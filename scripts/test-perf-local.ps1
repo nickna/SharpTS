@@ -4,6 +4,46 @@ param()
 $ErrorActionPreference = 'Stop'
 Import-Module (Join-Path $PSScriptRoot 'PerfLocal.psm1') -Force
 
+$routingTestRoot = Join-Path ([IO.Path]::GetTempPath()) "sharpts-perf-routing-$([Guid]::NewGuid().ToString('N'))"
+try {
+    $missingBaseline = Join-Path $routingTestRoot 'missing-baseline'
+    $gateBaseline = Resolve-SharpTSPerfBaselinePath `
+        -Action gate `
+        -BaselinePath $missingBaseline `
+        -RepositoryParent $routingTestRoot
+    if ($null -ne $gateBaseline) {
+        throw 'The gate action unexpectedly resolved a baseline worktree.'
+    }
+
+    $missingError = $null
+    try {
+        [void](Resolve-SharpTSPerfBaselinePath `
+            -Action measure `
+            -BaselinePath $missingBaseline `
+            -RepositoryParent $routingTestRoot)
+    } catch {
+        $missingError = $_
+    }
+    if ($null -eq $missingError -or
+        $missingError.Exception.Message -notmatch [regex]::Escape($missingBaseline)) {
+        throw 'A missing required baseline did not produce a directed path-specific error.'
+    }
+
+    $existingBaseline = Join-Path $routingTestRoot 'existing-baseline'
+    [IO.Directory]::CreateDirectory($existingBaseline) | Out-Null
+    $resolvedBaseline = Resolve-SharpTSPerfBaselinePath `
+        -Action measure `
+        -BaselinePath $existingBaseline `
+        -RepositoryParent $routingTestRoot
+    if ($resolvedBaseline -cne (Resolve-Path -LiteralPath $existingBaseline).Path) {
+        throw 'A required existing baseline did not resolve to its canonical path.'
+    }
+} finally {
+    if (Test-Path -LiteralPath $routingTestRoot) {
+        Remove-Item -LiteralPath $routingTestRoot -Recurse -Force
+    }
+}
+
 foreach ($relativePath in @(
     'perf-local.ps1',
     '../benchmarks/cross-runtime/run-benchmarks.ps1'

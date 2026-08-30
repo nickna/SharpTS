@@ -43,11 +43,11 @@ $ErrorActionPreference = 'Stop'
 $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $RepoParent = Split-Path -Parent $RepoRoot
 $Runner = Join-Path $RepoRoot 'benchmarks/cross-runtime/run-benchmarks.ps1'
-$BaselinePath = if ($BaselinePath) {
-    (Resolve-Path -LiteralPath $BaselinePath).Path
-} else {
-    (Resolve-Path -LiteralPath (Join-Path $RepoParent '.perf-baseline-worktree')).Path
-}
+Import-Module (Join-Path $PSScriptRoot 'PerfLocal.psm1') -Force
+$BaselinePath = Resolve-SharpTSPerfBaselinePath `
+    -Action $Action `
+    -BaselinePath $BaselinePath `
+    -RepositoryParent $RepoParent
 $OutputDirectory = if ($OutputDirectory) {
     [IO.Path]::GetFullPath($OutputDirectory)
 } else {
@@ -68,8 +68,6 @@ if ($Platforms.Count -eq 0) {
 if ($Workloads.Count -eq 0 -and $Action -in @('measure', 'all')) {
     throw 'At least one workload must be selected for measurement.'
 }
-
-Import-Module (Join-Path $PSScriptRoot 'PerfLocal.psm1') -Force
 
 function Quote-BashArgument {
     param([AllowEmptyString()] [string]$Value)

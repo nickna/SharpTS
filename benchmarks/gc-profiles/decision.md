@@ -30,8 +30,8 @@ and the metadata records the clean commit and complete host/container runtime in
 - Ubuntu 24.04 x64: the same compiled assemblies in the digest-pinned Docker image, with .NET 10
   and Node 24.19.0. Workloads ran as the non-root `app` user with read-only source mounts.
 - Inner benchmark mean/minimum came from the existing cross-runtime protocol.
-- Process elapsed time and peak working set came from `System.Diagnostics.Process` on Windows and
-  GNU `time` inside the Ubuntu container.
+- Process elapsed time and peak memory came from `System.Diagnostics.Process` elapsed/working-set
+  APIs on Windows and GNU `time` elapsed/maximum-RSS fields inside the Ubuntu container.
 - A separate quiet-host Windows JSON run used five launches per cell to confirm the acceptance
   target without the full matrix competing for resources.
 
@@ -40,16 +40,17 @@ The complete result table is preserved in
 [full-corpus-metadata.json](results/full-corpus-metadata.json), and the focused confirmation in
 [json-windows-confirmation.md](results/json-windows-confirmation.md).
 
-The process matrix records mean, minimum, standard deviation, process elapsed time, and peak RSS
-for every launch. Allocation and generation counts come from the faithful BenchmarkDotNet phase
-diagnostic cited below; the cross-runtime `BENCH` protocol does not expose managed GC counters to
-Node and therefore does not pretend its sixth timing field is allocation data.
+The process matrix records mean, minimum, standard deviation, process elapsed time, and peak memory
+for every launch. The Windows memory value is peak working set; the Ubuntu value is maximum RSS.
+Allocation and generation counts come from the faithful BenchmarkDotNet phase diagnostic cited
+below; the cross-runtime `BENCH` protocol does not expose managed GC counters to Node and therefore
+does not pretend its sixth timing field is allocation data.
 
 ## Evidence
 
 The focused Windows JSON N=10,000 confirmation measured:
 
-| Runtime/profile | Median mean | Relative to Node | Median process | Median peak RSS |
+| Runtime/profile | Median mean | Relative to Node | Median process | Median peak memory |
 | --- | ---: | ---: | ---: | ---: |
 | workstation | 3.8156 ms | 1.39x | 1133.8 ms | 62.3 MB |
 | adaptive | 2.1110 ms | 0.77x | 1142.7 ms | 95.1 MB |
@@ -84,9 +85,9 @@ Sub-millisecond async cases also produced large percentages from very small abso
 reinforce that a universal server default would be unjustified. These are explicit tradeoffs of
 the opt-in adaptive profile, not silent regressions in the default.
 
-Fixed throughput GC commonly reached 616-759 MB peak RSS and was not consistently faster than
-DATAS. It remains available because some long-lived, memory-provisioned services may measure a win,
-but SharpTS does not recommend selecting it without deployment-specific evidence.
+Fixed throughput GC commonly reached 616-759 MB peak memory and was not consistently faster than
+the adaptive profile. It remains available because some long-lived, memory-provisioned services may
+measure a win, but SharpTS does not recommend selecting it without deployment-specific evidence.
 
 ## Propagation and guardrails
 

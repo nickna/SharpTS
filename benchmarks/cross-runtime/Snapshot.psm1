@@ -469,8 +469,8 @@ function Export-SharpTSPublicBenchmarkSnapshot {
     $snapshot = New-SharpTSPublicBenchmarkSnapshot @arguments
     $parent = Split-Path -Parent ([IO.Path]::GetFullPath($OutputFile))
     if ($parent) { [IO.Directory]::CreateDirectory($parent) | Out-Null }
-    $json = $snapshot | ConvertTo-Json -Depth 12
-    [IO.File]::WriteAllText([IO.Path]::GetFullPath($OutputFile), $json + [Environment]::NewLine, [Text.UTF8Encoding]::new($false))
+    $json = ($snapshot | ConvertTo-Json -Depth 12) -replace "`r`n", "`n"
+    [IO.File]::WriteAllText([IO.Path]::GetFullPath($OutputFile), $json + "`n", [Text.UTF8Encoding]::new($false))
     return $snapshot
 }
 

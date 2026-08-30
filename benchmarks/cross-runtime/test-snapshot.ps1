@@ -68,6 +68,12 @@ try {
     $snapshotFile = Join-Path $temporaryDirectory 'snapshot.json'
     [void](Export-SharpTSPublicBenchmarkSnapshot -ResultsFile $resultsA -OutputFile $snapshotFile @fixed)
     Assert-True (Test-SharpTSPublicBenchmarkSnapshotFile $snapshotFile) 'Written snapshot did not validate.'
+    $snapshotBytes = [IO.File]::ReadAllBytes($snapshotFile)
+    Assert-True ($snapshotBytes.Count -gt 1 -and $snapshotBytes[-1] -eq 0x0A) `
+        'Written snapshot did not end with LF.'
+    Assert-True ($snapshotBytes[-2] -ne 0x0A) 'Written snapshot ended with more than one newline.'
+    Assert-True (-not ($snapshotBytes -contains [byte]0x0D)) `
+        'Written snapshot contained a carriage return instead of LF-only newlines.'
 
     $schema = Get-Content -LiteralPath (Join-Path $harnessDirectory 'snapshot-v1.schema.json') -Raw | ConvertFrom-Json
     Assert-True ($schema.'$schema' -ceq 'https://json-schema.org/draft/2020-12/schema') 'Schema is not JSON Schema 2020-12.'
