@@ -128,6 +128,38 @@ public partial class CompilationContext
         return true;
     }
 
+    /// <summary>
+    /// Emits a non-captured top-level binding read. Literal numeric constants retain the same TDZ
+    /// behavior as an ordinary field read but stay as native doubles for downstream arithmetic.
+    /// </summary>
+    internal StackType EmitTopLevelStaticLoad(ILGenerator il, string name, FieldBuilder field)
+    {
+        if (TryEmitTopLevelNumericConstantLoad(il, name, field))
+            return StackType.Double;
+
+        EmitTopLevelLexicalTdzCheck(il, name);
+        il.Emit(OpCodes.Ldsfld, field);
+        return StackType.Unknown;
+    }
+
+    /// <summary>
+    /// Emits a native-double read for a proven immutable top-level numeric constant. This helper
+    /// also handles constants stored on the entry-point display class, whose field load can then
+    /// be omitted while its separate TDZ flag remains observable.
+    /// </summary>
+    internal bool TryEmitTopLevelNumericConstantLoad(
+        ILGenerator il,
+        string name,
+        FieldBuilder field)
+    {
+        if (TopLevelNumericConstantValues?.TryGetValue(field, out double value) != true)
+            return false;
+
+        EmitTopLevelLexicalTdzCheck(il, name);
+        il.Emit(OpCodes.Ldc_R8, value);
+        return true;
+    }
+
     /// <summary>Marks a top-level let/const binding initialized after its declaration stores.</summary>
     internal bool EmitMarkTopLevelLexicalInitialized(ILGenerator il, string name)
     {

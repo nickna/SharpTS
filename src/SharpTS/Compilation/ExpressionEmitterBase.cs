@@ -2066,9 +2066,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
 
         if (Ctx.TopLevelStaticVars?.TryGetValue(name, out var topLevelField) == true)
         {
-            Ctx.EmitTopLevelLexicalTdzCheck(IL, name);
-            IL.Emit(OpCodes.Ldsfld, topLevelField);
-            SetStackUnknown();
+            SetStackType(Ctx.EmitTopLevelStaticLoad(IL, name, topLevelField));
             return true;
         }
 

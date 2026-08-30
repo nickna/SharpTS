@@ -64,9 +64,7 @@ public partial class AsyncArrowMoveNextEmitter
         // because cross-module function references need to go through the import field
         if (_ctx?.TopLevelStaticVars?.TryGetValue(name, out var topLevelField) == true)
         {
-            _ctx.EmitTopLevelLexicalTdzCheck(_il, name);
-            _il.Emit(OpCodes.Ldsfld, topLevelField);
-            SetStackUnknown();
+            SetStackType(_ctx.EmitTopLevelStaticLoad(_il, name, topLevelField));
             return;
         }
 

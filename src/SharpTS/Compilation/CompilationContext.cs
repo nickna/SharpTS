@@ -362,6 +362,12 @@ public partial class CompilationContext
     public Dictionary<string, FieldBuilder>? TopLevelStaticVars { get; set; }
 
     /// <summary>
+    /// Exact numeric literals for immutable top-level bindings, keyed by their canonical static
+    /// backing field. Loads may use the native value after preserving the binding's TDZ check.
+    /// </summary>
+    public IReadOnlyDictionary<FieldBuilder, double>? TopLevelNumericConstantValues { get; set; }
+
+    /// <summary>
     /// Type information from static analysis.
     /// </summary>
     public TypeMap? TypeMap { get; set; }

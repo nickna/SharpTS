@@ -36,6 +36,7 @@ important but are not mixed into the workload metric.
 | `scripts/lib/bench.ts` | Shared synchronous and asynchronous timing harnesses (auto-batching, warmup, mean/min/stdev). |
 | `scripts/lib/algorithms.ts` | Algorithm bodies **shared byte-identical** with the microbenchmark suite (embedded there as a resource). |
 | `scripts/worker-scaling.ts` | Fixed-total-work CPU comparison using direct execution and persistent pools of 1, 2, and 4 workers. |
+| `scripts/worker-message-latency.ts` | Persistent-pool fan-out/fan-in message round trips with 1, 2, and 4 workers and negligible worker-side computation. |
 | `scripts/workers/*.ts` | Worker entry points and worker-specific shared kernels; these are dependencies, not standalone workloads. |
 
 The schema-v1 file remains the versioned contract for this one suite. The
@@ -118,6 +119,13 @@ messaging, scheduling, and parallel execution rather than startup or compilation
 The direct case is the serial in-process compute baseline; compare each runtime's
 2- and 4-worker times with its 1-worker time to calculate parallel speedup and
 efficiency.
+
+The `worker-message-latency` workload isolates the other side of worker performance: one small
+structured message is sent to every worker in a persistent pool and the timed invocation completes
+after every reply arrives. Worker creation, readiness, validation, and shutdown remain outside the
+timed region. Comparing its 1-, 2-, and 4-worker cases exposes dispatch, structured-clone,
+cross-thread wake-up, event-loop drain, and promise-settlement overhead without enough worker-side
+CPU work to hide that latency.
 
 Each JSON measurement preserves the reported mean, minimum, sample standard
 deviation, sample count, calibrated inner-iteration count, sampled duration,
