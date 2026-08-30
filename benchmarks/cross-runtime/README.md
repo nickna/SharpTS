@@ -111,10 +111,11 @@ The `worker-scaling` workload uses the same parent, worker, and CPU-kernel
 TypeScript verbatim in every runtime. It keeps the total amount of CPU work
 fixed while varying the persistent pool size from 1 to 4 workers. Pool startup,
 worker readiness, shutdown, and a deterministic checksum validation occur
-outside the timed region, so the reported cases measure steady-state dispatch
-and parallel execution rather than startup or compilation. The direct case
-shows the messaging overhead floor; compare each runtime's 2- and 4-worker
-times with its 1-worker time to calculate parallel speedup and efficiency.
+outside the timed region, so the reported cases measure steady-state dispatch,
+messaging, scheduling, and parallel execution rather than startup or compilation.
+The direct case is the serial in-process compute baseline; compare each runtime's
+2- and 4-worker times with its 1-worker time to calculate parallel speedup and
+efficiency.
 
 Each JSON measurement preserves the reported mean, minimum, sample standard
 deviation, sample count, calibrated inner-iteration count, sampled duration,

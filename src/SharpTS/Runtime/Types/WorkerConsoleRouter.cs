@@ -1,4 +1,3 @@
-using System.Reflection;
 using System.Text;
 
 namespace SharpTS.Runtime.Types;
@@ -27,16 +26,14 @@ internal static class WorkerConsoleRouter
             if (!ReferenceEquals(Console.Out, _installedOut))
             {
                 var proxy = new ProxyWriter(Console.Out, OutOverride);
-                if (!TrySetConsoleWriter("s_out", proxy))
-                    Console.SetOut(proxy);
+                Console.SetOut(proxy);
                 _installedOut = Console.Out;
             }
 
             if (!ReferenceEquals(Console.Error, _installedError))
             {
                 var proxy = new ProxyWriter(Console.Error, ErrorOverride);
-                if (!TrySetConsoleWriter("s_error", proxy))
-                    Console.SetError(proxy);
+                Console.SetError(proxy);
                 _installedError = Console.Error;
             }
         }
@@ -52,14 +49,6 @@ internal static class WorkerConsoleRouter
     {
         EnsureInstalled();
         return Push(ErrorOverride, writer);
-    }
-
-    private static bool TrySetConsoleWriter(string fieldName, TextWriter writer)
-    {
-        var field = typeof(Console).GetField(fieldName, BindingFlags.NonPublic | BindingFlags.Static);
-        if (field is null) return false;
-        field.SetValue(null, writer);
-        return true;
     }
 
     private static IDisposable Push(AsyncLocal<TextWriter?> slot, TextWriter writer)

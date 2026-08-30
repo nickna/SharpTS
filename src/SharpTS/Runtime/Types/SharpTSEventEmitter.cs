@@ -653,9 +653,4 @@ public class SharpTSEventEmitter : ITypeCategorized, IMemberProvider
         }
     }
 
-    /// <summary>
-    /// Removes every listener without requiring an interpreter. Worker realm teardown uses
-    /// this to ensure emitted callback objects do not keep a collectible assembly alive.
-    /// </summary>
-    internal void RemoveAllListenersDirect() => _events.Clear();
 }

@@ -20,30 +20,27 @@ namespace SharpTS.Compilation;
 internal static class CompiledWorkerCompilationService
 {
     private static readonly ConcurrentDictionary<string, Lazy<byte[]>> ArtifactCache = new();
-    private static long _compilationCount;
     private static long _executionCount;
 
-    internal static long CompilationCount => Interlocked.Read(ref _compilationCount);
     internal static long ExecutionCount => Interlocked.Read(ref _executionCount);
 
     internal static byte[] Compile(string entryPath)
     {
-        if (!System.Runtime.CompilerServices.RuntimeFeature.IsDynamicCodeSupported)
-        {
-            throw new PlatformNotSupportedException(
-                "Compiled Worker execution requires a managed SharpTS runtime with dynamic code support.");
-        }
+        EnsureDynamicCodeSupported();
+        return Compile(PrepareCompilation(entryPath));
+    }
 
-        var absolutePath = Path.GetFullPath(entryPath);
-        var resolver = new ModuleResolver(absolutePath);
-        var entryModule = resolver.LoadModule(absolutePath);
-        var modules = resolver.GetModulesInOrder(entryModule);
-        var fingerprint = ComputeFingerprint(modules);
+    internal static byte[] Compile(PreparedCompilation compilation)
+    {
+        EnsureDynamicCodeSupported();
 
         var artifact = ArtifactCache.GetOrAdd(
-            fingerprint,
+            compilation.Fingerprint,
             _ => new Lazy<byte[]>(
-                () => CompileCore(modules, resolver, fingerprint),
+                () => CompileCore(
+                    compilation.Modules,
+                    compilation.Resolver,
+                    compilation.Fingerprint),
                 LazyThreadSafetyMode.ExecutionAndPublication));
 
         return artifact.Value;
@@ -57,16 +54,20 @@ internal static class CompiledWorkerCompilationService
     /// host bridges retain the previous interpreter-backed worker path until their emitted
     /// equivalents are implemented.
     /// </summary>
-    internal static bool CanExecuteCompiled(string entryPath, object? workerData, bool hasStdin)
+    internal static bool TryPrepareCompiled(
+        string entryPath,
+        object? workerData,
+        bool hasStdin,
+        out PreparedCompilation compilation)
     {
-        if (hasStdin || ContainsUnsupportedRealmValue(
+        compilation = null!;
+        if (!System.Runtime.CompilerServices.RuntimeFeature.IsDynamicCodeSupported ||
+            hasStdin || ContainsUnsupportedRealmValue(
                 workerData, new(System.Collections.Generic.ReferenceEqualityComparer.Instance)))
             return false;
 
-        var absolutePath = Path.GetFullPath(entryPath);
-        var resolver = new ModuleResolver(absolutePath);
-        var entryModule = resolver.LoadModule(absolutePath);
-        foreach (var module in resolver.GetModulesInOrder(entryModule))
+        var prepared = PrepareCompilation(entryPath);
+        foreach (var module in prepared.Modules)
         {
             var source = module.Document?.Text;
             if (source is null)
@@ -83,7 +84,26 @@ internal static class CompiledWorkerCompilationService
             }
         }
 
+        compilation = prepared;
         return true;
+    }
+
+    private static PreparedCompilation PrepareCompilation(string entryPath)
+    {
+        var absolutePath = Path.GetFullPath(entryPath);
+        var resolver = new ModuleResolver(absolutePath);
+        var entryModule = resolver.LoadModule(absolutePath);
+        var modules = resolver.GetModulesInOrder(entryModule);
+        return new PreparedCompilation(modules, resolver, ComputeFingerprint(modules));
+    }
+
+    private static void EnsureDynamicCodeSupported()
+    {
+        if (!System.Runtime.CompilerServices.RuntimeFeature.IsDynamicCodeSupported)
+        {
+            throw new PlatformNotSupportedException(
+                "Compiled Worker execution requires a managed SharpTS runtime with dynamic code support.");
+        }
     }
 
     private static byte[] CompileCore(
@@ -102,9 +122,7 @@ internal static class CompiledWorkerCompilationService
         var deadCode = new DeadCodeAnalyzer(typeMap).Analyze(statements);
         var compiler = new ILCompiler($"SharpTS.Worker.{fingerprint[..16]}");
         compiler.CompileModules(modules, resolver, typeMap, deadCode);
-        var bytes = compiler.SaveToBytes();
-        Interlocked.Increment(ref _compilationCount);
-        return bytes;
+        return compiler.SaveToBytes();
     }
 
     private static string ComputeFingerprint(IEnumerable<ParsedModule> modules)
@@ -150,4 +168,9 @@ internal static class CompiledWorkerCompilationService
             _ => false,
         };
     }
+
+    internal sealed record PreparedCompilation(
+        List<ParsedModule> Modules,
+        ModuleResolver Resolver,
+        string Fingerprint);
 }

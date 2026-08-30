@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Runtime.ExceptionServices;
 using System.Runtime.Loader;
@@ -333,9 +334,9 @@ public class SharpTSWorker : SharpTSEventEmitter, IDisposable
         int exitCode = 0;
         try
         {
-            if (_runCompiledWorker && CompiledWorkerCompilationService.CanExecuteCompiled(
-                    _scriptPath, _workerData, _stdin is not null))
-                RunCompiledWorkerScript();
+            if (_runCompiledWorker && CompiledWorkerCompilationService.TryPrepareCompiled(
+                    _scriptPath, _workerData, _stdin is not null, out var compilation))
+                RunCompiledWorkerScript(compilation);
             else
                 RunWorkerScript();
 
@@ -482,13 +483,22 @@ public class SharpTSWorker : SharpTSEventEmitter, IDisposable
     /// The generated runtime's static module cache and event loop are isolated by the
     /// AssemblyLoadContext, while the host-backed parentPort crosses the boundary as data.
     /// </summary>
-    private void RunCompiledWorkerScript()
+    [UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2026",
+        Justification = "The worker assembly is emitted at runtime and cannot be described to the trimmer; compiled workers are gated on dynamic-code support and are unavailable in Native AOT.")]
+    [UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2075",
+        Justification = "The reflected types come from a runtime-emitted worker assembly; compiled workers are gated on dynamic-code support and are unavailable in Native AOT.")]
+    private void RunCompiledWorkerScript(
+        CompiledWorkerCompilationService.PreparedCompilation compilation)
     {
         string absolutePath = Path.GetFullPath(_scriptPath);
         if (!File.Exists(absolutePath))
             throw new Exception($"Worker script not found: {absolutePath}");
 
-        byte[] artifact = CompiledWorkerCompilationService.Compile(absolutePath);
+        byte[] artifact = CompiledWorkerCompilationService.Compile(compilation);
         _cts.Token.ThrowIfCancellationRequested();
 
         var loadContext = new AssemblyLoadContext(
@@ -541,6 +551,17 @@ public class SharpTSWorker : SharpTSEventEmitter, IDisposable
             _compiledWorkerRef = () => loopRef.Invoke(eventLoop, null);
             _compiledWorkerUnref = () => loopUnref.Invoke(eventLoop, null);
 
+            // terminate() can race the cold compile/load/bootstrap window. If it ran before
+            // these delegates were published it could not set the emitted cancellation flag,
+            // so observe the host token again now. A later terminate() sees the delegates and
+            // sets the same flag directly.
+            if (_isTerminated || _cts.IsCancellationRequested)
+            {
+                _compiledWorkerCancel();
+                _compiledWorkerWake();
+                _cts.Token.ThrowIfCancellationRequested();
+            }
+
             // Messages sent immediately after construction remain queued until the realm and
             // its event loop exist, then are delivered on the worker thread.
             ScheduleCompiledWorkerDelivery();
@@ -577,7 +598,7 @@ public class SharpTSWorker : SharpTSEventEmitter, IDisposable
             _compiledWorkerWake = null;
             _compiledWorkerRef = null;
             _compiledWorkerUnref = null;
-            _parentPort.RemoveAllListenersDirect();
+            _parentPort.ClearAllListenersInternal();
             try { clearContext?.Invoke(null, null); }
             catch { /* teardown is best-effort; the entire realm is being unloaded */ }
             loadContext.Unload();
@@ -1378,7 +1399,7 @@ internal class WorkerParentPort : SharpTSEventEmitter
                 _worker.UnrefWorkerEventLoop();
             }
         }
-        RemoveAllListenersDirect();
+        ClearAllListenersInternal();
     }
 
     protected override void OnListenerAdded(string eventName)

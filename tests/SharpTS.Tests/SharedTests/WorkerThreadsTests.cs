@@ -1996,6 +1996,41 @@ public class WorkerThreadsTests
     }
 
     [Fact]
+    public async Task CompiledWorker_TerminateDuringRealmBootstrap_DoesNotMissCancellation()
+    {
+        string directory = Path.Combine(Path.GetTempPath(), $"sharpts_compiled_worker_{Guid.NewGuid():N}");
+        Directory.CreateDirectory(directory);
+        string workerPath = Path.Combine(directory, "worker.ts");
+        File.WriteAllText(workerPath, "while (true) { }");
+
+        try
+        {
+            // Populate the artifact cache so the worker proceeds directly into its realm-load
+            // window. CompiledRealmReference is published after the initial token check but
+            // before the emitted cancellation bridge, which recreates the cold-start race.
+            CompiledWorkerCompilationService.Compile(workerPath);
+
+            using var worker = SharpTSWorker.CreateForCompiledLoop(
+                workerPath, options: null, static () => { }, static () => { }, static action => action());
+            Assert.True(
+                SpinWait.SpinUntil(
+                    () => worker.CompiledRealmReference is not null || !worker.IsRunning,
+                    TimeSpan.FromSeconds(30)),
+                "Compiled worker did not begin loading its isolated realm.");
+
+            SharpTSPromise termination = worker.Terminate();
+            object? exitCode = await termination.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            Assert.True(SpinWait.SpinUntil(() => !worker.IsRunning, TimeSpan.FromSeconds(1)),
+                "Compiled worker remained running after terminate().");
+            Assert.Equal(1d, exitCode);
+        }
+        finally
+        {
+            try { Directory.Delete(directory, recursive: true); } catch { }
+        }
+    }
+
+    [Fact]
     public void CompiledWorker_CollectibleRealmUnloadsAfterExit()
     {
         string directory = Path.Combine(Path.GetTempPath(), $"sharpts_compiled_worker_{Guid.NewGuid():N}");
@@ -2010,10 +2045,8 @@ public class WorkerThreadsTests
         try
         {
             byte[] firstArtifact = CompiledWorkerCompilationService.Compile(workerPath);
-            long compilationsAfterFirst = CompiledWorkerCompilationService.CompilationCount;
             byte[] cachedArtifact = CompiledWorkerCompilationService.Compile(workerPath);
             Assert.Same(firstArtifact, cachedArtifact);
-            Assert.Equal(compilationsAfterFirst, CompiledWorkerCompilationService.CompilationCount);
 
             using (var worker = SharpTSWorker.CreateForCompiledLoop(
                        workerPath, options: null, static () => { }, static () => { }, static action => action()))
