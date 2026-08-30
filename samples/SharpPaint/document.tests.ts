@@ -98,8 +98,10 @@ history = undo(history);
 expect("undo", history.document.layers[0].commands.length === beforeUndo - 1 && history.future.length === 1);
 history = redo(history);
 expect("redo", history.document.layers[0].commands.length === beforeUndo);
+const pastBeforeSave = history.past.length;
+const futureBeforeSave = history.future.length;
 history = markSaved(history);
-expect("saved state", !history.dirty);
+expect("saved state preserves history", !history.dirty && history.past.length === pastBeforeSave && history.future.length === futureBeforeSave);
 const savedHistory = commitDocument(history, appendCommand(history.document, initial.layers[0].id, { kind: "line", x1: 1, y1: 1, x2: 2, y2: 2, stroke: "#000000", strokeThickness: 1 }));
 expect("edit after save is dirty", savedHistory.dirty);
 expect("undo to saved identity is clean", !undo(savedHistory).dirty);
@@ -115,6 +117,8 @@ rejects("future version", '{"format":"sharpaint","version":2,"width":1,"height":
 rejects("duplicate layer IDs", '{"format":"sharpaint","version":1,"width":1,"height":1,"layers":[{"id":"x","name":"a","isVisible":true,"opacity":1,"commands":[]},{"id":"x","name":"b","isVisible":true,"opacity":1,"commands":[]}]}');
 rejects("non-finite geometry", '{"format":"sharpaint","version":1,"width":1e999,"height":1,"layers":[{"id":"x","name":"a","isVisible":true,"opacity":1,"commands":[]}]}');
 rejects("unsupported command", '{"format":"sharpaint","version":1,"width":1,"height":1,"layers":[{"id":"x","name":"a","isVisible":true,"opacity":1,"commands":[{"kind":"filter"}]}]}');
+rejects("negative rectangle dimensions", '{"format":"sharpaint","version":1,"width":10,"height":10,"layers":[{"id":"x","name":"a","isVisible":true,"opacity":1,"commands":[{"kind":"rectangle","x":5,"y":5,"width":-1,"height":0,"fill":"#000000","strokeThickness":1}]}]}');
+rejects("negative ellipse radii", '{"format":"sharpaint","version":1,"width":10,"height":10,"layers":[{"id":"x","name":"a","isVisible":true,"opacity":1,"commands":[{"kind":"ellipse","centerX":5,"centerY":5,"radiusX":0,"radiusY":-1,"fill":"#000000","strokeThickness":1}]}]}');
 rejects("unembedded image", '{"format":"sharpaint","version":1,"width":1,"height":1,"layers":[{"id":"x","name":"a","isVisible":true,"opacity":1,"commands":[{"kind":"image","source":"file.png","x":0,"y":0,"width":1,"height":1}]}]}');
 rejects("invalid text", '{"format":"sharpaint","version":1,"width":10,"height":10,"layers":[{"id":"x","name":"a","isVisible":true,"opacity":1,"commands":[{"kind":"text","text":"","x":0,"y":0,"width":5,"height":5,"fill":"#000000","fontFamily":"sans-serif","fontSize":12,"textAlignment":"left","textWrapping":"wrap"}]}]}');
 

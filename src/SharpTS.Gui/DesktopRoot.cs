@@ -1058,6 +1058,18 @@ public sealed class DesktopRoot : IDisposable
                 mounted.LatestPointerDown is not null || mounted.LatestPointerMove is not null ||
                 mounted.LatestPointerUp is not null || mounted.LatestPointerCancel is not null;
         }
+        if (!node.CapturePointerOnPress && mounted.CapturedPointer is { } capturedPointer)
+        {
+            try
+            {
+                if (ReferenceEquals(capturedPointer.Captured, mounted.Control))
+                    capturedPointer.Capture(null);
+            }
+            finally
+            {
+                mounted.CapturedPointer = null;
+            }
+        }
         bool needsPointerDown = mounted.LatestPointerDown is not null || node.CapturePointerOnPress;
         if (needsPointerDown && mounted.PointerDownHandler is null)
         {
@@ -1579,6 +1591,7 @@ public sealed class DesktopRoot : IDisposable
             PointerMove = null,
             PointerUp = null,
             PointerCancel = null,
+            WindowMetricsChanged = null,
             CloseRequested = null,
             DragOver = null,
             Drop = null,
