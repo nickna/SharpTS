@@ -2,6 +2,35 @@ Set-StrictMode -Version Latest
 
 $script:InvariantCulture = [Globalization.CultureInfo]::InvariantCulture
 
+function Resolve-SharpTSPerfBaselinePath {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [ValidateSet('sync', 'measure', 'gate', 'all')]
+        [string]$Action,
+
+        [string]$BaselinePath,
+
+        [Parameter(Mandatory)]
+        [string]$RepositoryParent
+    )
+
+    if ($Action -eq 'gate') {
+        return $null
+    }
+
+    $candidatePath = if ($BaselinePath) {
+        $BaselinePath
+    } else {
+        Join-Path $RepositoryParent '.perf-baseline-worktree'
+    }
+    if (-not (Test-Path -LiteralPath $candidatePath -PathType Container)) {
+        throw "Baseline worktree '$candidatePath' was not found. Create it from origin/main, or pass -BaselinePath."
+    }
+
+    return (Resolve-Path -LiteralPath $candidatePath).Path
+}
+
 function Get-SharpTSMedian {
     [CmdletBinding()]
     param([Parameter(Mandatory)] [double[]]$Values)
@@ -177,6 +206,7 @@ function ConvertTo-SharpTSPerfMarkdown {
 }
 
 Export-ModuleMember -Function @(
+    'Resolve-SharpTSPerfBaselinePath',
     'Get-SharpTSMedian',
     'ConvertFrom-SharpTSBenchmarkResults',
     'Get-SharpTSPerfComparisons',

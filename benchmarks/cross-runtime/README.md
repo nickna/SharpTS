@@ -43,6 +43,8 @@ methodology rather than flattening unlike measurements together.
 
 ## Running
 
+PowerShell 7 or later (`pwsh`) is required for the benchmark PowerShell tools.
+
 ```powershell
 # Run everything; results land in $TEMP/bench-results/{results.txt,snapshot.json}
 ./benchmarks/cross-runtime/run-benchmarks.ps1
@@ -97,7 +99,7 @@ Each workload calls `bench(name, param, fn)` from `scripts/lib/bench.ts`, which:
    method than an already-fast optimizing JIT.
 3. Emits one line per case, consumed by the PowerShell formatter and exporter:
 
-   ```
+   ```text
    BENCH:<name>:<param>:<meanMs>:<minMs>:<stdevMs>:<samples>:<inner>:<sampledMs>
    ```
 
@@ -164,6 +166,7 @@ timed sweep (shared-runner timing is noisy and the full sweep is slow).
 | **Profiling** | Wall-clock mean/min/stdev | + allocations/GC (`MemoryDiagnoser`) |
 
 They can't be merged: BenchmarkDotNet must run in-process against managed code
-(it can't drive the `node`/`bun` executables), and the cross-runtime comparison
-must be black-box at the process boundary. Keeping them separate is intentional;
-the shared `scripts/lib/algorithms.ts` ensures both measure identical source.
+(it can't drive the `node`/`bun` executables). The cross-runtime runner instead
+launches each runtime as a black-box process, while the published metric is measured
+inside that process around the workload function. Keeping the suites separate is
+intentional; the shared `scripts/lib/algorithms.ts` ensures both measure identical source.

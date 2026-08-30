@@ -441,10 +441,11 @@ $invariantCulture = [Globalization.CultureInfo]::InvariantCulture
 $lines.Add('# GC profile benchmark matrix')
 $lines.Add('')
 $lines.Add("Generated from commit ``$($metadata.commit)`` with $Launches launches per cell.")
+$lines.Add('Peak memory is peak working set from System.Diagnostics.Process on Windows and maximum RSS from GNU time on Ubuntu.')
 $lines.Add('')
 $lines.Add('## Largest-input benchmark results')
 $lines.Add('')
-$lines.Add('| Platform | Benchmark | Input | Runtime/profile | Median mean | Median minimum | Median stdev | Median process | Median peak RSS |')
+$lines.Add('| Platform | Benchmark | Input | Runtime/profile | Median mean | Median minimum | Median stdev | Median process | Median peak memory |')
 $lines.Add('|---|---|---:|---|---:|---:|---:|---:|---:|')
 
 $namedGroups = $benchRows | Group-Object platform, name
@@ -466,7 +467,7 @@ foreach ($namedGroup in $namedGroups | Sort-Object Name) {
 $lines.Add('')
 $lines.Add('## Cold startup')
 $lines.Add('')
-$lines.Add('| Platform | Runtime/profile | Median elapsed | Median peak RSS |')
+$lines.Add('| Platform | Runtime/profile | Median elapsed | Median peak memory |')
 $lines.Add('|---|---|---:|---:|')
 $startupMeasurements = @($measurements | Where-Object { $_.workload -eq 'startup' })
 foreach ($group in $startupMeasurements | Group-Object platform, runtime, profile | Sort-Object Name) {

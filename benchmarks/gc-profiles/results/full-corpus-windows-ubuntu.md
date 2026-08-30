@@ -1,10 +1,11 @@
 # GC profile benchmark matrix
 
 Generated from commit `5c5333d53baa046fac6013188ebbb32c32851928` with 3 launches per cell.
+Peak memory is peak working set from System.Diagnostics.Process on Windows and maximum RSS from GNU time on Ubuntu.
 
 ## Largest-input benchmark results
 
-| Platform | Benchmark | Input | Runtime/profile | Median mean | Median minimum | Median stdev | Median process | Median peak RSS |
+| Platform | Benchmark | Input | Runtime/profile | Median mean | Median minimum | Median stdev | Median process | Median peak memory |
 |---|---|---:|---|---:|---:|---:|---:|---:|
 | ubuntu | accumulate | 1000000 | adaptive | 9.0289 ms | 6.4926 ms | 1.7142 ms | 2120.0 ms | 95.1 MB |
 | ubuntu | accumulate | 1000000 | node | 4.5767 ms | 3.6206 ms | 1.0063 ms | 2310.0 ms | 206.9 MB |
@@ -233,7 +234,7 @@ Generated from commit `5c5333d53baa046fac6013188ebbb32c32851928` with 3 launches
 
 ## Cold startup
 
-| Platform | Runtime/profile | Median elapsed | Median peak RSS |
+| Platform | Runtime/profile | Median elapsed | Median peak memory |
 |---|---|---:|---:|
 | ubuntu | adaptive | 60.00 ms | 29.0 MB |
 | ubuntu | throughput | 60.00 ms | 29.1 MB |
