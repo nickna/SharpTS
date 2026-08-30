@@ -1940,6 +1940,30 @@ public class WorkerThreadsTests
             "The worker must execute through the compiled-worker bootstrap, not the interpreter fallback.");
     }
 
+    [Fact]
+    public void CompiledWorker_ReflectedPostMessageMethodsHaveStableIdentity()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["worker_identity.ts"] = """
+                import { parentPort } from "worker_threads";
+                const port: any = parentPort;
+                port.postMessage("worker:" + (port.postMessage === port.postMessage));
+                """,
+            ["main.ts"] = """
+                import { Worker } from "worker_threads";
+                const worker: any = new Worker(__dirname + "/worker_identity.ts");
+                console.log("parent:" + (worker.postMessage === worker.postMessage));
+                worker.on("message", (value: any) => console.log(value));
+                """,
+        };
+
+        var output = TestHarness.RunModules(files, "main.ts", ExecutionMode.Compiled);
+
+        Assert.Contains("parent:true", output);
+        Assert.Contains("worker:true", output);
+    }
+
     [Theory, ModeData]
     public void Worker_ParentPortReceivesMessagesAndKeepsWorkerAlive(ExecutionMode mode)
     {

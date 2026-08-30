@@ -445,6 +445,13 @@ public class EmittedRuntime
     public MethodBuilder CompactDictionaryOrder { get; set; } = null!;
     public MethodBuilder DeletePropertyStrict { get; set; } = null!;
     public MethodBuilder GetFieldsProperty { get; set; } = null!;
+    /// <summary>
+    /// Weak per-receiver cache of reflected CLR method wrappers used by
+    /// <see cref="GetFieldsProperty"/>. Values are
+    /// ConcurrentDictionary&lt;string, object&gt; instances whose entries are
+    /// emitted $TSFunction objects.
+    /// </summary>
+    public FieldBuilder ReflectedMethodCacheField { get; set; } = null!;
     public MethodBuilder SetFieldsProperty { get; set; } = null!;
     public MethodBuilder SetFieldsPropertyStrict { get; set; } = null!;
     public MethodBuilder GetArrayMethod { get; set; } = null!;

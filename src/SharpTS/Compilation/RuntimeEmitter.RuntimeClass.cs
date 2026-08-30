@@ -477,6 +477,22 @@ public partial class RuntimeEmitter
             FieldAttributes.Private | FieldAttributes.Static
         );
 
+        // Reflection-backed host objects (Worker, parentPort, streams, crypto
+        // handles, etc.) expose CLR methods through GetFieldsProperty. Cache the
+        // bound $TSFunction per receiver/name so repeated calls do not repeat
+        // Type/GetMethod reflection or reconstruct the wrapper's MethodInvoker
+        // metadata. The weak key preserves collectible worker realms and host
+        // object lifetimes; ConcurrentDictionary makes shared host objects safe.
+        var reflectedMethodDictionaryType = _types.MakeGenericType(
+            _types.ConcurrentDictionaryOpen, _types.String, _types.Object);
+        var reflectedMethodCacheType = _types.MakeGenericType(
+            typeof(ConditionalWeakTable<,>), _types.Object, reflectedMethodDictionaryType);
+        var reflectedMethodCacheField = typeBuilder.DefineField(
+            "_reflectedMethodCache",
+            reflectedMethodCacheType,
+            FieldAttributes.Private | FieldAttributes.Static | FieldAttributes.InitOnly);
+        runtime.ReflectedMethodCacheField = reflectedMethodCacheField;
+
         // Static field for console group indentation level (needed early for ConsoleLog)
         var consoleGroupLevelField = typeBuilder.DefineField(
             "_consoleGroupLevel",
@@ -537,6 +553,9 @@ public partial class RuntimeEmitter
             Type.EmptyTypes
         );
         var cctorIL = cctorBuilder.GetILGenerator();
+
+        cctorIL.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(reflectedMethodCacheType));
+        cctorIL.Emit(OpCodes.Stsfld, reflectedMethodCacheField);
 
         Type fixedStateType = typeof(ValueTuple<ulong, int, bool>);
         Type fixedFormatterType = EmitGenerics.MakeGenericType(typeof(SpanAction<,>),
