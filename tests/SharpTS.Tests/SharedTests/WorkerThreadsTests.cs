@@ -2006,6 +2006,40 @@ public class WorkerThreadsTests
     }
 
     [Fact]
+    public void CompiledParent_MessageUsesWorkerInterpreterFallbackQueue()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["worker_fallback_echo.ts"] = """
+                import { parentPort } from "worker_threads";
+                // The compiled-worker service conservatively falls back when a module
+                // contains Atomics.wait, even when it is unreachable.
+                if (false) {
+                    const view = new Int32Array(new SharedArrayBuffer(4));
+                    Atomics.wait(view, 0, 0);
+                }
+                parentPort!.on("message", (value: any) => {
+                    parentPort!.postMessage("fallback:" + value);
+                    parentPort!.close();
+                });
+                parentPort!.postMessage("ready");
+                """,
+            ["main.ts"] = """
+                import { Worker } from "worker_threads";
+                const worker = new Worker(__dirname + "/worker_fallback_echo.ts");
+                worker.on("message", (value: any) => {
+                    if (value === "ready") worker.postMessage("ping");
+                    else console.log(value);
+                });
+                """,
+        };
+
+        var output = TestHarness.RunModules(files, "main.ts", ExecutionMode.Compiled);
+
+        Assert.Contains("fallback:ping", output);
+    }
+
+    [Fact]
     public void CompiledWorkers_HaveIndependentModuleState()
     {
         var files = new Dictionary<string, string>

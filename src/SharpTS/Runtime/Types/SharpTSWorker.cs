@@ -35,6 +35,7 @@ public class SharpTSWorker : SharpTSEventEmitter, IDisposable
 
     private readonly Thread _thread;
     private readonly BlockingCollection<SharpTSMessagePort.ClonedMessage> _parentToWorkerQueue = new();
+    private readonly ConcurrentQueue<SharpTSMessagePort.ClonedMessage> _compiledParentToWorkerQueue = new();
     private readonly ConcurrentQueue<SharpTSMessagePort.ClonedMessage> _workerToParentQueue = new();
     private readonly CancellationTokenSource _cts = new();
     private readonly string _scriptPath;
@@ -955,7 +956,14 @@ public class SharpTSWorker : SharpTSEventEmitter, IDisposable
             {
                 delivery = new SharpTSMessagePort.ClonedMessage(null, null, IsError: true);
             }
-            _parentToWorkerQueue.Add(delivery);
+            // Before compiled bootstrap (and when compilation falls back to the
+            // interpreter), the blocking queue is the worker's only receiver. Once
+            // the compiled scheduler is published, delivery is event-driven and can
+            // bypass BlockingCollection's unused semaphore accounting.
+            if (_compiledWorkerSchedule is null)
+                _parentToWorkerQueue.Add(delivery);
+            else
+                _compiledParentToWorkerQueue.Enqueue(delivery);
             ScheduleCompiledWorkerDelivery();
         }
         catch (InvalidOperationException)
@@ -1241,7 +1249,8 @@ public class SharpTSWorker : SharpTSEventEmitter, IDisposable
     /// </summary>
     private void ScheduleCompiledWorkerDelivery()
     {
-        if (!_runCompiledWorker || _parentToWorkerQueue.Count == 0 || _isTerminated)
+        if (!_runCompiledWorker || _isTerminated ||
+            (_compiledParentToWorkerQueue.IsEmpty && _parentToWorkerQueue.Count == 0))
             return;
 
         var schedule = _compiledWorkerSchedule;
@@ -1271,11 +1280,19 @@ public class SharpTSWorker : SharpTSEventEmitter, IDisposable
                 else
                     _parentPort.EmitDirect("message", message.Data);
             }
+
+            while (_compiledParentToWorkerQueue.TryDequeue(out var message))
+            {
+                if (message.IsError)
+                    _parentPort.EmitDirect("messageerror");
+                else
+                    _parentPort.EmitDirect("message", message.Data);
+            }
         }
         finally
         {
             Volatile.Write(ref _compiledDeliveryScheduled, 0);
-            if (_parentToWorkerQueue.Count > 0)
+            if (!_compiledParentToWorkerQueue.IsEmpty || _parentToWorkerQueue.Count > 0)
                 ScheduleCompiledWorkerDelivery();
         }
     }
@@ -1296,8 +1313,9 @@ public class SharpTSWorker : SharpTSEventEmitter, IDisposable
     /// </summary>
     internal void RefWorkerEventLoop()
     {
-        if (_runCompiledWorker)
-            _compiledWorkerRef?.Invoke();
+        var compiledRef = _compiledWorkerRef;
+        if (compiledRef is not null)
+            compiledRef();
         else
             _workerInterpreter?.Ref();
     }
@@ -1307,8 +1325,9 @@ public class SharpTSWorker : SharpTSEventEmitter, IDisposable
     /// </summary>
     internal void UnrefWorkerEventLoop()
     {
-        if (_runCompiledWorker)
-            _compiledWorkerUnref?.Invoke();
+        var compiledUnref = _compiledWorkerUnref;
+        if (compiledUnref is not null)
+            compiledUnref();
         else
             _workerInterpreter?.Unref();
     }
