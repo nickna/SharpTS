@@ -409,6 +409,39 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, runtime.InvokeCallback);
         il.Emit(OpCodes.Stloc, callbackResultLocal);
 
+        // Primitive values cannot be thenables. Complete the reaction directly
+        // instead of allocating a resolved Task only to synchronously await it
+        // again. Keep numbers first because numeric reductions are the dominant
+        // hot path. Object results still take the full observable Promise Resolve
+        // path below (including custom `then` lookup and abrupt getters).
+        var fulfillHandlerResultLabel = il.DefineLabel();
+        var adoptHandlerResultLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, callbackResultLocal);
+        il.Emit(OpCodes.Isinst, _types.Double);
+        il.Emit(OpCodes.Brtrue, fulfillHandlerResultLabel);
+        il.Emit(OpCodes.Ldloc, callbackResultLocal);
+        il.Emit(OpCodes.Isinst, _types.String);
+        il.Emit(OpCodes.Brtrue, fulfillHandlerResultLabel);
+        il.Emit(OpCodes.Ldloc, callbackResultLocal);
+        il.Emit(OpCodes.Isinst, _types.Boolean);
+        il.Emit(OpCodes.Brtrue, fulfillHandlerResultLabel);
+        il.Emit(OpCodes.Ldloc, callbackResultLocal);
+        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Brtrue, fulfillHandlerResultLabel);
+        il.Emit(OpCodes.Ldloc, callbackResultLocal);
+        il.Emit(OpCodes.Isinst, _types.BigInteger);
+        il.Emit(OpCodes.Brtrue, fulfillHandlerResultLabel);
+        il.Emit(OpCodes.Ldloc, callbackResultLocal);
+        il.Emit(OpCodes.Isinst, runtime.TSSymbolType);
+        il.Emit(OpCodes.Brtrue, fulfillHandlerResultLabel);
+        il.Emit(OpCodes.Ldloc, callbackResultLocal);
+        il.Emit(OpCodes.Brtrue, adoptHandlerResultLabel);
+        il.MarkLabel(fulfillHandlerResultLabel);
+        il.Emit(OpCodes.Ldloc, callbackResultLocal);
+        il.Emit(OpCodes.Stloc, resultLocal);
+        il.Emit(OpCodes.Leave, setResultLabel);
+        il.MarkLabel(adoptHandlerResultLabel);
+
         // Resolve the handler result through the Promise Resolve Functions
         // algorithm before flattening it. This deliberately performs the
         // observable `then` lookup even when the host value is already a

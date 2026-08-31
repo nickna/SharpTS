@@ -240,6 +240,30 @@ public class PromiseMethodTests
         Assert.Equal("20\n", output);
     }
 
+    [Fact]
+    public void CompiledThen_NumberResult_DoesNotAssimilateNumberPrototypeThen()
+    {
+        var source = """
+            let calls: number = 0;
+            const numberPrototype: any = Number.prototype;
+            numberPrototype.then = (resolve: any): void => {
+                calls = calls + 1;
+                resolve(99);
+            };
+
+            async function main(): Promise<void> {
+                const source: Promise<number> = new Promise<number>(
+                    (resolve): void => resolve(1));
+                const result: number = await source.then(
+                    (value: number): number => value + 1);
+                console.log(String(result) + ":" + String(calls));
+            }
+            main();
+            """;
+
+        Assert.Equal("2:0\n", TestHarness.RunCompiledStandalone(source));
+    }
+
     [Theory, ModeData]
     public void Then_WithOnRejected(ExecutionMode mode)
     {
