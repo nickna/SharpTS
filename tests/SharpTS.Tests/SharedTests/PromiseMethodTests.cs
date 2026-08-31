@@ -1102,6 +1102,42 @@ public class PromiseMethodTests
     }
 
     [Theory, ModeData]
+    public void ExecutorConstructor_PrimitivesDoNotAssimilatePrototypeThen(ExecutionMode mode)
+    {
+        var source = """
+            let calls: number = 0;
+            (Number.prototype as any).then = function(resolve: any): void {
+                calls += 1;
+                resolve(99);
+            };
+            (String.prototype as any).then = function(resolve: any): void {
+                calls += 1;
+                resolve("changed");
+            };
+            (Boolean.prototype as any).then = function(resolve: any): void {
+                calls += 1;
+                resolve(false);
+            };
+
+            async function main(): Promise<void> {
+                const values: any[] = await Promise.all([
+                    new Promise<any>((resolve): void => resolve(42)),
+                    new Promise<any>((resolve): void => resolve("value")),
+                    new Promise<any>((resolve): void => resolve(true)),
+                ]);
+                console.log(values[0], values[1], values[2], calls);
+                delete (Number.prototype as any).then;
+                delete (String.prototype as any).then;
+                delete (Boolean.prototype as any).then;
+            }
+            main();
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("42 value true 0\n", output);
+    }
+
+    [Theory, ModeData]
     public void ExecutorConstructor_ImmediateReject(ExecutionMode mode)
     {
         var source = """

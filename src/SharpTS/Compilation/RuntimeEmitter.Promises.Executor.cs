@@ -1468,6 +1468,42 @@ public partial class RuntimeEmitter
 
             il.MarkLabel(endLockLabel);
 
+            // ECMAScript Promise Resolve Functions only perform thenable
+            // assimilation for Objects (callable functions included). Primitive
+            // resolutions can fulfill the target capability directly. Routing a
+            // number/string/boolean/null through PromiseResolveValue needlessly
+            // performed a dynamic `then` lookup, allocated an intermediate TCS,
+            // and transferred its already-completed result back into this TCS.
+            // Worker fan-in resolves one primitive promise per worker, making
+            // that generic path a material part of every round trip.
+            var resolveObjectValueLabel = il.DefineLabel();
+            var resolvePrimitiveValueLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldloc, valueLocal);
+            il.Emit(OpCodes.Brfalse, resolvePrimitiveValueLabel);
+            il.Emit(OpCodes.Ldloc, valueLocal);
+            il.Emit(OpCodes.Isinst, _types.Double);
+            il.Emit(OpCodes.Brtrue, resolvePrimitiveValueLabel);
+            il.Emit(OpCodes.Ldloc, valueLocal);
+            il.Emit(OpCodes.Isinst, _types.String);
+            il.Emit(OpCodes.Brtrue, resolvePrimitiveValueLabel);
+            il.Emit(OpCodes.Ldloc, valueLocal);
+            il.Emit(OpCodes.Isinst, _types.Boolean);
+            il.Emit(OpCodes.Brtrue, resolvePrimitiveValueLabel);
+            il.Emit(OpCodes.Ldloc, valueLocal);
+            il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+            il.Emit(OpCodes.Brtrue, resolvePrimitiveValueLabel);
+            il.Emit(OpCodes.Br, resolveObjectValueLabel);
+
+            il.MarkLabel(resolvePrimitiveValueLabel);
+            il.Emit(OpCodes.Ldloc, tcsLocal);
+            il.Emit(OpCodes.Ldloc, valueLocal);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(
+                _types.TaskCompletionSourceOfObject, "TrySetResult", _types.Object));
+            il.Emit(OpCodes.Pop);
+            il.Emit(OpCodes.Br, endLabel);
+
+            il.MarkLabel(resolveObjectValueLabel);
+
             // Promise Resolve Functions adopt promises and thenables instead of
             // fulfilling with their host Task representation as a plain value.
             // Native promises/tasks retain their backing task. For every other
