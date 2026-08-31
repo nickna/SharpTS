@@ -13,6 +13,7 @@ public sealed class OwnedProcessRegistryTests
 {
     private static readonly TimeSpan ExitTimeout = TimeSpan.FromSeconds(10);
     private static readonly TimeSpan FixtureReadyTimeout = TimeSpan.FromSeconds(10);
+    private static readonly TimeSpan ExecutionTimeout = TimeSpan.FromSeconds(5);
 
     [Fact]
     public void InterpreterDispose_TerminatesOnlyItsOwnProcesses()
@@ -92,12 +93,13 @@ public sealed class OwnedProcessRegistryTests
     }
 
     [Theory, ModeData]
-    public void ExecutionTimeout_TerminatesSpawnedProcess(ExecutionMode mode)
+    public async Task ExecutionTimeout_TerminatesSpawnedProcess(ExecutionMode mode)
     {
         string pidPath = Path.Combine(Path.GetTempPath(), $"sharpts-owned-process-{Guid.NewGuid():N}.pid");
         string sourcePath = pidPath.Replace("\\", "\\\\").Replace("'", "\\'");
         (string command, string arguments) = LongRunningGuestCommand();
         Process? child = null;
+        Task<string>? execution = null;
 
         string source = $$"""
             import { spawn } from 'child_process';
@@ -111,19 +113,33 @@ public sealed class OwnedProcessRegistryTests
         try
         {
             var files = new Dictionary<string, string> { ["main.ts"] = source };
-            Assert.Throws<TimeoutException>(() =>
-                TestHarness.RunModules(files, "main.ts", mode, TimeSpan.FromSeconds(1)));
+            execution = Task.Run(() =>
+                TestHarness.RunModules(files, "main.ts", mode, ExecutionTimeout));
 
-            Assert.True(File.Exists(pidPath), "The guest did not record the spawned child PID before timing out.");
-            Assert.True(int.TryParse(File.ReadAllText(pidPath), out int childPid), "The guest recorded an invalid child PID.");
+            child = await CaptureGuestChildProcessAsync(pidPath, execution, FixtureReadyTimeout);
+            int childPid = child.Id;
 
-            child = TryGetProcess(childPid);
-            Assert.True(child is null || WaitUntilExited(child), $"{mode} timeout left child PID {childPid} running.");
+            Exception? executionFailure = null;
+            try
+            {
+                await execution.WaitAsync(ExitTimeout);
+            }
+            catch (Exception exception)
+            {
+                executionFailure = exception;
+            }
+
+            Assert.True(execution.IsCompleted, $"{mode} execution did not honor its timeout.");
+            Assert.IsType<TimeoutException>(executionFailure);
+
+            Assert.True(WaitUntilExited(child), $"{mode} timeout left child PID {childPid} running.");
         }
         finally
         {
             ProcessTreeTermination.Terminate(child);
             child?.Dispose();
+            if (execution is not null)
+                await ObserveExecutionAsync(execution);
             try { File.Delete(pidPath); }
             catch (IOException) { }
             catch (UnauthorizedAccessException) { }
@@ -216,9 +232,114 @@ public sealed class OwnedProcessRegistryTests
         }, ExitTimeout);
     }
 
-    private static Process? TryGetProcess(int processId)
+    private static async Task<Process> CaptureGuestChildProcessAsync(
+        string pidPath,
+        Task<string> execution,
+        TimeSpan timeout)
     {
-        try { return Process.GetProcessById(processId); }
-        catch (ArgumentException) { return null; }
+        var readiness = Stopwatch.StartNew();
+        string lastPidFileState = "not created";
+
+        while (readiness.Elapsed < timeout)
+        {
+            if (execution.IsCompleted)
+            {
+                throw new XunitException(
+                    $"Guest execution {DescribeExecution(execution)} before its child process could be captured; " +
+                    $"elapsed: {readiness.Elapsed.TotalMilliseconds:F0} ms; PID file: {lastPidFileState}.");
+            }
+
+            try
+            {
+                if (File.Exists(pidPath))
+                {
+                    string pidText = await File.ReadAllTextAsync(pidPath);
+                    lastPidFileState = $"'{pidText}'";
+                    if (int.TryParse(pidText, out int childPid))
+                    {
+                        Process candidate;
+                        try
+                        {
+                            candidate = Process.GetProcessById(childPid);
+                        }
+                        catch (ArgumentException exception)
+                        {
+                            throw new XunitException(
+                                $"Guest child PID {childPid} exited before its process handle could be captured; " +
+                                $"elapsed: {readiness.Elapsed.TotalMilliseconds:F0} ms; " +
+                                $"lookup failed with {exception.Message}");
+                        }
+
+                        try
+                        {
+                            if (candidate.HasExited)
+                            {
+                                throw new XunitException(
+                                    $"Guest child PID {childPid} exited before its process handle could be captured; " +
+                                    $"elapsed: {readiness.Elapsed.TotalMilliseconds:F0} ms.");
+                            }
+
+                            if (execution.IsCompleted)
+                            {
+                                throw new XunitException(
+                                    $"Guest execution {DescribeExecution(execution)} while child PID {childPid} " +
+                                    "was being captured.");
+                            }
+
+                            return candidate;
+                        }
+                        catch
+                        {
+                            candidate.Dispose();
+                            throw;
+                        }
+                    }
+                }
+            }
+            catch (IOException exception)
+            {
+                lastPidFileState = $"temporarily unreadable ({exception.Message})";
+            }
+            catch (UnauthorizedAccessException exception)
+            {
+                lastPidFileState = $"temporarily inaccessible ({exception.Message})";
+            }
+
+            await Task.Delay(TimeSpan.FromMilliseconds(25));
+        }
+
+        throw new XunitException(
+            $"Timed out after {readiness.Elapsed.TotalMilliseconds:F0} ms waiting to capture the guest child process; " +
+            $"execution {DescribeExecution(execution)}; PID file: {lastPidFileState}.");
+    }
+
+    private static string DescribeExecution(Task<string> execution)
+    {
+        if (!execution.IsCompleted)
+            return "is still running";
+        if (execution.IsCanceled)
+            return "was canceled";
+        if (execution.IsFaulted)
+        {
+            Exception exception = execution.Exception!.GetBaseException();
+            return $"failed with {exception.GetType().Name}: {exception.Message}";
+        }
+
+        return "completed successfully";
+    }
+
+    private static async Task ObserveExecutionAsync(Task<string> execution)
+    {
+        try
+        {
+            await execution.WaitAsync(ExitTimeout);
+        }
+        catch (Exception exception) when (exception is TimeoutException or OperationCanceledException)
+        {
+        }
+        catch
+        {
+            // The test asserts the expected timeout above; this await only observes cleanup failures.
+        }
     }
 }
