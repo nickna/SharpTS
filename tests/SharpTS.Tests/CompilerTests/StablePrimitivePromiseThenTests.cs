@@ -779,6 +779,107 @@ public sealed class StablePrimitivePromiseThenTests
         Assert.Equal("3\n", TestHarness.RunCompiledStandalone(source));
     }
 
+    [Fact]
+    public void DirectPromiseAllNumericReaction_UsesCompactObjectPrimitivePath()
+    {
+        const string source = """
+            let resolveFirst: any;
+            let resolveSecond: any;
+            const first: Promise<number> = new Promise<number>((resolve: any): void => {
+                resolveFirst = resolve;
+            });
+            const second: Promise<number> = new Promise<number>((resolve: any): void => {
+                resolveSecond = resolve;
+            });
+
+            function sum(promises: Promise<number>[]): Promise<number> {
+                return (Promise.all(promises) as Promise<any>).then(
+                    (values: any): number => values[0] + values[1],
+                );
+            }
+            const result: Promise<number> = sum([first, second]);
+            result.then(
+                (value: number): void => console.log("result:" + value),
+                (error: any): void => console.log("unexpected:" + error),
+            );
+
+            resolveFirst(2);
+            queueMicrotask((): void => {
+                console.log("after-first");
+                resolveSecond(3);
+            });
+            console.log("sync");
+            """;
+
+        Assembly assembly = Compile(source);
+        Assert.NotEmpty(FindCompactObjectPrimitiveCallers(assembly));
+        Assert.Empty(TestHarness.CompileAndVerifyOnly(source));
+        Assert.Equal(
+            "sync\nafter-first\nresult:5\n",
+            TestHarness.RunCompiledStandalone(source));
+    }
+
+    [Fact]
+    public void DirectPromiseAllNumericReaction_PropagatesRejectionAndThrow()
+    {
+        const string source = """
+            function one(promises: Promise<number>[]): Promise<number> {
+                return (Promise.all(promises) as Promise<any>).then(
+                    (values: any): number => values.length,
+                );
+            }
+            function boom(promises: Promise<number>[]): Promise<number> {
+                return (Promise.all(promises) as Promise<any>).then(
+                    (values: any): number => {
+                        if (values.length > 0) {
+                            throw new Error("handler");
+                        }
+                        return values.length;
+                    },
+                );
+            }
+
+            one([Promise.reject("input")]).then(
+                (_value: number): void => console.log("unexpected-input"),
+                (error: any): void => console.log("rejected:" + error),
+            );
+
+            boom([Promise.resolve(1)]).then(
+                (_value: number): void => console.log("unexpected-handler"),
+                (error: any): void => console.log("threw:" + error.message),
+            );
+            """;
+
+        Assembly assembly = Compile(source);
+        Assert.Equal(2, FindCompactObjectPrimitiveCallers(assembly).Count);
+        Assert.Empty(TestHarness.CompileAndVerifyOnly(source));
+        Assert.Equal(
+            "rejected:input\nthrew:handler\n",
+            TestHarness.RunCompiledStandalone(source));
+    }
+
+    [Fact]
+    public void DirectPromiseAllObjectReaction_RetainsThenableAdoption()
+    {
+        const string source = """
+            function adopt(promises: Promise<number>[]): Promise<number> {
+                return (Promise.all(promises) as Promise<any>).then(
+                    (values: any): any => ({
+                        then: (resolve: any): void => resolve(values[0] + 1),
+                    }),
+                );
+            }
+            adopt([Promise.resolve(2)]).then(
+                (value: number): void => console.log(value),
+            );
+            """;
+
+        Assembly assembly = Compile(source);
+        Assert.Empty(FindCompactObjectPrimitiveCallers(assembly));
+        Assert.Empty(TestHarness.CompileAndVerifyOnly(source));
+        Assert.Equal("3\n", TestHarness.RunCompiledStandalone(source));
+    }
+
     private static Assembly Compile(string source)
     {
         var statements = new Parser(new Lexer(source).ScanTokens()).ParseOrThrow();
@@ -803,6 +904,9 @@ public sealed class StablePrimitivePromiseThenTests
 
     private static MethodInfo FindSingleCaller(Assembly assembly, string methodName) =>
         Assert.Single(FindCallers(assembly, methodName));
+
+    private static List<MethodInfo> FindCompactObjectPrimitiveCallers(Assembly assembly) =>
+        FindCallers(assembly, "PromiseThenObjectPrimitive");
 
     private static List<MethodInfo> FindCallers(Assembly assembly, string methodName) =>
         assembly.GetTypes()

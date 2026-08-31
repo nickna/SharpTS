@@ -2433,6 +2433,63 @@ public abstract partial class ExpressionEmitterBase
         List<Expr> arguments)
     {
         Expr promise = methodGet.Object;
+        Expr promiseReference = UnwrapCallReference(promise);
+
+        // Direct intrinsic Promise.all always yields the base Promise task. If
+        // its sole synchronous fulfillment arrow accepts the array as object
+        // and returns a number, the result cannot require thenable adoption.
+        // Use the compact queued reaction machine while preserving the same
+        // FIFO Promise-job boundary as ordinary then().
+        if (methodName == "then"
+            && promiseReference is Expr.Call
+            {
+                Optional: false,
+                Callee: Expr.Get
+                {
+                    Optional: false,
+                    Object: Expr.Variable { Name.Lexeme: "Promise" },
+                    Name.Lexeme: "all"
+                }
+            }
+            && arguments is [Expr.ArrowFunction
+            {
+                IsAsync: false,
+                IsGenerator: false,
+                HasOwnThis: false,
+                Parameters: [{ IsRest: false, IsOptional: false, DefaultValue: null }]
+            } objectHandler]
+            && (objectHandler.ReturnType?.Trim() == "number"
+                || Ctx.TypeMap?.Get(objectHandler) is TypeSystem.TypeInfo.Function
+                {
+                    ReturnType: TypeSystem.TypeInfo.Primitive { Type: TokenType.TYPE_NUMBER }
+                        or TypeSystem.TypeInfo.NumberLiteral
+                })
+            && Ctx.ArrowMethods?.TryGetValue(objectHandler, out var objectHandlerMethod) == true
+            && objectHandlerMethod.ReturnType == Types.Object
+            && objectHandlerMethod.GetParameters() is [var objectHandlerParameter]
+            && objectHandlerParameter.ParameterType == Types.Object)
+        {
+            EmitExpression(promise);
+            EnsureBoxed();
+            IL.Emit(OpCodes.Castclass, Types.TaskOfObject);
+            var promiseLocal = IL.DeclareLocal(Types.TaskOfObject);
+            IL.Emit(OpCodes.Stloc, promiseLocal);
+            IL.Emit(OpCodes.Ldloc, promiseLocal);
+
+            if (TryEmitArrowAsDelegate(objectHandler, typeof(Func<object, object>)))
+            {
+                IL.Emit(OpCodes.Call, Ctx.Runtime!.PromiseThenObjectPrimitive);
+            }
+            else
+            {
+                EmitExpression(objectHandler);
+                EnsureBoxed();
+                IL.Emit(OpCodes.Ldnull);
+                IL.Emit(OpCodes.Call, Ctx.Runtime!.PromiseThen);
+            }
+            SetStackUnknown();
+            return;
+        }
 
         // #1438: a whole-program proof established that this receiver is a
         // fresh intrinsic Promise binding which never aliases or escapes, and

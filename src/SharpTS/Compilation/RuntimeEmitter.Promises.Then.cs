@@ -714,12 +714,14 @@ public partial class RuntimeEmitter
     /// </summary>
     private PrimitivePromiseThenStateMachine DefinePrimitivePromiseThenStateMachine(
         ModuleBuilder moduleBuilder,
-        Type promiseJobAwaiterType)
+        Type promiseJobAwaiterType,
+        string typeName,
+        Type handlerType)
     {
         var builderType = typeof(AsyncTaskMethodBuilder<object>);
         var awaiterType = typeof(TaskAwaiter<object?>);
         var smType = moduleBuilder.DefineType(
-            "$PromiseThenPrimitive_SM",
+            typeName,
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             typeof(ValueType),
             [typeof(IAsyncStateMachine)]);
@@ -731,7 +733,7 @@ public partial class RuntimeEmitter
         var promiseField = smType.DefineField(
             "promise", typeof(Task<object?>), FieldAttributes.Public);
         var onFulfilledField = smType.DefineField(
-            "onFulfilled", typeof(Func<double, double>), FieldAttributes.Public);
+            "onFulfilled", handlerType, FieldAttributes.Public);
         var promiseAwaiterField = smType.DefineField(
             "<>u__1", awaiterType, FieldAttributes.Private);
         var jobAwaiterField = smType.DefineField(
@@ -812,7 +814,10 @@ public partial class RuntimeEmitter
 
     private void EmitPrimitivePromiseThenMoveNext(
         PrimitivePromiseThenStateMachine sm,
-        Type promiseJobAwaiterType)
+        Type promiseJobAwaiterType,
+        Type handlerType,
+        bool unboxInput,
+        bool boxResult)
     {
         var il = sm.MoveNextMethod.GetILGenerator();
         var awaiterType = typeof(TaskAwaiter<object?>);
@@ -901,9 +906,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, sm.OnFulfilledField);
         il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Unbox_Any, typeof(double));
-        il.Emit(OpCodes.Callvirt, typeof(Func<double, double>).GetMethod("Invoke")!);
-        il.Emit(OpCodes.Box, typeof(double));
+        if (unboxInput)
+            il.Emit(OpCodes.Unbox_Any, typeof(double));
+        il.Emit(OpCodes.Callvirt, handlerType.GetMethod("Invoke")!);
+        if (boxResult)
+            il.Emit(OpCodes.Box, typeof(double));
         il.Emit(OpCodes.Stloc, resultLocal);
 
         il.Emit(OpCodes.Ldarg_0);
