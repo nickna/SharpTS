@@ -103,7 +103,12 @@ foreach ($requiredText in @(
     '2997d2bbe620534edbd79b0049f00ce84eef3fedb15c7822456d58e38d8b05c9',
     'b563ae76e22ce28c7080a8b628cfabf6fa86f9ee114a0f5697bc2ca26f9ce1d7',
     'Get-FileHash -LiteralPath $archivePath -Algorithm SHA256',
-    '--ignore-comments --check-only --exit-code',
+    '[Diagnostics.ProcessStartInfo]::new()',
+    "ArgumentList.Add('--ignore-comments')",
+    "ArgumentList.Add('--check-only')",
+    "ArgumentList.Add('--exit-code')",
+    'RedirectStandardOutput = $true',
+    'RedirectStandardError = $true',
     "return New-ScopeResult 'full'"
 )) {
     if (-not $ciScopeScript.Contains($requiredText, [StringComparison]::Ordinal)) {
