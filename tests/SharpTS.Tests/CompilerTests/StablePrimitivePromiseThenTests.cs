@@ -323,16 +323,6 @@ public sealed class StablePrimitivePromiseThenTests
         """
         async function work(): Promise<number> {
             let chain: Promise<number> = Promise.resolve(1);
-            chain = chain.then(
-                (value: number): number => value + 1,
-                (_error: any): number => 0);
-            return await chain;
-        }
-        work();
-        """,
-        """
-        async function work(): Promise<number> {
-            let chain: Promise<number> = Promise.resolve(1);
             const next: Promise<{ value: number }> = chain.then(
                 (value: number): { value: number } => ({ value: value + 1 }));
             return (await next).value;
@@ -777,6 +767,182 @@ public sealed class StablePrimitivePromiseThenTests
         Assert.Empty(FindCallers(assembly, "PromiseFromDirectExecutor"));
         Assert.NotEmpty(FindCallers(assembly, "PromiseFromExecutor"));
         Assert.Equal("3\n", TestHarness.RunCompiledStandalone(source));
+    }
+
+    [Fact]
+    public void StableNumericTwoHandler_UsesCompactTypedReaction()
+    {
+        const string source = """
+            function work(): Promise<number> {
+                let chain: Promise<number> = Promise.resolve(1);
+                chain = chain.then(
+                    (value: number): number => value + 1,
+                    (_error: any): number => 0,
+                );
+                return chain;
+            }
+            work().then((value: number): void => console.log(value));
+            """;
+
+        Assembly assembly = Compile(source);
+        MethodInfo caller = FindSingleCaller(
+            assembly, "PromiseThenPrimitiveWithRejection");
+        Assert.DoesNotContain(ReadInstructions(caller), instruction =>
+            instruction.Operand is MethodBase
+            {
+                Name: "PromiseThen" or "InvokeCallback" or "PromiseResolveValue"
+            });
+
+        MethodInfo moveNext = assembly
+            .GetType("$PromiseThenPrimitiveWithRejection_SM")!
+            .GetMethod("MoveNext")!;
+        Assert.Contains(ReadInstructions(moveNext), instruction =>
+            instruction.Operand is MethodBase
+            {
+                Name: "Invoke",
+                DeclaringType: { IsGenericType: true } declaringType
+            }
+            && declaringType.GetGenericTypeDefinition() == typeof(Func<,>));
+        Assert.DoesNotContain(ReadInstructions(moveNext), instruction =>
+            instruction.Operand is MethodBase
+            {
+                Name: "InvokeCallback" or "PromiseResolveValue"
+            });
+        Assert.Empty(TestHarness.CompileAndVerifyOnly(source));
+        Assert.Equal("2\n", TestHarness.RunCompiledStandalone(source));
+    }
+
+    [Fact]
+    public void StableNumericTwoHandler_PreservesRejectionThrowAndJobOrdering()
+    {
+        const string source = """
+            const events: string[] = [];
+            function makeFulfilled(): Promise<number> {
+                let chain: Promise<number> = Promise.resolve(1);
+                chain = chain.then(
+                    (value: number): number => {
+                        events.push("fulfilled:" + value);
+                        return value + 1;
+                    },
+                    (_error: any): number => {
+                        events.push("unexpected-rejection");
+                        return 0;
+                    },
+                );
+                return chain;
+            }
+            const fulfilled: Promise<number> = makeFulfilled();
+
+            events.push("sync");
+            queueMicrotask((): void => {
+                events.push("microtask");
+            });
+
+            function makeRecovered(): Promise<number> {
+                let chain: Promise<number> = Promise.resolve(
+                    Promise.reject("source-error")) as any as Promise<number>;
+                chain = chain.then(
+                    (value: number): number => value,
+                    (error: any): number => {
+                        events.push("rejected:" + error);
+                        return 7;
+                    },
+                );
+                return chain;
+            }
+            const recovered: Promise<number> = makeRecovered();
+
+            let sameReactionRejectCalls: number = 0;
+            function makeThrown(): Promise<number> {
+                let chain: Promise<number> = Promise.resolve(1);
+                chain = chain.then(
+                    (_value: number): number => {
+                        throw new Error("handler-error");
+                    },
+                    (_error: any): number => {
+                        sameReactionRejectCalls = sameReactionRejectCalls + 1;
+                        return 9;
+                    },
+                );
+                return chain;
+            }
+            const thrown: Promise<number> = makeThrown();
+            const checkedThrown: Promise<number> = thrown.then(
+                (_value: number): number => 0,
+                (error: any): number => {
+                    events.push("thrown:" + error.message);
+                    events.push("same-reject:" + sameReactionRejectCalls);
+                    return 0;
+                },
+            );
+
+            function makeRejectedThrow(): Promise<number> {
+                let chain: Promise<number> = Promise.resolve(
+                    Promise.reject("reject-source")) as any as Promise<number>;
+                chain = chain.then(
+                    (value: number): number => value,
+                    (error: any): number => {
+                        throw new Error("reject-handler-" + error);
+                    },
+                );
+                return chain;
+            }
+            const rejectedThrow: Promise<number> = makeRejectedThrow();
+            const checkedRejectedThrow: Promise<number> = rejectedThrow.then(
+                (_value: number): number => 0,
+                (error: any): number => {
+                    events.push("reject-thrown:" + error.message);
+                    return 0;
+                },
+            );
+
+            Promise.all([
+                fulfilled,
+                recovered,
+                checkedThrown,
+                checkedRejectedThrow,
+            ]).then(
+                (values: any): void => {
+                    events.push("values:" + values.join(":"));
+                    queueMicrotask((): void => console.log(events.join("|")));
+                },
+            );
+            """;
+
+        Assembly assembly = Compile(source);
+        Assert.Equal(4, FindCallers(
+            assembly, "PromiseThenPrimitiveWithRejection").Count);
+        Assert.Empty(TestHarness.CompileAndVerifyOnly(source));
+        Assert.Equal(
+            "sync|fulfilled:1|microtask|rejected:source-error|" +
+            "thrown:handler-error|same-reject:0|" +
+            "reject-thrown:reject-handler-reject-source|values:2:7:0:0\n",
+            TestHarness.RunCompiledStandalone(source));
+    }
+
+    [Fact]
+    public void StableTwoHandlerObjectResult_RetainsGeneralAdoption()
+    {
+        const string source = """
+            function work(): Promise<number> {
+                return (
+                    Promise.resolve(Promise.reject("source-error"))
+                        as any as Promise<number>
+                ).then(
+                    (value: number): number => value + 1,
+                    (_error: any): any => ({
+                        then: (resolve: any): void => resolve(9),
+                    }),
+                );
+            }
+            work().then((value: number): void => console.log(value));
+            """;
+
+        Assembly assembly = Compile(source);
+        Assert.Empty(FindCallers(
+            assembly, "PromiseThenPrimitiveWithRejection"));
+        Assert.NotEmpty(FindCallers(assembly, "PromiseThen"));
+        Assert.Equal("9\n", TestHarness.RunCompiledStandalone(source));
     }
 
     [Fact]

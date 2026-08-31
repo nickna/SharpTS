@@ -1562,7 +1562,9 @@ public abstract partial class ExpressionEmitterBase
             return true;
 
         if (methodName is "then" or "catch" or "finally"
-            && Ctx.RuntimeFeatures?.UsesPromisePrototypeMutation != true)
+            && (Ctx.RuntimeFeatures?.UsesPromisePrototypeMutation != true
+                || methodName == "then"
+                    && Ctx.TypeMap?.IsStablePrimitivePromiseThen(methodGet) == true))
         {
             EmitPromiseInstanceMethodCall(methodGet, methodName, c.Arguments);
             return true;
@@ -2493,13 +2495,24 @@ public abstract partial class ExpressionEmitterBase
 
         // #1438: a whole-program proof established that this receiver is a
         // fresh intrinsic Promise binding which never aliases or escapes, and
-        // that its sole inline fulfillment callback returns a primitive. The
-        // callback result therefore cannot require Promise Resolve/thenable
+        // that its inline callback results are primitive. Those callback
+        // results therefore cannot require Promise Resolve/thenable
         // adoption, while the intrinsic receiver cannot require constructor /
         // species observation or derived-result wrapping.
         if (methodName == "then"
             && Ctx.TypeMap?.IsStablePrimitivePromiseThen(methodGet) == true)
         {
+            bool useTypedRejection = arguments is
+                [Expr.ArrowFunction fulfilled, Expr.ArrowFunction rejected]
+                && Ctx.ArrowMethods?.TryGetValue(fulfilled, out var fulfilledMethod) == true
+                && fulfilledMethod.ReturnType == Types.Double
+                && fulfilledMethod.GetParameters() is [var fulfilledParameter]
+                && fulfilledParameter.ParameterType == Types.Double
+                && Ctx.ArrowMethods.TryGetValue(rejected, out var rejectedMethod)
+                && rejectedMethod.ReturnType == Types.Double
+                && rejectedMethod.GetParameters() is [var rejectedParameter]
+                && rejectedParameter.ParameterType == Types.Object;
+
             EmitExpression(promise);
             EnsureBoxed();
             IL.Emit(OpCodes.Castclass, Types.TaskOfObject);
@@ -2507,8 +2520,20 @@ public abstract partial class ExpressionEmitterBase
             IL.Emit(OpCodes.Stloc, promiseLocal);
             IL.Emit(OpCodes.Ldloc, promiseLocal);
 
-            var handler = (Expr.ArrowFunction)arguments[0];
-            if (TryEmitArrowAsDelegate(handler, typeof(Func<double, double>)))
+            if (useTypedRejection)
+            {
+                var fulfilledHandler = (Expr.ArrowFunction)arguments[0];
+                var rejectedHandler = (Expr.ArrowFunction)arguments[1];
+                if (!TryEmitArrowAsDelegate(fulfilledHandler, typeof(Func<double, double>))
+                    || !TryEmitArrowAsDelegate(rejectedHandler, typeof(Func<object, double>)))
+                {
+                    throw new InvalidOperationException(
+                        "Stable primitive Promise handlers could not be emitted as typed delegates.");
+                }
+                IL.Emit(OpCodes.Call, Ctx.Runtime!.PromiseThenPrimitiveWithRejection);
+            }
+            else if (arguments is [Expr.ArrowFunction handler]
+                && TryEmitArrowAsDelegate(handler, typeof(Func<double, double>)))
             {
                 IL.Emit(OpCodes.Call, Ctx.Runtime!.PromiseThenPrimitive);
             }
@@ -2517,9 +2542,8 @@ public abstract partial class ExpressionEmitterBase
                 // Defensive fallback if a future emitter cannot materialize the
                 // proven arrow as a typed delegate. The receiver is still stable,
                 // but callback behavior remains on the general state machine.
-                EmitExpression(handler);
-                EnsureBoxed();
-                IL.Emit(OpCodes.Ldnull);
+                EmitBoxedArgOrNull(arguments, 0);
+                EmitBoxedArgOrNull(arguments, 1);
                 IL.Emit(OpCodes.Call, Ctx.Runtime!.PromiseThen);
             }
             SetStackUnknown();

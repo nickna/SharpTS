@@ -1066,6 +1066,8 @@ public class EmittedRuntime
     public MethodBuilder PromiseThenObjectPrimitive { get; set; } = null!;
     /// <summary>$Runtime.PromiseThenPrimitive(Task&lt;object?&gt;, Func&lt;double,double&gt;) -> Task&lt;object?&gt; — stable intrinsic fulfillment-only numeric continuation whose primitive callback result cannot require thenable adoption.</summary>
     public MethodBuilder PromiseThenPrimitive { get; set; } = null!;
+    /// <summary>$Runtime.PromiseThenPrimitiveWithRejection(Task&lt;object?&gt;, Func&lt;double,double&gt;, Func&lt;object,double&gt;) -> Task&lt;object?&gt; — stable intrinsic numeric continuation with a typed rejection handler and no thenable-result adoption.</summary>
+    public MethodBuilder PromiseThenPrimitiveWithRejection { get; set; } = null!;
     public MethodBuilder PromiseCatch { get; set; } = null!;
     public MethodBuilder PromiseFinally { get; set; } = null!;
     /// <summary>Keeps standalone event-loop execution alive until a discarded top-level Promise reaction settles, without pumping it before the current script job completes.</summary>

@@ -716,7 +716,8 @@ public partial class RuntimeEmitter
         ModuleBuilder moduleBuilder,
         Type promiseJobAwaiterType,
         string typeName,
-        Type handlerType)
+        Type handlerType,
+        Type? rejectedHandlerType = null)
     {
         var builderType = typeof(AsyncTaskMethodBuilder<object>);
         var awaiterType = typeof(TaskAwaiter<object?>);
@@ -734,6 +735,10 @@ public partial class RuntimeEmitter
             "promise", typeof(Task<object?>), FieldAttributes.Public);
         var onFulfilledField = smType.DefineField(
             "onFulfilled", handlerType, FieldAttributes.Public);
+        var onRejectedField = rejectedHandlerType is null
+            ? null
+            : smType.DefineField(
+                "onRejected", rejectedHandlerType, FieldAttributes.Public);
         var promiseAwaiterField = smType.DefineField(
             "<>u__1", awaiterType, FieldAttributes.Private);
         var jobAwaiterField = smType.DefineField(
@@ -763,6 +768,7 @@ public partial class RuntimeEmitter
             BuilderField = builderField,
             PromiseField = promiseField,
             OnFulfilledField = onFulfilledField,
+            OnRejectedField = onRejectedField,
             PromiseAwaiterField = promiseAwaiterField,
             JobAwaiterField = jobAwaiterField,
             MoveNextMethod = moveNext,
@@ -772,9 +778,19 @@ public partial class RuntimeEmitter
 
     private void EmitPrimitivePromiseThenWrapper(
         ILGenerator il,
-        PrimitivePromiseThenStateMachine sm)
+        PrimitivePromiseThenStateMachine sm,
+        EmittedRuntime? runtime = null)
     {
         var smLocal = il.DeclareLocal(sm.Type);
+
+        if (sm.OnRejectedField is not null)
+        {
+            // PerformPromiseThen marks a rejected source handled when the
+            // callable rejection reaction is attached, before the job runs.
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Call, runtime!.NotifyPromiseRejectionHandler);
+        }
+
         il.Emit(OpCodes.Ldloca, smLocal);
         il.Emit(OpCodes.Initobj, sm.Type);
 
@@ -789,6 +805,13 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloca, smLocal);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Stfld, sm.OnFulfilledField);
+
+        if (sm.OnRejectedField is not null)
+        {
+            il.Emit(OpCodes.Ldloca, smLocal);
+            il.Emit(OpCodes.Ldarg_2);
+            il.Emit(OpCodes.Stfld, sm.OnRejectedField);
+        }
 
         il.Emit(OpCodes.Ldloca, smLocal);
         il.Emit(OpCodes.Call, _types.GetMethod(
@@ -919,6 +942,159 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldflda, sm.BuilderField);
         il.Emit(OpCodes.Ldloc, resultLocal);
+        il.Emit(OpCodes.Call, _types.GetMethod(sm.BuilderType, "SetResult")!);
+        il.Emit(OpCodes.Leave, returnLabel);
+
+        il.BeginCatchBlock(typeof(Exception));
+        il.Emit(OpCodes.Stloc, exceptionLocal);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldc_I4, -2);
+        il.Emit(OpCodes.Stfld, sm.StateField);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldflda, sm.BuilderField);
+        il.Emit(OpCodes.Ldloc, exceptionLocal);
+        il.Emit(OpCodes.Call, _types.GetMethod(sm.BuilderType, "SetException")!);
+        il.Emit(OpCodes.Leave, returnLabel);
+        il.EndExceptionBlock();
+
+        il.MarkLabel(returnLabel);
+        il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Emits the compact numeric two-handler reaction. Source rejection invokes
+    /// the typed rejection handler; a throw from either handler rejects the
+    /// result and is never redispatched to that same rejection handler.
+    /// </summary>
+    private void EmitPrimitivePromiseThenWithRejectionMoveNext(
+        PrimitivePromiseThenStateMachine sm,
+        EmittedRuntime runtime,
+        Type promiseJobAwaiterType,
+        Type fulfilledHandlerType,
+        Type rejectedHandlerType)
+    {
+        var il = sm.MoveNextMethod.GetILGenerator();
+        var awaiterType = typeof(TaskAwaiter<object?>);
+        var awaiterLocal = il.DeclareLocal(awaiterType);
+        var valueLocal = il.DeclareLocal(typeof(object));
+        var sourceExceptionLocal = il.DeclareLocal(typeof(Exception));
+        var exceptionLocal = il.DeclareLocal(typeof(Exception));
+        var resumeLabel = il.DefineLabel();
+        var jobResumeLabel = il.DefineLabel();
+        var queueJobLabel = il.DefineLabel();
+        var sourceObservedLabel = il.DefineLabel();
+        var rejectedLabel = il.DefineLabel();
+        var haveResultLabel = il.DefineLabel();
+        var returnLabel = il.DefineLabel();
+
+        il.BeginExceptionBlock();
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, sm.StateField);
+        il.Emit(OpCodes.Brfalse, resumeLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, sm.StateField);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Beq, jobResumeLabel);
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, sm.PromiseField);
+        il.Emit(OpCodes.Callvirt, _types.TaskOfObjectGetAwaiter);
+        il.Emit(OpCodes.Stloc, awaiterLocal);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, awaiterLocal);
+        il.Emit(OpCodes.Stfld, sm.PromiseAwaiterField);
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldflda, sm.PromiseAwaiterField);
+        il.Emit(OpCodes.Call, awaiterType.GetProperty("IsCompleted")!.GetGetMethod()!);
+        il.Emit(OpCodes.Brtrue, queueJobLabel);
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stfld, sm.StateField);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldflda, sm.BuilderField);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldflda, sm.PromiseAwaiterField);
+        il.Emit(OpCodes.Ldarg_0);
+        var awaitMethod = EmitGenerics.MakeGenericMethod(
+            _types.GetMethods(sm.BuilderType, BindingFlags.Public | BindingFlags.Instance)
+                .First(method => method.Name == "AwaitUnsafeOnCompleted" && method.IsGenericMethod),
+            awaiterType,
+            sm.Type);
+        il.Emit(OpCodes.Call, awaitMethod);
+        il.Emit(OpCodes.Leave, returnLabel);
+
+        il.MarkLabel(resumeLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldc_I4_M1);
+        il.Emit(OpCodes.Stfld, sm.StateField);
+
+        il.MarkLabel(queueJobLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Stfld, sm.StateField);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldflda, sm.BuilderField);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldflda, sm.JobAwaiterField);
+        il.Emit(OpCodes.Ldarg_0);
+        var jobAwaitMethod = EmitGenerics.MakeGenericMethod(
+            _types.GetMethods(sm.BuilderType, BindingFlags.Public | BindingFlags.Instance)
+                .First(method => method.Name == "AwaitUnsafeOnCompleted" && method.IsGenericMethod),
+            promiseJobAwaiterType,
+            sm.Type);
+        il.Emit(OpCodes.Call, jobAwaitMethod);
+        il.Emit(OpCodes.Leave, returnLabel);
+
+        il.MarkLabel(jobResumeLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldc_I4_M1);
+        il.Emit(OpCodes.Stfld, sm.StateField);
+
+        // Observe source settlement separately so only a source rejection is
+        // routed to onRejected. A fulfilled-handler throw is caught by the
+        // surrounding reaction guard and rejects the output directly.
+        il.Emit(OpCodes.Ldnull);
+        il.Emit(OpCodes.Stloc, sourceExceptionLocal);
+        il.BeginExceptionBlock();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldflda, sm.PromiseAwaiterField);
+        il.Emit(OpCodes.Call, awaiterType.GetMethod("GetResult")!);
+        il.Emit(OpCodes.Stloc, valueLocal);
+        il.Emit(OpCodes.Leave, sourceObservedLabel);
+        il.BeginCatchBlock(typeof(Exception));
+        il.Emit(OpCodes.Stloc, sourceExceptionLocal);
+        il.Emit(OpCodes.Leave, sourceObservedLabel);
+        il.EndExceptionBlock();
+        il.MarkLabel(sourceObservedLabel);
+
+        il.Emit(OpCodes.Ldloc, sourceExceptionLocal);
+        il.Emit(OpCodes.Brtrue, rejectedLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, sm.OnFulfilledField);
+        il.Emit(OpCodes.Ldloc, valueLocal);
+        il.Emit(OpCodes.Unbox_Any, typeof(double));
+        il.Emit(OpCodes.Callvirt, fulfilledHandlerType.GetMethod("Invoke")!);
+        il.Emit(OpCodes.Br, haveResultLabel);
+
+        il.MarkLabel(rejectedLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, sm.OnRejectedField!);
+        il.Emit(OpCodes.Ldloc, sourceExceptionLocal);
+        il.Emit(OpCodes.Call, runtime.WrapException);
+        il.Emit(OpCodes.Callvirt, rejectedHandlerType.GetMethod("Invoke")!);
+
+        il.MarkLabel(haveResultLabel);
+        il.Emit(OpCodes.Box, typeof(double));
+        il.Emit(OpCodes.Stloc, valueLocal);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldc_I4, -2);
+        il.Emit(OpCodes.Stfld, sm.StateField);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldflda, sm.BuilderField);
+        il.Emit(OpCodes.Ldloc, valueLocal);
         il.Emit(OpCodes.Call, _types.GetMethod(sm.BuilderType, "SetResult")!);
         il.Emit(OpCodes.Leave, returnLabel);
 

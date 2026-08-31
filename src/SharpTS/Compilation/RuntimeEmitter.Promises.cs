@@ -61,8 +61,8 @@ internal class PromiseThenStateMachine
 }
 
 /// <summary>
-/// Holds information about the fulfillment-only Promise.then state machine used
-/// when the receiver and primitive callback result are statically stable.
+/// Holds information about a compact Promise.then state machine used when the
+/// receiver and primitive callback results are statically stable.
 /// </summary>
 internal class PrimitivePromiseThenStateMachine
 {
@@ -71,6 +71,7 @@ internal class PrimitivePromiseThenStateMachine
     public required FieldBuilder BuilderField { get; init; }
     public required FieldBuilder PromiseField { get; init; }
     public required FieldBuilder OnFulfilledField { get; init; }
+    public FieldBuilder? OnRejectedField { get; init; }
     public required FieldBuilder PromiseAwaiterField { get; init; }
     public required FieldBuilder JobAwaiterField { get; init; }
     public required MethodBuilder MoveNextMethod { get; init; }
@@ -766,10 +767,36 @@ public partial class RuntimeEmitter
             unboxInput: false,
             boxResult: false);
 
+        // A stable numeric reaction with an inline numeric rejection handler
+        // can remain on the typed ABI as well. This compact machine still
+        // distinguishes source rejection (which invokes onRejected) from a
+        // fulfillment-handler throw (which rejects the result directly).
+        var primitiveHandlerType = typeof(Func<double, double>);
+        var primitiveRejectHandlerType = typeof(Func<object, double>);
+        var primitiveWithRejectionSM = DefinePrimitivePromiseThenStateMachine(
+            moduleBuilder,
+            promiseJobAwaiterType,
+            "$PromiseThenPrimitiveWithRejection_SM",
+            primitiveHandlerType,
+            primitiveRejectHandlerType);
+        var primitiveWithRejection = typeBuilder.DefineMethod(
+            "PromiseThenPrimitiveWithRejection",
+            MethodAttributes.Public | MethodAttributes.Static,
+            taskType,
+            [taskType, primitiveHandlerType, primitiveRejectHandlerType]);
+        runtime.PromiseThenPrimitiveWithRejection = primitiveWithRejection;
+        EmitPrimitivePromiseThenWrapper(
+            primitiveWithRejection.GetILGenerator(), primitiveWithRejectionSM, runtime);
+        EmitPrimitivePromiseThenWithRejectionMoveNext(
+            primitiveWithRejectionSM,
+            runtime,
+            promiseJobAwaiterType,
+            primitiveHandlerType,
+            primitiveRejectHandlerType);
+
         // Retain the small state machine as a defensive fallback for an input
         // that violates the completed intrinsic seed invariant. Proven-linear
         // chains use one fused carrier and one final Task instead.
-        var primitiveHandlerType = typeof(Func<double, double>);
         var primitivePromiseThenSM = DefinePrimitivePromiseThenStateMachine(
             moduleBuilder,
             promiseJobAwaiterType,
@@ -805,6 +832,7 @@ public partial class RuntimeEmitter
             primitiveThenFallback);
         primitiveChain.Type.CreateType();
         objectPrimitivePromiseThenSM.Type.CreateType();
+        primitiveWithRejectionSM.Type.CreateType();
         primitivePromiseThenSM.Type.CreateType();
 
         // Promise.prototype.catch - delegates to PromiseThen(promise, null, onRejected)

@@ -299,9 +299,9 @@ public class TypeMap
 
     /// <summary>
     /// Marks a direct <c>Promise.prototype.then</c> access whose receiver is a fresh,
-    /// non-escaping intrinsic Promise binding and whose sole inline fulfillment
-    /// callback has a statically primitive result. The compiler may skip species,
-    /// dynamic callback-shape, and thenable-adoption machinery for this exact call.
+    /// non-escaping intrinsic Promise binding and whose inline callback results are
+    /// statically primitive. The compiler may skip species, dynamic callback-shape,
+    /// and thenable-adoption machinery for this exact call.
     /// </summary>
     public void MarkStablePrimitivePromiseThen(Expr.Get method) =>
         _stablePrimitivePromiseThenCalls.Add(method);
