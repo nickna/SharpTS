@@ -143,4 +143,24 @@ public class RuntimeCallableDispatcherTests
 
         Assert.Equal(1, callCount);
     }
+
+    [Fact]
+    public void EmitDirect_SoleListenerAddedDuringEmitWaitsForNextEmission()
+    {
+        var emitter = new SharpTSEventEmitter();
+        var calls = new List<string>();
+        Action<object?[]> added = _ => calls.Add("added");
+        Action<object?[]> initial = _ =>
+        {
+            calls.Add("initial");
+            emitter.AddListenerDirect("evt", added);
+        };
+
+        emitter.AddListenerDirect("evt", initial);
+        emitter.EmitDirect("evt");
+        Assert.Equal(["initial"], calls);
+
+        emitter.EmitDirect("evt");
+        Assert.Equal(["initial", "initial", "added"], calls);
+    }
 }
