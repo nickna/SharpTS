@@ -44,6 +44,12 @@ function Assert-Mode([string]$Expected, [object]$Actual, [string]$Case) {
     }
 }
 
+function Assert-NativeExitCode([int]$Expected, [int]$Actual, [string]$Case) {
+    if ($Actual -ne $Expected) {
+        throw "$Case expected native exit code $Expected, got $Actual."
+    }
+}
+
 try {
     New-Item -ItemType Directory -Path $fixtureRoot | Out-Null
     Push-Location $fixtureRoot
@@ -91,7 +97,9 @@ internal static class Sample
 }
 '@
         $stringChange = Save-Fixture 'string token change'
-        Assert-Mode 'full' (Get-Scope $commentsAndDocs $stringChange) 'comment marker inside string'
+        $stringChangeScope = Get-Scope $commentsAndDocs $stringChange
+        Assert-Mode 'full' $stringChangeScope 'comment marker inside string'
+        Assert-NativeExitCode 0 $LASTEXITCODE 'syntax-change classification'
 
         Write-Fixture 'src/Sample.cs' @'
 #nullable disable
@@ -104,7 +112,9 @@ internal static class Sample
 }
 '@
         $directiveChange = Save-Fixture 'directive change'
-        Assert-Mode 'full' (Get-Scope $stringChange $directiveChange) 'preprocessor directive change'
+        $directiveChangeScope = Get-Scope $stringChange $directiveChange
+        Assert-Mode 'full' $directiveChangeScope 'preprocessor directive change'
+        Assert-NativeExitCode 0 $LASTEXITCODE 'directive-change classification'
 
         Write-Fixture 'src/Added.cs' "namespace Fixture;`ninternal sealed class Added;`n"
         $addedFile = Save-Fixture 'add C# file'

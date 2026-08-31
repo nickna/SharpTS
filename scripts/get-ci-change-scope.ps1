@@ -194,6 +194,38 @@ function Write-GitBlob([string]$Revision, [string]$Path, [string]$Destination) {
     }
 }
 
+function Invoke-DifftasticCheck([string]$Tool, [string]$OldPath, [string]$NewPath) {
+    $startInfo = [Diagnostics.ProcessStartInfo]::new()
+    $startInfo.FileName = $Tool
+    $startInfo.WorkingDirectory = (Get-Location).ProviderPath
+    $startInfo.UseShellExecute = $false
+    $startInfo.RedirectStandardOutput = $true
+    $startInfo.RedirectStandardError = $true
+    $startInfo.ArgumentList.Add('--ignore-comments')
+    $startInfo.ArgumentList.Add('--check-only')
+    $startInfo.ArgumentList.Add('--exit-code')
+    $startInfo.ArgumentList.Add($OldPath)
+    $startInfo.ArgumentList.Add($NewPath)
+
+    $process = [Diagnostics.Process]::new()
+    $process.StartInfo = $startInfo
+    if (-not $process.Start()) { throw "Unable to start Difftastic for $NewPath." }
+    try {
+        # Drain both redirected streams concurrently so neither pipe can block the process.
+        $standardOutputTask = $process.StandardOutput.ReadToEndAsync()
+        $standardErrorTask = $process.StandardError.ReadToEndAsync()
+        $process.WaitForExit()
+        return [pscustomobject]@{
+            ExitCode = $process.ExitCode
+            StandardOutput = $standardOutputTask.GetAwaiter().GetResult()
+            StandardError = $standardErrorTask.GetAwaiter().GetResult()
+        }
+    }
+    finally {
+        $process.Dispose()
+    }
+}
+
 function Test-NoCSharpSyntaxChange([string]$Tool, [string]$Path) {
     $comparisonRoot = Join-Path ([IO.Path]::GetTempPath()) ('sharpts-ci-diff-' + [Guid]::NewGuid().ToString('N'))
     try {
@@ -203,9 +235,11 @@ function Test-NoCSharpSyntaxChange([string]$Tool, [string]$Path) {
         Write-GitBlob $BaseSha $Path $oldPath
         Write-GitBlob $HeadSha $Path $newPath
 
-        $output = @(& $Tool --ignore-comments --check-only --exit-code $oldPath $newPath 2>&1)
-        $exitCode = $LASTEXITCODE
-        foreach ($line in $output) { Write-Host $line }
+        $result = Invoke-DifftasticCheck $Tool $oldPath $newPath
+        foreach ($text in @($result.StandardOutput, $result.StandardError)) {
+            if (-not [string]::IsNullOrWhiteSpace($text)) { Write-Host $text.TrimEnd() }
+        }
+        $exitCode = $result.ExitCode
         if ($exitCode -eq 0) { return $true }
         if ($exitCode -eq 1) { return $false }
         throw "Difftastic failed for '$Path' with exit code $exitCode."
