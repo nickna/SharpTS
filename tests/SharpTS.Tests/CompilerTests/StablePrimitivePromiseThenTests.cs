@@ -533,6 +533,47 @@ public sealed class StablePrimitivePromiseThenTests
             });
     }
 
+    [Fact]
+    public void IntrinsicPromiseAllWithoutPrototypeMutation_AvoidsResultAdoptionFacade()
+    {
+        Assembly assembly = Compile("""
+            function gather(promise: Promise<number>): Promise<number[]> {
+                return Promise.all([promise]);
+            }
+            gather(new Promise<number>((resolve): void => resolve(1)));
+            """);
+
+        MethodInfo promiseAll = assembly.GetType("$Runtime")!
+            .GetMethod("PromiseAll")!;
+        Assert.DoesNotContain(ReadInstructions(promiseAll), instruction =>
+            instruction.Operand is MethodBase
+            {
+                Name: "AdoptPromiseCombinatorResult"
+            });
+    }
+
+    [Fact]
+    public void IntrinsicPromiseAllWithPrototypeMutation_RetainsResultAdoptionFacade()
+    {
+        Assembly assembly = Compile("""
+            (Array.prototype as any).then = function (resolve: any): void {
+                resolve("adopted");
+            };
+            function gather(promise: Promise<number>): Promise<number[]> {
+                return Promise.all([promise]);
+            }
+            gather(new Promise<number>((resolve): void => resolve(1)));
+            """);
+
+        MethodInfo promiseAll = assembly.GetType("$Runtime")!
+            .GetMethod("PromiseAll")!;
+        Assert.Contains(ReadInstructions(promiseAll), instruction =>
+            instruction.Operand is MethodBase
+            {
+                Name: "AdoptPromiseCombinatorResult"
+            });
+    }
+
     [Theory, ModeData]
     public void StablePromiseAllFanOut_PreservesPromiseJobOrdering(ExecutionMode mode)
     {

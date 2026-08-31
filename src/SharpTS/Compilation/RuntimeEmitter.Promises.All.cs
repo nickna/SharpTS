@@ -97,7 +97,20 @@ public partial class RuntimeEmitter
         EmittedStateMachine sm,
         EmittedRuntime runtime,
         bool stablePrimitive)
-        => EmitCombinatorWrapper(il, sm.Type, sm.StateField, sm.IterableField, sm.BuilderField, sm.BuilderType,
+    {
+        // The intrinsic result is a fresh internal array. When the whole-program
+        // feature analysis proves that neither Array/Object prototypes nor
+        // property descriptors can change, that array cannot become a thenable.
+        // Return the state-machine task directly instead of building a second
+        // TCS/callback/continuation facade solely to re-run Promise resolution.
+        MethodInfo? adoptResultMethod =
+            _features.UsesArrayPrototypeMutation
+            || _features.UsesDynamicPropertyDescriptors
+            || _features.UsesClassPrototypeMutation
+                ? runtime.AdoptPromiseCombinatorResultMethod
+                : null;
+
+        EmitCombinatorWrapper(il, sm.Type, sm.StateField, sm.IterableField, sm.BuilderField, sm.BuilderType,
             () =>
             {
                 // Store the raw input. NormalizePromiseList runs inside
@@ -106,10 +119,11 @@ public partial class RuntimeEmitter
             }, sm.ConstructorField, () => il.Emit(OpCodes.Ldarg_1),
             sm.CapabilityField, () => il.Emit(OpCodes.Ldarg_2),
             markNonAutoAwaitMethod: runtime.MarkNonAutoAwaitPromiseMethod,
-            adoptResultMethod: runtime.AdoptPromiseCombinatorResultMethod,
+            adoptResultMethod: adoptResultMethod,
             stablePrimitiveField: sm.StablePrimitiveField,
             emitStablePrimitiveValue: () => il.Emit(
                 stablePrimitive ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0));
+    }
 
     /// <summary>
     /// Emits the compiler-proven completed primitive Promise.all path. The

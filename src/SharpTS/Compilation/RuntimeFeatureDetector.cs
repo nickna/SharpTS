@@ -934,6 +934,12 @@ public sealed class RuntimeFeatureDetector
                     if (ov.Name.Lexeme is "Object" or "Reflect"
                         && g.Name.Lexeme == "getPrototypeOf")
                     {
+                        // The returned prototype can alias Array.prototype (or
+                        // Object.prototype in an array's chain) and later gain
+                        // a callable `then`. Promise.all may skip its result-
+                        // adoption facade only when that cannot happen.
+                        _set.UsesClassPrototypeMutation = true;
+                        _set.UsesArrayPrototypeMutation = true;
                         _set.UsesRegExpPrototypeMutation = true;
                         _set.UsesStringPrototypeMutation = true;
                         _set.UsesMathMutation = true;

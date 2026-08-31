@@ -518,6 +518,29 @@ public class PromiseMethodTests
         Assert.Equal("9\n1\n", output);
     }
 
+    [Theory, ModeData]
+    public void All_ResultAssimilatesArrayPrototypeThen(ExecutionMode mode)
+    {
+        var source = """
+            let calls: number = 0;
+            const prototype: any = Array.prototype;
+            prototype.then = function (resolve: any): void {
+                calls = calls + 1;
+                resolve("adopted");
+            };
+
+            async function main(): Promise<void> {
+                const result: any = await Promise.all([Promise.resolve(1)]);
+                console.log(result);
+                console.log(calls);
+            }
+            main();
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("adopted\n1\n", output);
+    }
+
     #endregion
 
     #region Promise.race() Tests
