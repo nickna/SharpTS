@@ -691,6 +691,53 @@ public sealed class StablePrimitivePromiseThenTests
         Assert.NotEmpty(FindCallers(assembly, "PromiseAll"));
     }
 
+    [Fact]
+    public void InlinePromiseExecutor_UsesTypedDirectInvocation()
+    {
+        const string source = """
+            function create(): Promise<number> {
+                return new Promise<number>((resolve: any, reject: any): void => {
+                    resolve(7);
+                });
+            }
+            create().then((value: number): void => console.log(value));
+            """;
+
+        Assembly assembly = Compile(source);
+        MethodInfo caller = FindSingleCaller(assembly, "PromiseFromDirectExecutor");
+        Assert.DoesNotContain(ReadInstructions(caller), instruction =>
+            instruction.Operand is MethodBase { Name: "PromiseFromExecutor" });
+
+        MethodInfo direct = assembly.GetType("$Runtime")!
+            .GetMethod("PromiseFromDirectExecutor")!;
+        Assert.Contains(ReadInstructions(direct), instruction =>
+            instruction.Operand is MethodBase
+            {
+                Name: "Invoke",
+                DeclaringType: { IsGenericType: true } declaringType
+            }
+            && declaringType.GetGenericTypeDefinition() == typeof(Func<,,>));
+        Assert.DoesNotContain(ReadInstructions(direct), instruction =>
+            instruction.Operand is MethodBase { Name: "InvokeMethodValue" });
+        Assert.Empty(TestHarness.CompileAndVerifyOnly(source));
+        Assert.Equal("7\n", TestHarness.RunCompiledStandalone(source));
+    }
+
+    [Fact]
+    public void EscapedPromiseExecutor_RetainsGeneralCallableDispatch()
+    {
+        const string source = """
+            const executor: any = (resolve: any, reject: any): void => resolve(3);
+            const promise: Promise<number> = new Promise<number>(executor);
+            promise.then((value: number): void => console.log(value));
+            """;
+
+        Assembly assembly = Compile(source);
+        Assert.Empty(FindCallers(assembly, "PromiseFromDirectExecutor"));
+        Assert.NotEmpty(FindCallers(assembly, "PromiseFromExecutor"));
+        Assert.Equal("3\n", TestHarness.RunCompiledStandalone(source));
+    }
+
     private static Assembly Compile(string source)
     {
         var statements = new Parser(new Lexer(source).ScanTokens()).ParseOrThrow();

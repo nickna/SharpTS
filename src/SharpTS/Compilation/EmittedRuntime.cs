@@ -1073,6 +1073,8 @@ public class EmittedRuntime
     public MethodBuilder PromiseKeyedMapResult { get; set; } = null!;
     public MethodBuilder PromiseAny { get; set; } = null!;
     public MethodBuilder PromiseFromExecutor { get; set; } = null!;
+    /// <summary>$Runtime.PromiseFromDirectExecutor(Func&lt;object,object,object&gt;) -> Task&lt;object?&gt; — compiler-only fast path for an inline, two-argument Promise executor arrow whose CLR signature is known. Avoids materializing a $TSFunction and redispatching the executor through InvokeMethodValue.</summary>
+    public MethodBuilder PromiseFromDirectExecutor { get; set; } = null!;
     public MethodBuilder PromiseWithResolvers { get; set; } = null!;
     /// <summary>$Runtime.UnwrapPromiseReceiver(object) -> Task&lt;object?&gt; — $Promise (incl. #242 subclasses) → .Task; anything else is cast to Task&lt;object?&gt;. Used by then/catch/finally emission so promise-typed receivers work regardless of representation.</summary>
     public MethodBuilder UnwrapPromiseReceiverMethod { get; set; } = null!;

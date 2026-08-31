@@ -445,6 +445,34 @@ public abstract partial class ExpressionEmitterBase
 
             // --- Promise ---
             case "Promise":
+                // An inline executor arrow with the exact boxed two-argument
+                // signature is consumed synchronously by this constructor and
+                // cannot be observed as a function value. Bind its emitted
+                // body to a typed delegate so the runtime can invoke it
+                // directly, avoiding $TSFunction + object[] dynamic dispatch.
+                if (arguments.Count == 1
+                    && arguments[0] is Expr.ArrowFunction
+                    {
+                        IsAsync: false,
+                        IsGenerator: false,
+                        Name: null,
+                        HasOwnThis: false,
+                        Parameters: [var resolveParameter, var rejectParameter]
+                    } executorArrow
+                    && executorArrow.TypeParams is null or { Count: 0 }
+                    && Ctx.TypeMap?.Get(executorArrow) is
+                        TypeSystem.TypeInfo.Function
+                        { ReturnType: TypeSystem.TypeInfo.Void }
+                    && IsBoxedPromiseExecutorParameter(resolveParameter)
+                    && IsBoxedPromiseExecutorParameter(rejectParameter)
+                    && TryEmitArrowAsDelegate(
+                        executorArrow, typeof(Func<object, object, object>)))
+                {
+                    IL.Emit(OpCodes.Call, Ctx.Runtime!.PromiseFromDirectExecutor);
+                    SetStackUnknown();
+                    return true;
+                }
+
                 if (arguments.Count == 0)
                 {
                     // Missing executor is a runtime TypeError. Emitting the
@@ -640,6 +668,14 @@ public abstract partial class ExpressionEmitterBase
                 return false;
         }
     }
+
+    private static bool IsBoxedPromiseExecutorParameter(Stmt.Parameter parameter) =>
+        !parameter.IsRest
+        && !parameter.IsOptional
+        && !parameter.IsParameterProperty
+        && parameter.DestructuredProperties is null
+        && parameter.DefaultValue is null
+        && parameter.Type is null or "any" or "unknown" or "object";
 
     /// <summary>
     /// Attempts to emit an Intl namespace constructor.
