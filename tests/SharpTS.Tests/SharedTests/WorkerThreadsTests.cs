@@ -1,3 +1,6 @@
+using System.Collections.Concurrent;
+using System.Reflection;
+using System.Reflection.Emit;
 using SharpTS.Compilation;
 using SharpTS.Runtime.Types;
 using SharpTS.Tests.Infrastructure;
@@ -1646,9 +1649,10 @@ public class WorkerThreadsTests
     /// <remarks>
     /// This exercises the full cross-runtime/cross-thread contract. In compiled mode
     /// the channel ports are the emitted <c>$MessagePort</c> type and the transferred
-    /// port is adopted by the worker's interpreter via <c>CompiledMessagePortBridge</c>
-    /// (which forwards posts to the compiled partner on the parent's <c>$EventLoop</c>
-    /// and drains the partner's posts onto the worker loop). In interpreter mode the
+    /// port is adopted via <c>CompiledMessagePortBridge</c>. The bridge attaches to the
+    /// isolated compiled worker's event loop, forwards posts to the compiled partner on
+    /// the parent's <c>$EventLoop</c>, and dispatches incoming messages directly to the
+    /// worker's emitted listeners. In interpreter mode the
     /// ports are <c>SharpTSMessagePort</c>; transfer marks the pair cross-thread so
     /// delivery marshals onto each owner's loop instead of the poster's thread, and a
     /// started port keeps its loop alive. Before the fix the compiled
@@ -1665,6 +1669,7 @@ public class WorkerThreadsTests
     [Theory, ModeData]
     public void Worker_TransferredMessagePort_RoundTripsBetweenParentAndWorker(ExecutionMode mode)
     {
+        long compiledExecutionsBefore = CompiledWorkerCompilationService.ExecutionCount;
         var files = new Dictionary<string, string>
         {
             ["worker_port.ts"] = """
@@ -1693,6 +1698,12 @@ public class WorkerThreadsTests
 
         var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Contains("received:pong:ping", output);
+        if (mode == ExecutionMode.Compiled)
+        {
+            Assert.True(
+                CompiledWorkerCompilationService.ExecutionCount > compiledExecutionsBefore,
+                "A transferred MessagePort must not force the worker into interpreter fallback.");
+        }
     }
 
     [Theory, ModeData]
@@ -2256,6 +2267,89 @@ public class WorkerThreadsTests
         {
             try { Directory.Delete(directory, recursive: true); } catch { }
         }
+    }
+
+    [Fact]
+    public void CompiledWorker_TransferredMessagePortDoesNotRootRealmAfterExit()
+    {
+        string directory = Path.Combine(
+            Path.GetTempPath(), $"sharpts_compiled_worker_{Guid.NewGuid():N}");
+        Directory.CreateDirectory(directory);
+        string workerPath = Path.Combine(directory, "worker.ts");
+        File.WriteAllText(workerPath, """
+            const port: any = workerData.port;
+            port.on("message", () => {});
+            port.close();
+            """);
+
+        WeakReference realm;
+        try
+        {
+            object emittedPort = CreateEmittedMessagePortStub();
+            var options = new Dictionary<string, object?>
+            {
+                ["workerData"] = new Dictionary<string, object?> { ["port"] = emittedPort },
+                ["transferList"] = new List<object?> { emittedPort },
+            };
+
+            using (var worker = SharpTSWorker.CreateForCompiledLoop(
+                       workerPath, options, static () => { }, static () => { },
+                       static action => action()))
+            {
+                Assert.True(SpinWait.SpinUntil(() => !worker.IsRunning, TimeSpan.FromSeconds(30)),
+                    "Compiled transferred-port worker did not exit.");
+                realm = worker.CompiledRealmReference
+                    ?? throw new Xunit.Sdk.XunitException(
+                        "Compiled transferred-port worker did not create an isolated realm.");
+            }
+
+            for (int i = 0; i < 10 && realm.IsAlive; i++)
+            {
+                GC.Collect();
+                GC.WaitForPendingFinalizers();
+                GC.Collect();
+                Thread.Sleep(20);
+            }
+
+            Assert.False(realm.IsAlive,
+                "The transferred MessagePort bridge retained the compiled worker realm after exit.");
+        }
+        finally
+        {
+            try { Directory.Delete(directory, recursive: true); } catch { }
+        }
+    }
+
+    private static object CreateEmittedMessagePortStub()
+    {
+        var assembly = AssemblyBuilder.DefineDynamicAssembly(
+            new AssemblyName($"SharpTS.MessagePortStub.{Guid.NewGuid():N}"),
+            AssemblyBuilderAccess.Run);
+        var module = assembly.DefineDynamicModule("main");
+        var type = module.DefineType("$MessagePort", TypeAttributes.Public | TypeAttributes.Class);
+        var pending = type.DefineField(
+            "_pending", typeof(ConcurrentQueue<object>), FieldAttributes.Private);
+        type.DefineField("_onEnqueue", typeof(Action), FieldAttributes.Private);
+
+        var ctor = type.DefineConstructor(
+            MethodAttributes.Public, CallingConventions.Standard, Type.EmptyTypes);
+        var ctorIl = ctor.GetILGenerator();
+        ctorIl.Emit(OpCodes.Ldarg_0);
+        ctorIl.Emit(OpCodes.Call, typeof(object).GetConstructor(Type.EmptyTypes)!);
+        ctorIl.Emit(OpCodes.Ldarg_0);
+        ctorIl.Emit(OpCodes.Newobj,
+            typeof(ConcurrentQueue<object>).GetConstructor(Type.EmptyTypes)!);
+        ctorIl.Emit(OpCodes.Stfld, pending);
+        ctorIl.Emit(OpCodes.Ret);
+
+        var postMessage = type.DefineMethod(
+            "PostMessage", MethodAttributes.Public, typeof(void), [typeof(object)]);
+        postMessage.GetILGenerator().Emit(OpCodes.Ret);
+        var markTransferred = type.DefineMethod(
+            "MarkTransferredAcrossThreads", MethodAttributes.Public, typeof(void), Type.EmptyTypes);
+        markTransferred.GetILGenerator().Emit(OpCodes.Ret);
+
+        return Activator.CreateInstance(type.CreateType())!;
     }
 
     /// <summary>

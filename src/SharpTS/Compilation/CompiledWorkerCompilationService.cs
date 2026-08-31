@@ -167,9 +167,6 @@ internal static class CompiledWorkerCompilationService
         if (!value.GetType().IsValueType && !visited.Add(value))
             return false;
 
-        if (value is CompiledMessagePortBridge)
-            return true;
-
         string typeName = value.GetType().Name;
         if (typeName is "$ArrayBuffer" or "$SharedArrayBuffer" ||
             (typeName.StartsWith('$') && typeName.EndsWith("Array", StringComparison.Ordinal)))

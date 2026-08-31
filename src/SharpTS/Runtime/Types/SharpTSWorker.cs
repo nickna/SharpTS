@@ -507,6 +507,7 @@ public class SharpTSWorker : SharpTSEventEmitter, IDisposable
         _compiledRealmReference = new WeakReference(loadContext);
 
         MethodInfo? clearContext = null;
+        List<CompiledMessagePortBridge>? compiledMessagePorts = null;
         try
         {
             using var stream = new MemoryStream(artifact, writable: false);
@@ -549,12 +550,22 @@ public class SharpTSWorker : SharpTSEventEmitter, IDisposable
             // Bind the emitted loop methods once. Calling MethodInfo.Invoke from these
             // lambdas put reflection and an object[] allocation on every parent→worker
             // message; closed delegates cross the collectible-realm boundary directly.
-            _compiledWorkerSchedule = (Action<Action>)schedule.CreateDelegate(
+            var compiledSchedule = (Action<Action>)schedule.CreateDelegate(
                 typeof(Action<Action>), eventLoop);
+            var compiledLoopRef = (Action)loopRef.CreateDelegate(typeof(Action), eventLoop);
+            var compiledLoopUnref = (Action)loopUnref.CreateDelegate(typeof(Action), eventLoop);
+            _compiledWorkerSchedule = compiledSchedule;
             _compiledWorkerCancel = () => cancelField?.SetValue(null, true);
             _compiledWorkerWake = (Action)wake.CreateDelegate(typeof(Action), eventLoop);
-            _compiledWorkerRef = (Action)loopRef.CreateDelegate(typeof(Action), eventLoop);
-            _compiledWorkerUnref = (Action)loopUnref.CreateDelegate(typeof(Action), eventLoop);
+            _compiledWorkerRef = compiledLoopRef;
+            _compiledWorkerUnref = compiledLoopUnref;
+
+            compiledMessagePorts = FindCompiledMessagePortBridges(_workerData);
+            foreach (var messagePort in compiledMessagePorts)
+            {
+                messagePort.AttachCompiledRealm(
+                    compiledSchedule, compiledLoopRef, compiledLoopUnref);
+            }
 
             // terminate() can race the cold compile/load/bootstrap window. If it ran before
             // these delegates were published it could not set the emitted cancellation flag,
@@ -598,6 +609,11 @@ public class SharpTSWorker : SharpTSEventEmitter, IDisposable
         }
         finally
         {
+            if (compiledMessagePorts != null)
+            {
+                foreach (var messagePort in compiledMessagePorts)
+                    messagePort.DetachCompiledRealm();
+            }
             _compiledWorkerSchedule = null;
             _compiledWorkerCancel = null;
             _compiledWorkerWake = null;
@@ -608,6 +624,42 @@ public class SharpTSWorker : SharpTSEventEmitter, IDisposable
             catch { /* teardown is best-effort; the entire realm is being unloaded */ }
             RuntimeCallableDispatcher.ClearCaches();
             loadContext.Unload();
+        }
+    }
+
+    private static List<CompiledMessagePortBridge> FindCompiledMessagePortBridges(object? value)
+    {
+        var bridges = new List<CompiledMessagePortBridge>();
+        var visited = new HashSet<object>(
+            System.Collections.Generic.ReferenceEqualityComparer.Instance);
+
+        Visit(value);
+        return bridges;
+
+        void Visit(object? current)
+        {
+            if (current is null || current is string || current.GetType().IsValueType ||
+                !visited.Add(current))
+                return;
+
+            switch (current)
+            {
+                case CompiledMessagePortBridge bridge:
+                    bridges.Add(bridge);
+                    return;
+                case IDictionary<string, object?> dictionary:
+                    foreach (var item in dictionary.Values)
+                        Visit(item);
+                    return;
+                case IEnumerable<object?> sequence:
+                    foreach (var item in sequence)
+                        Visit(item);
+                    return;
+                case SharpTSObject obj:
+                    foreach (var name in obj.PropertyNames)
+                        Visit(obj.GetProperty(name));
+                    return;
+            }
         }
     }
 

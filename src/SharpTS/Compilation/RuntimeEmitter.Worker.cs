@@ -2197,15 +2197,46 @@ public partial class RuntimeEmitter
         var msgLocal = il.DeclareLocal(_types.Object);
         var valueLocal = il.DeclareLocal(_types.Object);
         var dictLocal = il.DeclareLocal(_types.DictionaryStringObject);
+        var foreignReceiveMethodLocal = il.DeclareLocal(_types.MethodInfo);
+        var foreignReceiveResultLocal = il.DeclareLocal(_types.Object);
         var undefinedLabel = il.DefineLabel();
+        var emittedPortLabel = il.DefineLabel();
         var afterMarkerLabel = il.DefineLabel();
 
-        // port = arg0 as $MessagePort; if (port == null) return undefined
+        // port = arg0 as $MessagePort; realm-local ports use the direct queue path.
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, _messagePortType);
         il.Emit(OpCodes.Stloc, portLocal);
         il.Emit(OpCodes.Ldloc, portLocal);
+        il.Emit(OpCodes.Brtrue, emittedPortLabel);
+
+        // A compiled-parent MessagePort reaches the isolated worker as a host bridge.
+        // Discover its narrow synchronous receive ABI by name so standalone output keeps
+        // no static SharpTS.dll dependency. The bridge returns Dictionary<string, object?>,
+        // which is the emitted runtime's native object-literal representation.
+        il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Brfalse, undefinedLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "GetType"));
+        il.Emit(OpCodes.Ldstr, "ReceiveMessageSyncForCompiled");
+        il.Emit(OpCodes.Ldc_I4, (int)(BindingFlags.Instance | BindingFlags.NonPublic));
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(
+            _types.Type, "GetMethod", _types.String, typeof(BindingFlags)));
+        il.Emit(OpCodes.Stloc, foreignReceiveMethodLocal);
+        il.Emit(OpCodes.Ldloc, foreignReceiveMethodLocal);
+        il.Emit(OpCodes.Brfalse, undefinedLabel);
+        il.Emit(OpCodes.Ldloc, foreignReceiveMethodLocal);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldnull);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(
+            _types.MethodInfo, "Invoke", _types.Object, _types.ObjectArray));
+        il.Emit(OpCodes.Stloc, foreignReceiveResultLocal);
+        il.Emit(OpCodes.Ldloc, foreignReceiveResultLocal);
+        il.Emit(OpCodes.Brfalse, undefinedLabel);
+        il.Emit(OpCodes.Ldloc, foreignReceiveResultLocal);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(emittedPortLabel);
 
         // if (port._closed) return undefined
         il.Emit(OpCodes.Ldloc, portLocal);
