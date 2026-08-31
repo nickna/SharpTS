@@ -6,8 +6,29 @@ namespace SharpTS.Gui.Conformance.Tests;
 
 public sealed class SharpPaintHeadlessTests
 {
+    private static readonly TimeSpan ModelTestTimeout = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan ProcessCleanupTimeout = TimeSpan.FromSeconds(5);
+
     [Fact]
     public async Task ModelTestsPassThroughSharpTSInterpreter()
+    {
+        string output = await RunModelTestsAsync(ModelTestTimeout);
+        Assert.Contains("SharpPaint model tests passed.", output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ModelTestTimeoutTerminatesProcessAndObservesOutput()
+    {
+        TimeoutException exception = await Assert.ThrowsAsync<TimeoutException>(() =>
+            RunModelTestsAsync(TimeSpan.Zero));
+
+        Assert.Contains("exited with code", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("cleanup completed", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("stdout:", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("stderr:", exception.Message, StringComparison.Ordinal);
+    }
+
+    private static async Task<string> RunModelTestsAsync(TimeSpan executionTimeout)
     {
         string root = FindRepositoryRoot();
 #if DEBUG
@@ -29,11 +50,28 @@ public sealed class SharpPaintHeadlessTests
             ?? throw new InvalidOperationException("Could not start the SharpPaint model tests.");
         Task<string> stdout = process.StandardOutput.ReadToEndAsync();
         Task<string> stderr = process.StandardError.ReadToEndAsync();
-        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-        await process.WaitForExitAsync(timeout.Token);
+        using var timeout = new CancellationTokenSource(executionTimeout);
+        try
+        {
+            await process.WaitForExitAsync(timeout.Token);
+        }
+        catch (OperationCanceledException exception) when (timeout.IsCancellationRequested)
+        {
+            string diagnostics = await TerminateAndObserveProcessAsync(
+                process,
+                stdout,
+                stderr,
+                ProcessCleanupTimeout);
+            throw new TimeoutException(
+                $"SharpPaint model tests exceeded {executionTimeout.TotalSeconds:F0} seconds. {diagnostics}",
+                exception);
+        }
+
+        string output = await stdout;
+        string errors = await stderr;
         Assert.True(process.ExitCode == 0,
-            $"SharpPaint model tests failed.{Environment.NewLine}{await stdout}{Environment.NewLine}{await stderr}");
-        Assert.Contains("SharpPaint model tests passed.", await stdout, StringComparison.Ordinal);
+            $"SharpPaint model tests failed.{Environment.NewLine}{output}{Environment.NewLine}{errors}");
+        return output;
     }
 
     [Fact]
@@ -153,6 +191,107 @@ public sealed class SharpPaintHeadlessTests
             Directory.CreateDirectory(Path.GetDirectoryName(target)!);
             File.Copy(file, target, true);
         }
+    }
+
+    private static async Task<string> TerminateAndObserveProcessAsync(
+        Process process,
+        Task<string> stdout,
+        Task<string> stderr,
+        TimeSpan timeout)
+    {
+        int processId = process.Id;
+        var cleanupNotes = new List<string>();
+
+        try
+        {
+            if (!process.HasExited)
+                process.Kill(entireProcessTree: true);
+        }
+        catch (Exception exception) when (exception is
+            InvalidOperationException or
+            NotSupportedException or
+            System.ComponentModel.Win32Exception)
+        {
+            cleanupNotes.Add($"termination failed with {exception.GetType().Name}: {exception.Message}");
+        }
+
+        Task exit;
+        try
+        {
+            exit = process.WaitForExitAsync();
+        }
+        catch (Exception exception) when (exception is
+            InvalidOperationException or
+            System.ComponentModel.Win32Exception)
+        {
+            cleanupNotes.Add($"exit observation failed with {exception.GetType().Name}: {exception.Message}");
+            exit = Task.CompletedTask;
+        }
+
+        Task observation = Task.WhenAll(exit, stdout, stderr);
+        try
+        {
+            await observation.WaitAsync(timeout);
+        }
+        catch (TimeoutException)
+        {
+            cleanupNotes.Add($"cleanup did not complete within {timeout.TotalSeconds:F0} seconds");
+        }
+        catch (Exception exception)
+        {
+            cleanupNotes.Add($"cleanup observation failed with {exception.GetType().Name}: {exception.Message}");
+        }
+
+        if (!observation.IsCompleted)
+        {
+            _ = observation.ContinueWith(
+                static task => _ = task.Exception,
+                CancellationToken.None,
+                TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
+                TaskScheduler.Default);
+        }
+
+        string notes = cleanupNotes.Count == 0 ? "cleanup completed" : string.Join("; ", cleanupNotes);
+        return $"PID {processId}; {DescribeExit(process)}; {notes}; " +
+            $"{DescribeOutput("stdout", stdout)}; {DescribeOutput("stderr", stderr)}";
+    }
+
+    private static string DescribeExit(Process process)
+    {
+        try
+        {
+            return process.HasExited
+                ? $"exited with code {process.ExitCode}"
+                : "still running";
+        }
+        catch (Exception exception) when (exception is
+            InvalidOperationException or
+            System.ComponentModel.Win32Exception)
+        {
+            return $"exit state unavailable ({exception.GetType().Name}: {exception.Message})";
+        }
+    }
+
+    private static string DescribeOutput(string name, Task<string> output)
+    {
+        if (output.IsCompletedSuccessfully)
+        {
+            string text = output.Result;
+            const int limit = 2_000;
+            if (text.Length > limit)
+                text = text[..limit] + "... <truncated>";
+            return $"{name}: {(string.IsNullOrWhiteSpace(text) ? "<empty>" : text.Trim())}";
+        }
+
+        if (output.IsCanceled)
+            return $"{name}: read canceled";
+        if (output.IsFaulted)
+        {
+            Exception exception = output.Exception!.GetBaseException();
+            return $"{name}: read failed with {exception.GetType().Name}: {exception.Message}";
+        }
+
+        return $"{name}: read did not complete";
     }
 
     private static string FindRepositoryRoot()
