@@ -20,6 +20,8 @@ namespace SharpTS.Compilation;
 internal static class CompiledWorkerCompilationService
 {
     private static readonly ConcurrentDictionary<string, Lazy<byte[]>> ArtifactCache = new();
+    private static readonly ConcurrentDictionary<string, PreparedCompilation> PreparedCache = new();
+    private static readonly ConcurrentDictionary<string, object> PreparationLocks = new();
     private static long _executionCount;
 
     internal static long ExecutionCount => Interlocked.Read(ref _executionCount);
@@ -91,10 +93,28 @@ internal static class CompiledWorkerCompilationService
     private static PreparedCompilation PrepareCompilation(string entryPath)
     {
         var absolutePath = Path.GetFullPath(entryPath);
-        var resolver = new ModuleResolver(absolutePath);
-        var entryModule = resolver.LoadModule(absolutePath);
-        var modules = resolver.GetModulesInOrder(entryModule);
-        return new PreparedCompilation(modules, resolver, ComputeFingerprint(modules));
+        var preparationLock = PreparationLocks.GetOrAdd(absolutePath, static _ => new object());
+
+        lock (preparationLock)
+        {
+            // ArtifactCache avoids repeated type-checking and IL emission, but worker startup
+            // previously reparsed and re-resolved the entire module graph before discovering the
+            // same fingerprint. Re-hash the cached graph first: this keeps content-based
+            // invalidation exact while avoiding redundant lexer/parser/resolver work.
+            if (PreparedCache.TryGetValue(absolutePath, out var cached))
+            {
+                var currentFingerprint = ComputeFingerprint(cached.Modules);
+                if (string.Equals(currentFingerprint, cached.Fingerprint, StringComparison.Ordinal))
+                    return cached;
+            }
+
+            var resolver = new ModuleResolver(absolutePath);
+            var entryModule = resolver.LoadModule(absolutePath);
+            var modules = resolver.GetModulesInOrder(entryModule);
+            var prepared = new PreparedCompilation(modules, resolver, ComputeFingerprint(modules));
+            PreparedCache[absolutePath] = prepared;
+            return prepared;
+        }
     }
 
     private static void EnsureDynamicCodeSupported()

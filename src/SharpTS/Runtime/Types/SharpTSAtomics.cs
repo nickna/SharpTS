@@ -28,15 +28,33 @@ public static class SharpTSAtomics
     {
         private readonly object _lock = new();
         private readonly List<WaiterEntry> _entries = new();
+        private bool _retired;
 
-        public void Add(WaiterEntry entry)
+        public bool TryAdd(WaiterEntry entry)
         {
-            lock (_lock) _entries.Add(entry);
+            lock (_lock)
+            {
+                if (_retired)
+                    return false;
+
+                _entries.Add(entry);
+                return true;
+            }
         }
 
-        public void Remove(WaiterEntry entry)
+        public bool RemoveAndRetireIfEmpty(WaiterEntry entry)
         {
-            lock (_lock) _entries.Remove(entry);
+            lock (_lock)
+            {
+                _entries.Remove(entry);
+                if (_entries.Count != 0)
+                    return false;
+
+                // Prevent a waiter that already observed this list from joining it while
+                // the owner removes the now-empty list from the dictionary.
+                _retired = true;
+                return true;
+            }
         }
 
         public int NotifyCount(int count)
@@ -70,6 +88,44 @@ public static class SharpTSAtomics
         /// </summary>
         public bool Cancelled;
     }
+
+    private static WaiterList RegisterWaiter(
+        (Guid BufferId, int ByteOffset) key,
+        WaiterEntry entry)
+    {
+        while (true)
+        {
+            var waiterList = _waiters.GetOrAdd(key, static _ => new WaiterList());
+            if (waiterList.TryAdd(entry))
+                return waiterList;
+
+            // A retiring list can remain observable briefly between being marked retired
+            // and being removed. Remove that exact key/value pair and retry with a new list.
+            RemoveWaiterList(key, waiterList);
+        }
+    }
+
+    private static void UnregisterWaiter(
+        (Guid BufferId, int ByteOffset) key,
+        WaiterList waiterList,
+        WaiterEntry entry)
+    {
+        if (waiterList.RemoveAndRetireIfEmpty(entry))
+            RemoveWaiterList(key, waiterList);
+    }
+
+    private static void RemoveWaiterList(
+        (Guid BufferId, int ByteOffset) key,
+        WaiterList waiterList)
+    {
+        // ICollection.Remove performs an atomic key-and-value match, so a replacement list
+        // installed for the same memory location cannot be removed accidentally.
+        ((ICollection<KeyValuePair<(Guid BufferId, int ByteOffset), WaiterList>>)_waiters)
+            .Remove(new KeyValuePair<(Guid BufferId, int ByteOffset), WaiterList>(key, waiterList));
+    }
+
+    internal static bool HasWaiterLocation(Guid bufferId, int byteOffset) =>
+        _waiters.ContainsKey((bufferId, byteOffset));
 
     #region Validation
 
@@ -558,9 +614,8 @@ public static class SharpTSAtomics
         var byteOffset = array.ByteOffset + index * 4;
         var key = (bufferId, byteOffset);
 
-        var waiterList = _waiters.GetOrAdd(key, _ => new WaiterList());
         var entry = new WaiterEntry();
-        waiterList.Add(entry);
+        var waiterList = RegisterWaiter(key, entry);
 
         var registration = RegisterWaitCancellation(entry, cancellationToken);
         try
@@ -593,7 +648,7 @@ public static class SharpTSAtomics
         finally
         {
             registration.Dispose();
-            waiterList.Remove(entry);
+            UnregisterWaiter(key, waiterList, entry);
         }
     }
 
@@ -609,9 +664,8 @@ public static class SharpTSAtomics
         var byteOffset = array.ByteOffset + index * 8;
         var key = (bufferId, byteOffset);
 
-        var waiterList = _waiters.GetOrAdd(key, _ => new WaiterList());
         var entry = new WaiterEntry();
-        waiterList.Add(entry);
+        var waiterList = RegisterWaiter(key, entry);
 
         var registration = RegisterWaitCancellation(entry, cancellationToken);
         try
@@ -642,7 +696,7 @@ public static class SharpTSAtomics
         finally
         {
             registration.Dispose();
-            waiterList.Remove(entry);
+            UnregisterWaiter(key, waiterList, entry);
         }
     }
 

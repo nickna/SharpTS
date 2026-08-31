@@ -47,9 +47,10 @@ namespace SharpTS.Runtime.Types;
 public sealed class CompiledMessagePortBridge : SharpTSEventEmitter
 {
     private readonly object _compiledPort;               // transferred emitted $MessagePort
-    private readonly MethodInfo _postMessageMethod;      // $MessagePort.PostMessage(object)
+    private readonly Action<object?> _postMessage;       // closed $MessagePort.PostMessage(object)
     private readonly ConcurrentQueue<object> _incoming;  // $MessagePort._pending
     private readonly FieldInfo _onEnqueueField;          // $MessagePort._onEnqueue (Action wake hook)
+    private readonly BuiltInMethod _postMessageBuiltIn;
 
     // The worker interpreter that owns delivery. Captured the first time the worker
     // attaches a 'message' listener / starts the port; null until then.
@@ -62,13 +63,15 @@ public sealed class CompiledMessagePortBridge : SharpTSEventEmitter
     // returns Unknown for subclasses, routing member access through the per-type
     // registration in BuiltInRegistry, which reaches this class's GetMember.
 
-    private CompiledMessagePortBridge(object compiledPort, MethodInfo postMessageMethod,
+    private CompiledMessagePortBridge(object compiledPort, Action<object?> postMessage,
         ConcurrentQueue<object> incoming, FieldInfo onEnqueueField)
     {
         _compiledPort = compiledPort;
-        _postMessageMethod = postMessageMethod;
+        _postMessage = postMessage;
         _incoming = incoming;
         _onEnqueueField = onEnqueueField;
+        _postMessageBuiltIn = BuiltInMethod.CreateV2(
+            "postMessage", 1, 2, InvokePostMessage);
     }
 
     /// <summary>
@@ -120,7 +123,11 @@ public sealed class CompiledMessagePortBridge : SharpTSEventEmitter
         // in Start() below, independent of the compiled port's _refed state.
         markTransferred.Invoke(compiledPort, null);
 
-        return new CompiledMessagePortBridge(compiledPort, postMessage, incoming, onEnqueueField);
+        // Bind once at adoption time. A closed delegate avoids MethodInfo.Invoke's
+        // per-message object[] allocation and reflective invocation dispatch.
+        var postMessageDelegate = postMessage.CreateDelegate<Action<object?>>(compiledPort);
+        return new CompiledMessagePortBridge(
+            compiledPort, postMessageDelegate, incoming, onEnqueueField);
     }
 
     /// <summary>
@@ -139,7 +146,21 @@ public sealed class CompiledMessagePortBridge : SharpTSEventEmitter
         // effect is exactly one structured copy and the worker never shares a mutable
         // graph with the parent.
         var clone = StructuredClone.Clone(message);
-        _postMessageMethod.Invoke(_compiledPort, [clone]);
+        _postMessage(clone);
+    }
+
+    private RuntimeValue InvokePostMessage(
+        Interp interpreter,
+        RuntimeValue receiver,
+        ReadOnlySpan<RuntimeValue> args)
+    {
+        if (args.Length == 0)
+            throw new Exception("postMessage requires at least one argument");
+
+        // A transferList on a re-post from the worker is not supported across this
+        // bridge; retain the existing behavior of ignoring the second argument.
+        PostMessage(args[0].ToObject());
+        return RuntimeValue.Null;
     }
 
     /// <summary>
@@ -262,16 +283,7 @@ public sealed class CompiledMessagePortBridge : SharpTSEventEmitter
     {
         return name switch
         {
-            "postMessage" => BuiltInMethod.CreateV2("postMessage", 1, 2, (_, _, args) =>
-            {
-                if (args.Length == 0)
-                    throw new Exception("postMessage requires at least one argument");
-                // A transferList on a re-post from the worker is not supported across
-                // this bridge (the worker re-transferring a compiled port); the second
-                // argument is ignored rather than rejected.
-                PostMessage(args[0].ToObject());
-                return RuntimeValue.Null;
-            }),
+            "postMessage" => _postMessageBuiltIn,
 
             "start" => BuiltInMethod.CreateV2("start", 0, (interp, _, _) =>
             {

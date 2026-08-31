@@ -35,8 +35,12 @@ important but are not mixed into the workload metric.
 | `scripts/*.ts` | One workload per file (fibonacci, sort, json, regex, async/promises, …). |
 | `scripts/lib/bench.ts` | Shared synchronous and asynchronous timing harnesses (auto-batching, warmup, mean/min/stdev). |
 | `scripts/lib/algorithms.ts` | Algorithm bodies **shared byte-identical** with the microbenchmark suite (embedded there as a resource). |
-| `scripts/worker-scaling.ts` | Fixed-total-work CPU comparison using direct execution and persistent pools of 1, 2, and 4 workers. |
+| `scripts/worker-scaling.ts` | Fixed-total-work CPU comparison using direct execution and persistent pools of 1, 2, 4, 8, and 16 workers. |
 | `scripts/worker-message-latency.ts` | Persistent-pool fan-out/fan-in message round trips with 1, 2, and 4 workers and negligible worker-side computation. |
+| `scripts/worker-message-throughput.ts` | Persistent-worker bursts of 1, 100, and 1,000 small messages, exposing queue-drain and callback-scheduling throughput. |
+| `scripts/worker-message-port-throughput.ts` | Bidirectional bursts over a `MessagePort` transferred to a persistent worker, isolating port bridge and callback scheduling throughput. |
+| `scripts/worker-lifecycle.ts` | Repeated create, ready, and terminate cycles for groups of 1, 2, and 4 workers. |
+| `scripts/worker-allocation-scaling.ts` | Fixed-total-work allocation-heavy comparison using direct execution and persistent pools of 1, 2, and 4 workers. |
 | `scripts/workers/*.ts` | Worker entry points and worker-specific shared kernels; these are dependencies, not standalone workloads. |
 
 The schema-v1 file remains the versioned contract for this one suite. The
@@ -112,7 +116,7 @@ dead-code elimination in both SharpTS modes and the JS engines.
 
 The `worker-scaling` workload uses the same parent, worker, and CPU-kernel
 TypeScript verbatim in every runtime. It keeps the total amount of CPU work
-fixed while varying the persistent pool size from 1 to 4 workers. Pool startup,
+fixed while varying the persistent pool size from 1 to 16 workers. Pool startup,
 worker readiness, shutdown, and a deterministic checksum validation occur
 outside the timed region, so the reported cases measure steady-state dispatch,
 messaging, scheduling, and parallel execution rather than startup or compilation.
@@ -120,12 +124,31 @@ The direct case is the serial in-process compute baseline; compare each runtime'
 2- and 4-worker times with its 1-worker time to calculate parallel speedup and
 efficiency.
 
+`worker-allocation-scaling` applies the same fixed-total-work design to short-lived object,
+string, and array graphs. It exposes allocation throughput, shared-runtime GC interference, and
+whether adding workers continues to help once managed-heap traffic replaces an allocation-free
+numeric kernel.
+
 The `worker-message-latency` workload isolates the other side of worker performance: one small
 structured message is sent to every worker in a persistent pool and the timed invocation completes
 after every reply arrives. Worker creation, readiness, validation, and shutdown remain outside the
 timed region. Comparing its 1-, 2-, and 4-worker cases exposes dispatch, structured-clone,
 cross-thread wake-up, event-loop drain, and promise-settlement overhead without enough worker-side
 CPU work to hide that latency.
+
+The `worker-message-throughput` workload complements latency by allowing many worker-to-parent
+messages to be outstanding at once. Its timed region includes posting the burst request, cloning
+every reply, cross-thread scheduling, draining the parent queue, and settling the completion
+promise. Worker creation, readiness, validation, and shutdown remain outside the timed region.
+
+`worker-message-port-throughput` transfers one side of a `MessageChannel` to a persistent worker
+and times bursts in both directions. This covers the dedicated port queue, the compiled/interpreter
+port bridge, structured cloning, event-loop wake coalescing, and listener dispatch independently
+from the Worker's built-in parent channel.
+
+Unlike the steady-state worker workloads, `worker-lifecycle` deliberately times construction,
+worker bootstrap, the ready message, cooperative shutdown, and termination-promise settlement.
+Repeated invocations use the same script so runtime artifact/code-cache behavior is represented.
 
 Each JSON measurement preserves the reported mean, minimum, sample standard
 deviation, sample count, calibrated inner-iteration count, sampled duration,

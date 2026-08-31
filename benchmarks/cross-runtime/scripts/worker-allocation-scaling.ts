@@ -1,6 +1,6 @@
 import { Worker } from "worker_threads";
 import { bench, benchAsync } from "./lib/bench.ts";
-import { combineChecksums, cpuRangeChecksum } from "./workers/cpu-kernel.ts";
+import { allocationChecksum } from "./workers/allocation-kernel.ts";
 
 function createWorkerPool(workerCount: number, workerPath: string): any {
     const workers: any[] = [];
@@ -27,16 +27,11 @@ function createWorkerPool(workerCount: number, workerPath: string): any {
                 if (readyCount === workerCount) {
                     resolveReady(readyCount);
                 }
-                return;
-            }
-
-            if (message.kind === "result") {
+            } else if (message.kind === "result") {
                 const resolveResult: any = resultResolvers[i];
                 resultResolvers[i] = null;
                 resultRejecters[i] = null;
-                if (resolveResult !== null) {
-                    resolveResult(message.checksum);
-                }
+                resolveResult(message.checksum);
             }
         });
 
@@ -62,23 +57,28 @@ function createWorkerPool(workerCount: number, workerPath: string): any {
             for (let i: number = 0; i < workerCount; i++) {
                 const size: number = baseSize + (i < remainder ? 1 : 0);
                 const end: number = start + size;
-                const job: Promise<number> = new Promise((resolve: any, reject: any) => {
+                jobs.push(new Promise((resolve: any, reject: any) => {
                     resultResolvers[i] = resolve;
                     resultRejecters[i] = reject;
                     workers[i].postMessage({ kind: "run", start, end });
-                });
-                jobs.push(job);
+                }));
                 start = end;
             }
 
-            return Promise.all(jobs).then((checksums: any) => combineChecksums(checksums));
+            return Promise.all(jobs).then((checksums: any) => {
+                let checksum: number = 0;
+                for (let i: number = 0; i < checksums.length; i++) {
+                    checksum = checksum + checksums[i];
+                }
+                return checksum;
+            });
         },
         close: (): Promise<number> => {
             const exits: Promise<number>[] = [];
             for (let i: number = 0; i < workers.length; i++) {
                 exits.push(workers[i].terminate());
             }
-            return Promise.all(exits).then((exitCodes: any) => combineChecksums(exitCodes));
+            return Promise.all(exits).then((codes: any) => codes.length);
         },
     };
 }
@@ -95,12 +95,12 @@ function runWorkerCase(
         .then((actual: number) => {
             if (actual !== expected) {
                 throw new Error(
-                    "worker checksum mismatch for " + workerCount +
-                    " workers: expected " + expected + ", got " + actual,
+                    "worker allocation checksum mismatch: expected " + expected +
+                    ", got " + actual,
                 );
             }
             return benchAsync(
-                "worker-cpu-fixed-work",
+                "worker-allocation-fixed-work",
                 workerCount,
                 () => pool.run(totalItems),
             );
@@ -112,17 +112,15 @@ function runWorkerCase(
 }
 
 function main(): Promise<any> {
-    const totalItems: number = 200000;
+    const totalItems: number = 20000;
     const moduleMeta: any = import.meta;
-    const workerPath: string = moduleMeta.dirname + "/workers/cpu-worker.ts";
-    const expected: number = cpuRangeChecksum(0, totalItems);
-    bench("worker-cpu-direct", totalItems, () => cpuRangeChecksum(0, totalItems));
+    const workerPath: string = moduleMeta.dirname + "/workers/allocation-worker.ts";
+    const expected: number = allocationChecksum(0, totalItems);
 
+    bench("worker-allocation-direct", totalItems, () => allocationChecksum(0, totalItems));
     return runWorkerCase(1, workerPath, totalItems, expected)
         .then(() => runWorkerCase(2, workerPath, totalItems, expected))
-        .then(() => runWorkerCase(4, workerPath, totalItems, expected))
-        .then(() => runWorkerCase(8, workerPath, totalItems, expected))
-        .then(() => runWorkerCase(16, workerPath, totalItems, expected));
+        .then(() => runWorkerCase(4, workerPath, totalItems, expected));
 }
 
 main().catch((error: any) => {

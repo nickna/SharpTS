@@ -11,6 +11,16 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class WorkerThreadsTests
 {
+    [Fact]
+    public void AtomicsWait_TimedOutLocationIsRemovedFromRegistry()
+    {
+        using var buffer = new SharpTSSharedArrayBuffer(16);
+        var view = new SharpTSInt32Array(buffer);
+
+        Assert.Equal("timed-out", SharpTSAtomics.Wait(view, 2, 0, timeout: 0));
+        Assert.False(SharpTSAtomics.HasWaiterLocation(buffer.BufferId, byteOffset: 8));
+    }
+
     [Theory, ModeData]
     public void AtomicsPause_AcceptsOnlyIntegralNumbers(ExecutionMode mode)
     {
@@ -818,6 +828,36 @@ public class WorkerThreadsTests
         // 'online' must be delivered before the first 'message'.
         Assert.True(output.IndexOf("online") < output.IndexOf("message:hello"),
             $"'online' should precede the first 'message'. Output:\n{output}");
+    }
+
+    [Theory, ModeData]
+    public void Worker_BurstMessages_ArriveExactlyOnce(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["worker_burst.ts"] = """
+                for (let i = 0; i < 200; i++) {
+                    postMessage(i);
+                }
+                """,
+            ["main.ts"] = """
+                import { Worker } from "worker_threads";
+                const worker = new Worker(__dirname + "/worker_burst.ts");
+                let count = 0;
+                let sum = 0;
+                worker.on("message", (value: any) => {
+                    count++;
+                    sum += value;
+                    if (count === 200) {
+                        console.log("burst:" + count + ":" + sum);
+                    }
+                });
+                """,
+        };
+
+        var output = TestHarness.RunModules(files, "main.ts", mode);
+
+        Assert.Contains("burst:200:19900", output);
     }
 
     #endregion
@@ -1655,6 +1695,45 @@ public class WorkerThreadsTests
         Assert.Contains("received:pong:ping", output);
     }
 
+    [Theory, ModeData]
+    public void Worker_TransferredMessagePort_BurstArrivesExactlyOnce(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["worker_port_burst.ts"] = """
+                const port: any = workerData.port;
+                port.on("message", () => {
+                    for (let i: number = 0; i < 200; i++) {
+                        port.postMessage(i);
+                    }
+                    port.close();
+                });
+                """,
+            ["main.ts"] = """
+                import { Worker, MessageChannel } from "worker_threads";
+                const { port1, port2 } = new MessageChannel();
+                const w = new Worker(__dirname + "/worker_port_burst.ts", {
+                    workerData: { port: port1 },
+                    transferList: [port1],
+                });
+                let received: number = 0;
+                let checksum: number = 0;
+                port2.on("message", (message: number) => {
+                    received++;
+                    checksum += message;
+                    if (received === 200) {
+                        console.log("burst:" + received + ":" + checksum);
+                        port2.close();
+                    }
+                });
+                port2.postMessage("start");
+                """
+        };
+
+        var output = TestHarness.RunModules(files, "main.ts", mode);
+        Assert.Contains("burst:200:19900", output);
+    }
+
     /// <summary>
     /// #406: an object posted across a transferred port is structured-cloned in both
     /// directions, so each side reads independent field values (exercises the
@@ -2097,6 +2176,31 @@ public class WorkerThreadsTests
             Assert.True(SpinWait.SpinUntil(() => !worker.IsRunning, TimeSpan.FromSeconds(1)),
                 "Compiled worker remained running after terminate().");
             Assert.Equal(1d, exitCode);
+        }
+        finally
+        {
+            try { Directory.Delete(directory, recursive: true); } catch { }
+        }
+    }
+
+    [Fact]
+    public void CompiledWorker_PreparedCacheInvalidatesWhenSourceChanges()
+    {
+        string directory = Path.Combine(Path.GetTempPath(), $"sharpts_compiled_worker_{Guid.NewGuid():N}");
+        Directory.CreateDirectory(directory);
+        string workerPath = Path.Combine(directory, "worker.ts");
+
+        try
+        {
+            File.WriteAllText(workerPath, "postMessage('first');");
+            byte[] firstArtifact = CompiledWorkerCompilationService.Compile(workerPath);
+            Assert.Same(firstArtifact, CompiledWorkerCompilationService.Compile(workerPath));
+
+            File.WriteAllText(workerPath, "postMessage('second');");
+            byte[] secondArtifact = CompiledWorkerCompilationService.Compile(workerPath);
+
+            Assert.NotSame(firstArtifact, secondArtifact);
+            Assert.Same(secondArtifact, CompiledWorkerCompilationService.Compile(workerPath));
         }
         finally
         {

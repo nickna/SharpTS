@@ -58,6 +58,7 @@ public class SharpTSWorker : SharpTSEventEmitter, IDisposable
     private volatile Action? _compiledWorkerRef;
     private volatile Action? _compiledWorkerUnref;
     private int _compiledDeliveryScheduled;
+    private int _parentDeliveryScheduled;
     private WeakReference? _compiledRealmReference;
 
     internal WeakReference? CompiledRealmReference => _compiledRealmReference;
@@ -786,7 +787,7 @@ public class SharpTSWorker : SharpTSEventEmitter, IDisposable
             // the delivery onto the $EventLoop via the captured sync context — a bare
             // _parentInterpreter?.ScheduleTimer here would silently drop every worker
             // message in compiled programs (#354).
-            ScheduleOnMainThread(DeliverMessagesToParent);
+            ScheduleMessagesToParent();
         }
         catch (InvalidOperationException)
         {
@@ -800,19 +801,49 @@ public class SharpTSWorker : SharpTSEventEmitter, IDisposable
     /// </summary>
     internal void DeliverMessagesToParent()
     {
-        while (_workerToParentQueue.TryDequeue(out var message))
+        try
         {
-            if (message.IsError)
+            while (_workerToParentQueue.TryDequeue(out var message))
             {
-                // The worker's postMessage value failed to clone — fire 'messageerror' on
-                // the parent Worker instead of 'message' (#1001).
-                EmitEventOnMainThread("messageerror");
-                continue;
-            }
+                if (message.IsError)
+                {
+                    // The worker's postMessage value failed to clone — fire 'messageerror' on
+                    // the parent Worker instead of 'message' (#1001).
+                    EmitEventOnMainThread("messageerror");
+                    continue;
+                }
 
-            // Node's Worker EventEmitter passes the cloned value itself. The { data }
-            // wrapper belongs to browser MessageEvent APIs, not node:worker_threads.
-            EmitEventOnMainThread("message", message.Data);
+                // Node's Worker EventEmitter passes the cloned value itself. The { data }
+                // wrapper belongs to browser MessageEvent APIs, not node:worker_threads.
+                EmitEventOnMainThread("message", message.Data);
+            }
+        }
+        finally
+        {
+            Volatile.Write(ref _parentDeliveryScheduled, 0);
+            if (!_workerToParentQueue.IsEmpty)
+                ScheduleMessagesToParent();
+        }
+    }
+
+    /// <summary>
+    /// Coalesces worker-to-parent queue drains. A burst can enqueue many messages before the
+    /// parent loop runs; one callback drains them all, so scheduling a callback per message only
+    /// creates redundant loop work after the first drain completes.
+    /// </summary>
+    private void ScheduleMessagesToParent()
+    {
+        if (Interlocked.Exchange(ref _parentDeliveryScheduled, 1) != 0)
+            return;
+
+        try
+        {
+            ScheduleOnMainThread(DeliverMessagesToParent);
+        }
+        catch
+        {
+            Volatile.Write(ref _parentDeliveryScheduled, 0);
+            throw;
         }
     }
 
@@ -1351,6 +1382,7 @@ public class SharpTSWorker : SharpTSEventEmitter, IDisposable
 internal class WorkerParentPort : SharpTSEventEmitter
 {
     private readonly SharpTSWorker _worker;
+    private readonly BuiltInMethod _postMessageBuiltIn;
     private readonly object _stateLock = new();
     private bool _started;
     private bool _refed;
@@ -1364,6 +1396,8 @@ internal class WorkerParentPort : SharpTSEventEmitter
     public WorkerParentPort(SharpTSWorker worker)
     {
         _worker = worker;
+        _postMessageBuiltIn = BuiltInMethod.CreateV2(
+            "postMessage", 1, 2, InvokePostMessage);
     }
 
     public void PostMessage(object? message, SharpTSArray? transfer = null)
@@ -1371,6 +1405,18 @@ internal class WorkerParentPort : SharpTSEventEmitter
         if (_closed)
             return;
         _worker.PostMessageToParent(message, transfer);
+    }
+
+    private RuntimeValue InvokePostMessage(
+        Interpreter interpreter,
+        RuntimeValue receiver,
+        ReadOnlySpan<RuntimeValue> args)
+    {
+        if (args.Length == 0)
+            throw new Exception("postMessage requires at least one argument");
+        var transfer = args.Length > 1 ? args[1].ToObject() as SharpTSArray : null;
+        PostMessage(args[0].ToObject(), transfer);
+        return RuntimeValue.Null;
     }
 
     private void Start()
@@ -1434,14 +1480,7 @@ internal class WorkerParentPort : SharpTSEventEmitter
     {
         return name switch
         {
-            "postMessage" => BuiltInMethod.CreateV2("postMessage", 1, 2, (_, _, args) =>
-            {
-                if (args.Length == 0)
-                    throw new Exception("postMessage requires at least one argument");
-                var transfer = args.Length > 1 ? args[1].ToObject() as SharpTSArray : null;
-                PostMessage(args[0].ToObject(), transfer);
-                return RuntimeValue.Null;
-            }),
+            "postMessage" => _postMessageBuiltIn,
             "start" => BuiltInMethod.CreateV2("start", 0, (_, _, _) =>
             {
                 Start();
