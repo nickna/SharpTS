@@ -35,7 +35,7 @@ public class SharpTSWorker : SharpTSEventEmitter, IDisposable
 
     private readonly Thread _thread;
     private readonly BlockingCollection<SharpTSMessagePort.ClonedMessage> _parentToWorkerQueue = new();
-    private readonly BlockingCollection<SharpTSMessagePort.ClonedMessage> _workerToParentQueue = new();
+    private readonly ConcurrentQueue<SharpTSMessagePort.ClonedMessage> _workerToParentQueue = new();
     private readonly CancellationTokenSource _cts = new();
     private readonly string _scriptPath;
     private readonly object? _workerData;
@@ -374,7 +374,6 @@ public class SharpTSWorker : SharpTSEventEmitter, IDisposable
 
             _isRunning = false;
             _parentToWorkerQueue.CompleteAdding();
-            _workerToParentQueue.CompleteAdding();
 
             // Stop accepting parent→worker stdin: a late worker.stdin.write() after exit becomes a
             // guarded no-op (#1076). Clear the thread-local stdin override for hygiene — the worker
@@ -545,11 +544,15 @@ public class SharpTSWorker : SharpTSEventEmitter, IDisposable
 
             configureContext.Invoke(null, [ThreadId, _workerData, _parentPort]);
 
-            _compiledWorkerSchedule = action => schedule.Invoke(eventLoop, [action]);
+            // Bind the emitted loop methods once. Calling MethodInfo.Invoke from these
+            // lambdas put reflection and an object[] allocation on every parent→worker
+            // message; closed delegates cross the collectible-realm boundary directly.
+            _compiledWorkerSchedule = (Action<Action>)schedule.CreateDelegate(
+                typeof(Action<Action>), eventLoop);
             _compiledWorkerCancel = () => cancelField?.SetValue(null, true);
-            _compiledWorkerWake = () => wake.Invoke(eventLoop, null);
-            _compiledWorkerRef = () => loopRef.Invoke(eventLoop, null);
-            _compiledWorkerUnref = () => loopUnref.Invoke(eventLoop, null);
+            _compiledWorkerWake = (Action)wake.CreateDelegate(typeof(Action), eventLoop);
+            _compiledWorkerRef = (Action)loopRef.CreateDelegate(typeof(Action), eventLoop);
+            _compiledWorkerUnref = (Action)loopUnref.CreateDelegate(typeof(Action), eventLoop);
 
             // terminate() can race the cold compile/load/bootstrap window. If it ran before
             // these delegates were published it could not set the emitted cancellation flag,
@@ -774,7 +777,7 @@ public class SharpTSWorker : SharpTSEventEmitter, IDisposable
             {
                 delivery = new SharpTSMessagePort.ClonedMessage(null, null, IsError: true);
             }
-            _workerToParentQueue.Add(delivery);
+            _workerToParentQueue.Enqueue(delivery);
 
             // Schedule delivery on the parent thread. Routed through
             // ScheduleOnMainThread so compiled mode (no parent interpreter) marshals
@@ -795,7 +798,7 @@ public class SharpTSWorker : SharpTSEventEmitter, IDisposable
     /// </summary>
     internal void DeliverMessagesToParent()
     {
-        while (_workerToParentQueue.TryTake(out var message))
+        while (_workerToParentQueue.TryDequeue(out var message))
         {
             if (message.IsError)
             {
@@ -1315,7 +1318,6 @@ public class SharpTSWorker : SharpTSEventEmitter, IDisposable
         Terminate().Task.Wait(1000);
         _cts.Dispose();
         _parentToWorkerQueue.Dispose();
-        _workerToParentQueue.Dispose();
         _parentToWorkerStdinQueue.Dispose();
         GC.SuppressFinalize(this);
     }
