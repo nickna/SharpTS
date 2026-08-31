@@ -52,6 +52,22 @@ public static class StructuredClone
     /// <returns>A deep clone of the value.</returns>
     public static object? Clone(object? value, IEnumerable<object?>? transfer = null)
     {
+        // Worker control messages are commonly flat compiled object literals
+        // containing only strings, numbers, and booleans. With no transfer list
+        // these cannot contain cycles or transferable state, so avoid allocating
+        // the general clone graph and transfer tracking collections.
+        if (transfer is null)
+        {
+            if (IsPrimitive(value))
+                return value;
+
+            if (value is Dictionary<string, object?> flatDictionary
+                && TryCloneFlatDictionary(flatDictionary, out var flatClone))
+            {
+                return flatClone;
+            }
+        }
+
         var cloned = new Dictionary<object, object>();
         var transferred = new HashSet<object>();
         // ArrayBuffers in the transfer list are detached on this (sender) side after the
@@ -101,6 +117,26 @@ public static class StructuredClone
         }
 
         return result;
+    }
+
+    private static bool IsPrimitive(object? value)
+        => value is null or double or string or bool or BigInteger;
+
+    private static bool TryCloneFlatDictionary(
+        Dictionary<string, object?> source,
+        out Dictionary<string, object?> result)
+    {
+        foreach (var value in source.Values)
+        {
+            if (!IsPrimitive(value))
+            {
+                result = null!;
+                return false;
+            }
+        }
+
+        result = new Dictionary<string, object?>(source);
+        return true;
     }
 
     /// <summary>

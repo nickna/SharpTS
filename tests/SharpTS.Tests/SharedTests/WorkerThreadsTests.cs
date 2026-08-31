@@ -372,6 +372,22 @@ public class WorkerThreadsTests
     #region StructuredClone Tests
 
     [Theory, ModeData]
+    public void StructuredClone_ClonesFlatPrimitiveObject(ExecutionMode mode)
+    {
+        var source = """
+            const original = { kind: 'ping', sequence: 42, ready: true, empty: null };
+            const cloned = structuredClone(original);
+            cloned.kind = 'pong';
+            cloned.sequence = 43;
+            console.log(original.kind + ':' + original.sequence);
+            console.log(cloned.kind + ':' + cloned.sequence);
+            console.log(cloned.ready + ':' + (cloned.empty === null));
+            """;
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("ping:42\npong:43\ntrue:true\n", output);
+    }
+
+    [Theory, ModeData]
     public void StructuredClone_ClonesObject(ExecutionMode mode)
     {
         var source = @"
