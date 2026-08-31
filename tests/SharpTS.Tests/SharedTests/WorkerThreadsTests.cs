@@ -2111,8 +2111,12 @@ public class WorkerThreadsTests
         Directory.CreateDirectory(directory);
         string workerPath = Path.Combine(directory, "worker.ts");
         File.WriteAllText(workerPath, """
-            import { isMainThread } from "worker_threads";
+            import { isMainThread, parentPort } from "worker_threads";
             if (isMainThread) throw new Error("worker context was not configured");
+            parentPort!.on("message", (value: any) => {
+                if (value !== "stop") throw new Error("unexpected worker message");
+                parentPort!.close();
+            });
             """);
 
         WeakReference realm;
@@ -2125,6 +2129,9 @@ public class WorkerThreadsTests
             using (var worker = SharpTSWorker.CreateForCompiledLoop(
                        workerPath, options: null, static () => { }, static () => { }, static action => action()))
             {
+                // Populate RuntimeCallableDispatcher's emitted-function caches before
+                // teardown; those caches must not pin the collectible worker realm.
+                worker.PostMessage("stop");
                 Assert.True(SpinWait.SpinUntil(() => !worker.IsRunning, TimeSpan.FromSeconds(30)),
                     "Compiled worker did not exit.");
                 realm = worker.CompiledRealmReference

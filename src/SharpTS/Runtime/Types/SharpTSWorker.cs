@@ -605,6 +605,7 @@ public class SharpTSWorker : SharpTSEventEmitter, IDisposable
             _parentPort.ClearAllListenersInternal();
             try { clearContext?.Invoke(null, null); }
             catch { /* teardown is best-effort; the entire realm is being unloaded */ }
+            RuntimeCallableDispatcher.ClearCaches();
             loadContext.Unload();
         }
     }
