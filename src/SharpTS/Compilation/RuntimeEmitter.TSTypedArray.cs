@@ -399,6 +399,10 @@ public partial class RuntimeEmitter
         }
     }
 
+    [System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2111",
+        Justification = "The fixed Type.GetMethod(string, Type[]) BCL overload is used only as an IL token for CoreCLR-generated output; the native host never reflects over a trimmed application type.")]
     private ConstructorBuilder EmitTypedArrayBufferConstructor(TypeBuilder typeBuilder, EmittedRuntime runtime, int bytesPerElement)
     {
         // Constructor: public $XArray(object buffer, int byteOffset, int? length)
@@ -416,6 +420,8 @@ public partial class RuntimeEmitter
 
         // Get byte[] from buffer
         var isSharedArrayBufferLabel = il.DefineLabel();
+        var foreignSharedArrayBufferMethodFoundLabel = il.DefineLabel();
+        var invalidBufferLabel = il.DefineLabel();
         var afterBufferLabel = il.DefineLabel();
 
         // Check if buffer is $ArrayBuffer
@@ -438,7 +444,7 @@ public partial class RuntimeEmitter
         // Check if buffer is $SharedArrayBuffer
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Isinst, runtime.SharedArrayBufferType);
-        il.Emit(OpCodes.Brfalse, afterBufferLabel);
+        il.Emit(OpCodes.Brfalse, invalidBufferLabel);
 
         // It's $SharedArrayBuffer
         il.Emit(OpCodes.Ldarg_1);
@@ -451,6 +457,48 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, bufByteLengthLocal);
         il.Emit(OpCodes.Br, afterBufferLabel);
 
+        // A compiled Worker runs in a collectible AssemblyLoadContext, so the parent's emitted
+        // $SharedArrayBuffer is not assignable to the worker realm's identically named type. Its
+        // public GetBuffer shape is deliberately BCL-only: recover the SAME byte[] rather than
+        // copying it, preserving SharedArrayBuffer aliasing across compiled realms.
+        il.MarkLabel(invalidBufferLabel);
+        il.Emit(OpCodes.Ldarg_1);
+        var trulyInvalidBufferLabel = il.DefineLabel();
+        il.Emit(OpCodes.Brfalse, trulyInvalidBufferLabel);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Callvirt, typeof(object).GetMethod(nameof(GetType))!);
+        il.Emit(OpCodes.Callvirt, typeof(Type).GetProperty(nameof(Type.Name))!.GetMethod!);
+        il.Emit(OpCodes.Ldstr, "$SharedArrayBuffer");
+        il.Emit(OpCodes.Call, typeof(string).GetMethod(
+            "op_Equality", BindingFlags.Public | BindingFlags.Static,
+            binder: null, [typeof(string), typeof(string)], modifiers: null)!);
+        il.Emit(OpCodes.Brfalse, trulyInvalidBufferLabel);
+
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Callvirt, typeof(object).GetMethod(nameof(GetType))!);
+        il.Emit(OpCodes.Ldstr, "GetBuffer");
+        il.Emit(OpCodes.Ldsfld, typeof(Type).GetField(nameof(Type.EmptyTypes))!);
+        il.Emit(OpCodes.Callvirt, typeof(Type).GetMethod(
+            nameof(Type.GetMethod), [typeof(string), typeof(Type[])])!);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Brtrue, foreignSharedArrayBufferMethodFoundLabel);
+        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Br, trulyInvalidBufferLabel);
+
+        il.MarkLabel(foreignSharedArrayBufferMethodFoundLabel);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldnull);
+        il.Emit(OpCodes.Callvirt, typeof(MethodBase).GetMethod(
+            nameof(MethodBase.Invoke), [typeof(object), typeof(object[])])!);
+        il.Emit(OpCodes.Castclass, typeof(byte[]));
+        il.Emit(OpCodes.Stloc, byteArrayLocal);
+        il.Emit(OpCodes.Ldloc, byteArrayLocal);
+        il.Emit(OpCodes.Ldlen);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Stloc, bufByteLengthLocal);
+        il.Emit(OpCodes.Br, afterBufferLabel);
+
+        il.MarkLabel(trulyInvalidBufferLabel);
         il.Emit(OpCodes.Ldstr, "TypedArray buffer constructor requires emitted ArrayBuffer/SharedArrayBuffer.");
         il.Emit(OpCodes.Newobj, _types.InvalidOperationExceptionCtorString);
         il.Emit(OpCodes.Throw);

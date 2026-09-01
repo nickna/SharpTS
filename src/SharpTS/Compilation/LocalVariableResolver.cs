@@ -234,6 +234,9 @@ public class LocalVariableResolver : IVariableResolver
         if (_ctx.CapturedTopLevelVars?.Contains(name) == true &&
             _ctx.EntryPointDisplayClassFields?.TryGetValue(name, out var entryPointField) == true)
         {
+            if (_ctx.TryEmitTopLevelNumericConstantLoad(_il, name, entryPointField))
+                return StackType.Double;
+
             _ctx.EmitTopLevelLexicalTdzCheck(_il, name);
             if (_ctx.EntryPointDisplayClassLocal != null)
             {
@@ -265,9 +268,7 @@ public class LocalVariableResolver : IVariableResolver
         // 6. Top-level static vars (non-captured)
         if (_ctx.TopLevelStaticVars?.TryGetValue(name, out var topLevelField) == true)
         {
-            _ctx.EmitTopLevelLexicalTdzCheck(_il, name);
-            _il.Emit(OpCodes.Ldsfld, topLevelField);
-            return StackType.Unknown;
+            return _ctx.EmitTopLevelStaticLoad(_il, name, topLevelField);
         }
 
         return null; // Caller handles fallback (Math, classes, functions, namespaces)

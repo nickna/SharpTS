@@ -66,25 +66,14 @@ internal static class StablePrimitivePromiseThenAnalyzer
                     Optional: false,
                     Name.Lexeme: "then"
                 } get,
-                Arguments: [Expr.ArrowFunction
-                {
-                    IsAsync: false,
-                    IsGenerator: false,
-                    HasOwnThis: false,
-                    Parameters: [
-                        {
-                            IsRest: false,
-                            IsOptional: false,
-                            DefaultValue: null
-                        }]
-                } handler]
+                Arguments: var arguments
             } candidate
             || typeMap.Get(get.Object) is not TypeInfo.Promise receiver
             || !IsNumber(receiver.ValueType)
-            || typeMap.Get(handler) is not TypeInfo.Function function
-            || function.ParamTypes is not [var parameterType]
-            || !IsNumber(parameterType)
-            || !IsNumber(function.ReturnType))
+            || arguments.Count is < 1 or > 2
+            || !IsEligibleNumericHandler(arguments[0], typeMap, requireNumericParameter: true)
+            || arguments.Count == 2
+                && !IsEligibleNumericHandler(arguments[1], typeMap, requireNumericParameter: false))
         {
             return false;
         }
@@ -92,6 +81,38 @@ internal static class StablePrimitivePromiseThenAnalyzer
         call = candidate;
         method = get;
         return true;
+    }
+
+    private static bool IsEligibleNumericHandler(
+        Expr expression,
+        TypeMap typeMap,
+        bool requireNumericParameter)
+    {
+        if (expression is not Expr.ArrowFunction
+            {
+                IsAsync: false,
+                IsGenerator: false,
+                HasOwnThis: false,
+                Parameters:
+                [
+                    {
+                        IsRest: false,
+                        IsOptional: false,
+                        DefaultValue: null
+                    }
+                ]
+            } handler
+            || typeMap.Get(handler) is not TypeInfo.Function function
+            || !IsNumber(function.ReturnType))
+        {
+            return false;
+        }
+
+        if (!requireNumericParameter)
+            return true;
+
+        return function.ParamTypes is [var parameterType]
+            && IsNumber(parameterType);
     }
 
     private static bool IsNumber(TypeInfo type) => type is

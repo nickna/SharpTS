@@ -1,12 +1,12 @@
 import { Worker } from "worker_threads";
-import { bench, benchAsync } from "./lib/bench.ts";
-import { combineChecksums, cpuRangeChecksum } from "./workers/cpu-kernel.ts";
+import { benchAsync } from "./lib/bench.ts";
 
 function createWorkerPool(workerCount: number, workerPath: string): any {
     const workers: any[] = [];
     const resultResolvers: any[] = [];
     const resultRejecters: any[] = [];
     let readyCount: number = 0;
+    let nextSequence: number = 0;
     let resolveReady: any;
     let rejectReady: any;
 
@@ -30,12 +30,20 @@ function createWorkerPool(workerCount: number, workerPath: string): any {
                 return;
             }
 
-            if (message.kind === "result") {
+            if (message.kind === "pong") {
                 const resolveResult: any = resultResolvers[i];
+                const rejectResult: any = resultRejecters[i];
                 resultResolvers[i] = null;
                 resultRejecters[i] = null;
-                if (resolveResult !== null) {
-                    resolveResult(message.checksum);
+                if (message.sequence !== nextSequence) {
+                    if (rejectResult !== null) {
+                        rejectResult(new Error(
+                            "worker message sequence mismatch: expected " + nextSequence +
+                            ", got " + message.sequence,
+                        ));
+                    }
+                } else if (resolveResult !== null) {
+                    resolveResult(message.sequence + i);
                 }
             }
         });
@@ -53,56 +61,56 @@ function createWorkerPool(workerCount: number, workerPath: string): any {
 
     return {
         ready,
-        run: (totalItems: number): Promise<number> => {
-            const jobs: Promise<number>[] = [];
-            const baseSize: number = Math.floor(totalItems / workerCount);
-            const remainder: number = totalItems % workerCount;
-            let start: number = 0;
+        roundTrip: (): Promise<number> => {
+            nextSequence = nextSequence + 1;
+            const sequence: number = nextSequence;
+            const replies: Promise<number>[] = [];
 
             for (let i: number = 0; i < workerCount; i++) {
-                const size: number = baseSize + (i < remainder ? 1 : 0);
-                const end: number = start + size;
-                const job: Promise<number> = new Promise((resolve: any, reject: any) => {
+                const reply: Promise<number> = new Promise((resolve: any, reject: any) => {
                     resultResolvers[i] = resolve;
                     resultRejecters[i] = reject;
-                    workers[i].postMessage({ kind: "run", start, end });
+                    workers[i].postMessage({ kind: "ping", sequence });
                 });
-                jobs.push(job);
-                start = end;
+                replies.push(reply);
             }
 
-            return Promise.all(jobs).then((checksums: any) => combineChecksums(checksums));
+            return Promise.all(replies).then((values: any) => {
+                let checksum: number = 0;
+                for (let i: number = 0; i < values.length; i++) {
+                    checksum = checksum + values[i];
+                }
+                return checksum;
+            });
         },
         close: (): Promise<number> => {
             const exits: Promise<number>[] = [];
             for (let i: number = 0; i < workers.length; i++) {
                 exits.push(workers[i].terminate());
             }
-            return Promise.all(exits).then((exitCodes: any) => combineChecksums(exitCodes));
+            return Promise.all(exits).then((exitCodes: any) => {
+                let checksum: number = 0;
+                for (let i: number = 0; i < exitCodes.length; i++) {
+                    checksum = checksum + exitCodes[i];
+                }
+                return checksum;
+            });
         },
     };
 }
 
-function runWorkerCase(
-    workerCount: number,
-    workerPath: string,
-    totalItems: number,
-    expected: number,
-): Promise<any> {
+function runWorkerCase(workerCount: number, workerPath: string): Promise<any> {
     const pool: any = createWorkerPool(workerCount, workerPath);
     return pool.ready
-        .then(() => pool.run(totalItems))
-        .then((actual: number) => {
-            if (actual !== expected) {
-                throw new Error(
-                    "worker checksum mismatch for " + workerCount +
-                    " workers: expected " + expected + ", got " + actual,
-                );
+        .then(() => pool.roundTrip())
+        .then((checksum: number) => {
+            if (checksum <= 0) {
+                throw new Error("worker message round-trip produced an invalid checksum");
             }
             return benchAsync(
-                "worker-cpu-fixed-work",
+                "worker-message-roundtrip",
                 workerCount,
-                () => pool.run(totalItems),
+                () => pool.roundTrip(),
             );
         })
         .then(
@@ -112,17 +120,12 @@ function runWorkerCase(
 }
 
 function main(): Promise<any> {
-    const totalItems: number = 200000;
     const moduleMeta: any = import.meta;
-    const workerPath: string = moduleMeta.dirname + "/workers/cpu-worker.ts";
-    const expected: number = cpuRangeChecksum(0, totalItems);
-    bench("worker-cpu-direct", totalItems, () => cpuRangeChecksum(0, totalItems));
+    const workerPath: string = moduleMeta.dirname + "/workers/message-worker.ts";
 
-    return runWorkerCase(1, workerPath, totalItems, expected)
-        .then(() => runWorkerCase(2, workerPath, totalItems, expected))
-        .then(() => runWorkerCase(4, workerPath, totalItems, expected))
-        .then(() => runWorkerCase(8, workerPath, totalItems, expected))
-        .then(() => runWorkerCase(16, workerPath, totalItems, expected));
+    return runWorkerCase(1, workerPath)
+        .then(() => runWorkerCase(2, workerPath))
+        .then(() => runWorkerCase(4, workerPath));
 }
 
 main().catch((error: any) => {

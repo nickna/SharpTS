@@ -1,4 +1,3 @@
-using System.Runtime.InteropServices;
 using SharpTS.TypeSystem;
 
 namespace SharpTS.Runtime.Types;
@@ -8,15 +7,15 @@ namespace SharpTS.Runtime.Types;
 /// </summary>
 /// <remarks>
 /// Provides shared memory that can be accessed from multiple threads.
-/// Uses a pinned byte array to ensure the memory address remains stable
-/// for cross-thread access and Atomics operations.
+/// Uses a managed byte array shared by reference. Managed references and byrefs
+/// remain valid when the GC relocates the array, so permanent pinning is neither
+/// necessary for cross-thread access nor for the Interlocked-based Atomics paths.
 /// Unlike regular ArrayBuffer, SharedArrayBuffer is shared by reference
 /// across threads (not cloned during postMessage).
 /// </remarks>
 public class SharpTSSharedArrayBuffer : ITypeCategorized, IDisposable
 {
     private readonly byte[] _data;
-    private readonly GCHandle _handle;
     private bool _disposed;
 
     /// <summary>
@@ -45,8 +44,6 @@ public class SharpTSSharedArrayBuffer : ITypeCategorized, IDisposable
 
         ByteLength = byteLength;
         _data = new byte[byteLength];
-        // Pin the array so it doesn't move during GC - required for safe cross-thread access
-        _handle = GCHandle.Alloc(_data, GCHandleType.Pinned);
     }
 
     /// <summary>
@@ -133,34 +130,19 @@ public class SharpTSSharedArrayBuffer : ITypeCategorized, IDisposable
 
     private void ThrowIfDisposed()
     {
-        if (_disposed && !_handle.IsAllocated)
+        if (_disposed)
         {
             throw new ObjectDisposedException(nameof(SharpTSSharedArrayBuffer));
         }
     }
 
     /// <summary>
-    /// Releases the pinned memory handle.
+    /// Marks this buffer disposed so later access throws
+    /// <see cref="ObjectDisposedException"/>.
     /// </summary>
     public void Dispose()
     {
-        if (!_disposed)
-        {
-            _disposed = true;
-            if (_handle.IsAllocated)
-            {
-                _handle.Free();
-            }
-            GC.SuppressFinalize(this);
-        }
-    }
-
-    ~SharpTSSharedArrayBuffer()
-    {
-        if (!_disposed && _handle.IsAllocated)
-        {
-            _handle.Free();
-        }
+        _disposed = true;
     }
 
     public override string ToString() => $"SharedArrayBuffer {{ byteLength: {ByteLength} }}";

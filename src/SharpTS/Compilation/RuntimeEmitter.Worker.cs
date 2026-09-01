@@ -953,6 +953,7 @@ public partial class RuntimeEmitter
 
         var endLabel = il.DefineLabel();
         var isEmittedSharedArrayBufferLabel = il.DefineLabel();
+        var constructSharedArrayBufferLabel = il.DefineLabel();
         var isTSArrayLabel = il.DefineLabel();
         var isTypedArrayLabel = il.DefineLabel();
         var isNumberLabel = il.DefineLabel();
@@ -990,9 +991,11 @@ public partial class RuntimeEmitter
         // Check if arg is $SharedArrayBuffer (emitted type)
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, runtime.SharedArrayBufferType);
-        il.Emit(OpCodes.Brfalse, isTSArrayLabel);
+        il.Emit(OpCodes.Brtrue, constructSharedArrayBufferLabel);
+        il.Emit(OpCodes.Br, isTSArrayLabel);
 
         // It's $SharedArrayBuffer - use emitted buffer constructor
+        il.MarkLabel(constructSharedArrayBufferLabel);
         il.Emit(OpCodes.Ldarg_0);  // buffer
         il.Emit(OpCodes.Ldc_I4_0);  // byteOffset = 0
         il.Emit(OpCodes.Ldloca, nullableIntLocal);
@@ -1115,6 +1118,16 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, argTypeLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Type, "get_FullName"));
         il.Emit(OpCodes.Stloc, argTypeNameLocal);
+
+        // A parent compiled realm's $SharedArrayBuffer has the same stable emitted shape but
+        // a different CLR identity. The concrete buffer constructor validates the shape and
+        // recovers its shared byte[] backing store.
+        il.Emit(OpCodes.Ldloc, argTypeNameLocal);
+        il.Emit(OpCodes.Ldstr, "$SharedArrayBuffer");
+        il.Emit(OpCodes.Call, typeof(string).GetMethod(
+            "op_Equality", BindingFlags.Public | BindingFlags.Static,
+            binder: null, [typeof(string), typeof(string)], modifiers: null)!);
+        il.Emit(OpCodes.Brtrue, constructSharedArrayBufferLabel);
 
         // Check if it contains "ArrayBuffer" (interpreter types)
         il.Emit(OpCodes.Ldloc, argTypeNameLocal);
@@ -2049,6 +2062,8 @@ public partial class RuntimeEmitter
     // WorkerThreadsReceiveMessageOnPort: defined during EmitWorkerThreadsModuleHelpers, body
     // emitted later by EmitWorkerThreadsReceiveMessageOnPortBody once $MessagePort exists (#1077).
     private MethodBuilder _receiveMessageOnPortMethod = null!;
+    private FieldBuilder _receiveMessageOnPortForeignTypeField = null!;
+    private FieldBuilder _receiveMessageOnPortForeignMethodField = null!;
 
     /// <summary>
     /// Emits worker_threads module helper methods.
@@ -2171,6 +2186,14 @@ public partial class RuntimeEmitter
             [_types.Object]
         );
         runtime.WorkerThreadsReceiveMessageOnPort = _receiveMessageOnPortMethod;
+        _receiveMessageOnPortForeignTypeField = runtimeType.DefineField(
+            "_receiveMessageOnPortForeignType",
+            _types.Type,
+            FieldAttributes.Private | FieldAttributes.Static);
+        _receiveMessageOnPortForeignMethodField = runtimeType.DefineField(
+            "_receiveMessageOnPortForeignMethod",
+            _types.MethodInfo,
+            FieldAttributes.Private | FieldAttributes.Static);
 
         // getEnvironmentData / setEnvironmentData — route to the C# per-process
         // WorkerEnvironmentData store via reflection (worker programs co-locate SharpTS.dll;
@@ -2197,15 +2220,66 @@ public partial class RuntimeEmitter
         var msgLocal = il.DeclareLocal(_types.Object);
         var valueLocal = il.DeclareLocal(_types.Object);
         var dictLocal = il.DeclareLocal(_types.DictionaryStringObject);
+        var foreignPortTypeLocal = il.DeclareLocal(_types.Type);
+        var foreignReceiveMethodLocal = il.DeclareLocal(_types.MethodInfo);
+        var foreignReceiveResultLocal = il.DeclareLocal(_types.Object);
         var undefinedLabel = il.DefineLabel();
+        var emittedPortLabel = il.DefineLabel();
+        var foreignMethodCachedLabel = il.DefineLabel();
+        var foreignMethodReadyLabel = il.DefineLabel();
         var afterMarkerLabel = il.DefineLabel();
 
-        // port = arg0 as $MessagePort; if (port == null) return undefined
+        // port = arg0 as $MessagePort; realm-local ports use the direct queue path.
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, _messagePortType);
         il.Emit(OpCodes.Stloc, portLocal);
         il.Emit(OpCodes.Ldloc, portLocal);
+        il.Emit(OpCodes.Brtrue, emittedPortLabel);
+
+        // A compiled-parent MessagePort reaches the isolated worker as a host bridge.
+        // Discover its narrow synchronous receive ABI by name so standalone output keeps
+        // no static SharpTS.dll dependency. The bridge returns Dictionary<string, object?>,
+        // which is the emitted runtime's native object-literal representation.
+        il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Brfalse, undefinedLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "GetType"));
+        il.Emit(OpCodes.Stloc, foreignPortTypeLocal);
+        il.Emit(OpCodes.Ldsfld, _receiveMessageOnPortForeignTypeField);
+        il.Emit(OpCodes.Ldloc, foreignPortTypeLocal);
+        il.Emit(OpCodes.Beq, foreignMethodCachedLabel);
+
+        il.Emit(OpCodes.Ldloc, foreignPortTypeLocal);
+        il.Emit(OpCodes.Ldstr, "ReceiveMessageSyncForCompiled");
+        il.Emit(OpCodes.Ldc_I4, (int)(BindingFlags.Instance | BindingFlags.NonPublic));
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(
+            _types.Type, "GetMethod", _types.String, typeof(BindingFlags)));
+        il.Emit(OpCodes.Stloc, foreignReceiveMethodLocal);
+        il.Emit(OpCodes.Ldloc, foreignReceiveMethodLocal);
+        il.Emit(OpCodes.Stsfld, _receiveMessageOnPortForeignMethodField);
+        il.Emit(OpCodes.Ldloc, foreignPortTypeLocal);
+        il.Emit(OpCodes.Stsfld, _receiveMessageOnPortForeignTypeField);
+        il.Emit(OpCodes.Br, foreignMethodReadyLabel);
+
+        il.MarkLabel(foreignMethodCachedLabel);
+        il.Emit(OpCodes.Ldsfld, _receiveMessageOnPortForeignMethodField);
+        il.Emit(OpCodes.Stloc, foreignReceiveMethodLocal);
+
+        il.MarkLabel(foreignMethodReadyLabel);
+        il.Emit(OpCodes.Ldloc, foreignReceiveMethodLocal);
+        il.Emit(OpCodes.Brfalse, undefinedLabel);
+        il.Emit(OpCodes.Ldloc, foreignReceiveMethodLocal);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldnull);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(
+            _types.MethodInfo, "Invoke", _types.Object, _types.ObjectArray));
+        il.Emit(OpCodes.Stloc, foreignReceiveResultLocal);
+        il.Emit(OpCodes.Ldloc, foreignReceiveResultLocal);
+        il.Emit(OpCodes.Brfalse, undefinedLabel);
+        il.Emit(OpCodes.Ldloc, foreignReceiveResultLocal);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(emittedPortLabel);
 
         // if (port._closed) return undefined
         il.Emit(OpCodes.Ldloc, portLocal);

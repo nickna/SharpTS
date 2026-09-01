@@ -6,7 +6,7 @@ using Interp = SharpTS.Execution.Interpreter;
 namespace SharpTS.Runtime.Types;
 
 /// <summary>
-/// Worker-side adapter that lets an interpreter worker drive a MessagePort that a
+/// Worker-side adapter that lets either worker runtime drive a MessagePort that a
 /// COMPILED parent created and transferred via <c>workerData</c>/<c>transferList</c> (#406).
 /// </summary>
 /// <remarks>
@@ -14,11 +14,11 @@ namespace SharpTS.Runtime.Types;
 /// objects (see <c>RuntimeEmitter.MessageChannel.cs</c>) that communicate in-process:
 /// <c>postMessage</c> enqueues a structured clone to the partner's internal
 /// <c>_pending</c> queue and, if the partner has started, schedules the partner's
-/// <c>Drain</c> on the process-global <c>$EventLoop</c>. A worker always runs the
-/// interpreter on its own thread, so it cannot call methods on the raw emitted type
-/// and cannot safely be driven by the parent's <c>$EventLoop</c> (a different thread).
+/// <c>Drain</c> on the process-global <c>$EventLoop</c>. The transferred object belongs
+/// to the parent's emitted realm, so neither worker runtime can safely drive it using
+/// the parent's <c>$EventLoop</c> from the worker thread.
 ///
-/// This bridge wraps the transferred compiled port and presents the interpreter
+/// This bridge wraps the transferred compiled port and presents the worker
 /// MessagePort surface (<c>postMessage</c>/<c>on</c>/<c>once</c>/<c>start</c>/
 /// <c>close</c> plus the inherited EventEmitter members):
 /// <list type="bullet">
@@ -31,8 +31,9 @@ namespace SharpTS.Runtime.Types;
 /// scheduled when the port has started, which this transferred port never does on the
 /// compiled side). The bridge instead installs an on-enqueue callback on the compiled
 /// port (<c>_onEnqueue</c>): a parent post invokes it right after enqueuing, and it
-/// marshals a drain onto the WORKER loop via the thread-safe <c>EnqueueCallback</c>,
-/// which emits <c>'message'</c> to the worker's listeners on the worker thread. This
+/// marshals a drain onto the WORKER loop via the interpreter's thread-safe
+/// <c>EnqueueCallback</c> or the compiled loop's <c>Schedule</c>, which emits
+/// <c>'message'</c> to the worker's listeners on the worker thread. This
 /// is event-driven — an idle bridged port no longer wakes the worker loop on a timer
 /// (#465). A keep-alive <c>Ref</c> on the worker loop holds it open while the port is
 /// open, matching Node's "a listening port is ref'd" semantics (#406, same liveness
@@ -47,13 +48,17 @@ namespace SharpTS.Runtime.Types;
 public sealed class CompiledMessagePortBridge : SharpTSEventEmitter
 {
     private readonly object _compiledPort;               // transferred emitted $MessagePort
-    private readonly MethodInfo _postMessageMethod;      // $MessagePort.PostMessage(object)
+    private readonly Action<object?> _postMessage;       // closed $MessagePort.PostMessage(object)
     private readonly ConcurrentQueue<object> _incoming;  // $MessagePort._pending
     private readonly FieldInfo _onEnqueueField;          // $MessagePort._onEnqueue (Action wake hook)
+    private readonly BuiltInMethod _postMessageBuiltIn;
 
-    // The worker interpreter that owns delivery. Captured the first time the worker
-    // attaches a 'message' listener / starts the port; null until then.
+    // The interpreter owner is captured on first use. A compiled worker instead has
+    // its isolated event-loop delegates attached by SharpTSWorker before guest code runs.
     private Interp? _owner;
+    private volatile Action<Action>? _compiledSchedule;
+    private volatile Action? _compiledLoopRef;
+    private volatile Action? _compiledLoopUnref;
     private bool _started;
     private bool _closed;
     private bool _loopRefed;
@@ -62,13 +67,15 @@ public sealed class CompiledMessagePortBridge : SharpTSEventEmitter
     // returns Unknown for subclasses, routing member access through the per-type
     // registration in BuiltInRegistry, which reaches this class's GetMember.
 
-    private CompiledMessagePortBridge(object compiledPort, MethodInfo postMessageMethod,
+    private CompiledMessagePortBridge(object compiledPort, Action<object?> postMessage,
         ConcurrentQueue<object> incoming, FieldInfo onEnqueueField)
     {
         _compiledPort = compiledPort;
-        _postMessageMethod = postMessageMethod;
+        _postMessage = postMessage;
         _incoming = incoming;
         _onEnqueueField = onEnqueueField;
+        _postMessageBuiltIn = BuiltInMethod.CreateV2(
+            "postMessage", 1, 2, InvokePostMessage);
     }
 
     /// <summary>
@@ -120,7 +127,47 @@ public sealed class CompiledMessagePortBridge : SharpTSEventEmitter
         // in Start() below, independent of the compiled port's _refed state.
         markTransferred.Invoke(compiledPort, null);
 
-        return new CompiledMessagePortBridge(compiledPort, postMessage, incoming, onEnqueueField);
+        // Bind once at adoption time. A closed delegate avoids MethodInfo.Invoke's
+        // per-message object[] allocation and reflective invocation dispatch.
+        var postMessageDelegate = postMessage.CreateDelegate<Action<object?>>(compiledPort);
+        return new CompiledMessagePortBridge(
+            compiledPort, postMessageDelegate, incoming, onEnqueueField);
+    }
+
+    /// <summary>
+    /// Attaches the isolated compiled worker realm's event loop. Compiled member
+    /// dispatch calls host <see cref="BuiltInMethod"/> values without an interpreter,
+    /// so these delegates provide the scheduling and keep-alive operations that the
+    /// interpreter owner normally supplies.
+    /// </summary>
+    internal void AttachCompiledRealm(
+        Action<Action> schedule,
+        Action loopRef,
+        Action loopUnref)
+    {
+        _compiledSchedule = schedule;
+        _compiledLoopRef = loopRef;
+        _compiledLoopUnref = loopUnref;
+    }
+
+    /// <summary>
+    /// Releases every reference from this host bridge into a collectible worker realm.
+    /// </summary>
+    internal void DetachCompiledRealm()
+    {
+        _onEnqueueField.SetValue(_compiledPort, null);
+        Thread.MemoryBarrier();
+
+        if (_loopRefed)
+        {
+            _loopRefed = false;
+            _compiledLoopUnref?.Invoke();
+        }
+
+        ClearAllListenersInternal();
+        _compiledSchedule = null;
+        _compiledLoopRef = null;
+        _compiledLoopUnref = null;
     }
 
     /// <summary>
@@ -139,7 +186,21 @@ public sealed class CompiledMessagePortBridge : SharpTSEventEmitter
         // effect is exactly one structured copy and the worker never shares a mutable
         // graph with the parent.
         var clone = StructuredClone.Clone(message);
-        _postMessageMethod.Invoke(_compiledPort, [clone]);
+        _postMessage(clone);
+    }
+
+    private RuntimeValue InvokePostMessage(
+        Interp interpreter,
+        RuntimeValue receiver,
+        ReadOnlySpan<RuntimeValue> args)
+    {
+        if (args.Length == 0)
+            throw new Exception("postMessage requires at least one argument");
+
+        // A transferList on a re-post from the worker is not supported across this
+        // bridge; retain the existing behavior of ignoring the second argument.
+        PostMessage(args[0].ToObject());
+        return RuntimeValue.Null;
     }
 
     /// <summary>
@@ -150,7 +211,7 @@ public sealed class CompiledMessagePortBridge : SharpTSEventEmitter
     /// </summary>
     private void Start()
     {
-        if (_started || _closed || _owner == null)
+        if (_started || _closed || (_owner == null && _compiledSchedule == null))
             return;
 
         _started = true;
@@ -163,7 +224,10 @@ public sealed class CompiledMessagePortBridge : SharpTSEventEmitter
         if (!_loopRefed)
         {
             _loopRefed = true;
-            _owner.Ref();
+            if (_owner != null)
+                _owner.Ref();
+            else
+                _compiledLoopRef!();
         }
 
         // Event-driven receive (#465): a parent post enqueues to _incoming on the
@@ -177,7 +241,7 @@ public sealed class CompiledMessagePortBridge : SharpTSEventEmitter
         Thread.MemoryBarrier();
 
         // Drain anything the parent posted before the callback was installed.
-        _owner.EnqueueCallback(Pump);
+        SchedulePump();
     }
 
     /// <summary>
@@ -186,7 +250,15 @@ public sealed class CompiledMessagePortBridge : SharpTSEventEmitter
     /// drain onto the worker loop; <see cref="Interp.EnqueueCallback"/> is thread-safe
     /// and wakes the worker's event loop.
     /// </summary>
-    private void OnPartnerEnqueued() => _owner?.EnqueueCallback(Pump);
+    private void OnPartnerEnqueued() => SchedulePump();
+
+    private void SchedulePump()
+    {
+        if (_owner != null)
+            _owner.EnqueueCallback(Pump);
+        else
+            _compiledSchedule?.Invoke(Pump);
+    }
 
     /// <summary>
     /// Synchronously dequeues one message from the compiled partner's incoming queue,
@@ -207,12 +279,28 @@ public sealed class CompiledMessagePortBridge : SharpTSEventEmitter
     }
 
     /// <summary>
+    /// Compiled-realm counterpart to <see cref="ReceiveMessageSync"/>. The emitted
+    /// worker runtime discovers this method by name without taking a static dependency
+    /// on SharpTS.dll and receives its native object-literal representation.
+    /// </summary>
+    internal object? ReceiveMessageSyncForCompiled()
+    {
+        if (_closed || !_incoming.TryDequeue(out var message))
+            return null;
+
+        return new Dictionary<string, object?>
+        {
+            ["message"] = message
+        };
+    }
+
+    /// <summary>
     /// Drains the compiled port's incoming queue, emitting each message to the
     /// worker's 'message' listeners. Runs on the worker loop thread.
     /// </summary>
     private void Pump()
     {
-        if (_closed || _owner == null)
+        if (_closed || (_owner == null && _compiledSchedule == null))
             return;
 
         // The compiled sender already structured-cloned each payload before enqueuing,
@@ -220,7 +308,10 @@ public sealed class CompiledMessagePortBridge : SharpTSEventEmitter
         // the listener receives the value, not a {data} wrapper).
         while (_incoming.TryDequeue(out var message))
         {
-            EmitEvent(_owner, "message", [message]);
+            if (_owner != null)
+                EmitEvent(_owner, "message", [message]);
+            else
+                EmitDirect("message", message);
         }
     }
 
@@ -243,14 +334,19 @@ public sealed class CompiledMessagePortBridge : SharpTSEventEmitter
 
         // Release the keep-alive Ref so the worker loop can quiesce and the worker
         // thread can exit.
-        if (_loopRefed && _owner != null)
+        if (_loopRefed)
         {
             _loopRefed = false;
-            _owner.Unref();
+            if (_owner != null)
+                _owner.Unref();
+            else
+                _compiledLoopUnref?.Invoke();
         }
 
         if (_owner != null)
             EmitEvent(_owner, "close", []);
+        else
+            EmitDirect("close");
     }
 
     /// <summary>
@@ -262,16 +358,7 @@ public sealed class CompiledMessagePortBridge : SharpTSEventEmitter
     {
         return name switch
         {
-            "postMessage" => BuiltInMethod.CreateV2("postMessage", 1, 2, (_, _, args) =>
-            {
-                if (args.Length == 0)
-                    throw new Exception("postMessage requires at least one argument");
-                // A transferList on a re-post from the worker is not supported across
-                // this bridge (the worker re-transferring a compiled port); the second
-                // argument is ignored rather than rejected.
-                PostMessage(args[0].ToObject());
-                return RuntimeValue.Null;
-            }),
+            "postMessage" => _postMessageBuiltIn,
 
             "start" => BuiltInMethod.CreateV2("start", 0, (interp, _, _) =>
             {

@@ -1,3 +1,6 @@
+using System.Collections.Concurrent;
+using System.Reflection;
+using System.Reflection.Emit;
 using SharpTS.Compilation;
 using SharpTS.Runtime.Types;
 using SharpTS.Tests.Infrastructure;
@@ -11,6 +14,16 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class WorkerThreadsTests
 {
+    [Fact]
+    public void AtomicsWait_TimedOutLocationIsRemovedFromRegistry()
+    {
+        using var buffer = new SharpTSSharedArrayBuffer(16);
+        var view = new SharpTSInt32Array(buffer);
+
+        Assert.Equal("timed-out", SharpTSAtomics.Wait(view, 2, 0, timeout: 0));
+        Assert.False(SharpTSAtomics.HasWaiterLocation(buffer.BufferId, byteOffset: 8));
+    }
+
     [Theory, ModeData]
     public void AtomicsPause_AcceptsOnlyIntegralNumbers(ExecutionMode mode)
     {
@@ -170,6 +183,57 @@ public class WorkerThreadsTests
         ";
         var output = TestHarness.Run(source, mode);
         Assert.Equal("10\n15\n", output);
+    }
+
+    [Theory, ModeData]
+    public void Atomics_Int32OperandsUseEcmaScriptWrapping(ExecutionMode mode)
+    {
+        const string source = """
+            const signed = new Int32Array(new SharedArrayBuffer(4));
+            signed[0] = 1;
+            console.log(Atomics.add(signed, 0, 4294967296));
+            console.log(Atomics.load(signed, 0));
+            console.log(Atomics.add(signed, 0, 5000000000));
+            console.log(Atomics.load(signed, 0));
+            console.log(Atomics.exchange(signed, 0, NaN));
+            console.log(Atomics.load(signed, 0));
+            console.log(Atomics.compareExchange(signed, 0, Infinity, 7));
+            console.log(Atomics.load(signed, 0));
+            console.log(Atomics.store(signed, 0, 4294967296));
+            console.log(Atomics.load(signed, 0));
+
+            const unsigned = new Uint32Array(new SharedArrayBuffer(4));
+            console.log(Atomics.add(unsigned, 0, -1));
+            console.log(Atomics.load(unsigned, 0));
+            console.log(Atomics.store(unsigned, 0, -1));
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal(
+            "1\n1\n1\n705032705\n705032705\n0\n0\n7\n0\n0\n0\n4294967295\n4294967295\n",
+            output);
+    }
+
+    [Theory, ModeData]
+    public void Atomics_Int32FastPathsRejectOutOfViewIndices(ExecutionMode mode)
+    {
+        const string source = """
+            const shared = new SharedArrayBuffer(8);
+            const view = new Int32Array(shared, 0, 1);
+            const neighbour = new Int32Array(shared, 4, 1);
+            neighbour[0] = 77;
+
+            try { Atomics.add(view, 1, 1); }
+            catch (error) { console.log(error instanceof RangeError); }
+
+            try { console.log(Atomics.add(view, -1, 1)); }
+            catch (error) { console.log(error instanceof RangeError); }
+
+            console.log(neighbour[0]);
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("true\ntrue\n77\n", output);
     }
 
     [Theory, ModeData]
@@ -370,6 +434,22 @@ public class WorkerThreadsTests
     #endregion
 
     #region StructuredClone Tests
+
+    [Theory, ModeData]
+    public void StructuredClone_ClonesFlatPrimitiveObject(ExecutionMode mode)
+    {
+        var source = """
+            const original = { kind: 'ping', sequence: 42, ready: true, empty: null };
+            const cloned = structuredClone(original);
+            cloned.kind = 'pong';
+            cloned.sequence = 43;
+            console.log(original.kind + ':' + original.sequence);
+            console.log(cloned.kind + ':' + cloned.sequence);
+            console.log(cloned.ready + ':' + (cloned.empty === null));
+            """;
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("ping:42\npong:43\ntrue:true\n", output);
+    }
 
     [Theory, ModeData]
     public void StructuredClone_ClonesObject(ExecutionMode mode)
@@ -802,6 +882,36 @@ public class WorkerThreadsTests
         // 'online' must be delivered before the first 'message'.
         Assert.True(output.IndexOf("online") < output.IndexOf("message:hello"),
             $"'online' should precede the first 'message'. Output:\n{output}");
+    }
+
+    [Theory, ModeData]
+    public void Worker_BurstMessages_ArriveExactlyOnce(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["worker_burst.ts"] = """
+                for (let i = 0; i < 200; i++) {
+                    postMessage(i);
+                }
+                """,
+            ["main.ts"] = """
+                import { Worker } from "worker_threads";
+                const worker = new Worker(__dirname + "/worker_burst.ts");
+                let count = 0;
+                let sum = 0;
+                worker.on("message", (value: any) => {
+                    count++;
+                    sum += value;
+                    if (count === 200) {
+                        console.log("burst:" + count + ":" + sum);
+                    }
+                });
+                """,
+        };
+
+        var output = TestHarness.RunModules(files, "main.ts", mode);
+
+        Assert.Contains("burst:200:19900", output);
     }
 
     #endregion
@@ -1590,9 +1700,10 @@ public class WorkerThreadsTests
     /// <remarks>
     /// This exercises the full cross-runtime/cross-thread contract. In compiled mode
     /// the channel ports are the emitted <c>$MessagePort</c> type and the transferred
-    /// port is adopted by the worker's interpreter via <c>CompiledMessagePortBridge</c>
-    /// (which forwards posts to the compiled partner on the parent's <c>$EventLoop</c>
-    /// and drains the partner's posts onto the worker loop). In interpreter mode the
+    /// port is adopted via <c>CompiledMessagePortBridge</c>. The bridge attaches to the
+    /// isolated compiled worker's event loop, forwards posts to the compiled partner on
+    /// the parent's <c>$EventLoop</c>, and dispatches incoming messages directly to the
+    /// worker's emitted listeners. In interpreter mode the
     /// ports are <c>SharpTSMessagePort</c>; transfer marks the pair cross-thread so
     /// delivery marshals onto each owner's loop instead of the poster's thread, and a
     /// started port keeps its loop alive. Before the fix the compiled
@@ -1609,6 +1720,7 @@ public class WorkerThreadsTests
     [Theory, ModeData]
     public void Worker_TransferredMessagePort_RoundTripsBetweenParentAndWorker(ExecutionMode mode)
     {
+        long compiledExecutionsBefore = CompiledWorkerCompilationService.ExecutionCount;
         var files = new Dictionary<string, string>
         {
             ["worker_port.ts"] = """
@@ -1637,6 +1749,51 @@ public class WorkerThreadsTests
 
         var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Contains("received:pong:ping", output);
+        if (mode == ExecutionMode.Compiled)
+        {
+            Assert.True(
+                CompiledWorkerCompilationService.ExecutionCount > compiledExecutionsBefore,
+                "A transferred MessagePort must not force the worker into interpreter fallback.");
+        }
+    }
+
+    [Theory, ModeData]
+    public void Worker_TransferredMessagePort_BurstArrivesExactlyOnce(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["worker_port_burst.ts"] = """
+                const port: any = workerData.port;
+                port.on("message", () => {
+                    for (let i: number = 0; i < 200; i++) {
+                        port.postMessage(i);
+                    }
+                    port.close();
+                });
+                """,
+            ["main.ts"] = """
+                import { Worker, MessageChannel } from "worker_threads";
+                const { port1, port2 } = new MessageChannel();
+                const w = new Worker(__dirname + "/worker_port_burst.ts", {
+                    workerData: { port: port1 },
+                    transferList: [port1],
+                });
+                let received: number = 0;
+                let checksum: number = 0;
+                port2.on("message", (message: number) => {
+                    received++;
+                    checksum += message;
+                    if (received === 200) {
+                        console.log("burst:" + received + ":" + checksum);
+                        port2.close();
+                    }
+                });
+                port2.postMessage("start");
+                """
+        };
+
+        var output = TestHarness.RunModules(files, "main.ts", mode);
+        Assert.Contains("burst:200:19900", output);
     }
 
     /// <summary>
@@ -1761,6 +1918,40 @@ public class WorkerThreadsTests
         Assert.Contains("recv:pong1:ping1", output);
         Assert.Contains("recv:pong2:ping2", output);
         Assert.Contains("recv:pong3:ping3", output);
+    }
+
+    [Fact]
+    public void CompiledWorker_FindsTransferredPortNestedInMapAndSet()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["worker_nested_port.ts"] = """
+                const ports: any = workerData.get("ports");
+                const port: any = ports.values().next().value;
+                port.on("message", (message: any) => {
+                    port.postMessage("nested:" + message);
+                    port.close();
+                });
+                """,
+            ["main.ts"] = """
+                import { Worker, MessageChannel } from "worker_threads";
+                const { port1, port2 } = new MessageChannel();
+                const ports = new Set<any>([port1]);
+                const data = new Map<any, any>([["ports", ports]]);
+                new Worker(__dirname + "/worker_nested_port.ts", {
+                    workerData: data,
+                    transferList: [port1],
+                });
+                port2.on("message", (message: any) => {
+                    console.log(message);
+                    port2.close();
+                });
+                port2.postMessage("hello");
+                """
+        };
+
+        var output = TestHarness.RunModules(files, "main.ts", ExecutionMode.Compiled);
+        Assert.Contains("nested:hello", output);
     }
 
     /// <summary>
@@ -1940,6 +2131,113 @@ public class WorkerThreadsTests
             "The worker must execute through the compiled-worker bootstrap, not the interpreter fallback.");
     }
 
+    [Fact]
+    public void CompiledWorkers_SharedInt32AtomicsPreserveEveryUpdate()
+    {
+        long executionsBefore = CompiledWorkerCompilationService.ExecutionCount;
+        var files = new Dictionary<string, string>
+        {
+            ["worker_atomic_add.ts"] = """
+                import { parentPort, workerData } from "worker_threads";
+                const view = new Int32Array(workerData);
+                for (let i: number = 0; i < 50000; i++) {
+                    Atomics.add(view, 0, 1);
+                }
+                parentPort!.postMessage("done");
+                """,
+            ["main.ts"] = """
+                import { Worker } from "worker_threads";
+                const shared = new SharedArrayBuffer(4);
+                const view = new Int32Array(shared);
+                let completed = 0;
+                for (let i: number = 0; i < 2; i++) {
+                    const worker = new Worker(__dirname + "/worker_atomic_add.ts", {
+                        workerData: shared,
+                    });
+                    worker.on("message", () => {
+                        completed++;
+                        if (completed === 2) console.log(Atomics.load(view, 0));
+                    });
+                }
+                """,
+        };
+
+        var output = TestHarness.RunModules(files, "main.ts", ExecutionMode.Compiled);
+
+        Assert.Contains("100000", output);
+        Assert.True(CompiledWorkerCompilationService.ExecutionCount >= executionsBefore + 2,
+            "Both workers must execute in compiled realms when sharing a SharedArrayBuffer.");
+    }
+
+    [Fact]
+    public void CompiledWorkers_MixedInt32AtomicsUseOneAtomicProtocol()
+    {
+        long executionsBefore = CompiledWorkerCompilationService.ExecutionCount;
+        var files = new Dictionary<string, string>
+        {
+            ["worker_add.ts"] = """
+                import { parentPort, workerData } from "worker_threads";
+                const view = new Int32Array(workerData);
+                for (let i: number = 0; i < 50000; i++) {
+                    Atomics.add(view, 0, 1);
+                }
+                parentPort!.postMessage("done");
+                """,
+            ["worker_sub.ts"] = """
+                import { parentPort, workerData } from "worker_threads";
+                const view = new Int32Array(workerData);
+                for (let i: number = 0; i < 50000; i++) {
+                    Atomics.sub(view, 0, 1);
+                }
+                parentPort!.postMessage("done");
+                """,
+            ["main.ts"] = """
+                import { Worker } from "worker_threads";
+                const shared = new SharedArrayBuffer(4);
+                const view = new Int32Array(shared);
+                let completed = 0;
+                const finished = () => {
+                    completed++;
+                    if (completed === 2) console.log("final=" + Atomics.load(view, 0));
+                };
+                new Worker(__dirname + "/worker_add.ts", { workerData: shared })
+                    .on("message", finished);
+                new Worker(__dirname + "/worker_sub.ts", { workerData: shared })
+                    .on("message", finished);
+                """,
+        };
+
+        var output = TestHarness.RunModules(files, "main.ts", ExecutionMode.Compiled);
+
+        Assert.Contains("final=0", output);
+        Assert.True(CompiledWorkerCompilationService.ExecutionCount >= executionsBefore + 2,
+            "Both workers must execute in compiled realms while mixing atomic operations.");
+    }
+
+    [Fact]
+    public void CompiledWorker_ReflectedPostMessageMethodsHaveStableIdentity()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["worker_identity.ts"] = """
+                import { parentPort } from "worker_threads";
+                const port: any = parentPort;
+                port.postMessage("worker:" + (port.postMessage === port.postMessage));
+                """,
+            ["main.ts"] = """
+                import { Worker } from "worker_threads";
+                const worker: any = new Worker(__dirname + "/worker_identity.ts");
+                console.log("parent:" + (worker.postMessage === worker.postMessage));
+                worker.on("message", (value: any) => console.log(value));
+                """,
+        };
+
+        var output = TestHarness.RunModules(files, "main.ts", ExecutionMode.Compiled);
+
+        Assert.Contains("parent:true", output);
+        Assert.Contains("worker:true", output);
+    }
+
     [Theory, ModeData]
     public void Worker_ParentPortReceivesMessagesAndKeepsWorkerAlive(ExecutionMode mode)
     {
@@ -1963,6 +2261,40 @@ public class WorkerThreadsTests
         var output = TestHarness.RunModules(files, "main.ts", mode);
 
         Assert.Contains("echo:ping", output);
+    }
+
+    [Fact]
+    public void CompiledParent_MessageUsesWorkerInterpreterFallbackQueue()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["worker_fallback_echo.ts"] = """
+                import { parentPort } from "worker_threads";
+                // The compiled-worker service conservatively falls back when a module
+                // contains Atomics.wait, even when it is unreachable.
+                if (false) {
+                    const view = new Int32Array(new SharedArrayBuffer(4));
+                    Atomics.wait(view, 0, 0);
+                }
+                parentPort!.on("message", (value: any) => {
+                    parentPort!.postMessage("fallback:" + value);
+                    parentPort!.close();
+                });
+                parentPort!.postMessage("ready");
+                """,
+            ["main.ts"] = """
+                import { Worker } from "worker_threads";
+                const worker = new Worker(__dirname + "/worker_fallback_echo.ts");
+                worker.on("message", (value: any) => {
+                    if (value === "ready") worker.postMessage("ping");
+                    else console.log(value);
+                });
+                """,
+        };
+
+        var output = TestHarness.RunModules(files, "main.ts", ExecutionMode.Compiled);
+
+        Assert.Contains("fallback:ping", output);
     }
 
     [Fact]
@@ -2031,14 +2363,43 @@ public class WorkerThreadsTests
     }
 
     [Fact]
+    public void CompiledWorker_PreparedCacheInvalidatesWhenSourceChanges()
+    {
+        string directory = Path.Combine(Path.GetTempPath(), $"sharpts_compiled_worker_{Guid.NewGuid():N}");
+        Directory.CreateDirectory(directory);
+        string workerPath = Path.Combine(directory, "worker.ts");
+
+        try
+        {
+            File.WriteAllText(workerPath, "postMessage('first');");
+            byte[] firstArtifact = CompiledWorkerCompilationService.Compile(workerPath);
+            Assert.Same(firstArtifact, CompiledWorkerCompilationService.Compile(workerPath));
+
+            File.WriteAllText(workerPath, "postMessage('second');");
+            byte[] secondArtifact = CompiledWorkerCompilationService.Compile(workerPath);
+
+            Assert.NotSame(firstArtifact, secondArtifact);
+            Assert.Same(secondArtifact, CompiledWorkerCompilationService.Compile(workerPath));
+        }
+        finally
+        {
+            try { Directory.Delete(directory, recursive: true); } catch { }
+        }
+    }
+
+    [Fact]
     public void CompiledWorker_CollectibleRealmUnloadsAfterExit()
     {
         string directory = Path.Combine(Path.GetTempPath(), $"sharpts_compiled_worker_{Guid.NewGuid():N}");
         Directory.CreateDirectory(directory);
         string workerPath = Path.Combine(directory, "worker.ts");
         File.WriteAllText(workerPath, """
-            import { isMainThread } from "worker_threads";
+            import { isMainThread, parentPort } from "worker_threads";
             if (isMainThread) throw new Error("worker context was not configured");
+            parentPort!.on("message", (value: any) => {
+                if (value !== "stop") throw new Error("unexpected worker message");
+                parentPort!.close();
+            });
             """);
 
         WeakReference realm;
@@ -2051,6 +2412,9 @@ public class WorkerThreadsTests
             using (var worker = SharpTSWorker.CreateForCompiledLoop(
                        workerPath, options: null, static () => { }, static () => { }, static action => action()))
             {
+                // Populate RuntimeCallableDispatcher's emitted-function caches before
+                // teardown; those caches must not pin the collectible worker realm.
+                worker.PostMessage("stop");
                 Assert.True(SpinWait.SpinUntil(() => !worker.IsRunning, TimeSpan.FromSeconds(30)),
                     "Compiled worker did not exit.");
                 realm = worker.CompiledRealmReference
@@ -2071,6 +2435,89 @@ public class WorkerThreadsTests
         {
             try { Directory.Delete(directory, recursive: true); } catch { }
         }
+    }
+
+    [Fact]
+    public void CompiledWorker_TransferredMessagePortDoesNotRootRealmAfterExit()
+    {
+        string directory = Path.Combine(
+            Path.GetTempPath(), $"sharpts_compiled_worker_{Guid.NewGuid():N}");
+        Directory.CreateDirectory(directory);
+        string workerPath = Path.Combine(directory, "worker.ts");
+        File.WriteAllText(workerPath, """
+            const port: any = workerData.port;
+            port.on("message", () => {});
+            port.close();
+            """);
+
+        WeakReference realm;
+        try
+        {
+            object emittedPort = CreateEmittedMessagePortStub();
+            var options = new Dictionary<string, object?>
+            {
+                ["workerData"] = new Dictionary<string, object?> { ["port"] = emittedPort },
+                ["transferList"] = new List<object?> { emittedPort },
+            };
+
+            using (var worker = SharpTSWorker.CreateForCompiledLoop(
+                       workerPath, options, static () => { }, static () => { },
+                       static action => action()))
+            {
+                Assert.True(SpinWait.SpinUntil(() => !worker.IsRunning, TimeSpan.FromSeconds(30)),
+                    "Compiled transferred-port worker did not exit.");
+                realm = worker.CompiledRealmReference
+                    ?? throw new Xunit.Sdk.XunitException(
+                        "Compiled transferred-port worker did not create an isolated realm.");
+            }
+
+            for (int i = 0; i < 10 && realm.IsAlive; i++)
+            {
+                GC.Collect();
+                GC.WaitForPendingFinalizers();
+                GC.Collect();
+                Thread.Sleep(20);
+            }
+
+            Assert.False(realm.IsAlive,
+                "The transferred MessagePort bridge retained the compiled worker realm after exit.");
+        }
+        finally
+        {
+            try { Directory.Delete(directory, recursive: true); } catch { }
+        }
+    }
+
+    private static object CreateEmittedMessagePortStub()
+    {
+        var assembly = AssemblyBuilder.DefineDynamicAssembly(
+            new AssemblyName($"SharpTS.MessagePortStub.{Guid.NewGuid():N}"),
+            AssemblyBuilderAccess.Run);
+        var module = assembly.DefineDynamicModule("main");
+        var type = module.DefineType("$MessagePort", TypeAttributes.Public | TypeAttributes.Class);
+        var pending = type.DefineField(
+            "_pending", typeof(ConcurrentQueue<object>), FieldAttributes.Private);
+        type.DefineField("_onEnqueue", typeof(Action), FieldAttributes.Private);
+
+        var ctor = type.DefineConstructor(
+            MethodAttributes.Public, CallingConventions.Standard, Type.EmptyTypes);
+        var ctorIl = ctor.GetILGenerator();
+        ctorIl.Emit(OpCodes.Ldarg_0);
+        ctorIl.Emit(OpCodes.Call, typeof(object).GetConstructor(Type.EmptyTypes)!);
+        ctorIl.Emit(OpCodes.Ldarg_0);
+        ctorIl.Emit(OpCodes.Newobj,
+            typeof(ConcurrentQueue<object>).GetConstructor(Type.EmptyTypes)!);
+        ctorIl.Emit(OpCodes.Stfld, pending);
+        ctorIl.Emit(OpCodes.Ret);
+
+        var postMessage = type.DefineMethod(
+            "PostMessage", MethodAttributes.Public, typeof(void), [typeof(object)]);
+        postMessage.GetILGenerator().Emit(OpCodes.Ret);
+        var markTransferred = type.DefineMethod(
+            "MarkTransferredAcrossThreads", MethodAttributes.Public, typeof(void), Type.EmptyTypes);
+        markTransferred.GetILGenerator().Emit(OpCodes.Ret);
+
+        return Activator.CreateInstance(type.CreateType())!;
     }
 
     /// <summary>

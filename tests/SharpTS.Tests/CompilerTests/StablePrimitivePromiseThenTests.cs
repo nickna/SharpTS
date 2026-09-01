@@ -323,16 +323,6 @@ public sealed class StablePrimitivePromiseThenTests
         """
         async function work(): Promise<number> {
             let chain: Promise<number> = Promise.resolve(1);
-            chain = chain.then(
-                (value: number): number => value + 1,
-                (_error: any): number => 0);
-            return await chain;
-        }
-        work();
-        """,
-        """
-        async function work(): Promise<number> {
-            let chain: Promise<number> = Promise.resolve(1);
             const next: Promise<{ value: number }> = chain.then(
                 (value: number): { value: number } => ({ value: value + 1 }));
             return (await next).value;
@@ -533,6 +523,47 @@ public sealed class StablePrimitivePromiseThenTests
             });
     }
 
+    [Fact]
+    public void IntrinsicPromiseAllWithoutPrototypeMutation_AvoidsResultAdoptionFacade()
+    {
+        Assembly assembly = Compile("""
+            function gather(promise: Promise<number>): Promise<number[]> {
+                return Promise.all([promise]);
+            }
+            gather(new Promise<number>((resolve): void => resolve(1)));
+            """);
+
+        MethodInfo promiseAll = assembly.GetType("$Runtime")!
+            .GetMethod("PromiseAll")!;
+        Assert.DoesNotContain(ReadInstructions(promiseAll), instruction =>
+            instruction.Operand is MethodBase
+            {
+                Name: "AdoptPromiseCombinatorResult"
+            });
+    }
+
+    [Fact]
+    public void IntrinsicPromiseAllWithPrototypeMutation_RetainsResultAdoptionFacade()
+    {
+        Assembly assembly = Compile("""
+            (Array.prototype as any).then = function (resolve: any): void {
+                resolve("adopted");
+            };
+            function gather(promise: Promise<number>): Promise<number[]> {
+                return Promise.all([promise]);
+            }
+            gather(new Promise<number>((resolve): void => resolve(1)));
+            """);
+
+        MethodInfo promiseAll = assembly.GetType("$Runtime")!
+            .GetMethod("PromiseAll")!;
+        Assert.Contains(ReadInstructions(promiseAll), instruction =>
+            instruction.Operand is MethodBase
+            {
+                Name: "AdoptPromiseCombinatorResult"
+            });
+    }
+
     [Theory, ModeData]
     public void StablePromiseAllFanOut_PreservesPromiseJobOrdering(ExecutionMode mode)
     {
@@ -691,6 +722,350 @@ public sealed class StablePrimitivePromiseThenTests
         Assert.NotEmpty(FindCallers(assembly, "PromiseAll"));
     }
 
+    [Fact]
+    public void InlinePromiseExecutor_UsesTypedDirectInvocation()
+    {
+        const string source = """
+            function create(): Promise<number> {
+                return new Promise<number>((resolve: any, reject: any): void => {
+                    resolve(7);
+                });
+            }
+            create().then((value: number): void => console.log(value));
+            """;
+
+        Assembly assembly = Compile(source);
+        MethodInfo caller = FindSingleCaller(assembly, "PromiseFromDirectExecutor");
+        Assert.DoesNotContain(ReadInstructions(caller), instruction =>
+            instruction.Operand is MethodBase { Name: "PromiseFromExecutor" });
+
+        MethodInfo direct = assembly.GetType("$Runtime")!
+            .GetMethod("PromiseFromDirectExecutor")!;
+        Assert.Contains(ReadInstructions(direct), instruction =>
+            instruction.Operand is MethodBase
+            {
+                Name: "Invoke",
+                DeclaringType: { IsGenericType: true } declaringType
+            }
+            && declaringType.GetGenericTypeDefinition() == typeof(Func<,,>));
+        Assert.DoesNotContain(ReadInstructions(direct), instruction =>
+            instruction.Operand is MethodBase { Name: "InvokeMethodValue" });
+        Assert.Empty(TestHarness.CompileAndVerifyOnly(source));
+        Assert.Equal("7\n", TestHarness.RunCompiledStandalone(source));
+    }
+
+    [Fact]
+    public void EscapedPromiseExecutor_RetainsGeneralCallableDispatch()
+    {
+        const string source = """
+            const executor: any = (resolve: any, reject: any): void => resolve(3);
+            const promise: Promise<number> = new Promise<number>(executor);
+            promise.then((value: number): void => console.log(value));
+            """;
+
+        Assembly assembly = Compile(source);
+        Assert.Empty(FindCallers(assembly, "PromiseFromDirectExecutor"));
+        Assert.NotEmpty(FindCallers(assembly, "PromiseFromExecutor"));
+        Assert.Equal("3\n", TestHarness.RunCompiledStandalone(source));
+    }
+
+    [Fact]
+    public void CapturingPromiseExecutor_RetainsGeneralCallableDispatch()
+    {
+        const string source = """
+            async function main(): Promise<void> {
+                const expected = 9;
+                const actual = await new Promise<number>((resolve: any, reject: any): void => {
+                    setTimeout(() => resolve(expected), 0);
+                });
+                console.log(actual);
+            }
+            main();
+            """;
+
+        Assembly assembly = Compile(source);
+        Assert.Empty(FindCallers(assembly, "PromiseFromDirectExecutor"));
+        Assert.NotEmpty(FindCallers(assembly, "PromiseFromExecutor"));
+        Assert.Equal("9\n", TestHarness.RunCompiledStandalone(source));
+    }
+
+    [Fact]
+    public void StableNumericTwoHandler_UsesCompactTypedReaction()
+    {
+        const string source = """
+            function work(): Promise<number> {
+                let chain: Promise<number> = Promise.resolve(1);
+                chain = chain.then(
+                    (value: number): number => value + 1,
+                    (_error: any): number => 0,
+                );
+                return chain;
+            }
+            work().then((value: number): void => console.log(value));
+            """;
+
+        Assembly assembly = Compile(source);
+        MethodInfo caller = FindSingleCaller(
+            assembly, "PromiseThenPrimitiveWithRejection");
+        Assert.DoesNotContain(ReadInstructions(caller), instruction =>
+            instruction.Operand is MethodBase
+            {
+                Name: "PromiseThen" or "InvokeCallback" or "PromiseResolveValue"
+            });
+
+        MethodInfo moveNext = assembly
+            .GetType("$PromiseThenPrimitiveWithRejection_SM")!
+            .GetMethod("MoveNext")!;
+        Assert.Contains(ReadInstructions(moveNext), instruction =>
+            instruction.Operand is MethodBase
+            {
+                Name: "Invoke",
+                DeclaringType: { IsGenericType: true } declaringType
+            }
+            && declaringType.GetGenericTypeDefinition() == typeof(Func<,>));
+        Assert.DoesNotContain(ReadInstructions(moveNext), instruction =>
+            instruction.Operand is MethodBase
+            {
+                Name: "InvokeCallback" or "PromiseResolveValue"
+            });
+        Assert.Empty(TestHarness.CompileAndVerifyOnly(source));
+        Assert.Equal("2\n", TestHarness.RunCompiledStandalone(source));
+    }
+
+    [Fact]
+    public void StableNumericTwoHandler_PreservesRejectionThrowAndJobOrdering()
+    {
+        const string source = """
+            const events: string[] = [];
+            function makeFulfilled(): Promise<number> {
+                let chain: Promise<number> = Promise.resolve(1);
+                chain = chain.then(
+                    (value: number): number => {
+                        events.push("fulfilled:" + value);
+                        return value + 1;
+                    },
+                    (_error: any): number => {
+                        events.push("unexpected-rejection");
+                        return 0;
+                    },
+                );
+                return chain;
+            }
+            const fulfilled: Promise<number> = makeFulfilled();
+
+            events.push("sync");
+            queueMicrotask((): void => {
+                events.push("microtask");
+            });
+
+            function makeRecovered(): Promise<number> {
+                let chain: Promise<number> = Promise.resolve(
+                    Promise.reject("source-error")) as any as Promise<number>;
+                chain = chain.then(
+                    (value: number): number => value,
+                    (error: any): number => {
+                        events.push("rejected:" + error);
+                        return 7;
+                    },
+                );
+                return chain;
+            }
+            const recovered: Promise<number> = makeRecovered();
+
+            let sameReactionRejectCalls: number = 0;
+            function makeThrown(): Promise<number> {
+                let chain: Promise<number> = Promise.resolve(1);
+                chain = chain.then(
+                    (_value: number): number => {
+                        throw new Error("handler-error");
+                    },
+                    (_error: any): number => {
+                        sameReactionRejectCalls = sameReactionRejectCalls + 1;
+                        return 9;
+                    },
+                );
+                return chain;
+            }
+            const thrown: Promise<number> = makeThrown();
+            const checkedThrown: Promise<number> = thrown.then(
+                (_value: number): number => 0,
+                (error: any): number => {
+                    events.push("thrown:" + error.message);
+                    events.push("same-reject:" + sameReactionRejectCalls);
+                    return 0;
+                },
+            );
+
+            function makeRejectedThrow(): Promise<number> {
+                let chain: Promise<number> = Promise.resolve(
+                    Promise.reject("reject-source")) as any as Promise<number>;
+                chain = chain.then(
+                    (value: number): number => value,
+                    (error: any): number => {
+                        throw new Error("reject-handler-" + error);
+                    },
+                );
+                return chain;
+            }
+            const rejectedThrow: Promise<number> = makeRejectedThrow();
+            const checkedRejectedThrow: Promise<number> = rejectedThrow.then(
+                (_value: number): number => 0,
+                (error: any): number => {
+                    events.push("reject-thrown:" + error.message);
+                    return 0;
+                },
+            );
+
+            Promise.all([
+                fulfilled,
+                recovered,
+                checkedThrown,
+                checkedRejectedThrow,
+            ]).then(
+                (values: any): void => {
+                    events.push("values:" + values.join(":"));
+                    queueMicrotask((): void => console.log(events.join("|")));
+                },
+            );
+            """;
+
+        Assembly assembly = Compile(source);
+        Assert.Equal(4, FindCallers(
+            assembly, "PromiseThenPrimitiveWithRejection").Count);
+        Assert.Empty(TestHarness.CompileAndVerifyOnly(source));
+        Assert.Equal(
+            "sync|fulfilled:1|microtask|rejected:source-error|" +
+            "thrown:handler-error|same-reject:0|" +
+            "reject-thrown:reject-handler-reject-source|values:2:7:0:0\n",
+            TestHarness.RunCompiledStandalone(source));
+    }
+
+    [Fact]
+    public void StableTwoHandlerObjectResult_RetainsGeneralAdoption()
+    {
+        const string source = """
+            function work(): Promise<number> {
+                return (
+                    Promise.resolve(Promise.reject("source-error"))
+                        as any as Promise<number>
+                ).then(
+                    (value: number): number => value + 1,
+                    (_error: any): any => ({
+                        then: (resolve: any): void => resolve(9),
+                    }),
+                );
+            }
+            work().then((value: number): void => console.log(value));
+            """;
+
+        Assembly assembly = Compile(source);
+        Assert.Empty(FindCallers(
+            assembly, "PromiseThenPrimitiveWithRejection"));
+        Assert.NotEmpty(FindCallers(assembly, "PromiseThen"));
+        Assert.Equal("9\n", TestHarness.RunCompiledStandalone(source));
+    }
+
+    [Fact]
+    public void DirectPromiseAllNumericReaction_UsesCompactObjectPrimitivePath()
+    {
+        const string source = """
+            let resolveFirst: any;
+            let resolveSecond: any;
+            const first: Promise<number> = new Promise<number>((resolve: any): void => {
+                resolveFirst = resolve;
+            });
+            const second: Promise<number> = new Promise<number>((resolve: any): void => {
+                resolveSecond = resolve;
+            });
+
+            function sum(promises: Promise<number>[]): Promise<number> {
+                return (Promise.all(promises) as Promise<any>).then(
+                    (values: any): number => values[0] + values[1],
+                );
+            }
+            const result: Promise<number> = sum([first, second]);
+            result.then(
+                (value: number): void => console.log("result:" + value),
+                (error: any): void => console.log("unexpected:" + error),
+            );
+
+            resolveFirst(2);
+            queueMicrotask((): void => {
+                console.log("after-first");
+                resolveSecond(3);
+            });
+            console.log("sync");
+            """;
+
+        Assembly assembly = Compile(source);
+        Assert.NotEmpty(FindCompactObjectPrimitiveCallers(assembly));
+        Assert.Empty(TestHarness.CompileAndVerifyOnly(source));
+        Assert.Equal(
+            "sync\nafter-first\nresult:5\n",
+            TestHarness.RunCompiledStandalone(source));
+    }
+
+    [Fact]
+    public void DirectPromiseAllNumericReaction_PropagatesRejectionAndThrow()
+    {
+        const string source = """
+            function one(promises: Promise<number>[]): Promise<number> {
+                return (Promise.all(promises) as Promise<any>).then(
+                    (values: any): number => values.length,
+                );
+            }
+            function boom(promises: Promise<number>[]): Promise<number> {
+                return (Promise.all(promises) as Promise<any>).then(
+                    (values: any): number => {
+                        if (values.length > 0) {
+                            throw new Error("handler");
+                        }
+                        return values.length;
+                    },
+                );
+            }
+
+            one([Promise.reject("input")]).then(
+                (_value: number): void => console.log("unexpected-input"),
+                (error: any): void => console.log("rejected:" + error),
+            );
+
+            boom([Promise.resolve(1)]).then(
+                (_value: number): void => console.log("unexpected-handler"),
+                (error: any): void => console.log("threw:" + error.message),
+            );
+            """;
+
+        Assembly assembly = Compile(source);
+        Assert.Equal(2, FindCompactObjectPrimitiveCallers(assembly).Count);
+        Assert.Empty(TestHarness.CompileAndVerifyOnly(source));
+        Assert.Equal(
+            "rejected:input\nthrew:handler\n",
+            TestHarness.RunCompiledStandalone(source));
+    }
+
+    [Fact]
+    public void DirectPromiseAllObjectReaction_RetainsThenableAdoption()
+    {
+        const string source = """
+            function adopt(promises: Promise<number>[]): Promise<number> {
+                return (Promise.all(promises) as Promise<any>).then(
+                    (values: any): any => ({
+                        then: (resolve: any): void => resolve(values[0] + 1),
+                    }),
+                );
+            }
+            adopt([Promise.resolve(2)]).then(
+                (value: number): void => console.log(value),
+            );
+            """;
+
+        Assembly assembly = Compile(source);
+        Assert.Empty(FindCompactObjectPrimitiveCallers(assembly));
+        Assert.Empty(TestHarness.CompileAndVerifyOnly(source));
+        Assert.Equal("3\n", TestHarness.RunCompiledStandalone(source));
+    }
+
     private static Assembly Compile(string source)
     {
         var statements = new Parser(new Lexer(source).ScanTokens()).ParseOrThrow();
@@ -715,6 +1090,9 @@ public sealed class StablePrimitivePromiseThenTests
 
     private static MethodInfo FindSingleCaller(Assembly assembly, string methodName) =>
         Assert.Single(FindCallers(assembly, methodName));
+
+    private static List<MethodInfo> FindCompactObjectPrimitiveCallers(Assembly assembly) =>
+        FindCallers(assembly, "PromiseThenObjectPrimitive");
 
     private static List<MethodInfo> FindCallers(Assembly assembly, string methodName) =>
         assembly.GetTypes()

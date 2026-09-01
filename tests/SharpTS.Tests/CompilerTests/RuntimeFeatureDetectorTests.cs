@@ -183,6 +183,8 @@ public class RuntimeFeatureDetectorTests
     [InlineData("Reflect.setPrototypeOf({}, null);", true)]
     [InlineData("const setProto = Object.setPrototypeOf;", true)]
     [InlineData("const setProto = Reflect['setPrototypeOf'];", true)]
+    [InlineData("const prototype = Object.getPrototypeOf([]);", true)]
+    [InlineData("const getPrototypeOf = Reflect.getPrototypeOf;", true)]
     [InlineData("const value = ([] as any).__proto__;", true)]
     [InlineData("const values: object[] = []; (values as any).push = () => 0;", true)]
     [InlineData("const values: object[] = []; delete (values as any)['push'];", true)]

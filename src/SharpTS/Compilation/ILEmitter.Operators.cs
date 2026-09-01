@@ -1782,6 +1782,9 @@ public partial class ILEmitter
     {
         switch (e)
         {
+            case Expr.Grouping grouping:
+                return TryEmitIntegerCounterValueI8(grouping.Expression);
+
             case Expr.Variable v when IsIntegerCounterLocal(v.Name.Lexeme):
                 IL.Emit(OpCodes.Ldloc, _ctx.Locals.GetLocal(v.Name.Lexeme)!);
                 return true;
@@ -1814,6 +1817,16 @@ public partial class ILEmitter
                     _ => OpCodes.Mul
                 });
                 return true;
+
+            case Expr.Binary { Operator.Type: TokenType.PERCENT } modulo
+                when ForLoopAnalyzer.IntegerModuloEnabled
+                     && TryGetIntLiteralValue(modulo.Right, out long divisor)
+                     && divisor != 0
+                     && IsIntegerCounterValueI8(modulo.Left):
+                _ = TryEmitIntegerCounterValueI8(modulo.Left);
+                IL.Emit(OpCodes.Ldc_I8, divisor);
+                IL.Emit(OpCodes.Rem);
+                return true;
         }
         return false;
     }
@@ -1825,6 +1838,7 @@ public partial class ILEmitter
     /// </summary>
     private bool IsIntegerCounterValueI8(Expr e) => e switch
     {
+        Expr.Grouping grouping => IsIntegerCounterValueI8(grouping.Expression),
         Expr.Variable v => IsIntegerCounterLocal(v.Name.Lexeme),
         Expr.Binary { Operator.Type: TokenType.PLUS or TokenType.MINUS } b
             when b.Left is Expr.Variable lv
@@ -1837,6 +1851,11 @@ public partial class ILEmitter
         Expr.Binary { Operator.Type: TokenType.PLUS or TokenType.MINUS or TokenType.STAR } b
             when IsIntegerCounterValueI8(b.Left)
                  && IsIntegerCounterValueI8(b.Right) => true,
+        Expr.Binary { Operator.Type: TokenType.PERCENT } b
+            when ForLoopAnalyzer.IntegerModuloEnabled
+                 && TryGetIntLiteralValue(b.Right, out long divisor)
+                 && divisor != 0
+                 && IsIntegerCounterValueI8(b.Left) => true,
         _ => false
     };
 

@@ -445,6 +445,13 @@ public class EmittedRuntime
     public MethodBuilder CompactDictionaryOrder { get; set; } = null!;
     public MethodBuilder DeletePropertyStrict { get; set; } = null!;
     public MethodBuilder GetFieldsProperty { get; set; } = null!;
+    /// <summary>
+    /// Weak per-receiver cache of reflected CLR method wrappers used by
+    /// <see cref="GetFieldsProperty"/>. Values are
+    /// ConcurrentDictionary&lt;string, object&gt; instances whose entries are
+    /// emitted $TSFunction objects.
+    /// </summary>
+    public FieldBuilder ReflectedMethodCacheField { get; set; } = null!;
     public MethodBuilder SetFieldsProperty { get; set; } = null!;
     public MethodBuilder SetFieldsPropertyStrict { get; set; } = null!;
     public MethodBuilder GetArrayMethod { get; set; } = null!;
@@ -1055,8 +1062,12 @@ public class EmittedRuntime
     public MethodBuilder PromiseAllKeyed { get; set; } = null!;
     public MethodBuilder PromiseRace { get; set; } = null!;
     public MethodBuilder PromiseThen { get; set; } = null!;
+    /// <summary>$Runtime.PromiseThenObjectPrimitive(Task&lt;object?&gt;, Func&lt;object,object&gt;) -> Task&lt;object?&gt; — fulfillment-only direct Promise.all reaction whose boxed callback result is statically primitive.</summary>
+    public MethodBuilder PromiseThenObjectPrimitive { get; set; } = null!;
     /// <summary>$Runtime.PromiseThenPrimitive(Task&lt;object?&gt;, Func&lt;double,double&gt;) -> Task&lt;object?&gt; — stable intrinsic fulfillment-only numeric continuation whose primitive callback result cannot require thenable adoption.</summary>
     public MethodBuilder PromiseThenPrimitive { get; set; } = null!;
+    /// <summary>$Runtime.PromiseThenPrimitiveWithRejection(Task&lt;object?&gt;, Func&lt;double,double&gt;, Func&lt;object,double&gt;) -> Task&lt;object?&gt; — stable intrinsic numeric continuation with a typed rejection handler and no thenable-result adoption.</summary>
+    public MethodBuilder PromiseThenPrimitiveWithRejection { get; set; } = null!;
     public MethodBuilder PromiseCatch { get; set; } = null!;
     public MethodBuilder PromiseFinally { get; set; } = null!;
     /// <summary>Keeps standalone event-loop execution alive until a discarded top-level Promise reaction settles, without pumping it before the current script job completes.</summary>
@@ -1066,6 +1077,8 @@ public class EmittedRuntime
     public MethodBuilder PromiseKeyedMapResult { get; set; } = null!;
     public MethodBuilder PromiseAny { get; set; } = null!;
     public MethodBuilder PromiseFromExecutor { get; set; } = null!;
+    /// <summary>$Runtime.PromiseFromDirectExecutor(Func&lt;object,object,object&gt;) -> Task&lt;object?&gt; — compiler-only fast path for an inline, two-argument Promise executor arrow whose CLR signature is known. Avoids materializing a $TSFunction and redispatching the executor through InvokeMethodValue.</summary>
+    public MethodBuilder PromiseFromDirectExecutor { get; set; } = null!;
     public MethodBuilder PromiseWithResolvers { get; set; } = null!;
     /// <summary>$Runtime.UnwrapPromiseReceiver(object) -> Task&lt;object?&gt; — $Promise (incl. #242 subclasses) → .Task; anything else is cast to Task&lt;object?&gt;. Used by then/catch/finally emission so promise-typed receivers work regardless of representation.</summary>
     public MethodBuilder UnwrapPromiseReceiverMethod { get; set; } = null!;
@@ -2723,6 +2736,8 @@ public class EmittedRuntime
     public MethodBuilder AtomicsLoad { get; set; } = null!;
     public MethodBuilder AtomicsStore { get; set; } = null!;
     public MethodBuilder AtomicsAdd { get; set; } = null!;
+    public MethodBuilder AtomicsAddInt32 { get; set; } = null!;
+    public MethodBuilder AtomicsIncrementInt32Discarded { get; set; } = null!;
     public MethodBuilder AtomicsSub { get; set; } = null!;
     public MethodBuilder AtomicsAnd { get; set; } = null!;
     public MethodBuilder AtomicsOr { get; set; } = null!;

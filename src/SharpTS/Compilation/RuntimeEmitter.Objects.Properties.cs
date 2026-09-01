@@ -605,6 +605,42 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, _types.Type);
         il.Emit(OpCodes.Brtrue, skipTypeReflectionLabel);
 
+        // Repeated reads of a reflection-backed CLR method must return the
+        // same bound callable and should not redo reflection / wrapper setup on
+        // every invocation. Dynamic own descriptors were checked above, so an
+        // expando or monkey-patch still shadows this cache exactly as before.
+        var reflectedMethodDictionaryType = _types.MakeGenericType(
+            _types.ConcurrentDictionaryOpen, _types.String, _types.Object);
+        var reflectedMethodCacheType = _types.MakeGenericType(
+            typeof(System.Runtime.CompilerServices.ConditionalWeakTable<,>),
+            _types.Object,
+            reflectedMethodDictionaryType);
+        var reflectedMethodDictionaryLocal = il.DeclareLocal(reflectedMethodDictionaryType);
+        var reflectedMethodWrapperLocal = il.DeclareLocal(_types.Object);
+        var noCachedReflectedMethodLabel = il.DefineLabel();
+
+        il.Emit(OpCodes.Ldsfld, runtime.ReflectedMethodCacheField);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloca, reflectedMethodDictionaryLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(
+            reflectedMethodCacheType,
+            "TryGetValue",
+            _types.Object,
+            reflectedMethodDictionaryType.MakeByRefType()));
+        il.Emit(OpCodes.Brfalse, noCachedReflectedMethodLabel);
+        il.Emit(OpCodes.Ldloc, reflectedMethodDictionaryLocal);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldloca, reflectedMethodWrapperLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(
+            reflectedMethodDictionaryType,
+            "TryGetValue",
+            _types.String,
+            _types.Object.MakeByRefType()));
+        il.Emit(OpCodes.Brfalse, noCachedReflectedMethodLabel);
+        il.Emit(OpCodes.Ldloc, reflectedMethodWrapperLocal);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(noCachedReflectedMethodLabel);
+
         // Fallback: Try reflection-based property access for runtime-emitted types
         // This handles types like $Readable, $Writable, $Duplex that don't implement $IHasFields
 
@@ -654,10 +690,26 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, methodInfoLocal);
         il.Emit(OpCodes.Brfalse, noMethodLabel);
 
-        // Wrap in $TSFunction: new $TSFunction(target, methodInfo)
+        // Wrap in $TSFunction: new $TSFunction(target, methodInfo), then publish
+        // the stable bound wrapper. GetOrAdd handles the unlikely case where
+        // two threads first access the same receiver/name concurrently.
         il.Emit(OpCodes.Ldarg_0);  // target object
         il.Emit(OpCodes.Ldloc, methodInfoLocal);
         il.Emit(OpCodes.Newobj, runtime.TSFunctionCtor);
+        il.Emit(OpCodes.Stloc, reflectedMethodWrapperLocal);
+        il.Emit(OpCodes.Ldsfld, runtime.ReflectedMethodCacheField);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(
+            reflectedMethodCacheType,
+            "GetOrCreateValue",
+            _types.Object));
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldloc, reflectedMethodWrapperLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(
+            reflectedMethodDictionaryType,
+            "GetOrAdd",
+            _types.String,
+            _types.Object));
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(noMethodLabel);

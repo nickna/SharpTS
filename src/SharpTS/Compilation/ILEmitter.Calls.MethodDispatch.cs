@@ -12,6 +12,44 @@ public partial class ILEmitter
 {
     protected override bool TryEmitDiscardedExpression(Expr expression)
     {
+        // Shared-counter loops almost always discard Atomics.add's old-value result. When the
+        // receiver is statically Int32/Uint32, keep all three operands unboxed and call the
+        // Interlocked-backed helper directly; manufacturing a boxed double solely to pop it was
+        // a dominant per-increment cost in compiled worker contention benchmarks.
+        if (expression is Expr.Call
+            {
+                Optional: false,
+                Callee: Expr.Get
+                {
+                    Optional: false,
+                    Object: Expr.Variable { Name.Lexeme: "Atomics" },
+                    Name.Lexeme: "add"
+                },
+                Arguments: [var atomicReceiver, var atomicIndex, var atomicValue]
+            }
+            && !Resolver.HasVariable("Atomics")
+            && _ctx.TypeMap?.Get(atomicReceiver) is SharpTS.TypeSystem.TypeInfo.TypedArray
+                { ElementType: "Int32" or "Uint32" } atomicArray)
+        {
+            EmitExpression(atomicReceiver);
+            IL.Emit(OpCodes.Castclass, _ctx.Runtime!.TypedArrayBaseType);
+            EmitExpressionAsDouble(atomicIndex);
+            IL.Emit(OpCodes.Conv_I4);
+            if (atomicValue is Expr.Literal { Value: 1.0 })
+            {
+                IL.Emit(OpCodes.Call, _ctx.Runtime.AtomicsIncrementInt32Discarded);
+            }
+            else
+            {
+                EmitExpressionAsDouble(atomicValue);
+                IL.Emit(atomicArray.ElementType == "Uint32" ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
+                IL.Emit(OpCodes.Call, _ctx.Runtime.AtomicsAddInt32);
+                IL.Emit(OpCodes.Pop);
+            }
+            SetStackUnknown();
+            return true;
+        }
+
         // Numeric Map.set returns its receiver in JavaScript, but promotion only
         // admits statement-position calls. Emit Dictionary.set_Item directly and
         // leave the evaluation stack empty instead of manufacturing a receiver

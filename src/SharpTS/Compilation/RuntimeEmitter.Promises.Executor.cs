@@ -26,6 +26,8 @@ public partial class RuntimeEmitter
     {
         // Emit the PromiseFromExecutor method
         EmitPromiseFromExecutorMethod(runtimeType, runtime, runtime.PromiseResolveCallbackType, runtime.PromiseRejectCallbackType);
+        EmitPromiseFromDirectExecutorMethod(runtimeType, runtime,
+            runtime.PromiseResolveCallbackType, runtime.PromiseRejectCallbackType);
 
         // Promise-subclass support (#242): receiver unwrapping + derived-result wrapping
         EmitUnwrapPromiseReceiverMethod(runtimeType, runtime);
@@ -1468,6 +1470,42 @@ public partial class RuntimeEmitter
 
             il.MarkLabel(endLockLabel);
 
+            // ECMAScript Promise Resolve Functions only perform thenable
+            // assimilation for Objects (callable functions included). Primitive
+            // resolutions can fulfill the target capability directly. Routing a
+            // number/string/boolean/null through PromiseResolveValue needlessly
+            // performed a dynamic `then` lookup, allocated an intermediate TCS,
+            // and transferred its already-completed result back into this TCS.
+            // Worker fan-in resolves one primitive promise per worker, making
+            // that generic path a material part of every round trip.
+            var resolveObjectValueLabel = il.DefineLabel();
+            var resolvePrimitiveValueLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldloc, valueLocal);
+            il.Emit(OpCodes.Brfalse, resolvePrimitiveValueLabel);
+            il.Emit(OpCodes.Ldloc, valueLocal);
+            il.Emit(OpCodes.Isinst, _types.Double);
+            il.Emit(OpCodes.Brtrue, resolvePrimitiveValueLabel);
+            il.Emit(OpCodes.Ldloc, valueLocal);
+            il.Emit(OpCodes.Isinst, _types.String);
+            il.Emit(OpCodes.Brtrue, resolvePrimitiveValueLabel);
+            il.Emit(OpCodes.Ldloc, valueLocal);
+            il.Emit(OpCodes.Isinst, _types.Boolean);
+            il.Emit(OpCodes.Brtrue, resolvePrimitiveValueLabel);
+            il.Emit(OpCodes.Ldloc, valueLocal);
+            il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+            il.Emit(OpCodes.Brtrue, resolvePrimitiveValueLabel);
+            il.Emit(OpCodes.Br, resolveObjectValueLabel);
+
+            il.MarkLabel(resolvePrimitiveValueLabel);
+            il.Emit(OpCodes.Ldloc, tcsLocal);
+            il.Emit(OpCodes.Ldloc, valueLocal);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(
+                _types.TaskCompletionSourceOfObject, "TrySetResult", _types.Object));
+            il.Emit(OpCodes.Pop);
+            il.Emit(OpCodes.Br, endLabel);
+
+            il.MarkLabel(resolveObjectValueLabel);
+
             // Promise Resolve Functions adopt promises and thenables instead of
             // fulfilling with their host Task representation as a plain value.
             // Native promises/tasks retain their backing task. For every other
@@ -1805,6 +1843,89 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, tcsLocal);
         var taskProperty = typeof(TaskCompletionSource<object?>).GetProperty("Task")!.GetGetMethod()!;
         il.Emit(OpCodes.Callvirt, taskProperty);
+        il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Emits the compiler-only Promise constructor fast path for an inline
+    /// executor arrow with the exact CLR signature object(object, object).
+    /// The generic entry point above must accept every callable shape, so it
+    /// wraps the arrow in $TSFunction, builds an object[] and routes through
+    /// InvokeMethodValue. At an inline-arrow construction site none of those
+    /// dynamic artifacts are observable: the Promise constructor invokes the
+    /// executor exactly once and does not expose the function value. Bind the
+    /// emitted arrow body to a typed delegate and invoke it directly while
+    /// retaining the same resolving functions, first-settlement guard, throw
+    /// handling, and per-Promise Task identity as the general path.
+    /// </summary>
+    private void EmitPromiseFromDirectExecutorMethod(
+        TypeBuilder runtimeType,
+        EmittedRuntime runtime,
+        TypeBuilder resolveCallbackType,
+        TypeBuilder rejectCallbackType)
+    {
+        var executorType = typeof(Func<object, object, object>);
+        var method = runtimeType.DefineMethod(
+            "PromiseFromDirectExecutor",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.TaskOfObject,
+            [executorType]);
+        runtime.PromiseFromDirectExecutor = method;
+
+        var il = method.GetILGenerator();
+        var tcsLocal = il.DeclareLocal(typeof(TaskCompletionSource<object?>));
+        var settledLocal = il.DeclareLocal(_types.Object);
+        var resolveLocal = il.DeclareLocal(resolveCallbackType);
+        var rejectLocal = il.DeclareLocal(rejectCallbackType);
+        var exLocal = il.DeclareLocal(_types.Exception);
+
+        il.Emit(OpCodes.Newobj, typeof(TaskCompletionSource<object?>)
+            .GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Stloc, tcsLocal);
+
+        il.Emit(OpCodes.Newobj,
+            typeof(System.Runtime.CompilerServices.StrongBox<bool>)
+                .GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Stloc, settledLocal);
+
+        il.Emit(OpCodes.Ldloc, tcsLocal);
+        il.Emit(OpCodes.Ldloc, settledLocal);
+        il.Emit(OpCodes.Newobj, runtime.PromiseResolveCallbackCtor);
+        il.Emit(OpCodes.Stloc, resolveLocal);
+
+        il.Emit(OpCodes.Ldloc, tcsLocal);
+        il.Emit(OpCodes.Ldloc, settledLocal);
+        il.Emit(OpCodes.Newobj, runtime.PromiseRejectCallbackCtor);
+        il.Emit(OpCodes.Stloc, rejectLocal);
+
+        var completedLabel = il.DefineLabel();
+        il.BeginExceptionBlock();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, resolveLocal);
+        il.Emit(OpCodes.Ldloc, rejectLocal);
+        il.Emit(OpCodes.Callvirt, executorType.GetMethod("Invoke")!);
+        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Leave, completedLabel);
+
+        il.BeginCatchBlock(_types.Exception);
+        il.Emit(OpCodes.Stloc, exLocal);
+        il.Emit(OpCodes.Ldloc, rejectLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Newarr, _types.Object);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldloc, exLocal);
+        il.Emit(OpCodes.Call, runtime.WrapException);
+        il.Emit(OpCodes.Stelem_Ref);
+        il.Emit(OpCodes.Callvirt, runtime.PromiseRejectCallbackInvoke);
+        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Leave, completedLabel);
+        il.EndExceptionBlock();
+
+        il.MarkLabel(completedLabel);
+        il.Emit(OpCodes.Ldloc, tcsLocal);
+        il.Emit(OpCodes.Callvirt, typeof(TaskCompletionSource<object?>)
+            .GetProperty("Task")!.GetGetMethod()!);
         il.Emit(OpCodes.Ret);
     }
 }

@@ -537,6 +537,24 @@ public class SharpTSEventEmitter : ITypeCategorized, IMemberProvider
         if (!_events.TryGetValue(eventName, out var listeners) || listeners.Count == 0)
             return false;
 
+        // The worker/message hot path overwhelmingly has one persistent
+        // listener. There is nothing left in the current emission for a
+        // mutation inside that listener to affect, so invoking it directly is
+        // equivalent to snapshotting the list. Avoid allocating a List and
+        // enumerator for every cross-thread message. A sole once-listener is
+        // removed before invocation, preserving EventEmitter semantics.
+        if (listeners.Count == 1)
+        {
+            var wrapper = listeners.First!.Value;
+            if (wrapper.Once)
+            {
+                listeners.RemoveFirst();
+                _events.Remove(eventName);
+            }
+            InvokeListenerDirect(wrapper.Listener, args);
+            return true;
+        }
+
         // Snapshot the listeners to handle modifications during emit
         var snapshot = new List<ListenerWrapper>(listeners);
 

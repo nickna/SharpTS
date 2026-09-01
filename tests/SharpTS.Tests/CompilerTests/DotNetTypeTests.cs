@@ -979,6 +979,42 @@ public class DotNetTypeTests
     }
 
     [Fact]
+    public void DynamicClrMethodReads_AreStableAndExpandoOverridesCache()
+    {
+        var source = """
+            @DotNetType("System.Text.StringBuilder")
+            declare class StringBuilder {
+                constructor();
+                append(value: string): StringBuilder;
+                clear(): StringBuilder;
+                toString(): string;
+            }
+            const typedBuilder = new StringBuilder();
+            const builder: any = typedBuilder;
+            typedBuilder.append("seed");
+            const clear = builder.clear;
+            console.log(clear === builder.clear);
+
+            Object.defineProperty(builder, "clear", {
+                configurable: true,
+                value: function(): any {
+                    typedBuilder.append("|override");
+                    return builder;
+                }
+            });
+            builder.clear();
+            console.log(typedBuilder.toString());
+
+            delete builder.clear;
+            builder.clear();
+            console.log(typedBuilder.toString().length);
+            """;
+
+        var output = TestHarness.RunCompiled(source, DecoratorMode.Legacy);
+        Assert.Equal("true\nseed|override\n0\n", output);
+    }
+
+    [Fact]
     public void Issue51_DotNetOverload_Int_TruncatesInsteadOfRounds()
     {
         // Repro from issue #51 (b): without the hint, Convert.toInt32(3.7) picks

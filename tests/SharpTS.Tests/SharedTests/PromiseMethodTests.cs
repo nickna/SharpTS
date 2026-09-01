@@ -240,6 +240,30 @@ public class PromiseMethodTests
         Assert.Equal("20\n", output);
     }
 
+    [Fact]
+    public void CompiledThen_NumberResult_DoesNotAssimilateNumberPrototypeThen()
+    {
+        var source = """
+            let calls: number = 0;
+            const numberPrototype: any = Number.prototype;
+            numberPrototype.then = (resolve: any): void => {
+                calls = calls + 1;
+                resolve(99);
+            };
+
+            async function main(): Promise<void> {
+                const source: Promise<number> = new Promise<number>(
+                    (resolve): void => resolve(1));
+                const result: number = await source.then(
+                    (value: number): number => value + 1);
+                console.log(String(result) + ":" + String(calls));
+            }
+            main();
+            """;
+
+        Assert.Equal("2:0\n", TestHarness.RunCompiledStandalone(source));
+    }
+
     [Theory, ModeData]
     public void Then_WithOnRejected(ExecutionMode mode)
     {
@@ -492,6 +516,29 @@ public class PromiseMethodTests
 
         var output = TestHarness.Run(source, mode);
         Assert.Equal("9\n1\n", output);
+    }
+
+    [Theory, ModeData]
+    public void All_ResultAssimilatesArrayPrototypeThen(ExecutionMode mode)
+    {
+        var source = """
+            let calls: number = 0;
+            const prototype: any = Array.prototype;
+            prototype.then = function (resolve: any): void {
+                calls = calls + 1;
+                resolve("adopted");
+            };
+
+            async function main(): Promise<void> {
+                const result: any = await Promise.all([Promise.resolve(1)]);
+                console.log(result);
+                console.log(calls);
+            }
+            main();
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("adopted\n1\n", output);
     }
 
     #endregion
@@ -1099,6 +1146,42 @@ public class PromiseMethodTests
 
         var output = TestHarness.Run(source, mode);
         Assert.Equal("42\n", output);
+    }
+
+    [Theory, ModeData]
+    public void ExecutorConstructor_PrimitivesDoNotAssimilatePrototypeThen(ExecutionMode mode)
+    {
+        var source = """
+            let calls: number = 0;
+            (Number.prototype as any).then = function(resolve: any): void {
+                calls += 1;
+                resolve(99);
+            };
+            (String.prototype as any).then = function(resolve: any): void {
+                calls += 1;
+                resolve("changed");
+            };
+            (Boolean.prototype as any).then = function(resolve: any): void {
+                calls += 1;
+                resolve(false);
+            };
+
+            async function main(): Promise<void> {
+                const values: any[] = await Promise.all([
+                    new Promise<any>((resolve): void => resolve(42)),
+                    new Promise<any>((resolve): void => resolve("value")),
+                    new Promise<any>((resolve): void => resolve(true)),
+                ]);
+                console.log(values[0], values[1], values[2], calls);
+                delete (Number.prototype as any).then;
+                delete (String.prototype as any).then;
+                delete (Boolean.prototype as any).then;
+            }
+            main();
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("42 value true 0\n", output);
     }
 
     [Theory, ModeData]

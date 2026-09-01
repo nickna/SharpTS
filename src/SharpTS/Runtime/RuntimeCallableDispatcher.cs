@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Runtime.ExceptionServices;
 using SharpTS.Runtime.BuiltIns;
 using SharpTS.Runtime.Types;
@@ -32,8 +33,8 @@ namespace SharpTS.Runtime;
 ///     runtime <c>TSFunction</c> shipped in <c>SharpTS.dll</c>. Direct
 ///     <c>Invoke(args)</c> call, no reflection.</item>
 ///   <item>Emitted per-DLL <c>$TSFunction</c>/<c>$BoundTSFunction</c>. Detected
-///     by type name; dispatched through cached
-///     <c>InvokeWithThis(thisArg, args)</c> via reflection. Honours the
+///     by type name; dispatched through a weakly cached closed delegate to
+///     <c>InvokeWithThis(thisArg, args)</c>. Reflection is paid once when binding. Honours the
 ///     synthetic <c>__this</c> first parameter pattern that compiled object
 ///     literal methods use (see <c>RuntimeEmitter.TSFunction.cs</c>).</item>
 ///   <item><see cref="Func{TArray, TResult}"/> bound-method delegates created
@@ -50,6 +51,8 @@ public static class RuntimeCallableDispatcher
     // We pay reflection on first encounter only.
     private static readonly ConcurrentDictionary<Type, MethodInfo?> _invokeWithThisCache = new();
     private static readonly ConcurrentDictionary<Type, MethodInfo?> _invokeCache = new();
+    private static readonly ConditionalWeakTable<object, Func<object?, object?[], object?>>
+        _boundInvokeWithThisCache = new();
 
     /// <summary>
     /// Invokes <paramref name="callable"/> with the supplied arguments. Returns
@@ -92,8 +95,8 @@ public static class RuntimeCallableDispatcher
 
         // Emitted $TSFunction / $BoundTSFunction live in compiled DLLs and are
         // not visible to SharpTS.dll at compile time. Detect by type name and
-        // dispatch via reflection on InvokeWithThis (which understands the
-        // synthetic __this first-parameter contract).
+        // bind InvokeWithThis once (it understands the synthetic __this
+        // first-parameter contract), then use a normal delegate call.
         var type = callable.GetType();
         if (ManagedEmittedShapeReflection.IsShape(type, ManagedEmittedShape.Function))
         {
@@ -103,8 +106,13 @@ public static class RuntimeCallableDispatcher
                     [typeof(object), typeof(object[])]));
             if (invokeWithThis != null)
             {
-                return InvokeReflected(
-                    invokeWithThis, callable, [thisArg, args]);
+                if (!_boundInvokeWithThisCache.TryGetValue(callable, out var boundInvoke))
+                {
+                    boundInvoke = _boundInvokeWithThisCache.GetValue(callable, target =>
+                        (Func<object?, object?[], object?>)invokeWithThis.CreateDelegate(
+                            typeof(Func<object?, object?[], object?>), target));
+                }
+                return boundInvoke(thisArg, args);
             }
 
             var invoke = _invokeCache.GetOrAdd(type, t =>
@@ -175,5 +183,6 @@ public static class RuntimeCallableDispatcher
     {
         _invokeWithThisCache.Clear();
         _invokeCache.Clear();
+        _boundInvokeWithThisCache.Clear();
     }
 }

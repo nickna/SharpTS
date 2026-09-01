@@ -205,6 +205,31 @@ public sealed class JsonTypedScalarRecordTests
     }
 
     [Fact]
+    public void IntegerCounterModuloStringConcatFormatsIntoTheFinalString()
+    {
+        const string source = """
+            function labels(): string {
+                const values: string[] = [];
+                for (let i: number = 0; i < 3; i++) {
+                    values.push("item-" + (i % 100));
+                }
+                return values.join("|");
+            }
+            console.log(labels());
+            """;
+
+        Assembly assembly = Compile(source);
+        MethodInfo labels = FindFunction(assembly, "labels");
+        var members = ReadMembers(labels).ToArray();
+        Assert.Contains(members, member => member.Member?.Name == "ConcatStringInt64");
+        Assert.DoesNotContain(members, member =>
+            member.Member?.DeclaringType?.Name == "$Runtime" &&
+            member.Member.Name is ("Add" or "FormatNumber"));
+        Assert.DoesNotContain(members, member => member.OpCode == OpCodes.Box);
+        Assert.Equal("item-0|item-1|item-2\n", TestHarness.RunCompiled(source));
+    }
+
+    [Fact]
     public void DynamicMutationMaterializesAndPreservesJsonObjectSemantics()
     {
         const string source = """

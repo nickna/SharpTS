@@ -177,6 +177,14 @@ public partial class ILCompiler
     // into lib.ts's resolver.
     private readonly Dictionary<string, Dictionary<string, FieldBuilder>> _moduleTopLevelStaticVars = [];
 
+    // Numeric module-level const bindings whose initializer is an exact literal. The ordinary
+    // object field remains the binding's canonical storage (exports/reflection/module init still
+    // use it), but compiled reads may emit the literal directly after the normal TDZ check. This
+    // avoids a boxed collectible-static lookup plus ToNumber conversion in numeric hot loops.
+    // Key by the exact backing field rather than by name so same-named bindings in different
+    // modules cannot alias each other.
+    private readonly Dictionary<FieldBuilder, double> _topLevelNumericConstantValues = [];
+
     // Function name -> owning module path. Used to restore _modules.CurrentPath
     // during Phase-7 body emission so per-module lookups resolve against the
     // right module's storage.
@@ -2159,6 +2167,16 @@ public partial class ILCompiler
                 mf[varName] = field;
             }
 
+            // Real modules have isolated lexical scopes, so an immutable exact numeric literal
+            // can be propagated into compiled readers without conflating same-named bindings from
+            // script-merged global scopes. The display-class field remains canonical storage.
+            if (path != null
+                && stmt is Stmt.Const { Initializer: Expr.Literal { Value: double literalValue } }
+                && mf.TryGetValue(varName, out var constantField))
+            {
+                _topLevelNumericConstantValues[constantField] = literalValue;
+            }
+
             if (isLexical)
             {
                 var initFields = GetOrCreate(_closures.ModuleTopLevelLexicalInitFields, captureKey);
@@ -2520,6 +2538,11 @@ public partial class ILCompiler
             fieldName,
             _types.Object,
             FieldAttributes.Public | FieldAttributes.Static);
+
+        if (stmt is Stmt.Const { Initializer: Expr.Literal { Value: double literalValue } })
+        {
+            _topLevelNumericConstantValues[field] = literalValue;
+        }
 
         bool isLexical = stmt is Stmt.Const or Stmt.Var { IsVar: false };
         if (isLexical)
