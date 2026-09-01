@@ -2736,6 +2736,8 @@ public class EmittedRuntime
     public MethodBuilder AtomicsLoad { get; set; } = null!;
     public MethodBuilder AtomicsStore { get; set; } = null!;
     public MethodBuilder AtomicsAdd { get; set; } = null!;
+    public MethodBuilder AtomicsAddInt32 { get; set; } = null!;
+    public MethodBuilder AtomicsIncrementInt32Discarded { get; set; } = null!;
     public MethodBuilder AtomicsSub { get; set; } = null!;
     public MethodBuilder AtomicsAnd { get; set; } = null!;
     public MethodBuilder AtomicsOr { get; set; } = null!;

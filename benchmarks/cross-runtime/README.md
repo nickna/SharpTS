@@ -41,6 +41,7 @@ important but are not mixed into the workload metric.
 | `scripts/worker-message-port-throughput.ts` | Bidirectional bursts over a `MessagePort` transferred to a persistent worker, isolating port bridge and callback scheduling throughput. |
 | `scripts/worker-lifecycle.ts` | Repeated create, ready, and terminate cycles for groups of 1, 2, and 4 workers. |
 | `scripts/worker-allocation-scaling.ts` | Fixed-total-work allocation-heavy comparison using direct execution and persistent pools of 1, 2, and 4 workers. |
+| `scripts/worker-atomics-scaling.ts` | Fixed-total-work `Atomics.add` comparison over shared counters, separating padded disjoint updates from same-location contention with 1, 2, and 4 workers. |
 | `scripts/workers/*.ts` | Worker entry points and worker-specific shared kernels; these are dependencies, not standalone workloads. |
 
 The schema-v1 file remains the versioned contract for this one suite. The
@@ -128,6 +129,12 @@ efficiency.
 string, and array graphs. It exposes allocation throughput, shared-runtime GC interference, and
 whether adding workers continues to help once managed-heap traffic replaces an allocation-free
 numeric kernel.
+
+`worker-atomics-scaling` keeps a `SharedArrayBuffer` and persistent workers alive while timing a
+fixed total of `Atomics.add` operations. Padded disjoint counters measure the shared-memory and
+atomic-intrinsic path without cache-line contention; the contended case makes every worker update
+the same counter. Both cases validate the exact final count on every invocation, so a faster result
+cannot hide lost updates.
 
 The `worker-message-latency` workload isolates the other side of worker performance: one small
 structured message is sent to every worker in a persistent pool and the timed invocation completes

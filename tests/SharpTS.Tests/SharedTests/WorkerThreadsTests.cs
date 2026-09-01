@@ -2047,6 +2047,89 @@ public class WorkerThreadsTests
     }
 
     [Fact]
+    public void CompiledWorkers_SharedInt32AtomicsPreserveEveryUpdate()
+    {
+        long executionsBefore = CompiledWorkerCompilationService.ExecutionCount;
+        var files = new Dictionary<string, string>
+        {
+            ["worker_atomic_add.ts"] = """
+                import { parentPort, workerData } from "worker_threads";
+                const view = new Int32Array(workerData);
+                for (let i: number = 0; i < 50000; i++) {
+                    Atomics.add(view, 0, 1);
+                }
+                parentPort!.postMessage("done");
+                """,
+            ["main.ts"] = """
+                import { Worker } from "worker_threads";
+                const shared = new SharedArrayBuffer(4);
+                const view = new Int32Array(shared);
+                let completed = 0;
+                for (let i: number = 0; i < 2; i++) {
+                    const worker = new Worker(__dirname + "/worker_atomic_add.ts", {
+                        workerData: shared,
+                    });
+                    worker.on("message", () => {
+                        completed++;
+                        if (completed === 2) console.log(Atomics.load(view, 0));
+                    });
+                }
+                """,
+        };
+
+        var output = TestHarness.RunModules(files, "main.ts", ExecutionMode.Compiled);
+
+        Assert.Contains("100000", output);
+        Assert.True(CompiledWorkerCompilationService.ExecutionCount >= executionsBefore + 2,
+            "Both workers must execute in compiled realms when sharing a SharedArrayBuffer.");
+    }
+
+    [Fact]
+    public void CompiledWorkers_MixedInt32AtomicsUseOneAtomicProtocol()
+    {
+        long executionsBefore = CompiledWorkerCompilationService.ExecutionCount;
+        var files = new Dictionary<string, string>
+        {
+            ["worker_add.ts"] = """
+                import { parentPort, workerData } from "worker_threads";
+                const view = new Int32Array(workerData);
+                for (let i: number = 0; i < 50000; i++) {
+                    Atomics.add(view, 0, 1);
+                }
+                parentPort!.postMessage("done");
+                """,
+            ["worker_sub.ts"] = """
+                import { parentPort, workerData } from "worker_threads";
+                const view = new Int32Array(workerData);
+                for (let i: number = 0; i < 50000; i++) {
+                    Atomics.sub(view, 0, 1);
+                }
+                parentPort!.postMessage("done");
+                """,
+            ["main.ts"] = """
+                import { Worker } from "worker_threads";
+                const shared = new SharedArrayBuffer(4);
+                const view = new Int32Array(shared);
+                let completed = 0;
+                const finished = () => {
+                    completed++;
+                    if (completed === 2) console.log("final=" + Atomics.load(view, 0));
+                };
+                new Worker(__dirname + "/worker_add.ts", { workerData: shared })
+                    .on("message", finished);
+                new Worker(__dirname + "/worker_sub.ts", { workerData: shared })
+                    .on("message", finished);
+                """,
+        };
+
+        var output = TestHarness.RunModules(files, "main.ts", ExecutionMode.Compiled);
+
+        Assert.Contains("final=0", output);
+        Assert.True(CompiledWorkerCompilationService.ExecutionCount >= executionsBefore + 2,
+            "Both workers must execute in compiled realms while mixing atomic operations.");
+    }
+
+    [Fact]
     public void CompiledWorker_ReflectedPostMessageMethodsHaveStableIdentity()
     {
         var files = new Dictionary<string, string>

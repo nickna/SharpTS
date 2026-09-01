@@ -168,7 +168,7 @@ internal static class CompiledWorkerCompilationService
             return false;
 
         string typeName = value.GetType().Name;
-        if (typeName is "$ArrayBuffer" or "$SharedArrayBuffer" ||
+        if (typeName is "$ArrayBuffer" ||
             (typeName.StartsWith('$') && typeName.EndsWith("Array", StringComparison.Ordinal)))
         {
             return true;

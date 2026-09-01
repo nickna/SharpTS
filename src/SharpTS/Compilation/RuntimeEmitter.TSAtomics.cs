@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Reflection.Emit;
+using System.Runtime.CompilerServices;
 
 namespace SharpTS.Compilation;
 
@@ -9,12 +10,29 @@ namespace SharpTS.Compilation;
 /// </summary>
 public partial class RuntimeEmitter
 {
+    private MethodBuilder _atomicsLoadLocked = null!;
+    private MethodBuilder _atomicsStoreLocked = null!;
+    private MethodBuilder _atomicsUpdateLocked = null!;
+    private MethodBuilder _atomicsUpdateInt32 = null!;
+
     /// <summary>
     /// Emits Atomics static method helpers with pure-IL implementations for emitted types.
     /// Falls back to reflection-based SharpTS calls only if input is not an emitted type.
     /// </summary>
     private void EmitAtomicsHelpersPure(TypeBuilder runtimeType, EmittedRuntime runtime)
     {
+        // Every emitted realm sees the same byte[] for a shared buffer. Locking that backing
+        // object provides a cross-AssemblyLoadContext correctness fallback for integer element
+        // kinds without a directly usable CLR Interlocked primitive.
+        _atomicsLoadLocked = EmitAtomicsLoadLocked(runtimeType, runtime);
+        _atomicsStoreLocked = EmitAtomicsStoreLocked(runtimeType, runtime);
+        _atomicsUpdateLocked = EmitAtomicsUpdateLocked(runtimeType, runtime);
+
+        // Unboxed hot path used when the compiler knows the receiver is Int32Array/Uint32Array.
+        runtime.AtomicsAddInt32 = EmitAtomicsAddInt32(runtimeType, runtime);
+        runtime.AtomicsIncrementInt32Discarded = EmitAtomicsIncrementInt32Discarded(runtimeType, runtime);
+        _atomicsUpdateInt32 = EmitAtomicsUpdateInt32(runtimeType, runtime);
+
         // Atomics.load(typedArray, index) -> object
         runtime.AtomicsLoad = EmitAtomicsLoadPure(runtimeType, runtime);
 
@@ -53,6 +71,412 @@ public partial class RuntimeEmitter
 
         // Atomics.pause(iterationNumber?) -> undefined
         runtime.AtomicsPause = EmitAtomicsPausePure(runtimeType, runtime);
+    }
+
+    private MethodBuilder EmitAtomicsLoadLocked(TypeBuilder runtimeType, EmittedRuntime runtime)
+    {
+        var method = runtimeType.DefineMethod(
+            "AtomicsLoadLocked", MethodAttributes.Private | MethodAttributes.Static,
+            _types.Object, [runtime.TypedArrayBaseType, _types.Int32]);
+        var il = method.GetILGenerator();
+        var buffer = il.DeclareLocal(typeof(byte[]));
+        var lockTaken = il.DeclareLocal(_types.Boolean);
+        var result = il.DeclareLocal(_types.Object);
+        var done = il.DefineLabel();
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Callvirt, runtime.TypedArrayGetBuffer);
+        il.Emit(OpCodes.Stloc, buffer);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stloc, lockTaken);
+        il.BeginExceptionBlock();
+        EmitEnterAtomicBufferLock(il, buffer, lockTaken);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Callvirt, runtime.TypedArrayElementGet);
+        il.Emit(OpCodes.Stloc, result);
+        il.Emit(OpCodes.Leave, done);
+        EmitAtomicBufferLockFinally(il, buffer, lockTaken);
+        il.EndExceptionBlock();
+        il.MarkLabel(done);
+        il.Emit(OpCodes.Ldloc, result);
+        il.Emit(OpCodes.Ret);
+        return method;
+    }
+
+    private MethodBuilder EmitAtomicsStoreLocked(TypeBuilder runtimeType, EmittedRuntime runtime)
+    {
+        var method = runtimeType.DefineMethod(
+            "AtomicsStoreLocked", MethodAttributes.Private | MethodAttributes.Static,
+            _types.Object, [runtime.TypedArrayBaseType, _types.Int32, _types.Object]);
+        var il = method.GetILGenerator();
+        var buffer = il.DeclareLocal(typeof(byte[]));
+        var lockTaken = il.DeclareLocal(_types.Boolean);
+        var done = il.DefineLabel();
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Callvirt, runtime.TypedArrayGetBuffer);
+        il.Emit(OpCodes.Stloc, buffer);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stloc, lockTaken);
+        il.BeginExceptionBlock();
+        EmitEnterAtomicBufferLock(il, buffer, lockTaken);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Callvirt, runtime.TypedArrayElementSet);
+        il.Emit(OpCodes.Leave, done);
+        EmitAtomicBufferLockFinally(il, buffer, lockTaken);
+        il.EndExceptionBlock();
+        il.MarkLabel(done);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Ret);
+        return method;
+    }
+
+    // operation: 0 add, 1 sub, 2 and, 3 or, 4 xor, 5 exchange, 6 compareExchange.
+    private MethodBuilder EmitAtomicsUpdateLocked(TypeBuilder runtimeType, EmittedRuntime runtime)
+    {
+        var method = runtimeType.DefineMethod(
+            "AtomicsUpdateLocked", MethodAttributes.Private | MethodAttributes.Static,
+            _types.Object,
+            [runtime.TypedArrayBaseType, _types.Int32, _types.Object, _types.Object, _types.Int32]);
+        var il = method.GetILGenerator();
+        var buffer = il.DeclareLocal(typeof(byte[]));
+        var lockTaken = il.DeclareLocal(_types.Boolean);
+        var oldValue = il.DeclareLocal(_types.Object);
+        var newValue = il.DeclareLocal(_types.Object);
+        var done = il.DefineLabel();
+        var store = il.DefineLabel();
+        var operations = Enumerable.Range(0, 7).Select(_ => il.DefineLabel()).ToArray();
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Callvirt, runtime.TypedArrayGetBuffer);
+        il.Emit(OpCodes.Stloc, buffer);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stloc, lockTaken);
+        il.BeginExceptionBlock();
+        EmitEnterAtomicBufferLock(il, buffer, lockTaken);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Callvirt, runtime.TypedArrayElementGet);
+        il.Emit(OpCodes.Stloc, oldValue);
+        il.Emit(OpCodes.Ldarg, 4);
+        il.Emit(OpCodes.Switch, operations);
+        il.Emit(OpCodes.Br, done);
+
+        // add / sub
+        foreach (int operation in new[] { 0, 1 })
+        {
+            il.MarkLabel(operations[operation]);
+            il.Emit(OpCodes.Ldloc, oldValue);
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.Convert, "ToDouble", _types.Object));
+            il.Emit(OpCodes.Ldarg_2);
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.Convert, "ToDouble", _types.Object));
+            il.Emit(operation == 0 ? OpCodes.Add : OpCodes.Sub);
+            il.Emit(OpCodes.Box, _types.Double);
+            il.Emit(OpCodes.Stloc, newValue);
+            il.Emit(OpCodes.Br, store);
+        }
+
+        // and / or / xor
+        OpCode[] bitwiseOperations = [OpCodes.And, OpCodes.Or, OpCodes.Xor];
+        for (int operation = 2; operation <= 4; operation++)
+        {
+            il.MarkLabel(operations[operation]);
+            il.Emit(OpCodes.Ldloc, oldValue);
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.Convert, "ToInt32", _types.Object));
+            il.Emit(OpCodes.Ldarg_2);
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.Convert, "ToInt32", _types.Object));
+            il.Emit(bitwiseOperations[operation - 2]);
+            il.Emit(OpCodes.Conv_R8);
+            il.Emit(OpCodes.Box, _types.Double);
+            il.Emit(OpCodes.Stloc, newValue);
+            il.Emit(OpCodes.Br, store);
+        }
+
+        il.MarkLabel(operations[5]);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Stloc, newValue);
+        il.Emit(OpCodes.Br, store);
+
+        il.MarkLabel(operations[6]);
+        il.Emit(OpCodes.Ldloc, oldValue);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Convert, "ToDouble", _types.Object));
+        il.Emit(OpCodes.Ldarg_3);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Convert, "ToDouble", _types.Object));
+        il.Emit(OpCodes.Ceq);
+        il.Emit(OpCodes.Brfalse, done);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Stloc, newValue);
+
+        il.MarkLabel(store);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldloc, newValue);
+        il.Emit(OpCodes.Callvirt, runtime.TypedArrayElementSet);
+
+        il.MarkLabel(done);
+        var afterFinally = il.DefineLabel();
+        il.Emit(OpCodes.Leave, afterFinally);
+        EmitAtomicBufferLockFinally(il, buffer, lockTaken);
+        il.EndExceptionBlock();
+        il.MarkLabel(afterFinally);
+        il.Emit(OpCodes.Ldloc, oldValue);
+        il.Emit(OpCodes.Ret);
+        return method;
+    }
+
+    private void EmitEnterAtomicBufferLock(
+        ILGenerator il, LocalBuilder buffer, LocalBuilder lockTaken)
+    {
+        il.Emit(OpCodes.Ldloc, buffer);
+        il.Emit(OpCodes.Ldloca, lockTaken);
+        il.Emit(OpCodes.Call, _types.GetMethod(
+            typeof(Monitor), "Enter", _types.Object, _types.Boolean.MakeByRefType()));
+    }
+
+    private void EmitAtomicBufferLockFinally(
+        ILGenerator il, LocalBuilder buffer, LocalBuilder lockTaken)
+    {
+        il.BeginFinallyBlock();
+        var skipExit = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, lockTaken);
+        il.Emit(OpCodes.Brfalse, skipExit);
+        il.Emit(OpCodes.Ldloc, buffer);
+        il.Emit(OpCodes.Call, _types.GetMethod(typeof(Monitor), "Exit", _types.Object));
+        il.MarkLabel(skipExit);
+        il.Emit(OpCodes.Endfinally);
+    }
+
+    private MethodBuilder EmitAtomicsAddInt32(TypeBuilder runtimeType, EmittedRuntime runtime)
+    {
+        var method = runtimeType.DefineMethod(
+            "AtomicsAddInt32",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Double,
+            [runtime.TypedArrayBaseType, _types.Int32, _types.Double, _types.Boolean]);
+        method.SetImplementationFlags(MethodImplAttributes.AggressiveInlining);
+
+        var il = method.GetILGenerator();
+        var indexLocal = il.DeclareLocal(_types.Int32);
+        var deltaLocal = il.DeclareLocal(_types.Int32);
+        var newValueLocal = il.DeclareLocal(_types.Int32);
+        var unsignedResult = il.DefineLabel();
+
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Stloc, indexLocal);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Ldarg_3);
+        var signedDelta = il.DefineLabel();
+        var deltaReady = il.DefineLabel();
+        il.Emit(OpCodes.Brfalse, signedDelta);
+        il.Emit(OpCodes.Conv_U4);
+        il.Emit(OpCodes.Br, deltaReady);
+        il.MarkLabel(signedDelta);
+        il.Emit(OpCodes.Conv_I4);
+        il.MarkLabel(deltaReady);
+        il.Emit(OpCodes.Stloc, deltaLocal);
+
+        EmitInt32ElementReference(il, runtime, indexLocal);
+        il.Emit(OpCodes.Ldloc, deltaLocal);
+        il.Emit(OpCodes.Call, typeof(Interlocked).GetMethod(
+            nameof(Interlocked.Add), [typeof(int).MakeByRefType(), typeof(int)])!);
+        il.Emit(OpCodes.Stloc, newValueLocal);
+
+        il.Emit(OpCodes.Ldarg_3);
+        il.Emit(OpCodes.Brtrue, unsignedResult);
+        il.Emit(OpCodes.Ldloc, newValueLocal);
+        il.Emit(OpCodes.Ldloc, deltaLocal);
+        il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Conv_R8);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(unsignedResult);
+        il.Emit(OpCodes.Ldloc, newValueLocal);
+        il.Emit(OpCodes.Ldloc, deltaLocal);
+        il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Conv_U4);
+        il.Emit(OpCodes.Conv_U8);
+        il.Emit(OpCodes.Conv_R_Un);
+        il.Emit(OpCodes.Ret);
+
+        return method;
+    }
+
+    private MethodBuilder EmitAtomicsIncrementInt32Discarded(
+        TypeBuilder runtimeType, EmittedRuntime runtime)
+    {
+        var method = runtimeType.DefineMethod(
+            "AtomicsIncrementInt32Discarded",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Void,
+            [runtime.TypedArrayBaseType, _types.Int32]);
+        method.SetImplementationFlags(MethodImplAttributes.AggressiveInlining);
+        var il = method.GetILGenerator();
+        var indexLocal = il.DeclareLocal(_types.Int32);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Stloc, indexLocal);
+        EmitInt32ElementReference(il, runtime, indexLocal);
+        il.Emit(OpCodes.Call, typeof(Interlocked).GetMethod(
+            nameof(Interlocked.Increment), [typeof(int).MakeByRefType()])!);
+        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Ret);
+        return method;
+    }
+
+    // operation: 0 add, 1 sub, 2 and, 3 or, 4 xor, 5 exchange, 6 compareExchange.
+    // Atomics.add also has a smaller dedicated helper because it dominates shared-counter workloads.
+    private MethodBuilder EmitAtomicsUpdateInt32(TypeBuilder runtimeType, EmittedRuntime runtime)
+    {
+        var method = runtimeType.DefineMethod(
+            "AtomicsUpdateInt32",
+            MethodAttributes.Private | MethodAttributes.Static,
+            _types.Double,
+            [runtime.TypedArrayBaseType, _types.Int32, _types.Double, _types.Double,
+                _types.Int32, _types.Boolean]);
+        method.SetImplementationFlags(MethodImplAttributes.AggressiveInlining);
+
+        var il = method.GetILGenerator();
+        var indexLocal = il.DeclareLocal(_types.Int32);
+        var operandLocal = il.DeclareLocal(_types.Int32);
+        var expectedLocal = il.DeclareLocal(_types.Int32);
+        var elementLocal = il.DeclareLocal(typeof(int).MakeByRefType());
+        var oldValueLocal = il.DeclareLocal(_types.Int32);
+        var observedLocal = il.DeclareLocal(_types.Int32);
+        var replacementLocal = il.DeclareLocal(_types.Int32);
+        var operations = Enumerable.Range(0, 7).Select(_ => il.DefineLabel()).ToArray();
+        var xorRetry = il.DefineLabel();
+        var result = il.DefineLabel();
+        var unsignedResult = il.DefineLabel();
+
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Stloc, indexLocal);
+
+        EmitConvertAtomicsInt32Operand(il, argument: 2, operandLocal);
+        EmitConvertAtomicsInt32Operand(il, argument: 3, expectedLocal);
+
+        EmitInt32ElementReference(il, runtime, indexLocal);
+        il.Emit(OpCodes.Stloc, elementLocal);
+
+        il.Emit(OpCodes.Ldarg, 4);
+        il.Emit(OpCodes.Switch, operations);
+        il.Emit(OpCodes.Br, result);
+
+        il.MarkLabel(operations[0]);
+        il.Emit(OpCodes.Ldloc, elementLocal);
+        il.Emit(OpCodes.Ldloc, operandLocal);
+        il.Emit(OpCodes.Call, typeof(Interlocked).GetMethod(
+            nameof(Interlocked.Add), [typeof(int).MakeByRefType(), typeof(int)])!);
+        il.Emit(OpCodes.Ldloc, operandLocal);
+        il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Stloc, oldValueLocal);
+        il.Emit(OpCodes.Br, result);
+
+        // sub: Interlocked.Add(ref element, -operand) returns the new value.
+        il.MarkLabel(operations[1]);
+        il.Emit(OpCodes.Ldloc, elementLocal);
+        il.Emit(OpCodes.Ldloc, operandLocal);
+        il.Emit(OpCodes.Neg);
+        il.Emit(OpCodes.Call, typeof(Interlocked).GetMethod(
+            nameof(Interlocked.Add), [typeof(int).MakeByRefType(), typeof(int)])!);
+        il.Emit(OpCodes.Ldloc, operandLocal);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, oldValueLocal);
+        il.Emit(OpCodes.Br, result);
+
+        // Interlocked.And/Or return the value observed before the update.
+        foreach ((int operation, string name) in new[]
+                 {
+                     (2, nameof(Interlocked.And)),
+                     (3, nameof(Interlocked.Or))
+                 })
+        {
+            il.MarkLabel(operations[operation]);
+            il.Emit(OpCodes.Ldloc, elementLocal);
+            il.Emit(OpCodes.Ldloc, operandLocal);
+            il.Emit(OpCodes.Call, typeof(Interlocked).GetMethod(
+                name, [typeof(int).MakeByRefType(), typeof(int)])!);
+            il.Emit(OpCodes.Stloc, oldValueLocal);
+            il.Emit(OpCodes.Br, result);
+        }
+
+        // There is no Interlocked.Xor, so use a compare-and-swap retry loop.
+        il.MarkLabel(operations[4]);
+        il.Emit(OpCodes.Ldloc, elementLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Call, typeof(Interlocked).GetMethod(
+            nameof(Interlocked.CompareExchange),
+            [typeof(int).MakeByRefType(), typeof(int), typeof(int)])!);
+        il.Emit(OpCodes.Stloc, oldValueLocal);
+        il.MarkLabel(xorRetry);
+        il.Emit(OpCodes.Ldloc, oldValueLocal);
+        il.Emit(OpCodes.Ldloc, operandLocal);
+        il.Emit(OpCodes.Xor);
+        il.Emit(OpCodes.Stloc, replacementLocal);
+        il.Emit(OpCodes.Ldloc, elementLocal);
+        il.Emit(OpCodes.Ldloc, replacementLocal);
+        il.Emit(OpCodes.Ldloc, oldValueLocal);
+        il.Emit(OpCodes.Call, typeof(Interlocked).GetMethod(
+            nameof(Interlocked.CompareExchange),
+            [typeof(int).MakeByRefType(), typeof(int), typeof(int)])!);
+        il.Emit(OpCodes.Stloc, observedLocal);
+        il.Emit(OpCodes.Ldloc, observedLocal);
+        il.Emit(OpCodes.Ldloc, oldValueLocal);
+        il.Emit(OpCodes.Beq, result);
+        il.Emit(OpCodes.Ldloc, observedLocal);
+        il.Emit(OpCodes.Stloc, oldValueLocal);
+        il.Emit(OpCodes.Br, xorRetry);
+
+        il.MarkLabel(operations[5]);
+        il.Emit(OpCodes.Ldloc, elementLocal);
+        il.Emit(OpCodes.Ldloc, operandLocal);
+        il.Emit(OpCodes.Call, typeof(Interlocked).GetMethod(
+            nameof(Interlocked.Exchange), [typeof(int).MakeByRefType(), typeof(int)])!);
+        il.Emit(OpCodes.Stloc, oldValueLocal);
+        il.Emit(OpCodes.Br, result);
+
+        il.MarkLabel(operations[6]);
+        il.Emit(OpCodes.Ldloc, elementLocal);
+        il.Emit(OpCodes.Ldloc, operandLocal);
+        il.Emit(OpCodes.Ldloc, expectedLocal);
+        il.Emit(OpCodes.Call, typeof(Interlocked).GetMethod(
+            nameof(Interlocked.CompareExchange),
+            [typeof(int).MakeByRefType(), typeof(int), typeof(int)])!);
+        il.Emit(OpCodes.Stloc, oldValueLocal);
+
+        il.MarkLabel(result);
+        il.Emit(OpCodes.Ldarg, 5);
+        il.Emit(OpCodes.Brtrue, unsignedResult);
+        il.Emit(OpCodes.Ldloc, oldValueLocal);
+        il.Emit(OpCodes.Conv_R8);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(unsignedResult);
+        il.Emit(OpCodes.Ldloc, oldValueLocal);
+        il.Emit(OpCodes.Conv_U4);
+        il.Emit(OpCodes.Conv_U8);
+        il.Emit(OpCodes.Conv_R_Un);
+        il.Emit(OpCodes.Ret);
+
+        return method;
+    }
+
+    private static void EmitConvertAtomicsInt32Operand(
+        ILGenerator il, int argument, LocalBuilder destination)
+    {
+        var signed = il.DefineLabel();
+        var converted = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg, argument);
+        il.Emit(OpCodes.Ldarg, 5);
+        il.Emit(OpCodes.Brfalse, signed);
+        il.Emit(OpCodes.Conv_U4);
+        il.Emit(OpCodes.Br, converted);
+        il.MarkLabel(signed);
+        il.Emit(OpCodes.Conv_I4);
+        il.MarkLabel(converted);
+        il.Emit(OpCodes.Stloc, destination);
     }
 
     private MethodBuilder EmitAtomicsPausePure(TypeBuilder runtimeType, EmittedRuntime runtime)
@@ -133,9 +557,10 @@ public partial class RuntimeEmitter
         // Emitted type path - use GetTypedArrayElementMethod
         il.MarkLabel(emittedPath);
         il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, runtime.TypedArrayBaseType);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Conv_I4);  // Convert double index to int
-        il.Emit(OpCodes.Call, runtime.GetTypedArrayElementMethod);
+        il.Emit(OpCodes.Call, _atomicsLoadLocked);
 
         il.MarkLabel(endLabel);
         il.Emit(OpCodes.Ret);
@@ -172,12 +597,11 @@ public partial class RuntimeEmitter
         // Emitted type path - set and return value
         il.MarkLabel(emittedPath);
         il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, runtime.TypedArrayBaseType);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Conv_I4);  // Convert double index to int
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Call, runtime.SetTypedArrayElementMethod);
-        // Return the value that was stored
-        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Call, _atomicsStoreLocked);
 
         il.MarkLabel(endLabel);
         il.Emit(OpCodes.Ret);
@@ -198,9 +622,15 @@ public partial class RuntimeEmitter
         );
 
         var il = method.GetILGenerator();
-        var oldValueLocal = il.DeclareLocal(_types.Object);
+        var indexLocal = il.DeclareLocal(_types.Int32);
+        var deltaLocal = il.DeclareLocal(_types.Int32);
+        var newValueLocal = il.DeclareLocal(_types.Int32);
 
         var emittedPath = il.DefineLabel();
+        var uint32Path = il.DefineLabel();
+        var signedResultPath = il.DefineLabel();
+        var uintResultPath = il.DefineLabel();
+        var generalPath = il.DefineLabel();
         var endLabel = il.DefineLabel();
 
         // Check if it's an emitted $TypedArray
@@ -215,32 +645,155 @@ public partial class RuntimeEmitter
         // Emitted type path
         il.MarkLabel(emittedPath);
 
-        // Get old value
-        il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Conv_I4);  // Convert double index to int
-        il.Emit(OpCodes.Call, runtime.GetTypedArrayElementMethod);
-        il.Emit(OpCodes.Stloc, oldValueLocal);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Stloc, indexLocal);
 
-        // Set new value = old + value
+        // Int32Array/Uint32Array are the dominant shared-counter forms. Lower them to the
+        // CLR's lock-free atomic primitive instead of the old Get + boxed arithmetic + Set
+        // sequence (which both lost updates and paid two virtual calls per increment).
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Conv_I4);  // Convert double index to int
-        il.Emit(OpCodes.Ldloc, oldValueLocal);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.Convert, "ToDouble", _types.Object));
+        il.Emit(OpCodes.Isinst, runtime.Int32ArrayType);
+        il.Emit(OpCodes.Brfalse, uint32Path);
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Convert, "ToDouble", _types.Object));
-        il.Emit(OpCodes.Add);
-        il.Emit(OpCodes.Box, _types.Double);
-        il.Emit(OpCodes.Call, runtime.SetTypedArrayElementMethod);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Stloc, deltaLocal);
+        EmitInt32ElementReference(il, runtime, indexLocal);
+        il.Emit(OpCodes.Ldloc, deltaLocal);
+        il.Emit(OpCodes.Call, typeof(Interlocked).GetMethod(
+            nameof(Interlocked.Add), [typeof(int).MakeByRefType(), typeof(int)])!);
+        il.Emit(OpCodes.Stloc, newValueLocal);
+        il.Emit(OpCodes.Br, signedResultPath);
 
-        // Return old value
-        il.Emit(OpCodes.Ldloc, oldValueLocal);
+        il.MarkLabel(uint32Path);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.Uint32ArrayType);
+        il.Emit(OpCodes.Brfalse, generalPath);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Convert, "ToDouble", _types.Object));
+        il.Emit(OpCodes.Conv_U4);
+        il.Emit(OpCodes.Stloc, deltaLocal);
+        EmitInt32ElementReference(il, runtime, indexLocal);
+        il.Emit(OpCodes.Ldloc, deltaLocal);
+        il.Emit(OpCodes.Call, typeof(Interlocked).GetMethod(
+            nameof(Interlocked.Add), [typeof(int).MakeByRefType(), typeof(int)])!);
+        il.Emit(OpCodes.Stloc, newValueLocal);
+        il.Emit(OpCodes.Br, uintResultPath);
+
+        il.MarkLabel(signedResultPath);
+        il.Emit(OpCodes.Ldloc, newValueLocal);
+        il.Emit(OpCodes.Ldloc, deltaLocal);
+        il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Conv_R8);
+        il.Emit(OpCodes.Box, _types.Double);
+        il.Emit(OpCodes.Br, endLabel);
+
+        il.MarkLabel(uintResultPath);
+        il.Emit(OpCodes.Ldloc, newValueLocal);
+        il.Emit(OpCodes.Ldloc, deltaLocal);
+        il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Conv_U4);
+        il.Emit(OpCodes.Conv_U8);
+        il.Emit(OpCodes.Conv_R_Un);
+        il.Emit(OpCodes.Box, _types.Double);
+        il.Emit(OpCodes.Br, endLabel);
+
+        // Get old value
+        il.MarkLabel(generalPath);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, runtime.TypedArrayBaseType);
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Ldnull);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Call, _atomicsUpdateLocked);
 
         il.MarkLabel(endLabel);
         il.Emit(OpCodes.Ret);
 
         return method;
+    }
+
+    /// <summary>
+    /// Pushes a managed <c>ref int</c> for an aligned Int32/Uint32 typed-array element.
+    /// SharedArrayBuffer byte offsets for these views are four-byte aligned by construction.
+    /// </summary>
+    private void EmitInt32ElementReference(
+        ILGenerator il, EmittedRuntime runtime, LocalBuilder indexLocal)
+    {
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, runtime.TypedArrayBaseType);
+        il.Emit(OpCodes.Callvirt, runtime.TypedArrayGetBuffer);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, runtime.TypedArrayBaseType);
+        il.Emit(OpCodes.Callvirt, runtime.TypedArrayByteOffsetGetter);
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Ldc_I4_4);
+        il.Emit(OpCodes.Mul);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Ldelema, typeof(byte));
+
+        MethodInfo unsafeAs = typeof(Unsafe).GetMethods(BindingFlags.Public | BindingFlags.Static)
+            .Single(candidate =>
+                candidate.Name == nameof(Unsafe.As) &&
+                candidate.IsGenericMethodDefinition &&
+                candidate.GetGenericArguments().Length == 2 &&
+                candidate.GetParameters() is [{ ParameterType.IsByRef: true }])
+            .MakeGenericMethod(typeof(byte), typeof(int));
+        il.Emit(OpCodes.Call, unsafeAs);
+    }
+
+    /// <summary>
+    /// Emits the lock-free Int32Array/Uint32Array branch for a read-modify-write operation.
+    /// Other integer typed arrays branch to the shared-buffer lock implementation.
+    /// </summary>
+    private void EmitAtomicsInt32UpdateFastPath(
+        ILGenerator il,
+        EmittedRuntime runtime,
+        int operation,
+        int valueArgument,
+        int? expectedArgument,
+        Label generalPath,
+        Label endLabel)
+    {
+        var uint32Path = il.DefineLabel();
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.Int32ArrayType);
+        il.Emit(OpCodes.Brfalse, uint32Path);
+        EmitCall(unsigned: false);
+
+        il.MarkLabel(uint32Path);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.Uint32ArrayType);
+        il.Emit(OpCodes.Brfalse, generalPath);
+        EmitCall(unsigned: true);
+        return;
+
+        void EmitCall(bool unsigned)
+        {
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Castclass, runtime.TypedArrayBaseType);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Conv_I4);
+            il.Emit(OpCodes.Ldarg, valueArgument);
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.Convert, "ToDouble", _types.Object));
+            if (expectedArgument is int argument)
+            {
+                il.Emit(OpCodes.Ldarg, argument);
+                il.Emit(OpCodes.Call, _types.GetMethod(_types.Convert, "ToDouble", _types.Object));
+            }
+            else
+            {
+                il.Emit(OpCodes.Ldc_R8, 0d);
+            }
+            il.Emit(OpCodes.Ldc_I4, operation);
+            il.Emit(unsigned ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Call, _atomicsUpdateInt32);
+            il.Emit(OpCodes.Box, _types.Double);
+            il.Emit(OpCodes.Br, endLabel);
+        }
     }
 
     /// <summary>
@@ -256,9 +809,8 @@ public partial class RuntimeEmitter
         );
 
         var il = method.GetILGenerator();
-        var oldValueLocal = il.DeclareLocal(_types.Object);
-
         var emittedPath = il.DefineLabel();
+        var generalPath = il.DefineLabel();
         var endLabel = il.DefineLabel();
 
         // Check if it's an emitted $TypedArray
@@ -273,27 +825,19 @@ public partial class RuntimeEmitter
         // Emitted type path
         il.MarkLabel(emittedPath);
 
-        // Get old value
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Conv_I4);  // Convert double index to int
-        il.Emit(OpCodes.Call, runtime.GetTypedArrayElementMethod);
-        il.Emit(OpCodes.Stloc, oldValueLocal);
+        EmitAtomicsInt32UpdateFastPath(
+            il, runtime, operation: 1, valueArgument: 2, expectedArgument: null,
+            generalPath, endLabel);
 
-        // Set new value = old - value
+        il.MarkLabel(generalPath);
         il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, runtime.TypedArrayBaseType);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Conv_I4);  // Convert double index to int
-        il.Emit(OpCodes.Ldloc, oldValueLocal);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.Convert, "ToDouble", _types.Object));
+        il.Emit(OpCodes.Conv_I4);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.Convert, "ToDouble", _types.Object));
-        il.Emit(OpCodes.Sub);
-        il.Emit(OpCodes.Box, _types.Double);
-        il.Emit(OpCodes.Call, runtime.SetTypedArrayElementMethod);
-
-        // Return old value
-        il.Emit(OpCodes.Ldloc, oldValueLocal);
+        il.Emit(OpCodes.Ldnull);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Call, _atomicsUpdateLocked);
 
         il.MarkLabel(endLabel);
         il.Emit(OpCodes.Ret);
@@ -314,9 +858,8 @@ public partial class RuntimeEmitter
         );
 
         var il = method.GetILGenerator();
-        var oldValueLocal = il.DeclareLocal(_types.Object);
-
         var emittedPath = il.DefineLabel();
+        var generalPath = il.DefineLabel();
         var endLabel = il.DefineLabel();
 
         // Check if it's an emitted $TypedArray
@@ -331,28 +874,19 @@ public partial class RuntimeEmitter
         // Emitted type path
         il.MarkLabel(emittedPath);
 
-        // Get old value
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Conv_I4);  // Convert double index to int
-        il.Emit(OpCodes.Call, runtime.GetTypedArrayElementMethod);
-        il.Emit(OpCodes.Stloc, oldValueLocal);
+        EmitAtomicsInt32UpdateFastPath(
+            il, runtime, operation: 2, valueArgument: 2, expectedArgument: null,
+            generalPath, endLabel);
 
-        // Set new value = old & value
+        il.MarkLabel(generalPath);
         il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, runtime.TypedArrayBaseType);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Conv_I4);  // Convert double index to int
-        il.Emit(OpCodes.Ldloc, oldValueLocal);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.Convert, "ToInt32", _types.Object));
+        il.Emit(OpCodes.Conv_I4);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.Convert, "ToInt32", _types.Object));
-        il.Emit(OpCodes.And);
-        il.Emit(OpCodes.Conv_R8);
-        il.Emit(OpCodes.Box, _types.Double);
-        il.Emit(OpCodes.Call, runtime.SetTypedArrayElementMethod);
-
-        // Return old value
-        il.Emit(OpCodes.Ldloc, oldValueLocal);
+        il.Emit(OpCodes.Ldnull);
+        il.Emit(OpCodes.Ldc_I4_2);
+        il.Emit(OpCodes.Call, _atomicsUpdateLocked);
 
         il.MarkLabel(endLabel);
         il.Emit(OpCodes.Ret);
@@ -373,9 +907,8 @@ public partial class RuntimeEmitter
         );
 
         var il = method.GetILGenerator();
-        var oldValueLocal = il.DeclareLocal(_types.Object);
-
         var emittedPath = il.DefineLabel();
+        var generalPath = il.DefineLabel();
         var endLabel = il.DefineLabel();
 
         // Check if it's an emitted $TypedArray
@@ -390,28 +923,19 @@ public partial class RuntimeEmitter
         // Emitted type path
         il.MarkLabel(emittedPath);
 
-        // Get old value
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Conv_I4);  // Convert double index to int
-        il.Emit(OpCodes.Call, runtime.GetTypedArrayElementMethod);
-        il.Emit(OpCodes.Stloc, oldValueLocal);
+        EmitAtomicsInt32UpdateFastPath(
+            il, runtime, operation: 3, valueArgument: 2, expectedArgument: null,
+            generalPath, endLabel);
 
-        // Set new value = old | value
+        il.MarkLabel(generalPath);
         il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, runtime.TypedArrayBaseType);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Conv_I4);  // Convert double index to int
-        il.Emit(OpCodes.Ldloc, oldValueLocal);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.Convert, "ToInt32", _types.Object));
+        il.Emit(OpCodes.Conv_I4);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.Convert, "ToInt32", _types.Object));
-        il.Emit(OpCodes.Or);
-        il.Emit(OpCodes.Conv_R8);
-        il.Emit(OpCodes.Box, _types.Double);
-        il.Emit(OpCodes.Call, runtime.SetTypedArrayElementMethod);
-
-        // Return old value
-        il.Emit(OpCodes.Ldloc, oldValueLocal);
+        il.Emit(OpCodes.Ldnull);
+        il.Emit(OpCodes.Ldc_I4_3);
+        il.Emit(OpCodes.Call, _atomicsUpdateLocked);
 
         il.MarkLabel(endLabel);
         il.Emit(OpCodes.Ret);
@@ -432,9 +956,8 @@ public partial class RuntimeEmitter
         );
 
         var il = method.GetILGenerator();
-        var oldValueLocal = il.DeclareLocal(_types.Object);
-
         var emittedPath = il.DefineLabel();
+        var generalPath = il.DefineLabel();
         var endLabel = il.DefineLabel();
 
         // Check if it's an emitted $TypedArray
@@ -449,28 +972,19 @@ public partial class RuntimeEmitter
         // Emitted type path
         il.MarkLabel(emittedPath);
 
-        // Get old value
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Conv_I4);  // Convert double index to int
-        il.Emit(OpCodes.Call, runtime.GetTypedArrayElementMethod);
-        il.Emit(OpCodes.Stloc, oldValueLocal);
+        EmitAtomicsInt32UpdateFastPath(
+            il, runtime, operation: 4, valueArgument: 2, expectedArgument: null,
+            generalPath, endLabel);
 
-        // Set new value = old ^ value
+        il.MarkLabel(generalPath);
         il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, runtime.TypedArrayBaseType);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Conv_I4);  // Convert double index to int
-        il.Emit(OpCodes.Ldloc, oldValueLocal);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.Convert, "ToInt32", _types.Object));
+        il.Emit(OpCodes.Conv_I4);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.Convert, "ToInt32", _types.Object));
-        il.Emit(OpCodes.Xor);
-        il.Emit(OpCodes.Conv_R8);
-        il.Emit(OpCodes.Box, _types.Double);
-        il.Emit(OpCodes.Call, runtime.SetTypedArrayElementMethod);
-
-        // Return old value
-        il.Emit(OpCodes.Ldloc, oldValueLocal);
+        il.Emit(OpCodes.Ldnull);
+        il.Emit(OpCodes.Ldc_I4_4);
+        il.Emit(OpCodes.Call, _atomicsUpdateLocked);
 
         il.MarkLabel(endLabel);
         il.Emit(OpCodes.Ret);
@@ -491,9 +1005,8 @@ public partial class RuntimeEmitter
         );
 
         var il = method.GetILGenerator();
-        var oldValueLocal = il.DeclareLocal(_types.Object);
-
         var emittedPath = il.DefineLabel();
+        var generalPath = il.DefineLabel();
         var endLabel = il.DefineLabel();
 
         // Check if it's an emitted $TypedArray
@@ -508,22 +1021,19 @@ public partial class RuntimeEmitter
         // Emitted type path
         il.MarkLabel(emittedPath);
 
-        // Get old value
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Conv_I4);  // Convert double index to int
-        il.Emit(OpCodes.Call, runtime.GetTypedArrayElementMethod);
-        il.Emit(OpCodes.Stloc, oldValueLocal);
+        EmitAtomicsInt32UpdateFastPath(
+            il, runtime, operation: 5, valueArgument: 2, expectedArgument: null,
+            generalPath, endLabel);
 
-        // Set new value
+        il.MarkLabel(generalPath);
         il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, runtime.TypedArrayBaseType);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Conv_I4);  // Convert double index to int
+        il.Emit(OpCodes.Conv_I4);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Call, runtime.SetTypedArrayElementMethod);
-
-        // Return old value
-        il.Emit(OpCodes.Ldloc, oldValueLocal);
+        il.Emit(OpCodes.Ldnull);
+        il.Emit(OpCodes.Ldc_I4_5);
+        il.Emit(OpCodes.Call, _atomicsUpdateLocked);
 
         il.MarkLabel(endLabel);
         il.Emit(OpCodes.Ret);
@@ -544,11 +1054,9 @@ public partial class RuntimeEmitter
         );
 
         var il = method.GetILGenerator();
-        var oldValueLocal = il.DeclareLocal(_types.Object);
-
         var emittedPath = il.DefineLabel();
+        var generalPath = il.DefineLabel();
         var endLabel = il.DefineLabel();
-        var noExchangeLabel = il.DefineLabel();
 
         // Check if it's an emitted $TypedArray
         il.Emit(OpCodes.Ldarg_0);
@@ -562,31 +1070,19 @@ public partial class RuntimeEmitter
         // Emitted type path
         il.MarkLabel(emittedPath);
 
-        // Get current value
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Conv_I4);  // Convert double index to int
-        il.Emit(OpCodes.Call, runtime.GetTypedArrayElementMethod);
-        il.Emit(OpCodes.Stloc, oldValueLocal);
+        EmitAtomicsInt32UpdateFastPath(
+            il, runtime, operation: 6, valueArgument: 3, expectedArgument: 2,
+            generalPath, endLabel);
 
-        // Compare old value with expected value (as doubles)
-        il.Emit(OpCodes.Ldloc, oldValueLocal);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.Convert, "ToDouble", _types.Object));
-        il.Emit(OpCodes.Ldarg_2); // expected
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.Convert, "ToDouble", _types.Object));
-        il.Emit(OpCodes.Ceq);
-        il.Emit(OpCodes.Brfalse, noExchangeLabel);
-
-        // Values match - do the exchange
+        il.MarkLabel(generalPath);
         il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, runtime.TypedArrayBaseType);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Conv_I4);  // Convert double index to int
+        il.Emit(OpCodes.Conv_I4);
         il.Emit(OpCodes.Ldarg_3); // replacement
-        il.Emit(OpCodes.Call, runtime.SetTypedArrayElementMethod);
-
-        il.MarkLabel(noExchangeLabel);
-        // Return old value (whether exchanged or not)
-        il.Emit(OpCodes.Ldloc, oldValueLocal);
+        il.Emit(OpCodes.Ldarg_2); // expected
+        il.Emit(OpCodes.Ldc_I4_6);
+        il.Emit(OpCodes.Call, _atomicsUpdateLocked);
 
         il.MarkLabel(endLabel);
         il.Emit(OpCodes.Ret);

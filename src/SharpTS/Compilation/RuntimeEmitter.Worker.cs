@@ -953,6 +953,7 @@ public partial class RuntimeEmitter
 
         var endLabel = il.DefineLabel();
         var isEmittedSharedArrayBufferLabel = il.DefineLabel();
+        var constructSharedArrayBufferLabel = il.DefineLabel();
         var isTSArrayLabel = il.DefineLabel();
         var isTypedArrayLabel = il.DefineLabel();
         var isNumberLabel = il.DefineLabel();
@@ -990,9 +991,11 @@ public partial class RuntimeEmitter
         // Check if arg is $SharedArrayBuffer (emitted type)
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, runtime.SharedArrayBufferType);
-        il.Emit(OpCodes.Brfalse, isTSArrayLabel);
+        il.Emit(OpCodes.Brtrue, constructSharedArrayBufferLabel);
+        il.Emit(OpCodes.Br, isTSArrayLabel);
 
         // It's $SharedArrayBuffer - use emitted buffer constructor
+        il.MarkLabel(constructSharedArrayBufferLabel);
         il.Emit(OpCodes.Ldarg_0);  // buffer
         il.Emit(OpCodes.Ldc_I4_0);  // byteOffset = 0
         il.Emit(OpCodes.Ldloca, nullableIntLocal);
@@ -1115,6 +1118,16 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, argTypeLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Type, "get_FullName"));
         il.Emit(OpCodes.Stloc, argTypeNameLocal);
+
+        // A parent compiled realm's $SharedArrayBuffer has the same stable emitted shape but
+        // a different CLR identity. The concrete buffer constructor validates the shape and
+        // recovers its shared byte[] backing store.
+        il.Emit(OpCodes.Ldloc, argTypeNameLocal);
+        il.Emit(OpCodes.Ldstr, "$SharedArrayBuffer");
+        il.Emit(OpCodes.Call, typeof(string).GetMethod(
+            "op_Equality", BindingFlags.Public | BindingFlags.Static,
+            binder: null, [typeof(string), typeof(string)], modifiers: null)!);
+        il.Emit(OpCodes.Brtrue, constructSharedArrayBufferLabel);
 
         // Check if it contains "ArrayBuffer" (interpreter types)
         il.Emit(OpCodes.Ldloc, argTypeNameLocal);

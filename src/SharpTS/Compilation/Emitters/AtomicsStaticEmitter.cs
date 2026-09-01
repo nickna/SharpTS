@@ -1,5 +1,6 @@
 using System.Reflection.Emit;
 using SharpTS.Parsing;
+using SharpTS.TypeSystem;
 
 namespace SharpTS.Compilation.Emitters;
 
@@ -96,6 +97,20 @@ public sealed class AtomicsStaticEmitter : IStaticTypeEmitterStrategy
 
         var ctx = emitter.Context;
         var il = ctx.IL;
+
+        if (ctx.TypeMap?.Get(arguments[0]) is TypeInfo.TypedArray
+            { ElementType: "Int32" or "Uint32" } typedArray)
+        {
+            emitter.EmitExpression(arguments[0]);
+            il.Emit(OpCodes.Castclass, ctx.Runtime!.TypedArrayBaseType);
+            emitter.EmitExpressionAsDouble(arguments[1]);
+            il.Emit(OpCodes.Conv_I4);
+            emitter.EmitExpressionAsDouble(arguments[2]);
+            il.Emit(typedArray.ElementType == "Uint32" ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Call, ctx.Runtime.AtomicsAddInt32);
+            il.Emit(OpCodes.Box, ctx.Types.Double);
+            return true;
+        }
 
         emitter.EmitExpression(arguments[0]);
         emitter.EmitBoxIfNeeded(arguments[0]);
