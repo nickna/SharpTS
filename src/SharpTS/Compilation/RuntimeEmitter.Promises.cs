@@ -763,7 +763,7 @@ public partial class RuntimeEmitter
         EmitPrimitivePromiseThenMoveNext(
             objectPrimitivePromiseThenSM,
             promiseJobAwaiterType,
-            objectPrimitiveHandlerType,
+            typeof(Func<object, object>).GetMethod(nameof(Func<object, object>.Invoke))!,
             unboxInput: false,
             boxResult: false);
 
@@ -790,9 +790,7 @@ public partial class RuntimeEmitter
         EmitPrimitivePromiseThenWithRejectionMoveNext(
             primitiveWithRejectionSM,
             runtime,
-            promiseJobAwaiterType,
-            primitiveHandlerType,
-            primitiveRejectHandlerType);
+            promiseJobAwaiterType);
 
         // Retain the small state machine as a defensive fallback for an input
         // that violates the completed intrinsic seed invariant. Proven-linear
@@ -813,7 +811,7 @@ public partial class RuntimeEmitter
         EmitPrimitivePromiseThenMoveNext(
             primitivePromiseThenSM,
             promiseJobAwaiterType,
-            primitiveHandlerType,
+            typeof(Func<double, double>).GetMethod(nameof(Func<double, double>.Invoke))!,
             unboxInput: true,
             boxResult: true);
 

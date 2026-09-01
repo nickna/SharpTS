@@ -838,7 +838,7 @@ public partial class RuntimeEmitter
     private void EmitPrimitivePromiseThenMoveNext(
         PrimitivePromiseThenStateMachine sm,
         Type promiseJobAwaiterType,
-        Type handlerType,
+        MethodInfo handlerInvoke,
         bool unboxInput,
         bool boxResult)
     {
@@ -931,7 +931,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, valueLocal);
         if (unboxInput)
             il.Emit(OpCodes.Unbox_Any, typeof(double));
-        il.Emit(OpCodes.Callvirt, handlerType.GetMethod("Invoke")!);
+        il.Emit(OpCodes.Callvirt, handlerInvoke);
         if (boxResult)
             il.Emit(OpCodes.Box, typeof(double));
         il.Emit(OpCodes.Stloc, resultLocal);
@@ -969,9 +969,7 @@ public partial class RuntimeEmitter
     private void EmitPrimitivePromiseThenWithRejectionMoveNext(
         PrimitivePromiseThenStateMachine sm,
         EmittedRuntime runtime,
-        Type promiseJobAwaiterType,
-        Type fulfilledHandlerType,
-        Type rejectedHandlerType)
+        Type promiseJobAwaiterType)
     {
         var il = sm.MoveNextMethod.GetILGenerator();
         var awaiterType = typeof(TaskAwaiter<object?>);
@@ -1076,7 +1074,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldfld, sm.OnFulfilledField);
         il.Emit(OpCodes.Ldloc, valueLocal);
         il.Emit(OpCodes.Unbox_Any, typeof(double));
-        il.Emit(OpCodes.Callvirt, fulfilledHandlerType.GetMethod("Invoke")!);
+        il.Emit(OpCodes.Callvirt,
+            typeof(Func<double, double>).GetMethod(nameof(Func<double, double>.Invoke))!);
         il.Emit(OpCodes.Br, haveResultLabel);
 
         il.MarkLabel(rejectedLabel);
@@ -1084,7 +1083,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldfld, sm.OnRejectedField!);
         il.Emit(OpCodes.Ldloc, sourceExceptionLocal);
         il.Emit(OpCodes.Call, runtime.WrapException);
-        il.Emit(OpCodes.Callvirt, rejectedHandlerType.GetMethod("Invoke")!);
+        il.Emit(OpCodes.Callvirt,
+            typeof(Func<object, double>).GetMethod(nameof(Func<object, double>.Invoke))!);
 
         il.MarkLabel(haveResultLabel);
         il.Emit(OpCodes.Box, typeof(double));

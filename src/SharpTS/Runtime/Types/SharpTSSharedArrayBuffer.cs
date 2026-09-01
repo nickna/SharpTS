@@ -137,14 +137,12 @@ public class SharpTSSharedArrayBuffer : ITypeCategorized, IDisposable
     }
 
     /// <summary>
-    /// Releases the pinned memory handle.
+    /// Marks this buffer disposed so later access throws
+    /// <see cref="ObjectDisposedException"/>.
     /// </summary>
     public void Dispose()
     {
-        if (!_disposed)
-        {
-            _disposed = true;
-        }
+        _disposed = true;
     }
 
     public override string ToString() => $"SharedArrayBuffer {{ byteLength: {ByteLength} }}";

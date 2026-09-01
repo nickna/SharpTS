@@ -770,6 +770,26 @@ public sealed class StablePrimitivePromiseThenTests
     }
 
     [Fact]
+    public void CapturingPromiseExecutor_RetainsGeneralCallableDispatch()
+    {
+        const string source = """
+            async function main(): Promise<void> {
+                const expected = 9;
+                const actual = await new Promise<number>((resolve: any, reject: any): void => {
+                    setTimeout(() => resolve(expected), 0);
+                });
+                console.log(actual);
+            }
+            main();
+            """;
+
+        Assembly assembly = Compile(source);
+        Assert.Empty(FindCallers(assembly, "PromiseFromDirectExecutor"));
+        Assert.NotEmpty(FindCallers(assembly, "PromiseFromExecutor"));
+        Assert.Equal("9\n", TestHarness.RunCompiledStandalone(source));
+    }
+
+    [Fact]
     public void StableNumericTwoHandler_UsesCompactTypedReaction()
     {
         const string source = """

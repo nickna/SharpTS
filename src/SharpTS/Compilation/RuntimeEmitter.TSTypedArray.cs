@@ -399,6 +399,10 @@ public partial class RuntimeEmitter
         }
     }
 
+    [System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2111",
+        Justification = "The fixed Type.GetMethod(string, Type[]) BCL overload is used only as an IL token for CoreCLR-generated output; the native host never reflects over a trimmed application type.")]
     private ConstructorBuilder EmitTypedArrayBufferConstructor(TypeBuilder typeBuilder, EmittedRuntime runtime, int bytesPerElement)
     {
         // Constructor: public $XArray(object buffer, int byteOffset, int? length)

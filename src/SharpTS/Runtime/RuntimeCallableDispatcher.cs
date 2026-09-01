@@ -106,9 +106,12 @@ public static class RuntimeCallableDispatcher
                     [typeof(object), typeof(object[])]));
             if (invokeWithThis != null)
             {
-                var boundInvoke = _boundInvokeWithThisCache.GetValue(callable, target =>
-                    (Func<object?, object?[], object?>)invokeWithThis.CreateDelegate(
-                        typeof(Func<object?, object?[], object?>), target));
+                if (!_boundInvokeWithThisCache.TryGetValue(callable, out var boundInvoke))
+                {
+                    boundInvoke = _boundInvokeWithThisCache.GetValue(callable, target =>
+                        (Func<object?, object?[], object?>)invokeWithThis.CreateDelegate(
+                            typeof(Func<object?, object?[], object?>), target));
+                }
                 return boundInvoke(thisArg, args);
             }
 

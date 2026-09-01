@@ -460,6 +460,7 @@ public abstract partial class ExpressionEmitterBase
                         Parameters: [var resolveParameter, var rejectParameter]
                     } executorArrow
                     && executorArrow.TypeParams is null or { Count: 0 }
+                    && !Ctx.DisplayClasses.ContainsKey(executorArrow)
                     && Ctx.TypeMap?.Get(executorArrow) is
                         TypeSystem.TypeInfo.Function
                         { ReturnType: TypeSystem.TypeInfo.Void }

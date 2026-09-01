@@ -159,6 +159,36 @@ public static class SharpTSAtomics
             throw new Exception("RangeError: Invalid index for Atomics operation");
     }
 
+    private static int ToInt32Operand(object? value)
+    {
+        double number = Convert.ToDouble(value);
+        if (!double.IsFinite(number) || number == 0)
+            return 0;
+
+        double modulo = Math.Truncate(number) % 4294967296.0;
+        if (modulo < 0)
+            modulo += 4294967296.0;
+
+        return modulo >= 2147483648.0
+            ? (int)(modulo - 4294967296.0)
+            : (int)modulo;
+    }
+
+    private static object ConvertIntegerOperand(SharpTSTypedArray typedArray, object? value)
+    {
+        int bits = ToInt32Operand(value);
+        return typedArray switch
+        {
+            SharpTSInt8Array => (double)unchecked((sbyte)bits),
+            SharpTSUint8Array or SharpTSUint8ClampedArray => (double)unchecked((byte)bits),
+            SharpTSInt16Array => (double)unchecked((short)bits),
+            SharpTSUint16Array => (double)unchecked((ushort)bits),
+            SharpTSInt32Array => (double)bits,
+            SharpTSUint32Array => (double)unchecked((uint)bits),
+            _ => value ?? 0d
+        };
+    }
+
     #endregion
 
     #region Load/Store
@@ -180,8 +210,11 @@ public static class SharpTSAtomics
     {
         ValidateIntegerTypedArray(typedArray, "store");
         ValidateIndex(typedArray, index);
-        typedArray.SetVolatile(index, value);
-        return value;
+        object? convertedValue = typedArray is SharpTSBigInt64Array or SharpTSBigUint64Array
+            ? value
+            : ConvertIntegerOperand(typedArray, value);
+        typedArray.SetVolatile(index, convertedValue);
+        return convertedValue;
     }
 
     #endregion
@@ -198,7 +231,7 @@ public static class SharpTSAtomics
 
         return typedArray switch
         {
-            SharpTSInt32Array int32Array => AddInt32(int32Array, index, (int)Convert.ToDouble(value)),
+            SharpTSInt32Array int32Array => AddInt32(int32Array, index, ToInt32Operand(value)),
             SharpTSBigInt64Array bigInt64Array => AddBigInt64(bigInt64Array, index, ConvertToBigInt64(value)),
             _ => AddGeneric(typedArray, index, value)
         };
@@ -235,13 +268,14 @@ public static class SharpTSAtomics
 
     private static object? AddValues(object? a, object? b, SharpTSTypedArray array)
     {
+        int operand = ToInt32Operand(b);
         return array switch
         {
-            SharpTSInt8Array => (double)((sbyte)Convert.ToDouble(a) + (sbyte)Convert.ToDouble(b)),
-            SharpTSUint8Array or SharpTSUint8ClampedArray => (double)((byte)Convert.ToDouble(a) + (byte)Convert.ToDouble(b)),
-            SharpTSInt16Array => (double)((short)Convert.ToDouble(a) + (short)Convert.ToDouble(b)),
-            SharpTSUint16Array => (double)((ushort)Convert.ToDouble(a) + (ushort)Convert.ToDouble(b)),
-            SharpTSUint32Array => (double)((uint)Convert.ToDouble(a) + (uint)Convert.ToDouble(b)),
+            SharpTSInt8Array => (double)unchecked((sbyte)((sbyte)Convert.ToDouble(a) + (sbyte)operand)),
+            SharpTSUint8Array or SharpTSUint8ClampedArray => (double)unchecked((byte)((byte)Convert.ToDouble(a) + (byte)operand)),
+            SharpTSInt16Array => (double)unchecked((short)((short)Convert.ToDouble(a) + (short)operand)),
+            SharpTSUint16Array => (double)unchecked((ushort)((ushort)Convert.ToDouble(a) + (ushort)operand)),
+            SharpTSUint32Array => (double)unchecked((uint)((uint)Convert.ToDouble(a) + (uint)operand)),
             _ => throw new Exception("Unsupported typed array for Atomics.add")
         };
     }
@@ -256,7 +290,7 @@ public static class SharpTSAtomics
 
         return typedArray switch
         {
-            SharpTSInt32Array int32Array => SubInt32(int32Array, index, (int)Convert.ToDouble(value)),
+            SharpTSInt32Array int32Array => SubInt32(int32Array, index, ToInt32Operand(value)),
             SharpTSBigInt64Array bigInt64Array => SubBigInt64(bigInt64Array, index, ConvertToBigInt64(value)),
             _ => SubGeneric(typedArray, index, value)
         };
@@ -292,13 +326,14 @@ public static class SharpTSAtomics
 
     private static object? SubValues(object? a, object? b, SharpTSTypedArray array)
     {
+        int operand = ToInt32Operand(b);
         return array switch
         {
-            SharpTSInt8Array => (double)((sbyte)Convert.ToDouble(a) - (sbyte)Convert.ToDouble(b)),
-            SharpTSUint8Array or SharpTSUint8ClampedArray => (double)((byte)Convert.ToDouble(a) - (byte)Convert.ToDouble(b)),
-            SharpTSInt16Array => (double)((short)Convert.ToDouble(a) - (short)Convert.ToDouble(b)),
-            SharpTSUint16Array => (double)((ushort)Convert.ToDouble(a) - (ushort)Convert.ToDouble(b)),
-            SharpTSUint32Array => (double)((uint)Convert.ToDouble(a) - (uint)Convert.ToDouble(b)),
+            SharpTSInt8Array => (double)unchecked((sbyte)((sbyte)Convert.ToDouble(a) - (sbyte)operand)),
+            SharpTSUint8Array or SharpTSUint8ClampedArray => (double)unchecked((byte)((byte)Convert.ToDouble(a) - (byte)operand)),
+            SharpTSInt16Array => (double)unchecked((short)((short)Convert.ToDouble(a) - (short)operand)),
+            SharpTSUint16Array => (double)unchecked((ushort)((ushort)Convert.ToDouble(a) - (ushort)operand)),
+            SharpTSUint32Array => (double)unchecked((uint)((uint)Convert.ToDouble(a) - (uint)operand)),
             _ => throw new Exception("Unsupported typed array for Atomics.sub")
         };
     }
@@ -317,7 +352,7 @@ public static class SharpTSAtomics
 
         return typedArray switch
         {
-            SharpTSInt32Array int32Array => AndInt32(int32Array, index, (int)Convert.ToDouble(value)),
+            SharpTSInt32Array int32Array => AndInt32(int32Array, index, ToInt32Operand(value)),
             SharpTSBigInt64Array bigInt64Array => AndBigInt64(bigInt64Array, index, ConvertToBigInt64(value)),
             _ => AndGeneric(typedArray, index, value)
         };
@@ -352,10 +387,8 @@ public static class SharpTSAtomics
 
     private static object? AndValues(object? a, object? b, SharpTSTypedArray array)
     {
-        int ia = (int)Convert.ToDouble(a);
-        int ib = (int)Convert.ToDouble(b);
-        int result = ia & ib;
-        return (double)result;
+        int result = ToInt32Operand(a) & ToInt32Operand(b);
+        return ConvertIntegerOperand(array, (double)result);
     }
 
     /// <summary>
@@ -368,7 +401,7 @@ public static class SharpTSAtomics
 
         return typedArray switch
         {
-            SharpTSInt32Array int32Array => OrInt32(int32Array, index, (int)Convert.ToDouble(value)),
+            SharpTSInt32Array int32Array => OrInt32(int32Array, index, ToInt32Operand(value)),
             SharpTSBigInt64Array bigInt64Array => OrBigInt64(bigInt64Array, index, ConvertToBigInt64(value)),
             _ => OrGeneric(typedArray, index, value)
         };
@@ -403,10 +436,8 @@ public static class SharpTSAtomics
 
     private static object? OrValues(object? a, object? b, SharpTSTypedArray array)
     {
-        int ia = (int)Convert.ToDouble(a);
-        int ib = (int)Convert.ToDouble(b);
-        int result = ia | ib;
-        return (double)result;
+        int result = ToInt32Operand(a) | ToInt32Operand(b);
+        return ConvertIntegerOperand(array, (double)result);
     }
 
     /// <summary>
@@ -419,7 +450,7 @@ public static class SharpTSAtomics
 
         return typedArray switch
         {
-            SharpTSInt32Array int32Array => XorInt32(int32Array, index, (int)Convert.ToDouble(value)),
+            SharpTSInt32Array int32Array => XorInt32(int32Array, index, ToInt32Operand(value)),
             SharpTSBigInt64Array bigInt64Array => XorBigInt64(bigInt64Array, index, ConvertToBigInt64(value)),
             _ => XorGeneric(typedArray, index, value)
         };
@@ -468,10 +499,8 @@ public static class SharpTSAtomics
 
     private static object? XorValues(object? a, object? b, SharpTSTypedArray array)
     {
-        int ia = (int)Convert.ToDouble(a);
-        int ib = (int)Convert.ToDouble(b);
-        int result = ia ^ ib;
-        return (double)result;
+        int result = ToInt32Operand(a) ^ ToInt32Operand(b);
+        return ConvertIntegerOperand(array, (double)result);
     }
 
     #endregion
@@ -488,7 +517,7 @@ public static class SharpTSAtomics
 
         return typedArray switch
         {
-            SharpTSInt32Array int32Array => ExchangeInt32(int32Array, index, (int)Convert.ToDouble(value)),
+            SharpTSInt32Array int32Array => ExchangeInt32(int32Array, index, ToInt32Operand(value)),
             SharpTSBigInt64Array bigInt64Array => ExchangeBigInt64(bigInt64Array, index, ConvertToBigInt64(value)),
             _ => ExchangeGeneric(typedArray, index, value)
         };
@@ -509,7 +538,7 @@ public static class SharpTSAtomics
     private static object? ExchangeGeneric(SharpTSTypedArray array, int index, object? value)
     {
         var oldValue = array.GetVolatile(index);
-        array.SetVolatile(index, value);
+        array.SetVolatile(index, ConvertIntegerOperand(array, value));
         return oldValue;
     }
 
@@ -524,7 +553,7 @@ public static class SharpTSAtomics
         return typedArray switch
         {
             SharpTSInt32Array int32Array => CompareExchangeInt32(int32Array, index,
-                (int)Convert.ToDouble(expectedValue), (int)Convert.ToDouble(replacementValue)),
+                ToInt32Operand(expectedValue), ToInt32Operand(replacementValue)),
             SharpTSBigInt64Array bigInt64Array => CompareExchangeBigInt64(bigInt64Array, index,
                 ConvertToBigInt64(expectedValue), ConvertToBigInt64(replacementValue)),
             _ => CompareExchangeGeneric(typedArray, index, expectedValue, replacementValue)
@@ -546,9 +575,10 @@ public static class SharpTSAtomics
     private static object? CompareExchangeGeneric(SharpTSTypedArray array, int index, object? expected, object? replacement)
     {
         var current = array.GetVolatile(index);
-        if (Equals(current, expected))
+        object convertedExpected = ConvertIntegerOperand(array, expected);
+        if (Equals(current, convertedExpected))
         {
-            array.SetVolatile(index, replacement);
+            array.SetVolatile(index, ConvertIntegerOperand(array, replacement));
         }
         return current;
     }
@@ -566,7 +596,7 @@ public static class SharpTSAtomics
         if (typedArray is SharpTSInt32Array int32Array)
         {
             ValidateSharedInt32Array(typedArray, "wait");
-            return WaitInt32(int32Array, index, (int)Convert.ToDouble(expectedValue), timeout, cancellationToken);
+            return WaitInt32(int32Array, index, ToInt32Operand(expectedValue), timeout, cancellationToken);
         }
         else if (typedArray is SharpTSBigInt64Array bigInt64Array)
         {

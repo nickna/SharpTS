@@ -10,10 +10,13 @@ namespace SharpTS.Compilation;
 /// </summary>
 public partial class RuntimeEmitter
 {
+    private delegate ref int UnsafeByteToInt32Delegate(ref byte source);
+
     private MethodBuilder _atomicsLoadLocked = null!;
     private MethodBuilder _atomicsStoreLocked = null!;
     private MethodBuilder _atomicsUpdateLocked = null!;
     private MethodBuilder _atomicsUpdateInt32 = null!;
+    private MethodBuilder _atomicsConvertInt32Operand = null!;
 
     /// <summary>
     /// Emits Atomics static method helpers with pure-IL implementations for emitted types.
@@ -27,6 +30,7 @@ public partial class RuntimeEmitter
         _atomicsLoadLocked = EmitAtomicsLoadLocked(runtimeType, runtime);
         _atomicsStoreLocked = EmitAtomicsStoreLocked(runtimeType, runtime);
         _atomicsUpdateLocked = EmitAtomicsUpdateLocked(runtimeType, runtime);
+        _atomicsConvertInt32Operand = EmitAtomicsConvertInt32Operand(runtimeType);
 
         // Unboxed hot path used when the compiler knows the receiver is Int32Array/Uint32Array.
         runtime.AtomicsAddInt32 = EmitAtomicsAddInt32(runtimeType, runtime);
@@ -267,15 +271,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Stloc, indexLocal);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Ldarg_3);
-        var signedDelta = il.DefineLabel();
-        var deltaReady = il.DefineLabel();
-        il.Emit(OpCodes.Brfalse, signedDelta);
-        il.Emit(OpCodes.Conv_U4);
-        il.Emit(OpCodes.Br, deltaReady);
-        il.MarkLabel(signedDelta);
-        il.Emit(OpCodes.Conv_I4);
-        il.MarkLabel(deltaReady);
+        il.Emit(OpCodes.Call, _atomicsConvertInt32Operand);
         il.Emit(OpCodes.Stloc, deltaLocal);
 
         EmitInt32ElementReference(il, runtime, indexLocal);
@@ -463,20 +459,75 @@ public partial class RuntimeEmitter
         return method;
     }
 
-    private static void EmitConvertAtomicsInt32Operand(
+    private void EmitConvertAtomicsInt32Operand(
         ILGenerator il, int argument, LocalBuilder destination)
     {
-        var signed = il.DefineLabel();
-        var converted = il.DefineLabel();
         il.Emit(OpCodes.Ldarg, argument);
-        il.Emit(OpCodes.Ldarg, 5);
-        il.Emit(OpCodes.Brfalse, signed);
-        il.Emit(OpCodes.Conv_U4);
-        il.Emit(OpCodes.Br, converted);
-        il.MarkLabel(signed);
-        il.Emit(OpCodes.Conv_I4);
-        il.MarkLabel(converted);
+        il.Emit(OpCodes.Call, _atomicsConvertInt32Operand);
         il.Emit(OpCodes.Stloc, destination);
+    }
+
+    /// <summary>
+    /// Emits ECMAScript ToInt32/ToUint32 as one signed 32-bit bit pattern.
+    /// Both conversions have identical low 32 bits; callers choose how to
+    /// render the result after the atomic operation.
+    /// </summary>
+    private MethodBuilder EmitAtomicsConvertInt32Operand(TypeBuilder runtimeType)
+    {
+        var method = runtimeType.DefineMethod(
+            "AtomicsConvertInt32Operand",
+            MethodAttributes.Private | MethodAttributes.Static,
+            _types.Int32,
+            [_types.Double]);
+        method.SetImplementationFlags(MethodImplAttributes.AggressiveInlining);
+
+        var il = method.GetILGenerator();
+        var modulo = il.DeclareLocal(_types.Double);
+        var zero = il.DefineLabel();
+        var nonNegative = il.DefineLabel();
+        var signedRange = il.DefineLabel();
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, _types.DoubleIsNaN);
+        il.Emit(OpCodes.Brtrue, zero);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, typeof(double).GetMethod(
+            nameof(double.IsInfinity), [typeof(double)])!);
+        il.Emit(OpCodes.Brtrue, zero);
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, typeof(Math).GetMethod(
+            nameof(Math.Truncate), [typeof(double)])!);
+        il.Emit(OpCodes.Ldc_R8, 4294967296d);
+        il.Emit(OpCodes.Rem);
+        il.Emit(OpCodes.Stloc, modulo);
+
+        il.Emit(OpCodes.Ldloc, modulo);
+        il.Emit(OpCodes.Ldc_R8, 0d);
+        il.Emit(OpCodes.Bge, nonNegative);
+        il.Emit(OpCodes.Ldloc, modulo);
+        il.Emit(OpCodes.Ldc_R8, 4294967296d);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, modulo);
+
+        il.MarkLabel(nonNegative);
+        il.Emit(OpCodes.Ldloc, modulo);
+        il.Emit(OpCodes.Ldc_R8, 2147483648d);
+        il.Emit(OpCodes.Blt, signedRange);
+        il.Emit(OpCodes.Ldloc, modulo);
+        il.Emit(OpCodes.Ldc_R8, 4294967296d);
+        il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Stloc, modulo);
+
+        il.MarkLabel(signedRange);
+        il.Emit(OpCodes.Ldloc, modulo);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(zero);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ret);
+        return method;
     }
 
     private MethodBuilder EmitAtomicsPausePure(TypeBuilder runtimeType, EmittedRuntime runtime)
@@ -541,8 +592,11 @@ public partial class RuntimeEmitter
         );
 
         var il = method.GetILGenerator();
-
+        var indexLocal = il.DeclareLocal(_types.Int32);
         var emittedPath = il.DefineLabel();
+        var uint32Path = il.DefineLabel();
+        var lockedPath = il.DefineLabel();
+        var unsignedResult = il.DefineLabel();
         var endLabel = il.DefineLabel();
 
         // Check if it's an emitted $TypedArray
@@ -554,12 +608,43 @@ public partial class RuntimeEmitter
         EmitThrowAtomicsTypedArrayRequired(il);
         il.Emit(OpCodes.Br, endLabel);
 
-        // Emitted type path - use GetTypedArrayElementMethod
+        // Int32Array/Uint32Array use an aligned volatile read; other integer
+        // element kinds retain the shared-buffer lock fallback.
         il.MarkLabel(emittedPath);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Stloc, indexLocal);
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.Int32ArrayType);
+        il.Emit(OpCodes.Brfalse, uint32Path);
+        EmitInt32ElementReference(il, runtime, indexLocal);
+        il.Emit(OpCodes.Call, typeof(Volatile).GetMethod(
+            nameof(Volatile.Read), [typeof(int).MakeByRefType()])!);
+        il.Emit(OpCodes.Conv_R8);
+        il.Emit(OpCodes.Box, _types.Double);
+        il.Emit(OpCodes.Br, endLabel);
+
+        il.MarkLabel(uint32Path);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.Uint32ArrayType);
+        il.Emit(OpCodes.Brfalse, lockedPath);
+        EmitInt32ElementReference(il, runtime, indexLocal);
+        il.Emit(OpCodes.Call, typeof(Volatile).GetMethod(
+            nameof(Volatile.Read), [typeof(int).MakeByRefType()])!);
+        il.Emit(OpCodes.Br, unsignedResult);
+
+        il.MarkLabel(unsignedResult);
+        il.Emit(OpCodes.Conv_U4);
+        il.Emit(OpCodes.Conv_U8);
+        il.Emit(OpCodes.Conv_R_Un);
+        il.Emit(OpCodes.Box, _types.Double);
+        il.Emit(OpCodes.Br, endLabel);
+
+        il.MarkLabel(lockedPath);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, runtime.TypedArrayBaseType);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Conv_I4);  // Convert double index to int
+        il.Emit(OpCodes.Ldloc, indexLocal);
         il.Emit(OpCodes.Call, _atomicsLoadLocked);
 
         il.MarkLabel(endLabel);
@@ -581,8 +666,13 @@ public partial class RuntimeEmitter
         );
 
         var il = method.GetILGenerator();
-
+        var indexLocal = il.DeclareLocal(_types.Int32);
+        var valueLocal = il.DeclareLocal(_types.Int32);
         var emittedPath = il.DefineLabel();
+        var uint32Path = il.DefineLabel();
+        var lockedPath = il.DefineLabel();
+        var signedResult = il.DefineLabel();
+        var unsignedResult = il.DefineLabel();
         var endLabel = il.DefineLabel();
 
         // Check if it's an emitted $TypedArray
@@ -594,12 +684,42 @@ public partial class RuntimeEmitter
         EmitThrowAtomicsTypedArrayRequired(il);
         il.Emit(OpCodes.Br, endLabel);
 
-        // Emitted type path - set and return value
+        // Int32Array/Uint32Array use an aligned volatile write; other integer
+        // element kinds retain the shared-buffer lock fallback.
         il.MarkLabel(emittedPath);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Stloc, indexLocal);
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.Int32ArrayType);
+        il.Emit(OpCodes.Brfalse, uint32Path);
+        EmitStore(unsigned: false);
+
+        il.MarkLabel(uint32Path);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.Uint32ArrayType);
+        il.Emit(OpCodes.Brfalse, lockedPath);
+        EmitStore(unsigned: true);
+
+        il.MarkLabel(signedResult);
+        il.Emit(OpCodes.Ldloc, valueLocal);
+        il.Emit(OpCodes.Conv_R8);
+        il.Emit(OpCodes.Box, _types.Double);
+        il.Emit(OpCodes.Br, endLabel);
+
+        il.MarkLabel(unsignedResult);
+        il.Emit(OpCodes.Ldloc, valueLocal);
+        il.Emit(OpCodes.Conv_U4);
+        il.Emit(OpCodes.Conv_U8);
+        il.Emit(OpCodes.Conv_R_Un);
+        il.Emit(OpCodes.Box, _types.Double);
+        il.Emit(OpCodes.Br, endLabel);
+
+        il.MarkLabel(lockedPath);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, runtime.TypedArrayBaseType);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Conv_I4);  // Convert double index to int
+        il.Emit(OpCodes.Ldloc, indexLocal);
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Call, _atomicsStoreLocked);
 
@@ -607,6 +727,19 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
 
         return method;
+
+        void EmitStore(bool unsigned)
+        {
+            il.Emit(OpCodes.Ldarg_2);
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.Convert, "ToDouble", _types.Object));
+            il.Emit(OpCodes.Call, _atomicsConvertInt32Operand);
+            il.Emit(OpCodes.Stloc, valueLocal);
+            EmitInt32ElementReference(il, runtime, indexLocal);
+            il.Emit(OpCodes.Ldloc, valueLocal);
+            il.Emit(OpCodes.Call, typeof(Volatile).GetMethod(
+                nameof(Volatile.Write), [typeof(int).MakeByRefType(), typeof(int)])!);
+            il.Emit(OpCodes.Br, unsigned ? unsignedResult : signedResult);
+        }
     }
 
     /// <summary>
@@ -657,7 +790,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, uint32Path);
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Convert, "ToDouble", _types.Object));
-        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Call, _atomicsConvertInt32Operand);
         il.Emit(OpCodes.Stloc, deltaLocal);
         EmitInt32ElementReference(il, runtime, indexLocal);
         il.Emit(OpCodes.Ldloc, deltaLocal);
@@ -672,7 +805,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, generalPath);
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Convert, "ToDouble", _types.Object));
-        il.Emit(OpCodes.Conv_U4);
+        il.Emit(OpCodes.Call, _atomicsConvertInt32Operand);
         il.Emit(OpCodes.Stloc, deltaLocal);
         EmitInt32ElementReference(il, runtime, indexLocal);
         il.Emit(OpCodes.Ldloc, deltaLocal);
@@ -722,6 +855,17 @@ public partial class RuntimeEmitter
     private void EmitInt32ElementReference(
         ILGenerator il, EmittedRuntime runtime, LocalBuilder indexLocal)
     {
+        var validIndex = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Conv_U4);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, runtime.TypedArrayBaseType);
+        il.Emit(OpCodes.Callvirt, runtime.TypedArrayLengthGetter);
+        il.Emit(OpCodes.Conv_U4);
+        il.Emit(OpCodes.Blt_Un, validIndex);
+        GuestErrorEmitter.ThrowRangeError(il, runtime, "Atomics index is out of range");
+
+        il.MarkLabel(validIndex);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, runtime.TypedArrayBaseType);
         il.Emit(OpCodes.Callvirt, runtime.TypedArrayGetBuffer);
@@ -734,13 +878,10 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Add);
         il.Emit(OpCodes.Ldelema, typeof(byte));
 
-        MethodInfo unsafeAs = typeof(Unsafe).GetMethods(BindingFlags.Public | BindingFlags.Static)
-            .Single(candidate =>
-                candidate.Name == nameof(Unsafe.As) &&
-                candidate.IsGenericMethodDefinition &&
-                candidate.GetGenericArguments().Length == 2 &&
-                candidate.GetParameters() is [{ ParameterType.IsByRef: true }])
-            .MakeGenericMethod(typeof(byte), typeof(int));
+        // A strongly typed method group both roots this exact generic instantiation for
+        // Native AOT and avoids the trimming-unsafe MakeGenericMethod path.
+        MethodInfo unsafeAs =
+            ((UnsafeByteToInt32Delegate)Unsafe.As<byte, int>).Method;
         il.Emit(OpCodes.Call, unsafeAs);
     }
 

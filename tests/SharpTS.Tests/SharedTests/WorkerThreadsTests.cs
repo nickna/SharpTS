@@ -186,6 +186,57 @@ public class WorkerThreadsTests
     }
 
     [Theory, ModeData]
+    public void Atomics_Int32OperandsUseEcmaScriptWrapping(ExecutionMode mode)
+    {
+        const string source = """
+            const signed = new Int32Array(new SharedArrayBuffer(4));
+            signed[0] = 1;
+            console.log(Atomics.add(signed, 0, 4294967296));
+            console.log(Atomics.load(signed, 0));
+            console.log(Atomics.add(signed, 0, 5000000000));
+            console.log(Atomics.load(signed, 0));
+            console.log(Atomics.exchange(signed, 0, NaN));
+            console.log(Atomics.load(signed, 0));
+            console.log(Atomics.compareExchange(signed, 0, Infinity, 7));
+            console.log(Atomics.load(signed, 0));
+            console.log(Atomics.store(signed, 0, 4294967296));
+            console.log(Atomics.load(signed, 0));
+
+            const unsigned = new Uint32Array(new SharedArrayBuffer(4));
+            console.log(Atomics.add(unsigned, 0, -1));
+            console.log(Atomics.load(unsigned, 0));
+            console.log(Atomics.store(unsigned, 0, -1));
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal(
+            "1\n1\n1\n705032705\n705032705\n0\n0\n7\n0\n0\n0\n4294967295\n4294967295\n",
+            output);
+    }
+
+    [Theory, ModeData]
+    public void Atomics_Int32FastPathsRejectOutOfViewIndices(ExecutionMode mode)
+    {
+        const string source = """
+            const shared = new SharedArrayBuffer(8);
+            const view = new Int32Array(shared, 0, 1);
+            const neighbour = new Int32Array(shared, 4, 1);
+            neighbour[0] = 77;
+
+            try { Atomics.add(view, 1, 1); }
+            catch (error) { console.log(error instanceof RangeError); }
+
+            try { console.log(Atomics.add(view, -1, 1)); }
+            catch (error) { console.log(error instanceof RangeError); }
+
+            console.log(neighbour[0]);
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("true\ntrue\n77\n", output);
+    }
+
+    [Theory, ModeData]
     public void Atomics_Sub_SubtractsAndReturnsOldValue(ExecutionMode mode)
     {
         var source = @"
@@ -1867,6 +1918,40 @@ public class WorkerThreadsTests
         Assert.Contains("recv:pong1:ping1", output);
         Assert.Contains("recv:pong2:ping2", output);
         Assert.Contains("recv:pong3:ping3", output);
+    }
+
+    [Fact]
+    public void CompiledWorker_FindsTransferredPortNestedInMapAndSet()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["worker_nested_port.ts"] = """
+                const ports: any = workerData.get("ports");
+                const port: any = ports.values().next().value;
+                port.on("message", (message: any) => {
+                    port.postMessage("nested:" + message);
+                    port.close();
+                });
+                """,
+            ["main.ts"] = """
+                import { Worker, MessageChannel } from "worker_threads";
+                const { port1, port2 } = new MessageChannel();
+                const ports = new Set<any>([port1]);
+                const data = new Map<any, any>([["ports", ports]]);
+                new Worker(__dirname + "/worker_nested_port.ts", {
+                    workerData: data,
+                    transferList: [port1],
+                });
+                port2.on("message", (message: any) => {
+                    console.log(message);
+                    port2.close();
+                });
+                port2.postMessage("hello");
+                """
+        };
+
+        var output = TestHarness.RunModules(files, "main.ts", ExecutionMode.Compiled);
+        Assert.Contains("nested:hello", output);
     }
 
     /// <summary>

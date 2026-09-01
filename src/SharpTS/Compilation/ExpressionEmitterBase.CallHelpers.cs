@@ -2518,30 +2518,59 @@ public abstract partial class ExpressionEmitterBase
             IL.Emit(OpCodes.Castclass, Types.TaskOfObject);
             var promiseLocal = IL.DeclareLocal(Types.TaskOfObject);
             IL.Emit(OpCodes.Stloc, promiseLocal);
-            IL.Emit(OpCodes.Ldloc, promiseLocal);
 
             if (useTypedRejection)
             {
                 var fulfilledHandler = (Expr.ArrowFunction)arguments[0];
                 var rejectedHandler = (Expr.ArrowFunction)arguments[1];
-                if (!TryEmitArrowAsDelegate(fulfilledHandler, typeof(Func<double, double>))
-                    || !TryEmitArrowAsDelegate(rejectedHandler, typeof(Func<object, double>)))
+                var fulfilledLocal = IL.DeclareLocal(typeof(Func<double, double>));
+                var rejectedLocal = IL.DeclareLocal(typeof(Func<object, double>));
+                bool emittedTypedHandlers = false;
+
+                if (TryEmitArrowAsDelegate(fulfilledHandler, typeof(Func<double, double>)))
                 {
-                    throw new InvalidOperationException(
-                        "Stable primitive Promise handlers could not be emitted as typed delegates.");
+                    IL.Emit(OpCodes.Stloc, fulfilledLocal);
+                    if (TryEmitArrowAsDelegate(rejectedHandler, typeof(Func<object, double>)))
+                    {
+                        IL.Emit(OpCodes.Stloc, rejectedLocal);
+                        emittedTypedHandlers = true;
+                    }
                 }
-                IL.Emit(OpCodes.Call, Ctx.Runtime!.PromiseThenPrimitiveWithRejection);
+
+                IL.Emit(OpCodes.Ldloc, promiseLocal);
+                if (emittedTypedHandlers)
+                {
+                    IL.Emit(OpCodes.Ldloc, fulfilledLocal);
+                    IL.Emit(OpCodes.Ldloc, rejectedLocal);
+                    IL.Emit(OpCodes.Call, Ctx.Runtime!.PromiseThenPrimitiveWithRejection);
+                }
+                else
+                {
+                    EmitBoxedArgOrNull(arguments, 0);
+                    EmitBoxedArgOrNull(arguments, 1);
+                    IL.Emit(OpCodes.Call, Ctx.Runtime!.PromiseThen);
+                }
             }
-            else if (arguments is [Expr.ArrowFunction handler]
-                && TryEmitArrowAsDelegate(handler, typeof(Func<double, double>)))
+            else if (arguments is [Expr.ArrowFunction handler])
             {
-                IL.Emit(OpCodes.Call, Ctx.Runtime!.PromiseThenPrimitive);
+                IL.Emit(OpCodes.Ldloc, promiseLocal);
+                if (TryEmitArrowAsDelegate(handler, typeof(Func<double, double>)))
+                {
+                    IL.Emit(OpCodes.Call, Ctx.Runtime!.PromiseThenPrimitive);
+                }
+                else
+                {
+                    EmitBoxedArgOrNull(arguments, 0);
+                    IL.Emit(OpCodes.Ldnull);
+                    IL.Emit(OpCodes.Call, Ctx.Runtime!.PromiseThen);
+                }
             }
             else
             {
                 // Defensive fallback if a future emitter cannot materialize the
                 // proven arrow as a typed delegate. The receiver is still stable,
                 // but callback behavior remains on the general state machine.
+                IL.Emit(OpCodes.Ldloc, promiseLocal);
                 EmitBoxedArgOrNull(arguments, 0);
                 EmitBoxedArgOrNull(arguments, 1);
                 IL.Emit(OpCodes.Call, Ctx.Runtime!.PromiseThen);

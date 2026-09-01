@@ -651,6 +651,24 @@ public class SharpTSWorker : SharpTSEventEmitter, IDisposable
                     foreach (var item in dictionary.Values)
                         Visit(item);
                     return;
+                case IDictionary<object, object?> objectKeyedDictionary:
+                    foreach (var entry in objectKeyedDictionary)
+                    {
+                        Visit(entry.Key);
+                        Visit(entry.Value);
+                    }
+                    return;
+                case SharpTSMap map:
+                    foreach (var (key, item) in map.InternalEntries)
+                    {
+                        Visit(key);
+                        Visit(item);
+                    }
+                    return;
+                case SharpTSSet set:
+                    foreach (var item in set.InternalValues)
+                        Visit(item);
+                    return;
                 case IEnumerable<object?> sequence:
                     foreach (var item in sequence)
                         Visit(item);
