@@ -70,9 +70,21 @@ public class SharpTSAsyncFunction : ISharpTSAsyncCallable, ITypeCategorized
     /// </summary>
     public object? Call(Interpreter interpreter, List<object?> arguments)
     {
-        // Start async execution and wrap in Promise
-        var task = NormalizePromiseRejection(CallAsync(interpreter, arguments), interpreter);
-        return new SharpTSPromise(task);
+        // An async function runs synchronously until its first suspension, but calling it
+        // still returns to the caller's lexical environment immediately. ExecuteBlockAsync
+        // keeps the function environment installed across awaits so its continuation can
+        // resume correctly; restore the caller here before sibling expressions (notably a
+        // chained .then(...) argument) are evaluated and capture the wrong closure.
+        RuntimeEnvironment callerEnvironment = interpreter.Environment;
+        try
+        {
+            var task = NormalizePromiseRejection(CallAsync(interpreter, arguments), interpreter);
+            return new SharpTSPromise(task);
+        }
+        finally
+        {
+            interpreter.SetEnvironment(callerEnvironment);
+        }
     }
 
     internal static async Task<object?> NormalizePromiseRejection(
@@ -234,9 +246,19 @@ public class SharpTSAsyncArrowFunction : ISharpTSAsyncCallable, ITypeCategorized
     /// </summary>
     public object? Call(Interpreter interpreter, List<object?> arguments)
     {
-        var task = SharpTSAsyncFunction.NormalizePromiseRejection(
-            CallAsync(interpreter, arguments), interpreter);
-        return new SharpTSPromise(task);
+        // Mirror SharpTSAsyncFunction.Call: a pending async arrow owns its suspended
+        // environment, but must not leave that environment ambient in its caller.
+        RuntimeEnvironment callerEnvironment = interpreter.Environment;
+        try
+        {
+            var task = SharpTSAsyncFunction.NormalizePromiseRejection(
+                CallAsync(interpreter, arguments), interpreter);
+            return new SharpTSPromise(task);
+        }
+        finally
+        {
+            interpreter.SetEnvironment(callerEnvironment);
+        }
     }
 
     /// <summary>
