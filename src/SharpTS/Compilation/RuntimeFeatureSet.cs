@@ -53,7 +53,9 @@ public sealed class RuntimeFeatureSet
 
     /// <summary>
     /// Compact-record shapes used by at least one stable discarded array push.
-    /// Only these shapes specialize scalar slots to native CLR field types.
+    /// These shapes specialize scalar slots to native CLR field types even when
+    /// another use keeps the shape-wide materialization guard enabled. Shapes
+    /// proven never materialized specialize their scalar slots independently.
     /// </summary>
     internal HashSet<string> CompactObjectRecordStablePushShapes { get; } =
         new(StringComparer.Ordinal);

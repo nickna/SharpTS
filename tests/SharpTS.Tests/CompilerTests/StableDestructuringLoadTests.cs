@@ -43,6 +43,16 @@ public sealed class StableDestructuringLoadTests
         var objectLoop = FindFunction(assembly, "objectLoop")
             .CreateDelegate<Func<double, double>>();
 
+        Type pointCarrier = assembly.GetTypes().Single(type =>
+            type.Name.StartsWith("$CompactObjectRecord", StringComparison.Ordinal));
+        Assert.Equal(
+            [typeof(double), typeof(double)],
+            pointCarrier
+                .GetFields(BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public)
+                .Where(field => field.Name.StartsWith("_v", StringComparison.Ordinal))
+                .Select(field => field.FieldType)
+                .ToArray());
+
         Assert.Equal(300_000, arrayLoop(100_000));
         Assert.Equal(700_000, objectLoop(100_000));
 
@@ -98,6 +108,34 @@ public sealed class StableDestructuringLoadTests
             """;
 
         Assert.Equal("1 2 xy\n", TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
+    public void StableObjectReduction_FractionalAndOverflowCasesRetainNumberSemantics(
+        ExecutionMode mode)
+    {
+        const string source = """
+            type Point = { x: number; y: number };
+
+            function reduce(n: number, start: number, point: Point): number {
+                let total: number = start;
+                for (let i: number = 0; i < n; i++) {
+                    const { x, y } = point;
+                    total = total + x + y;
+                }
+                return total;
+            }
+
+            const fractional: Point = { x: 0.5, y: 0.25 };
+            const integers: Point = { x: 1, y: 2 };
+            console.log(reduce(2.5, 0.5, fractional));
+            console.log(reduce(2, 9007199254740991, integers));
+            console.log(Object.is(reduce(0, -0, integers), -0));
+            """;
+
+        Assert.Equal(
+            "2.75\n9007199254740998\ntrue\n",
+            TestHarness.Run(source, mode));
     }
 
     [Theory, ModeData]

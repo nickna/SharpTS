@@ -32,7 +32,8 @@ public partial class RuntimeEmitter
             JsonSerializationShape.Record shape = pair.Value;
             if (shape.Fields.Count is < 1 or > 4)
                 continue;
-            bool specializeStablePushScalars =
+            bool specializeStableScalars =
+                _features.CanAssumeCompactObjectRecordIsUnmaterialized(fingerprint) ||
                 _features.CompactObjectRecordStablePushShapes.Contains(fingerprint) ||
                 _features.CompactObjectRecordStableIteratorShapes.Contains(fingerprint);
 
@@ -52,7 +53,7 @@ public partial class RuntimeEmitter
                     $"_v{index}",
                     _features.CompactObjectRecordSelfFields.Contains((fingerprint, index))
                         ? typeBuilder
-                        : specializeStablePushScalars
+                        : specializeStableScalars
                             ? GetJsonScalarRecordFieldType(field.Value)
                             : _types.Object,
                     FieldAttributes.Assembly)).ToArray();
