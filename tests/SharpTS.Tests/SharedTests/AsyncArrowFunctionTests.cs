@@ -9,6 +9,25 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class AsyncArrowFunctionTests
 {
+    [Theory, InterpretedOnlyData]
+    public void AsyncArrow_CallRestoresCallerScopeBeforeThenCallback(ExecutionMode mode)
+    {
+        var source = """
+            const suspend = async (): Promise<void> => {
+                await new Promise((resolve: any) => setTimeout(resolve, 10));
+            };
+
+            function run(): Promise<void> {
+                const marker = "caller scope";
+                return suspend().then(() => console.log(marker));
+            }
+
+            run();
+            """;
+
+        Assert.Equal("caller scope\n", TestHarness.Run(source, mode));
+    }
+
     [Theory, ModeData]
     public void AsyncFunction_SyncArrowCapturesCanonicalTopLevelFunctionObject(ExecutionMode mode)
     {

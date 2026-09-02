@@ -735,6 +735,66 @@ public class WorkerThreadsTests
     }
 
     /// <summary>
+    /// A Promise reaction that starts a second async worker lifecycle must retain the
+    /// lexical environment in which its nested callback was created. The interpreter
+    /// previously resumed the second measurement against an unrelated ambient scope,
+    /// so the nested callback failed to resolve the module-level runLifecycle binding.
+    /// </summary>
+    [Fact]
+    public void Worker_Lifecycle_PromiseChainRetainsModuleScope()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["worker_ready.ts"] = """
+                import { parentPort } from "worker_threads";
+                parentPort!.on("message", () => {});
+                parentPort!.postMessage({ kind: "ready" });
+                """,
+            ["main.ts"] = """
+                import { Worker } from "worker_threads";
+
+                function runLifecycle(workerPath: string): Promise<number> {
+                    const worker: any = new Worker(workerPath);
+                    return new Promise((resolve: any, reject: any) => {
+                        worker.on("message", (message: any) => {
+                            if (message.kind === "ready") {
+                                resolve(worker.terminate());
+                            }
+                        });
+                        worker.on("error", (error: any) => reject(error));
+                    }).then((exit: any) => exit);
+                }
+
+                async function measure(label: string, fn: () => Promise<number>): Promise<void> {
+                    console.log(label + ":first");
+                    await fn();
+                    console.log(label + ":second");
+                    await fn();
+                }
+
+                function main(): Promise<any> {
+                    const workerPath: string = __dirname + "/worker_ready.ts";
+                    return measure("one", () => runLifecycle(workerPath))
+                        .then(() => {
+                            console.log("transition");
+                            return measure("two", () => runLifecycle(workerPath));
+                        });
+                }
+
+                main().then(
+                    () => console.log("completed"),
+                    (error: any) => console.log("failed:" + error),
+                );
+                """,
+        };
+
+        var output = TestHarness.RunModules(
+            files, "main.ts", ExecutionMode.Interpreted, TimeSpan.FromSeconds(15));
+
+        Assert.Equal("one:first\none:second\ntransition\ntwo:first\ntwo:second\ncompleted\n", output);
+    }
+
+    /// <summary>
     /// #997: terminating a worker parked in <c>Atomics.wait</c> must actually unwind the
     /// worker thread (not just settle the promise), and the <c>'exit'</c> event must report
     /// code 1. The worker parks on a never-notified index, so before the fix the
