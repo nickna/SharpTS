@@ -214,6 +214,83 @@ public sealed class StringEmitter : ITypeEmitterStrategy
     }
 
     /// <summary>
+    /// Keeps a statically typed primitive string length as a native double. When
+    /// the receiver is a stable slice/substring call, emits the corresponding
+    /// bounds-only helper so the temporary result string never materializes.
+    /// </summary>
+    internal static bool TryEmitPrimitiveStringLengthGet(
+        IEmitterContext emitter, Expr.Get get)
+    {
+        var ctx = emitter.Context;
+        if (get.Optional
+            || get.Name.Lexeme != "length"
+            || ctx.TypeMap?.Get(get.Object) is not TypeSystem.TypeInfo.String
+                and not TypeSystem.TypeInfo.StringLiteral)
+            return false;
+
+        if (TryEmitPrimitiveSliceLengthIntrinsic(emitter, get.Object))
+            return true;
+
+        emitter.EmitExpression(get.Object);
+        emitter.EnsureBoxed();
+        ctx.IL.Emit(OpCodes.Call, ctx.Runtime!.UnwrapStringReceiverMethod);
+        ctx.IL.Emit(OpCodes.Call,
+            ctx.Types.GetProperty(ctx.Types.String, "Length").GetGetMethod()!);
+        ctx.IL.Emit(OpCodes.Conv_R8);
+        emitter.SetStackType(StackType.Double);
+        return true;
+    }
+
+    private static bool TryEmitPrimitiveSliceLengthIntrinsic(
+        IEmitterContext emitter, Expr expression)
+    {
+        if (expression is not Expr.Call
+            {
+                Optional: false,
+                Callee: Expr.Get { Optional: false } methodGet,
+                Arguments: var arguments
+            })
+            return false;
+
+        string methodName = methodGet.Name.Lexeme;
+        if (methodName is not ("slice" or "substring"))
+            return false;
+
+        Expr receiver = methodGet.Object;
+
+        var ctx = emitter.Context;
+        if (ctx.RuntimeFeatures?.UsesStringPrototypeMutation != false
+            || !IsSideEffectFreePrimitiveString(receiver, ctx)
+            || arguments.Count is 0 or > 2
+            || arguments.Any(argument =>
+                !IsSideEffectFreePrimitiveNumber(argument, ctx)))
+            return false;
+
+        emitter.EmitExpression(receiver);
+        emitter.EmitConversionForParameter(receiver, ctx.Types.String);
+        emitter.EmitExpressionAsDouble(arguments[0]);
+        if (arguments.Count == 1)
+        {
+            ctx.IL.Emit(
+                OpCodes.Call,
+                methodName == "slice"
+                    ? ctx.Runtime!.StringSliceFromLengthPrimitive
+                    : ctx.Runtime!.StringSubstringFromLengthPrimitive);
+        }
+        else
+        {
+            emitter.EmitExpressionAsDouble(arguments[1]);
+            ctx.IL.Emit(
+                OpCodes.Call,
+                methodName == "slice"
+                    ? ctx.Runtime!.StringSliceLengthPrimitive
+                    : ctx.Runtime!.StringSubstringLengthPrimitive);
+        }
+        emitter.SetStackType(StackType.Double);
+        return true;
+    }
+
+    /// <summary>
     /// Attempts to emit IL for a property set on a string receiver.
     /// Strings are immutable in TypeScript/JavaScript.
     /// </summary>

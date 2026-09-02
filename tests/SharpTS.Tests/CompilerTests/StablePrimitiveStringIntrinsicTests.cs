@@ -23,6 +23,41 @@ public sealed class StablePrimitiveStringIntrinsicTests
         function takeSubstring(input: string, start: number, end: number): string {
             return input.substring(start, end);
         }
+        function plainStringLength(input: string): number {
+            return input.length;
+        }
+        function sliceLength(input: string, start: number, end: number): number {
+            return input.slice(start, end).length;
+        }
+        function substringLength(input: string, start: number, end: number): number {
+            return input.substring(start, end).length;
+        }
+        function sliceFromLength(input: string, start: number): number {
+            return input.slice(start).length;
+        }
+        function substringFromLength(input: string, start: number): number {
+            return input.substring(start).length;
+        }
+        function sliceLengthLoop(
+            input: string, start: number, end: number, n: number): number {
+            let total: number = 0;
+            let currentStart: number = start;
+            for (let i: number = 0; i < n; i++) {
+                total = total + input.slice(currentStart, end).length;
+                currentStart = currentStart === start ? start + 1 : start;
+            }
+            return total;
+        }
+        function substringLengthLoop(
+            input: string, start: number, end: number, n: number): number {
+            let total: number = 0;
+            let currentStart: number = start;
+            for (let i: number = 0; i < n; i++) {
+                total = total + input.substring(currentStart, end).length;
+                currentStart = currentStart === start ? start + 1 : start;
+            }
+            return total;
+        }
         """;
 
     [Theory]
@@ -48,6 +83,43 @@ public sealed class StablePrimitiveStringIntrinsicTests
             {
                 Name: "UnwrapStringReceiver" or "InvokeMethodValue"
             });
+    }
+
+    [Theory]
+    [InlineData("sliceLength", "StringSliceLengthPrimitive")]
+    [InlineData("substringLength", "StringSubstringLengthPrimitive")]
+    [InlineData("sliceFromLength", "StringSliceFromLengthPrimitive")]
+    [InlineData("substringFromLength", "StringSubstringFromLengthPrimitive")]
+    public void StablePrimitiveSliceLength_UsesAllocationFreeBoundsHelper(
+        string functionName, string helperName)
+    {
+        MethodInfo method = FindFunction(Compile(IntrinsicFunctions), functionName);
+        var instructions = ReadInstructions(method).ToArray();
+
+        Assert.Contains(instructions, instruction =>
+            instruction.OpCode == OpCodes.Call
+            && instruction.Operand is MethodBase { Name: var name }
+            && name == helperName);
+        Assert.DoesNotContain(instructions, instruction =>
+            instruction.OpCode is var opCode
+            && (opCode == OpCodes.Box || opCode == OpCodes.Newarr));
+        Assert.DoesNotContain(instructions, instruction =>
+            instruction.Operand is MethodBase
+            {
+                Name: "StringSlicePrimitive" or "StringSubstringPrimitive"
+            });
+    }
+
+    [Fact]
+    public void StablePrimitiveStringLength_RemainsUnboxed()
+    {
+        MethodInfo method = FindFunction(Compile(IntrinsicFunctions), "plainStringLength");
+        var instructions = ReadInstructions(method).ToArray();
+
+        Assert.Contains(instructions, instruction =>
+            instruction.Operand is MethodBase { Name: "get_Length" });
+        Assert.DoesNotContain(instructions, instruction =>
+            instruction.OpCode == OpCodes.Box);
     }
 
     [Fact]
@@ -80,6 +152,36 @@ public sealed class StablePrimitiveStringIntrinsicTests
         Assert.Equal(700_000, total);
         Assert.True(allocated <= 1_024,
             $"Primitive string searches allocated {allocated:N0} bytes.");
+    }
+
+    [Fact]
+    public void StablePrimitiveSliceLengths_DoNotAllocateResultStringsOrBoxes()
+    {
+        Assembly assembly = Compile(IntrinsicFunctions);
+        var slice = FindFunction(assembly, "sliceLengthLoop")
+            .CreateDelegate<Func<string, double, double, double, double>>();
+        var substring = FindFunction(assembly, "substringLengthLoop")
+            .CreateDelegate<Func<string, double, double, double, double>>();
+        Assert.DoesNotContain(
+            ReadInstructions(FindFunction(assembly, "sliceLengthLoop")),
+            instruction => instruction.OpCode == OpCodes.Box);
+        Assert.DoesNotContain(
+            ReadInstructions(FindFunction(assembly, "substringLengthLoop")),
+            instruction => instruction.OpCode == OpCodes.Box);
+        const string input = "alpha-beta-gamma-delta";
+
+        Assert.Equal(1_450, slice(input, 3, 18, 100));
+        Assert.Equal(1_450, substring(input, 3, 18, 100));
+        _ = slice(input, 3, 18, 10_000);
+        _ = substring(input, 3, 18, 10_000);
+
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        Assert.Equal(1_450_000, slice(input, 3, 18, 100_000));
+        Assert.Equal(1_450_000, substring(input, 3, 18, 100_000));
+        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+
+        Assert.True(allocated <= 1_024,
+            $"Primitive slice lengths allocated {allocated:N0} bytes.");
     }
 
     [Theory, ModeData]
@@ -131,11 +233,53 @@ public sealed class StablePrimitiveStringIntrinsicTests
     }
 
     [Theory, ModeData]
+    public void PrimitiveSliceLengths_PreservePositionsUtf16AndOmittedArguments(
+        ExecutionMode mode)
+    {
+        const string source = """
+            const unicode: string = "A😀BC😀D";
+            const ascii: string = "abcdef";
+            const zero: number = 0;
+            const three: number = 3;
+            const five: number = 5;
+            const notNumber: number = NaN;
+            const positiveInfinity: number = Infinity;
+            const negativeInfinity: number = -Infinity;
+            const negativeHuge: number = -1e100;
+            const fractionalStart: number = 1.9;
+            const fractionalEnd: number = 4.8;
+
+            console.log(unicode.slice(1, 3).length);
+            console.log(ascii.slice(zero).length);
+            console.log(ascii.slice(-three).length);
+            console.log(ascii.slice(negativeInfinity, positiveInfinity).length);
+            console.log(ascii.slice(notNumber, three).length);
+            console.log(ascii.slice(five, 2).length);
+            console.log(ascii.slice(positiveInfinity).length);
+            console.log(ascii.slice(fractionalStart, fractionalEnd).length);
+
+            console.log(ascii.substring(zero).length);
+            console.log(ascii.substring(-three).length);
+            console.log(ascii.substring(five, 2).length);
+            console.log(ascii.substring(notNumber, positiveInfinity).length);
+            console.log(ascii.substring(positiveInfinity, negativeHuge).length);
+            console.log(ascii.substring(fractionalStart, fractionalEnd).length);
+            """;
+
+        Assert.Equal(
+            "2\n6\n3\n6\n3\n0\n0\n3\n" +
+            "6\n6\n3\n6\n6\n3\n",
+            TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
     public void GenericFallback_PreservesBoxingCoercionAndRegExpRejection(
         ExecutionMode mode)
     {
         const string source = """
             const boxed: any = new String("abcdef");
+            const typedBoxed: String = new String("abcdef");
+            console.log(typedBoxed.length);
             console.log(boxed.indexOf("cd", 0));
             console.log(boxed.includes("ef", 0));
             console.log(boxed.slice(1, 4));
@@ -159,7 +303,7 @@ public sealed class StablePrimitiveStringIntrinsicTests
             """;
 
         Assert.Equal(
-            "2\ntrue\nbcd\nbcd\n2\nneedle,position\ntrue\n",
+            "6\n2\ntrue\nbcd\nbcd\n2\nneedle,position\ntrue\n",
             TestHarness.Run(source, mode));
     }
 
@@ -189,9 +333,42 @@ public sealed class StablePrimitiveStringIntrinsicTests
     }
 
     [Fact]
+    public void StringPrototypeReplacement_DisablesSliceLengthHelperAndIsObservable()
+    {
+        const string source = """
+            (String.prototype as any).slice = function(
+                start: any, end: any): string {
+                console.log("custom", this, start, end);
+                return "xy";
+            };
+            const input: string = "abcdef";
+            const start: number = 1;
+            const end: number = 4;
+            console.log(input.slice(start, end).length);
+            """;
+
+        Assembly assembly = Compile(source);
+        MethodInfo main = assembly.GetType("$Program")!.GetMethod(
+            "Main", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static)!;
+        Assert.DoesNotContain(ReadInstructions(main), instruction =>
+            instruction.Operand is MethodBase { Name: "StringSliceLengthPrimitive" });
+        Assert.Contains(ReadInstructions(main), instruction =>
+            instruction.Operand is MethodBase { Name: "InvokeMethodValue" });
+        Assert.Equal("custom abcdef 1 4\n2\n", TestHarness.RunCompiled(source));
+    }
+
+    [Fact]
     public void StableAndFallbackShapesPassIlVerification()
     {
         const string source = IntrinsicFunctions + """
+            async function asyncSliceLength(
+                input: string, start: number, end: number): Promise<number> {
+                return input.slice(start, end).length;
+            }
+            function* substringLengthGenerator(
+                input: string, start: number, end: number): Generator<number> {
+                yield input.substring(start, end).length;
+            }
             const boxed: any = new String("abcdef");
             const localized = new Date(Date.UTC(2024, 0, 15))
                 .toLocaleDateString("en-US", { timeZone: "UTC" });

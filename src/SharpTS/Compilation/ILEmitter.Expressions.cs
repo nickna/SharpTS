@@ -848,6 +848,8 @@ public partial class ILEmitter
         var builder = _ctx.ILBuilder;
         var elseLabel = builder.DefineLabel("ternary_else");
         var endLabel = builder.DefineLabel("ternary_end");
+        bool hasNumericBranches = IsNumericTernaryBranch(_ctx.TypeMap?.Get(t.ThenBranch))
+            && IsNumericTernaryBranch(_ctx.TypeMap?.Get(t.ElseBranch));
 
         EmitExpression(t.Condition);
         // Handle condition based on what's actually on the stack
@@ -869,6 +871,19 @@ public partial class ILEmitter
         }
         builder.Emit_Brfalse(elseLabel);
 
+        if (hasNumericBranches)
+        {
+            EmitExpressionAsDouble(t.ThenBranch);
+            builder.Emit_Br(endLabel);
+
+            builder.MarkLabel(elseLabel);
+            EmitExpressionAsDouble(t.ElseBranch);
+
+            builder.MarkLabel(endLabel);
+            SetStackType(StackType.Double);
+            return;
+        }
+
         EmitExpression(t.ThenBranch);
         EmitBoxIfNeeded(t.ThenBranch);
         builder.Emit_Br(endLabel);
@@ -881,6 +896,14 @@ public partial class ILEmitter
         // Both branches box, so result is Unknown (boxed object)
         SetStackUnknown();
     }
+
+    private static bool IsNumericTernaryBranch(TypeInfo? type) => type switch
+    {
+        TypeInfo.Primitive { Type: TokenType.TYPE_NUMBER } => true,
+        TypeInfo.NumberLiteral => true,
+        TypeInfo.Union union => union.FlattenedTypes.All(IsNumericTernaryBranch),
+        _ => false
+    };
 
     protected override void EmitNullishCoalescing(Expr.NullishCoalescing nc)
     {

@@ -408,6 +408,10 @@ public class EmittedRuntime
     public MethodBuilder StringIncludesPrimitive { get; set; } = null!;
     public MethodBuilder StringSlicePrimitive { get; set; } = null!;
     public MethodBuilder StringSubstringPrimitive { get; set; } = null!;
+    public MethodBuilder StringSliceFromLengthPrimitive { get; set; } = null!;
+    public MethodBuilder StringSliceLengthPrimitive { get; set; } = null!;
+    public MethodBuilder StringSubstringFromLengthPrimitive { get; set; } = null!;
+    public MethodBuilder StringSubstringLengthPrimitive { get; set; } = null!;
     public MethodBuilder StringToUpperCase { get; set; } = null!;
     public MethodBuilder StringToLowerCase { get; set; } = null!;
     public MethodBuilder StringTrim { get; set; } = null!;
