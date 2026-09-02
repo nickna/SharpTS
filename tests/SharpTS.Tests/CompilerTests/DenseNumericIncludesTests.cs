@@ -43,8 +43,25 @@ public sealed class DenseNumericIncludesTests
             TestHarness.Run(source, mode));
     }
 
+    [Theory, ModeData]
+    public void DenseNumericRangeFill_PreservesFractionalAndEmptyBounds(ExecutionMode mode)
+    {
+        const string source = """
+            function fill(bound: number): string {
+                const values: number[] = [];
+                for (let i: number = 0; i < bound; i++) values.push(i);
+                return values.join(",");
+            }
+            console.log(fill(3.5));
+            console.log(fill(-1));
+            console.log(fill(NaN));
+            """;
+
+        Assert.Equal("0,1,2,3\n\n\n", TestHarness.Run(source, mode));
+    }
+
     [Fact]
-    public void DenseNumericIncludes_UsesTypedHelperWithoutBoxing()
+    public void DenseNumericIncludes_InlinesTypedSpanSearchWithoutBoxing()
     {
         Assembly assembly = Compile(StableSource);
         MethodInfo scan = FindFunction(assembly, "scan");
@@ -53,10 +70,16 @@ public sealed class DenseNumericIncludesTests
             .Select(instruction => (MethodBase)instruction.Operand!)
             .ToArray();
 
-        Assert.Contains(calls, method => method.Name == "ArrayIncludesDouble");
+        Assert.Contains(calls, method =>
+            method.Name == "AsSpan" &&
+            method.DeclaringType == typeof(System.Runtime.InteropServices.CollectionsMarshal));
+        Assert.Contains(calls, method =>
+            method.Name == "IndexOf" && method.DeclaringType == typeof(MemoryExtensions));
+        Assert.Contains(calls, method =>
+            method.Name == "SetCount" &&
+            method.DeclaringType == typeof(System.Runtime.InteropServices.CollectionsMarshal));
         Assert.DoesNotContain(calls, method => method.Name == "ArrayIncludes");
-        MethodInfo helper = assembly.GetType("$Runtime")!.GetMethod("ArrayIncludesDouble")!;
-        Assert.DoesNotContain(ReadInstructions(helper), instruction => instruction.OpCode == OpCodes.Box);
+        Assert.DoesNotContain(ReadInstructions(scan), instruction => instruction.OpCode == OpCodes.Box);
         Assert.Empty(TestHarness.CompileAndVerifyOnly(StableSource));
     }
 

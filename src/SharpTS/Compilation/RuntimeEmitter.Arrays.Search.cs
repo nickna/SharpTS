@@ -6,6 +6,24 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
+    internal static readonly MethodInfo DoubleListAsSpan =
+        EmitGenerics.MakeGenericMethod(
+            typeof(System.Runtime.InteropServices.CollectionsMarshal)
+                .GetMethod(nameof(System.Runtime.InteropServices.CollectionsMarshal.AsSpan))!,
+            typeof(double));
+    private static readonly MethodInfo DoubleSpanSlice =
+        typeof(Span<double>).GetMethod(nameof(Span<double>.Slice), [typeof(int)])!;
+    internal static readonly MethodInfo DoubleSpanIndexOf =
+        EmitGenerics.MakeGenericMethod(
+            typeof(MemoryExtensions).GetMethods().Single(method =>
+                method.Name == nameof(MemoryExtensions.IndexOf) &&
+                method.IsGenericMethodDefinition &&
+                method.GetParameters() is [var span, var value] &&
+                span.ParameterType.IsGenericType &&
+                span.ParameterType.GetGenericTypeDefinition() == typeof(Span<>) &&
+                value.ParameterType.IsGenericParameter),
+            typeof(double));
+
     /// <summary>
     /// Variadic Array.prototype.includes entry point. Keeping the original
     /// argument count distinguishes an omitted searchElement (undefined) from
@@ -70,20 +88,18 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Boolean,
             [_types.ListOfDouble, _types.Double, _types.Double]);
-        method.SetImplementationFlags(MethodImplAttributes.AggressiveOptimization);
+        method.SetImplementationFlags(
+            MethodImplAttributes.AggressiveInlining | MethodImplAttributes.AggressiveOptimization);
         runtime.ArrayIncludesDouble = method;
 
         var il = method.GetILGenerator();
         var len = il.DeclareLocal(_types.Int32);
         var n = il.DeclareLocal(_types.Double);
         var index = il.DeclareLocal(_types.Int32);
-        var element = il.DeclareLocal(_types.Double);
         var returnFalse = il.DefineLabel();
         var normalizeFinite = il.DefineLabel();
         var nonNegative = il.DefineLabel();
         var startReady = il.DefineLabel();
-        var loop = il.DefineLabel();
-        var notEqual = il.DefineLabel();
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfDouble, "Count").GetGetMethod()!);
@@ -138,36 +154,23 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, index);
 
         il.MarkLabel(startReady);
-        il.MarkLabel(loop);
-        il.Emit(OpCodes.Ldloc, index);
-        il.Emit(OpCodes.Ldloc, len);
-        il.Emit(OpCodes.Bge, returnFalse);
+        // Span<double>.IndexOf implements the exact SameValueZero relation needed
+        // here: NaN equals NaN and signed zeroes compare equal. Searching the
+        // List<T> backing span lets the runtime use its vectorized primitive scan
+        // while also avoiding two NaN tests on every ordinary miss.
+        var span = il.DeclareLocal(typeof(Span<double>));
         il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, DoubleListAsSpan);
+        il.Emit(OpCodes.Stloc, span);
+        il.Emit(OpCodes.Ldloca, span);
         il.Emit(OpCodes.Ldloc, index);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfDouble, "get_Item", _types.Int32));
-        il.Emit(OpCodes.Stloc, element);
-
-        il.Emit(OpCodes.Ldloc, element);
+        il.Emit(OpCodes.Call, DoubleSpanSlice);
         il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, DoubleSpanIndexOf);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Clt);
+        il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ceq);
-        var returnTrue = il.DefineLabel();
-        il.Emit(OpCodes.Brtrue, returnTrue);
-        il.Emit(OpCodes.Ldloc, element);
-        il.Emit(OpCodes.Call, _types.DoubleIsNaN);
-        il.Emit(OpCodes.Brfalse, notEqual);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, _types.DoubleIsNaN);
-        il.Emit(OpCodes.Brtrue, returnTrue);
-
-        il.MarkLabel(notEqual);
-        il.Emit(OpCodes.Ldloc, index);
-        il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Add);
-        il.Emit(OpCodes.Stloc, index);
-        il.Emit(OpCodes.Br, loop);
-
-        il.MarkLabel(returnTrue);
-        il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(returnFalse);
         il.Emit(OpCodes.Ldc_I4_0);

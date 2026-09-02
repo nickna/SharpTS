@@ -335,6 +335,29 @@ public partial class TypeChecker
                     argIndex++;
                 }
             }
+            // The legacy array surface models reduce as returning `any`, but
+            // the two-argument form has an explicit accumulator seed. When a
+            // typed reducer returns the same primitive kind as that seed, keep
+            // the precise callback return type. Besides matching TypeScript's
+            // generic reduce overload, this prevents a proven numeric result
+            // from needlessly widening an annotated function's CLR return slot.
+            if (call.Callee is Expr.Get
+                {
+                    Optional: false,
+                    Name.Lexeme: "reduce" or "reduceRight",
+                    Object: var reduceReceiver
+                } &&
+                _typeMap.Get(reduceReceiver) is TypeInfo.Array or TypeInfo.Tuple &&
+                call.Arguments.Count >= 2 &&
+                _typeMap.Get(call.Arguments[0]) is TypeInfo.Function reducer &&
+                _typeMap.Get(call.Arguments[1]) is { } initialType &&
+                reducer.ReturnType is TypeInfo.Primitive { Type: TokenType.TYPE_NUMBER } &&
+                initialType is TypeInfo.Primitive { Type: TokenType.TYPE_NUMBER }
+                    or TypeInfo.NumberLiteral)
+            {
+                return reducer.ReturnType;
+            }
+
             return funcType.ReturnType;
         }
         else if (calleeType is TypeInfo.Any)

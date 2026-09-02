@@ -142,6 +142,54 @@ public partial class ILEmitter
         return true;
     }
 
+    /// <summary>
+    /// Emits a typed reduce loop into the caller. The promotion analysis and
+    /// signature checks at the call site prove a dense numeric source and a
+    /// non-capturing reducer, so no delegate object or per-element Invoke
+    /// dispatch is required.
+    /// </summary>
+    private void EmitPromotedDoubleReduce(
+        LocalBuilder source,
+        MethodBuilder reducer,
+        Expr initialValue)
+    {
+        Type listType = _ctx.Types.ListOfDouble;
+        var countGetter = _ctx.Types.GetProperty(listType, "Count").GetGetMethod()!;
+        var itemGetter = _ctx.Types.GetMethod(listType, "get_Item", _ctx.Types.Int32);
+        var count = IL.DeclareLocal(_ctx.Types.Int32);
+        var index = IL.DeclareLocal(_ctx.Types.Int32);
+        var accumulator = IL.DeclareLocal(_ctx.Types.Double);
+
+        EmitExpressionAsDouble(initialValue);
+        IL.Emit(OpCodes.Stloc, accumulator);
+        IL.Emit(OpCodes.Ldloc, source);
+        IL.Emit(OpCodes.Callvirt, countGetter);
+        IL.Emit(OpCodes.Stloc, count);
+        IL.Emit(OpCodes.Ldc_I4_0);
+        IL.Emit(OpCodes.Stloc, index);
+
+        var loop = IL.DefineLabel();
+        var end = IL.DefineLabel();
+        IL.MarkLabel(loop);
+        IL.Emit(OpCodes.Ldloc, index);
+        IL.Emit(OpCodes.Ldloc, count);
+        IL.Emit(OpCodes.Bge, end);
+        IL.Emit(OpCodes.Ldloc, accumulator);
+        IL.Emit(OpCodes.Ldloc, source);
+        IL.Emit(OpCodes.Ldloc, index);
+        IL.Emit(OpCodes.Callvirt, itemGetter);
+        IL.Emit(OpCodes.Call, reducer);
+        IL.Emit(OpCodes.Stloc, accumulator);
+        IL.Emit(OpCodes.Ldloc, index);
+        IL.Emit(OpCodes.Ldc_I4_1);
+        IL.Emit(OpCodes.Add);
+        IL.Emit(OpCodes.Stloc, index);
+        IL.Emit(OpCodes.Br, loop);
+
+        IL.MarkLabel(end);
+        IL.Emit(OpCodes.Ldloc, accumulator);
+    }
+
     private void EmitMethodCall(
         Expr.Get methodGet,
         List<Expr> arguments,
@@ -165,13 +213,30 @@ public partial class ILEmitter
             && arguments.Count is 1 or 2
             && arguments.All(argument => IsNumericType(_ctx.TypeMap?.Get(argument))))
         {
-            IL.Emit(OpCodes.Ldloc, includesPromotion.Local);
-            EmitExpressionAsDouble(arguments[0]);
+            if (_ctx.CurrentMethod is MethodBuilder includesMethod)
+            {
+                includesMethod.SetImplementationFlags(
+                    MethodImplAttributes.AggressiveInlining | MethodImplAttributes.AggressiveOptimization);
+            }
+
             if (arguments.Count == 2)
+            {
+                IL.Emit(OpCodes.Ldloc, includesPromotion.Local);
+                EmitExpressionAsDouble(arguments[0]);
                 EmitExpressionAsDouble(arguments[1]);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.ArrayIncludesDouble);
+            }
             else
-                IL.Emit(OpCodes.Ldc_R8, 0.0);
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.ArrayIncludesDouble);
+            {
+                IL.Emit(OpCodes.Ldloc, includesPromotion.Local);
+                IL.Emit(OpCodes.Call, RuntimeEmitter.DoubleListAsSpan);
+                EmitExpressionAsDouble(arguments[0]);
+                IL.Emit(OpCodes.Call, RuntimeEmitter.DoubleSpanIndexOf);
+                IL.Emit(OpCodes.Ldc_I4_0);
+                IL.Emit(OpCodes.Clt);
+                IL.Emit(OpCodes.Ldc_I4_0);
+                IL.Emit(OpCodes.Ceq);
+            }
             SetStackType(StackType.Boolean);
             return;
         }
@@ -327,13 +392,7 @@ public partial class ILEmitter
             && redMethod.GetParameters() is { Length: 2 } redPs
             && redPs[0].ParameterType == _ctx.Types.Double && redPs[1].ParameterType == _ctx.Types.Double)
         {
-            var func3 = typeof(Func<double, double, double>);
-            IL.Emit(OpCodes.Ldloc, redProm.Local);
-            IL.Emit(OpCodes.Ldnull);
-            IL.Emit(OpCodes.Ldftn, redMethod);
-            IL.Emit(OpCodes.Newobj, func3.GetConstructor([typeof(object), typeof(IntPtr)])!);
-            EmitExpressionAsDouble(arguments[1]);
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.ArrayReduceDouble);
+            EmitPromotedDoubleReduce(redProm.Local, redMethod, arguments[1]);
             SetStackType(StackType.Double);
             return;
         }
