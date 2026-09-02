@@ -127,8 +127,8 @@ internal sealed class AsyncEvaluationContext : IEvaluationContext
 
     public async ValueTask YieldToSchedulerAsync()
     {
-        // Async path: yield to the event loop, matching the async for-loop's await Task.Yield().
-        await Task.Yield();
+        // Async path: yield to the event loop while retaining the loop/frame environment.
+        await _interpreter.YieldPreservingEnvironment();
     }
 }
 

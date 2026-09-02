@@ -59,6 +59,29 @@ public partial class Interpreter
         }
     }
 
+    /// <summary>
+    /// Yields to the scheduler without letting another async frame's ambient environment
+    /// replace the current frame's scope when execution resumes. Unlike guest await values,
+    /// <see cref="Task.Yield"/> is not represented by a <see cref="Task{TResult}"/>, so it
+    /// needs its own environment-preserving path.
+    /// </summary>
+    internal async ValueTask YieldPreservingEnvironment()
+    {
+        RuntimeEnvironment saved = _environment;
+        var savedGen = CurrentAsyncGenerator;
+        savedGen?.MarkBodySuspended();
+        try
+        {
+            await Task.Yield();
+        }
+        finally
+        {
+            _environment = saved;
+            CurrentAsyncGenerator = savedGen;
+            savedGen?.MarkBodyResumed();
+        }
+    }
+
     internal async Task<ExecutionResult> ExecuteBlockAsync(List<Stmt> statements, RuntimeEnvironment environment)
     {
         using (PushScope(environment))
