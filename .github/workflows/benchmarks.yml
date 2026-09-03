@@ -50,7 +50,9 @@ jobs:
         run: |
           $resultsDir = Join-Path ([System.IO.Path]::GetTempPath()) 'bench-results'
           "BENCH_RESULTS_DIR=$resultsDir" >> $env:GITHUB_ENV
-          ./benchmarks/cross-runtime/run-benchmarks.ps1 -OutputDirectory $resultsDir
+          ./benchmarks/cross-runtime/run-benchmarks.ps1 `
+            -Launches 3 `
+            -OutputDirectory $resultsDir
 
       - name: Publish results to job summary
         shell: pwsh

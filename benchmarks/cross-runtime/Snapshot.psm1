@@ -216,7 +216,31 @@ function Assert-SharpTSPublicBenchmarkSnapshot {
                 throw "snapshot.run.tools.runtimes[$runtimeId] is unavailable but has a version."
             }
         }
-        [void](Get-RequiredProperty $Snapshot 'methodology' 'snapshot')
+        $methodology = Get-RequiredProperty $Snapshot 'methodology' 'snapshot'
+        $harnessVersion = [int](Get-RequiredProperty $methodology 'harnessVersion' 'snapshot.methodology')
+        $methodologyId = [string](Get-RequiredProperty $methodology 'id' 'snapshot.methodology')
+        $methodologyIds = @{
+            1 = 'performance-now-auto-batched-v1'
+            2 = 'performance-now-confirmed-probe-auto-batched-v2'
+            3 = 'performance-now-validated-high-precision-auto-batched-v3'
+        }
+        if (-not $methodologyIds.ContainsKey($harnessVersion) -or
+            $methodologyId -cne $methodologyIds[$harnessVersion]) {
+            throw "Unsupported or mismatched benchmark methodology '$methodologyId' version '$harnessVersion'."
+        }
+        if ($harnessVersion -eq 3) {
+            $validation = Get-RequiredProperty $methodology 'validation' 'snapshot.methodology'
+            if ((Get-RequiredProperty $validation 'mode' 'snapshot.methodology.validation') -cne
+                    'optionalExpectedNumericResult' -or
+                (Get-RequiredProperty $validation 'timing' 'snapshot.methodology.validation') -cne
+                    'beforeAndAfterSampling') {
+                throw 'snapshot.methodology.validation does not describe the version-3 validation contract.'
+            }
+            $sampling = Get-RequiredProperty $methodology 'sampling' 'snapshot.methodology'
+            if ((Get-RequiredProperty $sampling 'reportedDecimalPlaces' 'snapshot.methodology.sampling') -ne 7) {
+                throw 'snapshot.methodology.sampling.reportedDecimalPlaces must be 7 for harness version 3.'
+            }
+        }
 
         $cases = @(Get-RequiredProperty $Snapshot 'cases' 'snapshot')
         if ($cases.Count -eq 0) { throw 'snapshot.cases must contain at least one case.' }
@@ -419,12 +443,23 @@ function New-SharpTSPublicBenchmarkSnapshot {
             }
         }
         methodology = [pscustomobject][ordered]@{
-            harnessVersion = 2
-            id = 'performance-now-confirmed-probe-auto-batched-v2'
+            harnessVersion = 3
+            id = 'performance-now-validated-high-precision-auto-batched-v3'
             timingScope = 'inProcessWorkload'
             clock = 'performance.now'
             includes = @('one workload function invocation')
-            excludes = @('process startup', 'script loading', 'SharpTS compilation', 'warmup', 'batch calibration')
+            excludes = @(
+                'process startup',
+                'script loading',
+                'SharpTS compilation',
+                'warmup',
+                'batch calibration',
+                'correctness validation'
+            )
+            validation = [pscustomobject][ordered]@{
+                mode = 'optionalExpectedNumericResult'
+                timing = 'beforeAndAfterSampling'
+            }
             sampling = [pscustomobject][ordered]@{
                 warmupCapMilliseconds = 100
                 minimumSampleDurationMilliseconds = 1
@@ -432,6 +467,7 @@ function New-SharpTSPublicBenchmarkSnapshot {
                 minimumSamples = 8
                 hardCapMilliseconds = 2000
                 maximumSamples = 100000
+                reportedDecimalPlaces = 7
             }
         }
         cases = $cases.ToArray()

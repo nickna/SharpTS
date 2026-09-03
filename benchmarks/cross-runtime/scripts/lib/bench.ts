@@ -10,6 +10,10 @@
 // noise floor), then collects samples until a time budget elapses and reports
 // the per-call mean, min, and sample standard deviation.
 //
+// Cases may provide an expected numeric result. Validation runs before and
+// after sampling, outside the timed region, so optimized-code miscompilations
+// fail the workload without charging correctness checks to the measurement.
+//
 // Output line (consumed by the cross-runtime PowerShell tools):
 //   BENCH:<name>:<param>:<meanMs>:<minMs>:<stdevMs>:<samples>:<inner>:<sampledMs>
 
@@ -22,18 +26,34 @@ const MIN_SAMPLES: number = 8;       // sample floor (for a meaningful stdev)...
 const HARD_CAP_MS: number = 2000;    // ...but never exceed this, even below the floor
 const MAX_SAMPLES: number = 100000;
 const MAX_INNER: number = 1 << 24;
+const OUTPUT_SCALE: number = 10000000; // seven decimal places in milliseconds (0.1 ns)
 
 function round(x: number): number {
-    return Math.round(x * 10000) / 10000;
+    return Math.round(x * OUTPUT_SCALE) / OUTPUT_SCALE;
+}
+
+function validateExpected(name: string, param: number, actual: number, expected?: number): void {
+    if (expected !== undefined && actual !== expected) {
+        throw new Error(
+            "Benchmark checksum mismatch for " + name + "(" + param + "): expected " +
+            expected + ", received " + actual,
+        );
+    }
 }
 
 // `fn` returns a number that is accumulated into a guard so neither the
 // interpreter nor the compiler can dead-code-eliminate the measured work.
-export function bench(name: string, param: number, fn: () => number): void {
+export function bench(name: string, param: number, fn: () => number, expected?: number): void {
     let guard: number = 0;
     const samples: number[] = [];
     let total: number = 0;
     let inner: number = 1;
+
+    if (expected !== undefined) {
+        const validationResult: number = fn();
+        validateExpected(name, param, validationResult, expected);
+        guard = guard + validationResult;
+    }
 
     // One measured call up front. This probes the cost and, when a single call
     // is genuinely heavy (e.g. the tree-walking interpreter on a big input),
@@ -127,6 +147,14 @@ export function bench(name: string, param: number, fn: () => number): void {
     }
     const stdev: number = samples.length > 1 ? Math.sqrt(varSum / (samples.length - 1)) : 0;
 
+    // Re-check after the workload has reached optimized steady state. This is
+    // deliberately outside every measured sample.
+    if (expected !== undefined) {
+        const validationResult: number = fn();
+        validateExpected(name, param, validationResult, expected);
+        guard = guard + validationResult;
+    }
+
     // Anti-dead-code-elimination: force `guard` to be observably used.
     if (guard === -1) {
         console.log("guard:" + guard);
@@ -147,11 +175,18 @@ export async function benchAsync(
     name: string,
     param: number,
     fn: () => Promise<number>,
+    expected?: number,
 ): Promise<void> {
     let guard: number = 0;
     const samples: number[] = [];
     let total: number = 0;
     let inner: number = 1;
+
+    if (expected !== undefined) {
+        const validationResult: number = await fn();
+        validateExpected(name, param, validationResult, expected);
+        guard = guard + validationResult;
+    }
 
     const probeStart: number = performance.now();
     guard = guard + await fn();
@@ -231,6 +266,12 @@ export async function benchAsync(
         varSum = varSum + d * d;
     }
     const stdev: number = samples.length > 1 ? Math.sqrt(varSum / (samples.length - 1)) : 0;
+
+    if (expected !== undefined) {
+        const validationResult: number = await fn();
+        validateExpected(name, param, validationResult, expected);
+        guard = guard + validationResult;
+    }
 
     if (guard === -1) {
         console.log("guard:" + guard);
