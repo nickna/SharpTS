@@ -122,11 +122,12 @@ public class VmModuleTests
                 const ctx = { x: 1 };
                 vm.runInNewContext('x = 42;', ctx);
                 console.log(ctx.x);
+                console.log(ctx.x + 1);
                 """
         };
 
         var output = TestHarness.RunModules(files, "main.ts", mode);
-        Assert.Equal("42\n", output);
+        Assert.Equal("42\n43\n", output);
     }
 
     [Theory, ModeData]

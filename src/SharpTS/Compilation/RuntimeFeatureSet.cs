@@ -50,6 +50,13 @@ public sealed class RuntimeFeatureSet
     /// </summary>
     internal HashSet<Expr.ObjectLiteral> CompactObjectRecordStablePushLiterals { get; } =
         new(ReferenceEqualityComparer.Instance);
+    /// <summary>
+    /// Non-escaping const literals whose only observations are fixed property or
+    /// object-destructuring reads. Eligibility is per literal, so an escaped sibling
+    /// with the same structural shape cannot deopt this value.
+    /// </summary>
+    internal HashSet<Expr.ObjectLiteral> CompactObjectRecordStableLocalLiterals { get; } =
+        new(ReferenceEqualityComparer.Instance);
 
     /// <summary>
     /// Compact-record shapes used by at least one stable discarded array push.

@@ -21,12 +21,23 @@ public partial class ILEmitter
         LocalBuilder TypedLocal,
         string Fingerprint,
         JsonSerializationShape.Record Shape,
-        bool IsExact);
+        bool IsExact,
+        bool IsProvenStable);
 
     private readonly Dictionary<string, StableArrayDestructureBinding>
         _stableArrayDestructureBindings = [];
     private readonly Dictionary<string, StableRecordDestructureBinding>
         _stableRecordDestructureBindings = [];
+    private readonly HashSet<LocalBuilder> _stableCompactRecordLocals = [];
+
+    private void RegisterStableCompactRecordLocal(Stmt.Var declaration, LocalBuilder local)
+    {
+        if (declaration.Initializer is Expr.ObjectLiteral literal &&
+            _ctx.RuntimeFeatures?.CompactObjectRecordStableLocalLiterals.Contains(literal) == true)
+        {
+            _stableCompactRecordLocals.Add(local);
+        }
+    }
 
     private void RegisterStableDestructuringSource(Stmt.Var declaration, LocalBuilder objectLocal)
     {
@@ -75,8 +86,9 @@ public partial class ILEmitter
             return;
 
         string fingerprint = JsonSerializationShapeAnalyzer.Fingerprint(shape);
-        if (!features.CanAssumeCompactObjectRecordIsUnmaterialized(fingerprint) ||
-            !_ctx.Runtime!.CompactObjectRecordTypes.TryGetValue(fingerprint, out var carrierType))
+        if (!_ctx.Runtime!.CompactObjectRecordTypes.TryGetValue(
+                fingerprint, out var carrierType) ||
+            !_ctx.Runtime.CompactObjectRecordIsMaterializedGetters.ContainsKey(fingerprint))
             return;
 
         LocalBuilder typedLocal;
@@ -99,7 +111,14 @@ public partial class ILEmitter
 
         _stableRecordDestructureBindings[declaration.Name.Lexeme] =
             new StableRecordDestructureBinding(
-                objectLocal, typedLocal, fingerprint, shape, isExact);
+                objectLocal,
+                typedLocal,
+                fingerprint,
+                shape,
+                isExact,
+                declaration.Initializer is Expr.Variable source &&
+                _ctx.Locals.GetLocal(source.Name.Lexeme) is { } sourceLocal &&
+                _stableCompactRecordLocals.Contains(sourceLocal));
     }
 
     private bool TryEmitStableArrayDestructureGet(Expr.GetIndex expression)
@@ -203,6 +222,16 @@ public partial class ILEmitter
         var end = IL.DefineLabel();
         IL.Emit(OpCodes.Ldloc, binding.TypedLocal);
         IL.Emit(OpCodes.Brfalse, fallback);
+        if (!binding.IsProvenStable &&
+            !_ctx.RuntimeFeatures!.CanAssumeCompactObjectRecordIsUnmaterialized(
+                binding.Fingerprint))
+        {
+            IL.Emit(OpCodes.Ldloc, binding.TypedLocal);
+            IL.Emit(OpCodes.Call,
+                _ctx.Runtime!.CompactObjectRecordIsMaterializedGetters[
+                    binding.Fingerprint]);
+            IL.Emit(OpCodes.Brtrue, fallback);
+        }
         IL.Emit(OpCodes.Ldloc, binding.TypedLocal);
         IL.Emit(OpCodes.Ldfld, field);
         if (field.FieldType.IsValueType)
@@ -240,6 +269,16 @@ public partial class ILEmitter
         var result = IL.DeclareLocal(_ctx.Types.Double);
         IL.Emit(OpCodes.Ldloc, binding.TypedLocal);
         IL.Emit(OpCodes.Brfalse, fallback);
+        if (!binding.IsProvenStable &&
+            !_ctx.RuntimeFeatures!.CanAssumeCompactObjectRecordIsUnmaterialized(
+                binding.Fingerprint))
+        {
+            IL.Emit(OpCodes.Ldloc, binding.TypedLocal);
+            IL.Emit(OpCodes.Call,
+                _ctx.Runtime!.CompactObjectRecordIsMaterializedGetters[
+                    binding.Fingerprint]);
+            IL.Emit(OpCodes.Brtrue, fallback);
+        }
         IL.Emit(OpCodes.Ldloc, binding.TypedLocal);
         IL.Emit(OpCodes.Ldfld, field);
         IL.Emit(OpCodes.Stloc, result);

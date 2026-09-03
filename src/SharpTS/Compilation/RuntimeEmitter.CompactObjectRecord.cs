@@ -20,8 +20,9 @@ public partial class RuntimeEmitter
     /// Emits one exact CLR reference type per small plain-record shape.  The
     /// object contains only its value slots; a shared weak table holds the
     /// canonical dictionary only after a dynamic write or observation asks for
-    /// it.  A type-wide bit makes the untouched typed-read path a single branch
-    /// followed by ldfld while retaining full IHasFields mutation semantics.
+    /// it. Proven-stable reads go straight to the slot; guarded reads combine a
+    /// cheap type-wide negative test with a per-instance weak-table probe while
+    /// retaining full IHasFields mutation semantics.
     /// </summary>
     private void EmitCompactObjectRecordClasses(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
@@ -32,11 +33,6 @@ public partial class RuntimeEmitter
             JsonSerializationShape.Record shape = pair.Value;
             if (shape.Fields.Count is < 1 or > 4)
                 continue;
-            bool specializeStableScalars =
-                _features.CanAssumeCompactObjectRecordIsUnmaterialized(fingerprint) ||
-                _features.CompactObjectRecordStablePushShapes.Contains(fingerprint) ||
-                _features.CompactObjectRecordStableIteratorShapes.Contains(fingerprint);
-
             var typeBuilder = EmitTypeDefinitions.DefineType(
                 moduleBuilder,
                 $"$CompactObjectRecord{ordinal++}",
@@ -53,9 +49,7 @@ public partial class RuntimeEmitter
                     $"_v{index}",
                     _features.CompactObjectRecordSelfFields.Contains((fingerprint, index))
                         ? typeBuilder
-                        : specializeStableScalars
-                            ? GetJsonScalarRecordFieldType(field.Value)
-                            : _types.Object,
+                        : GetJsonScalarRecordFieldType(field.Value),
                     FieldAttributes.Assembly)).ToArray();
             Type weakTableType = _types.MakeGenericType(
                 _types.ConditionalWeakTableOpen, _types.Object, _types.DictionaryStringObject);
@@ -102,6 +96,34 @@ public partial class RuntimeEmitter
                 "EnsureMaterialized", MethodAttributes.Private | MethodAttributes.HideBySig,
                 _types.DictionaryStringObject, Type.EmptyTypes);
             EmitEnsure(ensure.GetILGenerator());
+
+            // Materialization belongs to an individual value, not its CLR shape.  A
+            // type-wide bit is still a cheap negative test, while the weak-table probe
+            // distinguishes an untouched carrier from another mutated value with the
+            // same shape.
+            var isMaterialized = typeBuilder.DefineMethod(
+                "get_IsMaterialized",
+                MethodAttributes.Assembly | MethodAttributes.SpecialName |
+                MethodAttributes.HideBySig,
+                _types.Boolean,
+                Type.EmptyTypes);
+            isMaterialized.SetImplementationFlags(MethodImplAttributes.AggressiveInlining);
+            runtime.CompactObjectRecordIsMaterializedGetters.Add(
+                fingerprint, isMaterialized);
+            var isMaterializedIl = isMaterialized.GetILGenerator();
+            var probeMaterializedTable = isMaterializedIl.DefineLabel();
+            isMaterializedIl.Emit(OpCodes.Ldsfld, anyMaterialized);
+            isMaterializedIl.Emit(OpCodes.Brtrue_S, probeMaterializedTable);
+            isMaterializedIl.Emit(OpCodes.Ldc_I4_0);
+            isMaterializedIl.Emit(OpCodes.Ret);
+            isMaterializedIl.MarkLabel(probeMaterializedTable);
+            var ignoredMaterializedValue = isMaterializedIl.DeclareLocal(
+                _types.DictionaryStringObject);
+            isMaterializedIl.Emit(OpCodes.Ldsfld, materializedTable);
+            isMaterializedIl.Emit(OpCodes.Ldarg_0);
+            isMaterializedIl.Emit(OpCodes.Ldloca, ignoredMaterializedValue);
+            isMaterializedIl.Emit(OpCodes.Callvirt, tableTryGet);
+            isMaterializedIl.Emit(OpCodes.Ret);
 
             var fieldsGetter = typeBuilder.DefineMethod(
                 "get_Fields",

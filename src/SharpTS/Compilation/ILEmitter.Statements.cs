@@ -627,6 +627,7 @@ public partial class ILEmitter
                 }
             }
             IL.Emit(OpCodes.Stloc, local);
+            RegisterStableCompactRecordLocal(v, local);
             RegisterStableDestructuringSource(v, local);
 
             foreach (var (dcInstance, field) in _ctx.SelfCaptureWriteBacks)

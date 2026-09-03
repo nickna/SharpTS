@@ -303,9 +303,10 @@ public partial class ILEmitter
     }
 
     /// <summary>
-    /// Emits a provably stable small plain object literal as an exact slot-backed CLR
-    /// carrier. Open and recursive record fields are supported, but mutation, export,
-    /// and escape through an unknown call retain the ordinary dictionary path.
+    /// Emits a small plain object literal as an exact slot-backed CLR carrier. Open and
+    /// recursive record fields are supported. Mutation and dynamic observation lazily
+    /// materialize the individual carrier, so an unrelated escaped value no longer
+    /// forces every literal with this shape onto the dictionary path.
     /// </summary>
     private bool TryEmitCompactObjectRecordLiteral(Expr.ObjectLiteral literal)
     {
@@ -335,8 +336,11 @@ public partial class ILEmitter
         string fingerprint = JsonSerializationShapeAnalyzer.Fingerprint(record);
         if (!_ctx.RuntimeFeatures.CanAssumeCompactObjectRecordIsUnmaterialized(
                 fingerprint) &&
-            !_ctx.RuntimeFeatures.CompactObjectRecordStablePushLiterals.Contains(literal))
+            !_ctx.RuntimeFeatures.CompactObjectRecordStablePushLiterals.Contains(literal) &&
+            !_ctx.RuntimeFeatures.CompactObjectRecordStableLocalLiterals.Contains(literal))
+        {
             return false;
+        }
 
         if (!_ctx.Runtime!.CompactObjectRecordCtors.TryGetValue(
                 fingerprint, out var exactCtor))
