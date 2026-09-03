@@ -47,6 +47,37 @@ public class Issue1486ThrowWrapperTests
         Assert.Same(marker, RuntimeTypes.WrapException(reflectionException));
     }
 
+    [Fact]
+    public void LocalPrimitiveThrow_AllocatesOnlyTheCatchRepresentationBox()
+    {
+        Assembly assembly = Compile("""
+            function run(n: number): number {
+                let sum: number = 0;
+                for (let i: number = 0; i < n; i++) {
+                    try {
+                        if ((i & 1023) === 0) throw i;
+                        sum = sum + 1;
+                    } catch (error: any) {
+                        sum = sum + (error === i ? i : -1);
+                    }
+                }
+                return sum;
+            }
+            """);
+        MethodInfo method = FindFunction(assembly.GetType("$Program")!, "run");
+        var run = method.CreateDelegate<Func<double, double>>();
+
+        _ = run(100_000);
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        double result = run(100_000);
+        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+
+        Assert.True(result > 0);
+        // 98 local throws require one 24-byte boxed double apiece. The former
+        // `error === i` path boxed both sides and allocated about 4.7 KiB.
+        Assert.InRange(allocated, 2_300, 3_500);
+    }
+
     private static Assembly Compile(string source)
     {
         var result = CompilationService.Compile(source);

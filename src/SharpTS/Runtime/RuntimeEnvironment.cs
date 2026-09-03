@@ -17,16 +17,75 @@ namespace SharpTS.Runtime;
 /// <seealso cref="TypeEnvironment"/>
 public class RuntimeEnvironment : ScopeChain<RuntimeValue, RuntimeEnvironment>
 {
-    private readonly Dictionary<string, SharpTSNamespace> _namespaces = [];
+    private Dictionary<string, SharpTSNamespace>? _namespaces;
+    private string? _directBindingName;
+    private RuntimeValue _directBindingValue;
+    private bool _hasDirectBinding;
 
     public RuntimeEnvironment(RuntimeEnvironment? enclosing = null, bool? strictMode = null)
         : base(enclosing, strictMode)
     {
     }
 
+    /// <summary>
+    /// Creates a scope with one binding stored inline. Catch clauses use this
+    /// path so catching a primitive does not box it or allocate a dictionary.
+    /// The environment remains a distinct object, preserving closure identity.
+    /// </summary>
+    internal RuntimeEnvironment(
+        RuntimeEnvironment enclosing,
+        string directBindingName,
+        RuntimeValue directBindingValue)
+        : base(enclosing)
+    {
+        _directBindingName = directBindingName;
+        _directBindingValue = directBindingValue;
+        _hasDirectBinding = true;
+    }
+
+    public override IEnumerable<string> Names
+    {
+        get
+        {
+            if (_hasDirectBinding)
+                yield return _directBindingName!;
+            if (_values != null)
+            {
+                foreach (string name in _values.Keys)
+                    yield return name;
+            }
+        }
+    }
+
+    public override void Define(string name, RuntimeValue value)
+        => DefineValue(name, value);
+
+    private void DefineValue(string name, RuntimeValue value)
+    {
+        if (_hasDirectBinding && name == _directBindingName)
+        {
+            _directBindingValue = value;
+            return;
+        }
+        Values[name] = value;
+    }
+
+    public override RuntimeValue Get(string name)
+    {
+        if (TryGetLocal(name, out RuntimeValue value))
+            return value;
+        return Enclosing != null ? Enclosing.Get(name) : default;
+    }
+
+    public override bool IsDefined(string name) =>
+        TryGetLocal(name, out _) || (Enclosing?.IsDefined(name) ?? false);
+
+    public override bool IsDefinedLocally(string name) =>
+        TryGetLocal(name, out _);
+
     public RuntimeValue Get(Token name)
     {
-        if (_values.TryGetValue(name.Lexeme, out var value))
+        if (TryGetLocal(name.Lexeme, out RuntimeValue value))
         {
             return value;
         }
@@ -43,7 +102,7 @@ public class RuntimeEnvironment : ScopeChain<RuntimeValue, RuntimeEnvironment>
     /// </summary>
     public bool TryGet(string name, out RuntimeValue value)
     {
-        if (_values.TryGetValue(name, out value))
+        if (TryGetLocal(name, out value))
         {
             return true;
         }
@@ -59,11 +118,19 @@ public class RuntimeEnvironment : ScopeChain<RuntimeValue, RuntimeEnvironment>
 
     public void Assign(Token name, RuntimeValue value)
     {
-        ref var slot = ref CollectionsMarshal.GetValueRefOrNullRef(_values, name.Lexeme);
-        if (!Unsafe.IsNullRef(ref slot))
+        if (_hasDirectBinding && name.Lexeme == _directBindingName)
         {
-            slot = value;
+            _directBindingValue = value;
             return;
+        }
+        if (_values != null)
+        {
+            ref var slot = ref CollectionsMarshal.GetValueRefOrNullRef(_values, name.Lexeme);
+            if (!Unsafe.IsNullRef(ref slot))
+            {
+                slot = value;
+                return;
+            }
         }
 
         if (Enclosing != null)
@@ -87,7 +154,8 @@ public class RuntimeEnvironment : ScopeChain<RuntimeValue, RuntimeEnvironment>
     /// </summary>
     public RuntimeValue GetAt(int distance, string name)
     {
-        return Ancestor(distance)._values.GetValueOrDefault(name);
+        RuntimeEnvironment environment = Ancestor(distance);
+        return environment.TryGetLocal(name, out RuntimeValue value) ? value : default;
     }
 
     /// <summary>
@@ -95,7 +163,7 @@ public class RuntimeEnvironment : ScopeChain<RuntimeValue, RuntimeEnvironment>
     /// </summary>
     public void AssignAt(int distance, Token name, RuntimeValue value)
     {
-        Ancestor(distance)._values[name.Lexeme] = value;
+        Ancestor(distance).DefineRV(name.Lexeme, value);
     }
 
     /// <summary>
@@ -103,7 +171,7 @@ public class RuntimeEnvironment : ScopeChain<RuntimeValue, RuntimeEnvironment>
     /// </summary>
     public void AssignAt(int distance, Token name, object? value)
     {
-        Ancestor(distance)._values[name.Lexeme] = RuntimeValue.FromBoxed(value);
+        Ancestor(distance).DefineRV(name.Lexeme, RuntimeValue.FromBoxed(value));
     }
 
     /// <summary>
@@ -125,16 +193,16 @@ public class RuntimeEnvironment : ScopeChain<RuntimeValue, RuntimeEnvironment>
     /// </summary>
     public void DefineNamespace(string name, SharpTSNamespace ns)
     {
-        if (_namespaces.TryGetValue(name, out var existing))
+        if (_namespaces?.TryGetValue(name, out var existing) == true)
         {
             // Merge: combine members from both namespace declarations
             existing.Merge(ns);
         }
         else
         {
-            _namespaces[name] = ns;
+            (_namespaces ??= [])[name] = ns;
             // Also define in values so it can be looked up as a variable
-            _values[name] = RuntimeValue.FromObject(ns);
+            DefineRV(name, RuntimeValue.FromObject(ns));
         }
     }
 
@@ -143,7 +211,7 @@ public class RuntimeEnvironment : ScopeChain<RuntimeValue, RuntimeEnvironment>
     /// </summary>
     public SharpTSNamespace? GetNamespace(string name)
     {
-        if (_namespaces.TryGetValue(name, out var ns))
+        if (_namespaces?.TryGetValue(name, out var ns) == true)
             return ns;
         return Enclosing?.GetNamespace(name);
     }
@@ -155,8 +223,9 @@ public class RuntimeEnvironment : ScopeChain<RuntimeValue, RuntimeEnvironment>
     /// </summary>
     public SharpTSNamespace? GetLocalNamespace(string name)
     {
-        _namespaces.TryGetValue(name, out var ns);
-        return ns;
+        return _namespaces != null && _namespaces.TryGetValue(name, out var ns)
+            ? ns
+            : null;
     }
 
     /// <summary>
@@ -167,12 +236,26 @@ public class RuntimeEnvironment : ScopeChain<RuntimeValue, RuntimeEnvironment>
     /// (Named <c>DefineRV</c> rather than overloading <c>Define</c> because that boxing overload,
     /// declared here, would otherwise shadow the base <c>Define(string, RuntimeValue)</c> by name.)
     /// </summary>
-    public void DefineRV(string name, RuntimeValue value) => base.Define(name, value);
+    public void DefineRV(string name, RuntimeValue value) => DefineValue(name, value);
 
     /// <summary>
     /// Defines a variable with a boxed value (legacy compatibility).
     /// Wraps the value in RuntimeValue.FromBoxed automatically.
     /// </summary>
-    public void Define(string name, object? value) => _values[name] = RuntimeValue.FromBoxed(value);
+    public void Define(string name, object? value) =>
+        DefineValue(name, RuntimeValue.FromBoxed(value));
+
+    private bool TryGetLocal(string name, out RuntimeValue value)
+    {
+        if (_hasDirectBinding && name == _directBindingName)
+        {
+            value = _directBindingValue;
+            return true;
+        }
+        if (_values?.TryGetValue(name, out value) == true)
+            return true;
+        value = default;
+        return false;
+    }
 
 }

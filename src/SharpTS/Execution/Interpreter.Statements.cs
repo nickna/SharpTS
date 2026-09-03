@@ -423,7 +423,8 @@ public partial class Interpreter
                 if (result.Type == ExecutionResult.ResultType.Throw)
                 {
                     pendingResult = result;
-                    (exceptionHandled, pendingResult) = await HandleCatchBlockCore(ctx, tryCatch, result.Value.ToObject(), fromHostException: false);
+                    (exceptionHandled, pendingResult) = await HandleCatchBlockCore(
+                        ctx, tryCatch, result.Value, fromHostException: false);
                     break;
                 }
                 else if (result.IsAbrupt)
@@ -446,9 +447,10 @@ public partial class Interpreter
             // origin. Only a true host C# exception is host-translated and re-typed at the catch
             // binding (#694), so derive fromHostException from the exception kind.
             bool isGuestThrow = ex is ThrowException;
-            object? errorValue = TranslateException(ex);
+            RuntimeValue errorValue = RuntimeValue.FromBoxed(TranslateException(ex));
             pendingResult = ExecutionResult.Throw(errorValue, fromGuestThrow: isGuestThrow);
-            (exceptionHandled, pendingResult) = await HandleCatchBlockCore(ctx, tryCatch, errorValue, fromHostException: !isGuestThrow);
+            (exceptionHandled, pendingResult) = await HandleCatchBlockCore(
+                ctx, tryCatch, errorValue, fromHostException: !isGuestThrow);
         }
 
         // Always execute finally
@@ -476,21 +478,15 @@ public partial class Interpreter
     private async ValueTask<(bool Handled, ExecutionResult Result)> HandleCatchBlockCore(
         IEvaluationContext ctx,
         Stmt.TryCatch tryCatch,
-        object? errorValue,
+        RuntimeValue errorValue,
         bool fromHostException)
     {
         if (tryCatch.CatchBlock != null)
         {
-            NotifyDebuggerCaughtException(errorValue);
-            RuntimeEnvironment catchEnv = new(_environment);
-            if (tryCatch.CatchParam != null)
-            {
-                // Only host-exception messages carry a stringified JS error type to recover
-                // (#694); a genuine guest `throw value` is already the final caught value and
-                // must never be re-typed — see CoerceCaughtValueForBinding.
-                catchEnv.Define(tryCatch.CatchParam.Lexeme,
-                    fromHostException ? CoerceCaughtValueForBinding(errorValue) : errorValue);
-            }
+            if (DebugController != null)
+                NotifyDebuggerCaughtException(errorValue.ToObject());
+            RuntimeEnvironment catchEnv = CreateCatchEnvironment(
+                tryCatch, errorValue, fromHostException);
 
             using (PushScope(catchEnv))
             {
@@ -559,7 +555,8 @@ public partial class Interpreter
                 if (result.Type == ExecutionResult.ResultType.Throw)
                 {
                     pendingResult = result;
-                    (exceptionHandled, pendingResult) = HandleCatchBlock(tryCatch, result.Value.ToObject(), fromHostException: false);
+                    (exceptionHandled, pendingResult) = HandleCatchBlock(
+                        tryCatch, result.Value, fromHostException: false);
                     break;
                 }
                 else if (result.IsAbrupt)
@@ -589,9 +586,10 @@ public partial class Interpreter
             // origin. Only a true host C# exception is host-translated and re-typed at the catch
             // binding (#694), so derive fromHostException from the exception kind.
             bool isGuestThrow = ex is ThrowException;
-            object? errorValue = TranslateException(ex);
+            RuntimeValue errorValue = RuntimeValue.FromBoxed(TranslateException(ex));
             pendingResult = ExecutionResult.Throw(errorValue, fromGuestThrow: isGuestThrow);
-            (exceptionHandled, pendingResult) = HandleCatchBlock(tryCatch, errorValue, fromHostException: !isGuestThrow);
+            (exceptionHandled, pendingResult) = HandleCatchBlock(
+                tryCatch, errorValue, fromHostException: !isGuestThrow);
         }
 
         // Always execute finally
@@ -618,21 +616,15 @@ public partial class Interpreter
     /// </summary>
     private (bool Handled, ExecutionResult Result) HandleCatchBlock(
         Stmt.TryCatch tryCatch,
-        object? errorValue,
+        RuntimeValue errorValue,
         bool fromHostException)
     {
         if (tryCatch.CatchBlock != null)
         {
-            NotifyDebuggerCaughtException(errorValue);
-            RuntimeEnvironment catchEnv = new(_environment);
-            if (tryCatch.CatchParam != null)
-            {
-                // Only host-exception messages carry a stringified JS error type to recover
-                // (#694); a genuine guest `throw value` is already the final caught value and
-                // must never be re-typed — see CoerceCaughtValueForBinding.
-                catchEnv.Define(tryCatch.CatchParam.Lexeme,
-                    fromHostException ? CoerceCaughtValueForBinding(errorValue) : errorValue);
-            }
+            if (DebugController != null)
+                NotifyDebuggerCaughtException(errorValue.ToObject());
+            RuntimeEnvironment catchEnv = CreateCatchEnvironment(
+                tryCatch, errorValue, fromHostException);
 
             using (PushScope(catchEnv))
             {
@@ -669,6 +661,24 @@ public partial class Interpreter
             }
         }
         return (false, ExecutionResult.Throw(errorValue, fromGuestThrow: !fromHostException));
+    }
+
+    private RuntimeEnvironment CreateCatchEnvironment(
+        Stmt.TryCatch tryCatch,
+        RuntimeValue errorValue,
+        bool fromHostException)
+    {
+        if (tryCatch.CatchParam == null)
+            return new RuntimeEnvironment(_environment);
+
+        // Only host-exception messages carry a stringified JS error type to recover
+        // (#694). A genuine guest throw is already represented as an unboxed
+        // RuntimeValue and can be installed directly in the catch scope.
+        RuntimeValue caughtValue = fromHostException
+            ? RuntimeValue.FromBoxed(CoerceCaughtValueForBinding(errorValue.ToObject()))
+            : errorValue;
+        return new RuntimeEnvironment(
+            _environment, tryCatch.CatchParam.Lexeme, caughtValue);
     }
 
     /// <summary>
@@ -1930,7 +1940,7 @@ public partial class Interpreter
     internal ExecutionResult VisitTryCatch(Stmt.TryCatch tryCatch) => ExecuteTryCatch(tryCatch);
 
     internal ExecutionResult VisitThrow(Stmt.Throw throwStmt) =>
-        ExecutionResult.Throw(Evaluate(throwStmt.Value));
+        ExecutionResult.Throw(EvaluateRV(throwStmt.Value));
 
     internal ExecutionResult VisitVar(Stmt.Var varStmt)
     {

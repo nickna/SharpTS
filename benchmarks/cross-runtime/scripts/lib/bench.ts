@@ -27,6 +27,8 @@ const HARD_CAP_MS: number = 2000;    // ...but never exceed this, even below the
 const MAX_SAMPLES: number = 100000;
 const MAX_INNER: number = 1 << 24;
 const OUTPUT_SCALE: number = 10000000; // seven decimal places in milliseconds (0.1 ns)
+const requestedCase = process.env.SHARPTS_BENCH_CASE;
+const listCases: boolean = process.env.SHARPTS_BENCH_LIST_CASES === "1";
 
 function round(x: number): number {
     return Math.round(x * OUTPUT_SCALE) / OUTPUT_SCALE;
@@ -44,6 +46,13 @@ function validateExpected(name: string, param: number, actual: number, expected?
 // `fn` returns a number that is accumulated into a guard so neither the
 // interpreter nor the compiler can dead-code-eliminate the measured work.
 export function bench(name: string, param: number, fn: () => number, expected?: number): void {
+    if (listCases) {
+        console.log("BENCH_CASE:" + name);
+        return;
+    }
+    if (requestedCase && requestedCase !== name) {
+        return;
+    }
     let guard: number = 0;
     const samples: number[] = [];
     let total: number = 0;
@@ -55,29 +64,26 @@ export function bench(name: string, param: number, fn: () => number, expected?: 
         guard = guard + validationResult;
     }
 
-    // One measured call up front. This probes the cost and, when a single call
-    // is genuinely heavy (e.g. the tree-walking interpreter on a big input),
-    // doubles as the first sample. A sub-warmup-cap result that crosses the 1ms
-    // boundary is confirmed once, but only a confirmed call that consumes the
-    // full warmup budget disables warmup and auto-batching. This prevents a cold
-    // first-tier JIT from selecting a different sampling method than an already
-    // optimized runtime.
+    // Discard a cold probe, then give every runtime the same time-bounded warmup.
+    // Previously a first call over WARMUP_CAP_MS was retained as sample zero and
+    // skipped warmup entirely. That made slow interpreter cases measure startup
+    // while fast JIT cases measured steady state.
+    guard = guard + fn();
+    const warmStart: number = performance.now();
+    do {
+        guard = guard + fn();
+    } while (performance.now() - warmStart < WARMUP_CAP_MS);
+
+    // This post-warmup probe selects single-call sampling versus auto-batching,
+    // but is itself discarded so both branches start with fresh observations.
     const probeStart: number = performance.now();
     guard = guard + fn();
-    let firstMs: number = performance.now() - probeStart;
-
-    if (firstMs >= MIN_SAMPLE_MS && firstMs < WARMUP_CAP_MS) {
-        const confirmStart: number = performance.now();
-        guard = guard + fn();
-        firstMs = performance.now() - confirmStart;
-    }
+    const firstMs: number = performance.now() - probeStart;
 
     if (firstMs >= WARMUP_CAP_MS) {
         // A single call is reliably measurable — sample one call at a time,
         // bounded by the budget and the hard cap (slow cases end up with few
         // samples, and thus stdev 0, which is honest).
-        samples.push(firstMs);
-        total = firstMs;
         while (samples.length < MAX_SAMPLES) {
             if (total >= HARD_CAP_MS) {
                 break;
@@ -92,13 +98,8 @@ export function bench(name: string, param: number, fn: () => number, expected?: 
             total = total + elapsed;
         }
     } else {
-        // Fast call: warm the JIT (time-bounded), calibrate an inner batch so a
-        // sample spans >= MIN_SAMPLE_MS, then collect budgeted samples.
-        const warmStart: number = performance.now();
-        while (performance.now() - warmStart < WARMUP_CAP_MS) {
-            guard = guard + fn();
-        }
-
+        // Fast call: calibrate an inner batch so a sample spans >= MIN_SAMPLE_MS,
+        // then collect budgeted samples.
         while (inner < MAX_INNER) {
             const c0: number = performance.now();
             for (let k: number = 0; k < inner; k++) {
@@ -177,6 +178,14 @@ export async function benchAsync(
     fn: () => Promise<number>,
     expected?: number,
 ): Promise<void> {
+    if (listCases) {
+        console.log("BENCH_CASE:" + name);
+        return;
+    }
+    if (requestedCase && requestedCase !== name) {
+        return;
+    }
+
     let guard: number = 0;
     const samples: number[] = [];
     let total: number = 0;
@@ -188,19 +197,19 @@ export async function benchAsync(
         guard = guard + validationResult;
     }
 
+    // Keep the async methodology identical to the synchronous path: discard the
+    // cold call, warm every runtime, and discard the post-warmup routing probe.
+    guard = guard + await fn();
+    const warmStart: number = performance.now();
+    do {
+        guard = guard + await fn();
+    } while (performance.now() - warmStart < WARMUP_CAP_MS);
+
     const probeStart: number = performance.now();
     guard = guard + await fn();
-    let firstMs: number = performance.now() - probeStart;
-
-    if (firstMs >= MIN_SAMPLE_MS && firstMs < WARMUP_CAP_MS) {
-        const confirmStart: number = performance.now();
-        guard = guard + await fn();
-        firstMs = performance.now() - confirmStart;
-    }
+    const firstMs: number = performance.now() - probeStart;
 
     if (firstMs >= WARMUP_CAP_MS) {
-        samples.push(firstMs);
-        total = firstMs;
         while (samples.length < MAX_SAMPLES) {
             if (total >= HARD_CAP_MS) {
                 break;
@@ -215,11 +224,6 @@ export async function benchAsync(
             total = total + elapsed;
         }
     } else {
-        const warmStart: number = performance.now();
-        while (performance.now() - warmStart < WARMUP_CAP_MS) {
-            guard = guard + await fn();
-        }
-
         while (inner < MAX_INNER) {
             const c0: number = performance.now();
             for (let k: number = 0; k < inner; k++) {

@@ -86,6 +86,11 @@ same inexpensive guard used by CI):
 selected; Bun is skipped if not on `PATH`. `-Launches` defaults to 3; use an
 explicit lower value only for quick local diagnostics, not published evidence.
 
+The `exceptions` workload runs each registered case in a fresh process by
+default so tiering, exception counters, and earlier cases cannot contaminate a
+later result. `-IsolatedWorkloads` accepts a comma-separated set of additional
+workload basenames (or an empty array to disable isolation).
+
 `-RepositoryRoot` is intended for the paired local performance harness. It lets
 the current runner compile and execute a frozen source worktree, so the baseline
 does not need to be modified when harness features are added later.
@@ -104,14 +109,12 @@ Each workload calls `bench(name, param, fn, expected?)` from
 1. When `expected` is supplied, validates one invocation before probing. A
    second validation after sampling checks the optimized steady-state result;
    neither validation is timed.
-2. Probes once. A result between 1 ms and the 100 ms warmup cap is confirmed with
-   one post-JIT probe so cold compilation cannot misclassify a fast workload. Only
-   a confirmed call that consumes the full 100 ms warmup budget is sampled one call
-   at a time (honest for slow cases like the tree-walking interpreter on big inputs).
-3. Otherwise it warms the JIT, calibrates an inner batch until a sample spans ≥ 1 ms
-   (lifting fast cases above timer and call-overhead noise), then samples to a budget.
-   This prevents a runtime's cold first-tier JIT from selecting a different sampling
-   method than an already-fast optimizing JIT.
+2. Discards a cold probe, gives every runtime at least 100 ms of time-bounded
+   warmup, and discards a post-warmup routing probe. Slow and fast cases therefore
+   both report steady-state samples rather than using different cold-start rules.
+3. A post-warmup call at or above 100 ms is sampled one call at a time. Faster
+   calls are auto-batched until a sample spans ≥ 1 ms, lifting them above timer
+   and call-overhead noise, and are then sampled to a shared time budget.
 4. Emits one line per case with seven decimal places in milliseconds (0.1 ns),
    consumed by the PowerShell formatter and exporter:
 

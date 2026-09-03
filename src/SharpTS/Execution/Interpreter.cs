@@ -194,6 +194,9 @@ public partial class Interpreter : IDisposable
     // Processed after each top-level statement and in the event loop before processing timers.
     private readonly Queue<Action> _microtaskQueue = new();
     private readonly object _microtaskQueueLock = new();
+    // Producers publish this flag while holding the queue lock. Empty checks on
+    // ordinary loop iterations can then avoid acquiring that lock altogether.
+    private int _hasMicrotasks;
 
     // Active handles counter - keeps the event loop alive while there are active operations.
     // Uses Interlocked operations for thread-safe lock-free access, consistent with _hasScheduledTimers.
@@ -481,6 +484,7 @@ public partial class Interpreter : IDisposable
                     }
                 }
             });
+            Volatile.Write(ref _hasMicrotasks, 1);
         }
         // Wake the event loop to process microtasks promptly
         WakeEventLoop();
@@ -493,13 +497,19 @@ public partial class Interpreter : IDisposable
     /// </summary>
     internal void ProcessMicrotasks()
     {
+        if (Volatile.Read(ref _hasMicrotasks) == 0)
+            return;
+
         while (true)
         {
             Action? microtask;
             lock (_microtaskQueueLock)
             {
                 if (_microtaskQueue.Count == 0 || _isDisposed)
+                {
+                    Volatile.Write(ref _hasMicrotasks, 0);
                     return;
+                }
                 microtask = _microtaskQueue.Dequeue();
             }
             microtask();
@@ -508,8 +518,7 @@ public partial class Interpreter : IDisposable
 
     private bool HasMicrotasks()
     {
-        lock (_microtaskQueueLock)
-            return _microtaskQueue.Count != 0;
+        return Volatile.Read(ref _hasMicrotasks) != 0;
     }
 
     /// <summary>

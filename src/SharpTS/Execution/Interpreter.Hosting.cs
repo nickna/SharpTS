@@ -398,11 +398,8 @@ public partial class Interpreter
             return false;
         if (_callbackQueue.Count != 0)
             return true;
-        lock (_microtaskQueueLock)
-        {
-            if (_microtaskQueue.Count != 0)
-                return true;
-        }
+        if (Volatile.Read(ref _hasMicrotasks) != 0)
+            return true;
         lock (_virtualTimersLock)
         {
             while (_virtualTimerQueue.TryPeek(out VirtualTimer? timer, out var priority))
@@ -501,6 +498,7 @@ public partial class Interpreter
                     TaskContinuationOptions.ExecuteSynchronously,
                     TaskScheduler.Default);
             });
+            Volatile.Write(ref _hasMicrotasks, 1);
         }
         WakeEventLoop();
         return completion.Task;

@@ -94,4 +94,46 @@ public class Issue1486ThrowValueTests
 
         Assert.Equal("inner\nouter\ntrue\n", TestHarness.Run(source, mode));
     }
+
+    [Theory, ModeData]
+    public void PrimitiveCatchBinding_PreservesAssignmentAndClosureIdentity(ExecutionMode mode)
+    {
+        var source = """
+            let first: any = null;
+            let total: number = 0;
+            for (let i: number = 0; i < 3; i++) {
+                try {
+                    throw i;
+                } catch (error: any) {
+                    error = error + 10;
+                    if (i === 0) first = () => error;
+                    total = total + error;
+                }
+            }
+            console.log(total);
+            console.log(first());
+            """;
+
+        Assert.Equal("33\n10\n", TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
+    public void MixedNumericStrictEquality_PreservesSemanticsAndEvaluationOrder(ExecutionMode mode)
+    {
+        var source = """
+            let trace: string = "";
+            function dynamicLeft(value: any): any { trace = trace + "L"; return value; }
+            function numericRight(value: number): number { trace = trace + "R"; return value; }
+
+            console.log(dynamicLeft(1) === numericRight(1), trace);
+            console.log((1 as any) === 1);
+            console.log(1 === (1 as any));
+            console.log(("1" as any) === 1);
+            console.log((NaN as any) === NaN);
+            console.log((-0 as any) === 0);
+            """;
+
+        Assert.Equal("true LR\ntrue\ntrue\nfalse\nfalse\ntrue\n",
+            TestHarness.Run(source, mode));
+    }
 }
