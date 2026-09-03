@@ -448,4 +448,40 @@ public class ArrayLocalPromotionTests
         // arr 0..9 → doubled [0,2,..,18] → evens (x%4===0) [0,4,8,12,16] → 40
         Assert.Equal("40\n", TestHarness.Run(source, mode));
     }
+
+    [Theory, ModeData]
+    public void TypedPipeline_FusedBuildPreservesLoopBounds(ExecutionMode mode)
+    {
+        var source = """
+            function work(n: number): number {
+                const arr: number[] = [];
+                for (let i: number = 0; i < n; i++) { arr.push(i); }
+                const doubled = arr.map((x: number): number => x * 2);
+                const evens = doubled.filter((x: number): boolean => x % 4 === 0);
+                return evens.reduce((acc: number, x: number): number => acc + x, 0);
+            }
+            console.log(work(3.5), work(-1), work(NaN));
+            """;
+
+        // 3.5 executes four build iterations (0..3); negative and NaN execute none.
+        Assert.Equal("4 0 0\n", TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
+    public void TypedPipeline_ObservableCallbacksRetainPhaseOrder(ExecutionMode mode)
+    {
+        var source = """
+            let order: string = "";
+            function work(): number {
+                const arr: number[] = [];
+                for (let i: number = 0; i < 2; i++) { arr.push(i); }
+                const doubled = arr.map((x: number): number => { order += "m"; return x * 2; });
+                const kept = doubled.filter((x: number): boolean => { order += "f"; return true; });
+                return kept.reduce((acc: number, x: number): number => { order += "r"; return acc + x; }, 0);
+            }
+            console.log(work(), order);
+            """;
+
+        Assert.Equal("2 mmffrr\n", TestHarness.Run(source, mode));
+    }
 }

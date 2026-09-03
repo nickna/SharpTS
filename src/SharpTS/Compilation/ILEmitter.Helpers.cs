@@ -350,6 +350,14 @@ public partial class ILEmitter
         {
             EmitDoubleConstant((double)i);
         }
+        else if (expr is Expr.Unary unary
+                 && ConstantFolder.TryFoldUnary(unary, out object? folded)
+                 && folded is double number)
+        {
+            // Unary numeric literals are otherwise emitted through the boxed
+            // expression path and immediately converted back to double.
+            EmitDoubleConstant(number);
+        }
         else
         {
             // Other expressions - emit and convert if needed

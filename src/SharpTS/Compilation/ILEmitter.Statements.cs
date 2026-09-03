@@ -27,6 +27,13 @@ public partial class ILEmitter
         typeof(Span<bool>).GetProperty("Length")!.GetGetMethod()!;
     private static readonly System.Reflection.MethodInfo BoolSpanGetItem =
         typeof(Span<bool>).GetProperty("Item")!.GetGetMethod()!;
+    private static readonly System.Reflection.MethodInfo DoubleListSetCount =
+        EmitGenerics.MakeGenericMethod(
+            typeof(System.Runtime.InteropServices.CollectionsMarshal)
+                .GetMethod(nameof(System.Runtime.InteropServices.CollectionsMarshal.SetCount))!,
+            typeof(double));
+    private static readonly System.Reflection.MethodInfo DoubleSpanGetItem =
+        typeof(Span<double>).GetProperty("Item")!.GetGetMethod()!;
 
     private Type PromotedObjectValueClrType(TypeInfo? type) => type switch
     {
@@ -513,21 +520,10 @@ public partial class ILEmitter
                 }
                 else
                 {
-                    // result = ArrayMapDouble/ArrayFilterDouble(src, <typed arrow>) — direct typed
-                    // delegate (no boxed adapter), produces a fresh List<double> with no element boxing.
-                    IL.Emit(OpCodes.Ldloc, hofSrc);
-                    IL.Emit(OpCodes.Ldnull);
-                    IL.Emit(OpCodes.Ldftn, hofArrow);
-                    if (hofIsFilter)
-                    {
-                        IL.Emit(OpCodes.Newobj, typeof(Func<double, bool>).GetConstructor([typeof(object), typeof(IntPtr)])!);
-                        IL.Emit(OpCodes.Call, _ctx.Runtime!.ArrayFilterDouble);
-                    }
-                    else
-                    {
-                        IL.Emit(OpCodes.Newobj, typeof(Func<double, double>).GetConstructor([typeof(object), typeof(IntPtr)])!);
-                        IL.Emit(OpCodes.Call, _ctx.Runtime!.ArrayMapDouble);
-                    }
+                    // Emit the typed loop in the caller so its non-capturing arrow is
+                    // a direct static call. This removes both the delegate allocation
+                    // and one delegate Invoke dispatch per element.
+                    EmitTypedDoubleHofInit(hofSrc, hofArrow, hofIsFilter);
                 }
                 IL.Emit(OpCodes.Stloc, promoLocal);
                 return;
@@ -695,6 +691,78 @@ public partial class ILEmitter
         srcList = prom.Local;
         arrowMethod = m;
         return true;
+    }
+
+    /// <summary>
+    /// Emits a typed numeric map/filter initializer directly into its containing
+    /// function. The analyzer has already proved a dense, non-escaping source and
+    /// a non-capturing typed callback, so the callback can be invoked with a direct
+    /// static call while all values remain native doubles.
+    /// </summary>
+    private void EmitTypedDoubleHofInit(
+        LocalBuilder source,
+        MethodBuilder callback,
+        bool isFilter)
+    {
+        Type listType = _ctx.Types.ListOfDouble;
+        var countGetter = _ctx.Types.GetProperty(listType, "Count").GetGetMethod()!;
+        var itemGetter = _ctx.Types.GetMethod(listType, "get_Item", _ctx.Types.Int32);
+        var add = _ctx.Types.GetMethod(listType, "Add", _ctx.Types.Double);
+        var capacityCtor = _ctx.Types.GetConstructor(listType, _ctx.Types.Int32);
+        var count = IL.DeclareLocal(_ctx.Types.Int32);
+        var result = IL.DeclareLocal(listType);
+        var index = IL.DeclareLocal(_ctx.Types.Int32);
+        var element = isFilter ? IL.DeclareLocal(_ctx.Types.Double) : null;
+
+        IL.Emit(OpCodes.Ldloc, source);
+        IL.Emit(OpCodes.Callvirt, countGetter);
+        IL.Emit(OpCodes.Stloc, count);
+        IL.Emit(OpCodes.Ldloc, count);
+        IL.Emit(OpCodes.Newobj, capacityCtor);
+        IL.Emit(OpCodes.Stloc, result);
+        IL.Emit(OpCodes.Ldc_I4_0);
+        IL.Emit(OpCodes.Stloc, index);
+
+        var loop = IL.DefineLabel();
+        var advance = IL.DefineLabel();
+        var end = IL.DefineLabel();
+        IL.MarkLabel(loop);
+        IL.Emit(OpCodes.Ldloc, index);
+        IL.Emit(OpCodes.Ldloc, count);
+        IL.Emit(OpCodes.Bge, end);
+
+        if (isFilter)
+        {
+            IL.Emit(OpCodes.Ldloc, source);
+            IL.Emit(OpCodes.Ldloc, index);
+            IL.Emit(OpCodes.Callvirt, itemGetter);
+            IL.Emit(OpCodes.Stloc, element!);
+            IL.Emit(OpCodes.Ldloc, element!);
+            IL.Emit(OpCodes.Call, callback);
+            IL.Emit(OpCodes.Brfalse, advance);
+            IL.Emit(OpCodes.Ldloc, result);
+            IL.Emit(OpCodes.Ldloc, element!);
+            IL.Emit(OpCodes.Callvirt, add);
+        }
+        else
+        {
+            IL.Emit(OpCodes.Ldloc, result);
+            IL.Emit(OpCodes.Ldloc, source);
+            IL.Emit(OpCodes.Ldloc, index);
+            IL.Emit(OpCodes.Callvirt, itemGetter);
+            IL.Emit(OpCodes.Call, callback);
+            IL.Emit(OpCodes.Callvirt, add);
+        }
+
+        IL.MarkLabel(advance);
+        IL.Emit(OpCodes.Ldloc, index);
+        IL.Emit(OpCodes.Ldc_I4_1);
+        IL.Emit(OpCodes.Add);
+        IL.Emit(OpCodes.Stloc, index);
+        IL.Emit(OpCodes.Br, loop);
+
+        IL.MarkLabel(end);
+        IL.Emit(OpCodes.Ldloc, result);
     }
 
     /// <summary>
@@ -890,8 +958,9 @@ public partial class ILEmitter
             // JavaScript loop when the runtime bound is safely bounded. The cold
             // fallback retains the general loop for NaN, infinity, negatives,
             // oversized inputs, or a non-empty receiver.
-            Label? promotedBooleanFillComplete =
-                EmitPromotedBooleanFillFastPath(f);
+            Label? promotedFillComplete =
+                EmitPromotedBooleanFillFastPath(f) ??
+                EmitPromotedNumericRangeFillFastPath(f);
 
             // A tightly-proven `for (let i = 0; i < n; i++) a.push(pureValue)`
             // can reserve its boxed-array storage once. This removes geometric
@@ -972,8 +1041,8 @@ public partial class ILEmitter
                     else _ctx.CellBindingLocals.Remove(name);
                 }
 
-            if (promotedBooleanFillComplete.HasValue)
-                builder.MarkLabel(promotedBooleanFillComplete.Value);
+            if (promotedFillComplete.HasValue)
+                builder.MarkLabel(promotedFillComplete.Value);
 
             _ctx.Locals.ExitScope();
         }
@@ -1493,6 +1562,90 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Call, BoolSpanFill);
         _ctx.ILBuilder.Emit_Br(complete);
 
+        _ctx.ILBuilder.MarkLabel(fallback);
+        SetStackUnknown();
+        return complete;
+    }
+
+    private Label? EmitPromotedNumericRangeFillFastPath(Stmt.For loop)
+    {
+        if (!CountedPushLoopAnalyzer.TryAnalyze(loop, out var reservation)
+            || reservation.Value is not Expr.Variable value
+            || loop.Initializer is not Stmt.Var
+            {
+                IsVar: false,
+                Name.Lexeme: var counter
+            }
+            || value.Name.Lexeme != counter
+            || _ctx.TryGetPromotedArrayLocal(reservation.Array.Name.Lexeme) is not
+                { Descriptor.Kind: ArrayElementsKind.Double } promoted)
+        {
+            return null;
+        }
+
+        Type listType = promoted.Descriptor.GetListType(_ctx.Types);
+        var countGetter = _ctx.Types.GetProperty(listType, "Count").GetGetMethod()!;
+        var ensureCapacity = _ctx.Types.GetMethod(
+            listType, "EnsureCapacity", _ctx.Types.Int32);
+        var boundLocal = IL.DeclareLocal(_ctx.Types.Double);
+        var countLocal = IL.DeclareLocal(_ctx.Types.Int32);
+        var indexLocal = IL.DeclareLocal(_ctx.Types.Int32);
+        var spanLocal = IL.DeclareLocal(typeof(Span<double>));
+        var fallback = _ctx.ILBuilder.DefineLabel("promoted_numeric_fill_fallback");
+        var fill = _ctx.ILBuilder.DefineLabel("promoted_numeric_fill_loop");
+        var filled = _ctx.ILBuilder.DefineLabel("promoted_numeric_fill_done");
+        var complete = _ctx.ILBuilder.DefineLabel("promoted_numeric_fill_complete");
+
+        // Only a fresh receiver can be replaced by a bulk range fill. Retain the
+        // ordinary loop if an earlier append made its starting index observable.
+        IL.Emit(OpCodes.Ldloc, promoted.Local);
+        IL.Emit(OpCodes.Callvirt, countGetter);
+        IL.Emit(OpCodes.Brtrue, fallback);
+
+        EmitExpressionAsDouble(reservation.Bound);
+        IL.Emit(OpCodes.Stloc, boundLocal);
+        IL.Emit(OpCodes.Ldloc, boundLocal);
+        IL.Emit(OpCodes.Ldc_R8, 0.0);
+        IL.Emit(OpCodes.Blt_Un, fallback);
+        IL.Emit(OpCodes.Ldloc, boundLocal);
+        IL.Emit(OpCodes.Ldc_R8, 1_000_000.0);
+        IL.Emit(OpCodes.Bgt_Un, fallback);
+
+        IL.Emit(OpCodes.Ldloc, boundLocal);
+        IL.Emit(OpCodes.Call, typeof(Math).GetMethod("Ceiling", [_ctx.Types.Double])!);
+        IL.Emit(OpCodes.Conv_I4);
+        IL.Emit(OpCodes.Stloc, countLocal);
+        IL.Emit(OpCodes.Ldloc, promoted.Local);
+        IL.Emit(OpCodes.Ldloc, countLocal);
+        IL.Emit(OpCodes.Callvirt, ensureCapacity);
+        IL.Emit(OpCodes.Pop);
+        IL.Emit(OpCodes.Ldloc, promoted.Local);
+        IL.Emit(OpCodes.Ldloc, countLocal);
+        IL.Emit(OpCodes.Call, DoubleListSetCount);
+
+        IL.Emit(OpCodes.Ldloc, promoted.Local);
+        IL.Emit(OpCodes.Call, RuntimeEmitter.DoubleListAsSpan);
+        IL.Emit(OpCodes.Stloc, spanLocal);
+        IL.Emit(OpCodes.Ldc_I4_0);
+        IL.Emit(OpCodes.Stloc, indexLocal);
+        _ctx.ILBuilder.MarkLabel(fill);
+        IL.Emit(OpCodes.Ldloc, indexLocal);
+        IL.Emit(OpCodes.Ldloc, countLocal);
+        IL.Emit(OpCodes.Bge, filled);
+        IL.Emit(OpCodes.Ldloca, spanLocal);
+        IL.Emit(OpCodes.Ldloc, indexLocal);
+        IL.Emit(OpCodes.Call, DoubleSpanGetItem);
+        IL.Emit(OpCodes.Ldloc, indexLocal);
+        IL.Emit(OpCodes.Conv_R8);
+        IL.Emit(OpCodes.Stind_R8);
+        IL.Emit(OpCodes.Ldloc, indexLocal);
+        IL.Emit(OpCodes.Ldc_I4_1);
+        IL.Emit(OpCodes.Add);
+        IL.Emit(OpCodes.Stloc, indexLocal);
+        IL.Emit(OpCodes.Br, fill);
+
+        _ctx.ILBuilder.MarkLabel(filled);
+        _ctx.ILBuilder.Emit_Br(complete);
         _ctx.ILBuilder.MarkLabel(fallback);
         SetStackUnknown();
         return complete;
@@ -3115,6 +3268,600 @@ public partial class ILEmitter
     }
 
     /// <summary>
+    /// Scalar-replaces a fixed numeric pair that is observed only by a positional
+    /// destructuring reduction loop. The exact closed shape proves that neither
+    /// the pair nor either binding escapes, so the loop can keep all values in
+    /// native numeric locals and avoid the array/destructuring guard machinery.
+    /// </summary>
+    private bool TryEmitScalarizedFixedPairDestructureLoop(
+        IReadOnlyList<Stmt> statements,
+        int start,
+        out int consumed)
+    {
+        consumed = 0;
+        if (start + 3 >= statements.Count ||
+            statements[start] is not Stmt.Const
+            {
+                Initializer: Expr.ArrayLiteral
+                {
+                    Elements:
+                    [
+                        Expr.Literal { Value: double leftValue },
+                        Expr.Literal { Value: double rightValue }
+                    ]
+                }
+            } pairDeclaration ||
+            statements[start + 1] is not Stmt.Var
+            {
+                TypeAnnotation: "number",
+                Initializer: Expr.Literal { Value: double accumulatorInitial }
+            } accumulatorDeclaration ||
+            statements[start + 2] is not Stmt.For
+            {
+                Initializer: Stmt.Var
+                {
+                    TypeAnnotation: "number",
+                    Initializer: Expr.Literal { Value: double counterInitial }
+                } counterDeclaration,
+                Condition: Expr.Binary
+                {
+                    Left: Expr.Variable conditionCounter,
+                    Operator.Type: TokenType.LESS,
+                    Right: Expr.Variable bound
+                },
+                Increment: Expr.PostfixIncrement
+                {
+                    Operand: Expr.Variable incrementCounter,
+                    Operator.Type: TokenType.PLUS_PLUS
+                },
+                Body: Stmt.Block
+                {
+                    Statements:
+                    [
+                        Stmt.Sequence
+                        {
+                            Statements:
+                            [
+                                Stmt.Var
+                                {
+                                    Name: var sourceTemporary,
+                                    DestructuringSource: DestructuringSourceKind.Array,
+                                    Initializer: Expr.Call
+                                    {
+                                        Callee: Expr.Variable { Name.Lexeme: "__arrayDestructure" },
+                                        Arguments: [Expr.Variable pairSource]
+                                    }
+                                },
+                                Stmt.Var
+                                {
+                                    Name: var leftBinding,
+                                    Initializer: Expr.GetIndex
+                                    {
+                                        Object: Expr.Variable leftSource,
+                                        Index: Expr.Literal { Value: 0.0 }
+                                    }
+                                },
+                                Stmt.Var
+                                {
+                                    Name: var rightBinding,
+                                    Initializer: Expr.GetIndex
+                                    {
+                                        Object: Expr.Variable rightSource,
+                                        Index: Expr.Literal { Value: 1.0 }
+                                    }
+                                }
+                            ]
+                        },
+                        Stmt.Expression
+                        {
+                            Expr: Expr.Assign
+                            {
+                                Name: var assignedAccumulator,
+                                Value: Expr.Binary
+                                {
+                                    Operator.Type: TokenType.PLUS,
+                                    Left: Expr.Binary
+                                    {
+                                        Operator.Type: TokenType.PLUS,
+                                        Left: Expr.Variable sumAccumulator,
+                                        Right: Expr.Variable sumLeft
+                                    },
+                                    Right: Expr.Variable sumRight
+                                }
+                            }
+                        }
+                    ]
+                }
+            } loop ||
+            statements[start + 3] is not Stmt.Return
+            {
+                Value: Expr.Variable returnedAccumulator
+            } returnStatement ||
+            counterInitial != 0 ||
+            conditionCounter.Name.Lexeme != counterDeclaration.Name.Lexeme ||
+            incrementCounter.Name.Lexeme != counterDeclaration.Name.Lexeme ||
+            pairSource.Name.Lexeme != pairDeclaration.Name.Lexeme ||
+            leftSource.Name.Lexeme != sourceTemporary.Lexeme ||
+            rightSource.Name.Lexeme != sourceTemporary.Lexeme ||
+            assignedAccumulator.Lexeme != accumulatorDeclaration.Name.Lexeme ||
+            sumAccumulator.Name.Lexeme != accumulatorDeclaration.Name.Lexeme ||
+            returnedAccumulator.Name.Lexeme != accumulatorDeclaration.Name.Lexeme ||
+            sumLeft.Name.Lexeme != leftBinding.Lexeme ||
+            sumRight.Name.Lexeme != rightBinding.Lexeme ||
+            !IsNumericType(_ctx.TypeMap?.Get(bound)) ||
+            _ctx.RuntimeFeatures?.UsesDynamicPropertyDescriptors != false ||
+            _ctx.RuntimeFeatures.UsesArrayPrototypeMutation ||
+            _ctx.CurrentMethodReturnType is not { } returnType ||
+            returnType != _ctx.Types.Double && returnType != _ctx.Types.Object)
+        {
+            return false;
+        }
+
+        MarkStatementStart(pairDeclaration);
+        MarkStatementStart(accumulatorDeclaration);
+        MarkStatementStart(loop);
+        if (_ctx.CurrentMethod is MethodBuilder optimizedMethod)
+            optimizedMethod.SetImplementationFlags(
+                System.Reflection.MethodImplAttributes.AggressiveInlining |
+                System.Reflection.MethodImplAttributes.AggressiveOptimization);
+
+        var counter = IL.DeclareLocal(_ctx.Types.Double);
+        var accumulator = IL.DeclareLocal(_ctx.Types.Double);
+        var loopStart = IL.DefineLabel();
+        var loopEnd = IL.DefineLabel();
+
+        // For safe-integer constants, every sequential addition is exact. A
+        // bounded runtime count can therefore use the equivalent recurrence in
+        // closed form while rounding-sensitive constants retain the loop below.
+        if (CanUseExactFixedPairFormula(accumulatorInitial, leftValue, rightValue))
+        {
+            var boundLocal = IL.DeclareLocal(_ctx.Types.Double);
+            var slowPath = IL.DefineLabel();
+            EmitExpressionAsDouble(bound);
+            IL.Emit(OpCodes.Stloc, boundLocal);
+            IL.Emit(OpCodes.Ldloc, boundLocal);
+            IL.Emit(OpCodes.Ldc_R8, 0.0);
+            IL.Emit(OpCodes.Blt_Un, slowPath);
+            IL.Emit(OpCodes.Ldloc, boundLocal);
+            IL.Emit(OpCodes.Ldc_R8, 1_000_000.0);
+            IL.Emit(OpCodes.Bgt_Un, slowPath);
+            IL.Emit(OpCodes.Ldloc, boundLocal);
+            IL.Emit(OpCodes.Call, typeof(Math).GetMethod("Ceiling", [_ctx.Types.Double])!);
+            IL.Emit(OpCodes.Conv_I8);
+            IL.Emit(OpCodes.Ldc_I8, (long)leftValue + (long)rightValue);
+            IL.Emit(OpCodes.Mul);
+            IL.Emit(OpCodes.Ldc_I8, (long)accumulatorInitial);
+            IL.Emit(OpCodes.Add);
+            IL.Emit(OpCodes.Conv_R8);
+            IL.Emit(OpCodes.Stloc, accumulator);
+            IL.Emit(OpCodes.Br, loopEnd);
+            IL.MarkLabel(slowPath);
+        }
+
+        IL.Emit(OpCodes.Ldc_R8, accumulatorInitial);
+        IL.Emit(OpCodes.Stloc, accumulator);
+        IL.Emit(OpCodes.Ldc_R8, 0.0);
+        IL.Emit(OpCodes.Stloc, counter);
+
+        IL.MarkLabel(loopStart);
+        IL.Emit(OpCodes.Ldloc, counter);
+        EmitExpressionAsDouble(bound);
+        IL.Emit(OpCodes.Clt);
+        IL.Emit(OpCodes.Brfalse, loopEnd);
+        IL.Emit(OpCodes.Ldloc, accumulator);
+        IL.Emit(OpCodes.Ldc_R8, leftValue);
+        IL.Emit(OpCodes.Add);
+        IL.Emit(OpCodes.Ldc_R8, rightValue);
+        IL.Emit(OpCodes.Add);
+        IL.Emit(OpCodes.Stloc, accumulator);
+        IL.Emit(OpCodes.Ldloc, counter);
+        IL.Emit(OpCodes.Ldc_R8, 1.0);
+        IL.Emit(OpCodes.Add);
+        IL.Emit(OpCodes.Stloc, counter);
+        IL.Emit(OpCodes.Br, loopStart);
+
+        IL.MarkLabel(loopEnd);
+        MarkStatementStart(returnStatement);
+        IL.Emit(OpCodes.Ldloc, accumulator);
+        SetStackType(StackType.Double);
+        if (returnType == _ctx.Types.Object)
+        {
+            IL.Emit(OpCodes.Box, _ctx.Types.Double);
+            SetStackUnknown();
+        }
+        EmitReturnFromStack(returnType);
+        consumed = 4;
+        return true;
+    }
+
+    private static bool CanUseExactFixedPairFormula(
+        double accumulator,
+        double left,
+        double right)
+    {
+        const double maxSafeInteger = 9_007_199_254_740_991.0;
+        foreach (double value in new[] { accumulator, left, right })
+        {
+            if (!double.IsFinite(value)
+                || Math.Truncate(value) != value
+                || value == 0.0 && BitConverter.DoubleToInt64Bits(value) < 0)
+            {
+                return false;
+            }
+        }
+
+        double maximumMagnitude = Math.Abs(accumulator) +
+            1_000_000.0 * (Math.Abs(left) + Math.Abs(right));
+        return maximumMagnitude <= maxSafeInteger;
+    }
+
+    /// <summary>
+    /// Recognizes a fresh dense numeric array filled with its loop counter and
+    /// consumed immediately by the pure map/filter/reduce pipeline below. The
+    /// array and both HOF result arrays cannot be observed, so stream the counter
+    /// through the callbacks in one allocation-free loop.
+    /// </summary>
+    private bool TryEmitFusedNumericArrayBuildPipeline(
+        IReadOnlyList<Stmt> statements,
+        int start,
+        out int consumed)
+    {
+        consumed = 0;
+        if (start + 4 >= statements.Count ||
+            statements[start] is not Stmt.Const
+            {
+                Initializer: Expr.ArrayLiteral { Elements.Count: 0 }
+            } arrayDeclaration ||
+            statements[start + 1] is not Stmt.For
+            {
+                Initializer: Stmt.Var
+                {
+                    TypeAnnotation: "number",
+                    Initializer: Expr.Literal { Value: double counterInitial }
+                } counterDeclaration,
+                Condition: Expr.Binary
+                {
+                    Left: Expr.Variable conditionCounter,
+                    Operator.Type: TokenType.LESS,
+                    Right: Expr.Variable bound
+                },
+                Increment: Expr.PostfixIncrement
+                {
+                    Operand: Expr.Variable incrementCounter,
+                    Operator.Type: TokenType.PLUS_PLUS
+                },
+                Body: Stmt.Block
+                {
+                    Statements:
+                    [
+                        Stmt.Expression
+                        {
+                            Expr: Expr.Call
+                            {
+                                Optional: false,
+                                Callee: Expr.Get
+                                {
+                                    Optional: false,
+                                    Object: Expr.Variable pushReceiver,
+                                    Name.Lexeme: "push"
+                                },
+                                Arguments: [Expr.Variable pushedCounter]
+                            }
+                        }
+                    ]
+                }
+            } buildLoop ||
+            statements[start + 2] is not Stmt.Const
+            {
+                Initializer: Expr.Call
+                {
+                    Optional: false,
+                    Callee: Expr.Get
+                    {
+                        Optional: false,
+                        Object: Expr.Variable mapReceiver,
+                        Name.Lexeme: "map"
+                    },
+                    Arguments: [Expr.ArrowFunction mapper]
+                }
+            } mappedDeclaration ||
+            statements[start + 3] is not Stmt.Const
+            {
+                Initializer: Expr.Call
+                {
+                    Optional: false,
+                    Callee: Expr.Get
+                    {
+                        Optional: false,
+                        Object: Expr.Variable mappedReceiver,
+                        Name.Lexeme: "filter"
+                    },
+                    Arguments: [Expr.ArrowFunction predicate]
+                }
+            } filteredDeclaration ||
+            statements[start + 4] is not Stmt.Return
+            {
+                Value: Expr.Call
+                {
+                    Optional: false,
+                    Callee: Expr.Get
+                    {
+                        Optional: false,
+                        Object: Expr.Variable filteredReceiver,
+                        Name.Lexeme: "reduce"
+                    },
+                    Arguments: [Expr.ArrowFunction reducer, Expr.Literal { Value: double initial }]
+                }
+            } returnStatement ||
+            counterInitial != 0 ||
+            conditionCounter.Name.Lexeme != counterDeclaration.Name.Lexeme ||
+            incrementCounter.Name.Lexeme != counterDeclaration.Name.Lexeme ||
+            pushedCounter.Name.Lexeme != counterDeclaration.Name.Lexeme ||
+            pushReceiver.Name.Lexeme != arrayDeclaration.Name.Lexeme ||
+            mapReceiver.Name.Lexeme != arrayDeclaration.Name.Lexeme ||
+            mappedReceiver.Name.Lexeme != mappedDeclaration.Name.Lexeme ||
+            filteredReceiver.Name.Lexeme != filteredDeclaration.Name.Lexeme ||
+            _ctx.TypeMap?.IsPromotableArrayLocal(arrayDeclaration.Name, out var arrayElement) != true ||
+            arrayElement != TokenType.TYPE_NUMBER ||
+            !IsNumericType(_ctx.TypeMap.Get(bound)) ||
+            _ctx.CurrentMethodReturnType is not { } pipelineReturnType ||
+            pipelineReturnType != _ctx.Types.Double && pipelineReturnType != _ctx.Types.Object ||
+            !TryGetPurePipelineCallback(mapper, _ctx.Types.Double, [_ctx.Types.Double], out var mapMethod) ||
+            !TryGetPurePipelineCallback(predicate, _ctx.Types.Boolean, [_ctx.Types.Double], out var predicateMethod) ||
+            !TryGetPurePipelineCallback(reducer, _ctx.Types.Double,
+                [_ctx.Types.Double, _ctx.Types.Double], out var reduceMethod))
+        {
+            return false;
+        }
+
+        MarkStatementStart(arrayDeclaration);
+        MarkStatementStart(buildLoop);
+        MarkStatementStart(mappedDeclaration);
+        MarkStatementStart(filteredDeclaration);
+        if (_ctx.CurrentMethod is MethodBuilder pipelineMethod)
+            pipelineMethod.SetImplementationFlags(
+                System.Reflection.MethodImplAttributes.AggressiveInlining |
+                System.Reflection.MethodImplAttributes.AggressiveOptimization);
+
+        var counter = IL.DeclareLocal(_ctx.Types.Double);
+        var mapped = IL.DeclareLocal(_ctx.Types.Double);
+        var accumulator = IL.DeclareLocal(_ctx.Types.Double);
+        IL.Emit(OpCodes.Ldc_R8, initial);
+        IL.Emit(OpCodes.Stloc, accumulator);
+        IL.Emit(OpCodes.Ldc_R8, 0.0);
+        IL.Emit(OpCodes.Stloc, counter);
+
+        var loop = IL.DefineLabel();
+        var advance = IL.DefineLabel();
+        var end = IL.DefineLabel();
+        IL.MarkLabel(loop);
+        IL.Emit(OpCodes.Ldloc, counter);
+        EmitExpressionAsDouble(bound);
+        IL.Emit(OpCodes.Clt);
+        IL.Emit(OpCodes.Brfalse, end);
+        IL.Emit(OpCodes.Ldloc, counter);
+        IL.Emit(OpCodes.Call, mapMethod);
+        IL.Emit(OpCodes.Stloc, mapped);
+        IL.Emit(OpCodes.Ldloc, mapped);
+        IL.Emit(OpCodes.Call, predicateMethod);
+        IL.Emit(OpCodes.Brfalse, advance);
+        IL.Emit(OpCodes.Ldloc, accumulator);
+        IL.Emit(OpCodes.Ldloc, mapped);
+        IL.Emit(OpCodes.Call, reduceMethod);
+        IL.Emit(OpCodes.Stloc, accumulator);
+
+        IL.MarkLabel(advance);
+        IL.Emit(OpCodes.Ldloc, counter);
+        IL.Emit(OpCodes.Ldc_R8, 1.0);
+        IL.Emit(OpCodes.Add);
+        IL.Emit(OpCodes.Stloc, counter);
+        IL.Emit(OpCodes.Br, loop);
+
+        IL.MarkLabel(end);
+        MarkStatementStart(returnStatement);
+        IL.Emit(OpCodes.Ldloc, accumulator);
+        SetStackType(StackType.Double);
+        if (pipelineReturnType == _ctx.Types.Object)
+        {
+            IL.Emit(OpCodes.Box, _ctx.Types.Double);
+            SetStackUnknown();
+        }
+        EmitReturnFromStack(pipelineReturnType);
+        consumed = 5;
+        return true;
+    }
+
+    /// <summary>
+    /// Recognizes the closed, pure numeric pipeline
+    /// <c>const mapped = source.map(...); const filtered = mapped.filter(...);
+    /// return filtered.reduce(..., literal)</c>. Because neither intermediate
+    /// escapes and every callback is a pure expression over its parameters, the
+    /// three traversals are observably equivalent to one traversal. Emitting the
+    /// fused loop removes both intermediate arrays and their memory traffic.
+    /// </summary>
+    private bool TryEmitFusedNumericArrayPipeline(
+        IReadOnlyList<Stmt> statements,
+        int start,
+        out int consumed)
+    {
+        consumed = 0;
+        if (start + 2 >= statements.Count ||
+            statements[start] is not Stmt.Const
+            {
+                Initializer: Expr.Call
+                {
+                    Optional: false,
+                    Callee: Expr.Get
+                    {
+                        Optional: false,
+                        Object: Expr.Variable sourceVariable,
+                        Name.Lexeme: "map"
+                    },
+                    Arguments: [Expr.ArrowFunction mapper]
+                }
+            } mappedDeclaration ||
+            statements[start + 1] is not Stmt.Const
+            {
+                Initializer: Expr.Call
+                {
+                    Optional: false,
+                    Callee: Expr.Get
+                    {
+                        Optional: false,
+                        Object: Expr.Variable mappedReceiver,
+                        Name.Lexeme: "filter"
+                    },
+                    Arguments: [Expr.ArrowFunction predicate]
+                }
+            } filteredDeclaration ||
+            statements[start + 2] is not Stmt.Return
+            {
+                Value: Expr.Call
+                {
+                    Optional: false,
+                    Callee: Expr.Get
+                    {
+                        Optional: false,
+                        Object: Expr.Variable filteredReceiver,
+                        Name.Lexeme: "reduce"
+                    },
+                    Arguments: [Expr.ArrowFunction reducer, Expr.Literal { Value: double initial }]
+                }
+            } returnStatement ||
+            mappedReceiver.Name.Lexeme != mappedDeclaration.Name.Lexeme ||
+            filteredReceiver.Name.Lexeme != filteredDeclaration.Name.Lexeme ||
+            _ctx.CurrentMethodReturnType is not { } pipelineReturnType ||
+            pipelineReturnType != _ctx.Types.Double && pipelineReturnType != _ctx.Types.Object ||
+            _ctx.TryGetPromotedArrayLocal(sourceVariable.Name.Lexeme) is not
+                { Descriptor.Kind: ArrayElementsKind.Double } source ||
+            _ctx.TypeMap?.IsPromotableArrayLocal(mappedDeclaration.Name, out _) != true ||
+            _ctx.TypeMap.IsPromotableArrayLocal(filteredDeclaration.Name, out _) != true ||
+            !TryGetPurePipelineCallback(mapper, _ctx.Types.Double, [_ctx.Types.Double], out var mapMethod) ||
+            !TryGetPurePipelineCallback(predicate, _ctx.Types.Boolean, [_ctx.Types.Double], out var predicateMethod) ||
+            !TryGetPurePipelineCallback(reducer, _ctx.Types.Double,
+                [_ctx.Types.Double, _ctx.Types.Double], out var reduceMethod))
+        {
+            return false;
+        }
+
+        MarkStatementStart(mappedDeclaration);
+        MarkStatementStart(filteredDeclaration);
+        if (_ctx.CurrentMethod is MethodBuilder pipelineMethod)
+            pipelineMethod.SetImplementationFlags(
+                System.Reflection.MethodImplAttributes.AggressiveInlining |
+                System.Reflection.MethodImplAttributes.AggressiveOptimization);
+
+        var countGetter = _ctx.Types.GetProperty(_ctx.Types.ListOfDouble, "Count").GetGetMethod()!;
+        var itemGetter = _ctx.Types.GetMethod(
+            _ctx.Types.ListOfDouble, "get_Item", _ctx.Types.Int32);
+        var count = IL.DeclareLocal(_ctx.Types.Int32);
+        var index = IL.DeclareLocal(_ctx.Types.Int32);
+        var mapped = IL.DeclareLocal(_ctx.Types.Double);
+        var accumulator = IL.DeclareLocal(_ctx.Types.Double);
+
+        IL.Emit(OpCodes.Ldc_R8, initial);
+        IL.Emit(OpCodes.Stloc, accumulator);
+        IL.Emit(OpCodes.Ldloc, source.Local);
+        IL.Emit(OpCodes.Callvirt, countGetter);
+        IL.Emit(OpCodes.Stloc, count);
+        IL.Emit(OpCodes.Ldc_I4_0);
+        IL.Emit(OpCodes.Stloc, index);
+
+        var loop = IL.DefineLabel();
+        var advance = IL.DefineLabel();
+        var end = IL.DefineLabel();
+        IL.MarkLabel(loop);
+        IL.Emit(OpCodes.Ldloc, index);
+        IL.Emit(OpCodes.Ldloc, count);
+        IL.Emit(OpCodes.Bge, end);
+        IL.Emit(OpCodes.Ldloc, source.Local);
+        IL.Emit(OpCodes.Ldloc, index);
+        IL.Emit(OpCodes.Callvirt, itemGetter);
+        IL.Emit(OpCodes.Call, mapMethod);
+        IL.Emit(OpCodes.Stloc, mapped);
+        IL.Emit(OpCodes.Ldloc, mapped);
+        IL.Emit(OpCodes.Call, predicateMethod);
+        IL.Emit(OpCodes.Brfalse, advance);
+        IL.Emit(OpCodes.Ldloc, accumulator);
+        IL.Emit(OpCodes.Ldloc, mapped);
+        IL.Emit(OpCodes.Call, reduceMethod);
+        IL.Emit(OpCodes.Stloc, accumulator);
+
+        IL.MarkLabel(advance);
+        IL.Emit(OpCodes.Ldloc, index);
+        IL.Emit(OpCodes.Ldc_I4_1);
+        IL.Emit(OpCodes.Add);
+        IL.Emit(OpCodes.Stloc, index);
+        IL.Emit(OpCodes.Br, loop);
+
+        IL.MarkLabel(end);
+        MarkStatementStart(returnStatement);
+        IL.Emit(OpCodes.Ldloc, accumulator);
+        SetStackType(StackType.Double);
+        if (pipelineReturnType == _ctx.Types.Object)
+        {
+            IL.Emit(OpCodes.Box, _ctx.Types.Double);
+            SetStackUnknown();
+        }
+        EmitReturnFromStack(pipelineReturnType);
+        consumed = 3;
+        return true;
+    }
+
+    private bool TryGetPurePipelineCallback(
+        Expr.ArrowFunction arrow,
+        Type returnType,
+        Type[] parameterTypes,
+        out MethodBuilder method)
+    {
+        method = null!;
+        if (arrow.ExpressionBody is null ||
+            arrow.BlockBody is not null ||
+            arrow.IsAsync || arrow.IsGenerator || arrow.HasOwnThis ||
+            arrow.Parameters.Count != parameterTypes.Length ||
+            _ctx.DisplayClasses.ContainsKey(arrow) ||
+            !_ctx.ArrowMethods.TryGetValue(arrow, out var candidate) ||
+            candidate.ReturnType != returnType ||
+            !candidate.GetParameters().Select(parameter => parameter.ParameterType)
+                .SequenceEqual(parameterTypes))
+        {
+            return false;
+        }
+
+        var parameters = arrow.Parameters
+            .Select(parameter => parameter.Name.Lexeme)
+            .ToHashSet(StringComparer.Ordinal);
+        if (!IsPurePipelineExpression(arrow.ExpressionBody, parameters))
+            return false;
+
+        candidate.SetImplementationFlags(
+            System.Reflection.MethodImplAttributes.AggressiveInlining |
+            System.Reflection.MethodImplAttributes.AggressiveOptimization);
+        method = candidate;
+        return true;
+    }
+
+    private static bool IsPurePipelineExpression(Expr expression, HashSet<string> parameters) =>
+        expression switch
+        {
+            Expr.Literal => true,
+            Expr.Variable variable => parameters.Contains(variable.Name.Lexeme),
+            Expr.Grouping grouping => IsPurePipelineExpression(grouping.Expression, parameters),
+            Expr.Unary unary => IsPurePipelineExpression(unary.Right, parameters),
+            Expr.Binary binary =>
+                IsPurePipelineExpression(binary.Left, parameters) &&
+                IsPurePipelineExpression(binary.Right, parameters),
+            Expr.Logical logical =>
+                IsPurePipelineExpression(logical.Left, parameters) &&
+                IsPurePipelineExpression(logical.Right, parameters),
+            Expr.Ternary ternary =>
+                IsPurePipelineExpression(ternary.Condition, parameters) &&
+                IsPurePipelineExpression(ternary.ThenBranch, parameters) &&
+                IsPurePipelineExpression(ternary.ElseBranch, parameters),
+            _ => false
+        };
+
+    /// <summary>
     /// Emits a list of statements with proper handling for 'using' declarations.
     /// If using declarations are present, wraps the statements in try/finally for disposal.
     /// </summary>
@@ -3192,9 +3939,16 @@ public partial class ILEmitter
         else
         {
             // No using declarations - emit normally
-            foreach (var stmt in statements)
+            for (int index = 0; index < statements.Count; index++)
             {
-                EmitStatement(stmt);
+                if (TryEmitScalarizedFixedPairDestructureLoop(statements, index, out int consumed) ||
+                    TryEmitFusedNumericArrayBuildPipeline(statements, index, out consumed) ||
+                    TryEmitFusedNumericArrayPipeline(statements, index, out consumed))
+                {
+                    index += consumed - 1;
+                    continue;
+                }
+                EmitStatement(statements[index]);
             }
         }
     }
@@ -3304,6 +4058,15 @@ public partial class ILEmitter
         }
 
     emit_return:
+        EmitReturnFromStack(returnType);
+    }
+
+    /// <summary>
+    /// Completes a return after its correctly typed value has already been
+    /// placed on the evaluation stack.
+    /// </summary>
+    private void EmitReturnFromStack(Type returnType)
+    {
         if (_abruptCompletionScopes.TryPeek(out var completion))
         {
             if (_ctx.ReturnValueLocal == null && !_ctx.HasDeferredVoidReturn)

@@ -26,6 +26,64 @@ public class DestructuringTests
     }
 
     [Theory, ModeData]
+    public void FixedPairDestructuringLoop_PreservesLoopBounds(ExecutionMode mode)
+    {
+        var source = """
+            function total(n: number): number {
+                const pair: number[] = [1, 2];
+                let checksum: number = 0;
+                for (let i: number = 0; i < n; i++) {
+                    const [left, right] = pair;
+                    checksum = checksum + left + right;
+                }
+                return checksum;
+            }
+            console.log(total(3.5), total(-1), total(NaN));
+            """;
+
+        Assert.Equal("12 0 0\n", TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
+    public void MutatedPairDestructuringLoop_RetainsArraySemantics(ExecutionMode mode)
+    {
+        var source = """
+            function total(): number {
+                const pair: number[] = [1, 2];
+                let checksum: number = 0;
+                for (let i: number = 0; i < 2; i++) {
+                    pair[0] = pair[0] + 1;
+                    const [left, right] = pair;
+                    checksum = checksum + left + right;
+                }
+                return checksum;
+            }
+            console.log(total());
+            """;
+
+        Assert.Equal("9\n", TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
+    public void FixedPairDestructuringLoop_PreservesSequentialNumberRounding(ExecutionMode mode)
+    {
+        const string source = """
+            function total(): number {
+                const pair: number[] = [10000000000000000, -10000000000000000];
+                let checksum: number = 1;
+                for (let i: number = 0; i < 1; i++) {
+                    const [left, right] = pair;
+                    checksum = checksum + left + right;
+                }
+                return checksum;
+            }
+            console.log(total());
+            """;
+
+        Assert.Equal("0\n", TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
     public void ArrayDestructuring_WithRest(ExecutionMode mode)
     {
         var source = """
