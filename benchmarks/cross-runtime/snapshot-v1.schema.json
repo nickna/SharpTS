@@ -103,14 +103,23 @@
             "harnessVersion": { "const": 2 },
             "id": { "const": "performance-now-confirmed-probe-auto-batched-v2" }
           }
+        },
+        {
+          "required": ["validation"],
+          "properties": {
+            "harnessVersion": { "const": 3 },
+            "id": { "const": "performance-now-validated-high-precision-auto-batched-v3" },
+            "sampling": { "required": ["reportedDecimalPlaces"] }
+          }
         }
       ],
       "properties": {
-        "harnessVersion": { "enum": [1, 2] },
+        "harnessVersion": { "enum": [1, 2, 3] },
         "id": {
           "enum": [
             "performance-now-auto-batched-v1",
-            "performance-now-confirmed-probe-auto-batched-v2"
+            "performance-now-confirmed-probe-auto-batched-v2",
+            "performance-now-validated-high-precision-auto-batched-v3"
           ]
         },
         "timingScope": { "const": "inProcessWorkload" },
@@ -124,6 +133,15 @@
           "type": "array",
           "minItems": 1,
           "items": { "$ref": "#/$defs/nonEmptyString" }
+        },
+        "validation": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["mode", "timing"],
+          "properties": {
+            "mode": { "const": "optionalExpectedNumericResult" },
+            "timing": { "const": "beforeAndAfterSampling" }
+          }
         },
         "sampling": {
           "type": "object",
@@ -142,7 +160,8 @@
             "targetDurationMilliseconds": { "type": "number", "exclusiveMinimum": 0 },
             "minimumSamples": { "type": "integer", "minimum": 1 },
             "hardCapMilliseconds": { "type": "number", "exclusiveMinimum": 0 },
-            "maximumSamples": { "type": "integer", "minimum": 1 }
+            "maximumSamples": { "type": "integer", "minimum": 1 },
+            "reportedDecimalPlaces": { "type": "integer", "minimum": 0 }
           }
         }
       }

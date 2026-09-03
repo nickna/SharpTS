@@ -61,9 +61,25 @@ try {
     Assert-True ($snapshotA.cases[0].runtimes[0].reason -ceq 'notSelected') 'Interpreter missing reason was notSelected.'
     Assert-True ($snapshotA.cases[0].runtimes[3].status -ceq 'missing') 'Bun should be explicitly missing.'
     Assert-True (-not $snapshotA.run.tools.runtimes[3].available) 'Unavailable Bun was marked available.'
-    Assert-True ($snapshotA.methodology.harnessVersion -eq 2) 'Expected confirmed-probe harness version 2.'
-    Assert-True ($snapshotA.methodology.id -ceq 'performance-now-confirmed-probe-auto-batched-v2') `
-        'Expected confirmed-probe methodology ID.'
+    Assert-True ($snapshotA.methodology.harnessVersion -eq 3) 'Expected validated high-precision harness version 3.'
+    Assert-True ($snapshotA.methodology.id -ceq 'performance-now-validated-high-precision-auto-batched-v3') `
+        'Expected validated high-precision methodology ID.'
+    Assert-True ($snapshotA.methodology.validation.mode -ceq 'optionalExpectedNumericResult') `
+        'Expected optional numeric result validation metadata.'
+    Assert-True ($snapshotA.methodology.validation.timing -ceq 'beforeAndAfterSampling') `
+        'Expected untimed pre/post validation metadata.'
+    Assert-True ($snapshotA.methodology.sampling.reportedDecimalPlaces -eq 7) `
+        'Expected seven-decimal millisecond result precision.'
+
+    $formatted = (& (Join-Path $harnessDirectory 'format-results.ps1') `
+        -ResultsFile $resultsA `
+        -DotNetVersion '10.0.100' `
+        -NodeVersion 'v24.0.0' `
+        -BunVersion 'n/a') -join "`n"
+    Assert-True ($formatted -match [regex]::Escape('5.25 ±0.175 (L2)')) `
+        'Formatter did not report the median across both Node launches.'
+    Assert-True ($formatted -match [regex]::Escape('6 ±0.3 (L1)')) `
+        'Formatter did not retain the compiled launch count.'
 
     $snapshotFile = Join-Path $temporaryDirectory 'snapshot.json'
     [void](Export-SharpTSPublicBenchmarkSnapshot -ResultsFile $resultsA -OutputFile $snapshotFile @fixed)
@@ -93,6 +109,11 @@ try {
     $unknownSchema = $jsonA | ConvertFrom-Json
     $unknownSchema.schemaVersion = 2
     Assert-Throws { Assert-SharpTSPublicBenchmarkSnapshot $unknownSchema } 'Unsupported benchmark snapshot schema version'
+
+    $mismatchedMethodology = $jsonA | ConvertFrom-Json
+    $mismatchedMethodology.methodology.id = 'performance-now-confirmed-probe-auto-batched-v2'
+    Assert-Throws { Assert-SharpTSPublicBenchmarkSnapshot $mismatchedMethodology } `
+        'Unsupported or mismatched benchmark methodology'
 
     $duplicateCase = $jsonA | ConvertFrom-Json
     $clonedCase = $duplicateCase.cases[0] | ConvertTo-Json -Depth 12 | ConvertFrom-Json

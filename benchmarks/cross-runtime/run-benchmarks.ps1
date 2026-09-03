@@ -9,7 +9,7 @@ param(
     [string[]]$Runtimes = @('interpreter', 'compiled', 'node', 'bun'),
 
     [ValidateRange(1, 20)]
-    [int]$Launches = 1,
+    [int]$Launches = 3,
 
     [string]$OutputDirectory,
 

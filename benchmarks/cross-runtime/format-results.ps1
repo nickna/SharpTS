@@ -31,14 +31,17 @@ Write-Output @"
 **Environment:** .NET $DotNetVersion | Node.js $NodeVersion | Bun $BunVersion | $os $arch
 **Date:** $(Get-Date -Format 'yyyy-MM-dd')
 
-Per-call mean ms with sample standard deviation (lower is better). Per-call
-minimums are kept in the raw results artifact for deeper analysis.
+Median per-launch mean ms with the median within-launch sample standard
+deviation (lower is better). ``L#`` is the number of retained launches;
+per-launch means and minimums remain in the raw results artifact.
 
 | Benchmark | Param | Interpreter (ms) | Compiled (ms) | Node.js (ms) | Bun (ms) | Compiled vs Node |
 |-----------|-------|------------------:|--------------:|--------------:|---------:|-----------------:|
 "@
 
-# Parse results into a dictionary keyed by "bench|param".
+# Parse results into a dictionary keyed by "bench|param". Keep every launch;
+# overwriting by runtime would make the displayed table silently show only the
+# final launch now that repeated launches are the default.
 # The first five payload fields remain
 # <bench>:<param>:<mean>:<min>:<stdev>. Newer harnesses append sampling,
 # workload-family, and launch metadata for the structured exporter.
@@ -55,20 +58,48 @@ foreach ($line in Get-Content $ResultsFile) {
     if (-not $data.Contains($key)) {
         $data[$key] = @{}
     }
-    $data[$key][$runtime] = @{
+    if (-not $data[$key].ContainsKey($runtime)) {
+        $data[$key][$runtime] = [Collections.Generic.List[object]]::new()
+    }
+    [void]$data[$key][$runtime].Add([pscustomobject]@{
         mean  = $fields[2]
         stdev = if ($fields.Count -ge 5) { $fields[4] } else { $null }
+    })
+}
+
+function Get-Median([double[]]$Values) {
+    $ordered = @($Values | Sort-Object)
+    $middle = [int][Math]::Floor($ordered.Count / 2)
+    if (($ordered.Count % 2) -eq 1) { return [double]$ordered[$middle] }
+    return ([double]$ordered[$middle - 1] + [double]$ordered[$middle]) / 2
+}
+
+function Format-Number([double]$Value) {
+    return $Value.ToString('0.#######', [Globalization.CultureInfo]::InvariantCulture)
+}
+
+function Get-RuntimeSummary($entry, $runtime) {
+    if (-not $entry.ContainsKey($runtime)) { return $null }
+    $launches = @($entry[$runtime])
+    $means = @($launches | ForEach-Object { [double]$_.mean })
+    $stdevs = @($launches | Where-Object { $null -ne $_.stdev -and $_.stdev -ne '' } |
+        ForEach-Object { [double]$_.stdev })
+    return [pscustomobject]@{
+        mean = Get-Median $means
+        stdev = if ($stdevs.Count -gt 0) { Get-Median $stdevs } else { $null }
+        launches = $launches.Count
     }
 }
 
-# Render a runtime cell as "mean ±stdev" (or just "mean", or "-" if absent).
+# Render a runtime cell as "median-mean ±median-stdev (L#)".
 function Format-Cell($entry, $runtime) {
-    if (-not $entry.ContainsKey($runtime)) { return '-' }
-    $m = $entry[$runtime]
-    if ($null -ne $m.stdev -and $m.stdev -ne '') {
-        return "$($m.mean) ±$($m.stdev)"
+    $summary = Get-RuntimeSummary $entry $runtime
+    if ($null -eq $summary) { return '-' }
+    $meanText = Format-Number $summary.mean
+    if ($null -ne $summary.stdev) {
+        return "$meanText ±$(Format-Number $summary.stdev) (L$($summary.launches))"
     }
-    return "$($m.mean)"
+    return "$meanText (L$($summary.launches))"
 }
 
 foreach ($key in $data.Keys) {
@@ -84,9 +115,11 @@ foreach ($key in $data.Keys) {
 
     $ratio = '-'
     if ($entry.ContainsKey('compiled') -and $entry.ContainsKey('node')) {
-        $njsNum = [double]$entry['node'].mean
+        $compiledSummary = Get-RuntimeSummary $entry 'compiled'
+        $nodeSummary = Get-RuntimeSummary $entry 'node'
+        $njsNum = $nodeSummary.mean
         if ($njsNum -gt 0) {
-            $ratio = '{0:F2}x' -f ([double]$entry['compiled'].mean / $njsNum)
+            $ratio = '{0:F2}x' -f ($compiledSummary.mean / $njsNum)
         }
     }
 
