@@ -127,7 +127,7 @@ public static class VmContext
             foreach (var name in originalProperties.Keys)
             {
                 if (env.TryGet(name, out var value))
-                    tsObj.SetProperty(name, value);
+                    tsObj.SetProperty(name, value.ToObject());
             }
         }
         else if (contextObject is Dictionary<string, object?> dict)
@@ -135,7 +135,7 @@ public static class VmContext
             foreach (var name in originalProperties.Keys)
             {
                 if (env.TryGet(name, out var value))
-                    dict[name] = value;
+                    dict[name] = value.ToObject();
             }
         }
         else if (contextObject != null)
@@ -155,7 +155,7 @@ public static class VmContext
                 foreach (var name in originalProperties.Keys)
                 {
                     if (env.TryGet(name, out var value))
-                        setMethod.Invoke(contextObject, [name, value]);
+                        setMethod.Invoke(contextObject, [name, value.ToObject()]);
                 }
             }
         }
