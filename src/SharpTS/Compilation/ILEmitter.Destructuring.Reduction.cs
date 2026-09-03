@@ -12,7 +12,9 @@ public partial class ILEmitter
         Expr.Variable Source,
         Expr.Variable Bound,
         string Accumulator,
-        IReadOnlyList<FieldBuilder> Fields);
+        IReadOnlyList<FieldBuilder> Fields,
+        MethodBuilder IsMaterializedGetter,
+        bool RequiresMaterializationGuard);
 
     /// <summary>
     /// Versions a side-effect-free stable-record reduction such as
@@ -88,6 +90,13 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Stloc, exactSource);
         IL.Emit(OpCodes.Ldloc, exactSource);
         IL.Emit(OpCodes.Brfalse, slowStart);
+        if (reduction.RequiresMaterializationGuard &&
+            !_stableCompactRecordLocals.Contains(sourceLocal))
+        {
+            IL.Emit(OpCodes.Ldloc, exactSource);
+            IL.Emit(OpCodes.Call, reduction.IsMaterializedGetter);
+            IL.Emit(OpCodes.Brtrue, slowStart);
+        }
 
         EmitExpressionAsDouble(reduction.Bound);
         IL.Emit(OpCodes.Stloc, boundDouble);
@@ -244,9 +253,10 @@ public partial class ILEmitter
             }
 
             string fingerprint = JsonSerializationShapeAnalyzer.Fingerprint(shape);
-            if (!features.CanAssumeCompactObjectRecordIsUnmaterialized(fingerprint)
-                || !runtime.CompactObjectRecordTypes.TryGetValue(
-                    fingerprint, out var carrierType))
+            if (!runtime.CompactObjectRecordTypes.TryGetValue(
+                    fingerprint, out var carrierType)
+                || !runtime.CompactObjectRecordIsMaterializedGetters.TryGetValue(
+                    fingerprint, out var isMaterializedGetter))
             {
                 return false;
             }
@@ -287,7 +297,12 @@ public partial class ILEmitter
                 return false;
 
             result = new StableObjectDestructureReduction(
-                source, loopBound, accumulator.Lexeme, fields);
+                source,
+                loopBound,
+                accumulator.Lexeme,
+                fields,
+                isMaterializedGetter,
+                !features.CanAssumeCompactObjectRecordIsUnmaterialized(fingerprint));
             return true;
         }
     }

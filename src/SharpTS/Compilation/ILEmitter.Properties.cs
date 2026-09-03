@@ -384,6 +384,8 @@ public partial class ILEmitter
             && objType is TypeInfo.Record recordType
             && _ctx.Runtime?.UndefinedInstance != null)
         {
+            if (TryEmitTypedRecordNumberGet(g, recordType))
+                return;
             EmitTypedRecordPropertyGet(g, recordType);
             return;
         }
@@ -430,6 +432,133 @@ public partial class ILEmitter
             IL.Emit(OpCodes.Ldstr, g.Name.Lexeme);
             IL.Emit(OpCodes.Call, _ctx.Runtime!.GetProperty);
         }
+    }
+
+    /// <summary>
+    /// Keeps a numeric compact-record slot native through ordinary <c>obj.x</c>
+    /// consumers.  The fast arm is guarded by the receiver's exact carrier type
+    /// and its own materialization state; the cold arm preserves the general
+    /// property lookup and ToNumber semantics.
+    /// </summary>
+    private bool TryEmitTypedRecordNumberGet(Expr.Get g, TypeInfo.Record recordType)
+    {
+        if (_ctx.ProgramType is null || _ctx.Runtime is not { } runtime ||
+            !JsonSerializationShapeAnalyzer.TryAnalyze(recordType, out var analyzedShape) ||
+            analyzedShape is not JsonSerializationShape.Record recordShape)
+        {
+            return false;
+        }
+
+        int fieldIndex = -1;
+        for (int index = 0; index < recordShape.Fields.Count; index++)
+        {
+            if (recordShape.Fields[index].Key == g.Name.Lexeme)
+            {
+                fieldIndex = index;
+                break;
+            }
+        }
+
+        string fingerprint = JsonSerializationShapeAnalyzer.Fingerprint(recordShape);
+        TypeBuilder? jsonCarrierType = null;
+        FieldBuilder? jsonValueField = null;
+        TypeBuilder? compactCarrierType = null;
+        FieldBuilder? compactValueField = null;
+        MethodBuilder? compactIsMaterializedGetter = null;
+        bool hasJsonCarrier = fieldIndex >= 0 &&
+            runtime.JsonTypedScalarRecordTypes.TryGetValue(
+                fingerprint, out jsonCarrierType) &&
+            runtime.JsonTypedScalarRecordValueFields.TryGetValue(
+                (fingerprint, fieldIndex), out jsonValueField) &&
+            jsonValueField.FieldType == _ctx.Types.Double;
+        bool hasCompactCarrier = fieldIndex >= 0 &&
+            runtime.CompactObjectRecordTypes.TryGetValue(
+                fingerprint, out compactCarrierType) &&
+            runtime.CompactObjectRecordValueFields.TryGetValue(
+                (fingerprint, fieldIndex), out compactValueField) &&
+            compactValueField.FieldType == _ctx.Types.Double &&
+            runtime.CompactObjectRecordIsMaterializedGetters.TryGetValue(
+                fingerprint, out compactIsMaterializedGetter);
+        if (!hasJsonCarrier && !hasCompactCarrier)
+        {
+            return false;
+        }
+
+        EmitExpression(g.Object);
+        EmitBoxIfNeeded(g.Object);
+        var receiver = IL.DeclareLocal(_ctx.Types.Object);
+        var result = IL.DeclareLocal(_ctx.Types.Double);
+        var tryCompact = IL.DefineLabel();
+        var fallback = IL.DefineLabel();
+        var end = IL.DefineLabel();
+        IL.Emit(OpCodes.Stloc, receiver);
+
+        if (hasJsonCarrier)
+        {
+            var jsonExact = IL.DeclareLocal(jsonCarrierType!);
+            IL.Emit(OpCodes.Ldloc, receiver);
+            IL.Emit(OpCodes.Isinst, jsonCarrierType!);
+            IL.Emit(OpCodes.Stloc, jsonExact);
+            IL.Emit(OpCodes.Ldloc, jsonExact);
+            IL.Emit(OpCodes.Brfalse, tryCompact);
+            IL.Emit(OpCodes.Ldloc, jsonExact);
+            IL.Emit(OpCodes.Callvirt, runtime.JsonScalarRecordIsMaterializedGetter);
+            IL.Emit(OpCodes.Brtrue, fallback);
+            if (_ctx.RuntimeFeatures?.UsesDynamicPropertyDescriptors == true)
+            {
+                IL.Emit(OpCodes.Ldloc, jsonExact);
+                IL.Emit(OpCodes.Call, runtime.PDSHasPropertyDescriptors);
+                IL.Emit(OpCodes.Brtrue, fallback);
+            }
+            IL.Emit(OpCodes.Ldloc, jsonExact);
+            IL.Emit(OpCodes.Ldfld, jsonValueField!);
+            IL.Emit(OpCodes.Stloc, result);
+            IL.Emit(OpCodes.Br, end);
+        }
+
+        IL.MarkLabel(tryCompact);
+        if (hasCompactCarrier)
+        {
+            var compactExact = IL.DeclareLocal(compactCarrierType!);
+            IL.Emit(OpCodes.Ldloc, receiver);
+            IL.Emit(OpCodes.Isinst, compactCarrierType!);
+            IL.Emit(OpCodes.Stloc, compactExact);
+            IL.Emit(OpCodes.Ldloc, compactExact);
+            IL.Emit(OpCodes.Brfalse, fallback);
+            if (!_ctx.RuntimeFeatures!.CanAssumeCompactObjectRecordIsUnmaterialized(
+                    fingerprint))
+            {
+                IL.Emit(OpCodes.Ldloc, compactExact);
+                IL.Emit(OpCodes.Call, compactIsMaterializedGetter!);
+                IL.Emit(OpCodes.Brtrue, fallback);
+            }
+            if (_ctx.RuntimeFeatures?.UsesDynamicPropertyDescriptors == true)
+            {
+                IL.Emit(OpCodes.Ldloc, compactExact);
+                IL.Emit(OpCodes.Call, runtime.PDSHasPropertyDescriptors);
+                IL.Emit(OpCodes.Brtrue, fallback);
+            }
+            IL.Emit(OpCodes.Ldloc, compactExact);
+            IL.Emit(OpCodes.Ldfld, compactValueField!);
+            IL.Emit(OpCodes.Stloc, result);
+            IL.Emit(OpCodes.Br, end);
+        }
+        else
+        {
+            IL.Emit(OpCodes.Br, fallback);
+        }
+
+        IL.MarkLabel(fallback);
+        IL.Emit(OpCodes.Ldloc, receiver);
+        IL.Emit(OpCodes.Ldstr, g.Name.Lexeme);
+        IL.Emit(OpCodes.Call, runtime.GetProperty);
+        IL.Emit(OpCodes.Call, runtime.ConvertToNumber);
+        IL.Emit(OpCodes.Stloc, result);
+
+        IL.MarkLabel(end);
+        IL.Emit(OpCodes.Ldloc, result);
+        SetStackType(StackType.Double);
+        return true;
     }
 
     /// <summary>
@@ -524,8 +653,8 @@ public partial class ILEmitter
                     fingerprint, out var exactType) &&
                 _ctx.Runtime.CompactObjectRecordValueFields.TryGetValue(
                     (fingerprint, scalarIndex), out var exactValueField) &&
-                _ctx.Runtime.CompactObjectRecordAnyMaterializedFields.TryGetValue(
-                    fingerprint, out var anyMaterializedField))
+                _ctx.Runtime.CompactObjectRecordIsMaterializedGetters.TryGetValue(
+                    fingerprint, out var isMaterializedGetter))
             {
                 exactCarrierSpecialized = true;
                 LocalBuilder exactLocal;
@@ -548,7 +677,8 @@ public partial class ILEmitter
                 if (!_ctx.RuntimeFeatures!.CanAssumeCompactObjectRecordIsUnmaterialized(
                         fingerprint))
                 {
-                    IL.Emit(OpCodes.Ldsfld, anyMaterializedField);
+                    IL.Emit(OpCodes.Ldloc, exactLocal);
+                    IL.Emit(OpCodes.Call, isMaterializedGetter);
                     IL.Emit(OpCodes.Brtrue, fallbackLabel);
                 }
                 if (_ctx.RuntimeFeatures?.UsesDynamicPropertyDescriptors == true)
