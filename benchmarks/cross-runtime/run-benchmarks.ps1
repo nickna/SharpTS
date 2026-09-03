@@ -11,6 +11,10 @@ param(
     [ValidateRange(1, 20)]
     [int]$Launches = 3,
 
+    # Run every case in these workloads in a fresh process. Exception timings
+    # are sensitive to tiering and earlier cases, so isolation is the default.
+    [string[]]$IsolatedWorkloads = @('exceptions'),
+
     [string]$OutputDirectory,
 
     # Keep the harness on the candidate branch while measuring a frozen
@@ -65,6 +69,9 @@ if ($Workloads.Count -gt 0) {
 } else {
     $scripts = $availableScripts
 }
+
+$IsolatedWorkloads = @($IsolatedWorkloads | ForEach-Object { $_ -split ',' } |
+    ForEach-Object { $_.Trim() } | Where-Object { $_ } | Select-Object -Unique)
 
 $Runtimes = @($Runtimes | ForEach-Object { $_ -split ',' } |
     ForEach-Object { $_.Trim().ToLowerInvariant() } | Where-Object { $_ } | Select-Object -Unique)
@@ -263,41 +270,94 @@ try {
             }
         }
 
+        # Ask the shared harness for its registered case names without executing
+        # any measured callback. Each selected case can then run in a clean
+        # process, preventing tiering and global state from earlier cases from
+        # changing its measurements.
+        $caseNames = @($null)
+        if ($benchName -in $IsolatedWorkloads) {
+            $oldListCases = [Environment]::GetEnvironmentVariable(
+                'SHARPTS_BENCH_LIST_CASES', 'Process')
+            $oldSelectedCase = [Environment]::GetEnvironmentVariable(
+                'SHARPTS_BENCH_CASE', 'Process')
+            try {
+                [Environment]::SetEnvironmentVariable(
+                    'SHARPTS_BENCH_LIST_CASES', '1', 'Process')
+                [Environment]::SetEnvironmentVariable(
+                    'SHARPTS_BENCH_CASE', $null, 'Process')
+                $discovery = Invoke-Captured {
+                    dotnet run -c Release --no-build --project $SharpTSProject -- $script.FullName
+                }
+            } finally {
+                [Environment]::SetEnvironmentVariable(
+                    'SHARPTS_BENCH_LIST_CASES', $oldListCases, 'Process')
+                [Environment]::SetEnvironmentVariable(
+                    'SHARPTS_BENCH_CASE', $oldSelectedCase, 'Process')
+            }
+
+            $caseNames = @($discovery.Output |
+                Where-Object { $_ -match '^BENCH_CASE:' } |
+                ForEach-Object { ([string]$_) -replace '^BENCH_CASE:', '' } |
+                Select-Object -Unique)
+            if ($discovery.ExitCode -ne 0 -or $caseNames.Count -eq 0) {
+                Add-Failure "$benchName [case discovery] failed"
+                Show-Diagnostics 'case-discovery' $discovery.Output
+                continue
+            }
+            Write-Host "  [isolation] discovered $($caseNames.Count) cases"
+        }
+
         for ($launch = 1; $launch -le $Launches; $launch++) {
             $offset = ($launch - 1) % $Runtimes.Count
             $orderedRuntimes = @($Runtimes[$offset..($Runtimes.Count - 1)])
             if ($offset -gt 0) { $orderedRuntimes += $Runtimes[0..($offset - 1)] }
 
             foreach ($runtime in $orderedRuntimes) {
-                Write-Host "  [$runtime] launch $launch/$Launches..."
-                switch ($runtime) {
-                    'interpreter' {
-                        $result = Invoke-Captured {
-                            dotnet run -c Release --no-build --project $SharpTSProject -- $script.FullName
+                foreach ($caseName in $caseNames) {
+                    $caseLabel = if ($null -eq $caseName) { '' } else { " case $caseName" }
+                    Write-Host "  [$runtime] launch $launch/$Launches$caseLabel..."
+                    $oldSelectedCase = [Environment]::GetEnvironmentVariable(
+                        'SHARPTS_BENCH_CASE', 'Process')
+                    try {
+                        if ($null -ne $caseName) {
+                            [Environment]::SetEnvironmentVariable(
+                                'SHARPTS_BENCH_CASE', $caseName, 'Process')
                         }
-                        Complete-Runtime $benchName 'interpreter' $launch $result $ResultsFile
-                    }
-                    'compiled' {
-                        if ($compiledReady) {
-                            $result = Invoke-Captured { dotnet $dllPath }
-                            Complete-Runtime $benchName 'compiled' $launch $result $ResultsFile
+                        switch ($runtime) {
+                            'interpreter' {
+                                $result = Invoke-Captured {
+                                    dotnet run -c Release --no-build --project $SharpTSProject -- $script.FullName
+                                }
+                                Complete-Runtime $benchName 'interpreter' $launch $result $ResultsFile
+                            }
+                            'compiled' {
+                                if ($compiledReady) {
+                                    $result = Invoke-Captured { dotnet $dllPath }
+                                    Complete-Runtime $benchName 'compiled' $launch $result $ResultsFile
+                                }
+                            }
+                            'node' {
+                                if ($node) {
+                                    $nodeArgs = $nodeFlags + @($script.FullName)
+                                    $result = Invoke-Captured { & $node.Source @nodeArgs }
+                                    Complete-Runtime $benchName 'node' $launch $result $ResultsFile
+                                } else {
+                                    Add-Failure "$benchName [node] could not run because Node.js is unavailable"
+                                }
+                            }
+                            'bun' {
+                                if ($bun) {
+                                    $result = Invoke-Captured { & bun run $script.FullName }
+                                    Complete-Runtime $benchName 'bun' $launch $result $ResultsFile
+                                } else {
+                                    Write-Host '  [bun] not installed, skipping'
+                                }
+                            }
                         }
-                    }
-                    'node' {
-                        if ($node) {
-                            $nodeArgs = $nodeFlags + @($script.FullName)
-                            $result = Invoke-Captured { & $node.Source @nodeArgs }
-                            Complete-Runtime $benchName 'node' $launch $result $ResultsFile
-                        } else {
-                            Add-Failure "$benchName [node] could not run because Node.js is unavailable"
-                        }
-                    }
-                    'bun' {
-                        if ($bun) {
-                            $result = Invoke-Captured { & bun run $script.FullName }
-                            Complete-Runtime $benchName 'bun' $launch $result $ResultsFile
-                        } else {
-                            Write-Host '  [bun] not installed, skipping'
+                    } finally {
+                        if ($null -ne $caseName) {
+                            [Environment]::SetEnvironmentVariable(
+                                'SHARPTS_BENCH_CASE', $oldSelectedCase, 'Process')
                         }
                     }
                 }

@@ -145,7 +145,7 @@ public class TypeEnvironment : ScopeChain<TypeInfo, TypeEnvironment>
 
     public void Assign(Token name, TypeInfo type)
     {
-        if (_values.ContainsKey(name.Lexeme))
+        if (_values?.ContainsKey(name.Lexeme) == true)
         {
             // In a stricter system, we might check if the re-assignment type matches the declared type here
             // But usually we just want to look up the existing declared type.
@@ -245,14 +245,14 @@ public class TypeEnvironment : ScopeChain<TypeInfo, TypeEnvironment>
                 mergedTypeBindings.Count == 0 ? null : mergedTypeBindings.ToFrozenDictionary(),
                 mergedValueBindings.Count == 0 ? null : mergedValueBindings.ToFrozenDictionary());
             _namespaces[name] = mergedNs;
-            _values[name] = mergedNs;
+            Values[name] = mergedNs;
             _types[name] = mergedNs;
         }
         else
         {
             _namespaces[name] = ns;
             // Also define in values so it can be looked up via Get()
-            _values[name] = ns;
+            Values[name] = ns;
             _types[name] = ns;
         }
     }
@@ -279,7 +279,7 @@ public class TypeEnvironment : ScopeChain<TypeInfo, TypeEnvironment>
         _importAliases[name] = (type, isValue);
         _types[name] = type;
         if (isValue)
-            _values[name] = type;
+            Values[name] = type;
     }
 
     /// <summary>

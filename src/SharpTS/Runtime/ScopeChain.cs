@@ -13,7 +13,11 @@ namespace SharpTS.Runtime;
 /// <typeparam name="TSelf">The concrete derived type (for covariant Enclosing)</typeparam>
 public abstract class ScopeChain<TValue, TSelf> where TSelf : ScopeChain<TValue, TSelf>
 {
-    protected readonly Dictionary<string, TValue> _values = new(StringComparer.Ordinal);
+    // Most transient scopes never declare a binding (for example a catch without
+    // a parameter). Defer the dictionary until the first actual definition.
+    protected Dictionary<string, TValue>? _values;
+    protected Dictionary<string, TValue> Values =>
+        _values ??= new Dictionary<string, TValue>(StringComparer.Ordinal);
 
     // Lazily allocated: only named function expressions mark a read-only name, so the
     // overwhelming majority of scopes never need the set.
@@ -43,19 +47,20 @@ public abstract class ScopeChain<TValue, TSelf> where TSelf : ScopeChain<TValue,
     /// <remarks>
     /// Used by REPL autocomplete to list the bindings currently in scope.
     /// </remarks>
-    public IEnumerable<string> Names => _values.Keys;
+    public virtual IEnumerable<string> Names =>
+        _values is null ? Array.Empty<string>() : _values.Keys;
 
     /// <summary>
     /// Defines a variable in the current scope.
     /// </summary>
-    public void Define(string name, TValue value) => _values[name] = value;
+    public virtual void Define(string name, TValue value) => Values[name] = value;
 
     /// <summary>
     /// Gets a variable value, searching up the scope chain.
     /// </summary>
     public virtual TValue? Get(string name)
     {
-        if (_values.TryGetValue(name, out var value))
+        if (_values?.TryGetValue(name, out var value) == true)
             return value;
         return Enclosing != null ? Enclosing.Get(name) : default;
     }
@@ -63,9 +68,9 @@ public abstract class ScopeChain<TValue, TSelf> where TSelf : ScopeChain<TValue,
     /// <summary>
     /// Checks if a variable is defined in this scope or any enclosing scope.
     /// </summary>
-    public bool IsDefined(string name)
+    public virtual bool IsDefined(string name)
     {
-        if (_values.ContainsKey(name)) return true;
+        if (_values?.ContainsKey(name) == true) return true;
         return Enclosing?.IsDefined(name) ?? false;
     }
 
@@ -73,7 +78,8 @@ public abstract class ScopeChain<TValue, TSelf> where TSelf : ScopeChain<TValue,
     /// Checks if a variable is defined in this scope only (not in enclosing scopes).
     /// Used for function hoisting to avoid re-defining already hoisted functions.
     /// </summary>
-    public bool IsDefinedLocally(string name) => _values.ContainsKey(name);
+    public virtual bool IsDefinedLocally(string name) =>
+        _values?.ContainsKey(name) == true;
 
     /// <summary>
     /// Marks a variable as read-only. Used for named function expressions

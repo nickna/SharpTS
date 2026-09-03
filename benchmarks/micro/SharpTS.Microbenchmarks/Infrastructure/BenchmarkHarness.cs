@@ -196,6 +196,28 @@ public static class BenchmarkHarness
     }
 
     /// <summary>
+    /// Returns a strongly-typed delegate for a compiled two-number function so
+    /// parameterized benchmarks do not box either input in the measured region.
+    /// </summary>
+    public static Func<double, double, double> GetCompiledNumber2Func(
+        Assembly assembly, string functionName)
+    {
+        var method = GetCompiledMethod(assembly, functionName);
+        var parameters = method.GetParameters();
+        if (method.ReturnType != typeof(double) ||
+            parameters.Length != 2 ||
+            parameters[0].ParameterType != typeof(double) ||
+            parameters[1].ParameterType != typeof(double))
+        {
+            throw new InvalidOperationException(
+                $"Compiled benchmark '{functionName}' has signature " +
+                $"{method.ReturnType.Name}({string.Join(", ", parameters.Select(p => p.ParameterType.Name))}); " +
+                "expected Double(Double, Double)");
+        }
+        return method.CreateDelegate<Func<double, double, double>>();
+    }
+
+    /// <summary>
     /// Returns a strongly-typed delegate for a compiled async TypeScript
     /// <c>number -&gt; Promise&lt;number&gt;</c> function. Async stubs intentionally use
     /// the runtime's dynamic ABI: <c>Task&lt;object&gt; f(object)</c>.

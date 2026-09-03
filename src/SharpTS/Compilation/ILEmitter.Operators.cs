@@ -359,6 +359,16 @@ public partial class ILEmitter
             return;
         }
 
+        // A common catch pattern compares an `any` value with a statically numeric
+        // local (`caught === i`). The general path boxed both operands even though
+        // strict equality only needs to test whether the dynamic operand is a boxed
+        // double and compare its payload. Preserve evaluation order while avoiding
+        // the second box.
+        if (TryEmitMixedNumericStrictEquality(b, isStrict, isNegated))
+        {
+            return;
+        }
+
         // Fast path: both operands statically numeric. JS number equality has no
         // coercion (=== and == agree when both sides are number), and IEEE `ceq`
         // matches the spec exactly — NaN is never equal (ceq → false, correct for
@@ -3302,6 +3312,62 @@ public partial class ILEmitter
         var leftType = _ctx.TypeMap.Get(b.Left);
         var rightType = _ctx.TypeMap.Get(b.Right);
         return IsNumericTypeInfo(leftType) && IsNumericTypeInfo(rightType);
+    }
+
+    private bool TryEmitMixedNumericStrictEquality(
+        Expr.Binary b,
+        bool isStrict,
+        bool isNegated)
+    {
+        if (!isStrict || _ctx.TypeMap == null)
+            return false;
+
+        bool leftNumeric = IsNumericTypeInfo(_ctx.TypeMap.Get(b.Left));
+        bool rightNumeric = IsNumericTypeInfo(_ctx.TypeMap.Get(b.Right));
+        if (leftNumeric == rightNumeric)
+            return false;
+
+        var numberLocal = IL.DeclareLocal(_ctx.Types.Double);
+        LocalBuilder boxedLocal;
+
+        // JavaScript evaluates the left operand before the right operand, so spill
+        // in source order even though the values have different CLR types.
+        if (leftNumeric)
+        {
+            EmitExpressionAsDouble(b.Left);
+            IL.Emit(OpCodes.Stloc, numberLocal);
+            boxedLocal = SpillBoxed(b.Right);
+        }
+        else
+        {
+            boxedLocal = SpillBoxed(b.Left);
+            EmitExpressionAsDouble(b.Right);
+            IL.Emit(OpCodes.Stloc, numberLocal);
+        }
+
+        var isNumber = IL.DefineLabel();
+        var end = IL.DefineLabel();
+        IL.Emit(OpCodes.Ldloc, boxedLocal);
+        IL.Emit(OpCodes.Isinst, _ctx.Types.Double);
+        IL.Emit(OpCodes.Dup);
+        IL.Emit(OpCodes.Brtrue, isNumber);
+        IL.Emit(OpCodes.Pop);
+        IL.Emit(OpCodes.Ldc_I4_0);
+        IL.Emit(OpCodes.Br, end);
+
+        IL.MarkLabel(isNumber);
+        IL.Emit(OpCodes.Unbox_Any, _ctx.Types.Double);
+        IL.Emit(OpCodes.Ldloc, numberLocal);
+        IL.Emit(OpCodes.Ceq);
+        IL.MarkLabel(end);
+
+        if (isNegated)
+        {
+            IL.Emit(OpCodes.Ldc_I4_0);
+            IL.Emit(OpCodes.Ceq);
+        }
+        SetStackType(StackType.Boolean);
+        return true;
     }
 
     private static bool IsNumericTypeInfo(TypeSystem.TypeInfo? type) => type switch

@@ -627,7 +627,7 @@ public partial class Interpreter
 
     internal async ValueTask<ExecutionResult> ExecuteThrowAsyncVT(Stmt.Throw throwStmt)
     {
-        return ExecutionResult.Throw((await EvaluateAsync(throwStmt.Value)).ToObject());
+        return ExecutionResult.Throw(await EvaluateAsync(throwStmt.Value));
     }
 
     internal async ValueTask<ExecutionResult> ExecuteVarAsyncVT(Stmt.Var varStmt)
