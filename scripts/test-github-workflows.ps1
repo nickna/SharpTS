@@ -229,7 +229,7 @@ foreach ($requiredText in @(
     'timeout-minutes: 20',
     "pattern: 'managed-*'",
     "pattern: 'native-*'",
-    'softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228'
+    'softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64'
 )) {
     if (-not $releaseJob.Contains($requiredText, [StringComparison]::Ordinal)) {
         $errors.Add("release is missing the post-verification release contract text: $requiredText")
