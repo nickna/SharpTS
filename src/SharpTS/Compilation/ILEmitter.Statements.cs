@@ -935,6 +935,11 @@ public partial class ILEmitter
         try
         {
             if (activeIntCounter != null
+                && TryEmitStableObjectDestructureReduction(f, activeIntCounter))
+            {
+                return;
+            }
+            if (activeIntCounter != null
                 && TryEmitExactInt32StencilReduction(f, activeIntCounter))
             {
                 return;
