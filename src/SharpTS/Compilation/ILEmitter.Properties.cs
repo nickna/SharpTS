@@ -1,4 +1,5 @@
 using System.Reflection.Emit;
+using SharpTS.Compilation.Emitters;
 using SharpTS.Diagnostics.Exceptions;
 using SharpTS.Parsing;
 using SharpTS.Runtime.BuiltIns;
@@ -18,6 +19,9 @@ public partial class ILEmitter
     protected override void EmitGet(Expr.Get g)
     {
         if (TryEmitStableRecordDestructureGet(g))
+            return;
+
+        if (StringEmitter.TryEmitPrimitiveStringLengthGet(this, g))
             return;
 
         if (!g.Optional

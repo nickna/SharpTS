@@ -2869,6 +2869,9 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
 
     protected virtual void EmitGet(Expr.Get g)
     {
+        if (StringEmitter.TryEmitPrimitiveStringLengthGet(this, g))
+            return;
+
         // CommonJS: `module.exports` reads → ldsfld $exports.
         if (TryEmitCjsGet(g)) return;
 

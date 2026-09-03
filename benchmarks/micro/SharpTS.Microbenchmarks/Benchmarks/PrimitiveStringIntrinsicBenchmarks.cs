@@ -7,8 +7,9 @@ namespace SharpTS.Microbenchmarks.Benchmarks;
 
 /// <summary>
 /// Dynamic-input coverage for the fixed-arity primitive string intrinsics.
-/// Search operations should allocate nothing in the measured loop; slicing
-/// should allocate only the observable result strings.
+/// Search operations and length-only slice/substring operations should allocate
+/// nothing in the measured loop. The native slice rows intentionally materialize
+/// strings to show the cost avoided when only the result length is observable.
 /// </summary>
 [MemoryDiagnoser]
 [RankColumn]
