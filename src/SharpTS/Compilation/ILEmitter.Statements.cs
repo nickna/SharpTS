@@ -497,6 +497,18 @@ public partial class ILEmitter
         // captured name (which has no typed local) can never accidentally hit them.
         if (_ctx.TypeMap != null && _ctx.TypeMap.IsPromotableArrayLocal(v.Name, out var promoElemTok))
         {
+            if (_ctx.TypeMap.IsPromotableQueueLocal(v.Name))
+            {
+                var queue = promoElemTok == TokenType.TYPE_NUMBER
+                    ? _ctx.Runtime!.NumberQueue : _ctx.Runtime!.BooleanQueue;
+                if (_ctx.TypeMap.QueueLocalHasWrites(v.Name))
+                    queue = promoElemTok == TokenType.TYPE_NUMBER
+                        ? _ctx.Runtime!.NumberQueueWithHoles : _ctx.Runtime!.BooleanQueueWithHoles;
+                var queueLocal = _ctx.Locals.DeclareLocal(v.Name.Lexeme, queue.Type);
+                IL.Emit(OpCodes.Newobj, queue.Constructor);
+                IL.Emit(OpCodes.Stloc, queueLocal);
+                return;
+            }
             // Initializer kinds the typed slot can hold: an empty array literal `[]` (build a fresh
             // List), or a typed-double `src.map(cb)` (#861 typed-HOF pipeline) when the source is
             // itself a promoted List<double> and the mapper is a typed non-capturing arrow — decided
@@ -1667,8 +1679,9 @@ public partial class ILEmitter
             return;
 
         var promoted = _ctx.TryGetPromotedArrayLocal(reservation.Array.Name.Lexeme);
+        var queue = _ctx.TryGetPromotedQueueLocal(reservation.Array.Name.Lexeme);
         var sourceLocal = promoted?.Local ?? arrayLocal;
-        var listType = promoted?.Descriptor.GetListType(_ctx.Types) ?? _ctx.Types.ListOfObject;
+        var listType = queue?.Queue.Type ?? promoted?.Descriptor.GetListType(_ctx.Types) ?? _ctx.Types.ListOfObject;
         var listLocal = IL.DeclareLocal(listType);
         var countLocal = IL.DeclareLocal(_ctx.Types.Double);
         var skipLabel = _ctx.ILBuilder.DefineLabel("counted_push_reserve_skip");
@@ -1698,10 +1711,11 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Ldloc, countLocal);
         IL.Emit(OpCodes.Call, typeof(Math).GetMethod("Ceiling", [_ctx.Types.Double])!);
         IL.Emit(OpCodes.Conv_I4);
-        IL.Emit(OpCodes.Callvirt, _ctx.Types.GetMethod(
-            listType,
-            "EnsureCapacity",
-            [_ctx.Types.Int32])!);
+        if (queue is { } queueReservation)
+            IL.Emit(OpCodes.Call, queueReservation.Queue.Reserve);
+        else
+            IL.Emit(OpCodes.Callvirt, _ctx.Types.GetMethod(
+                listType, "EnsureCapacity", [_ctx.Types.Int32])!);
         IL.Emit(OpCodes.Pop);
 
         _ctx.ILBuilder.MarkLabel(skipLabel);
@@ -1835,7 +1849,8 @@ public partial class ILEmitter
         // fast paths read it directly; hoisting would only emit a dead isinst + local.
         foreach (var name in candidates.Keys.ToList())
         {
-            if (_ctx.TryGetHoistedArray(name) != null || _ctx.TryGetPromotedArrayLocal(name) != null)
+            if (_ctx.TryGetHoistedArray(name) != null || _ctx.TryGetPromotedArrayLocal(name) != null
+                || _ctx.TryGetPromotedQueueLocal(name) != null)
                 candidates.Remove(name);
         }
         if (candidates.Count == 0) return false;

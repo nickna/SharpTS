@@ -59,6 +59,11 @@ public static class ArrayLocalPromotionAnalyzer
             if (!visitor.ElementToken.TryGetValue(key, out var token)) continue; // no Double/Bool use seen
             if (closures?.IsVariableCaptured(key.Name) == true) continue;
             typeMap.MarkPromotableArrayLocal(nameToken, token);
+            if (visitor.QueueReceivers.Contains(key) && !visitor.QueueIncompatible.Contains(key))
+            {
+                typeMap.MarkPromotableQueueLocal(nameToken);
+                if (visitor.QueueWrites.Contains(key)) typeMap.MarkQueueLocalWithWrites(nameToken);
+            }
             if (visitor.NumericSliceSortReceivers.TryGetValue(key, out var receiverToken))
                 typeMap.MarkStableNumericSliceSortReceiver(receiverToken);
         }
@@ -102,6 +107,9 @@ public static class ArrayLocalPromotionAnalyzer
 
         /// <summary>(scope, name) pairs with at least one disqualifying occurrence.</summary>
         public HashSet<(int Scope, string Name)> Disqualified { get; } = new();
+        public HashSet<(int Scope, string Name)> QueueReceivers { get; } = new();
+        public HashSet<(int Scope, string Name)> QueueIncompatible { get; } = new();
+        public HashSet<(int Scope, string Name)> QueueWrites { get; } = new();
 
         protected override void VisitFunction(Stmt.Function stmt) => InScope(() => base.VisitFunction(stmt));
         protected override void VisitArrowFunction(Expr.ArrowFunction expr) => InScope(() => base.VisitArrowFunction(expr));
@@ -123,6 +131,8 @@ public static class ArrayLocalPromotionAnalyzer
         private void HandleDeclaration(Token name, Expr? initializer)
         {
             var key = (_scope, name.Lexeme);
+            if (initializer is not Expr.ArrayLiteral { Elements.Count: 0 })
+                QueueIncompatible.Add(key);
             DeclCount[key] = DeclCount.GetValueOrDefault(key) + 1;
 
             // A promotable-array local is one initialized with an empty array literal `[]` OR a
@@ -228,6 +238,8 @@ public static class ArrayLocalPromotionAnalyzer
 
         protected override void VisitGetIndex(Expr.GetIndex expr)
         {
+            if (expr.Object is Expr.Variable queueIndex && !IsNumberExpression(expr.Index))
+                QueueIncompatible.Add((_scope, queueIndex.Name.Lexeme));
             // `x[i]` read — permitted when receiver is a bare variable. Record the
             // element kind and visit only the index (NOT the receiver variable).
             if (expr.Object is Expr.Variable v && !expr.Optional)
@@ -242,6 +254,12 @@ public static class ArrayLocalPromotionAnalyzer
             // `x[i] = v` write — permitted receiver; visit index and value only.
             if (expr.Object is Expr.Variable v)
             {
+                // Only bounded literal writes are admitted by the initial queue
+                // representation. Other writes retain the existing array lowering.
+                QueueWrites.Add((_scope, v.Name.Lexeme));
+                if (expr.Index is not Expr.Literal { Value: double index }
+                    || index < 0 || index > 65535 || index != Math.Truncate(index))
+                    QueueIncompatible.Add((_scope, v.Name.Lexeme));
                 NotePermittedReceiver(v);
                 // A written value whose static type admits the `undefined` sentinel
                 // (any/unknown/…) would be coerced to NaN/false by the typed setter,
@@ -271,6 +289,13 @@ public static class ArrayLocalPromotionAnalyzer
 
         protected override void VisitCall(Expr.Call expr)
         {
+            if (expr.Callee is Expr.Get { Object: Expr.Variable queueReceiver } queueMethod)
+            {
+                var key = (_scope, queueReceiver.Name.Lexeme);
+                if (queueMethod.Name.Lexeme is "shift" or "unshift") QueueReceivers.Add(key);
+                else if (queueMethod.Name.Lexeme != "push") QueueIncompatible.Add(key);
+                if (expr.Optional || queueMethod.Optional) QueueIncompatible.Add(key);
+            }
             // A stable intrinsic includes call over a number[] can scan the promoted
             // List<double> directly. Restrict both arguments to statically numeric
             // values so no ToNumber coercion (and therefore no user code or mutation)

@@ -17,6 +17,10 @@ namespace SharpTS.Compilation;
 /// <seealso cref="ILEmitter"/>
 public class EmittedRuntime
 {
+    public ArrayQueueTypeInfo NumberQueue { get; set; } = null!;
+    public ArrayQueueTypeInfo BooleanQueue { get; set; } = null!;
+    public ArrayQueueTypeInfo NumberQueueWithHoles { get; set; } = null!;
+    public ArrayQueueTypeInfo BooleanQueueWithHoles { get; set; } = null!;
     /// <summary>
     /// Human-readable reasons this compilation emitted late binding into the SharpTS runtime
     /// assembly (e.g. "eval()", "Proxy", "Intl"). Populated during emission by
