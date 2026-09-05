@@ -352,7 +352,7 @@ public sealed class StableNumericHotPathTests
         }
     }
 
-    private static Assembly Compile(string source)
+    internal static Assembly Compile(string source)
     {
         var statements = new Parser(new Lexer(source).ScanTokens()).ParseOrThrow();
         TypeMap typeMap = new TypeChecker().Check(statements);
@@ -392,12 +392,12 @@ public sealed class StableNumericHotPathTests
         Assert.Equal("13 7:2\n23 8:1\n", TestHarness.Run(source, ExecutionMode.Compiled));
     }
 
-    private static MethodInfo FindFunction(Assembly assembly, string name) =>
+    internal static MethodInfo FindFunction(Assembly assembly, string name) =>
         assembly.GetType("$Program")!
             .GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static)
             .Single(method => method.Name.EndsWith(name, StringComparison.Ordinal));
 
-    private static IEnumerable<(OpCode OpCode, MemberInfo? Operand)> ReadInstructions(
+    internal static IEnumerable<(OpCode OpCode, MemberInfo? Operand)> ReadInstructions(
         MethodInfo method)
     {
         byte[] il = method.GetMethodBody()?.GetILAsByteArray()

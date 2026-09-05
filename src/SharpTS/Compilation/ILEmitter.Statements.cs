@@ -3971,7 +3971,7 @@ public partial class ILEmitter
             if (TryEmitStableIteratorResultReturn(returnType, r.Value))
                 goto emit_return;
 
-            if (_ctx.Types.IsDouble(returnType) && r.Value is Expr.GetIndex)
+            if (_ctx.Types.IsDouble(returnType) && r.Value is Expr.GetIndex or Expr.Call)
                 EmitExpressionAsDouble(r.Value);
             else
                 EmitExpression(r.Value);

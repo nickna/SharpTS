@@ -271,6 +271,27 @@ public partial class ILCompiler
                         returnType,
                         companionParameters);
                     MarkCompilerGenerated(companion);
+                    if (flattenedInfo.RegularParameterCount == 0 && restArity == 4
+                        && variant.HasLiteralIndices && returnType == _types.Double)
+                    {
+                        // A closed static entry matches the delegate's receiver +
+                        // four-double ABI. An open static delegate needs a CLR
+                        // floating-point argument shuffle on Windows x64.
+                        var entry = _programType.DefineMethod(
+                            $"{qualifiedFunctionName}$numericRest4<Entry>",
+                            MethodAttributes.Private | MethodAttributes.Static | MethodAttributes.HideBySig,
+                            _types.Double,
+                            [_types.Object, _types.Double, _types.Double, _types.Double, _types.Double]);
+                        MarkCompilerGenerated(entry);
+                        entry.SetImplementationFlags(MethodImplAttributes.AggressiveInlining);
+                        var entryIL = entry.GetILGenerator();
+                        for (int argument = 1; argument <= 4; argument++)
+                            entryIL.Emit(OpCodes.Ldarg, argument);
+                        entryIL.Emit(OpCodes.Call, companion);
+                        entryIL.Emit(OpCodes.Ret);
+                        methodBuilder.SetCustomAttribute(_runtime!.NumericRest4AttrCtor,
+                            CustomAttributeEncoder.Encode(_runtime.NumericRest4AttrCtor, entry.Name));
+                    }
                     companions[variantIndex] = companion;
                     foreach (var call in variant.Calls)
                         _functions.NumericRestCallMethods[call] = companion;

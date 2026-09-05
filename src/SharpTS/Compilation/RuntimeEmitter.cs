@@ -86,6 +86,7 @@ public partial class RuntimeEmitter
         // available before $TSFunction so its reflective constructor can cache the value.
         EmitFunctionLengthAttribute(moduleBuilder, runtime);
         EmitFunctionNameAttribute(moduleBuilder, runtime);
+        EmitNumericRest4Attribute(moduleBuilder, runtime);
         EmitNonConstructibleAttribute(moduleBuilder, runtime);
 
         // Marker attribute for "this method's first parameter is the synthetic `__this` receiver".

@@ -1,6 +1,54 @@
 # Remaining language hot paths: implementation plan
 
-Status: approved; implementation begins with benchmark controls.
+Status: stages 0–5 are implemented and measured. All 599 focused checks pass
+against the final closed-entry compiler. Five paired launches show 10.63×,
+138.61×, and 12.03× median speedups for spread, unknown-target, and varying-index
+rest, respectively. The full run completed with host-related failures; its
+limitations and noisy controls are recorded in the results report.
+
+## Implementation record
+
+- Stage 0: permanent numeric/boxed/plain-list read controls, pre-created dispatch
+  controls, spread-length controls, and alternating eligible/ineligible targets.
+  The original compiler and updated benchmark executable were frozen before
+  production changes. All 21 baseline microbenchmarks passed their checksums.
+- Stage 1: guarded boxed reads retain the original property-lookup fallback.
+  All 69 initial focused checks passed. Boxed-array and plain-list read loops
+  fell from about 960,000 bytes per 10,000 iterations to zero; numeric controls
+  also allocate zero.
+- Stage 2: separate union/primitive decisions and cached parameter metadata.
+  All 303 focused checks passed. Pre-created rest-only dispatch dropped from
+  about 360 to 296 bytes per call after stage 1, confirming the expected
+  64-byte reduction. Existing compiled coercions are tested separately from
+  interpreter semantics; foreign strings passed to CLR `double` slots and a
+  missing defaulted argument already behave differently in the baseline.
+- Stage 3: native double arguments construct exact-capacity numeric rest storage.
+  `arguments` reconstruction and object-array `for…of` materialize storage at
+  their existing list boundary. Escaping four-number calls fell from 240 to
+  144 bytes/call; varying-index calls fell from 248 after stage 1 to 128.
+- Stage 4: numeric-preserving spread append/reservation and numeric-aware regular
+  parameter extraction. Spread fell from 184 after stage 1 to 120 bytes/call.
+  Collection drives custom iterators directly, avoiding a wrapper allocation
+  and avoiding terminal `value` getters that only `yield*` should consume.
+  All 589 focused checks, including iterator and `yield*` tests, passed.
+- Stage 5: an optional four-double delegate is bound through a small static entry
+  to the existing wrapper. This avoids an open-static argument shuffle that the
+  default-settings probe exposed as a performance problem. Existing direct
+  companions take priority over indirect companions within the variant limits.
+  Numeric consumers capture the callee and arguments once and retain generic
+  fallback. All 599 focused checks passed again against the final compiler,
+  including both constructors, special numbers, target replacement, standalone
+  output, zero allocation for alternating eligible targets, and budget exhaustion.
+  Five fresh-process pairs against stage 4 show a 31.34× median eligible-call
+  speedup and a 0.99× pure-fallback ratio. Eligible-wrapper construction pays
+  568 additional bytes, including metadata/delegate setup; ineligible wrappers
+  add one reference field (8 bytes on this host).
+
+Interim microbenchmarks used BenchmarkDotNet 0.14.0 ShortRun, in-process,
+three warmups and three measurements, .NET 10.0.11 x64, SDK 10.0.400. Their
+timings are diagnostic because launch/machine variation is substantial.
+See the [results report](language-hot-paths-results.md) for stage commits,
+allocation evidence, paired measurements, setup costs, and validation limits.
 
 This plan follows the [performance investigation](language-hot-paths-followup.md) at revision `af72038b83e9c88449b33ca42262f3f8dc156ea7`. The [earlier rest-call plan](language-hot-paths.md) is already implemented. Retain its direct-call, alias, and constant-index optimizations.
 

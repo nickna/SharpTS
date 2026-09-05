@@ -201,6 +201,9 @@ public partial class RuntimeEmitter
         // Fields
         var targetField = typeBuilder.DefineField("_target", _types.Object, FieldAttributes.Private);
         var methodField = typeBuilder.DefineField("_method", _types.MethodInfo, FieldAttributes.Private);
+        var numericRest4Field = typeBuilder.DefineField("_numericRest4",
+            typeof(Func<double, double, double, double, double>), FieldAttributes.Assembly | FieldAttributes.InitOnly);
+        runtime.TSFunctionNumericRest4Field = numericRest4Field;
         _ = methodField;
         // Cached name and length for functions where reflection doesn't work (e.g., MethodBuilder tokens)
         var cachedNameField = typeBuilder.DefineField("_cachedName", _types.String, FieldAttributes.Private);
@@ -405,6 +408,7 @@ public partial class RuntimeEmitter
         EmitComputeNeedsArgConversion(ctorIL, needsArgConversionField, conversionParametersField, hasListRestField, methodArgIndex: 2);
         // this._invoker = LookupOrAdd(_invokerCache, method)  [pseudocode]
         EmitLookupOrCreateInvoker(ctorIL, invokerField, invokerCacheField, invokerCacheType, methodArgIndex: 2);
+        EmitComputeNumericRest4(ctorIL, numericRest4Field, runtime);
         ctorIL.MarkLabel(noMethodLabel);
         ctorIL.Emit(OpCodes.Ret);
 
@@ -448,6 +452,7 @@ public partial class RuntimeEmitter
         EmitComputeNeedsArgConversion(ctorCacheIL, needsArgConversionField, conversionParametersField, hasListRestField, methodArgIndex: 2);
         // this._invoker = LookupOrAdd(_invokerCache, method)
         EmitLookupOrCreateInvoker(ctorCacheIL, invokerField, invokerCacheField, invokerCacheType, methodArgIndex: 2);
+        EmitComputeNumericRest4(ctorCacheIL, numericRest4Field, runtime);
         ctorCacheIL.MarkLabel(noCachedMethodLabel);
         ctorCacheIL.Emit(OpCodes.Ret);
 

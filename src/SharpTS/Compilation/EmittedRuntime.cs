@@ -361,6 +361,10 @@ public class EmittedRuntime
     // the iterator-helper skip-index-box detection so it never drops the index
     // arg for a callback that could observe it through `arguments`.
     public FieldBuilder TSFunctionCapturesArgumentsField { get; set; } = null!;
+    public FieldBuilder TSFunctionNumericRest4Field { get; set; } = null!;
+    public TypeBuilder NumericRest4AttrType { get; set; } = null!;
+    public ConstructorBuilder NumericRest4AttrCtor { get; set; } = null!;
+    public FieldBuilder NumericRest4AttrValueField { get; set; } = null!;
     // Marker attribute applied to function-declaration methods that reference
     // `arguments`. Its ctor is invoked via CustomAttributeBuilder at method
     // definition; the type token is read back via MethodInfo.IsDefined.

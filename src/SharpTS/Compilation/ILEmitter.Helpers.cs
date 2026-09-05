@@ -322,6 +322,9 @@ public partial class ILEmitter
 
     public override void EmitExpressionAsDouble(Expr expr)
     {
+        if (expr is Expr.Call call && TryEmitTypedNumericIndirectCall(call))
+            return;
+
         if (expr is Expr.Get stableRecordGet
             && TryEmitStableRecordDestructureGetAsDouble(stableRecordGet))
             return;
