@@ -6,6 +6,26 @@ namespace SharpTS.Tests.SharedTests;
 public class NumericRestOptimizationTests
 {
     [Theory, ModeData]
+    public void IndirectRestCalls_PreserveRegularArgumentConversions(ExecutionMode mode)
+    {
+        const string source = """
+            function numeric(prefix: number, ...values: number[]): number { return prefix + values[0] + values.length; }
+            function text(prefix: string, ...values: number[]): string { return prefix + ":" + values.length; }
+            function optional(prefix: number = 10, ...values: number[]): number { return prefix + values.length; }
+            const n: any = numeric;
+            const s: any = text;
+            const d: any = optional;
+            console.log(n(10, 1, 2), s("7", 1, 2), d(undefined, 1, 2), d(undefined));
+            console.log(n.call(null, 20, 1, 2), s.apply(null, ["8", 1]));
+            const bad: any = { valueOf(): number { throw new Error("coerce"); } };
+            try { n(bad, 1); } catch (e) { console.log(e.message); }
+            console.log(Array.prototype.slice.call({ 0: "a", length: 1 }).join(","));
+            try { Array.prototype.values.call(null); } catch (e) { console.log(e instanceof TypeError); }
+            """;
+        Assert.Equal("13 7:2 12 10\n23 8:1\ncoerce\na\ntrue\n", TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
     public void AlternatingEligibleAndMutatingTargets_PreserveValues(ExecutionMode mode)
     {
         const string source = """

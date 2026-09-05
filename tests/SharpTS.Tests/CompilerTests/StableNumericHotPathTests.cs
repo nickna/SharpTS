@@ -296,6 +296,36 @@ public sealed class StableNumericHotPathTests
         return Assembly.Load(compiler.SaveToBytes());
     }
 
+    [Fact]
+    public void WarmArgumentConversion_UsesCachedSignatureMetadata()
+    {
+        var assembly = Compile("""
+            function run(prefix: number, ...values: number[]): number { return prefix + values.length; }
+            """);
+        var wrapper = assembly.GetType("$TSFunction")!;
+        foreach (string name in new[] { "ConvertArgsForUnionTypes", "CoercePrimitiveArgs" })
+        {
+            var helper = wrapper.GetMethod(name, BindingFlags.NonPublic | BindingFlags.Static)!;
+            Assert.Equal(typeof(ParameterInfo[]), helper.GetParameters()[0].ParameterType);
+            Assert.DoesNotContain(ReadInstructions(helper), i => i.Operand is MethodBase { Name: "GetParameters" });
+        }
+    }
+
+    [Fact]
+    public void IndirectNumericAndStringParameters_RetainClrConversions()
+    {
+        const string source = """
+            function numeric(prefix: number, ...values: number[]): number { return prefix + values[0] + values.length; }
+            function text(prefix: string, ...values: number[]): string { return prefix + ":" + values.length; }
+            const n: any = numeric;
+            const s: any = text;
+            console.log(n("10", 1, 2), s(7, 1, 2));
+            console.log(n.call(null, "20", 1, 2), s.apply(null, [8, 1]));
+            """;
+        // Foreign values crossing typed CLR slots retain the existing compiled ABI.
+        Assert.Equal("13 7:2\n23 8:1\n", TestHarness.Run(source, ExecutionMode.Compiled));
+    }
+
     private static MethodInfo FindFunction(Assembly assembly, string name) =>
         assembly.GetType("$Program")!
             .GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static)
