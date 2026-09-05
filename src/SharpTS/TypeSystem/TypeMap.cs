@@ -24,6 +24,7 @@ public class TypeMap
     private readonly HashSet<Token> _promotableNumericMapLocals = new(ReferenceEqualityComparer.Instance);
     private readonly HashSet<Token> _promotableStringAccumulators = new(ReferenceEqualityComparer.Instance);
     private readonly Dictionary<Token, ObjectShapeInfo> _promotableObjectLocals = new(ReferenceEqualityComparer.Instance);
+    private readonly Dictionary<Expr.Call, ObjectConsumerInfo> _promotedObjectCalls = new(ReferenceEqualityComparer.Instance);
     private readonly Dictionary<Token, ClassScalarReplacementInfo> _scalarReplaceableClassLocals =
         new(ReferenceEqualityComparer.Instance);
     private readonly HashSet<Stmt.ForOf> _stableNumericMapIterations = new(ReferenceEqualityComparer.Instance);
@@ -245,6 +246,10 @@ public class TypeMap
     /// the generated types). Empty when no object local was promoted.
     /// </summary>
     public IEnumerable<ObjectShapeInfo> PromotableObjectLocalShapes => _promotableObjectLocals.Values;
+
+    public void MarkPromotedObjectCall(Expr.Call call, ObjectConsumerInfo summary) => _promotedObjectCalls[call] = summary;
+    public bool TryGetPromotedObjectCall(Expr.Call call, out ObjectConsumerInfo summary) =>
+        _promotedObjectCalls.TryGetValue(call, out summary!);
 
     /// <summary>
     /// Marks a fresh exact-class local whose allocation and pure constructor may be

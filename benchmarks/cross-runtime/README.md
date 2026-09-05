@@ -139,6 +139,18 @@ optimizing JavaScript engine start with tagged-small-integer arithmetic and
 deopt only at larger parameters. Other integer-oriented probes intentionally
 retain their natural representation behavior.
 
+`object-spread.ts` validates checksums for stable single-source and overwrite
+spreads, plus a mutation case passed to an `any` consumer. Controls compare a
+direct literal passed to the same consumer, the spread with its mutations
+inlined, and results retained in an array before consumption. The retained case
+also measures array allocation and traversal. The historical `escape` case name
+denotes a function boundary, not required retention: SharpTS can now specialize
+stable, bounded numeric-only consumers and preserve local object promotion.
+Truly retained results still materialize, while independent spread sources can
+remain in typed storage. Use the inline and retained controls to distinguish
+these cases, and the internal `ObjectLiteralsBenchmarks` spread cases for
+allocation/GC evidence.
+
 The `worker-scaling` workload uses the same parent, worker, and CPU-kernel
 TypeScript verbatim in every runtime. It keeps the total amount of CPU work
 fixed while varying the persistent pool size from 1 to 16 workers. Pool startup,

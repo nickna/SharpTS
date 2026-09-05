@@ -11,8 +11,8 @@ namespace SharpTS.Compilation;
 /// <see cref="NonEscapingArrowLocalAnalyzer"/>: a name qualifies only if it is provably non-escaping, so
 /// the promoted struct (which has no dynamic-object semantics — no descriptors, enumerability, prototype,
 /// <c>delete</c>, freeze) is never observed anywhere those would be needed. Stable object spread is
-/// represented by direct copies between compatible shape structs; a connected source/result chain is
-/// promoted only when every member remains non-escaping. A candidate <c>o</c>
+/// represented by direct copies between compatible shape structs. An escaping result can materialize
+/// fields from a still-promoted source. A candidate <c>o</c>
 /// qualifies iff ALL hold:
 /// <list type="number">
 ///   <item>declared <c>const</c>/<c>let</c> with an initializer that is a <em>simple</em> object literal —
@@ -23,7 +23,8 @@ namespace SharpTS.Compilation;
 ///         (which inherently excludes <c>any</c>/<c>undefined</c>-admitting fields a typed slot would
 ///         silently coerce);</item>
 ///   <item>the ONLY uses are constant-key field reads <c>o.KEY</c>, same-kind writes
-///         <c>o.KEY = v</c>, stable spread, and direct <c>Object.keys(o)</c> calls. The latter can
+///         <c>o.KEY = v</c>, stable spread, proven numeric-only consumers, and direct
+///         <c>Object.keys(o)</c> calls. The latter can
 ///         materialize the immutable key metadata without exposing the struct itself.
 ///         Any other appearance of the bare variable — argument pass, return, store to another binding,
 ///         unstable spread, <c>===</c>, <c>typeof</c>, <c>o[expr]</c>, <c>o.unknownKey</c>, <c>delete</c>,
@@ -42,15 +43,19 @@ namespace SharpTS.Compilation;
 /// </summary>
 public static class ObjectLocalPromotionAnalyzer
 {
-    public static void Analyze(List<Stmt> program, TypeMap? typeMap, ClosureAnalyzer? closures)
+    public static void Analyze(List<Stmt> program, TypeMap? typeMap, ClosureAnalyzer? closures,
+        IReadOnlyDictionary<Expr.Call, ObjectConsumerInfo>? consumers = null)
     {
         if (typeMap == null) return;
 
-        var visitor = new Visitor(typeMap);
+        var visitor = new Visitor(typeMap, consumers ?? StableObjectConsumerAnalyzer.Analyze(program));
         foreach (var stmt in program)
             visitor.Visit(stmt);
 
         var eligible = new HashSet<string>(visitor.Candidates.Keys, StringComparer.Ordinal);
+        if (visitor.Disqualified.Contains("eval")) eligible.Clear();
+        if (visitor.DeclCount.ContainsKey("Object") || visitor.Disqualified.Contains("Object"))
+            eligible.ExceptWith(visitor.ObjectKeysReceivers);
         foreach (var name in visitor.Candidates.Keys)
         {
             if (visitor.Disqualified.Contains(name)
@@ -59,18 +64,17 @@ public static class ObjectLocalPromotionAnalyzer
                 eligible.Remove(name);
         }
 
-        // A generic object cannot consume a promoted struct as a spread source, and a promoted result
-        // cannot snapshot a generic source. Therefore an instability anywhere in a spread-connected
-        // component invalidates both endpoints, transitively.
+        // A promoted result requires promoted sources, but a generic result can copy fields
+        // from a promoted source directly into its dictionary. Do not propagate an escape
+        // backwards into otherwise independent source objects.
         bool changed;
         do
         {
             changed = false;
             foreach (var (source, target) in visitor.SpreadEdges)
             {
-                if (eligible.Contains(source) && eligible.Contains(target)) continue;
-                changed |= eligible.Remove(source);
-                changed |= eligible.Remove(target);
+                if (!eligible.Contains(source))
+                    changed |= eligible.Remove(target);
             }
         } while (changed);
 
@@ -79,11 +83,16 @@ public static class ObjectLocalPromotionAnalyzer
             var candidate = visitor.Candidates[name];
             typeMap.MarkPromotableObjectLocal(candidate.NameToken, candidate.Shape);
         }
+        foreach (var (call, receiver) in visitor.ConsumerCalls)
+            if (eligible.Contains(receiver))
+                typeMap.MarkPromotedObjectCall(call, visitor.Consumers[call]);
     }
 
-    private sealed class Visitor(TypeMap typeMap) : AstVisitorBase
+    private sealed class Visitor(TypeMap typeMap, IReadOnlyDictionary<Expr.Call, ObjectConsumerInfo> consumers) : AstVisitorBase
     {
         private readonly TypeMap _typeMap = typeMap;
+        public IReadOnlyDictionary<Expr.Call, ObjectConsumerInfo> Consumers { get; } = consumers;
+        public Dictionary<Expr.Call, string> ConsumerCalls { get; } = new(ReferenceEqualityComparer.Instance);
 
         public sealed record Candidate(
             Token NameToken,
@@ -105,6 +114,7 @@ public static class ObjectLocalPromotionAnalyzer
 
         /// <summary>Names with at least one disqualifying occurrence.</summary>
         public HashSet<string> Disqualified { get; } = new();
+        public HashSet<string> ObjectKeysReceivers { get; } = new();
 
         protected override void VisitVar(Stmt.Var stmt) =>
             HandleDeclaration(stmt.Name, stmt.Initializer);
@@ -167,6 +177,16 @@ public static class ObjectLocalPromotionAnalyzer
 
         protected override void VisitCall(Expr.Call expr)
         {
+            if (Consumers.TryGetValue(expr, out var summary)
+                && expr.Arguments is [Expr.Variable argument]
+                && Candidates.TryGetValue(argument.Name.Lexeme, out var candidate)
+                && _typeMap.Get(expr) is TypeInfo.Primitive { Type: TokenType.TYPE_NUMBER }
+                && summary.NumericFields.All(name => candidate.Shape.Fields.Any(
+                    field => field.Name == name && field.Kind == TokenType.TYPE_NUMBER)))
+            {
+                ConsumerCalls[expr] = argument.Name.Lexeme;
+                return;
+            }
             // Object.keys over a closed promoted shape (#1506) observes only a fresh array of the
             // record's fixed enumerable string keys. The emitter does not load/box the struct.
             if (!expr.Optional && expr.Arguments is [Expr.Variable receiver]
@@ -177,7 +197,10 @@ public static class ObjectLocalPromotionAnalyzer
                     Name.Lexeme: "keys"
                 }
                 && Candidates.ContainsKey(receiver.Name.Lexeme))
+            {
+                ObjectKeysReceivers.Add(receiver.Name.Lexeme);
                 return;
+            }
 
             base.VisitCall(expr);
         }
@@ -209,6 +232,104 @@ public static class ObjectLocalPromotionAnalyzer
             // reassigned, ...).
             Disqualified.Add(expr.Name.Lexeme);
         }
+
+        protected override void VisitAssign(Expr.Assign expr)
+        {
+            Disqualified.Add(expr.Name.Lexeme);
+            base.VisitAssign(expr);
+        }
+
+        // Mutation operands are not ordinary reads. Traverse without the permitted field-read
+        // shortcut, including any grouping/assertion wrappers around the target.
+        private sealed class MutationVariables(HashSet<string> names) : AstVisitorBase
+        {
+            protected override void VisitVariable(Expr.Variable expr) => names.Add(expr.Name.Lexeme);
+        }
+
+        protected override void VisitDelete(Expr.Delete expr)
+        {
+            new MutationVariables(Disqualified).Visit(expr.Operand);
+            base.VisitDelete(expr);
+        }
+
+        protected override void VisitPrefixIncrement(Expr.PrefixIncrement expr)
+        {
+            new MutationVariables(Disqualified).Visit(expr.Operand);
+            base.VisitPrefixIncrement(expr);
+        }
+
+        protected override void VisitPostfixIncrement(Expr.PostfixIncrement expr)
+        {
+            new MutationVariables(Disqualified).Visit(expr.Operand);
+            base.VisitPostfixIncrement(expr);
+        }
+
+        protected override void VisitCompoundAssign(Expr.CompoundAssign expr)
+        {
+            Disqualified.Add(expr.Name.Lexeme);
+            base.VisitCompoundAssign(expr);
+        }
+
+        protected override void VisitLogicalAssign(Expr.LogicalAssign expr)
+        {
+            Disqualified.Add(expr.Name.Lexeme);
+            base.VisitLogicalAssign(expr);
+        }
+
+        protected override void VisitFunction(Stmt.Function statement)
+        {
+            CountName(statement.Name);
+            foreach (var parameter in statement.Parameters) CountParameter(parameter);
+            base.VisitFunction(statement);
+        }
+
+        protected override void VisitArrowFunction(Expr.ArrowFunction expression)
+        {
+            foreach (var parameter in expression.Parameters) CountParameter(parameter);
+            base.VisitArrowFunction(expression);
+        }
+
+        protected override void VisitForOf(Stmt.ForOf statement)
+        {
+            CountName(statement.Variable);
+            base.VisitForOf(statement);
+        }
+
+        protected override void VisitForIn(Stmt.ForIn statement)
+        {
+            CountName(statement.Variable);
+            base.VisitForIn(statement);
+        }
+
+        protected override void VisitTryCatch(Stmt.TryCatch statement)
+        {
+            if (statement.CatchParam != null) CountName(statement.CatchParam);
+            base.VisitTryCatch(statement);
+        }
+
+        private void CountName(Token name) => DeclCount[name.Lexeme] = DeclCount.GetValueOrDefault(name.Lexeme) + 1;
+
+        private void CountParameter(Stmt.Parameter parameter)
+        {
+            CountName(parameter.Name);
+            foreach (var property in parameter.DestructuredProperties ?? []) CountName(property.Binding);
+        }
+
+        protected override void VisitAccessor(Stmt.Accessor statement)
+        {
+            if (statement.SetterParam != null) CountParameter(statement.SetterParam);
+            base.VisitAccessor(statement);
+        }
+
+        protected override void VisitImport(Stmt.Import statement)
+        {
+            if (statement.DefaultImport != null) CountName(statement.DefaultImport);
+            if (statement.NamespaceImport != null) CountName(statement.NamespaceImport);
+            foreach (var import in statement.NamedImports ?? []) CountName(import.LocalName ?? import.Imported);
+        }
+
+        protected override void VisitImportAlias(Stmt.ImportAlias statement) => CountName(statement.AliasName);
+        protected override void VisitImportRequire(Stmt.ImportRequire statement) => CountName(statement.AliasName);
 
         /// <summary>
         /// Builds the shape for a candidate object literal, or returns false if the literal is not a

@@ -1012,6 +1012,7 @@ public class EmittedRuntime
 
     // Symbol storage for compiled objects (symbol as object key)
     public MethodBuilder GetSymbolDictMethod { get; set; } = null!;
+    public MethodBuilder TryGetSymbolDictMethod { get; set; } = null!;
     public MethodBuilder IsSymbolMethod { get; set; } = null!;
 
     // BigInt support

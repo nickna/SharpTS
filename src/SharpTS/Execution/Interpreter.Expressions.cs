@@ -812,6 +812,8 @@ public partial class Interpreter
 
         if (spreadValue is SharpTSObject spreadObj)
         {
+            if (spreadObj.TryCopyPlainSpreadFields(stringFields))
+                return symbolFields;
             // CopyDataProperties obtains one complete [[OwnPropertyKeys]] snapshot before
             // consulting descriptors or invoking getters. Descriptor and value reads remain
             // live, but getter-driven string/Symbol additions cannot join this spread.
@@ -819,13 +821,13 @@ public partial class Interpreter
             var symbolKeys = spreadObj.GetSymbolPropertyNames().ToList();
             foreach (string key in stringKeys)
             {
-                if (spreadObj.GetOwnPropertyDescriptor(key)?.Enumerable != true)
+                if (!spreadObj.IsOwnEnumerableProperty(key))
                     continue;
                 stringFields[key] = GetPropertyValue(spreadObj, key);
             }
             foreach (SharpTSSymbol symbol in symbolKeys)
             {
-                if (spreadObj.GetOwnPropertyDescriptor(symbol)?.Enumerable != true)
+                if (!spreadObj.IsOwnEnumerableProperty(symbol))
                     continue;
                 (symbolFields ??= [])[symbol] = GetSymbolPropertyValue(spreadObj, symbol);
             }
