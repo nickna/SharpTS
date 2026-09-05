@@ -803,6 +803,8 @@ public class EmittedRuntime
     // Invocation methods
     public MethodBuilder InvokeValue { get; set; } = null!;
     public MethodBuilder InvokeMethodValue { get; set; } = null!;
+    public MethodBuilder InvokeMethodValue0 { get; set; } = null!;
+    public MethodBuilder TSFunctionInvokeWithThis0 { get; set; } = null!;
     public MethodBuilder ConstructDynamicValue { get; set; } = null!;
     public MethodBuilder GetSuperMethod { get; set; } = null!;
 
@@ -1685,6 +1687,10 @@ public class EmittedRuntime
     // Iterator protocol helper methods
     public MethodBuilder GetIteratorFunction { get; set; } = null!;              // Returns iterator function or $Undefined when absent
     public MethodBuilder InvokeIteratorNext { get; set; } = null!;              // Calls next() on iterator (no sent value)
+    public MethodBuilder GetIteratorNextMethod { get; set; } = null!;
+    public MethodBuilder InvokeCapturedIteratorNext { get; set; } = null!;
+    public MethodBuilder InvokeCapturedIteratorNextWithSent { get; set; } = null!;
+    public MethodBuilder RequireIteratorObject { get; set; } = null!;
     public MethodBuilder InvokeIteratorNextWithSent { get; set; } = null!;      // Calls next(sent) forwarding resume value (#503)
     public MethodBuilder GetIteratorDone { get; set; } = null!;                 // Extracts done from result
     public MethodBuilder GetIteratorValue { get; set; } = null!;                // Extracts value from result

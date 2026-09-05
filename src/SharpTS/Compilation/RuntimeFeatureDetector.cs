@@ -1622,6 +1622,12 @@ public sealed class RuntimeFeatureDetector
                         string fingerprint = JsonSerializationShapeAnalyzer.Fingerprint(compactShape);
                         shapes.Add(fingerprint);
                         _set.CompactObjectRecordShapes.TryAdd(fingerprint, compactShape);
+                        if (compactShape.Fields.Count == 2 &&
+                            compactShape.Fields.Any(field => field.Key == "value" &&
+                                field.Value is JsonSerializationShape.Number) &&
+                            compactShape.Fields.Any(field => field.Key == "done" &&
+                                field.Value is JsonSerializationShape.Boolean))
+                            _set.CompactObjectRecordIteratorResultShapes.Add(fingerprint);
                         if (_set.CompactObjectRecordStablePushLiterals.Contains(ol))
                             _set.CompactObjectRecordStablePushShapes.Add(fingerprint);
                         AnalyzeCompactRecordSelfFields(ol, compactShape, fingerprint);

@@ -68,6 +68,10 @@ public sealed class RuntimeFeatureSet
         new(StringComparer.Ordinal);
     internal HashSet<string> CompactObjectRecordStableIteratorShapes { get; } =
         new(StringComparer.Ordinal);
+    // Ordinary, observable result objects remain reference records even when
+    // mutation prevents stable iterator specialization.
+    internal HashSet<string> CompactObjectRecordIteratorResultShapes { get; } =
+        new(StringComparer.Ordinal);
 
     /// <summary>
     /// Generic-looking compact-record slots whose literal initializers prove that the

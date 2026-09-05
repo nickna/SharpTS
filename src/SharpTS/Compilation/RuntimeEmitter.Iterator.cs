@@ -581,6 +581,7 @@ public partial class RuntimeEmitter
 
         // Define fields - simplified, no longer need _runtime field
         var iteratorField = typeBuilder.DefineField("_iterator", _types.Object, FieldAttributes.Private);
+        var nextField = typeBuilder.DefineField("_next", _types.Object, FieldAttributes.Private);
         var currentField = typeBuilder.DefineField("_current", _types.Object, FieldAttributes.Private);
 
         // Constructor: $IteratorWrapper(object iterator)
@@ -600,6 +601,10 @@ public partial class RuntimeEmitter
         ctorIl.Emit(OpCodes.Ldarg_0);
         ctorIl.Emit(OpCodes.Ldarg_1);
         ctorIl.Emit(OpCodes.Stfld, iteratorField);
+        ctorIl.Emit(OpCodes.Ldarg_0);
+        ctorIl.Emit(OpCodes.Ldarg_1);
+        ctorIl.Emit(OpCodes.Call, runtime.GetIteratorNextMethod);
+        ctorIl.Emit(OpCodes.Stfld, nextField);
         // this._current = null
         ctorIl.Emit(OpCodes.Ldarg_0);
         ctorIl.Emit(OpCodes.Ldnull);
@@ -654,7 +659,9 @@ public partial class RuntimeEmitter
         // var result = InvokeIteratorNext(_iterator);  -- DIRECT CALL
         moveNextIl.Emit(OpCodes.Ldarg_0);
         moveNextIl.Emit(OpCodes.Ldfld, iteratorField);
-        moveNextIl.Emit(OpCodes.Call, runtime.InvokeIteratorNext);
+        moveNextIl.Emit(OpCodes.Ldarg_0);
+        moveNextIl.Emit(OpCodes.Ldfld, nextField);
+        moveNextIl.Emit(OpCodes.Call, runtime.InvokeCapturedIteratorNext);
         moveNextIl.Emit(OpCodes.Stloc, resultLocal);
 
         // var done = GetIteratorDone(result);  -- DIRECT CALL
@@ -698,8 +705,10 @@ public partial class RuntimeEmitter
         // var result = InvokeIteratorNextWithSent(_iterator, sent);
         mwsIl.Emit(OpCodes.Ldarg_0);
         mwsIl.Emit(OpCodes.Ldfld, iteratorField);
+        mwsIl.Emit(OpCodes.Ldarg_0);
+        mwsIl.Emit(OpCodes.Ldfld, nextField);
         mwsIl.Emit(OpCodes.Ldarg_1);               // sent value
-        mwsIl.Emit(OpCodes.Call, runtime.InvokeIteratorNextWithSent);
+        mwsIl.Emit(OpCodes.Call, runtime.InvokeCapturedIteratorNextWithSent);
         mwsIl.Emit(OpCodes.Stloc, mwsResultLocal);
 
         mwsIl.Emit(OpCodes.Ldloc, mwsResultLocal);
@@ -753,6 +762,7 @@ public partial class RuntimeEmitter
     private void EmitIteratorMethodsBasic(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         // Basic iterator protocol helpers - needed by $IteratorWrapper
+        EmitCapturedIteratorMethods(typeBuilder, runtime);
         EmitGetIteratorDone(typeBuilder, runtime);
         EmitGetIteratorValue(typeBuilder, runtime);
         EmitInvokeIteratorNext(typeBuilder, runtime);
@@ -899,6 +909,7 @@ public partial class RuntimeEmitter
         runtime.GetIteratorDone = method;
 
         var il = method.GetILGenerator();
+        EmitCompactIteratorResultRead(il, runtime, "done");
 
         // Call GetProperty(result, "done")
         il.Emit(OpCodes.Ldarg_0);
@@ -925,6 +936,7 @@ public partial class RuntimeEmitter
         runtime.GetIteratorValue = method;
 
         var il = method.GetILGenerator();
+        EmitCompactIteratorResultRead(il, runtime, "value");
 
         // Call GetProperty(result, "value")
         il.Emit(OpCodes.Ldarg_0);

@@ -2340,6 +2340,13 @@ public partial class ILEmitter
             var iteratorObjLocal = IL.DeclareLocal(_ctx.Types.Object);
             IL.Emit(OpCodes.Stloc, iteratorObjLocal);
 
+            // GetIterator captures next once, even if the receiver is mutated
+            // by a later next call or by the loop body.
+            var nextMethodLocal = IL.DeclareLocal(_ctx.Types.Object);
+            IL.Emit(OpCodes.Ldloc, iteratorObjLocal);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.GetIteratorNextMethod);
+            IL.Emit(OpCodes.Stloc, nextMethodLocal);
+
             // Loop variable
             var loopVar = _ctx.Locals.DeclareLocal(f.Variable.Lexeme, _ctx.Types.Object);
             var resultLocal = IL.DeclareLocal(_ctx.Types.Object);
@@ -2352,7 +2359,8 @@ public partial class ILEmitter
             // IteratorStep: errors from next()/done occur before the iteration's
             // close region and therefore do not trigger IteratorClose.
             IL.Emit(OpCodes.Ldloc, iteratorObjLocal);
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.InvokeIteratorNext);
+            IL.Emit(OpCodes.Ldloc, nextMethodLocal);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.InvokeCapturedIteratorNext);
             IL.Emit(OpCodes.Stloc, resultLocal);
             IL.Emit(OpCodes.Ldloc, resultLocal);
             IL.Emit(OpCodes.Call, _ctx.Runtime!.GetIteratorDone);

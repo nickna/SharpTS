@@ -173,6 +173,7 @@ public partial class RuntimeEmitter
             [runtime.AsyncGeneratorInterfaceType]);
 
         var iteratorField = typeBuilder.DefineField("_iterator", _types.Object, FieldAttributes.Private);
+        var nextField = typeBuilder.DefineField("_next", _types.Object, FieldAttributes.Private);
         var isProtocolField = typeBuilder.DefineField("_isProtocol", _types.Boolean, FieldAttributes.Private);
 
         var ctor = typeBuilder.DefineConstructor(
@@ -189,9 +190,17 @@ public partial class RuntimeEmitter
         ctorIl.Emit(OpCodes.Ldarg_0);
         ctorIl.Emit(OpCodes.Ldarg_2);
         ctorIl.Emit(OpCodes.Stfld, isProtocolField);
+        var initialized = ctorIl.DefineLabel();
+        ctorIl.Emit(OpCodes.Ldarg_2);
+        ctorIl.Emit(OpCodes.Brfalse, initialized);
+        ctorIl.Emit(OpCodes.Ldarg_0);
+        ctorIl.Emit(OpCodes.Ldarg_1);
+        ctorIl.Emit(OpCodes.Call, runtime.GetIteratorNextMethod);
+        ctorIl.Emit(OpCodes.Stfld, nextField);
+        ctorIl.MarkLabel(initialized);
         ctorIl.Emit(OpCodes.Ret);
 
-        EmitAsyncFromSyncNext(typeBuilder, runtime, iteratorField, isProtocolField);
+        EmitAsyncFromSyncNext(typeBuilder, runtime, iteratorField, isProtocolField, nextField);
         EmitAsyncFromSyncReturn(typeBuilder, runtime, iteratorField, isProtocolField);
         EmitAsyncFromSyncThrow(typeBuilder, runtime, iteratorField, isProtocolField);
         EmitAsyncFromSyncInheritedMembers(typeBuilder, runtime, iteratorField);
@@ -203,7 +212,8 @@ public partial class RuntimeEmitter
         TypeBuilder typeBuilder,
         EmittedRuntime runtime,
         FieldBuilder iteratorField,
-        FieldBuilder isProtocolField)
+        FieldBuilder isProtocolField,
+        FieldBuilder nextField)
     {
         var method = typeBuilder.DefineMethod(
             "next",
@@ -230,7 +240,9 @@ public partial class RuntimeEmitter
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, iteratorField);
-        il.Emit(OpCodes.Call, runtime.InvokeIteratorNext);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, nextField);
+        il.Emit(OpCodes.Call, runtime.InvokeCapturedIteratorNext);
         il.Emit(OpCodes.Stloc, stepLocal);
         il.Emit(OpCodes.Br, haveStep);
 

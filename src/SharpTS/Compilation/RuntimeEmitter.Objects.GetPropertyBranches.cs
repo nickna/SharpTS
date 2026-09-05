@@ -1436,11 +1436,16 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
         il.MarkLabel(foundLabel);
 
-        // If value is a TSFunction, call BindThis(dict) on it
-        // to bind 'this' for object method shorthand
+        // Bind ordinary object methods only. An arrow's display-class `this`
+        // belongs to its lexical scope and must survive property acquisition.
         var notTSFunction = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, valueLocal);
         il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Brfalse, notTSFunction);
+
+        il.Emit(OpCodes.Ldloc, valueLocal);
+        il.Emit(OpCodes.Castclass, runtime.TSFunctionType);
+        il.Emit(OpCodes.Ldfld, runtime.TSFunctionExpectsThisField);
         il.Emit(OpCodes.Brfalse, notTSFunction);
 
         // Call func.BindThis(dict)

@@ -420,7 +420,7 @@ public class SharpTSArrowFunction : ISharpTSCallable, ITypeCategorized
     private readonly bool _hasBoundThis;
     // Arrow/function expressions are ordinary objects for user-defined string
     // properties, including descriptor attributes and accessors.
-    private SharpTSObject _properties = new([]);
+    private SharpTSObject _properties;
 
     /// <summary>
     /// Indicates whether this function has its own 'this' binding (function expressions)
@@ -435,6 +435,7 @@ public class SharpTSArrowFunction : ISharpTSCallable, ITypeCategorized
 
     private SharpTSArrowFunction(Expr.ArrowFunction declaration, RuntimeEnvironment closure, bool hasOwnThis, object? boundThis, bool hasBoundThis)
     {
+        _properties = new([]);
         _declaration = declaration;
         _closure = closure;
         HasOwnThis = hasOwnThis;
@@ -443,6 +444,22 @@ public class SharpTSArrowFunction : ISharpTSCallable, ITypeCategorized
         _arity = declaration.Parameters.Count(p => p.DefaultValue == null && !p.IsRest && !p.IsOptional);
         _simpleSortProperty = DescribeSimpleSortComparator(declaration);
         InitializeIntrinsicProperties(declaration.Name?.Lexeme ?? "");
+    }
+
+    // A receiver-bound view shares the original function's metadata. Building
+    // fresh intrinsic descriptors/prototype only to discard them is unnecessary.
+    private SharpTSArrowFunction(SharpTSArrowFunction source, object receiver)
+    {
+        _declaration = source._declaration;
+        _closure = source._closure;
+        _arity = source._arity;
+        _simpleSortProperty = source._simpleSortProperty;
+        HasOwnThis = true;
+        _boundThis = receiver;
+        _hasBoundThis = true;
+        _properties = source._properties;
+        _symbolProperties = source._symbolProperties ??= [];
+        _symbolAccessors = source._symbolAccessors ??= [];
     }
 
     private void InitializeIntrinsicProperties(string name)
@@ -830,8 +847,6 @@ public class SharpTSArrowFunction : ISharpTSCallable, ITypeCategorized
     /// <returns>A new SharpTSArrowFunction with 'this' bound.</returns>
     public SharpTSArrowFunction Bind(object thisObject)
     {
-        var bound = new SharpTSArrowFunction(_declaration, _closure, hasOwnThis: true,
-                                             boundThis: thisObject, hasBoundThis: true);
         // Share user-property storage so `obj.fn[k] = v` round-trips across
         // multiple `obj.fn` reads (each read produces a fresh bound copy via
         // EvaluateGetOnRecordRV's Bind-on-read for method-call binding;
@@ -840,12 +855,7 @@ public class SharpTSArrowFunction : ISharpTSCallable, ITypeCategorized
         // get). Eagerly materialize so a later mutation on either copy lands
         // in the same dict instead of branching into a private one via the
         // lazy `??=` init.
-        _symbolProperties ??= [];
-        bound._properties = _properties;
-        bound._symbolProperties = _symbolProperties;
-        _symbolAccessors ??= [];
-        bound._symbolAccessors = _symbolAccessors;
-        return bound;
+        return new SharpTSArrowFunction(this, thisObject);
     }
 
     public override string ToString()

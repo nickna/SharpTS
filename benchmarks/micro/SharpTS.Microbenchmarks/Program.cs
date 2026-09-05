@@ -54,6 +54,7 @@ class Program
         var resources = assembly.GetManifestResourceNames()
             .Where(name => name.EndsWith(".ts", StringComparison.Ordinal))
             .Where(name => !JsonModuleBenchmark.ModuleOnlyResources.Contains(name))
+            .Where(name => !CustomIteratorModuleBenchmark.ModuleOnlyResources.Contains(name))
             .OrderBy(name => name, StringComparer.Ordinal)
             .ToArray();
 
@@ -74,5 +75,8 @@ class Program
 
         JsonModuleBenchmark.Compile("SmokeJsonModules");
         Console.WriteLine("Smoke-compiled imported JSON module graph");
+        CustomIteratorModuleBenchmark.Compile(true, "SmokeDynamicCustomIterator");
+        CustomIteratorModuleBenchmark.Compile(false, "SmokeStableCustomIterator");
+        Console.WriteLine("Smoke-compiled imported custom iterator module graphs");
     }
 }

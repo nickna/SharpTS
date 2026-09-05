@@ -54,7 +54,8 @@ public sealed class StableCustomIteratorTests
         Assert.DoesNotContain(instructions, instruction =>
             instruction.Operand is MethodBase
             {
-                Name: "InvokeIteratorNext" or "GetIteratorDone" or "GetIteratorValue"
+                Name: "InvokeIteratorNext" or "InvokeCapturedIteratorNext" or
+                    "GetIteratorNextMethod" or "GetIteratorDone" or "GetIteratorValue"
             });
         Assert.Contains(assembly.GetTypes().SelectMany(type => type.GetFields()), field =>
             field.Name == "current" && field.FieldType == typeof(double));
@@ -193,6 +194,61 @@ public sealed class StableCustomIteratorTests
         var compiler = new ILCompiler($"stable_custom_iterator_{Guid.NewGuid():N}");
         compiler.Compile(statements, typeMap, deadCodeInfo);
         return Assembly.Load(compiler.SaveToBytes());
+    }
+
+    [Fact]
+    public void DynamicIterator_UsesCapturedProtocolAndTypedClosureFields()
+    {
+        string source = StableSource.Replace("let total: number = 0;", """
+            const alias: any = iterable;
+            alias.next = alias.next;
+            let total: number = 0;
+            """);
+        Assembly assembly = Compile(source);
+        MethodInfo iterate = FindFunction(assembly, "iterate");
+        Assert.Contains(ReadInstructions(iterate), instruction =>
+            instruction.Operand is MethodBase { Name: "InvokeCapturedIteratorNext" });
+        Assert.Contains(ReadInstructions(iterate), instruction =>
+            instruction.Operand is MethodBase { Name: "GetIteratorDone" });
+        Assert.DoesNotContain(assembly.GetTypes(), type => type.Name == "$StableNumberIteratorResult");
+        Assert.Contains(assembly.GetTypes().SelectMany(type => type.GetFields()), field =>
+            field.Name == "current" && field.FieldType == typeof(double));
+        Assert.Contains(assembly.GetTypes().SelectMany(type => type.GetFields()), field =>
+            field.Name == "n" && field.FieldType == typeof(double));
+        Assert.Empty(TestHarness.CompileAndVerifyOnly(source));
+
+        var invoke = iterate.CreateDelegate<Func<double, object>>();
+        Assert.Equal(4_999_950_000d, invoke(100_000));
+        // Warm the generated call adapters before measuring managed allocation.
+        for (int i = 0; i < 5; i++) invoke(10_000);
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        object small = invoke(1_000);
+        long smallBytes = GC.GetAllocatedBytesForCurrentThread() - before;
+        before = GC.GetAllocatedBytesForCurrentThread();
+        object large = invoke(100_000);
+        long largeBytes = GC.GetAllocatedBytesForCurrentThread() - before;
+        Assert.Equal(499_500d, small);
+        Assert.Equal(4_999_950_000d, large);
+        Assert.True(largeBytes - smallBytes < 128L * 99_000,
+            $"Generic iterator allocation grew by {largeBytes - smallBytes} bytes.");
+    }
+
+    [Fact]
+    public void CatchBindingCollision_DoesNotPromoteNumericCaptureStorage()
+    {
+        const string source = """
+            function make(): any {
+                let current: number = 1;
+                const object: any = { read() { return current; } };
+                try { throw "caught"; } catch (current) { }
+                return object;
+            }
+            """;
+        Assembly assembly = Compile(source);
+        var fields = assembly.GetTypes().SelectMany(type => type.GetFields())
+            .Where(field => field.Name == "current").ToArray();
+        Assert.NotEmpty(fields);
+        Assert.All(fields, field => Assert.Equal(typeof(object), field.FieldType));
     }
 
     private static MethodInfo FindFunction(Assembly assembly, string name) =>
