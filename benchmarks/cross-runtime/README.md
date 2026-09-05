@@ -50,6 +50,12 @@ The schema-v1 file remains the versioned contract for this one suite. The
 run beside compiler-micro and GUI evidence, preserving this environment and
 methodology rather than flattening unlike measurements together.
 
+`array-queue.ts` measures full shift/drain and unshift/build workloads at 1,000,
+2,500, 5,000, and 10,000 elements, plus a fixed-width alternating push/shift queue.
+Every case validates its checksum outside the timed region. The intermediate
+sizes expose scaling changes; the alternating case exercises reuse across many
+queue turnovers. Keep these operations intact when comparing implementations.
+
 ## Running
 
 PowerShell 7 or later (`pwsh`) is required for the benchmark PowerShell tools.
@@ -116,6 +122,28 @@ the setting alongside raw results.
 subsequently materialized. `object-destructure-materialized-controls` adds direct,
 manually hoisted, fractional, varying-receiver, and per-iteration mutation controls.
 
+The shared algorithm drivers supply independent expected checksums to catch
+miscompilations before and after sampling. Factorial uses finite inputs
+10, 20, and 100; `arithmetic-loop` provides a bounded accumulator at larger
+iteration counts. Its body is also shared with the microbenchmark suite.
+
+`callback-control` reports synchronous and asynchronous empty-callback costs.
+Treat these as diagnostic floors, not quantities to subtract from other cases:
+inlining and tiering depend on the callback body. `string-scaling` extends the
+unchanged shared string workload through one million iterations. For compiler
+scaling investigations, select `-Runtimes compiled,node`; the largest inputs
+are intentionally expensive in the interpreter.
+
+```powershell
+./benchmarks/cross-runtime/run-benchmarks.ps1 `
+  -Workloads strings,string-scaling,json,arithmetic-loop,callback-control `
+  -Runtimes compiled,node -Launches 3 -OutputDirectory .perf-algorithms
+```
+
+Use paired baseline/candidate measurements for performance acceptance. Ordinary
+CI should verify checksums, compilation, and generated-code regression checks;
+wall-clock ratios belong in the local performance workflow, not noisy CI gates.
+
 Each workload calls `bench(name, param, fn, expected?)` from
 `scripts/lib/bench.ts`, which:
 
@@ -145,12 +173,26 @@ dead-code elimination in both SharpTS modes and the JS engines.
 body remains as `left-associated-accumulation`, an intentionally different
 loop-carried dependency-chain probe. Direct fixed-arity rest specialization is
 reported beside immutable-alias and constant-index specialization targets,
-spread calls, and unknown-target/varying-index fallback controls.
+spread calls, and unknown-target/varying-index fallback controls. The
+`selected-numeric-rest` control alternates the callee on each iteration to
+exercise changing runtime targets alongside the parameter-bound unknown target.
 These rest cases share a fractional accumulator seed, keeping them in
 Number/double representation from the first iteration instead of letting an
 optimizing JavaScript engine start with tagged-small-integer arithmetic and
 deopt only at larger parameters. Other integer-oriented probes intentionally
 retain their natural representation behavior.
+
+`object-spread.ts` validates checksums for stable single-source and overwrite
+spreads, plus a mutation case passed to an `any` consumer. Controls compare a
+direct literal passed to the same consumer, the spread with its mutations
+inlined, and results retained in an array before consumption. The retained case
+also measures array allocation and traversal. The historical `escape` case name
+denotes a function boundary, not required retention: SharpTS can now specialize
+stable, bounded numeric-only consumers and preserve local object promotion.
+Truly retained results still materialize, while independent spread sources can
+remain in typed storage. Use the inline and retained controls to distinguish
+these cases, and the internal `ObjectLiteralsBenchmarks` spread cases for
+allocation/GC evidence.
 
 The `worker-scaling` workload uses the same parent, worker, and CPU-kernel
 TypeScript verbatim in every runtime. It keeps the total amount of CPU work

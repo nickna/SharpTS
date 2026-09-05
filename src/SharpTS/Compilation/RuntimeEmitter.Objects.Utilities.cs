@@ -56,6 +56,10 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, runtime.UndefinedType);
         il.Emit(OpCodes.Brtrue, returnLabel);
 
+        var generalCopy = il.DefineLabel();
+        EmitPlainDataSpreadCopy(il, runtime, generalCopy, returnLabel);
+        il.MarkLabel(generalCopy);
+
         // Snapshot the complete mixed [[OwnPropertyKeys]] list once. Proxy ownKeys must be invoked
         // exactly once; ordinary carriers reuse GetKeys' mature enumerable-string ordering and append
         // Symbols for per-key descriptor filtering.
@@ -77,6 +81,10 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, runtime.GetKeys);
         il.Emit(OpCodes.Stloc, keysLocal);
+        // No symbols means no temporary symbol list (and no attached symbol storage).
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, runtime.TryGetSymbolDictMethod);
+        il.Emit(OpCodes.Brfalse, keysReady);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, runtime.GetOwnPropertySymbols);
         il.Emit(OpCodes.Castclass, listType);
@@ -145,6 +153,98 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(returnLabel);
         il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Copy an ordinary, descriptor-free dictionary directly into the fresh literal target.
+    /// Neither key enumeration nor value reads can run guest code here. Validate every key
+    /// before writing so the fallback retains complete CopyDataProperties ordering.
+    /// </summary>
+    private void EmitPlainDataSpreadCopy(
+        ILGenerator il, EmittedRuntime runtime, Label fallback, Label done)
+    {
+        var dictType = _types.DictionaryStringObject;
+        var source = il.DeclareLocal(dictType);
+        var symbols = il.DeclareLocal(_types.DictionaryObjectObject);
+        var getEnumerator = _types.GetMethodNoParams(dictType, "GetEnumerator");
+        var enumType = getEnumerator.ReturnType;
+        var enumerator = il.DeclareLocal(enumType);
+        var pairType = _types.KeyValuePairStringObject;
+        var pair = il.DeclareLocal(pairType);
+        var key = il.DeclareLocal(_types.String);
+        var firstChar = il.DeclareLocal(_types.Int32);
+        var noSymbols = il.DefineLabel();
+        var checkKey = il.DefineLabel();
+        var copyStart = il.DefineLabel();
+        var copyNext = il.DefineLabel();
+
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Isinst, dictType);
+        il.Emit(OpCodes.Stloc, source);
+        il.Emit(OpCodes.Ldloc, source);
+        il.Emit(OpCodes.Brfalse, fallback);
+        il.Emit(OpCodes.Ldloc, source);
+        il.Emit(OpCodes.Call, runtime.PDSHasPropertyDescriptors);
+        il.Emit(OpCodes.Brtrue, fallback);
+        il.Emit(OpCodes.Ldloc, source);
+        il.Emit(OpCodes.Call, runtime.TryGetSymbolDictMethod);
+        il.Emit(OpCodes.Stloc, symbols);
+        il.Emit(OpCodes.Ldloc, symbols);
+        il.Emit(OpCodes.Brfalse, noSymbols);
+        il.Emit(OpCodes.Ldloc, symbols);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.DictionaryObjectObject, "Count").GetGetMethod()!);
+        il.Emit(OpCodes.Brtrue, fallback);
+        il.MarkLabel(noSymbols);
+
+        il.Emit(OpCodes.Ldloc, source);
+        il.Emit(OpCodes.Callvirt, getEnumerator);
+        il.Emit(OpCodes.Stloc, enumerator);
+        il.MarkLabel(checkKey);
+        il.Emit(OpCodes.Ldloca, enumerator);
+        il.Emit(OpCodes.Call, _types.GetMethodNoParams(enumType, "MoveNext"));
+        il.Emit(OpCodes.Brfalse, copyStart);
+        il.Emit(OpCodes.Ldloca, enumerator);
+        il.Emit(OpCodes.Call, _types.GetProperty(enumType, "Current").GetGetMethod()!);
+        il.Emit(OpCodes.Stloc, pair);
+        il.Emit(OpCodes.Ldloca, pair);
+        il.Emit(OpCodes.Call, _types.GetProperty(pairType, "Key").GetGetMethod()!);
+        il.Emit(OpCodes.Stloc, key);
+        il.Emit(OpCodes.Ldloc, key);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.String, "Length").GetGetMethod()!);
+        il.Emit(OpCodes.Brfalse, checkKey);
+        // Canonical array-index keys start with an ASCII digit. Conservatively defer all
+        // such keys to NormalizeOwnPropertyKeys, including noncanonical forms like "01".
+        il.Emit(OpCodes.Ldloc, key);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.String, "Chars").GetGetMethod()!);
+        il.Emit(OpCodes.Stloc, firstChar);
+        il.Emit(OpCodes.Ldloc, firstChar);
+        il.Emit(OpCodes.Ldc_I4, (int)'0');
+        il.Emit(OpCodes.Blt, checkKey);
+        il.Emit(OpCodes.Ldloc, firstChar);
+        il.Emit(OpCodes.Ldc_I4, (int)'9');
+        il.Emit(OpCodes.Ble, fallback);
+        il.Emit(OpCodes.Br, checkKey);
+
+        il.MarkLabel(copyStart);
+        // Dictionary's struct enumerator owns no resources; restarting it allocates nothing.
+        il.Emit(OpCodes.Ldloc, source);
+        il.Emit(OpCodes.Callvirt, getEnumerator);
+        il.Emit(OpCodes.Stloc, enumerator);
+        il.MarkLabel(copyNext);
+        il.Emit(OpCodes.Ldloca, enumerator);
+        il.Emit(OpCodes.Call, _types.GetMethodNoParams(enumType, "MoveNext"));
+        il.Emit(OpCodes.Brfalse, done);
+        il.Emit(OpCodes.Ldloca, enumerator);
+        il.Emit(OpCodes.Call, _types.GetProperty(enumType, "Current").GetGetMethod()!);
+        il.Emit(OpCodes.Stloc, pair);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloca, pair);
+        il.Emit(OpCodes.Call, _types.GetProperty(pairType, "Key").GetGetMethod()!);
+        il.Emit(OpCodes.Ldloca, pair);
+        il.Emit(OpCodes.Call, _types.GetProperty(pairType, "Value").GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(dictType, "set_Item", _types.String, _types.Object));
+        il.Emit(OpCodes.Br, copyNext);
     }
 
     private void EmitMergeIntoTSObject(TypeBuilder typeBuilder, EmittedRuntime runtime)

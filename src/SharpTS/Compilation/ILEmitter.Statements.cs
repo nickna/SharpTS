@@ -497,6 +497,18 @@ public partial class ILEmitter
         // captured name (which has no typed local) can never accidentally hit them.
         if (_ctx.TypeMap != null && _ctx.TypeMap.IsPromotableArrayLocal(v.Name, out var promoElemTok))
         {
+            if (_ctx.TypeMap.IsPromotableQueueLocal(v.Name))
+            {
+                var queue = promoElemTok == TokenType.TYPE_NUMBER
+                    ? _ctx.Runtime!.NumberQueue : _ctx.Runtime!.BooleanQueue;
+                if (_ctx.TypeMap.QueueLocalHasWrites(v.Name))
+                    queue = promoElemTok == TokenType.TYPE_NUMBER
+                        ? _ctx.Runtime!.NumberQueueWithHoles : _ctx.Runtime!.BooleanQueueWithHoles;
+                var queueLocal = _ctx.Locals.DeclareLocal(v.Name.Lexeme, queue.Type);
+                IL.Emit(OpCodes.Newobj, queue.Constructor);
+                IL.Emit(OpCodes.Stloc, queueLocal);
+                return;
+            }
             // Initializer kinds the typed slot can hold: an empty array literal `[]` (build a fresh
             // List), or a typed-double `src.map(cb)` (#861 typed-HOF pipeline) when the source is
             // itself a promoted List<double> and the mapper is a typed non-capturing arrow — decided
@@ -917,6 +929,8 @@ public partial class ILEmitter
     /// </summary>
     protected override void EmitFor(Stmt.For f)
     {
+        var savedStringSnapshots = _stringScanSnapshots;
+        _stringScanSnapshots = new(savedStringSnapshots);
         // Analyze the loop to see if we can use an unboxed counter
         var analysis = ForLoopAnalyzer.Analyze(f, _ctx.ClosureAnalyzer);
 
@@ -958,6 +972,8 @@ public partial class ILEmitter
             // Emit initializer (declares loop variable in current scope)
             if (f.Initializer != null)
                 EmitStatement(f.Initializer);
+
+            EmitStringScanSnapshots(f);
 
             // The Count Primes setup loop fills a fresh promoted boolean[] with
             // `true`. Emit a compact native fill loop and jump over the ordinary
@@ -1060,6 +1076,7 @@ public partial class ILEmitter
             if (activeIntCounter != null)
                 _ctx.IntegerCounterLocals.Remove(activeIntCounter);
             _integerLoopCounterName = savedIntCounterName;
+            _stringScanSnapshots = savedStringSnapshots;
         }
     }
 
@@ -1659,7 +1676,9 @@ public partial class ILEmitter
 
     private void EmitCountedPushReservation(Stmt.For loop)
     {
-        if (!CountedPushLoopAnalyzer.TryAnalyze(loop, out var reservation))
+        if (!CountedPushLoopAnalyzer.TryAnalyze(loop, out var reservation, allowRangeStart: true) ||
+            !IsNumericType(_ctx.TypeMap?.Get(reservation.Counter)) ||
+            !IsNumericType(_ctx.TypeMap?.Get(reservation.Bound)))
             return;
 
         var arrayLocal = _ctx.Locals.GetLocal(reservation.Array.Name.Lexeme);
@@ -1667,10 +1686,12 @@ public partial class ILEmitter
             return;
 
         var promoted = _ctx.TryGetPromotedArrayLocal(reservation.Array.Name.Lexeme);
+        var queue = _ctx.TryGetPromotedQueueLocal(reservation.Array.Name.Lexeme);
         var sourceLocal = promoted?.Local ?? arrayLocal;
-        var listType = promoted?.Descriptor.GetListType(_ctx.Types) ?? _ctx.Types.ListOfObject;
+        var listType = queue?.Queue.Type ?? promoted?.Descriptor.GetListType(_ctx.Types) ?? _ctx.Types.ListOfObject;
         var listLocal = IL.DeclareLocal(listType);
         var countLocal = IL.DeclareLocal(_ctx.Types.Double);
+        var startLocal = IL.DeclareLocal(_ctx.Types.Double);
         var skipLabel = _ctx.ILBuilder.DefineLabel("counted_push_reserve_skip");
 
         IL.Emit(OpCodes.Ldloc, sourceLocal);
@@ -1681,8 +1702,39 @@ public partial class ILEmitter
         _ctx.ILBuilder.Emit_Brfalse(skipLabel);
 
         SetStackUnknown();
+        EmitExpression(reservation.Counter);
+        if (StackType != StackType.Double)
+        {
+            // An annotation may describe object-backed storage. A reservation
+            // must not introduce an extra observable ToNumber/valueOf call.
+            IL.Emit(OpCodes.Pop);
+            _ctx.ILBuilder.MarkLabel(skipLabel);
+            SetStackUnknown();
+            return;
+        }
+        IL.Emit(OpCodes.Stloc, startLocal);
+        // Restrict range reservation to integer starts where ++ advances by
+        // exactly one throughout the capped range. Unordered branches reject NaN.
+        IL.Emit(OpCodes.Ldloc, startLocal);
+        IL.Emit(OpCodes.Ldc_R8, -4503599627370496.0);
+        IL.Emit(OpCodes.Blt_Un, skipLabel);
+        IL.Emit(OpCodes.Ldloc, startLocal);
+        IL.Emit(OpCodes.Ldc_R8, 4503599627370496.0);
+        IL.Emit(OpCodes.Bgt_Un, skipLabel);
+        IL.Emit(OpCodes.Ldloc, startLocal);
+        IL.Emit(OpCodes.Ldloc, startLocal);
+        IL.Emit(OpCodes.Call, typeof(Math).GetMethod("Truncate", [_ctx.Types.Double])!);
+        IL.Emit(OpCodes.Bne_Un, skipLabel);
         EmitExpression(reservation.Bound);
-        EnsureDouble();
+        if (StackType != StackType.Double)
+        {
+            IL.Emit(OpCodes.Pop);
+            _ctx.ILBuilder.MarkLabel(skipLabel);
+            SetStackUnknown();
+            return;
+        }
+        IL.Emit(OpCodes.Ldloc, startLocal);
+        IL.Emit(OpCodes.Sub);
         IL.Emit(OpCodes.Stloc, countLocal);
 
         // Bound eager allocation to one million elements. The unordered branch
@@ -1694,14 +1746,29 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Ldc_R8, 1_000_000.0);
         IL.Emit(OpCodes.Bgt_Un, skipLabel);
 
+        // EnsureCapacity takes total capacity, including earlier appends.
+        IL.Emit(OpCodes.Ldloc, countLocal);
+        IL.Emit(OpCodes.Ldloc, listLocal);
+        if (queue is { } countedQueue)
+            IL.Emit(OpCodes.Call, countedQueue.Queue.Count);
+        else
+            IL.Emit(OpCodes.Callvirt, _ctx.Types.GetProperty(listType, "Count").GetGetMethod()!);
+        IL.Emit(OpCodes.Conv_R8);
+        IL.Emit(OpCodes.Add);
+        IL.Emit(OpCodes.Stloc, countLocal);
+        IL.Emit(OpCodes.Ldloc, countLocal);
+        IL.Emit(OpCodes.Ldc_R8, 1_000_000.0);
+        IL.Emit(OpCodes.Bgt_Un, skipLabel);
+
         IL.Emit(OpCodes.Ldloc, listLocal);
         IL.Emit(OpCodes.Ldloc, countLocal);
         IL.Emit(OpCodes.Call, typeof(Math).GetMethod("Ceiling", [_ctx.Types.Double])!);
         IL.Emit(OpCodes.Conv_I4);
-        IL.Emit(OpCodes.Callvirt, _ctx.Types.GetMethod(
-            listType,
-            "EnsureCapacity",
-            [_ctx.Types.Int32])!);
+        if (queue is { } queueReservation)
+            IL.Emit(OpCodes.Call, queueReservation.Queue.Reserve);
+        else
+            IL.Emit(OpCodes.Callvirt, _ctx.Types.GetMethod(
+                listType, "EnsureCapacity", [_ctx.Types.Int32])!);
         IL.Emit(OpCodes.Pop);
 
         _ctx.ILBuilder.MarkLabel(skipLabel);
@@ -1835,7 +1902,8 @@ public partial class ILEmitter
         // fast paths read it directly; hoisting would only emit a dead isinst + local.
         foreach (var name in candidates.Keys.ToList())
         {
-            if (_ctx.TryGetHoistedArray(name) != null || _ctx.TryGetPromotedArrayLocal(name) != null)
+            if (_ctx.TryGetHoistedArray(name) != null || _ctx.TryGetPromotedArrayLocal(name) != null
+                || _ctx.TryGetPromotedQueueLocal(name) != null)
                 candidates.Remove(name);
         }
         if (candidates.Count == 0) return false;
@@ -1863,6 +1931,22 @@ public partial class ILEmitter
             if (arrLocal == null) continue; // Variable not found in locals — skip
             IL.Emit(OpCodes.Ldloc, arrLocal);
             // Array locals are always typed as object — no boxing needed
+            if (desc.Kind == ArrayElementsKind.Object)
+            {
+                // A number[] can reach this loop through an any[] alias. The
+                // cached List<object> reads require its boxed representation.
+                var notNumericArray = IL.DefineLabel();
+                IL.Emit(OpCodes.Dup);
+                IL.Emit(OpCodes.Isinst, _ctx.Runtime!.TSArrayType);
+                IL.Emit(OpCodes.Dup);
+                IL.Emit(OpCodes.Brfalse, notNumericArray);
+                IL.Emit(OpCodes.Callvirt, _ctx.Runtime.TSArrayEnsureBoxed);
+                var ready = IL.DefineLabel();
+                IL.Emit(OpCodes.Br, ready);
+                IL.MarkLabel(notNumericArray);
+                IL.Emit(OpCodes.Pop);
+                IL.MarkLabel(ready);
+            }
             IL.Emit(OpCodes.Isinst, hoistType);
             IL.Emit(OpCodes.Stloc, typedLocal);
 

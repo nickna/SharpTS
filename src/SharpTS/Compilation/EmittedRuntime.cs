@@ -17,6 +17,10 @@ namespace SharpTS.Compilation;
 /// <seealso cref="ILEmitter"/>
 public class EmittedRuntime
 {
+    public ArrayQueueTypeInfo NumberQueue { get; set; } = null!;
+    public ArrayQueueTypeInfo BooleanQueue { get; set; } = null!;
+    public ArrayQueueTypeInfo NumberQueueWithHoles { get; set; } = null!;
+    public ArrayQueueTypeInfo BooleanQueueWithHoles { get; set; } = null!;
     /// <summary>
     /// Human-readable reasons this compilation emitted late binding into the SharpTS runtime
     /// assembly (e.g. "eval()", "Proxy", "Intl"). Populated during emission by
@@ -1013,6 +1017,7 @@ public class EmittedRuntime
 
     // Symbol storage for compiled objects (symbol as object key)
     public MethodBuilder GetSymbolDictMethod { get; set; } = null!;
+    public MethodBuilder TryGetSymbolDictMethod { get; set; } = null!;
     public MethodBuilder IsSymbolMethod { get; set; } = null!;
 
     // BigInt support
@@ -1578,6 +1583,8 @@ public class EmittedRuntime
     /// </summary>
     public MethodBuilder CallArgsPoolGet { get; set; } = null!;
     public ConstructorBuilder TSArrayCtor { get; set; } = null!;
+    public ConstructorBuilder TSArrayLiteralCtor { get; set; } = null!;
+    public ConstructorBuilder TSArrayNumericLiteralCtor { get; set; } = null!;
     public ConstructorBuilder TSArrayRestCtor { get; set; } = null!;
     public MethodBuilder TSArrayAppendRest { get; set; } = null!;
     public MethodBuilder TSArrayFinishRest { get; set; } = null!;

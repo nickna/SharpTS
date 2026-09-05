@@ -11,8 +11,8 @@ namespace SharpTS.Tests.SharedTests;
 /// <c>Dictionary&lt;string, object&gt;</c> lookup with boxing.
 ///
 /// These run against BOTH the interpreter and the compiler. The positive cases exercise the promoted
-/// fast paths, including stable spread chains; the escape cases must NOT be promoted (they fall back to
-/// the general object path) and must still produce correct results — i.e. interpreter/compiled parity
+/// fast paths, including stable spread chains and numeric consumers. Escaping values retain ordinary
+/// object semantics while independent sources may stay promoted — i.e. interpreter/compiled parity
 /// must hold even when the object is passed, returned, dynamically spread, enumerated, indexed,
 /// compared, captured, or compound-assigned.
 /// A wrong escape rule, or a miscompiled struct fast path, surfaces here as a compiled-mode mismatch.
@@ -263,7 +263,7 @@ public class ObjectLocalPromotionTests
     }
 
     [Theory, ModeData]
-    public void Escape_SpreadResultPassedAndMutatedFallsBackAsAComponent(ExecutionMode mode)
+    public void SpreadResult_NumericConsumerMutatesResultIndependentlyOfSource(ExecutionMode mode)
     {
         var source = """
             function consume(value: any): number {

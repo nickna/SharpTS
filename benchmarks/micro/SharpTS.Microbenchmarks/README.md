@@ -50,6 +50,36 @@ The original direct-delegate JSON benchmarks remain as a comparison.
 
 ## Running
 
+`StringScalingBenchmarks` measures the shared append-and-scan body at 10,000,
+100,000, and 1,000,000 iterations against a C# builder followed by one string
+snapshot. `BoundedArithmeticBenchmarks` replaces overflowing large factorial
+inputs as the finite loop-carried arithmetic probe. The factorial C# baseline
+uses double arithmetic so its finite results agree with TypeScript at every
+configured input.
+
+For allocation investigations through the imported JSON callback boundary:
+
+```powershell
+dotnet run -c Release --project benchmarks/micro/SharpTS.Microbenchmarks -- `
+  --filter '*JsonImportedModulePhaseBenchmarks*'
+```
+
+Compare full-round-trip allocations and GC counts as well as time. Adjacent
+cumulative-phase timing differences are estimates because JIT and GC behavior
+can differ across independently measured phases.
+
+Allocation diagnostics share the unmodified cross-runtime `allocation-kernel.ts`.
+`AllocationKernelBenchmarks` measures the complete kernel, graph construction,
+and traversal of a graph built during setup, with allocation and GC counters.
+Each runs with interface and equivalent type-alias declarations. Phase timings
+are diagnostic and should not be added together: exposing the graph changes
+escape analysis and traversal starts with an already retained graph.
+
+```powershell
+dotnet run -c Release --project benchmarks/micro/SharpTS.Microbenchmarks -- --allocation-smoke
+dotnet run -c Release --project benchmarks/micro/SharpTS.Microbenchmarks -- --filter '*AllocationKernelBenchmarks*'
+```
+
 ```bash
 # From the repo root. BenchmarkDotNet requires a Release build.
 dotnet run -c Release --project benchmarks/micro/SharpTS.Microbenchmarks
@@ -72,6 +102,20 @@ typed parameters, categories, and operations-per-invoke directly from
 BenchmarkDotNet descriptors. See the [public snapshot exporter](../../snapshots/README.md)
 for normalized compiler-headroom publication.
 
+`ArrayQueueBenchmarks` retains the preallocated C# `List<double>` baselines and
+also measures the runtime's `Deque<double>` as an algorithmic ceiling. The list
+baselines repeatedly copy elements at the front, so matching those baselines
+does not establish efficient queue behavior. Deque baselines grow from empty,
+matching the TypeScript initialization. Compare allocation columns as well as
+time: counted push loops can reserve storage, while repeated unshift grows it.
+
+Compiled non-escaping queues use two typed stacks with constant-time indexed
+reads and amortized constant-time front operations. Ordinary arrays keep list
+promotion. Queues with admitted bounded literal writes use nullable slots to
+preserve holes; other write shapes and higher-order methods retain existing
+lowering. The interpreter uses its circular buffer only when conservative shape
+guards permit bypassing per-index property operations.
+
 ## Conventions
 
 - **One algorithm per class**, each with a single `[Params]` axis — a single
@@ -85,6 +129,10 @@ for normalized compiler-headroom publication.
   `"SharpTS.Microbenchmarks.TypeScriptSources.Regex.ts"`). `RootNamespace`/
   `AssemblyName` are pinned in the `.csproj` so those names stay stable; if you
   rename the project, keep the strings and the pinned names in sync.
+
+`NumericRestBenchmarks.restSelectedTarget` alternates between two callees on each
+iteration, complementing `restDynamicDispatch`, which receives one unknown target
+through a parameter. Both retain runtime dispatch and validate their checksums.
 
 ## Embedded-resource gotcha
 
