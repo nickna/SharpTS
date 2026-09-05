@@ -88,5 +88,3 @@ function destructureCarrierMaterialized(n: number): number {
     }
     return checksum;
 }
-
-
