@@ -213,6 +213,7 @@ public partial class RuntimeEmitter
         // dead-but-valid IL today.
         EmitTSArrayNumericAccessors(typeBuilder, runtime);
         EmitTSArrayRestConstruction(typeBuilder, runtime);
+        EmitTSArrayRestBuilderHelpers(typeBuilder, runtime);
 
         typeBuilder.CreateType();
     }
@@ -1124,6 +1125,10 @@ public partial class RuntimeEmitter
         }
     }
 
+    /// <summary>
+    /// Numeric-consumer helper for programs whose feature proof excludes observable
+    /// descriptors/prototype mutations. Does not coerce values or expose numeric base storage.
+    /// </summary>
     private void EmitTryGetBoxedDouble(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod("TryGetBoxedDouble",
@@ -1194,8 +1199,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    // Only used while constructing fresh, dense, boxed rest storage. This bypasses
-    // observable array setters and never accepts an escaped/numeric/sparse array.
+    // Only used while constructing private, fresh, dense rest storage.
     private void EmitTSArrayRestConstruction(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var ctor = typeBuilder.DefineConstructor(MethodAttributes.Assembly,
@@ -1233,6 +1237,23 @@ public partial class RuntimeEmitter
             _types.Void, [_types.Object]);
         runtime.TSArrayAppendRest = append;
         il = append.GetILGenerator();
+        var boxedAppend = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _tsArrayIsNumericField);
+        il.Emit(OpCodes.Brfalse, boxedAppend);
+        var deopt = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Isinst, _types.Double);
+        il.Emit(OpCodes.Brfalse, deopt);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Unbox_Any, _types.Double);
+        il.Emit(OpCodes.Call, runtime.TSArrayPushDouble);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(deopt);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, runtime.TSArrayEnsureBoxed);
+        il.MarkLabel(boxedAppend);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, _tsArrayListAdd!);
@@ -1245,12 +1266,51 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stfld, _tsArrayLengthField);
         il.Emit(OpCodes.Ret);
 
-        // Expansion appends to the inherited list. Once all arguments have
-        // evaluated, remove regular parameters and synchronize logical length.
+        // Once all arguments have evaluated, remove regular parameters from
+        // whichever private store survived expansion and synchronize length.
         var finish = typeBuilder.DefineMethod("FinishRest", MethodAttributes.Assembly,
             _types.Void, [_types.Int32]);
         runtime.TSArrayFinishRest = finish;
         il = finish.GetILGenerator();
+        var boxedFinish = il.DefineLabel();
+        var removed = il.DeclareLocal(_types.Int32);
+        var remaining = il.DeclareLocal(_types.Int32);
+        var numericDone = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _tsArrayIsNumericField);
+        il.Emit(OpCodes.Brfalse, boxedFinish);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _tsArrayNumCountField);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Math, "Min", [_types.Int32, _types.Int32])!);
+        il.Emit(OpCodes.Stloc, removed);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _tsArrayNumCountField);
+        il.Emit(OpCodes.Ldloc, removed);
+        il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Stloc, remaining);
+        il.Emit(OpCodes.Ldloc, removed);
+        il.Emit(OpCodes.Brfalse, numericDone);
+        il.Emit(OpCodes.Ldloc, remaining);
+        il.Emit(OpCodes.Brfalse, numericDone);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _tsArrayNumStoreField);
+        il.Emit(OpCodes.Ldloc, removed);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _tsArrayNumStoreField);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldloc, remaining);
+        il.Emit(OpCodes.Call, _types.ArrayCopy5);
+        il.MarkLabel(numericDone);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, remaining);
+        il.Emit(OpCodes.Stfld, _tsArrayNumCountField);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, remaining);
+        il.Emit(OpCodes.Conv_I8);
+        il.Emit(OpCodes.Stfld, _tsArrayLengthField);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(boxedFinish);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldarg_1);

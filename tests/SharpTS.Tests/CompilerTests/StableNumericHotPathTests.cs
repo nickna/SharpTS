@@ -273,6 +273,41 @@ public sealed class StableNumericHotPathTests
             i.Operand is MethodBase { Name: "InvokeMethodValue" });
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void SpreadRest_PreservesNumericSourceAndIndependentDestination(bool numericSource)
+    {
+        const string source = """
+            function input(): number[] {
+                const values: number[] = [];
+                values.push(1); values.push(2); values.push(3);
+                return values;
+            }
+            function collect(prefix: number, ...values: number[]): number[] { return values; }
+            function run(values: number[]): number[] { return collect(0, ...values, 4); }
+            """;
+        Assert.Empty(TestHarness.CompileAndVerifyOnly(source));
+        var assembly = Compile(source);
+        var type = assembly.GetType("$Array")!;
+        var numeric = type.GetField("_isNumeric", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        var store = type.GetField("_numStore", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        object input = numericSource ? FindFunction(assembly, "input").Invoke(null, null)!
+            : new List<object> { 1d, 2d, 3d };
+        var run = FindFunction(assembly, "run").CreateDelegate<Func<object, object>>();
+        object result = run(input);
+        Assert.True((bool)numeric.GetValue(result)!);
+        Assert.Empty((List<object>)result);
+        var get = type.GetMethod("GetDouble")!;
+        for (int i = 0; i < 4; i++) Assert.Equal(i + 1d, get.Invoke(result, [i]));
+        if (numericSource)
+        {
+            Assert.True((bool)numeric.GetValue(input)!);
+            Assert.Empty((List<object>)input);
+            Assert.NotSame(store.GetValue(input), store.GetValue(result));
+        }
+    }
+
     [Fact]
     public void OrdinaryRestPacking_FillsFinalStorageWithoutTemporaryArray()
     {

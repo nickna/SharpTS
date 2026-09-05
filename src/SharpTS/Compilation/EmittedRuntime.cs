@@ -1580,6 +1580,10 @@ public class EmittedRuntime
     public ConstructorBuilder TSArrayRestCtor { get; set; } = null!;
     public MethodBuilder TSArrayCreateNumericRest { get; set; } = null!;
     public MethodBuilder TSArrayAppendRest { get; set; } = null!;
+    public MethodBuilder TSArrayAppendRestDouble { get; set; } = null!;
+    public MethodBuilder TSArrayAppendRestValue { get; set; } = null!;
+    public MethodBuilder TSArrayReserveRest { get; set; } = null!;
+    public MethodBuilder TSArrayAppendNumericRestSource { get; set; } = null!;
     public MethodBuilder TSArrayFinishRest { get; set; } = null!;
     /// <summary>$Array(object?[] ctorArgs) — ECMA-262 Array-constructor semantics for guest classes extending Array (#233): implicit ctors and super(...) chain through this.</summary>
     public ConstructorBuilder TSArrayCtorFromCtorArgs { get; set; } = null!;

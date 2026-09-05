@@ -917,20 +917,22 @@ public abstract partial class ExpressionEmitterBase
         bool hasSpreads = arguments.Any(a => a is Expr.Spread);
         if (hasSpreads)
         {
-            var expanded = EmitExpandedRestStorage(arguments);
+            var expanded = EmitExpandedRestStorage(arguments,
+                numeric: allowNumericStorage && !AnyContainsSuspension(arguments));
             for (int i = 0; i < regularCount; i++)
             {
                 var missing = IL.DefineLabel();
                 var ready = IL.DefineLabel();
                 IL.Emit(OpCodes.Ldloc, expanded);
-                IL.Emit(OpCodes.Castclass, Types.ListOfObject);
-                IL.Emit(OpCodes.Callvirt, Types.GetPropertyGetter(Types.ListOfObject, "Count"));
+                IL.Emit(OpCodes.Castclass, Ctx.Runtime!.TSArrayType);
+                IL.Emit(OpCodes.Call, Ctx.Runtime.TSArrayLengthGetter);
                 IL.Emit(OpCodes.Ldc_I4, i);
                 IL.Emit(OpCodes.Ble, missing);
                 IL.Emit(OpCodes.Ldloc, expanded);
-                IL.Emit(OpCodes.Castclass, Types.ListOfObject);
+                IL.Emit(OpCodes.Castclass, Ctx.Runtime!.TSArrayType);
                 IL.Emit(OpCodes.Ldc_I4, i);
-                IL.Emit(OpCodes.Callvirt, Types.GetMethod(Types.ListOfObject, "get_Item", Types.Int32));
+                IL.Emit(OpCodes.Conv_I8);
+                IL.Emit(OpCodes.Call, Ctx.Runtime.TSArrayGetLong);
                 EmitCoerceBoxedToType(targetParams[i].ParameterType);
                 IL.Emit(OpCodes.Br, ready);
                 IL.MarkLabel(missing);
@@ -1016,13 +1018,29 @@ public abstract partial class ExpressionEmitterBase
     /// The private destination is a registered spill so it survives suspension;
     /// callers finalize its length only after extracting any regular parameters.
     /// </summary>
-    private LocalBuilder EmitExpandedRestStorage(IReadOnlyList<Expr> arguments)
+    private LocalBuilder EmitExpandedRestStorage(IReadOnlyList<Expr> arguments, bool numeric = false)
     {
-        IL.Emit(OpCodes.Ldc_I4, arguments.Count);
-        IL.Emit(OpCodes.Newobj, Ctx.Runtime!.TSArrayRestCtor);
+        // Numeric builders reserve at the first known spread length. A scalar
+        // prefix uses the normal small numeric capacity, not expression count.
+        IL.Emit(OpCodes.Ldc_I4, numeric ? 0 : arguments.Count);
+        if (numeric) IL.Emit(OpCodes.Call, Ctx.Runtime!.TSArrayCreateNumericRest);
+        else IL.Emit(OpCodes.Newobj, Ctx.Runtime!.TSArrayRestCtor);
         var target = _helpers.SpillStoreObject();
         foreach (var argument in arguments)
         {
+            if (numeric && argument is not Expr.Spread)
+            {
+                EmitExpression(argument);
+                bool native = StackType == StackType.Double;
+                if (!native) EnsureBoxedArg(argument);
+                var scalar = IL.DeclareLocal(native ? Types.Double : Types.Object);
+                IL.Emit(OpCodes.Stloc, scalar);
+                IL.Emit(OpCodes.Ldloc, target);
+                IL.Emit(OpCodes.Castclass, Ctx.Runtime.TSArrayType);
+                IL.Emit(OpCodes.Ldloc, scalar);
+                IL.Emit(OpCodes.Call, native ? Ctx.Runtime.TSArrayAppendRestDouble : Ctx.Runtime.TSArrayAppendRest);
+                continue;
+            }
             var value = SpillBoxed(argument is Expr.Spread spread ? spread.Expression : argument);
             if (argument is Expr.Spread)
             {

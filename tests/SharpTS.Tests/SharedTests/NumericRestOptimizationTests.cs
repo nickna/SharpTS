@@ -272,4 +272,39 @@ public class NumericRestOptimizationTests
         Assert.Equal("false true true 2\n", TestHarness.Run(source, mode));
     }
 
+    [Theory, ModeData]
+    public void SpreadBuilder_DefinesOwnElementsAfterBecomingHeterogeneous(ExecutionMode mode)
+    {
+        const string source = """
+            let setters = 0;
+            Object.defineProperty(Array.prototype, "2", { set: (value: any) => { setters++; }, configurable: true });
+            function collect(...values: any[]): any[] { return values; }
+            const values = collect("x", ...[2], 3);
+            console.log(values.join(","), setters);
+            delete Array.prototype[2];
+            """;
+        Assert.Equal("x,2,3 0\n", TestHarness.Run(source, mode));
+        if (mode == ExecutionMode.Compiled) Assert.Empty(TestHarness.CompileAndVerifyOnly(source));
+    }
+
+    [Theory, ModeData]
+    public void SpreadBuilder_InvokesIteratorOnceAndPreservesResultGetters(ExecutionMode mode)
+    {
+        const string source = """
+            let trace = "";
+            const input: any = { [Symbol.iterator](): any {
+                trace = trace + "g";
+                let i = 0;
+                return { next(): any {
+                    i++;
+                    return { get done(): boolean { return i > 2; },
+                        get value(): number { trace = trace + "v"; return i + 6; } };
+                }};
+            }};
+            function mark(): number { trace = trace + "m"; return 9; }
+            function collect(...values: number[]): string { return values.join(","); }
+            console.log(collect(...input, mark()), trace);
+            """;
+        Assert.Equal("7,8,9 gvvm\n", TestHarness.Run(source, mode));
+    }
 }
