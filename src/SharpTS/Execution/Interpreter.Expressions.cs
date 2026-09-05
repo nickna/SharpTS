@@ -1009,17 +1009,34 @@ public partial class Interpreter
     {
         // Avoid an async state machine for synchronous indexed reads. This is
         // the inner path for record-array traversal such as back[i].value.
-        object? obj = Evaluate(getIndex.Object);
+        RuntimeValue objectValue = EvaluateRV(getIndex.Object);
+        object? obj = objectValue.ToObject();
         if (getIndex.Optional
             && obj is null or Runtime.Types.SharpTSUndefined)
         {
             return RuntimeValue.Undefined;
         }
 
+        RuntimeValue indexValue = EvaluateRV(getIndex.Index);
+        if (obj is SharpTSArray directArray
+            && indexValue.Kind == ValueKind.Number)
+        {
+            double directNumber = indexValue.AsNumberUnsafe();
+            if (double.IsFinite(directNumber)
+                && directNumber >= 0
+                && directNumber <= SharpTSArray.MaxWriteIndex
+                && Math.Truncate(directNumber) == directNumber
+                && directArray.TryGetPresentDataIndexRV(
+                    (long)directNumber, out RuntimeValue directValue))
+            {
+                return directValue;
+            }
+        }
+
         return PerformIndexGet(
             getIndex.Object,
             obj,
-            Evaluate(getIndex.Index));
+            indexValue.ToObject());
     }
 
     /// <summary>
@@ -1027,7 +1044,8 @@ public partial class Interpreter
     /// </summary>
     private async ValueTask<RuntimeValue> EvaluateGetIndexCore(IEvaluationContext ctx, Expr.GetIndex getIndex)
     {
-        object? obj = (await ctx.EvaluateExprAsync(getIndex.Object)).ToObject();
+        RuntimeValue objectValue = await ctx.EvaluateExprAsync(getIndex.Object);
+        object? obj = objectValue.ToObject();
 
         // Optional bracket access: return undefined if object is nullish
         if (getIndex.Optional && (obj == null || obj is Runtime.Types.SharpTSUndefined))
@@ -1035,8 +1053,26 @@ public partial class Interpreter
             return RuntimeValue.Undefined;
         }
 
-        object? index = (await ctx.EvaluateExprAsync(getIndex.Index)).ToObject();
-        return PerformIndexGet(getIndex.Object, obj, index);
+        RuntimeValue indexValue = await ctx.EvaluateExprAsync(getIndex.Index);
+        if (obj is SharpTSArray directArray
+            && indexValue.Kind == ValueKind.Number)
+        {
+            double directNumber = indexValue.AsNumberUnsafe();
+            if (double.IsFinite(directNumber)
+                && directNumber >= 0
+                && directNumber <= SharpTSArray.MaxWriteIndex
+                && Math.Truncate(directNumber) == directNumber
+                && directArray.TryGetPresentDataIndexRV(
+                    (long)directNumber, out RuntimeValue directValue))
+            {
+                return directValue;
+            }
+        }
+
+        return PerformIndexGet(
+            getIndex.Object,
+            obj,
+            indexValue.ToObject());
     }
 
     /// <summary>
@@ -1457,18 +1493,58 @@ public partial class Interpreter
     /// Currently only supports array element assignment.
     /// </remarks>
     /// <seealso href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Property_accessors#bracket_notation">MDN Bracket Notation</seealso>
+    [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     private RuntimeValue EvaluateSetIndex(Expr.SetIndex setIndex)
-        => EvaluateSetIndexCore(_syncContext, setIndex).GetAwaiter().GetResult();
+    {
+        RuntimeValue objectValue = EvaluateRV(setIndex.Object);
+        RuntimeValue indexValue = EvaluateRV(setIndex.Index);
+        RuntimeValue value = EvaluateRV(setIndex.Value);
+
+        if (objectValue.TryAsObject<SharpTSArray>(out var array)
+            && array is not SharpTSArguments
+            && indexValue.Kind == ValueKind.Number)
+        {
+            double number = indexValue.AsNumberUnsafe();
+            if (double.IsFinite(number)
+                && number >= 0
+                && number <= SharpTSArray.MaxWriteIndex
+                && Math.Truncate(number) == number
+                && array.TrySetDenseDataIndex((long)number, value))
+            {
+                return value;
+            }
+        }
+
+        return PerformIndexSet(
+            objectValue.ToObject(), indexValue.ToObject(), value.ToObject());
+    }
 
     /// <summary>
     /// Core indexed-assignment logic shared by the sync and async evaluators.
     /// </summary>
     private async ValueTask<RuntimeValue> EvaluateSetIndexCore(IEvaluationContext ctx, Expr.SetIndex setIndex)
     {
-        object? obj = (await ctx.EvaluateExprAsync(setIndex.Object)).ToObject();
-        object? index = (await ctx.EvaluateExprAsync(setIndex.Index)).ToObject();
-        object? value = (await ctx.EvaluateExprAsync(setIndex.Value)).ToObject();
-        return PerformIndexSet(obj, index, value);
+        RuntimeValue objectValue = await ctx.EvaluateExprAsync(setIndex.Object);
+        RuntimeValue indexValue = await ctx.EvaluateExprAsync(setIndex.Index);
+        RuntimeValue value = await ctx.EvaluateExprAsync(setIndex.Value);
+
+        if (objectValue.TryAsObject<SharpTSArray>(out var array)
+            && array is not SharpTSArguments
+            && indexValue.Kind == ValueKind.Number)
+        {
+            double number = indexValue.AsNumberUnsafe();
+            if (double.IsFinite(number)
+                && number >= 0
+                && number <= SharpTSArray.MaxWriteIndex
+                && Math.Truncate(number) == number
+                && array.TrySetDenseDataIndex((long)number, value))
+            {
+                return value;
+            }
+        }
+
+        return PerformIndexSet(
+            objectValue.ToObject(), indexValue.ToObject(), value.ToObject());
     }
 
     /// <summary>

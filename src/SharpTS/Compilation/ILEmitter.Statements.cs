@@ -1007,6 +1007,7 @@ public partial class ILEmitter
 
             // Array hoist preamble: emit isinst checks for loop-invariant arrays
             var hoisted = EmitArrayHoistPreamble(f.Body, f.Condition, f.Increment);
+            EmitCountedIndexWriteReservation(f);
             // Typed-array receiver hoist (#928): cast loop-invariant numeric TypedArray receivers once.
             var taHoisted = EmitTypedArrayHoistPreamble(f.Body, f.Condition, f.Increment);
             // Promoted boolean arrays can expose one stable Span<bool> per loop. Direct
@@ -1815,6 +1816,55 @@ public partial class ILEmitter
         SetStackUnknown();
     }
 
+    private void EmitCountedIndexWriteReservation(Stmt.For loop)
+    {
+        if (!CountedIndexWriteLoopAnalyzer.TryAnalyze(loop, out var reservation)
+            || _ctx.TypeMap?.Get(reservation.Array) is not TypeInfo.Array
+                { ElementType: TypeInfo.Primitive { Type: TokenType.TYPE_NUMBER } }
+            || _ctx.TypeMap.Get(reservation.Bound) is not TypeInfo.Primitive
+                { Type: TokenType.TYPE_NUMBER }
+            || _ctx.TryGetHoistedArray(reservation.Array.Name.Lexeme) is not
+                { Descriptor.Kind: ArrayElementsKind.Double } hoisted
+            || _ctx.Runtime is null)
+        {
+            return;
+        }
+
+        var boundLocal = IL.DeclareLocal(_ctx.Types.Double);
+        var skip = _ctx.ILBuilder.DefineLabel("counted_index_reserve_skip");
+
+        // Captured numeric bindings can still use object-backed storage. Only
+        // reserve when loading the bound is already coercion-free; otherwise
+        // the ordinary condition must retain its per-check ToNumber timing.
+        EmitExpression(reservation.Bound);
+        if (StackType != StackType.Double)
+        {
+            IL.Emit(OpCodes.Pop);
+            _ctx.ILBuilder.MarkLabel(skip);
+            SetStackUnknown();
+            return;
+        }
+        IL.Emit(OpCodes.Stloc, boundLocal);
+        IL.Emit(OpCodes.Ldloc, boundLocal);
+        IL.Emit(OpCodes.Ldc_R8, 0d);
+        IL.Emit(OpCodes.Blt_Un, skip);
+        IL.Emit(OpCodes.Ldloc, boundLocal);
+        IL.Emit(OpCodes.Ldc_R8, 1_000_000d);
+        IL.Emit(OpCodes.Bgt_Un, skip);
+
+        IL.Emit(OpCodes.Ldloc, hoisted.TypedLocal);
+        IL.Emit(OpCodes.Brfalse, skip);
+        IL.Emit(OpCodes.Ldloc, hoisted.TypedLocal);
+        IL.Emit(OpCodes.Ldloc, boundLocal);
+        IL.Emit(OpCodes.Call, typeof(Math).GetMethod(
+            nameof(Math.Ceiling), [_ctx.Types.Double])!);
+        IL.Emit(OpCodes.Conv_I4);
+        IL.Emit(OpCodes.Callvirt, _ctx.Runtime.TSArrayEnsureDoubleCapacity);
+
+        _ctx.ILBuilder.MarkLabel(skip);
+        SetStackUnknown();
+    }
+
     protected override void EmitIf(Stmt.If i)
     {
         // Check for dead code elimination optimization
@@ -1924,13 +1974,16 @@ public partial class ILEmitter
                 : desc.GetListType(_ctx.Types);
             var typedLocal = IL.DeclareLocal(hoistType);
 
-            // Load array variable, isinst to the hoist type, store in local
-            // If the variable holds a different type, typedLocal will be null
-            // Use the local directly to avoid stack type tracking complications
-            var arrLocal = _ctx.Locals.GetLocal(varName);
-            if (arrLocal == null) continue; // Variable not found in locals — skip
-            IL.Emit(OpCodes.Ldloc, arrLocal);
-            // Array locals are always typed as object — no boxing needed
+            // Resolve once at loop entry. This covers parameters and captured
+            // bindings as well as locals; the previous local-only lookup forced
+            // helper parameters such as fillIndex(a, n) to cast on every write.
+            var loaded = _resolver.TryLoadVariable(varName);
+            if (loaded is null) continue;
+            if (loaded == StackType.Double)
+                IL.Emit(OpCodes.Box, _ctx.Types.Double);
+            else if (loaded == StackType.Boolean)
+                IL.Emit(OpCodes.Box, _ctx.Types.Boolean);
+
             if (desc.Kind == ArrayElementsKind.Object)
             {
                 // A number[] can reach this loop through an any[] alias. The
@@ -1953,6 +2006,7 @@ public partial class ILEmitter
             cache[varName] = new HoistedArrayEntry(typedLocal, desc);
         }
 
+        if (cache.Count == 0) return false;
         _ctx.HoistedArrayCaches.Push(cache);
         return true;
     }

@@ -297,6 +297,9 @@ public partial class RuntimeEmitter
         var pushDouble = typeBuilder.DefineMethod("PushDouble",
             MethodAttributes.Public | MethodAttributes.HideBySig, _types.Void, [_types.Double]);
         runtime.TSArrayPushDouble = pushDouble;
+        var ensureDoubleCapacity = typeBuilder.DefineMethod("EnsureDoubleCapacity",
+            MethodAttributes.Public | MethodAttributes.HideBySig, _types.Void, [_types.Int32]);
+        runtime.TSArrayEnsureDoubleCapacity = ensureDoubleCapacity;
         // #927 step 2: these are the per-element hot paths the compiler emits at statically-number[]
         // sites. They are non-virtual (HideBySig), so a `callvirt` on a $Array-typed receiver
         // devirtualizes; AggressiveInlining lets the JIT fold the field loads + bounds check into the
@@ -305,6 +308,37 @@ public partial class RuntimeEmitter
         getDouble.SetImplementationFlags(MethodImplAttributes.AggressiveInlining);
         setDouble.SetImplementationFlags(MethodImplAttributes.AggressiveInlining);
         pushDouble.SetImplementationFlags(MethodImplAttributes.AggressiveInlining);
+
+        // Capacity reservation changes neither length nor elements. It is used
+        // only for analyzer-proven counted sequential writes and is a no-op when
+        // the array has already deoptimized to boxed storage.
+        {
+            var il = ensureDoubleCapacity.GetILGenerator();
+            var resize = il.DefineLabel();
+            var done = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, _tsArrayIsNumericField);
+            il.Emit(OpCodes.Brfalse, done);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Ble, done);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, _tsArrayNumStoreField);
+            il.Emit(OpCodes.Brfalse, resize);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, _tsArrayNumStoreField);
+            il.Emit(OpCodes.Ldlen);
+            il.Emit(OpCodes.Conv_I4);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Bge, done);
+            il.MarkLabel(resize);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldflda, _tsArrayNumStoreField);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Call, arrayResize);
+            il.MarkLabel(done);
+            il.Emit(OpCodes.Ret);
+        }
         var markNumeric = typeBuilder.DefineMethod("MarkNumeric",
             MethodAttributes.Public | MethodAttributes.HideBySig, _types.Void, System.Type.EmptyTypes);
         runtime.TSArrayMarkNumeric = markNumeric;

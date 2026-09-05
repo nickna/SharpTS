@@ -1000,6 +1000,14 @@ public partial class Interpreter : IDisposable
     // event-loop ticks. Weak: tracking must not keep a guest registry alive.
     private readonly List<WeakReference<SharpTSFinalizationRegistry>> _finalizationRegistries = [];
     private readonly object _finalizationRegistriesLock = new();
+    private volatile bool _hasFinalizationRegistries;
+
+    /// <summary>Whether a loop checkpoint has timer, microtask, or finalizer work.</summary>
+    private bool HasPendingCallbacks =>
+        !_isDisposed
+        && (HasMicrotasks()
+            || _hasFinalizationRegistries
+            || _hasScheduledTimers);
 
     /// <summary>
     /// Enrolls a FinalizationRegistry so its GC-enqueued cleanups are drained on
@@ -1013,12 +1021,13 @@ public partial class Interpreter : IDisposable
                 if (wr.TryGetTarget(out var existing) && ReferenceEquals(existing, registry))
                     return;
             _finalizationRegistries.Add(new WeakReference<SharpTSFinalizationRegistry>(registry));
+            _hasFinalizationRegistries = true;
         }
     }
 
+    /// <summary>Prunes collected registries and drains any queued cleanup callbacks.</summary>
     private void DrainFinalizationRegistries()
     {
-        if (_finalizationRegistries.Count == 0) return;
         List<SharpTSFinalizationRegistry>? due = null;
         lock (_finalizationRegistriesLock)
         {
@@ -1031,6 +1040,7 @@ public partial class Interpreter : IDisposable
                 }
                 if (registry.HasPendingCleanups) (due ??= []).Add(registry);
             }
+            _hasFinalizationRegistries = _finalizationRegistries.Count != 0;
         }
         // Invoke outside the lock: cleanup callbacks are arbitrary guest code.
         if (due != null)
@@ -1046,7 +1056,8 @@ public partial class Interpreter : IDisposable
 
         // FinalizationRegistry cleanups ride event-loop ticks (Node runs them as
         // ordinary tasks after GC observes a target collection).
-        DrainFinalizationRegistries();
+        if (_hasFinalizationRegistries)
+            DrainFinalizationRegistries();
 
         // Quick checks before acquiring lock
         if (_isDisposed || !_hasScheduledTimers) return;

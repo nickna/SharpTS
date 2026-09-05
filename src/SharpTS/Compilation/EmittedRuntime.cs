@@ -1614,6 +1614,7 @@ public class EmittedRuntime
     public MethodBuilder TSArrayGetDouble { get; set; } = null!;
     public MethodBuilder TSArraySetDouble { get; set; } = null!;
     public MethodBuilder TSArrayPushDouble { get; set; } = null!;
+    public MethodBuilder TSArrayEnsureDoubleCapacity { get; set; } = null!;
     public MethodBuilder TSArrayEnsureBoxed { get; set; } = null!;
     public MethodBuilder TSArrayIsNumericGetter { get; set; } = null!;
     public MethodBuilder TSArrayNumericCountGetter { get; set; } = null!;
