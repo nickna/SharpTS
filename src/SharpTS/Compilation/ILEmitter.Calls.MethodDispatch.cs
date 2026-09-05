@@ -12,6 +12,30 @@ public partial class ILEmitter
 {
     protected override bool TryEmitDiscardedExpression(Expr expression)
     {
+        if (expression is Expr.Call
+            {
+                Optional: false, Arguments.Count: 0,
+                Callee: Expr.Get { Optional: false, Name.Lexeme: "shift", Object: Expr.Variable shifted }
+            }
+            && _ctx.TryGetPromotedQueueLocal(shifted.Name.Lexeme) is { Queue.ShiftNumber: { } shift } numericQueue)
+        {
+            IL.Emit(OpCodes.Ldloc, numericQueue.Local);
+            IL.Emit(OpCodes.Call, shift);
+            IL.Emit(OpCodes.Pop);
+            SetStackUnknown();
+            return true;
+        }
+        if ((expression is Expr.Call { Callee: Expr.Get { Object: Expr.Variable queueCall } }
+                && _ctx.TryGetPromotedQueueLocal(queueCall.Name.Lexeme) != null)
+            || (expression is Expr.SetIndex { Object: Expr.Variable queueWrite }
+                && _ctx.TryGetPromotedQueueLocal(queueWrite.Name.Lexeme) != null))
+        {
+            // Do not route the private queue through $Array/List-only shortcuts.
+            EmitExpression(expression);
+            IL.Emit(OpCodes.Pop);
+            SetStackUnknown();
+            return true;
+        }
         // Shared-counter loops almost always discard Atomics.add's old-value result. When the
         // receiver is statically Int32/Uint32, keep all three operands unboxed and call the
         // Interlocked-backed helper directly; manufacturing a boxed double solely to pop it was
@@ -238,6 +262,41 @@ public partial class ILEmitter
                 IL.Emit(OpCodes.Ceq);
             }
             SetStackType(StackType.Boolean);
+            return;
+        }
+
+        if (!methodGet.Optional && methodGet.Object is Expr.Variable queueReceiver
+            && _ctx.TryGetPromotedQueueLocal(queueReceiver.Name.Lexeme) is { } queue)
+        {
+            if (methodName == "shift")
+            {
+                IL.Emit(OpCodes.Ldloc, queue.Local);
+                IL.Emit(OpCodes.Call, queue.Queue.Shift);
+                SetStackUnknown();
+                return;
+            }
+            // Evaluate every argument before changing the receiver, including push.
+            var values = new List<LocalBuilder>();
+            foreach (var argument in arguments)
+            {
+                EmitExpression(argument);
+                if (queue.Queue.Elements.Kind == ArrayElementsKind.Double) EnsureDouble();
+                else EnsureBoolean();
+                var value = IL.DeclareLocal(queue.Queue.Elements.GetElementType(_ctx.Types));
+                IL.Emit(OpCodes.Stloc, value);
+                values.Add(value);
+            }
+            if (methodName == "unshift") values.Reverse();
+            foreach (var value in values)
+            {
+                IL.Emit(OpCodes.Ldloc, queue.Local);
+                IL.Emit(OpCodes.Ldloc, value);
+                IL.Emit(OpCodes.Call, methodName == "unshift" ? queue.Queue.Unshift : queue.Queue.Push);
+            }
+            IL.Emit(OpCodes.Ldloc, queue.Local);
+            IL.Emit(OpCodes.Call, queue.Queue.Count);
+            IL.Emit(OpCodes.Conv_R8);
+            SetStackType(StackType.Double);
             return;
         }
 

@@ -162,6 +162,13 @@ public class TypeMap
     public bool IsPromotableArrayLocal(Token nameToken, out TokenType elementToken) =>
         _promotableArrayLocals.TryGetValue(nameToken, out elementToken);
 
+    private readonly HashSet<Token> _promotableQueueLocals = new(ReferenceEqualityComparer.Instance);
+    public void MarkPromotableQueueLocal(Token nameToken) => _promotableQueueLocals.Add(nameToken);
+    public bool IsPromotableQueueLocal(Token nameToken) => _promotableQueueLocals.Contains(nameToken);
+    private readonly HashSet<Token> _queueLocalsWithWrites = new(ReferenceEqualityComparer.Instance);
+    public void MarkQueueLocalWithWrites(Token nameToken) => _queueLocalsWithWrites.Add(nameToken);
+    public bool QueueLocalHasWrites(Token nameToken) => _queueLocalsWithWrites.Contains(nameToken);
+
     private readonly HashSet<Token> _stableNumericSliceSortReceivers =
         new(ReferenceEqualityComparer.Instance);
 

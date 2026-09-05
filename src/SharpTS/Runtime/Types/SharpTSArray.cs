@@ -69,6 +69,10 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
     private const int SparseThreshold = 1024;
 
     private readonly Deque<object?> _dense;
+    // Conservative shape state: once holes may exist, queue operations use the
+    // property algorithm. Never scan the backing on each shift/unshift.
+    private bool _mayHaveHoles;
+    private bool _ownsDenseStorage;
     private Dictionary<uint, object?>? _sparse;
     private object? _explicitPrototype;
 
@@ -106,20 +110,37 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
     /// array in sparse mode: only the contiguous prefix that hasn't been
     /// sparse-promoted lives here.
     /// </summary>
-    internal Deque<object?> Elements => _dense;
+    internal Deque<object?> Elements
+    {
+        get
+        {
+            _ownsDenseStorage = false; // A caller can mutate this legacy backing view.
+            return _dense;
+        }
+    }
 
     /// <summary>Creates an empty array.</summary>
-    public SharpTSArray() : this(new Deque<object?>()) { }
+    public SharpTSArray() : this(new Deque<object?>()) { _ownsDenseStorage = true; }
 
     /// <summary>Creates an array from a deque (the deque becomes the dense backing).</summary>
     public SharpTSArray(Deque<object?> elements)
     {
         _dense = elements;
         _length = elements.Count;
+        _mayHaveHoles = elements.Any(value => value is ArrayHole);
     }
 
     /// <summary>Creates an array from any enumerable (copies into a new deque).</summary>
-    public SharpTSArray(IEnumerable<object?> elements) : this(new Deque<object?>(elements)) { }
+    public SharpTSArray(IEnumerable<object?> elements) : this(new Deque<object?>(elements))
+    {
+        _ownsDenseStorage = true;
+    }
+
+    internal bool CanUseDenseQueueFastPath(long expectedLength) =>
+        GetType() == typeof(SharpTSArray) && _ownsDenseStorage && !_mayHaveHoles
+        && !HasExplicitPrototype && !IsFrozen && !IsSealed && IsExtensible && _lengthWritable
+        && _sparse is null && _length == expectedLength && _dense.Count == expectedLength
+        && (_indexAccessors?.Count ?? 0) == 0 && (_descriptors?.Count ?? 0) == 0;
 
     /// <summary>
     /// ECMA-262 array length clamped to <see cref="int.MaxValue"/>.
@@ -241,6 +262,7 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
     /// </summary>
     public void DeleteAt(long index)
     {
+        _mayHaveHoles = true;
         if (IsFrozen) return;
         if ((ulong)index >= (ulong)_length) return;
         if (index <= uint.MaxValue)
@@ -278,6 +300,7 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
     /// <summary>Writes the slot at the given index without mutating length or transitioning.</summary>
     private void SetCore(long index, object? value)
     {
+        _mayHaveHoles |= value is ArrayHole;
         if (_sparse == null || index < _dense.Count)
             _dense[(int)index] = value;
         else
@@ -321,6 +344,7 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
     /// <summary>Appends an element. Does not check frozen/sealed state.</summary>
     public void Add(object? value)
     {
+        _mayHaveHoles |= value is ArrayHole;
         if (_sparse != null)
         {
             // Appending on a sparse array: write directly to the dict at _length.
@@ -335,6 +359,7 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
     /// <summary>Appends many elements. Does not check frozen/sealed state.</summary>
     public void AddRange(IEnumerable<object?> values)
     {
+        _mayHaveHoles = true; // Unknown enumerable; do not enumerate it twice.
         if (_sparse != null)
         {
             foreach (var v in values)
@@ -351,6 +376,7 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
     /// <summary>Prepends an element (O(1) in dense mode via Deque).</summary>
     public void AddFirst(object? value)
     {
+        _mayHaveHoles |= value is ArrayHole;
         MaterializeDense();
         _dense.AddFirst(value);
         _length = _dense.Count;
@@ -359,6 +385,7 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
     /// <summary>Inserts at an index, shifting later elements right.</summary>
     public void Insert(int index, object? value)
     {
+        _mayHaveHoles |= value is ArrayHole;
         MaterializeDense();
         _dense.Insert(index, value);
         _length = _dense.Count;
@@ -367,6 +394,7 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
     /// <summary>Inserts many elements at an index.</summary>
     public void InsertRange(int index, IEnumerable<object?> values)
     {
+        _mayHaveHoles = true;
         MaterializeDense();
         _dense.InsertRange(index, values);
         _length = _dense.Count;
@@ -536,6 +564,7 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
     {
         if (_sparse == null)
             return;
+        _mayHaveHoles = true;
         // Materialization copies every sparse entry into the dense prefix. If
         // _length exceeds int.MaxValue we can't represent that as a dense Deque.
         // Structural mutations (Insert / RemoveAt / AddFirst / Reverse) that
@@ -722,6 +751,7 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
     /// </summary>
     private void SetCoreWithExtend(long index, object? value)
     {
+        _mayHaveHoles |= value is ArrayHole || index > _length;
         if (_sparse != null)
         {
             SetCore(index, value);
@@ -768,6 +798,7 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
             throw new Exception($"RangeError: Array length {newLength} exceeds ECMA-262 uint32 maximum.");
 
         if (newLength == _length) return;
+        _mayHaveHoles |= newLength > _length;
 
         if (newLength < _length)
         {
@@ -1378,6 +1409,7 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
                 _indexAccessors[uindex] = (
                     descriptor.HasGet ? descriptor.Get : existingIsAccessor ? existingGetter : null,
                     descriptor.HasSet ? descriptor.Set : existingIsAccessor ? existingSetter : null);
+                _mayHaveHoles = true;
                 // Accessors have no data value at the same index.
                 if (_sparse == null || index < _dense.Count)
                     _dense[(int)index] = ArrayHole.Instance;

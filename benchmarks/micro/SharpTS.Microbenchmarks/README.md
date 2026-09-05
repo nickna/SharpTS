@@ -84,6 +84,20 @@ typed parameters, categories, and operations-per-invoke directly from
 BenchmarkDotNet descriptors. See the [public snapshot exporter](../../snapshots/README.md)
 for normalized compiler-headroom publication.
 
+`ArrayQueueBenchmarks` retains the preallocated C# `List<double>` baselines and
+also measures the runtime's `Deque<double>` as an algorithmic ceiling. The list
+baselines repeatedly copy elements at the front, so matching those baselines
+does not establish efficient queue behavior. Deque baselines grow from empty,
+matching the TypeScript initialization. Compare allocation columns as well as
+time: counted push loops can reserve storage, while repeated unshift grows it.
+
+Compiled non-escaping queues use two typed stacks with constant-time indexed
+reads and amortized constant-time front operations. Ordinary arrays keep list
+promotion. Queues with admitted bounded literal writes use nullable slots to
+preserve holes; other write shapes and higher-order methods retain existing
+lowering. The interpreter uses its circular buffer only when conservative shape
+guards permit bypassing per-index property operations.
+
 ## Conventions
 
 - **One algorithm per class**, each with a single `[Params]` axis — a single
