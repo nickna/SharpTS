@@ -347,10 +347,16 @@ public sealed class ProcessModuleEmitter : IBuiltInModuleEmitter
         var cbLocal = il.DeclareLocal(ctx.Types.Object);
         il.Emit(OpCodes.Stloc, cbLocal);
 
-        // if (cb == null) throw — matches interpreter "callback must be a function".
+        // Omitted arguments on an indirect TS wrapper arrive as undefined.
+        // Reject that sentinel as well as null before scheduling the callback.
         var callbackOkLabel = il.DefineLabel();
+        var invalidCallbackLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, cbLocal);
-        il.Emit(OpCodes.Brtrue, callbackOkLabel);
+        il.Emit(OpCodes.Brfalse, invalidCallbackLabel);
+        il.Emit(OpCodes.Ldloc, cbLocal);
+        il.Emit(OpCodes.Isinst, ctx.Runtime!.UndefinedType);
+        il.Emit(OpCodes.Brfalse, callbackOkLabel);
+        il.MarkLabel(invalidCallbackLabel);
         il.Emit(OpCodes.Ldstr, "Runtime Error: process.nextTick callback must be a function");
         il.Emit(OpCodes.Newobj, ctx.Types.GetConstructor(ctx.Types.ArgumentException, [ctx.Types.String])!);
         il.Emit(OpCodes.Throw);

@@ -28,7 +28,8 @@ public class DynamicIteratorResultTests
             function shadowed(): any {
                 let current: number = 1;
                 const object: any = { read() { return current++; } };
-                { let current: number = 20; console.log(current); }
+                function show(current: number) { console.log(current); }
+                show(20);
                 return object;
             }
             const shadow = shadowed();
@@ -178,7 +179,8 @@ public class DynamicIteratorResultTests
             }
             const object: any = create(10);
             console.log(object.next(), object.next());
+            console.log(Number.isNaN(create(NaN).next()), create(Infinity).next());
             """;
-        Assert.Equal("13 14\n", TestHarness.Run(source, mode));
+        Assert.Equal("13 14\ntrue Infinity\n", TestHarness.Run(source, mode));
     }
 }

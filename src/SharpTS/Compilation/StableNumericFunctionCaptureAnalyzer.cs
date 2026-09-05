@@ -35,7 +35,7 @@ internal static class StableNumericFunctionCaptureAnalyzer
         {
             if (!ReferenceEquals(closures.GetCaptureSource(next, name), source) ||
                 IsCapturedByAnotherCallable(source.Body, next, name, closures) ||
-                StableNumericFunctionCaptureAnalyzer.HasAmbiguousBinding(source, name) ||
+                HasAmbiguousBinding(source, name) ||
                 !HasStableNumericBinding(source, name, iteratorDeclaration, typeMap))
                 continue;
 
@@ -51,6 +51,7 @@ internal static class StableNumericFunctionCaptureAnalyzer
     {
         bool initialized = source.Parameters.Any(parameter =>
             parameter.Name.Lexeme == name && parameter.Type == "number" &&
+            !parameter.IsOptional && !parameter.IsRest &&
             !typeMap.IsUndefinedReachableNumericParam(parameter));
 
         if (!initialized)
@@ -220,6 +221,16 @@ internal static class StableNumericFunctionCaptureAnalyzer
     private sealed class BindingVisitor(string name) : AstVisitorBase
     {
         public int Count { get; set; }
+        protected override void VisitTryCatch(Stmt.TryCatch statement)
+        {
+            if (statement.CatchParam?.Lexeme == name) Count++;
+            base.VisitTryCatch(statement);
+        }
+        protected override void VisitClass(Stmt.Class statement)
+        {
+            if (statement.Name.Lexeme == name) Count++;
+            base.VisitClass(statement);
+        }
         protected override void VisitVar(Stmt.Var statement)
         {
             if (statement.Name.Lexeme == name) Count++;

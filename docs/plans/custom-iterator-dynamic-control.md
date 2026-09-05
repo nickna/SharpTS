@@ -1,6 +1,8 @@
 # Dynamic custom iterator implementation plan
 
-Status: planned; implementation has not started.
+Status: implemented, with interpreter environment reuse deferred as allowed in
+stage 6. See the [implementation results](custom-iterator-dynamic-control-results.md)
+for measurements, validation, and remaining costs.
 
 Improve generic custom iterator performance in compiled and interpreted SharpTS while preserving observable JavaScript behavior. Keep `custom-iterator-dynamic-control.ts` as a generic protocol workload, including its alias and `alias.next = alias.next` assignment. Deliver six independently reviewable stages, with correctness and allocation evidence accompanying each optimization.
 
