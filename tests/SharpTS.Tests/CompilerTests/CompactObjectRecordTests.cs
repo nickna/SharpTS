@@ -15,6 +15,60 @@ namespace SharpTS.Tests.CompilerTests;
 /// </summary>
 public sealed class CompactObjectRecordTests
 {
+    [Fact]
+    public void InterfaceStoredRecord_UsesGuardedNativeNumberRead()
+    {
+        const string source = """
+            interface Base { index: number; }
+            interface Item extends Base { label: string; next: number; values: number[]; }
+            function read(item: Item): number { return item.index + item.next; }
+            function exercise(): number {
+                const items: Item[] = [];
+                items.push({ index: 2, next: 3, label: "item", values: [2, 3] });
+                return read(items[0]);
+            }
+            console.log(exercise());
+            """;
+        var assembly = Compile(source);
+        Assert.Contains(ReadMembers(FindFunction(assembly, "read")), member =>
+            member.OpCode == OpCodes.Ldfld && member.Member is FieldInfo { FieldType: var t } &&
+            t == typeof(double));
+        Assert.Equal("5\n", TestHarness.RunCompiled(source));
+        Assert.Empty(TestHarness.CompileAndVerifyOnly(source));
+    }
+
+    [Fact]
+    public void InterfaceReads_PreserveAliasesDescriptorsAndDifferentRuntimeShapes()
+    {
+        const string source = """
+            interface Item { value: number; label: string; }
+            interface Optional { value?: number; }
+            function read(item: Item): number { return item.value; }
+            function exercise(): void {
+                const items: Item[] = [];
+                items.push({ value: 1, label: "a" });
+                const item: Item = items[0];
+                const alias: any = item;
+                console.log(read(item));
+                item.value = 7;
+                console.log(read(item));
+                Object.defineProperty(alias, "value", { get: () => 9, configurable: true });
+                console.log(read(item));
+                console.log(read({ label: "b", value: 3 }));
+                const optional: Optional = {};
+                console.log(optional.value);
+            }
+            class Other implements Item {
+                label: string = "class";
+                get value(): number { return 11; }
+            }
+            exercise();
+            console.log(read(new Other()));
+            """;
+        Assert.Equal("1\n7\n9\n3\nundefined\n11\n", TestHarness.RunCompiled(source));
+        Assert.Empty(TestHarness.CompileAndVerifyOnly(source));
+    }
+
     private const string TreeSource = """
         type TreeNode = { left: TreeNode | null; right: TreeNode | null };
 

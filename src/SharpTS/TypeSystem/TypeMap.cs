@@ -24,6 +24,7 @@ public class TypeMap
     private readonly HashSet<Token> _promotableNumericMapLocals = new(ReferenceEqualityComparer.Instance);
     private readonly HashSet<Token> _promotableStringAccumulators = new(ReferenceEqualityComparer.Instance);
     private readonly Dictionary<Token, ObjectShapeInfo> _promotableObjectLocals = new(ReferenceEqualityComparer.Instance);
+    private readonly Dictionary<Expr.Call, ObjectConsumerInfo> _promotedObjectCalls = new(ReferenceEqualityComparer.Instance);
     private readonly Dictionary<Token, ClassScalarReplacementInfo> _scalarReplaceableClassLocals =
         new(ReferenceEqualityComparer.Instance);
     private readonly HashSet<Stmt.ForOf> _stableNumericMapIterations = new(ReferenceEqualityComparer.Instance);
@@ -162,6 +163,13 @@ public class TypeMap
     public bool IsPromotableArrayLocal(Token nameToken, out TokenType elementToken) =>
         _promotableArrayLocals.TryGetValue(nameToken, out elementToken);
 
+    private readonly HashSet<Token> _promotableQueueLocals = new(ReferenceEqualityComparer.Instance);
+    public void MarkPromotableQueueLocal(Token nameToken) => _promotableQueueLocals.Add(nameToken);
+    public bool IsPromotableQueueLocal(Token nameToken) => _promotableQueueLocals.Contains(nameToken);
+    private readonly HashSet<Token> _queueLocalsWithWrites = new(ReferenceEqualityComparer.Instance);
+    public void MarkQueueLocalWithWrites(Token nameToken) => _queueLocalsWithWrites.Add(nameToken);
+    public bool QueueLocalHasWrites(Token nameToken) => _queueLocalsWithWrites.Contains(nameToken);
+
     private readonly HashSet<Token> _stableNumericSliceSortReceivers =
         new(ReferenceEqualityComparer.Instance);
 
@@ -245,6 +253,10 @@ public class TypeMap
     /// the generated types). Empty when no object local was promoted.
     /// </summary>
     public IEnumerable<ObjectShapeInfo> PromotableObjectLocalShapes => _promotableObjectLocals.Values;
+
+    public void MarkPromotedObjectCall(Expr.Call call, ObjectConsumerInfo summary) => _promotedObjectCalls[call] = summary;
+    public bool TryGetPromotedObjectCall(Expr.Call call, out ObjectConsumerInfo summary) =>
+        _promotedObjectCalls.TryGetValue(call, out summary!);
 
     /// <summary>
     /// Marks a fresh exact-class local whose allocation and pure constructor may be

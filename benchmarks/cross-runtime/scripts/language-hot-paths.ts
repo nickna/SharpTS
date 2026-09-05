@@ -59,8 +59,8 @@ function leftAssociatedAccumulation(n: number): number {
     return sum;
 }
 
-// Rest fallback coverage. These deliberately prevent the fixed-arity companion
-// from applying so the suite retains evidence for the ordinary rest ABI too.
+// Stable alias and constant-index specialization targets. The parameter-bound
+// and varying-index cases below retain coverage for the ordinary rest ABI.
 function indirectNumericRest(n: number): number {
     const indirectAdd4: (...values: number[]) => number = add4;
     let sum: number = REST_ACCUMULATOR_SEED;
@@ -87,6 +87,20 @@ function dynamicIndexNumericRest(n: number): number {
     let sum: number = REST_ACCUMULATOR_SEED;
     for (let i: number = 0; i < n; i++) {
         sum = sum + add4Dynamic(0, i, 1, 2, 3);
+    }
+    return sum;
+}
+
+function unknownTargetNumericRest(n: number, fn: (...values: number[]) => number): number {
+    let sum: number = REST_ACCUMULATOR_SEED;
+    for (let i: number = 0; i < n; i++) sum = sum + fn(i, 1, 2, 3);
+    return sum;
+}
+
+function varyingIndexNumericRest(n: number): number {
+    let sum: number = REST_ACCUMULATOR_SEED;
+    for (let i: number = 0; i < n; i++) {
+        sum = sum + add4Dynamic(i % 2, i, i, i, i, i);
     }
     return sum;
 }
@@ -145,6 +159,8 @@ for (let p: number = 0; p < params.length; p++) {
     bench("indirect-numeric-rest", n, () => indirectNumericRest(n), restChecksum);
     bench("spread-numeric-rest", n, () => spreadNumericRest(n), restChecksum);
     bench("dynamic-index-numeric-rest", n, () => dynamicIndexNumericRest(n), restChecksum);
+    bench("unknown-target-numeric-rest", n, () => unknownTargetNumericRest(n, add4), restChecksum);
+    bench("varying-index-numeric-rest", n, () => varyingIndexNumericRest(n), REST_ACCUMULATOR_SEED + 4 * rangeChecksum);
     bench("generator-range", n, () => generatorRange(n), rangeChecksum);
     bench("parse-integers", n, () => parseIntegers(n), rangeChecksum);
     bench("format-fixed", n, () => formatFixed(n));

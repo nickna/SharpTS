@@ -50,6 +50,12 @@ The schema-v1 file remains the versioned contract for this one suite. The
 run beside compiler-micro and GUI evidence, preserving this environment and
 methodology rather than flattening unlike measurements together.
 
+`array-queue.ts` measures full shift/drain and unshift/build workloads at 1,000,
+2,500, 5,000, and 10,000 elements, plus a fixed-width alternating push/shift queue.
+Every case validates its checksum outside the timed region. The intermediate
+sizes expose scaling changes; the alternating case exercises reuse across many
+queue turnovers. Keep these operations intact when comparing implementations.
+
 ## Running
 
 PowerShell 7 or later (`pwsh`) is required for the benchmark PowerShell tools.
@@ -153,12 +159,25 @@ dead-code elimination in both SharpTS modes and the JS engines.
 `sum + add4(i, 1, 2, 3)` without its call/rest mechanics. The former ungrouped
 body remains as `left-associated-accumulation`, an intentionally different
 loop-carried dependency-chain probe. Direct fixed-arity rest specialization is
-reported beside indirect-call, spread-call, and dynamic-index fallback cases.
+reported beside immutable-alias and constant-index specialization targets,
+spread calls, and unknown-target/varying-index fallback controls.
 These rest cases share a fractional accumulator seed, keeping them in
 Number/double representation from the first iteration instead of letting an
 optimizing JavaScript engine start with tagged-small-integer arithmetic and
 deopt only at larger parameters. Other integer-oriented probes intentionally
 retain their natural representation behavior.
+
+`object-spread.ts` validates checksums for stable single-source and overwrite
+spreads, plus a mutation case passed to an `any` consumer. Controls compare a
+direct literal passed to the same consumer, the spread with its mutations
+inlined, and results retained in an array before consumption. The retained case
+also measures array allocation and traversal. The historical `escape` case name
+denotes a function boundary, not required retention: SharpTS can now specialize
+stable, bounded numeric-only consumers and preserve local object promotion.
+Truly retained results still materialize, while independent spread sources can
+remain in typed storage. Use the inline and retained controls to distinguish
+these cases, and the internal `ObjectLiteralsBenchmarks` spread cases for
+allocation/GC evidence.
 
 The `worker-scaling` workload uses the same parent, worker, and CPU-kernel
 TypeScript verbatim in every runtime. It keeps the total amount of CPU work

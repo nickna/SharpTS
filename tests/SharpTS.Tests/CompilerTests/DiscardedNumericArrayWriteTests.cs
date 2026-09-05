@@ -39,19 +39,22 @@ public sealed class DiscardedNumericArrayWriteTests
     [Fact]
     public void ObservedAssignment_RetainsResultProducingPath()
     {
-        Assembly assembly = Compile("""
+        const string source = """
             function set(values: number[], index: number, value: number): number {
                 return values[index] = value;
             }
-            """);
+            const values: number[] = [1, 2];
+            console.log(set(values, 1, 7), values[1]);
+            console.log(set(values, -1, 9), values.length);
+            """;
+        Assembly assembly = Compile(source);
 
         var instructions = ReadInstructions(FindFunction(assembly, "set")).ToArray();
         int setDouble = Array.FindIndex(instructions, instruction =>
             instruction.Operand is MethodBase { Name: "SetDouble" });
         Assert.True(setDouble >= 0, "Expected the numeric $Array SetDouble fast path.");
-        Assert.StartsWith("ldloc", instructions[setDouble + 1].OpCode.Name);
-        Assert.Equal(OpCodes.Box, instructions[setDouble + 2].OpCode);
-        Assert.Equal(typeof(double), instructions[setDouble + 2].Operand);
+        Assert.Equal("7 7\n9 2\n", TestHarness.RunCompiled(source));
+        Assert.Empty(TestHarness.CompileAndVerifyOnly(source));
     }
 
     [Fact]

@@ -13,22 +13,26 @@ internal static class CountedPushLoopAnalyzer
     internal readonly record struct Reservation(
         Expr.Variable Array,
         Expr.Variable Bound,
-        Expr Value);
+        Expr Value,
+        Expr.Variable Counter);
 
-    internal static bool TryAnalyze(Stmt.For loop, out Reservation reservation)
+    internal static bool TryAnalyze(Stmt.For loop, out Reservation reservation,
+        bool allowRangeStart = false)
     {
         reservation = default;
         if (loop.Initializer is not Stmt.Var
             {
                 Name.Lexeme: var counter,
-                Initializer: Expr.Literal { Value: double initial }
+                Initializer: { } initial
             }
-            || initial != 0)
+            || (allowRangeStart
+                ? initial is not (Expr.Variable or Expr.Literal { Value: double })
+                : initial is not Expr.Literal { Value: 0.0 }))
             return false;
 
         if (loop.Condition is not Expr.Binary
             {
-                Left: Expr.Variable { Name.Lexeme: var conditionCounter },
+                Left: Expr.Variable { Name.Lexeme: var conditionCounter } counterExpression,
                 Operator.Type: TokenType.LESS,
                 Right: Expr.Variable bound
             }
@@ -63,7 +67,7 @@ internal static class CountedPushLoopAnalyzer
             || !IsPure(arguments[0]))
             return false;
 
-        reservation = new Reservation(array, bound, arguments[0]);
+        reservation = new Reservation(array, bound, arguments[0], counterExpression);
         return true;
     }
 

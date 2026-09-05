@@ -846,6 +846,8 @@ public static class ArrayBuiltIns
     {
         long length = ToLength(
             interpreter.GetPropertyValue(receiver, "length"), interpreter);
+        if (receiver is SharpTSArray dense && dense.CanUseDenseQueueFastPath(length))
+            return length == 0 ? SharpTSUndefined.Instance : dense.RemoveFirst();
         if (length == 0)
         {
             interpreter.SetProperty(receiver, "length", 0d);
@@ -892,6 +894,18 @@ public static class ArrayBuiltIns
             interpreter.GetPropertyValue(receiver, "length"), interpreter);
         if (items.Count > MaxSafeInteger - length)
             throw TypeError("Array.prototype.unshift result exceeds the maximum safe integer.");
+
+        // Existing dense own data properties shadow prototypes. New tail indices
+        // may encounter inherited setters, so unshift also checks both intrinsic
+        // prototypes before adding slots. These checks never scan array elements.
+        if (receiver is SharpTSArray dense && dense.CanUseDenseQueueFastPath(length)
+            && length + items.Count <= int.MaxValue
+            && !interpreter.GetArrayPrototype().HasIndexedExtra(length + items.Count)
+            && !interpreter.GetObjectPrototype().HasIndexedExtra(length + items.Count))
+        {
+            for (int i = items.Count - 1; i >= 0; i--) dense.AddFirst(items[i]);
+            return dense.LongLength;
+        }
 
         if (items.Count == 0)
         {

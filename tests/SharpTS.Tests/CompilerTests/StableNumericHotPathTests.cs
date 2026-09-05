@@ -106,7 +106,7 @@ public sealed class StableNumericHotPathTests
             function pick(index: number, ...values: number[]): number {
                 return values[index];
             }
-            function run(): number { return pick(1, 1, 2, 3); }
+            function run(index: number): number { return pick(index, 1, 2, 3); }
             """);
 
         Assert.DoesNotContain(
@@ -147,7 +147,7 @@ public sealed class StableNumericHotPathTests
             && instruction.Operand is MethodBase called
             && called.MetadataToken == companion.MetadataToken);
         Assert.Contains(ReadInstructions(FindFunction(assembly, "runDynamic")), instruction =>
-            instruction.Operand is MethodBase { Name: "CreateArray" });
+            instruction.Operand is MethodBase { Name: "AppendRest" });
     }
 
     [Fact]
@@ -179,6 +179,111 @@ public sealed class StableNumericHotPathTests
         Assert.DoesNotContain(
             assembly.GetType("$Program")!.GetMethods(BindingFlags.NonPublic | BindingFlags.Static),
             method => method.Name.Contains("$rest$arity", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData("const alias = add; const chain = alias;", "chain(i, 1, 2, 3)")]
+    [InlineData("", "pick(0, i, 1, 2, 3)")]
+    public void ProvenRestCalls_UseAllocationFreeCompanions(string setup, string call)
+    {
+        string source = $$"""
+            function add(...values: number[]): number {
+                return values[0] + values[1] + values[2] + values[3];
+            }
+            function pick(start: number, ...values: number[]): number {
+                return values[start] + values[start + 1] + values[start + 2] + values[start + 3];
+            }
+            function run(n: number): number {
+                {{setup}}
+                let sum: number = 0.5;
+                for (let i: number = 0; i < n; i++) sum = sum + {{call}};
+                return sum;
+            }
+            """;
+        Assert.Empty(TestHarness.CompileAndVerifyOnly(source));
+        var assembly = Compile(source);
+        var method = FindFunction(assembly, "run");
+        var instructions = ReadInstructions(method).ToArray();
+        Assert.Contains(instructions, i => i.Operand is MethodBase called && called.Name.Contains("$rest$arity"));
+        Assert.DoesNotContain(instructions, i => i.OpCode == OpCodes.Newarr);
+        Assert.DoesNotContain(instructions, i => i.Operand is MethodBase { Name: "InvokeMethodValue" or "AppendRest" });
+        var run = method.CreateDelegate<Func<double, double>>();
+        for (int i = 0; i < 20; i++) run(1000);
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        double actual = run(100_000);
+        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        Assert.Equal(5000550000.5, actual);
+        // Creating an observable function value for the local alias can have a
+        // fixed cost; its loop must allocate no per-call argument/rest storage.
+        Assert.True(allocated < 1024, $"Unexpected loop allocations: {allocated}");
+    }
+
+    [Fact]
+    public void ConstantIndexVariants_AreBounded()
+    {
+        string calls = string.Join(" + ", Enumerable.Range(0, 12)
+            .Select(i => $"pick({i}, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11)"));
+        var assembly = Compile($$"""
+            function pick(index: number, ...values: number[]): number { return values[index]; }
+            function run(): number { return {{calls}}; }
+            """);
+        Assert.Equal(8, assembly.GetType("$Program")!
+            .GetMethods(BindingFlags.NonPublic | BindingFlags.Static)
+            .Count(m => m.Name.Contains("$rest$arity")));
+        Assert.Equal(66, FindFunction(assembly, "run").CreateDelegate<Func<double>>()());
+    }
+
+    [Fact]
+    public void ConstantIndexVariants_HaveCompilationWideLimit()
+    {
+        string declarations = string.Join("\n", Enumerable.Range(0, 9).Select(i =>
+            $"function pick{i}(index: number, ...values: number[]): number {{ return values[index]; }}"));
+        string calls = string.Join(" + ", Enumerable.Range(0, 9).SelectMany(i => Enumerable.Range(0, 8)
+            .Select(j => $"pick{i}({j}, 0, 1, 2, 3, 4, 5, 6, 7)")));
+        var assembly = Compile(declarations + $"\nfunction run(): number {{ return {calls}; }}");
+        Assert.Equal(64, assembly.GetType("$Program")!
+            .GetMethods(BindingFlags.NonPublic | BindingFlags.Static)
+            .Count(m => m.Name.Contains("$rest$arity")));
+        Assert.Equal(252, FindFunction(assembly, "run").CreateDelegate<Func<double>>()());
+    }
+
+    [Fact]
+    public void SpreadPacking_UsesOneDestinationAndVerifies()
+    {
+        const string source = """
+            function collect(prefix: number, ...values: number[]): number[] { return values; }
+            function run(): number { return collect(...[1, 2], 3, ...[4]).length; }
+            """;
+        Assert.Empty(TestHarness.CompileAndVerifyOnly(source));
+        var method = FindFunction(Compile(source), "run");
+        Assert.Contains(ReadInstructions(method), i => i.Operand is MethodBase { Name: "IterateIntoList" });
+        Assert.DoesNotContain(ReadInstructions(method), i => i.Operand is MethodBase { Name: "ExpandCallArgs" });
+        Assert.Equal(3, method.CreateDelegate<Func<double>>()());
+    }
+
+    [Fact]
+    public void UnknownTarget_RetainsValueDispatch()
+    {
+        var assembly = Compile("""
+            function run(fn: (...values: number[]) => number, n: number): number {
+                return fn(n, 1, 2, 3);
+            }
+            """);
+        Assert.Contains(ReadInstructions(FindFunction(assembly, "run")), i =>
+            i.Operand is MethodBase { Name: "InvokeMethodValue" });
+    }
+
+    [Fact]
+    public void OrdinaryRestPacking_FillsFinalStorageWithoutTemporaryArray()
+    {
+        const string source = """
+            function escape(...values: number[]): number[] { return values; }
+            function run(n: number): number { return escape(n, 1, 2, 3).length; }
+            """;
+        Assert.Empty(TestHarness.CompileAndVerifyOnly(source));
+        var instructions = ReadInstructions(FindFunction(Compile(source), "run")).ToArray();
+        Assert.DoesNotContain(instructions, i => i.OpCode == OpCodes.Newarr);
+        Assert.Contains(instructions, i => i.Operand is MethodBase { Name: "AppendRest" });
     }
 
     private static Assembly Compile(string source)

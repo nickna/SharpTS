@@ -49,6 +49,39 @@ public sealed class UnboxedNumberArrayReadTests
     }
 
     [Fact]
+    public void DenseNumericLiteral_ConstructsPackedStorageWithoutBoxingElements()
+    {
+        var assembly = Compile("""
+            function make(n: number): number[] { return [n, n + 1, n + 2, n + 3]; }
+            """);
+        var instructions = ReadInstructions(FindFunction(assembly, "make")).ToArray();
+        Assert.Contains(instructions, instruction => instruction.OpCode == OpCodes.Newobj &&
+            instruction.Operand is ConstructorInfo ctor && ctor.DeclaringType?.Name == "$Array" &&
+            ctor.GetParameters().Select(parameter => parameter.ParameterType)
+                .SequenceEqual(new[] { typeof(double[]) }));
+        Assert.DoesNotContain(instructions, instruction => instruction.OpCode == OpCodes.Box);
+    }
+
+    [Fact]
+    public void NestedArrayRead_UsesNumericStorageAndCapturesReceiverBeforeKey()
+    {
+        const string source = """
+            interface Record { values: number[]; }
+            function read(record: Record, index: number): number {
+                return record.values[index] * 2;
+            }
+            let record: Record = { values: [3, 4] };
+            function key(): number { record.values = [9, 10]; return 0; }
+            console.log(record.values[key()] * 2, read(record, 0));
+            """;
+        var assembly = Compile(source);
+        Assert.Contains(ReadInstructions(FindFunction(assembly, "read")), instruction =>
+            instruction.Operand is MethodBase { Name: "GetDouble" });
+        Assert.Equal("6 18\n", TestHarness.RunCompiled(source));
+        Assert.Empty(TestHarness.CompileAndVerifyOnly(source));
+    }
+
+    [Fact]
     public void NumericConsumer_UsesGuardedGetDoubleWithoutBoxingHotResult()
     {
         Assembly assembly = Compile("""

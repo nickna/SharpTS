@@ -51,10 +51,11 @@ public partial class CompilationContext
     public Dictionary<string, (int RestParamIndex, int RegularParamCount)>? FunctionRestParams { get; set; }
 
     /// <summary>
-    /// Private typed companions for stable <c>number[]</c> rest functions, keyed by
-    /// qualified function name and the number of trailing rest arguments.
+    /// Exact call nodes whose lexical binding and numeric rest reads have been
+    /// proven eligible for a private typed companion.
     /// </summary>
-    public Dictionary<string, Dictionary<int, MethodBuilder>>? FlattenedNumericRestMethods { get; set; }
+    public Dictionary<Expr.Call, MethodBuilder>? NumericRestCallMethods { get; set; }
+    public Dictionary<string, Dictionary<int, MethodBuilder>>? LiteralNumericRestMethods { get; set; }
 
     /// <summary>
     /// Set only while emitting one flattened companion body. Constant rest-element
@@ -214,4 +215,5 @@ public partial class CompilationContext
 public sealed record FlattenedNumericRestParameter(
     string Name,
     int FirstArgumentIndex,
-    int Length);
+    int Length,
+    IReadOnlyDictionary<Expr.GetIndex, int> Reads);
