@@ -148,7 +148,6 @@ public partial class RuntimeEmitter
         runtime.TSArrayEnsureBoxed = _tsArrayEnsureBoxedMethod;
 
         EmitTSArrayConstructor(typeBuilder, runtime);
-        EmitTSArrayRestConstruction(typeBuilder, runtime);
 
         // Elements returns `this` (the inherited List<object?>). In practice
         // callers that cared about the sparse tail have migrated to the
@@ -213,6 +212,7 @@ public partial class RuntimeEmitter
         // never entered until creation/fast-path emission is wired, so these are
         // dead-but-valid IL today.
         EmitTSArrayNumericAccessors(typeBuilder, runtime);
+        EmitTSArrayRestConstruction(typeBuilder, runtime);
 
         typeBuilder.CreateType();
     }
@@ -1205,6 +1205,28 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, _types.GetConstructor(_types.ListOfObject, [_types.Int32]));
+        il.Emit(OpCodes.Ret);
+
+        var numeric = typeBuilder.DefineMethod("CreateNumericRest",
+            MethodAttributes.Assembly | MethodAttributes.Static, typeBuilder, [_types.Int32]);
+        runtime.TSArrayCreateNumericRest = numeric;
+        il = numeric.GetILGenerator();
+        var result = il.DeclareLocal(typeBuilder);
+        var ready = il.DefineLabel();
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Newobj, ctor);
+        il.Emit(OpCodes.Stloc, result);
+        il.Emit(OpCodes.Ldloc, result);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Stfld, _tsArrayIsNumericField);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Brfalse, ready);
+        il.Emit(OpCodes.Ldloc, result);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Newarr, _types.Double);
+        il.Emit(OpCodes.Stfld, _tsArrayNumStoreField);
+        il.MarkLabel(ready);
+        il.Emit(OpCodes.Ldloc, result);
         il.Emit(OpCodes.Ret);
 
         var append = typeBuilder.DefineMethod("AppendRest", MethodAttributes.Assembly,

@@ -278,12 +278,43 @@ public sealed class StableNumericHotPathTests
     {
         const string source = """
             function escape(...values: number[]): number[] { return values; }
-            function run(n: number): number { return escape(n, 1, 2, 3).length; }
+            function run(n: number): number[] { return escape(n, 1, 2, 3); }
             """;
         Assert.Empty(TestHarness.CompileAndVerifyOnly(source));
         var instructions = ReadInstructions(FindFunction(Compile(source), "run")).ToArray();
         Assert.DoesNotContain(instructions, i => i.OpCode == OpCodes.Newarr);
-        Assert.Contains(instructions, i => i.Operand is MethodBase { Name: "AppendRest" });
+        Assert.Contains(instructions, i => i.Operand is MethodBase { Name: "CreateNumericRest" });
+        Assert.Contains(instructions, i => i.Operand is MethodBase { Name: "PushDouble" });
+        Assert.DoesNotContain(instructions, i => i.OpCode == OpCodes.Box && i.Operand == typeof(double));
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(4)]
+    [InlineData(16)]
+    public void OrdinaryNumericRest_KeepsFreshStorage(int count)
+    {
+        string arguments = string.Join(", ", Enumerable.Repeat("n", count));
+        var assembly = Compile($$"""
+            function escape(...values: number[]): number[] { return values; }
+            function run(n: number): number[] { return escape({{arguments}}); }
+            """);
+        var run = FindFunction(assembly, "run").CreateDelegate<Func<double, object>>();
+        var first = run(-0.0);
+        var second = run(2);
+        Assert.NotSame(first, second);
+        var type = assembly.GetType("$Array")!;
+        var numeric = type.GetField("_isNumeric", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        Assert.Equal(count > 0, numeric.GetValue(first));
+        Assert.Empty((List<object>)first);
+        if (count > 0)
+        {
+            var get = type.GetMethod("GetDouble")!;
+            Assert.Equal(BitConverter.DoubleToInt64Bits(-0.0),
+                BitConverter.DoubleToInt64Bits((double)get.Invoke(first, [0])!));
+            Assert.Equal(2d, get.Invoke(second, [count - 1]));
+        }
     }
 
     private static Assembly Compile(string source)

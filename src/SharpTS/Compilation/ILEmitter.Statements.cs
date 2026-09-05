@@ -2597,8 +2597,6 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Ldloc, iterableLocal);
         IL.Emit(OpCodes.Isinst, listType);
         IL.Emit(OpCodes.Stloc, listLocal);
-        IL.Emit(OpCodes.Ldloc, listLocal);
-        IL.Emit(OpCodes.Brtrue, loopHeadLabel);
 
         if (desc.Kind == ArrayElementsKind.Object)
         {
@@ -2614,6 +2612,8 @@ public partial class ILEmitter
             IL.Emit(OpCodes.Br, loopHeadLabel);
 
             builder.MarkLabel(notTSArrayLabel);
+            IL.Emit(OpCodes.Ldloc, listLocal);
+            IL.Emit(OpCodes.Brtrue, loopHeadLabel);
             // Last resort: route through IterateToList to materialize.
             IL.Emit(OpCodes.Ldloc, iterableLocal);
             IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.SymbolIterator);
@@ -2624,6 +2624,8 @@ public partial class ILEmitter
         }
         else
         {
+            IL.Emit(OpCodes.Ldloc, listLocal);
+            IL.Emit(OpCodes.Brtrue, loopHeadLabel);
             // Typed kind. The list could be elsewhere wrapped ($Array stores
             // List<object> only, so an `arr: number[]` declared then mutated
             // through a generic path could wind up as List<object>). Skip

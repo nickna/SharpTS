@@ -1578,6 +1578,7 @@ public class EmittedRuntime
     public MethodBuilder CallArgsPoolGet { get; set; } = null!;
     public ConstructorBuilder TSArrayCtor { get; set; } = null!;
     public ConstructorBuilder TSArrayRestCtor { get; set; } = null!;
+    public MethodBuilder TSArrayCreateNumericRest { get; set; } = null!;
     public MethodBuilder TSArrayAppendRest { get; set; } = null!;
     public MethodBuilder TSArrayFinishRest { get; set; } = null!;
     /// <summary>$Array(object?[] ctorArgs) — ECMA-262 Array-constructor semantics for guest classes extending Array (#233): implicit ctors and super(...) chain through this.</summary>

@@ -240,7 +240,7 @@ public abstract partial class ExpressionEmitterBase
 
                 if (hasRestParam)
                 {
-                    EmitRestParameterCall(c.Arguments, restInfo.RegularParamCount, targetMethod.GetParameters());
+                    EmitRestParameterCall(c.Arguments, restInfo.RegularParamCount, targetMethod.GetParameters(), allowNumericStorage: this is ILEmitter);
                 }
                 else
                 {
@@ -912,7 +912,7 @@ public abstract partial class ExpressionEmitterBase
         return true;
     }
 
-    private void EmitRestParameterCall(List<Expr> arguments, int regularCount, ParameterInfo[] targetParams)
+    private void EmitRestParameterCall(List<Expr> arguments, int regularCount, ParameterInfo[] targetParams, bool allowNumericStorage = false)
     {
         bool hasSpreads = arguments.Any(a => a is Expr.Spread);
         if (hasSpreads)
@@ -962,6 +962,16 @@ public abstract partial class ExpressionEmitterBase
                 argLocals[i] = IL.DeclareLocal(Types.Double);
                 IL.Emit(OpCodes.Stloc, argLocals[i]);
             }
+            else if (allowNumericStorage && !hasSuspension && i >= regularCount)
+            {
+                // Preserve the emitted representation: annotations must not coerce
+                // foreign values solely to qualify for numeric rest storage.
+                EmitExpression(arguments[i]);
+                var type = StackType == StackType.Double ? Types.Double : Types.Object;
+                if (type == Types.Object) EnsureBoxedArg(arguments[i]);
+                argLocals[i] = IL.DeclareLocal(type);
+                IL.Emit(OpCodes.Stloc, argLocals[i]);
+            }
             else
                 argLocals[i] = SpillBoxed(arguments[i] is Expr.Spread spread ? spread.Expression : arguments[i]);
         }
@@ -969,7 +979,7 @@ public abstract partial class ExpressionEmitterBase
         // Load regular arguments (before rest param) from their locals, coercing each boxed
         // object back to the parameter's declared CLR type — free-function params are emitted
         // with their real type (e.g. string, double), so passing a bare object would fail
-        // verification (StackUnexpected). The rest List<object> always takes boxed elements.
+        // verification (StackUnexpected).
         for (int i = 0; i < Math.Min(regularCount, arguments.Count); i++)
         {
             IL.Emit(OpCodes.Ldloc, argLocals[i]);
@@ -986,13 +996,18 @@ public abstract partial class ExpressionEmitterBase
 
         // Build rest parameter array from remaining arguments
         int restArgsCount = Math.Max(0, arguments.Count - regularCount);
+        bool numericRest = allowNumericStorage && !hasSuspension && restArgsCount > 0
+            && argLocals.Skip(regularCount).All(local => local.LocalType == Types.Double);
         IL.Emit(OpCodes.Ldc_I4, restArgsCount);
-        IL.Emit(OpCodes.Newobj, Ctx.Runtime!.TSArrayRestCtor);
+        if (numericRest) IL.Emit(OpCodes.Call, Ctx.Runtime!.TSArrayCreateNumericRest);
+        else IL.Emit(OpCodes.Newobj, Ctx.Runtime!.TSArrayRestCtor);
         for (int i = 0; i < restArgsCount; i++)
         {
             IL.Emit(OpCodes.Dup);
             IL.Emit(OpCodes.Ldloc, argLocals[regularCount + i]);
-            IL.Emit(OpCodes.Call, Ctx.Runtime.TSArrayAppendRest);
+            if (!numericRest && argLocals[regularCount + i].LocalType == Types.Double)
+                IL.Emit(OpCodes.Box, Types.Double);
+            IL.Emit(OpCodes.Call, numericRest ? Ctx.Runtime.TSArrayPushDouble : Ctx.Runtime.TSArrayAppendRest);
         }
     }
 

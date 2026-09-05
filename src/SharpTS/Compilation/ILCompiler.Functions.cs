@@ -1066,6 +1066,15 @@ public partial class ILCompiler
         // Fast path: parameter is already List<object?> (the common case).
         if (paramType == targetListType)
         {
+            // A rest argument can be a numeric $Array with an empty base list.
+            var plainList = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg, argIndex);
+            il.Emit(OpCodes.Isinst, ctx.Runtime!.TSArrayType);
+            il.Emit(OpCodes.Brfalse, plainList);
+            il.Emit(OpCodes.Ldarg, argIndex);
+            il.Emit(OpCodes.Castclass, ctx.Runtime.TSArrayType);
+            il.Emit(OpCodes.Call, ctx.Runtime.TSArrayEnsureBoxed);
+            il.MarkLabel(plainList);
             var addRange = ctx.Types.GetMethod(
                 targetListType,
                 "AddRange",

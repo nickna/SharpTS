@@ -6,6 +6,68 @@ namespace SharpTS.Tests.SharedTests;
 public class NumericRestOptimizationTests
 {
     [Theory, ModeData]
+    public void NumericRest_EnumeratesAndReconstructsArguments(ExecutionMode mode)
+    {
+        const string source = """
+            function walk(...values: any[]): string {
+                let text = "";
+                for (const value of values) text = text + value;
+                return text;
+            }
+            function inspect(prefix: number, ...values: number[]): void {
+                console.log(arguments.length, arguments[0], arguments[1], arguments[3]);
+                values[0] = 9;
+                console.log(arguments[1], values.join(","));
+            }
+            console.log(walk(1, 2, 3));
+            inspect(0, 1, 2, 3);
+            """;
+        Assert.Equal("123\n4 0 1 3\n1 9,2,3\n", TestHarness.Run(source, mode));
+        if (mode == ExecutionMode.Compiled) Assert.Empty(TestHarness.CompileAndVerifyOnly(source));
+    }
+
+    [Theory, ModeData]
+    public void NumericRest_ArrayConsumersAndTransitionsPreserveValues(ExecutionMode mode)
+    {
+        const string source = """
+            function collect(...values: number[]): number[] { return values; }
+            console.log(collect(1, 2, 3).join(","));
+            console.log(collect(1, 2, 3).map(x => x * 2).join(","));
+            console.log(collect(1, 2, 3).filter(x => x > 1).join(","));
+            console.log(collect(1, 2, 3).reduce((a, b) => a + b, 0));
+            console.log(collect(1, 2, 3).slice(1).join(","));
+            console.log(collect(1, 2, 3).pop());
+            console.log(JSON.stringify(collect(1, 2, 3)));
+            console.log(Object.keys(collect(1, 2, 3)).join(","));
+            const values: any = collect(1, 2, 3);
+            values[1] = "x";
+            delete values[0];
+            values.length = 4;
+            console.log(values.join(","), 0 in values, 1 in values, values[3] === undefined);
+            const described = collect(1, 2, 3);
+            Object.defineProperty(described, "1", { get: () => 8 });
+            console.log(described[1], described[0], described.length);
+            """;
+        Assert.Equal("1,2,3\n2,4,6\n2,3\n6\n2,3\n3\n[1,2,3]\n0,1,2\n,x,3, false true true\n8 1 3\n", TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
+    public void NumericRest_ClosuresAndForeignValuesRetainIdentity(ExecutionMode mode)
+    {
+        const string source = """
+            function capture(...values: number[]): () => number[] { return () => values; }
+            const get = capture(1, 2, 3);
+            const values = get();
+            values[0] = 7;
+            console.log(get() === values, get()[0]);
+            function raw(...values: number[]): void { console.log(typeof values[0], values[0], values[1]); }
+            const foreign: any = "x";
+            raw(foreign, 2);
+            """;
+        Assert.Equal("true 7\nstring x 2\n", TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
     public void IndirectRestCalls_PreserveRegularArgumentConversions(ExecutionMode mode)
     {
         const string source = """
