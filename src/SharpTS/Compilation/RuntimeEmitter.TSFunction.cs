@@ -1738,8 +1738,15 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, _types.GetMethod(_types.ArrayType, "Copy", [_types.ArrayType, _types.ArrayType, _types.Int32])!);
         il.MarkLabel(skipCopy);
 
-        // restList = new List<object>()
-        il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.ListOfObject));
+        // Pre-size ordinary indirect rest storage without changing its ABI.
+        il.Emit(OpCodes.Ldloc, argsLengthLocal);
+        il.Emit(OpCodes.Ldloc, paramCountLocal);
+        il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Math, "Max", [_types.Int32, _types.Int32])!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, [_types.Int32]));
         il.Emit(OpCodes.Stloc, restListLocal);
 
         // for (i = paramCount - 1; i < argsLength; i++) restList.Add(args[i])

@@ -1577,6 +1577,9 @@ public class EmittedRuntime
     /// </summary>
     public MethodBuilder CallArgsPoolGet { get; set; } = null!;
     public ConstructorBuilder TSArrayCtor { get; set; } = null!;
+    public ConstructorBuilder TSArrayRestCtor { get; set; } = null!;
+    public MethodBuilder TSArrayAppendRest { get; set; } = null!;
+    public MethodBuilder TSArrayFinishRest { get; set; } = null!;
     /// <summary>$Array(object?[] ctorArgs) — ECMA-262 Array-constructor semantics for guest classes extending Array (#233): implicit ctors and super(...) chain through this.</summary>
     public ConstructorBuilder TSArrayCtorFromCtorArgs { get; set; } = null!;
     public MethodBuilder TSArrayElementsGetter { get; set; } = null!;
@@ -1668,6 +1671,7 @@ public class EmittedRuntime
     public MethodBuilder GetIteratorValue { get; set; } = null!;                // Extracts value from result
     public MethodBuilder IteratorClose { get; set; } = null!;                   // IteratorClose(iterator, preserveThrowCompletion)
     public MethodBuilder IterateToList { get; set; } = null!;                   // Converts any iterable to List<object>
+    public MethodBuilder IterateIntoList { get; set; } = null!;
     public MethodBuilder IteratorWrapperMoveNextWithSent { get; set; } = null!; // $IteratorWrapper.MoveNextWithSent(sent) (#503)
 
     // Generator interface ($IGenerator extends IEnumerator<object> with Return/Throw)

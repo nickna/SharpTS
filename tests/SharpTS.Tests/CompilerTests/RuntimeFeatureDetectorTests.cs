@@ -7,6 +7,18 @@ namespace SharpTS.Tests.CompilerTests;
 
 public class RuntimeFeatureDetectorTests
 {
+    [Fact]
+    public void AnyTypedArrayIteratorMutation_DisablesBackingStorageShortcut()
+    {
+        const string source = """
+            const items: any = [1, 2];
+            items[Symbol.iterator] = function* (): Generator<number> { yield 7; };
+            """;
+        var statements = new Parser(new Lexer(source).ScanTokens()).ParseOrThrow();
+        var types = new TypeChecker().Check(statements);
+        Assert.True(new RuntimeFeatureDetector().Detect(statements, types).UsesArrayPrototypeMutation);
+    }
+
     [Theory]
     [InlineData("", true)]
     [InlineData("const observed: number = items.push({ key: 2, tag: 'y' });", true)]

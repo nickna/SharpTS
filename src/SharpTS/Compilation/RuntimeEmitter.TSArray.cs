@@ -148,6 +148,7 @@ public partial class RuntimeEmitter
         runtime.TSArrayEnsureBoxed = _tsArrayEnsureBoxedMethod;
 
         EmitTSArrayConstructor(typeBuilder, runtime);
+        EmitTSArrayRestConstruction(typeBuilder, runtime);
 
         // Elements returns `this` (the inherited List<object?>). In practice
         // callers that cared about the sparse tail have migrated to the
@@ -1120,6 +1121,56 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Stfld, _tsArrayNonExtensibleField);
             il.Emit(OpCodes.Ret);
         }
+    }
+
+    // Only used while constructing fresh, dense, boxed rest storage. This bypasses
+    // observable array setters and never accepts an escaped/numeric/sparse array.
+    private void EmitTSArrayRestConstruction(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var ctor = typeBuilder.DefineConstructor(MethodAttributes.Assembly,
+            CallingConventions.Standard, [_types.Int32]);
+        runtime.TSArrayRestCtor = ctor;
+        var il = ctor.GetILGenerator();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, _types.GetConstructor(_types.ListOfObject, [_types.Int32]));
+        il.Emit(OpCodes.Ret);
+
+        var append = typeBuilder.DefineMethod("AppendRest", MethodAttributes.Assembly,
+            _types.Void, [_types.Object]);
+        runtime.TSArrayAppendRest = append;
+        il = append.GetILGenerator();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, _tsArrayListAdd!);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _tsArrayLengthField);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Conv_I8);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stfld, _tsArrayLengthField);
+        il.Emit(OpCodes.Ret);
+
+        // Expansion appends to the inherited list. Once all arguments have
+        // evaluated, remove regular parameters and synchronize logical length.
+        var finish = typeBuilder.DefineMethod("FinishRest", MethodAttributes.Assembly,
+            _types.Void, [_types.Int32]);
+        runtime.TSArrayFinishRest = finish;
+        il = finish.GetILGenerator();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, _tsArrayListCountGetter!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Math, "Min", [_types.Int32, _types.Int32])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.ListOfObject, "RemoveRange", [_types.Int32, _types.Int32])!);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, _tsArrayListCountGetter!);
+        il.Emit(OpCodes.Conv_I8);
+        il.Emit(OpCodes.Stfld, _tsArrayLengthField);
+        il.Emit(OpCodes.Ret);
     }
 
     private void EmitTSArrayConstructor(TypeBuilder typeBuilder, EmittedRuntime runtime)
