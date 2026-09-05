@@ -148,6 +148,7 @@ public partial class RuntimeEmitter
         runtime.TSArrayEnsureBoxed = _tsArrayEnsureBoxedMethod;
 
         EmitTSArrayConstructor(typeBuilder, runtime);
+        EmitTSArrayNumericLiteralConstructor(typeBuilder, runtime);
 
         // Elements returns `this` (the inherited List<object?>). In practice
         // callers that cared about the sparse tail have migrated to the
@@ -298,6 +299,9 @@ public partial class RuntimeEmitter
         var pushDouble = typeBuilder.DefineMethod("PushDouble",
             MethodAttributes.Public | MethodAttributes.HideBySig, _types.Void, [_types.Double]);
         runtime.TSArrayPushDouble = pushDouble;
+        var ensureDoubleCapacity = typeBuilder.DefineMethod("EnsureDoubleCapacity",
+            MethodAttributes.Public | MethodAttributes.HideBySig, _types.Void, [_types.Int32]);
+        runtime.TSArrayEnsureDoubleCapacity = ensureDoubleCapacity;
         // #927 step 2: these are the per-element hot paths the compiler emits at statically-number[]
         // sites. They are non-virtual (HideBySig), so a `callvirt` on a $Array-typed receiver
         // devirtualizes; AggressiveInlining lets the JIT fold the field loads + bounds check into the
@@ -306,6 +310,37 @@ public partial class RuntimeEmitter
         getDouble.SetImplementationFlags(MethodImplAttributes.AggressiveInlining);
         setDouble.SetImplementationFlags(MethodImplAttributes.AggressiveInlining);
         pushDouble.SetImplementationFlags(MethodImplAttributes.AggressiveInlining);
+
+        // Capacity reservation changes neither length nor elements. It is used
+        // only for analyzer-proven counted sequential writes and is a no-op when
+        // the array has already deoptimized to boxed storage.
+        {
+            var il = ensureDoubleCapacity.GetILGenerator();
+            var resize = il.DefineLabel();
+            var done = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, _tsArrayIsNumericField);
+            il.Emit(OpCodes.Brfalse, done);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Ble, done);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, _tsArrayNumStoreField);
+            il.Emit(OpCodes.Brfalse, resize);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, _tsArrayNumStoreField);
+            il.Emit(OpCodes.Ldlen);
+            il.Emit(OpCodes.Conv_I4);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Bge, done);
+            il.MarkLabel(resize);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldflda, _tsArrayNumStoreField);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Call, arrayResize);
+            il.MarkLabel(done);
+            il.Emit(OpCodes.Ret);
+        }
         var markNumeric = typeBuilder.DefineMethod("MarkNumeric",
             MethodAttributes.Public | MethodAttributes.HideBySig, _types.Void, System.Type.EmptyTypes);
         runtime.TSArrayMarkNumeric = markNumeric;
@@ -1326,6 +1361,35 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
+    private void EmitTSArrayNumericLiteralConstructor(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        // The emitter hands over a fresh, dense double[]; no other value can
+        // observe its storage. Holes continue to use the ordinary literal path.
+        var ctor = typeBuilder.DefineConstructor(MethodAttributes.Assembly,
+            CallingConventions.Standard, [_types.DoubleArray]);
+        runtime.TSArrayNumericLiteralCtor = ctor;
+        var il = ctor.GetILGenerator();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, _types.GetDefaultConstructor(_types.ListOfObject));
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Stfld, _tsArrayNumStoreField);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldlen);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Stfld, _tsArrayNumCountField);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldlen);
+        il.Emit(OpCodes.Conv_I8);
+        il.Emit(OpCodes.Stfld, _tsArrayLengthField);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Stfld, _tsArrayIsNumericField);
+        il.Emit(OpCodes.Ret);
+    }
+
     private void EmitTSArrayConstructor(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var ctor = typeBuilder.DefineConstructor(
@@ -1335,11 +1399,22 @@ public partial class RuntimeEmitter
         );
         runtime.TSArrayCtor = ctor;
 
-        var il = ctor.GetILGenerator();
+        // Internal element construction is distinct from the object[] overload
+        // implementing Array(...args), where one number denotes a length.
+        var literalCtor = typeBuilder.DefineConstructor(
+            MethodAttributes.Public,
+            CallingConventions.Standard,
+            [_types.IEnumerableOfObject]);
+        runtime.TSArrayLiteralCtor = literalCtor;
+        var forwardingIl = ctor.GetILGenerator();
+        forwardingIl.Emit(OpCodes.Ldarg_0);
+        forwardingIl.Emit(OpCodes.Ldarg_1);
+        forwardingIl.Emit(OpCodes.Call, literalCtor);
+        forwardingIl.Emit(OpCodes.Ret);
 
-        // base(IEnumerable<object?>) — copies the input list's items into our
-        // own List<object?> storage. Per-element copy is O(N) but callers
-        // build a fresh list per $Array allocation, so throughput is unchanged.
+        var il = literalCtor.GetILGenerator();
+
+        // One copy, directly from the supplied elements into our own storage.
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, _types.GetConstructor(_types.ListOfObject, _types.IEnumerableOfObject));

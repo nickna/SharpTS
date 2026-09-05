@@ -1,48 +1,61 @@
 using System.Reflection;
 using BenchmarkDotNet.Attributes;
+using BenchmarkDotNet.Order;
+using SharpTS.Microbenchmarks.Baselines;
 using SharpTS.Microbenchmarks.Infrastructure;
 
 namespace SharpTS.Microbenchmarks.Benchmarks;
 
-/// <summary>Read-only attribution: all receiver construction is outside measurement.</summary>
 [MemoryDiagnoser]
+[RankColumn]
+[Orderer(SummaryOrderPolicy.FastestToSlowest)]
 public class NumericArrayReadBenchmarks
 {
-    private Func<object, double, double> _run = null!;
-    private object _values = null!;
+    private Func<double, double> _sharpTs = null!;
+    private double[] _baseline = null!;
 
-    [Params("BoxedArray", "NumericArray", "PlainList")]
-    public string Storage { get; set; } = null!;
-
-    [Params("readFixed", "readVarying")]
-    public string Case { get; set; } = null!;
-
-    [Params(10_000)]
+    [Params(1_000_000)]
     public int N { get; set; }
 
     [GlobalSetup]
     public void Setup()
     {
-        using var stream = typeof(NumericArrayReadBenchmarks).Assembly.GetManifestResourceStream(
-            "SharpTS.Microbenchmarks.TypeScriptSources.NumericArrayRead.ts")!;
-        using var reader = new StreamReader(stream);
-        var assembly = BenchmarkHarness.LoadCompiledAssembly(
-            CompilationCache.GetOrCompile(reader.ReadToEnd(), "NumericArrayRead"), "numeric-array-read");
-        BenchmarkHarness.InitializeCompiledModules(assembly);
-        _run = BenchmarkHarness.GetCompiledMethod(assembly, Case)
-            .CreateDelegate<Func<object, double, double>>();
-        var boxed = new List<object> { 1d, 1d, 1d, 1d, 1d };
-        _values = Storage switch
-        {
-            "PlainList" => boxed,
-            "BoxedArray" => Activator.CreateInstance(assembly.GetType("$Array")!, [boxed])!,
-            "NumericArray" => BenchmarkHarness.GetCompiledMethod(assembly, "numericReadInput").Invoke(null, null)!,
-            _ => throw new InvalidOperationException(Storage)
-        };
-        if (_run(_values, N) != 0.5 + 4 * N)
-            throw new InvalidOperationException($"Incorrect checksum for {Storage}/{Case}");
+        Assembly compiled = NumericArrayWriteBenchmarkAssembly.Load();
+        BenchmarkHarness.GetCompiledNumberFunc(
+            compiled, "setupNumericArrays")(N);
+        _sharpTs = BenchmarkHarness.GetCompiledNumberFunc(
+            compiled, "numericArrayRead");
+        _baseline = new double[N];
+        for (int i = 0; i < N; i++)
+            _baseline[i] = i * 3.0;
     }
 
     [Benchmark]
-    public double Run() => _run(_values, N);
+    public double SharpTS() => _sharpTs(N);
+
+    [Benchmark(Baseline = true)]
+    public double IdiomaticCSharp() =>
+        NumericArrayWriteBaselines.Read(_baseline);
+}
+
+internal static class NumericArrayWriteBenchmarkAssembly
+{
+    private static Assembly? _compiled;
+
+    internal static Assembly Load()
+    {
+        if (_compiled is not null) return _compiled;
+        Assembly assembly = typeof(NumericArrayWriteBenchmarkAssembly).Assembly;
+        using Stream stream = assembly.GetManifestResourceStream(
+            "SharpTS.Microbenchmarks.TypeScriptSources.NumericArrayWrite.ts")
+            ?? throw new InvalidOperationException(
+                "Could not find embedded resource NumericArrayWrite.ts");
+        using var reader = new StreamReader(stream);
+        string dllPath = CompilationCache.GetOrCompile(
+            reader.ReadToEnd(), "NumericArrayWriteSplit");
+        _compiled = BenchmarkHarness.LoadCompiledAssembly(
+            dllPath, "numeric-array-write-split");
+        BenchmarkHarness.InitializeCompiledModules(_compiled);
+        return _compiled;
+    }
 }

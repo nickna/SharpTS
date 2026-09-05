@@ -12,7 +12,8 @@ public class NumericRestBenchmarks
 
     [Params("restFixedParameters", "restDirect", "restAlias", "restConstantIndex",
         "restVaryingIndex", "restPacking", "restEscaping", "restSpread", "restDynamicDispatch",
-        "restSpreadLength", "restDynamicLength", "restAlternating", "restMixedTargets")]
+        "restSpreadLength", "restDynamicLength", "restAlternating", "restMixedTargets",
+        "restSelectedTarget")]
     public string Case { get; set; } = null!;
 
     [Params(10_000)]

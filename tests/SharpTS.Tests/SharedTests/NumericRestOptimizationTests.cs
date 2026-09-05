@@ -107,6 +107,20 @@ public class NumericRestOptimizationTests
     }
 
     [Theory, ModeData]
+    public void UsingBindingsShadowRestCallees(ExecutionMode mode)
+    {
+        const string source = """
+            function add(...values: number[]): number { return values[0] + values[1]; }
+            function run(): void {
+                { using add: any = null;
+                  try { console.log(add(1, 2)); } catch { console.log("shadow"); } }
+            }
+            run();
+            """;
+        Assert.Equal("shadow\n", TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
     public void RestStorageIsFreshAndIndependent(ExecutionMode mode)
     {
         const string source = """
@@ -306,5 +320,64 @@ public class NumericRestOptimizationTests
             console.log(collect(...input, mark()), trace);
             """;
         Assert.Equal("7,8,9 gvvm\n", TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
+    public void RestFallbacks_PreserveFreshArraysAndMissingArguments(ExecutionMode mode)
+    {
+        const string source = """
+            function collect(...values: number[]): number[] { return values; }
+            const first = collect(1, 2);
+            const second = collect(1, 2);
+            first[0] = 9;
+            console.log(first === second, second[0]);
+            function read(...values: number[]): any { return values[1]; }
+            function run(): void { const alias = read; console.log(alias(1)); }
+            run();
+            const tail = [2, 3];
+            const spread = collect(1, ...tail);
+            spread[1] = 8;
+            console.log(tail[0], spread.length);
+            """;
+        Assert.Equal("false 1\nundefined\n2 3\n", TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
+    public void RestAlias_ShadowedTargetAndEarlyClosureKeepLexicalSemantics(ExecutionMode mode)
+    {
+        const string source = """
+            function add(...values: number[]): number { return values[0] + values[1]; }
+            function shadow(add: (...values: number[]) => number): number {
+                const localAlias = add;
+                return localAlias(3, 4);
+            }
+            console.log(shadow((...values: number[]): number => values[0] * values[1]));
+            function early(): void {
+                function read(): number { return later(3, 4); }
+                try { read(); } catch { console.log("tdz"); }
+                const later = add;
+                console.log(read());
+            }
+            early();
+            """;
+        Assert.Equal("12\ntdz\n7\n", TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
+    public void SpecializedRestCalls_EvaluateArgumentsOnceInOrder(ExecutionMode mode)
+    {
+        const string source = """
+            function pair(start: number, ...values: number[]): number {
+                return values[start] * 10 + values[start + 1];
+            }
+            function run(): void {
+                const orderedAlias = pair;
+                let counter = 1;
+                console.log(orderedAlias(0, counter++, counter++), counter);
+                console.log(pair(0, counter++, counter++), counter);
+            }
+            run();
+            """;
+        Assert.Equal("12 3\n34 5\n", TestHarness.Run(source, mode));
     }
 }

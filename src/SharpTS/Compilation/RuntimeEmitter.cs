@@ -43,6 +43,10 @@ public partial class RuntimeEmitter
 
         // Emit $Undefined singleton class first (other methods need this type)
         EmitUndefinedClass(moduleBuilder, runtime);
+        runtime.NumberQueue = EmitArrayQueue(moduleBuilder, runtime, ArrayElements.Double);
+        runtime.BooleanQueue = EmitArrayQueue(moduleBuilder, runtime, ArrayElements.Bool);
+        runtime.NumberQueueWithHoles = EmitArrayQueue(moduleBuilder, runtime, ArrayElements.Double, true);
+        runtime.BooleanQueueWithHoles = EmitArrayQueue(moduleBuilder, runtime, ArrayElements.Bool, true);
         EmitLexicalUninitializedClass(moduleBuilder, runtime);
 
         // Marker used only to give compiler-generated prototype constructors a

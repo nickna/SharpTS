@@ -91,6 +91,19 @@ function dynamicIndexNumericRest(n: number): number {
     return sum;
 }
 
+function add4Alternative(...values: number[]): number {
+    return values[3] + values[2] + values[1] + values[0];
+}
+
+function selectedNumericRest(n: number): number {
+    let sum: number = REST_ACCUMULATOR_SEED;
+    for (let i: number = 0; i < n; i++) {
+        const operation = i % 2 === 0 ? add4 : add4Alternative;
+        sum = sum + operation(i, 1, 2, 3);
+    }
+    return sum;
+}
+
 function unknownTargetNumericRest(n: number, fn: (...values: number[]) => number): number {
     let sum: number = REST_ACCUMULATOR_SEED;
     for (let i: number = 0; i < n; i++) sum = sum + fn(i, 1, 2, 3);
@@ -179,6 +192,7 @@ for (let p: number = 0; p < params.length; p++) {
     bench("spread-numeric-rest", n, () => spreadNumericRest(n), restChecksum);
     bench("dynamic-index-numeric-rest", n, () => dynamicIndexNumericRest(n), restChecksum);
     bench("unknown-target-numeric-rest", n, () => unknownTargetNumericRest(n, add4), restChecksum);
+    bench("selected-numeric-rest", n, () => selectedNumericRest(n), restChecksum);
     bench("varying-index-numeric-rest", n, () => varyingIndexNumericRest(n), REST_ACCUMULATOR_SEED + 4 * rangeChecksum);
     bench("alternating-target-numeric-rest", n, () => alternatingNumericRest(n, add4, add4Extra), restChecksum + n / 2);
     bench("mixed-target-numeric-rest", n, () => alternatingNumericRest(n, add4, add4MutatingExtra), restChecksum + n / 2);

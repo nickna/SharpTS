@@ -3,6 +3,16 @@
 Measurement date: September 4–5, 2026. Baseline revision:
 `af72038b83e9c88449b33ca42262f3f8dc156ea7`.
 
+The measurements below describe candidate `a931bc0e`, before merging newer
+`main` changes for PR #1590. The evidence retains those exact compiler and
+source hashes; it is not a fresh throughput measurement of the merged branch.
+The merge preserves main's separate numeric-array read benchmark and renames
+this change's storage controls to `NumericArrayStorageReadBenchmarks`.
+Post-merge validation passed the 599-check focused selection and a 142-check
+array/rest/queue/destructuring selection (the selections overlap). The benchmark
+Release build passed, and all 24 selected BenchmarkDotNet Dry smoke cases
+completed. These smoke observations are not additional throughput evidence.
+
 This implements the six stages in the
 [approved plan](language-hot-paths-implementation.md). The original benchmark
 workloads and arithmetic trees remain intact; two additional cases exercise
@@ -220,7 +230,7 @@ For allocation attribution:
 
 ```powershell
 dotnet run -c Release --project benchmarks/micro/SharpTS.Microbenchmarks -- `
-  --filter '*NumericArrayReadBenchmarks*' '*NumericRestBenchmarks*' '*NumericRestDispatchBenchmarks*' `
+  --filter '*NumericArrayStorageReadBenchmarks*' '*NumericRestBenchmarks*' '*NumericRestDispatchBenchmarks*' `
   --job short --inProcess --artifacts <new-artifact-directory>
 ```
 

@@ -79,6 +79,77 @@ public sealed class UnboxedNumberArrayReadTests
     }
 
     [Fact]
+    public void ArrayLength_KeepsNumericResultUnboxed()
+    {
+        Assembly assembly = Compile("""
+            function length(values: { value: number }[]): number {
+                return values.length;
+            }
+            """);
+        MethodInfo method = FindFunction(assembly, "length");
+        Assert.DoesNotContain(ReadInstructions(method), instruction => instruction.OpCode == OpCodes.Box);
+        var length = method.CreateDelegate<Func<object, double>>();
+        var values = new List<object> { new object() };
+        for (int i = 0; i < 1000; i++) _ = length(values);
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        double sum = 0;
+        for (int i = 0; i < 10_000; i++) sum += length(values);
+        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        Assert.Equal(10_000, sum);
+        Assert.True(allocated <= 1024, $"Array length reads allocated {allocated:N0} bytes.");
+    }
+
+    [Theory, ModeData]
+    public void ArrayLength_PreservesObjectConsumersAndMutations(ExecutionMode mode)
+    {
+        const string source = """
+            function length(values: any[]): any { return values.length; }
+            const values: any[] = [];
+            values.push("x");
+            console.log(length(values), typeof length(values));
+            values.push("y");
+            console.log(values.length + 1);
+            console.log(JSON.stringify({ size: values.length }));
+            const parsed: any[] = JSON.parse('[1,2,3]');
+            console.log(length(parsed));
+            """;
+        Assert.Equal("1 number\n3\n{\"size\":2}\n3\n", TestHarness.Run(source, mode));
+    }
+
+    [Fact]
+    public void DenseNumericLiteral_ConstructsPackedStorageWithoutBoxingElements()
+    {
+        var assembly = Compile("""
+            function make(n: number): number[] { return [n, n + 1, n + 2, n + 3]; }
+            """);
+        var instructions = ReadInstructions(FindFunction(assembly, "make")).ToArray();
+        Assert.Contains(instructions, instruction => instruction.OpCode == OpCodes.Newobj &&
+            instruction.Operand is ConstructorInfo ctor && ctor.DeclaringType?.Name == "$Array" &&
+            ctor.GetParameters().Select(parameter => parameter.ParameterType)
+                .SequenceEqual(new[] { typeof(double[]) }));
+        Assert.DoesNotContain(instructions, instruction => instruction.OpCode == OpCodes.Box);
+    }
+
+    [Fact]
+    public void NestedArrayRead_UsesNumericStorageAndCapturesReceiverBeforeKey()
+    {
+        const string source = """
+            interface Record { values: number[]; }
+            function read(record: Record, index: number): number {
+                return record.values[index] * 2;
+            }
+            let record: Record = { values: [3, 4] };
+            function key(): number { record.values = [9, 10]; return 0; }
+            console.log(record.values[key()] * 2, read(record, 0));
+            """;
+        var assembly = Compile(source);
+        Assert.Contains(ReadInstructions(FindFunction(assembly, "read")), instruction =>
+            instruction.Operand is MethodBase { Name: "GetDouble" });
+        Assert.Equal("6 18\n", TestHarness.RunCompiled(source));
+        Assert.Empty(TestHarness.CompileAndVerifyOnly(source));
+    }
+
+    [Fact]
     public void NumericConsumer_UsesGuardedGetDoubleWithoutBoxingHotResult()
     {
         Assembly assembly = Compile("""

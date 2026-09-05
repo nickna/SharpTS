@@ -17,6 +17,10 @@ namespace SharpTS.Compilation;
 /// <seealso cref="ILEmitter"/>
 public class EmittedRuntime
 {
+    public ArrayQueueTypeInfo NumberQueue { get; set; } = null!;
+    public ArrayQueueTypeInfo BooleanQueue { get; set; } = null!;
+    public ArrayQueueTypeInfo NumberQueueWithHoles { get; set; } = null!;
+    public ArrayQueueTypeInfo BooleanQueueWithHoles { get; set; } = null!;
     /// <summary>
     /// Human-readable reasons this compilation emitted late binding into the SharpTS runtime
     /// assembly (e.g. "eval()", "Proxy", "Intl"). Populated during emission by
@@ -971,6 +975,7 @@ public class EmittedRuntime
     public Dictionary<(string Fingerprint, int Index), FieldBuilder> CompactObjectRecordValueFields { get; } = [];
     public Dictionary<string, FieldBuilder> CompactObjectRecordAnyMaterializedFields { get; } = [];
     public Dictionary<string, MethodBuilder> CompactObjectRecordIsMaterializedGetters { get; } = [];
+    public Dictionary<string, MethodBuilder> CompactObjectRecordTryGetMaterializedDictionary { get; } = [];
     public MethodBuilder JsonScalarRecordShapeGetter { get; set; } = null!;
     public MethodBuilder JsonScalarRecordValuesGetter { get; set; } = null!;
     public MethodBuilder JsonScalarRecordGetValue { get; set; } = null!;
@@ -1016,6 +1021,7 @@ public class EmittedRuntime
 
     // Symbol storage for compiled objects (symbol as object key)
     public MethodBuilder GetSymbolDictMethod { get; set; } = null!;
+    public MethodBuilder TryGetSymbolDictMethod { get; set; } = null!;
     public MethodBuilder IsSymbolMethod { get; set; } = null!;
 
     // BigInt support
@@ -1581,6 +1587,8 @@ public class EmittedRuntime
     /// </summary>
     public MethodBuilder CallArgsPoolGet { get; set; } = null!;
     public ConstructorBuilder TSArrayCtor { get; set; } = null!;
+    public ConstructorBuilder TSArrayLiteralCtor { get; set; } = null!;
+    public ConstructorBuilder TSArrayNumericLiteralCtor { get; set; } = null!;
     public ConstructorBuilder TSArrayRestCtor { get; set; } = null!;
     public MethodBuilder TSArrayCreateNumericRest { get; set; } = null!;
     public MethodBuilder TSArrayAppendRest { get; set; } = null!;
@@ -1617,6 +1625,7 @@ public class EmittedRuntime
     public MethodBuilder TSArrayGetDouble { get; set; } = null!;
     public MethodBuilder TSArraySetDouble { get; set; } = null!;
     public MethodBuilder TSArrayPushDouble { get; set; } = null!;
+    public MethodBuilder TSArrayEnsureDoubleCapacity { get; set; } = null!;
     public MethodBuilder TSArrayEnsureBoxed { get; set; } = null!;
     public MethodBuilder TSArrayIsNumericGetter { get; set; } = null!;
     public MethodBuilder TSArrayNumericCountGetter { get; set; } = null!;

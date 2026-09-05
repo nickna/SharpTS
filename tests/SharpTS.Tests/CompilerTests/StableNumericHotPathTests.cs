@@ -352,6 +352,23 @@ public sealed class StableNumericHotPathTests
         }
     }
 
+
+    [Fact]
+    public void UsingBindingsPreventConstantIndexSpecialization()
+    {
+        var assembly = Compile("""
+            function pick(start: number, ...values: number[]): any {
+                let result: any;
+                { using start: any = null; result = values[start]; }
+                return result;
+            }
+            function run(): any { return pick(0, 10, 20); }
+            """);
+        Assert.DoesNotContain(assembly.GetType("$Program")!
+            .GetMethods(BindingFlags.NonPublic | BindingFlags.Static),
+            method => method.Name.Contains("$rest$arity", StringComparison.Ordinal));
+    }
+
     internal static Assembly Compile(string source)
     {
         var statements = new Parser(new Lexer(source).ScanTokens()).ParseOrThrow();

@@ -12,9 +12,9 @@ public partial class ILEmitter
         Expr.Variable Source,
         Expr.Variable Bound,
         string Accumulator,
-        IReadOnlyList<FieldBuilder> Fields,
-        MethodBuilder IsMaterializedGetter,
-        bool RequiresMaterializationGuard);
+        Expr Addition,
+        IReadOnlyList<string> Bindings,
+        NumericRecordReadPlan Reads);
 
     /// <summary>
     /// Versions a side-effect-free stable-record reduction such as
@@ -28,9 +28,8 @@ public partial class ILEmitter
     /// complete result remains a safe integer before entering the loop. It can
     /// therefore combine the invariant destructured terms once and use one
     /// native integer addition per iteration without changing Number rounding.
-    /// Every other value or receiver shape branches to the ordinary emitted
-    /// loop, preserving fractional arithmetic, getters, proxies, NaN/infinity,
-    /// negative zero, overflow rounding, and runtime cancellation.
+    /// Other numeric values retain the original addition tree in a double loop.
+    /// Receivers without proven own numeric data properties use the ordinary loop.
     /// </remarks>
     private bool TryEmitStableObjectDestructureReduction(Stmt.For loop, string counterName)
     {
@@ -59,6 +58,9 @@ public partial class ILEmitter
             || boundType != _ctx.Types.Double
             || !TryAnalyzeStableObjectDestructureReduction(
                 loop.Body, bound, out var reduction)
+            || reduction.Accumulator == counterName
+            || reduction.Accumulator == bound.Name.Lexeme
+            || reduction.Accumulator == reduction.Source.Name.Lexeme
             || _ctx.Locals.GetLocal(reduction.Source.Name.Lexeme) is not { } sourceLocal
             || _ctx.Locals.GetLocal(reduction.Accumulator) is not { } accumulatorDouble
             || accumulatorDouble.LocalType != _ctx.Types.Double)
@@ -69,43 +71,34 @@ public partial class ILEmitter
         _ctx.Locals.EnterScope();
         EmitStatement(loop.Initializer);
         var counter = _ctx.Locals.GetLocal(counterName)!;
-        var exactSource = IL.DeclareLocal(reduction.Fields[0].DeclaringType!);
         var boundDouble = IL.DeclareLocal(_ctx.Types.Double);
         var boundInteger = IL.DeclareLocal(_ctx.Types.Int64);
         var accumulatorInteger = IL.DeclareLocal(_ctx.Types.Int64);
         var incrementInteger = IL.DeclareLocal(_ctx.Types.Int64);
-        var termDouble = IL.DeclareLocal(_ctx.Types.Double);
+        var values = reduction.Bindings.Select(_ => IL.DeclareLocal(_ctx.Types.Double)).ToArray();
 
         var slowStart = IL.DefineLabel();
         var fastStart = IL.DefineLabel();
         var fastContinue = IL.DefineLabel();
         var fastEnd = IL.DefineLabel();
+        var doubleStart = IL.DefineLabel();
         var incrementReady = IL.DefineLabel();
         var end = IL.DefineLabel();
 
         _ctx.EnterLoop(end, fastContinue);
 
-        IL.Emit(OpCodes.Ldloc, sourceLocal);
-        IL.Emit(OpCodes.Isinst, reduction.Fields[0].DeclaringType!);
-        IL.Emit(OpCodes.Stloc, exactSource);
-        IL.Emit(OpCodes.Ldloc, exactSource);
-        IL.Emit(OpCodes.Brfalse, slowStart);
-        if (reduction.RequiresMaterializationGuard &&
-            !_stableCompactRecordLocals.Contains(sourceLocal))
-        {
-            IL.Emit(OpCodes.Ldloc, exactSource);
-            IL.Emit(OpCodes.Call, reduction.IsMaterializedGetter);
-            IL.Emit(OpCodes.Brtrue, slowStart);
-        }
-
+        EmitCancellationCheck();
         EmitExpressionAsDouble(reduction.Bound);
         IL.Emit(OpCodes.Stloc, boundDouble);
         EmitExactIntegerGuard(boundDouble, 0d, MaxSafeInteger, slowStart);
         IL.Emit(OpCodes.Ldloc, boundDouble);
         IL.Emit(OpCodes.Conv_I8);
         IL.Emit(OpCodes.Stloc, boundInteger);
+        IL.Emit(OpCodes.Ldloc, boundInteger);
+        IL.Emit(OpCodes.Brfalse, end);
+        EmitNumericRecordSnapshot(sourceLocal, reduction.Reads, values, slowStart);
 
-        EmitExactIntegerGuard(accumulatorDouble, 0d, MaxSafeInteger, slowStart);
+        EmitExactIntegerGuard(accumulatorDouble, 0d, MaxSafeInteger, doubleStart);
         var accumulatorNotZero = IL.DefineLabel();
         IL.Emit(OpCodes.Ldloc, accumulatorDouble);
         IL.Emit(OpCodes.Ldc_R8, 0d);
@@ -114,7 +107,7 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Call, typeof(BitConverter).GetMethod(
             nameof(BitConverter.DoubleToInt64Bits), [_ctx.Types.Double])!);
         IL.Emit(OpCodes.Ldc_I8, 0L);
-        IL.Emit(OpCodes.Blt, slowStart);
+        IL.Emit(OpCodes.Blt, doubleStart);
         IL.MarkLabel(accumulatorNotZero);
         IL.Emit(OpCodes.Ldloc, accumulatorDouble);
         IL.Emit(OpCodes.Conv_I8);
@@ -123,12 +116,9 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Ldc_I4_0);
         IL.Emit(OpCodes.Conv_I8);
         IL.Emit(OpCodes.Stloc, incrementInteger);
-        foreach (var field in reduction.Fields)
+        foreach (var termDouble in values)
         {
-            IL.Emit(OpCodes.Ldloc, exactSource);
-            IL.Emit(OpCodes.Ldfld, field);
-            IL.Emit(OpCodes.Stloc, termDouble);
-            EmitExactIntegerGuard(termDouble, 0d, MaxSafeInteger, slowStart);
+            EmitExactIntegerGuard(termDouble, 0d, MaxSafeInteger, doubleStart);
             IL.Emit(OpCodes.Ldloc, incrementInteger);
             IL.Emit(OpCodes.Ldloc, termDouble);
             IL.Emit(OpCodes.Conv_I8);
@@ -136,7 +126,7 @@ public partial class ILEmitter
             IL.Emit(OpCodes.Stloc, incrementInteger);
             IL.Emit(OpCodes.Ldloc, incrementInteger);
             IL.Emit(OpCodes.Ldc_I8, MaxSafeInteger);
-            IL.Emit(OpCodes.Bgt, slowStart);
+            IL.Emit(OpCodes.Bgt, doubleStart);
         }
 
         // Prove every integer addition in the loop remains exactly representable.
@@ -149,7 +139,7 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Ldloc, incrementInteger);
         IL.Emit(OpCodes.Div);
         IL.Emit(OpCodes.Ldloc, boundInteger);
-        IL.Emit(OpCodes.Blt, slowStart);
+        IL.Emit(OpCodes.Blt, doubleStart);
         IL.MarkLabel(incrementReady);
 
         IL.Emit(OpCodes.Br, fastStart);
@@ -176,6 +166,20 @@ public partial class ILEmitter
         EmitInt64AccumulatorStore(accumulatorDouble, accumulatorInteger);
         IL.Emit(OpCodes.Br, end);
 
+        IL.MarkLabel(doubleStart);
+        EmitCancellationCheck();
+        IL.Emit(OpCodes.Ldloc, counter);
+        IL.Emit(OpCodes.Ldloc, boundInteger);
+        IL.Emit(OpCodes.Bge, end);
+        EmitSnapshotAddition(reduction.Addition);
+        IL.Emit(OpCodes.Stloc, accumulatorDouble);
+        IL.Emit(OpCodes.Ldloc, counter);
+        IL.Emit(OpCodes.Ldc_I4_1);
+        IL.Emit(OpCodes.Conv_I8);
+        IL.Emit(OpCodes.Add);
+        IL.Emit(OpCodes.Stloc, counter);
+        IL.Emit(OpCodes.Br, doubleStart);
+
         IL.MarkLabel(slowStart);
         EmitCancellationCheck();
         EmitConditionCheck(loop.Condition);
@@ -190,6 +194,22 @@ public partial class ILEmitter
         _ctx.Locals.ExitScope();
         SetStackUnknown();
         return true;
+
+        void EmitSnapshotAddition(Expr expression)
+        {
+            if (expression is Expr.Binary binary)
+            {
+                EmitSnapshotAddition(binary.Left);
+                EmitSnapshotAddition(binary.Right);
+                IL.Emit(OpCodes.Add);
+            }
+            else
+            {
+                string name = ((Expr.Variable)expression).Name.Lexeme;
+                IL.Emit(OpCodes.Ldloc, name == reduction.Accumulator
+                    ? accumulatorDouble : values[reduction.Bindings.ToList().IndexOf(name)]);
+            }
+        }
 
         bool TryAnalyzeStableObjectDestructureReduction(
             Stmt body,
@@ -225,6 +245,11 @@ public partial class ILEmitter
                 return false;
             }
 
+            var reserved = new HashSet<string>(StringComparer.Ordinal)
+            {
+                counterName, loopBound.Name.Lexeme, source.Name.Lexeme,
+                accumulator.Lexeme, sourceDeclaration.Name.Lexeme
+            };
             var properties = new Dictionary<string, string>(StringComparer.Ordinal);
             for (int index = 1; index < destructure.Count; index++)
             {
@@ -240,28 +265,15 @@ public partial class ILEmitter
                         }
                     }
                     || receiver.Name.Lexeme != sourceDeclaration.Name.Lexeme
+                    || reserved.Contains(binding.Lexeme)
                     || !properties.TryAdd(binding.Lexeme, property.Lexeme))
                 {
                     return false;
                 }
             }
 
-            if (_ctx.TypeMap?.Get(sourceDeclaration.Initializer!) is not { } sourceType
-                || !ILCompiler.TryGetCompactRecordShape(sourceType, out var shape))
-            {
-                return false;
-            }
-
-            string fingerprint = JsonSerializationShapeAnalyzer.Fingerprint(shape);
-            if (!runtime.CompactObjectRecordTypes.TryGetValue(
-                    fingerprint, out var carrierType)
-                || !runtime.CompactObjectRecordIsMaterializedGetters.TryGetValue(
-                    fingerprint, out var isMaterializedGetter))
-            {
-                return false;
-            }
-
-            var fields = new List<FieldBuilder>(terms.Count - 1);
+            var keys = new List<string>(terms.Count - 1);
+            var bindings = new List<string>(terms.Count - 1);
             var usedBindings = new HashSet<string>(StringComparer.Ordinal);
             for (int termIndex = 1; termIndex < terms.Count; termIndex++)
             {
@@ -272,37 +284,21 @@ public partial class ILEmitter
                     return false;
                 }
 
-                int fieldIndex = -1;
-                for (int index = 0; index < shape.Fields.Count; index++)
-                {
-                    if (shape.Fields[index].Key == property)
-                    {
-                        fieldIndex = index;
-                        break;
-                    }
-                }
-
-                if (fieldIndex < 0
-                    || !runtime.CompactObjectRecordValueFields.TryGetValue(
-                        (fingerprint, fieldIndex), out var field)
-                    || field.DeclaringType != carrierType
-                    || field.FieldType != _ctx.Types.Double)
-                {
-                    return false;
-                }
-                fields.Add(field);
+                keys.Add(property);
+                bindings.Add(binding);
             }
 
-            if (usedBindings.Count != properties.Count)
+            if (usedBindings.Count != properties.Count ||
+                !TryCreateNumericRecordReadPlan(sourceDeclaration.Initializer!, keys, out var reads))
                 return false;
 
             result = new StableObjectDestructureReduction(
                 source,
                 loopBound,
                 accumulator.Lexeme,
-                fields,
-                isMaterializedGetter,
-                !features.CanAssumeCompactObjectRecordIsUnmaterialized(fingerprint));
+                addition,
+                bindings,
+                reads);
             return true;
         }
     }

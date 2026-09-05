@@ -502,6 +502,17 @@ public partial class CompilationContext
         return null;
     }
 
+    public (LocalBuilder Local, ArrayQueueTypeInfo Queue)? TryGetPromotedQueueLocal(string name)
+    {
+        if (Runtime == null || !Locals.TryGetLocal(name, out var local)) return null;
+        var type = Locals.GetLocalType(name);
+        if (type == Runtime.NumberQueue.Type) return (local, Runtime.NumberQueue);
+        if (type == Runtime.BooleanQueue.Type) return (local, Runtime.BooleanQueue);
+        if (type == Runtime.NumberQueueWithHoles.Type) return (local, Runtime.NumberQueueWithHoles);
+        if (type == Runtime.BooleanQueueWithHoles.Type) return (local, Runtime.BooleanQueueWithHoles);
+        return null;
+    }
+
     /// <summary>
     /// Resolves a promoted numeric Map local. The concrete slot type is the
     /// scope-correct source of truth, so same-named boxed Maps cannot enter the

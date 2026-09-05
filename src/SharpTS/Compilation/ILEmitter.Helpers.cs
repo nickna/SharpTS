@@ -325,6 +325,24 @@ public partial class ILEmitter
         if (expr is Expr.Call call && TryEmitTypedNumericIndirectCall(call))
             return;
 
+        if (expr is Expr.Call
+            {
+                Optional: false, Arguments.Count: 0,
+                Callee: Expr.Get { Optional: false, Name.Lexeme: "shift", Object: Expr.Variable receiver }
+            }
+            && _ctx.TryGetPromotedQueueLocal(receiver.Name.Lexeme) is { Queue.ShiftNumber: { } shift } queue)
+        {
+            IL.Emit(OpCodes.Ldloc, queue.Local);
+            IL.Emit(OpCodes.Call, shift);
+            SetStackType(StackType.Double);
+            return;
+        }
+        if (expr is Expr.GetIndex { Optional: false, Object: Expr.Variable indexed } index
+            && _ctx.TryGetPromotedQueueLocal(indexed.Name.Lexeme) is { Queue.GetNumber: not null } indexedQueue)
+        {
+            EmitQueueGet(indexedQueue.Local, indexedQueue.Queue, index.Index, numeric: true);
+            return;
+        }
         if (expr is Expr.Get stableRecordGet
             && TryEmitStableRecordDestructureGetAsDouble(stableRecordGet))
             return;

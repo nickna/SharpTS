@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "note": "The full run used the initial open-static entry and predates two additional special-number cases. The final closed-entry run repeats the focused selection with the new cases and checks both constructors. Full-suite failures concern HTTP handles, TLS certificate access/handshakes, IPC, and standalone subprocess exit; the full suite is not green.",
+  "note": "The full run used the initial open-static entry and predates two additional special-number cases. The final closed-entry run repeats the focused selection with the new cases and checks both constructors. Full-suite failures concern HTTP handles, TLS certificate access/handshakes, IPC, and standalone subprocess exit; the full suite is not green. After merging main for PR #1590, the focused selection passed 599 checks and the overlapping array/rest/queue/destructuring selection passed 142 checks (selections overlap). A BenchmarkDotNet Dry in-process smoke run completed all 24 selected cases; it is not throughput evidence.",
   "runs": [
     {
       "run": "stage5",
@@ -1175,6 +1175,28 @@
       "finished": "2026-09-04T21:31:53.6683193-07:00",
       "total": 599,
       "passed": 599,
+      "failed": 0,
+      "notExecuted": 0,
+      "failedTests": []
+    },
+    {
+      "run": "language-hot-paths-merge",
+      "compilerSha256": "F4A254F43C804D91E7E83CE53B1CF1DDABEF54FE59CB70163B47D8A2EEBCF4DE",
+      "started": "2026-09-04T22:31:31.4262733-07:00",
+      "finished": "2026-09-04T22:32:19.8494878-07:00",
+      "total": 599,
+      "passed": 599,
+      "failed": 0,
+      "notExecuted": 0,
+      "failedTests": []
+    },
+    {
+      "run": "language-hot-paths-merge-overlap",
+      "compilerSha256": "F4A254F43C804D91E7E83CE53B1CF1DDABEF54FE59CB70163B47D8A2EEBCF4DE",
+      "started": "2026-09-04T22:32:34.4022130-07:00",
+      "finished": "2026-09-04T22:32:53.4672452-07:00",
+      "total": 142,
+      "passed": 142,
       "failed": 0,
       "notExecuted": 0,
       "failedTests": []

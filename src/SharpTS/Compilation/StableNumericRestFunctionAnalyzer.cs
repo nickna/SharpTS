@@ -367,6 +367,10 @@ internal static class StableNumericRestFunctionAnalyzer
 
         protected override void VisitDestructuringAssign(Expr.DestructuringAssign expression) => Reject();
 
+        // Using bindings can shadow both the rest array and constant index
+        // parameters; their patterns are not visited as ordinary declarations.
+        protected override void VisitUsing(Stmt.Using statement) => Reject();
+
         protected override void VisitCall(Expr.Call expression)
         {
             if (expression.Callee is Expr.Variable { Name.Lexeme: "eval" }) Reject();

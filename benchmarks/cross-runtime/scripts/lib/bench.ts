@@ -19,7 +19,14 @@
 
 import { performance } from "perf_hooks";
 
-const WARMUP_CAP_MS: number = 100;   // warm up the JIT, but never block for long
+const configuredWarmup = process.env.SHARPTS_BENCH_WARMUP_MS;
+const WARMUP_CAP_MS: number = configuredWarmup === undefined ? 100 : Number(configuredWarmup);
+if (configuredWarmup !== undefined && (configuredWarmup.trim() === "" ||
+    !Number.isInteger(WARMUP_CAP_MS) || WARMUP_CAP_MS < 0 || WARMUP_CAP_MS > 10000)) {
+    console.error("SHARPTS_BENCH_WARMUP_MS must be an integer from 0 to 10000");
+    process.exit(1);
+}
+const SLOW_CALL_MS: number = 100;   // sampling policy is independent of warmup duration
 const MIN_SAMPLE_MS: number = 1;     // grow the inner batch until a sample spans this
 const BUDGET_MS: number = 300;       // preferred total sampling time per case
 const MIN_SAMPLES: number = 8;       // sample floor (for a meaningful stdev)...
@@ -69,10 +76,12 @@ export function bench(name: string, param: number, fn: () => number, expected?: 
     // skipped warmup entirely. That made slow interpreter cases measure startup
     // while fast JIT cases measured steady state.
     guard = guard + fn();
-    const warmStart: number = performance.now();
-    do {
-        guard = guard + fn();
-    } while (performance.now() - warmStart < WARMUP_CAP_MS);
+    if (WARMUP_CAP_MS > 0) {
+        const warmStart: number = performance.now();
+        do {
+            guard = guard + fn();
+        } while (performance.now() - warmStart < WARMUP_CAP_MS);
+    }
 
     // This post-warmup probe selects single-call sampling versus auto-batching,
     // but is itself discarded so both branches start with fresh observations.
@@ -80,7 +89,7 @@ export function bench(name: string, param: number, fn: () => number, expected?: 
     guard = guard + fn();
     const firstMs: number = performance.now() - probeStart;
 
-    if (firstMs >= WARMUP_CAP_MS) {
+    if (firstMs >= SLOW_CALL_MS) {
         // A single call is reliably measurable — sample one call at a time,
         // bounded by the budget and the hard cap (slow cases end up with few
         // samples, and thus stdev 0, which is honest).
@@ -200,16 +209,18 @@ export async function benchAsync(
     // Keep the async methodology identical to the synchronous path: discard the
     // cold call, warm every runtime, and discard the post-warmup routing probe.
     guard = guard + await fn();
-    const warmStart: number = performance.now();
-    do {
-        guard = guard + await fn();
-    } while (performance.now() - warmStart < WARMUP_CAP_MS);
+    if (WARMUP_CAP_MS > 0) {
+        const warmStart: number = performance.now();
+        do {
+            guard = guard + await fn();
+        } while (performance.now() - warmStart < WARMUP_CAP_MS);
+    }
 
     const probeStart: number = performance.now();
     guard = guard + await fn();
     const firstMs: number = performance.now() - probeStart;
 
-    if (firstMs >= WARMUP_CAP_MS) {
+    if (firstMs >= SLOW_CALL_MS) {
         while (samples.length < MAX_SAMPLES) {
             if (total >= HARD_CAP_MS) {
                 break;
