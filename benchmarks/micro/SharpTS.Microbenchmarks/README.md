@@ -50,6 +50,24 @@ The original direct-delegate JSON benchmarks remain as a comparison.
 
 ## Running
 
+`StringScalingBenchmarks` measures the shared append-and-scan body at 10,000,
+100,000, and 1,000,000 iterations against a C# builder followed by one string
+snapshot. `BoundedArithmeticBenchmarks` replaces overflowing large factorial
+inputs as the finite loop-carried arithmetic probe. The factorial C# baseline
+uses double arithmetic so its finite results agree with TypeScript at every
+configured input.
+
+For allocation investigations through the imported JSON callback boundary:
+
+```powershell
+dotnet run -c Release --project benchmarks/micro/SharpTS.Microbenchmarks -- `
+  --filter '*JsonImportedModulePhaseBenchmarks*'
+```
+
+Compare full-round-trip allocations and GC counts as well as time. Adjacent
+cumulative-phase timing differences are estimates because JIT and GC behavior
+can differ across independently measured phases.
+
 Allocation diagnostics share the unmodified cross-runtime `allocation-kernel.ts`.
 `AllocationKernelBenchmarks` measures the complete kernel, graph construction,
 and traversal of a graph built during setup, with allocation and GC counters.

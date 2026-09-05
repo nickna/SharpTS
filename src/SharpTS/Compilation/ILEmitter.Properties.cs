@@ -21,6 +21,18 @@ public partial class ILEmitter
         if (TryEmitStableRecordDestructureGet(g))
             return;
 
+        // Promoted string-accumulator `.length` (#857): direct StringBuilder.Length. .NET StringBuilder
+        // .Length is UTF-16 code units, identical to JS string .length — no materialization.
+        if (!g.Optional && g.Name.Lexeme == "length" && g.Object is Expr.Variable accLenVar
+            && _ctx.TryGetPromotedStringAccumulator(accLenVar.Name.Lexeme) is { } accLenSb)
+        {
+            IL.Emit(OpCodes.Ldloc, accLenSb);
+            IL.Emit(OpCodes.Callvirt, _ctx.Types.GetProperty(_ctx.Types.StringBuilder, "Length").GetGetMethod()!);
+            IL.Emit(OpCodes.Conv_R8);
+            SetStackType(StackType.Double);
+            return;
+        }
+
         if (StringEmitter.TryEmitPrimitiveStringLengthGet(this, g))
             return;
 
@@ -334,18 +346,6 @@ public partial class ILEmitter
             return;
         }
 
-        // Promoted string-accumulator `.length` (#857): direct StringBuilder.Length. .NET StringBuilder
-        // .Length is UTF-16 code units, identical to JS string .length — no materialization.
-        if (!g.Optional && g.Name.Lexeme == "length" && g.Object is Expr.Variable accLenVar
-            && _ctx.TryGetPromotedStringAccumulator(accLenVar.Name.Lexeme) is { } accLenSb)
-        {
-            IL.Emit(OpCodes.Ldloc, accLenSb);
-            IL.Emit(OpCodes.Callvirt, _ctx.Types.GetProperty(_ctx.Types.StringBuilder, "Length").GetGetMethod()!);
-            IL.Emit(OpCodes.Conv_R8);
-            SetStackType(StackType.Double);
-            return;
-        }
-
         // Promoted numeric Map `.size` (#1482): keep Dictionary.Count as an
         // unboxed TypeScript number. The registry property contract otherwise
         // resets stack tracking to object because ordinary Map properties box.
@@ -359,6 +359,9 @@ public partial class ILEmitter
             SetStackType(StackType.Double);
             return;
         }
+
+        if (!g.Optional && g.Name.Lexeme == "length" && ArrayEmitter.TryEmitLengthGet(this, g.Object))
+            return;
 
         // Try direct getter dispatch for known class instance types
         TypeInfo? objType = _ctx.TypeMap?.Get(g.Object);
@@ -2279,11 +2282,21 @@ public partial class ILEmitter
     /// <summary>
     /// Emits <c>s.charCodeAt(i)</c> for a promoted string-accumulator (StringBuilder slot): reads the
     /// UTF-16 code unit directly via the <c>this[int]</c> indexer (identical to JS charCodeAt), with an
-    /// out-of-range (incl. negative, via unsigned compare) result of NaN. Leaves a boxed double, matching
-    /// the string-method call convention. See EmitMethodCall and StringAccumulatorPromotionAnalyzer.
+    /// out-of-range (incl. negative, via unsigned compare) result of NaN. Read-only for loops use a
+    /// single contiguous snapshot instead of repeatedly searching builder chunks. Leaves a native double.
     /// </summary>
     private void EmitPromotedStringCharCodeAt(LocalBuilder sb, List<Expr> arguments)
     {
+        if (_stringScanSnapshots.TryGetValue(sb, out var snapshot))
+        {
+            IL.Emit(OpCodes.Ldloc, snapshot);
+            if (arguments.Count > 0) EmitExpressionAsDouble(arguments[0]);
+            else IL.Emit(OpCodes.Ldc_R8, 0.0);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.StringCharCodeAt);
+            SetStackType(StackType.Double);
+            return;
+        }
+
         var getLength = _ctx.Types.GetProperty(_ctx.Types.StringBuilder, "Length").GetGetMethod()!;
         var getChars = _ctx.Types.GetMethod(_ctx.Types.StringBuilder, "get_Chars", _ctx.Types.Int32);
 
