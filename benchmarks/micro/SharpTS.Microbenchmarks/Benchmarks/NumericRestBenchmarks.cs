@@ -12,6 +12,7 @@ public class NumericRestBenchmarks
 
     [Params("restFixedParameters", "restDirect", "restAlias", "restConstantIndex",
         "restVaryingIndex", "restPacking", "restEscaping", "restSpread", "restDynamicDispatch",
+        "restSpreadLength", "restDynamicLength", "restAlternating", "restMixedTargets",
         "restSelectedTarget")]
     public string Case { get; set; } = null!;
 
@@ -31,8 +32,9 @@ public class NumericRestBenchmarks
         double range = (double)N * (N - 1) / 2;
         double expected = Case switch
         {
-            "restPacking" or "restEscaping" => 0.5 + 4 * N,
+            "restPacking" or "restEscaping" or "restSpreadLength" or "restDynamicLength" => 0.5 + 4 * N,
             "restVaryingIndex" => 0.5 + 4 * range,
+            "restAlternating" or "restMixedTargets" => 0.5 + range + 6 * N + N / 2,
             _ => 0.5 + range + 6 * N
         };
         if (_run(N) != expected)

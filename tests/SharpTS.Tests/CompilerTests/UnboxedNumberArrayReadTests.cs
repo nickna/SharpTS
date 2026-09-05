@@ -10,6 +10,74 @@ namespace SharpTS.Tests.CompilerTests;
 
 public sealed class UnboxedNumberArrayReadTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ReusedBoxedNumericReads_DoNotAllocate(bool plainList)
+    {
+        var assembly = Compile("""
+            function sum(values: number[], n: number): number {
+                let result: number = 0.5;
+                for (let i: number = 0; i < n; i++) {
+                    const index: number = i % 2;
+                    result = result + values[index] + values[index + 1] + values[index + 2] + values[index + 3];
+                }
+                return result;
+            }
+            """);
+        var method = FindFunction(assembly, "sum");
+        Assert.Contains(ReadInstructions(method), i => i.Operand is MethodBase { Name: "TryGetBoxedDouble" });
+        var run = method.CreateDelegate<Func<object, double, double>>();
+        var list = new List<object> { 1d, 1d, 1d, 1d, 1d };
+        object values = plainList ? list : Activator.CreateInstance(assembly.GetType("$Array")!, [list])!;
+        for (int i = 0; i < 30; i++) Assert.Equal(4000.5, run(values, 1000));
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        double actual = run(values, 10000);
+        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        Assert.Equal(40000.5, actual);
+        Assert.Equal(0, allocated);
+    }
+
+    [Theory, ModeData]
+    public void BoxedReadGuard_PreservesValuesAndSideEffects(ExecutionMode mode)
+    {
+        const string source = """
+            function read(values: number[], index: number): number { return values[index] * 2; }
+            const values: number[] = [2, 3, 4];
+            const alias: any = values;
+            alias[1] = "7";
+            console.log(read(values, 0), read(values, 1));
+            delete alias[0];
+            console.log(read(values, 0), read(values, -1), read(values, 10));
+            let calls: number = 0;
+            function key(): number { calls++; alias[2] = "9"; return 2; }
+            console.log(values[key()] * 2, calls);
+            const numeric: number[] = [];
+            numeric.push(-0); numeric.push(NaN); numeric.push(Infinity);
+            console.log(1 / read(numeric, 0), read(numeric, 1), read(numeric, 2));
+            """;
+        Assert.Equal("4 14\nNaN NaN NaN\n18 1\n-Infinity NaN Infinity\n", TestHarness.Run(source, mode));
+        if (mode == ExecutionMode.Compiled) Assert.Empty(TestHarness.CompileAndVerifyOnly(source));
+    }
+
+    [Theory, ModeData]
+    public void BoxedReadGuard_RespectsAccessorAndPrototypeOverrides(ExecutionMode mode)
+    {
+        const string source = """
+            function read(values: number[], index: number): number { return values[index] * 2; }
+            let calls: number = 0;
+            const values: number[] = [2, 3];
+            Object.defineProperty(values, "0", { get: (): number => { calls++; return 7; } });
+            console.log(read(values, 0), calls);
+            const alias: any = values;
+            delete alias[1];
+            Object.defineProperty(Array.prototype, "1", { value: 9, configurable: true, writable: true });
+            console.log(read(values, 1));
+            delete (Array.prototype as any)[1];
+            """;
+        Assert.Equal("14 1\n18\n", TestHarness.Run(source, mode));
+    }
+
     [Fact]
     public void ArrayLength_KeepsNumericResultUnboxed()
     {

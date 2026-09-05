@@ -201,6 +201,9 @@ public partial class RuntimeEmitter
         // Fields
         var targetField = typeBuilder.DefineField("_target", _types.Object, FieldAttributes.Private);
         var methodField = typeBuilder.DefineField("_method", _types.MethodInfo, FieldAttributes.Private);
+        var numericRest4Field = typeBuilder.DefineField("_numericRest4",
+            typeof(Func<double, double, double, double, double>), FieldAttributes.Assembly | FieldAttributes.InitOnly);
+        runtime.TSFunctionNumericRest4Field = numericRest4Field;
         _ = methodField;
         // Cached name and length for functions where reflection doesn't work (e.g., MethodBuilder tokens)
         var cachedNameField = typeBuilder.DefineField("_cachedName", _types.String, FieldAttributes.Private);
@@ -248,14 +251,11 @@ public partial class RuntimeEmitter
         runtime.TSFunctionParamCountField = paramCountField;
         var hasListRestField = typeBuilder.DefineField("_hasListRest", _types.Boolean, FieldAttributes.Private);
         var hasArrayRestField = typeBuilder.DefineField("_hasArrayRest", _types.Boolean, FieldAttributes.Private);
-        // Set true at construction iff ConvertArgsForUnionTypes or
-        // CoercePrimitiveArgs might do something non-trivial — i.e., any param
-        // is a Union_* value type or one of the coerce-target types
-        // (string/double/int/List<object>). For typical arrow callbacks
-        // (`x => x*2` etc.) all params are `object`, so this is false and Invoke
-        // skips both helper calls entirely. Saves 2 reflection-driven loops per
-        // callback dispatch.
-        var needsArgConversionField = typeBuilder.DefineField("_needsArgConversion", _types.Boolean, FieldAttributes.Private);
+        // Bits 1/2 select union/primitive conversion independently. Keep metadata
+        // only for wrappers that need conversion; AdjustArgs already materializes rest.
+        var needsArgConversionField = typeBuilder.DefineField("_argConversionKinds", _types.Int32, FieldAttributes.Private);
+        var conversionParametersField = typeBuilder.DefineField("_conversionParameters",
+            _types.MakeArrayType(_types.ParameterInfo), FieldAttributes.Private);
 
         // Static cache for "this" fields: ConcurrentDictionary<Type, FieldInfo>
         // used to avoid reflection overhead in BindThis
@@ -405,9 +405,10 @@ public partial class RuntimeEmitter
         EmitComputePadUndefinedMask(ctorIL, padUndefinedMaskField, runtime, methodArgIndex: 2);
         // this._paramCount, _hasListRest, _hasArrayRest: cached by AdjustArgs.
         EmitComputeAdjustArgsCache(ctorIL, paramCountField, hasListRestField, hasArrayRestField, methodArgIndex: 2);
-        EmitComputeNeedsArgConversion(ctorIL, needsArgConversionField, methodArgIndex: 2);
+        EmitComputeNeedsArgConversion(ctorIL, needsArgConversionField, conversionParametersField, hasListRestField, methodArgIndex: 2);
         // this._invoker = LookupOrAdd(_invokerCache, method)  [pseudocode]
         EmitLookupOrCreateInvoker(ctorIL, invokerField, invokerCacheField, invokerCacheType, methodArgIndex: 2);
+        EmitComputeNumericRest4(ctorIL, numericRest4Field, runtime);
         ctorIL.MarkLabel(noMethodLabel);
         ctorIL.Emit(OpCodes.Ret);
 
@@ -448,9 +449,10 @@ public partial class RuntimeEmitter
         EmitComputeCapturesArguments(ctorCacheIL, capturesArgumentsField, runtime, methodArgIndex: 2);
         EmitComputePadUndefinedMask(ctorCacheIL, padUndefinedMaskField, runtime, methodArgIndex: 2);
         EmitComputeAdjustArgsCache(ctorCacheIL, paramCountField, hasListRestField, hasArrayRestField, methodArgIndex: 2);
-        EmitComputeNeedsArgConversion(ctorCacheIL, needsArgConversionField, methodArgIndex: 2);
+        EmitComputeNeedsArgConversion(ctorCacheIL, needsArgConversionField, conversionParametersField, hasListRestField, methodArgIndex: 2);
         // this._invoker = LookupOrAdd(_invokerCache, method)
         EmitLookupOrCreateInvoker(ctorCacheIL, invokerField, invokerCacheField, invokerCacheType, methodArgIndex: 2);
+        EmitComputeNumericRest4(ctorCacheIL, numericRest4Field, runtime);
         ctorCacheIL.MarkLabel(noCachedMethodLabel);
         ctorCacheIL.Emit(OpCodes.Ret);
 
@@ -550,18 +552,38 @@ public partial class RuntimeEmitter
         gtIL.Emit(OpCodes.Ldfld, targetField);
         gtIL.Emit(OpCodes.Ret);
 
-        // Helper method: private static object[] AdjustArgs(MethodInfo method, object[] args)
+        // Instance argument adjustment uses the cached rest/arity metadata.
         var adjustArgsMethod = EmitTSFunctionAdjustArgsHelper(typeBuilder, runtime, paramCountField, hasListRestField, hasArrayRestField, padUndefinedMaskField);
 
-        // Helper method: private static void ConvertArgsForUnionTypes(MethodInfo method, object[] args)
+        // Conversion helpers consume the cached signature, not MethodInfo.GetParameters per call.
         var convertArgsMethod = EmitTSFunctionConvertArgsHelper(typeBuilder, runtime);
 
-        // Helper method: private static void CoercePrimitiveArgs(MethodInfo method, object[] args)
         // Coerces args whose target parameter type is `string` via $Runtime.ToJsString.
         // Used for borrowed prototype methods like
         // `Number.prototype.split = String.prototype.split; new Number(x).split(...)`
         // where the wrapped helper expects (string, ...) but receives a non-string `this`.
         var coercePrimitivesMethod = EmitTSFunctionCoercePrimitivesHelper(typeBuilder, runtime);
+
+        void EmitConvertArguments(ILGenerator il, LocalBuilder args)
+        {
+            EmitConversionStage(1, convertArgsMethod);
+            EmitConversionStage(2, coercePrimitivesMethod);
+
+            void EmitConversionStage(int kind, MethodBuilder helper)
+            {
+                var skip = il.DefineLabel();
+                il.Emit(OpCodes.Ldarg_0);
+                il.Emit(OpCodes.Ldfld, needsArgConversionField);
+                il.Emit(OpCodes.Ldc_I4, kind);
+                il.Emit(OpCodes.And);
+                il.Emit(OpCodes.Brfalse, skip);
+                il.Emit(OpCodes.Ldarg_0);
+                il.Emit(OpCodes.Ldfld, conversionParametersField);
+                il.Emit(OpCodes.Ldloc, args);
+                il.Emit(OpCodes.Call, helper);
+                il.MarkLabel(skip);
+            }
+        }
 
         // Invoke method: public object Invoke(object[] args)
         var invokeBuilder = typeBuilder.DefineMethod(
@@ -643,29 +665,7 @@ public partial class RuntimeEmitter
         invokeIL.Emit(OpCodes.Callvirt, adjustArgsMethod);
         invokeIL.Emit(OpCodes.Stloc, adjustedArgsLocal);
 
-        // Skip both Convert and Coerce helpers when the cached
-        // _needsArgConversion flag says no param needs union or primitive
-        // conversion. For typical arrow callbacks (`x => x*2` etc., all
-        // params typed `object`), this is the case and we save 2
-        // reflection-driven loops per dispatch.
-        var skipArgConversionLabel = invokeIL.DefineLabel();
-        invokeIL.Emit(OpCodes.Ldarg_0);
-        invokeIL.Emit(OpCodes.Ldfld, needsArgConversionField);
-        invokeIL.Emit(OpCodes.Brfalse, skipArgConversionLabel);
-
-        // Convert args for union types before invoking
-        invokeIL.Emit(OpCodes.Ldarg_0);
-        invokeIL.Emit(OpCodes.Ldfld, methodField);
-        invokeIL.Emit(OpCodes.Ldloc, adjustedArgsLocal);
-        invokeIL.Emit(OpCodes.Call, convertArgsMethod);
-
-        // Coerce string-typed params from non-string args via $Runtime.ToJsString.
-        invokeIL.Emit(OpCodes.Ldarg_0);
-        invokeIL.Emit(OpCodes.Ldfld, methodField);
-        invokeIL.Emit(OpCodes.Ldloc, adjustedArgsLocal);
-        invokeIL.Emit(OpCodes.Call, coercePrimitivesMethod);
-
-        invokeIL.MarkLabel(skipArgConversionLabel);
+        EmitConvertArguments(invokeIL, adjustedArgsLocal);
 
         // Publish the un-adjusted caller args to the thread-static $Runtime._currentArguments
         // slot so flagged function bodies (those that reference JS `arguments`) can see
@@ -861,20 +861,7 @@ public partial class RuntimeEmitter
         iwt.Emit(OpCodes.Callvirt, adjustArgsMethod);
         iwt.Emit(OpCodes.Stloc, iwtAdjustedArgsLocal);
 
-        // Optional Convert/Coerce gated on _needsArgConversion.
-        var iwtSkipConvLabel = iwt.DefineLabel();
-        iwt.Emit(OpCodes.Ldarg_0);
-        iwt.Emit(OpCodes.Ldfld, needsArgConversionField);
-        iwt.Emit(OpCodes.Brfalse, iwtSkipConvLabel);
-        iwt.Emit(OpCodes.Ldarg_0);
-        iwt.Emit(OpCodes.Ldfld, methodField);
-        iwt.Emit(OpCodes.Ldloc, iwtAdjustedArgsLocal);
-        iwt.Emit(OpCodes.Call, convertArgsMethod);
-        iwt.Emit(OpCodes.Ldarg_0);
-        iwt.Emit(OpCodes.Ldfld, methodField);
-        iwt.Emit(OpCodes.Ldloc, iwtAdjustedArgsLocal);
-        iwt.Emit(OpCodes.Call, coercePrimitivesMethod);
-        iwt.MarkLabel(iwtSkipConvLabel);
+        EmitConvertArguments(iwt, iwtAdjustedArgsLocal);
 
         // Publish effectiveArgs (thisArg + caller args) to thread-static.
         // Mirrors what Invoke() did pre-fix when called from this path:
@@ -1347,22 +1334,25 @@ public partial class RuntimeEmitter
 
     /// <summary>
     /// Emits IL inside a constructor to compute and store the cached
-    /// <c>_needsArgConversion</c> bool. True iff any param is a
+    /// conversion flags and caches reflection metadata when any param is a
     /// <c>Union_*</c> value type (handled by <c>ConvertArgsForUnionTypes</c>)
     /// or one of the coerce-target types (handled by <c>CoercePrimitiveArgs</c>:
     /// string/double/int32/List&lt;object&gt;). For typical arrow callbacks
-    /// with all-<c>object</c> params, this is false and Invoke skips both
-    /// helpers entirely.
+    /// with all-<c>object</c> params, Invoke skips both helpers. A trailing
+    /// rest list is supplied in its final CLR representation by AdjustArgs.
     /// </summary>
-    private void EmitComputeNeedsArgConversion(ILGenerator il, FieldBuilder needsArgConversionField, int methodArgIndex)
+    private void EmitComputeNeedsArgConversion(ILGenerator il, FieldBuilder needsArgConversionField,
+        FieldBuilder conversionParametersField, FieldBuilder hasListRestField, int methodArgIndex)
     {
         var paramsLocal = il.DeclareLocal(_types.MakeArrayType(_types.ParameterInfo));
         var iLocal = il.DeclareLocal(_types.Int32);
         var paramTypeLocal = il.DeclareLocal(_types.Type);
+        var kinds = il.DeclareLocal(_types.Int32);
 
         var loopBody = il.DefineLabel();
         var loopCond = il.DefineLabel();
-        var setTrueLabel = il.DefineLabel();
+        var primitive = il.DefineLabel();
+        var union = il.DefineLabel();
         var doneLabel = il.DefineLabel();
         var notValueType = il.DefineLabel();
 
@@ -1377,6 +1367,20 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, loopCond);
 
         il.MarkLabel(loopBody);
+        // Only the proven rest slot is exempt. A synthetic __this List receiver
+        // is explicitly excluded by EmitComputeAdjustArgsCache.
+        var checkType = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, hasListRestField);
+        il.Emit(OpCodes.Brfalse, checkType);
+        il.Emit(OpCodes.Ldloc, iLocal);
+        il.Emit(OpCodes.Ldloc, paramsLocal);
+        il.Emit(OpCodes.Ldlen);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Beq, notValueType);
+        il.MarkLabel(checkType);
         // pt = ps[i].ParameterType
         il.Emit(OpCodes.Ldloc, paramsLocal);
         il.Emit(OpCodes.Ldloc, iLocal);
@@ -1385,10 +1389,10 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, paramTypeLocal);
 
         // Check coerce-target types: string, double, int32, List<object>
-        EmitTypeEqAndBranchTrue(il, paramTypeLocal, _types.String, setTrueLabel);
-        EmitTypeEqAndBranchTrue(il, paramTypeLocal, _types.Double, setTrueLabel);
-        EmitTypeEqAndBranchTrue(il, paramTypeLocal, _types.Int32, setTrueLabel);
-        EmitTypeEqAndBranchTrue(il, paramTypeLocal, _types.ListOfObject, setTrueLabel);
+        EmitTypeEqAndBranchTrue(il, paramTypeLocal, _types.String, primitive);
+        EmitTypeEqAndBranchTrue(il, paramTypeLocal, _types.Double, primitive);
+        EmitTypeEqAndBranchTrue(il, paramTypeLocal, _types.Int32, primitive);
+        EmitTypeEqAndBranchTrue(il, paramTypeLocal, _types.ListOfObject, primitive);
 
         // Check Union_* value type
         il.Emit(OpCodes.Ldloc, paramTypeLocal);
@@ -1398,7 +1402,19 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Type, "Name")!.GetGetMethod()!);
         il.Emit(OpCodes.Ldstr, "Union_");
         il.Emit(OpCodes.Callvirt, typeof(string).GetMethod("StartsWith", [typeof(string)])!);
-        il.Emit(OpCodes.Brtrue, setTrueLabel);
+        il.Emit(OpCodes.Brtrue, union);
+        il.Emit(OpCodes.Br, notValueType);
+        il.MarkLabel(primitive);
+        il.Emit(OpCodes.Ldloc, kinds);
+        il.Emit(OpCodes.Ldc_I4_2);
+        il.Emit(OpCodes.Or);
+        il.Emit(OpCodes.Stloc, kinds);
+        il.Emit(OpCodes.Br, notValueType);
+        il.MarkLabel(union);
+        il.Emit(OpCodes.Ldloc, kinds);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Or);
+        il.Emit(OpCodes.Stloc, kinds);
         il.MarkLabel(notValueType);
 
         // i++
@@ -1414,17 +1430,14 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Conv_I4);
         il.Emit(OpCodes.Blt, loopBody);
 
-        // No match: _needsArgConversion = false (zero-init default — explicit for clarity)
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldloc, kinds);
         il.Emit(OpCodes.Stfld, needsArgConversionField);
-        il.Emit(OpCodes.Br, doneLabel);
-
-        // Match: _needsArgConversion = true
-        il.MarkLabel(setTrueLabel);
+        il.Emit(OpCodes.Ldloc, kinds);
+        il.Emit(OpCodes.Brfalse, doneLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Stfld, needsArgConversionField);
+        il.Emit(OpCodes.Ldloc, paramsLocal);
+        il.Emit(OpCodes.Stfld, conversionParametersField);
 
         il.MarkLabel(doneLabel);
     }
@@ -1972,13 +1985,13 @@ public partial class RuntimeEmitter
     /// </summary>
     private MethodBuilder EmitTSFunctionConvertArgsHelper(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
-        // private static void ConvertArgsForUnionTypes(MethodInfo method, object[] args)
+        // private static void ConvertArgsForUnionTypes(ParameterInfo[] parameters, object[] args)
         // Wraps raw primitive values into union types using op_Implicit operators.
         var method = typeBuilder.DefineMethod(
             "ConvertArgsForUnionTypes",
             MethodAttributes.Private | MethodAttributes.Static,
             _types.Void,
-            [_types.MethodInfo, _types.ObjectArray]
+            [_types.MakeArrayType(_types.ParameterInfo), _types.ObjectArray]
         );
 
         var il = method.GetILGenerator();
@@ -1991,9 +2004,8 @@ public partial class RuntimeEmitter
         var argTypeLocal = il.DeclareLocal(_types.Type);
         var implicitOpLocal = il.DeclareLocal(_types.MethodInfo);
 
-        // params = method.GetParameters()
+        // Reuse immutable signature metadata captured at wrapper construction.
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Callvirt, typeof(MethodBase).GetMethod("GetParameters")!);
         il.Emit(OpCodes.Stloc, paramsLocal);
 
         // count = Math.Min(args.Length, params.Length)
@@ -2144,7 +2156,7 @@ public partial class RuntimeEmitter
             "CoercePrimitiveArgs",
             MethodAttributes.Private | MethodAttributes.Static,
             _types.Void,
-            [_types.MethodInfo, _types.ObjectArray]
+            [_types.MakeArrayType(_types.ParameterInfo), _types.ObjectArray]
         );
         var il = method.GetILGenerator();
 
@@ -2162,9 +2174,8 @@ public partial class RuntimeEmitter
         var requireObjectCoercibleThisLocal = il.DeclareLocal(_types.MethodInfo);
         var oneArgLocal = il.DeclareLocal(_types.ObjectArray);
 
-        // params = method.GetParameters()
+        // Reuse immutable signature metadata captured at wrapper construction.
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.MethodBase, "GetParameters")!);
         il.Emit(OpCodes.Stloc, paramsLocal);
 
         // count = Math.Min(args.Length, params.Length)

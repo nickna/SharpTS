@@ -1557,7 +1557,7 @@ public partial class ILEmitter
 
     /// <summary>
     /// Emits a native-double numeric-consumer path for a statically-number[] read.
-    /// The hot arm is limited to a dense numeric-mode $Array and an exactly integral,
+    /// The hot arms accept dense numeric storage or present boxed doubles and an exactly integral,
     /// Int32 index. Every unsupported receiver/index shape takes the ordinary GetIndex
     /// path and then the caller's pre-existing ToNumber coercion, so raw/any consumers
     /// never enter this specialization and continue to observe the original JS value.
@@ -1586,19 +1586,32 @@ public partial class ILEmitter
         // Capture the receiver before evaluating the key. A hoisted exact-$Array
         // local already captured the stable binding at loop entry; parameters and
         // non-hoisted locals are spilled at this read site.
-        LocalBuilder? receiverLocal = null;
+        var receiverLocal = IL.DeclareLocal(_ctx.Types.Object);
         LocalBuilder? arrayLocal = null;
         if (hoisted is null)
         {
             EmitExpression(gi.Object);
             EmitBoxIfNeeded(gi.Object);
-            receiverLocal = IL.DeclareLocal(_ctx.Types.Object);
             IL.Emit(OpCodes.Stloc, receiverLocal);
 
             arrayLocal = IL.DeclareLocal(_ctx.Runtime!.TSArrayType);
             IL.Emit(OpCodes.Ldloc, receiverLocal);
             IL.Emit(OpCodes.Isinst, _ctx.Runtime.TSArrayType);
             IL.Emit(OpCodes.Stloc, arrayLocal);
+        }
+        else
+        {
+            // Capture the raw receiver before the key even when a hoisted cast
+            // failed. Reloading the binding after a side-effecting key is too late.
+            var captured = IL.DefineLabel();
+            IL.Emit(OpCodes.Ldloc, hoisted.Value.TypedLocal);
+            IL.Emit(OpCodes.Dup);
+            IL.Emit(OpCodes.Brtrue, captured);
+            IL.Emit(OpCodes.Pop);
+            EmitExpression(gi.Object);
+            EmitBoxIfNeeded(gi.Object);
+            IL.MarkLabel(captured);
+            IL.Emit(OpCodes.Stloc, receiverLocal);
         }
 
         EmitExpressionAsDouble(gi.Index);
@@ -1610,6 +1623,7 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Stloc, indexInt);
 
         var fallbackLabel = IL.DefineLabel();
+        var boxedLabel = IL.DefineLabel();
         var endLabel = IL.DefineLabel();
 
         // Conv_I4 is used only as a candidate. Round-tripping to double proves
@@ -1621,39 +1635,32 @@ public partial class ILEmitter
 
         var guardedArray = hoisted?.TypedLocal ?? arrayLocal!;
         IL.Emit(OpCodes.Ldloc, guardedArray);
-        IL.Emit(OpCodes.Brfalse, fallbackLabel);
+        IL.Emit(OpCodes.Brfalse, boxedLabel);
         IL.Emit(OpCodes.Ldloc, guardedArray);
         IL.Emit(OpCodes.Ldloc, indexInt);
         IL.Emit(OpCodes.Callvirt, _ctx.Runtime!.TSArrayCanGetDouble);
-        IL.Emit(OpCodes.Brfalse, fallbackLabel);
+        IL.Emit(OpCodes.Brfalse, boxedLabel);
 
         IL.Emit(OpCodes.Ldloc, guardedArray);
         IL.Emit(OpCodes.Ldloc, indexInt);
         IL.Emit(OpCodes.Callvirt, _ctx.Runtime.TSArrayGetDouble);
         IL.Emit(OpCodes.Br, endLabel);
 
+        IL.MarkLabel(boxedLabel);
+        var boxedValue = IL.DeclareLocal(_ctx.Types.Double);
+        IL.Emit(OpCodes.Ldloc, receiverLocal);
+        IL.Emit(OpCodes.Ldloc, indexInt);
+        IL.Emit(OpCodes.Ldloca, boxedValue);
+        IL.Emit(OpCodes.Call, _ctx.Runtime.TSArrayTryGetBoxedDouble);
+        IL.Emit(OpCodes.Brfalse, fallbackLabel);
+        IL.Emit(OpCodes.Ldloc, boxedValue);
+        IL.Emit(OpCodes.Br, endLabel);
+
         // Cold arm: preserve the numeric key exactly (including fractional,
         // negative, and uint32-range values) and use the descriptor/prototype-
         // aware runtime lookup before applying the numeric consumer's ToNumber.
         IL.MarkLabel(fallbackLabel);
-        if (receiverLocal != null)
-        {
-            IL.Emit(OpCodes.Ldloc, receiverLocal);
-        }
-        else
-        {
-            // When the hoisted cast succeeded, it is the captured receiver. If it
-            // failed (ordinary object/list supplied through an alias), reload the
-            // side-effect-free variable binding for the generic fallback.
-            var haveReceiver = IL.DefineLabel();
-            IL.Emit(OpCodes.Ldloc, hoisted!.Value.TypedLocal);
-            IL.Emit(OpCodes.Dup);
-            IL.Emit(OpCodes.Brtrue, haveReceiver);
-            IL.Emit(OpCodes.Pop);
-            EmitExpression(gi.Object);
-            EmitBoxIfNeeded(gi.Object);
-            IL.MarkLabel(haveReceiver);
-        }
+        IL.Emit(OpCodes.Ldloc, receiverLocal);
         IL.Emit(OpCodes.Ldloc, indexDouble);
         IL.Emit(OpCodes.Box, _ctx.Types.Double);
         IL.Emit(OpCodes.Call, _ctx.Runtime!.GetIndex);

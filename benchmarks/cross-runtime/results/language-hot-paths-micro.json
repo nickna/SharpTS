@@ -1,0 +1,2274 @@
+{
+  "schemaVersion": 1,
+  "baselineRevision": "af72038b83e9c88449b33ca42262f3f8dc156ea7",
+  "runtime": ".NET 10.0.11 x64 RyuJIT AVX2; SDK 10.0.400; Windows 11",
+  "benchmarkDotNet": "0.14.0",
+  "job": "ShortRun; InProcessEmitToolchain; one launch, three warmups, three measurements",
+  "runtimeConfiguration": {
+    "tieredCompilation": true,
+    "quickJit": false
+  },
+  "caveat": "Stage runs are diagnostic and unpaired. Use paired cross-runtime measurements for throughput claims.",
+  "sourceHashes": [
+    {
+      "path": "benchmarks/micro/SharpTS.Microbenchmarks/TypeScriptSources/NumericRest.ts",
+      "sha256": "052707B486469DA215DDD893032B6A945F863EF9398330FB3847259298299634"
+    },
+    {
+      "path": "benchmarks/micro/SharpTS.Microbenchmarks/TypeScriptSources/NumericArrayRead.ts",
+      "sha256": "306FD40C72A4197D5C99105A8F27EDD90B103B0E0745A99C1F82F8CF5FE58C3D"
+    }
+  ],
+  "results": [
+    {
+      "stage": "frozen",
+      "compilerSha256": "20BD7E14BF9E9DD4B88232DA35F0B92F805F529815D37DA1E2F19272E208D30F",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericArrayReadBenchmarks.Run(Storage: \"NumericArray\", Case: \"readFixed\", N: 10000)",
+      "parameters": "Storage=NumericArray&Case=readFixed&N=10000",
+      "meanNanoseconds": 104007.65787760417,
+      "standardDeviationNanoseconds": 15.540127719778155,
+      "minNanoseconds": 103992.041015625,
+      "maxNanoseconds": 104023.1201171875,
+      "measurementsNanoseconds": [
+        103992.041015625,
+        104023.1201171875,
+        104007.8125
+      ],
+      "bytesAllocatedPerInvocation": 0,
+      "gen0Collections": 0,
+      "memoryMeasurementOperations": 8192
+    },
+    {
+      "stage": "frozen",
+      "compilerSha256": "20BD7E14BF9E9DD4B88232DA35F0B92F805F529815D37DA1E2F19272E208D30F",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericArrayReadBenchmarks.Run(Storage: \"NumericArray\", Case: \"readVarying\", N: 10000)",
+      "parameters": "Storage=NumericArray&Case=readVarying&N=10000",
+      "meanNanoseconds": 106865.49479166667,
+      "standardDeviationNanoseconds": 30.460780478998394,
+      "minNanoseconds": 106834.47265625,
+      "maxNanoseconds": 106895.361328125,
+      "measurementsNanoseconds": [
+        106866.650390625,
+        106895.361328125,
+        106834.47265625
+      ],
+      "bytesAllocatedPerInvocation": 0,
+      "gen0Collections": 0,
+      "memoryMeasurementOperations": 8192
+    },
+    {
+      "stage": "frozen",
+      "compilerSha256": "20BD7E14BF9E9DD4B88232DA35F0B92F805F529815D37DA1E2F19272E208D30F",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericArrayReadBenchmarks.Run(Storage: \"BoxedArray\", Case: \"readVarying\", N: 10000)",
+      "parameters": "Storage=BoxedArray&Case=readVarying&N=10000",
+      "meanNanoseconds": 5221354.166666667,
+      "standardDeviationNanoseconds": 6227.583546955424,
+      "minNanoseconds": 5214175,
+      "maxNanoseconds": 5225300.78125,
+      "measurementsNanoseconds": [
+        5214175,
+        5225300.78125,
+        5224586.71875
+      ],
+      "bytesAllocatedPerInvocation": 960052,
+      "gen0Collections": 7,
+      "memoryMeasurementOperations": 128
+    },
+    {
+      "stage": "frozen",
+      "compilerSha256": "20BD7E14BF9E9DD4B88232DA35F0B92F805F529815D37DA1E2F19272E208D30F",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericArrayReadBenchmarks.Run(Storage: \"BoxedArray\", Case: \"readFixed\", N: 10000)",
+      "parameters": "Storage=BoxedArray&Case=readFixed&N=10000",
+      "meanNanoseconds": 5347447.916666667,
+      "standardDeviationNanoseconds": 37355.80194459963,
+      "minNanoseconds": 5311228.125,
+      "maxNanoseconds": 5385844.53125,
+      "measurementsNanoseconds": [
+        5385844.53125,
+        5345271.09375,
+        5311228.125
+      ],
+      "bytesAllocatedPerInvocation": 960050,
+      "gen0Collections": 7,
+      "memoryMeasurementOperations": 128
+    },
+    {
+      "stage": "frozen",
+      "compilerSha256": "20BD7E14BF9E9DD4B88232DA35F0B92F805F529815D37DA1E2F19272E208D30F",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericArrayReadBenchmarks.Run(Storage: \"PlainList\", Case: \"readFixed\", N: 10000)",
+      "parameters": "Storage=PlainList&Case=readFixed&N=10000",
+      "meanNanoseconds": 5375211.71875,
+      "standardDeviationNanoseconds": 98814.01262567229,
+      "minNanoseconds": 5263719.53125,
+      "maxNanoseconds": 5451965.625,
+      "measurementsNanoseconds": [
+        5409950,
+        5263719.53125,
+        5451965.625
+      ],
+      "bytesAllocatedPerInvocation": 960040,
+      "gen0Collections": 7,
+      "memoryMeasurementOperations": 128
+    },
+    {
+      "stage": "frozen",
+      "compilerSha256": "20BD7E14BF9E9DD4B88232DA35F0B92F805F529815D37DA1E2F19272E208D30F",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericArrayReadBenchmarks.Run(Storage: \"PlainList\", Case: \"readVarying\", N: 10000)",
+      "parameters": "Storage=PlainList&Case=readVarying&N=10000",
+      "meanNanoseconds": 5376846.09375,
+      "standardDeviationNanoseconds": 252864.36428661557,
+      "minNanoseconds": 5171374.21875,
+      "maxNanoseconds": 5659238.28125,
+      "measurementsNanoseconds": [
+        5171374.21875,
+        5299925.78125,
+        5659238.28125
+      ],
+      "bytesAllocatedPerInvocation": 960040,
+      "gen0Collections": 7,
+      "memoryMeasurementOperations": 128
+    },
+    {
+      "stage": "frozen",
+      "compilerSha256": "20BD7E14BF9E9DD4B88232DA35F0B92F805F529815D37DA1E2F19272E208D30F",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericRestBenchmarks.Run(Case: \"restFixedParameters\", N: 10000)",
+      "parameters": "Case=restFixedParameters&N=10000",
+      "meanNanoseconds": 8970.095825195312,
+      "standardDeviationNanoseconds": 25.471946855382736,
+      "minNanoseconds": 8940.805053710938,
+      "maxNanoseconds": 8987.055969238281,
+      "measurementsNanoseconds": [
+        8982.426452636719,
+        8987.055969238281,
+        8940.805053710938
+      ],
+      "bytesAllocatedPerInvocation": 0,
+      "gen0Collections": 0,
+      "memoryMeasurementOperations": 65536
+    },
+    {
+      "stage": "frozen",
+      "compilerSha256": "20BD7E14BF9E9DD4B88232DA35F0B92F805F529815D37DA1E2F19272E208D30F",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericRestBenchmarks.Run(Case: \"restConstantIndex\", N: 10000)",
+      "parameters": "Case=restConstantIndex&N=10000",
+      "meanNanoseconds": 8975.82041422526,
+      "standardDeviationNanoseconds": 6.358107680243214,
+      "minNanoseconds": 8969.876098632812,
+      "maxNanoseconds": 8982.524108886719,
+      "measurementsNanoseconds": [
+        8975.06103515625,
+        8969.876098632812,
+        8982.524108886719
+      ],
+      "bytesAllocatedPerInvocation": 0,
+      "gen0Collections": 0,
+      "memoryMeasurementOperations": 65536
+    },
+    {
+      "stage": "frozen",
+      "compilerSha256": "20BD7E14BF9E9DD4B88232DA35F0B92F805F529815D37DA1E2F19272E208D30F",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericRestBenchmarks.Run(Case: \"restDirect\", N: 10000)",
+      "parameters": "Case=restDirect&N=10000",
+      "meanNanoseconds": 8998.42300415039,
+      "standardDeviationNanoseconds": 10.130053328915228,
+      "minNanoseconds": 8990.37094116211,
+      "maxNanoseconds": 9009.796905517578,
+      "measurementsNanoseconds": [
+        8995.101165771484,
+        8990.37094116211,
+        9009.796905517578
+      ],
+      "bytesAllocatedPerInvocation": 0,
+      "gen0Collections": 0,
+      "memoryMeasurementOperations": 65536
+    },
+    {
+      "stage": "frozen",
+      "compilerSha256": "20BD7E14BF9E9DD4B88232DA35F0B92F805F529815D37DA1E2F19272E208D30F",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericRestBenchmarks.Run(Case: \"restAlias\", N: 10000)",
+      "parameters": "Case=restAlias&N=10000",
+      "meanNanoseconds": 9159.662373860678,
+      "standardDeviationNanoseconds": 34.78164706600813,
+      "minNanoseconds": 9127.450561523438,
+      "maxNanoseconds": 9196.542358398438,
+      "measurementsNanoseconds": [
+        9196.542358398438,
+        9154.994201660156,
+        9127.450561523438
+      ],
+      "bytesAllocatedPerInvocation": 96,
+      "gen0Collections": 0,
+      "memoryMeasurementOperations": 65536
+    },
+    {
+      "stage": "frozen",
+      "compilerSha256": "20BD7E14BF9E9DD4B88232DA35F0B92F805F529815D37DA1E2F19272E208D30F",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericRestBenchmarks.Run(Case: \"restEscaping\", N: 10000)",
+      "parameters": "Case=restEscaping&N=10000",
+      "meanNanoseconds": 504023.14453125,
+      "standardDeviationNanoseconds": 22487.293249455244,
+      "minNanoseconds": 478915.91796875,
+      "maxNanoseconds": 522312.49999999994,
+      "measurementsNanoseconds": [
+        510841.015625,
+        522312.49999999994,
+        478915.91796875
+      ],
+      "bytesAllocatedPerInvocation": 2400006,
+      "gen0Collections": 142,
+      "memoryMeasurementOperations": 1024
+    },
+    {
+      "stage": "frozen",
+      "compilerSha256": "20BD7E14BF9E9DD4B88232DA35F0B92F805F529815D37DA1E2F19272E208D30F",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericRestBenchmarks.Run(Case: \"restPacking\", N: 10000)",
+      "parameters": "Case=restPacking&N=10000",
+      "meanNanoseconds": 663514.8763020834,
+      "standardDeviationNanoseconds": 14233.1552061434,
+      "minNanoseconds": 655004.4921875,
+      "maxNanoseconds": 679946.38671875,
+      "measurementsNanoseconds": [
+        679946.38671875,
+        655593.75,
+        655004.4921875
+      ],
+      "bytesAllocatedPerInvocation": 2640006,
+      "gen0Collections": 156,
+      "memoryMeasurementOperations": 1024
+    },
+    {
+      "stage": "frozen",
+      "compilerSha256": "20BD7E14BF9E9DD4B88232DA35F0B92F805F529815D37DA1E2F19272E208D30F",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericRestBenchmarks.Run(Case: \"restSpreadLength\", N: 10000)",
+      "parameters": "Case=restSpreadLength&N=10000",
+      "meanNanoseconds": 695088.0533854166,
+      "standardDeviationNanoseconds": 14359.768421095376,
+      "minNanoseconds": 685061.42578125,
+      "maxNanoseconds": 711538.28125,
+      "measurementsNanoseconds": [
+        685061.42578125,
+        711538.28125,
+        688664.453125
+      ],
+      "bytesAllocatedPerInvocation": 2080318,
+      "gen0Collections": 123,
+      "memoryMeasurementOperations": 1024
+    },
+    {
+      "stage": "frozen",
+      "compilerSha256": "20BD7E14BF9E9DD4B88232DA35F0B92F805F529815D37DA1E2F19272E208D30F",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericRestBenchmarks.Run(Case: \"restDynamicLength\", N: 10000)",
+      "parameters": "Case=restDynamicLength&N=10000",
+      "meanNanoseconds": 1736621.1588541667,
+      "standardDeviationNanoseconds": 16028.419743108272,
+      "minNanoseconds": 1719116.2109375,
+      "maxNanoseconds": 1750578.7109375,
+      "measurementsNanoseconds": [
+        1750578.7109375,
+        1719116.2109375,
+        1740168.5546875
+      ],
+      "bytesAllocatedPerInvocation": 3600107,
+      "gen0Collections": 106,
+      "memoryMeasurementOperations": 512
+    },
+    {
+      "stage": "frozen",
+      "compilerSha256": "20BD7E14BF9E9DD4B88232DA35F0B92F805F529815D37DA1E2F19272E208D30F",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericRestBenchmarks.Run(Case: \"restVaryingIndex\", N: 10000)",
+      "parameters": "Case=restVaryingIndex&N=10000",
+      "meanNanoseconds": 5681032.291666667,
+      "standardDeviationNanoseconds": 20682.76304595615,
+      "minNanoseconds": 5657233.59375,
+      "maxNanoseconds": 5694661.71875,
+      "measurementsNanoseconds": [
+        5694661.71875,
+        5657233.59375,
+        5691201.5625
+      ],
+      "bytesAllocatedPerInvocation": 3440087,
+      "gen0Collections": 25,
+      "memoryMeasurementOperations": 128
+    },
+    {
+      "stage": "frozen",
+      "compilerSha256": "20BD7E14BF9E9DD4B88232DA35F0B92F805F529815D37DA1E2F19272E208D30F",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericRestBenchmarks.Run(Case: \"restSpread\", N: 10000)",
+      "parameters": "Case=restSpread&N=10000",
+      "meanNanoseconds": 5932974.479166667,
+      "standardDeviationNanoseconds": 20592.93480362858,
+      "minNanoseconds": 5915935.15625,
+      "maxNanoseconds": 5955857.8125,
+      "measurementsNanoseconds": [
+        5927130.46875,
+        5915935.15625,
+        5955857.8125
+      ],
+      "bytesAllocatedPerInvocation": 2800391,
+      "gen0Collections": 20,
+      "memoryMeasurementOperations": 128
+    },
+    {
+      "stage": "frozen",
+      "compilerSha256": "20BD7E14BF9E9DD4B88232DA35F0B92F805F529815D37DA1E2F19272E208D30F",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericRestBenchmarks.Run(Case: \"restAlternating\", N: 10000)",
+      "parameters": "Case=restAlternating&N=10000",
+      "meanNanoseconds": 7170468.229166667,
+      "standardDeviationNanoseconds": 166310.3915609179,
+      "minNanoseconds": 7060620.3125,
+      "maxNanoseconds": 7361807.8125,
+      "measurementsNanoseconds": [
+        7361807.8125,
+        7060620.3125,
+        7088976.5625
+      ],
+      "bytesAllocatedPerInvocation": 4560237,
+      "gen0Collections": 33,
+      "memoryMeasurementOperations": 128
+    },
+    {
+      "stage": "frozen",
+      "compilerSha256": "20BD7E14BF9E9DD4B88232DA35F0B92F805F529815D37DA1E2F19272E208D30F",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericRestBenchmarks.Run(Case: \"restDynamicDispatch\", N: 10000)",
+      "parameters": "Case=restDynamicDispatch&N=10000",
+      "meanNanoseconds": 7235616.145833333,
+      "standardDeviationNanoseconds": 49683.2938491748,
+      "minNanoseconds": 7178285.15625,
+      "maxNanoseconds": 7266097.65625,
+      "measurementsNanoseconds": [
+        7178285.15625,
+        7266097.65625,
+        7262465.625
+      ],
+      "bytesAllocatedPerInvocation": 4560141,
+      "gen0Collections": 33,
+      "memoryMeasurementOperations": 128
+    },
+    {
+      "stage": "frozen",
+      "compilerSha256": "20BD7E14BF9E9DD4B88232DA35F0B92F805F529815D37DA1E2F19272E208D30F",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericRestBenchmarks.Run(Case: \"restMixedTargets\", N: 10000)",
+      "parameters": "Case=restMixedTargets&N=10000",
+      "meanNanoseconds": 8504641.666666666,
+      "standardDeviationNanoseconds": 80798.33901589726,
+      "minNanoseconds": 8441923.4375,
+      "maxNanoseconds": 8595818.75,
+      "measurementsNanoseconds": [
+        8595818.75,
+        8476182.8125,
+        8441923.4375
+      ],
+      "bytesAllocatedPerInvocation": 5040282,
+      "gen0Collections": 18,
+      "memoryMeasurementOperations": 64
+    },
+    {
+      "stage": "frozen",
+      "compilerSha256": "20BD7E14BF9E9DD4B88232DA35F0B92F805F529815D37DA1E2F19272E208D30F",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericRestDispatchBenchmarks.Run(Case: \"Length\", N: 10000)",
+      "parameters": "Case=Length&N=10000",
+      "meanNanoseconds": 1876456.7708333333,
+      "standardDeviationNanoseconds": 46909.04261331287,
+      "minNanoseconds": 1849039.84375,
+      "maxNanoseconds": 1930621.2890625,
+      "measurementsNanoseconds": [
+        1849039.84375,
+        1930621.2890625,
+        1849709.1796875
+      ],
+      "bytesAllocatedPerInvocation": 3600013,
+      "gen0Collections": 106,
+      "memoryMeasurementOperations": 512
+    },
+    {
+      "stage": "frozen",
+      "compilerSha256": "20BD7E14BF9E9DD4B88232DA35F0B92F805F529815D37DA1E2F19272E208D30F",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericRestDispatchBenchmarks.Run(Case: \"Reads\", N: 10000)",
+      "parameters": "Case=Reads&N=10000",
+      "meanNanoseconds": 5079454.6875,
+      "standardDeviationNanoseconds": 627189.0281204135,
+      "minNanoseconds": 4499409.375,
+      "maxNanoseconds": 5745012.5,
+      "measurementsNanoseconds": [
+        5745012.5,
+        4993942.1875,
+        4499409.375
+      ],
+      "bytesAllocatedPerInvocation": 4560105,
+      "gen0Collections": 16,
+      "memoryMeasurementOperations": 64
+    },
+    {
+      "stage": "stage1",
+      "compilerSha256": "5BC1696A472061819AE91A0DAEEF31ACFFEEF1408EAFC82C3C15AB0582276E89",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericArrayReadBenchmarks.Run(Storage: \"NumericArray\", Case: \"readVarying\", N: 10000)",
+      "parameters": "Storage=NumericArray&Case=readVarying&N=10000",
+      "meanNanoseconds": 78736.5987141927,
+      "standardDeviationNanoseconds": 5647.233992590232,
+      "minNanoseconds": 72228.80859375,
+      "maxNanoseconds": 82347.91870117188,
+      "measurementsNanoseconds": [
+        72228.80859375,
+        82347.91870117188,
+        81633.06884765625
+      ],
+      "bytesAllocatedPerInvocation": 0,
+      "gen0Collections": 0,
+      "memoryMeasurementOperations": 16384
+    },
+    {
+      "stage": "stage1",
+      "compilerSha256": "5BC1696A472061819AE91A0DAEEF31ACFFEEF1408EAFC82C3C15AB0582276E89",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericArrayReadBenchmarks.Run(Storage: \"BoxedArray\", Case: \"readVarying\", N: 10000)",
+      "parameters": "Storage=BoxedArray&Case=readVarying&N=10000",
+      "meanNanoseconds": 91754.96419270833,
+      "standardDeviationNanoseconds": 3366.078300957972,
+      "minNanoseconds": 88425.1953125,
+      "maxNanoseconds": 95156.21337890625,
+      "measurementsNanoseconds": [
+        88425.1953125,
+        95156.21337890625,
+        91683.48388671875
+      ],
+      "bytesAllocatedPerInvocation": 0,
+      "gen0Collections": 0,
+      "memoryMeasurementOperations": 8192
+    },
+    {
+      "stage": "stage1",
+      "compilerSha256": "5BC1696A472061819AE91A0DAEEF31ACFFEEF1408EAFC82C3C15AB0582276E89",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericArrayReadBenchmarks.Run(Storage: \"BoxedArray\", Case: \"readFixed\", N: 10000)",
+      "parameters": "Storage=BoxedArray&Case=readFixed&N=10000",
+      "meanNanoseconds": 93389.6240234375,
+      "standardDeviationNanoseconds": 1882.1663767617213,
+      "minNanoseconds": 91548.33984375,
+      "maxNanoseconds": 95310.16845703125,
+      "measurementsNanoseconds": [
+        95310.16845703125,
+        93310.36376953125,
+        91548.33984375
+      ],
+      "bytesAllocatedPerInvocation": 0,
+      "gen0Collections": 0,
+      "memoryMeasurementOperations": 8192
+    },
+    {
+      "stage": "stage1",
+      "compilerSha256": "5BC1696A472061819AE91A0DAEEF31ACFFEEF1408EAFC82C3C15AB0582276E89",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericArrayReadBenchmarks.Run(Storage: \"NumericArray\", Case: \"readFixed\", N: 10000)",
+      "parameters": "Storage=NumericArray&Case=readFixed&N=10000",
+      "meanNanoseconds": 93556.64469401042,
+      "standardDeviationNanoseconds": 22767.58766923617,
+      "minNanoseconds": 77400.3173828125,
+      "maxNanoseconds": 119595.6787109375,
+      "measurementsNanoseconds": [
+        83673.93798828125,
+        77400.3173828125,
+        119595.6787109375
+      ],
+      "bytesAllocatedPerInvocation": 0,
+      "gen0Collections": 0,
+      "memoryMeasurementOperations": 8192
+    },
+    {
+      "stage": "stage1",
+      "compilerSha256": "5BC1696A472061819AE91A0DAEEF31ACFFEEF1408EAFC82C3C15AB0582276E89",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericArrayReadBenchmarks.Run(Storage: \"PlainList\", Case: \"readVarying\", N: 10000)",
+      "parameters": "Storage=PlainList&Case=readVarying&N=10000",
+      "meanNanoseconds": 132196.81803385416,
+      "standardDeviationNanoseconds": 613.6166088553415,
+      "minNanoseconds": 131494.82421875,
+      "maxNanoseconds": 132631.0546875,
+      "measurementsNanoseconds": [
+        132631.0546875,
+        131494.82421875,
+        132464.5751953125
+      ],
+      "bytesAllocatedPerInvocation": 0,
+      "gen0Collections": 0,
+      "memoryMeasurementOperations": 4096
+    },
+    {
+      "stage": "stage1",
+      "compilerSha256": "5BC1696A472061819AE91A0DAEEF31ACFFEEF1408EAFC82C3C15AB0582276E89",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericArrayReadBenchmarks.Run(Storage: \"PlainList\", Case: \"readFixed\", N: 10000)",
+      "parameters": "Storage=PlainList&Case=readFixed&N=10000",
+      "meanNanoseconds": 135448.17708333334,
+      "standardDeviationNanoseconds": 3737.0089967801996,
+      "minNanoseconds": 132915.673828125,
+      "maxNanoseconds": 139740.1611328125,
+      "measurementsNanoseconds": [
+        132915.673828125,
+        139740.1611328125,
+        133688.6962890625
+      ],
+      "bytesAllocatedPerInvocation": 0,
+      "gen0Collections": 0,
+      "memoryMeasurementOperations": 4096
+    },
+    {
+      "stage": "stage1",
+      "compilerSha256": "5BC1696A472061819AE91A0DAEEF31ACFFEEF1408EAFC82C3C15AB0582276E89",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericRestBenchmarks.Run(Case: \"restFixedParameters\", N: 10000)",
+      "parameters": "Case=restFixedParameters&N=10000",
+      "meanNanoseconds": 5565.83735148112,
+      "standardDeviationNanoseconds": 67.98458227267407,
+      "minNanoseconds": 5506.252288818359,
+      "maxNanoseconds": 5639.891815185547,
+      "measurementsNanoseconds": [
+        5506.252288818359,
+        5551.367950439453,
+        5639.891815185547
+      ],
+      "bytesAllocatedPerInvocation": 0,
+      "gen0Collections": 0,
+      "memoryMeasurementOperations": 131072
+    },
+    {
+      "stage": "stage1",
+      "compilerSha256": "5BC1696A472061819AE91A0DAEEF31ACFFEEF1408EAFC82C3C15AB0582276E89",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericRestBenchmarks.Run(Case: \"restDirect\", N: 10000)",
+      "parameters": "Case=restDirect&N=10000",
+      "meanNanoseconds": 5572.737630208333,
+      "standardDeviationNanoseconds": 154.25780494356275,
+      "minNanoseconds": 5483.188629150391,
+      "maxNanoseconds": 5750.858306884766,
+      "measurementsNanoseconds": [
+        5750.858306884766,
+        5483.188629150391,
+        5484.165954589844
+      ],
+      "bytesAllocatedPerInvocation": 0,
+      "gen0Collections": 0,
+      "memoryMeasurementOperations": 131072
+    },
+    {
+      "stage": "stage1",
+      "compilerSha256": "5BC1696A472061819AE91A0DAEEF31ACFFEEF1408EAFC82C3C15AB0582276E89",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericRestBenchmarks.Run(Case: \"restConstantIndex\", N: 10000)",
+      "parameters": "Case=restConstantIndex&N=10000",
+      "meanNanoseconds": 5644.966125488281,
+      "standardDeviationNanoseconds": 146.47358920800863,
+      "minNanoseconds": 5558.201599121094,
+      "maxNanoseconds": 5814.080047607422,
+      "measurementsNanoseconds": [
+        5814.080047607422,
+        5558.201599121094,
+        5562.616729736328
+      ],
+      "bytesAllocatedPerInvocation": 0,
+      "gen0Collections": 0,
+      "memoryMeasurementOperations": 131072
+    },
+    {
+      "stage": "stage1",
+      "compilerSha256": "5BC1696A472061819AE91A0DAEEF31ACFFEEF1408EAFC82C3C15AB0582276E89",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericRestBenchmarks.Run(Case: \"restAlias\", N: 10000)",
+      "parameters": "Case=restAlias&N=10000",
+      "meanNanoseconds": 11953.938293457031,
+      "standardDeviationNanoseconds": 1581.201823331196,
+      "minNanoseconds": 10995.0439453125,
+      "maxNanoseconds": 13778.96728515625,
+      "measurementsNanoseconds": [
+        13778.96728515625,
+        11087.803649902344,
+        10995.0439453125
+      ],
+      "bytesAllocatedPerInvocation": 96,
+      "gen0Collections": 0,
+      "memoryMeasurementOperations": 65536
+    },
+    {
+      "stage": "stage1",
+      "compilerSha256": "5BC1696A472061819AE91A0DAEEF31ACFFEEF1408EAFC82C3C15AB0582276E89",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericRestBenchmarks.Run(Case: \"restEscaping\", N: 10000)",
+      "parameters": "Case=restEscaping&N=10000",
+      "meanNanoseconds": 285405.4361979167,
+      "standardDeviationNanoseconds": 7133.387177719428,
+      "minNanoseconds": 277321.97265625,
+      "maxNanoseconds": 290817.724609375,
+      "measurementsNanoseconds": [
+        288076.611328125,
+        290817.724609375,
+        277321.97265625
+      ],
+      "bytesAllocatedPerInvocation": 2400003,
+      "gen0Collections": 284,
+      "memoryMeasurementOperations": 2048
+    },
+    {
+      "stage": "stage1",
+      "compilerSha256": "5BC1696A472061819AE91A0DAEEF31ACFFEEF1408EAFC82C3C15AB0582276E89",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericRestBenchmarks.Run(Case: \"restPacking\", N: 10000)",
+      "parameters": "Case=restPacking&N=10000",
+      "meanNanoseconds": 383172.1842447917,
+      "standardDeviationNanoseconds": 23878.446270750446,
+      "minNanoseconds": 356501.123046875,
+      "maxNanoseconds": 402563.37890625,
+      "measurementsNanoseconds": [
+        356501.123046875,
+        390452.05078125,
+        402563.37890625
+      ],
+      "bytesAllocatedPerInvocation": 2640003,
+      "gen0Collections": 313,
+      "memoryMeasurementOperations": 2048
+    },
+    {
+      "stage": "stage1",
+      "compilerSha256": "5BC1696A472061819AE91A0DAEEF31ACFFEEF1408EAFC82C3C15AB0582276E89",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericRestBenchmarks.Run(Case: \"restSpread\", N: 10000)",
+      "parameters": "Case=restSpread&N=10000",
+      "meanNanoseconds": 410465.5436197917,
+      "standardDeviationNanoseconds": 55101.4038570285,
+      "minNanoseconds": 367908.251953125,
+      "maxNanoseconds": 472705.419921875,
+      "measurementsNanoseconds": [
+        472705.419921875,
+        390782.958984375,
+        367908.251953125
+      ],
+      "bytesAllocatedPerInvocation": 1840318,
+      "gen0Collections": 109,
+      "memoryMeasurementOperations": 1024
+    },
+    {
+      "stage": "stage1",
+      "compilerSha256": "5BC1696A472061819AE91A0DAEEF31ACFFEEF1408EAFC82C3C15AB0582276E89",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericRestBenchmarks.Run(Case: \"restSpreadLength\", N: 10000)",
+      "parameters": "Case=restSpreadLength&N=10000",
+      "meanNanoseconds": 422922.6888020833,
+      "standardDeviationNanoseconds": 53038.18819736237,
+      "minNanoseconds": 370259.08203125,
+      "maxNanoseconds": 476327.685546875,
+      "measurementsNanoseconds": [
+        370259.08203125,
+        476327.685546875,
+        422181.298828125
+      ],
+      "bytesAllocatedPerInvocation": 2080315,
+      "gen0Collections": 246,
+      "memoryMeasurementOperations": 2048
+    },
+    {
+      "stage": "stage1",
+      "compilerSha256": "5BC1696A472061819AE91A0DAEEF31ACFFEEF1408EAFC82C3C15AB0582276E89",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericRestBenchmarks.Run(Case: \"restVaryingIndex\", N: 10000)",
+      "parameters": "Case=restVaryingIndex&N=10000",
+      "meanNanoseconds": 457931.6975911458,
+      "standardDeviationNanoseconds": 6894.886055754741,
+      "minNanoseconds": 450589.4287109375,
+      "maxNanoseconds": 464268.8720703125,
+      "measurementsNanoseconds": [
+        464268.8720703125,
+        458936.7919921875,
+        450589.4287109375
+      ],
+      "bytesAllocatedPerInvocation": 2480003,
+      "gen0Collections": 294,
+      "memoryMeasurementOperations": 2048
+    },
+    {
+      "stage": "stage1",
+      "compilerSha256": "5BC1696A472061819AE91A0DAEEF31ACFFEEF1408EAFC82C3C15AB0582276E89",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericRestBenchmarks.Run(Case: \"restDynamicDispatch\", N: 10000)",
+      "parameters": "Case=restDynamicDispatch&N=10000",
+      "meanNanoseconds": 853173.1770833334,
+      "standardDeviationNanoseconds": 4118.830198550084,
+      "minNanoseconds": 850013.28125,
+      "maxNanoseconds": 857831.4453125,
+      "measurementsNanoseconds": [
+        850013.28125,
+        851674.8046875,
+        857831.4453125
+      ],
+      "bytesAllocatedPerInvocation": 3600102,
+      "gen0Collections": 213,
+      "memoryMeasurementOperations": 1024
+    },
+    {
+      "stage": "stage1",
+      "compilerSha256": "5BC1696A472061819AE91A0DAEEF31ACFFEEF1408EAFC82C3C15AB0582276E89",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericRestBenchmarks.Run(Case: \"restDynamicLength\", N: 10000)",
+      "parameters": "Case=restDynamicLength&N=10000",
+      "meanNanoseconds": 891703.90625,
+      "standardDeviationNanoseconds": 2564.170187037641,
+      "minNanoseconds": 888752.1484375,
+      "maxNanoseconds": 893380.56640625,
+      "measurementsNanoseconds": [
+        888752.1484375,
+        893380.56640625,
+        892979.00390625
+      ],
+      "bytesAllocatedPerInvocation": 3600102,
+      "gen0Collections": 213,
+      "memoryMeasurementOperations": 1024
+    },
+    {
+      "stage": "stage1",
+      "compilerSha256": "5BC1696A472061819AE91A0DAEEF31ACFFEEF1408EAFC82C3C15AB0582276E89",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericRestBenchmarks.Run(Case: \"restAlternating\", N: 10000)",
+      "parameters": "Case=restAlternating&N=10000",
+      "meanNanoseconds": 1127281.9661458333,
+      "standardDeviationNanoseconds": 25553.310936790178,
+      "minNanoseconds": 1108161.03515625,
+      "maxNanoseconds": 1156304.296875,
+      "measurementsNanoseconds": [
+        1156304.296875,
+        1108161.03515625,
+        1117380.56640625
+      ],
+      "bytesAllocatedPerInvocation": 3600203,
+      "gen0Collections": 213,
+      "memoryMeasurementOperations": 1024
+    },
+    {
+      "stage": "stage1",
+      "compilerSha256": "5BC1696A472061819AE91A0DAEEF31ACFFEEF1408EAFC82C3C15AB0582276E89",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericRestBenchmarks.Run(Case: \"restMixedTargets\", N: 10000)",
+      "parameters": "Case=restMixedTargets&N=10000",
+      "meanNanoseconds": 1517183.203125,
+      "standardDeviationNanoseconds": 1966.8408925529925,
+      "minNanoseconds": 1515136.9140625,
+      "maxNanoseconds": 1519059.5703125,
+      "measurementsNanoseconds": [
+        1517353.125,
+        1519059.5703125,
+        1515136.9140625
+      ],
+      "bytesAllocatedPerInvocation": 3960203,
+      "gen0Collections": 117,
+      "memoryMeasurementOperations": 512
+    },
+    {
+      "stage": "stage1",
+      "compilerSha256": "5BC1696A472061819AE91A0DAEEF31ACFFEEF1408EAFC82C3C15AB0582276E89",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericRestDispatchBenchmarks.Run(Case: \"Reads\", N: 10000)",
+      "parameters": "Case=Reads&N=10000",
+      "meanNanoseconds": 1183110.3515625,
+      "standardDeviationNanoseconds": 161040.65340083427,
+      "minNanoseconds": 1070504.296875,
+      "maxNanoseconds": 1367569.53125,
+      "measurementsNanoseconds": [
+        1070504.296875,
+        1111257.2265625,
+        1367569.53125
+      ],
+      "bytesAllocatedPerInvocation": 3600013,
+      "gen0Collections": 106,
+      "memoryMeasurementOperations": 512
+    },
+    {
+      "stage": "stage1",
+      "compilerSha256": "5BC1696A472061819AE91A0DAEEF31ACFFEEF1408EAFC82C3C15AB0582276E89",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericRestDispatchBenchmarks.Run(Case: \"Length\", N: 10000)",
+      "parameters": "Case=Length&N=10000",
+      "meanNanoseconds": 1771062.1744791667,
+      "standardDeviationNanoseconds": 40960.325896082984,
+      "minNanoseconds": 1726658.7890625,
+      "maxNanoseconds": 1807370.703125,
+      "measurementsNanoseconds": [
+        1807370.703125,
+        1779157.03125,
+        1726658.7890625
+      ],
+      "bytesAllocatedPerInvocation": 3600013,
+      "gen0Collections": 106,
+      "memoryMeasurementOperations": 512
+    },
+    {
+      "stage": "stage2",
+      "compilerSha256": "A7D1CAC820AC3DCED4EB753095F30469793CA8459B354880B5014CFBEFDA9680",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericRestBenchmarks.Run(Case: \"restDirect\", N: 10000)",
+      "parameters": "Case=restDirect&N=10000",
+      "meanNanoseconds": 6396.086120605469,
+      "standardDeviationNanoseconds": 89.32382546091202,
+      "minNanoseconds": 6305.757141113281,
+      "maxNanoseconds": 6484.369659423828,
+      "measurementsNanoseconds": [
+        6484.369659423828,
+        6398.131561279297,
+        6305.757141113281
+      ],
+      "bytesAllocatedPerInvocation": 0,
+      "gen0Collections": 0,
+      "memoryMeasurementOperations": 131072
+    },
+    {
+      "stage": "stage2",
+      "compilerSha256": "A7D1CAC820AC3DCED4EB753095F30469793CA8459B354880B5014CFBEFDA9680",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericRestBenchmarks.Run(Case: \"restAlias\", N: 10000)",
+      "parameters": "Case=restAlias&N=10000",
+      "meanNanoseconds": 6812.3647054036455,
+      "standardDeviationNanoseconds": 423.72366429171257,
+      "minNanoseconds": 6552.756500244141,
+      "maxNanoseconds": 7301.326751708984,
+      "measurementsNanoseconds": [
+        6552.756500244141,
+        7301.326751708984,
+        6583.0108642578125
+      ],
+      "bytesAllocatedPerInvocation": 96,
+      "gen0Collections": 0,
+      "memoryMeasurementOperations": 131072
+    },
+    {
+      "stage": "stage2",
+      "compilerSha256": "A7D1CAC820AC3DCED4EB753095F30469793CA8459B354880B5014CFBEFDA9680",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericRestBenchmarks.Run(Case: \"restFixedParameters\", N: 10000)",
+      "parameters": "Case=restFixedParameters&N=10000",
+      "meanNanoseconds": 8980.92295328776,
+      "standardDeviationNanoseconds": 27.311427662360128,
+      "minNanoseconds": 8952.142333984375,
+      "maxNanoseconds": 9006.478881835938,
+      "measurementsNanoseconds": [
+        9006.478881835938,
+        8952.142333984375,
+        8984.147644042969
+      ],
+      "bytesAllocatedPerInvocation": 0,
+      "gen0Collections": 0,
+      "memoryMeasurementOperations": 65536
+    },
+    {
+      "stage": "stage2",
+      "compilerSha256": "A7D1CAC820AC3DCED4EB753095F30469793CA8459B354880B5014CFBEFDA9680",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericRestBenchmarks.Run(Case: \"restConstantIndex\", N: 10000)",
+      "parameters": "Case=restConstantIndex&N=10000",
+      "meanNanoseconds": 11713.317108154297,
+      "standardDeviationNanoseconds": 1328.331866981255,
+      "minNanoseconds": 10213.526153564453,
+      "maxNanoseconds": 12741.485595703125,
+      "measurementsNanoseconds": [
+        10213.526153564453,
+        12184.939575195312,
+        12741.485595703125
+      ],
+      "bytesAllocatedPerInvocation": 0,
+      "gen0Collections": 0,
+      "memoryMeasurementOperations": 131072
+    },
+    {
+      "stage": "stage2",
+      "compilerSha256": "A7D1CAC820AC3DCED4EB753095F30469793CA8459B354880B5014CFBEFDA9680",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericRestBenchmarks.Run(Case: \"restEscaping\", N: 10000)",
+      "parameters": "Case=restEscaping&N=10000",
+      "meanNanoseconds": 428028.90625,
+      "standardDeviationNanoseconds": 18280.527929473286,
+      "minNanoseconds": 415582.177734375,
+      "maxNanoseconds": 449016.650390625,
+      "measurementsNanoseconds": [
+        415582.177734375,
+        419487.890625,
+        449016.650390625
+      ],
+      "bytesAllocatedPerInvocation": 2400002,
+      "gen0Collections": 284,
+      "memoryMeasurementOperations": 2048
+    },
+    {
+      "stage": "stage2",
+      "compilerSha256": "A7D1CAC820AC3DCED4EB753095F30469793CA8459B354880B5014CFBEFDA9680",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericRestBenchmarks.Run(Case: \"restSpreadLength\", N: 10000)",
+      "parameters": "Case=restSpreadLength&N=10000",
+      "meanNanoseconds": 440391.1458333333,
+      "standardDeviationNanoseconds": 36355.469157819156,
+      "minNanoseconds": 401720.3125,
+      "maxNanoseconds": 473873.828125,
+      "measurementsNanoseconds": [
+        401720.3125,
+        445579.296875,
+        473873.828125
+      ],
+      "bytesAllocatedPerInvocation": 2080317,
+      "gen0Collections": 123,
+      "memoryMeasurementOperations": 1024
+    },
+    {
+      "stage": "stage2",
+      "compilerSha256": "A7D1CAC820AC3DCED4EB753095F30469793CA8459B354880B5014CFBEFDA9680",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericRestBenchmarks.Run(Case: \"restPacking\", N: 10000)",
+      "parameters": "Case=restPacking&N=10000",
+      "meanNanoseconds": 624387.01171875,
+      "standardDeviationNanoseconds": 13036.719382041394,
+      "minNanoseconds": 612929.19921875,
+      "maxNanoseconds": 638571.38671875,
+      "measurementsNanoseconds": [
+        612929.19921875,
+        638571.38671875,
+        621660.44921875
+      ],
+      "bytesAllocatedPerInvocation": 2640005,
+      "gen0Collections": 156,
+      "memoryMeasurementOperations": 1024
+    },
+    {
+      "stage": "stage2",
+      "compilerSha256": "A7D1CAC820AC3DCED4EB753095F30469793CA8459B354880B5014CFBEFDA9680",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericRestBenchmarks.Run(Case: \"restSpread\", N: 10000)",
+      "parameters": "Case=restSpread&N=10000",
+      "meanNanoseconds": 637086.03515625,
+      "standardDeviationNanoseconds": 8792.977471705297,
+      "minNanoseconds": 631689.453125,
+      "maxNanoseconds": 647232.421875,
+      "measurementsNanoseconds": [
+        632336.23046875,
+        631689.453125,
+        647232.421875
+      ],
+      "bytesAllocatedPerInvocation": 1840317,
+      "gen0Collections": 109,
+      "memoryMeasurementOperations": 1024
+    },
+    {
+      "stage": "stage2",
+      "compilerSha256": "A7D1CAC820AC3DCED4EB753095F30469793CA8459B354880B5014CFBEFDA9680",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericRestBenchmarks.Run(Case: \"restVaryingIndex\", N: 10000)",
+      "parameters": "Case=restVaryingIndex&N=10000",
+      "meanNanoseconds": 718128.80859375,
+      "standardDeviationNanoseconds": 72803.19799688178,
+      "minNanoseconds": 661585.107421875,
+      "maxNanoseconds": 800274.70703125,
+      "measurementsNanoseconds": [
+        661585.107421875,
+        800274.70703125,
+        692526.611328125
+      ],
+      "bytesAllocatedPerInvocation": 2480002,
+      "gen0Collections": 294,
+      "memoryMeasurementOperations": 2048
+    },
+    {
+      "stage": "stage2",
+      "compilerSha256": "A7D1CAC820AC3DCED4EB753095F30469793CA8459B354880B5014CFBEFDA9680",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericRestBenchmarks.Run(Case: \"restDynamicLength\", N: 10000)",
+      "parameters": "Case=restDynamicLength&N=10000",
+      "meanNanoseconds": 819197.4934895834,
+      "standardDeviationNanoseconds": 36268.84946891103,
+      "minNanoseconds": 777670.8984375,
+      "maxNanoseconds": 844660.3515625,
+      "measurementsNanoseconds": [
+        777670.8984375,
+        835261.23046875,
+        844660.3515625
+      ],
+      "bytesAllocatedPerInvocation": 2960101,
+      "gen0Collections": 175,
+      "memoryMeasurementOperations": 1024
+    },
+    {
+      "stage": "stage2",
+      "compilerSha256": "A7D1CAC820AC3DCED4EB753095F30469793CA8459B354880B5014CFBEFDA9680",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericRestBenchmarks.Run(Case: \"restAlternating\", N: 10000)",
+      "parameters": "Case=restAlternating&N=10000",
+      "meanNanoseconds": 878815.6087239584,
+      "standardDeviationNanoseconds": 34438.25902283535,
+      "minNanoseconds": 839814.794921875,
+      "maxNanoseconds": 905038.818359375,
+      "measurementsNanoseconds": [
+        891593.212890625,
+        905038.818359375,
+        839814.794921875
+      ],
+      "bytesAllocatedPerInvocation": 2960197,
+      "gen0Collections": 175,
+      "memoryMeasurementOperations": 1024
+    },
+    {
+      "stage": "stage2",
+      "compilerSha256": "A7D1CAC820AC3DCED4EB753095F30469793CA8459B354880B5014CFBEFDA9680",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericRestBenchmarks.Run(Case: \"restDynamicDispatch\", N: 10000)",
+      "parameters": "Case=restDynamicDispatch&N=10000",
+      "meanNanoseconds": 885155.6966145834,
+      "standardDeviationNanoseconds": 24837.06454346632,
+      "minNanoseconds": 856519.23828125,
+      "maxNanoseconds": 900832.12890625,
+      "measurementsNanoseconds": [
+        856519.23828125,
+        900832.12890625,
+        898115.72265625
+      ],
+      "bytesAllocatedPerInvocation": 2960101,
+      "gen0Collections": 175,
+      "memoryMeasurementOperations": 1024
+    },
+    {
+      "stage": "stage2",
+      "compilerSha256": "A7D1CAC820AC3DCED4EB753095F30469793CA8459B354880B5014CFBEFDA9680",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericRestBenchmarks.Run(Case: \"restMixedTargets\", N: 10000)",
+      "parameters": "Case=restMixedTargets&N=10000",
+      "meanNanoseconds": 2042307.8125,
+      "standardDeviationNanoseconds": 4894.417661915329,
+      "minNanoseconds": 2037453.1249999998,
+      "maxNanoseconds": 2047241.015625,
+      "measurementsNanoseconds": [
+        2037453.1249999998,
+        2042229.296875,
+        2047241.015625
+      ],
+      "bytesAllocatedPerInvocation": 3320210,
+      "gen0Collections": 49,
+      "memoryMeasurementOperations": 256
+    },
+    {
+      "stage": "stage2",
+      "compilerSha256": "A7D1CAC820AC3DCED4EB753095F30469793CA8459B354880B5014CFBEFDA9680",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericRestDispatchBenchmarks.Run(Case: \"Reads\", N: 10000)",
+      "parameters": "Case=Reads&N=10000",
+      "meanNanoseconds": 854023.92578125,
+      "standardDeviationNanoseconds": 22584.244361416204,
+      "minNanoseconds": 828164.94140625,
+      "maxNanoseconds": 869874.51171875,
+      "measurementsNanoseconds": [
+        864032.32421875,
+        869874.51171875,
+        828164.94140625
+      ],
+      "bytesAllocatedPerInvocation": 2960006,
+      "gen0Collections": 175,
+      "memoryMeasurementOperations": 1024
+    },
+    {
+      "stage": "stage2",
+      "compilerSha256": "A7D1CAC820AC3DCED4EB753095F30469793CA8459B354880B5014CFBEFDA9680",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericRestDispatchBenchmarks.Run(Case: \"Length\", N: 10000)",
+      "parameters": "Case=Length&N=10000",
+      "meanNanoseconds": 883112.01171875,
+      "standardDeviationNanoseconds": 8905.482091625134,
+      "minNanoseconds": 875598.33984375,
+      "maxNanoseconds": 892948.828125,
+      "measurementsNanoseconds": [
+        892948.828125,
+        875598.33984375,
+        880788.8671875
+      ],
+      "bytesAllocatedPerInvocation": 2960006,
+      "gen0Collections": 175,
+      "memoryMeasurementOperations": 1024
+    },
+    {
+      "stage": "stage3",
+      "compilerSha256": "E5A0A5A65CDE422EABB61355A4F6703542820269ECD72AF2D072E0A831682B65",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericRestBenchmarks.Run(Case: \"restDirect\", N: 10000)",
+      "parameters": "Case=restDirect&N=10000",
+      "meanNanoseconds": 15208.368682861328,
+      "standardDeviationNanoseconds": 460.12096693520266,
+      "minNanoseconds": 14680.196380615234,
+      "maxNanoseconds": 15522.322845458983,
+      "measurementsNanoseconds": [
+        14680.196380615234,
+        15422.586822509767,
+        15522.322845458983
+      ],
+      "bytesAllocatedPerInvocation": 0,
+      "gen0Collections": 0,
+      "memoryMeasurementOperations": 65536
+    },
+    {
+      "stage": "stage3",
+      "compilerSha256": "E5A0A5A65CDE422EABB61355A4F6703542820269ECD72AF2D072E0A831682B65",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericRestBenchmarks.Run(Case: \"restFixedParameters\", N: 10000)",
+      "parameters": "Case=restFixedParameters&N=10000",
+      "meanNanoseconds": 15598.919677734375,
+      "standardDeviationNanoseconds": 584.2443613943445,
+      "minNanoseconds": 15186.491394042969,
+      "maxNanoseconds": 16267.485046386719,
+      "measurementsNanoseconds": [
+        15342.782592773436,
+        16267.485046386719,
+        15186.491394042969
+      ],
+      "bytesAllocatedPerInvocation": 0,
+      "gen0Collections": 0,
+      "memoryMeasurementOperations": 65536
+    },
+    {
+      "stage": "stage3",
+      "compilerSha256": "E5A0A5A65CDE422EABB61355A4F6703542820269ECD72AF2D072E0A831682B65",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericRestBenchmarks.Run(Case: \"restConstantIndex\", N: 10000)",
+      "parameters": "Case=restConstantIndex&N=10000",
+      "meanNanoseconds": 15820.77662150065,
+      "standardDeviationNanoseconds": 23.78565775322968,
+      "minNanoseconds": 15799.195098876951,
+      "maxNanoseconds": 15846.279144287111,
+      "measurementsNanoseconds": [
+        15799.195098876951,
+        15846.279144287111,
+        15816.85562133789
+      ],
+      "bytesAllocatedPerInvocation": 0,
+      "gen0Collections": 0,
+      "memoryMeasurementOperations": 65536
+    },
+    {
+      "stage": "stage3",
+      "compilerSha256": "E5A0A5A65CDE422EABB61355A4F6703542820269ECD72AF2D072E0A831682B65",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericRestBenchmarks.Run(Case: \"restAlias\", N: 10000)",
+      "parameters": "Case=restAlias&N=10000",
+      "meanNanoseconds": 15899.317932128906,
+      "standardDeviationNanoseconds": 313.1776285265074,
+      "minNanoseconds": 15537.799072265625,
+      "maxNanoseconds": 16087.713623046877,
+      "measurementsNanoseconds": [
+        16072.44110107422,
+        15537.799072265625,
+        16087.713623046877
+      ],
+      "bytesAllocatedPerInvocation": 96,
+      "gen0Collections": 0,
+      "memoryMeasurementOperations": 65536
+    },
+    {
+      "stage": "stage3",
+      "compilerSha256": "E5A0A5A65CDE422EABB61355A4F6703542820269ECD72AF2D072E0A831682B65",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericRestBenchmarks.Run(Case: \"restVaryingIndex\", N: 10000)",
+      "parameters": "Case=restVaryingIndex&N=10000",
+      "meanNanoseconds": 470144.5475260417,
+      "standardDeviationNanoseconds": 128064.31536288733,
+      "minNanoseconds": 368859.814453125,
+      "maxNanoseconds": 614095.654296875,
+      "measurementsNanoseconds": [
+        614095.654296875,
+        368859.814453125,
+        427478.173828125
+      ],
+      "bytesAllocatedPerInvocation": 1280005,
+      "gen0Collections": 75,
+      "memoryMeasurementOperations": 1024
+    },
+    {
+      "stage": "stage3",
+      "compilerSha256": "E5A0A5A65CDE422EABB61355A4F6703542820269ECD72AF2D072E0A831682B65",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericRestBenchmarks.Run(Case: \"restPacking\", N: 10000)",
+      "parameters": "Case=restPacking&N=10000",
+      "meanNanoseconds": 490170.4427083333,
+      "standardDeviationNanoseconds": 64965.99374920577,
+      "minNanoseconds": 424920.80078125,
+      "maxNanoseconds": 554849.0234375,
+      "measurementsNanoseconds": [
+        554849.0234375,
+        424920.80078125,
+        490741.50390625006
+      ],
+      "bytesAllocatedPerInvocation": 1440005,
+      "gen0Collections": 85,
+      "memoryMeasurementOperations": 1024
+    },
+    {
+      "stage": "stage3",
+      "compilerSha256": "E5A0A5A65CDE422EABB61355A4F6703542820269ECD72AF2D072E0A831682B65",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericRestBenchmarks.Run(Case: \"restEscaping\", N: 10000)",
+      "parameters": "Case=restEscaping&N=10000",
+      "meanNanoseconds": 511933.154296875,
+      "standardDeviationNanoseconds": 10893.114454647499,
+      "minNanoseconds": 501429.73632812494,
+      "maxNanoseconds": 523178.07617187506,
+      "measurementsNanoseconds": [
+        501429.73632812494,
+        511191.65039062494,
+        523178.07617187506
+      ],
+      "bytesAllocatedPerInvocation": 1440005,
+      "gen0Collections": 85,
+      "memoryMeasurementOperations": 1024
+    },
+    {
+      "stage": "stage3",
+      "compilerSha256": "E5A0A5A65CDE422EABB61355A4F6703542820269ECD72AF2D072E0A831682B65",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericRestBenchmarks.Run(Case: \"restSpread\", N: 10000)",
+      "parameters": "Case=restSpread&N=10000",
+      "meanNanoseconds": 1087301.1067708333,
+      "standardDeviationNanoseconds": 84526.25434739816,
+      "minNanoseconds": 1002581.4453125001,
+      "maxNanoseconds": 1171632.6171875,
+      "measurementsNanoseconds": [
+        1171632.6171875,
+        1087689.2578125,
+        1002581.4453125001
+      ],
+      "bytesAllocatedPerInvocation": 1840321,
+      "gen0Collections": 54,
+      "memoryMeasurementOperations": 512
+    },
+    {
+      "stage": "stage3",
+      "compilerSha256": "E5A0A5A65CDE422EABB61355A4F6703542820269ECD72AF2D072E0A831682B65",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericRestBenchmarks.Run(Case: \"restSpreadLength\", N: 10000)",
+      "parameters": "Case=restSpreadLength&N=10000",
+      "meanNanoseconds": 1104594.1080729167,
+      "standardDeviationNanoseconds": 112301.8509508173,
+      "minNanoseconds": 1016956.7382812499,
+      "maxNanoseconds": 1231186.42578125,
+      "measurementsNanoseconds": [
+        1231186.42578125,
+        1016956.7382812499,
+        1065639.16015625
+      ],
+      "bytesAllocatedPerInvocation": 2080321,
+      "gen0Collections": 61,
+      "memoryMeasurementOperations": 512
+    },
+    {
+      "stage": "stage3",
+      "compilerSha256": "E5A0A5A65CDE422EABB61355A4F6703542820269ECD72AF2D072E0A831682B65",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericRestBenchmarks.Run(Case: \"restDynamicDispatch\", N: 10000)",
+      "parameters": "Case=restDynamicDispatch&N=10000",
+      "meanNanoseconds": 1648711.71875,
+      "standardDeviationNanoseconds": 214613.14099091847,
+      "minNanoseconds": 1402972.8515625,
+      "maxNanoseconds": 1799295.8984375,
+      "measurementsNanoseconds": [
+        1743866.40625,
+        1402972.8515625,
+        1799295.8984375
+      ],
+      "bytesAllocatedPerInvocation": 2960105,
+      "gen0Collections": 87,
+      "memoryMeasurementOperations": 512
+    },
+    {
+      "stage": "stage3",
+      "compilerSha256": "E5A0A5A65CDE422EABB61355A4F6703542820269ECD72AF2D072E0A831682B65",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericRestBenchmarks.Run(Case: \"restDynamicLength\", N: 10000)",
+      "parameters": "Case=restDynamicLength&N=10000",
+      "meanNanoseconds": 1738030.8919270833,
+      "standardDeviationNanoseconds": 66988.93559616414,
+      "minNanoseconds": 1662080.95703125,
+      "maxNanoseconds": 1788703.22265625,
+      "measurementsNanoseconds": [
+        1763308.49609375,
+        1662080.95703125,
+        1788703.22265625
+      ],
+      "bytesAllocatedPerInvocation": 2960105,
+      "gen0Collections": 87,
+      "memoryMeasurementOperations": 512
+    },
+    {
+      "stage": "stage3",
+      "compilerSha256": "E5A0A5A65CDE422EABB61355A4F6703542820269ECD72AF2D072E0A831682B65",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericRestBenchmarks.Run(Case: \"restAlternating\", N: 10000)",
+      "parameters": "Case=restAlternating&N=10000",
+      "meanNanoseconds": 2422774.8046875,
+      "standardDeviationNanoseconds": 28546.054483281925,
+      "minNanoseconds": 2391724.8046875,
+      "maxNanoseconds": 2447881.0546875,
+      "measurementsNanoseconds": [
+        2447881.0546875,
+        2391724.8046875,
+        2428718.5546875
+      ],
+      "bytesAllocatedPerInvocation": 2960210,
+      "gen0Collections": 43,
+      "memoryMeasurementOperations": 256
+    },
+    {
+      "stage": "stage3",
+      "compilerSha256": "E5A0A5A65CDE422EABB61355A4F6703542820269ECD72AF2D072E0A831682B65",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericRestBenchmarks.Run(Case: \"restMixedTargets\", N: 10000)",
+      "parameters": "Case=restMixedTargets&N=10000",
+      "meanNanoseconds": 3521641.015625,
+      "standardDeviationNanoseconds": 118792.91230518147,
+      "minNanoseconds": 3444620.703125,
+      "maxNanoseconds": 3658450,
+      "measurementsNanoseconds": [
+        3658450,
+        3444620.703125,
+        3461852.34375
+      ],
+      "bytesAllocatedPerInvocation": 3320210,
+      "gen0Collections": 49,
+      "memoryMeasurementOperations": 256
+    },
+    {
+      "stage": "stage4",
+      "compilerSha256": "6BB026C07C31EAC44F991C7000A4C6A6E1143FE76D89FA2542845F1C7D2AAD53",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericRestBenchmarks.Run(Case: \"restDirect\", N: 10000)",
+      "parameters": "Case=restDirect&N=10000",
+      "meanNanoseconds": 5405.017344156901,
+      "standardDeviationNanoseconds": 5.290762454965431,
+      "minNanoseconds": 5398.963165283203,
+      "maxNanoseconds": 5408.753204345703,
+      "measurementsNanoseconds": [
+        5398.963165283203,
+        5408.753204345703,
+        5407.335662841797
+      ],
+      "bytesAllocatedPerInvocation": 0,
+      "gen0Collections": 0,
+      "memoryMeasurementOperations": 131072
+    },
+    {
+      "stage": "stage4",
+      "compilerSha256": "6BB026C07C31EAC44F991C7000A4C6A6E1143FE76D89FA2542845F1C7D2AAD53",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericRestBenchmarks.Run(Case: \"restConstantIndex\", N: 10000)",
+      "parameters": "Case=restConstantIndex&N=10000",
+      "meanNanoseconds": 5448.410542805989,
+      "standardDeviationNanoseconds": 59.18490636634586,
+      "minNanoseconds": 5410.331726074219,
+      "maxNanoseconds": 5516.596221923828,
+      "measurementsNanoseconds": [
+        5418.303680419922,
+        5410.331726074219,
+        5516.596221923828
+      ],
+      "bytesAllocatedPerInvocation": 0,
+      "gen0Collections": 0,
+      "memoryMeasurementOperations": 131072
+    },
+    {
+      "stage": "stage4",
+      "compilerSha256": "6BB026C07C31EAC44F991C7000A4C6A6E1143FE76D89FA2542845F1C7D2AAD53",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericRestBenchmarks.Run(Case: \"restFixedParameters\", N: 10000)",
+      "parameters": "Case=restFixedParameters&N=10000",
+      "meanNanoseconds": 5467.925771077474,
+      "standardDeviationNanoseconds": 19.778283848475645,
+      "minNanoseconds": 5449.537658691406,
+      "maxNanoseconds": 5488.849639892578,
+      "measurementsNanoseconds": [
+        5449.537658691406,
+        5465.3900146484375,
+        5488.849639892578
+      ],
+      "bytesAllocatedPerInvocation": 0,
+      "gen0Collections": 0,
+      "memoryMeasurementOperations": 131072
+    },
+    {
+      "stage": "stage4",
+      "compilerSha256": "6BB026C07C31EAC44F991C7000A4C6A6E1143FE76D89FA2542845F1C7D2AAD53",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericRestBenchmarks.Run(Case: \"restAlias\", N: 10000)",
+      "parameters": "Case=restAlias&N=10000",
+      "meanNanoseconds": 5475.927480061849,
+      "standardDeviationNanoseconds": 48.21942305660412,
+      "minNanoseconds": 5445.751190185547,
+      "maxNanoseconds": 5531.539154052734,
+      "measurementsNanoseconds": [
+        5531.539154052734,
+        5450.492095947266,
+        5445.751190185547
+      ],
+      "bytesAllocatedPerInvocation": 96,
+      "gen0Collections": 0,
+      "memoryMeasurementOperations": 131072
+    },
+    {
+      "stage": "stage4",
+      "compilerSha256": "6BB026C07C31EAC44F991C7000A4C6A6E1143FE76D89FA2542845F1C7D2AAD53",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericRestBenchmarks.Run(Case: \"restVaryingIndex\", N: 10000)",
+      "parameters": "Case=restVaryingIndex&N=10000",
+      "meanNanoseconds": 155692.5048828125,
+      "standardDeviationNanoseconds": 926.2903122488698,
+      "minNanoseconds": 154987.1337890625,
+      "maxNanoseconds": 156741.50390625,
+      "measurementsNanoseconds": [
+        155348.876953125,
+        156741.50390625,
+        154987.1337890625
+      ],
+      "bytesAllocatedPerInvocation": 1280001,
+      "gen0Collections": 303,
+      "memoryMeasurementOperations": 4096
+    },
+    {
+      "stage": "stage4",
+      "compilerSha256": "6BB026C07C31EAC44F991C7000A4C6A6E1143FE76D89FA2542845F1C7D2AAD53",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericRestBenchmarks.Run(Case: \"restEscaping\", N: 10000)",
+      "parameters": "Case=restEscaping&N=10000",
+      "meanNanoseconds": 174917.65950520834,
+      "standardDeviationNanoseconds": 7622.228920158975,
+      "minNanoseconds": 166287.3046875,
+      "maxNanoseconds": 180728.1982421875,
+      "measurementsNanoseconds": [
+        166287.3046875,
+        180728.1982421875,
+        177737.4755859375
+      ],
+      "bytesAllocatedPerInvocation": 1440001,
+      "gen0Collections": 341,
+      "memoryMeasurementOperations": 4096
+    },
+    {
+      "stage": "stage4",
+      "compilerSha256": "6BB026C07C31EAC44F991C7000A4C6A6E1143FE76D89FA2542845F1C7D2AAD53",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericRestBenchmarks.Run(Case: \"restPacking\", N: 10000)",
+      "parameters": "Case=restPacking&N=10000",
+      "meanNanoseconds": 190728.28776041666,
+      "standardDeviationNanoseconds": 128.46296056521535,
+      "minNanoseconds": 190612.0849609375,
+      "maxNanoseconds": 190866.2353515625,
+      "measurementsNanoseconds": [
+        190706.54296875,
+        190612.0849609375,
+        190866.2353515625
+      ],
+      "bytesAllocatedPerInvocation": 1440001,
+      "gen0Collections": 341,
+      "memoryMeasurementOperations": 4096
+    },
+    {
+      "stage": "stage4",
+      "compilerSha256": "6BB026C07C31EAC44F991C7000A4C6A6E1143FE76D89FA2542845F1C7D2AAD53",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericRestBenchmarks.Run(Case: \"restSpread\", N: 10000)",
+      "parameters": "Case=restSpread&N=10000",
+      "meanNanoseconds": 278664.6647135417,
+      "standardDeviationNanoseconds": 1005.7232779368828,
+      "minNanoseconds": 277640.33203125,
+      "maxNanoseconds": 279650.68359375,
+      "measurementsNanoseconds": [
+        277640.33203125,
+        279650.68359375,
+        278702.978515625
+      ],
+      "bytesAllocatedPerInvocation": 1200314,
+      "gen0Collections": 142,
+      "memoryMeasurementOperations": 2048
+    },
+    {
+      "stage": "stage4",
+      "compilerSha256": "6BB026C07C31EAC44F991C7000A4C6A6E1143FE76D89FA2542845F1C7D2AAD53",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericRestBenchmarks.Run(Case: \"restSpreadLength\", N: 10000)",
+      "parameters": "Case=restSpreadLength&N=10000",
+      "meanNanoseconds": 335305.2734375,
+      "standardDeviationNanoseconds": 5069.806352224008,
+      "minNanoseconds": 331229.8828125,
+      "maxNanoseconds": 340982.51953125,
+      "measurementsNanoseconds": [
+        340982.51953125,
+        331229.8828125,
+        333703.41796875
+      ],
+      "bytesAllocatedPerInvocation": 1440314,
+      "gen0Collections": 170,
+      "memoryMeasurementOperations": 2048
+    },
+    {
+      "stage": "stage4",
+      "compilerSha256": "6BB026C07C31EAC44F991C7000A4C6A6E1143FE76D89FA2542845F1C7D2AAD53",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericRestBenchmarks.Run(Case: \"restDynamicDispatch\", N: 10000)",
+      "parameters": "Case=restDynamicDispatch&N=10000",
+      "meanNanoseconds": 648582.2591145834,
+      "standardDeviationNanoseconds": 13254.30922928743,
+      "minNanoseconds": 639562.01171875,
+      "maxNanoseconds": 663800,
+      "measurementsNanoseconds": [
+        639562.01171875,
+        642384.765625,
+        663800
+      ],
+      "bytesAllocatedPerInvocation": 2960101,
+      "gen0Collections": 175,
+      "memoryMeasurementOperations": 1024
+    },
+    {
+      "stage": "stage4",
+      "compilerSha256": "6BB026C07C31EAC44F991C7000A4C6A6E1143FE76D89FA2542845F1C7D2AAD53",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericRestBenchmarks.Run(Case: \"restDynamicLength\", N: 10000)",
+      "parameters": "Case=restDynamicLength&N=10000",
+      "meanNanoseconds": 712902.8645833334,
+      "standardDeviationNanoseconds": 19414.888153837936,
+      "minNanoseconds": 690506.54296875,
+      "maxNanoseconds": 724962.109375,
+      "measurementsNanoseconds": [
+        723239.94140625,
+        724962.109375,
+        690506.54296875
+      ],
+      "bytesAllocatedPerInvocation": 2960101,
+      "gen0Collections": 175,
+      "memoryMeasurementOperations": 1024
+    },
+    {
+      "stage": "stage4",
+      "compilerSha256": "6BB026C07C31EAC44F991C7000A4C6A6E1143FE76D89FA2542845F1C7D2AAD53",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericRestBenchmarks.Run(Case: \"restAlternating\", N: 10000)",
+      "parameters": "Case=restAlternating&N=10000",
+      "meanNanoseconds": 750087.6953125,
+      "standardDeviationNanoseconds": 18493.973124796335,
+      "minNanoseconds": 729183.49609375,
+      "maxNanoseconds": 764319.7265625,
+      "measurementsNanoseconds": [
+        756759.86328125,
+        729183.49609375,
+        764319.7265625
+      ],
+      "bytesAllocatedPerInvocation": 2960197,
+      "gen0Collections": 175,
+      "memoryMeasurementOperations": 1024
+    },
+    {
+      "stage": "stage4",
+      "compilerSha256": "6BB026C07C31EAC44F991C7000A4C6A6E1143FE76D89FA2542845F1C7D2AAD53",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericRestBenchmarks.Run(Case: \"restMixedTargets\", N: 10000)",
+      "parameters": "Case=restMixedTargets&N=10000",
+      "meanNanoseconds": 1295365.4296875,
+      "standardDeviationNanoseconds": 68332.68797465807,
+      "minNanoseconds": 1231265.0390625,
+      "maxNanoseconds": 1367261.71875,
+      "measurementsNanoseconds": [
+        1287569.53125,
+        1367261.71875,
+        1231265.0390625
+      ],
+      "bytesAllocatedPerInvocation": 3320201,
+      "gen0Collections": 98,
+      "memoryMeasurementOperations": 512
+    },
+    {
+      "stage": "stage5",
+      "compilerSha256": "CBE56E41F96CB716CC645106A52007191DA678A6AFB3AB8F7F32659C3F8B1DC1",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericArrayReadBenchmarks.Run(Storage: \"NumericArray\", Case: \"readFixed\", N: 10000)",
+      "parameters": "Storage=NumericArray&Case=readFixed&N=10000",
+      "meanNanoseconds": 54525.55135091146,
+      "standardDeviationNanoseconds": 94.04684324856042,
+      "minNanoseconds": 54416.9677734375,
+      "maxNanoseconds": 54581.26220703125,
+      "measurementsNanoseconds": [
+        54581.26220703125,
+        54416.9677734375,
+        54578.424072265625
+      ],
+      "bytesAllocatedPerInvocation": 0,
+      "gen0Collections": 0,
+      "memoryMeasurementOperations": 16384
+    },
+    {
+      "stage": "stage5",
+      "compilerSha256": "CBE56E41F96CB716CC645106A52007191DA678A6AFB3AB8F7F32659C3F8B1DC1",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericArrayReadBenchmarks.Run(Storage: \"NumericArray\", Case: \"readVarying\", N: 10000)",
+      "parameters": "Storage=NumericArray&Case=readVarying&N=10000",
+      "meanNanoseconds": 57539.237467447914,
+      "standardDeviationNanoseconds": 213.9493748923023,
+      "minNanoseconds": 57343.90869140625,
+      "maxNanoseconds": 57767.8955078125,
+      "measurementsNanoseconds": [
+        57505.908203125,
+        57767.8955078125,
+        57343.90869140625
+      ],
+      "bytesAllocatedPerInvocation": 0,
+      "gen0Collections": 0,
+      "memoryMeasurementOperations": 16384
+    },
+    {
+      "stage": "stage5",
+      "compilerSha256": "CBE56E41F96CB716CC645106A52007191DA678A6AFB3AB8F7F32659C3F8B1DC1",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericArrayReadBenchmarks.Run(Storage: \"BoxedArray\", Case: \"readFixed\", N: 10000)",
+      "parameters": "Storage=BoxedArray&Case=readFixed&N=10000",
+      "meanNanoseconds": 84627.20540364583,
+      "standardDeviationNanoseconds": 392.70213172410666,
+      "minNanoseconds": 84222.6318359375,
+      "maxNanoseconds": 85006.84814453125,
+      "measurementsNanoseconds": [
+        85006.84814453125,
+        84652.13623046875,
+        84222.6318359375
+      ],
+      "bytesAllocatedPerInvocation": 0,
+      "gen0Collections": 0,
+      "memoryMeasurementOperations": 8192
+    },
+    {
+      "stage": "stage5",
+      "compilerSha256": "CBE56E41F96CB716CC645106A52007191DA678A6AFB3AB8F7F32659C3F8B1DC1",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericArrayReadBenchmarks.Run(Storage: \"BoxedArray\", Case: \"readVarying\", N: 10000)",
+      "parameters": "Storage=BoxedArray&Case=readVarying&N=10000",
+      "meanNanoseconds": 87446.1181640625,
+      "standardDeviationNanoseconds": 9.933321200167097,
+      "minNanoseconds": 87435.94970703125,
+      "maxNanoseconds": 87455.79833984375,
+      "measurementsNanoseconds": [
+        87446.6064453125,
+        87435.94970703125,
+        87455.79833984375
+      ],
+      "bytesAllocatedPerInvocation": 0,
+      "gen0Collections": 0,
+      "memoryMeasurementOperations": 8192
+    },
+    {
+      "stage": "stage5",
+      "compilerSha256": "CBE56E41F96CB716CC645106A52007191DA678A6AFB3AB8F7F32659C3F8B1DC1",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericArrayReadBenchmarks.Run(Storage: \"PlainList\", Case: \"readFixed\", N: 10000)",
+      "parameters": "Storage=PlainList&Case=readFixed&N=10000",
+      "meanNanoseconds": 131384.1552734375,
+      "standardDeviationNanoseconds": 568.3939836065546,
+      "minNanoseconds": 130744.2626953125,
+      "maxNanoseconds": 131830.4931640625,
+      "measurementsNanoseconds": [
+        131830.4931640625,
+        131577.7099609375,
+        130744.2626953125
+      ],
+      "bytesAllocatedPerInvocation": 0,
+      "gen0Collections": 0,
+      "memoryMeasurementOperations": 4096
+    },
+    {
+      "stage": "stage5",
+      "compilerSha256": "CBE56E41F96CB716CC645106A52007191DA678A6AFB3AB8F7F32659C3F8B1DC1",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericArrayReadBenchmarks.Run(Storage: \"PlainList\", Case: \"readVarying\", N: 10000)",
+      "parameters": "Storage=PlainList&Case=readVarying&N=10000",
+      "meanNanoseconds": 131503.40983072916,
+      "standardDeviationNanoseconds": 453.6938105052044,
+      "minNanoseconds": 131226.5625,
+      "maxNanoseconds": 132027.001953125,
+      "measurementsNanoseconds": [
+        131226.5625,
+        131256.6650390625,
+        132027.001953125
+      ],
+      "bytesAllocatedPerInvocation": 0,
+      "gen0Collections": 0,
+      "memoryMeasurementOperations": 4096
+    },
+    {
+      "stage": "stage5",
+      "compilerSha256": "CBE56E41F96CB716CC645106A52007191DA678A6AFB3AB8F7F32659C3F8B1DC1",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericRestBenchmarks.Run(Case: \"restFixedParameters\", N: 10000)",
+      "parameters": "Case=restFixedParameters&N=10000",
+      "meanNanoseconds": 5401.947275797526,
+      "standardDeviationNanoseconds": 2.2197400960608973,
+      "minNanoseconds": 5399.445343017578,
+      "maxNanoseconds": 5403.680419921875,
+      "measurementsNanoseconds": [
+        5403.680419921875,
+        5399.445343017578,
+        5402.716064453125
+      ],
+      "bytesAllocatedPerInvocation": 0,
+      "gen0Collections": 0,
+      "memoryMeasurementOperations": 131072
+    },
+    {
+      "stage": "stage5",
+      "compilerSha256": "CBE56E41F96CB716CC645106A52007191DA678A6AFB3AB8F7F32659C3F8B1DC1",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericRestBenchmarks.Run(Case: \"restConstantIndex\", N: 10000)",
+      "parameters": "Case=restConstantIndex&N=10000",
+      "meanNanoseconds": 5415.339914957683,
+      "standardDeviationNanoseconds": 22.186539887616775,
+      "minNanoseconds": 5401.334381103516,
+      "maxNanoseconds": 5440.920257568359,
+      "measurementsNanoseconds": [
+        5401.334381103516,
+        5403.765106201172,
+        5440.920257568359
+      ],
+      "bytesAllocatedPerInvocation": 0,
+      "gen0Collections": 0,
+      "memoryMeasurementOperations": 131072
+    },
+    {
+      "stage": "stage5",
+      "compilerSha256": "CBE56E41F96CB716CC645106A52007191DA678A6AFB3AB8F7F32659C3F8B1DC1",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericRestBenchmarks.Run(Case: \"restAlias\", N: 10000)",
+      "parameters": "Case=restAlias&N=10000",
+      "meanNanoseconds": 5454.579162597656,
+      "standardDeviationNanoseconds": 6.470532816906209,
+      "minNanoseconds": 5448.316955566406,
+      "maxNanoseconds": 5461.2396240234375,
+      "measurementsNanoseconds": [
+        5461.2396240234375,
+        5448.316955566406,
+        5454.180908203125
+      ],
+      "bytesAllocatedPerInvocation": 96,
+      "gen0Collections": 0,
+      "memoryMeasurementOperations": 131072
+    },
+    {
+      "stage": "stage5",
+      "compilerSha256": "CBE56E41F96CB716CC645106A52007191DA678A6AFB3AB8F7F32659C3F8B1DC1",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericRestBenchmarks.Run(Case: \"restDirect\", N: 10000)",
+      "parameters": "Case=restDirect&N=10000",
+      "meanNanoseconds": 5471.574401855469,
+      "standardDeviationNanoseconds": 58.555615219462865,
+      "minNanoseconds": 5427.086639404297,
+      "maxNanoseconds": 5537.913513183594,
+      "measurementsNanoseconds": [
+        5427.086639404297,
+        5449.723052978516,
+        5537.913513183594
+      ],
+      "bytesAllocatedPerInvocation": 0,
+      "gen0Collections": 0,
+      "memoryMeasurementOperations": 131072
+    },
+    {
+      "stage": "stage5",
+      "compilerSha256": "CBE56E41F96CB716CC645106A52007191DA678A6AFB3AB8F7F32659C3F8B1DC1",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericRestBenchmarks.Run(Case: \"restDynamicDispatch\", N: 10000)",
+      "parameters": "Case=restDynamicDispatch&N=10000",
+      "meanNanoseconds": 27237.924194335938,
+      "standardDeviationNanoseconds": 19.589095524488272,
+      "minNanoseconds": 27215.7958984375,
+      "maxNanoseconds": 27253.048706054688,
+      "measurementsNanoseconds": [
+        27253.048706054688,
+        27215.7958984375,
+        27244.927978515625
+      ],
+      "bytesAllocatedPerInvocation": 96,
+      "gen0Collections": 0,
+      "memoryMeasurementOperations": 32768
+    },
+    {
+      "stage": "stage5",
+      "compilerSha256": "CBE56E41F96CB716CC645106A52007191DA678A6AFB3AB8F7F32659C3F8B1DC1",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericRestBenchmarks.Run(Case: \"restAlternating\", N: 10000)",
+      "parameters": "Case=restAlternating&N=10000",
+      "meanNanoseconds": 28924.88505045573,
+      "standardDeviationNanoseconds": 146.7811863578765,
+      "minNanoseconds": 28785.842895507812,
+      "maxNanoseconds": 29078.341674804688,
+      "measurementsNanoseconds": [
+        29078.341674804688,
+        28785.842895507812,
+        28910.470581054688
+      ],
+      "bytesAllocatedPerInvocation": 192,
+      "gen0Collections": 0,
+      "memoryMeasurementOperations": 32768
+    },
+    {
+      "stage": "stage5",
+      "compilerSha256": "CBE56E41F96CB716CC645106A52007191DA678A6AFB3AB8F7F32659C3F8B1DC1",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericRestBenchmarks.Run(Case: \"restVaryingIndex\", N: 10000)",
+      "parameters": "Case=restVaryingIndex&N=10000",
+      "meanNanoseconds": 150653.759765625,
+      "standardDeviationNanoseconds": 362.2858697574801,
+      "minNanoseconds": 150340.478515625,
+      "maxNanoseconds": 151050.48828125,
+      "measurementsNanoseconds": [
+        150340.478515625,
+        150570.3125,
+        151050.48828125
+      ],
+      "bytesAllocatedPerInvocation": 1280001,
+      "gen0Collections": 303,
+      "memoryMeasurementOperations": 4096
+    },
+    {
+      "stage": "stage5",
+      "compilerSha256": "CBE56E41F96CB716CC645106A52007191DA678A6AFB3AB8F7F32659C3F8B1DC1",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericRestBenchmarks.Run(Case: \"restEscaping\", N: 10000)",
+      "parameters": "Case=restEscaping&N=10000",
+      "meanNanoseconds": 156086.11653645834,
+      "standardDeviationNanoseconds": 1034.1883791617418,
+      "minNanoseconds": 154940.234375,
+      "maxNanoseconds": 156950.1953125,
+      "measurementsNanoseconds": [
+        156950.1953125,
+        156367.919921875,
+        154940.234375
+      ],
+      "bytesAllocatedPerInvocation": 1440001,
+      "gen0Collections": 341,
+      "memoryMeasurementOperations": 4096
+    },
+    {
+      "stage": "stage5",
+      "compilerSha256": "CBE56E41F96CB716CC645106A52007191DA678A6AFB3AB8F7F32659C3F8B1DC1",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericRestBenchmarks.Run(Case: \"restPacking\", N: 10000)",
+      "parameters": "Case=restPacking&N=10000",
+      "meanNanoseconds": 174980.87565104166,
+      "standardDeviationNanoseconds": 561.9090548864438,
+      "minNanoseconds": 174619.7509765625,
+      "maxNanoseconds": 175628.271484375,
+      "measurementsNanoseconds": [
+        174694.6044921875,
+        175628.271484375,
+        174619.7509765625
+      ],
+      "bytesAllocatedPerInvocation": 1440001,
+      "gen0Collections": 341,
+      "memoryMeasurementOperations": 4096
+    },
+    {
+      "stage": "stage5",
+      "compilerSha256": "CBE56E41F96CB716CC645106A52007191DA678A6AFB3AB8F7F32659C3F8B1DC1",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericRestBenchmarks.Run(Case: \"restSpread\", N: 10000)",
+      "parameters": "Case=restSpread&N=10000",
+      "meanNanoseconds": 275330.95703125,
+      "standardDeviationNanoseconds": 2016.1320697613876,
+      "minNanoseconds": 273866.6015625,
+      "maxNanoseconds": 277630.46875,
+      "measurementsNanoseconds": [
+        277630.46875,
+        273866.6015625,
+        274495.80078125
+      ],
+      "bytesAllocatedPerInvocation": 1200315,
+      "gen0Collections": 142,
+      "memoryMeasurementOperations": 2048
+    },
+    {
+      "stage": "stage5",
+      "compilerSha256": "CBE56E41F96CB716CC645106A52007191DA678A6AFB3AB8F7F32659C3F8B1DC1",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericRestBenchmarks.Run(Case: \"restSpreadLength\", N: 10000)",
+      "parameters": "Case=restSpreadLength&N=10000",
+      "meanNanoseconds": 320546.484375,
+      "standardDeviationNanoseconds": 2627.866869302875,
+      "minNanoseconds": 318678.125,
+      "maxNanoseconds": 323551.318359375,
+      "measurementsNanoseconds": [
+        318678.125,
+        323551.318359375,
+        319410.009765625
+      ],
+      "bytesAllocatedPerInvocation": 1440315,
+      "gen0Collections": 170,
+      "memoryMeasurementOperations": 2048
+    },
+    {
+      "stage": "stage5",
+      "compilerSha256": "CBE56E41F96CB716CC645106A52007191DA678A6AFB3AB8F7F32659C3F8B1DC1",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericRestBenchmarks.Run(Case: \"restDynamicLength\", N: 10000)",
+      "parameters": "Case=restDynamicLength&N=10000",
+      "meanNanoseconds": 665010.05859375,
+      "standardDeviationNanoseconds": 2082.0769468520884,
+      "minNanoseconds": 663455.46875,
+      "maxNanoseconds": 667375.5859375,
+      "measurementsNanoseconds": [
+        664199.12109375,
+        663455.46875,
+        667375.5859375
+      ],
+      "bytesAllocatedPerInvocation": 2960102,
+      "gen0Collections": 175,
+      "memoryMeasurementOperations": 1024
+    },
+    {
+      "stage": "stage5",
+      "compilerSha256": "CBE56E41F96CB716CC645106A52007191DA678A6AFB3AB8F7F32659C3F8B1DC1",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericRestBenchmarks.Run(Case: \"restMixedTargets\", N: 10000)",
+      "parameters": "Case=restMixedTargets&N=10000",
+      "meanNanoseconds": 883554.98046875,
+      "standardDeviationNanoseconds": 818.6115351647329,
+      "minNanoseconds": 882920.80078125,
+      "maxNanoseconds": 884479.1015625,
+      "measurementsNanoseconds": [
+        884479.1015625,
+        883265.0390625,
+        882920.80078125
+      ],
+      "bytesAllocatedPerInvocation": 1840198,
+      "gen0Collections": 109,
+      "memoryMeasurementOperations": 1024
+    },
+    {
+      "stage": "stage5",
+      "compilerSha256": "CBE56E41F96CB716CC645106A52007191DA678A6AFB3AB8F7F32659C3F8B1DC1",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericRestDispatchBenchmarks.Run(Case: \"Reads\", N: 10000)",
+      "parameters": "Case=Reads&N=10000",
+      "meanNanoseconds": 27418.936157226562,
+      "standardDeviationNanoseconds": 180.53084753689765,
+      "minNanoseconds": 27287.240600585938,
+      "maxNanoseconds": 27624.725341796875,
+      "measurementsNanoseconds": [
+        27287.240600585938,
+        27344.842529296875,
+        27624.725341796875
+      ],
+      "bytesAllocatedPerInvocation": 0,
+      "gen0Collections": 0,
+      "memoryMeasurementOperations": 32768
+    },
+    {
+      "stage": "stage5",
+      "compilerSha256": "CBE56E41F96CB716CC645106A52007191DA678A6AFB3AB8F7F32659C3F8B1DC1",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericRestDispatchBenchmarks.Run(Case: \"Length\", N: 10000)",
+      "parameters": "Case=Length&N=10000",
+      "meanNanoseconds": 667210.6119791666,
+      "standardDeviationNanoseconds": 2268.2568990688737,
+      "minNanoseconds": 664594.43359375,
+      "maxNanoseconds": 668626.85546875,
+      "measurementsNanoseconds": [
+        664594.43359375,
+        668410.546875,
+        668626.85546875
+      ],
+      "bytesAllocatedPerInvocation": 2960007,
+      "gen0Collections": 175,
+      "memoryMeasurementOperations": 1024
+    },
+    {
+      "stage": "stage5-closed",
+      "compilerSha256": "95DF7B5DFF347A5D28565216CF8315E48612C341AA6770DA8423065642BE544D",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericArrayReadBenchmarks.Run(Storage: \"NumericArray\", Case: \"readFixed\", N: 10000)",
+      "parameters": "Storage=NumericArray&Case=readFixed&N=10000",
+      "meanNanoseconds": 53371.728515625,
+      "standardDeviationNanoseconds": 608.0590492126701,
+      "minNanoseconds": 52951.67236328125,
+      "maxNanoseconds": 54068.994140625,
+      "measurementsNanoseconds": [
+        53094.51904296875,
+        52951.67236328125,
+        54068.994140625
+      ],
+      "bytesAllocatedPerInvocation": 0,
+      "gen0Collections": 0,
+      "memoryMeasurementOperations": 16384
+    },
+    {
+      "stage": "stage5-closed",
+      "compilerSha256": "95DF7B5DFF347A5D28565216CF8315E48612C341AA6770DA8423065642BE544D",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericArrayReadBenchmarks.Run(Storage: \"NumericArray\", Case: \"readVarying\", N: 10000)",
+      "parameters": "Storage=NumericArray&Case=readVarying&N=10000",
+      "meanNanoseconds": 56352.60009765625,
+      "standardDeviationNanoseconds": 90.61550797705749,
+      "minNanoseconds": 56251.46484375,
+      "maxNanoseconds": 56426.40380859375,
+      "measurementsNanoseconds": [
+        56426.40380859375,
+        56379.931640625,
+        56251.46484375
+      ],
+      "bytesAllocatedPerInvocation": 0,
+      "gen0Collections": 0,
+      "memoryMeasurementOperations": 8192
+    },
+    {
+      "stage": "stage5-closed",
+      "compilerSha256": "95DF7B5DFF347A5D28565216CF8315E48612C341AA6770DA8423065642BE544D",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericArrayReadBenchmarks.Run(Storage: \"BoxedArray\", Case: \"readVarying\", N: 10000)",
+      "parameters": "Storage=BoxedArray&Case=readVarying&N=10000",
+      "meanNanoseconds": 85909.07389322917,
+      "standardDeviationNanoseconds": 987.9394154424596,
+      "minNanoseconds": 84997.119140625,
+      "maxNanoseconds": 86958.58154296875,
+      "measurementsNanoseconds": [
+        84997.119140625,
+        85771.52099609375,
+        86958.58154296875
+      ],
+      "bytesAllocatedPerInvocation": 0,
+      "gen0Collections": 0,
+      "memoryMeasurementOperations": 8192
+    },
+    {
+      "stage": "stage5-closed",
+      "compilerSha256": "95DF7B5DFF347A5D28565216CF8315E48612C341AA6770DA8423065642BE544D",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericArrayReadBenchmarks.Run(Storage: \"BoxedArray\", Case: \"readFixed\", N: 10000)",
+      "parameters": "Storage=BoxedArray&Case=readFixed&N=10000",
+      "meanNanoseconds": 88574.97965494792,
+      "standardDeviationNanoseconds": 3466.5032855372897,
+      "minNanoseconds": 85578.369140625,
+      "maxNanoseconds": 92371.52099609375,
+      "measurementsNanoseconds": [
+        92371.52099609375,
+        87775.048828125,
+        85578.369140625
+      ],
+      "bytesAllocatedPerInvocation": 0,
+      "gen0Collections": 0,
+      "memoryMeasurementOperations": 8192
+    },
+    {
+      "stage": "stage5-closed",
+      "compilerSha256": "95DF7B5DFF347A5D28565216CF8315E48612C341AA6770DA8423065642BE544D",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericArrayReadBenchmarks.Run(Storage: \"PlainList\", Case: \"readVarying\", N: 10000)",
+      "parameters": "Storage=PlainList&Case=readVarying&N=10000",
+      "meanNanoseconds": 119025.38248697917,
+      "standardDeviationNanoseconds": 1126.405217963141,
+      "minNanoseconds": 117772.900390625,
+      "maxNanoseconds": 119955.35888671875,
+      "measurementsNanoseconds": [
+        119347.88818359375,
+        117772.900390625,
+        119955.35888671875
+      ],
+      "bytesAllocatedPerInvocation": 0,
+      "gen0Collections": 0,
+      "memoryMeasurementOperations": 8192
+    },
+    {
+      "stage": "stage5-closed",
+      "compilerSha256": "95DF7B5DFF347A5D28565216CF8315E48612C341AA6770DA8423065642BE544D",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericArrayReadBenchmarks.Run(Storage: \"PlainList\", Case: \"readFixed\", N: 10000)",
+      "parameters": "Storage=PlainList&Case=readFixed&N=10000",
+      "meanNanoseconds": 122126.13118489583,
+      "standardDeviationNanoseconds": 2852.6984783144367,
+      "minNanoseconds": 120322.9248046875,
+      "maxNanoseconds": 125415.0390625,
+      "measurementsNanoseconds": [
+        125415.0390625,
+        120322.9248046875,
+        120640.4296875
+      ],
+      "bytesAllocatedPerInvocation": 0,
+      "gen0Collections": 0,
+      "memoryMeasurementOperations": 8192
+    },
+    {
+      "stage": "stage5-closed",
+      "compilerSha256": "95DF7B5DFF347A5D28565216CF8315E48612C341AA6770DA8423065642BE544D",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericRestBenchmarks.Run(Case: \"restFixedParameters\", N: 10000)",
+      "parameters": "Case=restFixedParameters&N=10000",
+      "meanNanoseconds": 5456.0302734375,
+      "standardDeviationNanoseconds": 49.115785017773106,
+      "minNanoseconds": 5421.407318115234,
+      "maxNanoseconds": 5512.242889404297,
+      "measurementsNanoseconds": [
+        5512.242889404297,
+        5434.440612792969,
+        5421.407318115234
+      ],
+      "bytesAllocatedPerInvocation": 0,
+      "gen0Collections": 0,
+      "memoryMeasurementOperations": 131072
+    },
+    {
+      "stage": "stage5-closed",
+      "compilerSha256": "95DF7B5DFF347A5D28565216CF8315E48612C341AA6770DA8423065642BE544D",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericRestBenchmarks.Run(Case: \"restAlias\", N: 10000)",
+      "parameters": "Case=restAlias&N=10000",
+      "meanNanoseconds": 6223.003896077474,
+      "standardDeviationNanoseconds": 591.9109006625995,
+      "minNanoseconds": 5777.716827392578,
+      "maxNanoseconds": 6894.699859619141,
+      "measurementsNanoseconds": [
+        5996.595001220703,
+        5777.716827392578,
+        6894.699859619141
+      ],
+      "bytesAllocatedPerInvocation": 96,
+      "gen0Collections": 0,
+      "memoryMeasurementOperations": 131072
+    },
+    {
+      "stage": "stage5-closed",
+      "compilerSha256": "95DF7B5DFF347A5D28565216CF8315E48612C341AA6770DA8423065642BE544D",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericRestBenchmarks.Run(Case: \"restDirect\", N: 10000)",
+      "parameters": "Case=restDirect&N=10000",
+      "meanNanoseconds": 7292.985280354817,
+      "standardDeviationNanoseconds": 1468.483558894781,
+      "minNanoseconds": 6206.235504150391,
+      "maxNanoseconds": 8963.602447509766,
+      "measurementsNanoseconds": [
+        8963.602447509766,
+        6709.117889404297,
+        6206.235504150391
+      ],
+      "bytesAllocatedPerInvocation": 0,
+      "gen0Collections": 0,
+      "memoryMeasurementOperations": 65536
+    },
+    {
+      "stage": "stage5-closed",
+      "compilerSha256": "95DF7B5DFF347A5D28565216CF8315E48612C341AA6770DA8423065642BE544D",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericRestBenchmarks.Run(Case: \"restConstantIndex\", N: 10000)",
+      "parameters": "Case=restConstantIndex&N=10000",
+      "meanNanoseconds": 8541.064453125,
+      "standardDeviationNanoseconds": 697.0753925457827,
+      "minNanoseconds": 7736.9537353515625,
+      "maxNanoseconds": 8974.241638183594,
+      "measurementsNanoseconds": [
+        7736.9537353515625,
+        8974.241638183594,
+        8911.997985839844
+      ],
+      "bytesAllocatedPerInvocation": 0,
+      "gen0Collections": 0,
+      "memoryMeasurementOperations": 65536
+    },
+    {
+      "stage": "stage5-closed",
+      "compilerSha256": "95DF7B5DFF347A5D28565216CF8315E48612C341AA6770DA8423065642BE544D",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericRestBenchmarks.Run(Case: \"restDynamicDispatch\", N: 10000)",
+      "parameters": "Case=restDynamicDispatch&N=10000",
+      "meanNanoseconds": 23664.145914713543,
+      "standardDeviationNanoseconds": 549.4728029968855,
+      "minNanoseconds": 23144.29931640625,
+      "maxNanoseconds": 24239.093017578125,
+      "measurementsNanoseconds": [
+        23609.04541015625,
+        23144.29931640625,
+        24239.093017578125
+      ],
+      "bytesAllocatedPerInvocation": 96,
+      "gen0Collections": 0,
+      "memoryMeasurementOperations": 32768
+    },
+    {
+      "stage": "stage5-closed",
+      "compilerSha256": "95DF7B5DFF347A5D28565216CF8315E48612C341AA6770DA8423065642BE544D",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericRestBenchmarks.Run(Case: \"restAlternating\", N: 10000)",
+      "parameters": "Case=restAlternating&N=10000",
+      "meanNanoseconds": 42480.19307454427,
+      "standardDeviationNanoseconds": 12798.6770525677,
+      "minNanoseconds": 27967.141723632812,
+      "maxNanoseconds": 52152.21862792969,
+      "measurementsNanoseconds": [
+        27967.141723632812,
+        52152.21862792969,
+        47321.21887207031
+      ],
+      "bytesAllocatedPerInvocation": 192,
+      "gen0Collections": 0,
+      "memoryMeasurementOperations": 16384
+    },
+    {
+      "stage": "stage5-closed",
+      "compilerSha256": "95DF7B5DFF347A5D28565216CF8315E48612C341AA6770DA8423065642BE544D",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericRestBenchmarks.Run(Case: \"restEscaping\", N: 10000)",
+      "parameters": "Case=restEscaping&N=10000",
+      "meanNanoseconds": 150640.86100260416,
+      "standardDeviationNanoseconds": 261.67454170618674,
+      "minNanoseconds": 150347.65625,
+      "maxNanoseconds": 150850.68359375,
+      "measurementsNanoseconds": [
+        150850.68359375,
+        150724.2431640625,
+        150347.65625
+      ],
+      "bytesAllocatedPerInvocation": 1440001,
+      "gen0Collections": 341,
+      "memoryMeasurementOperations": 4096
+    },
+    {
+      "stage": "stage5-closed",
+      "compilerSha256": "95DF7B5DFF347A5D28565216CF8315E48612C341AA6770DA8423065642BE544D",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericRestBenchmarks.Run(Case: \"restVaryingIndex\", N: 10000)",
+      "parameters": "Case=restVaryingIndex&N=10000",
+      "meanNanoseconds": 165417.7001953125,
+      "standardDeviationNanoseconds": 8506.624574388174,
+      "minNanoseconds": 157407.1044921875,
+      "maxNanoseconds": 174345.947265625,
+      "measurementsNanoseconds": [
+        157407.1044921875,
+        164500.048828125,
+        174345.947265625
+      ],
+      "bytesAllocatedPerInvocation": 1280001,
+      "gen0Collections": 303,
+      "memoryMeasurementOperations": 4096
+    },
+    {
+      "stage": "stage5-closed",
+      "compilerSha256": "95DF7B5DFF347A5D28565216CF8315E48612C341AA6770DA8423065642BE544D",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericRestBenchmarks.Run(Case: \"restPacking\", N: 10000)",
+      "parameters": "Case=restPacking&N=10000",
+      "meanNanoseconds": 181245.01953125,
+      "standardDeviationNanoseconds": 2059.469477146243,
+      "minNanoseconds": 179370.1904296875,
+      "maxNanoseconds": 183449.3896484375,
+      "measurementsNanoseconds": [
+        179370.1904296875,
+        183449.3896484375,
+        180915.478515625
+      ],
+      "bytesAllocatedPerInvocation": 1440001,
+      "gen0Collections": 341,
+      "memoryMeasurementOperations": 4096
+    },
+    {
+      "stage": "stage5-closed",
+      "compilerSha256": "95DF7B5DFF347A5D28565216CF8315E48612C341AA6770DA8423065642BE544D",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericRestBenchmarks.Run(Case: \"restSpread\", N: 10000)",
+      "parameters": "Case=restSpread&N=10000",
+      "meanNanoseconds": 310330.9895833333,
+      "standardDeviationNanoseconds": 20121.690105965783,
+      "minNanoseconds": 289586.669921875,
+      "maxNanoseconds": 329766.11328125,
+      "measurementsNanoseconds": [
+        311640.185546875,
+        329766.11328125,
+        289586.669921875
+      ],
+      "bytesAllocatedPerInvocation": 1200315,
+      "gen0Collections": 142,
+      "memoryMeasurementOperations": 2048
+    },
+    {
+      "stage": "stage5-closed",
+      "compilerSha256": "95DF7B5DFF347A5D28565216CF8315E48612C341AA6770DA8423065642BE544D",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericRestBenchmarks.Run(Case: \"restSpreadLength\", N: 10000)",
+      "parameters": "Case=restSpreadLength&N=10000",
+      "meanNanoseconds": 324990.13671875,
+      "standardDeviationNanoseconds": 3590.072287838523,
+      "minNanoseconds": 321737.5,
+      "maxNanoseconds": 328842.1875,
+      "measurementsNanoseconds": [
+        328842.1875,
+        324390.72265625,
+        321737.5
+      ],
+      "bytesAllocatedPerInvocation": 1440315,
+      "gen0Collections": 170,
+      "memoryMeasurementOperations": 2048
+    },
+    {
+      "stage": "stage5-closed",
+      "compilerSha256": "95DF7B5DFF347A5D28565216CF8315E48612C341AA6770DA8423065642BE544D",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericRestBenchmarks.Run(Case: \"restDynamicLength\", N: 10000)",
+      "parameters": "Case=restDynamicLength&N=10000",
+      "meanNanoseconds": 882903.125,
+      "standardDeviationNanoseconds": 71408.04257155802,
+      "minNanoseconds": 839644.921875,
+      "maxNanoseconds": 965324.12109375,
+      "measurementsNanoseconds": [
+        965324.12109375,
+        843740.33203125,
+        839644.921875
+      ],
+      "bytesAllocatedPerInvocation": 2960102,
+      "gen0Collections": 175,
+      "memoryMeasurementOperations": 1024
+    },
+    {
+      "stage": "stage5-closed",
+      "compilerSha256": "95DF7B5DFF347A5D28565216CF8315E48612C341AA6770DA8423065642BE544D",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericRestBenchmarks.Run(Case: \"restMixedTargets\", N: 10000)",
+      "parameters": "Case=restMixedTargets&N=10000",
+      "meanNanoseconds": 897131.4453125,
+      "standardDeviationNanoseconds": 29653.72617105936,
+      "minNanoseconds": 877971.875,
+      "maxNanoseconds": 931288.18359375,
+      "measurementsNanoseconds": [
+        931288.18359375,
+        882134.27734375,
+        877971.875
+      ],
+      "bytesAllocatedPerInvocation": 1840198,
+      "gen0Collections": 109,
+      "memoryMeasurementOperations": 1024
+    },
+    {
+      "stage": "stage5-closed",
+      "compilerSha256": "95DF7B5DFF347A5D28565216CF8315E48612C341AA6770DA8423065642BE544D",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericRestDispatchBenchmarks.Run(Case: \"Reads\", N: 10000)",
+      "parameters": "Case=Reads&N=10000",
+      "meanNanoseconds": 22832.848103841145,
+      "standardDeviationNanoseconds": 311.03880350638394,
+      "minNanoseconds": 22639.010620117188,
+      "maxNanoseconds": 23191.616821289062,
+      "measurementsNanoseconds": [
+        22639.010620117188,
+        22667.916870117188,
+        23191.616821289062
+      ],
+      "bytesAllocatedPerInvocation": 0,
+      "gen0Collections": 0,
+      "memoryMeasurementOperations": 32768
+    },
+    {
+      "stage": "stage5-closed",
+      "compilerSha256": "95DF7B5DFF347A5D28565216CF8315E48612C341AA6770DA8423065642BE544D",
+      "benchmark": "SharpTS.Microbenchmarks.Benchmarks.NumericRestDispatchBenchmarks.Run(Case: \"Length\", N: 10000)",
+      "parameters": "Case=Length&N=10000",
+      "meanNanoseconds": 671861.0677083334,
+      "standardDeviationNanoseconds": 23610.496813321308,
+      "minNanoseconds": 654837.40234375,
+      "maxNanoseconds": 698814.74609375,
+      "measurementsNanoseconds": [
+        698814.74609375,
+        654837.40234375,
+        661931.0546875
+      ],
+      "bytesAllocatedPerInvocation": 2960007,
+      "gen0Collections": 175,
+      "memoryMeasurementOperations": 1024
+    }
+  ]
+}

@@ -273,18 +273,85 @@ public sealed class StableNumericHotPathTests
             i.Operand is MethodBase { Name: "InvokeMethodValue" });
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void SpreadRest_PreservesNumericSourceAndIndependentDestination(bool numericSource)
+    {
+        const string source = """
+            function input(): number[] {
+                const values: number[] = [];
+                values.push(1); values.push(2); values.push(3);
+                return values;
+            }
+            function collect(prefix: number, ...values: number[]): number[] { return values; }
+            function run(values: number[]): number[] { return collect(0, ...values, 4); }
+            """;
+        Assert.Empty(TestHarness.CompileAndVerifyOnly(source));
+        var assembly = Compile(source);
+        var type = assembly.GetType("$Array")!;
+        var numeric = type.GetField("_isNumeric", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        var store = type.GetField("_numStore", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        object input = numericSource ? FindFunction(assembly, "input").Invoke(null, null)!
+            : new List<object> { 1d, 2d, 3d };
+        var run = FindFunction(assembly, "run").CreateDelegate<Func<object, object>>();
+        object result = run(input);
+        Assert.True((bool)numeric.GetValue(result)!);
+        Assert.Empty((List<object>)result);
+        var get = type.GetMethod("GetDouble")!;
+        for (int i = 0; i < 4; i++) Assert.Equal(i + 1d, get.Invoke(result, [i]));
+        if (numericSource)
+        {
+            Assert.True((bool)numeric.GetValue(input)!);
+            Assert.Empty((List<object>)input);
+            Assert.NotSame(store.GetValue(input), store.GetValue(result));
+        }
+    }
+
     [Fact]
     public void OrdinaryRestPacking_FillsFinalStorageWithoutTemporaryArray()
     {
         const string source = """
             function escape(...values: number[]): number[] { return values; }
-            function run(n: number): number { return escape(n, 1, 2, 3).length; }
+            function run(n: number): number[] { return escape(n, 1, 2, 3); }
             """;
         Assert.Empty(TestHarness.CompileAndVerifyOnly(source));
         var instructions = ReadInstructions(FindFunction(Compile(source), "run")).ToArray();
         Assert.DoesNotContain(instructions, i => i.OpCode == OpCodes.Newarr);
-        Assert.Contains(instructions, i => i.Operand is MethodBase { Name: "AppendRest" });
+        Assert.Contains(instructions, i => i.Operand is MethodBase { Name: "CreateNumericRest" });
+        Assert.Contains(instructions, i => i.Operand is MethodBase { Name: "PushDouble" });
+        Assert.DoesNotContain(instructions, i => i.OpCode == OpCodes.Box && i.Operand == typeof(double));
     }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(4)]
+    [InlineData(16)]
+    public void OrdinaryNumericRest_KeepsFreshStorage(int count)
+    {
+        string arguments = string.Join(", ", Enumerable.Repeat("n", count));
+        var assembly = Compile($$"""
+            function escape(...values: number[]): number[] { return values; }
+            function run(n: number): number[] { return escape({{arguments}}); }
+            """);
+        var run = FindFunction(assembly, "run").CreateDelegate<Func<double, object>>();
+        var first = run(-0.0);
+        var second = run(2);
+        Assert.NotSame(first, second);
+        var type = assembly.GetType("$Array")!;
+        var numeric = type.GetField("_isNumeric", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        Assert.Equal(count > 0, numeric.GetValue(first));
+        Assert.Empty((List<object>)first);
+        if (count > 0)
+        {
+            var get = type.GetMethod("GetDouble")!;
+            Assert.Equal(BitConverter.DoubleToInt64Bits(-0.0),
+                BitConverter.DoubleToInt64Bits((double)get.Invoke(first, [0])!));
+            Assert.Equal(2d, get.Invoke(second, [count - 1]));
+        }
+    }
+
 
     [Fact]
     public void UsingBindingsPreventConstantIndexSpecialization()
@@ -302,7 +369,7 @@ public sealed class StableNumericHotPathTests
             method => method.Name.Contains("$rest$arity", StringComparison.Ordinal));
     }
 
-    private static Assembly Compile(string source)
+    internal static Assembly Compile(string source)
     {
         var statements = new Parser(new Lexer(source).ScanTokens()).ParseOrThrow();
         TypeMap typeMap = new TypeChecker().Check(statements);
@@ -312,12 +379,42 @@ public sealed class StableNumericHotPathTests
         return Assembly.Load(compiler.SaveToBytes());
     }
 
-    private static MethodInfo FindFunction(Assembly assembly, string name) =>
+    [Fact]
+    public void WarmArgumentConversion_UsesCachedSignatureMetadata()
+    {
+        var assembly = Compile("""
+            function run(prefix: number, ...values: number[]): number { return prefix + values.length; }
+            """);
+        var wrapper = assembly.GetType("$TSFunction")!;
+        foreach (string name in new[] { "ConvertArgsForUnionTypes", "CoercePrimitiveArgs" })
+        {
+            var helper = wrapper.GetMethod(name, BindingFlags.NonPublic | BindingFlags.Static)!;
+            Assert.Equal(typeof(ParameterInfo[]), helper.GetParameters()[0].ParameterType);
+            Assert.DoesNotContain(ReadInstructions(helper), i => i.Operand is MethodBase { Name: "GetParameters" });
+        }
+    }
+
+    [Fact]
+    public void IndirectNumericAndStringParameters_RetainClrConversions()
+    {
+        const string source = """
+            function numeric(prefix: number, ...values: number[]): number { return prefix + values[0] + values.length; }
+            function text(prefix: string, ...values: number[]): string { return prefix + ":" + values.length; }
+            const n: any = numeric;
+            const s: any = text;
+            console.log(n("10", 1, 2), s(7, 1, 2));
+            console.log(n.call(null, "20", 1, 2), s.apply(null, [8, 1]));
+            """;
+        // Foreign values crossing typed CLR slots retain the existing compiled ABI.
+        Assert.Equal("13 7:2\n23 8:1\n", TestHarness.Run(source, ExecutionMode.Compiled));
+    }
+
+    internal static MethodInfo FindFunction(Assembly assembly, string name) =>
         assembly.GetType("$Program")!
             .GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static)
             .Single(method => method.Name.EndsWith(name, StringComparison.Ordinal));
 
-    private static IEnumerable<(OpCode OpCode, MemberInfo? Operand)> ReadInstructions(
+    internal static IEnumerable<(OpCode OpCode, MemberInfo? Operand)> ReadInstructions(
         MethodInfo method)
     {
         byte[] il = method.GetMethodBody()?.GetILAsByteArray()

@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 1,
+  "startedAtUtc": "2026-09-05T04:37:23.4864843Z",
+  "baselineCompilerSha256": "20BD7E14BF9E9DD4B88232DA35F0B92F805F529815D37DA1E2F19272E208D30F",
+  "candidateCompilerSha256": "95DF7B5DFF347A5D28565216CF8315E48612C341AA6770DA8423065642BE544D",
+  "sourceSha256": "1AF86575727A326B20908E56C8074C3E6DC0835E1F9BA13457C2276C34655CCC",
+  "originalHarnessSha256": "CB871357A4A945814C2FCA95D63F722CC1C39EF694BA124AC47ABB2FE5E6F364",
+  "measuredHarnessSha256": "B6F8CC253E50B41D6194602AD3F209FDEC73953AF596570FCCF76A9A53A2BCA4",
+  "baselineAssemblySha256": "F927BC4C2FC2EE0B305FC5AEAD0F4372AAD9BD20727139252C2617DBB088BB7C",
+  "candidateAssemblySha256": "8100F99591ECAB12FF8FA6AB78395350D355DB3FF14D54D921A3C7926AA981FD",
+  "launches": 5,
+  "warmupMs": 500,
+  "sampleBudgetMs": 300,
+  "requestedCases": null,
+  "dotnetInfo": ".NET SDK:\n Version:           10.0.400\n Commit:            14fbf8d527\n Workload version:  10.0.400-manifests.b0ae88bd\n MSBuild version:   18.9.6+14fbf8d52\n\nRuntime Environment:\n OS Name:     Windows\n OS Version:  10.0.29639\n OS Platform: Windows\n RID:         win-x64\n Base Path:   C:\\Program Files\\dotnet\\sdk\\10.0.400\\\n\n.NET workloads installed:\n [maui-windows]\n   Installation Source: VS 18.10.12120.281\n   Manifest Version:    10.0.20/10.0.100\n   Manifest Path:       C:\\Program Files\\dotnet\\sdk-manifests\\10.0.100\\microsoft.net.sdk.maui\\10.0.20\\WorkloadManifest.json\n   Install Type:              Msi\n\n [maccatalyst]\n   Installation Source: VS 18.10.12120.281\n   Manifest Version:    26.5.10301/10.0.100\n   Manifest Path:       C:\\Program Files\\dotnet\\sdk-manifests\\10.0.100\\microsoft.net.sdk.maccatalyst\\26.5.10301\\WorkloadManifest.json\n   Install Type:              Msi\n\n [ios]\n   Installation Source: VS 18.10.12120.281\n   Manifest Version:    26.5.10301/10.0.100\n   Manifest Path:       C:\\Program Files\\dotnet\\sdk-manifests\\10.0.100\\microsoft.net.sdk.ios\\26.5.10301\\WorkloadManifest.json\n   Install Type:              Msi\n\n [android]\n   Installation Source: VS 18.10.12120.281\n   Manifest Version:    36.1.69/10.0.100\n   Manifest Path:       C:\\Program Files\\dotnet\\sdk-manifests\\10.0.100\\microsoft.net.sdk.android\\36.1.69\\WorkloadManifest.json\n   Install Type:              Msi\n\nConfigured to use workload sets when installing new manifests.\nNo workload sets are installed. Run \"dotnet workload restore\" to install a workload set.\n\nHost:\n  Version:      10.0.11\n  Architecture: x64\n  Commit:       e2f47b0110\n\n.NET SDKs installed:\n  10.0.400 [C:\\Program Files\\dotnet\\sdk]\n\n.NET runtimes installed:\n  Microsoft.AspNetCore.App 8.0.30 [C:\\Program Files\\dotnet\\shared\\Microsoft.AspNetCore.App]\n  Microsoft.AspNetCore.App 10.0.11 [C:\\Program Files\\dotnet\\shared\\Microsoft.AspNetCore.App]\n  Microsoft.NETCore.App 8.0.30 [C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App]\n  Microsoft.NETCore.App 10.0.11 [C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App]\n  Microsoft.WindowsDesktop.App 8.0.30 [C:\\Program Files\\dotnet\\shared\\Microsoft.WindowsDesktop.App]\n  Microsoft.WindowsDesktop.App 10.0.11 [C:\\Program Files\\dotnet\\shared\\Microsoft.WindowsDesktop.App]\n\nOther architectures found:\n  x86   [C:\\Program Files (x86)\\dotnet]\n    registered at [HKLM\\SOFTWARE\\dotnet\\Setup\\InstalledVersions\\x86\\InstallLocation]\n\nEnvironment variables:\n  Not set\n\nglobal.json file:\n  C:\\Users\\NicholasNassiri\\.codex\\worktrees\\527e\\SharpTS\\global.json\n\nLearn more:\n  https://aka.ms/dotnet/info\n\nDownload .NET:\n  https://aka.ms/dotnet/download",
+  "nodeVersion": "v22.23.2",
+  "revision": "c03e0e74e52fa508e3b9846116eefd2bba04a3af",
+  "workingTreeChanges": [
+    " M ../../docs/plans/language-hot-paths-implementation.md",
+    " M ../../src/SharpTS/Compilation/EmittedRuntime.cs",
+    " M ../../src/SharpTS/Compilation/ILCompiler.Functions.cs",
+    " M ../../src/SharpTS/Compilation/ILEmitter.Helpers.cs",
+    " M ../../src/SharpTS/Compilation/ILEmitter.Statements.cs",
+    " M ../../src/SharpTS/Compilation/RuntimeEmitter.TSFunction.cs",
+    " M ../../src/SharpTS/Compilation/RuntimeEmitter.cs",
+    " M ../../src/SharpTS/Compilation/StableNumericRestFunctionAnalyzer.cs",
+    " M ../../tests/SharpTS.Tests/CompilerTests/StableNumericHotPathTests.cs",
+    "?? compare-language-hot-paths.ps1",
+    "?? probes/",
+    "?? results/",
+    "?? ../../docs/plans/language-hot-paths-results.md",
+    "?? ../../src/SharpTS/Compilation/ILEmitter.NumericIndirectCalls.cs",
+    "?? ../../src/SharpTS/Compilation/RuntimeEmitter.TSFunction.NumericRest.cs",
+    "?? ../../tests/SharpTS.Tests/CompilerTests/NumericIndirectCallTests.cs"
+  ],
+  "completedAtUtc": "2026-09-05T04:47:02.5888032Z",
+  "measurements": 675,
+  "baselineRuntimeConfiguration": {
+    "runtimeOptions": {
+      "tfm": "net10.0",
+      "framework": {
+        "name": "Microsoft.NETCore.App",
+        "version": "10.0.0"
+      },
+      "configProperties": {
+        "System.GC.Server": false,
+        "System.GC.Concurrent": true
+      }
+    }
+  },
+  "candidateRuntimeConfiguration": {
+    "runtimeOptions": {
+      "tfm": "net10.0",
+      "framework": {
+        "name": "Microsoft.NETCore.App",
+        "version": "10.0.0"
+      },
+      "configProperties": {
+        "System.GC.Server": false,
+        "System.GC.Concurrent": true
+      }
+    }
+  }
+}

@@ -365,6 +365,10 @@ public class EmittedRuntime
     // the iterator-helper skip-index-box detection so it never drops the index
     // arg for a callback that could observe it through `arguments`.
     public FieldBuilder TSFunctionCapturesArgumentsField { get; set; } = null!;
+    public FieldBuilder TSFunctionNumericRest4Field { get; set; } = null!;
+    public TypeBuilder NumericRest4AttrType { get; set; } = null!;
+    public ConstructorBuilder NumericRest4AttrCtor { get; set; } = null!;
+    public FieldBuilder NumericRest4AttrValueField { get; set; } = null!;
     // Marker attribute applied to function-declaration methods that reference
     // `arguments`. Its ctor is invoked via CustomAttributeBuilder at method
     // definition; the type token is read back via MethodInfo.IsDefined.
@@ -1586,7 +1590,12 @@ public class EmittedRuntime
     public ConstructorBuilder TSArrayLiteralCtor { get; set; } = null!;
     public ConstructorBuilder TSArrayNumericLiteralCtor { get; set; } = null!;
     public ConstructorBuilder TSArrayRestCtor { get; set; } = null!;
+    public MethodBuilder TSArrayCreateNumericRest { get; set; } = null!;
     public MethodBuilder TSArrayAppendRest { get; set; } = null!;
+    public MethodBuilder TSArrayAppendRestDouble { get; set; } = null!;
+    public MethodBuilder TSArrayAppendRestValue { get; set; } = null!;
+    public MethodBuilder TSArrayReserveRest { get; set; } = null!;
+    public MethodBuilder TSArrayAppendNumericRestSource { get; set; } = null!;
     public MethodBuilder TSArrayFinishRest { get; set; } = null!;
     /// <summary>$Array(object?[] ctorArgs) — ECMA-262 Array-constructor semantics for guest classes extending Array (#233): implicit ctors and super(...) chain through this.</summary>
     public ConstructorBuilder TSArrayCtorFromCtorArgs { get; set; } = null!;
@@ -1612,6 +1621,7 @@ public class EmittedRuntime
     // GetDouble/SetDouble/PushDouble are the fast paths the compiler emits at
     // statically-number[] sites; EnsureBoxed is the deopt (numeric -> boxed).
     public MethodBuilder TSArrayCanGetDouble { get; set; } = null!;
+    public MethodBuilder TSArrayTryGetBoxedDouble { get; set; } = null!;
     public MethodBuilder TSArrayGetDouble { get; set; } = null!;
     public MethodBuilder TSArraySetDouble { get; set; } = null!;
     public MethodBuilder TSArrayPushDouble { get; set; } = null!;
