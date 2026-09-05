@@ -11,6 +11,14 @@ public partial class ILEmitter
         // Check if any element is a spread
         bool hasSpreads = a.Elements.Any(e => e is Expr.Spread);
 
+        if (!hasSpreads && a.Elements.Count > 0 &&
+            ArrayElements.Resolve(_ctx.TypeMap?.Get(a))?.Kind == ArrayElementsKind.Double &&
+            Enumerable.Range(0, a.Elements.Count).All(index => !a.IsHole(index)))
+        {
+            EmitNumericArrayLiteral(a);
+            return;
+        }
+
         // Typed array optimization: emit List<double> or List<bool> for empty typed arrays.
         // Only for empty arrays (populated via index assignment) to avoid issues with
         // array methods (flatMap, map, etc.) that expect List<object?>.
@@ -99,6 +107,41 @@ public partial class ILEmitter
         // The stack now holds a List<object?> reference. Reset the stack-type
         // tracker so a subsequent EmitBoxIfNeeded doesn't reinterpret the
         // reference as whatever primitive the previous expression left behind.
+        SetStackUnknown();
+    }
+
+    private void EmitNumericArrayLiteral(Expr.ArrayLiteral literal)
+    {
+        // Evaluate once, left-to-right, before choosing storage. An annotation
+        // alone cannot justify coercing an object-backed value to a number (an
+        // `any` alias or assertion may hold a string). Keep the boxed fallback
+        // unless every emitted element is already a native number.
+        var values = new List<LocalBuilder>(literal.Elements.Count);
+        foreach (var element in literal.Elements)
+        {
+            EmitExpression(element);
+            bool nativeNumber = StackType == StackType.Double;
+            if (nativeNumber) EnsureDouble();
+            else EmitBoxIfNeeded(element);
+            var local = IL.DeclareLocal(nativeNumber ? _ctx.Types.Double : _ctx.Types.Object);
+            IL.Emit(OpCodes.Stloc, local);
+            values.Add(local);
+        }
+
+        bool numeric = values.All(local => local.LocalType == _ctx.Types.Double);
+        IL.Emit(OpCodes.Ldc_I4, values.Count);
+        IL.Emit(OpCodes.Newarr, numeric ? _ctx.Types.Double : _ctx.Types.Object);
+        for (int index = 0; index < values.Count; index++)
+        {
+            IL.Emit(OpCodes.Dup);
+            IL.Emit(OpCodes.Ldc_I4, index);
+            IL.Emit(OpCodes.Ldloc, values[index]);
+            if (!numeric && values[index].LocalType == _ctx.Types.Double)
+                IL.Emit(OpCodes.Box, _ctx.Types.Double);
+            IL.Emit(numeric ? OpCodes.Stelem_R8 : OpCodes.Stelem_Ref);
+        }
+        if (numeric) IL.Emit(OpCodes.Newobj, _ctx.Runtime!.TSArrayNumericLiteralCtor);
+        else IL.Emit(OpCodes.Call, _ctx.Runtime!.CreateArray);
         SetStackUnknown();
     }
 

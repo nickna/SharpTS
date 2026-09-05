@@ -92,10 +92,9 @@ public partial class RuntimeEmitter
         runtime.CreateArray = method;
 
         var il = method.GetILGenerator();
-        // return new $Array(new List<object>(elements));
+        // Copy the literal elements directly into the final array's storage.
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, _types.IEnumerableOfObject));
-        il.Emit(OpCodes.Newobj, runtime.TSArrayCtor);
+        il.Emit(OpCodes.Newobj, runtime.TSArrayLiteralCtor);
         il.Emit(OpCodes.Ret);
     }
 

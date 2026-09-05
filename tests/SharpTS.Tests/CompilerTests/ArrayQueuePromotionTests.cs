@@ -50,6 +50,24 @@ public class ArrayQueuePromotionTests
     }
 
     [Fact]
+    public void QueueReservationSupportsNonzeroRangesAndEarlierAppends()
+    {
+        const string source = """
+            function queue(start: number, end: number): number {
+                const values: number[] = [];
+                values.push(100);
+                for (let i: number = start; i < end; i++) values.push(i);
+                let total: number = 0;
+                while (values.length > 0) total = total + values.shift();
+                return total;
+            }
+            console.log(queue(3, 8), queue(8, 3));
+            """;
+        Assert.Empty(TestHarness.CompileAndVerifyOnly(source));
+        Assert.Equal("125 100\n", TestHarness.RunCompiled(source));
+    }
+
+    [Fact]
     public void QueueHelpersPassIlVerification()
     {
         Assert.Empty(TestHarness.CompileAndVerifyOnly(Source));
