@@ -103,6 +103,28 @@ For repeatable candidate-vs-baseline runs on native Windows and WSL, see
 
 ## How timing works
 
+The shared algorithm drivers supply independent expected checksums to catch
+miscompilations before and after sampling. Factorial uses finite inputs
+10, 20, and 100; `arithmetic-loop` provides a bounded accumulator at larger
+iteration counts. Its body is also shared with the microbenchmark suite.
+
+`callback-control` reports synchronous and asynchronous empty-callback costs.
+Treat these as diagnostic floors, not quantities to subtract from other cases:
+inlining and tiering depend on the callback body. `string-scaling` extends the
+unchanged shared string workload through one million iterations. For compiler
+scaling investigations, select `-Runtimes compiled,node`; the largest inputs
+are intentionally expensive in the interpreter.
+
+```powershell
+./benchmarks/cross-runtime/run-benchmarks.ps1 `
+  -Workloads strings,string-scaling,json,arithmetic-loop,callback-control `
+  -Runtimes compiled,node -Launches 3 -OutputDirectory .perf-algorithms
+```
+
+Use paired baseline/candidate measurements for performance acceptance. Ordinary
+CI should verify checksums, compilation, and generated-code regression checks;
+wall-clock ratios belong in the local performance workflow, not noisy CI gates.
+
 Each workload calls `bench(name, param, fn, expected?)` from
 `scripts/lib/bench.ts`, which:
 

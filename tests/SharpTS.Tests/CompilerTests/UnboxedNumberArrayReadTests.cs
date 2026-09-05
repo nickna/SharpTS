@@ -11,6 +11,44 @@ namespace SharpTS.Tests.CompilerTests;
 public sealed class UnboxedNumberArrayReadTests
 {
     [Fact]
+    public void ArrayLength_KeepsNumericResultUnboxed()
+    {
+        Assembly assembly = Compile("""
+            function length(values: { value: number }[]): number {
+                return values.length;
+            }
+            """);
+        MethodInfo method = FindFunction(assembly, "length");
+        Assert.DoesNotContain(ReadInstructions(method), instruction => instruction.OpCode == OpCodes.Box);
+        var length = method.CreateDelegate<Func<object, double>>();
+        var values = new List<object> { new object() };
+        for (int i = 0; i < 1000; i++) _ = length(values);
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        double sum = 0;
+        for (int i = 0; i < 10_000; i++) sum += length(values);
+        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        Assert.Equal(10_000, sum);
+        Assert.True(allocated <= 1024, $"Array length reads allocated {allocated:N0} bytes.");
+    }
+
+    [Theory, ModeData]
+    public void ArrayLength_PreservesObjectConsumersAndMutations(ExecutionMode mode)
+    {
+        const string source = """
+            function length(values: any[]): any { return values.length; }
+            const values: any[] = [];
+            values.push("x");
+            console.log(length(values), typeof length(values));
+            values.push("y");
+            console.log(values.length + 1);
+            console.log(JSON.stringify({ size: values.length }));
+            const parsed: any[] = JSON.parse('[1,2,3]');
+            console.log(length(parsed));
+            """;
+        Assert.Equal("1 number\n3\n{\"size\":2}\n3\n", TestHarness.Run(source, mode));
+    }
+
+    [Fact]
     public void NumericConsumer_UsesGuardedGetDoubleWithoutBoxingHotResult()
     {
         Assembly assembly = Compile("""

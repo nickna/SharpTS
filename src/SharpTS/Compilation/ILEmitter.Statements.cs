@@ -917,6 +917,8 @@ public partial class ILEmitter
     /// </summary>
     protected override void EmitFor(Stmt.For f)
     {
+        var savedStringSnapshots = _stringScanSnapshots;
+        _stringScanSnapshots = new(savedStringSnapshots);
         // Analyze the loop to see if we can use an unboxed counter
         var analysis = ForLoopAnalyzer.Analyze(f, _ctx.ClosureAnalyzer);
 
@@ -958,6 +960,8 @@ public partial class ILEmitter
             // Emit initializer (declares loop variable in current scope)
             if (f.Initializer != null)
                 EmitStatement(f.Initializer);
+
+            EmitStringScanSnapshots(f);
 
             // The Count Primes setup loop fills a fresh promoted boolean[] with
             // `true`. Emit a compact native fill loop and jump over the ordinary
@@ -1060,6 +1064,7 @@ public partial class ILEmitter
             if (activeIntCounter != null)
                 _ctx.IntegerCounterLocals.Remove(activeIntCounter);
             _integerLoopCounterName = savedIntCounterName;
+            _stringScanSnapshots = savedStringSnapshots;
         }
     }
 

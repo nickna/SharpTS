@@ -17,11 +17,11 @@ public static class IdiomaticCSharp
     }
 
     /// <summary>
-    /// Factorial (iterative) - Uses long to avoid overflow, native int for loop
+    /// Factorial (iterative) - finite double arithmetic, native int for loop.
     /// </summary>
-    public static long Factorial(int n)
+    public static double Factorial(int n)
     {
-        long result = 1;
+        double result = 1;
         for (int i = 2; i <= n; i++)
         {
             result *= i;
