@@ -50,6 +50,22 @@ The original direct-delegate JSON benchmarks remain as a comparison.
 
 ## Running
 
+The `CustomIterator*` benchmarks embed the original stable and dynamic
+cross-runtime sources, including their `bench` import. The compiled cases call
+the original workload functions through cached delegates at 1,000, 10,000, and
+100,000 values. They retain emitted return-value boxing and validate the checksum
+outside measurement. The dynamic source retains its alias and `next` assignment.
+The interpreter cases execute the original function ASTs without the timing driver.
+
+`CustomIteratorNextBodyBenchmarks` isolates the emitted dynamic `next` body;
+`CustomIteratorCallBenchmarks` is an ordinary generic method-call control. These
+attribution cases exclude parts of iteration and are not cross-runtime speedup
+claims. All four classes report managed allocation through `MemoryDiagnoser`.
+
+```powershell
+dotnet run -c Release --project benchmarks/micro/SharpTS.Microbenchmarks -- --filter '*CustomIterator*' --job Short
+```
+
 ```bash
 # From the repo root. BenchmarkDotNet requires a Release build.
 dotnet run -c Release --project benchmarks/micro/SharpTS.Microbenchmarks

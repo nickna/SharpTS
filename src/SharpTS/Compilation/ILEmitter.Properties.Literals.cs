@@ -337,7 +337,8 @@ public partial class ILEmitter
         if (!_ctx.RuntimeFeatures.CanAssumeCompactObjectRecordIsUnmaterialized(
                 fingerprint) &&
             !_ctx.RuntimeFeatures.CompactObjectRecordStablePushLiterals.Contains(literal) &&
-            !_ctx.RuntimeFeatures.CompactObjectRecordStableLocalLiterals.Contains(literal))
+            !_ctx.RuntimeFeatures.CompactObjectRecordStableLocalLiterals.Contains(literal) &&
+            !_ctx.RuntimeFeatures.CompactObjectRecordIteratorResultShapes.Contains(fingerprint))
         {
             return false;
         }

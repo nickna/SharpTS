@@ -338,9 +338,9 @@ public class TypeMap
 
     /// <summary>
     /// Marks a function-owned captured numeric binding whose shared display-class
-    /// slot can remain an unboxed <c>double</c>. The stable custom-iterator analyzer
-    /// only records bindings initialized before iterator creation, referenced by the
-    /// exact non-escaping <c>next</c> closure, and kept numeric by every write.
+    /// slot can remain an unboxed <c>double</c>. The numeric function capture proof
+    /// requires initialization before closure creation, an unambiguous binding,
+    /// a single capturing callable, and numeric values on every write.
     /// </summary>
     public void MarkStableNumericFunctionCaptureField(object callable, string name)
     {

@@ -586,6 +586,7 @@ public partial class RuntimeEmitter
         var symbolDict = il.DeclareLocal(_types.DictionaryObjectObject);
         var iteratorFunction = il.DeclareLocal(_types.Object);
         var iterator = il.DeclareLocal(_types.Object);
+        var nextMethod = il.DeclareLocal(_types.Object);
         var iteratorResult = il.DeclareLocal(_types.Object);
         var clrIterator = il.DeclareLocal(_types.IEnumeratorOfObject);
         var returnFunction = il.DeclareLocal(_types.Object);
@@ -673,6 +674,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Newarr, _types.Object);
         il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
         il.Emit(OpCodes.Stloc, iterator);
+        il.Emit(OpCodes.Ldloc, iterator);
+        il.Emit(OpCodes.Call, runtime.GetIteratorNextMethod);
+        il.Emit(OpCodes.Stloc, nextMethod);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Stloc, customIterator);
         il.Emit(OpCodes.Br, loop);
@@ -699,7 +703,8 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(jsIteratorElement);
         il.Emit(OpCodes.Ldloc, iterator);
-        il.Emit(OpCodes.Call, runtime.InvokeIteratorNext);
+        il.Emit(OpCodes.Ldloc, nextMethod);
+        il.Emit(OpCodes.Call, runtime.InvokeCapturedIteratorNext);
         il.Emit(OpCodes.Stloc, iteratorResult);
         il.Emit(OpCodes.Ldloc, iteratorResult);
         il.Emit(OpCodes.Call, runtime.GetIteratorDone);

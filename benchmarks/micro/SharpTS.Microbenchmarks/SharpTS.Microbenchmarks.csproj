@@ -34,6 +34,9 @@
     <!-- Shared with the cross-runtime shell harness (benchmarks/scripts/lib)
          so both benchmark systems measure byte-identical algorithm sources. -->
     <EmbeddedResource Include="..\..\cross-runtime\scripts\lib\algorithms.ts" LogicalName="SharpTS.Microbenchmarks.algorithms.ts" />
+    <EmbeddedResource Include="..\..\cross-runtime\scripts\custom-iterator.ts" LogicalName="SharpTS.Microbenchmarks.CustomIterator.stable.ts" />
+    <EmbeddedResource Include="..\..\cross-runtime\scripts\custom-iterator-dynamic-control.ts" LogicalName="SharpTS.Microbenchmarks.CustomIterator.dynamic.ts" />
+    <EmbeddedResource Include="..\..\cross-runtime\scripts\lib\bench.ts" LogicalName="SharpTS.Microbenchmarks.CustomIterator.bench.ts" />
   </ItemGroup>
 
   <!-- Create output directory for pre-compiled DLLs -->

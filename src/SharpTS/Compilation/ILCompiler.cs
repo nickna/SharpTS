@@ -667,6 +667,7 @@ public partial class ILCompiler
         StableMapIterationAnalyzer.Analyze(statements, _typeMap, _closures.Analyzer);
         StableCustomIteratorAnalyzer.Analyze(
             statements, _typeMap, _closures.Analyzer, _features);
+        StableNumericFunctionCaptureAnalyzer.Analyze(statements, _typeMap, _closures.Analyzer);
         NumericMapLocalPromotionAnalyzer.Analyze(statements, _typeMap, _closures.Analyzer);
         StablePrimitivePromiseThenAnalyzer.Analyze(
             statements, _typeMap, _closures.Analyzer);

@@ -1001,11 +1001,24 @@ public partial class Interpreter
         // it can clean up. `iteratorDone` suppresses the close on normal
         // exhaustion (a completed iterator must not be re-closed). yield is
         // legal here because the try has only a finally, no catch.
-        bool iteratorDone = false;
+        // Capture Get(iterator, "next") before entering the close region.
+        // Getter results still need the iterator receiver; lexical arrows do not.
+        object? nextMethod = iterator is SharpTSObject nextObject
+            ? EvaluateGetOnRecord(nextObject, "next")
+            : EvaluateGetOnInstanceRV((SharpTSInstance)iterator,
+                new Token(TokenType.IDENTIFIER, "next", null, 0)).ToObject();
+        nextMethod = TryBindReceiverForMethodAccess(nextMethod, iterator) ?? nextMethod;
+        if (nextMethod is SharpTSFunction nextFunction && iterator is SharpTSInstance nextInstance)
+            nextMethod = nextFunction.Bind(nextInstance);
+
+        // Only abandonment after a successful IteratorStepValue closes. A
+        // failure in next/done/value itself marks the iterator completed.
+        bool iteratorDone = true;
         try
         {
             while (true)
             {
+                iteratorDone = true;
                 // Honor the VM timeout token. A custom iterator whose next() never
                 // reports done — or whose done/value getters loop — would otherwise
                 // spin this thread forever, past the timeout. Under the Test262
@@ -1017,38 +1030,6 @@ public partial class Interpreter
                 // enumerator (it is consumed via .ToList()/foreach by spread,
                 // Array.from, yield*, etc.) so the thread actually exits.
                 ThrowIfExecutionCancelled();
-
-                // Get the next() method
-                object? nextMethod = null;
-                if (iterator is SharpTSObject iterObj)
-                {
-                    nextMethod = iterObj.GetProperty("next");
-                }
-                else if (iterator is SharpTSInstance iterInst)
-                {
-                    nextMethod = iterInst.GetRawField("next");
-                    if (nextMethod == null)
-                    {
-                        // Try getting a method from the class
-                        var tok = new Token(TokenType.IDENTIFIER, "next", null, 0);
-                        try { nextMethod = iterInst.Get(tok); } catch { }
-                    }
-                }
-
-                if (nextMethod == null)
-                {
-                    throw new InterpreterException("Iterator must have a next() method.");
-                }
-
-                // Bind next() to the iterator object so 'this' works correctly
-                if (nextMethod is SharpTSArrowFunction arrowFn)
-                {
-                    nextMethod = arrowFn.Bind(iterator!);
-                }
-                else if (nextMethod is SharpTSFunction fn && iterator is SharpTSInstance inst)
-                {
-                    nextMethod = fn.Bind(inst);
-                }
 
                 // Call next()
                 object? result;
@@ -1062,8 +1043,11 @@ public partial class Interpreter
                 }
                 else
                 {
-                    throw new InterpreterException("Iterator.next must be a function.");
+                    throw new ThrowException(new SharpTSTypeError("Iterator.next must be a function."));
                 }
+
+                if (result is null or SharpTSUndefined or double or string or bool or SharpTSBigInt or SharpTSSymbol)
+                    throw new ThrowException(new SharpTSTypeError("Iterator.next must return an object."));
 
                 // Get done and value from result
                 bool done = false;
@@ -1088,17 +1072,13 @@ public partial class Interpreter
                 {
                     var doneTok = new Token(TokenType.IDENTIFIER, "done", null, 0);
                     var valueTok = new Token(TokenType.IDENTIFIER, "value", null, 0);
-                    try
-                    {
-                        done = IsTruthy(resultInst.Get(doneTok));
-                        value = resultInst.Get(valueTok);
-                    }
-                    catch
-                    {
-                        // Fall back to field access
-                        done = IsTruthy(resultInst.GetRawField("done"));
-                        value = resultInst.GetRawField("value");
-                    }
+                    done = EvaluateGetOnInstanceRV(resultInst, doneTok).IsTruthy();
+                    value = done ? null : EvaluateGetOnInstanceRV(resultInst, valueTok).ToObject();
+                }
+                else if (result is SharpTSProxy resultProxy)
+                {
+                    done = IsTruthy(resultProxy.TrapGet("done", this));
+                    value = done ? null : resultProxy.TrapGet("value", this);
                 }
 
                 if (done)
@@ -1107,6 +1087,7 @@ public partial class Interpreter
                     yield break;
                 }
 
+                iteratorDone = false;
                 yield return value;
             }
         }

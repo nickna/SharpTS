@@ -919,6 +919,10 @@ public partial class RuntimeEmitter
         iwt.Emit(OpCodes.Callvirt, iwtInvokerInvokeSpan);
         iwt.Emit(OpCodes.Ret);
 
+        EmitTSFunctionInvokeWithThis0(typeBuilder, runtime, expectsThisField,
+            paramCountField, capturesArgumentsField, needsArgConversionField,
+            invokerField, methodField, targetField);
+
         // ToString method
         var toStringBuilder = typeBuilder.DefineMethod(
             "ToString",
@@ -1717,6 +1721,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, paramCountLocal);
         il.Emit(OpCodes.Newarr, _types.Object);
         il.Emit(OpCodes.Stloc, resultLocal);
+        EmitMissingRestPrefix(resultLocal);
 
         // regularParamCount = paramCount - 1
         // copyCount = min(argsLength, regularParamCount)
@@ -1804,6 +1809,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, paramCountLocal);
         il.Emit(OpCodes.Newarr, _types.Object);
         il.Emit(OpCodes.Stloc, arrayRestResult);
+        EmitMissingRestPrefix(arrayRestResult);
 
         // Copy regular params: Array.Copy(args, result, min(argsLength, paramCount - 1))
         var regularCount = il.DeclareLocal(_types.Int32);
@@ -1965,6 +1971,47 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
 
         return method;
+
+        void EmitMissingRestPrefix(LocalBuilder result)
+        {
+            // Rest packing must pad omitted ordinary parameters just like the
+            // non-rest path. CLR null suppresses JS default initializers.
+            var index = il.DeclareLocal(_types.Int32);
+            var condition = il.DefineLabel();
+            var body = il.DefineLabel();
+            var next = il.DefineLabel();
+            var done = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, padUndefinedMaskField);
+            il.Emit(OpCodes.Brfalse, done);
+            il.Emit(OpCodes.Ldloc, argsLengthLocal);
+            il.Emit(OpCodes.Stloc, index);
+            il.Emit(OpCodes.Br, condition);
+            il.MarkLabel(body);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, padUndefinedMaskField);
+            il.Emit(OpCodes.Ldloc, index);
+            il.Emit(OpCodes.Shr_Un);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.And);
+            il.Emit(OpCodes.Brfalse, next);
+            il.Emit(OpCodes.Ldloc, result);
+            il.Emit(OpCodes.Ldloc, index);
+            il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+            il.Emit(OpCodes.Stelem_Ref);
+            il.MarkLabel(next);
+            il.Emit(OpCodes.Ldloc, index);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Add);
+            il.Emit(OpCodes.Stloc, index);
+            il.MarkLabel(condition);
+            il.Emit(OpCodes.Ldloc, index);
+            il.Emit(OpCodes.Ldloc, paramCountLocal);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Sub);
+            il.Emit(OpCodes.Blt, body);
+            il.MarkLabel(done);
+        }
     }
 
     /// <summary>
