@@ -30,22 +30,7 @@ public abstract partial class ExpressionEmitterBase
     /// </summary>
     protected virtual void EmitCall(Expr.Call c)
     {
-        if (Ctx.NumericRestCallTargets?.TryGetValue(c, out var numericRestTarget) == true)
-        {
-            // Preserve the lexical read (including TDZ checks), then call the exact
-            // companion selected by binding analysis. Arguments are still evaluated once
-            // in source order by the ordinary typed-call argument emitter.
-            if (numericRestTarget.ReadCallee)
-            {
-                EmitExpression(c.Callee);
-                IL.Emit(OpCodes.Pop);
-            }
-            EmitStaticCallArguments(c.Arguments, numericRestTarget.Method);
-            IL.Emit(OpCodes.Call, numericRestTarget.Method);
-            BoxReturnValueIfNeeded(numericRestTarget.Method.ReturnType);
-            return;
-        }
-
+        if (TryEmitNumericRestCompanionCall(c)) return;
         if (TryEmitStaticIndirectEvalGlobal(c))
             return;
 
@@ -238,28 +223,17 @@ public abstract partial class ExpressionEmitterBase
                 (int RestParamIndex, int RegularParamCount) restInfo = default;
                 bool hasRestParam = Ctx.FunctionRestParams?.TryGetValue(resolvedFuncName, out restInfo) == true;
 
-                // A stable number[] rest function may have a private fixed-arity
-                // companion whose trailing values are native doubles. Select it
-                // only for a fixed call whose rest arguments are themselves
-                // statically numeric. The public List<object> ABI remains the
-                // target for spreads, any-typed values, aliases, imports, and all
-                // indirect calls.
-                bool usesFlattenedNumericRest = false;
-                if (hasRestParam
-                    && !hasSpreadArguments
+                // Preserve the original arity-only optimization behind the
+                // ordinary direct-call binding guards, including calls from
+                // closures and methods outside exact alias-call analysis.
+                if (hasRestParam && !hasSpreadArguments
                     && c.Arguments.Count >= restInfo.RegularParamCount
-                    && c.Arguments.Skip(restInfo.RegularParamCount)
-                        .All(argument => IsNumericType(Ctx.TypeMap?.Get(argument))))
+                    && c.Arguments.Skip(restInfo.RegularParamCount).All(arg => IsNumericType(Ctx.TypeMap?.Get(arg)))
+                    && Ctx.LiteralNumericRestMethods?.TryGetValue(resolvedFuncName, out var literalMethods) == true
+                    && literalMethods.TryGetValue(c.Arguments.Count - restInfo.RegularParamCount, out var literalCompanion))
                 {
-                    int restArity = c.Arguments.Count - restInfo.RegularParamCount;
-                    if (Ctx.FlattenedNumericRestMethods?.TryGetValue(
-                            resolvedFuncName, out var companions) == true
-                        && companions.TryGetValue(restArity, out var companion))
-                    {
-                        targetMethod = companion;
-                        hasRestParam = false;
-                        usesFlattenedNumericRest = true;
-                    }
+                    targetMethod = literalCompanion;
+                    hasRestParam = false;
                 }
 
                 var paramCount = targetMethod.GetParameters().Length;
@@ -359,8 +333,7 @@ public abstract partial class ExpressionEmitterBase
                     // arguments object including extras past the declared arity (#64).
                     // Done *before* loading args onto the stack so we don't disturb
                     // the evaluation order for the call itself.
-                    if (!usesFlattenedNumericRest &&
-                        Ctx.FunctionsCapturingArguments?.Contains(resolvedFuncName) == true &&
+                    if (Ctx.FunctionsCapturingArguments?.Contains(resolvedFuncName) == true &&
                         Ctx.Runtime?.CurrentArgumentsField != null)
                     {
                         int publishCount = c.Arguments.Count;
@@ -913,26 +886,85 @@ public abstract partial class ExpressionEmitterBase
     }
 
     /// <summary>
-    /// Emits arguments for a function call with rest parameter, handling spreads: loads the
-    /// leading regular arguments, then builds the trailing rest array.
+    /// Emits an exact call site proven eligible for scalar rest parameters.
     /// </summary>
-    /// <remarks>
-    /// Every argument is spilled to a local up front via <see cref="SpillBoxed"/> before any
-    /// array is assembled. State-machine emitters can suspend (<c>await</c>) inside any
-    /// argument; assembling the rest array inline would leave the array reference (and the
-    /// regular args) on the IL evaluation stack across the suspension, which produces invalid
-    /// IL (<c>PathStackDepth</c>, #413). SpillBoxed also registers each value so it survives
-    /// the MoveNext re-entry (#400). In non-suspending emitters (ILEmitter) these are plain
-    /// locals the JIT collapses away.
-    /// </remarks>
+    protected bool TryEmitNumericRestCompanionCall(Expr.Call call)
+    {
+        if (Ctx.NumericRestCallMethods?.TryGetValue(call, out var companion) != true || companion == null
+            || AnyContainsSuspension(call.Arguments))
+            return false;
+
+        // The binding analysis proves both direct declarations and initialized
+        // immutable aliases. Evaluating the arguments still occurs exactly once,
+        // in source order; only unobservable rest materialization is removed.
+        var parameters = companion.GetParameters();
+        var arguments = new LocalBuilder[call.Arguments.Count];
+        for (int i = 0; i < arguments.Length; i++)
+        {
+            EmitExpression(call.Arguments[i]);
+            EmitConversionForParameter(call.Arguments[i], parameters[i].ParameterType);
+            arguments[i] = IL.DeclareLocal(parameters[i].ParameterType);
+            IL.Emit(OpCodes.Stloc, arguments[i]);
+        }
+        foreach (var argument in arguments) IL.Emit(OpCodes.Ldloc, argument);
+        IL.Emit(OpCodes.Call, companion);
+        BoxReturnValueIfNeeded(companion.ReturnType);
+        return true;
+    }
+
     private void EmitRestParameterCall(List<Expr> arguments, int regularCount, ParameterInfo[] targetParams)
     {
         bool hasSpreads = arguments.Any(a => a is Expr.Spread);
+        if (hasSpreads)
+        {
+            var expanded = EmitExpandedRestStorage(arguments);
+            for (int i = 0; i < regularCount; i++)
+            {
+                var missing = IL.DefineLabel();
+                var ready = IL.DefineLabel();
+                IL.Emit(OpCodes.Ldloc, expanded);
+                IL.Emit(OpCodes.Castclass, Types.ListOfObject);
+                IL.Emit(OpCodes.Callvirt, Types.GetPropertyGetter(Types.ListOfObject, "Count"));
+                IL.Emit(OpCodes.Ldc_I4, i);
+                IL.Emit(OpCodes.Ble, missing);
+                IL.Emit(OpCodes.Ldloc, expanded);
+                IL.Emit(OpCodes.Castclass, Types.ListOfObject);
+                IL.Emit(OpCodes.Ldc_I4, i);
+                IL.Emit(OpCodes.Callvirt, Types.GetMethod(Types.ListOfObject, "get_Item", Types.Int32));
+                EmitCoerceBoxedToType(targetParams[i].ParameterType);
+                IL.Emit(OpCodes.Br, ready);
+                IL.MarkLabel(missing);
+                EmitOmittedArgument(targetParams[i].ParameterType);
+                IL.MarkLabel(ready);
+            }
+            IL.Emit(OpCodes.Ldloc, expanded);
+            IL.Emit(OpCodes.Castclass, Ctx.Runtime!.TSArrayType);
+            IL.Emit(OpCodes.Dup);
+            IL.Emit(OpCodes.Ldc_I4, regularCount);
+            IL.Emit(OpCodes.Call, Ctx.Runtime.TSArrayFinishRest);
+            return;
+        }
+
+        bool hasSuspension = AnyContainsSuspension(arguments);
 
         // Spill every argument (spreads spill their inner expression) before touching the stack.
         var argLocals = new LocalBuilder[arguments.Count];
         for (int i = 0; i < arguments.Count; i++)
-            argLocals[i] = SpillBoxed(arguments[i] is Expr.Spread spread ? spread.Expression : arguments[i]);
+        {
+            // Only statically numeric non-suspending regular arguments can avoid
+            // boxing here. Dynamic coercions still happen after all evaluations,
+            // as on the ordinary ABI, and registered boxed spills survive awaits.
+            if (!hasSuspension
+                && i < regularCount && targetParams[i].ParameterType == Types.Double
+                && IsNumericType(Ctx.TypeMap?.Get(arguments[i])))
+            {
+                EmitExpressionAsDouble(arguments[i]);
+                argLocals[i] = IL.DeclareLocal(Types.Double);
+                IL.Emit(OpCodes.Stloc, argLocals[i]);
+            }
+            else
+                argLocals[i] = SpillBoxed(arguments[i] is Expr.Spread spread ? spread.Expression : arguments[i]);
+        }
 
         // Load regular arguments (before rest param) from their locals, coercing each boxed
         // object back to the parameter's declared CLR type — free-function params are emitted
@@ -941,7 +973,7 @@ public abstract partial class ExpressionEmitterBase
         for (int i = 0; i < Math.Min(regularCount, arguments.Count); i++)
         {
             IL.Emit(OpCodes.Ldloc, argLocals[i]);
-            if (i < targetParams.Length)
+            if (i < targetParams.Length && argLocals[i].LocalType == Types.Object)
                 EmitCoerceBoxedToType(targetParams[i].ParameterType);
         }
 
@@ -954,31 +986,49 @@ public abstract partial class ExpressionEmitterBase
 
         // Build rest parameter array from remaining arguments
         int restArgsCount = Math.Max(0, arguments.Count - regularCount);
-        if (hasSpreads && restArgsCount > 0)
+        IL.Emit(OpCodes.Ldc_I4, restArgsCount);
+        IL.Emit(OpCodes.Newobj, Ctx.Runtime!.TSArrayRestCtor);
+        for (int i = 0; i < restArgsCount; i++)
         {
-            EmitSpreadArrayFromLocals(arguments, argLocals, regularCount, restArgsCount);
-            EmitExpandCallArgs(asRestArray: true);
+            IL.Emit(OpCodes.Dup);
+            IL.Emit(OpCodes.Ldloc, argLocals[regularCount + i]);
+            IL.Emit(OpCodes.Call, Ctx.Runtime.TSArrayAppendRest);
         }
-        else if (restArgsCount > 0)
+    }
+
+    /// <summary>
+    /// Expands each spread immediately, before evaluating the next argument.
+    /// The private destination is a registered spill so it survives suspension;
+    /// callers finalize its length only after extracting any regular parameters.
+    /// </summary>
+    private LocalBuilder EmitExpandedRestStorage(IReadOnlyList<Expr> arguments)
+    {
+        IL.Emit(OpCodes.Ldc_I4, arguments.Count);
+        IL.Emit(OpCodes.Newobj, Ctx.Runtime!.TSArrayRestCtor);
+        var target = _helpers.SpillStoreObject();
+        foreach (var argument in arguments)
         {
-            IL.Emit(OpCodes.Ldc_I4, restArgsCount);
-            IL.Emit(OpCodes.Newarr, Types.Object);
-            for (int i = 0; i < restArgsCount; i++)
+            var value = SpillBoxed(argument is Expr.Spread spread ? spread.Expression : argument);
+            if (argument is Expr.Spread)
             {
-                IL.Emit(OpCodes.Dup);
-                IL.Emit(OpCodes.Ldc_I4, i);
-                IL.Emit(OpCodes.Ldloc, argLocals[regularCount + i]);
-                IL.Emit(OpCodes.Stelem_Ref);
+                IL.Emit(OpCodes.Ldloc, value);
+                IL.Emit(OpCodes.Ldsfld, Ctx.Runtime.SymbolIterator);
+                IL.Emit(OpCodes.Ldtoken, Ctx.Runtime.RuntimeType);
+                IL.Emit(OpCodes.Call, Types.TypeGetTypeFromHandle);
+                IL.Emit(OpCodes.Ldloc, target);
+                IL.Emit(OpCodes.Castclass, Types.ListOfObject);
+                IL.Emit(OpCodes.Call, Ctx.Runtime.IterateIntoList);
+                IL.Emit(OpCodes.Pop);
             }
-            IL.Emit(OpCodes.Call, Ctx.Runtime!.CreateArray);
+            else
+            {
+                IL.Emit(OpCodes.Ldloc, target);
+                IL.Emit(OpCodes.Castclass, Ctx.Runtime.TSArrayType);
+                IL.Emit(OpCodes.Ldloc, value);
+                IL.Emit(OpCodes.Call, Ctx.Runtime.TSArrayAppendRest);
+            }
         }
-        else
-        {
-            // Empty rest array
-            IL.Emit(OpCodes.Ldc_I4_0);
-            IL.Emit(OpCodes.Newarr, Types.Object);
-            IL.Emit(OpCodes.Call, Ctx.Runtime!.CreateArray);
-        }
+        return target;
     }
 
     /// <summary>
@@ -1163,40 +1213,6 @@ public abstract partial class ExpressionEmitterBase
     }
 
     /// <summary>
-    /// Emits an args array and isSpread bool array from pre-spilled argument locals (a slice of
-    /// <paramref name="argLocals"/> starting at <paramref name="offset"/>). Leaves both arrays
-    /// on the stack (args array first, then isSpread array on top). Reads from locals rather
-    /// than re-emitting expressions so no <c>await</c> can suspend while the arrays are stacked
-    /// (#413); the caller is responsible for having spilled the values.
-    /// </summary>
-    private void EmitSpreadArrayFromLocals(List<Expr> arguments, LocalBuilder[] argLocals, int offset, int count)
-    {
-        IL.Emit(OpCodes.Ldc_I4, count);
-        IL.Emit(OpCodes.Newarr, Types.Object);
-        for (int i = 0; i < count; i++)
-        {
-            IL.Emit(OpCodes.Dup);
-            IL.Emit(OpCodes.Ldc_I4, i);
-            IL.Emit(OpCodes.Ldloc, argLocals[offset + i]);
-            IL.Emit(OpCodes.Stelem_Ref);
-        }
-
-        // isSpread bool array
-        IL.Emit(OpCodes.Ldc_I4, count);
-        IL.Emit(OpCodes.Newarr, Types.Boolean);
-        for (int i = 0; i < count; i++)
-        {
-            if (arguments[offset + i] is Expr.Spread)
-            {
-                IL.Emit(OpCodes.Dup);
-                IL.Emit(OpCodes.Ldc_I4, i);
-                IL.Emit(OpCodes.Ldc_I4_1);
-                IL.Emit(OpCodes.Stelem_I1);
-            }
-        }
-    }
-
-    /// <summary>
     /// Coerces the boxed object currently on the stack to <paramref name="targetType"/>:
     /// unbox for value types, downcast for reference types, no-op for object. Used when
     /// loading a previously-spilled (boxed) argument into a typed parameter slot.
@@ -1353,12 +1369,12 @@ public abstract partial class ExpressionEmitterBase
     /// Emits the ExpandCallArgs call with Symbol.iterator and runtime type arguments.
     /// Expects args array and isSpread array on the stack.
     /// </summary>
-    protected void EmitExpandCallArgs(bool asRestArray = false)
+    protected void EmitExpandCallArgs()
     {
         IL.Emit(OpCodes.Ldsfld, Ctx.Runtime!.SymbolIterator);
         IL.Emit(OpCodes.Ldtoken, Ctx.Runtime!.RuntimeType);
         IL.Emit(OpCodes.Call, Types.TypeGetTypeFromHandle);
-        IL.Emit(OpCodes.Call, asRestArray ? Ctx.Runtime!.ExpandRestArgs : Ctx.Runtime!.ExpandCallArgs);
+        IL.Emit(OpCodes.Call, Ctx.Runtime!.ExpandCallArgs);
     }
 
     /// <summary>
@@ -1395,66 +1411,23 @@ public abstract partial class ExpressionEmitterBase
 
     /// <summary>
     /// Evaluates <paramref name="args"/> and leaves a single <c>object[]</c> on the IL stack with
-    /// any <see cref="Expr.Spread"/> arguments flattened in place (via the emitted-runtime
-    /// <c>ExpandCallArgs</c>, which understands numeric <c>$Array</c> + arbitrary iterables). Each
-    /// argument is evaluated and boxed into a temp local <em>before</em> any array is built, so an
-    /// <c>await</c>/<c>yield</c> in a later argument never strands a partly-built array on the stack
-    /// (#413). Shared by <see cref="EmitFunctionValueCall"/> and the variadic <c>Math.*</c> emitter
+    /// any <see cref="Expr.Spread"/> arguments consumed in source order into fresh storage.
+    /// Registered spill locals keep the destination and values live across suspension.
+    /// Shared by <see cref="EmitFunctionValueCall"/> and the variadic <c>Math.*</c> emitter
     /// so <c>Math.max(...arr)</c> expands spreads identically to <c>f(...arr)</c> (#951).
     /// </summary>
     public void EmitArgsArrayWithSpread(IReadOnlyList<Expr> args)
     {
-        // Evaluate all arguments into temps first (await-safe for async emitters)
-        List<LocalBuilder> argTemps = [];
-        List<bool> isSpread = [];
-        foreach (var arg in args)
+        if (args.Any(argument => argument is Expr.Spread))
         {
-            if (arg is Expr.Spread spread)
-            {
-                EmitExpression(spread.Expression);
-                EnsureBoxed();
-                isSpread.Add(true);
-            }
-            else
-            {
-                EmitExpression(arg);
-                EnsureBoxed();
-                isSpread.Add(false);
-            }
-            var temp = IL.DeclareLocal(Types.Object);
-            IL.Emit(OpCodes.Stloc, temp);
-            argTemps.Add(temp);
-        }
-
-        // Build args array from temps (both paths leave object[] on the stack).
-        IL.Emit(OpCodes.Ldc_I4, argTemps.Count);
-        IL.Emit(OpCodes.Newarr, Types.Object);
-        for (int i = 0; i < argTemps.Count; i++)
-        {
-            IL.Emit(OpCodes.Dup);
-            IL.Emit(OpCodes.Ldc_I4, i);
-            IL.Emit(OpCodes.Ldloc, argTemps[i]);
-            IL.Emit(OpCodes.Stelem_Ref);
-        }
-
-        if (!isSpread.Any(s => s))
+            var expanded = EmitExpandedRestStorage(args);
+            IL.Emit(OpCodes.Ldloc, expanded);
+            IL.Emit(OpCodes.Castclass, Types.ListOfObject);
+            IL.Emit(OpCodes.Callvirt, Types.GetMethod(Types.ListOfObject, "ToArray", Types.EmptyTypes));
             return;
-
-        // Spread case: build the isSpread bool array and flatten via ExpandCallArgs.
-        IL.Emit(OpCodes.Ldc_I4, argTemps.Count);
-        IL.Emit(OpCodes.Newarr, Types.Boolean);
-        for (int i = 0; i < argTemps.Count; i++)
-        {
-            if (isSpread[i])
-            {
-                IL.Emit(OpCodes.Dup);
-                IL.Emit(OpCodes.Ldc_I4, i);
-                IL.Emit(OpCodes.Ldc_I4_1);
-                IL.Emit(OpCodes.Stelem_I1);
-            }
         }
-
-        EmitExpandCallArgs();
+        var argumentLocals = args.Select(SpillBoxed).ToArray();
+        EmitArgsArray(args, argumentLocals);
     }
 
     /// <summary>

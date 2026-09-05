@@ -2143,12 +2143,12 @@ public sealed class RuntimeFeatureDetector
             break;
         }
 
-        return CouldContainArray(_typeMap?.Get(expr));
+        return CouldBeArray(_typeMap?.Get(expr));
 
-        static bool CouldContainArray(TypeInfo? type) => type switch
+        static bool CouldBeArray(TypeInfo? type) => type switch
         {
-            null or TypeInfo.Any or TypeInfo.Unknown or TypeInfo.Array => true,
-            TypeInfo.Union union => union.Types.Any(CouldContainArray),
+            null or TypeInfo.Array or TypeInfo.Any or TypeInfo.Unknown => true,
+            TypeInfo.Union union => union.Types.Any(CouldBeArray),
             _ => false
         };
     }

@@ -92,10 +92,9 @@ public partial class RuntimeEmitter
         runtime.CreateArray = method;
 
         var il = method.GetILGenerator();
-        // Copy directly into the final array's inherited list storage. The old
-        // intermediate List allocated another backing array and copied every element twice.
+        // Copy the literal elements directly into the final array's storage.
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Newobj, runtime.TSArrayCtorFromElements);
+        il.Emit(OpCodes.Newobj, runtime.TSArrayLiteralCtor);
         il.Emit(OpCodes.Ret);
     }
 
@@ -1587,20 +1586,13 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitExpandCallArgs(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
-        EmitCallArgumentExpansion(typeBuilder, runtime, false);
-        EmitCallArgumentExpansion(typeBuilder, runtime, true);
-    }
-
-    private void EmitCallArgumentExpansion(TypeBuilder typeBuilder, EmittedRuntime runtime, bool restArray)
-    {
         var method = typeBuilder.DefineMethod(
-            restArray ? "ExpandRestArgs" : "ExpandCallArgs",
+            "ExpandCallArgs",
             MethodAttributes.Public | MethodAttributes.Static,
-            restArray ? runtime.TSArrayType : _types.ObjectArray,
+            _types.ObjectArray,
             [_types.ObjectArray, _types.BoolArray, runtime.TSSymbolType, _types.Type]  // Added iteratorSymbol and runtimeType
         );
-        if (restArray) runtime.ExpandRestArgs = method;
-        else runtime.ExpandCallArgs = method;
+        runtime.ExpandCallArgs = method;
 
         var il = method.GetILGenerator();
         // Create result list, iterate args, expand spreads using IterateToList
@@ -1610,14 +1602,7 @@ public partial class RuntimeEmitter
         var loopStart = il.DefineLabel();
         var loopEnd = il.DefineLabel();
 
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldlen);
-        il.Emit(OpCodes.Conv_I4);
-        // Match List's first-growth minimum. A call such as f(x, ...tail)
-        // otherwise allocates a two-slot buffer and immediately replaces it.
-        il.Emit(OpCodes.Ldc_I4_4);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.Math, "Max", [_types.Int32, _types.Int32])!);
-        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, _types.Int32));
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, _types.EmptyTypes));
         il.Emit(OpCodes.Stloc, resultLocal);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Stloc, indexLocal);
@@ -1669,10 +1654,7 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(loopEnd);
         il.Emit(OpCodes.Ldloc, resultLocal);
-        if (restArray)
-            il.Emit(OpCodes.Newobj, runtime.TSArrayCtor);
-        else
-            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "ToArray", _types.EmptyTypes));
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "ToArray", _types.EmptyTypes));
         il.Emit(OpCodes.Ret);
     }
 
@@ -2157,3 +2139,4 @@ public partial class RuntimeEmitter
         typeBuilder.CreateType();
     }
 }
+

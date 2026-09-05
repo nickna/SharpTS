@@ -148,6 +148,8 @@ public partial class RuntimeEmitter
         runtime.TSArrayEnsureBoxed = _tsArrayEnsureBoxedMethod;
 
         EmitTSArrayConstructor(typeBuilder, runtime);
+        EmitTSArrayNumericLiteralConstructor(typeBuilder, runtime);
+        EmitTSArrayRestConstruction(typeBuilder, runtime);
 
         // Elements returns `this` (the inherited List<object?>). In practice
         // callers that cared about the sparse tail have migrated to the
@@ -1122,27 +1124,110 @@ public partial class RuntimeEmitter
         }
     }
 
-    private void EmitTSArrayConstructor(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    // Only used while constructing fresh, dense, boxed rest storage. This bypasses
+    // observable array setters and never accepts an escaped/numeric/sparse array.
+    private void EmitTSArrayRestConstruction(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
-        EmitTSArrayElementsConstructor(typeBuilder, runtime, _types.ListOfObject, false);
-        EmitTSArrayElementsConstructor(typeBuilder, runtime, _types.IEnumerableOfObject, true);
+        var ctor = typeBuilder.DefineConstructor(MethodAttributes.Assembly,
+            CallingConventions.Standard, [_types.Int32]);
+        runtime.TSArrayRestCtor = ctor;
+        var il = ctor.GetILGenerator();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, _types.GetConstructor(_types.ListOfObject, [_types.Int32]));
+        il.Emit(OpCodes.Ret);
+
+        var append = typeBuilder.DefineMethod("AppendRest", MethodAttributes.Assembly,
+            _types.Void, [_types.Object]);
+        runtime.TSArrayAppendRest = append;
+        il = append.GetILGenerator();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, _tsArrayListAdd!);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _tsArrayLengthField);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Conv_I8);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stfld, _tsArrayLengthField);
+        il.Emit(OpCodes.Ret);
+
+        // Expansion appends to the inherited list. Once all arguments have
+        // evaluated, remove regular parameters and synchronize logical length.
+        var finish = typeBuilder.DefineMethod("FinishRest", MethodAttributes.Assembly,
+            _types.Void, [_types.Int32]);
+        runtime.TSArrayFinishRest = finish;
+        il = finish.GetILGenerator();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, _tsArrayListCountGetter!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Math, "Min", [_types.Int32, _types.Int32])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.ListOfObject, "RemoveRange", [_types.Int32, _types.Int32])!);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, _tsArrayListCountGetter!);
+        il.Emit(OpCodes.Conv_I8);
+        il.Emit(OpCodes.Stfld, _tsArrayLengthField);
+        il.Emit(OpCodes.Ret);
     }
 
-    private void EmitTSArrayElementsConstructor(
-        TypeBuilder typeBuilder, EmittedRuntime runtime, Type inputType, bool fromElements)
+    private void EmitTSArrayNumericLiteralConstructor(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        // The emitter hands over a fresh, dense double[]; no other value can
+        // observe its storage. Holes continue to use the ordinary literal path.
+        var ctor = typeBuilder.DefineConstructor(MethodAttributes.Assembly,
+            CallingConventions.Standard, [_types.DoubleArray]);
+        runtime.TSArrayNumericLiteralCtor = ctor;
+        var il = ctor.GetILGenerator();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, _types.GetDefaultConstructor(_types.ListOfObject));
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Stfld, _tsArrayNumStoreField);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldlen);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Stfld, _tsArrayNumCountField);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldlen);
+        il.Emit(OpCodes.Conv_I8);
+        il.Emit(OpCodes.Stfld, _tsArrayLengthField);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Stfld, _tsArrayIsNumericField);
+        il.Emit(OpCodes.Ret);
+    }
+
+    private void EmitTSArrayConstructor(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var ctor = typeBuilder.DefineConstructor(
             MethodAttributes.Public,
             CallingConventions.Standard,
-            [inputType]
+            [_types.ListOfObject]
         );
-        if (fromElements) runtime.TSArrayCtorFromElements = ctor;
-        else runtime.TSArrayCtor = ctor;
+        runtime.TSArrayCtor = ctor;
 
-        var il = ctor.GetILGenerator();
+        // Internal element construction is distinct from the object[] overload
+        // implementing Array(...args), where one number denotes a length.
+        var literalCtor = typeBuilder.DefineConstructor(
+            MethodAttributes.Public,
+            CallingConventions.Standard,
+            [_types.IEnumerableOfObject]);
+        runtime.TSArrayLiteralCtor = literalCtor;
+        var forwardingIl = ctor.GetILGenerator();
+        forwardingIl.Emit(OpCodes.Ldarg_0);
+        forwardingIl.Emit(OpCodes.Ldarg_1);
+        forwardingIl.Emit(OpCodes.Call, literalCtor);
+        forwardingIl.Emit(OpCodes.Ret);
 
-        // Copy into our own dense storage. The IEnumerable overload accepts an
-        // object[] directly without constructing an intermediate list/backing array.
+        var il = literalCtor.GetILGenerator();
+
+        // One copy, directly from the supplied elements into our own storage.
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, _types.GetConstructor(_types.ListOfObject, _types.IEnumerableOfObject));

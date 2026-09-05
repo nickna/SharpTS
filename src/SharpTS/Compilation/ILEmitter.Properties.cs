@@ -312,6 +312,16 @@ public partial class ILEmitter
                 return;
         }
 
+        if (!g.Optional && g.Name.Lexeme == "length" && g.Object is Expr.Variable queueLength
+            && _ctx.TryGetPromotedQueueLocal(queueLength.Name.Lexeme) is { } queueLen)
+        {
+            IL.Emit(OpCodes.Ldloc, queueLen.Local);
+            IL.Emit(OpCodes.Call, queueLen.Queue.Count);
+            IL.Emit(OpCodes.Conv_R8);
+            SetStackType(StackType.Double);
+            return;
+        }
+
         // Promoted typed-array local `.length` (#857): direct List<T>.Count, no GetLength/isinst.
         if (!g.Optional && g.Name.Lexeme == "length" && g.Object is Expr.Variable promVarLen
             && _ctx.TryGetPromotedArrayLocal(promVarLen.Name.Lexeme) is { } promLen)
@@ -384,9 +394,24 @@ public partial class ILEmitter
             && objType is TypeInfo.Record recordType
             && _ctx.Runtime?.UndefinedInstance != null)
         {
-            if (TryEmitTypedRecordNumberGet(g, recordType))
+            JsonSerializationShapeAnalyzer.TryAnalyze(recordType, out var analyzed);
+            var shape = analyzed as JsonSerializationShape.Record;
+            if (TryEmitTypedRecordNumberGet(g, shape))
                 return;
-            EmitTypedRecordPropertyGet(g, recordType);
+            EmitTypedRecordPropertyGet(g, shape);
+            return;
+        }
+
+        // Interface declarations do not define object insertion order. Match an
+        // emitted carrier by its field names/types, then use its canonical order.
+        // The same runtime type/materialization guards protect class instances,
+        // aliases and structurally compatible values with a different layout.
+        if (!g.Optional && objType is TypeInfo.Interface interfaceType &&
+            TryGetInterfaceReadShape(interfaceType, out var interfaceShape))
+        {
+            if (TryEmitTypedRecordNumberGet(g, interfaceShape, requireMaterializationGuard: true))
+                return;
+            EmitTypedRecordPropertyGet(g, interfaceShape, requireMaterializationGuard: true);
             return;
         }
 
@@ -440,11 +465,11 @@ public partial class ILEmitter
     /// and its own materialization state; the cold arm preserves the general
     /// property lookup and ToNumber semantics.
     /// </summary>
-    private bool TryEmitTypedRecordNumberGet(Expr.Get g, TypeInfo.Record recordType)
+    private bool TryEmitTypedRecordNumberGet(Expr.Get g, JsonSerializationShape.Record? recordShape,
+        bool requireMaterializationGuard = false)
     {
         if (_ctx.ProgramType is null || _ctx.Runtime is not { } runtime ||
-            !JsonSerializationShapeAnalyzer.TryAnalyze(recordType, out var analyzedShape) ||
-            analyzedShape is not JsonSerializationShape.Record recordShape)
+            recordShape is null)
         {
             return false;
         }
@@ -525,7 +550,7 @@ public partial class ILEmitter
             IL.Emit(OpCodes.Stloc, compactExact);
             IL.Emit(OpCodes.Ldloc, compactExact);
             IL.Emit(OpCodes.Brfalse, fallback);
-            if (!_ctx.RuntimeFeatures!.CanAssumeCompactObjectRecordIsUnmaterialized(
+            if (requireMaterializationGuard || !_ctx.RuntimeFeatures!.CanAssumeCompactObjectRecordIsUnmaterialized(
                     fingerprint))
             {
                 IL.Emit(OpCodes.Ldloc, compactExact);
@@ -571,7 +596,8 @@ public partial class ILEmitter
     /// instances downcast to record shape, etc.) we fall through to the
     /// existing dispatch.
     /// </summary>
-    private void EmitTypedRecordPropertyGet(Expr.Get g, TypeInfo.Record recordType)
+    private void EmitTypedRecordPropertyGet(Expr.Get g, JsonSerializationShape.Record? recordShape,
+        bool requireMaterializationGuard = false)
     {
         EmitExpression(g.Object);
         EmitBoxIfNeeded(g.Object);
@@ -590,8 +616,7 @@ public partial class ILEmitter
         bool exactCarrierSpecialized = false;
 
         if (hasCompactCarrier && _ctx.ProgramType is not null &&
-            JsonSerializationShapeAnalyzer.TryAnalyze(recordType, out var analyzedShape) &&
-            analyzedShape is JsonSerializationShape.Record recordShape)
+            recordShape is not null)
         {
             int scalarIndex = -1;
             for (int index = 0; index < recordShape.Fields.Count; index++)
@@ -674,7 +699,7 @@ public partial class ILEmitter
                 }
                 IL.Emit(OpCodes.Ldloc, exactLocal);
                 IL.Emit(OpCodes.Brfalse, fallbackLabel);
-                if (!_ctx.RuntimeFeatures!.CanAssumeCompactObjectRecordIsUnmaterialized(
+                if (requireMaterializationGuard || !_ctx.RuntimeFeatures!.CanAssumeCompactObjectRecordIsUnmaterialized(
                         fingerprint))
                 {
                     IL.Emit(OpCodes.Ldloc, exactLocal);
@@ -1255,6 +1280,13 @@ public partial class ILEmitter
         // OOB/in-range merge (the #860 unboxed-element read is deferred — see plan B3). Even boxed,
         // this still drops the per-access isinst ladder and the $Array virtual dispatch. The
         // `(uint)i >= (uint)Count` compare folds the negative-index case into the OOB branch.
+        if (!gi.Optional && gi.Object is Expr.Variable queueRead
+            && _ctx.TryGetPromotedQueueLocal(queueRead.Name.Lexeme) is { } queueGet)
+        {
+            EmitQueueGet(queueGet.Local, queueGet.Queue, gi.Index, numeric: false);
+            return;
+        }
+
         if (!gi.Optional && gi.Object is Expr.Variable promVarGet
             && _ctx.TryGetPromotedArrayLocal(promVarGet.Name.Lexeme) is { } promGet
             && _ctx.TypeMap?.Get(gi.Index) is TypeInfo.Primitive { Type: TokenType.TYPE_NUMBER } or TypeInfo.NumberLiteral)
@@ -1447,9 +1479,9 @@ public partial class ILEmitter
             IL.Emit(OpCodes.Br, endLabelNH);
 
             IL.MarkLabel(notTSArrayGet);
-            // Ordinary indirect rest calls can supply a plain List<object?> with
-            // fewer elements than this read. Its unchecked get_Item would throw
-            // instead of returning JS undefined; retain canonical index semantics.
+            // Indirect rest calls can supply a plain List with fewer elements
+            // than this read. Use canonical indexing so missing entries return
+            // undefined rather than throwing from List.get_Item.
             IL.MarkLabel(fallbackLabelNH);
             IL.Emit(OpCodes.Ldloc, objLocal);
             EmitExpression(gi.Index);
@@ -1481,28 +1513,13 @@ public partial class ILEmitter
         if (expression.Optional
             || expression.Object is not Expr.Variable restVariable
             || _ctx.FlattenedNumericRestParameter is not { } flattened
-            || restVariable.Name.Lexeme != flattened.Name)
+            || restVariable.Name.Lexeme != flattened.Name
+            || !flattened.Reads.TryGetValue(expression, out int index))
         {
             return false;
         }
 
-        double index;
-        if (flattened.Indices?.TryGetValue(expression, out int specializedIndex) == true)
-            index = specializedIndex;
-        else if (expression.Index is Expr.Literal { Value: double literal })
-            index = literal;
-        else
-            return false;
-
-        if (!double.IsFinite(index)
-            || index < 0
-            || index != Math.Truncate(index)
-            || index >= flattened.Length)
-        {
-            return false;
-        }
-
-        IL.Emit(OpCodes.Ldarg, flattened.FirstArgumentIndex + (int)index);
+        IL.Emit(OpCodes.Ldarg, flattened.FirstArgumentIndex + index);
         SetStackType(StackType.Double);
         return true;
     }
@@ -1545,10 +1562,11 @@ public partial class ILEmitter
     private bool TryEmitNumberArrayGetIndexAsDouble(Expr.GetIndex gi)
     {
         if (gi.Optional
-            || gi.Object is not Expr.Variable arrayVariable
             || ArrayElements.Resolve(_ctx.TypeMap?.Get(gi.Object)) is not
                 { Kind: ArrayElementsKind.Double }
-            || _ctx.TryGetPromotedArrayLocal(arrayVariable.Name.Lexeme) != null
+            || (gi.Object is Expr.Variable promotedVariable &&
+                (_ctx.TryGetPromotedArrayLocal(promotedVariable.Name.Lexeme) != null ||
+                 _ctx.TryGetPromotedQueueLocal(promotedVariable.Name.Lexeme) != null))
             || !IsNumericType(_ctx.TypeMap?.Get(gi.Index))
             || _ctx.RuntimeFeatures?.UsesDynamicPropertyDescriptors == true
             || _ctx.RuntimeFeatures?.UsesArrayPrototypeMutation == true)
@@ -1556,7 +1574,9 @@ public partial class ILEmitter
             return false;
         }
 
-        var hoisted = _ctx.TryGetHoistedArray(arrayVariable.Name.Lexeme);
+        var hoisted = gi.Object is Expr.Variable arrayVariable
+            ? _ctx.TryGetHoistedArray(arrayVariable.Name.Lexeme)
+            : null;
         if (hoisted is { Descriptor.Kind: not ArrayElementsKind.Double })
             return false;
 
@@ -1643,21 +1663,19 @@ public partial class ILEmitter
     }
 
     /// <summary>
-    /// Emits a stack-neutral statement-position write through a guarded numeric
-    /// <c>$Array</c>. The ordinary result-producing path must reload and box the
-    /// assigned double so arbitrary expression consumers see the JS assignment
-    /// value. A discarded expression has no such consumer, so this specialization
-    /// keeps the fast arm unboxed while retaining the guarded generic fallback
+    /// Emits a write through a guarded numeric <c>$Array</c>, optionally leaving
+    /// the assigned double as the expression result. Discarded expressions leave
+    /// the stack empty. This keeps the fast arm unboxed with a generic fallback
     /// for non-<c>$Array</c> values passed through a cast. Loop-local receivers
     /// reuse the existing hoisted guard; parameters use the same guard per write.
     /// </summary>
-    private bool TryEmitDiscardedNumberArraySetIndex(Expr.SetIndex si)
+    private bool TryEmitDiscardedNumberArraySetIndex(Expr.SetIndex si, bool discardResult = true)
     {
-        if (_ctx.RuntimeFeatures?.UsesDynamicPropertyDescriptors == true
-            || si.Object is not Expr.Variable arrayVariable)
+        if (_ctx.RuntimeFeatures?.UsesDynamicPropertyDescriptors == true)
             return false;
 
-        var hoisted = _ctx.TryGetHoistedArray(arrayVariable.Name.Lexeme);
+        var hoisted = si.Object is Expr.Variable arrayVariable
+            ? _ctx.TryGetHoistedArray(arrayVariable.Name.Lexeme) : null;
         if (hoisted is not { Descriptor.Kind: ArrayElementsKind.Double }
             && ArrayElements.Resolve(_ctx.TypeMap?.Get(si.Object)) is not
                 { Kind: ArrayElementsKind.Double })
@@ -1678,8 +1696,8 @@ public partial class ILEmitter
 
         // Preserve reference evaluation order for the remaining operands:
         // index before RHS. Keep the original numeric key as a double for the
-        // array-like fallback (3.5 must remain property "3.5" there); only the
-        // guarded $Array arm narrows it exactly as the ordinary fast path does.
+        // fallback (3.5 must remain property "3.5" there); only the guarded
+        // $Array arm narrows keys after proving they are exact integer indices.
         EmitExpressionAsDouble(si.Index);
         var indexLocal = IL.DeclareLocal(_ctx.Types.Double);
         IL.Emit(OpCodes.Stloc, indexLocal);
@@ -1691,6 +1709,16 @@ public partial class ILEmitter
 
         var fallbackLabel = IL.DefineLabel();
         var endLabel = IL.DefineLabel();
+        // Narrow only exact non-negative Int32 keys. Other numeric keys are
+        // ordinary properties and must retain their original value.
+        IL.Emit(OpCodes.Ldloc, indexLocal);
+        IL.Emit(OpCodes.Ldc_R8, 0.0);
+        IL.Emit(OpCodes.Blt_Un, fallbackLabel);
+        IL.Emit(OpCodes.Ldloc, indexLocal);
+        IL.Emit(OpCodes.Ldloc, indexLocal);
+        IL.Emit(OpCodes.Conv_I4);
+        IL.Emit(OpCodes.Conv_R8);
+        IL.Emit(OpCodes.Bne_Un, fallbackLabel);
         if (hoisted is { } cached)
         {
             IL.Emit(OpCodes.Ldloc, cached.TypedLocal);
@@ -1738,6 +1766,11 @@ public partial class ILEmitter
         }
 
         IL.MarkLabel(endLabel);
+        if (!discardResult)
+        {
+            IL.Emit(OpCodes.Ldloc, valueLocal);
+            SetStackType(StackType.Double);
+        }
         return true;
     }
 
@@ -1773,6 +1806,23 @@ public partial class ILEmitter
         // overwhelmingly common in-range write as List<T>.set_Item and retain the typed auto-extend
         // helper as a cold fallback. The receiver is a side-effect-free local, so evaluating index
         // before value preserves JavaScript assignment order without an observable receiver load.
+        if (si.Object is Expr.Variable queueWrite
+            && _ctx.TryGetPromotedQueueLocal(queueWrite.Name.Lexeme) is { } queueSet)
+        {
+            var value = IL.DeclareLocal(queueSet.Queue.Elements.GetElementType(_ctx.Types));
+            EmitExpression(si.Value);
+            if (queueSet.Queue.Elements.Kind == ArrayElementsKind.Double) EnsureDouble();
+            else EnsureBoolean();
+            IL.Emit(OpCodes.Stloc, value);
+            IL.Emit(OpCodes.Ldloc, queueSet.Local);
+            EmitIndexAsInt32(si.Index); // Queue promotion admits only literal write indices.
+            IL.Emit(OpCodes.Ldloc, value);
+            IL.Emit(OpCodes.Call, queueSet.Queue.Set);
+            IL.Emit(OpCodes.Ldloc, value);
+            SetStackType(queueSet.Queue.Elements.StackType);
+            return;
+        }
+
         if (si.Object is Expr.Variable promVarSet
             && _ctx.TryGetPromotedArrayLocal(promVarSet.Name.Lexeme) is { } promSet)
         {
@@ -1901,6 +1951,9 @@ public partial class ILEmitter
             SetStackType(StackType.Double);
             return;
         }
+
+        if (TryEmitDiscardedNumberArraySetIndex(si, discardResult: false))
+            return;
 
         // Descriptor-driven fast path: when receiver is statically known to be an array,
         // emit direct List<T> access with auto-extension — skips runtime type dispatch,

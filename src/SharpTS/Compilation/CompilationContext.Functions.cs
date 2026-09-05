@@ -51,20 +51,15 @@ public partial class CompilationContext
     public Dictionary<string, (int RestParamIndex, int RegularParamCount)>? FunctionRestParams { get; set; }
 
     /// <summary>
-    /// Private typed companions for stable <c>number[]</c> rest functions, keyed by
-    /// qualified function name and the number of trailing rest arguments.
+    /// Exact call nodes whose lexical binding and numeric rest reads have been
+    /// proven eligible for a private typed companion.
     /// </summary>
-    public Dictionary<string, Dictionary<int, MethodBuilder>>? FlattenedNumericRestMethods { get; set; }
+    public Dictionary<Expr.Call, MethodBuilder>? NumericRestCallMethods { get; set; }
+    public Dictionary<string, Dictionary<int, MethodBuilder>>? LiteralNumericRestMethods { get; set; }
 
     /// <summary>
-    /// Exact AST call sites proven to target a typed rest companion. ReadCallee
-    /// preserves the lexical access for local aliases.
-    /// </summary>
-    public IReadOnlyDictionary<Expr.Call, (MethodBuilder Method, bool ReadCallee)>? NumericRestCallTargets { get; set; }
-
-    /// <summary>
-    /// Companion-body rest reads redirected to scalar parameters. Specialized index
-    /// expressions are keyed by AST identity; ordinary companions use literal indices.
+    /// Set only while emitting one flattened companion body. Constant rest-element
+    /// reads are redirected to native double arguments and <c>length</c> to a literal.
     /// </summary>
     public FlattenedNumericRestParameter? FlattenedNumericRestParameter { get; set; }
 
@@ -221,4 +216,4 @@ public sealed record FlattenedNumericRestParameter(
     string Name,
     int FirstArgumentIndex,
     int Length,
-    IReadOnlyDictionary<Expr.GetIndex, int>? Indices = null);
+    IReadOnlyDictionary<Expr.GetIndex, int> Reads);
