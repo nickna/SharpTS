@@ -1,5 +1,6 @@
 using SharpTS.Modules;
 using SharpTS.Modules.Stdlib;
+using SharpTS.Compilation;
 using SharpTS.Parsing;
 using SharpTS.Parsing.Visitors;
 using SharpTS.Runtime;
@@ -1792,6 +1793,10 @@ public partial class Interpreter
 
             List<string>? perIterationNames =
                 CollectPerIterationBindings(forStmt.Initializer);
+            if (perIterationNames is not null
+                && !ForLoopAnalyzer.RequiresPerIterationEnvironment(
+                    forStmt, perIterationNames))
+                perIterationNames = null;
             if (perIterationNames is not null)
                 CreatePerIterationEnvironment(loopEnv, perIterationNames);
 
@@ -1811,7 +1816,8 @@ public partial class Interpreter
                             loopEnv, perIterationNames);
                     if (forStmt.Increment is not null)
                         EvaluateRV(forStmt.Increment);
-                    Thread.Sleep(0);
+                    if (HasPendingCallbacks)
+                        ProcessPendingCallbacks();
                     continue;
                 }
 
@@ -1822,7 +1828,8 @@ public partial class Interpreter
                     CreatePerIterationEnvironment(loopEnv, perIterationNames);
                 if (forStmt.Increment is not null)
                     EvaluateRV(forStmt.Increment);
-                ProcessPendingCallbacks();
+                if (HasPendingCallbacks)
+                    ProcessPendingCallbacks();
             }
 
             return ExecutionResult.Success();
@@ -1849,6 +1856,10 @@ public partial class Interpreter
             // iterations capture distinct values (#633). `var`/expression
             // initializers share a single binding and keep the no-copy fast path.
             var perIterationNames = CollectPerIterationBindings(forStmt.Initializer);
+            if (perIterationNames != null
+                && !ForLoopAnalyzer.RequiresPerIterationEnvironment(
+                    forStmt, perIterationNames))
+                perIterationNames = null;
             if (perIterationNames != null)
                 CreatePerIterationEnvironment(loopEnv, perIterationNames);
             // Loop with proper continue handling - increment always runs
@@ -1875,7 +1886,8 @@ public partial class Interpreter
                 if (forStmt.Increment != null)
                     await ctx.EvaluateExprAsync(forStmt.Increment);
                 // Process any pending timer callbacks
-                ProcessPendingCallbacks();
+                if (HasPendingCallbacks)
+                    ProcessPendingCallbacks();
             }
             return ExecutionResult.Success();
         }

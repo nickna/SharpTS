@@ -1000,6 +1000,13 @@ public partial class Interpreter : IDisposable
     // event-loop ticks. Weak: tracking must not keep a guest registry alive.
     private readonly List<WeakReference<SharpTSFinalizationRegistry>> _finalizationRegistries = [];
     private readonly object _finalizationRegistriesLock = new();
+    private volatile bool _hasFinalizationRegistries;
+
+    private bool HasPendingCallbacks =>
+        !_isDisposed
+        && (HasMicrotasks()
+            || _hasFinalizationRegistries
+            || _hasScheduledTimers);
 
     /// <summary>
     /// Enrolls a FinalizationRegistry so its GC-enqueued cleanups are drained on
@@ -1013,6 +1020,7 @@ public partial class Interpreter : IDisposable
                 if (wr.TryGetTarget(out var existing) && ReferenceEquals(existing, registry))
                     return;
             _finalizationRegistries.Add(new WeakReference<SharpTSFinalizationRegistry>(registry));
+            _hasFinalizationRegistries = true;
         }
     }
 
@@ -1046,7 +1054,8 @@ public partial class Interpreter : IDisposable
 
         // FinalizationRegistry cleanups ride event-loop ticks (Node runs them as
         // ordinary tasks after GC observes a target collection).
-        DrainFinalizationRegistries();
+        if (_hasFinalizationRegistries)
+            DrainFinalizationRegistries();
 
         // Quick checks before acquiring lock
         if (_isDisposed || !_hasScheduledTimers) return;

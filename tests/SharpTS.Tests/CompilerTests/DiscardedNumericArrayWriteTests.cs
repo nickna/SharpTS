@@ -22,6 +22,8 @@ public sealed class DiscardedNumericArrayWriteTests
             """);
 
         var instructions = ReadInstructions(FindFunction(assembly, "fill")).ToArray();
+        Assert.Contains(instructions, instruction =>
+            instruction.Operand is MethodBase { Name: "EnsureDoubleCapacity" });
         int setDouble = Array.FindIndex(instructions, instruction =>
             instruction.Operand is MethodBase { Name: "SetDouble" });
 

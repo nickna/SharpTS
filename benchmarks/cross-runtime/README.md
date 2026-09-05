@@ -167,6 +167,12 @@ The direct case is the serial in-process compute baseline; compare each runtime'
 2- and 4-worker times with its 1-worker time to calculate parallel speedup and
 efficiency.
 
+The `num-arrays` workload separates indexed numeric-array cost into three cases:
+`num-write` grows an escaped array and then checksums it, `num-overwrite`
+prepopulates an array outside the timed region and measures overwrite plus
+checksum, and `num-read` measures the checksum pass alone. This makes allocation
+and capacity growth distinguishable from element-store and element-load cost.
+
 `worker-allocation-scaling` applies the same fixed-total-work design to short-lived object,
 string, and array graphs. It exposes allocation throughput, shared-runtime GC interference, and
 whether adding workers continues to help once managed-heap traffic replaces an allocation-free
