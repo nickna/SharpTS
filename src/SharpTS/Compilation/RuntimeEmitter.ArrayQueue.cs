@@ -27,7 +27,7 @@ public partial class RuntimeEmitter
         var element = elements.GetElementType(_types);
         var slot = holes ? _types.MakeNullable(element) : element;
         var list = _types.MakeGenericType(_types.ListOpen, slot);
-        var type = module.DefineType("$ArrayQueue" + elements.Kind + (holes ? "WithHoles" : ""),
+        var type = EmitTypeDefinitions.DefineType(module, "$ArrayQueue" + elements.Kind + (holes ? "WithHoles" : ""),
             TypeAttributes.NotPublic | TypeAttributes.Sealed, _types.Object);
         var front = type.DefineField("_front", list, FieldAttributes.Private);
         var back = type.DefineField("_back", list, FieldAttributes.Private);
