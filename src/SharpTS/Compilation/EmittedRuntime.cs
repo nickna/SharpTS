@@ -251,6 +251,7 @@ public class EmittedRuntime
     public MethodBuilder LookupBuiltInStaticMember { get; set; } = null!;
     public MethodBuilder ConcatArrays { get; set; } = null!;
     public MethodBuilder ExpandCallArgs { get; set; } = null!;
+    public MethodBuilder ExpandRestArgs { get; set; } = null!;
     public MethodBuilder ArrayPop { get; set; } = null!;
     public MethodBuilder ArrayPopProto { get; set; } = null!;
     public MethodBuilder ArrayShift { get; set; } = null!;
@@ -1577,6 +1578,7 @@ public class EmittedRuntime
     /// </summary>
     public MethodBuilder CallArgsPoolGet { get; set; } = null!;
     public ConstructorBuilder TSArrayCtor { get; set; } = null!;
+    public ConstructorBuilder TSArrayCtorFromElements { get; set; } = null!;
     /// <summary>$Array(object?[] ctorArgs) — ECMA-262 Array-constructor semantics for guest classes extending Array (#233): implicit ctors and super(...) chain through this.</summary>
     public ConstructorBuilder TSArrayCtorFromCtorArgs { get; set; } = null!;
     public MethodBuilder TSArrayElementsGetter { get; set; } = null!;

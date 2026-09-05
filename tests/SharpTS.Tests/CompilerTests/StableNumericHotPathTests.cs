@@ -181,6 +181,187 @@ public sealed class StableNumericHotPathTests
             method => method.Name.Contains("$rest$arity", StringComparison.Ordinal));
     }
 
+    [Fact]
+    public void AliasOnlyRestCall_UsesCompanionAndDoesNotAllocatePerIteration()
+    {
+        const string source = """
+            function add(...values: number[]): number { return values[0] + values[1]; }
+            function run(n: number): number {
+                const alias = add;
+                const second = alias;
+                let sum = 0.5;
+                for (let i = 0; i < n; i++) sum = sum + second(i, 1);
+                return sum;
+            }
+            """;
+        Assembly assembly = Compile(source);
+        var method = FindFunction(assembly, "run");
+        Assert.Contains(ReadInstructions(method), instruction =>
+            instruction.Operand is MethodBase called && called.Name.Contains("add$rest$arity2"));
+        var run = method.CreateDelegate<Func<double, double>>();
+        Assert.Equal(5000050000.5, run(100000));
+        run(100000);
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        run(100000);
+        long large = GC.GetAllocatedBytesForCurrentThread() - before;
+        before = GC.GetAllocatedBytesForCurrentThread();
+        run(10);
+        Assert.Equal(GC.GetAllocatedBytesForCurrentThread() - before, large);
+        Assert.Empty(TestHarness.CompileAndVerifyOnly(source));
+    }
+
+    [Theory, ModeData]
+    public void RestAliases_PreserveShadowingAndArgumentOrder(ExecutionMode mode)
+    {
+        const string source = """
+            function add(...values: number[]): number { return values[0] + values[1]; }
+            function run(): void {
+                const alias = add;
+                let counter = 0;
+                console.log(alias(counter++, counter++), counter);
+                { const alias = (...values: number[]): number => values[0] * values[1];
+                  console.log(alias(3, 4)); }
+                console.log(alias(3, 4));
+            }
+            run();
+            """;
+        Assert.Equal("1 2\n12\n7\n", TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
+    public void RestFallbacks_PreserveFreshArraysAndMissingArguments(ExecutionMode mode)
+    {
+        const string source = """
+            function collect(...values: number[]): number[] { return values; }
+            const first = collect(1, 2);
+            const second = collect(1, 2);
+            first[0] = 9;
+            console.log(first === second, second[0]);
+            function read(...values: number[]): any { return values[1]; }
+            function run(): void { const alias = read; console.log(alias(1)); }
+            run();
+            const tail = [2, 3];
+            const spread = collect(1, ...tail);
+            spread[1] = 8;
+            console.log(tail[0], spread.length);
+            """;
+        Assert.Equal("false 1\nundefined\n2 3\n", TestHarness.Run(source, mode));
+    }
+
+    [Fact]
+    public void ConstantRestIndex_UsesBoundedScalarCompanion()
+    {
+        const string source = """
+            function read(start: number, ...values: number[]): number {
+                return values[start] + values[start + 1];
+            }
+            function run(n: number): number {
+                let sum = 0.5;
+                for (let i = 0; i < n; i++) sum = sum + read(0, i, 1);
+                return sum;
+            }
+            """;
+        Assembly assembly = Compile(source);
+        var method = FindFunction(assembly, "run");
+        Assert.Contains(ReadInstructions(method), instruction =>
+            instruction.Operand is MethodBase called && called.Name.Contains("$rest$constant"));
+        var run = method.CreateDelegate<Func<double, double>>();
+        Assert.Equal(5000050000.5, run(100000));
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        run(100000);
+        Assert.Equal(0, GC.GetAllocatedBytesForCurrentThread() - before);
+        Assert.Empty(TestHarness.CompileAndVerifyOnly(source));
+    }
+
+    [Theory, ModeData]
+    public void ConstantRestIndex_PreservesParameterWritesAndOutOfRangeReads(ExecutionMode mode)
+    {
+        const string source = """
+            function changed(start: number, ...values: number[]): number {
+                start++;
+                return values[start];
+            }
+            function pick(start: number, ...values: number[]): any { return values[start]; }
+            function run(): void {
+                console.log(changed(0, 10, 20));
+                console.log(pick(0, 10, 20), pick(1, 10, 20), pick(2, 10, 20));
+                for (let i = 0; i < 2; i++) console.log(pick(i, 10, 20));
+            }
+            run();
+            """;
+        Assert.Equal("20\n10 20 undefined\n10\n20\n", TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
+    public void RestSpread_UsesCustomIteratorAndFreshStorage(ExecutionMode mode)
+    {
+        const string source = """
+            function collect(...values: number[]): number[] { return values; }
+            const tail: any = [1, 2];
+            tail[Symbol.iterator] = function* () { yield 7; yield 8; };
+            const values = collect(3, ...tail);
+            console.log(values.length, values[0], values[1], values[2]);
+            const empty = collect();
+            console.log(empty.length, empty === collect());
+            """;
+        Assert.Equal("3 3 7 8\n0 false\n", TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
+    public void RestAlias_ShadowedTargetAndEarlyClosureKeepLexicalSemantics(ExecutionMode mode)
+    {
+        const string source = """
+            function add(...values: number[]): number { return values[0] + values[1]; }
+            function shadow(add: (...values: number[]) => number): number {
+                const localAlias = add;
+                return localAlias(3, 4);
+            }
+            console.log(shadow((...values: number[]): number => values[0] * values[1]));
+            function early(): void {
+                function read(): number { return later(3, 4); }
+                try { read(); } catch { console.log("tdz"); }
+                const later = add;
+                console.log(read());
+            }
+            early();
+            """;
+        Assert.Equal("12\ntdz\n7\n", TestHarness.Run(source, mode));
+    }
+
+    [Fact]
+    public void ConstantRestIndex_SpecializationCountIsBounded()
+    {
+        string calls = string.Join("\n", Enumerable.Range(0, 12).Select(i =>
+            $"sum = sum + pick({i}, {string.Join(",", Enumerable.Range(0, 12))});"));
+        string source = """
+            function pick(start: number, ...values: number[]): number { return values[start]; }
+            function run(): number { let sum = 0;
+            """ + calls + "return sum; }";
+        Assembly assembly = Compile(source);
+        Assert.Equal(8, assembly.GetType("$Program")!
+            .GetMethods(BindingFlags.NonPublic | BindingFlags.Static)
+            .Count(method => method.Name.Contains("$rest$constant")));
+        Assert.Equal(66d, FindFunction(assembly, "run").Invoke(null, null));
+    }
+
+    [Theory, ModeData]
+    public void SpecializedRestCalls_EvaluateArgumentsOnceInOrder(ExecutionMode mode)
+    {
+        const string source = """
+            function pair(start: number, ...values: number[]): number {
+                return values[start] * 10 + values[start + 1];
+            }
+            function run(): void {
+                const orderedAlias = pair;
+                let counter = 1;
+                console.log(orderedAlias(0, counter++, counter++), counter);
+                console.log(pair(0, counter++, counter++), counter);
+            }
+            run();
+            """;
+        Assert.Equal("12 3\n34 5\n", TestHarness.Run(source, mode));
+    }
+
     private static Assembly Compile(string source)
     {
         var statements = new Parser(new Lexer(source).ScanTokens()).ParseOrThrow();

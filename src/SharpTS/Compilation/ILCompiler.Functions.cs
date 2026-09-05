@@ -273,6 +273,24 @@ public partial class ILCompiler
                 }
 
                 _functions.FlattenedNumericRestMethods[qualifiedFunctionName] = companions;
+                foreach (var call in flattenedInfo.AliasCalls)
+                    _numericRestCallTargets[call] = (companions[call.Arguments.Count - regularCount], true);
+
+                for (int index = 0; index < flattenedInfo.Specializations.Count; index++)
+                {
+                    var specialization = flattenedInfo.Specializations[index];
+                    Type[] parameters = paramTypes.Take(regularCount)
+                        .Concat(Enumerable.Repeat(_types.Double, specialization.RestArity)).ToArray();
+                    var companion = _programType.DefineMethod(
+                        $"{qualifiedFunctionName}$rest$constant{index}$arity{specialization.RestArity}",
+                        MethodAttributes.Private | MethodAttributes.Static | MethodAttributes.HideBySig,
+                        returnType, parameters);
+                    MarkCompilerGenerated(companion);
+                    _specializedNumericRestMethods[specialization] = companion;
+                    foreach (var call in specialization.Calls)
+                        _numericRestCallTargets[call] = (companion,
+                            call.Callee is Expr.Variable variable && variable.Name.Lexeme != funcStmt.Name.Lexeme);
+                }
             }
         }
 
@@ -660,7 +678,12 @@ public partial class ILCompiler
         Dictionary<string, FieldBuilder>? topLevelVars =
             BuildModuleMemberTopLevelStaticVarsForModule(_modules.CurrentPath);
 
-        foreach (var (restArity, companion) in companions.OrderBy(pair => pair.Key))
+        var bodies = companions.OrderBy(pair => pair.Key)
+            .Select(pair => (Arity: pair.Key, Method: pair.Value,
+                Indices: (IReadOnlyDictionary<Expr.GetIndex, int>?)null))
+            .Concat(info.Specializations.Select(s =>
+                (s.RestArity, _specializedNumericRestMethods[s], (IReadOnlyDictionary<Expr.GetIndex, int>?)s.Indices)));
+        foreach (var (restArity, companion, indices) in bodies)
         {
             var il = companion.GetILGenerator();
             var ctx = CreateModuleMemberContext(il, companion);
@@ -689,7 +712,7 @@ public partial class ILCompiler
             ctx.FlattenedNumericRestParameter = new FlattenedNumericRestParameter(
                 info.RestName,
                 info.RegularParameterCount,
-                restArity);
+                restArity, indices);
 
             var parameters = companion.GetParameters();
             for (int i = 0; i < info.RegularParameterCount; i++)

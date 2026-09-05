@@ -53,6 +53,7 @@ public partial class ILCompiler
             // Function metadata
             FunctionRestParams = _functions.RestParams,
             FlattenedNumericRestMethods = _functions.FlattenedNumericRestMethods,
+            NumericRestCallTargets = _numericRestCallTargets,
             FunctionLengths = _functions.Lengths,
             FunctionNames = _functions.Names,
             FunctionsCapturingArguments = _functions.CapturingArguments,
@@ -247,6 +248,7 @@ public partial class ILCompiler
             TopLevelNumericConstantValues = parentCtx.TopLevelNumericConstantValues,
             FunctionRestParams = parentCtx.FunctionRestParams,
             FlattenedNumericRestMethods = parentCtx.FlattenedNumericRestMethods,
+            NumericRestCallTargets = parentCtx.NumericRestCallTargets,
             FunctionLengths = parentCtx.FunctionLengths,
             FunctionNames = parentCtx.FunctionNames,
             FunctionGenericParams = parentCtx.FunctionGenericParams,

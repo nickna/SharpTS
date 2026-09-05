@@ -1447,21 +1447,9 @@ public partial class ILEmitter
             IL.Emit(OpCodes.Br, endLabelNH);
 
             IL.MarkLabel(notTSArrayGet);
-            IL.Emit(OpCodes.Ldloc, objLocal);
-            IL.Emit(OpCodes.Isinst, _ctx.Types.ListOfObject);
-            IL.Emit(OpCodes.Brfalse, fallbackLabelNH);
-
-            // List<object?> path: cast + get_Item (int-indexed; ordinary arrays
-            // don't exceed int.MaxValue so no widening needed here).
-            IL.Emit(OpCodes.Ldloc, objLocal);
-            IL.Emit(OpCodes.Castclass, _ctx.Types.ListOfObject);
-            EmitExpressionAsDouble(gi.Index);
-            IL.Emit(OpCodes.Conv_I4);
-            IL.Emit(OpCodes.Callvirt, _ctx.Types.GetMethod(_ctx.Types.ListOfObject, "get_Item", _ctx.Types.Int32));
-            SetStackUnknown();
-            IL.Emit(OpCodes.Br, endLabelNH);
-
-            // Fallback: generic dispatch
+            // Ordinary indirect rest calls can supply a plain List<object?> with
+            // fewer elements than this read. Its unchecked get_Item would throw
+            // instead of returning JS undefined; retain canonical index semantics.
             IL.MarkLabel(fallbackLabelNH);
             IL.Emit(OpCodes.Ldloc, objLocal);
             EmitExpression(gi.Index);
@@ -1493,8 +1481,20 @@ public partial class ILEmitter
         if (expression.Optional
             || expression.Object is not Expr.Variable restVariable
             || _ctx.FlattenedNumericRestParameter is not { } flattened
-            || restVariable.Name.Lexeme != flattened.Name
-            || expression.Index is not Expr.Literal { Value: double index }
+            || restVariable.Name.Lexeme != flattened.Name)
+        {
+            return false;
+        }
+
+        double index;
+        if (flattened.Indices?.TryGetValue(expression, out int specializedIndex) == true)
+            index = specializedIndex;
+        else if (expression.Index is Expr.Literal { Value: double literal })
+            index = literal;
+        else
+            return false;
+
+        if (!double.IsFinite(index)
             || index < 0
             || index != Math.Truncate(index)
             || index >= flattened.Length)

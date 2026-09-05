@@ -30,6 +30,22 @@ public abstract partial class ExpressionEmitterBase
     /// </summary>
     protected virtual void EmitCall(Expr.Call c)
     {
+        if (Ctx.NumericRestCallTargets?.TryGetValue(c, out var numericRestTarget) == true)
+        {
+            // Preserve the lexical read (including TDZ checks), then call the exact
+            // companion selected by binding analysis. Arguments are still evaluated once
+            // in source order by the ordinary typed-call argument emitter.
+            if (numericRestTarget.ReadCallee)
+            {
+                EmitExpression(c.Callee);
+                IL.Emit(OpCodes.Pop);
+            }
+            EmitStaticCallArguments(c.Arguments, numericRestTarget.Method);
+            IL.Emit(OpCodes.Call, numericRestTarget.Method);
+            BoxReturnValueIfNeeded(numericRestTarget.Method.ReturnType);
+            return;
+        }
+
         if (TryEmitStaticIndirectEvalGlobal(c))
             return;
 
@@ -941,8 +957,7 @@ public abstract partial class ExpressionEmitterBase
         if (hasSpreads && restArgsCount > 0)
         {
             EmitSpreadArrayFromLocals(arguments, argLocals, regularCount, restArgsCount);
-            EmitExpandCallArgs();
-            IL.Emit(OpCodes.Call, Ctx.Runtime!.CreateArray);
+            EmitExpandCallArgs(asRestArray: true);
         }
         else if (restArgsCount > 0)
         {
@@ -1338,12 +1353,12 @@ public abstract partial class ExpressionEmitterBase
     /// Emits the ExpandCallArgs call with Symbol.iterator and runtime type arguments.
     /// Expects args array and isSpread array on the stack.
     /// </summary>
-    protected void EmitExpandCallArgs()
+    protected void EmitExpandCallArgs(bool asRestArray = false)
     {
         IL.Emit(OpCodes.Ldsfld, Ctx.Runtime!.SymbolIterator);
         IL.Emit(OpCodes.Ldtoken, Ctx.Runtime!.RuntimeType);
         IL.Emit(OpCodes.Call, Types.TypeGetTypeFromHandle);
-        IL.Emit(OpCodes.Call, Ctx.Runtime!.ExpandCallArgs);
+        IL.Emit(OpCodes.Call, asRestArray ? Ctx.Runtime!.ExpandRestArgs : Ctx.Runtime!.ExpandCallArgs);
     }
 
     /// <summary>

@@ -131,7 +131,11 @@ dead-code elimination in both SharpTS modes and the JS engines.
 `sum + add4(i, 1, 2, 3)` without its call/rest mechanics. The former ungrouped
 body remains as `left-associated-accumulation`, an intentionally different
 loop-carried dependency-chain probe. Direct fixed-arity rest specialization is
-reported beside indirect-call, spread-call, and dynamic-index fallback cases.
+reported beside stable local aliases and constant-index specialization opportunities.
+`selected-numeric-rest` chooses its callee during the loop and
+`varying-index-numeric-rest` varies the starting index; these retain ordinary
+rest-call coverage as the stable cases improve. `spread-numeric-rest` exercises
+iterator expansion and rest-array construction.
 These rest cases share a fractional accumulator seed, keeping them in
 Number/double representation from the first iteration instead of letting an
 optimizing JavaScript engine start with tagged-small-integer arithmetic and

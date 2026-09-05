@@ -1124,18 +1124,25 @@ public partial class RuntimeEmitter
 
     private void EmitTSArrayConstructor(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
+        EmitTSArrayElementsConstructor(typeBuilder, runtime, _types.ListOfObject, false);
+        EmitTSArrayElementsConstructor(typeBuilder, runtime, _types.IEnumerableOfObject, true);
+    }
+
+    private void EmitTSArrayElementsConstructor(
+        TypeBuilder typeBuilder, EmittedRuntime runtime, Type inputType, bool fromElements)
+    {
         var ctor = typeBuilder.DefineConstructor(
             MethodAttributes.Public,
             CallingConventions.Standard,
-            [_types.ListOfObject]
+            [inputType]
         );
-        runtime.TSArrayCtor = ctor;
+        if (fromElements) runtime.TSArrayCtorFromElements = ctor;
+        else runtime.TSArrayCtor = ctor;
 
         var il = ctor.GetILGenerator();
 
-        // base(IEnumerable<object?>) — copies the input list's items into our
-        // own List<object?> storage. Per-element copy is O(N) but callers
-        // build a fresh list per $Array allocation, so throughput is unchanged.
+        // Copy into our own dense storage. The IEnumerable overload accepts an
+        // object[] directly without constructing an intermediate list/backing array.
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, _types.GetConstructor(_types.ListOfObject, _types.IEnumerableOfObject));

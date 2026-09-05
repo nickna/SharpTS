@@ -73,6 +73,9 @@ public partial class ILCompiler
         new(ReferenceEqualityComparer.Instance);
     private readonly Dictionary<Stmt.Function, StableNumericRestFunctionAnalyzer.Info>
         _stableNumericRestFunctions = new(ReferenceEqualityComparer.Instance);
+    private readonly Dictionary<Expr.Call, (MethodBuilder Method, bool ReadCallee)> _numericRestCallTargets = new(ReferenceEqualityComparer.Instance);
+    private readonly Dictionary<StableNumericRestFunctionAnalyzer.Specialization, MethodBuilder>
+        _specializedNumericRestMethods = new(ReferenceEqualityComparer.Instance);
     private TypeBuilder _programType = null!;
 
     // Organized state containers (see ILCompiler.State.cs for definitions)

@@ -2143,7 +2143,14 @@ public sealed class RuntimeFeatureDetector
             break;
         }
 
-        return _typeMap is null || _typeMap.Get(expr) is TypeInfo.Array;
+        return CouldContainArray(_typeMap?.Get(expr));
+
+        static bool CouldContainArray(TypeInfo? type) => type switch
+        {
+            null or TypeInfo.Any or TypeInfo.Unknown or TypeInfo.Array => true,
+            TypeInfo.Union union => union.Types.Any(CouldContainArray),
+            _ => false
+        };
     }
 
     private void MarkStableDiscardedArrayPushLiteral(Expr expression)

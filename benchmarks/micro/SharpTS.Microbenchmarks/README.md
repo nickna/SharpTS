@@ -72,6 +72,11 @@ typed parameters, categories, and operations-per-invoke directly from
 BenchmarkDotNet descriptors. See the [public snapshot exporter](../../snapshots/README.md)
 for normalized compiler-headroom publication.
 
+`NumericRestBenchmarks` complements `language-hot-paths.ts` with allocation
+measurements for direct, stable-alias, constant-index, spread, runtime-selected,
+and varying-index rest calls. Run it with `--filter '*NumericRestBenchmarks*'`.
+Checksums are validated in setup, outside the measured delegate invocation.
+
 ## Conventions
 
 - **One algorithm per class**, each with a single `[Params]` axis — a single

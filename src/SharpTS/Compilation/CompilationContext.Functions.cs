@@ -57,8 +57,14 @@ public partial class CompilationContext
     public Dictionary<string, Dictionary<int, MethodBuilder>>? FlattenedNumericRestMethods { get; set; }
 
     /// <summary>
-    /// Set only while emitting one flattened companion body. Constant rest-element
-    /// reads are redirected to native double arguments and <c>length</c> to a literal.
+    /// Exact AST call sites proven to target a typed rest companion. ReadCallee
+    /// preserves the lexical access for local aliases.
+    /// </summary>
+    public IReadOnlyDictionary<Expr.Call, (MethodBuilder Method, bool ReadCallee)>? NumericRestCallTargets { get; set; }
+
+    /// <summary>
+    /// Companion-body rest reads redirected to scalar parameters. Specialized index
+    /// expressions are keyed by AST identity; ordinary companions use literal indices.
     /// </summary>
     public FlattenedNumericRestParameter? FlattenedNumericRestParameter { get; set; }
 
@@ -214,4 +220,5 @@ public partial class CompilationContext
 public sealed record FlattenedNumericRestParameter(
     string Name,
     int FirstArgumentIndex,
-    int Length);
+    int Length,
+    IReadOnlyDictionary<Expr.GetIndex, int>? Indices = null);
