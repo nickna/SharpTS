@@ -11,7 +11,8 @@ public class NumericRestBenchmarks
     private Func<double, double> _run = null!;
 
     [Params("restFixedParameters", "restDirect", "restAlias", "restConstantIndex",
-        "restVaryingIndex", "restPacking", "restEscaping", "restSpread", "restDynamicDispatch")]
+        "restVaryingIndex", "restPacking", "restEscaping", "restSpread", "restDynamicDispatch",
+        "restSelectedTarget")]
     public string Case { get; set; } = null!;
 
     [Params(10_000)]

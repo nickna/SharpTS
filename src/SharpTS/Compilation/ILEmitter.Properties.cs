@@ -1479,21 +1479,9 @@ public partial class ILEmitter
             IL.Emit(OpCodes.Br, endLabelNH);
 
             IL.MarkLabel(notTSArrayGet);
-            IL.Emit(OpCodes.Ldloc, objLocal);
-            IL.Emit(OpCodes.Isinst, _ctx.Types.ListOfObject);
-            IL.Emit(OpCodes.Brfalse, fallbackLabelNH);
-
-            // List<object?> path: cast + get_Item (int-indexed; ordinary arrays
-            // don't exceed int.MaxValue so no widening needed here).
-            IL.Emit(OpCodes.Ldloc, objLocal);
-            IL.Emit(OpCodes.Castclass, _ctx.Types.ListOfObject);
-            EmitExpressionAsDouble(gi.Index);
-            IL.Emit(OpCodes.Conv_I4);
-            IL.Emit(OpCodes.Callvirt, _ctx.Types.GetMethod(_ctx.Types.ListOfObject, "get_Item", _ctx.Types.Int32));
-            SetStackUnknown();
-            IL.Emit(OpCodes.Br, endLabelNH);
-
-            // Fallback: generic dispatch
+            // Indirect rest calls can supply a plain List with fewer elements
+            // than this read. Use canonical indexing so missing entries return
+            // undefined rather than throwing from List.get_Item.
             IL.MarkLabel(fallbackLabelNH);
             IL.Emit(OpCodes.Ldloc, objLocal);
             EmitExpression(gi.Index);

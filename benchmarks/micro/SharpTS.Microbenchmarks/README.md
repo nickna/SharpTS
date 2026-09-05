@@ -112,6 +112,10 @@ guards permit bypassing per-index property operations.
   `AssemblyName` are pinned in the `.csproj` so those names stay stable; if you
   rename the project, keep the strings and the pinned names in sync.
 
+`NumericRestBenchmarks.restSelectedTarget` alternates between two callees on each
+iteration, complementing `restDynamicDispatch`, which receives one unknown target
+through a parameter. Both retain runtime dispatch and validate their checksums.
+
 ## Embedded-resource gotcha
 
 A wrong resource name **compiles fine** but throws at `[GlobalSetup]`

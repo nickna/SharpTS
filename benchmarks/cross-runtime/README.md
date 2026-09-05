@@ -138,7 +138,9 @@ dead-code elimination in both SharpTS modes and the JS engines.
 body remains as `left-associated-accumulation`, an intentionally different
 loop-carried dependency-chain probe. Direct fixed-arity rest specialization is
 reported beside immutable-alias and constant-index specialization targets,
-spread calls, and unknown-target/varying-index fallback controls.
+spread calls, and unknown-target/varying-index fallback controls. The
+`selected-numeric-rest` control alternates the callee on each iteration to
+exercise changing runtime targets alongside the parameter-bound unknown target.
 These rest cases share a fractional accumulator seed, keeping them in
 Number/double representation from the first iteration instead of letting an
 optimizing JavaScript engine start with tagged-small-integer arithmetic and
