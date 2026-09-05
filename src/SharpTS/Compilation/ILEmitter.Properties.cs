@@ -1675,21 +1675,19 @@ public partial class ILEmitter
     }
 
     /// <summary>
-    /// Emits a stack-neutral statement-position write through a guarded numeric
-    /// <c>$Array</c>. The ordinary result-producing path must reload and box the
-    /// assigned double so arbitrary expression consumers see the JS assignment
-    /// value. A discarded expression has no such consumer, so this specialization
-    /// keeps the fast arm unboxed while retaining the guarded generic fallback
+    /// Emits a write through a guarded numeric <c>$Array</c>, optionally leaving
+    /// the assigned double as the expression result. Discarded expressions leave
+    /// the stack empty. This keeps the fast arm unboxed with a generic fallback
     /// for non-<c>$Array</c> values passed through a cast. Loop-local receivers
     /// reuse the existing hoisted guard; parameters use the same guard per write.
     /// </summary>
-    private bool TryEmitDiscardedNumberArraySetIndex(Expr.SetIndex si)
+    private bool TryEmitDiscardedNumberArraySetIndex(Expr.SetIndex si, bool discardResult = true)
     {
-        if (_ctx.RuntimeFeatures?.UsesDynamicPropertyDescriptors == true
-            || si.Object is not Expr.Variable arrayVariable)
+        if (_ctx.RuntimeFeatures?.UsesDynamicPropertyDescriptors == true)
             return false;
 
-        var hoisted = _ctx.TryGetHoistedArray(arrayVariable.Name.Lexeme);
+        var hoisted = si.Object is Expr.Variable arrayVariable
+            ? _ctx.TryGetHoistedArray(arrayVariable.Name.Lexeme) : null;
         if (hoisted is not { Descriptor.Kind: ArrayElementsKind.Double }
             && ArrayElements.Resolve(_ctx.TypeMap?.Get(si.Object)) is not
                 { Kind: ArrayElementsKind.Double })
@@ -1710,8 +1708,8 @@ public partial class ILEmitter
 
         // Preserve reference evaluation order for the remaining operands:
         // index before RHS. Keep the original numeric key as a double for the
-        // array-like fallback (3.5 must remain property "3.5" there); only the
-        // guarded $Array arm narrows it exactly as the ordinary fast path does.
+        // fallback (3.5 must remain property "3.5" there); only the guarded
+        // $Array arm narrows keys after proving they are exact integer indices.
         EmitExpressionAsDouble(si.Index);
         var indexLocal = IL.DeclareLocal(_ctx.Types.Double);
         IL.Emit(OpCodes.Stloc, indexLocal);
@@ -1723,6 +1721,16 @@ public partial class ILEmitter
 
         var fallbackLabel = IL.DefineLabel();
         var endLabel = IL.DefineLabel();
+        // Narrow only exact non-negative Int32 keys. Other numeric keys are
+        // ordinary properties and must retain their original value.
+        IL.Emit(OpCodes.Ldloc, indexLocal);
+        IL.Emit(OpCodes.Ldc_R8, 0.0);
+        IL.Emit(OpCodes.Blt_Un, fallbackLabel);
+        IL.Emit(OpCodes.Ldloc, indexLocal);
+        IL.Emit(OpCodes.Ldloc, indexLocal);
+        IL.Emit(OpCodes.Conv_I4);
+        IL.Emit(OpCodes.Conv_R8);
+        IL.Emit(OpCodes.Bne_Un, fallbackLabel);
         if (hoisted is { } cached)
         {
             IL.Emit(OpCodes.Ldloc, cached.TypedLocal);
@@ -1770,6 +1778,11 @@ public partial class ILEmitter
         }
 
         IL.MarkLabel(endLabel);
+        if (!discardResult)
+        {
+            IL.Emit(OpCodes.Ldloc, valueLocal);
+            SetStackType(StackType.Double);
+        }
         return true;
     }
 
@@ -1950,6 +1963,9 @@ public partial class ILEmitter
             SetStackType(StackType.Double);
             return;
         }
+
+        if (TryEmitDiscardedNumberArraySetIndex(si, discardResult: false))
+            return;
 
         // Descriptor-driven fast path: when receiver is statically known to be an array,
         // emit direct List<T> access with auto-extension — skips runtime type dispatch,

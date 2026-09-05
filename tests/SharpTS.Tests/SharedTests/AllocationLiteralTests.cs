@@ -6,6 +6,28 @@ namespace SharpTS.Tests.SharedTests;
 public class AllocationLiteralTests
 {
     [Theory, ModeData]
+    public void PackedWritesPreserveNumericPropertyKeys(ExecutionMode mode)
+    {
+        const string source = """
+            function read(values: any, key: number): any { return values["" + key]; }
+            function write(values: number[], key: number): void {
+                values[key] = 7;
+                console.log(read(values, key), values.length, values[1]);
+                console.log(values[key] = 9, read(values, key));
+            }
+            write([1, 2, 3], 1.5);
+            write([1, 2, 3], -1);
+            write([1, 2, 3], NaN);
+            write([1, 2, 3], Infinity);
+            write([1, 2, 3], 4294967296);
+            const record = { values: [1, 2, 3] };
+            console.log(record.values[-1] = 5, read(record.values, -1), record.values.length);
+            """;
+        Assert.Equal(string.Concat(Enumerable.Repeat("7 3 2\n9 9\n", 5)) + "5 5 3\n",
+            TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
     public void NumericLiteralsKeepDynamicElementsAndObjectArrayAliases(ExecutionMode mode)
     {
         const string source = """
