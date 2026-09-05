@@ -1828,7 +1828,17 @@ public partial class ILEmitter
         var boundLocal = IL.DeclareLocal(_ctx.Types.Double);
         var skip = _ctx.ILBuilder.DefineLabel("counted_index_reserve_skip");
 
-        EmitExpressionAsDouble(reservation.Bound);
+        // Captured numeric bindings can still use object-backed storage. Only
+        // reserve when loading the bound is already coercion-free; otherwise
+        // the ordinary condition must retain its per-check ToNumber timing.
+        EmitExpression(reservation.Bound);
+        if (StackType != StackType.Double)
+        {
+            IL.Emit(OpCodes.Pop);
+            _ctx.ILBuilder.MarkLabel(skip);
+            SetStackUnknown();
+            return;
+        }
         IL.Emit(OpCodes.Stloc, boundLocal);
         IL.Emit(OpCodes.Ldloc, boundLocal);
         IL.Emit(OpCodes.Ldc_R8, 0d);
