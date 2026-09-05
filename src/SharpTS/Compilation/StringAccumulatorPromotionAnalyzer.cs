@@ -11,7 +11,8 @@ namespace SharpTS.Compilation;
 /// <c>String.Concat</c>, which copies the whole accumulator every iteration — O(n²). A StringBuilder
 /// slot turns that into amortized-O(1) <c>Append</c> (O(n) total). <c>StringBuilder.Length</c> and the
 /// <c>this[int]</c> indexer are UTF-16 code units, identical to JS <c>.length</c> and
-/// <c>charCodeAt(i)</c>, so those reads need no materialization.
+/// <c>charCodeAt(i)</c>. The emitter snapshots provably read-only for loops once to avoid the
+/// chunked builder indexer's nonlinear scan cost; other reads use the builder directly.
 ///
 /// <para>Deliberately-conservative first cut (mirrors <see cref="ArrayLocalPromotionAnalyzer"/>): a local
 /// is promoted only when provably non-escaping AND every use is one of a tiny permitted set, so the bare

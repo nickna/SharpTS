@@ -17,6 +17,68 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class StringAccumulatorPromotionTests
 {
+    [Theory, ModeData]
+    public void ReadOnlyScans_RefreshAfterBothAppendFormsAndLoopReentry(ExecutionMode mode)
+    {
+        const string source = """
+            function scan(): number {
+                let s: string = "";
+                let sum: number = 0;
+                for (let round: number = 0; round < 3; round++) {
+                    s = s + "A";
+                    for (let i: number = 0; i < s.length; i++) {
+                        sum = sum + s.charCodeAt(i);
+                    }
+                    s += "B";
+                    for (let i: number = 0; i < s.length; i++) {
+                        if (i === 0) continue;
+                        sum = sum + s.charCodeAt(i);
+                    }
+                }
+                return sum;
+            }
+            console.log(scan());
+            """;
+        Assert.Equal("1179\n", TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
+    public void MutatingScan_ObservesEveryAppend(ExecutionMode mode)
+    {
+        const string source = """
+            function scan(): number {
+                let s: string = "";
+                let sum: number = 0;
+                for (let i: number = 0; i < 4; i++) {
+                    s += "AB";
+                    sum = sum + s.charCodeAt(i * 2 + 1);
+                }
+                return sum;
+            }
+            console.log(scan());
+            """;
+        Assert.Equal("264\n", TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
+    public void ReadOnlyScan_PreservesUtf16AndEmptyInput(ExecutionMode mode)
+    {
+        const string source = """
+            function scan(n: number): number {
+                let s: string = "";
+                for (let i: number = 0; i < n; i++) { s += "A😀"; }
+                let sum: number = 0;
+                for (let i: number = 0; i < s.length; i++) {
+                    sum = sum + s.charCodeAt(i);
+                }
+                return sum;
+            }
+            console.log(scan(0));
+            console.log(scan(2));
+            """;
+        Assert.Equal("0\n224508\n", TestHarness.Run(source, mode));
+    }
+
     // ── Positive cases: promotable shapes ──────────────────────────────────
 
     [Theory, ModeData]

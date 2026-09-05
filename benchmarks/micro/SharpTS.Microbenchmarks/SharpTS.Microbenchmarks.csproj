@@ -37,6 +37,7 @@
     <EmbeddedResource Include="..\..\cross-runtime\scripts\custom-iterator.ts" LogicalName="SharpTS.Microbenchmarks.CustomIterator.stable.ts" />
     <EmbeddedResource Include="..\..\cross-runtime\scripts\custom-iterator-dynamic-control.ts" LogicalName="SharpTS.Microbenchmarks.CustomIterator.dynamic.ts" />
     <EmbeddedResource Include="..\..\cross-runtime\scripts\lib\bench.ts" LogicalName="SharpTS.Microbenchmarks.CustomIterator.bench.ts" />
+    <EmbeddedResource Include="..\..\cross-runtime\scripts\workers\allocation-kernel.ts" LogicalName="SharpTS.Microbenchmarks.allocation-kernel.ts" />
   </ItemGroup>
 
   <!-- Create output directory for pre-compiled DLLs -->

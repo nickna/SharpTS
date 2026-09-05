@@ -109,14 +109,49 @@ For repeatable candidate-vs-baseline runs on native Windows and WSL, see
 
 ## How timing works
 
+Set `SHARPTS_BENCH_WARMUP_MS=1500` for focused steady-state investigations.
+The optional override accepts integer milliseconds from 0 to 10000; the default
+remains 100 ms. It changes warmup only, not the sampling budget or slow-call
+sampling threshold. Zero skips timed warmup; correctness checks, the discarded
+cold and routing probes, and batch calibration still run. Use the same setting
+and workload sources for every runtime and baseline/candidate build, and retain
+the setting alongside raw results.
+
+`object-destructure-materialized` exercises dictionary storage from construction.
+`object-destructure-carrier-materialized` exercises a compact record that is
+subsequently materialized. `object-destructure-materialized-controls` adds direct,
+manually hoisted, fractional, varying-receiver, and per-iteration mutation controls.
+
+The shared algorithm drivers supply independent expected checksums to catch
+miscompilations before and after sampling. Factorial uses finite inputs
+10, 20, and 100; `arithmetic-loop` provides a bounded accumulator at larger
+iteration counts. Its body is also shared with the microbenchmark suite.
+
+`callback-control` reports synchronous and asynchronous empty-callback costs.
+Treat these as diagnostic floors, not quantities to subtract from other cases:
+inlining and tiering depend on the callback body. `string-scaling` extends the
+unchanged shared string workload through one million iterations. For compiler
+scaling investigations, select `-Runtimes compiled,node`; the largest inputs
+are intentionally expensive in the interpreter.
+
+```powershell
+./benchmarks/cross-runtime/run-benchmarks.ps1 `
+  -Workloads strings,string-scaling,json,arithmetic-loop,callback-control `
+  -Runtimes compiled,node -Launches 3 -OutputDirectory .perf-algorithms
+```
+
+Use paired baseline/candidate measurements for performance acceptance. Ordinary
+CI should verify checksums, compilation, and generated-code regression checks;
+wall-clock ratios belong in the local performance workflow, not noisy CI gates.
+
 Each workload calls `bench(name, param, fn, expected?)` from
 `scripts/lib/bench.ts`, which:
 
 1. When `expected` is supplied, validates one invocation before probing. A
    second validation after sampling checks the optimized steady-state result;
    neither validation is timed.
-2. Discards a cold probe, gives every runtime at least 100 ms of time-bounded
-   warmup, and discards a post-warmup routing probe. Slow and fast cases therefore
+2. Discards a cold probe, gives every runtime the configured time-bounded
+   warmup (100 ms by default), and discards a post-warmup routing probe. Slow and fast cases therefore
    both report steady-state samples rather than using different cold-start rules.
 3. A post-warmup call at or above 100 ms is sampled one call at a time. Faster
    calls are auto-batched until a sample spans ≥ 1 ms, lifting them above timer
@@ -138,12 +173,26 @@ dead-code elimination in both SharpTS modes and the JS engines.
 body remains as `left-associated-accumulation`, an intentionally different
 loop-carried dependency-chain probe. Direct fixed-arity rest specialization is
 reported beside immutable-alias and constant-index specialization targets,
-spread calls, and unknown-target/varying-index fallback controls.
+spread calls, and unknown-target/varying-index fallback controls. The
+`selected-numeric-rest` control alternates the callee on each iteration to
+exercise changing runtime targets alongside the parameter-bound unknown target.
 These rest cases share a fractional accumulator seed, keeping them in
 Number/double representation from the first iteration instead of letting an
 optimizing JavaScript engine start with tagged-small-integer arithmetic and
 deopt only at larger parameters. Other integer-oriented probes intentionally
 retain their natural representation behavior.
+
+`object-spread.ts` validates checksums for stable single-source and overwrite
+spreads, plus a mutation case passed to an `any` consumer. Controls compare a
+direct literal passed to the same consumer, the spread with its mutations
+inlined, and results retained in an array before consumption. The retained case
+also measures array allocation and traversal. The historical `escape` case name
+denotes a function boundary, not required retention: SharpTS can now specialize
+stable, bounded numeric-only consumers and preserve local object promotion.
+Truly retained results still materialize, while independent spread sources can
+remain in typed storage. Use the inline and retained controls to distinguish
+these cases, and the internal `ObjectLiteralsBenchmarks` spread cases for
+allocation/GC evidence.
 
 The `worker-scaling` workload uses the same parent, worker, and CPU-kernel
 TypeScript verbatim in every runtime. It keeps the total amount of CPU work
@@ -154,6 +203,12 @@ messaging, scheduling, and parallel execution rather than startup or compilation
 The direct case is the serial in-process compute baseline; compare each runtime's
 2- and 4-worker times with its 1-worker time to calculate parallel speedup and
 efficiency.
+
+The `num-arrays` workload separates indexed numeric-array cost into three cases:
+`num-write` grows an escaped array and then checksums it, `num-overwrite`
+prepopulates an array outside the timed region and measures overwrite plus
+checksum, and `num-read` measures the checksum pass alone. This makes allocation
+and capacity growth distinguishable from element-store and element-load cost.
 
 `worker-allocation-scaling` applies the same fixed-total-work design to short-lived object,
 string, and array graphs. It exposes allocation throughput, shared-runtime GC interference, and

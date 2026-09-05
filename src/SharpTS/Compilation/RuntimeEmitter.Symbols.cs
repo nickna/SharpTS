@@ -30,6 +30,22 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(symbolStorageType, "GetOrCreateValue", [_types.Object])!);
         il.Emit(OpCodes.Ret);
+
+        // Read-only consumers must not attach empty symbol storage to every object they inspect.
+        var tryGet = typeBuilder.DefineMethod(
+            "TryGetSymbolDict", MethodAttributes.Private | MethodAttributes.Static,
+            symbolDictType, [_types.Object]);
+        runtime.TryGetSymbolDictMethod = tryGet;
+        var readIl = tryGet.GetILGenerator();
+        var result = readIl.DeclareLocal(symbolDictType);
+        readIl.Emit(OpCodes.Ldsfld, symbolStorageField);
+        readIl.Emit(OpCodes.Ldarg_0);
+        readIl.Emit(OpCodes.Ldloca, result);
+        readIl.Emit(OpCodes.Callvirt, _types.GetMethod(symbolStorageType, "TryGetValue",
+            [_types.Object, symbolDictType.MakeByRefType()])!);
+        readIl.Emit(OpCodes.Pop);
+        readIl.Emit(OpCodes.Ldloc, result);
+        readIl.Emit(OpCodes.Ret);
     }
 
     /// <summary>

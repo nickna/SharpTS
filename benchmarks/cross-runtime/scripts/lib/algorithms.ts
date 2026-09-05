@@ -27,6 +27,16 @@ export function factorial(n: number): number {
     return result;
 }
 
+// Finite loop-carried arithmetic at large iteration counts. The modulo bounds
+// the accumulator; the independent checksum is n * (n - 1) / 2 modulo 65536.
+export function boundedArithmetic(n: number): number {
+    let result: number = 0;
+    for (let i: number = 0; i < n; i++) {
+        result = (result + i) % 65536;
+    }
+    return result;
+}
+
 // Array allocation + nested loops (Sieve of Eratosthenes).
 export function countPrimes(n: number): number {
     if (n <= 2) return 0;

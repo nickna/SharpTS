@@ -11,6 +11,14 @@ public partial class ILEmitter
         // Check if any element is a spread
         bool hasSpreads = a.Elements.Any(e => e is Expr.Spread);
 
+        if (!hasSpreads && a.Elements.Count > 0 &&
+            ArrayElements.Resolve(_ctx.TypeMap?.Get(a))?.Kind == ArrayElementsKind.Double &&
+            Enumerable.Range(0, a.Elements.Count).All(index => !a.IsHole(index)))
+        {
+            EmitNumericArrayLiteral(a);
+            return;
+        }
+
         // Typed array optimization: emit List<double> or List<bool> for empty typed arrays.
         // Only for empty arrays (populated via index assignment) to avoid issues with
         // array methods (flatMap, map, etc.) that expect List<object?>.
@@ -102,6 +110,41 @@ public partial class ILEmitter
         SetStackUnknown();
     }
 
+    private void EmitNumericArrayLiteral(Expr.ArrayLiteral literal)
+    {
+        // Evaluate once, left-to-right, before choosing storage. An annotation
+        // alone cannot justify coercing an object-backed value to a number (an
+        // `any` alias or assertion may hold a string). Keep the boxed fallback
+        // unless every emitted element is already a native number.
+        var values = new List<LocalBuilder>(literal.Elements.Count);
+        foreach (var element in literal.Elements)
+        {
+            EmitExpression(element);
+            bool nativeNumber = StackType == StackType.Double;
+            if (nativeNumber) EnsureDouble();
+            else EmitBoxIfNeeded(element);
+            var local = IL.DeclareLocal(nativeNumber ? _ctx.Types.Double : _ctx.Types.Object);
+            IL.Emit(OpCodes.Stloc, local);
+            values.Add(local);
+        }
+
+        bool numeric = values.All(local => local.LocalType == _ctx.Types.Double);
+        IL.Emit(OpCodes.Ldc_I4, values.Count);
+        IL.Emit(OpCodes.Newarr, numeric ? _ctx.Types.Double : _ctx.Types.Object);
+        for (int index = 0; index < values.Count; index++)
+        {
+            IL.Emit(OpCodes.Dup);
+            IL.Emit(OpCodes.Ldc_I4, index);
+            IL.Emit(OpCodes.Ldloc, values[index]);
+            if (!numeric && values[index].LocalType == _ctx.Types.Double)
+                IL.Emit(OpCodes.Box, _ctx.Types.Double);
+            IL.Emit(numeric ? OpCodes.Stelem_R8 : OpCodes.Stelem_Ref);
+        }
+        if (numeric) IL.Emit(OpCodes.Newobj, _ctx.Runtime!.TSArrayNumericLiteralCtor);
+        else IL.Emit(OpCodes.Call, _ctx.Runtime!.CreateArray);
+        SetStackUnknown();
+    }
+
     protected override void EmitObjectLiteral(Expr.ObjectLiteral o)
     {
         // Check if any property is a spread, computed key, or accessor (getter/setter)
@@ -162,12 +205,16 @@ public partial class ILEmitter
         else
         {
             // Complex case: has spreads or computed keys, use Dictionary<string, object?> and SetIndex.
-            // Pre-size only when Properties.Count > 3 (matches simple-case
-            // heuristic); spreads may add more, but the resize then is
-            // hard to avoid without runtime info.
-            if (o.Properties.Count > 3)
+            // A record's merged field count is only a bounded capacity hint, never a proof
+            // of runtime keys: optional/deleted fields and structurally wider values still
+            // go through the full copy operation. Cap the hint to avoid large speculative
+            // allocations for broad annotated types.
+            int capacity = o.Properties.Count;
+            if (hasSpreads && _ctx.TypeMap?.Get(o) is SharpTS.TypeSystem.TypeInfo.Record record)
+                capacity = Math.Max(capacity, Math.Min(record.Fields.Count, 64));
+            if (capacity > 3)
             {
-                IL.Emit(OpCodes.Ldc_I4, o.Properties.Count);
+                IL.Emit(OpCodes.Ldc_I4, capacity);
                 IL.Emit(OpCodes.Newobj, _ctx.Types.GetConstructor(_ctx.Types.DictionaryStringObject, _ctx.Types.Int32));
             }
             else
@@ -181,6 +228,26 @@ public partial class ILEmitter
 
                 if (prop.IsSpread)
                 {
+                    if (prop.Value is Expr.Variable variable &&
+                        _ctx.TryGetPromotedObjectLocal(variable.Name.Lexeme) is { } source)
+                    {
+                        // Only the result escapes. Copy the source's typed fields at this
+                        // spread position without allocating or boxing a source object.
+                        foreach (var field in source.Shape.Fields)
+                        {
+                            var builder = source.Shape.FieldBuilders[field.Name];
+                            IL.Emit(OpCodes.Dup);
+                            IL.Emit(OpCodes.Ldstr, field.Name);
+                            IL.Emit(OpCodes.Ldloca, source.Local);
+                            IL.Emit(OpCodes.Ldfld, builder);
+                            if (builder.FieldType.IsValueType)
+                                IL.Emit(OpCodes.Box, builder.FieldType);
+                            IL.Emit(OpCodes.Callvirt, _ctx.Types.GetMethod(
+                                _ctx.Types.DictionaryStringObject, "set_Item", _ctx.Types.String, _ctx.Types.Object));
+                        }
+                        IL.Emit(OpCodes.Pop); // consume the duplicate target, like MergeIntoObject
+                        continue;
+                    }
                     // Spread: merge the object into target
                     EmitExpression(prop.Value);
                     EmitBoxIfNeeded(prop.Value);

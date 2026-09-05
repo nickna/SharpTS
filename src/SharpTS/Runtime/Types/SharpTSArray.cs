@@ -73,6 +73,12 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
     // property algorithm. Never scan the backing on each shift/unshift.
     private bool _mayHaveHoles;
     private bool _ownsDenseStorage;
+    // Interpreter-only packed prefix. Empty arrays enter this mode on their
+    // first ordinary sequential numeric write; generic/object operations lazily
+    // materialize it back into _dense. This mirrors the compiled $Array
+    // elements-kind without changing SharpTSArray's public object API.
+    private double[]? _numericStore;
+    private int _numericCount;
     private Dictionary<uint, object?>? _sparse;
     private object? _explicitPrototype;
 
@@ -114,6 +120,7 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
     {
         get
         {
+            MaterializeNumeric();
             _ownsDenseStorage = false; // A caller can mutate this legacy backing view.
             return _dense;
         }
@@ -139,7 +146,8 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
     internal bool CanUseDenseQueueFastPath(long expectedLength) =>
         GetType() == typeof(SharpTSArray) && _ownsDenseStorage && !_mayHaveHoles
         && !HasExplicitPrototype && !IsFrozen && !IsSealed && IsExtensible && _lengthWritable
-        && _sparse is null && _length == expectedLength && _dense.Count == expectedLength
+        && _numericStore is null && _sparse is null
+        && _length == expectedLength && _dense.Count == expectedLength
         && (_indexAccessors?.Count ?? 0) == 0 && (_descriptors?.Count ?? 0) == 0;
 
     /// <summary>
@@ -220,6 +228,8 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
     public bool HasIndex(long index)
     {
         if ((ulong)index >= (ulong)_length) return false;
+        if (_numericStore is not null)
+            return index < _numericCount;
         if (index <= uint.MaxValue
             && (_indexAccessors?.ContainsKey((uint)index) ?? false))
             return true;
@@ -241,6 +251,12 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
     internal bool TryGetPresentDataIndex(long index, out object? value)
     {
         value = null;
+        if (_numericStore is not null)
+        {
+            if ((ulong)index >= (ulong)_numericCount) return false;
+            value = _numericStore[(int)index];
+            return true;
+        }
         if ((ulong)index >= (ulong)_length
             || index <= uint.MaxValue
                 && (_indexAccessors?.ContainsKey((uint)index) ?? false))
@@ -256,6 +272,131 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
         return true;
     }
 
+    [System.Runtime.CompilerServices.MethodImpl(
+        System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
+    internal bool TryGetPresentDataIndexRV(long index, out RuntimeValue value)
+    {
+        if (_numericStore is not null
+            && (ulong)index < (ulong)_numericCount)
+        {
+            value = RuntimeValue.FromNumber(_numericStore[(int)index]);
+            return true;
+        }
+        if (TryGetPresentDataIndex(index, out object? boxed))
+        {
+            value = RuntimeValue.FromBoxed(boxed);
+            return true;
+        }
+        value = RuntimeValue.Undefined;
+        return false;
+    }
+
+    /// <summary>
+    /// Writes the common ordinary dense-array case without property-key
+    /// conversion or descriptor lookup. Returns false when any observable array
+    /// exotic behavior requires the full interpreter property path.
+    /// </summary>
+    [System.Runtime.CompilerServices.MethodImpl(
+        System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
+    internal bool TrySetDenseDataIndex(long index, RuntimeValue value)
+    {
+        if (IsFrozen
+            || _sparse is not null
+            || _descriptors is not null
+            || _indexAccessors is not null
+            || index < 0
+            || index > MaxWriteIndex)
+        {
+            return false;
+        }
+
+        if (_numericStore is not null)
+        {
+            if (value.Kind != ValueKind.Number)
+            {
+                MaterializeNumeric();
+                return false;
+            }
+
+            if ((ulong)index < (ulong)_numericCount)
+            {
+                _numericStore[(int)index] = value.AsNumberUnsafe();
+                return true;
+            }
+            if (index != _numericCount
+                || !_lengthWritable
+                || !IsExtensible
+                || HasExplicitPrototype)
+            {
+                return false;
+            }
+
+            EnsureNumericCapacity(_numericCount + 1);
+            _numericStore[_numericCount++] = value.AsNumberUnsafe();
+            _length = _numericCount;
+            return true;
+        }
+
+        // An existing ordinary data property always shadows the prototype.
+        if (index < _length)
+        {
+            if (index >= _dense.Count || _dense[(int)index] is ArrayHole)
+                return false;
+            _dense[(int)index] = value.ToObject();
+            return true;
+        }
+
+        // Sequential growth is the Num Write hot path. Decline gaps and custom
+        // prototypes so inherited indexed behavior stays on the generic path.
+        if (index != _length
+            || index >= int.MaxValue
+            || !_lengthWritable
+            || !IsExtensible
+            || HasExplicitPrototype)
+        {
+            return false;
+        }
+
+        if (_length == 0 && _ownsDenseStorage && value.Kind == ValueKind.Number)
+        {
+            EnsureNumericCapacity(1);
+            _numericStore![_numericCount++] = value.AsNumberUnsafe();
+            _length = _numericCount;
+        }
+        else
+        {
+            _dense.Add(value.ToObject());
+            _length = _dense.Count;
+        }
+        return true;
+    }
+
+    [System.Runtime.CompilerServices.MethodImpl(
+        System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
+    private void EnsureNumericCapacity(int minimum)
+    {
+        if (_numericStore is null)
+        {
+            _numericStore = new double[Math.Max(4, minimum)];
+            return;
+        }
+        if (_numericStore.Length >= minimum) return;
+        int doubled = _numericStore.Length <= int.MaxValue / 2
+            ? _numericStore.Length * 2
+            : int.MaxValue;
+        int capacity = Math.Max(minimum, doubled);
+        Array.Resize(ref _numericStore, capacity);
+    }
+
+    private void MaterializeNumeric()
+    {
+        if (_numericStore is null) return;
+        for (int index = 0; index < _numericCount; index++)
+            _dense.Add(_numericStore[index]);
+        _numericStore = null;
+        _numericCount = 0;
+    }
+
     /// <summary>
     /// Makes <paramref name="index"/> a hole (ECMA-262 <c>delete arr[i]</c>).
     /// Length is unchanged. No-op for out-of-range indices or frozen arrays.
@@ -265,6 +406,7 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
         _mayHaveHoles = true;
         if (IsFrozen) return;
         if ((ulong)index >= (ulong)_length) return;
+        MaterializeNumeric();
         if (index <= uint.MaxValue)
             _indexAccessors?.Remove((uint)index);
         if (_sparse == null || index < _dense.Count)
@@ -282,6 +424,10 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
     /// use <see cref="Get(long)"/> or convert via <see cref="UnholeForRead(object?)"/>.</summary>
     private object? GetCore(long index)
     {
+        if (_numericStore is not null)
+            return (ulong)index < (ulong)_numericCount
+                ? _numericStore[(int)index]
+                : ArrayHole.Instance;
         if (_sparse == null || index < _dense.Count)
             return _dense[(int)index];
         if (index > uint.MaxValue) return ArrayHole.Instance;
@@ -300,6 +446,15 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
     /// <summary>Writes the slot at the given index without mutating length or transitioning.</summary>
     private void SetCore(long index, object? value)
     {
+        if (_numericStore is not null)
+        {
+            if (value is double number && index >= 0 && index < _numericCount)
+            {
+                _numericStore[(int)index] = number;
+                return;
+            }
+            MaterializeNumeric();
+        }
         _mayHaveHoles |= value is ArrayHole;
         if (_sparse == null || index < _dense.Count)
             _dense[(int)index] = value;
@@ -317,6 +472,9 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
     /// </remarks>
     public IEnumerator<object?> GetEnumerator()
     {
+        // Iterators are live across guest mutations. Materialize once so a
+        // delete/splice between MoveNext calls cannot invalidate _numericStore.
+        MaterializeNumeric();
         // %ArrayIteratorPrototype%.next reads the array's current length on
         // every step. Mutations during iteration are therefore observable:
         // shrinking stops the iterator early, while appended elements can be
@@ -344,6 +502,17 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
     /// <summary>Appends an element. Does not check frozen/sealed state.</summary>
     public void Add(object? value)
     {
+        if (_numericStore is not null)
+        {
+            if (value is double number)
+            {
+                EnsureNumericCapacity(_numericCount + 1);
+                _numericStore[_numericCount++] = number;
+                _length = _numericCount;
+                return;
+            }
+            MaterializeNumeric();
+        }
         _mayHaveHoles |= value is ArrayHole;
         if (_sparse != null)
         {
@@ -359,6 +528,7 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
     /// <summary>Appends many elements. Does not check frozen/sealed state.</summary>
     public void AddRange(IEnumerable<object?> values)
     {
+        MaterializeNumeric();
         _mayHaveHoles = true; // Unknown enumerable; do not enumerate it twice.
         if (_sparse != null)
         {
@@ -403,6 +573,7 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
     /// <summary>Removes and returns the last element. A hole reads as undefined.</summary>
     public object? RemoveLast()
     {
+        MaterializeNumeric();
         if (_length == 0)
             throw new InvalidOperationException("Array is empty.");
         long last = _length - 1;
@@ -455,6 +626,8 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
     {
         _dense.Clear();
         _sparse = null;
+        _numericStore = null;
+        _numericCount = 0;
         _length = 0;
     }
 
@@ -472,6 +645,7 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
     internal bool CanUseDenseSortFastPath(
         long expectedLength, bool checkForHoles = true)
     {
+        MaterializeNumeric();
         if (IsFrozen
             || expectedLength < 0
             || expectedLength > int.MaxValue
@@ -511,6 +685,8 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
     internal void ReplaceDenseSortContents(
         IReadOnlyList<object?> defined, long undefinedCount)
     {
+        _numericStore = null;
+        _numericCount = 0;
         _dense.Clear();
         for (int index = 0; index < defined.Count; index++)
             _dense.Add(defined[index]);
@@ -523,6 +699,7 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
     /// <summary>Returns a new <see cref="List{T}"/> containing the given slice.</summary>
     public List<object?> GetRange(int index, int count)
     {
+        MaterializeNumeric();
         if (index < 0 || count < 0 || index + count > _length)
             throw new ArgumentOutOfRangeException();
         if (_sparse == null && index + count <= _dense.Count)
@@ -562,6 +739,7 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
     /// </summary>
     private void MaterializeDense()
     {
+        MaterializeNumeric();
         if (_sparse == null)
             return;
         _mayHaveHoles = true;
@@ -751,6 +929,24 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
     /// </summary>
     private void SetCoreWithExtend(long index, object? value)
     {
+        if (_numericStore is not null)
+        {
+            if (value is double number && index >= 0 && index <= _numericCount)
+            {
+                if (index == _numericCount)
+                {
+                    EnsureNumericCapacity(_numericCount + 1);
+                    _numericStore[_numericCount++] = number;
+                    _length = _numericCount;
+                }
+                else
+                {
+                    _numericStore[(int)index] = number;
+                }
+                return;
+            }
+            MaterializeNumeric();
+        }
         _mayHaveHoles |= value is ArrayHole || index > _length;
         if (_sparse != null)
         {
@@ -798,6 +994,7 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
             throw new Exception($"RangeError: Array length {newLength} exceeds ECMA-262 uint32 maximum.");
 
         if (newLength == _length) return;
+        MaterializeNumeric();
         _mayHaveHoles |= newLength > _length;
 
         if (newLength < _length)
@@ -1177,6 +1374,7 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
     /// </summary>
     internal IEnumerable<string> OwnStringKeys()
     {
+        MaterializeNumeric();
         int denseLimit = (int)Math.Min(_length, _dense.Count);
         for (int index = 0; index < denseLimit; index++)
         {
@@ -1285,6 +1483,7 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
     public bool DefineProperty(string name, SharpTSPropertyDescriptor descriptor)
     {
         if (IsFrozen) return false;
+        MaterializeNumeric();
 
         // ArraySetLength (ECMA-262 §10.4.2.4). The length property is a
         // non-enumerable, non-configurable data property whose value controls

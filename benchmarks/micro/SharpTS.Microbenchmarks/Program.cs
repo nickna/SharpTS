@@ -18,6 +18,17 @@ class Program
 {
     static void Main(string[] args)
     {
+        if (args is ["--allocation-smoke"])
+        {
+            foreach (int n in new[] { 2000, 20000 })
+            foreach (bool alias in new[] { false, true })
+            {
+                new Benchmarks.AllocationKernelBenchmarks { N = n, UseTypeAlias = alias }.Setup();
+                Console.WriteLine($"Validated allocation diagnostics: N={n}, UseTypeAlias={alias}");
+            }
+            return;
+        }
+
         if (args is ["--smoke"])
         {
             CompileEmbeddedTypeScript();

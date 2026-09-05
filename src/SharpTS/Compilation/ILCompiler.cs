@@ -661,7 +661,7 @@ public partial class ILCompiler
         return statements;
     }
 
-    private void AnalyzeClosuresAndPromotions(List<Stmt> statements)
+    private void AnalyzeClosuresAndPromotions(List<Stmt> statements, IReadOnlyList<ParsedModule>? modules = null)
     {
         Phase2_AnalyzeClosures(statements);
         StableMapIterationAnalyzer.Analyze(statements, _typeMap, _closures.Analyzer);
@@ -685,7 +685,18 @@ public partial class ILCompiler
         TypedArrayHoistAnalyzer.Analyze(statements, _typeMap, _closures.Analyzer);
         ArrayLocalPromotionAnalyzer.Analyze(statements, _typeMap, _closures.Analyzer, _features);
         StringAccumulatorPromotionAnalyzer.Analyze(statements, _typeMap, _closures.Analyzer);
-        ObjectLocalPromotionAnalyzer.Analyze(statements, _typeMap, _closures.Analyzer);
+        // Callee identity proofs stay inside their module. The combined object-local pass
+        // still handles global name/capture conflicts conservatively across all modules.
+        Dictionary<Expr.Call, ObjectConsumerInfo>? consumers = null;
+        if (modules != null)
+        {
+            consumers = new(ReferenceEqualityComparer.Instance);
+            foreach (var module in modules)
+                if (!module.IsCommonJs)
+                    foreach (var (call, summary) in StableObjectConsumerAnalyzer.Analyze(module.Statements))
+                        consumers.Add(call, summary);
+        }
+        ObjectLocalPromotionAnalyzer.Analyze(statements, _typeMap, _closures.Analyzer, consumers);
     }
 
     private void DefineSingleProgramStructure(List<Stmt> statements)
@@ -1271,7 +1282,7 @@ public partial class ILCompiler
             var allStatements = PrepareModuleCompilation(modules, resolver, typeMap, deadCodeInfo);
             ModulePhase0_ExtractNamespaces(modules);
             Phase1_EmitRuntimeTypes();
-            AnalyzeClosuresAndPromotions(allStatements);
+            AnalyzeClosuresAndPromotions(allStatements, modules);
             DefineModuleProgramStructure(allStatements);
             AnalyzeModuleBindings(modules);
             ModulePhase5_DefineDeclarations(modules);
@@ -1293,7 +1304,7 @@ public partial class ILCompiler
             () => ModulePhase0_ExtractNamespaces(modules));
         _timingCollector.Measure(ExecutionPhaseTiming.EmitRuntimeTypes, Phase1_EmitRuntimeTypes);
         _timingCollector.Measure(ExecutionPhaseTiming.AnalyzeClosures,
-            () => AnalyzeClosuresAndPromotions(statements));
+            () => AnalyzeClosuresAndPromotions(statements, modules));
         _timingCollector.Measure(ExecutionPhaseTiming.DefineProgramStructure,
             () => DefineModuleProgramStructure(statements));
         _timingCollector.Measure(ExecutionPhaseTiming.AnalyzeModuleBindings,

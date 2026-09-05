@@ -9,7 +9,7 @@ using Xunit;
 namespace SharpTS.Tests.CompilerTests;
 
 /// <summary>Regression coverage for stable typed destructuring loads (#1502).</summary>
-public sealed class StableDestructuringLoadTests
+public sealed partial class StableDestructuringLoadTests
 {
     private const string HotSource = """
         type Point = { x: number; y: number };
@@ -285,7 +285,7 @@ public sealed class StableDestructuringLoadTests
             .GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static)
             .Single(method => method.Name.EndsWith(name, StringComparison.Ordinal));
 
-    private static IEnumerable<(OpCode OpCode, MemberInfo? Member)> ReadInstructions(
+    private static IEnumerable<(int Offset, OpCode OpCode, MemberInfo? Member, int? BranchTarget)> ReadInstructions(
         MethodInfo method)
     {
         byte[] il = method.GetMethodBody()?.GetILAsByteArray()
@@ -294,6 +294,7 @@ public sealed class StableDestructuringLoadTests
 
         for (int offset = 0; offset < il.Length;)
         {
+            int instructionOffset = offset;
             byte first = il[offset++];
             short value = first == 0xfe
                 ? unchecked((short)(0xfe00 | il[offset++]))
@@ -326,8 +327,14 @@ public sealed class StableDestructuringLoadTests
                 _ => throw new InvalidOperationException(
                     $"Unsupported IL operand type {opCode.OperandType}.")
             };
+            int? branchTarget = opCode.OperandType switch
+            {
+                OperandType.InlineBrTarget => offset + 4 + BitConverter.ToInt32(il, offset),
+                OperandType.ShortInlineBrTarget => offset + 1 + (sbyte)il[offset],
+                _ => null
+            };
             offset += operandSize;
-            yield return (opCode, member);
+            yield return (instructionOffset, opCode, member, branchTarget);
         }
     }
 

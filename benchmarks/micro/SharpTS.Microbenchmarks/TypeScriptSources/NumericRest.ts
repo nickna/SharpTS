@@ -76,3 +76,16 @@ function restUnknownTarget(n: number, fn: (...values: number[]) => number): numb
 }
 
 function restDynamicDispatch(n: number): number { return restUnknownTarget(n, restAdd4); }
+
+function restAdd4Alternative(...values: number[]): number {
+    return values[3] + values[2] + values[1] + values[0];
+}
+
+function restSelectedTarget(n: number): number {
+    let sum: number = 0.5;
+    for (let i: number = 0; i < n; i++) {
+        const operation = i % 2 === 0 ? restAdd4 : restAdd4Alternative;
+        sum = sum + operation(i, 1, 2, 3);
+    }
+    return sum;
+}
