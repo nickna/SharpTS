@@ -879,6 +879,9 @@ public partial class RuntimeEmitter
             _types.ListOfObject,
             [_types.Object, runtime.TSSymbolType, _types.Type]
         );
+        runtime.IterateIntoList = typeBuilder.DefineMethod(
+            "IterateIntoList", MethodAttributes.Public | MethodAttributes.Static,
+            _types.ListOfObject, [_types.Object, runtime.TSSymbolType, _types.Type, _types.ListOfObject]);
     }
 
     /// <summary>
@@ -1148,7 +1151,61 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitIterateToList(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
-        var method = runtime.IterateToList;
+        EmitIterateToListBody(runtime, appendToExisting: false);
+        EmitIterateToListBody(runtime, appendToExisting: true);
+    }
+
+    private void EmitAppendDenseIteratorSource(ILGenerator il, EmittedRuntime runtime,
+        LocalBuilder destination, LocalBuilder source)
+    {
+        var index = il.DeclareLocal(_types.Int32);
+        var count = il.DeclareLocal(_types.Int32);
+        var value = il.DeclareLocal(_types.Object);
+        il.Emit(OpCodes.Ldloc, source);
+        il.Emit(OpCodes.Callvirt, _types.GetPropertyGetter(_types.ListOfObject, "Count"));
+        il.Emit(OpCodes.Stloc, count);
+        il.Emit(OpCodes.Ldloc, destination);
+        il.Emit(OpCodes.Ldloc, destination);
+        il.Emit(OpCodes.Callvirt, _types.GetPropertyGetter(_types.ListOfObject, "Count"));
+        il.Emit(OpCodes.Ldloc, count);
+        il.Emit(OpCodes.Add_Ovf);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "EnsureCapacity", _types.Int32));
+        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stloc, index);
+        var loop = il.DefineLabel();
+        var done = il.DefineLabel();
+        var present = il.DefineLabel();
+        il.MarkLabel(loop);
+        il.Emit(OpCodes.Ldloc, index);
+        il.Emit(OpCodes.Ldloc, count);
+        il.Emit(OpCodes.Bge, done);
+        il.Emit(OpCodes.Ldloc, source);
+        il.Emit(OpCodes.Ldloc, index);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "get_Item", _types.Int32));
+        il.Emit(OpCodes.Stloc, value);
+        // Spread fills holes with actual undefined values, never the internal
+        // hole sentinel. The no-prototype-mutation proof permits this conversion.
+        il.Emit(OpCodes.Ldloc, value);
+        il.Emit(OpCodes.Isinst, runtime.ArrayHoleType);
+        il.Emit(OpCodes.Brfalse, present);
+        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Stloc, value);
+        il.MarkLabel(present);
+        il.Emit(OpCodes.Ldloc, destination);
+        il.Emit(OpCodes.Ldloc, value);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", _types.Object));
+        il.Emit(OpCodes.Ldloc, index);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, index);
+        il.Emit(OpCodes.Br, loop);
+        il.MarkLabel(done);
+    }
+
+    private void EmitIterateToListBody(EmittedRuntime runtime, bool appendToExisting)
+    {
+        var method = appendToExisting ? runtime.IterateIntoList : runtime.IterateToList;
 
         var il = method.GetILGenerator();
 
@@ -1168,21 +1225,19 @@ public partial class RuntimeEmitter
         var customArrayIteratorLabel = il.DefineLabel();
 
         // Create result list
-        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, _types.EmptyTypes));
+        if (appendToExisting) il.Emit(OpCodes.Ldarg_3);
+        else il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, _types.EmptyTypes));
         il.Emit(OpCodes.Stloc, resultLocal);
 
         // Check for null input
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Brfalse, throwLabel);
 
-        // An array can carry an own @@iterator. Only programs that can install one pay
-        // this probe; the stable majority retain the zero-dispatch backing-list path.
+        // Any array representation can carry an own @@iterator, including a
+        // List-backed value. Probe before collection fast paths and reuse the
+        // result below so an observable iterator getter is evaluated only once.
         if (_features.UsesArrayPrototypeMutation)
         {
-            var noCustomArrayIterator = il.DefineLabel();
-            il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.TSArrayType);
-            il.Emit(OpCodes.Brfalse, noCustomArrayIterator);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Call, runtime.GetIteratorFunction);
@@ -1190,7 +1245,6 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldloc, iterFnLocal);
             il.Emit(OpCodes.Isinst, runtime.UndefinedType);
             il.Emit(OpCodes.Brfalse, customArrayIteratorLabel);
-            il.MarkLabel(noCustomArrayIterator);
         }
 
         // 1a. Stage E.2: fast path for $Array — return its backing list directly.
@@ -1207,6 +1261,57 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, runtime.TSArrayType);
         il.Emit(OpCodes.Callvirt, runtime.TSArrayElementsGetter);
+        if (appendToExisting)
+        {
+            var elements = il.DeclareLocal(_types.ListOfObject);
+            il.Emit(OpCodes.Stloc, elements);
+            var indexed = il.DefineLabel();
+            if (_features.UsesArrayPrototypeMutation)
+                il.Emit(OpCodes.Br, indexed);
+            else
+            {
+                // Dense boxed storage can be copied directly after the iterator
+                // proof above. Holes/sparse tails require ordinary indexed reads.
+                il.Emit(OpCodes.Ldloc, elements);
+                il.Emit(OpCodes.Callvirt, _types.GetPropertyGetter(_types.ListOfObject, "Count"));
+                il.Emit(OpCodes.Conv_I8);
+                il.Emit(OpCodes.Ldarg_0);
+                il.Emit(OpCodes.Castclass, runtime.TSArrayType);
+                il.Emit(OpCodes.Callvirt, runtime.TSArrayLongLengthGetter);
+                il.Emit(OpCodes.Bne_Un, indexed);
+                EmitAppendDenseIteratorSource(il, runtime, resultLocal, elements);
+                il.Emit(OpCodes.Ldloc, resultLocal);
+                il.Emit(OpCodes.Ret);
+            }
+            il.MarkLabel(indexed);
+            var index = il.DeclareLocal(_types.Int64);
+            var check = il.DefineLabel();
+            var done = il.DefineLabel();
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Conv_I8);
+            il.Emit(OpCodes.Stloc, index);
+            il.MarkLabel(check);
+            il.Emit(OpCodes.Ldloc, index);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Castclass, runtime.TSArrayType);
+            il.Emit(OpCodes.Callvirt, runtime.TSArrayLongLengthGetter);
+            il.Emit(OpCodes.Bge, done);
+            il.Emit(OpCodes.Ldloc, resultLocal);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldloc, index);
+            il.Emit(OpCodes.Conv_R8);
+            il.Emit(OpCodes.Box, _types.Double);
+            il.Emit(OpCodes.Call, runtime.GetIndex);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", _types.Object));
+            il.Emit(OpCodes.Ldloc, index);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Conv_I8);
+            il.Emit(OpCodes.Add);
+            il.Emit(OpCodes.Stloc, index);
+            il.Emit(OpCodes.Br, check);
+            il.MarkLabel(done);
+            il.Emit(OpCodes.Ldloc, resultLocal);
+        }
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notTSArrayLabel);
 
@@ -1352,6 +1457,13 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, tryStringLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, _types.ListOfObject);
+        if (appendToExisting)
+        {
+            var source = il.DeclareLocal(_types.ListOfObject);
+            il.Emit(OpCodes.Stloc, source);
+            EmitAppendDenseIteratorSource(il, runtime, resultLocal, source);
+            il.Emit(OpCodes.Ldloc, resultLocal);
+        }
         il.Emit(OpCodes.Ret);
 
         // 2. If obj is string, iterate characters
@@ -1433,10 +1545,13 @@ public partial class RuntimeEmitter
         // 3. Check for Symbol.iterator
         var tryIEnumerableLabel = il.DefineLabel();
         il.MarkLabel(tryIteratorLabel);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldarg_1);  // Symbol.iterator
-        il.Emit(OpCodes.Call, runtime.GetIteratorFunction);
-        il.Emit(OpCodes.Stloc, iterFnLocal);
+        if (!_features.UsesArrayPrototypeMutation)
+        {
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldarg_1);  // Symbol.iterator
+            il.Emit(OpCodes.Call, runtime.GetIteratorFunction);
+            il.Emit(OpCodes.Stloc, iterFnLocal);
+        }
 
         if (_features.UsesArrayPrototypeMutation)
             il.MarkLabel(customArrayIteratorLabel);

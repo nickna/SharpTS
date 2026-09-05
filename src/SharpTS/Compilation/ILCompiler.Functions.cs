@@ -257,19 +257,29 @@ public partial class ILCompiler
             if (_stableNumericRestFunctions.TryGetValue(funcStmt, out var flattenedInfo))
             {
                 var companions = new Dictionary<int, MethodBuilder>();
-                foreach (int restArity in flattenedInfo.RestArities.Order())
+                for (int variantIndex = 0; variantIndex < flattenedInfo.Variants.Count; variantIndex++)
                 {
+                    var variant = flattenedInfo.Variants[variantIndex];
+                    int restArity = variant.RestArity;
                     Type[] companionParameters = paramTypes
                         .Take(flattenedInfo.RegularParameterCount)
                         .Concat(Enumerable.Repeat(_types.Double, restArity))
                         .ToArray();
                     var companion = _programType.DefineMethod(
-                        $"{qualifiedFunctionName}$rest$arity{restArity}",
+                        $"{qualifiedFunctionName}$rest$arity{restArity}$variant{variantIndex}",
                         MethodAttributes.Private | MethodAttributes.Static | MethodAttributes.HideBySig,
                         returnType,
                         companionParameters);
                     MarkCompilerGenerated(companion);
-                    companions[restArity] = companion;
+                    companions[variantIndex] = companion;
+                    foreach (var call in variant.Calls)
+                        _functions.NumericRestCallMethods[call] = companion;
+                    if (variant.HasLiteralIndices)
+                    {
+                        if (!_functions.LiteralNumericRestMethods.TryGetValue(qualifiedFunctionName, out var literalMethods))
+                            _functions.LiteralNumericRestMethods[qualifiedFunctionName] = literalMethods = [];
+                        literalMethods[restArity] = companion;
+                    }
                 }
 
                 _functions.FlattenedNumericRestMethods[qualifiedFunctionName] = companions;
@@ -660,8 +670,9 @@ public partial class ILCompiler
         Dictionary<string, FieldBuilder>? topLevelVars =
             BuildModuleMemberTopLevelStaticVarsForModule(_modules.CurrentPath);
 
-        foreach (var (restArity, companion) in companions.OrderBy(pair => pair.Key))
+        foreach (var (variantIndex, companion) in companions.OrderBy(pair => pair.Key))
         {
+            var variant = info.Variants[variantIndex];
             var il = companion.GetILGenerator();
             var ctx = CreateModuleMemberContext(il, companion);
             ctx.StableDirectSelfCallTarget = ordinaryMethod;
@@ -689,7 +700,8 @@ public partial class ILCompiler
             ctx.FlattenedNumericRestParameter = new FlattenedNumericRestParameter(
                 info.RestName,
                 info.RegularParameterCount,
-                restArity);
+                variant.RestArity,
+                variant.Reads);
 
             var parameters = companion.GetParameters();
             for (int i = 0; i < info.RegularParameterCount; i++)

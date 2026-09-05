@@ -121,6 +121,8 @@ public partial class ILCompiler
         public Dictionary<string, Dictionary<string, List<MethodBuilder>>> MethodOverloads { get; } = [];
         public Dictionary<string, (int RestParamIndex, int RegularParamCount)> RestParams { get; } = [];
         public Dictionary<string, Dictionary<int, MethodBuilder>> FlattenedNumericRestMethods { get; } = [];
+        public Dictionary<Expr.Call, MethodBuilder> NumericRestCallMethods { get; } = new(ReferenceEqualityComparer.Instance);
+        public Dictionary<string, Dictionary<int, MethodBuilder>> LiteralNumericRestMethods { get; } = [];
         public Dictionary<string, GenericTypeParameterBuilder[]> GenericParams { get; } = [];
         public Dictionary<string, bool> IsGeneric { get; } = [];
         public Dictionary<MethodBase, int> Lengths { get; } = [];

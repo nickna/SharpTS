@@ -1494,15 +1494,12 @@ public partial class ILEmitter
             || expression.Object is not Expr.Variable restVariable
             || _ctx.FlattenedNumericRestParameter is not { } flattened
             || restVariable.Name.Lexeme != flattened.Name
-            || expression.Index is not Expr.Literal { Value: double index }
-            || index < 0
-            || index != Math.Truncate(index)
-            || index >= flattened.Length)
+            || !flattened.Reads.TryGetValue(expression, out int index))
         {
             return false;
         }
 
-        IL.Emit(OpCodes.Ldarg, flattened.FirstArgumentIndex + (int)index);
+        IL.Emit(OpCodes.Ldarg, flattened.FirstArgumentIndex + index);
         SetStackType(StackType.Double);
         return true;
     }

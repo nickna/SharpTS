@@ -164,6 +164,7 @@ public partial class ILEmitter
 
     protected override void EmitCall(Expr.Call c)
     {
+        if (TryEmitNumericRestCompanionCall(c)) return;
         // A lexical super() inside an immediately invoked arrow must still be
         // emitted in the derived CLR constructor. Moving it into the arrow's
         // helper method would make the IL invalid: only a constructor may call
