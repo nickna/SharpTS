@@ -1206,26 +1206,9 @@ public partial class RuntimeEmitter
         EmitObjProtoMethodCheck("hasOwnProperty", runtime.HasOwnPropertyHelperMethod, 1);
         EmitObjProtoMethodCheck("isPrototypeOf",  runtime.IsPrototypeOfHelperMethod, 1);
 
-        // Check for getter accessor via $PropertyDescriptorStore - fully standalone, no reflection
+        // Retrieve the descriptor once: querying TryGetGetter first repeated the
+        // descriptor weak-table lookup for every ordinary dictionary property.
         var getterLocal = il.DeclareLocal(_types.Object);
-        var noGetterLabel = il.DefineLabel();
-
-        // Call PDSTryGetGetter(obj, name, out getter)
-        il.Emit(OpCodes.Ldarg_0);  // obj
-        il.Emit(OpCodes.Ldarg_1);  // name
-        il.Emit(OpCodes.Ldloca, getterLocal);  // out getter
-        il.Emit(OpCodes.Call, runtime.PDSTryGetGetter);
-        il.Emit(OpCodes.Brfalse, noGetterLabel);
-
-        // Getter was found - invoke it via InvokeMethodValue(obj, getter, emptyArgs)
-        il.Emit(OpCodes.Ldarg_0);  // receiver (obj)
-        il.Emit(OpCodes.Ldloc, getterLocal);  // function (getter)
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Newarr, _types.Object);  // empty args array
-        il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
-        il.Emit(OpCodes.Ret);
-
-        il.MarkLabel(noGetterLabel);
 
         // A descriptor without an invokable getter still shadows both the
         // dictionary's ordinary storage and its prototype. This includes
@@ -1242,8 +1225,21 @@ public partial class RuntimeEmitter
         var returnDescriptorValueLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, ownDescriptorLocal);
         il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorGetter.GetGetMethod()!);
+        il.Emit(OpCodes.Stloc, getterLocal);
+        il.Emit(OpCodes.Ldloc, getterLocal);
         il.Emit(OpCodes.Brfalse, returnDescriptorValueLabel);
+        var invokeGetterLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, getterLocal);
+        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Brfalse, invokeGetterLabel);
         il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(invokeGetterLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, getterLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Newarr, _types.Object);
+        il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(returnDescriptorValueLabel);
         // With no accessor slots this is a data descriptor. Its value is
