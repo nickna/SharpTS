@@ -148,6 +148,7 @@ public partial class RuntimeEmitter
         runtime.TSArrayEnsureBoxed = _tsArrayEnsureBoxedMethod;
 
         EmitTSArrayConstructor(typeBuilder, runtime);
+        EmitTSArrayNumericLiteralConstructor(typeBuilder, runtime);
         EmitTSArrayRestConstruction(typeBuilder, runtime);
 
         // Elements returns `this` (the inherited List<object?>). In practice
@@ -1173,6 +1174,35 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
+    private void EmitTSArrayNumericLiteralConstructor(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        // The emitter hands over a fresh, dense double[]; no other value can
+        // observe its storage. Holes continue to use the ordinary literal path.
+        var ctor = typeBuilder.DefineConstructor(MethodAttributes.Assembly,
+            CallingConventions.Standard, [_types.DoubleArray]);
+        runtime.TSArrayNumericLiteralCtor = ctor;
+        var il = ctor.GetILGenerator();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, _types.GetDefaultConstructor(_types.ListOfObject));
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Stfld, _tsArrayNumStoreField);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldlen);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Stfld, _tsArrayNumCountField);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldlen);
+        il.Emit(OpCodes.Conv_I8);
+        il.Emit(OpCodes.Stfld, _tsArrayLengthField);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Stfld, _tsArrayIsNumericField);
+        il.Emit(OpCodes.Ret);
+    }
+
     private void EmitTSArrayConstructor(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var ctor = typeBuilder.DefineConstructor(
@@ -1182,11 +1212,22 @@ public partial class RuntimeEmitter
         );
         runtime.TSArrayCtor = ctor;
 
-        var il = ctor.GetILGenerator();
+        // Internal element construction is distinct from the object[] overload
+        // implementing Array(...args), where one number denotes a length.
+        var literalCtor = typeBuilder.DefineConstructor(
+            MethodAttributes.Public,
+            CallingConventions.Standard,
+            [_types.IEnumerableOfObject]);
+        runtime.TSArrayLiteralCtor = literalCtor;
+        var forwardingIl = ctor.GetILGenerator();
+        forwardingIl.Emit(OpCodes.Ldarg_0);
+        forwardingIl.Emit(OpCodes.Ldarg_1);
+        forwardingIl.Emit(OpCodes.Call, literalCtor);
+        forwardingIl.Emit(OpCodes.Ret);
 
-        // base(IEnumerable<object?>) — copies the input list's items into our
-        // own List<object?> storage. Per-element copy is O(N) but callers
-        // build a fresh list per $Array allocation, so throughput is unchanged.
+        var il = literalCtor.GetILGenerator();
+
+        // One copy, directly from the supplied elements into our own storage.
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, _types.GetConstructor(_types.ListOfObject, _types.IEnumerableOfObject));

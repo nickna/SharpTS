@@ -50,6 +50,18 @@ The original direct-delegate JSON benchmarks remain as a comparison.
 
 ## Running
 
+Allocation diagnostics share the unmodified cross-runtime `allocation-kernel.ts`.
+`AllocationKernelBenchmarks` measures the complete kernel, graph construction,
+and traversal of a graph built during setup, with allocation and GC counters.
+Each runs with interface and equivalent type-alias declarations. Phase timings
+are diagnostic and should not be added together: exposing the graph changes
+escape analysis and traversal starts with an already retained graph.
+
+```powershell
+dotnet run -c Release --project benchmarks/micro/SharpTS.Microbenchmarks -- --allocation-smoke
+dotnet run -c Release --project benchmarks/micro/SharpTS.Microbenchmarks -- --filter '*AllocationKernelBenchmarks*'
+```
+
 ```bash
 # From the repo root. BenchmarkDotNet requires a Release build.
 dotnet run -c Release --project benchmarks/micro/SharpTS.Microbenchmarks

@@ -384,9 +384,24 @@ public partial class ILEmitter
             && objType is TypeInfo.Record recordType
             && _ctx.Runtime?.UndefinedInstance != null)
         {
-            if (TryEmitTypedRecordNumberGet(g, recordType))
+            JsonSerializationShapeAnalyzer.TryAnalyze(recordType, out var analyzed);
+            var shape = analyzed as JsonSerializationShape.Record;
+            if (TryEmitTypedRecordNumberGet(g, shape))
                 return;
-            EmitTypedRecordPropertyGet(g, recordType);
+            EmitTypedRecordPropertyGet(g, shape);
+            return;
+        }
+
+        // Interface declarations do not define object insertion order. Match an
+        // emitted carrier by its field names/types, then use its canonical order.
+        // The same runtime type/materialization guards protect class instances,
+        // aliases and structurally compatible values with a different layout.
+        if (!g.Optional && objType is TypeInfo.Interface interfaceType &&
+            TryGetInterfaceReadShape(interfaceType, out var interfaceShape))
+        {
+            if (TryEmitTypedRecordNumberGet(g, interfaceShape, requireMaterializationGuard: true))
+                return;
+            EmitTypedRecordPropertyGet(g, interfaceShape, requireMaterializationGuard: true);
             return;
         }
 
@@ -440,11 +455,11 @@ public partial class ILEmitter
     /// and its own materialization state; the cold arm preserves the general
     /// property lookup and ToNumber semantics.
     /// </summary>
-    private bool TryEmitTypedRecordNumberGet(Expr.Get g, TypeInfo.Record recordType)
+    private bool TryEmitTypedRecordNumberGet(Expr.Get g, JsonSerializationShape.Record? recordShape,
+        bool requireMaterializationGuard = false)
     {
         if (_ctx.ProgramType is null || _ctx.Runtime is not { } runtime ||
-            !JsonSerializationShapeAnalyzer.TryAnalyze(recordType, out var analyzedShape) ||
-            analyzedShape is not JsonSerializationShape.Record recordShape)
+            recordShape is null)
         {
             return false;
         }
@@ -525,7 +540,7 @@ public partial class ILEmitter
             IL.Emit(OpCodes.Stloc, compactExact);
             IL.Emit(OpCodes.Ldloc, compactExact);
             IL.Emit(OpCodes.Brfalse, fallback);
-            if (!_ctx.RuntimeFeatures!.CanAssumeCompactObjectRecordIsUnmaterialized(
+            if (requireMaterializationGuard || !_ctx.RuntimeFeatures!.CanAssumeCompactObjectRecordIsUnmaterialized(
                     fingerprint))
             {
                 IL.Emit(OpCodes.Ldloc, compactExact);
@@ -571,7 +586,8 @@ public partial class ILEmitter
     /// instances downcast to record shape, etc.) we fall through to the
     /// existing dispatch.
     /// </summary>
-    private void EmitTypedRecordPropertyGet(Expr.Get g, TypeInfo.Record recordType)
+    private void EmitTypedRecordPropertyGet(Expr.Get g, JsonSerializationShape.Record? recordShape,
+        bool requireMaterializationGuard = false)
     {
         EmitExpression(g.Object);
         EmitBoxIfNeeded(g.Object);
@@ -590,8 +606,7 @@ public partial class ILEmitter
         bool exactCarrierSpecialized = false;
 
         if (hasCompactCarrier && _ctx.ProgramType is not null &&
-            JsonSerializationShapeAnalyzer.TryAnalyze(recordType, out var analyzedShape) &&
-            analyzedShape is JsonSerializationShape.Record recordShape)
+            recordShape is not null)
         {
             int scalarIndex = -1;
             for (int index = 0; index < recordShape.Fields.Count; index++)
@@ -674,7 +689,7 @@ public partial class ILEmitter
                 }
                 IL.Emit(OpCodes.Ldloc, exactLocal);
                 IL.Emit(OpCodes.Brfalse, fallbackLabel);
-                if (!_ctx.RuntimeFeatures!.CanAssumeCompactObjectRecordIsUnmaterialized(
+                if (requireMaterializationGuard || !_ctx.RuntimeFeatures!.CanAssumeCompactObjectRecordIsUnmaterialized(
                         fingerprint))
                 {
                     IL.Emit(OpCodes.Ldloc, exactLocal);
@@ -1542,10 +1557,10 @@ public partial class ILEmitter
     private bool TryEmitNumberArrayGetIndexAsDouble(Expr.GetIndex gi)
     {
         if (gi.Optional
-            || gi.Object is not Expr.Variable arrayVariable
             || ArrayElements.Resolve(_ctx.TypeMap?.Get(gi.Object)) is not
                 { Kind: ArrayElementsKind.Double }
-            || _ctx.TryGetPromotedArrayLocal(arrayVariable.Name.Lexeme) != null
+            || (gi.Object is Expr.Variable promotedVariable &&
+                _ctx.TryGetPromotedArrayLocal(promotedVariable.Name.Lexeme) != null)
             || !IsNumericType(_ctx.TypeMap?.Get(gi.Index))
             || _ctx.RuntimeFeatures?.UsesDynamicPropertyDescriptors == true
             || _ctx.RuntimeFeatures?.UsesArrayPrototypeMutation == true)
@@ -1553,7 +1568,9 @@ public partial class ILEmitter
             return false;
         }
 
-        var hoisted = _ctx.TryGetHoistedArray(arrayVariable.Name.Lexeme);
+        var hoisted = gi.Object is Expr.Variable arrayVariable
+            ? _ctx.TryGetHoistedArray(arrayVariable.Name.Lexeme)
+            : null;
         if (hoisted is { Descriptor.Kind: not ArrayElementsKind.Double })
             return false;
 
