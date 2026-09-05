@@ -70,4 +70,19 @@ public sealed class PackedNumberArrayParityTests
             """;
         Assert.Equal("1,2,3 6,4,2\n", TestHarness.Run(source, mode));
     }
+
+    [Theory, ModeData]
+    public void AsyncIndexedRead_RoundTripsPackedNumbers(ExecutionMode mode)
+    {
+        const string source = """
+            async function readPacked(): Promise<number> {
+                const a: number[] = [];
+                for (let i = 0; i < 100; i++) a[i] = i * 3;
+                await Promise.resolve();
+                return a[37];
+            }
+            readPacked().then((value: number) => console.log(value));
+            """;
+        Assert.Equal("111\n", TestHarness.Run(source, mode));
+    }
 }

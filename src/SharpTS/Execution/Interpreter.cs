@@ -1002,6 +1002,7 @@ public partial class Interpreter : IDisposable
     private readonly object _finalizationRegistriesLock = new();
     private volatile bool _hasFinalizationRegistries;
 
+    /// <summary>Whether a loop checkpoint has timer, microtask, or finalizer work.</summary>
     private bool HasPendingCallbacks =>
         !_isDisposed
         && (HasMicrotasks()
@@ -1024,9 +1025,9 @@ public partial class Interpreter : IDisposable
         }
     }
 
+    /// <summary>Prunes collected registries and drains any queued cleanup callbacks.</summary>
     private void DrainFinalizationRegistries()
     {
-        if (_finalizationRegistries.Count == 0) return;
         List<SharpTSFinalizationRegistry>? due = null;
         lock (_finalizationRegistriesLock)
         {
@@ -1039,6 +1040,7 @@ public partial class Interpreter : IDisposable
                 }
                 if (registry.HasPendingCleanups) (due ??= []).Add(registry);
             }
+            _hasFinalizationRegistries = _finalizationRegistries.Count != 0;
         }
         // Invoke outside the lock: cleanup callbacks are arbitrary guest code.
         if (due != null)

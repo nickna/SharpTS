@@ -1044,7 +1044,8 @@ public partial class Interpreter
     /// </summary>
     private async ValueTask<RuntimeValue> EvaluateGetIndexCore(IEvaluationContext ctx, Expr.GetIndex getIndex)
     {
-        object? obj = (await ctx.EvaluateExprAsync(getIndex.Object)).ToObject();
+        RuntimeValue objectValue = await ctx.EvaluateExprAsync(getIndex.Object);
+        object? obj = objectValue.ToObject();
 
         // Optional bracket access: return undefined if object is nullish
         if (getIndex.Optional && (obj == null || obj is Runtime.Types.SharpTSUndefined))
@@ -1052,8 +1053,26 @@ public partial class Interpreter
             return RuntimeValue.Undefined;
         }
 
-        object? index = (await ctx.EvaluateExprAsync(getIndex.Index)).ToObject();
-        return PerformIndexGet(getIndex.Object, obj, index);
+        RuntimeValue indexValue = await ctx.EvaluateExprAsync(getIndex.Index);
+        if (obj is SharpTSArray directArray
+            && indexValue.Kind == ValueKind.Number)
+        {
+            double directNumber = indexValue.AsNumberUnsafe();
+            if (double.IsFinite(directNumber)
+                && directNumber >= 0
+                && directNumber <= SharpTSArray.MaxWriteIndex
+                && Math.Truncate(directNumber) == directNumber
+                && directArray.TryGetPresentDataIndexRV(
+                    (long)directNumber, out RuntimeValue directValue))
+            {
+                return directValue;
+            }
+        }
+
+        return PerformIndexGet(
+            getIndex.Object,
+            obj,
+            indexValue.ToObject());
     }
 
     /// <summary>
