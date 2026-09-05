@@ -109,6 +109,19 @@ For repeatable candidate-vs-baseline runs on native Windows and WSL, see
 
 ## How timing works
 
+Set `SHARPTS_BENCH_WARMUP_MS=1500` for focused steady-state investigations.
+The optional override accepts integer milliseconds from 0 to 10000; the default
+remains 100 ms. It changes warmup only, not the sampling budget or slow-call
+sampling threshold. Zero skips timed warmup; correctness checks, the discarded
+cold and routing probes, and batch calibration still run. Use the same setting
+and workload sources for every runtime and baseline/candidate build, and retain
+the setting alongside raw results.
+
+`object-destructure-materialized` exercises dictionary storage from construction.
+`object-destructure-carrier-materialized` exercises a compact record that is
+subsequently materialized. `object-destructure-materialized-controls` adds direct,
+manually hoisted, fractional, varying-receiver, and per-iteration mutation controls.
+
 The shared algorithm drivers supply independent expected checksums to catch
 miscompilations before and after sampling. Factorial uses finite inputs
 10, 20, and 100; `arithmetic-loop` provides a bounded accumulator at larger
@@ -137,8 +150,8 @@ Each workload calls `bench(name, param, fn, expected?)` from
 1. When `expected` is supplied, validates one invocation before probing. A
    second validation after sampling checks the optimized steady-state result;
    neither validation is timed.
-2. Discards a cold probe, gives every runtime at least 100 ms of time-bounded
-   warmup, and discards a post-warmup routing probe. Slow and fast cases therefore
+2. Discards a cold probe, gives every runtime the configured time-bounded
+   warmup (100 ms by default), and discards a post-warmup routing probe. Slow and fast cases therefore
    both report steady-state samples rather than using different cold-start rules.
 3. A post-warmup call at or above 100 ms is sampled one call at a time. Faster
    calls are auto-batched until a sample spans ≥ 1 ms, lifting them above timer

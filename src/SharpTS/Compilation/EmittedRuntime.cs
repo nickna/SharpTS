@@ -971,6 +971,7 @@ public class EmittedRuntime
     public Dictionary<(string Fingerprint, int Index), FieldBuilder> CompactObjectRecordValueFields { get; } = [];
     public Dictionary<string, FieldBuilder> CompactObjectRecordAnyMaterializedFields { get; } = [];
     public Dictionary<string, MethodBuilder> CompactObjectRecordIsMaterializedGetters { get; } = [];
+    public Dictionary<string, MethodBuilder> CompactObjectRecordTryGetMaterializedDictionary { get; } = [];
     public MethodBuilder JsonScalarRecordShapeGetter { get; set; } = null!;
     public MethodBuilder JsonScalarRecordValuesGetter { get; set; } = null!;
     public MethodBuilder JsonScalarRecordGetValue { get; set; } = null!;
