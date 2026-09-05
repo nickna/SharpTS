@@ -312,6 +312,16 @@ public partial class ILEmitter
                 return;
         }
 
+        if (!g.Optional && g.Name.Lexeme == "length" && g.Object is Expr.Variable queueLength
+            && _ctx.TryGetPromotedQueueLocal(queueLength.Name.Lexeme) is { } queueLen)
+        {
+            IL.Emit(OpCodes.Ldloc, queueLen.Local);
+            IL.Emit(OpCodes.Call, queueLen.Queue.Count);
+            IL.Emit(OpCodes.Conv_R8);
+            SetStackType(StackType.Double);
+            return;
+        }
+
         // Promoted typed-array local `.length` (#857): direct List<T>.Count, no GetLength/isinst.
         if (!g.Optional && g.Name.Lexeme == "length" && g.Object is Expr.Variable promVarLen
             && _ctx.TryGetPromotedArrayLocal(promVarLen.Name.Lexeme) is { } promLen)
@@ -1255,6 +1265,13 @@ public partial class ILEmitter
         // OOB/in-range merge (the #860 unboxed-element read is deferred — see plan B3). Even boxed,
         // this still drops the per-access isinst ladder and the $Array virtual dispatch. The
         // `(uint)i >= (uint)Count` compare folds the negative-index case into the OOB branch.
+        if (!gi.Optional && gi.Object is Expr.Variable queueRead
+            && _ctx.TryGetPromotedQueueLocal(queueRead.Name.Lexeme) is { } queueGet)
+        {
+            EmitQueueGet(queueGet.Local, queueGet.Queue, gi.Index, numeric: false);
+            return;
+        }
+
         if (!gi.Optional && gi.Object is Expr.Variable promVarGet
             && _ctx.TryGetPromotedArrayLocal(promVarGet.Name.Lexeme) is { } promGet
             && _ctx.TypeMap?.Get(gi.Index) is TypeInfo.Primitive { Type: TokenType.TYPE_NUMBER } or TypeInfo.NumberLiteral)
@@ -1549,6 +1566,7 @@ public partial class ILEmitter
             || ArrayElements.Resolve(_ctx.TypeMap?.Get(gi.Object)) is not
                 { Kind: ArrayElementsKind.Double }
             || _ctx.TryGetPromotedArrayLocal(arrayVariable.Name.Lexeme) != null
+            || _ctx.TryGetPromotedQueueLocal(arrayVariable.Name.Lexeme) != null
             || !IsNumericType(_ctx.TypeMap?.Get(gi.Index))
             || _ctx.RuntimeFeatures?.UsesDynamicPropertyDescriptors == true
             || _ctx.RuntimeFeatures?.UsesArrayPrototypeMutation == true)
@@ -1773,6 +1791,23 @@ public partial class ILEmitter
         // overwhelmingly common in-range write as List<T>.set_Item and retain the typed auto-extend
         // helper as a cold fallback. The receiver is a side-effect-free local, so evaluating index
         // before value preserves JavaScript assignment order without an observable receiver load.
+        if (si.Object is Expr.Variable queueWrite
+            && _ctx.TryGetPromotedQueueLocal(queueWrite.Name.Lexeme) is { } queueSet)
+        {
+            var value = IL.DeclareLocal(queueSet.Queue.Elements.GetElementType(_ctx.Types));
+            EmitExpression(si.Value);
+            if (queueSet.Queue.Elements.Kind == ArrayElementsKind.Double) EnsureDouble();
+            else EnsureBoolean();
+            IL.Emit(OpCodes.Stloc, value);
+            IL.Emit(OpCodes.Ldloc, queueSet.Local);
+            EmitIndexAsInt32(si.Index); // Queue promotion admits only literal write indices.
+            IL.Emit(OpCodes.Ldloc, value);
+            IL.Emit(OpCodes.Call, queueSet.Queue.Set);
+            IL.Emit(OpCodes.Ldloc, value);
+            SetStackType(queueSet.Queue.Elements.StackType);
+            return;
+        }
+
         if (si.Object is Expr.Variable promVarSet
             && _ctx.TryGetPromotedArrayLocal(promVarSet.Name.Lexeme) is { } promSet)
         {

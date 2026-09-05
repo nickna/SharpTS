@@ -50,6 +50,12 @@ The schema-v1 file remains the versioned contract for this one suite. The
 run beside compiler-micro and GUI evidence, preserving this environment and
 methodology rather than flattening unlike measurements together.
 
+`array-queue.ts` measures full shift/drain and unshift/build workloads at 1,000,
+2,500, 5,000, and 10,000 elements, plus a fixed-width alternating push/shift queue.
+Every case validates its checksum outside the timed region. The intermediate
+sizes expose scaling changes; the alternating case exercises reuse across many
+queue turnovers. Keep these operations intact when comparing implementations.
+
 ## Running
 
 PowerShell 7 or later (`pwsh`) is required for the benchmark PowerShell tools.

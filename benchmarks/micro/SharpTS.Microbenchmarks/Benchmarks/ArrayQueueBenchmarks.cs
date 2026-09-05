@@ -33,6 +33,8 @@ public class ArrayQueueBenchmarks
         BenchmarkHarness.InitializeCompiledModules(compiled);
         _shift = BenchmarkHarness.GetCompiledNumberFunc(compiled, "arrayShiftDrain");
         _unshift = BenchmarkHarness.GetCompiledNumberFunc(compiled, "arrayUnshiftBuild");
+        if (_shift(N) != (double)N * (N - 1) / 2 || _unshift(N) != 2 * N - 1)
+            throw new InvalidOperationException("Array queue checksum mismatch.");
     }
 
     [Benchmark]
@@ -44,10 +46,18 @@ public class ArrayQueueBenchmarks
     public double CSharp_Shift() => ArrayQueueBaselines.ShiftDrain(N);
 
     [Benchmark]
+    [BenchmarkCategory("Shift")]
+    public double CSharp_DequeShift() => ArrayQueueBaselines.DequeShiftDrain(N);
+
+    [Benchmark]
     [BenchmarkCategory("Unshift")]
     public double SharpTS_Unshift() => _unshift(N);
 
     [Benchmark(Baseline = true)]
     [BenchmarkCategory("Unshift")]
     public double CSharp_Unshift() => ArrayQueueBaselines.UnshiftBuild(N);
+
+    [Benchmark]
+    [BenchmarkCategory("Unshift")]
+    public double CSharp_DequeUnshift() => ArrayQueueBaselines.DequeUnshiftBuild(N);
 }
