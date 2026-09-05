@@ -6,6 +6,25 @@ namespace SharpTS.Tests.SharedTests;
 public class NumericRestOptimizationTests
 {
     [Theory, ModeData]
+    public void AlternatingEligibleAndMutatingTargets_PreserveValues(ExecutionMode mode)
+    {
+        const string source = """
+            function add(...v: number[]): number { return v[0] + v[1] + v[2] + v[3]; }
+            function extra(...v: number[]): number { return v[0] + v[1] + v[2] + v[3] + 1; }
+            function mutate(...v: number[]): number { v[0]++; return v[0] + v[1] + v[2] + v[3]; }
+            function run(a: (...v: number[]) => number, b: (...v: number[]) => number): void {
+                for (let i = 0; i < 4; i++) {
+                    const fn = i % 2 === 0 ? a : b;
+                    console.log(fn(i, 1, 2, 3));
+                }
+            }
+            run(add, extra);
+            run(add, mutate);
+            """;
+        Assert.Equal("6\n8\n8\n10\n6\n8\n8\n10\n", TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
     public void RestStorageIsFreshAndIndependent(ExecutionMode mode)
     {
         const string source = """
@@ -170,4 +189,5 @@ public class NumericRestOptimizationTests
             """;
         Assert.Equal("false true true 2\n", TestHarness.Run(source, mode));
     }
+
 }

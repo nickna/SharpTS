@@ -11,7 +11,8 @@ public class NumericRestBenchmarks
     private Func<double, double> _run = null!;
 
     [Params("restFixedParameters", "restDirect", "restAlias", "restConstantIndex",
-        "restVaryingIndex", "restPacking", "restEscaping", "restSpread", "restDynamicDispatch")]
+        "restVaryingIndex", "restPacking", "restEscaping", "restSpread", "restDynamicDispatch",
+        "restSpreadLength", "restDynamicLength", "restAlternating", "restMixedTargets")]
     public string Case { get; set; } = null!;
 
     [Params(10_000)]
@@ -30,8 +31,9 @@ public class NumericRestBenchmarks
         double range = (double)N * (N - 1) / 2;
         double expected = Case switch
         {
-            "restPacking" or "restEscaping" => 0.5 + 4 * N,
+            "restPacking" or "restEscaping" or "restSpreadLength" or "restDynamicLength" => 0.5 + 4 * N,
             "restVaryingIndex" => 0.5 + 4 * range,
+            "restAlternating" or "restMixedTargets" => 0.5 + range + 6 * N + N / 2,
             _ => 0.5 + range + 6 * N
         };
         if (_run(N) != expected)

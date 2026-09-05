@@ -105,6 +105,25 @@ function varyingIndexNumericRest(n: number): number {
     return sum;
 }
 
+function add4Extra(...values: number[]): number {
+    return values[0] + values[1] + values[2] + values[3] + 1;
+}
+
+function add4MutatingExtra(...values: number[]): number {
+    values[0] = values[0] + 1;
+    return values[0] + values[1] + values[2] + values[3];
+}
+
+function alternatingNumericRest(n: number, first: (...values: number[]) => number,
+    second: (...values: number[]) => number): number {
+    let sum: number = REST_ACCUMULATOR_SEED;
+    for (let i: number = 0; i < n; i++) {
+        const fn = i % 2 === 0 ? first : second;
+        sum = sum + fn(i, 1, 2, 3);
+    }
+    return sum;
+}
+
 // Permanently retain the next three widened-corpus leads. These are not part
 // of the current optimization, but keeping assignment-form controls here stops
 // numeric compound assignment from obscuring their residual costs.
@@ -161,6 +180,8 @@ for (let p: number = 0; p < params.length; p++) {
     bench("dynamic-index-numeric-rest", n, () => dynamicIndexNumericRest(n), restChecksum);
     bench("unknown-target-numeric-rest", n, () => unknownTargetNumericRest(n, add4), restChecksum);
     bench("varying-index-numeric-rest", n, () => varyingIndexNumericRest(n), REST_ACCUMULATOR_SEED + 4 * rangeChecksum);
+    bench("alternating-target-numeric-rest", n, () => alternatingNumericRest(n, add4, add4Extra), restChecksum + n / 2);
+    bench("mixed-target-numeric-rest", n, () => alternatingNumericRest(n, add4, add4MutatingExtra), restChecksum + n / 2);
     bench("generator-range", n, () => generatorRange(n), rangeChecksum);
     bench("parse-integers", n, () => parseIntegers(n), rangeChecksum);
     bench("format-fixed", n, () => formatFixed(n));

@@ -76,3 +76,42 @@ function restUnknownTarget(n: number, fn: (...values: number[]) => number): numb
 }
 
 function restDynamicDispatch(n: number): number { return restUnknownTarget(n, restAdd4); }
+
+function restSpreadLength(n: number): number {
+    const tail: number[] = [1, 2, 3];
+    let sum: number = 0.5;
+    for (let i: number = 0; i < n; i++) sum = sum + escapeRest(i, ...tail).length;
+    return sum;
+}
+
+function restUnknownLength(n: number, fn: (...values: number[]) => number[]): number {
+    let sum: number = 0.5;
+    for (let i: number = 0; i < n; i++) sum = sum + fn(i, 1, 2, 3).length;
+    return sum;
+}
+
+function restDynamicLength(n: number): number { return restUnknownLength(n, escapeRest); }
+
+function restAddExtra(...values: number[]): number {
+    return values[0] + values[1] + values[2] + values[3] + 1;
+}
+
+function restMutatingExtra(...values: number[]): number {
+    values[0] = values[0] + 1;
+    return values[0] + values[1] + values[2] + values[3];
+}
+
+function restAlternatingInner(n: number, first: (...values: number[]) => number,
+    second: (...values: number[]) => number): number {
+    let sum: number = 0.5;
+    for (let i: number = 0; i < n; i++) {
+        const fn = i % 2 === 0 ? first : second;
+        sum = sum + fn(i, 1, 2, 3);
+    }
+    return sum;
+}
+
+function restAlternating(n: number): number { return restAlternatingInner(n, restAdd4, restAddExtra); }
+function restMixedTargets(n: number): number { return restAlternatingInner(n, restAdd4, restMutatingExtra); }
+function restReadTarget(): (...values: number[]) => number { return restAdd4; }
+function restLengthTarget(): (...values: number[]) => number[] { return escapeRest; }
