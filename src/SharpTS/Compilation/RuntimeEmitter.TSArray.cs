@@ -290,6 +290,7 @@ public partial class RuntimeEmitter
         var getDouble = typeBuilder.DefineMethod("GetDouble",
             MethodAttributes.Public | MethodAttributes.HideBySig, _types.Double, [_types.Int32]);
         runtime.TSArrayGetDouble = getDouble;
+        EmitTryGetBoxedDouble(typeBuilder, runtime);
         var setDouble = typeBuilder.DefineMethod("SetDouble",
             MethodAttributes.Public | MethodAttributes.HideBySig, _types.Void, [_types.Int32, _types.Double]);
         runtime.TSArraySetDouble = setDouble;
@@ -1121,6 +1122,76 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Stfld, _tsArrayNonExtensibleField);
             il.Emit(OpCodes.Ret);
         }
+    }
+
+    private void EmitTryGetBoxedDouble(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod("TryGetBoxedDouble",
+            MethodAttributes.Public | MethodAttributes.Static, _types.Boolean,
+            [_types.Object, _types.Int32, _types.Double.MakeByRefType()]);
+        runtime.TSArrayTryGetBoxedDouble = method;
+        method.SetImplementationFlags(MethodImplAttributes.AggressiveInlining);
+        var il = method.GetILGenerator();
+        var array = il.DeclareLocal(typeBuilder);
+        var list = il.DeclareLocal(_types.ListOfObject);
+        var value = il.DeclareLocal(_types.Object);
+        var plainList = il.DefineLabel();
+        var read = il.DefineLabel();
+        var unavailable = il.DefineLabel();
+
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Ldc_R8, 0d);
+        il.Emit(OpCodes.Stind_R8);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, typeBuilder);
+        il.Emit(OpCodes.Stloc, array);
+        il.Emit(OpCodes.Ldloc, array);
+        il.Emit(OpCodes.Brfalse, plainList);
+        il.Emit(OpCodes.Ldloc, array);
+        il.Emit(OpCodes.Ldfld, _tsArrayIsNumericField);
+        il.Emit(OpCodes.Brtrue, unavailable);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Conv_I8);
+        il.Emit(OpCodes.Ldloc, array);
+        il.Emit(OpCodes.Ldfld, _tsArrayLengthField);
+        il.Emit(OpCodes.Bge_Un, unavailable);
+        il.Emit(OpCodes.Ldloc, array);
+        il.Emit(OpCodes.Stloc, list);
+        il.Emit(OpCodes.Br, read);
+
+        il.MarkLabel(plainList);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.ListOfObject);
+        il.Emit(OpCodes.Stloc, list);
+        il.Emit(OpCodes.Ldloc, list);
+        il.Emit(OpCodes.Brfalse, unavailable);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Object, "GetType"));
+        il.Emit(OpCodes.Ldtoken, _types.ListOfObject);
+        il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
+        il.Emit(OpCodes.Bne_Un, unavailable);
+
+        il.MarkLabel(read);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldloc, list);
+        il.Emit(OpCodes.Callvirt, _tsArrayListCountGetter!);
+        il.Emit(OpCodes.Bge_Un, unavailable);
+        il.Emit(OpCodes.Ldloc, list);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Callvirt, _tsArrayListGetItem!);
+        il.Emit(OpCodes.Stloc, value);
+        il.Emit(OpCodes.Ldloc, value);
+        il.Emit(OpCodes.Isinst, _types.Double);
+        il.Emit(OpCodes.Brfalse, unavailable);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Ldloc, value);
+        il.Emit(OpCodes.Unbox_Any, _types.Double);
+        il.Emit(OpCodes.Stind_R8);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(unavailable);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ret);
     }
 
     // Only used while constructing fresh, dense, boxed rest storage. This bypasses
