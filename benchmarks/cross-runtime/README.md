@@ -106,8 +106,10 @@ For repeatable candidate-vs-baseline runs on native Windows and WSL, see
 Set `SHARPTS_BENCH_WARMUP_MS=1500` for focused steady-state investigations.
 The optional override accepts integer milliseconds from 0 to 10000; the default
 remains 100 ms. It changes warmup only, not the sampling budget or slow-call
-sampling threshold. Use the same setting and workload sources for every runtime
-and baseline/candidate build, and retain the setting alongside raw results.
+sampling threshold. Zero skips timed warmup; correctness checks, the discarded
+cold and routing probes, and batch calibration still run. Use the same setting
+and workload sources for every runtime and baseline/candidate build, and retain
+the setting alongside raw results.
 
 `object-destructure-materialized` exercises dictionary storage from construction.
 `object-destructure-carrier-materialized` exercises a compact record that is

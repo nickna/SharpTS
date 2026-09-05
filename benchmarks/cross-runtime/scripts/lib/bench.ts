@@ -76,10 +76,12 @@ export function bench(name: string, param: number, fn: () => number, expected?: 
     // skipped warmup entirely. That made slow interpreter cases measure startup
     // while fast JIT cases measured steady state.
     guard = guard + fn();
-    const warmStart: number = performance.now();
-    do {
-        guard = guard + fn();
-    } while (performance.now() - warmStart < WARMUP_CAP_MS);
+    if (WARMUP_CAP_MS > 0) {
+        const warmStart: number = performance.now();
+        do {
+            guard = guard + fn();
+        } while (performance.now() - warmStart < WARMUP_CAP_MS);
+    }
 
     // This post-warmup probe selects single-call sampling versus auto-batching,
     // but is itself discarded so both branches start with fresh observations.
@@ -207,10 +209,12 @@ export async function benchAsync(
     // Keep the async methodology identical to the synchronous path: discard the
     // cold call, warm every runtime, and discard the post-warmup routing probe.
     guard = guard + await fn();
-    const warmStart: number = performance.now();
-    do {
-        guard = guard + await fn();
-    } while (performance.now() - warmStart < WARMUP_CAP_MS);
+    if (WARMUP_CAP_MS > 0) {
+        const warmStart: number = performance.now();
+        do {
+            guard = guard + await fn();
+        } while (performance.now() - warmStart < WARMUP_CAP_MS);
+    }
 
     const probeStart: number = performance.now();
     guard = guard + await fn();
