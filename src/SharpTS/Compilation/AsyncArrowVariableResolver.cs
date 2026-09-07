@@ -9,6 +9,7 @@ namespace SharpTS.Compilation;
 /// </summary>
 /// <remarks>
 /// Resolution order:
+/// 0. Per-iteration loop-binding cells
 /// 1. Arrow's own parameters (hoisted to fields)
 /// 2. Arrow's own hoisted locals (hoisted to fields)
 /// 3. Captured from outer scope (via boxed outer state machine reference)
@@ -49,189 +50,64 @@ public class AsyncArrowVariableResolver : IVariableResolver
     /// <inheritdoc />
     public StackType? TryLoadVariable(string name)
     {
-        // 0. Per-iteration loop-binding cell (#650): read through the StrongBox.
-        if (_cellBindingLocals != null && _cellBindingLocals.TryGetValue(name, out var loadCell))
-        {
-            _il.Emit(OpCodes.Ldloc, loadCell);
-            _il.Emit(OpCodes.Ldfld, _strongBoxValueField!);
-            return StackType.Unknown;
-        }
-
-        // 1. Check if it's a parameter of this arrow
-        if (_builder.ParameterFields.TryGetValue(name, out var paramField))
-        {
-            _il.Emit(OpCodes.Ldarg_0);
-            _il.Emit(OpCodes.Ldfld, paramField);
-            return StackType.Unknown;
-        }
-
-        // 2. Check if it's a hoisted local of this arrow
-        if (_builder.LocalFields.TryGetValue(name, out var localField))
-        {
-            _il.Emit(OpCodes.Ldarg_0);
-            _il.Emit(OpCodes.Ldfld, localField);
-            return StackType.Unknown;
-        }
-
-        // 3. Check if it's captured from outer scope
-        if (_builder.IsCaptured(name) && _builder.CapturedFieldMap.TryGetValue(name, out var outerField))
-        {
-            EmitCapturedLoad(name, outerField);
-            return StackType.Unknown;
-        }
-
-        // 4. Check non-hoisted local
-        if (_locals.TryGetValue(name, out var local))
-        {
-            _il.Emit(OpCodes.Ldloc, local);
-            return StackType.Unknown;
-        }
-
-        // NOTE: standalone captures (#641) are resolved by the EMITTER (AsyncArrowMoveNextEmitter)
-        // at LOWER priority than module-level globals, because a top-level variable a standalone
-        // arrow closes over is ALSO registered as a standalone capture but must be read LIVE from
-        // its static field, not from the by-value snapshot. Handling it here would shadow that.
-        return null; // Not found - caller handles fallback
+        var storage = TryResolveVariable(name);
+        if (storage == null) return null;
+        storage.EmitLoad(_il);
+        return StackType.Unknown;
     }
 
     /// <inheritdoc />
-    public bool HasVariable(string name)
-    {
-        if (_cellBindingLocals != null && _cellBindingLocals.ContainsKey(name)) return true;
-        if (_builder.ParameterFields.ContainsKey(name)) return true;
-        if (_builder.LocalFields.ContainsKey(name)) return true;
-        if (_builder.IsCaptured(name) && _builder.CapturedFieldMap.ContainsKey(name)) return true;
-        if (_locals.ContainsKey(name)) return true;
-        return false;
-    }
+    public bool HasVariable(string name) => TryResolveVariable(name) != null;
 
     /// <inheritdoc />
     public bool TryStoreVariable(string name)
     {
-        // 0. Per-iteration loop-binding cell (#650): write through the StrongBox.
-        if (_cellBindingLocals != null && _cellBindingLocals.TryGetValue(name, out var storeCell))
-        {
-            var cellTemp = _il.DeclareLocal(typeof(object));
-            _il.Emit(OpCodes.Stloc, cellTemp);
-            _il.Emit(OpCodes.Ldloc, storeCell);
-            _il.Emit(OpCodes.Ldloc, cellTemp);
-            _il.Emit(OpCodes.Stfld, _strongBoxValueField!);
-            return true;
-        }
+        (TryResolveVariable(name) ?? GetOrCreateLocal(name)).EmitStore(_il);
+        return true;
+    }
 
-        // 1. Check if it's a parameter of this arrow
-        if (_builder.ParameterFields.TryGetValue(name, out var paramField))
-        {
-            EmitStoreToField(paramField);
-            return true;
-        }
+    internal AsyncArrowStorageAccess? TryResolveCell(string name)
+        => _cellBindingLocals != null && _cellBindingLocals.TryGetValue(name, out var cell)
+            ? AsyncArrowStorageAccess.Cell(cell, _strongBoxValueField!)
+            : null;
 
-        // 2. Check if it's a hoisted local of this arrow
-        if (_builder.LocalFields.TryGetValue(name, out var localField))
-        {
-            EmitStoreToField(localField);
-            return true;
-        }
+    internal AsyncArrowStorageAccess? TryResolveHoistedOrCaptured(string name)
+    {
+        if (_builder.ParameterFields.TryGetValue(name, out var parameter))
+            return AsyncArrowStorageAccess.StateMachineField(parameter);
+        if (_builder.LocalFields.TryGetValue(name, out var local))
+            return AsyncArrowStorageAccess.StateMachineField(local);
+        if (_builder.IsCaptured(name) && _builder.CapturedFieldMap.TryGetValue(name, out var captured))
+            return AsyncArrowStorageAccess.CapturedField(_builder, name, captured);
+        return null;
+    }
 
-        // 3. Check if it's captured from outer scope
-        if (_builder.IsCaptured(name) && _builder.CapturedFieldMap.TryGetValue(name, out var outerField))
-        {
-            EmitCapturedStore(name, outerField);
-            return true;
-        }
+    internal AsyncArrowStorageAccess? TryResolveLocal(string name)
+        => _locals.TryGetValue(name, out var local) ? AsyncArrowStorageAccess.Local(local) : null;
 
-        // 4. Non-hoisted local - use or create IL local
+    internal AsyncArrowStorageAccess GetOrCreateLocal(string name)
+    {
         if (!_locals.TryGetValue(name, out var local))
         {
             local = _il.DeclareLocal(typeof(object));
             _locals[name] = local;
         }
-        _il.Emit(OpCodes.Stloc, local);
-        return true;
+        return AsyncArrowStorageAccess.Local(local);
+    }
+
+    private AsyncArrowStorageAccess? TryResolveVariable(string name)
+    {
+        // Standalone captures stay with the emitter, below module globals: their snapshot
+        // must not shadow the live static storage of a captured top-level binding (#641).
+        return TryResolveCell(name) ?? TryResolveHoistedOrCaptured(name) ?? TryResolveLocal(name);
     }
 
     /// <inheritdoc />
     public void LoadThis()
     {
-        // 'this' in async arrows is captured from outer scope
         if (_builder.IsCaptured("this") && _builder.CapturedFieldMap.TryGetValue("this", out var thisField))
-        {
-            _il.Emit(OpCodes.Ldarg_0);
-            _il.Emit(OpCodes.Ldfld, _builder.OuterStateMachineField!);
-            _il.Emit(OpCodes.Unbox, _builder.OuterStateMachineType!);
-            _il.Emit(OpCodes.Ldfld, thisField);
-        }
+            AsyncArrowStorageAccess.CapturedField(_builder, "this", thisField).EmitLoad(_il);
         else
-        {
             _il.Emit(OpCodes.Ldnull);
-        }
-    }
-
-    private void EmitCapturedLoad(string name, FieldInfo outerField)
-    {
-        // Load through outer reference
-        // Use Unbox (not Unbox_Any) to get a pointer to the boxed struct, then load field
-        _il.Emit(OpCodes.Ldarg_0);
-        _il.Emit(OpCodes.Ldfld, _builder.OuterStateMachineField!);
-
-        // Check if this is a transitive capture (needs extra indirection through parent's outer)
-        if (_builder.TransitiveCaptures.Contains(name) &&
-            _builder.ParentOuterStateMachineField != null &&
-            _builder.GrandparentStateMachineType != null)
-        {
-            // First unbox to parent, then load parent's outer reference
-            _il.Emit(OpCodes.Unbox, _builder.OuterStateMachineType!);
-            _il.Emit(OpCodes.Ldfld, _builder.ParentOuterStateMachineField);
-            _il.Emit(OpCodes.Unbox, _builder.GrandparentStateMachineType);
-        }
-        else
-        {
-            _il.Emit(OpCodes.Unbox, _builder.OuterStateMachineType!);
-        }
-
-        _il.Emit(OpCodes.Ldfld, outerField);
-    }
-
-    private void EmitCapturedStore(string name, FieldInfo outerField)
-    {
-        // Store value to outer state machine's field through the boxed reference
-        // Stack has: value
-        // We need to: store to temp, get outer ptr, load temp, store to field
-        var temp = _il.DeclareLocal(typeof(object));
-        _il.Emit(OpCodes.Stloc, temp);
-
-        // Get pointer to the boxed outer state machine
-        _il.Emit(OpCodes.Ldarg_0);
-        _il.Emit(OpCodes.Ldfld, _builder.OuterStateMachineField!);
-
-        // Check if this is a transitive capture (needs extra indirection through parent's outer)
-        if (_builder.TransitiveCaptures.Contains(name) &&
-            _builder.ParentOuterStateMachineField != null &&
-            _builder.GrandparentStateMachineType != null)
-        {
-            // First unbox to parent, then load parent's outer reference
-            _il.Emit(OpCodes.Unbox, _builder.OuterStateMachineType!);
-            _il.Emit(OpCodes.Ldfld, _builder.ParentOuterStateMachineField);
-            _il.Emit(OpCodes.Unbox, _builder.GrandparentStateMachineType);
-        }
-        else
-        {
-            _il.Emit(OpCodes.Unbox, _builder.OuterStateMachineType!);
-        }
-
-        // Load value and store to field
-        _il.Emit(OpCodes.Ldloc, temp);
-        _il.Emit(OpCodes.Stfld, outerField);
-    }
-
-    private void EmitStoreToField(FieldInfo field)
-    {
-        // Stack has: value
-        // Store to state machine field: save to temp, ldarg_0, load temp, stfld
-        var temp = _il.DeclareLocal(typeof(object));
-        _il.Emit(OpCodes.Stloc, temp);
-        _il.Emit(OpCodes.Ldarg_0);
-        _il.Emit(OpCodes.Ldloc, temp);
-        _il.Emit(OpCodes.Stfld, field);
     }
 }

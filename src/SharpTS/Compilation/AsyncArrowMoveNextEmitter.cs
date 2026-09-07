@@ -34,7 +34,7 @@ public partial class AsyncArrowMoveNextEmitter : AsyncFunctionMoveNextEmitter, I
     private readonly Dictionary<string, LocalBuilder> _locals = [];
 
     // Variable resolver for hoisted fields, locals, and captured variables
-    private IVariableResolver? _resolver;
+    private AsyncArrowVariableResolver? _resolver;
 
     #region IEmitterContext Implementation
 
