@@ -79,7 +79,7 @@ public partial class RuntimeEmitter
                 _types.Object,
                 Type.EmptyTypes
             );
-            runtime.DnsGetDefaultResultOrder = method;
+            runtime.RequireDns().GetDefaultResultOrder = method;
             runtime.RegisterBuiltInModuleMethod("dns", "getDefaultResultOrder", method);
             runtime.RegisterBuiltInModuleMethod("dns/promises", "getDefaultResultOrder", method);
 
@@ -102,7 +102,7 @@ public partial class RuntimeEmitter
                 _types.Object,
                 [_types.Object]
             );
-            runtime.DnsSetDefaultResultOrder = method;
+            runtime.RequireDns().SetDefaultResultOrder = method;
             runtime.RegisterBuiltInModuleMethod("dns", "setDefaultResultOrder", method);
             runtime.RegisterBuiltInModuleMethod("dns/promises", "setDefaultResultOrder", method);
 
@@ -189,7 +189,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object, _types.Object]
         );
-        runtime.DnsLookup = method;
+        runtime.RequireDns().Lookup = method;
 
         var il = method.GetILGenerator();
 
@@ -473,7 +473,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object, _types.Object]
         );
-        runtime.DnsLookupService = method;
+        runtime.RequireDns().LookupService = method;
 
         var il = method.GetILGenerator();
 
@@ -636,7 +636,7 @@ public partial class RuntimeEmitter
         // Call DnsLookup(hostname, options)
         il.Emit(OpCodes.Ldloc, hostnameLocal);
         il.Emit(OpCodes.Ldloc, optionsLocal);
-        il.Emit(OpCodes.Call, runtime.DnsLookup);
+        il.Emit(OpCodes.Call, runtime.RequireDns().Lookup);
         il.Emit(OpCodes.Ret);
 
         // Now create the getter method that returns a TSFunction
@@ -646,7 +646,7 @@ public partial class RuntimeEmitter
             _types.Object,
             Type.EmptyTypes
         );
-        runtime.DnsGetLookup = getterMethod;
+        runtime.RequireDns().GetLookup = getterMethod;
 
         var getterIl = getterMethod.GetILGenerator();
 
@@ -714,7 +714,7 @@ public partial class RuntimeEmitter
         // Call DnsLookupService(address, port)
         il.Emit(OpCodes.Ldloc, addressLocal);
         il.Emit(OpCodes.Ldloc, portLocal);
-        il.Emit(OpCodes.Call, runtime.DnsLookupService);
+        il.Emit(OpCodes.Call, runtime.RequireDns().LookupService);
         il.Emit(OpCodes.Ret);
 
         // Now create the getter method that returns a TSFunction
@@ -724,7 +724,7 @@ public partial class RuntimeEmitter
             _types.Object,
             Type.EmptyTypes
         );
-        runtime.DnsGetLookupService = getterMethod;
+        runtime.RequireDns().GetLookupService = getterMethod;
 
         var getterIl = getterMethod.GetILGenerator();
 
@@ -749,7 +749,7 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.Object, _types.Object]);
-        runtime.DnsResolveRecord = method;
+        runtime.RequireDns().ResolveRecord = method;
 
         var il = method.GetILGenerator();
 
@@ -832,7 +832,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(soaLabel);
         il.Emit(OpCodes.Ldloc, hostnameLocal);
         il.Emit(OpCodes.Ldc_I4, qtSOA);
-        il.Emit(OpCodes.Call, runtime.DnsDoQuery);
+        il.Emit(OpCodes.Call, runtime.RequireDns().DoQuery);
         // SOA returns a Dictionary<string, object?> directly, wrap as $Object
         il.Emit(OpCodes.Castclass, _types.DictionaryStringObject);
         il.Emit(OpCodes.Call, runtime.CreateObject);
@@ -888,12 +888,12 @@ public partial class RuntimeEmitter
     {
         il.Emit(OpCodes.Ldloc, hostnameLocal);
         il.Emit(OpCodes.Ldc_I4, queryType);
-        il.Emit(OpCodes.Call, runtime.DnsDoQuery);
+        il.Emit(OpCodes.Call, runtime.RequireDns().DoQuery);
         // DnsDoQuery returns List<object?> for non-SOA types
         il.Emit(OpCodes.Castclass, _types.ListOfObject);
         if (wrapWithConvertList)
         {
-            il.Emit(OpCodes.Call, runtime.DnsConvertList);
+            il.Emit(OpCodes.Call, runtime.RequireDns().ConvertList);
         }
         else
         {
@@ -1015,7 +1015,7 @@ public partial class RuntimeEmitter
             il.MarkLabel(qLoopTop);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldloc, offArrLocal);
-            il.Emit(OpCodes.Call, runtime.DnsSkipName);
+            il.Emit(OpCodes.Call, runtime.RequireDns().SkipName);
             il.Emit(OpCodes.Ldloc, offArrLocal);
             il.Emit(OpCodes.Ldc_I4_0);
             il.Emit(OpCodes.Ldloc, offArrLocal);
@@ -1048,7 +1048,7 @@ public partial class RuntimeEmitter
             il.MarkLabel(aLoopTop);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldloc, offArrLocal);
-            il.Emit(OpCodes.Call, runtime.DnsSkipName);
+            il.Emit(OpCodes.Call, runtime.RequireDns().SkipName);
 
             // off = offArr[0]
             il.Emit(OpCodes.Ldloc, offArrLocal);
@@ -1120,7 +1120,7 @@ public partial class RuntimeEmitter
                 il.Emit(OpCodes.Stelem_I4);
                 il.Emit(OpCodes.Ldarg_0);
                 il.Emit(OpCodes.Ldloc, nameOffLocal);
-                il.Emit(OpCodes.Call, runtime.DnsReadName);
+                il.Emit(OpCodes.Call, runtime.RequireDns().ReadName);
                 il.Emit(OpCodes.Stloc, resultLocal);
             }
             il.MarkLabel(notCname);
@@ -1163,7 +1163,7 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.String, _types.Int32]);
-        runtime.DnsDoQuery = method;
+        runtime.RequireDns().DoQuery = method;
 
         var il = method.GetILGenerator();
         var nameLocal = il.DeclareLocal(_types.String);
@@ -1185,12 +1185,12 @@ public partial class RuntimeEmitter
         // byte[] query = DnsBuildQuery(name, queryType)
         il.Emit(OpCodes.Ldloc, nameLocal);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.DnsBuildQuery);
+        il.Emit(OpCodes.Call, runtime.RequireDns().BuildQuery);
         il.Emit(OpCodes.Stloc, queryLocal);
 
         // byte[] response = DnsSendReceive(query)
         il.Emit(OpCodes.Ldloc, queryLocal);
-        il.Emit(OpCodes.Call, runtime.DnsSendReceive);
+        il.Emit(OpCodes.Call, runtime.RequireDns().SendReceive);
         il.Emit(OpCodes.Stloc, responseLocal);
 
         // CNAME chase (#1073): A(1)/AAAA(28) only, bounded depth 8
@@ -1230,7 +1230,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, responseLocal);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.DnsParseResponse);
+        il.Emit(OpCodes.Call, runtime.RequireDns().ParseResponse);
         il.Emit(OpCodes.Ret);
     }
 
@@ -1245,7 +1245,7 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Int32,
             [typeof(byte[]), typeof(int[])]);
-        runtime.DnsReadUInt16 = method;
+        runtime.RequireDns().ReadUInt16 = method;
 
         var il = method.GetILGenerator();
 
@@ -1295,7 +1295,7 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Int32,
             [typeof(byte[]), typeof(int[])]);
-        runtime.DnsReadUInt32 = method;
+        runtime.RequireDns().ReadUInt32 = method;
 
         var il = method.GetILGenerator();
 
@@ -1366,7 +1366,7 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             _types.String,
             [typeof(byte[]), typeof(int[])]);
-        runtime.DnsReadCharString = method;
+        runtime.RequireDns().ReadCharString = method;
 
         var il = method.GetILGenerator();
 
@@ -1425,7 +1425,7 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             typeof(void),
             [typeof(System.Net.Sockets.NetworkStream), typeof(byte[]), _types.Int32, _types.Int32]);
-        runtime.DnsReadExact = method;
+        runtime.RequireDns().ReadExact = method;
 
         var il = method.GetILGenerator();
 
@@ -1456,7 +1456,7 @@ public partial class RuntimeEmitter
 
         // if (!readTask.Wait(DnsGetTimeoutMs())) throw SocketException(TimedOut)
         il.Emit(OpCodes.Ldloc, readTaskLocal);
-        il.Emit(OpCodes.Call, runtime.DnsGetTimeoutMs);
+        il.Emit(OpCodes.Call, runtime.RequireDns().GetTimeoutMs);
         il.Emit(OpCodes.Callvirt, typeof(Task).GetMethod("Wait", [_types.Int32])!);
         var waitOkLabel = il.DefineLabel();
         il.Emit(OpCodes.Brtrue, waitOkLabel);
@@ -1515,7 +1515,7 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             typeof(void),
             [typeof(List<byte>), _types.String]);
-        runtime.DnsEncodeName = method;
+        runtime.RequireDns().EncodeName = method;
 
         var il = method.GetILGenerator();
 
@@ -1600,7 +1600,7 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             _types.String,
             [typeof(byte[]), typeof(int[])]);
-        runtime.DnsReadName = method;
+        runtime.RequireDns().ReadName = method;
 
         var il = method.GetILGenerator();
 
@@ -1787,7 +1787,7 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             typeof(void),
             [typeof(byte[]), typeof(int[])]);
-        runtime.DnsSkipName = method;
+        runtime.RequireDns().SkipName = method;
 
         var il = method.GetILGenerator();
 
@@ -1879,7 +1879,7 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Int32,
             Type.EmptyTypes);
-        runtime.DnsGetTimeoutMs = method;
+        runtime.RequireDns().GetTimeoutMs = method;
 
         var il = method.GetILGenerator();
 
@@ -1928,7 +1928,7 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             typeof(IPEndPoint),
             [_types.String]);
-        runtime.DnsParseServerEndpoint = method;
+        runtime.RequireDns().ParseServerEndpoint = method;
 
         var il = method.GetILGenerator();
 
@@ -1966,7 +1966,7 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             _types.String,
             Type.EmptyTypes);
-        runtime.DnsGetSystemDns = method;
+        runtime.RequireDns().GetSystemDns = method;
 
         var il = method.GetILGenerator();
 
@@ -2167,7 +2167,7 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             typeof(byte[]),
             [_types.String, _types.Int32]);
-        runtime.DnsBuildQuery = method;
+        runtime.RequireDns().BuildQuery = method;
 
         var il = method.GetILGenerator();
 
@@ -2230,7 +2230,7 @@ public partial class RuntimeEmitter
         // EncodeName(packet, hostname)
         il.Emit(OpCodes.Ldloc, packetLocal);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.DnsEncodeName);
+        il.Emit(OpCodes.Call, runtime.RequireDns().EncodeName);
 
         // QTYPE (2 bytes, big-endian)
         il.Emit(OpCodes.Ldloc, packetLocal);
@@ -2279,7 +2279,7 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             typeof(byte[]),
             [typeof(byte[]), _types.String]);
-        runtime.DnsSendViaTcp = method;
+        runtime.RequireDns().SendViaTcp = method;
 
         var il = method.GetILGenerator();
 
@@ -2289,7 +2289,7 @@ public partial class RuntimeEmitter
         // var endpoint = DnsParseServerEndpoint(server) — handles "host" and "host:port"
         var endpointLocal = il.DeclareLocal(typeof(IPEndPoint));
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.DnsParseServerEndpoint);
+        il.Emit(OpCodes.Call, runtime.RequireDns().ParseServerEndpoint);
         il.Emit(OpCodes.Stloc, endpointLocal);
 
         // using var tcp = new TcpClient()
@@ -2301,7 +2301,7 @@ public partial class RuntimeEmitter
 
         // tcp.SendTimeout = DnsGetTimeoutMs()
         il.Emit(OpCodes.Ldloc, tcpLocal);
-        il.Emit(OpCodes.Call, runtime.DnsGetTimeoutMs);
+        il.Emit(OpCodes.Call, runtime.RequireDns().GetTimeoutMs);
         il.Emit(OpCodes.Callvirt, typeof(TcpClient).GetProperty("SendTimeout")!.GetSetMethod()!);
 
         // tcp.ConnectAsync(endpoint.Address, endpoint.Port).WaitAsync(TimeSpan.FromMilliseconds(DnsGetTimeoutMs())).GetAwaiter().GetResult()
@@ -2312,7 +2312,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, typeof(IPEndPoint).GetProperty("Port")!.GetGetMethod()!);
         il.Emit(OpCodes.Callvirt, typeof(TcpClient).GetMethod("ConnectAsync", [typeof(IPAddress), _types.Int32])!);
         // Task.WaitAsync(TimeSpan) for reliable timeout
-        il.Emit(OpCodes.Call, runtime.DnsGetTimeoutMs);
+        il.Emit(OpCodes.Call, runtime.RequireDns().GetTimeoutMs);
         il.Emit(OpCodes.Conv_R8);
         il.Emit(OpCodes.Call, typeof(TimeSpan).GetMethod("FromMilliseconds", [typeof(double)])!);
         il.Emit(OpCodes.Callvirt, typeof(Task).GetMethod("WaitAsync", [typeof(TimeSpan)])!);
@@ -2389,7 +2389,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, respLenBufLocal);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldc_I4_2);
-        il.Emit(OpCodes.Call, runtime.DnsReadExact);
+        il.Emit(OpCodes.Call, runtime.RequireDns().ReadExact);
 
         // int respLen = (respLenBuf[0] << 8) | respLenBuf[1]
         var respLenLocal = il.DeclareLocal(_types.Int32);
@@ -2414,7 +2414,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldloc, respLenLocal);
-        il.Emit(OpCodes.Call, runtime.DnsReadExact);
+        il.Emit(OpCodes.Call, runtime.RequireDns().ReadExact);
 
         il.Emit(OpCodes.Leave, returnLabel);
 
@@ -2447,19 +2447,19 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             typeof(byte[]),
             [typeof(byte[])]);
-        runtime.DnsSendReceive = method;
+        runtime.RequireDns().SendReceive = method;
 
         var il = method.GetILGenerator();
 
         // string dnsServer = DnsGetSystemDns()
         var serverLocal = il.DeclareLocal(_types.String); // 0
-        il.Emit(OpCodes.Call, runtime.DnsGetSystemDns);
+        il.Emit(OpCodes.Call, runtime.RequireDns().GetSystemDns);
         il.Emit(OpCodes.Stloc, serverLocal);
 
         // var endpoint = DnsParseServerEndpoint(server) — handles "host" and "host:port"
         var endpointLocal = il.DeclareLocal(typeof(IPEndPoint)); // 1
         il.Emit(OpCodes.Ldloc, serverLocal);
-        il.Emit(OpCodes.Call, runtime.DnsParseServerEndpoint);
+        il.Emit(OpCodes.Call, runtime.RequireDns().ParseServerEndpoint);
         il.Emit(OpCodes.Stloc, endpointLocal);
 
         // byte[] result = null
@@ -2491,7 +2491,7 @@ public partial class RuntimeEmitter
         // udp.Client.SendTimeout = DnsGetTimeoutMs()
         il.Emit(OpCodes.Ldloc, udpLocal);
         il.Emit(OpCodes.Callvirt, typeof(UdpClient).GetProperty("Client")!.GetGetMethod()!);
-        il.Emit(OpCodes.Call, runtime.DnsGetTimeoutMs);
+        il.Emit(OpCodes.Call, runtime.RequireDns().GetTimeoutMs);
         il.Emit(OpCodes.Callvirt, typeof(Socket).GetProperty("SendTimeout")!.GetSetMethod()!);
 
         // udp.Send(query, query.Length, endpoint)
@@ -2531,7 +2531,7 @@ public partial class RuntimeEmitter
 
         // if (!task.Wait(DnsGetTimeoutMs())) { udp.Close(); throw SocketException(TimedOut); }
         il.Emit(OpCodes.Ldloc, taskLocal);
-        il.Emit(OpCodes.Call, runtime.DnsGetTimeoutMs);
+        il.Emit(OpCodes.Call, runtime.RequireDns().GetTimeoutMs);
         il.Emit(OpCodes.Callvirt, typeof(Task).GetMethod("Wait", [_types.Int32])!);
         var waitOkLabel = il.DefineLabel();
         il.Emit(OpCodes.Brtrue, waitOkLabel);
@@ -2615,7 +2615,7 @@ public partial class RuntimeEmitter
         var rcodeCheckLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, serverLocal);
-        il.Emit(OpCodes.Call, runtime.DnsSendViaTcp);
+        il.Emit(OpCodes.Call, runtime.RequireDns().SendViaTcp);
         il.Emit(OpCodes.Stloc, resultLocal);
         il.Emit(OpCodes.Br, rcodeCheckLabel);
 
@@ -2713,7 +2713,7 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [typeof(byte[]), typeof(int[]), _types.Int32, _types.Int32, _types.Int32]);
-        runtime.DnsParseRecord = method;
+        runtime.RequireDns().ParseRecord = method;
 
         var il = method.GetILGenerator();
 
@@ -2856,13 +2856,13 @@ public partial class RuntimeEmitter
         {
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Call, runtime.DnsReadUInt16);
+            il.Emit(OpCodes.Call, runtime.RequireDns().ReadUInt16);
             var prefLocal = il.DeclareLocal(_types.Int32);
             il.Emit(OpCodes.Stloc, prefLocal);
 
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Call, runtime.DnsReadName);
+            il.Emit(OpCodes.Call, runtime.RequireDns().ReadName);
             var exchangeLocal = il.DeclareLocal(_types.String);
             il.Emit(OpCodes.Stloc, exchangeLocal);
 
@@ -2971,25 +2971,25 @@ public partial class RuntimeEmitter
             var priorityLocal = il.DeclareLocal(_types.Int32);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Call, runtime.DnsReadUInt16);
+            il.Emit(OpCodes.Call, runtime.RequireDns().ReadUInt16);
             il.Emit(OpCodes.Stloc, priorityLocal);
 
             var weightLocal = il.DeclareLocal(_types.Int32);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Call, runtime.DnsReadUInt16);
+            il.Emit(OpCodes.Call, runtime.RequireDns().ReadUInt16);
             il.Emit(OpCodes.Stloc, weightLocal);
 
             var portLocal = il.DeclareLocal(_types.Int32);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Call, runtime.DnsReadUInt16);
+            il.Emit(OpCodes.Call, runtime.RequireDns().ReadUInt16);
             il.Emit(OpCodes.Stloc, portLocal);
 
             var targetLocal = il.DeclareLocal(_types.String);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Call, runtime.DnsReadName);
+            il.Emit(OpCodes.Call, runtime.RequireDns().ReadName);
             il.Emit(OpCodes.Stloc, targetLocal);
 
             il.Emit(OpCodes.Newobj, dictCtor);
@@ -3026,7 +3026,7 @@ public partial class RuntimeEmitter
         {
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Call, runtime.DnsReadName);
+            il.Emit(OpCodes.Call, runtime.RequireDns().ReadName);
             il.Emit(OpCodes.Stloc, resultLocal);
             EmitSetOffsetToRdataEnd(il);
             il.Emit(OpCodes.Br, returnLabel);
@@ -3037,7 +3037,7 @@ public partial class RuntimeEmitter
         {
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Call, runtime.DnsReadName);
+            il.Emit(OpCodes.Call, runtime.RequireDns().ReadName);
             il.Emit(OpCodes.Stloc, resultLocal);
             EmitSetOffsetToRdataEnd(il);
             il.Emit(OpCodes.Br, returnLabel);
@@ -3049,43 +3049,43 @@ public partial class RuntimeEmitter
             var mnameLocal = il.DeclareLocal(_types.String);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Call, runtime.DnsReadName);
+            il.Emit(OpCodes.Call, runtime.RequireDns().ReadName);
             il.Emit(OpCodes.Stloc, mnameLocal);
 
             var rnameLocal = il.DeclareLocal(_types.String);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Call, runtime.DnsReadName);
+            il.Emit(OpCodes.Call, runtime.RequireDns().ReadName);
             il.Emit(OpCodes.Stloc, rnameLocal);
 
             var serialLocal = il.DeclareLocal(_types.Int32);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Call, runtime.DnsReadUInt32);
+            il.Emit(OpCodes.Call, runtime.RequireDns().ReadUInt32);
             il.Emit(OpCodes.Stloc, serialLocal);
 
             var refreshLocal = il.DeclareLocal(_types.Int32);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Call, runtime.DnsReadUInt32);
+            il.Emit(OpCodes.Call, runtime.RequireDns().ReadUInt32);
             il.Emit(OpCodes.Stloc, refreshLocal);
 
             var retryLocal = il.DeclareLocal(_types.Int32);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Call, runtime.DnsReadUInt32);
+            il.Emit(OpCodes.Call, runtime.RequireDns().ReadUInt32);
             il.Emit(OpCodes.Stloc, retryLocal);
 
             var expireLocal = il.DeclareLocal(_types.Int32);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Call, runtime.DnsReadUInt32);
+            il.Emit(OpCodes.Call, runtime.RequireDns().ReadUInt32);
             il.Emit(OpCodes.Stloc, expireLocal);
 
             var minimumLocal = il.DeclareLocal(_types.Int32);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Call, runtime.DnsReadUInt32);
+            il.Emit(OpCodes.Call, runtime.RequireDns().ReadUInt32);
             il.Emit(OpCodes.Stloc, minimumLocal);
 
             il.Emit(OpCodes.Newobj, dictCtor);
@@ -3124,7 +3124,7 @@ public partial class RuntimeEmitter
         {
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Call, runtime.DnsReadName);
+            il.Emit(OpCodes.Call, runtime.RequireDns().ReadName);
             il.Emit(OpCodes.Stloc, resultLocal);
             EmitSetOffsetToRdataEnd(il);
             il.Emit(OpCodes.Br, returnLabel);
@@ -3237,37 +3237,37 @@ public partial class RuntimeEmitter
             var orderLocal = il.DeclareLocal(_types.Int32);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Call, runtime.DnsReadUInt16);
+            il.Emit(OpCodes.Call, runtime.RequireDns().ReadUInt16);
             il.Emit(OpCodes.Stloc, orderLocal);
 
             var prefLocal = il.DeclareLocal(_types.Int32);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Call, runtime.DnsReadUInt16);
+            il.Emit(OpCodes.Call, runtime.RequireDns().ReadUInt16);
             il.Emit(OpCodes.Stloc, prefLocal);
 
             var naptrFlagsLocal = il.DeclareLocal(_types.String);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Call, runtime.DnsReadCharString);
+            il.Emit(OpCodes.Call, runtime.RequireDns().ReadCharString);
             il.Emit(OpCodes.Stloc, naptrFlagsLocal);
 
             var serviceLocal = il.DeclareLocal(_types.String);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Call, runtime.DnsReadCharString);
+            il.Emit(OpCodes.Call, runtime.RequireDns().ReadCharString);
             il.Emit(OpCodes.Stloc, serviceLocal);
 
             var regexpLocal = il.DeclareLocal(_types.String);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Call, runtime.DnsReadCharString);
+            il.Emit(OpCodes.Call, runtime.RequireDns().ReadCharString);
             il.Emit(OpCodes.Stloc, regexpLocal);
 
             var replacementLocal = il.DeclareLocal(_types.String);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Call, runtime.DnsReadName);
+            il.Emit(OpCodes.Call, runtime.RequireDns().ReadName);
             il.Emit(OpCodes.Stloc, replacementLocal);
 
             il.Emit(OpCodes.Newobj, dictCtor);
@@ -3350,7 +3350,7 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [typeof(byte[]), _types.Int32, _types.String]);
-        runtime.DnsParseResponse = method;
+        runtime.RequireDns().ParseResponse = method;
 
         var il = method.GetILGenerator();
 
@@ -3503,7 +3503,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(qLoopStart);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, offsetLocal);
-        il.Emit(OpCodes.Call, runtime.DnsSkipName);
+        il.Emit(OpCodes.Call, runtime.RequireDns().SkipName);
         // offset[0] += 4 (QTYPE + QCLASS)
         il.Emit(OpCodes.Ldloc, offsetLocal);
         il.Emit(OpCodes.Ldc_I4_0);
@@ -3540,7 +3540,7 @@ public partial class RuntimeEmitter
         // SkipName(data, offset)
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, offsetLocal);
-        il.Emit(OpCodes.Call, runtime.DnsSkipName);
+        il.Emit(OpCodes.Call, runtime.RequireDns().SkipName);
 
         // int type = (data[offset[0]] << 8) | data[offset[0] + 1]
         var typeLocal = il.DeclareLocal(_types.Int32); // 9
@@ -3639,7 +3639,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, typeLocal);
         il.Emit(OpCodes.Ldloc, rdlengthLocal);
         il.Emit(OpCodes.Ldloc, rdataStartLocal);
-        il.Emit(OpCodes.Call, runtime.DnsParseRecord);
+        il.Emit(OpCodes.Call, runtime.RequireDns().ParseRecord);
         var recordLocal = il.DeclareLocal(_types.Object); // 12
         il.Emit(OpCodes.Stloc, recordLocal);
 
@@ -3737,7 +3737,7 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.ListOfObject]);
-        runtime.DnsConvertList = method;
+        runtime.RequireDns().ConvertList = method;
 
         var il = method.GetILGenerator();
 
@@ -3862,7 +3862,7 @@ public partial class RuntimeEmitter
         // hosts-file lookup), mirroring the interpreter. Returns a $Array of IP strings.
         il.Emit(OpCodes.Ldarg_0); // hostname (object)
         il.Emit(OpCodes.Ldstr, family == 4 ? "A" : "AAAA");
-        il.Emit(OpCodes.Call, runtime.DnsResolveRecord);
+        il.Emit(OpCodes.Call, runtime.RequireDns().ResolveRecord);
         il.Emit(OpCodes.Stloc, resultLocal);
 
         // callback.Invoke([null, result])
@@ -3990,7 +3990,7 @@ public partial class RuntimeEmitter
 
         il.Emit(OpCodes.Ldarg_0); // hostname
         il.Emit(OpCodes.Ldloc, rrtypeLocal); // rrtype
-        il.Emit(OpCodes.Call, runtime.DnsResolveRecord);
+        il.Emit(OpCodes.Call, runtime.RequireDns().ResolveRecord);
         var recordResultLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Stloc, recordResultLocal);
 
@@ -4053,7 +4053,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Pop);          // drop null
         il.Emit(OpCodes.Ldstr, "A");   // default rrtype
         il.MarkLabel(haveRrtypeLabel);
-        il.Emit(OpCodes.Call, runtime.DnsResolveRecord);
+        il.Emit(OpCodes.Call, runtime.RequireDns().ResolveRecord);
         var resultLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Stloc, resultLocal);
 
@@ -4368,7 +4368,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldfld, hostnameField);
             il.Emit(OpCodes.Castclass, _types.String);
             il.Emit(OpCodes.Ldstr, rrtype);
-            il.Emit(OpCodes.Call, runtime.DnsResolveRecord);
+            il.Emit(OpCodes.Call, runtime.RequireDns().ResolveRecord);
             il.Emit(OpCodes.Stfld, resultField);
             il.Emit(OpCodes.Leave, afterTry);
 
@@ -4404,6 +4404,6 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitDnsResolverFactory(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
-        EmitDnsResolverFactoryMethod(typeBuilder, runtime);
+        EmitDnsResolverFactoryMethod(typeBuilder, runtime.RequireDns());
     }
 }

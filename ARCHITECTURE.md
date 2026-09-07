@@ -164,6 +164,27 @@ Key compiler analyses include module bindings, closure/capture shape, runtime fe
 typed/local representation opportunities, and hosted output. Optimizations may use static type
 facts but must preserve JavaScript object identity, coercion, evaluation order, and exceptions.
 
+### Runtime metadata components
+
+Migrate `EmittedRuntime` metadata one feature family at a time. DNS is the first component:
+`Dns` is null when `UsesDns` is false, and `RequireDns()` reports accidental use of a disabled
+feature. `RuntimeEmitter.EmitAll` creates the component before emission and completes it before
+returning the runtime. Completion validates all required handles and promise wrappers and rejects
+subsequent writes. Consumers can read the component but cannot replace its handles or mutate its
+wrapper registry.
+
+During emission, each handle becomes readable as soon as its declaration is assigned, so forward
+references do not require a method body to exist yet. An early read names the missing declaration.
+Completion is an orchestration boundary, not an IL verifier: body emission and type finalization
+must finish before that boundary. Preserve existing emission order when migrating a family.
+
+Follow this pattern for subsequent families: explicit optional availability, checked declarations,
+one completion boundary, and no retained flat aliases. Pass the component to helpers that only
+need that family's metadata (for example, DNS resolver declaration); retain `EmittedRuntime` where
+cross-feature helpers are needed. These holders belong to the compiler host and must never appear
+as metadata dependencies in guest output. Keep feature gating, emitted signatures, and deployment
+capability recording unchanged.
+
 ### Specialized representations
 
 The compiler may replace ordinary boxed JavaScript storage with generated CLR locals, fields,

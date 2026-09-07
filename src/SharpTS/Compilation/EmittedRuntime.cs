@@ -2819,48 +2819,18 @@ public class EmittedRuntime
     public MethodBuilder WorkerThreadsSetEnvironmentData { get; set; } = null!;
     public MethodBuilder WorkerThreadsMarkAsUntransferable { get; set; } = null!;
 
-    // DNS module methods
-    public MethodBuilder DnsLookup { get; set; } = null!;
+    /// <summary>DNS metadata, or null when DNS is tree-shaken from this compilation.</summary>
+    public EmittedDnsRuntime? Dns { get; private set; }
 
-    // dns default result order (#1072)
-    public MethodBuilder DnsGetDefaultResultOrder { get; set; } = null!;
-    public MethodBuilder DnsSetDefaultResultOrder { get; set; } = null!;
-    public MethodBuilder DnsLookupService { get; set; } = null!;
-    public MethodBuilder DnsGetLookup { get; set; } = null!;
-    public MethodBuilder DnsGetLookupService { get; set; } = null!;
-    public MethodBuilder DnsResolveRecord { get; set; } = null!;
-    public MethodBuilder DnsConvertList { get; set; } = null!;
-    public MethodBuilder DnsDoQuery { get; set; } = null!;
+    internal void BeginDnsEmission()
+    {
+        if (Dns is not null)
+            throw new InvalidOperationException("DNS metadata emission has already started.");
+        Dns = new EmittedDnsRuntime();
+    }
 
-    // DNS wire protocol helpers (emitted into output assembly)
-    public MethodBuilder DnsGetTimeoutMs { get; set; } = null!;
-    public MethodBuilder DnsParseServerEndpoint { get; set; } = null!;
-    public MethodBuilder DnsGetSystemDns { get; set; } = null!;
-    public MethodBuilder DnsBuildQuery { get; set; } = null!;
-    public MethodBuilder DnsSendReceive { get; set; } = null!;
-    public MethodBuilder DnsReadName { get; set; } = null!;
-    public MethodBuilder DnsSkipName { get; set; } = null!;
-    public MethodBuilder DnsParseResponse { get; set; } = null!;
-    public MethodBuilder DnsReadCharString { get; set; } = null!;
-    public MethodBuilder DnsReadUInt32 { get; set; } = null!;
-    public MethodBuilder DnsReadUInt16 { get; set; } = null!;
-    public MethodBuilder DnsParseRecord { get; set; } = null!;
-    public MethodBuilder DnsSendViaTcp { get; set; } = null!;
-    public MethodBuilder DnsReadExact { get; set; } = null!;
-    public MethodBuilder DnsEncodeName { get; set; } = null!;
-
-    // DNS promises namespace
-    public MethodBuilder DnsGetPromisesNamespace { get; set; } = null!;
-    public Dictionary<string, MethodBuilder> DnsPromisesWrapperMethods { get; set; } = new();
-
-    // DNS Resolver factory
-    public MethodBuilder DnsResolverFactory { get; set; } = null!;
-    public MethodBuilder DnsResolverSetServers { get; set; } = null!;
-    public MethodBuilder DnsResolverGetServers { get; set; } = null!;
-    public MethodBuilder DnsResolverCancel { get; set; } = null!;
-    public MethodBuilder DnsResolverGetGeneration { get; set; } = null!;
-    public MethodBuilder DnsResolverSetLocalAddress { get; set; } = null!;
-    public MethodBuilder DnsResolverResolve { get; set; } = null!;
+    public EmittedDnsRuntime RequireDns() => Dns
+        ?? throw new InvalidOperationException("DNS runtime was not enabled for this compilation.");
 
     // $Stats type - emitted for fs.stat() and related methods
     // Provides Node.js-compatible Stats object with methods like isFile(), isDirectory(), etc.

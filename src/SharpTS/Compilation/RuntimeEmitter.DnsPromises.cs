@@ -35,8 +35,6 @@ public partial class RuntimeEmitter
 
     private void EmitDnsPromisesMethods(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
-        runtime.DnsPromisesWrapperMethods = new Dictionary<string, MethodBuilder>();
-
         // Emit display classes for closures
         EmitDnsDisplayClass1(typeBuilder.Module as ModuleBuilder ?? throw new Exception("need ModuleBuilder"));
         EmitDnsDisplayClass2(typeBuilder.Module as ModuleBuilder ?? throw new Exception("need ModuleBuilder"));
@@ -64,7 +62,7 @@ public partial class RuntimeEmitter
             {
                 il.Emit(OpCodes.Ldarg_0); // hostname
                 il.Emit(OpCodes.Ldstr, rrtype);
-                il.Emit(OpCodes.Call, runtime.DnsResolveRecord);
+                il.Emit(OpCodes.Call, runtime.RequireDns().ResolveRecord);
             });
             EmitDnsAsyncWrapper1(typeBuilder, runtime, methodName, syncHelper);
         }
@@ -74,7 +72,7 @@ public partial class RuntimeEmitter
         {
             il.Emit(OpCodes.Ldarg_0); // hostname
             il.Emit(OpCodes.Ldarg_1); // options
-            il.Emit(OpCodes.Call, runtime.DnsLookup);
+            il.Emit(OpCodes.Call, runtime.RequireDns().Lookup);
         });
         EmitDnsAsyncWrapper2(typeBuilder, runtime, "DnsPromisesLookup", lookupSync);
 
@@ -83,7 +81,7 @@ public partial class RuntimeEmitter
         {
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Call, runtime.DnsLookupService);
+            il.Emit(OpCodes.Call, runtime.RequireDns().LookupService);
         });
         EmitDnsAsyncWrapper2(typeBuilder, runtime, "DnsPromisesLookupService", lookupServiceSync);
 
@@ -92,7 +90,7 @@ public partial class RuntimeEmitter
         {
             il.Emit(OpCodes.Ldarg_0); // hostname
             il.Emit(OpCodes.Ldarg_1); // rrtype (already defaulted in wrapper)
-            il.Emit(OpCodes.Call, runtime.DnsResolveRecord);
+            il.Emit(OpCodes.Call, runtime.RequireDns().ResolveRecord);
         });
         EmitDnsAsyncWrapper2(typeBuilder, runtime, "DnsPromisesResolve", resolveSync);
 
@@ -121,7 +119,7 @@ public partial class RuntimeEmitter
         // Resolver queries use the same event-loop-aware Task.Run path. The sync
         // target late-binds to the shared DnsResolverInstance state in SharpTS.dll;
         // its single object[] request carries state/method/identifier/rrtype.
-        EmitDnsAsyncWrapper1(typeBuilder, runtime, "DnsResolverResolveAsync", runtime.DnsResolverResolve);
+        EmitDnsAsyncWrapper1(typeBuilder, runtime, "DnsResolverResolveAsync", runtime.RequireDns().ResolverResolve);
 
         // Namespace getter for dns.promises sub-property
         EmitDnsGetPromisesNamespace(typeBuilder, runtime);
@@ -505,7 +503,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, runtime.WrapTaskAsPromise);
         il.Emit(OpCodes.Ret);
 
-        runtime.DnsPromisesWrapperMethods[methodName] = wrapper;
+        runtime.RequireDns().RegisterPromiseWrapper(methodName, wrapper);
     }
 
     /// <summary>
@@ -564,7 +562,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, runtime.WrapTaskAsPromise);
         il.Emit(OpCodes.Ret);
 
-        runtime.DnsPromisesWrapperMethods[methodName] = wrapper;
+        runtime.RequireDns().RegisterPromiseWrapper(methodName, wrapper);
     }
 
     /// <summary>
@@ -578,7 +576,7 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             Type.EmptyTypes);
-        runtime.DnsGetPromisesNamespace = method;
+        runtime.RequireDns().GetPromisesNamespace = method;
 
         var il = method.GetILGenerator();
 
@@ -614,7 +612,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldstr, jsName);
 
             il.Emit(OpCodes.Ldnull);
-            il.Emit(OpCodes.Ldtoken, runtime.DnsPromisesWrapperMethods[wrapperKey]);
+            il.Emit(OpCodes.Ldtoken, runtime.RequireDns().PromisesWrapperMethods[wrapperKey]);
             il.Emit(OpCodes.Call, typeof(MethodBase).GetMethod("GetMethodFromHandle", [typeof(RuntimeMethodHandle)])!);
             il.Emit(OpCodes.Castclass, typeof(MethodInfo));
             il.Emit(OpCodes.Newobj, runtime.TSFunctionCtor);
