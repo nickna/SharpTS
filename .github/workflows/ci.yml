@@ -156,10 +156,8 @@ jobs:
             --project benchmarks/micro/SharpTS.Microbenchmarks -- --smoke
         timeout-minutes: 10
 
-      # The conformance harnesses live outside SharpTS.sln (running them needs the
-      # external/ submodules, absent here), but each references src/SharpTS/SharpTS.csproj — so
-      # compile them to catch API rot that would otherwise only surface when someone
-      # runs them manually.
+      # Keep cross-platform harness build coverage. TypeScript's executable baseline
+      # smoke lives in typescript-conformance; Test262 execution is tracked by #1280.
       - name: Build conformance harnesses (compile-only)
         shell: bash
         run: |
@@ -206,6 +204,32 @@ jobs:
       - name: Packaged SDK smoke test
         shell: pwsh
         run: ./scripts/test-packaged-sdk.ps1
+
+  typescript-conformance:
+    needs: workflow-policy
+    if: needs.workflow-policy.outputs.mode == 'full'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Setup .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+      - name: Acquire pinned TypeScript and compare smoke baseline
+        shell: pwsh
+        run: ./scripts/test-typescript-conformance.ps1
+        timeout-minutes: 8
+      - name: Upload TypeScript per-case diagnostic diff
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: typescript-conformance
+          path: artifacts/typescript-conformance/
+          if-no-files-found: error
+          retention-days: 7
 
   # The full suite intentionally stays off macOS, but the interpreter debugger is a portable .NET
   # tool and its product contract requires a real package/install/launch smoke on every supported
@@ -531,7 +555,7 @@ jobs:
   gate:
     name: Gate
     if: always()
-    needs: [workflow-policy, build, dap-macos-smoke, aot-ratchet, native-aot-compile-smoke, lightweight-validation]
+    needs: [workflow-policy, build, typescript-conformance, dap-macos-smoke, aot-ratchet, native-aot-compile-smoke, lightweight-validation]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
@@ -546,7 +570,7 @@ jobs:
             throw "CI change classification or workflow policy did not pass."
           }
 
-          $heavy = @('build', 'dap-macos-smoke', 'aot-ratchet', 'native-aot-compile-smoke')
+          $heavy = @('build', 'typescript-conformance', 'dap-macos-smoke', 'aot-ratchet', 'native-aot-compile-smoke')
           if ($env:CHANGE_MODE -eq 'full') {
             $bad = @($heavy | Where-Object { $needs.PSObject.Properties[$_].Value.result -ne 'success' })
             if ($needs.'lightweight-validation'.result -ne 'skipped') {

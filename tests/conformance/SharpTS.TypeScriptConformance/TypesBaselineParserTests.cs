@@ -117,7 +117,7 @@ public class TypesBaselineParserTests
     [Fact]
     public void Parse_IsDeterministicAcrossLineEndingsAndBom()
     {
-        string baseline = "\uFEFF" + ReadFixture("multi.types").Replace("\n", "\r\n", StringComparison.Ordinal);
+        string baseline = "\uFEFF" + ReadFixture("multi.types").ReplaceLineEndings("\r\n");
         TypeScriptConformanceFile[] sources =
         [
             new("a.ts", "export const value = 1;"),
