@@ -39,6 +39,38 @@ public class IteratorRecordTests
         Assert.Equal("0,1,2\n", TestHarness.Run(source, mode));
     }
 
+    [Theory, ModeData]
+    public void SpreadCapturesNextGetterOncePerAcquisitionAndSkipsCompletedValue(ExecutionMode mode)
+    {
+        const string source = """
+            let reads = 0;
+            let current = 0;
+            const iterator: any = {
+                [Symbol.iterator]() { current = 0; return this; },
+                get next() {
+                    reads++;
+                    return function() {
+                        if (this !== iterator) throw new Error("receiver");
+                        if (current === 3) {
+                            return {
+                                done: true,
+                                get value() { throw new Error("completed value"); }
+                            };
+                        }
+                        return { value: current++, done: false };
+                    };
+                }
+            };
+            function collect(...values: any[]): void {
+                console.log(values.join(","));
+            }
+            console.log([...iterator].join(","));
+            collect(...iterator);
+            console.log(reads);
+            """;
+        Assert.Equal("0,1,2\n0,1,2\n2\n", TestHarness.Run(source, mode));
+    }
+
     [Fact]
     public void GenericIteratorRemainsStandalone()
     {
