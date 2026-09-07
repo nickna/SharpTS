@@ -40,6 +40,8 @@ public partial class RuntimeEmitter
         if (_emitHosted)
             _features.UsesPromise = true;
         var runtime = new EmittedRuntime();
+        if (features.UsesNet)
+            runtime.BeginNetEmission();
         if (features.UsesTls)
             runtime.BeginTlsEmission();
         if (features.UsesZlib)
@@ -414,7 +416,7 @@ public partial class RuntimeEmitter
         {
             // The opaque $BlockList handle is self-contained (pure BCL) and must
             // exist before $NetServer and the primitive net factory reference it.
-            EmitTSNetBlockListTypes(moduleBuilder, runtime);
+            EmitTSNetBlockListTypes(moduleBuilder, runtime.RequireNet());
             EmitTSNetSocketPhase1(moduleBuilder, runtime);
             EmitTSNetServerPhase1(moduleBuilder, runtime);
         }
@@ -615,6 +617,7 @@ public partial class RuntimeEmitter
         runtime.Zlib?.CompleteEmission();
         runtime.Tls?.CompleteEmission();
         runtime.Dgram?.CompleteEmission();
+        runtime.Net?.CompleteEmission();
         return runtime;
     }
 }

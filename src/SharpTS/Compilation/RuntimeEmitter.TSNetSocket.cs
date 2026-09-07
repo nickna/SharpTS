@@ -21,7 +21,6 @@ namespace SharpTS.Compilation;
 public partial class RuntimeEmitter
 {
     // Field builders for $NetSocket
-    private TypeBuilder _netSocketTypeBuilder = null!;
     private FieldBuilder _netSocketClientField = null!;
     private FieldBuilder _netSocketStreamField = null!;
     private FieldBuilder _netSocketConnectingField = null!;
@@ -57,13 +56,9 @@ public partial class RuntimeEmitter
     internal FieldBuilder _netSocketFinishAfterEndField = null!;
 
     // Method builders for $NetSocket (defined in Phase 1a, bodies emitted in Phase 2)
-    private MethodBuilder _netSocketConnectMethod = null!;
-    private MethodBuilder _netSocketWriteMethod = null!;
     private MethodBuilder _netSocketEndMethod = null!;
     private MethodBuilder _netSocketDestroyMethod = null!;
-    private MethodBuilder _netSocketStartReadingMethod = null!;
     private MethodBuilder _netSocketSetEncodingMethod = null!;
-    private MethodBuilder _netSocketGetMemberMethod = null!;
     private MethodBuilder _netSocketEnqueueWriteMethod = null!;
     private MethodBuilder _netSocketWriteWorkerMethod = null!;
     private MethodBuilder _netSocketFlushTickMethod = null!;
@@ -95,8 +90,7 @@ public partial class RuntimeEmitter
             TypeAttributes.Public | TypeAttributes.BeforeFieldInit,
             runtime.TSEventEmitterType
         );
-        _netSocketTypeBuilder = typeBuilder;
-        runtime.NetSocketType = typeBuilder;
+        runtime.RequireNet().SocketType = typeBuilder;
 
         // ── Fields ──
         // Assembly (internal) rather than Private so the $TlsSocket subclass and the
@@ -152,29 +146,26 @@ public partial class RuntimeEmitter
 
         // ── Method stubs (no bodies — emitted in Phase 2) ──
 
-        _netSocketStartReadingMethod = typeBuilder.DefineMethod(
+        runtime.RequireNet().SocketStartReading = typeBuilder.DefineMethod(
             "StartReading",
             MethodAttributes.Public,
             typeof(void),
             Type.EmptyTypes
         );
-        runtime.NetSocketStartReading = _netSocketStartReadingMethod;
 
-        _netSocketConnectMethod = typeBuilder.DefineMethod(
+        runtime.RequireNet().SocketConnect = typeBuilder.DefineMethod(
             "Connect",
             MethodAttributes.Public,
             _types.Object,
             [_types.Object, _types.Object, _types.Object]
         );
-        runtime.NetSocketConnect = _netSocketConnectMethod;
 
-        _netSocketWriteMethod = typeBuilder.DefineMethod(
+        runtime.RequireNet().SocketWrite = typeBuilder.DefineMethod(
             "Write",
             MethodAttributes.Public,
             _types.Object,
             [_types.Object, _types.Object, _types.Object]
         );
-        runtime.NetSocketWrite = _netSocketWriteMethod;
 
         _netSocketEndMethod = typeBuilder.DefineMethod(
             "End",
@@ -200,13 +191,12 @@ public partial class RuntimeEmitter
         );
         _ = _netSocketSetEncodingMethod;
 
-        _netSocketGetMemberMethod = typeBuilder.DefineMethod(
+        runtime.RequireNet().SocketGetMember = typeBuilder.DefineMethod(
             "GetMember",
             MethodAttributes.Public,
             _types.Object,
             [_types.String]
         );
-        runtime.NetSocketGetMember = _netSocketGetMemberMethod;
 
         // Write-queue plumbing (#1068) — private helpers; bodies emitted in Phase 2.
         _netSocketEnqueueWriteMethod = typeBuilder.DefineMethod(
@@ -261,7 +251,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitTSNetSocketPhase2(EmittedRuntime runtime)
     {
-        var typeBuilder = _netSocketTypeBuilder;
+        var typeBuilder = runtime.RequireNet().SocketType;
 
         // Emit method bodies
         EmitNetSocketStartReadingBody(typeBuilder, runtime);
@@ -312,7 +302,7 @@ public partial class RuntimeEmitter
             CallingConventions.Standard,
             Type.EmptyTypes
         );
-        runtime.NetSocketCtor = ctor;
+        runtime.RequireNet().SocketCtor = ctor;
 
         var il = ctor.GetILGenerator();
         // base()
@@ -333,7 +323,7 @@ public partial class RuntimeEmitter
             CallingConventions.Standard,
             [typeof(TcpClient)]
         );
-        runtime.NetSocketCtorTcpClient = ctor;
+        runtime.RequireNet().SocketCtorTcpClient = ctor;
 
         var il = ctor.GetILGenerator();
         // base()
@@ -363,7 +353,7 @@ public partial class RuntimeEmitter
             CallingConventions.Standard,
             [typeof(System.IO.Stream), _types.String]
         );
-        runtime.NetSocketCtorStream = ctor;
+        runtime.RequireNet().SocketCtorStream = ctor;
 
         var il = ctor.GetILGenerator();
         // base()
@@ -399,7 +389,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitNetSocketConnectBody(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
-        var il = _netSocketConnectMethod.GetILGenerator();
+        var il = runtime.RequireNet().SocketConnect.GetILGenerator();
 
         // Locals
         var portLocal = il.DeclareLocal(_types.Int32);      // port
@@ -1082,7 +1072,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitNetSocketWriteBody(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
-        var il = _netSocketWriteMethod.GetILGenerator();
+        var il = runtime.RequireNet().SocketWrite.GetILGenerator();
 
         // if (_destroyed || _stream == null) return false
         var okLabel = il.DefineLabel();
@@ -1724,7 +1714,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Call, runtime.NetSocketWrite);
+        il.Emit(OpCodes.Call, runtime.RequireNet().SocketWrite);
         il.Emit(OpCodes.Pop);
 
         il.MarkLabel(noFinalWrite);
@@ -1939,7 +1929,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitNetSocketStartReadingBody(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
-        var il = _netSocketStartReadingMethod.GetILGenerator();
+        var il = runtime.RequireNet().SocketStartReading.GetILGenerator();
 
         // if (_destroyed || _stream == null) return
         var okLabel = il.DefineLabel();
@@ -2159,7 +2149,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitNetSocketGetMemberBody(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
-        var il = _netSocketGetMemberMethod.GetILGenerator();
+        var il = runtime.RequireNet().SocketGetMember.GetILGenerator();
 
         // Property dispatch labels
         var remoteAddressLabel = il.DefineLabel();

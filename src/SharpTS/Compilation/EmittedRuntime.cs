@@ -2277,16 +2277,18 @@ public class EmittedRuntime
     public TypeBuilder TSHttpResponseType { get; set; } = null!;
     public ConstructorBuilder TSHttpResponseCtor { get; set; } = null!;
 
-    // Net module methods
-    public MethodBuilder NetCreateServer { get; set; } = null!;
-    public MethodBuilder NetCreateConnection { get; set; } = null!;
-    public MethodBuilder NetCreateSocket { get; set; } = null!;
-    public MethodBuilder NetCreateBlockList { get; set; } = null!;
+    /// <summary>TCP/IPC metadata, or null when net is tree-shaken from this compilation.</summary>
+    public EmittedNetRuntime? Net { get; private set; }
 
-    // Opaque net.BlockList enforcement handle. Null when UsesNet is off.
-    public TypeBuilder? BlockListType { get; set; }
-    public ConstructorBuilder? BlockListCtor { get; set; }
-    public MethodBuilder? BlockListCheckIp { get; set; }
+    internal void BeginNetEmission()
+    {
+        if (Net is not null)
+            throw new InvalidOperationException("Net metadata emission has already started.");
+        Net = new EmittedNetRuntime();
+    }
+
+    public EmittedNetRuntime RequireNet() => Net
+        ?? throw new InvalidOperationException("Net runtime was not enabled for this compilation.");
 
     /// <summary>TLS metadata, or null when TLS is tree-shaken from this compilation.</summary>
     public EmittedTlsRuntime? Tls { get; private set; }
@@ -2931,23 +2933,6 @@ public class EmittedRuntime
     /// escaping to the thread pool.
     /// </summary>
     public ConstructorBuilder EventLoopSyncContextCtor { get; set; } = null!;
-
-    // ============================================================
-    // $NetServer — emitted TCP server (extends $EventEmitter)
-    // ============================================================
-    public ConstructorBuilder NetServerCtor { get; set; } = null!;
-
-    // ============================================================
-    // $NetSocket — emitted TCP socket (extends $EventEmitter)
-    // ============================================================
-    public TypeBuilder NetSocketType { get; set; } = null!;
-    public ConstructorBuilder NetSocketCtor { get; set; } = null!;
-    public ConstructorBuilder NetSocketCtorTcpClient { get; set; } = null!;
-    public ConstructorBuilder NetSocketCtorStream { get; set; } = null!;
-    public MethodBuilder NetSocketConnect { get; set; } = null!;
-    public MethodBuilder NetSocketWrite { get; set; } = null!;
-    public MethodBuilder NetSocketStartReading { get; set; } = null!;
-    public MethodBuilder NetSocketGetMember { get; set; } = null!;
 
     // Vm module methods
     public MethodBuilder VmRunInNewContext { get; set; } = null!;

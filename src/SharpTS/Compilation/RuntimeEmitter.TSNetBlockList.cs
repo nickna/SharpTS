@@ -12,7 +12,6 @@ namespace SharpTS.Compilation;
 /// </summary>
 public partial class RuntimeEmitter
 {
-    private TypeBuilder _blockListTypeBuilder = null!;
     private FieldBuilder _blockListRulesField = null!;
     private MethodBuilder _blockListParseAddrMethod = null!;
     private MethodBuilder _blockListCompareBytesMethod = null!;
@@ -20,14 +19,13 @@ public partial class RuntimeEmitter
     private MethodBuilder _blockListAddRuleMethod = null!;
     private MethodBuilder _blockListMatchBytesMethod = null!;
 
-    private void EmitTSNetBlockListTypes(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private void EmitTSNetBlockListTypes(ModuleBuilder moduleBuilder, EmittedNetRuntime net)
     {
         var typeBuilder = moduleBuilder.DefineType(
             "$BlockList",
             TypeAttributes.Public | TypeAttributes.BeforeFieldInit,
             typeof(object));
-        _blockListTypeBuilder = typeBuilder;
-        runtime.BlockListType = typeBuilder;
+        net.BlockListType = typeBuilder;
 
         // Each rule is object[3] { boxed bool isV6, byte[] start, byte[] end }.
         _blockListRulesField = typeBuilder.DefineField(
@@ -37,7 +35,7 @@ public partial class RuntimeEmitter
             MethodAttributes.Public,
             CallingConventions.Standard,
             Type.EmptyTypes);
-        runtime.BlockListCtor = ctor;
+        net.BlockListCtor = ctor;
         {
             var il = ctor.GetILGenerator();
             il.Emit(OpCodes.Ldarg_0);
@@ -56,7 +54,7 @@ public partial class RuntimeEmitter
         EmitBlockListAddAddress(typeBuilder);
         EmitBlockListAddRange(typeBuilder);
         EmitBlockListAddSubnet(typeBuilder);
-        EmitBlockListCheckIp(typeBuilder, runtime);
+        EmitBlockListCheckIp(typeBuilder, net);
 
         typeBuilder.CreateType();
     }
@@ -487,11 +485,11 @@ public partial class RuntimeEmitter
         EmitInvalidBlockListMutation(il, invalid);
     }
 
-    private void EmitBlockListCheckIp(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitBlockListCheckIp(TypeBuilder typeBuilder, EmittedNetRuntime net)
     {
         var method = typeBuilder.DefineMethod(
             "CheckIp", MethodAttributes.Public, _types.Boolean, [typeof(IPAddress)]);
-        runtime.BlockListCheckIp = method;
+        net.BlockListCheckIp = method;
         var il = method.GetILGenerator();
         var address = il.DeclareLocal(typeof(IPAddress));
         il.Emit(OpCodes.Ldarg_1);
