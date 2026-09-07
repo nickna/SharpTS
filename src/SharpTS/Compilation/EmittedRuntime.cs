@@ -2287,24 +2287,18 @@ public class EmittedRuntime
     public ConstructorBuilder? BlockListCtor { get; set; }
     public MethodBuilder? BlockListCheckIp { get; set; }
 
-    // TLS module methods
-    public MethodBuilder TlsCreateServer { get; set; } = null!;
-    public MethodBuilder TlsConnect { get; set; } = null!;
-    public MethodBuilder TlsCreateSecureContext { get; set; } = null!;
-    public MethodBuilder TlsGetDefaultMinVersion { get; set; } = null!;
-    public MethodBuilder TlsGetDefaultMaxVersion { get; set; } = null!;
-    public MethodBuilder TlsGetCiphers { get; set; } = null!;
-    public MethodBuilder TlsRootCertificates { get; set; } = null!;
-    public MethodBuilder TlsCreateSocket { get; set; } = null!;
+    /// <summary>TLS metadata, or null when TLS is tree-shaken from this compilation.</summary>
+    public EmittedTlsRuntime? Tls { get; private set; }
 
-    // $TlsSocket emitted type - pure IL standalone TLS socket
-    // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSTlsSocket
-    public Type TlsSocketType { get; set; } = null!;
-    public ConstructorBuilder TlsSocketCtor { get; set; } = null!;
+    internal void BeginTlsEmission()
+    {
+        if (Tls is not null)
+            throw new InvalidOperationException("TLS metadata emission has already started.");
+        Tls = new EmittedTlsRuntime();
+    }
 
-    // $TlsServer emitted type - pure IL standalone TLS server
-    // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSTlsServer
-    public ConstructorBuilder TlsServerCtor { get; set; } = null!;
+    public EmittedTlsRuntime RequireTls() => Tls
+        ?? throw new InvalidOperationException("TLS runtime was not enabled for this compilation.");
 
     // Dgram module methods
     public MethodBuilder DgramCreateSocket { get; set; } = null!;

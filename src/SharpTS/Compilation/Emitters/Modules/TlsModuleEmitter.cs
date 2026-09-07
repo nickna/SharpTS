@@ -41,7 +41,7 @@ public sealed class TlsModuleEmitter : IBuiltInModuleEmitter
             "connect" => EmitConnect(emitter, arguments),
             "createSecureContext" => EmitCreateSecureContext(emitter, arguments),
             "checkServerIdentity" => EmitCheckServerIdentity(emitter, arguments),
-            "getCiphers" => EmitNoArgCall(emitter, emitter.Context.Runtime!.TlsGetCiphers),
+            "getCiphers" => EmitNoArgCall(emitter, emitter.Context.Runtime!.RequireTls().GetCiphers),
             "TLSSocket" => EmitCreateSocket(emitter),
             _ => false
         };
@@ -83,9 +83,9 @@ public sealed class TlsModuleEmitter : IBuiltInModuleEmitter
 
         return propertyName switch
         {
-            "DEFAULT_MIN_VERSION" => EmitConstantProperty(il, ctx.Runtime!.TlsGetDefaultMinVersion),
-            "DEFAULT_MAX_VERSION" => EmitConstantProperty(il, ctx.Runtime!.TlsGetDefaultMaxVersion),
-            "rootCertificates" => EmitConstantProperty(il, ctx.Runtime!.TlsRootCertificates),
+            "DEFAULT_MIN_VERSION" => EmitConstantProperty(il, ctx.Runtime!.RequireTls().GetDefaultMinVersion),
+            "DEFAULT_MAX_VERSION" => EmitConstantProperty(il, ctx.Runtime!.RequireTls().GetDefaultMaxVersion),
+            "rootCertificates" => EmitConstantProperty(il, ctx.Runtime!.RequireTls().RootCertificates),
             _ => false
         };
     }
@@ -124,7 +124,7 @@ public sealed class TlsModuleEmitter : IBuiltInModuleEmitter
         }
 
         // Call $Runtime.TlsCreateServer(options, callback)
-        il.Emit(OpCodes.Call, ctx.Runtime!.TlsCreateServer);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireTls().CreateServer);
         emitter.SetStackUnknown();
         return true;
     }
@@ -149,7 +149,7 @@ public sealed class TlsModuleEmitter : IBuiltInModuleEmitter
         }
 
         // Call $Runtime.TlsConnect(portOrOptions, hostOrCallback, optionsOrNull, callbackOrNull)
-        il.Emit(OpCodes.Call, ctx.Runtime!.TlsConnect);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireTls().Connect);
         emitter.SetStackUnknown();
         return true;
     }
@@ -169,7 +169,7 @@ public sealed class TlsModuleEmitter : IBuiltInModuleEmitter
             il.Emit(OpCodes.Ldnull);
         }
 
-        il.Emit(OpCodes.Call, ctx.Runtime!.TlsCreateSecureContext);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireTls().CreateSecureContext);
         emitter.SetStackUnknown();
         return true;
     }
@@ -180,7 +180,7 @@ public sealed class TlsModuleEmitter : IBuiltInModuleEmitter
         var il = ctx.IL;
 
         // Call $Runtime.TlsCreateSocket() - creates a new $TlsSocket
-        il.Emit(OpCodes.Call, ctx.Runtime!.TlsCreateSocket);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireTls().CreateSocket);
         emitter.SetStackUnknown();
         return true;
     }

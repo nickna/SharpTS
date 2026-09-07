@@ -610,7 +610,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, typeof(SslStream).GetMethod("AuthenticateAsServer", [typeof(SslServerAuthenticationOptions)])!);
 
         // socket = new $TlsSocket(); populate
-        il.Emit(OpCodes.Newobj, runtime.TlsSocketCtor);
+        il.Emit(OpCodes.Newobj, runtime.RequireTls().SocketCtor);
         il.Emit(OpCodes.Stloc, socketLocal);
         EmitTlsPopulateSocket(il,
             loadSocket: () => il.Emit(OpCodes.Ldloc, socketLocal),

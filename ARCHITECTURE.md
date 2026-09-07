@@ -181,6 +181,14 @@ wrappers. `EmitAll` completes the component after type finalization. The 24 hand
 separate dependencies, and zlib retains
 its standalone output behavior.
 
+TLS uses `Tls` / `RequireTls()` for its eleven migrated module and socket handles.
+`EmitAll` creates it only for `UsesTls`, before socket/server phase 1. The declared
+`Connect` handle is also the source used to emit its deferred body after closure creation.
+Completion follows socket, runtime, and server finalization; net types remain separate
+dependencies. TLS-only constant and certificate emitters accept `EmittedTlsRuntime` directly.
+The shared built-in module registry still owns named-import dispatch (including
+`checkServerIdentity`); emitter-local closure and field state stays with the emitter.
+
 During emission, each handle becomes readable as soon as its declaration is assigned, so forward
 references do not require a method body to exist yet. An early read names the missing declaration.
 Completion is an orchestration boundary, not an IL verifier: body emission and type finalization
