@@ -1,5 +1,4 @@
 using SharpTS.Parsing;
-using SharpTS.Parsing.Visitors;
 using SharpTS.TypeSystem;
 
 namespace SharpTS.Compilation;
@@ -131,55 +130,27 @@ internal static class StablePrimitivePromiseThenAnalyzer
         };
     }
 
-    private sealed class BindingVisitor(TypeMap typeMap) : AstVisitorBase
+    private sealed class BindingVisitor(TypeMap typeMap) : FunctionScopedBindingVisitor
     {
         private readonly TypeMap _typeMap = typeMap;
-        private int _scope;
-        private int _nextScope;
         private Expr.Assign? _linearAssignmentStatement;
 
-        public HashSet<(int Scope, string Name)> Candidates { get; } = [];
-        public HashSet<(int Scope, string Name)> Disqualified { get; } = [];
-        public Dictionary<(int Scope, string Name), int> DeclarationCounts { get; } = [];
-        public Dictionary<(int Scope, string Name), int> TerminalCounts { get; } = [];
-        public Dictionary<(int Scope, string Name), List<Expr.Get>> Calls { get; } = [];
+        public HashSet<FunctionScopedBinding> Candidates { get; } = [];
+        public Dictionary<FunctionScopedBinding, int> TerminalCounts { get; } = [];
+        public Dictionary<FunctionScopedBinding, List<Expr.Get>> Calls { get; } = [];
         public HashSet<Expr.Get> DirectSeedCalls { get; } = new(ReferenceEqualityComparer.Instance);
-        private HashSet<(int Scope, string Name)> Terminated { get; } = [];
+        private HashSet<FunctionScopedBinding> Terminated { get; } = [];
 
-        protected override void VisitFunction(Stmt.Function statement) =>
-            InScope(() => base.VisitFunction(statement));
-
-        protected override void VisitArrowFunction(Expr.ArrowFunction expression) =>
-            InScope(() => base.VisitArrowFunction(expression));
-
-        private void InScope(Action visit)
+        protected override void OnDeclaration(FunctionScopedBinding key, Token name, Expr? initializer)
         {
-            int saved = _scope;
-            _scope = ++_nextScope;
-            visit();
-            _scope = saved;
-        }
-
-        protected override void VisitVar(Stmt.Var statement) =>
-            HandleDeclaration(statement.Name, statement.Initializer);
-
-        protected override void VisitConst(Stmt.Const statement) =>
-            HandleDeclaration(statement.Name, statement.Initializer);
-
-        private void HandleDeclaration(Token name, Expr? initializer)
-        {
-            var key = (_scope, name.Lexeme);
-            DeclarationCounts[key] = DeclarationCounts.GetValueOrDefault(key) + 1;
             // Top-level bindings can be observed through ESM exports (including
             // under an imported alias), so this deliberately remains a local-
             // binding optimization. Function-local bindings cannot become live
             // module cells unless another use below proves that they escape.
-            if (_scope != 0
+            if (key.Scope != 0
                 && initializer is not null
                 && IsIntrinsicResolveSeed(initializer))
                 Candidates.Add(key);
-            if (initializer is not null)
-                Visit(initializer);
         }
 
         protected override void VisitExpression(Stmt.Expression statement)
@@ -198,7 +169,7 @@ internal static class StablePrimitivePromiseThenAnalyzer
 
         protected override void VisitAssign(Expr.Assign expression)
         {
-            var key = (_scope, expression.Name.Lexeme);
+            var key = Binding(expression.Name);
             // The assignment's resulting value is itself observable when it is
             // nested in another expression (for example, consume(chain = ...)).
             // Only a discarded expression statement proves that no intermediate
@@ -215,7 +186,6 @@ internal static class StablePrimitivePromiseThenAnalyzer
                 return;
             }
 
-            Disqualified.Add(key);
             base.VisitAssign(expression);
         }
 
@@ -228,7 +198,7 @@ internal static class StablePrimitivePromiseThenAnalyzer
                     // Only `chain = chain.then(handler)` is a linear append.
                     // A bare or sibling call observes a distinct intermediate
                     // Promise and therefore cannot share the fused carrier.
-                    Disqualified.Add((_scope, receiver.Name.Lexeme));
+                    Disqualified.Add(Binding(receiver.Name));
                     VisitEligibleArguments(call);
                     return;
                 }
@@ -245,7 +215,7 @@ internal static class StablePrimitivePromiseThenAnalyzer
             base.VisitCall(expression);
         }
 
-        private void RecordCall((int Scope, string Name) key, Expr.Get method)
+        private void RecordCall(FunctionScopedBinding key, Expr.Get method)
         {
             if (!Calls.TryGetValue(key, out var calls))
                 Calls[key] = calls = [];
@@ -262,7 +232,7 @@ internal static class StablePrimitivePromiseThenAnalyzer
         {
             if (ExpressionUnwrapper.Unwrap(expression.Expression) is Expr.Variable variable)
             {
-                RecordTerminal((_scope, variable.Name.Lexeme));
+                RecordTerminal(Binding(variable.Name));
                 return;
             }
             base.VisitAwait(expression);
@@ -273,45 +243,19 @@ internal static class StablePrimitivePromiseThenAnalyzer
             if (statement.Value is not null
                 && ExpressionUnwrapper.Unwrap(statement.Value) is Expr.Variable variable)
             {
-                RecordTerminal((_scope, variable.Name.Lexeme));
+                RecordTerminal(Binding(variable.Name));
                 return;
             }
             base.VisitReturn(statement);
         }
 
-        private void RecordTerminal((int Scope, string Name) key)
+        private void RecordTerminal(FunctionScopedBinding key)
         {
             TerminalCounts[key] = TerminalCounts.GetValueOrDefault(key) + 1;
             Terminated.Add(key);
         }
 
         protected override void VisitVariable(Expr.Variable expression) =>
-            Disqualified.Add((_scope, expression.Name.Lexeme));
-
-        protected override void VisitCompoundAssign(Expr.CompoundAssign expression)
-        {
-            Disqualified.Add((_scope, expression.Name.Lexeme));
-            base.VisitCompoundAssign(expression);
-        }
-
-        protected override void VisitLogicalAssign(Expr.LogicalAssign expression)
-        {
-            Disqualified.Add((_scope, expression.Name.Lexeme));
-            base.VisitLogicalAssign(expression);
-        }
-
-        protected override void VisitPrefixIncrement(Expr.PrefixIncrement expression)
-        {
-            if (expression.Operand is Expr.Variable variable)
-                Disqualified.Add((_scope, variable.Name.Lexeme));
-            base.VisitPrefixIncrement(expression);
-        }
-
-        protected override void VisitPostfixIncrement(Expr.PostfixIncrement expression)
-        {
-            if (expression.Operand is Expr.Variable variable)
-                Disqualified.Add((_scope, variable.Name.Lexeme));
-            base.VisitPostfixIncrement(expression);
-        }
+            Disqualified.Add(Binding(expression.Name));
     }
 }

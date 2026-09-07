@@ -1,5 +1,4 @@
 using SharpTS.Parsing;
-using SharpTS.Parsing.Visitors;
 using SharpTS.TypeSystem;
 
 namespace SharpTS.Compilation;
@@ -53,49 +52,18 @@ internal static class StableMapIterationAnalyzer
     private static bool IsNumber(TypeInfo? type) =>
         type is TypeInfo.Primitive { Type: TokenType.TYPE_NUMBER } or TypeInfo.NumberLiteral;
 
-    private sealed class ReceiverVisitor(TypeMap typeMap) : AstVisitorBase
+    private sealed class ReceiverVisitor(TypeMap typeMap) : FunctionScopedBindingVisitor
     {
         private readonly TypeMap _typeMap = typeMap;
-        private readonly Stack<(int Scope, string Name)> _activeMapIterations = new();
+        private readonly Stack<FunctionScopedBinding> _activeMapIterations = new();
         private Expr.Call? _discardedCall;
-        private int _scope;
-        private int _nextScope;
 
-        public HashSet<(int Scope, string Name)> Candidates { get; } = [];
-        public HashSet<(int Scope, string Name)> Disqualified { get; } = [];
-        public Dictionary<(int Scope, string Name), int> DeclarationCounts { get; } = [];
-        public Dictionary<(int Scope, string Name), List<Stmt.ForOf>> Loops { get; } = [];
+        public HashSet<FunctionScopedBinding> Candidates { get; } = [];
+        public Dictionary<FunctionScopedBinding, List<Stmt.ForOf>> Loops { get; } = [];
         public bool ContainsDirectEval { get; private set; }
 
-        protected override void VisitFunction(Stmt.Function statement) =>
-            InScope(() => base.VisitFunction(statement));
-
-        protected override void VisitArrowFunction(Expr.ArrowFunction expression) =>
-            InScope(() => base.VisitArrowFunction(expression));
-
-        private void InScope(Action visit)
+        protected override void OnDeclaration(FunctionScopedBinding key, Token name, Expr? initializer)
         {
-            int saved = _scope;
-            _scope = ++_nextScope;
-            visit();
-            _scope = saved;
-        }
-
-        protected override void VisitVar(Stmt.Var statement)
-        {
-            HandleDeclaration(statement.Name, statement.Initializer);
-        }
-
-        protected override void VisitConst(Stmt.Const statement)
-        {
-            HandleDeclaration(statement.Name, statement.Initializer);
-        }
-
-        private void HandleDeclaration(Token name, Expr? initializer)
-        {
-            var key = (_scope, name.Lexeme);
-            DeclarationCounts[key] = DeclarationCounts.GetValueOrDefault(key) + 1;
-
             if (initializer is Expr.New
                 {
                     Callee: Expr.Variable { Name.Lexeme: "Map" },
@@ -107,16 +75,13 @@ internal static class StableMapIterationAnalyzer
             {
                 Candidates.Add(key);
             }
-
-            if (initializer != null)
-                Visit(initializer);
         }
 
         protected override void VisitForOf(Stmt.ForOf statement)
         {
             if (statement.Iterable is Expr.Variable receiver)
             {
-                var key = (_scope, receiver.Name.Lexeme);
+                var key = Binding(receiver.Name);
                 if (!Loops.TryGetValue(key, out var loops))
                     Loops[key] = loops = [];
                 loops.Add(statement);
@@ -159,7 +124,7 @@ internal static class StableMapIterationAnalyzer
                 && IsNumber(_typeMap.Get(key))
                 && IsNumber(_typeMap.Get(value))
                 && ReferenceEquals(expression, _discardedCall)
-                && !_activeMapIterations.Contains((_scope, receiver.Name.Lexeme)))
+                && !_activeMapIterations.Contains(Binding(receiver.Name)))
             {
                 Visit(key);
                 Visit(value);
@@ -197,42 +162,10 @@ internal static class StableMapIterationAnalyzer
         }
 
         protected override void VisitVariable(Expr.Variable expression) =>
-            Disqualified.Add((_scope, expression.Name.Lexeme));
-
-        protected override void VisitAssign(Expr.Assign expression)
-        {
-            Disqualified.Add((_scope, expression.Name.Lexeme));
-            base.VisitAssign(expression);
-        }
-
-        protected override void VisitCompoundAssign(Expr.CompoundAssign expression)
-        {
-            Disqualified.Add((_scope, expression.Name.Lexeme));
-            base.VisitCompoundAssign(expression);
-        }
-
-        protected override void VisitLogicalAssign(Expr.LogicalAssign expression)
-        {
-            Disqualified.Add((_scope, expression.Name.Lexeme));
-            base.VisitLogicalAssign(expression);
-        }
-
-        protected override void VisitPrefixIncrement(Expr.PrefixIncrement expression)
-        {
-            if (expression.Operand is Expr.Variable variable)
-                Disqualified.Add((_scope, variable.Name.Lexeme));
-            base.VisitPrefixIncrement(expression);
-        }
-
-        protected override void VisitPostfixIncrement(Expr.PostfixIncrement expression)
-        {
-            if (expression.Operand is Expr.Variable variable)
-                Disqualified.Add((_scope, variable.Name.Lexeme));
-            base.VisitPostfixIncrement(expression);
-        }
+            Disqualified.Add(Binding(expression.Name));
     }
 
-    private sealed class EntryUseVisitor(string entryName) : AstVisitorBase
+    private sealed class EntryUseVisitor(string entryName) : VariableWriteVisitor
     {
         private readonly string _entryName = entryName;
         public bool Safe { get; private set; } = true;
@@ -323,25 +256,10 @@ internal static class StableMapIterationAnalyzer
                 Safe = false;
         }
 
-        protected override void VisitAssign(Expr.Assign expression)
+        protected override void OnVariableWrite(Token name)
         {
-            if (expression.Name.Lexeme == _entryName)
+            if (name.Lexeme == _entryName)
                 Safe = false;
-            base.VisitAssign(expression);
-        }
-
-        protected override void VisitCompoundAssign(Expr.CompoundAssign expression)
-        {
-            if (expression.Name.Lexeme == _entryName)
-                Safe = false;
-            base.VisitCompoundAssign(expression);
-        }
-
-        protected override void VisitLogicalAssign(Expr.LogicalAssign expression)
-        {
-            if (expression.Name.Lexeme == _entryName)
-                Safe = false;
-            base.VisitLogicalAssign(expression);
         }
 
         protected override void VisitPrefixIncrement(Expr.PrefixIncrement expression)

@@ -1,5 +1,4 @@
 using SharpTS.Parsing;
-using SharpTS.Parsing.Visitors;
 using SharpTS.TypeSystem;
 
 namespace SharpTS.Compilation;
@@ -106,15 +105,11 @@ public static class TypedArrayHoistAnalyzer
             new(ReferenceEqualityComparer.Instance);
     }
 
-    private sealed class StableBackingVisitor(TypeMap typeMap) : AstVisitorBase
+    private sealed class StableBackingVisitor(TypeMap typeMap) : FunctionScopedBindingVisitor
     {
         private readonly TypeMap _typeMap = typeMap;
-        private int _scope;
-        private int _nextScope;
 
-        public Dictionary<(int Scope, string Name), StableBackingCandidate> Candidates { get; } = [];
-        public Dictionary<(int Scope, string Name), int> DeclarationCounts { get; } = [];
-        public HashSet<(int Scope, string Name)> Disqualified { get; } = [];
+        public Dictionary<FunctionScopedBinding, StableBackingCandidate> Candidates { get; } = [];
         public bool ContainsDirectEval { get; private set; }
         public bool IntrinsicConstructorIsObservable { get; private set; }
 
@@ -122,31 +117,11 @@ public static class TypedArrayHoistAnalyzer
         {
             if (TypedArrayElementLayout.IsSupportedConstructor(statement.Name.Lexeme))
                 IntrinsicConstructorIsObservable = true;
-            InScope(() => base.VisitFunction(statement));
+            base.VisitFunction(statement);
         }
 
-        protected override void VisitArrowFunction(Expr.ArrowFunction expression) =>
-            InScope(() => base.VisitArrowFunction(expression));
-
-        private void InScope(Action visit)
+        protected override void OnDeclaration(FunctionScopedBinding key, Token name, Expr? initializer)
         {
-            int saved = _scope;
-            _scope = ++_nextScope;
-            visit();
-            _scope = saved;
-        }
-
-        protected override void VisitVar(Stmt.Var statement) =>
-            HandleDeclaration(statement.Name, statement.Initializer);
-
-        protected override void VisitConst(Stmt.Const statement) =>
-            HandleDeclaration(statement.Name, statement.Initializer);
-
-        private void HandleDeclaration(Token name, Expr? initializer)
-        {
-            var key = (_scope, name.Lexeme);
-            DeclarationCounts[key] = DeclarationCounts.GetValueOrDefault(key) + 1;
-
             if (TypedArrayElementLayout.IsSupportedConstructor(name.Lexeme))
                 IntrinsicConstructorIsObservable = true;
 
@@ -162,9 +137,6 @@ public static class TypedArrayHoistAnalyzer
             {
                 Candidates.TryAdd(key, new StableBackingCandidate(typedArray.ElementType));
             }
-
-            if (initializer != null)
-                Visit(initializer);
         }
 
         protected override void VisitNew(Expr.New expression)
@@ -257,7 +229,7 @@ public static class TypedArrayHoistAnalyzer
                 return false;
             }
 
-            var key = (_scope, receiver.Name.Lexeme);
+            var key = Binding(receiver.Name);
             if (Candidates.TryGetValue(key, out var candidate)
                 && candidate.ElementType == typedArray.ElementType)
             {
@@ -270,46 +242,14 @@ public static class TypedArrayHoistAnalyzer
         {
             if (TypedArrayElementLayout.IsSupportedConstructor(expression.Name.Lexeme))
                 IntrinsicConstructorIsObservable = true;
-            Disqualified.Add((_scope, expression.Name.Lexeme));
+            Disqualified.Add(Binding(expression.Name));
         }
 
-        protected override void VisitAssign(Expr.Assign expression)
+        protected override void OnVariableWrite(Token name)
         {
-            NoteAssignment(expression.Name.Lexeme);
-            base.VisitAssign(expression);
-        }
-
-        protected override void VisitCompoundAssign(Expr.CompoundAssign expression)
-        {
-            NoteAssignment(expression.Name.Lexeme);
-            base.VisitCompoundAssign(expression);
-        }
-
-        protected override void VisitLogicalAssign(Expr.LogicalAssign expression)
-        {
-            NoteAssignment(expression.Name.Lexeme);
-            base.VisitLogicalAssign(expression);
-        }
-
-        protected override void VisitPrefixIncrement(Expr.PrefixIncrement expression)
-        {
-            if (expression.Operand is Expr.Variable variable)
-                NoteAssignment(variable.Name.Lexeme);
-            base.VisitPrefixIncrement(expression);
-        }
-
-        protected override void VisitPostfixIncrement(Expr.PostfixIncrement expression)
-        {
-            if (expression.Operand is Expr.Variable variable)
-                NoteAssignment(variable.Name.Lexeme);
-            base.VisitPostfixIncrement(expression);
-        }
-
-        private void NoteAssignment(string name)
-        {
-            if (TypedArrayElementLayout.IsSupportedConstructor(name))
+            if (TypedArrayElementLayout.IsSupportedConstructor(name.Lexeme))
                 IntrinsicConstructorIsObservable = true;
-            Disqualified.Add((_scope, name));
+            base.OnVariableWrite(name);
         }
 
         private static bool IsDirectCompoundOperator(TokenType op) => op is
@@ -319,7 +259,7 @@ public static class TypedArrayHoistAnalyzer
             TokenType.GREATER_GREATER_EQUAL;
     }
 
-    private sealed class TypedArrayAccessVisitor(TypeMap typeMap) : AstVisitorBase
+    private sealed class TypedArrayAccessVisitor(TypeMap typeMap) : VariableWriteVisitor
     {
         private readonly TypeMap _typeMap = typeMap;
 
@@ -347,37 +287,7 @@ public static class TypedArrayHoistAnalyzer
             base.VisitCompoundSetIndex(expr);
         }
 
-        protected override void VisitAssign(Expr.Assign expr)
-        {
-            Reassigned.Add(expr.Name.Lexeme);
-            base.VisitAssign(expr);
-        }
-
-        protected override void VisitCompoundAssign(Expr.CompoundAssign expr)
-        {
-            Reassigned.Add(expr.Name.Lexeme);
-            base.VisitCompoundAssign(expr);
-        }
-
-        protected override void VisitLogicalAssign(Expr.LogicalAssign expr)
-        {
-            Reassigned.Add(expr.Name.Lexeme);
-            base.VisitLogicalAssign(expr);
-        }
-
-        protected override void VisitPrefixIncrement(Expr.PrefixIncrement expr)
-        {
-            if (expr.Operand is Expr.Variable variable)
-                Reassigned.Add(variable.Name.Lexeme);
-            base.VisitPrefixIncrement(expr);
-        }
-
-        protected override void VisitPostfixIncrement(Expr.PostfixIncrement expr)
-        {
-            if (expr.Operand is Expr.Variable variable)
-                Reassigned.Add(variable.Name.Lexeme);
-            base.VisitPostfixIncrement(expr);
-        }
+        protected override void OnVariableWrite(Token name) => Reassigned.Add(name.Lexeme);
 
         protected override void VisitCall(Expr.Call expr)
         {
