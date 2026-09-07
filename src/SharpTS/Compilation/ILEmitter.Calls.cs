@@ -204,9 +204,6 @@ public partial class ILEmitter
         // `'[object Math]' === Object.prototype.toString.call(Math)`.
         if (TryEmitObjectPrototypeToStringCall(c)) return;
 
-        // Function('return this')() — global-detection probe; see helper doc.
-        if (TryEmitFunctionReturnThisIdiom(c)) return;
-
         // `String(x)` / `Number(x)` / `Boolean(x)` — non-`new` coercion calls.
         // Compiled mode would otherwise resolve `String` as `typeof(string)` and
         // try to "call" the Type, which devolves to Stringify → wrong format for

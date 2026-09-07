@@ -508,6 +508,19 @@ public partial class ILEmitter
         var typeLocal = IL.DeclareLocal(_ctx.Types.Type);
         IL.Emit(OpCodes.Stloc, typeLocal);
 
+        // Test before evaluating arguments so Function's spread arguments use
+        // the ordinary call expansion exactly once.
+        var notFunctionType = IL.DefineLabel();
+        var functionDone = IL.DefineLabel();
+        IL.Emit(OpCodes.Ldloc, typeLocal);
+        IL.Emit(OpCodes.Ldtoken, _ctx.Runtime!.TSFunctionType);
+        IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(_ctx.Types.Type, "GetTypeFromHandle", _ctx.Types.RuntimeTypeHandle));
+        IL.Emit(OpCodes.Bne_Un, notFunctionType);
+        EmitArgsArrayWithSpread(n.Arguments);
+        IL.Emit(OpCodes.Call, _ctx.Runtime.FunctionConstructor);
+        IL.Emit(OpCodes.Br, functionDone);
+        IL.MarkLabel(notFunctionType);
+
         List<LocalBuilder> argTemps = [];
         foreach (var arg in n.Arguments)
         {
@@ -685,6 +698,7 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Ldloc, argsArrayLocal);
         IL.Emit(OpCodes.Callvirt, invokeMethod);
         IL.MarkLabel(constructionDone);
+        IL.MarkLabel(functionDone);
     }
 
     /// <summary>

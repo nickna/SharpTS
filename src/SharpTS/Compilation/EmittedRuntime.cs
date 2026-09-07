@@ -85,6 +85,7 @@ public class EmittedRuntime
     /// Use when MethodInfo might not support GetParameters() (e.g., MethodBuilder tokens in persisted assemblies).
     /// </summary>
     public ConstructorBuilder TSFunctionCtorWithCache { get; set; } = null!;
+    public MethodBuilder FunctionConstructor { get; set; } = null!;
     public MethodBuilder TSFunctionInvoke { get; set; } = null!;
     public MethodBuilder TSFunctionInvokeWithThis { get; set; } = null!;
     public MethodBuilder TSFunctionGetTarget { get; set; } = null!;

@@ -391,7 +391,7 @@ public partial class RuntimeEmitter
         // Function call form. Bare Function is represented by the $TSFunction
         // Type token; calling it (including through the GeneratorFunction
         // constructor identity currently exposed by generator prototypes)
-        // produces the same anonymous callable shell as `new Function(...)`.
+        // uses the same source contract as `new Function(...)`.
         var notFunctionTypeLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, _types.Type);
@@ -401,25 +401,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "op_Equality",
             [_types.Type, _types.Type])!);
         il.Emit(OpCodes.Brfalse, notFunctionTypeLabel);
-        var dynamicFunctionLengthLocal = il.DeclareLocal(_types.Int32);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Ldlen);
-        il.Emit(OpCodes.Conv_I4);
-        il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Sub);
-        il.Emit(OpCodes.Stloc, dynamicFunctionLengthLocal);
-        var functionLengthNonNegative = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, dynamicFunctionLengthLocal);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Bge, functionLengthNonNegative);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Stloc, dynamicFunctionLengthLocal);
-        il.MarkLabel(functionLengthNonNegative);
-        il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Ldstr, "anonymous");
-        il.Emit(OpCodes.Ldloc, dynamicFunctionLengthLocal);
-        il.Emit(OpCodes.Newobj, runtime.TSFunctionCtorWithCache);
+        il.Emit(OpCodes.Call, runtime.FunctionConstructor);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notFunctionTypeLabel);
 

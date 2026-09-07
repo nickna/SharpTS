@@ -201,9 +201,8 @@ public class GlobalThisTests
     }
 
     // #271: the lodash/core-js `Function('return this')()` global probe yields
-    // the same real globalThis value (compiled mode; the interpreter rejects the
-    // dynamic Function constructor, so this is compiled-only).
-    [Theory, CompiledOnlyData]
+    // the same real globalThis value in both execution modes.
+    [Theory, ModeData]
     public void GlobalThis_FunctionReturnThisProbe_IsGlobalThis(ExecutionMode mode)
     {
         var result = TestHarness.Run("""
