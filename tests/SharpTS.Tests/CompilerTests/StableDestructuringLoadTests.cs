@@ -179,26 +179,56 @@ public sealed partial class StableDestructuringLoadTests
         Assert.DoesNotContain(reductionInstructions, instruction =>
             instruction.Member?.Name == "get_IsMaterialized");
 
-        objectLoop(1_000);
-        runDirect(1_000);
-        long before = GC.GetAllocatedBytesForCurrentThread();
-        objectLoop(1_000);
-        long objectSmallAllocated = GC.GetAllocatedBytesForCurrentThread() - before;
-        before = GC.GetAllocatedBytesForCurrentThread();
-        objectLoop(100_000);
-        long objectLargeAllocated = GC.GetAllocatedBytesForCurrentThread() - before;
-        before = GC.GetAllocatedBytesForCurrentThread();
-        runDirect(1_000);
-        long directSmallAllocated = GC.GetAllocatedBytesForCurrentThread() - before;
-        before = GC.GetAllocatedBytesForCurrentThread();
-        runDirect(100_000);
-        long directLargeAllocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        long objectSmallAllocated = MeasureMinimumLoopAllocations(objectLoop, 1_000, 7_000);
+        long objectLargeAllocated = MeasureMinimumLoopAllocations(objectLoop, 100_000, 700_000);
+        long directSmallAllocated = MeasureMinimumLoopAllocations(runDirect, 1_000, 7_000);
+        long directLargeAllocated = MeasureMinimumLoopAllocations(runDirect, 100_000, 700_000);
 
         Assert.True(objectLargeAllocated <= objectSmallAllocated + 1_024,
             $"Object destructuring allocations scaled: {objectSmallAllocated} vs {objectLargeAllocated}.");
         Assert.True(directLargeAllocated <= directSmallAllocated + 1_024,
             $"Direct record-read allocations scaled: {directSmallAllocated} vs {directLargeAllocated}.");
         Assert.Empty(TestHarness.CompileAndVerifyOnly(source));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void AllocationSampling_DistinguishesTransientOverheadFromScaling(bool allocationsScaleWithIterations)
+    {
+        int calls = 0;
+        double Loop(double iterations)
+        {
+            if (allocationsScaleWithIterations)
+                GC.KeepAlive(new byte[(int)iterations]);
+            else if (++calls % 2 == 0)
+                GC.KeepAlive(new byte[16_384]);
+            return iterations * 7;
+        }
+
+        long small = MeasureMinimumLoopAllocations(Loop, 1_000, 7_000);
+        long large = MeasureMinimumLoopAllocations(Loop, 100_000, 700_000);
+        Assert.Equal(allocationsScaleWithIterations, large > small + 1_024);
+    }
+
+    private static long MeasureMinimumLoopAllocations(
+        Func<double, double> loop, double iterations, double expectedResult)
+    {
+        Assert.Equal(expectedResult, loop(iterations));
+
+        // Compare steady-state floors so transient runtime bookkeeping cannot be
+        // mistaken for per-iteration allocation growth on busy CI runners.
+        // Persistent per-iteration allocations remain in every sample.
+        long minimum = long.MaxValue;
+        for (int sample = 0; sample < 5; sample++)
+        {
+            long before = GC.GetAllocatedBytesForCurrentThread();
+            double result = loop(iterations);
+            long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+            Assert.Equal(expectedResult, result);
+            minimum = Math.Min(minimum, allocated);
+        }
+        return minimum;
     }
 
     [Theory, ModeData]
