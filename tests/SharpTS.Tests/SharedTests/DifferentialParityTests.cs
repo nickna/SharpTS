@@ -18,7 +18,7 @@ namespace SharpTS.Tests.SharedTests;
 /// coercion, strings, JSON, collections). It is a green regression GATE: every snippet
 /// here currently agrees across modes. Snippets the harness found to diverge are kept in
 /// <see cref="ParityCorpus.KnownDivergences"/> and pinned by
-/// <see cref="KnownDivergence_StillDiverges"/>, so the gate stays green while each
+/// <see cref="KnownDivergences_StillDiverge"/>, so the gate stays green while each
 /// divergence is tracked (and a fix trips the pin, prompting promotion to the corpus).
 /// </summary>
 public class DifferentialParityTests
@@ -31,14 +31,14 @@ public class DifferentialParityTests
     public void InterpreterAndCompiledAgree(string name)
     {
         var source = ParityCorpus.Snippets[name];
-        var interp = Capture(() => TestHarness.RunInterpreted(source));
-        var compiled = Capture(() => TestHarness.RunCompiled(source));
+        var interp = TestHarness.RunInterpreted(source);
+        var compiled = TestHarness.RunCompiled(source);
         Assert.True(interp == compiled,
             $"interp/compiled divergence for '{name}':\n--- interpreted ---\n{interp}\n--- compiled ---\n{compiled}\n--- source ---\n{source}");
     }
 
     /// <summary>
-    /// Runs one mode and returns its stdout, or a normalized error marker if it threw.
+    /// For documented known divergences only: returns stdout or a normalized error marker.
     /// Thrown errors are reduced to their CLR type so a snippet that crashes in one mode
     /// shows up as a mismatch against the other mode's real output, without flaking on
     /// the exact (mode-specific) error wording.
@@ -94,7 +94,7 @@ internal static class ParityCorpus
 
         // ---- coercion ----
         ["coerce-concat"] = "console.log('' + 1, '' + true, '' + null, '' + undefined, '' + 1.5);",
-        ["coerce-add"] = "console.log(1 + '2', '3' + 4, true + 1, null + 1, undefined + 1, 1 + null, 2 + true);",
+        ["coerce-add"] = "console.log(1 + '2', '3' + 4, (true as any) + 1, (null as any) + 1, (undefined as any) + 1, 1 + (null as any), 2 + (true as any));",
         ["coerce-loose-eq"] = "console.log(0 == false, '' == false, '0' == 0, null == undefined, 1 == '1', 'true' == true);",
         ["coerce-truthy"] = "console.log(!!0, !!'', !!null, !!undefined, !!NaN, !!'x', !![], !!{}, !!0.0);",
         // Array -> string coercion uses Array.prototype.toString (join), not the debug format.
@@ -225,7 +225,7 @@ internal static class ParityCorpus
 
     /// <summary>
     /// Snippets the harness found to DIVERGE — real interp↔compiled bugs, kept out of the
-    /// green gate and pinned by <c>DifferentialParityTests.KnownDivergence_StillDiverges</c>
+    /// green gate and pinned by <c>DifferentialParityTests.KnownDivergences_StillDiverge</c>
     /// so a future fix prompts promotion into <see cref="Snippets"/>. Each value is
     /// (source, note) where the note records which mode is correct.
     /// </summary>

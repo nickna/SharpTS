@@ -1,3 +1,5 @@
+using SharpTS.Conformance;
+
 namespace SharpTS.Test262;
 
 /// <summary>
@@ -7,6 +9,11 @@ namespace SharpTS.Test262;
 /// </summary>
 public static class Test262Paths
 {
+    public static string RequireRoot() => ConformanceInputs.RequireRoot(TryFindRoot(), "test262");
+
+    public static string RequireProjectDir() => TryFindProjectDir()
+        ?? throw new InvalidOperationException("SharpTS.Test262 project directory missing.");
+
     public static string GetCorpusRevision(string root)
     {
         var startInfo = new System.Diagnostics.ProcessStartInfo("git")
@@ -37,7 +44,7 @@ public static class Test262Paths
     /// <summary>
     /// Walks up from <see cref="AppContext.BaseDirectory"/> looking for
     /// <c>external/test262/harness/sta.js</c>. Returns null when the submodule
-    /// hasn't been initialized — callers should skip rather than fail.
+    /// hasn't been initialized — corpus tests use RequireRoot to fail with setup instructions.
     /// </summary>
     public static string? TryFindRoot()
     {

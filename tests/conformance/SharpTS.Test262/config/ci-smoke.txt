@@ -1,0 +1,12 @@
+# Pinned by the repository submodule revision. Every selected case must Pass.
+test/built-ins/Array/15.4.5-1.js
+test/built-ins/Boolean/S15.6.1.1_A1_T1.js
+test/built-ins/Error/cause_abrupt.js
+test/built-ins/JSON/15.12-0-1.js
+test/built-ins/Math/E/prop-desc.js
+test/built-ins/Number/15.7.3-1.js
+test/built-ins/Object/S15.2.1.1_A1_T1.js
+test/built-ins/Promise/all/S25.4.4.1_A1.1_T1.js
+test/built-ins/RegExp/15.10.2.15-6-1.js
+test/built-ins/String/15.5.5.5.2-1-1.js
+test/language/expressions/call/11.2.3-3_1.js

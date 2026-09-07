@@ -146,7 +146,7 @@ public partial class Parser
                 return DispatchAssignmentTarget(grouping.Expression, value, errorMessage, onVariable, onGet, onGetIndex, onGetPrivate);
             case Expr.Variable variable:
                 if (_isStrictMode && (variable.Name.Lexeme == "eval" || variable.Name.Lexeme == "arguments"))
-                    throw new Exception("SyntaxError: Unexpected eval or arguments in strict mode");
+                    throw new ParseError("SyntaxError: Unexpected eval or arguments in strict mode");
                 return onVariable(variable.Name, value);
             // `undefined = v` must PARSE (it's an identifier-shaped target) and fail in the
             // CHECKER with TS2539 ("Cannot assign to 'undefined' because it is not a variable")
@@ -168,7 +168,7 @@ public partial class Parser
             case Expr.GetIndex getIndex:
                 return onGetIndex(getIndex, value);
             default:
-                throw new Exception(errorMessage);
+                throw new ParseError(errorMessage);
         }
     }
 
@@ -438,7 +438,7 @@ public partial class Parser
             Expr operand = Unary();
             if (operand is not (Expr.Variable or Expr.Get or Expr.GetIndex))
             {
-                throw new Exception("Invalid operand for prefix increment/decrement.");
+                throw new ParseError("Invalid operand for prefix increment/decrement.");
             }
             return new Expr.PrefixIncrement(op, operand);
         }
@@ -622,7 +622,7 @@ public partial class Parser
                 Token op = Previous();
                 if (expr is not (Expr.Variable or Expr.Get or Expr.GetIndex))
                 {
-                    throw new Exception("Invalid operand for postfix increment/decrement.");
+                    throw new ParseError("Invalid operand for postfix increment/decrement.");
                 }
                 expr = new Expr.PostfixIncrement(expr, op);
             }
@@ -805,7 +805,7 @@ public partial class Parser
             }
             else
             {
-                throw new Exception("Expect superclass method name.");
+                throw new ParseError("Expect superclass method name.");
             }
             return new Expr.Super(keyword, method);
         }
@@ -1156,7 +1156,7 @@ public partial class Parser
             Consume(TokenType.LEFT_PAREN, "Expect '(' after 'async' in async arrow function.");
             Expr? arrowFunc = TryParseArrowFunction(isAsync: true);
             if (arrowFunc != null) return arrowFunc;
-            throw new Exception("Parse Error: Expected arrow function after 'async ('.");
+            throw new ParseError("Parse Error: Expected arrow function after 'async ('.");
         }
         if (Check(TokenType.ASYNC))
         {
@@ -1215,7 +1215,7 @@ public partial class Parser
             return ParseTemplateLiteral();
         }
 
-        throw new Exception("Expect expression.");
+        throw new ParseError("Expect expression.");
     }
 
     /// <summary>
@@ -1267,7 +1267,7 @@ public partial class Parser
 
                 if (isRest && Check(TokenType.COMMA))
                 {
-                    throw new Exception("Parse Error: Rest parameter must be last.");
+                    throw new ParseError("Parse Error: Rest parameter must be last.");
                 }
             } while (Match(TokenType.COMMA));
         }
@@ -1414,7 +1414,7 @@ public partial class Parser
                         parameters.Add(parameter);
                         destructuredParams.Add((parameter.Name, pattern));
                     }
-                    catch
+                    catch (ParseError)
                     {
                         _current = savedPosition;
                         return null;
@@ -1468,7 +1468,7 @@ public partial class Parser
                 returnType = ParseFunctionTypeAnnotation();
                 returnTypeNode = TakeTypeNode();
             }
-            catch
+            catch (ParseError)
             {
                 _current = savedPosition;
                 return null;
@@ -1572,7 +1572,7 @@ public partial class Parser
             _current = savedPosition;
             return null;
         }
-        catch
+        catch (ParseError)
         {
             _current = savedPosition;
             return null;
@@ -1648,7 +1648,7 @@ public partial class Parser
                     // Rest parameter must be last
                     if (isRest && Check(TokenType.COMMA))
                     {
-                        throw new Exception("Parse Error: Rest parameter must be last.");
+                        throw new ParseError("Parse Error: Rest parameter must be last.");
                     }
                 }
             } while (Match(TokenType.COMMA));

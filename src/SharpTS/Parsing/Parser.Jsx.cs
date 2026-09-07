@@ -498,7 +498,7 @@ public partial class Parser
                             children.Add(isSpreadChild ? new Expr.Spread(child) : child);
                             childLines.Add(expressionLine);
                         }
-                        catch (ParseError ex)
+                        catch (ParseError ex) when (ex.TsCode is not null)
                         {
                             suppressNextSpreadRightBraceError = isSpreadChild;
                             int offset = Peek().Start;
@@ -507,7 +507,7 @@ public partial class Parser
                             childStart = offset >= 0 ? offset : _source!.Length;
                             continue;
                         }
-                        catch
+                        catch (ParseError)
                         {
                             suppressNextSpreadRightBraceError = isSpreadChild;
                             // Expression recovery inside JSX can fail after nested

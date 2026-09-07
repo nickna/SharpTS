@@ -4,12 +4,12 @@ namespace SharpTS.TypeScriptConformance;
 
 public class TypesBaselineIntegrationTests
 {
+    [Trait("Category", "Corpus")]
     [Fact]
     public void CurrentDiagnosticPasses_WithCompatibleTypesBaseline_ParseSuccessfully()
     {
-        string? root = TypeScriptConformancePaths.TryFindRoot();
-        string? projectDir = TypeScriptConformancePaths.TryFindProjectDir();
-        if (root is null || projectDir is null) return;
+        string? root = TypeScriptConformancePaths.RequireRoot();
+        string projectDir = TypeScriptConformancePaths.RequireProjectDir();
 
         string baselineIndex = Path.Combine(projectDir, "baselines", "interpreted.txt");
         int parsedCount = 0;
@@ -59,6 +59,7 @@ public class TypesBaselineIntegrationTests
         Assert.Equal(518, parsedCount);
     }
 
+    [Trait("Category", "Corpus")]
     [Theory]
     [InlineData("es2019/globalThisTypeIndexAccess.ts")]
     [InlineData("es2021/logicalAssignment/logicalAssignment9.ts")]
@@ -73,8 +74,7 @@ public class TypesBaselineIntegrationTests
     [InlineData("es2020/constructBigint.ts")]
     public void NamedPilotBaseline_ResolvesAndParses(string relativePath)
     {
-        string? root = TypeScriptConformancePaths.TryFindRoot();
-        if (root is null) return;
+        string? root = TypeScriptConformancePaths.RequireRoot();
 
         (TypeScriptBaselineResolution resolution, TypesBaselineDocument document) =
             ResolveAndParse(root, relativePath);
@@ -85,11 +85,11 @@ public class TypesBaselineIntegrationTests
         Assert.NotEmpty(document.Observations);
     }
 
+    [Trait("Category", "Corpus")]
     [Fact]
     public void PinnedMultiFileBaseline_ResolvesAndParsesEverySection()
     {
-        string? root = TypeScriptConformancePaths.TryFindRoot();
-        if (root is null) return;
+        string? root = TypeScriptConformancePaths.RequireRoot();
 
         (_, TypesBaselineDocument document) = ResolveAndParse(
             root,
@@ -99,14 +99,14 @@ public class TypesBaselineIntegrationTests
         Assert.All(document.Files, file => Assert.NotEmpty(file.Observations));
     }
 
+    [Trait("Category", "Corpus")]
     [Theory]
     [InlineData("es2020/modules/exportAsNamespace_exportAssignment.ts")]
     [InlineData("es2020/modules/exportAsNamespace_missingEmitHelpers.ts")]
     [InlineData("es2020/modules/exportAsNamespace_nonExistent.ts")]
     public void CurrentDiagnosticPassWithoutTypesFamily_IsNoBaseline(string relativePath)
     {
-        string? root = TypeScriptConformancePaths.TryFindRoot();
-        if (root is null) return;
+        string? root = TypeScriptConformancePaths.RequireRoot();
 
         string testPath = Path.Combine(
             TypeScriptConformancePaths.ConformanceDir(root),

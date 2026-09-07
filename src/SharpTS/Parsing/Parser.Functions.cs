@@ -129,7 +129,7 @@ public partial class Parser
                     // Rest parameter must be last
                     if (isRest && Check(TokenType.COMMA))
                     {
-                        throw new Exception("Parse Error: Rest parameter must be last.");
+                        throw new ParseError("Parse Error: Rest parameter must be last.");
                     }
                 }
             } while (Match(TokenType.COMMA));
@@ -217,7 +217,7 @@ public partial class Parser
 
             if (!seenNames.Add(param.Name.Lexeme))
             {
-                throw new Exception($"SyntaxError: Duplicate parameter name '{param.Name.Lexeme}' not allowed in strict mode");
+                throw new ParseError($"SyntaxError: Duplicate parameter name '{param.Name.Lexeme}' not allowed in strict mode");
             }
         }
     }
@@ -254,7 +254,7 @@ public partial class Parser
                 // Rest parameter must be last
                 if (isRest && Check(TokenType.COMMA))
                 {
-                    throw new Exception("Parse Error: Rest parameter must be last.");
+                    throw new ParseError("Parse Error: Rest parameter must be last.");
                 }
             } while (Match(TokenType.COMMA));
         }

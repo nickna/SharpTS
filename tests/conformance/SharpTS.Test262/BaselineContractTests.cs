@@ -63,11 +63,11 @@ public class BaselineContractTests
         }
     }
 
+    [Trait("Category", "Corpus")]
     [Fact]
     public void Corpus_revision_uses_a_process_scoped_safe_directory()
     {
-        var root = Test262Paths.TryFindRoot();
-        if (root is null) return;
+        var root = Test262Paths.RequireRoot();
 
         var revision = Test262Paths.GetCorpusRevision(root);
 

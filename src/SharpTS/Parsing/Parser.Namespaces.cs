@@ -103,7 +103,7 @@ public partial class Parser
             {
                 return ImportAliasDeclaration(isExported);
             }
-            throw new Exception($"Parse Error at line {Previous().Line}: ES6 imports not allowed inside namespaces. Use 'import X = Namespace.Member' syntax.");
+            throw new ParseError($"Parse Error at line {Previous().Line}: ES6 imports not allowed inside namespaces. Use 'import X = Namespace.Member' syntax.");
         }
 
         // Parse decorators for class declarations
@@ -152,7 +152,7 @@ public partial class Parser
         // If decorators were found but next token is not a class, report error
         if (decorators != null && decorators.Count > 0)
         {
-            throw new Exception($"Parse Error at line {decorators[0].AtToken.Line}: Decorators can only be applied to classes and class members.");
+            throw new ParseError($"Parse Error at line {decorators[0].AtToken.Line}: Decorators can only be applied to classes and class members.");
         }
 
         if (Match(TokenType.INTERFACE))
@@ -227,7 +227,7 @@ public partial class Parser
         // Namespace bodies may also contain ordinary statements (e.g. `s = t;` expression
         // statements). `export` must be followed by a declaration, so it can't reach here.
         if (isExported)
-            throw new Exception($"Parse Error at line {Peek().Line}: 'export' must be followed by a declaration in a namespace body.");
+            throw new ParseError($"Parse Error at line {Peek().Line}: 'export' must be followed by a declaration in a namespace body.");
         return Statement();
     }
 

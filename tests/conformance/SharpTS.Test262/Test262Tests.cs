@@ -1,3 +1,4 @@
+using SharpTS.Conformance;
 using System.Text;
 using Xunit;
 using Xunit.Abstractions;
@@ -42,16 +43,15 @@ public abstract class Test262TestsBase
             return;
         }
 
-        var test262Root = Test262Paths.TryFindRoot();
-        var projectDir = Test262Paths.TryFindProjectDir();
-        if (test262Root is null || projectDir is null)
-        {
-            _output.WriteLine("external/test262 or tests/conformance/SharpTS.Test262/ not found — run `git submodule update --init external/test262`");
-            return;
-        }
+        var test262Root = Test262Paths.RequireRoot();
+        var projectDir = Test262Paths.RequireProjectDir();
 
         var wideSweep = GetBool("SHARPTS_TEST262_WIDE_SWEEP");
         var updateBaseline = GetBool("SHARPTS_TEST262_UPDATE_BASELINE");
+
+        var baselinePath = Path.Combine(projectDir, "baselines",
+            mode == Test262ExecutionMode.Interpreted ? "interpreted.txt" : "compiled.txt");
+        if (!updateBaseline && !wideSweep) ConformanceInputs.RequireBaseline(baselinePath);
 
         var configDir = Path.Combine(projectDir, "config");
         var configFile = Path.Combine(configDir, wideSweep ? "wide-sweep.json" : "subset.json");
@@ -60,6 +60,7 @@ public abstract class Test262TestsBase
 
         var modeFolders = config.GetFoldersForMode(mode);
         var files = EnumerateTestFiles(test262Root, modeFolders);
+        ConformanceInputs.RequireCases(files.Count);
         _output.WriteLine($"[{mode}] enumerated {files.Count} test files from {modeFolders.Count} folders");
 
         var current = new SortedDictionary<string, string>(StringComparer.Ordinal);
@@ -142,10 +143,8 @@ public abstract class Test262TestsBase
             return;
         }
 
-        var baselinePath = Path.Combine(projectDir, "baselines",
-            mode == Test262ExecutionMode.Interpreted ? "interpreted.txt" : "compiled.txt");
 
-        if (updateBaseline || !File.Exists(baselinePath))
+        if (updateBaseline)
         {
             Test262Baseline.Write(baselinePath, current.Select(kv => (kv.Key, kv.Value)),
                 Test262Paths.GetCorpusRevision(test262Root));
@@ -197,7 +196,8 @@ public abstract class Test262TestsBase
         foreach (var folder in folders)
         {
             var absFolder = Path.Combine(test262Root, folder.Replace('/', Path.DirectorySeparatorChar));
-            if (!Directory.Exists(absFolder)) continue;
+            if (!Directory.Exists(absFolder))
+                throw new DirectoryNotFoundException($"Configured conformance folder missing: {absFolder}");
             foreach (var file in Directory.EnumerateFiles(absFolder, "*.js", SearchOption.AllDirectories))
             {
                 if (file.EndsWith("_FIXTURE.js", StringComparison.Ordinal)) continue;
@@ -248,6 +248,7 @@ public class Test262InterpretedTests : Test262TestsBase
 {
     public Test262InterpretedTests(ITestOutputHelper output) : base(output) { }
 
+    [Trait("Category", "Corpus")]
     [Fact]
     public void InterpretedBaseline() => RunBaseline(Test262ExecutionMode.Interpreted);
 }
@@ -257,6 +258,7 @@ public class Test262CompiledTests : Test262TestsBase
 {
     public Test262CompiledTests(ITestOutputHelper output) : base(output) { }
 
+    [Trait("Category", "Corpus")]
     [Fact]
     public void CompiledBaseline() => RunBaseline(Test262ExecutionMode.Compiled);
 }

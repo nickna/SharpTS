@@ -6,7 +6,7 @@
     (what CI runs) does not pick it up. Invoke explicitly:
         dotnet test tests/conformance/SharpTS.Test262/SharpTS.Test262.csproj
     Requires the Test262 submodule at external/test262/:
-        git submodule update init external/test262
+        Initialize external/test262 using the setup command in README.md.
   -->
 
   <PropertyGroup>
@@ -45,6 +45,10 @@
     <ProjectReference Include="..\SharpTS.Test262.Worker\SharpTS.Test262.Worker.csproj">
       <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
     </ProjectReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="../Shared/*.cs" Link="Infrastructure/%(Filename)%(Extension)" />
   </ItemGroup>
 
 </Project>

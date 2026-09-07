@@ -91,11 +91,16 @@ solution test loop unless that policy is changed deliberately.
 
 ### Running Tests
 
-Tests are xUnit tests in the `tests/SharpTS.Tests/` directory:
+The core xUnit suite lives in `tests/SharpTS.Tests/`. Use the standard PowerShell commands:
 
-```bash
-dotnet test
+```powershell
+./scripts/invoke-tests.ps1                  # Fast Unit layer
+./scripts/invoke-tests.ps1 -Suite Full      # Full hermetic core suite
+./scripts/invoke-tests.ps1 -Suite Coverage  # Isolated Unit coverage
 ```
+
+See the [test strategy](tests/README.md) for layer placement, diagnostic assertions,
+coverage scope, opt-in categories, and the separate conformance commands and CI gates.
 
 On Windows, the filesystem tests create real symbolic links. Enable Developer
 Mode (`ms-settings:developers`) and restart the terminal or IDE that runs the

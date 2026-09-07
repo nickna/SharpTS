@@ -29,4 +29,8 @@
     <ProjectReference Include="..\..\..\src\SharpTS\SharpTS.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Compile Include="../Shared/*.cs" Link="Infrastructure/%(Filename)%(Extension)" />
+  </ItemGroup>
+
 </Project>

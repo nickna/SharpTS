@@ -34,17 +34,13 @@ public class SmokeTest
     /// canonical <c>.then($DONE, $DONE)</c> shape and exercises both the
     /// host-callable interpreter path and the JS-shim compiled path.
     /// </summary>
+    [Trait("Category", "Corpus")]
     [Theory]
     [InlineData(Test262ExecutionMode.Interpreted)]
     [InlineData(Test262ExecutionMode.Compiled)]
     public void Promise_resolve_argNonThenable_AsyncDone(Test262ExecutionMode mode)
     {
-        var root = Test262Paths.TryFindRoot();
-        if (root is null)
-        {
-            _output.WriteLine("external/test262 not initialized");
-            return;
-        }
+        var root = Test262Paths.RequireRoot();
         var testPath = Path.Combine(
             Test262Paths.TestDir(root),
             "built-ins", "Promise", "resolve", "arg-non-thenable.js");
@@ -64,11 +60,11 @@ public class SmokeTest
     /// Pinpoints the exact line in species-ctor.js that throws after prop-desc.js,
     /// by progressively shrinking the source.
     /// </summary>
+    [Trait("Category", "Corpus")]
     [Fact(Skip = "diagnostic only — kept for repro of the issue#101 cross-test prototype leak")]
     public void Diagnostic_SpeciesCtorAfterPropDesc()
     {
-        var root = Test262Paths.TryFindRoot();
-        if (root is null) return;
+        var root = Test262Paths.RequireRoot();
         var testDir = Path.Combine(
             Test262Paths.TestDir(root),
             "built-ins", "RegExp", "prototype", "Symbol.split");
@@ -136,11 +132,11 @@ public class SmokeTest
     /// the harness. Confirms the bug is in the JS pattern itself, not in
     /// harness loading or shared state.
     /// </summary>
+    [Trait("Category", "Corpus")]
     [Fact(Skip = "diagnostic only — kept for repro of the issue#101 cross-test prototype leak")]
     public void Diagnostic_SpeciesCtorMinimal()
     {
-        var root = Test262Paths.TryFindRoot();
-        if (root is null) return;
+        var root = Test262Paths.RequireRoot();
         // Write a temp .js with the species-ctor pattern.
         var src = "var re = /x/iy; re.constructor = function() {}; re.constructor[Symbol.species] = function() { return /[db]/y; }; var r = RegExp.prototype[Symbol.split].call(re, 'abcde'); console.log(r);";
         var tmp = Path.GetTempFileName() + ".js";
@@ -158,11 +154,11 @@ public class SmokeTest
     /// directly to capture the exact outcome + message and confirm whether
     /// it's a runner-state issue or a code-path bug.
     /// </summary>
+    [Trait("Category", "Corpus")]
     [Fact]
     public void Diagnostic_SpeciesGetErr()
     {
-        var root = Test262Paths.TryFindRoot();
-        if (root is null) return;
+        var root = Test262Paths.RequireRoot();
         var path = Path.Combine(Test262Paths.TestDir(root),
             "built-ins", "RegExp", "prototype", "Symbol.split", "species-ctor-species-get-err.js");
         var runner = new Test262Runner(root, TimeSpan.FromSeconds(15), useNonCollectibleLoad: true);
@@ -170,11 +166,11 @@ public class SmokeTest
         _output.WriteLine($"{result.Outcome}: {result.Message}");
     }
 
+    [Trait("Category", "Corpus")]
     [Fact]
     public void Diagnostic_RegExpRegressions()
     {
-        var root = Test262Paths.TryFindRoot();
-        if (root is null) return;
+        var root = Test262Paths.RequireRoot();
         var paths = new[]
         {
             Path.Combine(Test262Paths.TestDir(root), "built-ins", "RegExp", "S15.10.4.1_A6_T1.js"),
@@ -189,11 +185,11 @@ public class SmokeTest
         }
     }
 
+    [Trait("Category", "Corpus")]
     [Fact]
     public void Diagnostic_CompiledThisValRegression()
     {
-        var root = Test262Paths.TryFindRoot();
-        if (root is null) return;
+        var root = Test262Paths.RequireRoot();
         var dir = Test262Paths.TestDir(root);
         var paths = new[]
         {
@@ -211,11 +207,11 @@ public class SmokeTest
         }
     }
 
+    [Trait("Category", "Corpus")]
     [Fact]
     public void Diagnostic_CompiledNotAConstructor()
     {
-        var root = Test262Paths.TryFindRoot();
-        if (root is null) return;
+        var root = Test262Paths.RequireRoot();
         var dir = Test262Paths.TestDir(root);
         var paths = new[]
         {
@@ -233,11 +229,11 @@ public class SmokeTest
         }
     }
 
+    [Trait("Category", "Corpus")]
     [Fact]
     public void Diagnostic_CompiledThisValNonObj()
     {
-        var root = Test262Paths.TryFindRoot();
-        if (root is null) return;
+        var root = Test262Paths.RequireRoot();
         var dir = Test262Paths.TestDir(root);
         var paths = new[]
         {
@@ -254,11 +250,11 @@ public class SmokeTest
         }
     }
 
+    [Trait("Category", "Corpus")]
     [Fact]
     public void Diagnostic_CoerceGlobal()
     {
-        var root = Test262Paths.TryFindRoot();
-        if (root is null) return;
+        var root = Test262Paths.RequireRoot();
         var path = Path.Combine(Test262Paths.TestDir(root),
             "built-ins", "RegExp", "prototype", "Symbol.replace", "coerce-global.js");
         var runner = new Test262Runner(root, TimeSpan.FromSeconds(15), useNonCollectibleLoad: true);
@@ -266,11 +262,11 @@ public class SmokeTest
         _output.WriteLine($"{result.Outcome}: {result.Message}");
     }
 
+    [Trait("Category", "Corpus")]
     [Fact]
     public void Diagnostic_RegExpExecRegression()
     {
-        var root = Test262Paths.TryFindRoot();
-        if (root is null) return;
+        var root = Test262Paths.RequireRoot();
         var tests = new[] { "S15.10.6.2_A6.js", "S15.10.6.2_A8.js", "S15.10.6.2_A9.js", "S15.10.6.2_A10.js", "S15.10.6.2_A11.js" };
         foreach (var t in tests)
         {
@@ -287,11 +283,11 @@ public class SmokeTest
     /// proto-walk / RangeError-for-huge-length cluster of #101 fixes by running
     /// a curated set of previously-failing tests in-process and reporting outcomes.
     /// </summary>
+    [Trait("Category", "Corpus")]
     [Fact]
     public void Diagnostic_ClusterFixes()
     {
-        var root = Test262Paths.TryFindRoot();
-        if (root is null) return;
+        var root = Test262Paths.RequireRoot();
         var tests = new[] {
             // BoundArrayMethod thisArg fix (compiled-mode dynamic dispatch)
             "test/built-ins/Array/prototype/map/15.4.4.19-5-10.js",
@@ -369,11 +365,11 @@ public class SmokeTest
     /// Diagnostic: scan ALL previously-failing Object.getOwnPropertyDescriptor
     /// tests to count impact of the LookupBuiltInStaticMember fix.
     /// </summary>
+    [Trait("Category", "Corpus")]
     [Fact]
     public void Diagnostic_GopdCluster()
     {
-        var root = Test262Paths.TryFindRoot();
-        if (root is null) return;
+        var root = Test262Paths.RequireRoot();
         var baselineFile = Path.Combine(Path.GetDirectoryName(typeof(SmokeTest).Assembly.Location)!,
             "..", "..", "..", "baselines", "compiled.txt");
         baselineFile = Path.GetFullPath(baselineFile);
@@ -400,11 +396,11 @@ public class SmokeTest
     /// Diagnostic: scan a sample of currently-Passing tests to verify the
     /// cluster fixes don't regress them.
     /// </summary>
+    [Trait("Category", "Corpus")]
     [Fact]
     public void Diagnostic_NoRegressions()
     {
-        var root = Test262Paths.TryFindRoot();
-        if (root is null) return;
+        var root = Test262Paths.RequireRoot();
         var baselineFile = Path.Combine(Path.GetDirectoryName(typeof(SmokeTest).Assembly.Location)!,
             "..", "..", "..", "baselines", "compiled.txt");
         baselineFile = Path.GetFullPath(baselineFile);
@@ -455,11 +451,11 @@ public class SmokeTest
     /// recent fixes touched. Reports how many now pass vs still fail. Used in
     /// lieu of full regen when xunit baseline write is acting up.
     /// </summary>
+    [Trait("Category", "Corpus")]
     [Fact]
     public void Diagnostic_PostFixAudit()
     {
-        var root = Test262Paths.TryFindRoot();
-        if (root is null) return;
+        var root = Test262Paths.RequireRoot();
         var baselineFile = Path.Combine(Path.GetDirectoryName(typeof(SmokeTest).Assembly.Location)!,
             "..", "..", "..", "baselines", "compiled.txt");
         baselineFile = Path.GetFullPath(baselineFile);
@@ -546,11 +542,11 @@ public class SmokeTest
     /// crashing testhost on memory pressure when the assembly load count
     /// gets too high).
     /// </summary>
+    [Trait("Category", "Corpus")]
     [Fact]
     public void Diagnostic_NativeErrorSubclassAudit()
     {
-        var root = Test262Paths.TryFindRoot();
-        if (root is null) return;
+        var root = Test262Paths.RequireRoot();
         var baselineFile = Path.Combine(Path.GetDirectoryName(typeof(SmokeTest).Assembly.Location)!,
             "..", "..", "..", "baselines", "compiled.txt");
         baselineFile = Path.GetFullPath(baselineFile);
@@ -617,11 +613,11 @@ public class SmokeTest
     /// messages. Lets me see why iter-* Promise tests are failing without
     /// running a full regen. Writes to /tmp/probe.txt.
     /// </summary>
+    [Trait("Category", "Corpus")]
     [Fact]
     public void Diagnostic_ProbeFailingTests()
     {
-        var root = Test262Paths.TryFindRoot();
-        if (root is null) return;
+        var root = Test262Paths.RequireRoot();
         var probes = new[] {
             "test/built-ins/Promise/any/iter-arg-is-undefined-reject.js",
             "test/built-ins/Promise/any/iter-arg-is-null-reject.js",
@@ -651,11 +647,11 @@ public class SmokeTest
     /// orchestrator path adds significant overhead vs raw subprocess
     /// pipe IPC.
     /// </summary>
+    [Trait("Category", "Corpus")]
     [Fact]
     public void Diagnostic_BatchedRunnerThroughput()
     {
-        var root = Test262Paths.TryFindRoot();
-        if (root is null) return;
+        var root = Test262Paths.RequireRoot();
         var testDir = Test262Paths.TestDir(root);
         // Throughput experiment: take a 1500-test mix matching the proportions
         // of the full subset.json — half Object (~3411/11K), then Array, Promise,
@@ -718,11 +714,11 @@ public class SmokeTest
             $"Pass: {pass}, Fail: {fail}, Skip: {skip}\n");
     }
 
+    [Trait("Category", "Corpus")]
     [Fact(Skip = "diagnostic only — kept for repro of the issue#101 cross-test prototype leak")]
     public void Diagnostic_SpeciesCtor()
     {
-        var root = Test262Paths.TryFindRoot();
-        if (root is null) return;
+        var root = Test262Paths.RequireRoot();
         var testDir = Path.Combine(
             Test262Paths.TestDir(root),
             "built-ins", "RegExp", "prototype", "Symbol.split");
@@ -756,11 +752,11 @@ public class SmokeTest
     /// regen only got 1.32× over serial, suggesting either disk/JIT
     /// contention, straggler batches, or orchestrator overhead.
     /// </summary>
+    [Trait("Category", "Corpus")]
     [Fact]
     public void Diagnostic_ParallelScaling()
     {
-        var root = Test262Paths.TryFindRoot();
-        if (root is null) return;
+        var root = Test262Paths.RequireRoot();
         var workerDll = Test262Paths.TryFindWorkerDll();
         if (workerDll is null)
         {
@@ -808,11 +804,11 @@ public class SmokeTest
     /// type-check, IL emit, save, ALC load, invoke). Lets us pinpoint where
     /// the per-test cost concentrates so we know what's worth optimizing.
     /// </summary>
+    [Trait("Category", "Corpus")]
     [Fact]
     public void Diagnostic_PerTestTimingBreakdown()
     {
-        var root = Test262Paths.TryFindRoot();
-        if (root is null) return;
+        var root = Test262Paths.RequireRoot();
         var testPath = Path.Combine(Test262Paths.TestDir(root),
             "built-ins", "Math", "abs", "S15.8.2.1_A1.js");
         if (!File.Exists(testPath)) return;
@@ -857,11 +853,11 @@ public class SmokeTest
     // test host with a fatal CLR error (0x80131506) at volume — see issue #964.
     // It is therefore skipped in normal runs; un-skip to profile the two load
     // modes against each other in isolation.
+    [Trait("Category", "Corpus")]
     [Fact(Skip = "diagnostic/profiling only — collectible-ALC arm crashes the host at volume (issue #964); un-skip to profile load modes")]
     public void Diagnostic_CompiledPhaseBreakdown()
     {
-        var root = Test262Paths.TryFindRoot();
-        if (root is null) { _output.WriteLine("external/test262 not initialized"); return; }
+        var root = Test262Paths.RequireRoot();
 
         var mathDir = Path.Combine(Test262Paths.TestDir(root), "built-ins", "Math");
         if (!Directory.Exists(mathDir)) { _output.WriteLine($"missing {mathDir}"); return; }
@@ -932,17 +928,13 @@ public class SmokeTest
         }
     }
 
+    [Trait("Category", "Corpus")]
     [Theory]
     [InlineData(Test262ExecutionMode.Interpreted)]
     [InlineData(Test262ExecutionMode.Compiled)]
     public void ArrayIsArray_existsAsFunction(Test262ExecutionMode mode)
     {
-        var root = Test262Paths.TryFindRoot();
-        if (root is null)
-        {
-            _output.WriteLine("external/test262 not initialized — run `git submodule update --init external/test262`");
-            return; // Soft-skip so local builds without the submodule still pass.
-        }
+        var root = Test262Paths.RequireRoot();
 
         var testPath = Path.Combine(
             Test262Paths.TestDir(root),

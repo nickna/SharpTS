@@ -5,8 +5,8 @@ namespace SharpTS.TypeScriptConformance;
 
 /// <summary>
 /// Scaffolding smoke test. Verifies the submodule is wired up and the path
-/// helpers find the expected directories. Soft-skips when the submodule is
-/// not initialized so local builds without the corpus still pass — the real
+/// helpers find the expected directories. Requires the pinned submodule;
+/// use the harness-only filter for local builds without the corpus. The real
 /// runner lands in issue #84.
 /// </summary>
 public class SmokeTest
@@ -15,15 +15,11 @@ public class SmokeTest
 
     public SmokeTest(ITestOutputHelper output) => _output = output;
 
+    [Trait("Category", "Corpus")]
     [Fact]
     public void Submodule_LayoutIsResolvable()
     {
-        var root = TypeScriptConformancePaths.TryFindRoot();
-        if (root is null)
-        {
-            _output.WriteLine("external/typescript not initialized — run `git submodule update --init external/typescript`");
-            return;
-        }
+        var root = TypeScriptConformancePaths.RequireRoot();
 
         _output.WriteLine($"TypeScript checkout: {root}");
 

@@ -59,7 +59,7 @@ public partial class Parser
                 }
                 else
                 {
-                    throw new Exception($"Line {Peek().Line}: Expect '{{' or '*' after ',' in import.");
+                    throw new ParseError($"Line {Peek().Line}: Expect '{{' or '*' after ',' in import.");
                 }
             }
         }
@@ -69,7 +69,7 @@ public partial class Parser
         }
         else
         {
-            throw new Exception($"Line {Peek().Line}: Expect import specifiers.");
+            throw new ParseError($"Line {Peek().Line}: Expect import specifiers.");
         }
 
         Consume(TokenType.FROM, "Expect 'from' after import specifiers.");
@@ -237,7 +237,7 @@ public partial class Parser
         {
             if (classDecorators is { Count: > 0 })
             {
-                throw new Exception($"Parse Error at line {classDecorators[0].AtToken.Line}: Decorators are not valid here. Decorators can only be applied to classes and class members.");
+                throw new ParseError($"Parse Error at line {classDecorators[0].AtToken.Line}: Decorators are not valid here. Decorators can only be applied to classes and class members.");
             }
         }
 
@@ -364,7 +364,7 @@ public partial class Parser
             {
                 return ParseImportWithEquals(isExported: true);
             }
-            throw new Exception($"Parse Error at line {Peek().Line}: Expected import alias after 'export import' (e.g., 'export import X = Namespace.Member' or 'export import X = require(\"...\")')).");
+            throw new ParseError($"Parse Error at line {Peek().Line}: Expected import alias after 'export import' (e.g., 'export import X = Namespace.Member' or 'export import X = require(\"...\")')).");
         }
 
         // export function/class/const/let/interface/type/enum
@@ -472,7 +472,7 @@ public partial class Parser
         }
         else
         {
-            throw new Exception($"Line {Peek().Line}: Expect declaration after 'export'.");
+            throw new ParseError($"Line {Peek().Line}: Expect declaration after 'export'.");
         }
 
         return new Stmt.Export(keyword, decl, null, null, null, IsDefaultExport: false);
@@ -546,6 +546,6 @@ public partial class Parser
             var token = Advance();
             return new Token(TokenType.IDENTIFIER, token.Lexeme, null, token.Line);
         }
-        throw new Exception($"Parse Error at line {Peek().Line}: {errorMessage}");
+        throw new ParseError($"Parse Error at line {Peek().Line}: {errorMessage}");
     }
 }

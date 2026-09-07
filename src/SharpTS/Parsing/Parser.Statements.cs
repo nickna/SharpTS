@@ -117,7 +117,7 @@ public partial class Parser
             // 'for await' must be followed by 'of', not 'in' or traditional for
             if (isAsync)
             {
-                throw new Exception("'for await' can only be used with 'for...of' loops.");
+                throw new ParseError("'for await' can only be used with 'for...of' loops.");
             }
 
             // If we see 'in', this is a for...in loop
@@ -246,9 +246,9 @@ public partial class Parser
         {
             if (isAsync)
             {
-                throw new Exception("'for await' can only be used with 'for...of' loops.");
+                throw new ParseError("'for await' can only be used with 'for...of' loops.");
             }
-            throw new Exception("Destructuring in for loop requires 'of' keyword. Use 'for (const [a, b] of iterable)'.");
+            throw new ParseError("Destructuring in for loop requires 'of' keyword. Use 'for (const [a, b] of iterable)'.");
         }
 
         Expr iterable = Expression();
@@ -264,7 +264,7 @@ public partial class Parser
         {
             ArrayPattern arrayPattern => DesugarArrayPattern(arrayPattern, tempVarExpr),
             ObjectPattern objectPattern => DesugarObjectPattern(objectPattern, tempVarExpr),
-            _ => throw new Exception("Unexpected pattern type in for...of destructuring.")
+            _ => throw new ParseError("Unexpected pattern type in for...of destructuring.")
         };
 
         // Combine destructuring statement with original body
@@ -375,7 +375,7 @@ public partial class Parser
             }
             else
             {
-                throw new Exception("Expect 'case' or 'default' in switch body.");
+                throw new ParseError("Expect 'case' or 'default' in switch body.");
             }
         }
 
@@ -425,7 +425,7 @@ public partial class Parser
 
         if (catchBlock == null && finallyBlock == null)
         {
-            throw new Exception("Try statement must have catch or finally clause.");
+            throw new ParseError("Try statement must have catch or finally clause.");
         }
 
         return new Stmt.TryCatch(tryBlock, catchParam, catchBlock, finallyBlock, catchParamType, catchParamTypeNode);
@@ -439,7 +439,7 @@ public partial class Parser
         // A newline after 'throw' is a syntax error (throw must have an expression).
         if (HasLineTerminatorBeforeCurrent())
         {
-            throw new Exception("Illegal newline after 'throw'.");
+            throw new ParseError("Illegal newline after 'throw'.");
         }
 
         Expr value = Expression();
@@ -485,7 +485,7 @@ public partial class Parser
                 var decl = Declaration();
                 if (decl != null) statements.Add(decl);
             }
-            catch (Exception ex)
+            catch (ParseError ex)
             {
                 RecordError(ex.Message);
                 SynchronizeInBlock();

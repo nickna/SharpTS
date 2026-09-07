@@ -130,9 +130,9 @@ public partial class Parser(List<Token> tokens, DecoratorMode decoratorMode = De
                 var decl = Declaration();
                 if (decl != null) statements.Add(decl);
             }
-            catch (Exception ex)
+            catch (ParseError ex)
             {
-                RecordError(ex.Message, (ex as ParseError)?.TsCode);
+                RecordError(ex.Message, ex.TsCode);
                 Synchronize();
                 if (_diagnostics.HitErrorLimit)
                     return new ParseDiagnosticResult(statements, _diagnostics.Diagnostics, HitErrorLimit: true);
@@ -295,7 +295,7 @@ public partial class Parser(List<Token> tokens, DecoratorMode decoratorMode = De
     private Token Consume(TokenType type, string message)
     {
         if (Check(type)) return Advance();
-        throw new Exception(message);
+        throw new ParseError(message);
     }
 
     /// <summary>
@@ -392,7 +392,7 @@ public partial class Parser(List<Token> tokens, DecoratorMode decoratorMode = De
             return new Token(TokenType.IDENTIFIER, token.Lexeme, null, token.Line);
         }
 
-        throw new Exception(message);
+        throw new ParseError(message);
     }
 
     /// <summary>
@@ -465,7 +465,7 @@ public partial class Parser(List<Token> tokens, DecoratorMode decoratorMode = De
             return new Token(TokenType.IDENTIFIER, current.Lexeme, null, current.Line);
         }
 
-        throw new Exception(message);
+        throw new ParseError(message);
     }
 
     /// <summary>
@@ -540,7 +540,7 @@ public partial class Parser(List<Token> tokens, DecoratorMode decoratorMode = De
         if (Previous().Line < Peek().Line) return;
         if (Check(TokenType.RIGHT_BRACE)) return;
         if (IsAtEnd()) return;
-        throw new Exception(message);
+        throw new ParseError(message);
     }
 
     /// <summary>
@@ -563,7 +563,7 @@ public partial class Parser(List<Token> tokens, DecoratorMode decoratorMode = De
         if (Previous().Line < Peek().Line) return;
         if (Check(TokenType.RIGHT_BRACE)) return;
         if (IsAtEnd()) return;
-        throw new Exception("Expect ';' or ',' after interface member.");
+        throw new ParseError("Expect ';' or ',' after interface member.");
     }
 
     private Expr? TryParseAngleBracketAssertion()
@@ -581,7 +581,7 @@ public partial class Parser(List<Token> tokens, DecoratorMode decoratorMode = De
             Expr expression = Unary();
             return new Expr.TypeAssertion(expression, typeName);
         }
-        catch { _current = saved; return null; }
+        catch (ParseError) { _current = saved; return null; }
     }
 
     private bool IsTypeStart() =>
@@ -679,7 +679,7 @@ public partial class Parser(List<Token> tokens, DecoratorMode decoratorMode = De
     private void ConsumeGreaterInTypeContext(string message)
     {
         if (!MatchGreaterInTypeContext())
-            throw new Exception(message);
+            throw new ParseError(message);
     }
 
     /// <summary>Offset <paramref name="characters"/> past a token's start, preserving "unset".</summary>

@@ -94,37 +94,37 @@ public partial class Parser
             // Validate: abstract members can only be in abstract classes
             if (isMemberAbstract && !isAbstract)
             {
-                throw new Exception($"Parse Error: Abstract methods can only appear within an abstract class.");
+                throw new ParseError($"Parse Error: Abstract methods can only appear within an abstract class.");
             }
 
             // Validate: abstract and static are mutually exclusive
             if (isMemberAbstract && isStatic)
             {
-                throw new Exception($"Parse Error: A method cannot be both abstract and static.");
+                throw new ParseError($"Parse Error: A method cannot be both abstract and static.");
             }
 
             // Validate: override and static are mutually exclusive
             if (isOverride && isStatic)
             {
-                throw new Exception($"Parse Error: Static methods cannot use the 'override' modifier.");
+                throw new ParseError($"Parse Error: Static methods cannot use the 'override' modifier.");
             }
 
             // Validate: override requires the class to have a superclass
             if (isOverride && superclassExpr == null)
             {
-                throw new Exception($"Parse Error: Cannot use 'override' modifier in a class that does not extend another class.");
+                throw new ParseError($"Parse Error: Cannot use 'override' modifier in a class that does not extend another class.");
             }
 
             // Validate: declare cannot be combined with abstract
             if (isMemberDeclare && isMemberAbstract)
             {
-                throw new Exception($"Parse Error: 'declare' modifier cannot be used with 'abstract'.");
+                throw new ParseError($"Parse Error: 'declare' modifier cannot be used with 'abstract'.");
             }
 
             // Validate: declare cannot be combined with override
             if (isMemberDeclare && isOverride)
             {
-                throw new Exception($"Parse Error: 'declare' modifier cannot be used with 'override'.");
+                throw new ParseError($"Parse Error: 'declare' modifier cannot be used with 'override'.");
             }
 
             // Check for static block: static { ... }
@@ -133,11 +133,11 @@ public partial class Parser
                 // Validate: no other modifiers allowed with static blocks
                 if (hasExplicitAccessModifier || isReadonly || isMemberAbstract || isOverride || isMemberAsync || isMemberDeclare)
                 {
-                    throw new Exception($"Parse Error at line {Previous().Line}: Static blocks cannot have access modifiers or other keywords.");
+                    throw new ParseError($"Parse Error at line {Previous().Line}: Static blocks cannot have access modifiers or other keywords.");
                 }
                 if (memberDecorators != null && memberDecorators.Count > 0)
                 {
-                    throw new Exception($"Parse Error at line {Previous().Line}: Static blocks cannot have decorators.");
+                    throw new ParseError($"Parse Error at line {Previous().Line}: Static blocks cannot have decorators.");
                 }
 
                 Consume(TokenType.LEFT_BRACE, "Expect '{' after 'static'.");
@@ -156,13 +156,13 @@ public partial class Parser
                 // Validate: generator cannot be used with auto-accessor
                 if (isMemberGenerator)
                 {
-                    throw new Exception($"Parse Error at line {Peek().Line}: Auto-accessors cannot be generators.");
+                    throw new ParseError($"Parse Error at line {Peek().Line}: Auto-accessors cannot be generators.");
                 }
 
                 // Validate: abstract accessor is not valid
                 if (isMemberAbstract)
                 {
-                    throw new Exception($"Parse Error at line {Peek().Line}: An auto-accessor cannot be abstract.");
+                    throw new ParseError($"Parse Error at line {Peek().Line}: An auto-accessor cannot be abstract.");
                 }
 
                 Advance(); // consume 'accessor'
@@ -170,7 +170,7 @@ public partial class Parser
                 // Validate: accessor #name (private identifier) is not valid
                 if (Check(TokenType.PRIVATE_IDENTIFIER))
                 {
-                    throw new Exception($"Parse Error at line {Peek().Line}: Auto-accessors cannot use private identifiers (#name).");
+                    throw new ParseError($"Parse Error at line {Peek().Line}: Auto-accessors cannot use private identifiers (#name).");
                 }
 
                 Token accessorName = Consume(TokenType.IDENTIFIER, "Expect property name after 'accessor'.");
@@ -215,7 +215,7 @@ public partial class Parser
                 // Validate: generator cannot be used with getter/setter
                 if (isMemberGenerator)
                 {
-                    throw new Exception($"Parse Error at line {Peek().Line}: Getters and setters cannot be generators.");
+                    throw new ParseError($"Parse Error at line {Peek().Line}: Getters and setters cannot be generators.");
                 }
 
                 Token kind = Advance(); // consume 'get' or 'set'
@@ -272,13 +272,13 @@ public partial class Parser
                 // Validate: ES2022 private fields cannot have access modifiers
                 if (access != AccessModifier.Public || memberDecorators != null)
                 {
-                    throw new Exception($"Parse Error at line {Peek().Line}: ES2022 private fields (#name) cannot have access modifiers or decorators.");
+                    throw new ParseError($"Parse Error at line {Peek().Line}: ES2022 private fields (#name) cannot have access modifiers or decorators.");
                 }
 
                 // Validate: declare cannot be used with ES2022 private fields
                 if (isMemberDeclare)
                 {
-                    throw new Exception($"Parse Error at line {Peek().Line}: 'declare' modifier cannot be used with private fields (#name).");
+                    throw new ParseError($"Parse Error at line {Peek().Line}: 'declare' modifier cannot be used with private fields (#name).");
                 }
 
                 Token fieldName = Consume(TokenType.PRIVATE_IDENTIFIER, "Expect private field name.");
@@ -309,7 +309,7 @@ public partial class Parser
                     // Validate: generator cannot be used with fields
                     if (isMemberGenerator)
                     {
-                        throw new Exception($"Parse Error at line {fieldName.Line}: Generator marker '*' can only be used with methods, not fields.");
+                        throw new ParseError($"Parse Error at line {fieldName.Line}: Generator marker '*' can only be used with methods, not fields.");
                     }
 
                     // Private field: #name: type or #name = value
@@ -353,7 +353,7 @@ public partial class Parser
                 // Validate: declare cannot be used with computed properties
                 if (isMemberDeclare)
                 {
-                    throw new Exception($"Parse Error at line {Peek().Line}: 'declare' modifier cannot be used with computed property names.");
+                    throw new ParseError($"Parse Error at line {Peek().Line}: 'declare' modifier cannot be used with computed property names.");
                 }
 
                 // Computed-name method ([Symbol.iterator]() {}) or field ([expr]: T = v).
@@ -380,7 +380,7 @@ public partial class Parser
                 // Validate: ! and ? are mutually exclusive
                 if (isOptional && hasDefiniteAssignment)
                 {
-                    throw new Exception($"Parse Error at line {fieldName.Line}: A property cannot be both optional and have a definite assignment assertion.");
+                    throw new ParseError($"Parse Error at line {fieldName.Line}: A property cannot be both optional and have a definite assignment assertion.");
                 }
 
                 // Type annotation is optional (ES class fields). Capture the structured node
@@ -399,7 +399,7 @@ public partial class Parser
                     // Validate: declare fields cannot have initializers
                     if (isMemberDeclare)
                     {
-                        throw new Exception($"Parse Error at line {fieldName.Line}: 'declare' fields cannot have an initializer.");
+                        throw new ParseError($"Parse Error at line {fieldName.Line}: 'declare' fields cannot have an initializer.");
                     }
                     initializer = Expression();
                 }
@@ -407,7 +407,7 @@ public partial class Parser
                 // Validate: ! cannot coexist with initializer
                 if (hasDefiniteAssignment && initializer != null)
                 {
-                    throw new Exception($"Parse Error at line {fieldName.Line}: Definite assignment assertion '!' cannot be used with an initializer.");
+                    throw new ParseError($"Parse Error at line {fieldName.Line}: Definite assignment assertion '!' cannot be used with an initializer.");
                 }
 
                 if (isDeclare)
@@ -426,19 +426,19 @@ public partial class Parser
                 // Validate: declare modifier is only valid on fields, not methods
                 if (isMemberDeclare)
                 {
-                    throw new Exception("Parse Error: 'declare' modifier is only valid on fields, not methods.");
+                    throw new ParseError("Parse Error: 'declare' modifier is only valid on fields, not methods.");
                 }
 
                 // Abstract methods cannot be constructors
                 if (isMemberAbstract && Check(TokenType.CONSTRUCTOR))
                 {
-                    throw new Exception("Parse Error: A constructor cannot be abstract.");
+                    throw new ParseError("Parse Error: A constructor cannot be abstract.");
                 }
 
                 // Override cannot be used on constructors
                 if (isOverride && Check(TokenType.CONSTRUCTOR))
                 {
-                    throw new Exception("Parse Error: A constructor cannot use the 'override' modifier.");
+                    throw new ParseError("Parse Error: A constructor cannot use the 'override' modifier.");
                 }
 
                 if (isMemberAbstract)
@@ -480,7 +480,7 @@ public partial class Parser
                     // Validate: generator cannot be used with constructor
                     if (isMemberGenerator && Check(TokenType.CONSTRUCTOR))
                     {
-                        throw new Exception("Parse Error: A constructor cannot be a generator.");
+                        throw new ParseError("Parse Error: A constructor cannot be a generator.");
                     }
 
                     string kind = "method";
@@ -500,7 +500,7 @@ public partial class Parser
                                 // Check for conflicts with explicitly declared fields
                                 if (fields.Any(f => f.Name.Lexeme == param.Name.Lexeme))
                                 {
-                                    throw new Exception($"Parse Error: Parameter property '{param.Name.Lexeme}' conflicts with existing field declaration.");
+                                    throw new ParseError($"Parse Error: Parameter property '{param.Name.Lexeme}' conflicts with existing field declaration.");
                                 }
 
                                 // Synthesize field declaration (no initializer - set in constructor)
@@ -519,7 +519,7 @@ public partial class Parser
                 }
             }
             }
-            catch (Exception ex)
+            catch (ParseError ex)
             {
                 RecordError(ex.Message);
                 SynchronizeInClassBody();
@@ -567,7 +567,7 @@ public partial class Parser
         // Computed-name field. Generator/async are method-only markers.
         if (isMemberGenerator)
         {
-            throw new Exception($"Parse Error at line {syntheticName.Line}: Generator marker '*' can only be used with methods, not fields.");
+            throw new ParseError($"Parse Error at line {syntheticName.Line}: Generator marker '*' can only be used with methods, not fields.");
         }
 
         // Type annotation is optional (ES class fields), matching the identifier-keyed field path:
@@ -746,7 +746,7 @@ public partial class Parser
                 // Validate: no other modifiers allowed with static blocks
                 if (access != AccessModifier.Public || isReadonly || isMemberAsync || isMemberDeclare)
                 {
-                    throw new Exception($"Parse Error at line {Previous().Line}: Static blocks cannot have access modifiers or other keywords.");
+                    throw new ParseError($"Parse Error at line {Previous().Line}: Static blocks cannot have access modifiers or other keywords.");
                 }
 
                 Consume(TokenType.LEFT_BRACE, "Expect '{' after 'static'.");
@@ -765,7 +765,7 @@ public partial class Parser
                 // Validate: generator cannot be used with auto-accessor
                 if (isMemberGenerator)
                 {
-                    throw new Exception($"Parse Error at line {Peek().Line}: Auto-accessors cannot be generators.");
+                    throw new ParseError($"Parse Error at line {Peek().Line}: Auto-accessors cannot be generators.");
                 }
 
                 Advance(); // consume 'accessor'
@@ -773,7 +773,7 @@ public partial class Parser
                 // Validate: accessor #name (private identifier) is not valid
                 if (Check(TokenType.PRIVATE_IDENTIFIER))
                 {
-                    throw new Exception($"Parse Error at line {Peek().Line}: Auto-accessors cannot use private identifiers (#name).");
+                    throw new ParseError($"Parse Error at line {Peek().Line}: Auto-accessors cannot use private identifiers (#name).");
                 }
 
                 Token accessorName = Consume(TokenType.IDENTIFIER, "Expect property name after 'accessor'.");
@@ -818,7 +818,7 @@ public partial class Parser
                 // Validate: generator cannot be used with getter/setter
                 if (isMemberGenerator)
                 {
-                    throw new Exception($"Parse Error at line {Peek().Line}: Getters and setters cannot be generators.");
+                    throw new ParseError($"Parse Error at line {Peek().Line}: Getters and setters cannot be generators.");
                 }
 
                 Token kind = Advance(); // consume 'get' or 'set'
@@ -860,13 +860,13 @@ public partial class Parser
                 // Validate: ES2022 private fields cannot have access modifiers
                 if (access != AccessModifier.Public)
                 {
-                    throw new Exception($"Parse Error at line {Peek().Line}: ES2022 private fields (#name) cannot have access modifiers.");
+                    throw new ParseError($"Parse Error at line {Peek().Line}: ES2022 private fields (#name) cannot have access modifiers.");
                 }
 
                 // Validate: declare cannot be used with ES2022 private fields
                 if (isMemberDeclare)
                 {
-                    throw new Exception($"Parse Error at line {Peek().Line}: 'declare' modifier cannot be used with private fields (#name).");
+                    throw new ParseError($"Parse Error at line {Peek().Line}: 'declare' modifier cannot be used with private fields (#name).");
                 }
 
                 Token fieldName = Consume(TokenType.PRIVATE_IDENTIFIER, "Expect private field name.");
@@ -897,7 +897,7 @@ public partial class Parser
                     // Validate: generator cannot be used with fields
                     if (isMemberGenerator)
                     {
-                        throw new Exception($"Parse Error at line {fieldName.Line}: Generator marker '*' can only be used with methods, not fields.");
+                        throw new ParseError($"Parse Error at line {fieldName.Line}: Generator marker '*' can only be used with methods, not fields.");
                     }
 
                     // Private field: #name: type or #name = value
@@ -934,7 +934,7 @@ public partial class Parser
                 // Validate: ! and ? are mutually exclusive
                 if (isOptional && hasDefiniteAssignment)
                 {
-                    throw new Exception($"Parse Error at line {fieldName.Line}: A property cannot be both optional and have a definite assignment assertion.");
+                    throw new ParseError($"Parse Error at line {fieldName.Line}: A property cannot be both optional and have a definite assignment assertion.");
                 }
 
                 string? typeAnnotation = null;
@@ -949,7 +949,7 @@ public partial class Parser
                     // Validate: declare fields cannot have initializers
                     if (isMemberDeclare)
                     {
-                        throw new Exception($"Parse Error at line {fieldName.Line}: 'declare' fields cannot have an initializer.");
+                        throw new ParseError($"Parse Error at line {fieldName.Line}: 'declare' fields cannot have an initializer.");
                     }
                     initializer = Expression();
                 }
@@ -957,7 +957,7 @@ public partial class Parser
                 // Validate: ! cannot coexist with initializer
                 if (hasDefiniteAssignment && initializer != null)
                 {
-                    throw new Exception($"Parse Error at line {fieldName.Line}: Definite assignment assertion '!' cannot be used with an initializer.");
+                    throw new ParseError($"Parse Error at line {fieldName.Line}: Definite assignment assertion '!' cannot be used with an initializer.");
                 }
 
                 ConsumeSemicolon("Expect ';' after field declaration.");
@@ -973,7 +973,7 @@ public partial class Parser
             {
                 if (isMemberDeclare)
                 {
-                    throw new Exception($"Parse Error at line {Peek().Line}: 'declare' modifier cannot be used with computed property names.");
+                    throw new ParseError($"Parse Error at line {Peek().Line}: 'declare' modifier cannot be used with computed property names.");
                 }
                 ParseComputedClassMember(isStatic, isMemberAsync, isMemberGenerator, isOverride: false, isReadonly, access, memberDecorators: null, methods, fields, staticInitializers);
             }
@@ -982,13 +982,13 @@ public partial class Parser
                 // Validate: declare modifier is only valid on fields, not methods
                 if (isMemberDeclare)
                 {
-                    throw new Exception("Parse Error: 'declare' modifier is only valid on fields, not methods.");
+                    throw new ParseError("Parse Error: 'declare' modifier is only valid on fields, not methods.");
                 }
 
                 // Validate: generator cannot be used with constructor
                 if (isMemberGenerator && Check(TokenType.CONSTRUCTOR))
                 {
-                    throw new Exception("Parse Error: A constructor cannot be a generator.");
+                    throw new ParseError("Parse Error: A constructor cannot be a generator.");
                 }
 
                 string kind = "method";
@@ -1006,7 +1006,7 @@ public partial class Parser
                         {
                             if (fields.Any(f => f.Name.Lexeme == param.Name.Lexeme))
                             {
-                                throw new Exception($"Parse Error: Parameter property '{param.Name.Lexeme}' conflicts with existing field declaration.");
+                                throw new ParseError($"Parse Error: Parameter property '{param.Name.Lexeme}' conflicts with existing field declaration.");
                             }
                             fields.Add(new Stmt.Field(
                                 param.Name,
@@ -1022,7 +1022,7 @@ public partial class Parser
                 }
             }
             }
-            catch (Exception ex)
+            catch (ParseError ex)
             {
                 RecordError(ex.Message);
                 SynchronizeInClassBody();

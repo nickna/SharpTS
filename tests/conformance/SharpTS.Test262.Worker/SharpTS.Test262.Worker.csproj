@@ -27,6 +27,7 @@
        assemblies, which is fine: the test project never references the
        worker assembly directly — it spawns it as a subprocess. -->
   <ItemGroup>
+    <Compile Include="../Shared/ConformanceInputs.cs" />
     <Compile Include="..\SharpTS.Test262\Test262Runner.cs" />
     <Compile Include="..\SharpTS.Test262\Test262HarnessAssembler.cs" />
     <Compile Include="..\SharpTS.Test262\Test262Metadata.cs" />

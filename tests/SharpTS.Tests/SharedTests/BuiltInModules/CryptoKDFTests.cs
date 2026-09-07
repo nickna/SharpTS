@@ -225,13 +225,15 @@ public class CryptoKDFTests
                 const key = crypto.scryptSync('password', 'NaCl', 64, { N: 1024, r: 8, p: 16 });
                 console.log(Buffer.isBuffer(key));
                 console.log(key.length === 64);
-                const key2 = crypto.scryptSync('password', 'NaCl', 64, { N: 1024, r: 8, p: 16 });
-                console.log(key.toString('hex') === key2.toString('hex'));
+                // RFC 7914 section 12: https://www.rfc-editor.org/rfc/rfc7914.html#section-12
+                console.log(key.toString('hex'));
                 """
         };
 
         var output = TestHarness.RunModules(files, "main.ts", mode);
-        Assert.Equal("true\ntrue\ntrue\n", output);
+        Assert.Equal("true\ntrue\n" +
+            "fdbabe1c9d3472007856e7190d01e9fe7c6ad7cbc8237830e77376634b373162" +
+            "2eaf30d92e22a3886ff109279d9830dac727afb94a83ee6d8360cbdfa2cc0640\n", output);
     }
 
     [Theory, ModeData]

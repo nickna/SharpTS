@@ -47,13 +47,12 @@ public class SignatureRelationshipConformanceTests
         "tests/cases/conformance/types/typeRelationships/subtypesAndSuperTypes/subtypingWithGenericConstructSignaturesWithOptionalParameters.ts",
     };
 
+    [Trait("Category", "Corpus")]
     [Theory]
     [MemberData(nameof(Cases))]
     public void MatchesTypeScriptDiagnostics(string relativePath)
     {
-        string? root = TypeScriptConformancePaths.TryFindRoot();
-        if (root is null)
-            return;
+        string? root = TypeScriptConformancePaths.RequireRoot();
 
         var result = new TypeScriptConformanceRunner(root).RunOne(
             Path.Combine(root, relativePath.Replace('/', Path.DirectorySeparatorChar)));

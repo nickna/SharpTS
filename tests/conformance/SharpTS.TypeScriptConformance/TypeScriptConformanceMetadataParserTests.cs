@@ -153,14 +153,13 @@ public class TypeScriptConformanceMetadataParserTests
 
     /// <summary>
     /// Acceptance check from #82: parse every <c>.ts</c> in the corpus and
-    /// confirm the parser doesn't throw on anything. Soft-skip when the
-    /// submodule isn't initialized.
+    /// confirm the parser doesn't throw on anything. Requires the pinned submodule.
     /// </summary>
+    [Trait("Category", "Corpus")]
     [Fact]
     public void Corpus_ParsesEveryFileWithoutThrowing()
     {
-        var root = TypeScriptConformancePaths.TryFindRoot();
-        if (root is null) return;
+        var root = TypeScriptConformancePaths.RequireRoot();
 
         var conformanceDir = TypeScriptConformancePaths.ConformanceDir(root);
         var files = Directory.EnumerateFiles(conformanceDir, "*.ts", SearchOption.AllDirectories).ToList();
