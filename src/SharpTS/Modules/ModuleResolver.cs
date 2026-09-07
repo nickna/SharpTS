@@ -278,8 +278,9 @@ public class ModuleResolver
                 specifier, currentDir, kind, preferDeclarations);
             if (result != null)
                 return result;
-            throw new Exception($"Module Error: Cannot resolve subpath import '{specifier}'. " +
-                                "No matching entry found in the nearest package.json \"imports\" field.");
+            throw new ModuleResolutionException(ModuleResolutionFailure.NotFound,
+                $"Module Error: Cannot resolve subpath import '{specifier}'. " +
+                "No matching entry found in the nearest package.json \"imports\" field.");
         }
         else
         {
@@ -328,7 +329,7 @@ public class ModuleResolver
 
             if (_resolutionOptions.Mode == ModuleResolutionMode.Classic)
             {
-                throw new Exception(
+                throw new ModuleResolutionException(ModuleResolutionFailure.NotFound,
                     $"Module Error: Cannot resolve bare specifier '{specifier}' with classic module resolution.");
             }
 
@@ -355,8 +356,9 @@ public class ModuleResolver
                 return npmFallbackModule.VirtualPath;
             }
 
-            throw new Exception($"Module Error: Cannot resolve bare specifier '{specifier}'. " +
-                                "Bare imports require a node_modules directory with the package installed.");
+            throw new ModuleResolutionException(ModuleResolutionFailure.NotFound,
+                $"Module Error: Cannot resolve bare specifier '{specifier}'. " +
+                "Bare imports require a node_modules directory with the package installed.");
         }
     }
 
@@ -699,7 +701,8 @@ public class ModuleResolver
     private string AddExtensionIfNeeded(string path)
     {
         return TryAddExtension(path)
-            ?? throw new Exception($"Module Error: Cannot resolve module '{path}'. File not found.");
+            ?? throw new ModuleResolutionException(ModuleResolutionFailure.NotFound,
+                $"Module Error: Cannot resolve module '{path}'. File not found.");
     }
 
     /// <summary>
@@ -1026,9 +1029,7 @@ public class ModuleResolver
                         string importedPath = ResolveModulePath(import.ModulePath, absolutePath);
                         importedModule = LoadModule(importedPath, decoratorMode);
                     }
-                    catch (Exception ex) when (
-                        _programOptions.PreferDeclarationFiles
-                        && ex.Message.StartsWith("Module Error: Cannot resolve", StringComparison.Ordinal))
+                    catch (ModuleResolutionException ex) when (CanRecoverResolutionFailure(ex))
                     {
                         // Program loading must keep the rest of the graph alive
                         // so the checker can report canonical TS2307 at the
@@ -1076,9 +1077,7 @@ public class ModuleResolver
                     {
                         reexportPath = ResolveModulePath(export.FromModulePath, absolutePath);
                     }
-                    catch (Exception ex) when (
-                        _programOptions.PreferDeclarationFiles
-                        && ex.Message.StartsWith("Module Error: Cannot resolve", StringComparison.Ordinal))
+                    catch (ModuleResolutionException ex) when (CanRecoverResolutionFailure(ex))
                     {
                         continue;
                     }
@@ -1191,6 +1190,9 @@ public class ModuleResolver
                export.NamedExports.Any(specifier => !specifier.IsTypeOnly);
     }
 
+    internal bool CanRecoverResolutionFailure(ModuleResolutionException exception) =>
+        _programOptions.PreferDeclarationFiles && exception.Reason == ModuleResolutionFailure.NotFound;
+
     private void TryAddRuntimeDependency(
         ParsedModule owner,
         string specifier,
@@ -1206,9 +1208,7 @@ public class ModuleResolver
             if (!owner.RuntimeDependencies.Contains(runtimeModule))
                 owner.RuntimeDependencies.Add(runtimeModule);
         }
-        catch (Exception ex) when (
-            _programOptions.PreferDeclarationFiles &&
-            ex.Message.StartsWith("Module Error: Cannot resolve", StringComparison.Ordinal))
+        catch (ModuleResolutionException ex) when (CanRecoverResolutionFailure(ex))
         {
             // A declaration-only package remains valid for type-only consumers. A value
             // consumer receives the normal runtime module-not-found diagnostic if executed.

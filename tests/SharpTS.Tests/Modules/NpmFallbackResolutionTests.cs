@@ -93,7 +93,7 @@ public class NpmFallbackResolutionTests
         var entry = dir.CreateFile("main.ts", "export {};");
         var resolver = new ModuleResolver(entry);
 
-        var ex = Assert.Throws<Exception>(() => resolver.ResolveModulePath("left-pad", entry));
+        var ex = Assert.Throws<ModuleResolutionException>(() => resolver.ResolveModulePath("left-pad", entry));
         Assert.Contains("Cannot resolve bare specifier", ex.Message);
     }
 }
