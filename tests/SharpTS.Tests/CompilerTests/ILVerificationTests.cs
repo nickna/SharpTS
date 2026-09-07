@@ -11,6 +11,34 @@ namespace SharpTS.Tests.CompilerTests;
 public class ILVerificationTests
 {
     [Fact]
+    public void StoredPropertyDescriptors_AfterSealAndFreeze_PassILVerification()
+    {
+        var source = """
+            const target: any = {};
+            Object.defineProperty(target, "data", {
+                value: 7, writable: true, enumerable: true, configurable: true
+            });
+            Object.defineProperty(target, "read", { get: () => 8, configurable: true });
+            Object.defineProperty(target, "write", { set: (value: number) => {}, configurable: true });
+            Object.seal(target);
+            let data: any = Object.getOwnPropertyDescriptor(target, "data");
+            console.log(data.value, data.writable, data.enumerable, data.configurable);
+            Object.freeze(target);
+            data = Object.getOwnPropertyDescriptor(target, "data");
+            console.log(data.value, data.writable, data.enumerable, data.configurable);
+            const read: any = Object.getOwnPropertyDescriptor(target, "read");
+            const write: any = Object.getOwnPropertyDescriptor(target, "write");
+            console.log(typeof read.get, "set" in read, typeof read.set, read.configurable);
+            console.log("get" in write, typeof write.get, typeof write.set, write.configurable);
+            """;
+
+        var (errors, output) = TestHarness.CompileVerifyAndRun(source);
+
+        Assert.Empty(errors);
+        Assert.Equal("7 true true false\n7 false true false\nfunction true undefined false\ntrue undefined function false\n", output);
+    }
+
+    [Fact]
     public void SameModuleExportBindingsInFunctionBody_PassILVerification()
     {
         var files = new Dictionary<string, string>
