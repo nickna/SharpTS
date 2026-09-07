@@ -1,0 +1,226 @@
+[
+  {
+    "Hash": "05253abc8da1f720fdf6ba2962a873a074ca74761e60de1209c9eb9a9b02d90c",
+    "Members": [
+      "src/SharpTS.Hosting.Abstractions/SharpTSHostedRuntimeBase.cs::SharpTSHostedRuntimeBase.InitializeAsync(CancellationToken cancellationToken = default)",
+      "src/SharpTS/Hosting/HostedInterpreterRuntime.cs::HostedInterpreterRuntime.InitializeAsync(CancellationToken cancellationToken = default)"
+    ],
+    "Reason": "Hosted compiled and interpreted runtimes own different execution state; retain matching initialization transitions across the assembly boundary."
+  },
+  {
+    "Hash": "05f8decd9fc4788911449c619ce17c7c8696c3bf8c0649b58819552099bc0395",
+    "Members": [
+      "src/SharpTS/Parsing/GeneratorArrowLifter.cs::GeneratorArrowLifter.RewriteClass(Stmt.Class cls)",
+      "src/SharpTS/Parsing/GeneratorArrowLifter.cs::GeneratorArrowLifter.RewriteClassExpression(Expr.ClassExpr cls)"
+    ],
+    "Reason": "Statement and expression class nodes are distinct record types; retain typed rewrites and static-initializer identity preservation."
+  },
+  {
+    "Hash": "066e57f501e16d304b7d27e53c5c71ce4f820dcccfc757af7dd7c776fa4dce87",
+    "Members": [
+      "src/SharpTS/Compilation/CountedIndexWriteLoopAnalyzer.cs::CountedIndexWriteLoopAnalyzer.IsPure(Expr expression)",
+      "src/SharpTS/Compilation/CountedNumericMapSetLoopAnalyzer.cs::CountedNumericMapSetLoopAnalyzer.IsPure(Expr expression)"
+    ],
+    "Reason": "Existing independent loop eligibility proofs share this conservative expression whitelist; defer shared proof-policy extraction to a focused optimization change."
+  },
+  {
+    "Hash": "092210f2d7b3ea0eda41f26e096ed7621372b0580f4bc3ee3c6cfc9f85b10885",
+    "Members": [
+      "src/SharpTS/Compilation/NestedFunctionLifter.cs::NestedFunctionLifter.ProcessClass(Stmt.Class cls)",
+      "src/SharpTS/Compilation/NestedFunctionLifter.cs::NestedFunctionLifter.ProcessClassExpression(Expr.ClassExpr cls)"
+    ],
+    "Reason": "Statement and expression class records require typed with-expressions; preserve identity-sensitive rewriting for both AST forms."
+  },
+  {
+    "Hash": "10fe44cd909319c6e1b817baaa3766dd0109a05c432bb9b92a5692bc23f14d51",
+    "Members": [
+      "src/SharpTS/Compilation/AsyncGeneratorMoveNextEmitter.Statements.TryCatch.cs::AsyncGeneratorMoveNextEmitter.EmitSyncSegmentInTry(List<Stmt> statements, LocalBuilder caughtExceptionLocal, LocalBuilder exceptionPresentLocal)",
+      "src/SharpTS/Compilation/GeneratorMoveNextEmitter.Statements.TryCatch.cs::GeneratorMoveNextEmitter.EmitSyncSegmentInTry(List<Stmt> statements, LocalBuilder caughtExceptionLocal, LocalBuilder exceptionPresentLocal)"
+    ],
+    "Reason": "Sync and async generator emitters own separate protected-region and suspension state; retain paired exception-segment emission until a shared state contract is designed."
+  },
+  {
+    "Hash": "13c1f1a2a93172e6390a0d1cd7f1a83872779713f39848dc22825ef987838810",
+    "Members": [
+      "src/SharpTS/Compilation/RuntimeEmitter.TSDataView.cs::RuntimeEmitter.EmitStoreByte(ILGenerator il, FieldBuilder bufferField, LocalBuilder offsetLocal, int add, LocalBuilder valueLocal, int shift)",
+      "src/SharpTS/Compilation/RuntimeEmitter.TSDataView.cs::RuntimeEmitter.EmitStoreByte64(ILGenerator il, FieldBuilder bufferField, LocalBuilder offsetLocal, int add, LocalBuilder valueLocal, int shift)"
+    ],
+    "Reason": "Existing 32-bit and 64-bit DataView store paths use differently typed IL locals; retain named width-specific entry points pending focused consolidation."
+  },
+  {
+    "Hash": "1e0977bf265015cfb87f4766b2f8ce906acd5202a82ee57bd9a0674633207329",
+    "Members": [
+      "src/SharpTS/Compilation/AsyncArrowStateMachineBuilder.cs::AsyncArrowStateMachineBuilder.DefineMoveNextMethod()",
+      "src/SharpTS/Compilation/AsyncStateMachineBuilder.cs::AsyncStateMachineBuilder.DefineMoveNextMethod()"
+    ],
+    "Reason": "Async function and arrow builders own separate generated types; retain the matching IAsyncStateMachine method declaration contract."
+  },
+  {
+    "Hash": "31de6c39a9f559a6cdcd09cc55e4ceadbc1c6f203f5b8ee9073da0e322e6b3ab",
+    "Members": [
+      "src/SharpTS/Compilation/Emitters/Modules/DnsModuleEmitter.cs::DnsModuleEmitter.EmitSetDefaultResultOrder(IEmitterContext emitter, List<Expr> arguments)",
+      "src/SharpTS/Compilation/Emitters/Modules/DnsPromisesModuleEmitter.cs::DnsPromisesModuleEmitter.EmitSetDefaultResultOrder(IEmitterContext emitter, List<Expr> arguments)"
+    ],
+    "Reason": "DNS callback and promise module surfaces share result-order configuration; retain existing adapters while deferring a module-helper extraction."
+  },
+  {
+    "Hash": "324970c98efdc1e628f7d1da5c05d3708c45f0b282faf06f08aae80aa30ee8f2",
+    "Members": [
+      "src/SharpTS/Compilation/Emitters/RegExpEmitter.cs::RegExpEmitter.EmitDynamicMethodCall(IEmitterContext emitter, Expr receiver, string methodName, List<Expr> arguments)",
+      "src/SharpTS/Compilation/Emitters/StringEmitter.cs::StringEmitter.EmitDynamicMethodCall(IEmitterContext emitter, Expr receiver, string methodName, List<Expr> arguments)"
+    ],
+    "Reason": "Existing string and RegExp fallback emitters preserve identical receiver/property/argument evaluation order; defer shared fallback extraction to a parity-tested change."
+  },
+  {
+    "Hash": "43de340fdb520eacfdd44dedaf42895dfcef7440ce6d2dd96a8399d36a5c9a3f",
+    "Members": [
+      "src/SharpTS/Runtime/BuiltIns/Modules/Interpreter/FsAsyncHelpers.cs::FsAsyncHelpers.ParseDateObject(SharpTSObject dateObj)",
+      "src/SharpTS/Runtime/BuiltIns/Modules/Interpreter/FsModuleInterpreter.cs::FsModuleInterpreter.ParseDateObject(SharpTSObject dateObj)"
+    ],
+    "Reason": "Existing synchronous and asynchronous filesystem timestamp adapters share Date conversion; defer consolidation to a filesystem-focused change."
+  },
+  {
+    "Hash": "447481be93c74d874ec53db2dd903b9a1f318eb229a71ef38ed582c1d7487fbf",
+    "Members": [
+      "src/SharpTS/Runtime/DotNet/DotNetGenericMethodInference.cs::DotNetGenericMethodInference.IsNumeric(Type type)",
+      "src/SharpTS/TypeSystem/DotNetTypeSynthesizer.cs::DotNetTypeSynthesizer.IsNumeric(Type type)"
+    ],
+    "Reason": "Runtime generic inference and static .NET type synthesis use the same numeric classification; retain the layer boundary pending a common type-policy design."
+  },
+  {
+    "Hash": "5dd03fd53c819f84e208e694e7d8d3e249858a67bcc85f1acb59026017c291d0",
+    "Members": [
+      "src/SharpTS/Compilation/StableFunctionBindingAnalyzer.cs::StableFunctionBindingAnalyzer.CollectTopLevelFunctions(Stmt statement, List<Stmt.Function> functions)",
+      "src/SharpTS/Compilation/StableNumericRestFunctionAnalyzer.cs::StableNumericRestFunctionAnalyzer.CollectTopLevelFunctions(Stmt statement, ICollection<Stmt.Function> functions)"
+    ],
+    "Reason": "Existing independent function stability analyses collect declarations identically; defer common AST collection extraction to an analyzer-focused change."
+  },
+  {
+    "Hash": "5f8cf69fc2fa78ef9b21e393008945d570522888d87264a2d7ad2bb65df97814",
+    "Members": [
+      "src/SharpTS/Compilation/ClosureAnalyzer.cs::ClosureAnalyzer.CollectLoopBindingNames(Stmt? initializer)",
+      "src/SharpTS/Compilation/PerIterationCellAnalyzer.cs::PerIterationCellAnalyzer.CollectLoopBindingNames(Stmt? initializer)"
+    ],
+    "Reason": "Closure capture and per-iteration cell analysis share lexical binding collection; retain existing implementations pending a focused capture-analysis refactor."
+  },
+  {
+    "Hash": "724261631d8f4ef03a75a5e80178cf425506d2c31d971dec6f75a0a5e109b93b",
+    "Members": [
+      "src/SharpTS/Compilation/AsyncGeneratorMoveNextEmitter.Statements.TryCatch.cs::AsyncGeneratorMoveNextEmitter.RegisterThrowTerminal()",
+      "src/SharpTS/Compilation/GeneratorMoveNextEmitter.Statements.TryCatch.cs::GeneratorMoveNextEmitter.RegisterThrowTerminal()"
+    ],
+    "Reason": "Sync and async generators have distinct builders and exit-routing state; retain matching terminal throw IL until those state contracts can be shared."
+  },
+  {
+    "Hash": "7aaf195ad96dd203691e9620fc518ebb5fbd02ea22cc5420336ce9194ebcb616",
+    "Members": [
+      "src/SharpTS/Compilation/ILCompiler.Classes.cs::ILCompiler.GetOverloadHints(Stmt.Class classStmt)",
+      "src/SharpTS/Execution/Interpreter.DotNet.cs::Interpreter.ExtractOverloadHints(Stmt.Class classStmt)"
+    ],
+    "Reason": "Interpreter and compiler independently consume DotNetOverload decorators; retain parity across backend boundaries."
+  },
+  {
+    "Hash": "7e2eb4e3604bf81358a9983fd3610e9ca3db2ece201c667a6e53469c228a0082",
+    "Members": [
+      "src/SharpTS/Compilation/Emitters/BufferEmitter.cs::BufferEmitter.EmitIntArg(IEmitterContext emitter, List<Expr> arguments, int index)",
+      "src/SharpTS/Compilation/Emitters/DataViewEmitter.cs::DataViewEmitter.EmitByteOffsetArg(IEmitterContext emitter, List<Expr> arguments, int index)"
+    ],
+    "Reason": "Existing Buffer and DataView argument adapters share numeric offset conversion; defer extraction to a built-in emission change."
+  },
+  {
+    "Hash": "8b65ab92c41910f87f8b5b99ebb7b0de5fd3fed0badda6f71cfc7e376b63c969",
+    "Members": [
+      "src/SharpTS/Compilation/Emitters/RegExpEmitter.cs::RegExpEmitter.IsSideEffectFreeString(Expr expression, CompilationContext ctx)",
+      "src/SharpTS/Compilation/Emitters/StringEmitter.cs::StringEmitter.IsSideEffectFreePrimitiveString(Expr expression, CompilationContext ctx)"
+    ],
+    "Reason": "Existing string and RegExp optimization guards share a conservative primitive-string proof; defer common proof extraction to an optimization change."
+  },
+  {
+    "Hash": "8bd6a8b5e8970409777e89cefeb367a0ca5da6771723407e34974fb69e126127",
+    "Members": [
+      "src/SharpTS/Program.cs::SharpTSCli.IsDeclarationSource(string path)",
+      "src/SharpTS/Projects/ProjectCommandRunner.cs::ProjectCommandRunner.IsProjectDeclarationSource(string path)"
+    ],
+    "Reason": "Existing CLI and project command paths share declaration-extension filtering; defer command-routing helper consolidation."
+  },
+  {
+    "Hash": "8cf7da892ae6a068eac8fe25f1a6886d2fa1d56ac264ff525c9ce374815d0758",
+    "Members": [
+      "src/SharpTS/Compilation/AsyncArrowStateMachineBuilder.cs::AsyncArrowStateMachineBuilder.DefineSetStateMachineMethod()",
+      "src/SharpTS/Compilation/AsyncStateMachineBuilder.cs::AsyncStateMachineBuilder.DefineSetStateMachineMethod()"
+    ],
+    "Reason": "Async function and arrow builders own separate generated types; retain the matching SetStateMachine interface implementation."
+  },
+  {
+    "Hash": "96617529933461a2fa834569d348d3174fc5376ff8fd503cfc25573382923949",
+    "Members": [
+      "src/SharpTS/Compilation/ArrowBoxedAdapterEmitter.cs::ArrowBoxedAdapterEmitter.EmitLdarg(ILGenerator il, int index)",
+      "src/SharpTS/Compilation/DelegateAdapterEmitter.cs::DelegateAdapterEmitter.EmitLdarg(ILGenerator il, int index)"
+    ],
+    "Reason": "Existing arrow and delegate adapters share compact ldarg selection; defer IL utility consolidation to a focused adapter change."
+  },
+  {
+    "Hash": "9aafa02617961f0dec6a1190dcaaac68c48b011ee87a48c8602a9f14ef8814e0",
+    "Members": [
+      "src/SharpTS/Runtime/Types/SharpTSPrimitiveNamespaces.cs::SharpTSNumberNamespace.SetExtra(string name, object? value)",
+      "src/SharpTS/Runtime/Types/SharpTSPrimitiveNamespaces.cs::SharpTSStringNamespace.SetExtra(string name, object? value)"
+    ],
+    "Reason": "Number and String namespace objects own separate property stores and built-in policies; retain matching extra-property descriptor semantics."
+  },
+  {
+    "Hash": "9c591acd65a372ef6b9d884a19d7f0ccea824fb3fc382f192c110b1bed15bcbc",
+    "Members": [
+      "src/SharpTS/Compilation/ExternalMethodResolver.cs::ExternalMethodResolver.GetTypeSize(Type t)",
+      "src/SharpTS/Runtime/DotNet/DotNetMethodResolver.cs::DotNetMethodResolver.GetTypeSize(Type t)"
+    ],
+    "Reason": "Interpreter reflection and compiler external-method resolution must agree on overload specificity; retain matching size rankings across backend boundaries."
+  },
+  {
+    "Hash": "acb28f6e04448f6fa284cc842561751a0932beeae4570922d5414529ba452ff5",
+    "Members": [
+      "src/SharpTS/Runtime/Types/SharpTSNetServer.cs::SharpTSNetServer.GetMember(string name)",
+      "src/SharpTS/Runtime/Types/SharpTSTlsServer.cs::SharpTSTlsServer.GetMember(string name)"
+    ],
+    "Reason": "Net and TLS servers expose matching names but bind methods to different transport implementations; retain the explicit transport adapters."
+  },
+  {
+    "Hash": "d11966a79cc15242c8615d8221c8d2dd89670aac2b626a3cc605d9e244beab65",
+    "Members": [
+      "src/SharpTS/Compilation/AsyncGeneratorMoveNextEmitter.Expressions.cs::AsyncGeneratorMoveNextEmitter.EmitCapturingArrowFunction(Expr.ArrowFunction af, MethodBuilder method, TypeBuilder displayClass)",
+      "src/SharpTS/Compilation/AsyncMoveNextEmitter.ArrowFunctions.cs::AsyncMoveNextEmitter.EmitCapturingArrowFunction(Expr.ArrowFunction af, MethodBuilder method, TypeBuilder displayClass)"
+    ],
+    "Reason": "Async and async-generator emitters own different state machines; retain matching closure threading until a shared capture-emission contract is extracted."
+  },
+  {
+    "Hash": "d53d7b94262ab121d5902bfd0de8b29cc05e24ede4a7a03b176c758ae601a880",
+    "Members": [
+      "src/SharpTS/Compilation/ILCompiler.Classes.cs::ILCompiler.GetDotNetTypeMapping(Stmt.Class classStmt)",
+      "src/SharpTS/Execution/Interpreter.DotNet.cs::Interpreter.ExtractDotNetTypeMapping(Stmt.Class classStmt)"
+    ],
+    "Reason": "Interpreter and compiler independently consume DotNetType decorators; retain parity across backend boundaries."
+  },
+  {
+    "Hash": "d7bc5d05dd09f8fcc13913999fd048f3b2abd96b6870dcd30ea8f336186c910f",
+    "Members": [
+      "src/SharpTS.Hosting.Abstractions/SharpTSHostedRuntimeBase.cs::SharpTSHostedRuntimeBase.RequestTurn()",
+      "src/SharpTS/Hosting/HostedInterpreterRuntime.cs::HostedInterpreterRuntime.RequestTurn()"
+    ],
+    "Reason": "Hosted compiled and interpreted runtimes own separate scheduler state across assemblies; retain matching turn request synchronization."
+  },
+  {
+    "Hash": "de35f45da59070a079aad487554982ad9269e7bf7ff5223f128b33f6f739c208",
+    "Members": [
+      "src/SharpTS/Compilation/AsyncGeneratorMoveNextEmitter.Statements.TryCatch.cs::AsyncGeneratorMoveNextEmitter.EmitTryBodyWithSuspensions(List<Stmt> tryBody, LocalBuilder caughtExceptionLocal, LocalBuilder exceptionPresentLocal, Label afterTryLabel)",
+      "src/SharpTS/Compilation/GeneratorMoveNextEmitter.Statements.TryCatch.cs::GeneratorMoveNextEmitter.EmitTryBodyWithYields(List<Stmt> tryBody, LocalBuilder caughtExceptionLocal, LocalBuilder exceptionPresentLocal, Label afterTryLabel)"
+    ],
+    "Reason": "Sync and async generators have different segment-breaker and suspension policies; retain matching orchestration over their respective emitter state."
+  },
+  {
+    "Hash": "e499159cbb71cfb0ed2943ce4b1459f3ba0968f121a567c4695ef377735b9add",
+    "Members": [
+      "src/SharpTS/Runtime/BuiltIns/BigIntBuiltIns.cs::BigIntBuiltIns.ParseRadix(ReadOnlySpan<char> digits, int radix)",
+      "src/SharpTS/Runtime/Types/SharpTSBigInt.cs::SharpTSBigInt.ParseRadix(ReadOnlySpan<char> digits, int radix)"
+    ],
+    "Reason": "Existing BigInt construction and runtime wrapper parsing share radix accumulation; defer shared parsing extraction to a BigInt-focused change."
+  }
+]

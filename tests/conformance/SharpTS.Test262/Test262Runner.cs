@@ -109,7 +109,6 @@ public sealed class Test262Runner
     private static int _consoleProxyInstalled;
     private static readonly object _consoleProxyLock = new();
 
-    private readonly string _test262Root;
     private readonly Test262HarnessAssembler _assembler;
     private readonly TimeSpan _timeout;
     private readonly HashSet<string> _skipFeatures;
@@ -151,7 +150,6 @@ public sealed class Test262Runner
         HashSet<string>? skipFeatures = null,
         bool useNonCollectibleLoad = false)
     {
-        _test262Root = test262Root;
         _assembler = new Test262HarnessAssembler(test262Root);
         _timeout = timeout ?? DefaultTimeout;
         _skipFeatures = skipFeatures ?? new HashSet<string>(StringComparer.Ordinal);

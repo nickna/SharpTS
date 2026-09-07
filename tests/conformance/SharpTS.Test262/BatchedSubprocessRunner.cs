@@ -293,7 +293,6 @@ public sealed class BatchedSubprocessRunner
         private readonly Action<string, string> _onResult;
         private readonly Func<string, bool> _shouldRetryAfterCrash;
         private readonly TimeSpan _idleBudget;
-        private readonly int _id;
         private readonly WorkerTrace _trace;
         private int _writtenCount;
         private int _readCount;
@@ -337,7 +336,6 @@ public sealed class BatchedSubprocessRunner
             _onResult = onResult;
             _shouldRetryAfterCrash = shouldRetryAfterCrash;
             _idleBudget = idleBudget;
-            _id = id;
             // Trace file is unique per spawn, not per slot: the previous worker's
             // parent-side StreamWriter stays open until RunAll's finally block, so a
             // respawn reopening worker_{id}.log would hit a sharing violation.
