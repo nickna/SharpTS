@@ -335,16 +335,24 @@ public class StandaloneDllTests
         var files = new Dictionary<string, string>
         {
             ["main.ts"] = """
-                import * as vm from 'vm';
-                console.log(vm.runInNewContext('1 + 1'));
+                import { runInNewContext } from 'vm';
+                try {
+                    runInNewContext('1 + 1');
+                } catch (error) {
+                    console.log('caught: ' + error.message);
+                }
                 """
         };
 
         var (tempDir, dllPath) = CompileStandaloneModule(files, "main.ts");
         try
         {
-            var ex = Assert.Throws<Exception>(() => ExecuteCompiledDllIsolated(dllPath, timeoutMs: 15000));
-            Assert.Contains("vm module is not supported in standalone", ex.Message);
+            // Catch inside the probe so this assertion does not depend on Windows
+            // unhandled-exception reporting finishing before the process deadline.
+            // A named function import defers the missing-runtime lookup to the call.
+            var output = ExecuteCompiledDllIsolated(dllPath, timeoutMs: 15000);
+            Assert.StartsWith("caught: ", output);
+            Assert.Contains("vm module is not supported in standalone", output);
         }
         finally
         {
@@ -398,9 +406,11 @@ public class StandaloneDllTests
         var files = new Dictionary<string, string>
         {
             ["main.ts"] = """
-                import * as cluster from 'cluster';
-                if (cluster.isPrimary) {
-                    cluster.fork();
+                import { fork } from 'cluster';
+                try {
+                    fork();
+                } catch (error) {
+                    console.log('caught: ' + error.message);
                 }
                 """
         };
@@ -408,8 +418,11 @@ public class StandaloneDllTests
         var (tempDir, dllPath) = CompileStandaloneModule(files, "main.ts");
         try
         {
-            var ex = Assert.Throws<Exception>(() => ExecuteCompiledDllIsolated(dllPath, timeoutMs: 15000));
-            Assert.Contains("cluster requires the SharpTS runtime", ex.Message);
+            // A namespace import would read cluster state before entering the try block.
+            // Invoke the named function inside it and require a normal process exit.
+            var output = ExecuteCompiledDllIsolated(dllPath, timeoutMs: 15000);
+            Assert.StartsWith("caught: ", output);
+            Assert.Contains("cluster requires the SharpTS runtime", output);
         }
         finally
         {
