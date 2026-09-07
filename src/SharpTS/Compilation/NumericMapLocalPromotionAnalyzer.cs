@@ -1,5 +1,4 @@
 using SharpTS.Parsing;
-using SharpTS.Parsing.Visitors;
 using SharpTS.TypeSystem;
 
 namespace SharpTS.Compilation;
@@ -48,44 +47,17 @@ internal static class NumericMapLocalPromotionAnalyzer
         && IsNumber(map.KeyType)
         && IsNumber(map.ValueType);
 
-    private sealed class Visitor(TypeMap typeMap) : AstVisitorBase
+    private sealed class Visitor(TypeMap typeMap) : FunctionScopedBindingVisitor
     {
         private readonly TypeMap _typeMap = typeMap;
         private Expr.Call? _discardedCall;
-        private int _scope;
-        private int _nextScope;
 
-        public Dictionary<(int Scope, string Name), Token> Candidates { get; } = [];
-        public Dictionary<(int Scope, string Name), int> DeclarationCounts { get; } = [];
-        public HashSet<(int Scope, string Name)> Disqualified { get; } = [];
+        public Dictionary<FunctionScopedBinding, Token> Candidates { get; } = [];
         public bool ContainsDirectEval { get; private set; }
         public bool IntrinsicMapIsObservable { get; private set; }
 
-        protected override void VisitFunction(Stmt.Function statement) =>
-            InScope(() => base.VisitFunction(statement));
-
-        protected override void VisitArrowFunction(Expr.ArrowFunction expression) =>
-            InScope(() => base.VisitArrowFunction(expression));
-
-        private void InScope(Action visit)
+        protected override void OnDeclaration(FunctionScopedBinding key, Token name, Expr? initializer)
         {
-            int saved = _scope;
-            _scope = ++_nextScope;
-            visit();
-            _scope = saved;
-        }
-
-        protected override void VisitVar(Stmt.Var statement) =>
-            HandleDeclaration(statement.Name, statement.Initializer);
-
-        protected override void VisitConst(Stmt.Const statement) =>
-            HandleDeclaration(statement.Name, statement.Initializer);
-
-        private void HandleDeclaration(Token name, Expr? initializer)
-        {
-            var key = (_scope, name.Lexeme);
-            DeclarationCounts[key] = DeclarationCounts.GetValueOrDefault(key) + 1;
-
             if (initializer is Expr.New
                 {
                     Callee: Expr.Variable { Name.Lexeme: "Map" },
@@ -95,9 +67,6 @@ internal static class NumericMapLocalPromotionAnalyzer
             {
                 Candidates.TryAdd(key, name);
             }
-
-            if (initializer != null)
-                Visit(initializer);
         }
 
         protected override void VisitNew(Expr.New expression)
@@ -202,45 +171,14 @@ internal static class NumericMapLocalPromotionAnalyzer
         {
             if (expression.Name.Lexeme == "Map")
                 IntrinsicMapIsObservable = true;
-            Disqualified.Add((_scope, expression.Name.Lexeme));
+            Disqualified.Add(Binding(expression.Name));
         }
 
-        protected override void VisitAssign(Expr.Assign expression)
+        protected override void OnVariableWrite(Token name)
         {
-            if (expression.Name.Lexeme == "Map")
+            if (name.Lexeme == "Map")
                 IntrinsicMapIsObservable = true;
-            Disqualified.Add((_scope, expression.Name.Lexeme));
-            base.VisitAssign(expression);
-        }
-
-        protected override void VisitCompoundAssign(Expr.CompoundAssign expression)
-        {
-            if (expression.Name.Lexeme == "Map")
-                IntrinsicMapIsObservable = true;
-            Disqualified.Add((_scope, expression.Name.Lexeme));
-            base.VisitCompoundAssign(expression);
-        }
-
-        protected override void VisitLogicalAssign(Expr.LogicalAssign expression)
-        {
-            if (expression.Name.Lexeme == "Map")
-                IntrinsicMapIsObservable = true;
-            Disqualified.Add((_scope, expression.Name.Lexeme));
-            base.VisitLogicalAssign(expression);
-        }
-
-        protected override void VisitPrefixIncrement(Expr.PrefixIncrement expression)
-        {
-            if (expression.Operand is Expr.Variable variable)
-                Disqualified.Add((_scope, variable.Name.Lexeme));
-            base.VisitPrefixIncrement(expression);
-        }
-
-        protected override void VisitPostfixIncrement(Expr.PostfixIncrement expression)
-        {
-            if (expression.Operand is Expr.Variable variable)
-                Disqualified.Add((_scope, variable.Name.Lexeme));
-            base.VisitPostfixIncrement(expression);
+            base.OnVariableWrite(name);
         }
     }
 }
