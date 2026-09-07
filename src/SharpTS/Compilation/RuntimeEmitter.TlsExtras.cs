@@ -23,7 +23,7 @@ public partial class RuntimeEmitter
             _types.Object,
             Type.EmptyTypes
         );
-        runtime.TlsGetCiphers = method;
+        runtime.RequireTls().GetCiphers = method;
         runtime.RegisterBuiltInModuleMethod("tls", "getCiphers", method);
 
         var il = method.GetILGenerator();
@@ -50,7 +50,7 @@ public partial class RuntimeEmitter
     /// Emits: public static object TlsRootCertificates() — a List&lt;object&gt; of PEM root certs
     /// enumerated from the platform Root store (CurrentUser + LocalMachine).
     /// </summary>
-    private void EmitTlsRootCertificates(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTlsRootCertificates(TypeBuilder typeBuilder, EmittedTlsRuntime tls)
     {
         var method = typeBuilder.DefineMethod(
             "TlsRootCertificates",
@@ -58,7 +58,7 @@ public partial class RuntimeEmitter
             _types.Object,
             Type.EmptyTypes
         );
-        runtime.TlsRootCertificates = method;
+        tls.RootCertificates = method;
 
         var il = method.GetILGenerator();
         var listType = _types.ListOfObject;

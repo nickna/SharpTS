@@ -20,9 +20,9 @@ public partial class RuntimeEmitter
         EmitTlsCreateSecureContext(typeBuilder, runtime);
         EmitTlsCheckServerIdentity(typeBuilder, runtime);
         EmitTlsGetCiphers(typeBuilder, runtime);
-        EmitTlsRootCertificates(typeBuilder, runtime);
-        EmitTlsGetDefaultMinVersion(typeBuilder, runtime);
-        EmitTlsGetDefaultMaxVersion(typeBuilder, runtime);
+        EmitTlsRootCertificates(typeBuilder, runtime.RequireTls());
+        EmitTlsGetDefaultMinVersion(typeBuilder, runtime.RequireTls());
+        EmitTlsGetDefaultMaxVersion(typeBuilder, runtime.RequireTls());
     }
 
     /// <summary>
@@ -37,7 +37,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object, _types.Object]
         );
-        runtime.TlsCreateServer = method;
+        runtime.RequireTls().CreateServer = method;
         runtime.RegisterBuiltInModuleMethod("tls", "createServer", method);
         runtime.RegisterBuiltInModuleMethod("tls", "Server", method); // alias
 
@@ -46,7 +46,7 @@ public partial class RuntimeEmitter
         // new $TlsServer(options, callback)
         il.Emit(OpCodes.Ldarg_0); // options
         il.Emit(OpCodes.Ldarg_1); // callback
-        il.Emit(OpCodes.Newobj, runtime.TlsServerCtor);
+        il.Emit(OpCodes.Newobj, runtime.RequireTls().ServerCtor);
         il.Emit(OpCodes.Ret);
     }
 
@@ -58,8 +58,6 @@ public partial class RuntimeEmitter
     /// NOTE: The TlsConnect body is deferred to EmitTlsConnectBody (Phase 2) since it
     /// depends on the $TlsConnectClosure type defined after EmitRuntimeClass.
     /// </summary>
-    private MethodBuilder? _tlsConnectMethod;
-
     private void EmitTlsConnect(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
@@ -68,9 +66,9 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object, _types.Object, _types.Object, _types.Object]
         );
-        runtime.TlsConnect = method;
+        runtime.RequireTls().Connect = method;
         runtime.RegisterBuiltInModuleMethod("tls", "connect", method);
-        _tlsConnectMethod = method;
+
         // Body emitted in EmitTlsConnectBody after $TlsConnectClosure is defined
     }
 
@@ -79,7 +77,7 @@ public partial class RuntimeEmitter
     /// </summary>
     internal void EmitTlsConnectBody(EmittedRuntime runtime)
     {
-        var il = _tlsConnectMethod!.GetILGenerator();
+        var il = runtime.RequireTls().Connect.GetILGenerator();
 
         // Parse port from arg0 (double → int)
         var portLocal = il.DeclareLocal(_types.Int32);
@@ -223,8 +221,8 @@ public partial class RuntimeEmitter
         il.MarkLabel(alpnDone);
 
         // Create socket
-        var socketLocal = il.DeclareLocal(runtime.TlsSocketType);
-        il.Emit(OpCodes.Newobj, runtime.TlsSocketCtor);
+        var socketLocal = il.DeclareLocal(runtime.RequireTls().SocketType);
+        il.Emit(OpCodes.Newobj, runtime.RequireTls().SocketCtor);
         il.Emit(OpCodes.Stloc, socketLocal);
         il.Emit(OpCodes.Ldloc, socketLocal);
         il.Emit(OpCodes.Ldloc, hostLocal);
@@ -278,13 +276,13 @@ public partial class RuntimeEmitter
             _types.Object,
             Type.EmptyTypes
         );
-        runtime.TlsCreateSocket = method;
+        runtime.RequireTls().CreateSocket = method;
         runtime.RegisterBuiltInModuleMethod("tls", "TLSSocket", method);
 
         var il = method.GetILGenerator();
 
         // new $TlsSocket()
-        il.Emit(OpCodes.Newobj, runtime.TlsSocketCtor);
+        il.Emit(OpCodes.Newobj, runtime.RequireTls().SocketCtor);
         il.Emit(OpCodes.Ret);
     }
 
@@ -302,7 +300,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object]
         );
-        runtime.TlsCreateSecureContext = method;
+        runtime.RequireTls().CreateSecureContext = method;
         runtime.RegisterBuiltInModuleMethod("tls", "createSecureContext", method);
 
         var il = method.GetILGenerator();
@@ -349,7 +347,7 @@ public partial class RuntimeEmitter
     /// Emits: public static object TlsGetDefaultMinVersion()
     /// Returns "TLSv1.2" - no reflection needed.
     /// </summary>
-    private void EmitTlsGetDefaultMinVersion(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTlsGetDefaultMinVersion(TypeBuilder typeBuilder, EmittedTlsRuntime tls)
     {
         var method = typeBuilder.DefineMethod(
             "TlsGetDefaultMinVersion",
@@ -357,7 +355,7 @@ public partial class RuntimeEmitter
             _types.Object,
             []
         );
-        runtime.TlsGetDefaultMinVersion = method;
+        tls.GetDefaultMinVersion = method;
 
         var il = method.GetILGenerator();
         il.Emit(OpCodes.Ldstr, "TLSv1.2");
@@ -368,7 +366,7 @@ public partial class RuntimeEmitter
     /// Emits: public static object TlsGetDefaultMaxVersion()
     /// Returns "TLSv1.3" - no reflection needed.
     /// </summary>
-    private void EmitTlsGetDefaultMaxVersion(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTlsGetDefaultMaxVersion(TypeBuilder typeBuilder, EmittedTlsRuntime tls)
     {
         var method = typeBuilder.DefineMethod(
             "TlsGetDefaultMaxVersion",
@@ -376,7 +374,7 @@ public partial class RuntimeEmitter
             _types.Object,
             []
         );
-        runtime.TlsGetDefaultMaxVersion = method;
+        tls.GetDefaultMaxVersion = method;
 
         var il = method.GetILGenerator();
         il.Emit(OpCodes.Ldstr, "TLSv1.3");

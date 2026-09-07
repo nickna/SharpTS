@@ -82,7 +82,7 @@ public partial class RuntimeEmitter
             runtime.NetSocketType  // extends $NetSocket — inherits real socket I/O over the SslStream
         );
         _tlsSocketTypeBuilder = typeBuilder;
-        runtime.TlsSocketType = typeBuilder;
+        runtime.RequireTls().SocketType = typeBuilder;
 
         // Fields (Assembly so the connect/accept workers can populate them)
         _tlsSocketSslStreamField = typeBuilder.DefineField("_sslStream", typeof(SslStream), FieldAttributes.Assembly);
@@ -98,7 +98,7 @@ public partial class RuntimeEmitter
             CallingConventions.Standard,
             Type.EmptyTypes
         );
-        runtime.TlsSocketCtor = ctor;
+        runtime.RequireTls().SocketCtor = ctor;
         var ctorIL = ctor.GetILGenerator();
         ctorIL.Emit(OpCodes.Ldarg_0);
         ctorIL.Emit(OpCodes.Call, runtime.NetSocketCtor);
@@ -780,7 +780,7 @@ public partial class RuntimeEmitter
             CallingConventions.Standard,
             [_types.Object, _types.Object]
         );
-        runtime.TlsServerCtor = ctor;
+        runtime.RequireTls().ServerCtor = ctor;
 
         var ctorIL = ctor.GetILGenerator();
         ctorIL.Emit(OpCodes.Ldarg_0);
