@@ -21,33 +21,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item"));
     }
 
-    /// <summary>
-    /// Emits Object.defineProperty(obj, prop, descriptor) - defines or modifies a property.
-    /// Signature: object ObjectDefineProperty(object obj, object prop, object descriptor)
-    /// Creates a $CompiledPropertyDescriptor and registers it in the emitted $PropertyDescriptorStore.
-    /// </summary>
-    private void EmitObjectDefineProperty(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    // These stages require an empty evaluation stack and leave it empty on fallthrough.
+    // Receiver branches own their labels and return from the emitted method when handled;
+    // the caller owns shared locals and preserves dispatch/coercion order.
+    private void EmitDefinePropertyReceiverValidation(ILGenerator il, EmittedRuntime runtime)
     {
-        var method = typeBuilder.DefineMethod(
-            "ObjectDefineProperty",
-            MethodAttributes.Public | MethodAttributes.Static,
-            _types.Object,
-            [_types.Object, _types.Object, _types.Object]
-        );
-        runtime.ObjectDefineProperty = method;
-
-        var il = method.GetILGenerator();
-
-        // Emit standalone property descriptor creation and registration
-        // This avoids any runtime dependency on SharpTS.dll
-
-        var descriptorLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
-        var dictLocal = il.DeclareLocal(_types.DictionaryStringObject);
-        var propNameLocal = il.DeclareLocal(_types.String);
-        var valueLocal = il.DeclareLocal(_types.Object);
-        var notDictLabel = il.DefineLabel();
-        var setDescriptorDoneLabel = il.DefineLabel();
-
         // ECMA-262 §20.1.2.4 step 1: If Type(O) is not Object, throw TypeError.
         // Covers null/undefined/primitives. test262 15.2.3.6-{1-*}.js verify.
         var primitiveThrowLabel = il.DefineLabel();
@@ -77,7 +55,10 @@ public partial class RuntimeEmitter
         il.MarkLabel(primitiveThrowLabel);
         GuestErrorEmitter.ThrowTypeError(il, runtime, "Object.defineProperty called on non-object");
         il.MarkLabel(skipTypeThrowLabel);
+    }
 
+    private void EmitDefinePropertySymbolReceiver(ILGenerator il, EmittedRuntime runtime, MethodBuilder method, LocalBuilder descriptorLocal)
+    {
         // Symbol-keyed properties live in the object's symbol dictionary. Normalize
         // the supplied descriptor through this same method using an ephemeral
         // string-keyed holder, then store the resulting compiled descriptor. This
@@ -132,17 +113,10 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(notSymbolLabel);
+    }
 
-        // propName = $Runtime.ToJsString(prop) — ECMA-262 §7.1.19 ToPropertyKey
-        // string path via the spec-shaped ToString. Avoids the prop.ToString()
-        // Callvirt-on-null NRE for `Object.defineProperty(obj, null, ...)`,
-        // and unlike runtime.Stringify (which produces debug "[1, 2]" form for
-        // arrays) honors `Array.prototype.toString` join semantics so
-        // `defineProperty(obj, [1], ...)` lands at key "1" (matches V8/SM).
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
-        il.Emit(OpCodes.Stloc, propNameLocal);
-
+    private void EmitDefinePropertyProxyReceiver(ILGenerator il, EmittedRuntime runtime, MethodBuilder method, LocalBuilder propNameLocal)
+    {
         // Proxy [[DefineOwnProperty]] dispatch. The callback lets the runtime
         // proxy forward a missing trap to the emitted target representation.
         var notProxyForDefineLabel = il.DefineLabel();
@@ -203,6 +177,50 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notProxyForDefineLabel);
+    }
+
+    /// <summary>
+    /// Emits Object.defineProperty(obj, prop, descriptor) - defines or modifies a property.
+    /// Signature: object ObjectDefineProperty(object obj, object prop, object descriptor)
+    /// Creates a $CompiledPropertyDescriptor and registers it in the emitted $PropertyDescriptorStore.
+    /// </summary>
+    private void EmitObjectDefineProperty(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "ObjectDefineProperty",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object,
+            [_types.Object, _types.Object, _types.Object]
+        );
+        runtime.ObjectDefineProperty = method;
+
+        var il = method.GetILGenerator();
+
+        // Emit standalone property descriptor creation and registration
+        // This avoids any runtime dependency on SharpTS.dll
+
+        var descriptorLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+        var dictLocal = il.DeclareLocal(_types.DictionaryStringObject);
+        var propNameLocal = il.DeclareLocal(_types.String);
+        var valueLocal = il.DeclareLocal(_types.Object);
+        var notDictLabel = il.DefineLabel();
+        var setDescriptorDoneLabel = il.DefineLabel();
+
+        EmitDefinePropertyReceiverValidation(il, runtime);
+
+        EmitDefinePropertySymbolReceiver(il, runtime, method, descriptorLocal);
+
+        // propName = $Runtime.ToJsString(prop) — ECMA-262 §7.1.19 ToPropertyKey
+        // string path via the spec-shaped ToString. Avoids the prop.ToString()
+        // Callvirt-on-null NRE for `Object.defineProperty(obj, null, ...)`,
+        // and unlike runtime.Stringify (which produces debug "[1, 2]" form for
+        // arrays) honors `Array.prototype.toString` join semantics so
+        // `defineProperty(obj, [1], ...)` lands at key "1" (matches V8/SM).
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Stloc, propNameLocal);
+
+        EmitDefinePropertyProxyReceiver(il, runtime, method, propNameLocal);
 
         // ECMA-262 10.4.2.4 ArraySetLength steps 3-4: newLen =
         // ToUint32(Desc.[[Value]]), numberLen = ToNumber(Desc.[[Value]]) —
