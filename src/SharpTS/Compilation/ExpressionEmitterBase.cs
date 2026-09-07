@@ -492,7 +492,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
 
     private bool HasNativeNumericLocal(Expr expression)
     {
-        expression = UnwrapNumericOperand(expression);
+        expression = ExpressionUnwrapper.Unwrap(expression);
         if (expression is not Expr.Variable variable)
             return false;
 
@@ -504,7 +504,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
 
     private static bool IsSimpleNumericOperand(Expr expression)
     {
-        expression = UnwrapNumericOperand(expression);
+        expression = ExpressionUnwrapper.Unwrap(expression);
         return expression is Expr.Variable
             or Expr.Literal { Value: double }
             or Expr.Unary
@@ -512,30 +512,6 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
             Operator.Type: TokenType.MINUS or TokenType.PLUS,
             Right: Expr.Literal { Value: double }
         };
-    }
-
-    private static Expr UnwrapNumericOperand(Expr expression)
-    {
-        while (true)
-        {
-            switch (expression)
-            {
-                case Expr.Grouping grouping:
-                    expression = grouping.Expression;
-                    continue;
-                case Expr.TypeAssertion assertion:
-                    expression = assertion.Expression;
-                    continue;
-                case Expr.Satisfies satisfies:
-                    expression = satisfies.Expression;
-                    continue;
-                case Expr.NonNullAssertion nonNull:
-                    expression = nonNull.Expression;
-                    continue;
-                default:
-                    return expression;
-            }
-        }
     }
 
     private static bool IsNumericType(TypeSystem.TypeInfo? type) => type is

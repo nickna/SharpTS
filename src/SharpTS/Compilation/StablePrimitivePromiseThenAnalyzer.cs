@@ -16,15 +16,13 @@ internal static class StablePrimitivePromiseThenAnalyzer
     public static void Analyze(
         List<Stmt> program,
         TypeMap? typeMap,
-        ClosureAnalyzer? closures)
+        ClosureAnalyzer? closures,
+        bool hasObservablePromiseMutation)
     {
         if (typeMap is null)
             return;
 
-        var mutationVisitor = new PromiseMutationVisitor(typeMap);
-        foreach (var statement in program)
-            mutationVisitor.Visit(statement);
-        if (mutationVisitor.HasObservableMutation)
+        if (hasObservablePromiseMutation)
             return;
 
         var visitor = new BindingVisitor(typeMap);
@@ -120,7 +118,7 @@ internal static class StablePrimitivePromiseThenAnalyzer
 
     private static bool IsIntrinsicResolveSeed(Expr expression)
     {
-        expression = Unwrap(expression);
+        expression = ExpressionUnwrapper.Unwrap(expression);
         return expression is Expr.Call
         {
             Optional: false,
@@ -131,30 +129,6 @@ internal static class StablePrimitivePromiseThenAnalyzer
                 Name.Lexeme: "resolve"
             }
         };
-    }
-
-    private static Expr Unwrap(Expr expression)
-    {
-        while (true)
-        {
-            switch (expression)
-            {
-                case Expr.Grouping grouping:
-                    expression = grouping.Expression;
-                    continue;
-                case Expr.TypeAssertion assertion:
-                    expression = assertion.Expression;
-                    continue;
-                case Expr.Satisfies satisfies:
-                    expression = satisfies.Expression;
-                    continue;
-                case Expr.NonNullAssertion nonNull:
-                    expression = nonNull.Expression;
-                    continue;
-                default:
-                    return expression;
-            }
-        }
     }
 
     private sealed class BindingVisitor(TypeMap typeMap) : AstVisitorBase
@@ -211,7 +185,7 @@ internal static class StablePrimitivePromiseThenAnalyzer
         protected override void VisitExpression(Stmt.Expression statement)
         {
             var saved = _linearAssignmentStatement;
-            _linearAssignmentStatement = Unwrap(statement.Expr) as Expr.Assign;
+            _linearAssignmentStatement = ExpressionUnwrapper.Unwrap(statement.Expr) as Expr.Assign;
             try
             {
                 Visit(statement.Expr);
@@ -286,7 +260,7 @@ internal static class StablePrimitivePromiseThenAnalyzer
 
         protected override void VisitAwait(Expr.Await expression)
         {
-            if (Unwrap(expression.Expression) is Expr.Variable variable)
+            if (ExpressionUnwrapper.Unwrap(expression.Expression) is Expr.Variable variable)
             {
                 RecordTerminal((_scope, variable.Name.Lexeme));
                 return;
@@ -297,7 +271,7 @@ internal static class StablePrimitivePromiseThenAnalyzer
         protected override void VisitReturn(Stmt.Return statement)
         {
             if (statement.Value is not null
-                && Unwrap(statement.Value) is Expr.Variable variable)
+                && ExpressionUnwrapper.Unwrap(statement.Value) is Expr.Variable variable)
             {
                 RecordTerminal((_scope, variable.Name.Lexeme));
                 return;
@@ -339,113 +313,5 @@ internal static class StablePrimitivePromiseThenAnalyzer
                 Disqualified.Add((_scope, variable.Name.Lexeme));
             base.VisitPostfixIncrement(expression);
         }
-    }
-
-    private sealed class PromiseMutationVisitor(TypeMap typeMap) : AstVisitorBase
-    {
-        private readonly TypeMap _typeMap = typeMap;
-        public bool HasObservableMutation { get; private set; }
-
-        protected override void VisitCall(Expr.Call expression)
-        {
-            if (expression.Callee is Expr.Variable { Name.Lexeme: "eval" })
-                HasObservableMutation = true;
-
-            if (expression.Arguments.Count > 0
-                && expression.Callee is Expr.Get
-                {
-                    Object: Expr.Variable { Name.Lexeme: "Object" or "Reflect" },
-                    Name.Lexeme: "assign" or "defineProperty" or "defineProperties"
-                        or "set" or "deleteProperty" or "setPrototypeOf"
-                }
-                && IsPromiseTarget(expression.Arguments[0]))
-            {
-                HasObservableMutation = true;
-            }
-
-            base.VisitCall(expression);
-        }
-
-        protected override void VisitGet(Expr.Get expression)
-        {
-            if (IsPromisePrototype(expression))
-                HasObservableMutation = true;
-            base.VisitGet(expression);
-        }
-
-        protected override void VisitAssign(Expr.Assign expression)
-        {
-            if (expression.Name.Lexeme == "Promise")
-                HasObservableMutation = true;
-            base.VisitAssign(expression);
-        }
-
-        protected override void VisitSet(Expr.Set expression)
-        {
-            if (IsPromiseTarget(expression.Object))
-                HasObservableMutation = true;
-            base.VisitSet(expression);
-        }
-
-        protected override void VisitSetIndex(Expr.SetIndex expression)
-        {
-            if (IsPromiseTarget(expression.Object))
-                HasObservableMutation = true;
-            base.VisitSetIndex(expression);
-        }
-
-        protected override void VisitCompoundSet(Expr.CompoundSet expression)
-        {
-            if (IsPromiseTarget(expression.Object))
-                HasObservableMutation = true;
-            base.VisitCompoundSet(expression);
-        }
-
-        protected override void VisitCompoundSetIndex(Expr.CompoundSetIndex expression)
-        {
-            if (IsPromiseTarget(expression.Object))
-                HasObservableMutation = true;
-            base.VisitCompoundSetIndex(expression);
-        }
-
-        protected override void VisitLogicalSet(Expr.LogicalSet expression)
-        {
-            if (IsPromiseTarget(expression.Object))
-                HasObservableMutation = true;
-            base.VisitLogicalSet(expression);
-        }
-
-        protected override void VisitLogicalSetIndex(Expr.LogicalSetIndex expression)
-        {
-            if (IsPromiseTarget(expression.Object))
-                HasObservableMutation = true;
-            base.VisitLogicalSetIndex(expression);
-        }
-
-        protected override void VisitDelete(Expr.Delete expression)
-        {
-            Expr operand = Unwrap(expression.Operand);
-            if (operand is Expr.Get property && IsPromiseTarget(property.Object)
-                || operand is Expr.GetIndex index && IsPromiseTarget(index.Object))
-            {
-                HasObservableMutation = true;
-            }
-            base.VisitDelete(expression);
-        }
-
-        private bool IsPromiseTarget(Expr expression)
-        {
-            expression = Unwrap(expression);
-            return expression is Expr.Variable { Name.Lexeme: "Promise" }
-                || IsPromisePrototype(expression)
-                || _typeMap.Get(expression) is TypeInfo.Promise;
-        }
-
-        private static bool IsPromisePrototype(Expr expression) => Unwrap(expression) is Expr.Get
-        {
-            Optional: false,
-            Object: Expr.Variable { Name.Lexeme: "Promise" },
-            Name.Lexeme: "prototype"
-        };
     }
 }

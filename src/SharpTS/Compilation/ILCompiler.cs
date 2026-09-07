@@ -669,10 +669,12 @@ public partial class ILCompiler
             statements, _typeMap, _closures.Analyzer, _features);
         StableNumericFunctionCaptureAnalyzer.Analyze(statements, _typeMap, _closures.Analyzer);
         NumericMapLocalPromotionAnalyzer.Analyze(statements, _typeMap, _closures.Analyzer);
+        bool hasObservablePromiseMutation = _typeMap is not null
+            && PromiseMutationAnalyzer.HasObservableMutation(statements, _typeMap);
         StablePrimitivePromiseThenAnalyzer.Analyze(
-            statements, _typeMap, _closures.Analyzer);
+            statements, _typeMap, _closures.Analyzer, hasObservablePromiseMutation);
         StablePrimitivePromiseAllAnalyzer.Analyze(
-            statements, _typeMap, _closures.Analyzer, _features);
+            statements, _typeMap, _closures.Analyzer, _features, hasObservablePromiseMutation);
         StableExactClassMethodCallAnalyzer.Analyze(statements, _typeMap, _features);
         NonEscapingArrowLocalAnalyzer.Analyze(
             statements, _closures.DirectCallArrowBindings, _closures.Analyzer);
