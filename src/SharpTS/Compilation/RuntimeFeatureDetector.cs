@@ -137,6 +137,7 @@ public sealed class RuntimeFeatureDetector
         foreach (var stmt in statements)
             VisitStmt(stmt);
         StableCompactRecordLocalAnalyzer.Analyze(statements, typeMap, _set);
+        LocalRecordArrayAnalyzer.Analyze(statements, typeMap, _set);
 
         // The emitter selects the discarded one-element push intrinsic only
         // while both of these whole-program guards remain clear. Keep literal

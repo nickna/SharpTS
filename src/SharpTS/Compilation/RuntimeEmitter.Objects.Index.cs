@@ -603,9 +603,23 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, doArrayGetLabel);
 
         il.MarkLabel(convertArrayIndexLabel);
+        // Only integral numeric keys are element indices. Convert.ToInt64 rounds
+        // fractions (0.5 becomes 0) and throws for NaN/Infinity; those keys must
+        // instead use their ordinary property names, without losing precision.
+        var tsArrayNumericKey = il.DeclareLocal(_types.Double);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.Convert, "ToInt64", _types.Object));
+        il.Emit(OpCodes.Isinst, _types.Double);
+        il.Emit(OpCodes.Brfalse, routeAsNamedGetLabel);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Unbox_Any, _types.Double);
+        il.Emit(OpCodes.Stloc, tsArrayNumericKey);
+        il.Emit(OpCodes.Ldloc, tsArrayNumericKey);
+        il.Emit(OpCodes.Conv_I8);
         il.Emit(OpCodes.Stloc, tsArrayGetIdx);
+        il.Emit(OpCodes.Ldloc, tsArrayNumericKey);
+        il.Emit(OpCodes.Ldloc, tsArrayGetIdx);
+        il.Emit(OpCodes.Conv_R8);
+        il.Emit(OpCodes.Bne_Un, routeAsNamedGetLabel);
 
         il.Emit(OpCodes.Ldloc, tsArrayGetIdx);
         il.Emit(OpCodes.Ldc_I4_0);

@@ -18,6 +18,7 @@ namespace SharpTS.Compilation;
 /// </summary>
 public sealed class RuntimeFeatureSet
 {
+    internal HashSet<Expr.ArrayLiteral> LocalRecordNumericArrays { get; } = new(ReferenceEqualityComparer.Instance);
     /// <summary>
     /// Closed record shapes reachable from a direct, one-argument
     /// <c>JSON.stringify</c> call. Object-literal emission uses this allow-list

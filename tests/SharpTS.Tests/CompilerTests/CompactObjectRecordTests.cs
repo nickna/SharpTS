@@ -16,6 +16,97 @@ namespace SharpTS.Tests.CompilerTests;
 public sealed class CompactObjectRecordTests
 {
     [Fact]
+    public void InterfaceRead_UsesGuardedSlotsInNumericConsumer()
+    {
+        const string source = """
+            interface Item { index: number; next: number; label: string; values: number[]; }
+            function read(item: Item): number { return item.index * 2 + item.next; }
+            function run(): number {
+                const items: Item[] = [];
+                items.push({ index: 2, next: 3, label: "x", values: [2, 3] });
+                return read(items[0]);
+            }
+            console.log(run());
+            """;
+        var parsed = new Parser(new Lexer(source).ScanTokens()).ParseOrThrow();
+        var typeMap = new TypeChecker().Check(parsed);
+        var read = parsed.OfType<Stmt.Function>().Single(f => f.Name.Lexeme == "read");
+        var expression = (Expr.Binary)((Stmt.Return)read.Body![0]).Value!;
+        var receiver = ((Expr.Get)expression.Right).Object;
+        var features = new RuntimeFeatureDetector().Detect(parsed, typeMap);
+        Assert.True(typeMap.Get(receiver) is SharpTS.TypeSystem.TypeInfo.Interface it &&
+            JsonSerializationShapeAnalyzer.TryMatchCompactInterface(it, features.CompactObjectRecordShapes.Values, out _),
+            $"Receiver: {typeMap.Get(receiver)}; carriers: {string.Join(",", features.CompactObjectRecordShapes.Keys)}");
+        var members = ReadMembers(FindFunction(Compile(source), "read")).ToArray();
+        Assert.Contains(members, x => x.OpCode == OpCodes.Ldfld && x.Member is FieldInfo { FieldType: var t } && t == typeof(double));
+        Assert.Contains(members, x => x.OpCode == OpCodes.Isinst);
+        Assert.Contains(members, x => x.Member?.Name == "GetProperty");
+        Assert.Equal("7\n", TestHarness.RunCompiled(source));
+        Assert.Empty(TestHarness.CompileAndVerifyOnly(source));
+    }
+
+    [Theory, ModeData]
+    public void InterfaceRead_NullishFallbackRetainsTypeError(ExecutionMode mode)
+    {
+        const string source = """
+            interface Item { value: number; label: string; }
+            function raw(item: Item): any { return item.value; }
+            function numeric(item: Item): number { return item.value * 2; }
+            const items: Item[] = [];
+            items.push({ value: 3, label: "x" });
+            console.log(raw(items[0]), numeric(items[0]));
+            const missing: any[] = [null, undefined];
+            for (const value of missing) {
+                try { raw(value); } catch (e: any) { console.log(e instanceof TypeError); }
+                try { numeric(value); } catch (e: any) { console.log(e instanceof TypeError); }
+            }
+            """;
+        Assert.Equal("3 6\ntrue\ntrue\ntrue\ntrue\n", TestHarness.Run(source, mode));
+        if (mode == ExecutionMode.Compiled) Assert.Empty(TestHarness.CompileAndVerifyOnly(source));
+    }
+
+    [Theory, ModeData]
+    public void InterfaceRead_PreservesDynamicValuesAndDescriptors(ExecutionMode mode)
+    {
+        const string source = """
+            interface Base { value: number; }
+            interface Item extends Base { label: string; }
+            function numeric(item: Item): number { return item.value * 2; }
+            function raw(item: Item): any { return item.value; }
+            const items: Item[] = [];
+            items.push({ value: 3, label: "x" });
+            console.log(numeric(items[0]), raw(items[0]));
+            const dynamic: any = items[0];
+            dynamic.value = "7";
+            console.log(numeric(items[0]), typeof raw(items[0]));
+            Object.defineProperty(dynamic, "value", { get: () => 9, configurable: true });
+            console.log(numeric(items[0]), raw(items[0]));
+            const extra = { label: "y", extra: true, value: 4 };
+            console.log(numeric(extra));
+            class Other { value: number = 5; label: string = "z"; }
+            console.log(numeric(new Other()));
+            """;
+        Assert.Equal("6 3\n14 string\n18 9\n8\n10\n", TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
+    public void GenericInterfaceRead_EvaluatesReceiverOnceAndRetainsMissingValues(ExecutionMode mode)
+    {
+        const string source = """
+            interface Box<T> { value: T; }
+            let calls: number = 0;
+            const boxes: Box<number>[] = [];
+            boxes.push({ value: 6 });
+            function get(): Box<number> { calls++; return boxes[0]; }
+            console.log(get().value * 2, calls);
+            const dynamic: any = boxes[0];
+            delete dynamic.value;
+            console.log(get().value, calls);
+            """;
+        Assert.Equal("12 1\nundefined 2\n", TestHarness.Run(source, mode));
+    }
+
+    [Fact]
     public void InterfaceStoredRecord_UsesGuardedNativeNumberRead()
     {
         const string source = """

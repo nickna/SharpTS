@@ -1,0 +1,5 @@
+Kernel: Double $M_allocation_kernel_allocationChecksum(Double, Double); GC server=False; CPUs=28; runtime=10.0.11
+MEASURE n=5000 ms=0.7036 bytes=1291392 bytesPerRecord=258.28 gen0=212 gen1=162 gen2=0 pauseMs=194.98 iterations=2843 checksum=50044500
+MEASURE n=8192 ms=1.2276 bytes=2031936 bytesPerRecord=248.04 gen0=191 gen1=113 gen2=0 pauseMs=328.77 iterations=1630 checksum=134290636
+MEASURE n=8193 ms=2.1529 bytes=2163264 bytesPerRecord=264.04 gen0=111 gen1=110 gen2=53 pauseMs=795.83 iterations=929 checksum=134323415
+MEASURE n=20000 ms=6.6913 bytes=5164672 bytesPerRecord=258.23 gen0=91 gen1=90 gen2=40 pauseMs=928.64 iterations=299 checksum=800178000

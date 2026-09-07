@@ -1,0 +1,1145 @@
+[
+  {
+    "key": "windows|worker-allocation-scaling|worker-allocation-direct|20000|compiled",
+    "baselineMs": 21.045725,
+    "candidateMs": 6.2464783,
+    "nodeMs": null,
+    "pairedChangePct": -74.45257461572234,
+    "improvedPairs": 5,
+    "pairs": 5,
+    "baselineRange": [
+      26.2761308,
+      18.9298623,
+      19.6888431,
+      21.045725,
+      21.2585625
+    ],
+    "candidateRange": [
+      6.2464783,
+      6.4243471,
+      5.0299925,
+      5.1923464,
+      6.5481712
+    ]
+  },
+  {
+    "key": "windows|worker-allocation-scaling|worker-allocation-fixed-work|1|compiled",
+    "baselineMs": 31.4523844,
+    "candidateMs": 8.4929161,
+    "nodeMs": null,
+    "pairedChangePct": -74.5024307784121,
+    "improvedPairs": 5,
+    "pairs": 5,
+    "baselineRange": [
+      35.5236,
+      27.6416079,
+      25.770361,
+      31.4523844,
+      33.3720516
+    ],
+    "candidateRange": [
+      9.0576545,
+      8.9249921,
+      7.4213228,
+      7.8308539,
+      8.4929161
+    ]
+  },
+  {
+    "key": "windows|worker-allocation-scaling|worker-allocation-fixed-work|2|compiled",
+    "baselineMs": 25.0206275,
+    "candidateMs": 9.0679117,
+    "nodeMs": null,
+    "pairedChangePct": -63.7582562627576,
+    "improvedPairs": 5,
+    "pairs": 5,
+    "baselineRange": [
+      29.4489706,
+      23.01295,
+      23.4328977,
+      25.0206275,
+      26.7923763
+    ],
+    "candidateRange": [
+      11.1113935,
+      6.3099616,
+      9.1850183,
+      9.0679117,
+      8.2490306
+    ]
+  },
+  {
+    "key": "windows|worker-allocation-scaling|worker-allocation-fixed-work|4|compiled",
+    "baselineMs": 9.128555,
+    "candidateMs": 2.5670421,
+    "nodeMs": null,
+    "pairedChangePct": -72.5447521540923,
+    "improvedPairs": 5,
+    "pairs": 5,
+    "baselineRange": [
+      9.128555,
+      10.4295031,
+      7.7545713,
+      8.1119202,
+      10.55538
+    ],
+    "candidateRange": [
+      2.5062674,
+      2.5670421,
+      2.6632332,
+      2.6604886,
+      2.386815
+    ]
+  },
+  {
+    "key": "windows|worker-allocation-scaling|worker-allocation-direct|20000|interpreter",
+    "baselineMs": 126.3587125,
+    "candidateMs": 138.66885,
+    "nodeMs": null,
+    "pairedChangePct": 9.00796678735376,
+    "improvedPairs": 2,
+    "pairs": 5,
+    "baselineRange": [
+      139.5697,
+      109.62341,
+      126.3587125,
+      116.4727778,
+      132.070175
+    ],
+    "candidateRange": [
+      138.66885,
+      148.9089875,
+      111.6457556,
+      129.9711375,
+      143.9670125
+    ]
+  },
+  {
+    "key": "windows|worker-allocation-scaling|worker-allocation-fixed-work|1|interpreter",
+    "baselineMs": 153.15175,
+    "candidateMs": 147.982975,
+    "nodeMs": null,
+    "pairedChangePct": -0.7934613871535823,
+    "improvedPairs": 3,
+    "pairs": 5,
+    "baselineRange": [
+      165.9469875,
+      150.405175,
+      157.6132375,
+      134.4253625,
+      153.15175
+    ],
+    "candidateRange": [
+      147.3284125,
+      151.7182375,
+      104.71091,
+      147.982975,
+      151.93655
+    ]
+  },
+  {
+    "key": "windows|worker-allocation-scaling|worker-allocation-fixed-work|2|interpreter",
+    "baselineMs": 121.5,
+    "candidateMs": 113.7523556,
+    "nodeMs": null,
+    "pairedChangePct": -5.469937296769222,
+    "improvedPairs": 5,
+    "pairs": 5,
+    "baselineRange": [
+      121.5,
+      111.4982,
+      116.5558444,
+      128.652825,
+      134.2993
+    ],
+    "candidateRange": [
+      115.5246778,
+      104.2407,
+      113.7523556,
+      101.5314,
+      126.9532125
+    ]
+  },
+  {
+    "key": "windows|worker-allocation-scaling|worker-allocation-fixed-work|4|interpreter",
+    "baselineMs": 103.23619,
+    "candidateMs": 92.9808417,
+    "nodeMs": null,
+    "pairedChangePct": -11.298662279011918,
+    "improvedPairs": 3,
+    "pairs": 5,
+    "baselineRange": [
+      102.9613,
+      100.44546,
+      114.7021444,
+      109.26825,
+      103.23619
+    ],
+    "candidateRange": [
+      174.626475,
+      89.0964667,
+      91.1892727,
+      92.9808417,
+      104.61984
+    ]
+  },
+  {
+    "key": "windows|worker-allocation-scaling|worker-allocation-direct|20000|node",
+    "baselineMs": null,
+    "candidateMs": null,
+    "nodeMs": 1.0200182,
+    "pairedChangePct": null,
+    "improvedPairs": 0,
+    "pairs": 0,
+    "baselineRange": [],
+    "candidateRange": []
+  },
+  {
+    "key": "windows|worker-allocation-scaling|worker-allocation-fixed-work|1|node",
+    "baselineMs": null,
+    "candidateMs": null,
+    "nodeMs": 0.746795,
+    "pairedChangePct": null,
+    "improvedPairs": 0,
+    "pairs": 0,
+    "baselineRange": [],
+    "candidateRange": []
+  },
+  {
+    "key": "windows|worker-allocation-scaling|worker-allocation-fixed-work|2|node",
+    "baselineMs": null,
+    "candidateMs": null,
+    "nodeMs": 0.7004256,
+    "pairedChangePct": null,
+    "improvedPairs": 0,
+    "pairs": 0,
+    "baselineRange": [],
+    "candidateRange": []
+  },
+  {
+    "key": "windows|worker-allocation-scaling|worker-allocation-fixed-work|4|node",
+    "baselineMs": null,
+    "candidateMs": null,
+    "nodeMs": 0.7106996,
+    "pairedChangePct": null,
+    "improvedPairs": 0,
+    "pairs": 0,
+    "baselineRange": [],
+    "candidateRange": []
+  },
+  {
+    "key": "windows|worker-message-latency|worker-message-roundtrip|1|compiled",
+    "baselineMs": 14.8598559,
+    "candidateMs": 12.8513231,
+    "nodeMs": null,
+    "pairedChangePct": -12.979970247901718,
+    "improvedPairs": 4,
+    "pairs": 5,
+    "baselineRange": [
+      14.7682357,
+      12.7749392,
+      14.8598559,
+      16.9151233,
+      15.6452797
+    ],
+    "candidateRange": [
+      12.8513231,
+      13.3402053,
+      13.5455227,
+      11.9093465,
+      6.7633128
+    ]
+  },
+  {
+    "key": "windows|worker-message-latency|worker-message-roundtrip|2|compiled",
+    "baselineMs": 7.9180336,
+    "candidateMs": 4.8944785,
+    "nodeMs": null,
+    "pairedChangePct": -47.49609296934533,
+    "improvedPairs": 4,
+    "pairs": 5,
+    "baselineRange": [
+      12.2556049,
+      16.7490082,
+      3.0809951,
+      7.9180336,
+      5.9800091
+    ],
+    "candidateRange": [
+      10.098799,
+      4.8944785,
+      5.3551,
+      4.157277,
+      3.136625
+    ]
+  },
+  {
+    "key": "windows|worker-message-latency|worker-message-roundtrip|4|compiled",
+    "baselineMs": 13.9571083,
+    "candidateMs": 11.0180096,
+    "nodeMs": null,
+    "pairedChangePct": -4.676130308538262,
+    "improvedPairs": 3,
+    "pairs": 5,
+    "baselineRange": [
+      18.9122189,
+      14.5866085,
+      10.3126711,
+      11.5520851,
+      13.9571083
+    ],
+    "candidateRange": [
+      18.0278589,
+      11.0180096,
+      10.9602022,
+      14.2653183,
+      3.5974353
+    ]
+  },
+  {
+    "key": "windows|worker-message-latency|worker-message-roundtrip|1|interpreter",
+    "baselineMs": 23.4416116,
+    "candidateMs": 21.8518565,
+    "nodeMs": null,
+    "pairedChangePct": -2.9352579981665294,
+    "improvedPairs": 3,
+    "pairs": 5,
+    "baselineRange": [
+      21.9851543,
+      24.4740268,
+      22.9338318,
+      23.4416116,
+      27.0054684
+    ],
+    "candidateRange": [
+      21.3398333,
+      17.9393821,
+      27.2470432,
+      21.8518565,
+      37.9072852
+    ]
+  },
+  {
+    "key": "windows|worker-message-latency|worker-message-roundtrip|2|interpreter",
+    "baselineMs": 23.8686262,
+    "candidateMs": 24.8994878,
+    "nodeMs": null,
+    "pairedChangePct": -4.834475149788897,
+    "improvedPairs": 3,
+    "pairs": 5,
+    "baselineRange": [
+      26.8355816,
+      20.9291292,
+      20.155394,
+      27.3057459,
+      23.8686262
+    ],
+    "candidateRange": [
+      19.9736098,
+      25.7628128,
+      24.8994878,
+      25.9856564,
+      18.7479815
+    ]
+  },
+  {
+    "key": "windows|worker-message-latency|worker-message-roundtrip|4|interpreter",
+    "baselineMs": 26.4000579,
+    "candidateMs": 21.0717653,
+    "nodeMs": null,
+    "pairedChangePct": -19.99348951806089,
+    "improvedPairs": 4,
+    "pairs": 5,
+    "baselineRange": [
+      31.4461062,
+      26.4000579,
+      23.1615682,
+      33.6204433,
+      22.3123267
+    ],
+    "candidateRange": [
+      21.0717653,
+      32.7816844,
+      18.9505887,
+      21.494975,
+      17.851314
+    ]
+  },
+  {
+    "key": "windows|worker-message-latency|worker-message-roundtrip|1|node",
+    "baselineMs": null,
+    "candidateMs": null,
+    "nodeMs": 15.9415524,
+    "pairedChangePct": null,
+    "improvedPairs": 0,
+    "pairs": 0,
+    "baselineRange": [],
+    "candidateRange": []
+  },
+  {
+    "key": "windows|worker-message-latency|worker-message-roundtrip|2|node",
+    "baselineMs": null,
+    "candidateMs": null,
+    "nodeMs": 14.7205412,
+    "pairedChangePct": null,
+    "improvedPairs": 0,
+    "pairs": 0,
+    "baselineRange": [],
+    "candidateRange": []
+  },
+  {
+    "key": "windows|worker-message-latency|worker-message-roundtrip|4|node",
+    "baselineMs": null,
+    "candidateMs": null,
+    "nodeMs": 17.5907368,
+    "pairedChangePct": null,
+    "improvedPairs": 0,
+    "pairs": 0,
+    "baselineRange": [],
+    "candidateRange": []
+  },
+  {
+    "key": "windows-final|array-methods--10000|array-methods|10000|compiled",
+    "baselineMs": 0.070062,
+    "candidateMs": 0.0686898,
+    "nodeMs": null,
+    "pairedChangePct": -0.8260316887183428,
+    "improvedPairs": 3,
+    "pairs": 5,
+    "baselineRange": [
+      0.072007,
+      0.0675761,
+      0.070062,
+      0.0692291,
+      0.07167
+    ],
+    "candidateRange": [
+      0.0686898,
+      0.0670179,
+      0.0717218,
+      0.0697924,
+      0.0663876
+    ]
+  },
+  {
+    "key": "windows-final|language-hot-paths-stable-numeric-rest-10000|stable-numeric-rest|10000|compiled",
+    "baselineMs": 0.0094002,
+    "candidateMs": 0.0094347,
+    "nodeMs": null,
+    "pairedChangePct": 0.36701346779857147,
+    "improvedPairs": 2,
+    "pairs": 5,
+    "baselineRange": [
+      0.0093576,
+      0.0094002,
+      0.0095791,
+      0.0097694,
+      0.0093583
+    ],
+    "candidateRange": [
+      0.009559,
+      0.0094347,
+      0.0092549,
+      0.0093948,
+      0.0094893
+    ]
+  },
+  {
+    "key": "windows-final|objects--10000|objects|10000|compiled",
+    "baselineMs": 0.0166219,
+    "candidateMs": 0.0167324,
+    "nodeMs": null,
+    "pairedChangePct": -0.19131386905226755,
+    "improvedPairs": 3,
+    "pairs": 5,
+    "baselineRange": [
+      0.0168727,
+      0.0172609,
+      0.0166219,
+      0.0166158,
+      0.0166115
+    ],
+    "candidateRange": [
+      0.0167324,
+      0.0169226,
+      0.0165901,
+      0.0167191,
+      0.0170545
+    ]
+  },
+  {
+    "key": "windows-final|worker-allocation-boundaries-allocation-partitions-serial-1-8192|allocation-partitions-serial-1|8192|compiled",
+    "baselineMs": 2.7328091,
+    "candidateMs": 0.9121109,
+    "nodeMs": null,
+    "pairedChangePct": -68.17693550945663,
+    "improvedPairs": 5,
+    "pairs": 5,
+    "baselineRange": [
+      2.6937634,
+      3.019054,
+      2.5669624,
+      2.9020971,
+      2.7328091
+    ],
+    "candidateRange": [
+      0.9121109,
+      0.9292404,
+      0.8168861,
+      0.9458283,
+      0.8256264
+    ]
+  },
+  {
+    "key": "windows-final|worker-allocation-boundaries-allocation-partitions-serial-1-8193|allocation-partitions-serial-1|8193|compiled",
+    "baselineMs": 9.1602182,
+    "candidateMs": 2.1270406,
+    "nodeMs": null,
+    "pairedChangePct": -73.44666200200341,
+    "improvedPairs": 5,
+    "pairs": 5,
+    "baselineRange": [
+      4.7144359,
+      12.018148,
+      7.0749674,
+      10.84735,
+      9.1602182
+    ],
+    "candidateRange": [
+      1.4200175,
+      1.2066123,
+      2.1270406,
+      2.1511594,
+      2.4323437
+    ]
+  },
+  {
+    "key": "windows-final|worker-allocation-boundaries-allocation-partitions-serial-4-8192|allocation-partitions-serial-4|8192|compiled",
+    "baselineMs": 19.7062,
+    "candidateMs": 4.955823,
+    "nodeMs": null,
+    "pairedChangePct": -74.56209894447574,
+    "improvedPairs": 5,
+    "pairs": 5,
+    "baselineRange": [
+      20.130725,
+      19.7062,
+      19.5790063,
+      19.4820437,
+      19.7100625
+    ],
+    "candidateRange": [
+      5.2408328,
+      5.3820456,
+      4.8180635,
+      4.955823,
+      4.8038476
+    ]
+  },
+  {
+    "key": "windows-final|worker-allocation-boundaries-allocation-partitions-serial-4-8193|allocation-partitions-serial-4|8193|compiled",
+    "baselineMs": 29.0441818,
+    "candidateMs": 8.5759486,
+    "nodeMs": null,
+    "pairedChangePct": -69.86385856773862,
+    "improvedPairs": 5,
+    "pairs": 5,
+    "baselineRange": [
+      29.0441818,
+      30.56889,
+      29.3477091,
+      28.4573545,
+      28.4911273
+    ],
+    "candidateRange": [
+      8.3616611,
+      8.4375194,
+      8.9893618,
+      8.5759486,
+      8.6574286
+    ]
+  },
+  {
+    "key": "windows-final|worker-allocation-scaling|worker-allocation-direct|20000|compiled",
+    "baselineMs": 14.497329,
+    "candidateMs": 3.9483663,
+    "nodeMs": null,
+    "pairedChangePct": -72.74972279091041,
+    "improvedPairs": 5,
+    "pairs": 5,
+    "baselineRange": [
+      14.0903127,
+      13.7685781,
+      14.497329,
+      15.2742803,
+      14.9426132
+    ],
+    "candidateRange": [
+      3.9483663,
+      3.7519757,
+      3.9688639,
+      4.043181,
+      3.8273405
+    ]
+  },
+  {
+    "key": "windows-final|worker-allocation-scaling|worker-allocation-fixed-work|1|compiled",
+    "baselineMs": 20.8661708,
+    "candidateMs": 6.1949451,
+    "nodeMs": null,
+    "pairedChangePct": -70.11305556957046,
+    "improvedPairs": 5,
+    "pairs": 5,
+    "baselineRange": [
+      20.8204714,
+      21.8435826,
+      20.7279306,
+      21.2804511,
+      20.8661708
+    ],
+    "candidateRange": [
+      6.0355762,
+      5.9225018,
+      6.1949451,
+      6.4335159,
+      7.1331761
+    ]
+  },
+  {
+    "key": "windows-final|worker-allocation-scaling|worker-allocation-fixed-work|2|compiled",
+    "baselineMs": 18.8734698,
+    "candidateMs": 5.4209108,
+    "nodeMs": null,
+    "pairedChangePct": -71.10710411891128,
+    "improvedPairs": 5,
+    "pairs": 5,
+    "baselineRange": [
+      19.4655038,
+      18.8440727,
+      18.8734698,
+      18.4503873,
+      19.2698154
+    ],
+    "candidateRange": [
+      5.4209108,
+      5.3742829,
+      5.498061,
+      5.4107551,
+      5.5676077
+    ]
+  },
+  {
+    "key": "windows-final|worker-allocation-scaling|worker-allocation-fixed-work|4|compiled",
+    "baselineMs": 6.177013,
+    "candidateMs": 1.3986797,
+    "nodeMs": null,
+    "pairedChangePct": -77.15575240517339,
+    "improvedPairs": 5,
+    "pairs": 5,
+    "baselineRange": [
+      6.3937369,
+      6.8236871,
+      5.9929677,
+      6.177013,
+      6.0694273
+    ],
+    "candidateRange": [
+      1.3986797,
+      1.4055382,
+      1.3968377,
+      1.708444,
+      1.386515
+    ]
+  },
+  {
+    "key": "windows-final|worker-lifecycle--1|worker-lifecycle|1|compiled",
+    "baselineMs": 57.0773625,
+    "candidateMs": 58.173,
+    "nodeMs": null,
+    "pairedChangePct": 1.8803077796302636,
+    "improvedPairs": 2,
+    "pairs": 5,
+    "baselineRange": [
+      55.8095375,
+      59.44795,
+      58.7124625,
+      57.0773625,
+      54.8441875
+    ],
+    "candidateRange": [
+      61.0618625,
+      55.1109625,
+      59.8164375,
+      56.9711125,
+      58.173
+    ]
+  },
+  {
+    "key": "windows-final|worker-lifecycle--1|worker-lifecycle|1|interpreter",
+    "baselineMs": 28.4670364,
+    "candidateMs": 28.5664636,
+    "nodeMs": null,
+    "pairedChangePct": 0.34927134178250885,
+    "improvedPairs": 2,
+    "pairs": 5,
+    "baselineRange": [
+      28.4670364,
+      27.318,
+      31.21055,
+      25.8233167,
+      31.4263
+    ],
+    "candidateRange": [
+      28.5664636,
+      27.4660667,
+      27.4464917,
+      31.11416,
+      29.7614636
+    ]
+  },
+  {
+    "key": "windows-final|worker-message-throughput-worker-message-burst-100|worker-message-burst|100|compiled",
+    "baselineMs": 0.6363595,
+    "candidateMs": 0.5686924,
+    "nodeMs": null,
+    "pairedChangePct": -1.7848516103061263,
+    "improvedPairs": 3,
+    "pairs": 5,
+    "baselineRange": [
+      0.6475605,
+      0.5475077,
+      0.6363595,
+      0.6657421,
+      0.5468267
+    ],
+    "candidateRange": [
+      0.7519193,
+      0.5377355,
+      0.5145678,
+      0.5686924,
+      0.9093627
+    ]
+  },
+  {
+    "key": "windows-final|worker-message-throughput-worker-message-burst-100|worker-message-burst|100|interpreter",
+    "baselineMs": 26.421425,
+    "candidateMs": 12.0134654,
+    "nodeMs": null,
+    "pairedChangePct": -58.18367444805745,
+    "improvedPairs": 5,
+    "pairs": 5,
+    "baselineRange": [
+      26.421425,
+      28.7291273,
+      25.4008833,
+      24.6534154,
+      29.0727182
+    ],
+    "candidateRange": [
+      13.1140043,
+      12.0134654,
+      14.0516773,
+      8.8407735,
+      12.0052769
+    ]
+  },
+  {
+    "key": "linux|worker-allocation-scaling|worker-allocation-direct|20000|compiled",
+    "baselineMs": 15.9077398,
+    "candidateMs": 4.6082245,
+    "nodeMs": null,
+    "pairedChangePct": -75.20687382628675,
+    "improvedPairs": 5,
+    "pairs": 5,
+    "baselineRange": [
+      23.4148059,
+      15.8995351,
+      15.9077398,
+      32.92916,
+      15.1961449
+    ],
+    "candidateRange": [
+      4.6082245,
+      5.0506987,
+      3.944026,
+      3.989891,
+      8.5246381
+    ]
+  },
+  {
+    "key": "linux|worker-allocation-scaling|worker-allocation-fixed-work|1|compiled",
+    "baselineMs": 21.8173096,
+    "candidateMs": 6.7398364,
+    "nodeMs": null,
+    "pairedChangePct": -70.42370290756234,
+    "improvedPairs": 5,
+    "pairs": 5,
+    "baselineRange": [
+      21.7986073,
+      25.0966038,
+      21.8173096,
+      151.9463138,
+      19.3714567
+    ],
+    "candidateRange": [
+      6.1843784,
+      7.4226461,
+      6.7398364,
+      6.2240437,
+      7.5850306
+    ]
+  },
+  {
+    "key": "linux|worker-allocation-scaling|worker-allocation-fixed-work|2|compiled",
+    "baselineMs": 17.6625148,
+    "candidateMs": 5.1602874,
+    "nodeMs": null,
+    "pairedChangePct": -71.00131526221362,
+    "improvedPairs": 5,
+    "pairs": 5,
+    "baselineRange": [
+      16.3607958,
+      17.6625148,
+      17.5794604,
+      20.9976603,
+      20.4453016
+    ],
+    "candidateRange": [
+      4.6920161,
+      5.1697076,
+      5.0978123,
+      5.1602874,
+      6.8730184
+    ]
+  },
+  {
+    "key": "linux|worker-allocation-scaling|worker-allocation-fixed-work|4|compiled",
+    "baselineMs": 7.3278675,
+    "candidateMs": 1.9571753,
+    "nodeMs": null,
+    "pairedChangePct": -73.58228591446266,
+    "improvedPairs": 5,
+    "pairs": 5,
+    "baselineRange": [
+      6.1300054,
+      6.4875429,
+      7.3278675,
+      8.9752784,
+      7.726715
+    ],
+    "candidateRange": [
+      1.6194073,
+      1.9798974,
+      1.636336,
+      1.9571753,
+      2.1662193
+    ]
+  },
+  {
+    "key": "linux|worker-allocation-scaling|worker-allocation-direct|20000|interpreter",
+    "baselineMs": 93.6962078,
+    "candidateMs": 91.2059985,
+    "nodeMs": null,
+    "pairedChangePct": -3.5606595588595025,
+    "improvedPairs": 3,
+    "pairs": 5,
+    "baselineRange": [
+      97.1609176,
+      87.667054,
+      74.941022,
+      103.0831549,
+      93.6962078
+    ],
+    "candidateRange": [
+      93.7013481,
+      91.2059985,
+      77.9552252,
+      95.7125255,
+      81.4589922
+    ]
+  },
+  {
+    "key": "linux|worker-allocation-scaling|worker-allocation-fixed-work|1|interpreter",
+    "baselineMs": 94.6416519,
+    "candidateMs": 91.8745159,
+    "nodeMs": null,
+    "pairedChangePct": -5.203008904695016,
+    "improvedPairs": 4,
+    "pairs": 5,
+    "baselineRange": [
+      98.1751622,
+      94.6416519,
+      83.6203492,
+      108.2330725,
+      93.0289787
+    ],
+    "candidateRange": [
+      109.0126454,
+      85.7944751,
+      76.4075271,
+      102.6016961,
+      91.8745159
+    ]
+  },
+  {
+    "key": "linux|worker-allocation-scaling|worker-allocation-fixed-work|2|interpreter",
+    "baselineMs": 76.9176788,
+    "candidateMs": 67.1566148,
+    "nodeMs": null,
+    "pairedChangePct": -9.326852504311988,
+    "improvedPairs": 4,
+    "pairs": 5,
+    "baselineRange": [
+      76.9176788,
+      73.8611884,
+      67.0097623,
+      106.8687573,
+      82.8826205
+    ],
+    "candidateRange": [
+      78.4233248,
+      66.9722643,
+      63.9496889,
+      79.5824503,
+      67.1566148
+    ]
+  },
+  {
+    "key": "linux|worker-allocation-scaling|worker-allocation-fixed-work|4|interpreter",
+    "baselineMs": 64.1569509,
+    "candidateMs": 55.7543576,
+    "nodeMs": null,
+    "pairedChangePct": -13.096933663660126,
+    "improvedPairs": 4,
+    "pairs": 5,
+    "baselineRange": [
+      153.2156164,
+      64.1569509,
+      53.9126843,
+      59.4890753,
+      64.1665992
+    ],
+    "candidateRange": [
+      69.9391677,
+      55.7543576,
+      47.702289,
+      68.0205805,
+      55.5673324
+    ]
+  },
+  {
+    "key": "linux|worker-allocation-scaling|worker-allocation-direct|20000|node",
+    "baselineMs": null,
+    "candidateMs": null,
+    "nodeMs": 0.7036953,
+    "pairedChangePct": null,
+    "improvedPairs": 0,
+    "pairs": 0,
+    "baselineRange": [],
+    "candidateRange": []
+  },
+  {
+    "key": "linux|worker-allocation-scaling|worker-allocation-fixed-work|1|node",
+    "baselineMs": null,
+    "candidateMs": null,
+    "nodeMs": 0.52565,
+    "pairedChangePct": null,
+    "improvedPairs": 0,
+    "pairs": 0,
+    "baselineRange": [],
+    "candidateRange": []
+  },
+  {
+    "key": "linux|worker-allocation-scaling|worker-allocation-fixed-work|2|node",
+    "baselineMs": null,
+    "candidateMs": null,
+    "nodeMs": 0.2733257,
+    "pairedChangePct": null,
+    "improvedPairs": 0,
+    "pairs": 0,
+    "baselineRange": [],
+    "candidateRange": []
+  },
+  {
+    "key": "linux|worker-allocation-scaling|worker-allocation-fixed-work|4|node",
+    "baselineMs": null,
+    "candidateMs": null,
+    "nodeMs": 0.196233,
+    "pairedChangePct": null,
+    "improvedPairs": 0,
+    "pairs": 0,
+    "baselineRange": [],
+    "candidateRange": []
+  },
+  {
+    "key": "linux|worker-message-latency|worker-message-roundtrip|1|compiled",
+    "baselineMs": 0.022839,
+    "candidateMs": 0.0099254,
+    "nodeMs": null,
+    "pairedChangePct": -44.318981842790336,
+    "improvedPairs": 3,
+    "pairs": 5,
+    "baselineRange": [
+      0.022839,
+      0.0251244,
+      0.024225,
+      0.0094478,
+      0.0183233
+    ],
+    "candidateRange": [
+      0.0231526,
+      0.0087324,
+      0.0099214,
+      0.0099254,
+      0.0102026
+    ]
+  },
+  {
+    "key": "linux|worker-message-latency|worker-message-roundtrip|2|compiled",
+    "baselineMs": 0.0444019,
+    "candidateMs": 0.0430445,
+    "nodeMs": null,
+    "pairedChangePct": 2.5924284025473643,
+    "improvedPairs": 2,
+    "pairs": 5,
+    "baselineRange": [
+      0.0476554,
+      0.0466963,
+      0.0444019,
+      0.0419568,
+      0.0414953
+    ],
+    "candidateRange": [
+      0.0593413,
+      0.0372188,
+      0.0439184,
+      0.0430445,
+      0.0427361
+    ]
+  },
+  {
+    "key": "linux|worker-message-latency|worker-message-roundtrip|4|compiled",
+    "baselineMs": 0.0808152,
+    "candidateMs": 0.0838734,
+    "nodeMs": null,
+    "pairedChangePct": -7.319096817526316,
+    "improvedPairs": 4,
+    "pairs": 5,
+    "baselineRange": [
+      0.1181749,
+      0.0911178,
+      0.0766727,
+      0.0808152,
+      0.0800623
+    ],
+    "candidateRange": [
+      0.0838734,
+      0.0844488,
+      0.0844188,
+      0.0748592,
+      0.0792313
+    ]
+  },
+  {
+    "key": "linux|worker-message-latency|worker-message-roundtrip|1|interpreter",
+    "baselineMs": 9.985116,
+    "candidateMs": 1.141091,
+    "nodeMs": null,
+    "pairedChangePct": -88.58166568484495,
+    "improvedPairs": 5,
+    "pairs": 5,
+    "baselineRange": [
+      9.9834752,
+      9.9934979,
+      9.9616856,
+      9.9886004,
+      9.985116
+    ],
+    "candidateRange": [
+      1.2022295,
+      1.141091,
+      1.1490103,
+      1.1165719,
+      1.1265363
+    ]
+  },
+  {
+    "key": "linux|worker-message-latency|worker-message-roundtrip|2|interpreter",
+    "baselineMs": 9.999981,
+    "candidateMs": 1.1456385,
+    "nodeMs": null,
+    "pairedChangePct": -88.53289164829599,
+    "improvedPairs": 5,
+    "pairs": 5,
+    "baselineRange": [
+      9.9668121,
+      9.9906486,
+      10.0155548,
+      9.999981,
+      10.008196
+    ],
+    "candidateRange": [
+      1.3506792,
+      1.1456385,
+      1.1498257,
+      1.1340398,
+      1.1404364
+    ]
+  },
+  {
+    "key": "linux|worker-message-latency|worker-message-roundtrip|4|interpreter",
+    "baselineMs": 9.9834741,
+    "candidateMs": 1.192935,
+    "nodeMs": null,
+    "pairedChangePct": -88.02291833529574,
+    "improvedPairs": 5,
+    "pairs": 5,
+    "baselineRange": [
+      10.0078676,
+      9.9726436,
+      9.9834741,
+      10.0159317,
+      9.9601475
+    ],
+    "candidateRange": [
+      1.3833784,
+      1.1905318,
+      1.2211694,
+      1.1778598,
+      1.192935
+    ]
+  },
+  {
+    "key": "linux|worker-message-latency|worker-message-roundtrip|1|node",
+    "baselineMs": null,
+    "candidateMs": null,
+    "nodeMs": 0.0347985,
+    "pairedChangePct": null,
+    "improvedPairs": 0,
+    "pairs": 0,
+    "baselineRange": [],
+    "candidateRange": []
+  },
+  {
+    "key": "linux|worker-message-latency|worker-message-roundtrip|2|node",
+    "baselineMs": null,
+    "candidateMs": null,
+    "nodeMs": 0.0474577,
+    "pairedChangePct": null,
+    "improvedPairs": 0,
+    "pairs": 0,
+    "baselineRange": [],
+    "candidateRange": []
+  },
+  {
+    "key": "linux|worker-message-latency|worker-message-roundtrip|4|node",
+    "baselineMs": null,
+    "candidateMs": null,
+    "nodeMs": 0.0695387,
+    "pairedChangePct": null,
+    "improvedPairs": 0,
+    "pairs": 0,
+    "baselineRange": [],
+    "candidateRange": []
+  }
+]

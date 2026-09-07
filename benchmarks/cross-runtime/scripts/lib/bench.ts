@@ -19,23 +19,35 @@
 
 import { performance } from "perf_hooks";
 
-const configuredWarmup = process.env.SHARPTS_BENCH_WARMUP_MS;
-const WARMUP_CAP_MS: number = configuredWarmup === undefined ? 100 : Number(configuredWarmup);
-if (configuredWarmup !== undefined && (configuredWarmup.trim() === "" ||
-    !Number.isInteger(WARMUP_CAP_MS) || WARMUP_CAP_MS < 0 || WARMUP_CAP_MS > 10000)) {
-    console.error("SHARPTS_BENCH_WARMUP_MS must be an integer from 0 to 10000");
-    process.exit(1);
+function budget(name: string, fallback: number, allowZero: boolean): number {
+    const raw = process.env[name];
+    if (raw === undefined) return fallback;
+    const value: number = Number(raw);
+    if (raw.trim() === "" || !Number.isFinite(value) || value > 60000 ||
+        (allowZero ? value < 0 : value <= 0)) {
+        throw new Error(name + " must be " + (allowZero ? "nonnegative" : "positive") + " and at most 60000 ms");
+    }
+    return value;
 }
-const SLOW_CALL_MS: number = 100;   // sampling policy is independent of warmup duration
+
+const WARMUP_CAP_MS: number = budget("SHARPTS_BENCH_WARMUP_MS", 100, true);
+const SLOW_CALL_MS: number = 100; // independent of configurable warmup
 const MIN_SAMPLE_MS: number = 1;     // grow the inner batch until a sample spans this
-const BUDGET_MS: number = 300;       // preferred total sampling time per case
+const BUDGET_MS: number = budget("SHARPTS_BENCH_SAMPLE_MS", 300, false);
 const MIN_SAMPLES: number = 8;       // sample floor (for a meaningful stdev)...
-const HARD_CAP_MS: number = 2000;    // ...but never exceed this, even below the floor
+const HARD_CAP_MS: number = Math.max(2000, BUDGET_MS);
 const MAX_SAMPLES: number = 100000;
 const MAX_INNER: number = 1 << 24;
 const OUTPUT_SCALE: number = 10000000; // seven decimal places in milliseconds (0.1 ns)
 const requestedCase = process.env.SHARPTS_BENCH_CASE;
-const listCases: boolean = process.env.SHARPTS_BENCH_LIST_CASES === "1";
+const requestedParam = process.env.SHARPTS_BENCH_PARAM;
+export const listCases: boolean = process.env.SHARPTS_BENCH_LIST_CASES === "1";
+
+// Workloads with expensive setup should consult this before creating their fixtures.
+export function shouldRunCase(name: string, param: number): boolean {
+    return (!requestedCase || requestedCase === name) &&
+        (!requestedParam || requestedParam === "" + param);
+}
 
 function round(x: number): number {
     return Math.round(x * OUTPUT_SCALE) / OUTPUT_SCALE;
@@ -57,7 +69,7 @@ export function bench(name: string, param: number, fn: () => number, expected?: 
         console.log("BENCH_CASE:" + name);
         return;
     }
-    if (requestedCase && requestedCase !== name) {
+    if (!shouldRunCase(name, param)) {
         return;
     }
     let guard: number = 0;
@@ -191,7 +203,7 @@ export async function benchAsync(
         console.log("BENCH_CASE:" + name);
         return;
     }
-    if (requestedCase && requestedCase !== name) {
+    if (!shouldRunCase(name, param)) {
         return;
     }
 

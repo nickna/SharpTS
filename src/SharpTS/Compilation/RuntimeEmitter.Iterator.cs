@@ -1227,6 +1227,7 @@ public partial class RuntimeEmitter
         var resultLocal = il.DeclareLocal(_types.ListOfObject);     // result list
         var iterFnLocal = il.DeclareLocal(_types.Object);           // iterator function
         var iteratorLocal = il.DeclareLocal(_types.Object);         // iterator object
+        var nextMethodLocal = il.DeclareLocal(_types.Object);       // captured IteratorRecord.[[NextMethod]]
         var iterationResultLocal = il.DeclareLocal(_types.Object);
 
         // Labels
@@ -1626,9 +1627,15 @@ public partial class RuntimeEmitter
         // Collection does not consume an iterator's completion value. Drive it
         // directly: $IteratorWrapper intentionally preserves that value for
         // yield*, which would invoke a terminal value getter during spread.
+        // Capture next once when acquiring this iterator, before any call can
+        // replace it. Both collection helpers must preserve the iterator record.
+        il.Emit(OpCodes.Ldloc, iteratorLocal);
+        il.Emit(OpCodes.Call, runtime.GetIteratorNextMethod);
+        il.Emit(OpCodes.Stloc, nextMethodLocal);
         il.MarkLabel(collectLoopLabel);
         il.Emit(OpCodes.Ldloc, iteratorLocal);
-        il.Emit(OpCodes.Call, runtime.InvokeIteratorNext);
+        il.Emit(OpCodes.Ldloc, nextMethodLocal);
+        il.Emit(OpCodes.Call, runtime.InvokeCapturedIteratorNext);
         il.Emit(OpCodes.Stloc, iterationResultLocal);
         il.Emit(OpCodes.Ldloc, iterationResultLocal);
         il.Emit(OpCodes.Call, runtime.GetIteratorDone);
