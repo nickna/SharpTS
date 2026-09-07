@@ -63,6 +63,220 @@ public partial class TypeChecker
         }
     }
 
+    // Helper to build a TypeInfo.Function from a method declaration
+    private TypeInfo.Function BuildDeclaredClassMethodType(Stmt.Function method)
+    {
+        var (paramTypes, requiredParams, hasRest, paramNames) = BuildFunctionSignature(
+            method.Parameters,
+            validateDefaults: true,
+            contextName: $"method '{method.Name.Lexeme}'"
+        );
+
+        TypeInfo returnType = ResolveAnnotation(method.ReturnType, method.ReturnTypeNode)
+            ?? TypeInfo.Inferred.Shared;
+
+        // Wrap return type for generator/async generator methods (skip when inferring)
+        if (method.ReturnType != null && method.IsGenerator)
+        {
+            if (method.IsAsync && returnType is not TypeInfo.AsyncGenerator)
+            {
+                returnType = new TypeInfo.AsyncGenerator(returnType);
+            }
+            else if (!method.IsAsync && returnType is not TypeInfo.Generator)
+            {
+                returnType = new TypeInfo.Generator(returnType);
+            }
+        }
+
+        TypeInfo? explicitThisType = ResolveAnnotation(method.ThisType, method.ThisTypeNode);
+        return new TypeInfo.Function(
+            paramTypes, returnType, requiredParams, hasRest, explicitThisType, paramNames);
+    }
+
+    // Signature collection runs in the caller-owned class type environment and populates
+    // the supplied class metadata. Diagnostic recovery and scope restoration remain
+    // owned by CheckClassDeclaration, including when collection throws.
+    private void CollectComputedClassMethodSignatures(Stmt.Class classStmt, TypeInfo.MutableClass mutableClass)
+    {
+        // Computed symbol-keyed methods (`[Symbol.iterator]() {...}`) are modeled under their canonical
+        // well-known-symbol member name (@@iterator, @@asyncIterator, …) so structural iterability and
+        // member lookup see them (#592/#485). They carry the synthetic `<computed>` name, so they are
+        // pulled out of the name-keyed overload grouping below and grouped here instead by (IsStatic,
+        // canonical name) — running the SAME overload/duplicate-implementation/static-consistency
+        // validation string-named methods get, rather than silently "last one wins" registration.
+        // Arbitrary computed keys (e.g. `[v]()`) aren't statically named members and are skipped
+        // (still parsed/checked, just untyped — like computed accessors).
+        var computedMethodGroups = classStmt.Methods
+            .Where(m => m.ComputedKey != null)
+            .Select(m => (Method: m, Name: TryGetWellKnownSymbolMemberName(m.ComputedKey)))
+            .Where(x => x.Name != null)
+            // Grouped by canonical NAME ONLY (not IsStatic too): the static-consistency check
+            // below needs static AND instance declarations of the same name in one group to
+            // compare them against each other — grouping by (IsStatic, Name) would silently
+            // split a static/instance mismatch into two single-member groups that never meet.
+            .GroupBy(x => x.Name!)
+            .ToList();
+
+        foreach (var group in computedMethodGroups)
+        {
+            string memberName = group.Key;
+            var members = group.Select(x => x.Method).ToList();
+
+            // TS2387/TS2388: tsc requires every declaration in an overload group to agree on
+            // static-ness. It compares consecutive pairs in source order and reports the mismatch
+            // at the LATER member, choosing the message from the EARLIER member's own static-ness
+            // ("must be static" when the earlier one was static, "must not be static" otherwise) —
+            // verified against symbolProperty42's exact (line, code) pairs.
+            for (int i = 1; i < members.Count; i++)
+            {
+                if (members[i - 1].IsStatic != members[i].IsStatic)
+                {
+                    var (msg, code) = members[i - 1].IsStatic
+                        ? (" Function overload must be static.", "TS2387")
+                        : (" Function overload must not be static.", "TS2388");
+                    RecordTypeError(new TypeCheckException(msg, line: members[i].Name.Line, tsCode: code));
+                }
+            }
+
+            var signatures = members.Where(m => m.Body == null && !m.IsAbstract).ToList();
+            var implementations = members.Where(m => m.Body != null).ToList();
+
+            if (implementations.Count > 1)
+            {
+                // tsc flags EVERY declaration in the group once a second implementation appears —
+                // signatures included, not just the implementations.
+                foreach (var m in members)
+                    RecordTypeError(new TypeCheckException(" Duplicate function implementation.", line: m.Name.Line, tsCode: "TS2393"));
+            }
+            else if (implementations.Count == 0 && signatures.Count > 0)
+            {
+                RecordTypeError(new TypeCheckException(
+                    " Function implementation is missing or not immediately following the declaration.",
+                    line: members[^1].Name.Line, tsCode: "TS2391"));
+            }
+
+            // Register the group's type from the single implementation when there is exactly one
+            // (the common, error-free case), else the last declaration as a best-effort fallback so
+            // an error'd group still gets SOME type. Build the factory signature WITHOUT the
+            // generator-return wrapping BuildDeclaredClassMethodType applies: a [Symbol.iterator]()/
+            // [Symbol.asyncIterator]() factory must return the iterator type itself (e.g.
+            // `Iterator<number>` — what for...of consumes and reads its element from), not
+            // Generator<Iterator<number>>. An un-annotated generator factory stays <inferred> here
+            // and is filled in by the inferred-return post-pass below as Generator<yieldType>.
+            var representative = implementations.Count == 1 ? implementations[0] : members[^1];
+            var (cParamTypes, cRequired, cHasRest, cParamNames) = BuildFunctionSignature(
+                representative.Parameters, validateDefaults: true, contextName: $"method '{memberName}'");
+            TypeInfo factoryReturn = ResolveAnnotation(representative.ReturnType, representative.ReturnTypeNode) ?? TypeInfo.Inferred.Shared;
+            var funcType = new TypeInfo.Function(cParamTypes, factoryReturn, cRequired, cHasRest, null, cParamNames);
+            if (representative.IsStatic)
+                mutableClass.StaticMethods[memberName] = funcType;
+            else
+                mutableClass.Methods[memberName] = funcType;
+            (representative.IsStatic ? mutableClass.StaticMethodAccess : mutableClass.MethodAccess)[memberName] = representative.Access;
+        }
+    }
+
+    private void CollectNamedClassMethodSignatures(Stmt.Class classStmt, TypeInfo.MutableClass mutableClass)
+    {
+        // First pass: collect signatures, grouping overloads
+        // Group methods by name to detect overloads (computed-key methods handled above)
+        var methodGroups = classStmt.Methods.Where(m => m.ComputedKey == null).GroupBy(m => (m.IsStatic, Name: m.Name.Lexeme)).ToList();
+
+        foreach (var group in methodGroups)
+        {
+            string methodName = group.Key.Name;
+            var methods = group.ToList();
+
+            // Separate overload signatures (null body) from implementations
+            var signatures = methods.Where(m => m.Body == null && !m.IsAbstract).ToList();
+            var implementations = methods.Where(m => m.Body != null).ToList();
+            var abstractDecls = methods.Where(m => m.IsAbstract).ToList();
+
+            // Handle abstract methods (no body, but marked abstract)
+            if (abstractDecls.Count > 0)
+            {
+                if (abstractDecls.Count > 1)
+                {
+                    throw new TypeCheckException($" Cannot have multiple abstract declarations for method '{methodName}'.", tsCode: "TS2516");
+                }
+                var abstractMethod = abstractDecls[0];
+                var funcType = BuildDeclaredClassMethodType(abstractMethod);
+
+                if (abstractMethod.IsStatic)
+                    mutableClass.StaticMethods[methodName] = funcType;
+                else
+                    mutableClass.Methods[methodName] = funcType;
+
+                (abstractMethod.IsStatic ? mutableClass.StaticMethodAccess : mutableClass.MethodAccess)[methodName] = abstractMethod.Access;
+                mutableClass.AbstractMethods.Add(methodName);
+                continue;
+            }
+
+            // Handle overloaded methods
+            if (signatures.Count > 0)
+            {
+                if (implementations.Count == 0)
+                {
+                    throw new TypeCheckException($" Overloaded method '{methodName}' has no implementation.", tsCode: "TS2391");
+                }
+                if (implementations.Count > 1)
+                {
+                    throw new TypeCheckException($" Overloaded method '{methodName}' has multiple implementations.", tsCode: "TS2393");
+                }
+
+                var implementation = implementations[0];
+                var signatureTypes = signatures.Select(BuildDeclaredClassMethodType).ToList();
+                var implType = BuildDeclaredClassMethodType(implementation);
+
+                // Validate implementation is compatible with all signatures
+                foreach (var sig in signatureTypes)
+                {
+                    if (implType.MinArity > sig.MinArity)
+                    {
+                        throw new TypeCheckException($" Implementation of '{methodName}' requires {implType.MinArity} arguments but overload signature requires only {sig.MinArity}.", tsCode: "TS2394");
+                    }
+                }
+
+                var overloadedFunc = new TypeInfo.OverloadedFunction(signatureTypes, implType);
+
+                if (implementation.IsStatic)
+                    mutableClass.StaticMethods[methodName] = overloadedFunc;
+                else
+                    mutableClass.Methods[methodName] = overloadedFunc;
+
+                (implementation.IsStatic ? mutableClass.StaticMethodAccess : mutableClass.MethodAccess)[methodName] = implementation.Access;
+            }
+            else if (implementations.Count == 1)
+            {
+                // Single non-overloaded method
+                var method = implementations[0];
+                var funcType = BuildDeclaredClassMethodType(method);
+
+                // Handle ES2022 private methods (#method)
+                if (method.IsPrivate)
+                {
+                    if (method.IsStatic)
+                        mutableClass.StaticPrivateMethods[methodName] = funcType;
+                    else
+                        mutableClass.PrivateMethods[methodName] = funcType;
+                }
+                else
+                {
+                    if (method.IsStatic)
+                        mutableClass.StaticMethods[methodName] = funcType;
+                    else
+                        mutableClass.Methods[methodName] = funcType;
+
+                    (method.IsStatic ? mutableClass.StaticMethodAccess : mutableClass.MethodAccess)[methodName] = method.Access;
+                }
+            }
+            else if (implementations.Count > 1)
+            {
+                throw new TypeCheckException($" Multiple implementations of method '{methodName}' without overload signatures.", tsCode: "TS2393");
+            }
+        }
+    }
+
     private void CheckClassDeclaration(Stmt.Class classStmt)
     {
         bool previousRecoveryMode = _recoveryMode;
@@ -163,210 +377,9 @@ public partial class TypeChecker
             }
         }
 
-        // Helper to build a TypeInfo.Function from a method declaration
-        TypeInfo.Function BuildMethodFuncType(Stmt.Function method)
-        {
-            var (paramTypes, requiredParams, hasRest, paramNames) = BuildFunctionSignature(
-                method.Parameters,
-                validateDefaults: true,
-                contextName: $"method '{method.Name.Lexeme}'"
-            );
+        CollectComputedClassMethodSignatures(classStmt, mutableClass);
 
-            TypeInfo returnType = ResolveAnnotation(method.ReturnType, method.ReturnTypeNode)
-                ?? TypeInfo.Inferred.Shared;
-
-            // Wrap return type for generator/async generator methods (skip when inferring)
-            if (method.ReturnType != null && method.IsGenerator)
-            {
-                if (method.IsAsync && returnType is not TypeInfo.AsyncGenerator)
-                {
-                    returnType = new TypeInfo.AsyncGenerator(returnType);
-                }
-                else if (!method.IsAsync && returnType is not TypeInfo.Generator)
-                {
-                    returnType = new TypeInfo.Generator(returnType);
-                }
-            }
-
-            TypeInfo? explicitThisType = ResolveAnnotation(method.ThisType, method.ThisTypeNode);
-            return new TypeInfo.Function(
-                paramTypes, returnType, requiredParams, hasRest, explicitThisType, paramNames);
-        }
-
-        // Computed symbol-keyed methods (`[Symbol.iterator]() {...}`) are modeled under their canonical
-        // well-known-symbol member name (@@iterator, @@asyncIterator, …) so structural iterability and
-        // member lookup see them (#592/#485). They carry the synthetic `<computed>` name, so they are
-        // pulled out of the name-keyed overload grouping below and grouped here instead by (IsStatic,
-        // canonical name) — running the SAME overload/duplicate-implementation/static-consistency
-        // validation string-named methods get, rather than silently "last one wins" registration.
-        // Arbitrary computed keys (e.g. `[v]()`) aren't statically named members and are skipped
-        // (still parsed/checked, just untyped — like computed accessors).
-        var computedMethodGroups = classStmt.Methods
-            .Where(m => m.ComputedKey != null)
-            .Select(m => (Method: m, Name: TryGetWellKnownSymbolMemberName(m.ComputedKey)))
-            .Where(x => x.Name != null)
-            // Grouped by canonical NAME ONLY (not IsStatic too): the static-consistency check
-            // below needs static AND instance declarations of the same name in one group to
-            // compare them against each other — grouping by (IsStatic, Name) would silently
-            // split a static/instance mismatch into two single-member groups that never meet.
-            .GroupBy(x => x.Name!)
-            .ToList();
-
-        foreach (var group in computedMethodGroups)
-        {
-            string memberName = group.Key;
-            var members = group.Select(x => x.Method).ToList();
-
-            // TS2387/TS2388: tsc requires every declaration in an overload group to agree on
-            // static-ness. It compares consecutive pairs in source order and reports the mismatch
-            // at the LATER member, choosing the message from the EARLIER member's own static-ness
-            // ("must be static" when the earlier one was static, "must not be static" otherwise) —
-            // verified against symbolProperty42's exact (line, code) pairs.
-            for (int i = 1; i < members.Count; i++)
-            {
-                if (members[i - 1].IsStatic != members[i].IsStatic)
-                {
-                    var (msg, code) = members[i - 1].IsStatic
-                        ? (" Function overload must be static.", "TS2387")
-                        : (" Function overload must not be static.", "TS2388");
-                    RecordTypeError(new TypeCheckException(msg, line: members[i].Name.Line, tsCode: code));
-                }
-            }
-
-            var signatures = members.Where(m => m.Body == null && !m.IsAbstract).ToList();
-            var implementations = members.Where(m => m.Body != null).ToList();
-
-            if (implementations.Count > 1)
-            {
-                // tsc flags EVERY declaration in the group once a second implementation appears —
-                // signatures included, not just the implementations.
-                foreach (var m in members)
-                    RecordTypeError(new TypeCheckException(" Duplicate function implementation.", line: m.Name.Line, tsCode: "TS2393"));
-            }
-            else if (implementations.Count == 0 && signatures.Count > 0)
-            {
-                RecordTypeError(new TypeCheckException(
-                    " Function implementation is missing or not immediately following the declaration.",
-                    line: members[^1].Name.Line, tsCode: "TS2391"));
-            }
-
-            // Register the group's type from the single implementation when there is exactly one
-            // (the common, error-free case), else the last declaration as a best-effort fallback so
-            // an error'd group still gets SOME type. Build the factory signature WITHOUT the
-            // generator-return wrapping BuildMethodFuncType applies: a [Symbol.iterator]()/
-            // [Symbol.asyncIterator]() factory must return the iterator type itself (e.g.
-            // `Iterator<number>` — what for...of consumes and reads its element from), not
-            // Generator<Iterator<number>>. An un-annotated generator factory stays <inferred> here
-            // and is filled in by the inferred-return post-pass below as Generator<yieldType>.
-            var representative = implementations.Count == 1 ? implementations[0] : members[^1];
-            var (cParamTypes, cRequired, cHasRest, cParamNames) = BuildFunctionSignature(
-                representative.Parameters, validateDefaults: true, contextName: $"method '{memberName}'");
-            TypeInfo factoryReturn = ResolveAnnotation(representative.ReturnType, representative.ReturnTypeNode) ?? TypeInfo.Inferred.Shared;
-            var funcType = new TypeInfo.Function(cParamTypes, factoryReturn, cRequired, cHasRest, null, cParamNames);
-            if (representative.IsStatic)
-                mutableClass.StaticMethods[memberName] = funcType;
-            else
-                mutableClass.Methods[memberName] = funcType;
-            (representative.IsStatic ? mutableClass.StaticMethodAccess : mutableClass.MethodAccess)[memberName] = representative.Access;
-        }
-
-        // First pass: collect signatures, grouping overloads
-        // Group methods by name to detect overloads (computed-key methods handled above)
-        var methodGroups = classStmt.Methods.Where(m => m.ComputedKey == null).GroupBy(m => (m.IsStatic, Name: m.Name.Lexeme)).ToList();
-
-        foreach (var group in methodGroups)
-        {
-            string methodName = group.Key.Name;
-            var methods = group.ToList();
-
-            // Separate overload signatures (null body) from implementations
-            var signatures = methods.Where(m => m.Body == null && !m.IsAbstract).ToList();
-            var implementations = methods.Where(m => m.Body != null).ToList();
-            var abstractDecls = methods.Where(m => m.IsAbstract).ToList();
-
-            // Handle abstract methods (no body, but marked abstract)
-            if (abstractDecls.Count > 0)
-            {
-                if (abstractDecls.Count > 1)
-                {
-                    throw new TypeCheckException($" Cannot have multiple abstract declarations for method '{methodName}'.", tsCode: "TS2516");
-                }
-                var abstractMethod = abstractDecls[0];
-                var funcType = BuildMethodFuncType(abstractMethod);
-
-                if (abstractMethod.IsStatic)
-                    mutableClass.StaticMethods[methodName] = funcType;
-                else
-                    mutableClass.Methods[methodName] = funcType;
-
-                (abstractMethod.IsStatic ? mutableClass.StaticMethodAccess : mutableClass.MethodAccess)[methodName] = abstractMethod.Access;
-                mutableClass.AbstractMethods.Add(methodName);
-                continue;
-            }
-
-            // Handle overloaded methods
-            if (signatures.Count > 0)
-            {
-                if (implementations.Count == 0)
-                {
-                    throw new TypeCheckException($" Overloaded method '{methodName}' has no implementation.", tsCode: "TS2391");
-                }
-                if (implementations.Count > 1)
-                {
-                    throw new TypeCheckException($" Overloaded method '{methodName}' has multiple implementations.", tsCode: "TS2393");
-                }
-
-                var implementation = implementations[0];
-                var signatureTypes = signatures.Select(BuildMethodFuncType).ToList();
-                var implType = BuildMethodFuncType(implementation);
-
-                // Validate implementation is compatible with all signatures
-                foreach (var sig in signatureTypes)
-                {
-                    if (implType.MinArity > sig.MinArity)
-                    {
-                        throw new TypeCheckException($" Implementation of '{methodName}' requires {implType.MinArity} arguments but overload signature requires only {sig.MinArity}.", tsCode: "TS2394");
-                    }
-                }
-
-                var overloadedFunc = new TypeInfo.OverloadedFunction(signatureTypes, implType);
-
-                if (implementation.IsStatic)
-                    mutableClass.StaticMethods[methodName] = overloadedFunc;
-                else
-                    mutableClass.Methods[methodName] = overloadedFunc;
-
-                (implementation.IsStatic ? mutableClass.StaticMethodAccess : mutableClass.MethodAccess)[methodName] = implementation.Access;
-            }
-            else if (implementations.Count == 1)
-            {
-                // Single non-overloaded method
-                var method = implementations[0];
-                var funcType = BuildMethodFuncType(method);
-
-                // Handle ES2022 private methods (#method)
-                if (method.IsPrivate)
-                {
-                    if (method.IsStatic)
-                        mutableClass.StaticPrivateMethods[methodName] = funcType;
-                    else
-                        mutableClass.PrivateMethods[methodName] = funcType;
-                }
-                else
-                {
-                    if (method.IsStatic)
-                        mutableClass.StaticMethods[methodName] = funcType;
-                    else
-                        mutableClass.Methods[methodName] = funcType;
-
-                    (method.IsStatic ? mutableClass.StaticMethodAccess : mutableClass.MethodAccess)[methodName] = method.Access;
-                }
-            }
-            else if (implementations.Count > 1)
-            {
-                throw new TypeCheckException($" Multiple implementations of method '{methodName}' without overload signatures.", tsCode: "TS2393");
-            }
-        }
+        CollectNamedClassMethodSignatures(classStmt, mutableClass);
 
         // Collect static property types, field access modifiers, and non-static field types
         foreach (var field in classStmt.Fields)
