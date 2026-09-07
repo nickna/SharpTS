@@ -6,6 +6,61 @@ namespace SharpTS.Tests.SharedTests;
 public class PropertySemanticsTests
 {
     [Theory, ModeData]
+    public void ArrayLengthDescriptor_CachesGetterAndCoercionAcrossNormalization(ExecutionMode mode)
+    {
+        var source = """
+            let reads = 0;
+            let coercions = 0;
+            const values: any = [1, 2, 3];
+            const descriptor: any = {};
+            Object.defineProperty(descriptor, "value", {
+                get: () => {
+                    reads++;
+                    return { valueOf: () => { coercions++; return 2; } };
+                }
+            });
+            Object.defineProperty(values, "length", descriptor);
+            console.log(reads, coercions, values.length,
+                Object.getOwnPropertyDescriptor(values, "length").value);
+
+            values.push(4);
+            Object.defineProperty(values, "length", { writable: false });
+            console.log(reads, coercions, values.length,
+                Object.getOwnPropertyDescriptor(values, "length").writable);
+            """;
+
+        Assert.Equal("1 2 2 2\n1 2 3 false\n", TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
+    public void ArrayLengthDescriptor_InvalidCoercionLeavesReceiverUnchanged(ExecutionMode mode)
+    {
+        var source = """
+            let reads = 0;
+            let coercions = 0;
+            const values: any = [1, 2, 3];
+            const descriptor: any = {};
+            Object.defineProperty(descriptor, "value", {
+                get: () => {
+                    reads++;
+                    return { valueOf: () => { coercions++; return 1.5; } };
+                }
+            });
+            try {
+                Object.defineProperty(values, "length", descriptor);
+            } catch (error) {
+                console.log(error instanceof RangeError);
+            }
+            const lengthDescriptor: any = Object.getOwnPropertyDescriptor(values, "length");
+            console.log(reads, coercions, values.join(","));
+            console.log(lengthDescriptor.value, lengthDescriptor.writable,
+                lengthDescriptor.enumerable, lengthDescriptor.configurable);
+            """;
+
+        Assert.Equal("true\n1 2 1,2,3\n3 true false false\n", TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
     public void NonWritableDescriptors_PreserveSameValueAcrossReceivers(ExecutionMode mode)
     {
         var source = """

@@ -370,97 +370,8 @@ public partial class RuntimeEmitter
 
         EmitDefinePropertyProxyReceiver(il, runtime, method, propNameLocal);
 
-        // ECMA-262 10.4.2.4 ArraySetLength steps 3-4: newLen =
-        // ToUint32(Desc.[[Value]]), numberLen = ToNumber(Desc.[[Value]]) —
-        // exactly two coercions, in that order (test262 define-own-prop-
-        // length-coercion-order.js counts the valueOf calls). If
-        // SameValueZero(newLen, numberLen) is false → RangeError, which
-        // rejects NaN, ±Infinity, negatives, non-integers, and >= 2^32.
-        // The coerced newLen then REPLACES the descriptor's value (stashed
-        // into the synth dict after the overlay pass below) so the raw
-        // object never reaches the PDS — re-coercing a stored object value
-        // on a later redefine is what produced the unbounded
-        // ObjectDefineProperty ⇄ ToNumber recursion of issue #180.
-        // Only fires for compiled Array receivers with
-        // propName == "length" and a value-typed descriptor.
-        var skipArrayLenCheck = il.DefineLabel();
-        var lenWasCoercedLocal = il.DeclareLocal(_types.Boolean);
-        var coercedLenLocal = il.DeclareLocal(_types.Object);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, _types.ListOfObject);
-        il.Emit(OpCodes.Brfalse, skipArrayLenCheck);
-        il.Emit(OpCodes.Ldloc, propNameLocal);
-        il.Emit(OpCodes.Ldstr, "length");
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
-        il.Emit(OpCodes.Brfalse, skipArrayLenCheck);
-        var lenValLocal = il.DeclareLocal(_types.Object);
-        il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Ldstr, "value");
-        il.Emit(OpCodes.Call, runtime.HasArrayLikeProperty);
-        il.Emit(OpCodes.Brfalse, skipArrayLenCheck);
-        il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Ldstr, "value");
-        il.Emit(OpCodes.Call, runtime.GetProperty);
-        il.Emit(OpCodes.Stloc, lenValLocal);
-        // First coercion (ToUint32's inner ToNumber) — valueOf call #1.
-        var lenNumLocal = il.DeclareLocal(_types.Double);
-        var newLenLocal = il.DeclareLocal(_types.Double);
-        var numberLenLocal = il.DeclareLocal(_types.Double);
-        il.Emit(OpCodes.Ldloc, lenValLocal);
-        il.Emit(OpCodes.Call, runtime.ToNumber);
-        il.Emit(OpCodes.Stloc, lenNumLocal);
-        // newLen = ToUint32(lenNum): NaN/±Inf → 0; else truncate, fmod 2^32,
-        // normalize into [0, 2^32).
-        var uintZeroLabel = il.DefineLabel();
-        var uintDoneLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, lenNumLocal);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.Double, "IsNaN", _types.Double));
-        il.Emit(OpCodes.Brtrue, uintZeroLabel);
-        il.Emit(OpCodes.Ldloc, lenNumLocal);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.Double, "IsInfinity", _types.Double));
-        il.Emit(OpCodes.Brtrue, uintZeroLabel);
-        il.Emit(OpCodes.Ldloc, lenNumLocal);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.Math, "Truncate", _types.Double));
-        il.Emit(OpCodes.Ldc_R8, 4294967296.0);
-        il.Emit(OpCodes.Rem);
-        il.Emit(OpCodes.Stloc, newLenLocal);
-        il.Emit(OpCodes.Ldloc, newLenLocal);
-        il.Emit(OpCodes.Ldc_R8, 0.0);
-        il.Emit(OpCodes.Bge, uintDoneLabel);
-        il.Emit(OpCodes.Ldloc, newLenLocal);
-        il.Emit(OpCodes.Ldc_R8, 4294967296.0);
-        il.Emit(OpCodes.Add);
-        il.Emit(OpCodes.Stloc, newLenLocal);
-        il.Emit(OpCodes.Br, uintDoneLabel);
-        il.MarkLabel(uintZeroLabel);
-        il.Emit(OpCodes.Ldc_R8, 0.0);
-        il.Emit(OpCodes.Stloc, newLenLocal);
-        il.MarkLabel(uintDoneLabel);
-        // Normalize -0 → +0 (x + 0.0 is identity for everything else).
-        il.Emit(OpCodes.Ldloc, newLenLocal);
-        il.Emit(OpCodes.Ldc_R8, 0.0);
-        il.Emit(OpCodes.Add);
-        il.Emit(OpCodes.Stloc, newLenLocal);
-        // Second coercion — valueOf call #2.
-        il.Emit(OpCodes.Ldloc, lenValLocal);
-        il.Emit(OpCodes.Call, runtime.ToNumber);
-        il.Emit(OpCodes.Stloc, numberLenLocal);
-        // SameValueZero(newLen, numberLen) — Bne_Un branches on unordered,
-        // so a NaN numberLen lands at rangeErr; ±0 compare equal.
-        var rangeErrLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, newLenLocal);
-        il.Emit(OpCodes.Ldloc, numberLenLocal);
-        il.Emit(OpCodes.Bne_Un, rangeErrLabel);
-        // Stash box(newLen) for the synth-dict override below.
-        il.Emit(OpCodes.Ldloc, newLenLocal);
-        il.Emit(OpCodes.Box, _types.Double);
-        il.Emit(OpCodes.Stloc, coercedLenLocal);
-        il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Stloc, lenWasCoercedLocal);
-        il.Emit(OpCodes.Br, skipArrayLenCheck);
-        il.MarkLabel(rangeErrLabel);
-        GuestErrorEmitter.ThrowRangeError(il, runtime, "Invalid array length");
-        il.MarkLabel(skipArrayLenCheck);
+        var (lenWasCoercedLocal, lenValLocal, coercedLenLocal) =
+            EmitDefinePropertyArrayLengthCoercion(il, runtime, propNameLocal);
 
         // Check if object is frozen - if so, throw TypeError
         var notFrozenLabel = il.DefineLabel();
@@ -513,344 +424,15 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorConfigurable.GetSetMethod()!);
 
-        // ECMA-262 §6.2.5.5 ToPropertyDescriptor step 1: If Type(Obj) is not
-        // Object, throw TypeError. Covers null/undefined/primitives in the
-        // descriptor slot. Tests 15.2.3.6-3-{15,16,17,...} verify each.
-        var descTypeOkLabel = il.DefineLabel();
-        var descThrowLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Brfalse, descThrowLabel);
-        il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
-        il.Emit(OpCodes.Brtrue, descThrowLabel);
-        il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Isinst, _types.Double);
-        il.Emit(OpCodes.Brtrue, descThrowLabel);
-        il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Isinst, _types.Int32);
-        il.Emit(OpCodes.Brtrue, descThrowLabel);
-        il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Isinst, _types.Boolean);
-        il.Emit(OpCodes.Brtrue, descThrowLabel);
-        il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Isinst, _types.String);
-        il.Emit(OpCodes.Brtrue, descThrowLabel);
-        // BigInt and Symbol are also primitives per ECMA-262 — reject them too.
-        // BigInt: System.Numerics.BigInteger (boxed). Symbol: $TSSymbol.
-        il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Isinst, typeof(System.Numerics.BigInteger));
-        il.Emit(OpCodes.Brtrue, descThrowLabel);
-        il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Isinst, runtime.TSSymbolType);
-        il.Emit(OpCodes.Brtrue, descThrowLabel);
-        il.Emit(OpCodes.Br, descTypeOkLabel);
+        EmitDefinePropertyDescriptorTypeValidation(il, runtime);
 
-        il.MarkLabel(descThrowLabel);
-        GuestErrorEmitter.ThrowTypeError(il, runtime, "Property description must be an object");
-
-        il.MarkLabel(descTypeOkLabel);
-
-        // ECMA-262 §6.2.5.5 ToPropertyDescriptor reads each known descriptor
-        // field via [[Get]], which walks the prototype chain AND invokes
-        // accessors. We always normalize the descriptor into a fresh Dict via
-        // runtime.GetProperty (which checks PDS accessors + walks proto chain
-        // for $Object / $IHasFields), then if the descriptor is itself a Dict,
-        // overlay explicit own keys on top — so `{value: undefined}` correctly
-        // sets value to JS undefined rather than being treated as absent.
-        var origDictLocal = il.DeclareLocal(_types.DictionaryStringObject);
-        il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
-        il.Emit(OpCodes.Stloc, origDictLocal);
-
-        // synthDict = new Dictionary<string, object?>();
-        var synthDictLocal = il.DeclareLocal(_types.DictionaryStringObject);
-        il.Emit(OpCodes.Newobj, _types.DictionaryStringObjectCtor);
-        il.Emit(OpCodes.Stloc, synthDictLocal);
-
-        var synthDictSetItem = _types.GetMethod(_types.DictionaryStringObject, "set_Item", _types.String, _types.Object);
-        var synthDictTryGetValue = _types.GetMethod(_types.DictionaryStringObject, "TryGetValue", _types.String, _types.Object.MakeByRefType());
-
-        // For each well-known descriptor field, GetProperty(descriptor, field).
-        // GetProperty walks the prototype chain and invokes getters. A defined
-        // result is stashed directly. When Get yields undefined we additionally
-        // probe for an INHERITED accessor (getter OR setter) via the prototype-
-        // walking __lookupGetter__/__lookupSetter__ helpers: a setter-only
-        // inherited `value` (or any field) IS specified per §6.2.5.5 HasProperty
-        // even though Get reads undefined (#801), so we stash $Undefined for it.
-        // Treats "undefined with no accessor" as "field absent" UNLESS the field
-        // is an explicit own key on the input Dict (the overlay pass handles that).
-        //
-        // Branches to `target` when `local` holds a defined value (non-null and
-        // not $Undefined); otherwise falls through.
-        void EmitBranchIfDefined(LocalBuilder local, Label target)
-        {
-            var notDefined = il.DefineLabel();
-            il.Emit(OpCodes.Ldloc, local);
-            il.Emit(OpCodes.Brfalse, notDefined);
-            il.Emit(OpCodes.Ldloc, local);
-            il.Emit(OpCodes.Isinst, runtime.UndefinedType);
-            il.Emit(OpCodes.Brtrue, notDefined);
-            il.Emit(OpCodes.Br, target);
-            il.MarkLabel(notDefined);
-        }
-
-        var getterGet = runtime.CompiledPropertyDescriptorGetter.GetGetMethod()!;
-        var setterGet = runtime.CompiledPropertyDescriptorSetter.GetGetMethod()!;
-
-        void EmitGetAndStash(string field)
-        {
-            var stashLabel = il.DefineLabel();
-            var skipLabel = il.DefineLabel();
-            var fieldValLocal = il.DeclareLocal(_types.Object);
-
-            // fieldVal = GetProperty(descriptor, field)
-            // ArraySetLength already performed the single observable [[Get]]
-            // of Desc.[[Value]] before its two numeric coercions. Reuse that
-            // cached result during ToPropertyDescriptor normalization so an
-            // accessor-backed descriptor is not invoked twice.
-            if (field == "value")
-            {
-                var loadValueNormallyLabel = il.DefineLabel();
-                il.Emit(OpCodes.Ldloc, lenWasCoercedLocal);
-                il.Emit(OpCodes.Brfalse, loadValueNormallyLabel);
-                il.Emit(OpCodes.Ldloc, lenValLocal);
-                il.Emit(OpCodes.Stloc, fieldValLocal);
-                il.Emit(OpCodes.Br, stashLabel);
-                il.MarkLabel(loadValueNormallyLabel);
-            }
-            il.Emit(OpCodes.Ldarg_2);
-            il.Emit(OpCodes.Ldstr, field);
-            il.Emit(OpCodes.Call, runtime.GetProperty);
-            il.Emit(OpCodes.Stloc, fieldValLocal);
-            // Defined value → stash it.
-            EmitBranchIfDefined(fieldValLocal, stashLabel);
-            // A null/undefined Get result is still specified when HasProperty
-            // succeeds.  Use the shared existence-only walk so ordinary
-            // $IHasFields slots (including compact-record `{ get: null }`),
-            // inherited data properties, and accessor descriptors are all
-            // distinguished from an absent field without firing a getter.
-            il.Emit(OpCodes.Ldarg_2);
-            il.Emit(OpCodes.Ldstr, field);
-            il.Emit(OpCodes.Call, runtime.HasArrayLikeProperty);
-            il.Emit(OpCodes.Brtrue, stashLabel);
-            il.Emit(OpCodes.Br, skipLabel);
-
-            // stash: synthDict[field] = fieldVal.  CLR null is JavaScript null
-            // and must remain distinct from the emitted $Undefined singleton;
-            // setter-only accessors already return that singleton from
-            // GetProperty.  Rewriting a proven-present null here incorrectly
-            // accepted descriptors such as `{ get: null }`.
-            il.MarkLabel(stashLabel);
-            il.Emit(OpCodes.Ldloc, synthDictLocal);
-            il.Emit(OpCodes.Ldstr, field);
-            il.Emit(OpCodes.Ldloc, fieldValLocal);
-            il.Emit(OpCodes.Callvirt, synthDictSetItem);
-            il.MarkLabel(skipLabel);
-        }
-        EmitGetAndStash("value");
-        EmitGetAndStash("writable");
-        EmitGetAndStash("get");
-        EmitGetAndStash("set");
-        EmitGetAndStash("enumerable");
-        EmitGetAndStash("configurable");
-
-        // Overlay: if descriptor is a Dict, copy each well-known field that
-        // is present as an OWN key in the input Dict over the synth — this
-        // preserves `{value: undefined}` (explicit own key with undefined
-        // value) while still picking up PDS accessors via the GetProperty
-        // pass above.
-        var skipOverlayLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, origDictLocal);
-        il.Emit(OpCodes.Brfalse, skipOverlayLabel);
-
-        void EmitOverlay(string field)
-        {
-            var skipLabel = il.DefineLabel();
-            var fieldValLocal = il.DeclareLocal(_types.Object);
-
-            // Accessor properties on dictionary-backed objects also have a raw
-            // placeholder entry in the dictionary. The GetProperty pass above
-            // has already invoked the accessor and stashed its result; copying
-            // the placeholder here would replace that result with undefined.
-            // Only overlay ordinary own data entries (the path needed to
-            // distinguish an explicit `{ value: undefined }` from absence).
-            var ownDescriptorLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
-            il.Emit(OpCodes.Ldarg_2);
-            il.Emit(OpCodes.Ldstr, field);
-            il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
-            il.Emit(OpCodes.Stloc, ownDescriptorLocal);
-            var noOwnDescriptorLabel = il.DefineLabel();
-            il.Emit(OpCodes.Ldloc, ownDescriptorLocal);
-            il.Emit(OpCodes.Brfalse, noOwnDescriptorLabel);
-            il.Emit(OpCodes.Ldloc, ownDescriptorLocal);
-            il.Emit(OpCodes.Callvirt, getterGet);
-            il.Emit(OpCodes.Brtrue, skipLabel);
-            il.Emit(OpCodes.Ldloc, ownDescriptorLocal);
-            il.Emit(OpCodes.Callvirt, setterGet);
-            il.Emit(OpCodes.Brtrue, skipLabel);
-            il.MarkLabel(noOwnDescriptorLabel);
-
-            il.Emit(OpCodes.Ldloc, origDictLocal);
-            il.Emit(OpCodes.Ldstr, field);
-            il.Emit(OpCodes.Ldloca, fieldValLocal);
-            il.Emit(OpCodes.Callvirt, synthDictTryGetValue);
-            il.Emit(OpCodes.Brfalse, skipLabel);
-            il.Emit(OpCodes.Ldloc, synthDictLocal);
-            il.Emit(OpCodes.Ldstr, field);
-            il.Emit(OpCodes.Ldloc, fieldValLocal);
-            il.Emit(OpCodes.Callvirt, synthDictSetItem);
-            il.MarkLabel(skipLabel);
-        }
-        EmitOverlay("value");
-        EmitOverlay("writable");
-        EmitOverlay("get");
-        EmitOverlay("set");
-        EmitOverlay("enumerable");
-        EmitOverlay("configurable");
-
-        il.MarkLabel(skipOverlayLabel);
-
-        // ECMA-262 10.4.2.4 ArraySetLength step 5: newLenDesc.[[Value]] =
-        // newLen. When the array-length coercion above ran, override the
-        // synth dict's "value" with the coerced uint32 so the descriptor
-        // (and the PDS entry it becomes) holds a plain number — never the
-        // raw object whose valueOf re-fires on later redefines (issue #180).
-        var skipLenValueOverride = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, lenWasCoercedLocal);
-        il.Emit(OpCodes.Brfalse, skipLenValueOverride);
-        il.Emit(OpCodes.Ldloc, synthDictLocal);
-        il.Emit(OpCodes.Ldstr, "value");
-        il.Emit(OpCodes.Ldloc, coercedLenLocal);
-        il.Emit(OpCodes.Callvirt, synthDictSetItem);
-        il.MarkLabel(skipLenValueOverride);
-
-        il.Emit(OpCodes.Ldloc, synthDictLocal);
-        il.Emit(OpCodes.Stloc, dictLocal);
+        EmitDefinePropertyDescriptorNormalization(
+            il, runtime, dictLocal, lenWasCoercedLocal, lenValLocal, coercedLenLocal);
 
         // Extract properties from descriptor dictionary
         var dictTryGetValue = _types.GetMethod(_types.DictionaryStringObject, "TryGetValue", _types.String, _types.Object.MakeByRefType());
 
-        // Try to get "value" property
-        var noValueLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, dictLocal);
-        il.Emit(OpCodes.Ldstr, "value");
-        il.Emit(OpCodes.Ldloca, valueLocal);
-        il.Emit(OpCodes.Callvirt, dictTryGetValue);
-        il.Emit(OpCodes.Brfalse, noValueLabel);
-        il.Emit(OpCodes.Ldloc, descriptorLocal);
-        il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorValue.GetSetMethod()!);
-        il.MarkLabel(noValueLabel);
-
-        // Try to get "writable" property
-        var noWritableLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, dictLocal);
-        il.Emit(OpCodes.Ldstr, "writable");
-        il.Emit(OpCodes.Ldloca, valueLocal);
-        il.Emit(OpCodes.Callvirt, dictTryGetValue);
-        il.Emit(OpCodes.Brfalse, noWritableLabel);
-        // Convert to bool and set
-        il.Emit(OpCodes.Ldloc, descriptorLocal);
-        il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Call, runtime.IsTruthy);  // Convert to bool
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorWritable.GetSetMethod()!);
-        il.MarkLabel(noWritableLabel);
-
-        // Try to get "get" property (getter). ECMA-262 §6.2.5.5 step 7:
-        // if "get" is present and not callable and not undefined → throw TypeError.
-        // For undefined, we store $Undefined.Instance in the slot so the
-        // descriptor classifier (slot non-null = accessor) still treats this
-        // as an accessor descriptor (verifyProperty expects `desc.get === undefined`).
-        var noGetterLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, dictLocal);
-        il.Emit(OpCodes.Ldstr, "get");
-        il.Emit(OpCodes.Ldloca, valueLocal);
-        il.Emit(OpCodes.Callvirt, dictTryGetValue);
-        il.Emit(OpCodes.Brfalse, noGetterLabel);
-        var getterStoreLabel = il.DefineLabel();
-        var getterIsUndefLabel = il.DefineLabel();
-        // Only JS-undefined (Isinst UndefinedType) is the accepted non-callable
-        // value per ECMA-262 §6.2.5.5 step 7. JS-null falls through to the
-        // callable-instance check (which it fails) and throws.
-        il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
-        il.Emit(OpCodes.Brtrue, getterIsUndefLabel);
-        il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
-        il.Emit(OpCodes.Brtrue, getterStoreLabel);
-        il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Isinst, runtime.BoundAnyFunctionType);
-        il.Emit(OpCodes.Brtrue, getterStoreLabel);
-        GuestErrorEmitter.ThrowTypeError(il, runtime, "Property descriptor 'get' is not callable");
-        il.MarkLabel(getterIsUndefLabel);
-        // Store $Undefined.Instance so the descriptor remains classified as
-        // accessor (slot non-null).
-        il.Emit(OpCodes.Ldloc, descriptorLocal);
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorGetter.GetSetMethod()!);
-        il.Emit(OpCodes.Br, noGetterLabel);
-        il.MarkLabel(getterStoreLabel);
-        il.Emit(OpCodes.Ldloc, descriptorLocal);
-        il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorGetter.GetSetMethod()!);
-        il.MarkLabel(noGetterLabel);
-
-        // Try to get "set" property (setter). Same callable check as "get".
-        var noSetterLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, dictLocal);
-        il.Emit(OpCodes.Ldstr, "set");
-        il.Emit(OpCodes.Ldloca, valueLocal);
-        il.Emit(OpCodes.Callvirt, dictTryGetValue);
-        il.Emit(OpCodes.Brfalse, noSetterLabel);
-        var setterStoreLabel = il.DefineLabel();
-        var setterIsUndefLabel = il.DefineLabel();
-        // Only JS-undefined accepted as non-callable per §6.2.5.5 step 8.
-        il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
-        il.Emit(OpCodes.Brtrue, setterIsUndefLabel);
-        il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
-        il.Emit(OpCodes.Brtrue, setterStoreLabel);
-        il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Isinst, runtime.BoundAnyFunctionType);
-        il.Emit(OpCodes.Brtrue, setterStoreLabel);
-        GuestErrorEmitter.ThrowTypeError(il, runtime, "Property descriptor 'set' is not callable");
-        il.MarkLabel(setterIsUndefLabel);
-        il.Emit(OpCodes.Ldloc, descriptorLocal);
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorSetter.GetSetMethod()!);
-        il.Emit(OpCodes.Br, noSetterLabel);
-        il.MarkLabel(setterStoreLabel);
-        il.Emit(OpCodes.Ldloc, descriptorLocal);
-        il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorSetter.GetSetMethod()!);
-        il.MarkLabel(noSetterLabel);
-
-        // Try to get "enumerable" property
-        var noEnumerableLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, dictLocal);
-        il.Emit(OpCodes.Ldstr, "enumerable");
-        il.Emit(OpCodes.Ldloca, valueLocal);
-        il.Emit(OpCodes.Callvirt, dictTryGetValue);
-        il.Emit(OpCodes.Brfalse, noEnumerableLabel);
-        il.Emit(OpCodes.Ldloc, descriptorLocal);
-        il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Call, runtime.IsTruthy);
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorEnumerable.GetSetMethod()!);
-        il.MarkLabel(noEnumerableLabel);
-
-        // Try to get "configurable" property
-        var noConfigurableLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, dictLocal);
-        il.Emit(OpCodes.Ldstr, "configurable");
-        il.Emit(OpCodes.Ldloca, valueLocal);
-        il.Emit(OpCodes.Callvirt, dictTryGetValue);
-        il.Emit(OpCodes.Brfalse, noConfigurableLabel);
-        il.Emit(OpCodes.Ldloc, descriptorLocal);
-        il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Call, runtime.IsTruthy);
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorConfigurable.GetSetMethod()!);
-        il.MarkLabel(noConfigurableLabel);
+        EmitDefinePropertyDescriptorFields(il, runtime, dictLocal, descriptorLocal, valueLocal, dictTryGetValue);
 
         il.MarkLabel(setDescriptorDoneLabel);
 
@@ -1126,272 +708,7 @@ public partial class RuntimeEmitter
         GuestErrorEmitter.ThrowTypeError(il, runtime, "Invalid property descriptor. Cannot both specify accessors and a value or writable attribute");
         il.MarkLabel(noMixLabel);
 
-        var validationEndLabel = il.DefineLabel();
-        // No existing descriptor → skip validation (new property add).
-        il.Emit(OpCodes.Ldloc, existingDescLocal);
-        il.Emit(OpCodes.Brfalse, validationEndLabel);
-        // Existing is configurable → all changes allowed.
-        il.Emit(OpCodes.Ldloc, existingDescLocal);
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorConfigurable.GetGetMethod()!);
-        il.Emit(OpCodes.Brtrue, validationEndLabel);
-
-        // Existing is non-configurable. Examine new descriptor for forbidden
-        // changes. Re-consult the input dict for "was field X specified"
-        // (the parsed descriptor already has all fields normalized).
-        var throwRedefineLabel = il.DefineLabel();
-
-        // We only run this block when the input was a dict (dictLocal non-null).
-        // For non-dict descriptor sources we fall through to the apply step.
-        il.Emit(OpCodes.Ldloc, dictLocal);
-        il.Emit(OpCodes.Brfalse, validationEndLabel);
-
-        // Rule (a): if new specifies configurable=true → throw.
-        var configKeyLocal = il.DeclareLocal(_types.Object);
-        il.Emit(OpCodes.Ldloc, dictLocal);
-        il.Emit(OpCodes.Ldstr, "configurable");
-        il.Emit(OpCodes.Ldloca, configKeyLocal);
-        il.Emit(OpCodes.Callvirt, dictTryGetValue);
-        var checkEnumerableLabel = il.DefineLabel();
-        il.Emit(OpCodes.Brfalse, checkEnumerableLabel);
-        il.Emit(OpCodes.Ldloc, configKeyLocal);
-        il.Emit(OpCodes.Call, runtime.IsTruthy);
-        il.Emit(OpCodes.Brtrue, throwRedefineLabel);
-        il.MarkLabel(checkEnumerableLabel);
-
-        // Rule (b): if new specifies enumerable AND it differs from existing → throw.
-        var enumKeyLocal = il.DeclareLocal(_types.Object);
-        il.Emit(OpCodes.Ldloc, dictLocal);
-        il.Emit(OpCodes.Ldstr, "enumerable");
-        il.Emit(OpCodes.Ldloca, enumKeyLocal);
-        il.Emit(OpCodes.Callvirt, dictTryGetValue);
-        var checkTypeLabel = il.DefineLabel();
-        il.Emit(OpCodes.Brfalse, checkTypeLabel);
-        il.Emit(OpCodes.Ldloc, enumKeyLocal);
-        il.Emit(OpCodes.Call, runtime.IsTruthy);
-        il.Emit(OpCodes.Ldloc, existingDescLocal);
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorEnumerable.GetGetMethod()!);
-        il.Emit(OpCodes.Bne_Un, throwRedefineLabel);
-        il.MarkLabel(checkTypeLabel);
-
-        // Rule (c): accessor↔data type swap. Existing is accessor if Getter
-        // OR Setter is non-null. New is accessor if it specifies "get" or "set".
-        var existingIsAccessor = il.DeclareLocal(_types.Boolean);
-        var notExistingAccessor = il.DefineLabel();
-        var setExistingAccessor = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, existingDescLocal);
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorGetter.GetGetMethod()!);
-        il.Emit(OpCodes.Brtrue, setExistingAccessor);
-        il.Emit(OpCodes.Ldloc, existingDescLocal);
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorSetter.GetGetMethod()!);
-        il.Emit(OpCodes.Brfalse, notExistingAccessor);
-        il.MarkLabel(setExistingAccessor);
-        il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Stloc, existingIsAccessor);
-        var afterExistingAccessor = il.DefineLabel();
-        il.Emit(OpCodes.Br, afterExistingAccessor);
-        il.MarkLabel(notExistingAccessor);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Stloc, existingIsAccessor);
-        il.MarkLabel(afterExistingAccessor);
-
-        var newIsAccessor = il.DeclareLocal(_types.Boolean);
-        var newIsData = il.DeclareLocal(_types.Boolean);
-        var setNewAccessor = il.DefineLabel();
-        var afterNewAccessor = il.DefineLabel();
-        var tmpVal = il.DeclareLocal(_types.Object);
-        il.Emit(OpCodes.Ldloc, dictLocal);
-        il.Emit(OpCodes.Ldstr, "get");
-        il.Emit(OpCodes.Ldloca, tmpVal);
-        il.Emit(OpCodes.Callvirt, dictTryGetValue);
-        il.Emit(OpCodes.Brtrue, setNewAccessor);
-        il.Emit(OpCodes.Ldloc, dictLocal);
-        il.Emit(OpCodes.Ldstr, "set");
-        il.Emit(OpCodes.Ldloca, tmpVal);
-        il.Emit(OpCodes.Callvirt, dictTryGetValue);
-        il.Emit(OpCodes.Brfalse, afterNewAccessor);
-        il.MarkLabel(setNewAccessor);
-        il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Stloc, newIsAccessor);
-        il.MarkLabel(afterNewAccessor);
-
-        var setNewData = il.DefineLabel();
-        var afterNewData = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, dictLocal);
-        il.Emit(OpCodes.Ldstr, "value");
-        il.Emit(OpCodes.Ldloca, tmpVal);
-        il.Emit(OpCodes.Callvirt, dictTryGetValue);
-        il.Emit(OpCodes.Brtrue, setNewData);
-        il.Emit(OpCodes.Ldloc, dictLocal);
-        il.Emit(OpCodes.Ldstr, "writable");
-        il.Emit(OpCodes.Ldloca, tmpVal);
-        il.Emit(OpCodes.Callvirt, dictTryGetValue);
-        il.Emit(OpCodes.Brfalse, afterNewData);
-        il.MarkLabel(setNewData);
-        il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Stloc, newIsData);
-        il.MarkLabel(afterNewData);
-
-        // Type swap: existing accessor + new data → throw. Existing data + new
-        // accessor → throw. (Same descriptor type required when configurable=false.)
-        var typeSwapDoneLabel = il.DefineLabel();
-        var existingIsDataLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, existingIsAccessor);
-        il.Emit(OpCodes.Brfalse, existingIsDataLabel);
-        // existing accessor: new data forbids it.
-        il.Emit(OpCodes.Ldloc, newIsData);
-        il.Emit(OpCodes.Brtrue, throwRedefineLabel);
-        il.Emit(OpCodes.Br, typeSwapDoneLabel);
-        il.MarkLabel(existingIsDataLabel);
-        // existing data: new accessor forbids it.
-        il.Emit(OpCodes.Ldloc, newIsAccessor);
-        il.Emit(OpCodes.Brtrue, throwRedefineLabel);
-        il.MarkLabel(typeSwapDoneLabel);
-
-        // Accessor-redefine validation: when existing is accessor + new is
-        // accessor + existing.configurable=false, ECMA-262 §10.1.6.3
-        // ValidateAndApplyPropertyDescriptor step 7.b/7.c require:
-        //   - if Desc has [[Get]] and !SameValue(Desc.[[Get]], current.[[Get]]) → throw
-        //   - if Desc has [[Set]] and !SameValue(Desc.[[Set]], current.[[Set]]) → throw
-        // Test262 15.2.3.6-4-{97,99,etc.} cover this. Without this check,
-        // accessor descriptors silently accept incompatible redefines.
-        var skipAccessorCheck = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, existingIsAccessor);
-        il.Emit(OpCodes.Brfalse, skipAccessorCheck);
-        // existing is accessor. Check new "get" / "set" if present.
-        var accessorGetKeyLocal = il.DeclareLocal(_types.Object);
-        il.Emit(OpCodes.Ldloc, dictLocal);
-        il.Emit(OpCodes.Ldstr, "get");
-        il.Emit(OpCodes.Ldloca, accessorGetKeyLocal);
-        il.Emit(OpCodes.Callvirt, dictTryGetValue);
-        var skipGetCheck = il.DefineLabel();
-        il.Emit(OpCodes.Brfalse, skipGetCheck);
-        // SameValue(new.get, existing.get); throw if false.
-        var existingGetterForCompare = il.DeclareLocal(_types.Object);
-        var haveExistingGetter = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, existingDescLocal);
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorGetter.GetGetMethod()!);
-        il.Emit(OpCodes.Stloc, existingGetterForCompare);
-        il.Emit(OpCodes.Ldloc, existingGetterForCompare);
-        il.Emit(OpCodes.Brtrue, haveExistingGetter);
-        // An omitted getter in a completed accessor descriptor has the
-        // ECMAScript value undefined. Normalize the CLR null representation
-        // before SameValue so `{ get: undefined }` is an allowed no-op.
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
-        il.Emit(OpCodes.Stloc, existingGetterForCompare);
-        il.MarkLabel(haveExistingGetter);
-        il.Emit(OpCodes.Ldloc, accessorGetKeyLocal);
-        il.Emit(OpCodes.Ldloc, existingGetterForCompare);
-        il.Emit(OpCodes.Call, runtime.ObjectIs);
-        il.Emit(OpCodes.Brfalse, throwRedefineLabel);
-        il.MarkLabel(skipGetCheck);
-        var accessorSetKeyLocal = il.DeclareLocal(_types.Object);
-        il.Emit(OpCodes.Ldloc, dictLocal);
-        il.Emit(OpCodes.Ldstr, "set");
-        il.Emit(OpCodes.Ldloca, accessorSetKeyLocal);
-        il.Emit(OpCodes.Callvirt, dictTryGetValue);
-        var skipSetCheck = il.DefineLabel();
-        il.Emit(OpCodes.Brfalse, skipSetCheck);
-        var existingSetterForCompare = il.DeclareLocal(_types.Object);
-        var haveExistingSetter = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, existingDescLocal);
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorSetter.GetGetMethod()!);
-        il.Emit(OpCodes.Stloc, existingSetterForCompare);
-        il.Emit(OpCodes.Ldloc, existingSetterForCompare);
-        il.Emit(OpCodes.Brtrue, haveExistingSetter);
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
-        il.Emit(OpCodes.Stloc, existingSetterForCompare);
-        il.MarkLabel(haveExistingSetter);
-        il.Emit(OpCodes.Ldloc, accessorSetKeyLocal);
-        il.Emit(OpCodes.Ldloc, existingSetterForCompare);
-        il.Emit(OpCodes.Call, runtime.ObjectIs);
-        il.Emit(OpCodes.Brfalse, throwRedefineLabel);
-        il.MarkLabel(skipSetCheck);
-        il.MarkLabel(skipAccessorCheck);
-
-        // Rule (d): data with existing.writable=false: cannot set writable=true.
-        // (writable: false → true is forbidden when configurable=false.)
-        // Existing is data when existingIsAccessor=false.
-        var skipWritableCheck = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, existingIsAccessor);
-        il.Emit(OpCodes.Brtrue, skipWritableCheck);
-        // existing data. Check writable.
-        il.Emit(OpCodes.Ldloc, existingDescLocal);
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorWritable.GetGetMethod()!);
-        il.Emit(OpCodes.Brtrue, skipWritableCheck); // existing.writable=true → all OK
-        // existing.writable=false. New specifies writable=true → throw.
-        var writableKeyLocal = il.DeclareLocal(_types.Object);
-        il.Emit(OpCodes.Ldloc, dictLocal);
-        il.Emit(OpCodes.Ldstr, "writable");
-        il.Emit(OpCodes.Ldloca, writableKeyLocal);
-        il.Emit(OpCodes.Callvirt, dictTryGetValue);
-        var checkValueChange = il.DefineLabel();
-        il.Emit(OpCodes.Brfalse, checkValueChange);
-        il.Emit(OpCodes.Ldloc, writableKeyLocal);
-        il.Emit(OpCodes.Call, runtime.IsTruthy);
-        il.Emit(OpCodes.Brtrue, throwRedefineLabel);
-        il.MarkLabel(checkValueChange);
-        // New specifies value != existing.value → throw (data with writable=false).
-        // Skip the equality check when existing.value is null: the prior PDS
-        // descriptor was installed without an explicit value (\`defineProperty\`
-        // with {writable:false} alone, before any value was captured).
-        // For arrays, \`length\` is special — its value lives on the List<object?>
-        // itself, not the PDS slot. ECMA-262 §10.4.2.4 ArraySetLength compares
-        // newLen to oldLen (the current list length), so override
-        // existingValueForCompare with list.Count when target is List + "length".
-        // Without this override, the back-filled \$Undefined would either
-        // (a) skip the check (was previous fix — regressed 4-162 etc.) or
-        // (b) compare against undefined and falsely throw on same-length redefine.
-        var valueKeyLocal = il.DeclareLocal(_types.Object);
-        il.Emit(OpCodes.Ldloc, dictLocal);
-        il.Emit(OpCodes.Ldstr, "value");
-        il.Emit(OpCodes.Ldloca, valueKeyLocal);
-        il.Emit(OpCodes.Callvirt, dictTryGetValue);
-        il.Emit(OpCodes.Brfalse, skipWritableCheck);
-        var existingValueForCompare = il.DeclareLocal(_types.Object);
-        il.Emit(OpCodes.Ldloc, existingDescLocal);
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorValue.GetGetMethod()!);
-        il.Emit(OpCodes.Stloc, existingValueForCompare);
-
-        // Array \`length\` special case: read list.Count for compare.
-        var afterArrayLenOverride = il.DefineLabel();
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSArrayType);
-        var arrayLenLocal = il.DeclareLocal(runtime.TSArrayType);
-        il.Emit(OpCodes.Stloc, arrayLenLocal);
-        il.Emit(OpCodes.Ldloc, arrayLenLocal);
-        il.Emit(OpCodes.Brfalse, afterArrayLenOverride);
-        il.Emit(OpCodes.Ldloc, propNameLocal);
-        il.Emit(OpCodes.Ldstr, "length");
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
-        il.Emit(OpCodes.Brfalse, afterArrayLenOverride);
-        // existingValueForCompare = (double)array.[[ArrayLength]]
-        il.Emit(OpCodes.Ldloc, arrayLenLocal);
-        il.Emit(OpCodes.Callvirt, runtime.TSArrayLongLengthGetter);
-        il.Emit(OpCodes.Conv_R8);
-        il.Emit(OpCodes.Box, _types.Double);
-        il.Emit(OpCodes.Stloc, existingValueForCompare);
-        il.MarkLabel(afterArrayLenOverride);
-
-        il.Emit(OpCodes.Ldloc, existingValueForCompare);
-        il.Emit(OpCodes.Brfalse, skipWritableCheck);  // null existing → skip
-        // ECMA-262 SameValue (Object.is) not Object.Equals: distinguishes
-        // +0 vs -0 (returns false) and equates NaN with itself (returns true).
-        // Test262 15.2.3.6-4-87 asserts redefining {value:+0,writable:false}
-        // with {value:-0} throws TypeError. runtime.ObjectIs implements proper
-        // SameValue per §7.2.10.
-        il.Emit(OpCodes.Ldloc, valueKeyLocal);
-        il.Emit(OpCodes.Ldloc, existingValueForCompare);
-        il.Emit(OpCodes.Call, runtime.ObjectIs);
-        il.Emit(OpCodes.Brfalse, throwRedefineLabel);
-        il.MarkLabel(skipWritableCheck);
-
-        // Validation passed.
-        il.Emit(OpCodes.Br, validationEndLabel);
-
-        il.MarkLabel(throwRedefineLabel);
-        GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot redefine property");
-
-        il.MarkLabel(validationEndLabel);
+        EmitDefinePropertyRedefinitionValidation(il, runtime, propNameLocal, dictLocal, existingDescLocal, dictTryGetValue);
 
         // ECMA-262 §10.1.6.3 step 6: when modifying an existing descriptor,
         // unspecified fields keep their existing values (don't overwrite to
@@ -1917,6 +1234,739 @@ public partial class RuntimeEmitter
         // Return the object
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ret);
+    }
+
+    // Reads receiver/descriptor arguments (0/2), with an empty stack on entry and fallthrough.
+    // The returned locals are the only state shared with descriptor normalization: when
+    // WasCoerced is true, OriginalValue caches the single getter read and CoercedValue
+    // holds the validated length. All labels and remaining locals belong to this stage.
+    private (LocalBuilder WasCoerced, LocalBuilder OriginalValue, LocalBuilder CoercedValue)
+        EmitDefinePropertyArrayLengthCoercion(ILGenerator il, EmittedRuntime runtime, LocalBuilder propNameLocal)
+    {
+        // ECMA-262 10.4.2.4 ArraySetLength steps 3-4: newLen =
+        // ToUint32(Desc.[[Value]]), numberLen = ToNumber(Desc.[[Value]]) —
+        // exactly two coercions, in that order (test262 define-own-prop-
+        // length-coercion-order.js counts the valueOf calls). If
+        // SameValueZero(newLen, numberLen) is false → RangeError, which
+        // rejects NaN, ±Infinity, negatives, non-integers, and >= 2^32.
+        // The coerced newLen then REPLACES the descriptor's value (stashed
+        // into the synth dict after the overlay pass below) so the raw
+        // object never reaches the PDS — re-coercing a stored object value
+        // on a later redefine is what produced the unbounded
+        // ObjectDefineProperty ⇄ ToNumber recursion of issue #180.
+        // Only fires for compiled Array receivers with
+        // propName == "length" and a value-typed descriptor.
+        var skipArrayLenCheck = il.DefineLabel();
+        var lenWasCoercedLocal = il.DeclareLocal(_types.Boolean);
+        var coercedLenLocal = il.DeclareLocal(_types.Object);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.ListOfObject);
+        il.Emit(OpCodes.Brfalse, skipArrayLenCheck);
+        il.Emit(OpCodes.Ldloc, propNameLocal);
+        il.Emit(OpCodes.Ldstr, "length");
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
+        il.Emit(OpCodes.Brfalse, skipArrayLenCheck);
+        var lenValLocal = il.DeclareLocal(_types.Object);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Ldstr, "value");
+        il.Emit(OpCodes.Call, runtime.HasArrayLikeProperty);
+        il.Emit(OpCodes.Brfalse, skipArrayLenCheck);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Ldstr, "value");
+        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Stloc, lenValLocal);
+        // First coercion (ToUint32's inner ToNumber) — valueOf call #1.
+        var lenNumLocal = il.DeclareLocal(_types.Double);
+        var newLenLocal = il.DeclareLocal(_types.Double);
+        var numberLenLocal = il.DeclareLocal(_types.Double);
+        il.Emit(OpCodes.Ldloc, lenValLocal);
+        il.Emit(OpCodes.Call, runtime.ToNumber);
+        il.Emit(OpCodes.Stloc, lenNumLocal);
+        // newLen = ToUint32(lenNum): NaN/±Inf → 0; else truncate, fmod 2^32,
+        // normalize into [0, 2^32).
+        var uintZeroLabel = il.DefineLabel();
+        var uintDoneLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, lenNumLocal);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Double, "IsNaN", _types.Double));
+        il.Emit(OpCodes.Brtrue, uintZeroLabel);
+        il.Emit(OpCodes.Ldloc, lenNumLocal);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Double, "IsInfinity", _types.Double));
+        il.Emit(OpCodes.Brtrue, uintZeroLabel);
+        il.Emit(OpCodes.Ldloc, lenNumLocal);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Math, "Truncate", _types.Double));
+        il.Emit(OpCodes.Ldc_R8, 4294967296.0);
+        il.Emit(OpCodes.Rem);
+        il.Emit(OpCodes.Stloc, newLenLocal);
+        il.Emit(OpCodes.Ldloc, newLenLocal);
+        il.Emit(OpCodes.Ldc_R8, 0.0);
+        il.Emit(OpCodes.Bge, uintDoneLabel);
+        il.Emit(OpCodes.Ldloc, newLenLocal);
+        il.Emit(OpCodes.Ldc_R8, 4294967296.0);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, newLenLocal);
+        il.Emit(OpCodes.Br, uintDoneLabel);
+        il.MarkLabel(uintZeroLabel);
+        il.Emit(OpCodes.Ldc_R8, 0.0);
+        il.Emit(OpCodes.Stloc, newLenLocal);
+        il.MarkLabel(uintDoneLabel);
+        // Normalize -0 → +0 (x + 0.0 is identity for everything else).
+        il.Emit(OpCodes.Ldloc, newLenLocal);
+        il.Emit(OpCodes.Ldc_R8, 0.0);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, newLenLocal);
+        // Second coercion — valueOf call #2.
+        il.Emit(OpCodes.Ldloc, lenValLocal);
+        il.Emit(OpCodes.Call, runtime.ToNumber);
+        il.Emit(OpCodes.Stloc, numberLenLocal);
+        // SameValueZero(newLen, numberLen) — Bne_Un branches on unordered,
+        // so a NaN numberLen lands at rangeErr; ±0 compare equal.
+        var rangeErrLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, newLenLocal);
+        il.Emit(OpCodes.Ldloc, numberLenLocal);
+        il.Emit(OpCodes.Bne_Un, rangeErrLabel);
+        // Stash box(newLen) for the synth-dict override below.
+        il.Emit(OpCodes.Ldloc, newLenLocal);
+        il.Emit(OpCodes.Box, _types.Double);
+        il.Emit(OpCodes.Stloc, coercedLenLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Stloc, lenWasCoercedLocal);
+        il.Emit(OpCodes.Br, skipArrayLenCheck);
+        il.MarkLabel(rangeErrLabel);
+        GuestErrorEmitter.ThrowRangeError(il, runtime, "Invalid array length");
+        il.MarkLabel(skipArrayLenCheck);
+
+        return (lenWasCoercedLocal, lenValLocal, coercedLenLocal);
+    }
+
+    // Reads descriptor argument 2; throws or falls through with an empty stack.
+    private void EmitDefinePropertyDescriptorTypeValidation(ILGenerator il, EmittedRuntime runtime)
+    {
+        // ECMA-262 §6.2.5.5 ToPropertyDescriptor step 1: If Type(Obj) is not
+        // Object, throw TypeError. Covers null/undefined/primitives in the
+        // descriptor slot. Tests 15.2.3.6-3-{15,16,17,...} verify each.
+        var descTypeOkLabel = il.DefineLabel();
+        var descThrowLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Brfalse, descThrowLabel);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Brtrue, descThrowLabel);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Isinst, _types.Double);
+        il.Emit(OpCodes.Brtrue, descThrowLabel);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Isinst, _types.Int32);
+        il.Emit(OpCodes.Brtrue, descThrowLabel);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Isinst, _types.Boolean);
+        il.Emit(OpCodes.Brtrue, descThrowLabel);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Isinst, _types.String);
+        il.Emit(OpCodes.Brtrue, descThrowLabel);
+        // BigInt and Symbol are also primitives per ECMA-262 — reject them too.
+        // BigInt: System.Numerics.BigInteger (boxed). Symbol: $TSSymbol.
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Isinst, typeof(System.Numerics.BigInteger));
+        il.Emit(OpCodes.Brtrue, descThrowLabel);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Isinst, runtime.TSSymbolType);
+        il.Emit(OpCodes.Brtrue, descThrowLabel);
+        il.Emit(OpCodes.Br, descTypeOkLabel);
+
+        il.MarkLabel(descThrowLabel);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Property description must be an object");
+
+        il.MarkLabel(descTypeOkLabel);
+    }
+
+    // Reads descriptor argument 2 and the array-length coercion locals; writes dictLocal.
+    // Entry and fallthrough stacks are empty. Getter reads, own-field overlays, and the
+    // coerced-length override must remain in this order. Scratch locals/labels stay here.
+    private void EmitDefinePropertyDescriptorNormalization(
+        ILGenerator il, EmittedRuntime runtime, LocalBuilder dictLocal,
+        LocalBuilder lenWasCoercedLocal, LocalBuilder lenValLocal, LocalBuilder coercedLenLocal)
+    {
+        // ECMA-262 §6.2.5.5 ToPropertyDescriptor reads each known descriptor
+        // field via [[Get]], which walks the prototype chain AND invokes
+        // accessors. We always normalize the descriptor into a fresh Dict via
+        // runtime.GetProperty (which checks PDS accessors + walks proto chain
+        // for $Object / $IHasFields), then if the descriptor is itself a Dict,
+        // overlay explicit own keys on top — so `{value: undefined}` correctly
+        // sets value to JS undefined rather than being treated as absent.
+        var origDictLocal = il.DeclareLocal(_types.DictionaryStringObject);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
+        il.Emit(OpCodes.Stloc, origDictLocal);
+
+        // synthDict = new Dictionary<string, object?>();
+        var synthDictLocal = il.DeclareLocal(_types.DictionaryStringObject);
+        il.Emit(OpCodes.Newobj, _types.DictionaryStringObjectCtor);
+        il.Emit(OpCodes.Stloc, synthDictLocal);
+
+        var synthDictSetItem = _types.GetMethod(_types.DictionaryStringObject, "set_Item", _types.String, _types.Object);
+        var synthDictTryGetValue = _types.GetMethod(_types.DictionaryStringObject, "TryGetValue", _types.String, _types.Object.MakeByRefType());
+
+        // For each well-known descriptor field, GetProperty(descriptor, field).
+        // GetProperty walks the prototype chain and invokes getters. A defined
+        // result is stashed directly. When Get yields undefined we additionally
+        // probe for an INHERITED accessor (getter OR setter) via the prototype-
+        // walking __lookupGetter__/__lookupSetter__ helpers: a setter-only
+        // inherited `value` (or any field) IS specified per §6.2.5.5 HasProperty
+        // even though Get reads undefined (#801), so we stash $Undefined for it.
+        // Treats "undefined with no accessor" as "field absent" UNLESS the field
+        // is an explicit own key on the input Dict (the overlay pass handles that).
+        //
+        // Branches to `target` when `local` holds a defined value (non-null and
+        // not $Undefined); otherwise falls through.
+        void EmitBranchIfDefined(LocalBuilder local, Label target)
+        {
+            var notDefined = il.DefineLabel();
+            il.Emit(OpCodes.Ldloc, local);
+            il.Emit(OpCodes.Brfalse, notDefined);
+            il.Emit(OpCodes.Ldloc, local);
+            il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+            il.Emit(OpCodes.Brtrue, notDefined);
+            il.Emit(OpCodes.Br, target);
+            il.MarkLabel(notDefined);
+        }
+
+        var getterGet = runtime.CompiledPropertyDescriptorGetter.GetGetMethod()!;
+        var setterGet = runtime.CompiledPropertyDescriptorSetter.GetGetMethod()!;
+
+        void EmitGetAndStash(string field)
+        {
+            var stashLabel = il.DefineLabel();
+            var skipLabel = il.DefineLabel();
+            var fieldValLocal = il.DeclareLocal(_types.Object);
+
+            // fieldVal = GetProperty(descriptor, field)
+            // ArraySetLength already performed the single observable [[Get]]
+            // of Desc.[[Value]] before its two numeric coercions. Reuse that
+            // cached result during ToPropertyDescriptor normalization so an
+            // accessor-backed descriptor is not invoked twice.
+            if (field == "value")
+            {
+                var loadValueNormallyLabel = il.DefineLabel();
+                il.Emit(OpCodes.Ldloc, lenWasCoercedLocal);
+                il.Emit(OpCodes.Brfalse, loadValueNormallyLabel);
+                il.Emit(OpCodes.Ldloc, lenValLocal);
+                il.Emit(OpCodes.Stloc, fieldValLocal);
+                il.Emit(OpCodes.Br, stashLabel);
+                il.MarkLabel(loadValueNormallyLabel);
+            }
+            il.Emit(OpCodes.Ldarg_2);
+            il.Emit(OpCodes.Ldstr, field);
+            il.Emit(OpCodes.Call, runtime.GetProperty);
+            il.Emit(OpCodes.Stloc, fieldValLocal);
+            // Defined value → stash it.
+            EmitBranchIfDefined(fieldValLocal, stashLabel);
+            // A null/undefined Get result is still specified when HasProperty
+            // succeeds.  Use the shared existence-only walk so ordinary
+            // $IHasFields slots (including compact-record `{ get: null }`),
+            // inherited data properties, and accessor descriptors are all
+            // distinguished from an absent field without firing a getter.
+            il.Emit(OpCodes.Ldarg_2);
+            il.Emit(OpCodes.Ldstr, field);
+            il.Emit(OpCodes.Call, runtime.HasArrayLikeProperty);
+            il.Emit(OpCodes.Brtrue, stashLabel);
+            il.Emit(OpCodes.Br, skipLabel);
+
+            // stash: synthDict[field] = fieldVal.  CLR null is JavaScript null
+            // and must remain distinct from the emitted $Undefined singleton;
+            // setter-only accessors already return that singleton from
+            // GetProperty.  Rewriting a proven-present null here incorrectly
+            // accepted descriptors such as `{ get: null }`.
+            il.MarkLabel(stashLabel);
+            il.Emit(OpCodes.Ldloc, synthDictLocal);
+            il.Emit(OpCodes.Ldstr, field);
+            il.Emit(OpCodes.Ldloc, fieldValLocal);
+            il.Emit(OpCodes.Callvirt, synthDictSetItem);
+            il.MarkLabel(skipLabel);
+        }
+        EmitGetAndStash("value");
+        EmitGetAndStash("writable");
+        EmitGetAndStash("get");
+        EmitGetAndStash("set");
+        EmitGetAndStash("enumerable");
+        EmitGetAndStash("configurable");
+
+        // Overlay: if descriptor is a Dict, copy each well-known field that
+        // is present as an OWN key in the input Dict over the synth — this
+        // preserves `{value: undefined}` (explicit own key with undefined
+        // value) while still picking up PDS accessors via the GetProperty
+        // pass above.
+        var skipOverlayLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, origDictLocal);
+        il.Emit(OpCodes.Brfalse, skipOverlayLabel);
+
+        void EmitOverlay(string field)
+        {
+            var skipLabel = il.DefineLabel();
+            var fieldValLocal = il.DeclareLocal(_types.Object);
+
+            // Accessor properties on dictionary-backed objects also have a raw
+            // placeholder entry in the dictionary. The GetProperty pass above
+            // has already invoked the accessor and stashed its result; copying
+            // the placeholder here would replace that result with undefined.
+            // Only overlay ordinary own data entries (the path needed to
+            // distinguish an explicit `{ value: undefined }` from absence).
+            var ownDescriptorLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+            il.Emit(OpCodes.Ldarg_2);
+            il.Emit(OpCodes.Ldstr, field);
+            il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+            il.Emit(OpCodes.Stloc, ownDescriptorLocal);
+            var noOwnDescriptorLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldloc, ownDescriptorLocal);
+            il.Emit(OpCodes.Brfalse, noOwnDescriptorLabel);
+            il.Emit(OpCodes.Ldloc, ownDescriptorLocal);
+            il.Emit(OpCodes.Callvirt, getterGet);
+            il.Emit(OpCodes.Brtrue, skipLabel);
+            il.Emit(OpCodes.Ldloc, ownDescriptorLocal);
+            il.Emit(OpCodes.Callvirt, setterGet);
+            il.Emit(OpCodes.Brtrue, skipLabel);
+            il.MarkLabel(noOwnDescriptorLabel);
+
+            il.Emit(OpCodes.Ldloc, origDictLocal);
+            il.Emit(OpCodes.Ldstr, field);
+            il.Emit(OpCodes.Ldloca, fieldValLocal);
+            il.Emit(OpCodes.Callvirt, synthDictTryGetValue);
+            il.Emit(OpCodes.Brfalse, skipLabel);
+            il.Emit(OpCodes.Ldloc, synthDictLocal);
+            il.Emit(OpCodes.Ldstr, field);
+            il.Emit(OpCodes.Ldloc, fieldValLocal);
+            il.Emit(OpCodes.Callvirt, synthDictSetItem);
+            il.MarkLabel(skipLabel);
+        }
+        EmitOverlay("value");
+        EmitOverlay("writable");
+        EmitOverlay("get");
+        EmitOverlay("set");
+        EmitOverlay("enumerable");
+        EmitOverlay("configurable");
+
+        il.MarkLabel(skipOverlayLabel);
+
+        // ECMA-262 10.4.2.4 ArraySetLength step 5: newLenDesc.[[Value]] =
+        // newLen. When the array-length coercion above ran, override the
+        // synth dict's "value" with the coerced uint32 so the descriptor
+        // (and the PDS entry it becomes) holds a plain number — never the
+        // raw object whose valueOf re-fires on later redefines (issue #180).
+        var skipLenValueOverride = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, lenWasCoercedLocal);
+        il.Emit(OpCodes.Brfalse, skipLenValueOverride);
+        il.Emit(OpCodes.Ldloc, synthDictLocal);
+        il.Emit(OpCodes.Ldstr, "value");
+        il.Emit(OpCodes.Ldloc, coercedLenLocal);
+        il.Emit(OpCodes.Callvirt, synthDictSetItem);
+        il.MarkLabel(skipLenValueOverride);
+
+        il.Emit(OpCodes.Ldloc, synthDictLocal);
+        il.Emit(OpCodes.Stloc, dictLocal);
+    }
+
+    // Reads the normalized dictionary and updates the caller-owned descriptor. valueLocal
+    // is caller-owned scratch; its final value is not an output of this stage. Callable
+    // validation may throw. Entry/fallthrough stacks are empty and all labels are local.
+    private void EmitDefinePropertyDescriptorFields(
+        ILGenerator il, EmittedRuntime runtime, LocalBuilder dictLocal,
+        LocalBuilder descriptorLocal, LocalBuilder valueLocal, MethodInfo dictTryGetValue)
+    {
+        // Try to get "value" property
+        var noValueLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, dictLocal);
+        il.Emit(OpCodes.Ldstr, "value");
+        il.Emit(OpCodes.Ldloca, valueLocal);
+        il.Emit(OpCodes.Callvirt, dictTryGetValue);
+        il.Emit(OpCodes.Brfalse, noValueLabel);
+        il.Emit(OpCodes.Ldloc, descriptorLocal);
+        il.Emit(OpCodes.Ldloc, valueLocal);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorValue.GetSetMethod()!);
+        il.MarkLabel(noValueLabel);
+
+        // Try to get "writable" property
+        var noWritableLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, dictLocal);
+        il.Emit(OpCodes.Ldstr, "writable");
+        il.Emit(OpCodes.Ldloca, valueLocal);
+        il.Emit(OpCodes.Callvirt, dictTryGetValue);
+        il.Emit(OpCodes.Brfalse, noWritableLabel);
+        // Convert to bool and set
+        il.Emit(OpCodes.Ldloc, descriptorLocal);
+        il.Emit(OpCodes.Ldloc, valueLocal);
+        il.Emit(OpCodes.Call, runtime.IsTruthy);  // Convert to bool
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorWritable.GetSetMethod()!);
+        il.MarkLabel(noWritableLabel);
+
+        // Try to get "get" property (getter). ECMA-262 §6.2.5.5 step 7:
+        // if "get" is present and not callable and not undefined → throw TypeError.
+        // For undefined, we store $Undefined.Instance in the slot so the
+        // descriptor classifier (slot non-null = accessor) still treats this
+        // as an accessor descriptor (verifyProperty expects `desc.get === undefined`).
+        var noGetterLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, dictLocal);
+        il.Emit(OpCodes.Ldstr, "get");
+        il.Emit(OpCodes.Ldloca, valueLocal);
+        il.Emit(OpCodes.Callvirt, dictTryGetValue);
+        il.Emit(OpCodes.Brfalse, noGetterLabel);
+        var getterStoreLabel = il.DefineLabel();
+        var getterIsUndefLabel = il.DefineLabel();
+        // Only JS-undefined (Isinst UndefinedType) is the accepted non-callable
+        // value per ECMA-262 §6.2.5.5 step 7. JS-null falls through to the
+        // callable-instance check (which it fails) and throws.
+        il.Emit(OpCodes.Ldloc, valueLocal);
+        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Brtrue, getterIsUndefLabel);
+        il.Emit(OpCodes.Ldloc, valueLocal);
+        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Brtrue, getterStoreLabel);
+        il.Emit(OpCodes.Ldloc, valueLocal);
+        il.Emit(OpCodes.Isinst, runtime.BoundAnyFunctionType);
+        il.Emit(OpCodes.Brtrue, getterStoreLabel);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Property descriptor 'get' is not callable");
+        il.MarkLabel(getterIsUndefLabel);
+        // Store $Undefined.Instance so the descriptor remains classified as
+        // accessor (slot non-null).
+        il.Emit(OpCodes.Ldloc, descriptorLocal);
+        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorGetter.GetSetMethod()!);
+        il.Emit(OpCodes.Br, noGetterLabel);
+        il.MarkLabel(getterStoreLabel);
+        il.Emit(OpCodes.Ldloc, descriptorLocal);
+        il.Emit(OpCodes.Ldloc, valueLocal);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorGetter.GetSetMethod()!);
+        il.MarkLabel(noGetterLabel);
+
+        // Try to get "set" property (setter). Same callable check as "get".
+        var noSetterLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, dictLocal);
+        il.Emit(OpCodes.Ldstr, "set");
+        il.Emit(OpCodes.Ldloca, valueLocal);
+        il.Emit(OpCodes.Callvirt, dictTryGetValue);
+        il.Emit(OpCodes.Brfalse, noSetterLabel);
+        var setterStoreLabel = il.DefineLabel();
+        var setterIsUndefLabel = il.DefineLabel();
+        // Only JS-undefined accepted as non-callable per §6.2.5.5 step 8.
+        il.Emit(OpCodes.Ldloc, valueLocal);
+        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Brtrue, setterIsUndefLabel);
+        il.Emit(OpCodes.Ldloc, valueLocal);
+        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Brtrue, setterStoreLabel);
+        il.Emit(OpCodes.Ldloc, valueLocal);
+        il.Emit(OpCodes.Isinst, runtime.BoundAnyFunctionType);
+        il.Emit(OpCodes.Brtrue, setterStoreLabel);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Property descriptor 'set' is not callable");
+        il.MarkLabel(setterIsUndefLabel);
+        il.Emit(OpCodes.Ldloc, descriptorLocal);
+        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorSetter.GetSetMethod()!);
+        il.Emit(OpCodes.Br, noSetterLabel);
+        il.MarkLabel(setterStoreLabel);
+        il.Emit(OpCodes.Ldloc, descriptorLocal);
+        il.Emit(OpCodes.Ldloc, valueLocal);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorSetter.GetSetMethod()!);
+        il.MarkLabel(noSetterLabel);
+
+        // Try to get "enumerable" property
+        var noEnumerableLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, dictLocal);
+        il.Emit(OpCodes.Ldstr, "enumerable");
+        il.Emit(OpCodes.Ldloca, valueLocal);
+        il.Emit(OpCodes.Callvirt, dictTryGetValue);
+        il.Emit(OpCodes.Brfalse, noEnumerableLabel);
+        il.Emit(OpCodes.Ldloc, descriptorLocal);
+        il.Emit(OpCodes.Ldloc, valueLocal);
+        il.Emit(OpCodes.Call, runtime.IsTruthy);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorEnumerable.GetSetMethod()!);
+        il.MarkLabel(noEnumerableLabel);
+
+        // Try to get "configurable" property
+        var noConfigurableLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, dictLocal);
+        il.Emit(OpCodes.Ldstr, "configurable");
+        il.Emit(OpCodes.Ldloca, valueLocal);
+        il.Emit(OpCodes.Callvirt, dictTryGetValue);
+        il.Emit(OpCodes.Brfalse, noConfigurableLabel);
+        il.Emit(OpCodes.Ldloc, descriptorLocal);
+        il.Emit(OpCodes.Ldloc, valueLocal);
+        il.Emit(OpCodes.Call, runtime.IsTruthy);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorConfigurable.GetSetMethod()!);
+        il.MarkLabel(noConfigurableLabel);
+    }
+
+    // Reads the normalized fields and existing descriptor without mutating either.
+    // Receiver argument 0 supplies the live array length for SameValue checks.
+    // Every branch/throw belongs to this stage; entry and fallthrough stacks are empty.
+    private void EmitDefinePropertyRedefinitionValidation(
+        ILGenerator il, EmittedRuntime runtime, LocalBuilder propNameLocal,
+        LocalBuilder dictLocal, LocalBuilder existingDescLocal, MethodInfo dictTryGetValue)
+    {
+        var validationEndLabel = il.DefineLabel();
+        // No existing descriptor → skip validation (new property add).
+        il.Emit(OpCodes.Ldloc, existingDescLocal);
+        il.Emit(OpCodes.Brfalse, validationEndLabel);
+        // Existing is configurable → all changes allowed.
+        il.Emit(OpCodes.Ldloc, existingDescLocal);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorConfigurable.GetGetMethod()!);
+        il.Emit(OpCodes.Brtrue, validationEndLabel);
+
+        // Existing is non-configurable. Examine new descriptor for forbidden
+        // changes. Re-consult the input dict for "was field X specified"
+        // (the parsed descriptor already has all fields normalized).
+        var throwRedefineLabel = il.DefineLabel();
+
+        // We only run this block when the input was a dict (dictLocal non-null).
+        // For non-dict descriptor sources we fall through to the apply step.
+        il.Emit(OpCodes.Ldloc, dictLocal);
+        il.Emit(OpCodes.Brfalse, validationEndLabel);
+
+        // Rule (a): if new specifies configurable=true → throw.
+        var configKeyLocal = il.DeclareLocal(_types.Object);
+        il.Emit(OpCodes.Ldloc, dictLocal);
+        il.Emit(OpCodes.Ldstr, "configurable");
+        il.Emit(OpCodes.Ldloca, configKeyLocal);
+        il.Emit(OpCodes.Callvirt, dictTryGetValue);
+        var checkEnumerableLabel = il.DefineLabel();
+        il.Emit(OpCodes.Brfalse, checkEnumerableLabel);
+        il.Emit(OpCodes.Ldloc, configKeyLocal);
+        il.Emit(OpCodes.Call, runtime.IsTruthy);
+        il.Emit(OpCodes.Brtrue, throwRedefineLabel);
+        il.MarkLabel(checkEnumerableLabel);
+
+        // Rule (b): if new specifies enumerable AND it differs from existing → throw.
+        var enumKeyLocal = il.DeclareLocal(_types.Object);
+        il.Emit(OpCodes.Ldloc, dictLocal);
+        il.Emit(OpCodes.Ldstr, "enumerable");
+        il.Emit(OpCodes.Ldloca, enumKeyLocal);
+        il.Emit(OpCodes.Callvirt, dictTryGetValue);
+        var checkTypeLabel = il.DefineLabel();
+        il.Emit(OpCodes.Brfalse, checkTypeLabel);
+        il.Emit(OpCodes.Ldloc, enumKeyLocal);
+        il.Emit(OpCodes.Call, runtime.IsTruthy);
+        il.Emit(OpCodes.Ldloc, existingDescLocal);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorEnumerable.GetGetMethod()!);
+        il.Emit(OpCodes.Bne_Un, throwRedefineLabel);
+        il.MarkLabel(checkTypeLabel);
+
+        // Rule (c): accessor↔data type swap. Existing is accessor if Getter
+        // OR Setter is non-null. New is accessor if it specifies "get" or "set".
+        var existingIsAccessor = il.DeclareLocal(_types.Boolean);
+        var notExistingAccessor = il.DefineLabel();
+        var setExistingAccessor = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, existingDescLocal);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorGetter.GetGetMethod()!);
+        il.Emit(OpCodes.Brtrue, setExistingAccessor);
+        il.Emit(OpCodes.Ldloc, existingDescLocal);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorSetter.GetGetMethod()!);
+        il.Emit(OpCodes.Brfalse, notExistingAccessor);
+        il.MarkLabel(setExistingAccessor);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Stloc, existingIsAccessor);
+        var afterExistingAccessor = il.DefineLabel();
+        il.Emit(OpCodes.Br, afterExistingAccessor);
+        il.MarkLabel(notExistingAccessor);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stloc, existingIsAccessor);
+        il.MarkLabel(afterExistingAccessor);
+
+        var newIsAccessor = il.DeclareLocal(_types.Boolean);
+        var newIsData = il.DeclareLocal(_types.Boolean);
+        var setNewAccessor = il.DefineLabel();
+        var afterNewAccessor = il.DefineLabel();
+        var tmpVal = il.DeclareLocal(_types.Object);
+        il.Emit(OpCodes.Ldloc, dictLocal);
+        il.Emit(OpCodes.Ldstr, "get");
+        il.Emit(OpCodes.Ldloca, tmpVal);
+        il.Emit(OpCodes.Callvirt, dictTryGetValue);
+        il.Emit(OpCodes.Brtrue, setNewAccessor);
+        il.Emit(OpCodes.Ldloc, dictLocal);
+        il.Emit(OpCodes.Ldstr, "set");
+        il.Emit(OpCodes.Ldloca, tmpVal);
+        il.Emit(OpCodes.Callvirt, dictTryGetValue);
+        il.Emit(OpCodes.Brfalse, afterNewAccessor);
+        il.MarkLabel(setNewAccessor);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Stloc, newIsAccessor);
+        il.MarkLabel(afterNewAccessor);
+
+        var setNewData = il.DefineLabel();
+        var afterNewData = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, dictLocal);
+        il.Emit(OpCodes.Ldstr, "value");
+        il.Emit(OpCodes.Ldloca, tmpVal);
+        il.Emit(OpCodes.Callvirt, dictTryGetValue);
+        il.Emit(OpCodes.Brtrue, setNewData);
+        il.Emit(OpCodes.Ldloc, dictLocal);
+        il.Emit(OpCodes.Ldstr, "writable");
+        il.Emit(OpCodes.Ldloca, tmpVal);
+        il.Emit(OpCodes.Callvirt, dictTryGetValue);
+        il.Emit(OpCodes.Brfalse, afterNewData);
+        il.MarkLabel(setNewData);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Stloc, newIsData);
+        il.MarkLabel(afterNewData);
+
+        // Type swap: existing accessor + new data → throw. Existing data + new
+        // accessor → throw. (Same descriptor type required when configurable=false.)
+        var typeSwapDoneLabel = il.DefineLabel();
+        var existingIsDataLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, existingIsAccessor);
+        il.Emit(OpCodes.Brfalse, existingIsDataLabel);
+        // existing accessor: new data forbids it.
+        il.Emit(OpCodes.Ldloc, newIsData);
+        il.Emit(OpCodes.Brtrue, throwRedefineLabel);
+        il.Emit(OpCodes.Br, typeSwapDoneLabel);
+        il.MarkLabel(existingIsDataLabel);
+        // existing data: new accessor forbids it.
+        il.Emit(OpCodes.Ldloc, newIsAccessor);
+        il.Emit(OpCodes.Brtrue, throwRedefineLabel);
+        il.MarkLabel(typeSwapDoneLabel);
+
+        // Accessor-redefine validation: when existing is accessor + new is
+        // accessor + existing.configurable=false, ECMA-262 §10.1.6.3
+        // ValidateAndApplyPropertyDescriptor step 7.b/7.c require:
+        //   - if Desc has [[Get]] and !SameValue(Desc.[[Get]], current.[[Get]]) → throw
+        //   - if Desc has [[Set]] and !SameValue(Desc.[[Set]], current.[[Set]]) → throw
+        // Test262 15.2.3.6-4-{97,99,etc.} cover this. Without this check,
+        // accessor descriptors silently accept incompatible redefines.
+        var skipAccessorCheck = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, existingIsAccessor);
+        il.Emit(OpCodes.Brfalse, skipAccessorCheck);
+        // existing is accessor. Check new "get" / "set" if present.
+        var accessorGetKeyLocal = il.DeclareLocal(_types.Object);
+        il.Emit(OpCodes.Ldloc, dictLocal);
+        il.Emit(OpCodes.Ldstr, "get");
+        il.Emit(OpCodes.Ldloca, accessorGetKeyLocal);
+        il.Emit(OpCodes.Callvirt, dictTryGetValue);
+        var skipGetCheck = il.DefineLabel();
+        il.Emit(OpCodes.Brfalse, skipGetCheck);
+        // SameValue(new.get, existing.get); throw if false.
+        var existingGetterForCompare = il.DeclareLocal(_types.Object);
+        var haveExistingGetter = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, existingDescLocal);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorGetter.GetGetMethod()!);
+        il.Emit(OpCodes.Stloc, existingGetterForCompare);
+        il.Emit(OpCodes.Ldloc, existingGetterForCompare);
+        il.Emit(OpCodes.Brtrue, haveExistingGetter);
+        // An omitted getter in a completed accessor descriptor has the
+        // ECMAScript value undefined. Normalize the CLR null representation
+        // before SameValue so `{ get: undefined }` is an allowed no-op.
+        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Stloc, existingGetterForCompare);
+        il.MarkLabel(haveExistingGetter);
+        il.Emit(OpCodes.Ldloc, accessorGetKeyLocal);
+        il.Emit(OpCodes.Ldloc, existingGetterForCompare);
+        il.Emit(OpCodes.Call, runtime.ObjectIs);
+        il.Emit(OpCodes.Brfalse, throwRedefineLabel);
+        il.MarkLabel(skipGetCheck);
+        var accessorSetKeyLocal = il.DeclareLocal(_types.Object);
+        il.Emit(OpCodes.Ldloc, dictLocal);
+        il.Emit(OpCodes.Ldstr, "set");
+        il.Emit(OpCodes.Ldloca, accessorSetKeyLocal);
+        il.Emit(OpCodes.Callvirt, dictTryGetValue);
+        var skipSetCheck = il.DefineLabel();
+        il.Emit(OpCodes.Brfalse, skipSetCheck);
+        var existingSetterForCompare = il.DeclareLocal(_types.Object);
+        var haveExistingSetter = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, existingDescLocal);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorSetter.GetGetMethod()!);
+        il.Emit(OpCodes.Stloc, existingSetterForCompare);
+        il.Emit(OpCodes.Ldloc, existingSetterForCompare);
+        il.Emit(OpCodes.Brtrue, haveExistingSetter);
+        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Stloc, existingSetterForCompare);
+        il.MarkLabel(haveExistingSetter);
+        il.Emit(OpCodes.Ldloc, accessorSetKeyLocal);
+        il.Emit(OpCodes.Ldloc, existingSetterForCompare);
+        il.Emit(OpCodes.Call, runtime.ObjectIs);
+        il.Emit(OpCodes.Brfalse, throwRedefineLabel);
+        il.MarkLabel(skipSetCheck);
+        il.MarkLabel(skipAccessorCheck);
+
+        // Rule (d): data with existing.writable=false: cannot set writable=true.
+        // (writable: false → true is forbidden when configurable=false.)
+        // Existing is data when existingIsAccessor=false.
+        var skipWritableCheck = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, existingIsAccessor);
+        il.Emit(OpCodes.Brtrue, skipWritableCheck);
+        // existing data. Check writable.
+        il.Emit(OpCodes.Ldloc, existingDescLocal);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorWritable.GetGetMethod()!);
+        il.Emit(OpCodes.Brtrue, skipWritableCheck); // existing.writable=true → all OK
+        // existing.writable=false. New specifies writable=true → throw.
+        var writableKeyLocal = il.DeclareLocal(_types.Object);
+        il.Emit(OpCodes.Ldloc, dictLocal);
+        il.Emit(OpCodes.Ldstr, "writable");
+        il.Emit(OpCodes.Ldloca, writableKeyLocal);
+        il.Emit(OpCodes.Callvirt, dictTryGetValue);
+        var checkValueChange = il.DefineLabel();
+        il.Emit(OpCodes.Brfalse, checkValueChange);
+        il.Emit(OpCodes.Ldloc, writableKeyLocal);
+        il.Emit(OpCodes.Call, runtime.IsTruthy);
+        il.Emit(OpCodes.Brtrue, throwRedefineLabel);
+        il.MarkLabel(checkValueChange);
+        // New specifies value != existing.value → throw (data with writable=false).
+        // Skip the equality check when existing.value is null: the prior PDS
+        // descriptor was installed without an explicit value (\`defineProperty\`
+        // with {writable:false} alone, before any value was captured).
+        // For arrays, \`length\` is special — its value lives on the List<object?>
+        // itself, not the PDS slot. ECMA-262 §10.4.2.4 ArraySetLength compares
+        // newLen to oldLen (the current list length), so override
+        // existingValueForCompare with list.Count when target is List + "length".
+        // Without this override, the back-filled \$Undefined would either
+        // (a) skip the check (was previous fix — regressed 4-162 etc.) or
+        // (b) compare against undefined and falsely throw on same-length redefine.
+        var valueKeyLocal = il.DeclareLocal(_types.Object);
+        il.Emit(OpCodes.Ldloc, dictLocal);
+        il.Emit(OpCodes.Ldstr, "value");
+        il.Emit(OpCodes.Ldloca, valueKeyLocal);
+        il.Emit(OpCodes.Callvirt, dictTryGetValue);
+        il.Emit(OpCodes.Brfalse, skipWritableCheck);
+        var existingValueForCompare = il.DeclareLocal(_types.Object);
+        il.Emit(OpCodes.Ldloc, existingDescLocal);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorValue.GetGetMethod()!);
+        il.Emit(OpCodes.Stloc, existingValueForCompare);
+
+        // Array \`length\` special case: read list.Count for compare.
+        var afterArrayLenOverride = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.TSArrayType);
+        var arrayLenLocal = il.DeclareLocal(runtime.TSArrayType);
+        il.Emit(OpCodes.Stloc, arrayLenLocal);
+        il.Emit(OpCodes.Ldloc, arrayLenLocal);
+        il.Emit(OpCodes.Brfalse, afterArrayLenOverride);
+        il.Emit(OpCodes.Ldloc, propNameLocal);
+        il.Emit(OpCodes.Ldstr, "length");
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
+        il.Emit(OpCodes.Brfalse, afterArrayLenOverride);
+        // existingValueForCompare = (double)array.[[ArrayLength]]
+        il.Emit(OpCodes.Ldloc, arrayLenLocal);
+        il.Emit(OpCodes.Callvirt, runtime.TSArrayLongLengthGetter);
+        il.Emit(OpCodes.Conv_R8);
+        il.Emit(OpCodes.Box, _types.Double);
+        il.Emit(OpCodes.Stloc, existingValueForCompare);
+        il.MarkLabel(afterArrayLenOverride);
+
+        il.Emit(OpCodes.Ldloc, existingValueForCompare);
+        il.Emit(OpCodes.Brfalse, skipWritableCheck);  // null existing → skip
+        // ECMA-262 SameValue (Object.is) not Object.Equals: distinguishes
+        // +0 vs -0 (returns false) and equates NaN with itself (returns true).
+        // Test262 15.2.3.6-4-87 asserts redefining {value:+0,writable:false}
+        // with {value:-0} throws TypeError. runtime.ObjectIs implements proper
+        // SameValue per §7.2.10.
+        il.Emit(OpCodes.Ldloc, valueKeyLocal);
+        il.Emit(OpCodes.Ldloc, existingValueForCompare);
+        il.Emit(OpCodes.Call, runtime.ObjectIs);
+        il.Emit(OpCodes.Brfalse, throwRedefineLabel);
+        il.MarkLabel(skipWritableCheck);
+
+        // Validation passed.
+        il.Emit(OpCodes.Br, validationEndLabel);
+
+        il.MarkLabel(throwRedefineLabel);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot redefine property");
+
+        il.MarkLabel(validationEndLabel);
     }
 
     /// <summary>
