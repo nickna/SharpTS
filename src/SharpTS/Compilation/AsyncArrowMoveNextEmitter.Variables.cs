@@ -1,4 +1,3 @@
-using System.Reflection;
 using System.Reflection.Emit;
 using SharpTS.Parsing;
 
@@ -16,36 +15,23 @@ public partial class AsyncArrowMoveNextEmitter
         if (TryEmitDefaultParameterTdz(v.Name.Lexeme))
             return;
 
-        // Resolve a shadowing block-scoped binding to its own storage before resolution (#766); a renamed
-        // binding is never a captured/DC name, so the capture checks below correctly fall through.
+        // Resolve a block-scoped shadow to its analyzed storage name before lookup (#766/#838).
+        // Own display-class and hoisted fields use that name, keeping outer captures separate.
         if (BlockScopeRenames.TryGetValue(v, out var renamed))
             v = v with { Name = RenameToken(v.Name, renamed) };
 
         string name = v.Name.Lexeme;
 
-        // A capture promoted into the enclosing function's display class (#625) is read through
-        // `outer.functionDC.field`, NOT the boxed state-machine field. Checked before the resolver:
-        // the variable may still have a (now-unused) hoisted SM field that the resolver would load
-        // a stale value from.
-        if (TryGetOuterFunctionDCField(name, out var dcReadField))
+        // Outer DC, then own DC, before the resolver: promoted captures may still have
+        // stale hoisted fields. Reads retain this order; writes put per-iteration cells first.
+        if (TryResolveDisplayClassStorage(name) is { } displayStorage)
         {
-            EmitLoadOuterFunctionDC();
-            _il.Emit(OpCodes.Ldfld, dcReadField);
+            displayStorage.EmitLoad(_il);
             SetStackUnknown();
             return;
         }
 
-        // Follow-up to #838: a local of THIS async arrow that a nested sync arrow writes lives in the
-        // arrow's own function DC (reference type), so read it through `this.<>__functionDC.field`.
-        if (TryGetOwnFunctionDCField(name, out var ownReadField))
-        {
-            EmitLoadOwnFunctionDC();
-            _il.Emit(OpCodes.Ldfld, ownReadField);
-            SetStackUnknown();
-            return;
-        }
-
-        // Try resolver first (params, locals, hoisted, captured)
+        // Then resolver storage (cells, parameters, hoisted locals, captures, IL locals).
         var stackType = _resolver!.TryLoadVariable(name);
         if (stackType != null)
         {
@@ -83,8 +69,7 @@ public partial class AsyncArrowMoveNextEmitter
         // same-named OUTER (module-level) binding.
         if (TryGetShadowedTopLevelCaptureField(name, out var shadowReadField))
         {
-            _il.Emit(OpCodes.Ldarg_0);
-            _il.Emit(OpCodes.Ldfld, shadowReadField);
+            AsyncArrowStorageAccess.StateMachineField(shadowReadField).EmitLoad(_il);
             SetStackUnknown();
             return;
         }
@@ -109,8 +94,7 @@ public partial class AsyncArrowMoveNextEmitter
         // assignment to such a variable. Reaches here only for genuine enclosing-arrow locals.
         if (_builder.StandaloneCaptureFields.TryGetValue(name, out var standaloneField))
         {
-            _il.Emit(OpCodes.Ldarg_0);
-            _il.Emit(OpCodes.Ldfld, standaloneField);
+            AsyncArrowStorageAccess.StateMachineField(standaloneField).EmitLoad(_il);
             SetStackUnknown();
             return;
         }
@@ -129,89 +113,19 @@ public partial class AsyncArrowMoveNextEmitter
             a = a with { Name = RenameToken(a.Name, renamed) };
 
         string name = a.Name.Lexeme;
-
         EmitExpression(a.Value);
         EnsureBoxed();
         _il.Emit(OpCodes.Dup);
 
-        // Per-iteration loop-binding cell (#650/#817): write through the StrongBox.
-        if (_ctx != null && _ctx.CellBindingLocals.TryGetValue(name, out var assignCell))
-        {
-            var cellTmp = _il.DeclareLocal(_types.Object);
-            _il.Emit(OpCodes.Stloc, cellTmp);
-            _il.Emit(OpCodes.Ldloc, assignCell);
-            _il.Emit(OpCodes.Ldloc, cellTmp);
-            _il.Emit(OpCodes.Stfld, _types.StrongBoxOfObjectValueField);
-            SetStackUnknown();
-            return;
-        }
-
-        // A capture promoted into the enclosing function's display class (#625) is written through
-        // `outer.functionDC.field = value` (the DC is a reference type, so the store is verifiable),
-        // not by mutating the boxed value-type state machine in place. Checked first.
-        if (TryGetOuterFunctionDCField(name, out var dcAssignField))
-        {
-            var temp = _il.DeclareLocal(_types.Object);
-            _il.Emit(OpCodes.Stloc, temp);     // consume the duplicated value
-            EmitLoadOuterFunctionDC();
-            _il.Emit(OpCodes.Ldloc, temp);
-            _il.Emit(OpCodes.Stfld, dcAssignField);
-            SetStackUnknown();                 // remaining copy is the assignment's value
-            return;
-        }
-
-        // Follow-up to #838: write a DC-resident local through `this.<>__functionDC.field = value`.
-        if (TryGetOwnFunctionDCField(name, out var ownAssignField))
-        {
-            var temp = _il.DeclareLocal(_types.Object);
-            _il.Emit(OpCodes.Stloc, temp);     // consume the duplicated value
-            EmitLoadOwnFunctionDC();
-            _il.Emit(OpCodes.Ldloc, temp);
-            _il.Emit(OpCodes.Stfld, ownAssignField);
-            SetStackUnknown();                 // remaining copy is the assignment's value
-            return;
-        }
-
-        // #1222: write the shadow's by-value snapshot field, never the same-named outer
-        // module binding's entry-DC home. (Lost on exit like every standalone-capture
-        // write — matching the by-value semantics of #641/#684.)
-        if (TryGetShadowedTopLevelCaptureField(name, out var shadowAssignField))
-        {
-            var shadowTemp = _il.DeclareLocal(_types.Object);
-            _il.Emit(OpCodes.Stloc, shadowTemp);
-            _il.Emit(OpCodes.Ldarg_0);
-            _il.Emit(OpCodes.Ldloc, shadowTemp);
-            _il.Emit(OpCodes.Stfld, shadowAssignField);
-            SetStackUnknown();
-            return;
-        }
-
-        // Check if it's a captured top-level variable in entry-point display class
-        if (_ctx?.CapturedTopLevelVars?.Contains(name) == true &&
-            _ctx.EntryPointDisplayClassFields?.TryGetValue(name, out var entryPointField) == true &&
-            _ctx.EntryPointDisplayClassStaticField != null)
-        {
-            _ctx.EmitTopLevelLexicalTdzCheck(_il, name);
-            var temp = _il.DeclareLocal(_types.Object);
-            _il.Emit(OpCodes.Stloc, temp);
-            _il.Emit(OpCodes.Ldsfld, _ctx.EntryPointDisplayClassStaticField);
-            _il.Emit(OpCodes.Ldloc, temp);
-            _il.Emit(OpCodes.Stfld, entryPointField);
-            SetStackUnknown();
-            return;
-        }
-
-        // Check if it's a non-captured top-level variable
-        if (_ctx?.TopLevelStaticVars?.TryGetValue(name, out var topLevelField) == true)
-        {
-            _ctx.EmitTopLevelLexicalTdzCheck(_il, name);
-            _il.Emit(OpCodes.Stsfld, topLevelField);
-            SetStackUnknown();
-            return;
-        }
-
-        // Use resolver to store (consumes one copy, leaves one on stack as return value)
-        _resolver!.TryStoreVariable(name);
+        // Simple assignment keeps module storage ahead of the resolver fallback. Declaration
+        // and compound/increment stores below instead resolve hoisted/captured fields first.
+        var storage = _resolver!.TryResolveCell(name)
+            ?? TryResolveDisplayClassStorage(name)
+            ?? TryResolveShadowedTopLevelStorage(name);
+        if (storage != null)
+            storage.EmitStore(_il);
+        else if (!TryStoreTopLevelVariable(name))
+            _resolver.TryStoreVariable(name);
 
         SetStackUnknown();
     }
@@ -220,111 +134,22 @@ public partial class AsyncArrowMoveNextEmitter
 
     private void StoreVariable(string name)
     {
-        // Per-iteration loop-binding cell (#650/#817): write through the StrongBox.
-        if (_ctx != null && _ctx.CellBindingLocals.TryGetValue(name, out var cell))
-        {
-            var t = _il.DeclareLocal(_types.Object);
-            _il.Emit(OpCodes.Stloc, t);
-            _il.Emit(OpCodes.Ldloc, cell);
-            _il.Emit(OpCodes.Ldloc, t);
-            _il.Emit(OpCodes.Stfld, _types.StrongBoxOfObjectValueField);
-            return;
-        }
+        // Renaming happens at the AST boundary. Cells and live display classes win over any
+        // hoisted copy; hoisted parameters/locals and outer captures win over module globals.
+        var storage = _resolver!.TryResolveCell(name)
+            ?? TryResolveDisplayClassStorage(name)
+            ?? _resolver.TryResolveHoistedOrCaptured(name)
+            ?? TryResolveShadowedTopLevelStorage(name);
+        if (storage != null)
+            storage.EmitStore(_il);
+        else if (!TryStoreTopLevelVariable(name))
+            _resolver.GetOrCreateLocal(name).EmitStore(_il);
+    }
 
-        // A capture promoted into the enclosing function's display class (#625) is stored through
-        // `outer.functionDC.field`. Checked first so it wins over any (now-unused) hoisted SM field.
-        if (TryGetOuterFunctionDCField(name, out var dcStoreField))
-        {
-            var temp = _il.DeclareLocal(_types.Object);
-            _il.Emit(OpCodes.Stloc, temp);
-            EmitLoadOuterFunctionDC();
-            _il.Emit(OpCodes.Ldloc, temp);
-            _il.Emit(OpCodes.Stfld, dcStoreField);
-            return;
-        }
-
-        // Follow-up to #838: store a DC-resident local through `this.<>__functionDC.field` (covers the
-        // body's own `let r = …` declaration, which routes through EmitStoreVariable). Checked first so it
-        // wins over any (now-unused) hoisted SM field.
-        if (TryGetOwnFunctionDCField(name, out var ownStoreField))
-        {
-            var temp = _il.DeclareLocal(_types.Object);
-            _il.Emit(OpCodes.Stloc, temp);
-            EmitLoadOwnFunctionDC();
-            _il.Emit(OpCodes.Ldloc, temp);
-            _il.Emit(OpCodes.Stfld, ownStoreField);
-            return;
-        }
-
-        // Check if it's a parameter of this arrow
-        if (_builder.ParameterFields.TryGetValue(name, out var paramField))
-        {
-            var temp = _il.DeclareLocal(typeof(object));
-            _il.Emit(OpCodes.Stloc, temp);
-            _il.Emit(OpCodes.Ldarg_0);
-            _il.Emit(OpCodes.Ldloc, temp);
-            _il.Emit(OpCodes.Stfld, paramField);
-            return;
-        }
-
-        // Check if it's a hoisted local of this arrow
-        if (_builder.LocalFields.TryGetValue(name, out var localField))
-        {
-            var temp = _il.DeclareLocal(typeof(object));
-            _il.Emit(OpCodes.Stloc, temp);
-            _il.Emit(OpCodes.Ldarg_0);
-            _il.Emit(OpCodes.Ldloc, temp);
-            _il.Emit(OpCodes.Stfld, localField);
-            return;
-        }
-
-        // Check if it's captured from outer scope - store back to outer
-        if (_builder.IsCaptured(name) && _builder.CapturedFieldMap.TryGetValue(name, out var outerField))
-        {
-            // Store value to outer state machine's field through the boxed reference
-            // Stack has: value
-            // We need to: store to temp, get outer ptr, load temp, store to field
-            var temp = _il.DeclareLocal(typeof(object));
-            _il.Emit(OpCodes.Stloc, temp);
-
-            // Get pointer to the boxed outer state machine
-            _il.Emit(OpCodes.Ldarg_0);
-            _il.Emit(OpCodes.Ldfld, _builder.OuterStateMachineField!);
-
-            // Check if this is a transitive capture (needs extra indirection through parent's outer)
-            if (_builder.TransitiveCaptures.Contains(name) &&
-                _builder.ParentOuterStateMachineField != null &&
-                _builder.GrandparentStateMachineType != null)
-            {
-                // First unbox to parent, then load parent's outer reference
-                _il.Emit(OpCodes.Unbox, _builder.OuterStateMachineType!);
-                _il.Emit(OpCodes.Ldfld, _builder.ParentOuterStateMachineField);
-                _il.Emit(OpCodes.Unbox, _builder.GrandparentStateMachineType);
-            }
-            else
-            {
-                _il.Emit(OpCodes.Unbox, _builder.OuterStateMachineType!);
-            }
-
-            // Load value and store to field
-            _il.Emit(OpCodes.Ldloc, temp);
-            _il.Emit(OpCodes.Stfld, outerField);
-            return;
-        }
-
-        // #1222: write the shadow's by-value snapshot field, never the same-named outer
-        // module binding's entry-DC home (mirror of the EmitAssign branch above).
-        if (TryGetShadowedTopLevelCaptureField(name, out var shadowStoreField))
-        {
-            var shadowTemp = _il.DeclareLocal(_types.Object);
-            _il.Emit(OpCodes.Stloc, shadowTemp);
-            _il.Emit(OpCodes.Ldarg_0);
-            _il.Emit(OpCodes.Ldloc, shadowTemp);
-            _il.Emit(OpCodes.Stfld, shadowStoreField);
-            return;
-        }
-
-        // Check if it's a captured top-level variable in entry-point display class
+    private bool TryStoreTopLevelVariable(string name)
+    {
+        // The block-scoped standalone shadow has already been resolved by the caller.
+        // Other top-level captures must reach live module storage, not standalone snapshots.
         if (_ctx?.CapturedTopLevelVars?.Contains(name) == true &&
             _ctx.EntryPointDisplayClassFields?.TryGetValue(name, out var entryPointField) == true &&
             _ctx.EntryPointDisplayClassStaticField != null)
@@ -335,117 +160,46 @@ public partial class AsyncArrowMoveNextEmitter
             _il.Emit(OpCodes.Ldsfld, _ctx.EntryPointDisplayClassStaticField);
             _il.Emit(OpCodes.Ldloc, temp);
             _il.Emit(OpCodes.Stfld, entryPointField);
-            return;
+            return true;
         }
 
-        // Check if it's a non-captured top-level variable
         if (_ctx?.TopLevelStaticVars?.TryGetValue(name, out var topLevelField) == true)
         {
             _ctx.EmitTopLevelLexicalTdzCheck(_il, name);
             _il.Emit(OpCodes.Stsfld, topLevelField);
-            return;
+            return true;
         }
-
-        // Non-hoisted local variable - use IL local
-        // Create or get the local
-        if (!_locals.TryGetValue(name, out var local))
-        {
-            local = _il.DeclareLocal(typeof(object));
-            _locals[name] = local;
-        }
-        _il.Emit(OpCodes.Stloc, local);
+        return false;
     }
 
-    /// <summary>
-    /// Loads a variable value for populating a capture in a non-async arrow's display class.
-    /// This is similar to the EmitVariable override but designed for capture population.
-    /// </summary>
     private void LoadVariableForCapture(string name)
     {
-        // Check if it's a parameter of this async arrow
-        if (_builder.ParameterFields.TryGetValue(name, out var paramField))
+        // Capture population has its own order: parameters, hoisted locals, outer captures,
+        // IL locals, then standalone captures before globals. The capturing-arrow caller
+        // separately shares cell/display-class references when live storage is required.
+        var storage = _resolver!.TryResolveHoistedOrCaptured(name) ?? _resolver.TryResolveLocal(name);
+        if (storage == null && _builder.StandaloneCaptureFields.TryGetValue(name, out var standaloneField))
+            storage = AsyncArrowStorageAccess.StateMachineField(standaloneField);
+
+        if (storage != null)
         {
-            _il.Emit(OpCodes.Ldarg_0);
-            _il.Emit(OpCodes.Ldfld, paramField);
+            storage.EmitLoad(_il);
             SetStackUnknown();
             return;
         }
 
-        // Check if it's a hoisted local of this async arrow
-        if (_builder.LocalFields.TryGetValue(name, out var localField))
-        {
-            _il.Emit(OpCodes.Ldarg_0);
-            _il.Emit(OpCodes.Ldfld, localField);
-            SetStackUnknown();
-            return;
-        }
-
-        // Check if it's captured from outer scope (parent async function/arrow)
-        if (_builder.IsCaptured(name) && _builder.CapturedFieldMap.TryGetValue(name, out var outerField))
-        {
-            _il.Emit(OpCodes.Ldarg_0);
-            _il.Emit(OpCodes.Ldfld, _builder.OuterStateMachineField!);
-
-            // Check if this is a transitive capture
-            if (_builder.TransitiveCaptures.Contains(name) &&
-                _builder.ParentOuterStateMachineField != null &&
-                _builder.GrandparentStateMachineType != null)
-            {
-                _il.Emit(OpCodes.Unbox, _builder.OuterStateMachineType!);
-                _il.Emit(OpCodes.Ldfld, _builder.ParentOuterStateMachineField);
-                _il.Emit(OpCodes.Unbox, _builder.GrandparentStateMachineType);
-            }
-            else
-            {
-                _il.Emit(OpCodes.Unbox, _builder.OuterStateMachineType!);
-            }
-
-            _il.Emit(OpCodes.Ldfld, outerField);
-            SetStackUnknown();
-            return;
-        }
-
-        // Check for non-hoisted local variable
-        if (_locals.TryGetValue(name, out var local))
-        {
-            _il.Emit(OpCodes.Ldloc, local);
-            SetStackUnknown();
-            return;
-        }
-
-        // Transitive standalone capture: a variable THIS (enclosing) standalone arrow itself
-        // captured (stored in its own state-machine field) and a nested standalone arrow now
-        // re-captures. Without this the value would fall through to null one level too deep.
-        // Checked after the arrow's own params/locals so a same-named local still shadows it.
-        if (_builder.StandaloneCaptureFields.TryGetValue(name, out var enclosingCaptureField))
-        {
-            _il.Emit(OpCodes.Ldarg_0);
-            _il.Emit(OpCodes.Ldfld, enclosingCaptureField);
-            SetStackUnknown();
-            return;
-        }
-
-        // Handle 'this' capture - in async arrows, 'this' is captured from outer scope
-        if (name == "this" && _builder.IsCaptured("this") && _builder.CapturedFieldMap.TryGetValue("this", out var thisField))
-        {
-            _il.Emit(OpCodes.Ldarg_0);
-            _il.Emit(OpCodes.Ldfld, _builder.OuterStateMachineField!);
-            _il.Emit(OpCodes.Unbox, _builder.OuterStateMachineType!);
-            _il.Emit(OpCodes.Ldfld, thisField);
-            SetStackUnknown();
-            return;
-        }
-
-        // A closure created inside an async arrow may capture a top-level
-        // function, class, or variable. Use normal global resolution so a
-        // function capture receives its canonical wrapper (and expandos), not
-        // a null snapshot.
+        // Global function captures need their canonical wrapper (including expandos).
         if (!TryEmitGlobalVariable(name))
         {
             _il.Emit(OpCodes.Ldnull);
             SetStackType(StackType.Null);
         }
     }
+
+    private AsyncArrowStorageAccess? TryResolveShadowedTopLevelStorage(string name)
+        => TryGetShadowedTopLevelCaptureField(name, out var field)
+            ? AsyncArrowStorageAccess.StateMachineField(field)
+            : null;
 
     /// <summary>
     /// True when <paramref name="name"/> is a top-level BLOCK-scoped shadow of a same-named
@@ -463,51 +217,22 @@ public partial class AsyncArrowMoveNextEmitter
             && _ctx.LiftedBlockScopedTopLevelVars?.Contains(name) != true;
     }
 
-    /// <summary>
-    /// True when <paramref name="name"/> is a captured variable the enclosing async function placed
-    /// in its (reference-type) display class (#625). Such a variable must be read/written through
-    /// <c>outer.functionDC.field</c> rather than the boxed state-machine field. Requires the outer
-    /// reference plumbing — present only for non-standalone arrows nested directly in an async
-    /// function — so standalone/top-level async arrows fall through to the existing paths.
-    /// </summary>
-    private bool TryGetOuterFunctionDCField(string name, out FieldBuilder dcField)
+    private AsyncArrowStorageAccess? TryResolveDisplayClassStorage(string name)
     {
-        dcField = null!;
-        return _ctx?.OuterFunctionDCField != null
-            && _builder.OuterStateMachineField != null
-            && _builder.OuterStateMachineType != null
-            && _ctx.FunctionDisplayClassFields?.TryGetValue(name, out dcField!) == true;
-    }
+        // A captured write promoted by the enclosing function uses outer.functionDC.field.
+        // The outer plumbing is absent on standalone arrows, which must fall through.
+        if (_ctx?.OuterFunctionDCField != null &&
+            _builder.OuterStateMachineField != null &&
+            _builder.OuterStateMachineType != null &&
+            _ctx.FunctionDisplayClassFields?.TryGetValue(name, out var outerField) == true)
+            return AsyncArrowStorageAccess.OuterDisplayClassField(_builder, _ctx.OuterFunctionDCField, outerField);
 
-    /// <summary>
-    /// Pushes the enclosing async function's display-class instance: <c>outer.functionDC</c>.
-    /// Reading the DC reference field through the <c>unbox</c>'d (readonly) outer pointer is
-    /// verifiable; the resulting reference is an ordinary class instance, so the caller's
-    /// subsequent <c>ldfld</c>/<c>stfld</c> on it verifies (unlike storing into the boxed struct).
-    /// </summary>
-    private void EmitLoadOuterFunctionDC()
-    {
-        _il.Emit(OpCodes.Ldarg_0);
-        _il.Emit(OpCodes.Ldfld, _builder.OuterStateMachineField!);
-        _il.Emit(OpCodes.Unbox, _builder.OuterStateMachineType!);
-        _il.Emit(OpCodes.Ldfld, _ctx!.OuterFunctionDCField!);
-    }
+        // An arrow's own DC is shared with nested sync arrows that write its locals (#838).
+        // Its map stays on the builder so it cannot collide with the enclosing function's map.
+        if (_builder.FunctionDCField != null && _builder.FunctionDCFieldMap.TryGetValue(name, out var ownField))
+            return AsyncArrowStorageAccess.OwnDisplayClassField(_builder.FunctionDCField, ownField);
 
-    // Follow-up to #838: this arrow's OWN function display class (a reference type held on its state
-    // machine), shared with a nested sync arrow that writes one of the arrow's locals. The field map is
-    // on the builder so it never collides with the OuterFunctionDCField relay above.
-    private bool TryGetOwnFunctionDCField(string name, out FieldBuilder dcField)
-    {
-        dcField = null!;
-        return _builder.FunctionDCField != null
-            && _builder.FunctionDCFieldMap.TryGetValue(name, out dcField!);
-    }
-
-    // Pushes `this.<>__functionDC` (a class reference); the caller's ldfld/stfld on it is verifiable.
-    private void EmitLoadOwnFunctionDC()
-    {
-        _il.Emit(OpCodes.Ldarg_0);
-        _il.Emit(OpCodes.Ldfld, _builder.FunctionDCField!);
+        return null;
     }
 
     // The rename-then-delegate overrides for const declarations, compound/logical assignment, and
