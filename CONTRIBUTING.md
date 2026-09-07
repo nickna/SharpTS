@@ -153,8 +153,10 @@ them but does not execute them.
 - **C# Version:** `LangVersion=latest` on .NET 10
 - **Nullable Reference Types:** Always enabled
 - **Records:** Use for immutable data (AST nodes, type representations)
-- **Analyzers:** IDE0051/IDE0052 (unused/unread private members) are build
-  warnings — keep the count at zero
+- **Analyzers:** IDE0051/IDE0052 (unused/unread private members) fail builds.
+  Run `./scripts/test-code-quality.ps1` for the analyzer coverage fixtures and
+  duplicate-method regression gate. See [coverage and exceptions](eng/CodeQuality/README.md)
+  before suppressing a diagnostic or editing the reviewed duplicate baseline.
 - **Comments:** State constraints the code can't show; don't narrate the code
 
 ### XML Documentation Policy
