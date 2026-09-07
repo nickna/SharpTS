@@ -66,6 +66,7 @@ public class SharpTSWorker : SharpTSEventEmitter, IDisposable
     // The worker's own (isolated) interpreter, captured once it starts so terminate()
     // can Shutdown() its event loop promptly (mirrors SharpTSClusterWorker._workerInterpreter).
     private volatile Interpreter? _workerInterpreter;
+    private volatile WorkerMessageHandler? _interpretedMessageHandler;
 
     // Exit code reported via the 'exit' event and the terminate() promise. 0 on clean exit;
     // 1 on terminate() or an uncaught worker error (Node semantics). Written by the worker
@@ -86,7 +87,7 @@ public class SharpTSWorker : SharpTSEventEmitter, IDisposable
     // worker never falls through to the real Console-reading SharpTSStdin singleton. `_stdin`
     // is the parent-facing Writable exposed as worker.stdin, created only when `stdin: true`;
     // each write is marshaled across the thread boundary via `_parentToWorkerStdinQueue` and
-    // pushed into `_workerStdin` by the message poller (PumpStdin). A null queue item is the
+    // pushed into `_workerStdin` by scheduled delivery (PumpStdin). A null queue item is the
     // EOF sentinel (PushFromHost(null) => 'end'), enqueued by _stdin.end()'s final callback.
     private readonly SharpTSReadable _workerStdin = new();
     private readonly SharpTSWritable? _stdin;
@@ -450,6 +451,7 @@ public class SharpTSWorker : SharpTSEventEmitter, IDisposable
 
         // Set up message handling loop
         var messageHandler = new WorkerMessageHandler(this, interpreter);
+        _interpretedMessageHandler = messageHandler;
         messageHandler.Start();
 
         // The worker environment is ready and user JS is about to run — Node emits 'online'
@@ -476,6 +478,7 @@ public class SharpTSWorker : SharpTSEventEmitter, IDisposable
         finally
         {
             messageHandler.Stop();
+            _interpretedMessageHandler = null;
         }
     }
 
@@ -1067,6 +1070,7 @@ public class SharpTSWorker : SharpTSEventEmitter, IDisposable
             else
                 _compiledParentToWorkerQueue.Enqueue(delivery);
             ScheduleCompiledWorkerDelivery();
+            _interpretedMessageHandler?.Schedule();
         }
         catch (InvalidOperationException)
         {
@@ -1269,7 +1273,7 @@ public class SharpTSWorker : SharpTSEventEmitter, IDisposable
     /// <summary>
     /// Builds the parent-facing worker.stdin Writable (#1076). Each write enqueues its chunk,
     /// and end() enqueues a null EOF sentinel, onto <see cref="_parentToWorkerStdinQueue"/>; the
-    /// message poller drains them into the worker's process.stdin via <see cref="PumpStdin"/>.
+    /// scheduled delivery drains them into the worker's process.stdin via <see cref="PumpStdin"/>.
     /// Mirrors the child_process stdin bridge (ChildProcessModuleInterpreter) — chunks cross the
     /// thread boundary as data only, so guest listeners inside the worker run on the worker.
     /// </summary>
@@ -1313,6 +1317,7 @@ public class SharpTSWorker : SharpTSEventEmitter, IDisposable
         try
         {
             _parentToWorkerStdinQueue.Add(item);
+            _interpretedMessageHandler?.Schedule();
         }
         catch (InvalidOperationException)
         {
@@ -1322,14 +1327,37 @@ public class SharpTSWorker : SharpTSEventEmitter, IDisposable
 
     /// <summary>
     /// Drains queued parent→worker stdin chunks into the worker's process.stdin Readable.
-    /// Called on each poll tick (worker side) with the worker interpreter, so the pushes — and
+    /// Called on the worker event loop with the worker interpreter, so the pushes — and
     /// the 'data'/'end' events they trigger — run against a live interpreter after guest code has
     /// attached its listeners (same marshaling model as message delivery). A null item is EOF.
     /// </summary>
     internal void PumpStdin(Interpreter workerInterpreter)
     {
-        while (_parentToWorkerStdinQueue.TryTake(out var chunk))
+        for (int i = 0; i < 256 && !_isTerminated && _parentToWorkerStdinQueue.TryTake(out var chunk); i++)
             _workerStdin.PushFromHost(workerInterpreter, chunk);
+    }
+
+    internal bool HasPendingInterpreterDelivery => !_isTerminated &&
+        (_parentToWorkerQueue.Count != 0 || _parentToWorkerStdinQueue.Count != 0);
+
+    internal void DrainInterpreterMessages(Interpreter interpreter)
+    {
+        if (_isTerminated) return;
+        PumpStdin(interpreter);
+        var emit = _parentPort.GetMember("emit") as BuiltInMethod;
+        for (int i = 0; i < 256 && !_isTerminated && TryReceiveMessage(out var message); i++)
+        {
+            if (message is null) continue;
+            try
+            {
+                if (message.IsError) emit?.Call(interpreter, ["messageerror"]);
+                else emit?.Call(interpreter, ["message", message.Data]);
+            }
+            catch (Exception ex)
+            {
+                interpreter.Error.WriteLine($"Worker message handler error: {ex.Message}");
+            }
+        }
     }
 
     /// <summary>
@@ -1584,72 +1612,58 @@ internal class WorkerParentPort : SharpTSEventEmitter
 /// <summary>
 /// Handles message delivery on the worker thread.
 /// </summary>
-internal class WorkerMessageHandler
+internal sealed class WorkerMessageHandler
 {
-    private readonly SharpTSWorker _worker;
-    private readonly Interpreter _interpreter;
-    private Timer? _pollTimer;
+    private readonly Action<Action> _schedule;
+    private readonly Func<bool> _hasWork;
+    private readonly Action _drain;
+    private int _active;
+    private int _scheduled;
 
     public WorkerMessageHandler(SharpTSWorker worker, Interpreter interpreter)
+        : this(action => interpreter.ScheduleTimer(0, 0, action, false),
+            () => worker.HasPendingInterpreterDelivery,
+            () => worker.DrainInterpreterMessages(interpreter)) { }
+
+    // Injected boundaries make enqueue/drain/stop races testable without sleeps.
+    internal WorkerMessageHandler(Action<Action> schedule, Func<bool> hasWork, Action drain)
     {
-        _worker = worker;
-        _interpreter = interpreter;
+        _schedule = schedule;
+        _hasWork = hasWork;
+        _drain = drain;
     }
 
     public void Start()
     {
-        // Poll for messages periodically
-        _pollTimer = new Timer(PollMessages, null, 10, 10);
+        Volatile.Write(ref _active, 1);
+        Schedule();
     }
 
-    public void Stop()
+    public void Stop() => Volatile.Write(ref _active, 0);
+
+    public void Schedule()
     {
-        _pollTimer?.Dispose();
-        _pollTimer = null;
+        if (Volatile.Read(ref _active) == 0 || !_hasWork() ||
+            Interlocked.Exchange(ref _scheduled, 1) != 0) return;
+        try { _schedule(Drain); }
+        catch { Volatile.Write(ref _scheduled, 0); throw; }
     }
 
-    private void PollMessages(object? state)
+    private void Drain()
     {
-        if (_worker.IsTerminated)
-            return;
-
-        // Feed any parent→worker stdin chunks into this worker's process.stdin (#1076). Done on
-        // the same poll tick as message delivery so 'data'/'end' events run against the live worker
-        // interpreter after guest code has attached its listeners.
-        _worker.PumpStdin(_interpreter);
-
-        while (_worker.TryReceiveMessage(out var message))
+        try
         {
-            if (message == null)
-                continue;
-
-            try
-            {
-                // Get the parentPort and emit the message (or messageerror) event
-                if (_interpreter.Environment.TryGet("parentPort", out var portRV) &&
-                    portRV.ToObject() is WorkerParentPort parentPort)
-                {
-                    var emitMethod = parentPort.GetMember("emit") as BuiltInMethod;
-                    if (message.IsError)
-                    {
-                        // The parent's postMessage value failed to clone — fire 'messageerror'
-                        // on the worker's parentPort instead of 'message' (#1001).
-                        emitMethod?.Call(_interpreter, ["messageerror"]);
-                    }
-                    else
-                    {
-                        emitMethod?.Call(_interpreter, ["message", message.Data]);
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                Console.Error.WriteLine($"Worker message handler error: {ex.Message}");
-            }
+            if (Volatile.Read(ref _active) != 0) _drain();
+        }
+        finally
+        {
+            // An enqueue after the queue looked empty but before this reset saw
+            // scheduled=1. Recheck after releasing ownership to avoid losing it.
+            Volatile.Write(ref _scheduled, 0);
+            Schedule();
         }
     }
 }
-
 /// <summary>
 /// Static helper for worker_threads module functionality.
 /// </summary>

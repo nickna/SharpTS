@@ -1,0 +1,266 @@
+[
+  {
+    "Method": "Full",
+    "Parameters": "N=5000&RecordAlias=True",
+    "Memory": {
+      "Gen0Collections": 8,
+      "Gen1Collections": 3,
+      "Gen2Collections": 0,
+      "TotalOperations": 112,
+      "BytesAllocatedPerOperation": 1291437
+    }
+  },
+  {
+    "Method": "Full",
+    "Parameters": "N=5000&RecordAlias=False",
+    "Memory": {
+      "Gen0Collections": 9,
+      "Gen1Collections": 3,
+      "Gen2Collections": 0,
+      "TotalOperations": 128,
+      "BytesAllocatedPerOperation": 1291429
+    }
+  },
+  {
+    "Method": "Construction",
+    "Parameters": "N=5000&RecordAlias=False",
+    "Memory": {
+      "Gen0Collections": 11,
+      "Gen1Collections": 7,
+      "Gen2Collections": 0,
+      "TotalOperations": 112,
+      "BytesAllocatedPerOperation": 1771437
+    }
+  },
+  {
+    "Method": "Construction",
+    "Parameters": "N=5000&RecordAlias=True",
+    "Memory": {
+      "Gen0Collections": 11,
+      "Gen1Collections": 7,
+      "Gen2Collections": 0,
+      "TotalOperations": 112,
+      "BytesAllocatedPerOperation": 1771437
+    }
+  },
+  {
+    "Method": "Full",
+    "Parameters": "N=8192&RecordAlias=True",
+    "Memory": {
+      "Gen0Collections": 9,
+      "Gen1Collections": 5,
+      "Gen2Collections": 0,
+      "TotalOperations": 80,
+      "BytesAllocatedPerOperation": 2031999
+    }
+  },
+  {
+    "Method": "Full",
+    "Parameters": "N=8192&RecordAlias=False",
+    "Memory": {
+      "Gen0Collections": 9,
+      "Gen1Collections": 5,
+      "Gen2Collections": 0,
+      "TotalOperations": 80,
+      "BytesAllocatedPerOperation": 2031999
+    }
+  },
+  {
+    "Method": "Traversal",
+    "Parameters": "N=5000&RecordAlias=True",
+    "Memory": {
+      "Gen0Collections": 1,
+      "Gen1Collections": 0,
+      "Gen2Collections": 0,
+      "TotalOperations": 80,
+      "BytesAllocatedPerOperation": 240068
+    }
+  },
+  {
+    "Method": "Traversal",
+    "Parameters": "N=5000&RecordAlias=False",
+    "Memory": {
+      "Gen0Collections": 1,
+      "Gen1Collections": 0,
+      "Gen2Collections": 0,
+      "TotalOperations": 80,
+      "BytesAllocatedPerOperation": 240068
+    }
+  },
+  {
+    "Method": "Construction",
+    "Parameters": "N=8192&RecordAlias=False",
+    "Memory": {
+      "Gen0Collections": 10,
+      "Gen1Collections": 7,
+      "Gen2Collections": 0,
+      "TotalOperations": 64,
+      "BytesAllocatedPerOperation": 2818447
+    }
+  },
+  {
+    "Method": "Construction",
+    "Parameters": "N=8192&RecordAlias=True",
+    "Memory": {
+      "Gen0Collections": 10,
+      "Gen1Collections": 7,
+      "Gen2Collections": 0,
+      "TotalOperations": 64,
+      "BytesAllocatedPerOperation": 2818447
+    }
+  },
+  {
+    "Method": "Traversal",
+    "Parameters": "N=8192&RecordAlias=True",
+    "Memory": {
+      "Gen0Collections": 1,
+      "Gen1Collections": 0,
+      "Gen2Collections": 0,
+      "TotalOperations": 48,
+      "BytesAllocatedPerOperation": 393330
+    }
+  },
+  {
+    "Method": "Traversal",
+    "Parameters": "N=8193&RecordAlias=True",
+    "Memory": {
+      "Gen0Collections": 1,
+      "Gen1Collections": 0,
+      "Gen2Collections": 0,
+      "TotalOperations": 48,
+      "BytesAllocatedPerOperation": 393378
+    }
+  },
+  {
+    "Method": "Traversal",
+    "Parameters": "N=8192&RecordAlias=False",
+    "Memory": {
+      "Gen0Collections": 1,
+      "Gen1Collections": 0,
+      "Gen2Collections": 0,
+      "TotalOperations": 48,
+      "BytesAllocatedPerOperation": 393330
+    }
+  },
+  {
+    "Method": "Traversal",
+    "Parameters": "N=8193&RecordAlias=False",
+    "Memory": {
+      "Gen0Collections": 1,
+      "Gen1Collections": 0,
+      "Gen2Collections": 0,
+      "TotalOperations": 48,
+      "BytesAllocatedPerOperation": 393378
+    }
+  },
+  {
+    "Method": "Full",
+    "Parameters": "N=8193&RecordAlias=False",
+    "Memory": {
+      "Gen0Collections": 4,
+      "Gen1Collections": 3,
+      "Gen2Collections": 1,
+      "TotalOperations": 32,
+      "BytesAllocatedPerOperation": 2163578
+    }
+  },
+  {
+    "Method": "Full",
+    "Parameters": "N=8193&RecordAlias=True",
+    "Memory": {
+      "Gen0Collections": 4,
+      "Gen1Collections": 3,
+      "Gen2Collections": 1,
+      "TotalOperations": 32,
+      "BytesAllocatedPerOperation": 2163578
+    }
+  },
+  {
+    "Method": "Construction",
+    "Parameters": "N=8193&RecordAlias=True",
+    "Memory": {
+      "Gen0Collections": 6,
+      "Gen1Collections": 5,
+      "Gen2Collections": 1,
+      "TotalOperations": 32,
+      "BytesAllocatedPerOperation": 2950106
+    }
+  },
+  {
+    "Method": "Construction",
+    "Parameters": "N=8193&RecordAlias=False",
+    "Memory": {
+      "Gen0Collections": 6,
+      "Gen1Collections": 5,
+      "Gen2Collections": 1,
+      "TotalOperations": 32,
+      "BytesAllocatedPerOperation": 2950106
+    }
+  },
+  {
+    "Method": "Traversal",
+    "Parameters": "N=20000&RecordAlias=True",
+    "Memory": {
+      "Gen0Collections": 1,
+      "Gen1Collections": 0,
+      "Gen2Collections": 0,
+      "TotalOperations": 32,
+      "BytesAllocatedPerOperation": 960171
+    }
+  },
+  {
+    "Method": "Traversal",
+    "Parameters": "N=20000&RecordAlias=False",
+    "Memory": {
+      "Gen0Collections": 1,
+      "Gen1Collections": 0,
+      "Gen2Collections": 0,
+      "TotalOperations": 32,
+      "BytesAllocatedPerOperation": 960171
+    }
+  },
+  {
+    "Method": "Full",
+    "Parameters": "N=20000&RecordAlias=False",
+    "Memory": {
+      "Gen0Collections": 5,
+      "Gen1Collections": 4,
+      "Gen2Collections": 1,
+      "TotalOperations": 16,
+      "BytesAllocatedPerOperation": 5165286
+    }
+  },
+  {
+    "Method": "Full",
+    "Parameters": "N=20000&RecordAlias=True",
+    "Memory": {
+      "Gen0Collections": 5,
+      "Gen1Collections": 4,
+      "Gen2Collections": 1,
+      "TotalOperations": 16,
+      "BytesAllocatedPerOperation": 5165265
+    }
+  },
+  {
+    "Method": "Construction",
+    "Parameters": "N=20000&RecordAlias=False",
+    "Memory": {
+      "Gen0Collections": 8,
+      "Gen1Collections": 7,
+      "Gen2Collections": 2,
+      "TotalOperations": 16,
+      "BytesAllocatedPerOperation": 7085596
+    }
+  },
+  {
+    "Method": "Construction",
+    "Parameters": "N=20000&RecordAlias=True",
+    "Memory": {
+      "Gen0Collections": 8,
+      "Gen1Collections": 7,
+      "Gen2Collections": 2,
+      "TotalOperations": 16,
+      "BytesAllocatedPerOperation": 7085596
+    }
+  }
+]

@@ -71,6 +71,33 @@ public class IteratorRecordTests
         Assert.Equal("0,1,2\n0,1,2\n2\n", TestHarness.Run(source, mode));
     }
 
+    [Theory]
+    [InlineData("[...iterator]")]
+    [InlineData("collect(...iterator)")]
+    public void SpreadCapturesNextGetterOncePerAcquisition(string expression)
+    {
+        string source = """
+            let reads = 0;
+            let current = 0;
+            const iterator: any = {
+                [Symbol.iterator]() { return this; },
+                get next() {
+                    reads++;
+                    return function() {
+                        if (this !== iterator || arguments.length !== 0) throw new Error("call contract");
+                        if (current === 3) return { done: true, get value() { throw new Error("completed value"); } };
+                        return { value: current++, done: false };
+                    };
+                }
+            };
+            function collect(...values: any[]): any[] { return values; }
+            """ + "console.log(" + expression + ".join(',')); current = 0; console.log(" +
+            expression + ".join(','), reads);";
+        Assert.Equal("0,1,2\n0,1,2 2\n", TestHarness.Run(source, ExecutionMode.Interpreted));
+        Assert.Equal("0,1,2\n0,1,2 2\n", TestHarness.RunCompiledStandalone(source));
+        Assert.Empty(TestHarness.CompileAndVerifyOnly(source));
+    }
+
     [Fact]
     public void GenericIteratorRemainsStandalone()
     {

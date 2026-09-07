@@ -26,6 +26,13 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+# Schema-v1 export describes the default 100/300 ms timing budgets. Retain
+# custom-budget runs as raw diagnostics rather than mislabeling their metadata.
+if (-not $Smoke -and -not $NoSnapshot -and
+    ($env:SHARPTS_BENCH_WARMUP_MS -or $env:SHARPTS_BENCH_SAMPLE_MS)) {
+    throw 'Custom timing budgets require -NoSnapshot; public snapshots describe the default budgets.'
+}
+
 $HarnessDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
 $RepoRoot = if ($RepositoryRoot) {
     (Resolve-Path -LiteralPath $RepositoryRoot).Path
@@ -311,9 +318,12 @@ try {
             $offset = ($launch - 1) % $Runtimes.Count
             $orderedRuntimes = @($Runtimes[$offset..($Runtimes.Count - 1)])
             if ($offset -gt 0) { $orderedRuntimes += $Runtimes[0..($offset - 1)] }
+            $caseOffset = ($launch - 1) % $caseNames.Count
+            $orderedCases = @($caseNames[$caseOffset..($caseNames.Count - 1)])
+            if ($caseOffset -gt 0) { $orderedCases += $caseNames[0..($caseOffset - 1)] }
 
             foreach ($runtime in $orderedRuntimes) {
-                foreach ($caseName in $caseNames) {
+                foreach ($caseName in $orderedCases) {
                     $caseLabel = if ($null -eq $caseName) { '' } else { " case $caseName" }
                     Write-Host "  [$runtime] launch $launch/$Launches$caseLabel..."
                     $oldSelectedCase = [Environment]::GetEnvironmentVariable(
