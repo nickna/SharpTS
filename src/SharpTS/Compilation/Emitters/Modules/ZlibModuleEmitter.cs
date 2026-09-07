@@ -79,6 +79,7 @@ public sealed class ZlibModuleEmitter : IBuiltInModuleEmitter
     {
         var ctx = emitter.Context;
         var il = ctx.IL;
+        var zlib = ctx.Runtime!.RequireZlib();
 
         // data argument
         if (arguments.Count == 0)
@@ -102,7 +103,7 @@ public sealed class ZlibModuleEmitter : IBuiltInModuleEmitter
             il.Emit(OpCodes.Ldnull);
         }
 
-        il.Emit(OpCodes.Call, ctx.Runtime!.ZlibCrc32);
+        il.Emit(OpCodes.Call, zlib.Crc32);
         return true;
     }
 
@@ -120,6 +121,7 @@ public sealed class ZlibModuleEmitter : IBuiltInModuleEmitter
     {
         var ctx = emitter.Context;
         var il = ctx.IL;
+        var zlib = ctx.Runtime!.RequireZlib();
 
         // Emit options argument (null if not provided)
         if (arguments.Count >= 1)
@@ -135,17 +137,17 @@ public sealed class ZlibModuleEmitter : IBuiltInModuleEmitter
         // Get the runtime method
         var method = runtimeMethodName switch
         {
-            "ZlibCreateGzip" => ctx.Runtime!.ZlibCreateGzip,
-            "ZlibCreateGunzip" => ctx.Runtime!.ZlibCreateGunzip,
-            "ZlibCreateDeflate" => ctx.Runtime!.ZlibCreateDeflate,
-            "ZlibCreateInflate" => ctx.Runtime!.ZlibCreateInflate,
-            "ZlibCreateDeflateRaw" => ctx.Runtime!.ZlibCreateDeflateRaw,
-            "ZlibCreateInflateRaw" => ctx.Runtime!.ZlibCreateInflateRaw,
-            "ZlibCreateBrotliCompress" => ctx.Runtime!.ZlibCreateBrotliCompress,
-            "ZlibCreateBrotliDecompress" => ctx.Runtime!.ZlibCreateBrotliDecompress,
-            "ZlibCreateZstdCompress" => ctx.Runtime!.ZlibCreateZstdCompress,
-            "ZlibCreateZstdDecompress" => ctx.Runtime!.ZlibCreateZstdDecompress,
-            "ZlibCreateUnzip" => ctx.Runtime!.ZlibCreateUnzip,
+            "ZlibCreateGzip" => zlib.CreateGzip,
+            "ZlibCreateGunzip" => zlib.CreateGunzip,
+            "ZlibCreateDeflate" => zlib.CreateDeflate,
+            "ZlibCreateInflate" => zlib.CreateInflate,
+            "ZlibCreateDeflateRaw" => zlib.CreateDeflateRaw,
+            "ZlibCreateInflateRaw" => zlib.CreateInflateRaw,
+            "ZlibCreateBrotliCompress" => zlib.CreateBrotliCompress,
+            "ZlibCreateBrotliDecompress" => zlib.CreateBrotliDecompress,
+            "ZlibCreateZstdCompress" => zlib.CreateZstdCompress,
+            "ZlibCreateZstdDecompress" => zlib.CreateZstdDecompress,
+            "ZlibCreateUnzip" => zlib.CreateUnzip,
             _ => throw new CompileException($"Unknown zlib streaming method: {runtimeMethodName}")
         };
 
@@ -161,6 +163,7 @@ public sealed class ZlibModuleEmitter : IBuiltInModuleEmitter
     {
         var ctx = emitter.Context;
         var il = ctx.IL;
+        var zlib = ctx.Runtime!.RequireZlib();
 
         // Emit input argument
         if (arguments.Count == 0)
@@ -187,17 +190,17 @@ public sealed class ZlibModuleEmitter : IBuiltInModuleEmitter
         // Get the appropriate runtime method
         var method = runtimeMethodName switch
         {
-            "ZlibGzipSync" => ctx.Runtime!.ZlibGzipSync,
-            "ZlibGunzipSync" => ctx.Runtime!.ZlibGunzipSync,
-            "ZlibDeflateSync" => ctx.Runtime!.ZlibDeflateSync,
-            "ZlibInflateSync" => ctx.Runtime!.ZlibInflateSync,
-            "ZlibDeflateRawSync" => ctx.Runtime!.ZlibDeflateRawSync,
-            "ZlibInflateRawSync" => ctx.Runtime!.ZlibInflateRawSync,
-            "ZlibBrotliCompressSync" => ctx.Runtime!.ZlibBrotliCompressSync,
-            "ZlibBrotliDecompressSync" => ctx.Runtime!.ZlibBrotliDecompressSync,
-            "ZlibZstdCompressSync" => ctx.Runtime!.ZlibZstdCompressSync,
-            "ZlibZstdDecompressSync" => ctx.Runtime!.ZlibZstdDecompressSync,
-            "ZlibUnzipSync" => ctx.Runtime!.ZlibUnzipSync,
+            "ZlibGzipSync" => zlib.GzipSync,
+            "ZlibGunzipSync" => zlib.GunzipSync,
+            "ZlibDeflateSync" => zlib.DeflateSync,
+            "ZlibInflateSync" => zlib.InflateSync,
+            "ZlibDeflateRawSync" => zlib.DeflateRawSync,
+            "ZlibInflateRawSync" => zlib.InflateRawSync,
+            "ZlibBrotliCompressSync" => zlib.BrotliCompressSync,
+            "ZlibBrotliDecompressSync" => zlib.BrotliDecompressSync,
+            "ZlibZstdCompressSync" => zlib.ZstdCompressSync,
+            "ZlibZstdDecompressSync" => zlib.ZstdDecompressSync,
+            "ZlibUnzipSync" => zlib.UnzipSync,
             _ => throw new CompileException($"Unknown zlib method: {runtimeMethodName}")
         };
 

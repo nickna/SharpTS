@@ -40,6 +40,8 @@ public partial class RuntimeEmitter
         if (_emitHosted)
             _features.UsesPromise = true;
         var runtime = new EmittedRuntime();
+        if (features.UsesZlib)
+            runtime.BeginZlibEmission();
         if (features.UsesDns)
             runtime.BeginDnsEmission();
 
@@ -606,6 +608,7 @@ public partial class RuntimeEmitter
         }
 
         runtime.Dns?.CompleteEmission();
+        runtime.Zlib?.CompleteEmission();
         return runtime;
     }
 }

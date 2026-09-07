@@ -474,7 +474,7 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.Object, _types.Object]);
-        runtime.ZlibGzipSync = method;
+        runtime.RequireZlib().GzipSync = method;
 
         EmitDeflateFamilyCompress(method.GetILGenerator(), runtime, typeof(GZipStream));
     }
@@ -490,7 +490,7 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.Object, _types.Object]);
-        runtime.ZlibGunzipSync = method;
+        runtime.RequireZlib().GunzipSync = method;
 
         EmitDecompressMethod(method.GetILGenerator(), runtime, typeof(GZipStream));
     }
@@ -510,7 +510,7 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.Object, _types.Object]);
-        runtime.ZlibDeflateSync = method;
+        runtime.RequireZlib().DeflateSync = method;
 
         EmitDeflateFamilyCompress(method.GetILGenerator(), runtime, typeof(ZLibStream));
     }
@@ -526,7 +526,7 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.Object, _types.Object]);
-        runtime.ZlibInflateSync = method;
+        runtime.RequireZlib().InflateSync = method;
 
         EmitDecompressMethod(method.GetILGenerator(), runtime, typeof(ZLibStream));
     }
@@ -546,7 +546,7 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.Object, _types.Object]);
-        runtime.ZlibDeflateRawSync = method;
+        runtime.RequireZlib().DeflateRawSync = method;
 
         EmitDeflateFamilyCompress(method.GetILGenerator(), runtime, typeof(DeflateStream));
     }
@@ -562,7 +562,7 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.Object, _types.Object]);
-        runtime.ZlibInflateRawSync = method;
+        runtime.RequireZlib().InflateRawSync = method;
 
         EmitDecompressMethod(method.GetILGenerator(), runtime, typeof(DeflateStream));
     }
@@ -582,7 +582,7 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.Object, _types.Object]);
-        runtime.ZlibBrotliCompressSync = method;
+        runtime.RequireZlib().BrotliCompressSync = method;
 
         EmitBrotliCompress(method.GetILGenerator(), runtime);
     }
@@ -598,7 +598,7 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.Object, _types.Object]);
-        runtime.ZlibBrotliDecompressSync = method;
+        runtime.RequireZlib().BrotliDecompressSync = method;
 
         EmitDecompressMethod(method.GetILGenerator(), runtime, typeof(BrotliStream));
     }
@@ -618,7 +618,7 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.Object, _types.Object]);
-        runtime.ZlibZstdCompressSync = method;
+        runtime.RequireZlib().ZstdCompressSync = method;
 
         EmitZstdCompressMethod(method.GetILGenerator(), runtime);
     }
@@ -634,7 +634,7 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.Object, _types.Object]);
-        runtime.ZlibZstdDecompressSync = method;
+        runtime.RequireZlib().ZstdDecompressSync = method;
 
         EmitZstdDecompressMethod(method.GetILGenerator(), runtime);
     }
@@ -654,7 +654,7 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.Object, _types.Object]);
-        runtime.ZlibUnzipSync = method;
+        runtime.RequireZlib().UnzipSync = method;
 
         var il = method.GetILGenerator();
 
@@ -699,21 +699,21 @@ public partial class RuntimeEmitter
         // It's zlib - call ZlibInflateSync
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.ZlibInflateSync);
+        il.Emit(OpCodes.Call, runtime.RequireZlib().InflateSync);
         il.Emit(OpCodes.Ret);
 
         // It's gzip - call ZlibGunzipSync
         il.MarkLabel(isGzipLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.ZlibGunzipSync);
+        il.Emit(OpCodes.Call, runtime.RequireZlib().GunzipSync);
         il.Emit(OpCodes.Ret);
 
         // Try raw deflate
         il.MarkLabel(tryDeflateLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.ZlibInflateRawSync);
+        il.Emit(OpCodes.Call, runtime.RequireZlib().InflateRawSync);
         il.Emit(OpCodes.Ret);
     }
 
@@ -734,7 +734,7 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.Object, _types.Object]);
-        runtime.ZlibCrc32 = method;
+        runtime.RequireZlib().Crc32 = method;
 
         var il = method.GetILGenerator();
 
@@ -843,17 +843,17 @@ public partial class RuntimeEmitter
     private void EmitZlibStreamingMethods(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         // Create methods for each compression/decompression type
-        EmitZlibCreateStreamMethod(typeBuilder, runtime, "ZlibCreateGzip", 0, mb => runtime.ZlibCreateGzip = mb);
-        EmitZlibCreateStreamMethod(typeBuilder, runtime, "ZlibCreateGunzip", 1, mb => runtime.ZlibCreateGunzip = mb);
-        EmitZlibCreateStreamMethod(typeBuilder, runtime, "ZlibCreateDeflate", 2, mb => runtime.ZlibCreateDeflate = mb);
-        EmitZlibCreateStreamMethod(typeBuilder, runtime, "ZlibCreateInflate", 3, mb => runtime.ZlibCreateInflate = mb);
-        EmitZlibCreateStreamMethod(typeBuilder, runtime, "ZlibCreateDeflateRaw", 4, mb => runtime.ZlibCreateDeflateRaw = mb);
-        EmitZlibCreateStreamMethod(typeBuilder, runtime, "ZlibCreateInflateRaw", 5, mb => runtime.ZlibCreateInflateRaw = mb);
-        EmitZlibCreateStreamMethod(typeBuilder, runtime, "ZlibCreateBrotliCompress", 6, mb => runtime.ZlibCreateBrotliCompress = mb);
-        EmitZlibCreateStreamMethod(typeBuilder, runtime, "ZlibCreateBrotliDecompress", 7, mb => runtime.ZlibCreateBrotliDecompress = mb);
-        EmitZlibCreateStreamMethod(typeBuilder, runtime, "ZlibCreateZstdCompress", 9, mb => runtime.ZlibCreateZstdCompress = mb);
-        EmitZlibCreateStreamMethod(typeBuilder, runtime, "ZlibCreateZstdDecompress", 10, mb => runtime.ZlibCreateZstdDecompress = mb);
-        EmitZlibCreateStreamMethod(typeBuilder, runtime, "ZlibCreateUnzip", 8, mb => runtime.ZlibCreateUnzip = mb);
+        EmitZlibCreateStreamMethod(typeBuilder, runtime, "ZlibCreateGzip", 0, mb => runtime.RequireZlib().CreateGzip = mb);
+        EmitZlibCreateStreamMethod(typeBuilder, runtime, "ZlibCreateGunzip", 1, mb => runtime.RequireZlib().CreateGunzip = mb);
+        EmitZlibCreateStreamMethod(typeBuilder, runtime, "ZlibCreateDeflate", 2, mb => runtime.RequireZlib().CreateDeflate = mb);
+        EmitZlibCreateStreamMethod(typeBuilder, runtime, "ZlibCreateInflate", 3, mb => runtime.RequireZlib().CreateInflate = mb);
+        EmitZlibCreateStreamMethod(typeBuilder, runtime, "ZlibCreateDeflateRaw", 4, mb => runtime.RequireZlib().CreateDeflateRaw = mb);
+        EmitZlibCreateStreamMethod(typeBuilder, runtime, "ZlibCreateInflateRaw", 5, mb => runtime.RequireZlib().CreateInflateRaw = mb);
+        EmitZlibCreateStreamMethod(typeBuilder, runtime, "ZlibCreateBrotliCompress", 6, mb => runtime.RequireZlib().CreateBrotliCompress = mb);
+        EmitZlibCreateStreamMethod(typeBuilder, runtime, "ZlibCreateBrotliDecompress", 7, mb => runtime.RequireZlib().CreateBrotliDecompress = mb);
+        EmitZlibCreateStreamMethod(typeBuilder, runtime, "ZlibCreateZstdCompress", 9, mb => runtime.RequireZlib().CreateZstdCompress = mb);
+        EmitZlibCreateStreamMethod(typeBuilder, runtime, "ZlibCreateZstdDecompress", 10, mb => runtime.RequireZlib().CreateZstdDecompress = mb);
+        EmitZlibCreateStreamMethod(typeBuilder, runtime, "ZlibCreateUnzip", 8, mb => runtime.RequireZlib().CreateUnzip = mb);
     }
 
     /// <summary>
@@ -877,7 +877,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4, kindValue);   // kind
         il.Emit(OpCodes.Ldarg_0);              // options
         il.Emit(OpCodes.Call, _getZlibCompressionLevel!);  // -> int (CompressionLevel)
-        il.Emit(OpCodes.Newobj, runtime.TSZlibTransformCtor);  // new $ZlibTransform(kind, level)
+        il.Emit(OpCodes.Newobj, runtime.RequireZlib().TransformCtor);  // new $ZlibTransform(kind, level)
         il.Emit(OpCodes.Ret);
     }
 
@@ -890,20 +890,21 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitZlibMethodWrappers(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
+        var zlib = runtime.RequireZlib();
         var methodNames = new[]
         {
-            ("gzipSync", runtime.ZlibGzipSync),
-            ("gunzipSync", runtime.ZlibGunzipSync),
-            ("deflateSync", runtime.ZlibDeflateSync),
-            ("inflateSync", runtime.ZlibInflateSync),
-            ("deflateRawSync", runtime.ZlibDeflateRawSync),
-            ("inflateRawSync", runtime.ZlibInflateRawSync),
-            ("brotliCompressSync", runtime.ZlibBrotliCompressSync),
-            ("brotliDecompressSync", runtime.ZlibBrotliDecompressSync),
-            ("zstdCompressSync", runtime.ZlibZstdCompressSync),
-            ("zstdDecompressSync", runtime.ZlibZstdDecompressSync),
-            ("unzipSync", runtime.ZlibUnzipSync),
-            ("crc32", runtime.ZlibCrc32)
+            ("gzipSync", zlib.GzipSync),
+            ("gunzipSync", zlib.GunzipSync),
+            ("deflateSync", zlib.DeflateSync),
+            ("inflateSync", zlib.InflateSync),
+            ("deflateRawSync", zlib.DeflateRawSync),
+            ("inflateRawSync", zlib.InflateRawSync),
+            ("brotliCompressSync", zlib.BrotliCompressSync),
+            ("brotliDecompressSync", zlib.BrotliDecompressSync),
+            ("zstdCompressSync", zlib.ZstdCompressSync),
+            ("zstdDecompressSync", zlib.ZstdDecompressSync),
+            ("unzipSync", zlib.UnzipSync),
+            ("crc32", zlib.Crc32)
         };
 
         foreach (var (name, targetMethod) in methodNames)
@@ -926,17 +927,17 @@ public partial class RuntimeEmitter
         // Streaming create* methods (1 arg: options)
         var streamingMethods = new (string name, MethodBuilder target)[]
         {
-            ("createGzip", runtime.ZlibCreateGzip),
-            ("createGunzip", runtime.ZlibCreateGunzip),
-            ("createDeflate", runtime.ZlibCreateDeflate),
-            ("createInflate", runtime.ZlibCreateInflate),
-            ("createDeflateRaw", runtime.ZlibCreateDeflateRaw),
-            ("createInflateRaw", runtime.ZlibCreateInflateRaw),
-            ("createBrotliCompress", runtime.ZlibCreateBrotliCompress),
-            ("createBrotliDecompress", runtime.ZlibCreateBrotliDecompress),
-            ("createZstdCompress", runtime.ZlibCreateZstdCompress),
-            ("createZstdDecompress", runtime.ZlibCreateZstdDecompress),
-            ("createUnzip", runtime.ZlibCreateUnzip)
+            ("createGzip", zlib.CreateGzip),
+            ("createGunzip", zlib.CreateGunzip),
+            ("createDeflate", zlib.CreateDeflate),
+            ("createInflate", zlib.CreateInflate),
+            ("createDeflateRaw", zlib.CreateDeflateRaw),
+            ("createInflateRaw", zlib.CreateInflateRaw),
+            ("createBrotliCompress", zlib.CreateBrotliCompress),
+            ("createBrotliDecompress", zlib.CreateBrotliDecompress),
+            ("createZstdCompress", zlib.CreateZstdCompress),
+            ("createZstdDecompress", zlib.CreateZstdDecompress),
+            ("createUnzip", zlib.CreateUnzip)
         };
 
         foreach (var (name, targetMethod) in streamingMethods)

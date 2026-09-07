@@ -2467,35 +2467,18 @@ public class EmittedRuntime
 
     // Querystring module methods
 
-    // Zlib module methods
-    public MethodBuilder ZlibGzipSync { get; set; } = null!;
-    public MethodBuilder ZlibGunzipSync { get; set; } = null!;
-    public MethodBuilder ZlibDeflateSync { get; set; } = null!;
-    public MethodBuilder ZlibInflateSync { get; set; } = null!;
-    public MethodBuilder ZlibDeflateRawSync { get; set; } = null!;
-    public MethodBuilder ZlibInflateRawSync { get; set; } = null!;
-    public MethodBuilder ZlibBrotliCompressSync { get; set; } = null!;
-    public MethodBuilder ZlibBrotliDecompressSync { get; set; } = null!;
-    public MethodBuilder ZlibZstdCompressSync { get; set; } = null!;
-    public MethodBuilder ZlibZstdDecompressSync { get; set; } = null!;
-    public MethodBuilder ZlibUnzipSync { get; set; } = null!;
-    public MethodBuilder ZlibCrc32 { get; set; } = null!;
+    /// <summary>Zlib metadata, or null when zlib is tree-shaken from this compilation.</summary>
+    public EmittedZlibRuntime? Zlib { get; private set; }
 
-    // Zlib streaming APIs
-    public MethodBuilder ZlibCreateGzip { get; set; } = null!;
-    public MethodBuilder ZlibCreateGunzip { get; set; } = null!;
-    public MethodBuilder ZlibCreateDeflate { get; set; } = null!;
-    public MethodBuilder ZlibCreateInflate { get; set; } = null!;
-    public MethodBuilder ZlibCreateDeflateRaw { get; set; } = null!;
-    public MethodBuilder ZlibCreateInflateRaw { get; set; } = null!;
-    public MethodBuilder ZlibCreateBrotliCompress { get; set; } = null!;
-    public MethodBuilder ZlibCreateBrotliDecompress { get; set; } = null!;
-    public MethodBuilder ZlibCreateZstdCompress { get; set; } = null!;
-    public MethodBuilder ZlibCreateZstdDecompress { get; set; } = null!;
-    public MethodBuilder ZlibCreateUnzip { get; set; } = null!;
+    internal void BeginZlibEmission()
+    {
+        if (Zlib is not null)
+            throw new InvalidOperationException("Zlib metadata emission has already started.");
+        Zlib = new EmittedZlibRuntime();
+    }
 
-    // $ZlibTransform type - emitted for standalone zlib streaming support
-    public ConstructorBuilder TSZlibTransformCtor { get; set; } = null!;
+    public EmittedZlibRuntime RequireZlib() => Zlib
+        ?? throw new InvalidOperationException("Zlib runtime was not enabled for this compilation.");
 
     // $EventEmitter type - emitted for standalone event emitter support
     // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSEventEmitter
