@@ -107,43 +107,36 @@ public sealed class SharpTSArrayGlobal : ISharpTSCallable, ISharpTSMutableBuiltI
 public sealed class SharpTSArrayPrototype : ISharpTSMutableBuiltIn, ISharpTSSymbolPropertyBag
 {
     internal SharpTSArrayGlobal? RealmConstructor { get; set; }
-    // Array.prototype is an ordinary mutable object. Reuse SharpTSObject's
-    // descriptor-aware storage so defineProperty can install accessors and
-    // enforce writable/configurable flags instead of maintaining a parallel
-    // value-only expando dictionary.
-    private readonly SharpTSObject _extras = new([]);
-    private readonly HashSet<string> _deletedBuiltIns = [];
+    private readonly PrototypePropertyOverlay _overlay;
     private readonly System.Collections.Concurrent.ConcurrentDictionary<string, ArrayPrototypeMethodWrapper>
         _methodCache = new(StringComparer.Ordinal);
 
-    public bool HasExtra(string name) => _extras.HasProperty(name) || _extras.HasSetter(name);
+    public SharpTSArrayPrototype()
+    {
+        _overlay = new(IsBuiltIn);
+    }
+
+    public bool HasExtra(string name) => _overlay.HasExtra(name);
     internal bool HasIndexedExtra(long exclusiveLength)
-        => _extras.HasIndexedOwnProperty(exclusiveLength);
-    public object? TryGetExtra(string name) => _extras.GetProperty(name);
-    public void SetExtra(string name, object? value)
-    {
-        _deletedBuiltIns.Remove(name);
-        _extras.SetProperty(name, value);
-    }
+        => _overlay.HasIndexedOwnProperty(exclusiveLength);
+    public object? TryGetExtra(string name) => _overlay.GetProperty(name);
+    public void SetExtra(string name, object? value) => _overlay.SetProperty(name, value);
     public bool DefineExtraProperty(string name, SharpTSPropertyDescriptor descriptor)
-    {
-        _deletedBuiltIns.Remove(name);
-        return _extras.DefineProperty(name, descriptor);
-    }
+        => _overlay.DefineProperty(name, descriptor);
     public SharpTSPropertyDescriptor? GetOwnPropertyDescriptor(string name)
-        => _extras.GetOwnPropertyDescriptor(name);
-    public ISharpTSCallable? GetExtraGetter(string name) => _extras.GetGetter(name);
-    public ISharpTSCallable? GetExtraSetter(string name) => _extras.GetSetter(name);
+        => _overlay.GetOwnPropertyDescriptor(name);
+    public ISharpTSCallable? GetExtraGetter(string name) => _overlay.GetGetter(name);
+    public ISharpTSCallable? GetExtraSetter(string name) => _overlay.GetSetter(name);
     bool ISharpTSSymbolPropertyBag.HasSymbolProperty(SharpTSSymbol symbol)
-        => _extras.HasSymbolProperty(symbol);
+        => _overlay.HasSymbolProperty(symbol);
     object? ISharpTSSymbolPropertyBag.GetBySymbol(SharpTSSymbol symbol)
-        => _extras.GetBySymbol(symbol);
+        => _overlay.GetBySymbol(symbol);
     bool ISharpTSSymbolPropertyBag.TryGetSymbolAccessor(
         SharpTSSymbol symbol, out ISharpTSCallable? getter, out ISharpTSCallable? setter)
-        => _extras.TryGetSymbolAccessor(symbol, out getter, out setter);
+        => _overlay.TryGetSymbolAccessor(symbol, out getter, out setter);
     void ISharpTSSymbolPropertyBag.SetBySymbolStrict(
         SharpTSSymbol symbol, object? value, bool strictMode)
-        => _extras.SetBySymbolStrict(symbol, value, strictMode);
+        => _overlay.SetBySymbolStrict(symbol, value, strictMode);
 
     private object? GetBuiltInMember(string name)
     {
@@ -158,25 +151,17 @@ public sealed class SharpTSArrayPrototype : ISharpTSMutableBuiltIn, ISharpTSSymb
 
     private bool IsBuiltIn(string name) => GetBuiltInMember(name) != null;
 
-    public bool HasOwnProperty(string name)
-        => HasExtra(name) || (!_deletedBuiltIns.Contains(name) && IsBuiltIn(name));
+    public bool HasOwnProperty(string name) => _overlay.HasOwnProperty(name);
 
-    public bool DeleteProperty(string name)
-    {
-        bool hadExtra = HasExtra(name);
-        if (hadExtra && !_extras.DeleteProperty(name)) return false;
-        if (IsBuiltIn(name)) _deletedBuiltIns.Add(name);
-        return true;
-    }
+    public bool DeleteProperty(string name) => _overlay.DeleteProperty(name);
 
-    public IEnumerable<string> OwnEnumerableKeys() => _extras.OwnEnumerableKeys();
+    public IEnumerable<string> OwnEnumerableKeys() => _overlay.OwnEnumerableKeys();
 
     // All Array.prototype methods now route through ArrayBuiltIns so instance
     // dispatch and generic call/apply share the same receiver semantics.
     public object? GetMember(string name)
     {
-        if (HasExtra(name)) return TryGetExtra(name);
-        if (_deletedBuiltIns.Contains(name)) return null;
+        if (_overlay.TryGetOverride(name, out var value)) return value;
         return GetBuiltInMember(name);
     }
 

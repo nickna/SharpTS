@@ -16,54 +16,37 @@ namespace SharpTS.Runtime.Types;
 public sealed class SharpTSPromisePrototype : ISharpTSMutableBuiltIn
 {
     /// <summary>
-    /// Process-wide instance. Promise.prototype carries no per-realm mutable state here
-    /// (guest writes land on <see cref="_extras"/>, which is per-instance), matching how the
-    /// other built-in prototypes start out.
+    /// Process-wide template. Guest reads use the interpreter's per-realm prototype;
+    /// its <see cref="_overlay"/> and method cache belong to that instance.
     /// </summary>
     public static readonly SharpTSPromisePrototype Instance = new();
 
     internal SharpTSPromisePrototype() { }
 
-    private readonly SharpTSObject _extras = new([]);
-    private readonly HashSet<string> _deletedBuiltIns = [];
+    private readonly PrototypePropertyOverlay _overlay = new(IsBuiltIn);
     private readonly Dictionary<string, ISharpTSCallable> _builtIns = [];
 
-    public bool HasExtra(string name) => _extras.HasProperty(name) || _extras.HasSetter(name);
-    public object? TryGetExtra(string name) => _extras.GetProperty(name);
-    public void SetExtra(string name, object? value)
-    {
-        _deletedBuiltIns.Remove(name);
-        _extras.SetProperty(name, value);
-    }
+    public bool HasExtra(string name) => _overlay.HasExtra(name);
+    public object? TryGetExtra(string name) => _overlay.GetProperty(name);
+    public void SetExtra(string name, object? value) => _overlay.SetProperty(name, value);
     public bool DefineExtraProperty(string name, SharpTSPropertyDescriptor descriptor)
-    {
-        _deletedBuiltIns.Remove(name);
-        return _extras.DefineProperty(name, descriptor);
-    }
+        => _overlay.DefineProperty(name, descriptor);
     public SharpTSPropertyDescriptor? GetOwnPropertyDescriptor(string name)
-        => _extras.GetOwnPropertyDescriptor(name);
-    public ISharpTSCallable? GetExtraGetter(string name) => _extras.GetGetter(name);
+        => _overlay.GetOwnPropertyDescriptor(name);
+    public ISharpTSCallable? GetExtraGetter(string name) => _overlay.GetGetter(name);
 
     private static bool IsBuiltIn(string name)
         => name is "then" or "catch" or "finally" or "constructor";
 
-    public bool HasOwnProperty(string name)
-        => HasExtra(name) || (!_deletedBuiltIns.Contains(name) && IsBuiltIn(name));
+    public bool HasOwnProperty(string name) => _overlay.HasOwnProperty(name);
 
-    public bool DeleteProperty(string name)
-    {
-        bool hadExtra = HasExtra(name);
-        if (hadExtra && !_extras.DeleteProperty(name)) return false;
-        if (IsBuiltIn(name)) _deletedBuiltIns.Add(name);
-        return true;
-    }
+    public bool DeleteProperty(string name) => _overlay.DeleteProperty(name);
 
-    public IEnumerable<string> OwnEnumerableKeys() => _extras.OwnEnumerableKeys();
+    public IEnumerable<string> OwnEnumerableKeys() => _overlay.OwnEnumerableKeys();
 
     public object? GetMember(string name)
     {
-        if (HasExtra(name)) return TryGetExtra(name);
-        if (_deletedBuiltIns.Contains(name)) return null;
+        if (_overlay.TryGetOverride(name, out var value)) return value;
         // The unbound form: PromiseBuiltIns.GetMember binds each method to a concrete
         // promise, which is wrong for a read off the prototype itself.
         if (_builtIns.TryGetValue(name, out var cached)) return cached;

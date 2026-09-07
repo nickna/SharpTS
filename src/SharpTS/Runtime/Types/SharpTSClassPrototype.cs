@@ -10,7 +10,7 @@ namespace SharpTS.Runtime.Types;
 /// <c>X.prototype === X.prototype</c> holds.
 /// </summary>
 /// <remarks>
-/// Guest-added properties live in <see cref="_extras"/>, a descriptor-aware
+/// Guest-added properties live in <see cref="_overlay"/>, backed by a descriptor-aware
 /// <see cref="SharpTSObject"/>, so <c>Object.defineProperty(Error.prototype, …)</c> — including
 /// Symbol-keyed writes like <c>@@toStringTag</c> — works and the attributes round-trip. The
 /// class's own method table stays read-only: an assignment shadows a method for reads without
@@ -19,54 +19,40 @@ namespace SharpTS.Runtime.Types;
 public sealed class SharpTSClassPrototype : ISharpTSMutableBuiltIn
 {
     private readonly SharpTSClass _klass;
-    private readonly SharpTSObject _extras = new([]);
-    private readonly HashSet<string> _deletedBuiltIns = [];
+    private readonly PrototypePropertyOverlay _overlay;
 
     public SharpTSClassPrototype(SharpTSClass klass)
     {
         _klass = klass;
+        _overlay = new(IsBuiltIn);
     }
 
     public SharpTSClass Class => _klass;
 
-    public bool HasExtra(string name) => _extras.HasProperty(name) || _extras.HasSetter(name);
-    public object? TryGetExtra(string name) => _extras.GetProperty(name);
-    public void SetExtra(string name, object? value)
-    {
-        _deletedBuiltIns.Remove(name);
-        _extras.SetProperty(name, value);
-    }
+    public bool HasExtra(string name) => _overlay.HasExtra(name);
+    public object? TryGetExtra(string name) => _overlay.GetProperty(name);
+    public void SetExtra(string name, object? value) => _overlay.SetProperty(name, value);
     public bool DefineExtraProperty(string name, SharpTSPropertyDescriptor descriptor)
-    {
-        _deletedBuiltIns.Remove(name);
-        return _extras.DefineProperty(name, descriptor);
-    }
+        => _overlay.DefineProperty(name, descriptor);
     public SharpTSPropertyDescriptor? GetOwnPropertyDescriptor(string name)
-        => _extras.GetOwnPropertyDescriptor(name);
-    public ISharpTSCallable? GetExtraGetter(string name) => _extras.GetGetter(name);
-    public ISharpTSCallable? GetExtraSetter(string name) => _extras.GetSetter(name);
-    public bool DeleteProperty(string name)
-    {
-        if (HasExtra(name) && !_extras.DeleteProperty(name)) return false;
-        if (name == "constructor" || _klass.FindMethod(name) != null)
-            _deletedBuiltIns.Add(name);
-        return true;
-    }
-    public bool HasOwnProperty(string name)
-        => HasExtra(name)
-            || (!_deletedBuiltIns.Contains(name)
-                && (name == "constructor" || _klass.FindMethod(name) != null));
-    public IEnumerable<string> OwnEnumerableKeys() => _extras.OwnEnumerableKeys();
+        => _overlay.GetOwnPropertyDescriptor(name);
+    public ISharpTSCallable? GetExtraGetter(string name) => _overlay.GetGetter(name);
+    public ISharpTSCallable? GetExtraSetter(string name) => _overlay.GetSetter(name);
+    public bool DeleteProperty(string name) => _overlay.DeleteProperty(name);
+
+    private bool IsBuiltIn(string name) => name == "constructor" || _klass.FindMethod(name) != null;
+
+    public bool HasOwnProperty(string name) => _overlay.HasOwnProperty(name);
+    public IEnumerable<string> OwnEnumerableKeys() => _overlay.OwnEnumerableKeys();
 
     /// <summary>Symbol-keyed own properties (<c>Error.prototype[Symbol.toStringTag]</c>).</summary>
-    public bool HasSymbolProperty(SharpTSSymbol key) => _extras.HasSymbolProperty(key);
-    public object? GetBySymbol(SharpTSSymbol key) => _extras.GetBySymbol(key);
-    public void SetBySymbol(SharpTSSymbol key, object? value) => _extras.SetBySymbol(key, value);
+    public bool HasSymbolProperty(SharpTSSymbol key) => _overlay.HasSymbolProperty(key);
+    public object? GetBySymbol(SharpTSSymbol key) => _overlay.GetBySymbol(key);
+    public void SetBySymbol(SharpTSSymbol key, object? value) => _overlay.SetBySymbol(key, value);
 
     public object? GetMember(string name)
     {
-        if (HasExtra(name)) return TryGetExtra(name);
-        if (_deletedBuiltIns.Contains(name)) return null;
+        if (_overlay.TryGetOverride(name, out var value)) return value;
         if (name == "constructor") return _klass;
         var method = _klass.FindMethod(name);
         if (method != null) return method;
