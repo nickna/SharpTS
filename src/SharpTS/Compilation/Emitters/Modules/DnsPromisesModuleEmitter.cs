@@ -66,7 +66,7 @@ public sealed class DnsPromisesModuleEmitter : IBuiltInModuleEmitter
         {
             il.Emit(OpCodes.Ldnull);
         }
-        il.Emit(OpCodes.Call, ctx.Runtime!.DnsSetDefaultResultOrder);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireDns().SetDefaultResultOrder);
         return true;
     }
 
@@ -74,7 +74,7 @@ public sealed class DnsPromisesModuleEmitter : IBuiltInModuleEmitter
     private static bool EmitGetDefaultResultOrder(IEmitterContext emitter)
     {
         var ctx = emitter.Context;
-        ctx.IL.Emit(OpCodes.Call, ctx.Runtime!.DnsGetDefaultResultOrder);
+        ctx.IL.Emit(OpCodes.Call, ctx.Runtime!.RequireDns().GetDefaultResultOrder);
         return true;
     }
 
@@ -93,7 +93,7 @@ public sealed class DnsPromisesModuleEmitter : IBuiltInModuleEmitter
         }
 
         // Wrappers already return $Promise (they call WrapTaskAsPromise internally)
-        il.Emit(OpCodes.Call, ctx.Runtime!.DnsPromisesWrapperMethods[runtimeMethod]);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireDns().PromisesWrapperMethods[runtimeMethod]);
         return true;
     }
 
@@ -122,7 +122,7 @@ public sealed class DnsPromisesModuleEmitter : IBuiltInModuleEmitter
             il.Emit(OpCodes.Ldnull);
 
         // Wrapper already calls WrapTaskAsPromise internally
-        il.Emit(OpCodes.Call, ctx.Runtime!.DnsPromisesWrapperMethods["DnsPromisesLookup"]);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireDns().PromisesWrapperMethods["DnsPromisesLookup"]);
         return true;
     }
 
@@ -144,7 +144,7 @@ public sealed class DnsPromisesModuleEmitter : IBuiltInModuleEmitter
             }
         }
 
-        il.Emit(OpCodes.Call, ctx.Runtime!.DnsPromisesWrapperMethods["DnsPromisesLookupService"]);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireDns().PromisesWrapperMethods["DnsPromisesLookupService"]);
         return true;
     }
 
@@ -171,7 +171,7 @@ public sealed class DnsPromisesModuleEmitter : IBuiltInModuleEmitter
             il.Emit(OpCodes.Stelem_Ref);
         }
 
-        il.Emit(OpCodes.Call, ctx.Runtime!.DnsPromisesWrapperMethods["DnsResolverResolveAsync"]);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireDns().PromisesWrapperMethods["DnsResolverResolveAsync"]);
         return true;
     }
 
@@ -200,7 +200,7 @@ public sealed class DnsPromisesModuleEmitter : IBuiltInModuleEmitter
             il.Emit(OpCodes.Ldnull);
 
         // Wrapper already calls WrapTaskAsPromise internally
-        il.Emit(OpCodes.Call, ctx.Runtime!.DnsPromisesWrapperMethods["DnsPromisesResolve"]);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireDns().PromisesWrapperMethods["DnsPromisesResolve"]);
         return true;
     }
 }

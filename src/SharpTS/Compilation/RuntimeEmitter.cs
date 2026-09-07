@@ -40,6 +40,8 @@ public partial class RuntimeEmitter
         if (_emitHosted)
             _features.UsesPromise = true;
         var runtime = new EmittedRuntime();
+        if (features.UsesDns)
+            runtime.BeginDnsEmission();
 
         // Emit $Undefined singleton class first (other methods need this type)
         EmitUndefinedClass(moduleBuilder, runtime);
@@ -603,6 +605,7 @@ public partial class RuntimeEmitter
             EmitBoundDHMethodFinalize(runtime);
         }
 
+        runtime.Dns?.CompleteEmission();
         return runtime;
     }
 }

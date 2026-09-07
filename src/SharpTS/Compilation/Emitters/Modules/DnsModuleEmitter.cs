@@ -41,18 +41,18 @@ public sealed class DnsModuleEmitter : IBuiltInModuleEmitter
             "setDefaultResultOrder" => EmitSetDefaultResultOrder(emitter, arguments),
             "getDefaultResultOrder" => EmitGetDefaultResultOrder(emitter),
             "createResolver" => EmitCreateResolver(emitter),
-            "resolverSetServers" => EmitPrimitiveCall(emitter, arguments, emitter.Context.Runtime!.DnsResolverSetServers, 2),
-            "resolverGetServers" => EmitPrimitiveCall(emitter, arguments, emitter.Context.Runtime!.DnsResolverGetServers, 1),
-            "resolverCancel" => EmitPrimitiveCall(emitter, arguments, emitter.Context.Runtime!.DnsResolverCancel, 1),
-            "resolverGetGeneration" => EmitPrimitiveCall(emitter, arguments, emitter.Context.Runtime!.DnsResolverGetGeneration, 1),
-            "resolverSetLocalAddress" => EmitPrimitiveCall(emitter, arguments, emitter.Context.Runtime!.DnsResolverSetLocalAddress, 3),
+            "resolverSetServers" => EmitPrimitiveCall(emitter, arguments, emitter.Context.Runtime!.RequireDns().ResolverSetServers, 2),
+            "resolverGetServers" => EmitPrimitiveCall(emitter, arguments, emitter.Context.Runtime!.RequireDns().ResolverGetServers, 1),
+            "resolverCancel" => EmitPrimitiveCall(emitter, arguments, emitter.Context.Runtime!.RequireDns().ResolverCancel, 1),
+            "resolverGetGeneration" => EmitPrimitiveCall(emitter, arguments, emitter.Context.Runtime!.RequireDns().ResolverGetGeneration, 1),
+            "resolverSetLocalAddress" => EmitPrimitiveCall(emitter, arguments, emitter.Context.Runtime!.RequireDns().ResolverSetLocalAddress, 3),
             _ => false
         };
     }
 
     private static bool EmitCreateResolver(IEmitterContext emitter)
     {
-        emitter.Context.IL.Emit(OpCodes.Call, emitter.Context.Runtime!.DnsResolverFactory);
+        emitter.Context.IL.Emit(OpCodes.Call, emitter.Context.Runtime!.RequireDns().ResolverFactory);
         return true;
     }
 
@@ -93,7 +93,7 @@ public sealed class DnsModuleEmitter : IBuiltInModuleEmitter
         {
             il.Emit(OpCodes.Ldnull);
         }
-        il.Emit(OpCodes.Call, ctx.Runtime!.DnsSetDefaultResultOrder);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireDns().SetDefaultResultOrder);
         return true;
     }
 
@@ -101,7 +101,7 @@ public sealed class DnsModuleEmitter : IBuiltInModuleEmitter
     private static bool EmitGetDefaultResultOrder(IEmitterContext emitter)
     {
         var ctx = emitter.Context;
-        ctx.IL.Emit(OpCodes.Call, ctx.Runtime!.DnsGetDefaultResultOrder);
+        ctx.IL.Emit(OpCodes.Call, ctx.Runtime!.RequireDns().GetDefaultResultOrder);
         return true;
     }
 
@@ -151,7 +151,7 @@ public sealed class DnsModuleEmitter : IBuiltInModuleEmitter
     {
         var ctx = emitter.Context;
         var il = ctx.IL;
-        il.Emit(OpCodes.Call, ctx.Runtime!.DnsGetPromisesNamespace);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireDns().GetPromisesNamespace);
         return true;
     }
 
@@ -159,7 +159,7 @@ public sealed class DnsModuleEmitter : IBuiltInModuleEmitter
     {
         var ctx = emitter.Context;
         var il = ctx.IL;
-        il.Emit(OpCodes.Call, ctx.Runtime!.DnsGetLookup);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireDns().GetLookup);
         return true;
     }
 
@@ -167,7 +167,7 @@ public sealed class DnsModuleEmitter : IBuiltInModuleEmitter
     {
         var ctx = emitter.Context;
         var il = ctx.IL;
-        il.Emit(OpCodes.Call, ctx.Runtime!.DnsGetLookupService);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireDns().GetLookupService);
         return true;
     }
 
@@ -224,8 +224,8 @@ public sealed class DnsModuleEmitter : IBuiltInModuleEmitter
             il.Emit(OpCodes.Ldnull);
         }
 
-        // Call $Runtime.DnsLookup(hostname, options)
-        il.Emit(OpCodes.Call, ctx.Runtime!.DnsLookup);
+        // Call $Runtime.RequireDns().Lookup(hostname, options)
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireDns().Lookup);
 
         return true;
     }
@@ -260,8 +260,8 @@ public sealed class DnsModuleEmitter : IBuiltInModuleEmitter
             il.Emit(OpCodes.Ldnull);
         }
 
-        // Call $Runtime.DnsLookupService(address, port)
-        il.Emit(OpCodes.Call, ctx.Runtime!.DnsLookupService);
+        // Call $Runtime.RequireDns().LookupService(address, port)
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireDns().LookupService);
 
         return true;
     }

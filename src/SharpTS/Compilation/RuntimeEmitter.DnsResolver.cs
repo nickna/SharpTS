@@ -12,14 +12,14 @@ public partial class RuntimeEmitter
     /// Emits resolver state/configuration helpers plus the synchronous reflection
     /// target that the shared DNS async runner wraps as a Promise.
     /// </summary>
-    private void EmitDnsResolverFactoryMethod(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitDnsResolverFactoryMethod(TypeBuilder typeBuilder, EmittedDnsRuntime dns)
     {
-        runtime.DnsResolverFactory = EmitReflectionHelper(typeBuilder, "DnsCreateResolverState", 0);
-        runtime.DnsResolverSetServers = EmitReflectionHelper(typeBuilder, "DnsResolverSetServers", 2);
-        runtime.DnsResolverGetServers = EmitReflectionHelper(typeBuilder, "DnsResolverGetServers", 1);
-        runtime.DnsResolverCancel = EmitReflectionHelper(typeBuilder, "DnsResolverCancel", 1);
-        runtime.DnsResolverGetGeneration = EmitReflectionHelper(typeBuilder, "DnsResolverGetGeneration", 1);
-        runtime.DnsResolverSetLocalAddress = EmitReflectionHelper(typeBuilder, "DnsResolverSetLocalAddress", 3);
-        runtime.DnsResolverResolve = EmitReflectionHelper(typeBuilder, "DnsResolverResolve", 1);
+        dns.ResolverFactory = EmitReflectionHelper(typeBuilder, "DnsCreateResolverState", 0);
+        dns.ResolverSetServers = EmitReflectionHelper(typeBuilder, "DnsResolverSetServers", 2);
+        dns.ResolverGetServers = EmitReflectionHelper(typeBuilder, "DnsResolverGetServers", 1);
+        dns.ResolverCancel = EmitReflectionHelper(typeBuilder, "DnsResolverCancel", 1);
+        dns.ResolverGetGeneration = EmitReflectionHelper(typeBuilder, "DnsResolverGetGeneration", 1);
+        dns.ResolverSetLocalAddress = EmitReflectionHelper(typeBuilder, "DnsResolverSetLocalAddress", 3);
+        dns.ResolverResolve = EmitReflectionHelper(typeBuilder, "DnsResolverResolve", 1);
     }
 }
