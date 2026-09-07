@@ -63,5 +63,13 @@ class Program
 
         JsonModuleBenchmark.Compile("SmokeJsonModules");
         Console.WriteLine("Smoke-compiled imported JSON module graph");
+        foreach (bool alias in new[] { false, true })
+        {
+            foreach (int n in new[] { 5000, 8192, 8193, 20000 })
+            {
+                new Benchmarks.WorkerAllocationBenchmarks { N = n, RecordAlias = alias }.Setup();
+            }
+        }
+        Console.WriteLine("Smoke-validated allocation kernel, construction and traversal");
     }
 }

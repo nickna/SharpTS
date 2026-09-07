@@ -279,6 +279,24 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitTSArrayNumericAccessors(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
+        // Takes ownership of a fresh compiler-created double[]. No caller may
+        // retain the buffer; JS identity belongs to this same $Array throughout.
+        var numericCtor = typeBuilder.DefineConstructor(MethodAttributes.Assembly,
+            CallingConventions.Standard, [_types.DoubleArray]);
+        runtime.TSArrayNumericLiteralCtor = numericCtor;
+        var ctorIl = numericCtor.GetILGenerator();
+        ctorIl.Emit(OpCodes.Ldarg_0);
+        ctorIl.Emit(OpCodes.Call, _types.GetConstructor(_types.ListOfObject, Type.EmptyTypes));
+        ctorIl.Emit(OpCodes.Ldarg_0); ctorIl.Emit(OpCodes.Ldarg_1);
+        ctorIl.Emit(OpCodes.Stfld, _tsArrayNumStoreField);
+        ctorIl.Emit(OpCodes.Ldarg_0); ctorIl.Emit(OpCodes.Ldarg_1); ctorIl.Emit(OpCodes.Ldlen); ctorIl.Emit(OpCodes.Conv_I4);
+        ctorIl.Emit(OpCodes.Stfld, _tsArrayNumCountField);
+        ctorIl.Emit(OpCodes.Ldarg_0); ctorIl.Emit(OpCodes.Ldarg_1); ctorIl.Emit(OpCodes.Ldlen); ctorIl.Emit(OpCodes.Conv_I8);
+        ctorIl.Emit(OpCodes.Stfld, _tsArrayLengthField);
+        ctorIl.Emit(OpCodes.Ldarg_0); ctorIl.Emit(OpCodes.Ldc_I4_1);
+        ctorIl.Emit(OpCodes.Stfld, _tsArrayIsNumericField);
+        ctorIl.Emit(OpCodes.Ret);
+
         var arrayResize = EmitGenerics.MakeGenericMethod(typeof(System.Array).GetMethod("Resize")!, _types.Double);
 
         // EnsureBoxed's builder was defined early (so base-list methods can guard

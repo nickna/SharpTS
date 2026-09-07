@@ -16,7 +16,9 @@ namespace SharpTS.Compilation;
 /// </summary>
 public partial class ILEmitter
 {
-    protected override void EmitGet(Expr.Get g)
+    protected override void EmitGet(Expr.Get g) => EmitGet(g, numericArrayLengthConsumer: false);
+
+    private void EmitGet(Expr.Get g, bool numericArrayLengthConsumer)
     {
         if (TryEmitStableRecordDestructureGet(g))
             return;
@@ -365,6 +367,11 @@ public partial class ILEmitter
         if (TryEmitDirectGetterCall(g.Object, objType, g.Name.Lexeme))
             return;
 
+        // Keep all specialized property routing above (flattened rest,
+        // promoted queues/arrays, arguments) before the ordinary array path.
+        if (numericArrayLengthConsumer && new ArrayEmitter().TryEmitLengthAsDouble(this, g.Object))
+            return;
+
         // Type-first dispatch: Use TypeEmitterRegistry for property getters
         if (objType != null && _ctx.TypeEmitterRegistry != null)
         {
@@ -390,6 +397,9 @@ public partial class ILEmitter
         // record, class instances assigned to record-typed variables, etc.).
         // Skipped when optional chaining is in play — null-check semantics
         // there are non-trivial and hot-path optionals are rare.
+        if (TryEmitInterfaceRecordGet(g, numericConsumer: false))
+            return;
+
         if (!g.Optional
             && objType is TypeInfo.Record recordType
             && _ctx.Runtime?.UndefinedInstance != null)
@@ -1341,6 +1351,9 @@ public partial class ILEmitter
         // Descriptor-driven fast path: when receiver is statically known to be an array,
         // emit direct List<T> access — skips runtime type dispatch,
         // index boxing, and Convert.ToInt32(object) overhead.
+        if (TryEmitGuardedArrayIndex(gi, boxResult: true))
+            return;
+
         var desc = ArrayElements.Resolve(_ctx.TypeMap?.Get(gi.Object));
         // Object/Reflect descriptor APIs can install indexed accessors on a
         // statically typed array. In those programs, route reads through the
@@ -1556,14 +1569,14 @@ public partial class ILEmitter
     /// path and then the caller's pre-existing ToNumber coercion, so raw/any consumers
     /// never enter this specialization and continue to observe the original JS value.
     /// </summary>
-    private bool TryEmitNumberArrayGetIndexAsDouble(Expr.GetIndex gi)
+    private bool TryEmitGuardedArrayIndex(Expr.GetIndex gi, bool boxResult = false)
     {
         if (gi.Optional
-            || gi.Object is not Expr.Variable arrayVariable
-            || ArrayElements.Resolve(_ctx.TypeMap?.Get(gi.Object)) is not
-                { Kind: ArrayElementsKind.Double }
-            || _ctx.TryGetPromotedArrayLocal(arrayVariable.Name.Lexeme) != null
-            || _ctx.TryGetPromotedQueueLocal(arrayVariable.Name.Lexeme) != null
+            || ArrayElements.Resolve(_ctx.TypeMap?.Get(gi.Object)) is not { } descriptor
+            || (!boxResult && descriptor.Kind != ArrayElementsKind.Double)
+            || (gi.Object is Expr.Variable promoted &&
+                (_ctx.TryGetPromotedArrayLocal(promoted.Name.Lexeme) != null ||
+                 _ctx.TryGetPromotedQueueLocal(promoted.Name.Lexeme) != null))
             || !IsNumericType(_ctx.TypeMap?.Get(gi.Index))
             || _ctx.RuntimeFeatures?.UsesDynamicPropertyDescriptors == true
             || _ctx.RuntimeFeatures?.UsesArrayPrototypeMutation == true)
@@ -1571,7 +1584,8 @@ public partial class ILEmitter
             return false;
         }
 
-        var hoisted = _ctx.TryGetHoistedArray(arrayVariable.Name.Lexeme);
+        var hoisted = gi.Object is Expr.Variable arrayVariable
+            ? _ctx.TryGetHoistedArray(arrayVariable.Name.Lexeme) : null;
         if (hoisted is { Descriptor.Kind: not ArrayElementsKind.Double })
             return false;
 
@@ -1614,14 +1628,18 @@ public partial class ILEmitter
         var guardedArray = hoisted?.TypedLocal ?? arrayLocal!;
         IL.Emit(OpCodes.Ldloc, guardedArray);
         IL.Emit(OpCodes.Brfalse, fallbackLabel);
-        IL.Emit(OpCodes.Ldloc, guardedArray);
-        IL.Emit(OpCodes.Ldloc, indexInt);
-        IL.Emit(OpCodes.Callvirt, _ctx.Runtime!.TSArrayCanGetDouble);
-        IL.Emit(OpCodes.Brfalse, fallbackLabel);
+        if (!boxResult)
+        {
+            IL.Emit(OpCodes.Ldloc, guardedArray);
+            IL.Emit(OpCodes.Ldloc, indexInt);
+            IL.Emit(OpCodes.Callvirt, _ctx.Runtime!.TSArrayCanGetDouble);
+            IL.Emit(OpCodes.Brfalse, fallbackLabel);
+        }
 
         IL.Emit(OpCodes.Ldloc, guardedArray);
         IL.Emit(OpCodes.Ldloc, indexInt);
-        IL.Emit(OpCodes.Callvirt, _ctx.Runtime.TSArrayGetDouble);
+        if (boxResult) IL.Emit(OpCodes.Conv_I8);
+        IL.Emit(OpCodes.Callvirt, boxResult ? _ctx.Runtime!.TSArrayGetLong : _ctx.Runtime!.TSArrayGetDouble);
         IL.Emit(OpCodes.Br, endLabel);
 
         // Cold arm: preserve the numeric key exactly (including fractional,
@@ -1650,10 +1668,11 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Box, _ctx.Types.Double);
         IL.Emit(OpCodes.Call, _ctx.Runtime!.GetIndex);
         SetStackUnknown();
-        EnsureDouble();
+        if (!boxResult) EnsureDouble();
 
         IL.MarkLabel(endLabel);
-        SetStackType(StackType.Double);
+        if (boxResult) SetStackUnknown();
+        else SetStackType(StackType.Double);
         return true;
     }
 

@@ -109,6 +109,50 @@ For repeatable candidate-vs-baseline runs on native Windows and WSL, see
 
 ## How timing works
 
+For allocation diagnostics, `worker-allocation-scaling` keeps the original
+20,000-record input and checks the independent checksum `800178000` before and
+after measurement. `worker-allocation-boundaries` pairs serial and worker
+execution over identical partitions. Its case-name suffix is the partition
+count; its numeric parameter is records per partition (8,192, 8,193, or 20,000).
+Total records are their product. This separates parallelism from the backing
+list's capacity jump at 8,193, which crosses the default x64 large-object-heap
+threshold. Treat these as diagnostic controls, separate from the original cases.
+
+`SHARPTS_BENCH_WARMUP_MS` and `SHARPTS_BENCH_SAMPLE_MS` override the default
+100 ms warmup and 300 ms sampling budgets. Values must be finite, at most 60,000
+ms, and nonnegative for warmup or positive for sampling. The minimum sample
+count may extend the sampling budget for slow operations.
+`SHARPTS_BENCH_CASE` selects a case name and `SHARPTS_BENCH_PARAM` selects its
+exact printed numeric parameter. Both allocation workloads apply selection
+before worker creation. `SHARPTS_BENCH_LIST_CASES=1` lists cases without running
+the kernel or creating workers. For example:
+
+```powershell
+$env:SHARPTS_BENCH_CASE = 'worker-allocation-fixed-work'
+$env:SHARPTS_BENCH_PARAM = '2'
+$env:SHARPTS_BENCH_WARMUP_MS = '1000'
+$env:SHARPTS_BENCH_SAMPLE_MS = '1000'
+./benchmarks/cross-runtime/run-benchmarks.ps1 -Workloads worker-allocation-scaling -Launches 5 -NoSnapshot
+```
+
+Custom timing budgets require `-NoSnapshot`: the public exporter describes the
+default budgets. Keep their raw output and explicit budget metadata as diagnostic
+evidence; do not export it as a default-budget snapshot.
+Remove these environment overrides after the diagnostic session. Isolated
+workloads rotate both case and runtime order between launches; capture the
+runner's console log to retain that execution schedule.
+The microbenchmark `WorkerAllocationBenchmarks` embeds the canonical kernel
+and exposes full, escaping-construction, and prebuilt-traversal measurements
+with MemoryDiagnoser and interface/type-alias controls. Because construction
+returns the records, it keeps boxed arrays; its time plus traversal time is not
+an additive decomposition of the private-array full kernel. Parent-thread
+allocation counters cannot measure worker allocation; use process-wide GC
+counters in a separate diagnostic run and label startup/compilation overhead.
+The [allocation GC diagnostic](diagnostics/allocation-gc/README.md) records a
+fixed-count steady-state phase separately from whole-process startup costs.
+The [worker allocation results](../../docs/performance/worker-allocation-scaling.md)
+retain the paired comparison and its validation limits.
+
 Each workload calls `bench(name, param, fn, expected?)` from
 `scripts/lib/bench.ts`, which:
 

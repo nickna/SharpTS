@@ -1,0 +1,42 @@
+{
+  "recordedUtc": "2026-09-05T05:48:54.028Z",
+  "baselineRevision": "88378dce04627da968dfde8243c4585b45ed3dfa",
+  "candidate": "uncommitted implementation in this change",
+  "compilerSha256": {
+    "baseline": "f5f226b30e34ef1d94b39bc9997d11c050ab7c27fbe6df250c395dc895d7fb26",
+    "candidate": "3f137681382dc982efd17220c89c1f88f014ac0d87db279b7b9da45e8b317053"
+  },
+  "kernelSha256": "39437120ea214e78be15b24b891c684a410dde9d5c6bb23ccf4db0966a2cd3b3",
+  "environments": {
+    "windows": "Windows x64 10.0.29639; 28 logical processors; Intel family 6 model 183 stepping 1",
+    "linux": "WSL Ubuntu 26.04 x64, ext4-backed source and compiled artifacts",
+    "sdk": "10.0.400",
+    "runtime": "10.0.11",
+    "node": "22.23.2"
+  },
+  "gc": {
+    "default": {
+      "server": false,
+      "concurrent": true
+    },
+    "adaptive": {
+      "server": true,
+      "concurrent": true,
+      "dynamicAdaptationMode": 1
+    }
+  },
+  "timing": {
+    "launches": 5,
+    "originalWarmupMs": 1000,
+    "originalSampleMs": 1000,
+    "adjacentWarmupMs": 300,
+    "adjacentSampleMs": 300,
+    "order": "Alternating baseline/candidate; original cases grouped in source order; preliminary Windows runtime order rotated; Linux compiled then interpreter then Node; final Windows compiled-only original and two-mode worker controls",
+    "hostLimit": "Shared host; other work could not be excluded; no concurrent builds/tests from this task"
+  },
+  "candidateVariants": "windows is preliminary; windows-final is rebuilt final candidate. Linux predates only the final boxed-local guard; canonical emitted kernel IL was verified identical after that guard.",
+  "gcMetrics": "One fixed 20-job steady-state phase per variant/worker count, across all process threads. Whole-process peak working set and allocation kept separate.",
+  "adaptiveTimings": "Five candidate-only adaptive launches collected separately after default controls; not interleaved pairs against workstation GC.",
+  "memoryDiagnoser": "Candidate only; in-process Short job, 1 warmup and 3 measured iterations at target 100 ms, all 24 cases. Allocation attribution, not independent latency acceptance evidence.",
+  "test262Revision": "d5e73fc8d2c663554fb72e2380a8c2bc1a318a33"
+}

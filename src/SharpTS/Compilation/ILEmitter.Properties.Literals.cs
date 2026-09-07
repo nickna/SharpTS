@@ -11,6 +11,23 @@ public partial class ILEmitter
         // Check if any element is a spread
         bool hasSpreads = a.Elements.Any(e => e is Expr.Spread);
 
+        if (_ctx.RuntimeFeatures?.LocalRecordNumericArrays.Contains(a) == true &&
+            !AnyContainsSuspension(a.Elements) && a.Elements.All(IsNativeNumericLiteralElement))
+        {
+            IL.Emit(OpCodes.Ldc_I4, a.Elements.Count);
+            IL.Emit(OpCodes.Newarr, _ctx.Types.Double);
+            for (int i = 0; i < a.Elements.Count; i++)
+            {
+                IL.Emit(OpCodes.Dup);
+                IL.Emit(OpCodes.Ldc_I4, i);
+                EmitExpressionAsDouble(a.Elements[i]);
+                IL.Emit(OpCodes.Stelem_R8);
+            }
+            IL.Emit(OpCodes.Newobj, _ctx.Runtime!.TSArrayNumericLiteralCtor);
+            SetStackUnknown();
+            return;
+        }
+
         // Typed array optimization: emit List<double> or List<bool> for empty typed arrays.
         // Only for empty arrays (populated via index assignment) to avoid issues with
         // array methods (flatMap, map, etc.) that expect List<object?>.
@@ -22,6 +39,24 @@ public partial class ILEmitter
                 EmitTypedArrayLiteral(a, desc);
                 return;
             }
+        }
+
+        if (!hasSpreads && !AnyContainsSuspension(a.Elements) &&
+            !Enumerable.Range(0, a.Elements.Count).Any(a.IsHole))
+        {
+            // Literal initialization is private: append into the final backing store,
+            // without calling observable Array.prototype methods or copying a list.
+            IL.Emit(OpCodes.Ldc_I4, a.Elements.Count);
+            IL.Emit(OpCodes.Newobj, _ctx.Runtime!.TSArrayRestCtor);
+            foreach (var element in a.Elements)
+            {
+                IL.Emit(OpCodes.Dup);
+                EmitExpression(element);
+                EmitBoxIfNeeded(element);
+                IL.Emit(OpCodes.Call, _ctx.Runtime.TSArrayAppendRest);
+            }
+            SetStackUnknown();
+            return;
         }
 
         if (!hasSpreads)
@@ -100,6 +135,28 @@ public partial class ILEmitter
         // tracker so a subsequent EmitBoxIfNeeded doesn't reinterpret the
         // reference as whatever primitive the previous expression left behind.
         SetStackUnknown();
+    }
+
+    private bool IsNativeNumericLiteralElement(Expr expression) => expression switch
+    {
+        Expr.Literal { Value: double or int } => true,
+        Expr.Variable variable => IsNativeNumericLiteralBinding(variable.Name.Lexeme),
+        Expr.Grouping grouping => IsNativeNumericLiteralElement(grouping.Expression),
+        Expr.Unary unary => IsNativeNumericLiteralElement(unary.Right),
+        Expr.Binary binary => IsNativeNumericLiteralElement(binary.Left) && IsNativeNumericLiteralElement(binary.Right),
+        _ => false
+    };
+
+    private bool IsNativeNumericLiteralBinding(string name)
+    {
+        // A number annotation can still have an object slot after an any or
+        // undefined assignment. Only existing native storage proves that filling
+        // a double buffer will preserve the value rather than coerce it.
+        if (_ctx.Locals.GetLocal(name) is { } local)
+            return _ctx.Types.IsDouble(local.LocalType) ||
+                (local.LocalType == _ctx.Types.Int64 && _ctx.IntegerCounterLocals.Contains(name));
+        return _ctx.TryGetParameterType(name, out var parameterType) &&
+            parameterType != null && _ctx.Types.IsDouble(parameterType);
     }
 
     protected override void EmitObjectLiteral(Expr.ObjectLiteral o)

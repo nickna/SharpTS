@@ -128,6 +128,15 @@ try {
     $invalidRuntime.cases[0].runtimes[0].status = 'skipped'
     Assert-Throws { Assert-SharpTSPublicBenchmarkSnapshot $invalidRuntime } 'invalid status'
 
+    $previousWarmup = $env:SHARPTS_BENCH_WARMUP_MS
+    try {
+        $env:SHARPTS_BENCH_WARMUP_MS = '1000'
+        Assert-Throws { & (Join-Path $harnessDirectory 'run-benchmarks.ps1') -NoBuild } `
+            'Custom timing budgets require -NoSnapshot'
+    } finally {
+        $env:SHARPTS_BENCH_WARMUP_MS = $previousWarmup
+    }
+
     Write-Host 'Cross-runtime snapshot contract tests passed.'
 } finally {
     Remove-Item -LiteralPath $temporaryDirectory -Recurse -Force -ErrorAction SilentlyContinue

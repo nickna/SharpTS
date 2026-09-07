@@ -25,6 +25,56 @@ internal static class JsonSerializationShapeAnalyzer
 {
     private const int MaxStaticDepth = 32;
 
+    // This projection is used only behind exact-carrier read guards. It must not
+    // teach JSON serialization that an interface describes all runtime own keys.
+    internal static bool TryMatchCompactInterface(
+        TypeInfo.Interface type,
+        IEnumerable<JsonSerializationShape.Record> candidates,
+        out JsonSerializationShape.Record shape)
+    {
+        shape = null!;
+        var members = new Dictionary<string, TypeInfo>(StringComparer.Ordinal);
+        var active = new HashSet<TypeInfo>(ReferenceEqualityComparer.Instance);
+        if (!Collect(type, 0) || members.Count is < 1 or > 4) return false;
+        foreach (var candidate in candidates)
+        {
+            if (candidate.Fields.Count != members.Count) continue;
+            bool match = true;
+            foreach (var (key, value) in candidate.Fields)
+            {
+                if (!members.TryGetValue(key, out var member)) { match = false; break; }
+                var analyzed = Analyze(member, active, 0);
+                // A literal's open reference slot still returns its original value;
+                // the exact carrier guard does not assert the interface's array type.
+                if (!IsClosed(analyzed) || (value is not JsonSerializationShape.Generic &&
+                    !(value is JsonSerializationShape.Array && analyzed is JsonSerializationShape.Array) &&
+                    Fingerprint(analyzed) != Fingerprint(value)))
+                { match = false; break; }
+            }
+            if (match) { shape = candidate; return true; }
+        }
+        return false;
+
+        bool Collect(TypeInfo.Interface current, int depth)
+        {
+            if (depth >= MaxStaticDepth || !active.Add(current) ||
+                current.HasIndexSignature || current.IsCallable || current.IsConstructable ||
+                current.OptionalMembers.Count != 0 || current.MethodMembers is { Count: > 0 })
+                return false;
+            foreach (var (name, member) in current.Members)
+            {
+                if (members.TryGetValue(name, out var prior) && !Equals(prior, member)) return false;
+                members[name] = member;
+            }
+            if (members.Count > 4) return false;
+            if (current.Extends != null)
+                foreach (var parent in current.Extends)
+                    if (!Collect(parent, depth + 1)) return false;
+            active.Remove(current);
+            return true;
+        }
+    }
+
     public static bool TryAnalyze(TypeInfo? type, out JsonSerializationShape shape)
     {
         var active = new HashSet<TypeInfo>(ReferenceEqualityComparer.Instance);

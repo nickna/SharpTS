@@ -355,7 +355,18 @@ public partial class ILEmitter
         // A number[] read consumed as a number can keep the numeric-mode $Array
         // result native while its guarded cold arm performs the same ordinary
         // property lookup + ToNumber coercion this method used previously.
-        if (expr is Expr.GetIndex getIndex && TryEmitNumberArrayGetIndexAsDouble(getIndex))
+        if (expr is Expr.Get { Optional: false, Name.Lexeme: "length" } arrayLength &&
+            _ctx.TypeMap?.Get(arrayLength.Object) is TypeInfo.Array)
+        {
+            EmitGet(arrayLength, numericArrayLengthConsumer: true);
+            EnsureDouble();
+            return;
+        }
+
+        if (expr is Expr.Get interfaceGet && TryEmitInterfaceRecordGet(interfaceGet, numericConsumer: true))
+            return;
+
+        if (expr is Expr.GetIndex getIndex && TryEmitGuardedArrayIndex(getIndex))
             return;
 
         // Emit expression and ensure result is a double on the stack
