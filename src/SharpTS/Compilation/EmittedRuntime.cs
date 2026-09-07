@@ -2300,11 +2300,18 @@ public class EmittedRuntime
     public EmittedTlsRuntime RequireTls() => Tls
         ?? throw new InvalidOperationException("TLS runtime was not enabled for this compilation.");
 
-    // Dgram module methods
-    public MethodBuilder DgramCreateSocket { get; set; } = null!;
+    /// <summary>Datagram metadata, or null when dgram is tree-shaken from this compilation.</summary>
+    public EmittedDgramRuntime? Dgram { get; private set; }
 
-    // $DatagramSocket emitted type
-    public ConstructorBuilder DatagramSocketCtor { get; set; } = null!;
+    internal void BeginDgramEmission()
+    {
+        if (Dgram is not null)
+            throw new InvalidOperationException("Dgram metadata emission has already started.");
+        Dgram = new EmittedDgramRuntime();
+    }
+
+    public EmittedDgramRuntime RequireDgram() => Dgram
+        ?? throw new InvalidOperationException("Dgram runtime was not enabled for this compilation.");
 
     // $Headers type - emitted for standalone Headers support
     public TypeBuilder TSHeadersType { get; set; } = null!;

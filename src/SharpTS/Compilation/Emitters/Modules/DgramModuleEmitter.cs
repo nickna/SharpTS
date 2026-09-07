@@ -43,7 +43,7 @@ public sealed class DgramModuleEmitter : IBuiltInModuleEmitter
                 il.Emit(OpCodes.Ldnull);
             }
 
-            il.Emit(OpCodes.Call, ctx.Runtime!.DgramCreateSocket);
+            il.Emit(OpCodes.Call, ctx.Runtime!.RequireDgram().CreateSocket);
             emitter.SetStackUnknown();
             return true;
         }

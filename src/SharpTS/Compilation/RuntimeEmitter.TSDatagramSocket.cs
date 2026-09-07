@@ -17,7 +17,6 @@ namespace SharpTS.Compilation;
 public partial class RuntimeEmitter
 {
     // Field builders for $DatagramSocket (used across method emitters)
-    private TypeBuilder _dgramSocketTypeBuilder = null!;
     private FieldBuilder _dgramClientField = null!;
     private FieldBuilder _dgramFamilyField = null!;
     private FieldBuilder _dgramBoundField = null!;
@@ -28,14 +27,11 @@ public partial class RuntimeEmitter
     private FieldBuilder _dgramReceiveCtsField = null!;
     private FieldBuilder _dgramPendingCloseCallbackField = null!;
     private FieldBuilder _dgramPendingErrorField = null!;
-    private MethodBuilder _dgramReceiveWorkerMethod = null!;
     private MethodBuilder _dgramEmitListeningMethod = null!;
     private MethodBuilder _dgramEmitCloseMethod = null!;
     private MethodBuilder _dgramEmitConnectMethod = null!;
     private MethodBuilder _dgramFireCloseCallbackMethod = null!;
     private MethodBuilder _dgramFireBindErrorMethod = null!;
-    private ConstructorBuilder _dgramMessageClosureCtor = null!;
-    private MethodBuilder _dgramMessageClosureRun = null!;
 
     /// <summary>
     /// Phase 1: Defines the $DatagramSocket type, fields, constructor, and all sync methods.
@@ -43,13 +39,14 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitDatagramSocketTypeDefinition(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
+        var dgram = runtime.RequireDgram();
         // Define class: public sealed class $DatagramSocket extends $EventEmitter
         var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$DatagramSocket",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             runtime.TSEventEmitterType
         );
-        _dgramSocketTypeBuilder = typeBuilder;
+        dgram.SocketType = typeBuilder;
 
         // Fields
         _dgramClientField = typeBuilder.DefineField("_client", typeof(UdpClient), FieldAttributes.Private);
@@ -69,7 +66,7 @@ public partial class RuntimeEmitter
             CallingConventions.Standard,
             [_types.Object]
         );
-        runtime.DatagramSocketCtor = ctor;
+        dgram.SocketCtor = ctor;
 
         var ctorIL = ctor.GetILGenerator();
         // Call base constructor ($EventEmitter)
@@ -120,7 +117,7 @@ public partial class RuntimeEmitter
 
         // Define receive worker method stub (body emitted in Phase 2)
         // Must be defined before EmitDgramBind which references it.
-        _dgramReceiveWorkerMethod = typeBuilder.DefineMethod(
+        dgram.ReceiveWorker = typeBuilder.DefineMethod(
             "_DgramReceiveWorker",
             MethodAttributes.Private,
             typeof(void),
@@ -169,9 +166,9 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Phase 2: Finalizes the $DatagramSocket type after EmitRuntimeClass.
     /// </summary>
-    private void EmitDatagramSocketFinalize(EmittedRuntime runtime)
+    private static void EmitDatagramSocketFinalize(EmittedDgramRuntime dgram)
     {
-        _ = _dgramSocketTypeBuilder.CreateType()!;
+        _ = dgram.SocketType.CreateType()!;
     }
 
     /// <summary>
@@ -657,7 +654,7 @@ public partial class RuntimeEmitter
         // Start receive loop on ThreadPool
         // ThreadPool.QueueUserWorkItem(new WaitCallback(this._DgramReceiveWorker))
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldftn, _dgramReceiveWorkerMethod);
+        il.Emit(OpCodes.Ldftn, runtime.RequireDgram().ReceiveWorker);
         il.Emit(OpCodes.Newobj, typeof(WaitCallback).GetConstructor([_types.Object, typeof(IntPtr)])!);
         il.Emit(OpCodes.Call, typeof(ThreadPool).GetMethod("QueueUserWorkItem", [typeof(WaitCallback)])!);
         il.Emit(OpCodes.Pop);

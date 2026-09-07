@@ -189,6 +189,15 @@ dependencies. TLS-only constant and certificate emitters accept `EmittedTlsRunti
 The shared built-in module registry still owns named-import dispatch (including
 `checkServerIdentity`); emitter-local closure and field state stays with the emitter.
 
+Dgram uses `Dgram` / `RequireDgram()` only when `UsesDgram` is enabled. Its component owns the
+socket type and constructor, module factory, forward-declared receive worker, and message closure
+constructor/entry point. Phase 1 declares the receive worker before `bind` references it; phase 2
+emits its body after the message closure is available and then finalizes the socket type.
+Completion follows runtime finalization. The factory and socket finalizer take `EmittedDgramRuntime`
+directly; event-loop, Buffer, and EventEmitter dependencies remain on the shared runtime. Socket
+fields and synchronous method helpers stay local to the emitter, and named-import dispatch remains
+in the shared built-in module registry.
+
 During emission, each handle becomes readable as soon as its declaration is assigned, so forward
 references do not require a method body to exist yet. An early read names the missing declaration.
 Completion is an orchestration boundary, not an IL verifier: body emission and type finalization
