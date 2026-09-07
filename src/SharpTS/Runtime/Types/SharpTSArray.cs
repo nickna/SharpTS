@@ -661,7 +661,7 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
         {
             foreach (string key in _descriptors.Keys)
             {
-                if (TryGetArrayIndex(key, out uint index)
+                if (PropertySemantics.TryGetArrayIndex(key, out uint index)
                     && index < expectedLength)
                 {
                     return false;
@@ -1010,7 +1010,7 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
                 {
                     if (!pair.Value.HasExplicitDescriptor || pair.Value.Configurable)
                         continue;
-                    if (!TryGetArrayIndex(pair.Key, out uint index)
+                    if (!PropertySemantics.TryGetArrayIndex(pair.Key, out uint index)
                         || index < newLength
                         || !HasIndex(index))
                     {
@@ -1048,7 +1048,7 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
             {
                 foreach (var key in _descriptors.Keys.Where(key =>
                 {
-                    return TryGetArrayIndex(key, out uint index)
+                    return PropertySemantics.TryGetArrayIndex(key, out uint index)
                         && index >= effectiveLength;
                 }).ToArray())
                 {
@@ -1347,7 +1347,7 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
     internal bool HasOwnProperty(string name)
     {
         if (name == "length") return true;
-        if (TryGetArrayIndex(name, out uint index))
+        if (PropertySemantics.TryGetArrayIndex(name, out uint index))
             return HasIndex(index)
                 || (_indexAccessors?.ContainsKey(index) ?? false)
                 || HasNamedProperty(name);
@@ -1443,7 +1443,7 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
             return false;
         }
 
-        if (TryGetArrayIndex(name, out uint index))
+        if (PropertySemantics.TryGetArrayIndex(name, out uint index))
         {
             DeleteAt(index);
         }
@@ -1521,7 +1521,7 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
         }
 
         // Numeric index path — accept full uint32 range per ECMA-262.
-        if (TryGetArrayIndex(name, out uint uindex))
+        if (PropertySemantics.TryGetArrayIndex(name, out uint uindex))
         {
             long index = uindex;
             bool hasExisting = HasIndex(index);
@@ -1550,9 +1550,9 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
                 {
                     if (descriptorIsData
                         || (descriptor.HasGet
-                            && !SameValue(descriptor.Get, existingGetter))
+                            && !PropertySemantics.SameValue(descriptor.Get, existingGetter))
                         || (descriptor.HasSet
-                            && !SameValue(descriptor.Set, existingSetter)))
+                            && !PropertySemantics.SameValue(descriptor.Set, existingSetter)))
                     {
                         return false;
                     }
@@ -1564,7 +1564,7 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
                     if (!existingFlags.Writable
                         && ((descriptor.HasWritable && descriptor.Writable)
                             || (descriptor.HasValue
-                                && !SameValue(descriptor.Value, UnholeForRead(GetCore(index))))))
+                                && !PropertySemantics.SameValue(descriptor.Value, UnholeForRead(GetCore(index))))))
                     {
                         return false;
                     }
@@ -1660,9 +1660,9 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
             {
                 if (namedDescriptorIsData
                     || (descriptor.HasGet
-                        && !SameValue(descriptor.Get, existingNamedAccessor.Get))
+                        && !PropertySemantics.SameValue(descriptor.Get, existingNamedAccessor.Get))
                     || (descriptor.HasSet
-                        && !SameValue(descriptor.Set, existingNamedAccessor.Set)))
+                        && !PropertySemantics.SameValue(descriptor.Set, existingNamedAccessor.Set)))
                 {
                     return false;
                 }
@@ -1671,7 +1671,7 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
                 || (!namedFlags.Writable
                     && ((descriptor.HasWritable && descriptor.Writable)
                         || (descriptor.HasValue
-                            && !SameValue(descriptor.Value, _namedProperties![name])))))
+                            && !PropertySemantics.SameValue(descriptor.Value, _namedProperties![name])))))
             {
                 return false;
             }
@@ -1735,7 +1735,7 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
             };
         }
 
-        if (TryGetArrayIndex(name, out uint uindex) && (long)uindex < _length)
+        if (PropertySemantics.TryGetArrayIndex(name, out uint uindex) && (long)uindex < _length)
         {
             long index = uindex;
             if (TryGetIndexAccessor(index, out var getter, out var setter))
@@ -1820,44 +1820,6 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
         }
 
         return null;
-    }
-
-    private static bool TryGetArrayIndex(string key, out uint index)
-    {
-        // ECMA-262 array indices use the canonical decimal spelling of a
-        // uint32 other than 2^32-1. Keep ordinary names such as "01", "+1",
-        // and whitespace-padded numbers out of indexed storage.
-        if (key.Length == 0
-            || key[0] is < '0' or > '9'
-            || (key.Length > 1 && key[0] == '0'))
-        {
-            index = 0;
-            return false;
-        }
-
-        return uint.TryParse(
-                key,
-                System.Globalization.NumberStyles.None,
-                System.Globalization.CultureInfo.InvariantCulture,
-                out index)
-            && index < uint.MaxValue;
-    }
-
-    /// <summary>
-    /// ECMA-262 SameValue comparison used by descriptor validation.
-    /// </summary>
-    private static bool SameValue(object? left, object? right)
-    {
-        if (ReferenceEquals(left, right)) return true;
-        if (left is double ld && right is double rd)
-        {
-            if (double.IsNaN(ld) && double.IsNaN(rd)) return true;
-            if (ld == 0 && rd == 0)
-                return BitConverter.DoubleToInt64Bits(ld)
-                    == BitConverter.DoubleToInt64Bits(rd);
-            return ld.Equals(rd);
-        }
-        return left?.Equals(right) == true;
     }
 
     public override string ToString()

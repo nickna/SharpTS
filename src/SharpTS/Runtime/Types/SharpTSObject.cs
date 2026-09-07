@@ -708,8 +708,8 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
             {
                 if (descriptorIsData) return false;
                 TryGetSymbolAccessor(symbol, out var currentGet, out var currentSet);
-                if (descriptor.HasGet && !SameValue(descriptor.Get, currentGet)) return false;
-                if (descriptor.HasSet && !SameValue(descriptor.Set, currentSet)) return false;
+                if (descriptor.HasGet && !PropertySemantics.SameValue(descriptor.Get, currentGet)) return false;
+                if (descriptor.HasSet && !PropertySemantics.SameValue(descriptor.Set, currentSet)) return false;
             }
             else
             {
@@ -718,7 +718,7 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
                 {
                     if (descriptor.HasWritable && descriptor.Writable) return false;
                     if (descriptor.HasValue
-                        && !SameValue(descriptor.Value, GetBySymbol(symbol)))
+                        && !PropertySemantics.SameValue(descriptor.Value, GetBySymbol(symbol)))
                         return false;
                 }
             }
@@ -801,9 +801,9 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
             {
                 if (descriptorIsData)
                     return false;
-                if (descriptor.HasGet && !SameValue(descriptor.Get, GetGetter(name)))
+                if (descriptor.HasGet && !PropertySemantics.SameValue(descriptor.Get, GetGetter(name)))
                     return false;
-                if (descriptor.HasSet && !SameValue(descriptor.Set, GetSetter(name)))
+                if (descriptor.HasSet && !PropertySemantics.SameValue(descriptor.Set, GetSetter(name)))
                     return false;
             }
             else
@@ -815,7 +815,7 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
                     if (descriptor.HasWritable && descriptor.Writable)
                         return false;
                     var currentValue = _fields.TryGetValue(name, out var value) ? value : SharpTSUndefined.Instance;
-                    if (descriptor.HasValue && !SameValue(descriptor.Value, currentValue))
+                    if (descriptor.HasValue && !PropertySemantics.SameValue(descriptor.Value, currentValue))
                         return false;
                 }
             }
@@ -910,24 +910,6 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
         }
 
         return true;
-    }
-
-    /// <summary>
-    /// ECMA-262 SameValue comparison used by ValidateAndApplyPropertyDescriptor.
-    /// Object/callable identity is reference-based; numbers additionally keep
-    /// NaN equal to itself and distinguish positive from negative zero.
-    /// </summary>
-    internal static bool SameValue(object? left, object? right)
-    {
-        if (ReferenceEquals(left, right)) return true;
-        if (left is double ld && right is double rd)
-        {
-            if (double.IsNaN(ld) && double.IsNaN(rd)) return true;
-            if (ld == 0 && rd == 0)
-                return BitConverter.DoubleToInt64Bits(ld) == BitConverter.DoubleToInt64Bits(rd);
-            return ld.Equals(rd);
-        }
-        return left?.Equals(right) == true;
     }
 
     /// <summary>
@@ -1101,7 +1083,7 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
                 continue;
             }
 
-            if (TryGetArrayIndex(key, out uint index))
+            if (PropertySemantics.TryGetArrayIndex(key, out uint index))
             {
                 indices ??= [];
                 indices.Add((index, key));
@@ -1136,7 +1118,7 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
         {
             foreach (string key in _fields.Keys)
             {
-                if (TryGetArrayIndex(key, out _))
+                if (PropertySemantics.TryGetArrayIndex(key, out _))
                 {
                     fields = null!;
                     return false;
@@ -1168,7 +1150,7 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
         // Preserve numeric key ordering and the interpreter's callable binding behavior by
         // retaining the general path. Validate everything before modifying the destination.
         foreach (var entry in _fields)
-            if (TryGetArrayIndex(entry.Key, out _) || entry.Value is ISharpTSCallable)
+            if (PropertySemantics.TryGetArrayIndex(entry.Key, out _) || entry.Value is ISharpTSCallable)
                 return false;
 
         destination.EnsureCapacity(destination.Count + _fields.Count);
@@ -1195,7 +1177,7 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
         {
             if (!HasOwnStringProperty(key))
                 continue;
-            if (TryGetArrayIndex(key, out uint index))
+            if (PropertySemantics.TryGetArrayIndex(key, out uint index))
             {
                 indices ??= [];
                 indices.Add((index, key));
@@ -1213,7 +1195,7 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
         {
             if (!HasOwnStringProperty(key))
                 continue;
-            if (indices is not null && TryGetArrayIndex(key, out _))
+            if (indices is not null && PropertySemantics.TryGetArrayIndex(key, out _))
                 continue;
             yield return key;
         }
@@ -1230,7 +1212,7 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
         foreach (string key in StringPropertyOrder)
         {
             if (HasOwnStringProperty(key)
-                && TryGetArrayIndex(key, out uint index)
+                && PropertySemantics.TryGetArrayIndex(key, out uint index)
                 && index < exclusiveLength)
             {
                 return true;
@@ -1241,28 +1223,6 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
 
     internal bool HasOwnStringProperty(string name)
         => _fields.ContainsKey(name) || IsAccessorProperty(name);
-
-    private static bool TryGetArrayIndex(string key, out uint index)
-    {
-        // Canonical array indices contain only ASCII digits and have no
-        // leading zero unless the key is exactly "0". Reject ordinary names
-        // before entering UInt32.TryParse, and avoid allocating ToString just
-        // to verify the canonical spelling.
-        if (key.Length == 0
-            || key[0] is < '0' or > '9'
-            || (key.Length > 1 && key[0] == '0'))
-        {
-            index = 0;
-            return false;
-        }
-
-        return uint.TryParse(
-                key,
-                System.Globalization.NumberStyles.None,
-                System.Globalization.CultureInfo.InvariantCulture,
-                out index)
-            && index < uint.MaxValue;
-    }
 
     public override string ToString() => $"{{ {string.Join(", ", _fields.Select(f => $"{f.Key}: {f.Value}"))} }}";
 }

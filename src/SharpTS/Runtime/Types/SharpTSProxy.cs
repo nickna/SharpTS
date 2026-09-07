@@ -206,7 +206,7 @@ public class SharpTSProxy : ISharpTSCallable
         var descriptor = SharpTSPropertyDescriptor.FromAnyObject(targetDescriptor);
         if (descriptor.Configurable) return;
         if (descriptor.HasValue && !descriptor.Writable
-            && !SharpTSObject.SameValue(result, descriptor.Value))
+            && !PropertySemantics.SameValue(result, descriptor.Value))
         {
             throw new ThrowException(new SharpTSTypeError(
                 "Proxy get trap must return the value of a fixed data property"));
@@ -297,7 +297,7 @@ public class SharpTSProxy : ISharpTSCallable
         if (descriptor.Configurable) return;
 
         if (descriptor.HasValue && !descriptor.Writable
-            && !SharpTSObject.SameValue(result, descriptor.Value))
+            && !PropertySemantics.SameValue(result, descriptor.Value))
         {
             throw new ThrowException(new SharpTSTypeError(
                 "Proxy get trap must return the value of a fixed data property"));
@@ -563,7 +563,7 @@ public class SharpTSProxy : ISharpTSCallable
         var descriptor = SharpTSPropertyDescriptor.FromAnyObject(targetDescriptor);
         if (descriptor.Configurable) return true;
         if (descriptor.HasValue && !descriptor.Writable
-            && !SharpTSObject.SameValue(value, descriptor.Value))
+            && !PropertySemantics.SameValue(value, descriptor.Value))
         {
             throw new ThrowException(new SharpTSTypeError(
                 "Proxy set trap cannot change a fixed data property"));
@@ -598,7 +598,7 @@ public class SharpTSProxy : ISharpTSCallable
         var descriptor = SharpTSPropertyDescriptor.FromAnyObject(targetDescriptor);
         if (descriptor.Configurable) return true;
         if (descriptor.HasValue && !descriptor.Writable
-            && !SharpTSObject.SameValue(value, descriptor.Value))
+            && !PropertySemantics.SameValue(value, descriptor.Value))
         {
             throw new ThrowException(new SharpTSTypeError(
                 "Proxy set trap cannot change a fixed data property"));
@@ -1311,10 +1311,10 @@ public class SharpTSProxy : ISharpTSCallable
         if (targetAccessor)
         {
             if (requested.HasGet
-                && !SharpTSObject.SameValue(requested.RawGet, target.RawGet))
+                && !PropertySemantics.SameValue(requested.RawGet, target.RawGet))
                 ThrowInvariant();
             if (requested.HasSet
-                && !SharpTSObject.SameValue(requested.RawSet, target.RawSet))
+                && !PropertySemantics.SameValue(requested.RawSet, target.RawSet))
                 ThrowInvariant();
             return;
         }
@@ -1326,7 +1326,7 @@ public class SharpTSProxy : ISharpTSCallable
             if (requested.HasWritable && requested.Writable)
                 ThrowInvariant();
             if (requested.HasValue
-                && !SharpTSObject.SameValue(requested.Value, target.Value))
+                && !PropertySemantics.SameValue(requested.Value, target.Value))
                 ThrowInvariant();
         }
 
