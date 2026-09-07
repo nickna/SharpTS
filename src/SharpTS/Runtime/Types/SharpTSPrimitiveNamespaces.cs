@@ -168,13 +168,13 @@ public sealed class SharpTSStringPrototype : ISharpTSMutableBuiltIn, ISharpTSSym
     /// </summary>
     public static readonly SharpTSStringPrototype Instance = new();
     // internal (not private) so each Interpreter can construct its own realm
-    // instance; only the _extras overlay differs between instances.
+    // instance with its own overlay and method cache.
     internal SharpTSStringPrototype()
     {
         var iterator = new StringPrototypeMethodWrapper(
             "[Symbol.iterator]",
             StringBuiltIns.GetPrototypeMethod("[Symbol.iterator]")!);
-        _extras.DefineProperty(SharpTSSymbol.Iterator, new SharpTSPropertyDescriptor
+        _overlay.DefineProperty(SharpTSSymbol.Iterator, new SharpTSPropertyDescriptor
         {
             Value = iterator,
             HasValue = true,
@@ -187,68 +187,52 @@ public sealed class SharpTSStringPrototype : ISharpTSMutableBuiltIn, ISharpTSSym
         });
     }
 
-    private readonly SharpTSObject _extras = new([]);
-    private readonly HashSet<string> _deletedBuiltIns = [];
+    private readonly PrototypePropertyOverlay _overlay = new(IsBuiltIn);
     private readonly System.Collections.Concurrent.ConcurrentDictionary<string, StringPrototypeMethodWrapper>
         _methodCache = new(StringComparer.Ordinal);
-    public bool HasExtra(string name) => _extras.HasProperty(name) || _extras.HasSetter(name);
-    public object? TryGetExtra(string name) => _extras.GetProperty(name);
-    public void SetExtra(string name, object? value)
-    {
-        _deletedBuiltIns.Remove(name);
-        _extras.SetProperty(name, value);
-    }
+    public bool HasExtra(string name) => _overlay.HasExtra(name);
+    public object? TryGetExtra(string name) => _overlay.GetProperty(name);
+    public void SetExtra(string name, object? value) => _overlay.SetProperty(name, value);
     public bool DefineExtraProperty(string name, SharpTSPropertyDescriptor descriptor)
-    {
-        _deletedBuiltIns.Remove(name);
-        return _extras.DefineProperty(name, descriptor);
-    }
+        => _overlay.DefineProperty(name, descriptor);
     public SharpTSPropertyDescriptor? GetOwnPropertyDescriptor(string name)
-        => _extras.GetOwnPropertyDescriptor(name);
-    public ISharpTSCallable? GetExtraGetter(string name) => _extras.GetGetter(name);
-    public ISharpTSCallable? GetExtraSetter(string name) => _extras.GetSetter(name);
+        => _overlay.GetOwnPropertyDescriptor(name);
+    public ISharpTSCallable? GetExtraGetter(string name) => _overlay.GetGetter(name);
+    public ISharpTSCallable? GetExtraSetter(string name) => _overlay.GetSetter(name);
     internal IEnumerable<SharpTSSymbol> GetSymbolPropertyNames()
-        => _extras.GetSymbolPropertyNames();
-    internal object? GetBySymbol(SharpTSSymbol symbol) => _extras.GetBySymbol(symbol);
+        => _overlay.GetSymbolPropertyNames();
+    internal object? GetBySymbol(SharpTSSymbol symbol) => _overlay.GetBySymbol(symbol);
     internal void SetBySymbolStrict(SharpTSSymbol symbol, object? value, bool strictMode)
-        => _extras.SetBySymbolStrict(symbol, value, strictMode);
+        => _overlay.SetBySymbolStrict(symbol, value, strictMode);
     internal bool DeleteBySymbolStrict(SharpTSSymbol symbol, bool strictMode)
-        => _extras.DeleteBySymbolStrict(symbol, strictMode);
+        => _overlay.DeleteBySymbolStrict(symbol, strictMode);
     internal bool DefineProperty(SharpTSSymbol symbol, SharpTSPropertyDescriptor descriptor)
-        => _extras.DefineProperty(symbol, descriptor);
+        => _overlay.DefineProperty(symbol, descriptor);
     internal SharpTSPropertyDescriptor? GetOwnPropertyDescriptor(SharpTSSymbol symbol)
-        => _extras.GetOwnPropertyDescriptor(symbol);
+        => _overlay.GetOwnPropertyDescriptor(symbol);
     bool ISharpTSSymbolPropertyBag.HasSymbolProperty(SharpTSSymbol symbol)
-        => _extras.HasSymbolProperty(symbol);
+        => _overlay.HasSymbolProperty(symbol);
     object? ISharpTSSymbolPropertyBag.GetBySymbol(SharpTSSymbol symbol)
-        => _extras.GetBySymbol(symbol);
+        => _overlay.GetBySymbol(symbol);
     bool ISharpTSSymbolPropertyBag.TryGetSymbolAccessor(
         SharpTSSymbol symbol, out ISharpTSCallable? getter, out ISharpTSCallable? setter)
-        => _extras.TryGetSymbolAccessor(symbol, out getter, out setter);
+        => _overlay.TryGetSymbolAccessor(symbol, out getter, out setter);
     void ISharpTSSymbolPropertyBag.SetBySymbolStrict(
         SharpTSSymbol symbol, object? value, bool strictMode)
-        => _extras.SetBySymbolStrict(symbol, value, strictMode);
+        => _overlay.SetBySymbolStrict(symbol, value, strictMode);
 
-    private bool IsBuiltIn(string name)
+    private static bool IsBuiltIn(string name)
         => name == "constructor" || StringBuiltIns.GetPrototypeMethod(name) != null;
 
-    public bool HasOwnProperty(string name)
-        => HasExtra(name) || (!_deletedBuiltIns.Contains(name) && IsBuiltIn(name));
+    public bool HasOwnProperty(string name) => _overlay.HasOwnProperty(name);
 
-    public bool DeleteProperty(string name)
-    {
-        bool hadExtra = HasExtra(name);
-        if (hadExtra && !_extras.DeleteProperty(name)) return false;
-        if (IsBuiltIn(name)) _deletedBuiltIns.Add(name);
-        return true;
-    }
+    public bool DeleteProperty(string name) => _overlay.DeleteProperty(name);
 
-    public IEnumerable<string> OwnEnumerableKeys() => _extras.OwnEnumerableKeys();
+    public IEnumerable<string> OwnEnumerableKeys() => _overlay.OwnEnumerableKeys();
 
     public object? GetMember(string name)
     {
-        if (HasExtra(name)) return TryGetExtra(name);
-        if (_deletedBuiltIns.Contains(name)) return null;
+        if (_overlay.TryGetOverride(name, out var value)) return value;
         if (name == "constructor") return RealmConstructor ?? (object)SharpTSStringNamespace.Instance;
         var method = StringBuiltIns.GetPrototypeMethod(name);
         if (method is null) return null;
@@ -388,14 +372,12 @@ internal sealed class StringPrototypeMethodWrapper : ISharpTSCallable, IBuiltInF
 public sealed class SharpTSBigIntPrototype : ISharpTSMutableBuiltIn, ISharpTSSymbolPropertyBag
 {
     internal object? RealmConstructor { get; set; }
-    private readonly SharpTSObject _extras = new([]);
-    private bool _constructorDeleted;
+    private readonly PrototypePropertyOverlay _overlay = new(IsBuiltIn, preserveBuiltInAssignmentAttributes: true);
     private readonly Dictionary<string, BigIntPrototypeMethodWrapper> _methodCache = [];
-    private readonly HashSet<string> _deletedMethods = [];
 
     internal SharpTSBigIntPrototype()
     {
-        _extras.DefineProperty(SharpTSSymbol.ToStringTag, new SharpTSPropertyDescriptor
+        _overlay.DefineProperty(SharpTSSymbol.ToStringTag, new SharpTSPropertyDescriptor
         {
             Value = "BigInt",
             HasValue = true,
@@ -408,80 +390,45 @@ public sealed class SharpTSBigIntPrototype : ISharpTSMutableBuiltIn, ISharpTSSym
         });
     }
 
-    public bool HasExtra(string name) => _extras.HasProperty(name) || _extras.HasSetter(name);
-    public object? TryGetExtra(string name) => _extras.GetProperty(name);
-    public void SetExtra(string name, object? value)
-    {
-        _deletedMethods.Remove(name);
-        if (name == "constructor") _constructorDeleted = false;
-        if (name is "constructor" or "valueOf" or "toString" or "toLocaleString" && !HasExtra(name))
-        {
-            _extras.DefineProperty(name, new SharpTSPropertyDescriptor
-            {
-                Value = value,
-                HasValue = true,
-                Writable = true,
-                HasWritable = true,
-                Enumerable = false,
-                HasEnumerable = true,
-                Configurable = true,
-                HasConfigurable = true,
-            });
-            return;
-        }
-        _extras.SetProperty(name, value);
-    }
+    public bool HasExtra(string name) => _overlay.HasExtra(name);
+    public object? TryGetExtra(string name) => _overlay.GetProperty(name);
+    public void SetExtra(string name, object? value) => _overlay.SetProperty(name, value);
     public bool DefineExtraProperty(string name, SharpTSPropertyDescriptor descriptor)
-    {
-        _deletedMethods.Remove(name);
-        if (name == "constructor") _constructorDeleted = false;
-        return _extras.DefineProperty(name, descriptor);
-    }
+        => _overlay.DefineProperty(name, descriptor);
     public SharpTSPropertyDescriptor? GetOwnPropertyDescriptor(string name)
-        => _extras.GetOwnPropertyDescriptor(name);
-    public ISharpTSCallable? GetExtraGetter(string name) => _extras.GetGetter(name);
-    public ISharpTSCallable? GetExtraSetter(string name) => _extras.GetSetter(name);
-    public bool HasOwnProperty(string name)
-        => HasExtra(name)
-            || name == "constructor" && !_constructorDeleted
-            || name is "valueOf" or "toString" or "toLocaleString" && !_deletedMethods.Contains(name);
-    public bool DeleteProperty(string name)
-    {
-        if (HasExtra(name))
-        {
-            bool deleted = _extras.DeleteProperty(name);
-            if (deleted && name == "constructor") _constructorDeleted = true;
-            if (deleted && name is "valueOf" or "toString" or "toLocaleString") _deletedMethods.Add(name);
-            return deleted;
-        }
-        if (name == "constructor") _constructorDeleted = true;
-        if (name is "valueOf" or "toString" or "toLocaleString") _deletedMethods.Add(name);
-        return true;
-    }
-    public IEnumerable<string> OwnEnumerableKeys() => _extras.OwnEnumerableKeys();
+        => _overlay.GetOwnPropertyDescriptor(name);
+    public ISharpTSCallable? GetExtraGetter(string name) => _overlay.GetGetter(name);
+    public ISharpTSCallable? GetExtraSetter(string name) => _overlay.GetSetter(name);
+    private static bool IsBuiltIn(string name) => name is "constructor" or "valueOf" or "toString" or "toLocaleString";
+
+    public bool HasOwnProperty(string name) => _overlay.HasOwnProperty(name);
+    public bool DeleteProperty(string name) => _overlay.DeleteProperty(name);
+    public IEnumerable<string> OwnEnumerableKeys() => _overlay.OwnEnumerableKeys();
     internal bool DefineProperty(SharpTSSymbol symbol, SharpTSPropertyDescriptor descriptor)
-        => _extras.DefineProperty(symbol, descriptor);
+        => _overlay.DefineProperty(symbol, descriptor);
     internal SharpTSPropertyDescriptor? GetOwnPropertyDescriptor(SharpTSSymbol symbol)
-        => _extras.GetOwnPropertyDescriptor(symbol);
+        => _overlay.GetOwnPropertyDescriptor(symbol);
     internal bool DeleteBySymbolStrict(SharpTSSymbol symbol, bool strictMode)
-        => _extras.DeleteBySymbolStrict(symbol, strictMode);
+        => _overlay.DeleteBySymbolStrict(symbol, strictMode);
     bool ISharpTSSymbolPropertyBag.HasSymbolProperty(SharpTSSymbol symbol)
-        => _extras.HasSymbolProperty(symbol);
+        => _overlay.HasSymbolProperty(symbol);
     object? ISharpTSSymbolPropertyBag.GetBySymbol(SharpTSSymbol symbol)
-        => _extras.GetBySymbol(symbol);
+        => _overlay.GetBySymbol(symbol);
     bool ISharpTSSymbolPropertyBag.TryGetSymbolAccessor(
         SharpTSSymbol symbol, out ISharpTSCallable? getter, out ISharpTSCallable? setter)
-        => _extras.TryGetSymbolAccessor(symbol, out getter, out setter);
+        => _overlay.TryGetSymbolAccessor(symbol, out getter, out setter);
     void ISharpTSSymbolPropertyBag.SetBySymbolStrict(
         SharpTSSymbol symbol, object? value, bool strictMode)
-        => _extras.SetBySymbolStrict(symbol, value, strictMode);
+        => _overlay.SetBySymbolStrict(symbol, value, strictMode);
     public object? GetMember(string name)
-        => HasExtra(name) ? TryGetExtra(name)
-            : name == "constructor" && !_constructorDeleted ? RealmConstructor
-            : name is "valueOf" or "toString" or "toLocaleString" && !_deletedMethods.Contains(name)
-                ? _methodCache.GetValueOrDefault(name)
-                    ?? (_methodCache[name] = new BigIntPrototypeMethodWrapper(name))
+    {
+        if (_overlay.TryGetOverride(name, out var value)) return value;
+        if (name == "constructor") return RealmConstructor;
+        return name is "valueOf" or "toString" or "toLocaleString"
+            ? _methodCache.GetValueOrDefault(name)
+                ?? (_methodCache[name] = new BigIntPrototypeMethodWrapper(name))
             : null;
+    }
     public override string ToString() => "[object BigInt]";
 }
 
@@ -540,71 +487,34 @@ internal sealed class BigIntPrototypeMethodWrapper : ISharpTSCallable, IBuiltInF
 public sealed class SharpTSSymbolPrototype : ISharpTSMutableBuiltIn
 {
     internal object? RealmConstructor { get; set; }
-    private readonly SharpTSObject _extras = new([]);
-    private bool _constructorDeleted;
+    private readonly PrototypePropertyOverlay _overlay = new(IsBuiltIn, preserveBuiltInAssignmentAttributes: true);
     private readonly Dictionary<string, SymbolPrototypeMethodWrapper> _methodCache = [];
-    private readonly HashSet<string> _deletedMethods = [];
 
     internal SharpTSSymbolPrototype() { }
 
-    public bool HasExtra(string name) => _extras.HasProperty(name) || _extras.HasSetter(name);
-    public object? TryGetExtra(string name) => _extras.GetProperty(name);
-    public void SetExtra(string name, object? value)
-    {
-        _deletedMethods.Remove(name);
-        if (name == "constructor") _constructorDeleted = false;
-        if (name is "constructor" or "toString" or "valueOf" && !HasExtra(name))
-        {
-            _extras.DefineProperty(name, new SharpTSPropertyDescriptor
-            {
-                Value = value,
-                HasValue = true,
-                Writable = true,
-                HasWritable = true,
-                Enumerable = false,
-                HasEnumerable = true,
-                Configurable = true,
-                HasConfigurable = true,
-            });
-            return;
-        }
-        _extras.SetProperty(name, value);
-    }
+    public bool HasExtra(string name) => _overlay.HasExtra(name);
+    public object? TryGetExtra(string name) => _overlay.GetProperty(name);
+    public void SetExtra(string name, object? value) => _overlay.SetProperty(name, value);
     public bool DefineExtraProperty(string name, SharpTSPropertyDescriptor descriptor)
-    {
-        _deletedMethods.Remove(name);
-        if (name == "constructor") _constructorDeleted = false;
-        return _extras.DefineProperty(name, descriptor);
-    }
+        => _overlay.DefineProperty(name, descriptor);
     public SharpTSPropertyDescriptor? GetOwnPropertyDescriptor(string name)
-        => _extras.GetOwnPropertyDescriptor(name);
-    public ISharpTSCallable? GetExtraGetter(string name) => _extras.GetGetter(name);
-    public ISharpTSCallable? GetExtraSetter(string name) => _extras.GetSetter(name);
-    public bool HasOwnProperty(string name)
-        => HasExtra(name)
-            || name == "constructor" && !_constructorDeleted
-            || name is "toString" or "valueOf" && !_deletedMethods.Contains(name);
-    public bool DeleteProperty(string name)
-    {
-        if (HasExtra(name))
-        {
-            bool deleted = _extras.DeleteProperty(name);
-            if (deleted && name == "constructor") _constructorDeleted = true;
-            if (deleted && name is "toString" or "valueOf") _deletedMethods.Add(name);
-            return deleted;
-        }
-        if (name == "constructor") _constructorDeleted = true;
-        if (name is "toString" or "valueOf") _deletedMethods.Add(name);
-        return true;
-    }
-    public IEnumerable<string> OwnEnumerableKeys() => _extras.OwnEnumerableKeys();
+        => _overlay.GetOwnPropertyDescriptor(name);
+    public ISharpTSCallable? GetExtraGetter(string name) => _overlay.GetGetter(name);
+    public ISharpTSCallable? GetExtraSetter(string name) => _overlay.GetSetter(name);
+    private static bool IsBuiltIn(string name) => name is "constructor" or "toString" or "valueOf";
+
+    public bool HasOwnProperty(string name) => _overlay.HasOwnProperty(name);
+    public bool DeleteProperty(string name) => _overlay.DeleteProperty(name);
+    public IEnumerable<string> OwnEnumerableKeys() => _overlay.OwnEnumerableKeys();
     public object? GetMember(string name)
-        => HasExtra(name) ? TryGetExtra(name)
-            : name == "constructor" && !_constructorDeleted ? RealmConstructor
-            : name is "toString" or "valueOf" && !_deletedMethods.Contains(name)
-                ? _methodCache.GetValueOrDefault(name)
-                    ?? (_methodCache[name] = new SymbolPrototypeMethodWrapper(name))
+    {
+        if (_overlay.TryGetOverride(name, out var value)) return value;
+        if (name == "constructor") return RealmConstructor;
+        return name is "toString" or "valueOf"
+            ? _methodCache.GetValueOrDefault(name)
+                ?? (_methodCache[name] = new SymbolPrototypeMethodWrapper(name))
             : null;
+    }
     public override string ToString() => "[object Symbol]";
 }
 
@@ -813,65 +723,49 @@ public sealed class SharpTSNumberPrototype : ISharpTSMutableBuiltIn, ISharpTSSym
     /// </summary>
     public static readonly SharpTSNumberPrototype Instance = new();
     // internal (not private) so each Interpreter can construct its own realm
-    // instance; only the _extras overlay differs between instances.
+    // instance with its own overlay and method cache.
     internal SharpTSNumberPrototype() { }
 
-    private readonly SharpTSObject _extras = new([]);
-    private readonly HashSet<string> _deletedBuiltIns = [];
+    private readonly PrototypePropertyOverlay _overlay = new(IsBuiltIn);
     private readonly System.Collections.Concurrent.ConcurrentDictionary<string, NumberPrototypeMethodWrapper>
         _methodCache = new(StringComparer.Ordinal);
-    public bool HasExtra(string name) => _extras.HasProperty(name) || _extras.HasSetter(name);
-    public object? TryGetExtra(string name) => _extras.GetProperty(name);
-    public void SetExtra(string name, object? value)
-    {
-        _deletedBuiltIns.Remove(name);
-        _extras.SetProperty(name, value);
-    }
+    public bool HasExtra(string name) => _overlay.HasExtra(name);
+    public object? TryGetExtra(string name) => _overlay.GetProperty(name);
+    public void SetExtra(string name, object? value) => _overlay.SetProperty(name, value);
     public bool DefineExtraProperty(string name, SharpTSPropertyDescriptor descriptor)
-    {
-        _deletedBuiltIns.Remove(name);
-        return _extras.DefineProperty(name, descriptor);
-    }
+        => _overlay.DefineProperty(name, descriptor);
     public SharpTSPropertyDescriptor? GetOwnPropertyDescriptor(string name)
-        => _extras.GetOwnPropertyDescriptor(name);
-    public ISharpTSCallable? GetExtraGetter(string name) => _extras.GetGetter(name);
-    public ISharpTSCallable? GetExtraSetter(string name) => _extras.GetSetter(name);
+        => _overlay.GetOwnPropertyDescriptor(name);
+    public ISharpTSCallable? GetExtraGetter(string name) => _overlay.GetGetter(name);
+    public ISharpTSCallable? GetExtraSetter(string name) => _overlay.GetSetter(name);
     bool ISharpTSSymbolPropertyBag.HasSymbolProperty(SharpTSSymbol symbol)
-        => _extras.HasSymbolProperty(symbol);
+        => _overlay.HasSymbolProperty(symbol);
     object? ISharpTSSymbolPropertyBag.GetBySymbol(SharpTSSymbol symbol)
-        => _extras.GetBySymbol(symbol);
+        => _overlay.GetBySymbol(symbol);
     bool ISharpTSSymbolPropertyBag.TryGetSymbolAccessor(
         SharpTSSymbol symbol, out ISharpTSCallable? getter, out ISharpTSCallable? setter)
-        => _extras.TryGetSymbolAccessor(symbol, out getter, out setter);
+        => _overlay.TryGetSymbolAccessor(symbol, out getter, out setter);
     void ISharpTSSymbolPropertyBag.SetBySymbolStrict(
         SharpTSSymbol symbol, object? value, bool strictMode)
-        => _extras.SetBySymbolStrict(symbol, value, strictMode);
+        => _overlay.SetBySymbolStrict(symbol, value, strictMode);
 
-    public IEnumerable<string> OwnEnumerableKeys() => _extras.OwnEnumerableKeys();
+    public IEnumerable<string> OwnEnumerableKeys() => _overlay.OwnEnumerableKeys();
 
-    private bool IsBuiltIn(string name)
+    private static bool IsBuiltIn(string name)
         => name == "constructor" || NumberBuiltIns.GetPrototypeMethod(name) != null;
 
-    public bool HasOwnProperty(string name)
-        => HasExtra(name) || (!_deletedBuiltIns.Contains(name) && IsBuiltIn(name));
+    public bool HasOwnProperty(string name) => _overlay.HasOwnProperty(name);
 
     /// <summary>
     /// Number.prototype is an ordinary object, so its built-in methods are configurable
     /// and `delete Number.prototype.toString` must take — after which the name resolves
     /// up the chain to Object.prototype.
     /// </summary>
-    public bool DeleteProperty(string name)
-    {
-        bool hadExtra = HasExtra(name);
-        if (hadExtra && !_extras.DeleteProperty(name)) return false;
-        if (IsBuiltIn(name)) _deletedBuiltIns.Add(name);
-        return true;
-    }
+    public bool DeleteProperty(string name) => _overlay.DeleteProperty(name);
 
     public object? GetMember(string name)
     {
-        if (HasExtra(name)) return TryGetExtra(name);
-        if (_deletedBuiltIns.Contains(name)) return null;
+        if (_overlay.TryGetOverride(name, out var value)) return value;
         if (name == "constructor") return RealmConstructor ?? (object)SharpTSNumberNamespace.Instance;
         var method = NumberBuiltIns.GetPrototypeMethod(name);
         if (method is null) return null;
@@ -1043,53 +937,38 @@ public sealed class SharpTSBooleanPrototype : ISharpTSMutableBuiltIn, ISharpTSSy
     /// </summary>
     public static readonly SharpTSBooleanPrototype Instance = new();
     // internal (not private) so each Interpreter can construct its own realm
-    // instance; only the _extras overlay differs between instances.
+    // instance with its own overlay.
     internal SharpTSBooleanPrototype() { }
 
-    private readonly SharpTSObject _extras = new([]);
-    private readonly HashSet<string> _deletedBuiltIns = [];
-    public bool HasExtra(string name) => _extras.HasProperty(name) || _extras.HasSetter(name);
-    public object? TryGetExtra(string name) => _extras.GetProperty(name);
-    public void SetExtra(string name, object? value)
-    {
-        _deletedBuiltIns.Remove(name);
-        _extras.SetProperty(name, value);
-    }
+    private readonly PrototypePropertyOverlay _overlay = new(IsBuiltIn);
+    public bool HasExtra(string name) => _overlay.HasExtra(name);
+    public object? TryGetExtra(string name) => _overlay.GetProperty(name);
+    public void SetExtra(string name, object? value) => _overlay.SetProperty(name, value);
     public bool DefineExtraProperty(string name, SharpTSPropertyDescriptor descriptor)
-    {
-        _deletedBuiltIns.Remove(name);
-        return _extras.DefineProperty(name, descriptor);
-    }
+        => _overlay.DefineProperty(name, descriptor);
     public SharpTSPropertyDescriptor? GetOwnPropertyDescriptor(string name)
-        => _extras.GetOwnPropertyDescriptor(name);
-    public ISharpTSCallable? GetExtraGetter(string name) => _extras.GetGetter(name);
-    public ISharpTSCallable? GetExtraSetter(string name) => _extras.GetSetter(name);
+        => _overlay.GetOwnPropertyDescriptor(name);
+    public ISharpTSCallable? GetExtraGetter(string name) => _overlay.GetGetter(name);
+    public ISharpTSCallable? GetExtraSetter(string name) => _overlay.GetSetter(name);
     bool ISharpTSSymbolPropertyBag.HasSymbolProperty(SharpTSSymbol symbol)
-        => _extras.HasSymbolProperty(symbol);
+        => _overlay.HasSymbolProperty(symbol);
     object? ISharpTSSymbolPropertyBag.GetBySymbol(SharpTSSymbol symbol)
-        => _extras.GetBySymbol(symbol);
+        => _overlay.GetBySymbol(symbol);
     bool ISharpTSSymbolPropertyBag.TryGetSymbolAccessor(
         SharpTSSymbol symbol, out ISharpTSCallable? getter, out ISharpTSCallable? setter)
-        => _extras.TryGetSymbolAccessor(symbol, out getter, out setter);
+        => _overlay.TryGetSymbolAccessor(symbol, out getter, out setter);
     void ISharpTSSymbolPropertyBag.SetBySymbolStrict(
         SharpTSSymbol symbol, object? value, bool strictMode)
-        => _extras.SetBySymbolStrict(symbol, value, strictMode);
+        => _overlay.SetBySymbolStrict(symbol, value, strictMode);
     private static bool IsBuiltIn(string name)
         => name is "constructor" or "toString" or "valueOf";
 
-    public bool DeleteProperty(string name)
-    {
-        if (HasExtra(name) && !_extras.DeleteProperty(name)) return false;
-        if (IsBuiltIn(name)) _deletedBuiltIns.Add(name);
-        return true;
-    }
-    public bool HasOwnProperty(string name)
-        => HasExtra(name) || (!_deletedBuiltIns.Contains(name) && IsBuiltIn(name));
-    public IEnumerable<string> OwnEnumerableKeys() => _extras.OwnEnumerableKeys();
+    public bool DeleteProperty(string name) => _overlay.DeleteProperty(name);
+    public bool HasOwnProperty(string name) => _overlay.HasOwnProperty(name);
+    public IEnumerable<string> OwnEnumerableKeys() => _overlay.OwnEnumerableKeys();
     public object? GetMember(string name)
     {
-        if (HasExtra(name)) return TryGetExtra(name);
-        if (_deletedBuiltIns.Contains(name)) return null;
+        if (_overlay.TryGetOverride(name, out var value)) return value;
         return name switch
         {
             "constructor" => RealmConstructor ?? (object)SharpTSBooleanNamespace.Instance,
