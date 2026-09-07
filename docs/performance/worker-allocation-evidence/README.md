@@ -2,6 +2,9 @@
 
 These files support the [implementation results](../worker-allocation-scaling.md).
 They are diagnostic evidence, not a refresh of the public benchmark snapshot.
+They were captured before integration with main at `5cc21d58`. The original
+implementation is preserved in `48eefb3b`; the numbers are not incremental
+performance claims against current main. See the report's integration note.
 
 | File | Meaning |
 | --- | --- |

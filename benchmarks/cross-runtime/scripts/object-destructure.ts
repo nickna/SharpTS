@@ -56,9 +56,9 @@ const points: Point[] = [{ x: 1, y: 2 }, { x: 3, y: 4 }];
 const sizes: number[] = [10000, 100000];
 for (let i: number = 0; i < sizes.length; i++) {
     const n: number = sizes[i];
-    bench("object-destructure-invariant-fused", n, () => destructureInvariantFused(n));
-    bench("object-destructure-invariant-split", n, () => destructureInvariantSplit(n));
-    bench("object-destructure-invariant-fractional", n, () => destructureInvariantFractional(n));
-    bench("object-destructure-varying", n, () => destructureVarying(points, n));
-    bench("object-direct-varying", n, () => directVarying(points, n));
+    bench("object-destructure-invariant-fused", n, () => destructureInvariantFused(n), n * 3);
+    bench("object-destructure-invariant-split", n, () => destructureInvariantSplit(n), n * 3);
+    bench("object-destructure-invariant-fractional", n, () => destructureInvariantFractional(n), n * 3.75);
+    bench("object-destructure-varying", n, () => destructureVarying(points, n), n * 5);
+    bench("object-direct-varying", n, () => directVarying(points, n), n * 5);
 }

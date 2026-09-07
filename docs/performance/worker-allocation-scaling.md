@@ -1,5 +1,15 @@
 # Worker allocation scaling results
 
+**Evidence scope after integration:** the measurements below describe the original
+implementation captured in commit `48eefb3b`, against baseline `88378dce`.
+The PR subsequently integrates `main` at `5cc21d58`, which already includes
+overlapping numeric-array, interface-read and native-length improvements. These
+percentages are historical tranche results, **not incremental gains over current
+main**. The merged implementation reuses main's general numeric-literal storage,
+array-length emission and boxed-double read fallback, with the private-record
+specialization ahead of the general literal path. Its rejected cases fall through
+to main's existing storage selection; they are no longer necessarily boxed.
+
 The unchanged 20,000-record kernel allocates approximately **5.17 MB per job**,
 down from **11.41 MB** (about **55% less**). Five paired Linux launches measured
 70–75% lower compiled execution time across direct execution and 1/2/4 workers.
@@ -165,6 +175,12 @@ not a paired profile comparison.
 
 ## Correctness and reproducibility
 
+After integrating main at `5cc21d58`, the Release array/rest/numeric/compact-record/
+worker selection passed **2,442 tests**, with no failures or skips. The merged Node
+worker-allocation harness, snapshot-contract checks, full microbenchmark smoke
+validation and eight selected cross-runtime smoke compilations also passed. The original
+validation history below is retained separately from this integration run.
+
 - Release full-suite run: 17,962 passed, 3 failed, 3 skipped. All three failures
   traced to bypassing existing queue/rest routing in numeric length emission.
   After the routing fix, the affected array/rest/numeric/compact-record/worker
@@ -225,6 +241,11 @@ adaptive measurements, kernel probes, MemoryDiagnoser output and paired
 conformance outcomes. The metadata includes compiler and kernel hashes.
 
 ## Remaining scope
+
+The boundary discussion below describes the original measured implementation.
+After integration, it limits only the additional private-record specialization;
+main's general numeric-array support handles all other eligible literals and
+their existing boundary transitions.
 
 No newly eligible numeric array can escape to an iterator, array builtin,
 serialization, structured cloning or .NET interop. Those uses retain boxed

@@ -58,9 +58,10 @@ public class WorkerAllocationBenchmarks
     }
 
     [Benchmark] public double Full() => _full(0, N);
-    // Returning records deliberately crosses the escape boundary, so this is a
-    // boxed-storage control. Full() is allowed to retain private numeric arrays;
-    // Construction + Traversal is therefore not an additive decomposition of it.
+    // Returning records deliberately crosses the private specialization's escape
+    // boundary. Main's general literal emitter still selects storage for this
+    // control. Construction + Traversal need not be an additive decomposition
+    // of Full(), since escape analysis can choose different generated code.
     [Benchmark] public object Construction() => _build(0, N);
     [Benchmark] public double Traversal() => _traverse(_records);
 }

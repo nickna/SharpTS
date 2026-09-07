@@ -176,6 +176,36 @@ public static class ForLoopAnalyzer
     }
 
     /// <summary>
+    /// Returns whether a C-style loop must create fresh lexical bindings for the
+    /// supplied <c>let</c>/<c>const</c> initializer names. A fresh environment is
+    /// observable only when code created by the loop captures one of the names.
+    /// Direct <c>eval</c> is conservatively treated as a capture because its source
+    /// is not available to this AST pass.
+    /// </summary>
+    public static bool RequiresPerIterationEnvironment(
+        Stmt.For forLoop,
+        IReadOnlyList<string> bindingNames)
+    {
+        foreach (var name in bindingNames)
+        {
+            if (ContainsPotentialCapture(forLoop.Body, name)
+                || (forLoop.Condition != null
+                    && ContainsPotentialCaptureExpr(forLoop.Condition, name))
+                || (forLoop.Increment != null
+                    && ContainsPotentialCaptureExpr(forLoop.Increment, name)))
+                return true;
+        }
+
+        var evalVisitor = new DirectEvalVisitor();
+        if (forLoop.Condition != null)
+            evalVisitor.VisitExpr(forLoop.Condition);
+        if (forLoop.Increment != null)
+            evalVisitor.VisitExpr(forLoop.Increment);
+        evalVisitor.Visit(forLoop.Body);
+        return evalVisitor.Found;
+    }
+
+    /// <summary>
     /// Result of analyzing a for loop for unboxed counter optimization.
     /// </summary>
     public readonly struct AnalysisResult
@@ -447,6 +477,20 @@ public static class ForLoopAnalyzer
                 HasPotentialCapture = true;
             }
             base.VisitAssign(expr);
+        }
+    }
+
+    private sealed class DirectEvalVisitor : Parsing.Visitors.AstVisitorBase
+    {
+        public bool Found { get; private set; }
+
+        public void VisitExpr(Expr expr) => Visit(expr);
+
+        protected override void VisitCall(Expr.Call expr)
+        {
+            if (expr.Callee is Expr.Variable { Name.Lexeme: "eval" })
+                Found = true;
+            base.VisitCall(expr);
         }
     }
 

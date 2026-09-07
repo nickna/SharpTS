@@ -111,6 +111,40 @@ public sealed class StablePrimitiveStringIntrinsicTests
     }
 
     [Fact]
+    public void PromotedStringLength_DoesNotMaterializeStringInScan()
+    {
+        const string source = """
+            function scan(n: number): number {
+                let s: string = "";
+                for (let i: number = 0; i < n; i++) { s = s + "ab"; }
+                let sum: number = 0;
+                for (let i: number = 0; i < s.length; i++) { sum = sum + s.charCodeAt(i); }
+                return sum;
+            }
+            """;
+        MethodInfo method = FindFunction(Compile(source), "scan");
+        var instructions = ReadInstructions(method).ToArray();
+        Assert.Contains(instructions, instruction =>
+            instruction.Operand is MethodBase { Name: "get_Length", DeclaringType: var type }
+            && type == typeof(System.Text.StringBuilder));
+        Assert.DoesNotContain(instructions, instruction =>
+            instruction.Operand is MethodBase { Name: "UnwrapStringReceiver" });
+        Assert.DoesNotContain(instructions, instruction =>
+            instruction.Operand is MethodBase { Name: "get_Chars", DeclaringType: var type }
+            && type == typeof(System.Text.StringBuilder));
+        Assert.Single(instructions, instruction =>
+            instruction.Operand is MethodBase { Name: "ToString", DeclaringType: var type }
+            && type == typeof(System.Text.StringBuilder));
+        var scan = method.CreateDelegate<Func<double, double>>();
+        Assert.Equal(1_950_000, scan(10_000));
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        double result = scan(10_000);
+        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        Assert.Equal(1_950_000, result);
+        Assert.True(allocated < 200_000, $"String scan allocated {allocated:N0} bytes.");
+    }
+
+    [Fact]
     public void StablePrimitiveStringLength_RemainsUnboxed()
     {
         MethodInfo method = FindFunction(Compile(IntrinsicFunctions), "plainStringLength");

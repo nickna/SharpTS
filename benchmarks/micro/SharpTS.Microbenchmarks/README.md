@@ -50,6 +50,52 @@ The original direct-delegate JSON benchmarks remain as a comparison.
 
 ## Running
 
+The `CustomIterator*` benchmarks embed the original stable and dynamic
+cross-runtime sources, including their `bench` import. The compiled cases call
+the original workload functions through cached delegates at 1,000, 10,000, and
+100,000 values. They retain emitted return-value boxing and validate the checksum
+outside measurement. The dynamic source retains its alias and `next` assignment.
+The interpreter cases execute the original function ASTs without the timing driver.
+
+`CustomIteratorNextBodyBenchmarks` isolates the emitted dynamic `next` body;
+`CustomIteratorCallBenchmarks` is an ordinary generic method-call control. These
+attribution cases exclude parts of iteration and are not cross-runtime speedup
+claims. All four classes report managed allocation through `MemoryDiagnoser`.
+
+```powershell
+dotnet run -c Release --project benchmarks/micro/SharpTS.Microbenchmarks -- --filter '*CustomIterator*' --job Short
+```
+
+`StringScalingBenchmarks` measures the shared append-and-scan body at 10,000,
+100,000, and 1,000,000 iterations against a C# builder followed by one string
+snapshot. `BoundedArithmeticBenchmarks` replaces overflowing large factorial
+inputs as the finite loop-carried arithmetic probe. The factorial C# baseline
+uses double arithmetic so its finite results agree with TypeScript at every
+configured input.
+
+For allocation investigations through the imported JSON callback boundary:
+
+```powershell
+dotnet run -c Release --project benchmarks/micro/SharpTS.Microbenchmarks -- `
+  --filter '*JsonImportedModulePhaseBenchmarks*'
+```
+
+Compare full-round-trip allocations and GC counts as well as time. Adjacent
+cumulative-phase timing differences are estimates because JIT and GC behavior
+can differ across independently measured phases.
+
+Allocation diagnostics share the unmodified cross-runtime `allocation-kernel.ts`.
+`AllocationKernelBenchmarks` measures the complete kernel, graph construction,
+and traversal of a graph built during setup, with allocation and GC counters.
+Each runs with interface and equivalent type-alias declarations. Phase timings
+are diagnostic and should not be added together: exposing the graph changes
+escape analysis and traversal starts with an already retained graph.
+
+```powershell
+dotnet run -c Release --project benchmarks/micro/SharpTS.Microbenchmarks -- --allocation-smoke
+dotnet run -c Release --project benchmarks/micro/SharpTS.Microbenchmarks -- --filter '*AllocationKernelBenchmarks*'
+```
+
 ```bash
 # From the repo root. BenchmarkDotNet requires a Release build.
 dotnet run -c Release --project benchmarks/micro/SharpTS.Microbenchmarks
@@ -99,6 +145,10 @@ guards permit bypassing per-index property operations.
   `"SharpTS.Microbenchmarks.TypeScriptSources.Regex.ts"`). `RootNamespace`/
   `AssemblyName` are pinned in the `.csproj` so those names stay stable; if you
   rename the project, keep the strings and the pinned names in sync.
+
+`NumericRestBenchmarks.restSelectedTarget` alternates between two callees on each
+iteration, complementing `restDynamicDispatch`, which receives one unknown target
+through a parameter. Both retain runtime dispatch and validate their checksums.
 
 ## Embedded-resource gotcha
 

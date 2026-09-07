@@ -22,6 +22,17 @@ public class CountedPushLoopAnalyzerTests
     }
 
     [Theory]
+    [InlineData("for (let i = start; i < end; i++) items.push({ value: i });")]
+    [InlineData("for (let i = 5; i < end; i++) items.push({ value: i });")]
+    public void RangeReservation_DoesNotEnableZeroBasedFillOptimizations(string source)
+    {
+        var loop = ParseLoop(source);
+        Assert.False(CountedPushLoopAnalyzer.TryAnalyze(loop, out _));
+        Assert.True(CountedPushLoopAnalyzer.TryAnalyze(loop, out var reservation, allowRangeStart: true));
+        Assert.Equal("i", reservation.Counter.Name.Lexeme);
+    }
+
+    [Theory]
     [InlineData("for (let i = 1; i < n; i++) items.push({ value: i });")]
     [InlineData("for (let i = 0; i <= n; i++) items.push({ value: i });")]
     [InlineData("for (let i = 0; i < n; i++) { items.push({ value: i }); log(i); }")]

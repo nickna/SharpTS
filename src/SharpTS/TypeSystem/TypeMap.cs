@@ -24,6 +24,7 @@ public class TypeMap
     private readonly HashSet<Token> _promotableNumericMapLocals = new(ReferenceEqualityComparer.Instance);
     private readonly HashSet<Token> _promotableStringAccumulators = new(ReferenceEqualityComparer.Instance);
     private readonly Dictionary<Token, ObjectShapeInfo> _promotableObjectLocals = new(ReferenceEqualityComparer.Instance);
+    private readonly Dictionary<Expr.Call, ObjectConsumerInfo> _promotedObjectCalls = new(ReferenceEqualityComparer.Instance);
     private readonly Dictionary<Token, ClassScalarReplacementInfo> _scalarReplaceableClassLocals =
         new(ReferenceEqualityComparer.Instance);
     private readonly HashSet<Stmt.ForOf> _stableNumericMapIterations = new(ReferenceEqualityComparer.Instance);
@@ -253,6 +254,10 @@ public class TypeMap
     /// </summary>
     public IEnumerable<ObjectShapeInfo> PromotableObjectLocalShapes => _promotableObjectLocals.Values;
 
+    public void MarkPromotedObjectCall(Expr.Call call, ObjectConsumerInfo summary) => _promotedObjectCalls[call] = summary;
+    public bool TryGetPromotedObjectCall(Expr.Call call, out ObjectConsumerInfo summary) =>
+        _promotedObjectCalls.TryGetValue(call, out summary!);
+
     /// <summary>
     /// Marks a fresh exact-class local whose allocation and pure constructor may be
     /// represented by the same generated typed shape used for promoted object
@@ -338,9 +343,9 @@ public class TypeMap
 
     /// <summary>
     /// Marks a function-owned captured numeric binding whose shared display-class
-    /// slot can remain an unboxed <c>double</c>. The stable custom-iterator analyzer
-    /// only records bindings initialized before iterator creation, referenced by the
-    /// exact non-escaping <c>next</c> closure, and kept numeric by every write.
+    /// slot can remain an unboxed <c>double</c>. The numeric function capture proof
+    /// requires initialization before closure creation, an unambiguous binding,
+    /// a single capturing callable, and numeric values on every write.
     /// </summary>
     public void MarkStableNumericFunctionCaptureField(object callable, string name)
     {

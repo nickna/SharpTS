@@ -1,0 +1,2289 @@
+{
+  "schemaVersion": 1,
+  "source": "benchmarks/micro/SharpTS.Microbenchmarks/TypeScriptSources/NumericRest.ts",
+  "sourceSha256": "052707B486469DA215DDD893032B6A945F863EF9398330FB3847259298299634",
+  "probeSha256": "11249B8472A654A9BCBCCFC3E342A1C4F010DC2DA3FA93E7714F902E552E0188",
+  "methodology": "Five fresh-process pairs with alternating stage order; one discarded compile per stage; CLI compile includes process startup; call warmup 500 ms; seven samples with repeats calibrated for 2 ms (minimum 3); wrapper constructors warmed 1000 times before 10000 measured constructions.",
+  "results": [
+    {
+      "stage": "stage4",
+      "launch": 1,
+      "compilerSha256": "6BB026C07C31EAC44F991C7000A4C6A6E1143FE76D89FA2542845F1C7D2AAD53",
+      "cliCompileMs": 1060.2692,
+      "measurement": {
+        "schemaVersion": 1,
+        "assemblySha256": "385FB68F3C84167B86E6AD78EE9E27C3CA5885137590F5E9A879C9BB66246B50",
+        "assemblyBytes": 270336,
+        "emittedIlBytes": 177184,
+        "programMethods": [
+          {
+            "Name": "restAdd4",
+            "ilBytes": 457
+          },
+          {
+            "Name": "restAdd4$rest$arity4$variant0",
+            "ilBytes": 18
+          },
+          {
+            "Name": "fixedAdd4",
+            "ilBytes": 18
+          },
+          {
+            "Name": "restPick",
+            "ilBytes": 455
+          },
+          {
+            "Name": "restPick$rest$arity4$variant0",
+            "ilBytes": 19
+          },
+          {
+            "Name": "packedLength",
+            "ilBytes": 199
+          },
+          {
+            "Name": "escapeRest",
+            "ilBytes": 8
+          },
+          {
+            "Name": "restFixedParameters",
+            "ilBytes": 131
+          },
+          {
+            "Name": "restDirect",
+            "ilBytes": 131
+          },
+          {
+            "Name": "restAlias",
+            "ilBytes": 165
+          },
+          {
+            "Name": "restConstantIndex",
+            "ilBytes": 144
+          },
+          {
+            "Name": "restVaryingIndex",
+            "ilBytes": 168
+          },
+          {
+            "Name": "restPacking",
+            "ilBytes": 161
+          },
+          {
+            "Name": "restEscaping",
+            "ilBytes": 286
+          },
+          {
+            "Name": "restSpread",
+            "ilBytes": 222
+          },
+          {
+            "Name": "restUnknownTarget",
+            "ilBytes": 188
+          },
+          {
+            "Name": "restDynamicDispatch",
+            "ilBytes": 52
+          },
+          {
+            "Name": "restSpreadLength",
+            "ilBytes": 347
+          },
+          {
+            "Name": "restUnknownLength",
+            "ilBytes": 308
+          },
+          {
+            "Name": "restDynamicLength",
+            "ilBytes": 52
+          },
+          {
+            "Name": "restAddExtra",
+            "ilBytes": 467
+          },
+          {
+            "Name": "restMutatingExtra",
+            "ilBytes": 655
+          },
+          {
+            "Name": "restAlternatingInner",
+            "ilBytes": 226
+          },
+          {
+            "Name": "restAlternating",
+            "ilBytes": 85
+          },
+          {
+            "Name": "restMixedTargets",
+            "ilBytes": 85
+          },
+          {
+            "Name": "restReadTarget",
+            "ilBytes": 38
+          },
+          {
+            "Name": "restLengthTarget",
+            "ilBytes": 38
+          },
+          {
+            "Name": "$InitScript_NumericRest",
+            "ilBytes": 17
+          },
+          {
+            "Name": "Main",
+            "ilBytes": 48
+          }
+        ],
+        "wrapperConstruction": [
+          {
+            "target": "restAdd4",
+            "hasCapability": false,
+            "bytesPerConstruction": 1032.0128,
+            "microsecondsPerConstruction": 4.26194
+          },
+          {
+            "target": "restMutatingExtra",
+            "hasCapability": false,
+            "bytesPerConstruction": 1048,
+            "microsecondsPerConstruction": 3.25381
+          }
+        ],
+        "calls": [
+          {
+            "target": "restAdd4",
+            "n": 10000,
+            "innerRepeats": 4,
+            "meanMs": 0.5362357142857143,
+            "minMs": 0.514725,
+            "maxMs": 0.612525,
+            "measurementsMs": [
+              0.612525,
+              0.5327,
+              0.52355,
+              0.514725,
+              0.519325,
+              0.5326,
+              0.518225
+            ],
+            "bytesPerInvocation": 2960000,
+            "bytesPerInnerCall": 296
+          },
+          {
+            "target": "restAdd4",
+            "n": 100000,
+            "innerRepeats": 3,
+            "meanMs": 5.222685714285714,
+            "minMs": 5.0536,
+            "maxMs": 5.445166666666666,
+            "measurementsMs": [
+              5.445166666666666,
+              5.3297,
+              5.212533333333334,
+              5.0536,
+              5.0979,
+              5.0666,
+              5.3533
+            ],
+            "bytesPerInvocation": 29600000,
+            "bytesPerInnerCall": 296
+          },
+          {
+            "target": "restMutatingExtra",
+            "n": 10000,
+            "innerRepeats": 3,
+            "meanMs": 1.0105333333333333,
+            "minMs": 0.9598333333333334,
+            "maxMs": 1.0765,
+            "measurementsMs": [
+              1.0551,
+              1.0765,
+              1.0449333333333333,
+              0.9751666666666666,
+              0.9598333333333334,
+              0.9782666666666667,
+              0.9839333333333333
+            ],
+            "bytesPerInvocation": 3680131.0476190476,
+            "bytesPerInnerCall": 368.01310476190474
+          },
+          {
+            "target": "restMutatingExtra",
+            "n": 100000,
+            "innerRepeats": 3,
+            "meanMs": 10.632680952380952,
+            "minMs": 10.290799999999999,
+            "maxMs": 10.956766666666667,
+            "measurementsMs": [
+              10.956766666666667,
+              10.687199999999999,
+              10.460233333333333,
+              10.290799999999999,
+              10.7387,
+              10.7299,
+              10.565166666666666
+            ],
+            "bytesPerInvocation": 36801441.52380952,
+            "bytesPerInnerCall": 368.01441523809524
+          }
+        ]
+      }
+    },
+    {
+      "stage": "stage5-closed",
+      "launch": 1,
+      "compilerSha256": "95DF7B5DFF347A5D28565216CF8315E48612C341AA6770DA8423065642BE544D",
+      "cliCompileMs": 1214.1129,
+      "measurement": {
+        "schemaVersion": 1,
+        "assemblySha256": "E9D224E2E4D4A89DB215D09961C9502E1E41E965B32B1CE727B45CE94AC6ACF9",
+        "assemblyBytes": 270848,
+        "emittedIlBytes": 177565,
+        "programMethods": [
+          {
+            "Name": "restAdd4",
+            "ilBytes": 457
+          },
+          {
+            "Name": "restAdd4$rest$arity4$variant0",
+            "ilBytes": 18
+          },
+          {
+            "Name": "restAdd4$numericRest4<Entry>",
+            "ilBytes": 11
+          },
+          {
+            "Name": "fixedAdd4",
+            "ilBytes": 18
+          },
+          {
+            "Name": "restPick",
+            "ilBytes": 455
+          },
+          {
+            "Name": "restPick$rest$arity4$variant0",
+            "ilBytes": 19
+          },
+          {
+            "Name": "packedLength",
+            "ilBytes": 199
+          },
+          {
+            "Name": "escapeRest",
+            "ilBytes": 8
+          },
+          {
+            "Name": "restFixedParameters",
+            "ilBytes": 131
+          },
+          {
+            "Name": "restDirect",
+            "ilBytes": 131
+          },
+          {
+            "Name": "restAlias",
+            "ilBytes": 165
+          },
+          {
+            "Name": "restConstantIndex",
+            "ilBytes": 144
+          },
+          {
+            "Name": "restVaryingIndex",
+            "ilBytes": 168
+          },
+          {
+            "Name": "restPacking",
+            "ilBytes": 161
+          },
+          {
+            "Name": "restEscaping",
+            "ilBytes": 286
+          },
+          {
+            "Name": "restSpread",
+            "ilBytes": 222
+          },
+          {
+            "Name": "restUnknownTarget",
+            "ilBytes": 234
+          },
+          {
+            "Name": "restDynamicDispatch",
+            "ilBytes": 52
+          },
+          {
+            "Name": "restSpreadLength",
+            "ilBytes": 347
+          },
+          {
+            "Name": "restUnknownLength",
+            "ilBytes": 308
+          },
+          {
+            "Name": "restDynamicLength",
+            "ilBytes": 52
+          },
+          {
+            "Name": "restAddExtra",
+            "ilBytes": 467
+          },
+          {
+            "Name": "restAddExtra$rest$arity4$variant0",
+            "ilBytes": 28
+          },
+          {
+            "Name": "restAddExtra$numericRest4<Entry>",
+            "ilBytes": 11
+          },
+          {
+            "Name": "restMutatingExtra",
+            "ilBytes": 655
+          },
+          {
+            "Name": "restAlternatingInner",
+            "ilBytes": 273
+          },
+          {
+            "Name": "restAlternating",
+            "ilBytes": 85
+          },
+          {
+            "Name": "restMixedTargets",
+            "ilBytes": 85
+          },
+          {
+            "Name": "restReadTarget",
+            "ilBytes": 38
+          },
+          {
+            "Name": "restLengthTarget",
+            "ilBytes": 38
+          },
+          {
+            "Name": "$InitScript_NumericRest",
+            "ilBytes": 17
+          },
+          {
+            "Name": "Main",
+            "ilBytes": 48
+          }
+        ],
+        "wrapperConstruction": [
+          {
+            "target": "restAdd4",
+            "hasCapability": true,
+            "bytesPerConstruction": 1600.0128,
+            "microsecondsPerConstruction": 7.4261099999999995
+          },
+          {
+            "target": "restMutatingExtra",
+            "hasCapability": false,
+            "bytesPerConstruction": 1056,
+            "microsecondsPerConstruction": 3.2232399999999997
+          }
+        ],
+        "calls": [
+          {
+            "target": "restAdd4",
+            "n": 10000,
+            "innerRepeats": 88,
+            "meanMs": 0.023182305194805197,
+            "minMs": 0.02158068181818182,
+            "maxMs": 0.024428409090909094,
+            "measurementsMs": [
+              0.023195454545454543,
+              0.023772727272727275,
+              0.022867045454545456,
+              0.02323409090909091,
+              0.024428409090909094,
+              0.023197727272727273,
+              0.02158068181818182
+            ],
+            "bytesPerInvocation": 0,
+            "bytesPerInnerCall": 0
+          },
+          {
+            "target": "restAdd4",
+            "n": 100000,
+            "innerRepeats": 11,
+            "meanMs": 0.16663636363636367,
+            "minMs": 0.16042727272727272,
+            "maxMs": 0.17527272727272727,
+            "measurementsMs": [
+              0.1681,
+              0.1694909090909091,
+              0.16274545454545455,
+              0.16042727272727272,
+              0.16490000000000002,
+              0.16551818181818181,
+              0.17527272727272727
+            ],
+            "bytesPerInvocation": 0,
+            "bytesPerInnerCall": 0
+          },
+          {
+            "target": "restMutatingExtra",
+            "n": 10000,
+            "innerRepeats": 3,
+            "meanMs": 1.017461904761905,
+            "minMs": 0.972,
+            "maxMs": 1.1239666666666668,
+            "measurementsMs": [
+              0.972,
+              1.0342666666666667,
+              0.9721333333333333,
+              1.1239666666666668,
+              1.0267666666666666,
+              1.0030333333333334,
+              0.9900666666666668
+            ],
+            "bytesPerInvocation": 3680131.0476190476,
+            "bytesPerInnerCall": 368.01310476190474
+          },
+          {
+            "target": "restMutatingExtra",
+            "n": 100000,
+            "innerRepeats": 3,
+            "meanMs": 9.99887619047619,
+            "minMs": 9.871333333333334,
+            "maxMs": 10.083533333333333,
+            "measurementsMs": [
+              10.083466666666666,
+              9.992933333333333,
+              10.054733333333333,
+              10.083533333333333,
+              9.871333333333334,
+              10.001533333333333,
+              9.9046
+            ],
+            "bytesPerInvocation": 36801474.28571428,
+            "bytesPerInnerCall": 368.01474285714283
+          }
+        ]
+      }
+    },
+    {
+      "stage": "stage5-closed",
+      "launch": 2,
+      "compilerSha256": "95DF7B5DFF347A5D28565216CF8315E48612C341AA6770DA8423065642BE544D",
+      "cliCompileMs": 1036.6822,
+      "measurement": {
+        "schemaVersion": 1,
+        "assemblySha256": "09F8471BDAEE64EA4E7416FF6932223981F5697EDCB13D645A2E4AAEEC4DCF80",
+        "assemblyBytes": 270848,
+        "emittedIlBytes": 177565,
+        "programMethods": [
+          {
+            "Name": "restAdd4",
+            "ilBytes": 457
+          },
+          {
+            "Name": "restAdd4$rest$arity4$variant0",
+            "ilBytes": 18
+          },
+          {
+            "Name": "restAdd4$numericRest4<Entry>",
+            "ilBytes": 11
+          },
+          {
+            "Name": "fixedAdd4",
+            "ilBytes": 18
+          },
+          {
+            "Name": "restPick",
+            "ilBytes": 455
+          },
+          {
+            "Name": "restPick$rest$arity4$variant0",
+            "ilBytes": 19
+          },
+          {
+            "Name": "packedLength",
+            "ilBytes": 199
+          },
+          {
+            "Name": "escapeRest",
+            "ilBytes": 8
+          },
+          {
+            "Name": "restFixedParameters",
+            "ilBytes": 131
+          },
+          {
+            "Name": "restDirect",
+            "ilBytes": 131
+          },
+          {
+            "Name": "restAlias",
+            "ilBytes": 165
+          },
+          {
+            "Name": "restConstantIndex",
+            "ilBytes": 144
+          },
+          {
+            "Name": "restVaryingIndex",
+            "ilBytes": 168
+          },
+          {
+            "Name": "restPacking",
+            "ilBytes": 161
+          },
+          {
+            "Name": "restEscaping",
+            "ilBytes": 286
+          },
+          {
+            "Name": "restSpread",
+            "ilBytes": 222
+          },
+          {
+            "Name": "restUnknownTarget",
+            "ilBytes": 234
+          },
+          {
+            "Name": "restDynamicDispatch",
+            "ilBytes": 52
+          },
+          {
+            "Name": "restSpreadLength",
+            "ilBytes": 347
+          },
+          {
+            "Name": "restUnknownLength",
+            "ilBytes": 308
+          },
+          {
+            "Name": "restDynamicLength",
+            "ilBytes": 52
+          },
+          {
+            "Name": "restAddExtra",
+            "ilBytes": 467
+          },
+          {
+            "Name": "restAddExtra$rest$arity4$variant0",
+            "ilBytes": 28
+          },
+          {
+            "Name": "restAddExtra$numericRest4<Entry>",
+            "ilBytes": 11
+          },
+          {
+            "Name": "restMutatingExtra",
+            "ilBytes": 655
+          },
+          {
+            "Name": "restAlternatingInner",
+            "ilBytes": 273
+          },
+          {
+            "Name": "restAlternating",
+            "ilBytes": 85
+          },
+          {
+            "Name": "restMixedTargets",
+            "ilBytes": 85
+          },
+          {
+            "Name": "restReadTarget",
+            "ilBytes": 38
+          },
+          {
+            "Name": "restLengthTarget",
+            "ilBytes": 38
+          },
+          {
+            "Name": "$InitScript_NumericRest",
+            "ilBytes": 17
+          },
+          {
+            "Name": "Main",
+            "ilBytes": 48
+          }
+        ],
+        "wrapperConstruction": [
+          {
+            "target": "restAdd4",
+            "hasCapability": true,
+            "bytesPerConstruction": 1600.0128,
+            "microsecondsPerConstruction": 6.50008
+          },
+          {
+            "target": "restMutatingExtra",
+            "hasCapability": false,
+            "bytesPerConstruction": 1056,
+            "microsecondsPerConstruction": 3.22535
+          }
+        ],
+        "calls": [
+          {
+            "target": "restAdd4",
+            "n": 10000,
+            "innerRepeats": 100,
+            "meanMs": 0.01917585714285714,
+            "minMs": 0.018645000000000002,
+            "maxMs": 0.019973,
+            "measurementsMs": [
+              0.019092,
+              0.019973,
+              0.019559,
+              0.019125,
+              0.018718,
+              0.018645000000000002,
+              0.019119
+            ],
+            "bytesPerInvocation": 0,
+            "bytesPerInnerCall": 0
+          },
+          {
+            "target": "restAdd4",
+            "n": 100000,
+            "innerRepeats": 11,
+            "meanMs": 0.18017402597402596,
+            "minMs": 0.15435454545454544,
+            "maxMs": 0.20486363636363636,
+            "measurementsMs": [
+              0.16932727272727274,
+              0.18162727272727272,
+              0.17075454545454546,
+              0.19215454545454547,
+              0.20486363636363636,
+              0.18813636363636366,
+              0.15435454545454544
+            ],
+            "bytesPerInvocation": 0,
+            "bytesPerInnerCall": 0
+          },
+          {
+            "target": "restMutatingExtra",
+            "n": 10000,
+            "innerRepeats": 3,
+            "meanMs": 1.0343666666666667,
+            "minMs": 0.9975333333333333,
+            "maxMs": 1.1510333333333334,
+            "measurementsMs": [
+              1.0161,
+              1.1510333333333334,
+              1.0102333333333333,
+              0.9975333333333333,
+              1.0071999999999999,
+              1.0542333333333334,
+              1.0042333333333333
+            ],
+            "bytesPerInvocation": 3680131.0476190476,
+            "bytesPerInnerCall": 368.01310476190474
+          },
+          {
+            "target": "restMutatingExtra",
+            "n": 100000,
+            "innerRepeats": 3,
+            "meanMs": 10.344457142857143,
+            "minMs": 10.181566666666667,
+            "maxMs": 10.648966666666666,
+            "measurementsMs": [
+              10.467333333333334,
+              10.396700000000001,
+              10.2047,
+              10.215366666666666,
+              10.296566666666667,
+              10.181566666666667,
+              10.648966666666666
+            ],
+            "bytesPerInvocation": 36801474.28571428,
+            "bytesPerInnerCall": 368.01474285714283
+          }
+        ]
+      }
+    },
+    {
+      "stage": "stage4",
+      "launch": 2,
+      "compilerSha256": "6BB026C07C31EAC44F991C7000A4C6A6E1143FE76D89FA2542845F1C7D2AAD53",
+      "cliCompileMs": 1019.5129,
+      "measurement": {
+        "schemaVersion": 1,
+        "assemblySha256": "78738068316611D706110872829F9495968E730A1895B0C0FFDC5139EAD25DEE",
+        "assemblyBytes": 270336,
+        "emittedIlBytes": 177184,
+        "programMethods": [
+          {
+            "Name": "restAdd4",
+            "ilBytes": 457
+          },
+          {
+            "Name": "restAdd4$rest$arity4$variant0",
+            "ilBytes": 18
+          },
+          {
+            "Name": "fixedAdd4",
+            "ilBytes": 18
+          },
+          {
+            "Name": "restPick",
+            "ilBytes": 455
+          },
+          {
+            "Name": "restPick$rest$arity4$variant0",
+            "ilBytes": 19
+          },
+          {
+            "Name": "packedLength",
+            "ilBytes": 199
+          },
+          {
+            "Name": "escapeRest",
+            "ilBytes": 8
+          },
+          {
+            "Name": "restFixedParameters",
+            "ilBytes": 131
+          },
+          {
+            "Name": "restDirect",
+            "ilBytes": 131
+          },
+          {
+            "Name": "restAlias",
+            "ilBytes": 165
+          },
+          {
+            "Name": "restConstantIndex",
+            "ilBytes": 144
+          },
+          {
+            "Name": "restVaryingIndex",
+            "ilBytes": 168
+          },
+          {
+            "Name": "restPacking",
+            "ilBytes": 161
+          },
+          {
+            "Name": "restEscaping",
+            "ilBytes": 286
+          },
+          {
+            "Name": "restSpread",
+            "ilBytes": 222
+          },
+          {
+            "Name": "restUnknownTarget",
+            "ilBytes": 188
+          },
+          {
+            "Name": "restDynamicDispatch",
+            "ilBytes": 52
+          },
+          {
+            "Name": "restSpreadLength",
+            "ilBytes": 347
+          },
+          {
+            "Name": "restUnknownLength",
+            "ilBytes": 308
+          },
+          {
+            "Name": "restDynamicLength",
+            "ilBytes": 52
+          },
+          {
+            "Name": "restAddExtra",
+            "ilBytes": 467
+          },
+          {
+            "Name": "restMutatingExtra",
+            "ilBytes": 655
+          },
+          {
+            "Name": "restAlternatingInner",
+            "ilBytes": 226
+          },
+          {
+            "Name": "restAlternating",
+            "ilBytes": 85
+          },
+          {
+            "Name": "restMixedTargets",
+            "ilBytes": 85
+          },
+          {
+            "Name": "restReadTarget",
+            "ilBytes": 38
+          },
+          {
+            "Name": "restLengthTarget",
+            "ilBytes": 38
+          },
+          {
+            "Name": "$InitScript_NumericRest",
+            "ilBytes": 17
+          },
+          {
+            "Name": "Main",
+            "ilBytes": 48
+          }
+        ],
+        "wrapperConstruction": [
+          {
+            "target": "restAdd4",
+            "hasCapability": false,
+            "bytesPerConstruction": 1032.0128,
+            "microsecondsPerConstruction": 4.13438
+          },
+          {
+            "target": "restMutatingExtra",
+            "hasCapability": false,
+            "bytesPerConstruction": 1048,
+            "microsecondsPerConstruction": 2.98733
+          }
+        ],
+        "calls": [
+          {
+            "target": "restAdd4",
+            "n": 10000,
+            "innerRepeats": 5,
+            "meanMs": 0.5205400000000001,
+            "minMs": 0.49026,
+            "maxMs": 0.60128,
+            "measurementsMs": [
+              0.60128,
+              0.4998,
+              0.49286,
+              0.4984,
+              0.52742,
+              0.53376,
+              0.49026
+            ],
+            "bytesPerInvocation": 2960000,
+            "bytesPerInnerCall": 296
+          },
+          {
+            "target": "restAdd4",
+            "n": 100000,
+            "innerRepeats": 3,
+            "meanMs": 5.0364666666666675,
+            "minMs": 4.936,
+            "maxMs": 5.161433333333333,
+            "measurementsMs": [
+              5.161433333333333,
+              4.936,
+              5.0892333333333335,
+              5.1362,
+              4.982600000000001,
+              4.954,
+              4.9958
+            ],
+            "bytesPerInvocation": 29600000,
+            "bytesPerInnerCall": 296
+          },
+          {
+            "target": "restMutatingExtra",
+            "n": 10000,
+            "innerRepeats": 3,
+            "meanMs": 1.032247619047619,
+            "minMs": 0.9893000000000001,
+            "maxMs": 1.1062333333333334,
+            "measurementsMs": [
+              1.1062333333333334,
+              1.0043,
+              1.0359,
+              0.9893000000000001,
+              1.0175,
+              1.0302666666666667,
+              1.0422333333333333
+            ],
+            "bytesPerInvocation": 3680131.0476190476,
+            "bytesPerInnerCall": 368.01310476190474
+          },
+          {
+            "target": "restMutatingExtra",
+            "n": 100000,
+            "innerRepeats": 3,
+            "meanMs": 10.284514285714286,
+            "minMs": 10.1578,
+            "maxMs": 10.580233333333334,
+            "measurementsMs": [
+              10.395766666666667,
+              10.1578,
+              10.212033333333332,
+              10.232366666666666,
+              10.246333333333334,
+              10.167066666666667,
+              10.580233333333334
+            ],
+            "bytesPerInvocation": 36801474.28571428,
+            "bytesPerInnerCall": 368.01474285714283
+          }
+        ]
+      }
+    },
+    {
+      "stage": "stage4",
+      "launch": 3,
+      "compilerSha256": "6BB026C07C31EAC44F991C7000A4C6A6E1143FE76D89FA2542845F1C7D2AAD53",
+      "cliCompileMs": 1024.0122,
+      "measurement": {
+        "schemaVersion": 1,
+        "assemblySha256": "3FE6B2A2B3A4805A34AFE4C2FC8A933FF354F49520A6E3DF0C9FB392EFDE8D81",
+        "assemblyBytes": 270336,
+        "emittedIlBytes": 177184,
+        "programMethods": [
+          {
+            "Name": "restAdd4",
+            "ilBytes": 457
+          },
+          {
+            "Name": "restAdd4$rest$arity4$variant0",
+            "ilBytes": 18
+          },
+          {
+            "Name": "fixedAdd4",
+            "ilBytes": 18
+          },
+          {
+            "Name": "restPick",
+            "ilBytes": 455
+          },
+          {
+            "Name": "restPick$rest$arity4$variant0",
+            "ilBytes": 19
+          },
+          {
+            "Name": "packedLength",
+            "ilBytes": 199
+          },
+          {
+            "Name": "escapeRest",
+            "ilBytes": 8
+          },
+          {
+            "Name": "restFixedParameters",
+            "ilBytes": 131
+          },
+          {
+            "Name": "restDirect",
+            "ilBytes": 131
+          },
+          {
+            "Name": "restAlias",
+            "ilBytes": 165
+          },
+          {
+            "Name": "restConstantIndex",
+            "ilBytes": 144
+          },
+          {
+            "Name": "restVaryingIndex",
+            "ilBytes": 168
+          },
+          {
+            "Name": "restPacking",
+            "ilBytes": 161
+          },
+          {
+            "Name": "restEscaping",
+            "ilBytes": 286
+          },
+          {
+            "Name": "restSpread",
+            "ilBytes": 222
+          },
+          {
+            "Name": "restUnknownTarget",
+            "ilBytes": 188
+          },
+          {
+            "Name": "restDynamicDispatch",
+            "ilBytes": 52
+          },
+          {
+            "Name": "restSpreadLength",
+            "ilBytes": 347
+          },
+          {
+            "Name": "restUnknownLength",
+            "ilBytes": 308
+          },
+          {
+            "Name": "restDynamicLength",
+            "ilBytes": 52
+          },
+          {
+            "Name": "restAddExtra",
+            "ilBytes": 467
+          },
+          {
+            "Name": "restMutatingExtra",
+            "ilBytes": 655
+          },
+          {
+            "Name": "restAlternatingInner",
+            "ilBytes": 226
+          },
+          {
+            "Name": "restAlternating",
+            "ilBytes": 85
+          },
+          {
+            "Name": "restMixedTargets",
+            "ilBytes": 85
+          },
+          {
+            "Name": "restReadTarget",
+            "ilBytes": 38
+          },
+          {
+            "Name": "restLengthTarget",
+            "ilBytes": 38
+          },
+          {
+            "Name": "$InitScript_NumericRest",
+            "ilBytes": 17
+          },
+          {
+            "Name": "Main",
+            "ilBytes": 48
+          }
+        ],
+        "wrapperConstruction": [
+          {
+            "target": "restAdd4",
+            "hasCapability": false,
+            "bytesPerConstruction": 1032.0128,
+            "microsecondsPerConstruction": 4.16932
+          },
+          {
+            "target": "restMutatingExtra",
+            "hasCapability": false,
+            "bytesPerConstruction": 1048,
+            "microsecondsPerConstruction": 3.0529599999999997
+          }
+        ],
+        "calls": [
+          {
+            "target": "restAdd4",
+            "n": 10000,
+            "innerRepeats": 5,
+            "meanMs": 0.5109514285714286,
+            "minMs": 0.49522000000000005,
+            "maxMs": 0.56784,
+            "measurementsMs": [
+              0.56784,
+              0.49904000000000004,
+              0.50218,
+              0.50044,
+              0.49522000000000005,
+              0.51188,
+              0.5000600000000001
+            ],
+            "bytesPerInvocation": 2960000,
+            "bytesPerInnerCall": 296
+          },
+          {
+            "target": "restAdd4",
+            "n": 100000,
+            "innerRepeats": 3,
+            "meanMs": 5.0455523809523815,
+            "minMs": 4.980333333333333,
+            "maxMs": 5.1940333333333335,
+            "measurementsMs": [
+              5.1940333333333335,
+              4.988733333333333,
+              5.001433333333334,
+              4.980333333333333,
+              5.1328000000000005,
+              5.009566666666667,
+              5.011966666666667
+            ],
+            "bytesPerInvocation": 29600000,
+            "bytesPerInnerCall": 296
+          },
+          {
+            "target": "restMutatingExtra",
+            "n": 10000,
+            "innerRepeats": 3,
+            "meanMs": 1.0202714285714285,
+            "minMs": 0.9930333333333333,
+            "maxMs": 1.0638333333333334,
+            "measurementsMs": [
+              1.0035333333333334,
+              1.0638333333333334,
+              1.0175333333333334,
+              0.9930333333333333,
+              0.9962666666666666,
+              1.0600333333333334,
+              1.0076666666666667
+            ],
+            "bytesPerInvocation": 3680131.0476190476,
+            "bytesPerInnerCall": 368.01310476190474
+          },
+          {
+            "target": "restMutatingExtra",
+            "n": 100000,
+            "innerRepeats": 3,
+            "meanMs": 10.152633333333332,
+            "minMs": 10.006466666666666,
+            "maxMs": 10.273133333333334,
+            "measurementsMs": [
+              10.235666666666667,
+              10.2073,
+              10.1755,
+              10.130733333333334,
+              10.039633333333333,
+              10.006466666666666,
+              10.273133333333334
+            ],
+            "bytesPerInvocation": 36801474.28571428,
+            "bytesPerInnerCall": 368.01474285714283
+          }
+        ]
+      }
+    },
+    {
+      "stage": "stage5-closed",
+      "launch": 3,
+      "compilerSha256": "95DF7B5DFF347A5D28565216CF8315E48612C341AA6770DA8423065642BE544D",
+      "cliCompileMs": 1016.0858,
+      "measurement": {
+        "schemaVersion": 1,
+        "assemblySha256": "53353FAD070E54118407E592A60D5593F37E6CF9B7B2B31C0C4B16BFEC2EF92B",
+        "assemblyBytes": 270848,
+        "emittedIlBytes": 177565,
+        "programMethods": [
+          {
+            "Name": "restAdd4",
+            "ilBytes": 457
+          },
+          {
+            "Name": "restAdd4$rest$arity4$variant0",
+            "ilBytes": 18
+          },
+          {
+            "Name": "restAdd4$numericRest4<Entry>",
+            "ilBytes": 11
+          },
+          {
+            "Name": "fixedAdd4",
+            "ilBytes": 18
+          },
+          {
+            "Name": "restPick",
+            "ilBytes": 455
+          },
+          {
+            "Name": "restPick$rest$arity4$variant0",
+            "ilBytes": 19
+          },
+          {
+            "Name": "packedLength",
+            "ilBytes": 199
+          },
+          {
+            "Name": "escapeRest",
+            "ilBytes": 8
+          },
+          {
+            "Name": "restFixedParameters",
+            "ilBytes": 131
+          },
+          {
+            "Name": "restDirect",
+            "ilBytes": 131
+          },
+          {
+            "Name": "restAlias",
+            "ilBytes": 165
+          },
+          {
+            "Name": "restConstantIndex",
+            "ilBytes": 144
+          },
+          {
+            "Name": "restVaryingIndex",
+            "ilBytes": 168
+          },
+          {
+            "Name": "restPacking",
+            "ilBytes": 161
+          },
+          {
+            "Name": "restEscaping",
+            "ilBytes": 286
+          },
+          {
+            "Name": "restSpread",
+            "ilBytes": 222
+          },
+          {
+            "Name": "restUnknownTarget",
+            "ilBytes": 234
+          },
+          {
+            "Name": "restDynamicDispatch",
+            "ilBytes": 52
+          },
+          {
+            "Name": "restSpreadLength",
+            "ilBytes": 347
+          },
+          {
+            "Name": "restUnknownLength",
+            "ilBytes": 308
+          },
+          {
+            "Name": "restDynamicLength",
+            "ilBytes": 52
+          },
+          {
+            "Name": "restAddExtra",
+            "ilBytes": 467
+          },
+          {
+            "Name": "restAddExtra$rest$arity4$variant0",
+            "ilBytes": 28
+          },
+          {
+            "Name": "restAddExtra$numericRest4<Entry>",
+            "ilBytes": 11
+          },
+          {
+            "Name": "restMutatingExtra",
+            "ilBytes": 655
+          },
+          {
+            "Name": "restAlternatingInner",
+            "ilBytes": 273
+          },
+          {
+            "Name": "restAlternating",
+            "ilBytes": 85
+          },
+          {
+            "Name": "restMixedTargets",
+            "ilBytes": 85
+          },
+          {
+            "Name": "restReadTarget",
+            "ilBytes": 38
+          },
+          {
+            "Name": "restLengthTarget",
+            "ilBytes": 38
+          },
+          {
+            "Name": "$InitScript_NumericRest",
+            "ilBytes": 17
+          },
+          {
+            "Name": "Main",
+            "ilBytes": 48
+          }
+        ],
+        "wrapperConstruction": [
+          {
+            "target": "restAdd4",
+            "hasCapability": true,
+            "bytesPerConstruction": 1600.0128,
+            "microsecondsPerConstruction": 6.637949999999999
+          },
+          {
+            "target": "restMutatingExtra",
+            "hasCapability": false,
+            "bytesPerConstruction": 1056,
+            "microsecondsPerConstruction": 3.25345
+          }
+        ],
+        "calls": [
+          {
+            "target": "restAdd4",
+            "n": 10000,
+            "innerRepeats": 104,
+            "meanMs": 0.019013873626373627,
+            "minMs": 0.018686538461538463,
+            "maxMs": 0.019702884615384615,
+            "measurementsMs": [
+              0.018915384615384615,
+              0.01869903846153846,
+              0.019009615384615385,
+              0.018864423076923077,
+              0.018686538461538463,
+              0.01921923076923077,
+              0.019702884615384615
+            ],
+            "bytesPerInvocation": 0,
+            "bytesPerInnerCall": 0
+          },
+          {
+            "target": "restAdd4",
+            "n": 100000,
+            "innerRepeats": 13,
+            "meanMs": 0.16023406593406594,
+            "minMs": 0.1543692307692308,
+            "maxMs": 0.16626923076923078,
+            "measurementsMs": [
+              0.1543692307692308,
+              0.16626923076923078,
+              0.16003076923076923,
+              0.16339230769230767,
+              0.16101538461538462,
+              0.15449230769230768,
+              0.16206923076923077
+            ],
+            "bytesPerInvocation": 0,
+            "bytesPerInnerCall": 0
+          },
+          {
+            "target": "restMutatingExtra",
+            "n": 10000,
+            "innerRepeats": 3,
+            "meanMs": 1.0161476190476189,
+            "minMs": 0.9853999999999999,
+            "maxMs": 1.0621666666666667,
+            "measurementsMs": [
+              1.0447666666666666,
+              0.9975999999999999,
+              0.9853999999999999,
+              1.0046,
+              1.0101,
+              1.0621666666666667,
+              1.0084
+            ],
+            "bytesPerInvocation": 3680163.8095238097,
+            "bytesPerInnerCall": 368.0163809523809
+          },
+          {
+            "target": "restMutatingExtra",
+            "n": 100000,
+            "innerRepeats": 3,
+            "meanMs": 10.702661904761905,
+            "minMs": 10.522233333333334,
+            "maxMs": 10.9869,
+            "measurementsMs": [
+              10.9869,
+              10.8558,
+              10.653033333333333,
+              10.600633333333333,
+              10.683633333333333,
+              10.6164,
+              10.522233333333334
+            ],
+            "bytesPerInvocation": 36801474.28571428,
+            "bytesPerInnerCall": 368.01474285714283
+          }
+        ]
+      }
+    },
+    {
+      "stage": "stage5-closed",
+      "launch": 4,
+      "compilerSha256": "95DF7B5DFF347A5D28565216CF8315E48612C341AA6770DA8423065642BE544D",
+      "cliCompileMs": 1018.5928,
+      "measurement": {
+        "schemaVersion": 1,
+        "assemblySha256": "CDDD98C4B4AADBE79E99B3B90F13D8C3B2CEEBE38426FE5C848B964EE58650F4",
+        "assemblyBytes": 270848,
+        "emittedIlBytes": 177565,
+        "programMethods": [
+          {
+            "Name": "restAdd4",
+            "ilBytes": 457
+          },
+          {
+            "Name": "restAdd4$rest$arity4$variant0",
+            "ilBytes": 18
+          },
+          {
+            "Name": "restAdd4$numericRest4<Entry>",
+            "ilBytes": 11
+          },
+          {
+            "Name": "fixedAdd4",
+            "ilBytes": 18
+          },
+          {
+            "Name": "restPick",
+            "ilBytes": 455
+          },
+          {
+            "Name": "restPick$rest$arity4$variant0",
+            "ilBytes": 19
+          },
+          {
+            "Name": "packedLength",
+            "ilBytes": 199
+          },
+          {
+            "Name": "escapeRest",
+            "ilBytes": 8
+          },
+          {
+            "Name": "restFixedParameters",
+            "ilBytes": 131
+          },
+          {
+            "Name": "restDirect",
+            "ilBytes": 131
+          },
+          {
+            "Name": "restAlias",
+            "ilBytes": 165
+          },
+          {
+            "Name": "restConstantIndex",
+            "ilBytes": 144
+          },
+          {
+            "Name": "restVaryingIndex",
+            "ilBytes": 168
+          },
+          {
+            "Name": "restPacking",
+            "ilBytes": 161
+          },
+          {
+            "Name": "restEscaping",
+            "ilBytes": 286
+          },
+          {
+            "Name": "restSpread",
+            "ilBytes": 222
+          },
+          {
+            "Name": "restUnknownTarget",
+            "ilBytes": 234
+          },
+          {
+            "Name": "restDynamicDispatch",
+            "ilBytes": 52
+          },
+          {
+            "Name": "restSpreadLength",
+            "ilBytes": 347
+          },
+          {
+            "Name": "restUnknownLength",
+            "ilBytes": 308
+          },
+          {
+            "Name": "restDynamicLength",
+            "ilBytes": 52
+          },
+          {
+            "Name": "restAddExtra",
+            "ilBytes": 467
+          },
+          {
+            "Name": "restAddExtra$rest$arity4$variant0",
+            "ilBytes": 28
+          },
+          {
+            "Name": "restAddExtra$numericRest4<Entry>",
+            "ilBytes": 11
+          },
+          {
+            "Name": "restMutatingExtra",
+            "ilBytes": 655
+          },
+          {
+            "Name": "restAlternatingInner",
+            "ilBytes": 273
+          },
+          {
+            "Name": "restAlternating",
+            "ilBytes": 85
+          },
+          {
+            "Name": "restMixedTargets",
+            "ilBytes": 85
+          },
+          {
+            "Name": "restReadTarget",
+            "ilBytes": 38
+          },
+          {
+            "Name": "restLengthTarget",
+            "ilBytes": 38
+          },
+          {
+            "Name": "$InitScript_NumericRest",
+            "ilBytes": 17
+          },
+          {
+            "Name": "Main",
+            "ilBytes": 48
+          }
+        ],
+        "wrapperConstruction": [
+          {
+            "target": "restAdd4",
+            "hasCapability": true,
+            "bytesPerConstruction": 1600.0128,
+            "microsecondsPerConstruction": 6.23575
+          },
+          {
+            "target": "restMutatingExtra",
+            "hasCapability": false,
+            "bytesPerConstruction": 1056,
+            "microsecondsPerConstruction": 3.26976
+          }
+        ],
+        "calls": [
+          {
+            "target": "restAdd4",
+            "n": 10000,
+            "innerRepeats": 104,
+            "meanMs": 0.019160164835164833,
+            "minMs": 0.018516346153846154,
+            "maxMs": 0.02004326923076923,
+            "measurementsMs": [
+              0.01917980769230769,
+              0.018516346153846154,
+              0.019141346153846155,
+              0.01934326923076923,
+              0.02004326923076923,
+              0.018821153846153845,
+              0.019075961538461538
+            ],
+            "bytesPerInvocation": 0,
+            "bytesPerInnerCall": 0
+          },
+          {
+            "target": "restAdd4",
+            "n": 100000,
+            "innerRepeats": 11,
+            "meanMs": 0.18802077922077925,
+            "minMs": 0.18250909090909093,
+            "maxMs": 0.19097272727272727,
+            "measurementsMs": [
+              0.18685454545454547,
+              0.19097272727272727,
+              0.18250909090909093,
+              0.18576363636363638,
+              0.18948181818181817,
+              0.19022727272727272,
+              0.19033636363636364
+            ],
+            "bytesPerInvocation": 0,
+            "bytesPerInnerCall": 0
+          },
+          {
+            "target": "restMutatingExtra",
+            "n": 10000,
+            "innerRepeats": 3,
+            "meanMs": 1.0678619047619047,
+            "minMs": 1.0078666666666667,
+            "maxMs": 1.2030333333333334,
+            "measurementsMs": [
+              1.2030333333333334,
+              1.0360333333333334,
+              1.0496,
+              1.0419,
+              1.0078666666666667,
+              1.0769666666666666,
+              1.0596333333333334
+            ],
+            "bytesPerInvocation": 3680163.8095238097,
+            "bytesPerInnerCall": 368.0163809523809
+          },
+          {
+            "target": "restMutatingExtra",
+            "n": 100000,
+            "innerRepeats": 3,
+            "meanMs": 9.84620476190476,
+            "minMs": 9.641133333333334,
+            "maxMs": 10.116933333333334,
+            "measurementsMs": [
+              9.9301,
+              10.116933333333334,
+              9.7703,
+              9.816699999999999,
+              9.910933333333334,
+              9.737333333333334,
+              9.641133333333334
+            ],
+            "bytesPerInvocation": 36801474.28571428,
+            "bytesPerInnerCall": 368.01474285714283
+          }
+        ]
+      }
+    },
+    {
+      "stage": "stage4",
+      "launch": 4,
+      "compilerSha256": "6BB026C07C31EAC44F991C7000A4C6A6E1143FE76D89FA2542845F1C7D2AAD53",
+      "cliCompileMs": 1024.8353,
+      "measurement": {
+        "schemaVersion": 1,
+        "assemblySha256": "D0329F1D0CCFE1204AFBC214C19C279CD273E0CC9E75C87E57766B8F89AEDB39",
+        "assemblyBytes": 270336,
+        "emittedIlBytes": 177184,
+        "programMethods": [
+          {
+            "Name": "restAdd4",
+            "ilBytes": 457
+          },
+          {
+            "Name": "restAdd4$rest$arity4$variant0",
+            "ilBytes": 18
+          },
+          {
+            "Name": "fixedAdd4",
+            "ilBytes": 18
+          },
+          {
+            "Name": "restPick",
+            "ilBytes": 455
+          },
+          {
+            "Name": "restPick$rest$arity4$variant0",
+            "ilBytes": 19
+          },
+          {
+            "Name": "packedLength",
+            "ilBytes": 199
+          },
+          {
+            "Name": "escapeRest",
+            "ilBytes": 8
+          },
+          {
+            "Name": "restFixedParameters",
+            "ilBytes": 131
+          },
+          {
+            "Name": "restDirect",
+            "ilBytes": 131
+          },
+          {
+            "Name": "restAlias",
+            "ilBytes": 165
+          },
+          {
+            "Name": "restConstantIndex",
+            "ilBytes": 144
+          },
+          {
+            "Name": "restVaryingIndex",
+            "ilBytes": 168
+          },
+          {
+            "Name": "restPacking",
+            "ilBytes": 161
+          },
+          {
+            "Name": "restEscaping",
+            "ilBytes": 286
+          },
+          {
+            "Name": "restSpread",
+            "ilBytes": 222
+          },
+          {
+            "Name": "restUnknownTarget",
+            "ilBytes": 188
+          },
+          {
+            "Name": "restDynamicDispatch",
+            "ilBytes": 52
+          },
+          {
+            "Name": "restSpreadLength",
+            "ilBytes": 347
+          },
+          {
+            "Name": "restUnknownLength",
+            "ilBytes": 308
+          },
+          {
+            "Name": "restDynamicLength",
+            "ilBytes": 52
+          },
+          {
+            "Name": "restAddExtra",
+            "ilBytes": 467
+          },
+          {
+            "Name": "restMutatingExtra",
+            "ilBytes": 655
+          },
+          {
+            "Name": "restAlternatingInner",
+            "ilBytes": 226
+          },
+          {
+            "Name": "restAlternating",
+            "ilBytes": 85
+          },
+          {
+            "Name": "restMixedTargets",
+            "ilBytes": 85
+          },
+          {
+            "Name": "restReadTarget",
+            "ilBytes": 38
+          },
+          {
+            "Name": "restLengthTarget",
+            "ilBytes": 38
+          },
+          {
+            "Name": "$InitScript_NumericRest",
+            "ilBytes": 17
+          },
+          {
+            "Name": "Main",
+            "ilBytes": 48
+          }
+        ],
+        "wrapperConstruction": [
+          {
+            "target": "restAdd4",
+            "hasCapability": false,
+            "bytesPerConstruction": 1032.0128,
+            "microsecondsPerConstruction": 4.20899
+          },
+          {
+            "target": "restMutatingExtra",
+            "hasCapability": false,
+            "bytesPerConstruction": 1048,
+            "microsecondsPerConstruction": 3.1732299999999998
+          }
+        ],
+        "calls": [
+          {
+            "target": "restAdd4",
+            "n": 10000,
+            "innerRepeats": 4,
+            "meanMs": 0.49552499999999994,
+            "minMs": 0.48315,
+            "maxMs": 0.505025,
+            "measurementsMs": [
+              0.50485,
+              0.502625,
+              0.49295,
+              0.48315,
+              0.489875,
+              0.4902,
+              0.505025
+            ],
+            "bytesPerInvocation": 2960000,
+            "bytesPerInnerCall": 296
+          },
+          {
+            "target": "restAdd4",
+            "n": 100000,
+            "innerRepeats": 3,
+            "meanMs": 5.054709523809524,
+            "minMs": 4.9492666666666665,
+            "maxMs": 5.492166666666667,
+            "measurementsMs": [
+              5.037533333333333,
+              4.956466666666667,
+              4.9492666666666665,
+              4.957233333333334,
+              5.023733333333333,
+              4.966566666666666,
+              5.492166666666667
+            ],
+            "bytesPerInvocation": 29600000,
+            "bytesPerInnerCall": 296
+          },
+          {
+            "target": "restMutatingExtra",
+            "n": 10000,
+            "innerRepeats": 3,
+            "meanMs": 0.9742952380952381,
+            "minMs": 0.9468333333333333,
+            "maxMs": 1.0454999999999999,
+            "measurementsMs": [
+              1.0454999999999999,
+              0.9512666666666667,
+              0.9676999999999999,
+              0.9929333333333333,
+              0.9563333333333334,
+              0.9594999999999999,
+              0.9468333333333333
+            ],
+            "bytesPerInvocation": 3680131.0476190476,
+            "bytesPerInnerCall": 368.01310476190474
+          },
+          {
+            "target": "restMutatingExtra",
+            "n": 100000,
+            "innerRepeats": 3,
+            "meanMs": 9.861961904761904,
+            "minMs": 9.668533333333334,
+            "maxMs": 10.210666666666667,
+            "measurementsMs": [
+              9.8833,
+              9.724666666666666,
+              9.821966666666667,
+              9.668533333333334,
+              9.8706,
+              9.854000000000001,
+              10.210666666666667
+            ],
+            "bytesPerInvocation": 36801474.28571428,
+            "bytesPerInnerCall": 368.01474285714283
+          }
+        ]
+      }
+    },
+    {
+      "stage": "stage4",
+      "launch": 5,
+      "compilerSha256": "6BB026C07C31EAC44F991C7000A4C6A6E1143FE76D89FA2542845F1C7D2AAD53",
+      "cliCompileMs": 1032.3335,
+      "measurement": {
+        "schemaVersion": 1,
+        "assemblySha256": "67B7A0E2862D8073150143531A37945FF4B453FC9B596E4D2C563CC136791D7B",
+        "assemblyBytes": 270336,
+        "emittedIlBytes": 177184,
+        "programMethods": [
+          {
+            "Name": "restAdd4",
+            "ilBytes": 457
+          },
+          {
+            "Name": "restAdd4$rest$arity4$variant0",
+            "ilBytes": 18
+          },
+          {
+            "Name": "fixedAdd4",
+            "ilBytes": 18
+          },
+          {
+            "Name": "restPick",
+            "ilBytes": 455
+          },
+          {
+            "Name": "restPick$rest$arity4$variant0",
+            "ilBytes": 19
+          },
+          {
+            "Name": "packedLength",
+            "ilBytes": 199
+          },
+          {
+            "Name": "escapeRest",
+            "ilBytes": 8
+          },
+          {
+            "Name": "restFixedParameters",
+            "ilBytes": 131
+          },
+          {
+            "Name": "restDirect",
+            "ilBytes": 131
+          },
+          {
+            "Name": "restAlias",
+            "ilBytes": 165
+          },
+          {
+            "Name": "restConstantIndex",
+            "ilBytes": 144
+          },
+          {
+            "Name": "restVaryingIndex",
+            "ilBytes": 168
+          },
+          {
+            "Name": "restPacking",
+            "ilBytes": 161
+          },
+          {
+            "Name": "restEscaping",
+            "ilBytes": 286
+          },
+          {
+            "Name": "restSpread",
+            "ilBytes": 222
+          },
+          {
+            "Name": "restUnknownTarget",
+            "ilBytes": 188
+          },
+          {
+            "Name": "restDynamicDispatch",
+            "ilBytes": 52
+          },
+          {
+            "Name": "restSpreadLength",
+            "ilBytes": 347
+          },
+          {
+            "Name": "restUnknownLength",
+            "ilBytes": 308
+          },
+          {
+            "Name": "restDynamicLength",
+            "ilBytes": 52
+          },
+          {
+            "Name": "restAddExtra",
+            "ilBytes": 467
+          },
+          {
+            "Name": "restMutatingExtra",
+            "ilBytes": 655
+          },
+          {
+            "Name": "restAlternatingInner",
+            "ilBytes": 226
+          },
+          {
+            "Name": "restAlternating",
+            "ilBytes": 85
+          },
+          {
+            "Name": "restMixedTargets",
+            "ilBytes": 85
+          },
+          {
+            "Name": "restReadTarget",
+            "ilBytes": 38
+          },
+          {
+            "Name": "restLengthTarget",
+            "ilBytes": 38
+          },
+          {
+            "Name": "$InitScript_NumericRest",
+            "ilBytes": 17
+          },
+          {
+            "Name": "Main",
+            "ilBytes": 48
+          }
+        ],
+        "wrapperConstruction": [
+          {
+            "target": "restAdd4",
+            "hasCapability": false,
+            "bytesPerConstruction": 1032.0128,
+            "microsecondsPerConstruction": 4.15463
+          },
+          {
+            "target": "restMutatingExtra",
+            "hasCapability": false,
+            "bytesPerConstruction": 1048,
+            "microsecondsPerConstruction": 3.17925
+          }
+        ],
+        "calls": [
+          {
+            "target": "restAdd4",
+            "n": 10000,
+            "innerRepeats": 3,
+            "meanMs": 0.590995238095238,
+            "minMs": 0.5213333333333333,
+            "maxMs": 0.794,
+            "measurementsMs": [
+              0.794,
+              0.6136333333333334,
+              0.5700666666666666,
+              0.5213333333333333,
+              0.5483666666666667,
+              0.5469666666666667,
+              0.5426
+            ],
+            "bytesPerInvocation": 2960000,
+            "bytesPerInnerCall": 296
+          },
+          {
+            "target": "restAdd4",
+            "n": 100000,
+            "innerRepeats": 3,
+            "meanMs": 5.507019047619048,
+            "minMs": 5.388000000000001,
+            "maxMs": 5.584933333333333,
+            "measurementsMs": [
+              5.584933333333333,
+              5.4799,
+              5.558800000000001,
+              5.4806333333333335,
+              5.477233333333333,
+              5.579633333333334,
+              5.388000000000001
+            ],
+            "bytesPerInvocation": 29600000,
+            "bytesPerInnerCall": 296
+          },
+          {
+            "target": "restMutatingExtra",
+            "n": 10000,
+            "innerRepeats": 3,
+            "meanMs": 0.9861714285714286,
+            "minMs": 0.9548666666666666,
+            "maxMs": 1.0279666666666667,
+            "measurementsMs": [
+              1.0279666666666667,
+              1.0032666666666665,
+              0.9939666666666667,
+              0.9548666666666666,
+              0.9573,
+              0.9579,
+              1.0079333333333333
+            ],
+            "bytesPerInvocation": 3680163.8095238097,
+            "bytesPerInnerCall": 368.0163809523809
+          },
+          {
+            "target": "restMutatingExtra",
+            "n": 100000,
+            "innerRepeats": 3,
+            "meanMs": 9.768119047619049,
+            "minMs": 9.496833333333333,
+            "maxMs": 10.165966666666668,
+            "measurementsMs": [
+              9.705133333333334,
+              9.6793,
+              9.496833333333333,
+              10.165966666666668,
+              9.599933333333334,
+              10.104466666666667,
+              9.6252
+            ],
+            "bytesPerInvocation": 36801474.28571428,
+            "bytesPerInnerCall": 368.01474285714283
+          }
+        ]
+      }
+    },
+    {
+      "stage": "stage5-closed",
+      "launch": 5,
+      "compilerSha256": "95DF7B5DFF347A5D28565216CF8315E48612C341AA6770DA8423065642BE544D",
+      "cliCompileMs": 1021.9682,
+      "measurement": {
+        "schemaVersion": 1,
+        "assemblySha256": "DFCDFCE695E92D1A8035E600275F81B04401B5C76912A4AB805BA49B6B3EE4AD",
+        "assemblyBytes": 270848,
+        "emittedIlBytes": 177565,
+        "programMethods": [
+          {
+            "Name": "restAdd4",
+            "ilBytes": 457
+          },
+          {
+            "Name": "restAdd4$rest$arity4$variant0",
+            "ilBytes": 18
+          },
+          {
+            "Name": "restAdd4$numericRest4<Entry>",
+            "ilBytes": 11
+          },
+          {
+            "Name": "fixedAdd4",
+            "ilBytes": 18
+          },
+          {
+            "Name": "restPick",
+            "ilBytes": 455
+          },
+          {
+            "Name": "restPick$rest$arity4$variant0",
+            "ilBytes": 19
+          },
+          {
+            "Name": "packedLength",
+            "ilBytes": 199
+          },
+          {
+            "Name": "escapeRest",
+            "ilBytes": 8
+          },
+          {
+            "Name": "restFixedParameters",
+            "ilBytes": 131
+          },
+          {
+            "Name": "restDirect",
+            "ilBytes": 131
+          },
+          {
+            "Name": "restAlias",
+            "ilBytes": 165
+          },
+          {
+            "Name": "restConstantIndex",
+            "ilBytes": 144
+          },
+          {
+            "Name": "restVaryingIndex",
+            "ilBytes": 168
+          },
+          {
+            "Name": "restPacking",
+            "ilBytes": 161
+          },
+          {
+            "Name": "restEscaping",
+            "ilBytes": 286
+          },
+          {
+            "Name": "restSpread",
+            "ilBytes": 222
+          },
+          {
+            "Name": "restUnknownTarget",
+            "ilBytes": 234
+          },
+          {
+            "Name": "restDynamicDispatch",
+            "ilBytes": 52
+          },
+          {
+            "Name": "restSpreadLength",
+            "ilBytes": 347
+          },
+          {
+            "Name": "restUnknownLength",
+            "ilBytes": 308
+          },
+          {
+            "Name": "restDynamicLength",
+            "ilBytes": 52
+          },
+          {
+            "Name": "restAddExtra",
+            "ilBytes": 467
+          },
+          {
+            "Name": "restAddExtra$rest$arity4$variant0",
+            "ilBytes": 28
+          },
+          {
+            "Name": "restAddExtra$numericRest4<Entry>",
+            "ilBytes": 11
+          },
+          {
+            "Name": "restMutatingExtra",
+            "ilBytes": 655
+          },
+          {
+            "Name": "restAlternatingInner",
+            "ilBytes": 273
+          },
+          {
+            "Name": "restAlternating",
+            "ilBytes": 85
+          },
+          {
+            "Name": "restMixedTargets",
+            "ilBytes": 85
+          },
+          {
+            "Name": "restReadTarget",
+            "ilBytes": 38
+          },
+          {
+            "Name": "restLengthTarget",
+            "ilBytes": 38
+          },
+          {
+            "Name": "$InitScript_NumericRest",
+            "ilBytes": 17
+          },
+          {
+            "Name": "Main",
+            "ilBytes": 48
+          }
+        ],
+        "wrapperConstruction": [
+          {
+            "target": "restAdd4",
+            "hasCapability": true,
+            "bytesPerConstruction": 1600.0128,
+            "microsecondsPerConstruction": 6.3322400000000005
+          },
+          {
+            "target": "restMutatingExtra",
+            "hasCapability": false,
+            "bytesPerConstruction": 1056,
+            "microsecondsPerConstruction": 3.3192
+          }
+        ],
+        "calls": [
+          {
+            "target": "restAdd4",
+            "n": 10000,
+            "innerRepeats": 104,
+            "meanMs": 0.019276785714285715,
+            "minMs": 0.019129807692307692,
+            "maxMs": 0.01938942307692308,
+            "measurementsMs": [
+              0.01938942307692308,
+              0.01931153846153846,
+              0.019254807692307693,
+              0.019260576923076922,
+              0.01929038461538462,
+              0.019129807692307692,
+              0.019300961538461538
+            ],
+            "bytesPerInvocation": 0,
+            "bytesPerInnerCall": 0
+          },
+          {
+            "target": "restAdd4",
+            "n": 100000,
+            "innerRepeats": 13,
+            "meanMs": 0.1637791208791209,
+            "minMs": 0.15436153846153847,
+            "maxMs": 0.17265384615384616,
+            "measurementsMs": [
+              0.15436153846153847,
+              0.16267692307692305,
+              0.17059230769230768,
+              0.15731538461538463,
+              0.15828461538461538,
+              0.17056923076923078,
+              0.17265384615384616
+            ],
+            "bytesPerInvocation": 0,
+            "bytesPerInnerCall": 0
+          },
+          {
+            "target": "restMutatingExtra",
+            "n": 10000,
+            "innerRepeats": 3,
+            "meanMs": 1.0427857142857142,
+            "minMs": 0.9996,
+            "maxMs": 1.1132666666666666,
+            "measurementsMs": [
+              1.1132666666666666,
+              0.9996,
+              1.1056000000000001,
+              1.0109333333333332,
+              1.0208,
+              1.0432333333333335,
+              1.0060666666666667
+            ],
+            "bytesPerInvocation": 3680131.0476190476,
+            "bytesPerInnerCall": 368.01310476190474
+          },
+          {
+            "target": "restMutatingExtra",
+            "n": 100000,
+            "innerRepeats": 3,
+            "meanMs": 10.257523809523809,
+            "minMs": 10.204966666666666,
+            "maxMs": 10.329633333333334,
+            "measurementsMs": [
+              10.329633333333334,
+              10.304933333333333,
+              10.246933333333333,
+              10.301133333333334,
+              10.204966666666666,
+              10.208166666666667,
+              10.2069
+            ],
+            "bytesPerInvocation": 36801474.28571428,
+            "bytesPerInnerCall": 368.01474285714283
+          }
+        ]
+      }
+    }
+  ]
+}

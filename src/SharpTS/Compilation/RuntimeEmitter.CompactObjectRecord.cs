@@ -125,6 +125,29 @@ public partial class RuntimeEmitter
             isMaterializedIl.Emit(OpCodes.Callvirt, tableTryGet);
             isMaterializedIl.Emit(OpCodes.Ret);
 
+            // Return canonical storage without materializing an untouched carrier.
+            // Callers must check descriptors on the carrier, not on this dictionary.
+            var tryGetMaterialized = typeBuilder.DefineMethod(
+                "TryGetMaterializedDictionary", MethodAttributes.Assembly | MethodAttributes.HideBySig,
+                _types.Boolean, [_types.DictionaryStringObject.MakeByRefType()]);
+            tryGetMaterialized.SetImplementationFlags(MethodImplAttributes.AggressiveInlining);
+            runtime.CompactObjectRecordTryGetMaterializedDictionary.Add(fingerprint, tryGetMaterialized);
+            var tryIl = tryGetMaterialized.GetILGenerator();
+            var probeTable = tryIl.DefineLabel();
+            tryIl.Emit(OpCodes.Ldsfld, anyMaterialized);
+            tryIl.Emit(OpCodes.Brtrue_S, probeTable);
+            tryIl.Emit(OpCodes.Ldarg_1);
+            tryIl.Emit(OpCodes.Ldnull);
+            tryIl.Emit(OpCodes.Stind_Ref);
+            tryIl.Emit(OpCodes.Ldc_I4_0);
+            tryIl.Emit(OpCodes.Ret);
+            tryIl.MarkLabel(probeTable);
+            tryIl.Emit(OpCodes.Ldsfld, materializedTable);
+            tryIl.Emit(OpCodes.Ldarg_0);
+            tryIl.Emit(OpCodes.Ldarg_1);
+            tryIl.Emit(OpCodes.Callvirt, tableTryGet);
+            tryIl.Emit(OpCodes.Ret);
+
             var fieldsGetter = typeBuilder.DefineMethod(
                 "get_Fields",
                 MethodAttributes.Public | MethodAttributes.Virtual | MethodAttributes.SpecialName |

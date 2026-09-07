@@ -581,6 +581,7 @@ public partial class RuntimeEmitter
 
         // Define fields - simplified, no longer need _runtime field
         var iteratorField = typeBuilder.DefineField("_iterator", _types.Object, FieldAttributes.Private);
+        var nextField = typeBuilder.DefineField("_next", _types.Object, FieldAttributes.Private);
         var currentField = typeBuilder.DefineField("_current", _types.Object, FieldAttributes.Private);
 
         // Constructor: $IteratorWrapper(object iterator)
@@ -600,6 +601,10 @@ public partial class RuntimeEmitter
         ctorIl.Emit(OpCodes.Ldarg_0);
         ctorIl.Emit(OpCodes.Ldarg_1);
         ctorIl.Emit(OpCodes.Stfld, iteratorField);
+        ctorIl.Emit(OpCodes.Ldarg_0);
+        ctorIl.Emit(OpCodes.Ldarg_1);
+        ctorIl.Emit(OpCodes.Call, runtime.GetIteratorNextMethod);
+        ctorIl.Emit(OpCodes.Stfld, nextField);
         // this._current = null
         ctorIl.Emit(OpCodes.Ldarg_0);
         ctorIl.Emit(OpCodes.Ldnull);
@@ -654,7 +659,9 @@ public partial class RuntimeEmitter
         // var result = InvokeIteratorNext(_iterator);  -- DIRECT CALL
         moveNextIl.Emit(OpCodes.Ldarg_0);
         moveNextIl.Emit(OpCodes.Ldfld, iteratorField);
-        moveNextIl.Emit(OpCodes.Call, runtime.InvokeIteratorNext);
+        moveNextIl.Emit(OpCodes.Ldarg_0);
+        moveNextIl.Emit(OpCodes.Ldfld, nextField);
+        moveNextIl.Emit(OpCodes.Call, runtime.InvokeCapturedIteratorNext);
         moveNextIl.Emit(OpCodes.Stloc, resultLocal);
 
         // var done = GetIteratorDone(result);  -- DIRECT CALL
@@ -698,8 +705,10 @@ public partial class RuntimeEmitter
         // var result = InvokeIteratorNextWithSent(_iterator, sent);
         mwsIl.Emit(OpCodes.Ldarg_0);
         mwsIl.Emit(OpCodes.Ldfld, iteratorField);
+        mwsIl.Emit(OpCodes.Ldarg_0);
+        mwsIl.Emit(OpCodes.Ldfld, nextField);
         mwsIl.Emit(OpCodes.Ldarg_1);               // sent value
-        mwsIl.Emit(OpCodes.Call, runtime.InvokeIteratorNextWithSent);
+        mwsIl.Emit(OpCodes.Call, runtime.InvokeCapturedIteratorNextWithSent);
         mwsIl.Emit(OpCodes.Stloc, mwsResultLocal);
 
         mwsIl.Emit(OpCodes.Ldloc, mwsResultLocal);
@@ -753,6 +762,7 @@ public partial class RuntimeEmitter
     private void EmitIteratorMethodsBasic(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         // Basic iterator protocol helpers - needed by $IteratorWrapper
+        EmitCapturedIteratorMethods(typeBuilder, runtime);
         EmitGetIteratorDone(typeBuilder, runtime);
         EmitGetIteratorValue(typeBuilder, runtime);
         EmitInvokeIteratorNext(typeBuilder, runtime);
@@ -899,6 +909,7 @@ public partial class RuntimeEmitter
         runtime.GetIteratorDone = method;
 
         var il = method.GetILGenerator();
+        EmitCompactIteratorResultRead(il, runtime, "done");
 
         // Call GetProperty(result, "done")
         il.Emit(OpCodes.Ldarg_0);
@@ -925,6 +936,7 @@ public partial class RuntimeEmitter
         runtime.GetIteratorValue = method;
 
         var il = method.GetILGenerator();
+        EmitCompactIteratorResultRead(il, runtime, "value");
 
         // Call GetProperty(result, "value")
         il.Emit(OpCodes.Ldarg_0);
@@ -1165,12 +1177,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, _types.GetPropertyGetter(_types.ListOfObject, "Count"));
         il.Emit(OpCodes.Stloc, count);
         il.Emit(OpCodes.Ldloc, destination);
-        il.Emit(OpCodes.Ldloc, destination);
-        il.Emit(OpCodes.Callvirt, _types.GetPropertyGetter(_types.ListOfObject, "Count"));
         il.Emit(OpCodes.Ldloc, count);
-        il.Emit(OpCodes.Add_Ovf);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "EnsureCapacity", _types.Int32));
-        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Call, runtime.TSArrayReserveRest);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Stloc, index);
         var loop = il.DefineLabel();
@@ -1194,7 +1202,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(present);
         il.Emit(OpCodes.Ldloc, destination);
         il.Emit(OpCodes.Ldloc, value);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", _types.Object));
+        il.Emit(OpCodes.Call, runtime.TSArrayAppendRestValue);
         il.Emit(OpCodes.Ldloc, index);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Add);
@@ -1209,11 +1217,17 @@ public partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
 
+        void AppendValue()
+        {
+            if (appendToExisting) il.Emit(OpCodes.Call, runtime.TSArrayAppendRestValue);
+            else il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", _types.Object));
+        }
+
         // Locals
         var resultLocal = il.DeclareLocal(_types.ListOfObject);     // result list
         var iterFnLocal = il.DeclareLocal(_types.Object);           // iterator function
         var iteratorLocal = il.DeclareLocal(_types.Object);         // iterator object
-        var wrapperLocal = il.DeclareLocal(_types.IEnumeratorOfObject); // $IteratorWrapper
+        var iterationResultLocal = il.DeclareLocal(_types.Object);
 
         // Labels
         var tryStringLabel = il.DefineLabel();
@@ -1258,6 +1272,21 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, runtime.TSArrayType);
         il.Emit(OpCodes.Brfalse, notTSArrayLabel);
+        if (appendToExisting && !_features.UsesArrayPrototypeMutation)
+        {
+            var boxedSource = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Castclass, runtime.TSArrayType);
+            il.Emit(OpCodes.Call, runtime.TSArrayIsNumericGetter);
+            il.Emit(OpCodes.Brfalse, boxedSource);
+            il.Emit(OpCodes.Ldloc, resultLocal);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Castclass, runtime.TSArrayType);
+            il.Emit(OpCodes.Call, runtime.TSArrayAppendNumericRestSource);
+            il.Emit(OpCodes.Ldloc, resultLocal);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(boxedSource);
+        }
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, runtime.TSArrayType);
         il.Emit(OpCodes.Callvirt, runtime.TSArrayElementsGetter);
@@ -1302,7 +1331,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Conv_R8);
             il.Emit(OpCodes.Box, _types.Double);
             il.Emit(OpCodes.Call, runtime.GetIndex);
-            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", _types.Object));
+            AppendValue();
             il.Emit(OpCodes.Ldloc, index);
             il.Emit(OpCodes.Ldc_I4_1);
             il.Emit(OpCodes.Conv_I8);
@@ -1347,7 +1376,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Castclass, runtime.TypedArrayBaseType);
             il.Emit(OpCodes.Ldloc, taILocal);
             il.Emit(OpCodes.Callvirt, runtime.TypedArrayElementGet);
-            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", _types.Object));
+            AppendValue();
             il.Emit(OpCodes.Ldloc, taILocal);
             il.Emit(OpCodes.Ldc_I4_1);
             il.Emit(OpCodes.Add);
@@ -1438,7 +1467,7 @@ public partial class RuntimeEmitter
             // result.Add(pair);
             il.Emit(OpCodes.Ldloc, resultLocal);
             il.Emit(OpCodes.Ldloc, mapPairLocal);
-            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", _types.Object));
+            AppendValue();
 
             il.Emit(OpCodes.Br, mapLoopStart);
 
@@ -1519,7 +1548,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldloc, idxLocal);
             il.Emit(OpCodes.Ldc_I4_2);
             il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "Substring", _types.Int32, _types.Int32));
-            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", _types.Object));
+            AppendValue();
             il.Emit(OpCodes.Ldloc, idxLocal);
             il.Emit(OpCodes.Ldc_I4_2);
             il.Emit(OpCodes.Add);
@@ -1529,7 +1558,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldloc, resultLocal);
             il.Emit(OpCodes.Ldloca, charLocal);
             il.Emit(OpCodes.Call, _types.GetMethodNoParams(_types.Char, "ToString"));
-            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", _types.Object));
+            AppendValue();
 
             il.Emit(OpCodes.Ldloc, idxLocal);
             il.Emit(OpCodes.Ldc_I4_1);
@@ -1594,23 +1623,22 @@ public partial class RuntimeEmitter
         GuestErrorEmitter.ThrowTypeError(il, runtime, "Iterator method must return an object");
         il.MarkLabel(iteratorObjectOkLabel);
 
-        // Create $IteratorWrapper: wrapper = new $IteratorWrapper(iterator, runtimeType)
-        il.Emit(OpCodes.Ldloc, iteratorLocal);
-        il.Emit(OpCodes.Ldarg_2);  // runtimeType
-        il.Emit(OpCodes.Newobj, runtime.IteratorWrapperCtor);
-        il.Emit(OpCodes.Stloc, wrapperLocal);
-
-        // Collect all values: while (wrapper.MoveNext()) result.Add(wrapper.Current);
+        // Collection does not consume an iterator's completion value. Drive it
+        // directly: $IteratorWrapper intentionally preserves that value for
+        // yield*, which would invoke a terminal value getter during spread.
         il.MarkLabel(collectLoopLabel);
-        il.Emit(OpCodes.Ldloc, wrapperLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.IEnumerator, "MoveNext")!);
-        il.Emit(OpCodes.Brfalse, collectDoneLabel);
+        il.Emit(OpCodes.Ldloc, iteratorLocal);
+        il.Emit(OpCodes.Call, runtime.InvokeIteratorNext);
+        il.Emit(OpCodes.Stloc, iterationResultLocal);
+        il.Emit(OpCodes.Ldloc, iterationResultLocal);
+        il.Emit(OpCodes.Call, runtime.GetIteratorDone);
+        il.Emit(OpCodes.Brtrue, collectDoneLabel);
 
-        // result.Add(wrapper.Current)
+        // Append only values from non-completed iterator results.
         il.Emit(OpCodes.Ldloc, resultLocal);
-        il.Emit(OpCodes.Ldloc, wrapperLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.IEnumeratorOfObject, "Current")!.GetGetMethod()!);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", _types.Object));
+        il.Emit(OpCodes.Ldloc, iterationResultLocal);
+        il.Emit(OpCodes.Call, runtime.GetIteratorValue);
+        AppendValue();
         il.Emit(OpCodes.Br, collectLoopLabel);
 
         il.MarkLabel(collectDoneLabel);
@@ -1641,7 +1669,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldloc, resultLocal);
             il.Emit(OpCodes.Ldloc, ienumLocal);
             il.Emit(OpCodes.Callvirt, _types.GetPropertyGetter(_types.IEnumeratorOfObject, "Current"));
-            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", _types.Object));
+            AppendValue();
             il.Emit(OpCodes.Br, ienumLoopLabel);
 
             il.MarkLabel(ienumDoneLabel);
@@ -1676,7 +1704,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldloc, resultLocal);
             il.Emit(OpCodes.Ldloc, enumLocal);
             il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.IEnumerator, "Current")!.GetGetMethod()!);
-            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", _types.Object));
+            AppendValue();
             il.Emit(OpCodes.Br, enumLoopLabel);
 
             il.MarkLabel(enumDoneLabel);
@@ -1723,7 +1751,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldelem_U1);
             il.Emit(OpCodes.Conv_R8);
             il.Emit(OpCodes.Box, _types.Double);
-            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", _types.Object));
+            AppendValue();
 
             il.Emit(OpCodes.Ldloc, bufIdxLocal);
             il.Emit(OpCodes.Ldc_I4_1);

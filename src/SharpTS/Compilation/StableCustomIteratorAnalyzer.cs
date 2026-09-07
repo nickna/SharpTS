@@ -54,9 +54,6 @@ internal static class StableCustomIteratorAnalyzer
                 }
             }
 
-            if (closures is not null)
-                MarkStableNumericFunctionCaptures(
-                    candidate.Info.NextMethod, candidate.Owner, closures, typeMap);
         }
     }
 
@@ -85,7 +82,7 @@ internal static class StableCustomIteratorAnalyzer
         if (loopIndex < 0)
             return;
 
-        var writes = new NumericWriteVisitor(
+        var writes = new StableNumericFunctionCaptureAnalyzer.NumericWriteVisitor(
             accumulatorName.Lexeme, typeMap, assignment);
         foreach (var statement in body)
             writes.Visit(statement);
@@ -99,10 +96,10 @@ internal static class StableCustomIteratorAnalyzer
                 Stmt.Var declaration when declaration.Name.Lexeme == accumulatorName.Lexeme &&
                     declaration.TypeAnnotation == "number" &&
                     declaration.Initializer is not null &&
-                    IsNumber(typeMap.Get(declaration.Initializer)) => declaration.Name,
+                    StableNumericFunctionCaptureAnalyzer.IsNumber(typeMap.Get(declaration.Initializer)) => declaration.Name,
                 Stmt.Const declaration when declaration.Name.Lexeme == accumulatorName.Lexeme &&
                     declaration.TypeAnnotation == "number" &&
-                    IsNumber(typeMap.Get(declaration.Initializer)) => declaration.Name,
+                    StableNumericFunctionCaptureAnalyzer.IsNumber(typeMap.Get(declaration.Initializer)) => declaration.Name,
                 _ => null
             };
             if (declarationName is not null)
@@ -110,161 +107,6 @@ internal static class StableCustomIteratorAnalyzer
                 typeMap.MarkStableCustomIteratorNumericAccumulator(declarationName);
                 return;
             }
-        }
-    }
-
-    private static void MarkStableNumericFunctionCaptures(
-        Expr.ArrowFunction next,
-        object? owner,
-        ClosureAnalyzer closures,
-        TypeMap typeMap)
-    {
-        if (owner is not Stmt.Function source || source.Body is null || source.IsAsync)
-            return;
-
-        int iteratorDeclaration = source.Body.FindIndex(statement => statement switch
-        {
-            Stmt.Var { Initializer: Expr.ObjectLiteral literal } =>
-                literal.Properties.Any(property => ReferenceEquals(property.Value, next)),
-            Stmt.Const { Initializer: Expr.ObjectLiteral literal } =>
-                literal.Properties.Any(property => ReferenceEquals(property.Value, next)),
-            _ => false
-        });
-        if (iteratorDeclaration < 0)
-            return;
-
-        foreach (string name in closures.GetCaptures(next))
-        {
-            if (!ReferenceEquals(closures.GetCaptureSource(next, name), source) ||
-                IsCapturedByAnotherCallable(source.Body, next, name, closures) ||
-                !HasStableNumericBinding(source, name, iteratorDeclaration, typeMap))
-                continue;
-
-            typeMap.MarkStableNumericFunctionCaptureField(source, name);
-        }
-    }
-
-    private static bool HasStableNumericBinding(
-        Stmt.Function source,
-        string name,
-        int iteratorDeclaration,
-        TypeMap typeMap)
-    {
-        bool initialized = source.Parameters.Any(parameter =>
-            parameter.Name.Lexeme == name && parameter.Type == "number" &&
-            !typeMap.IsUndefinedReachableNumericParam(parameter));
-
-        if (!initialized)
-        {
-            for (int index = 0; index < iteratorDeclaration; index++)
-            {
-                initialized = source.Body![index] switch
-                {
-                    Stmt.Var declaration when declaration.Name.Lexeme == name &&
-                        declaration.TypeAnnotation == "number" &&
-                        declaration.Initializer is not null &&
-                        !typeMap.IsUndefinedReachableNumericLocal(declaration) &&
-                        !typeMap.IsUndefinedReachableNumericLocal(declaration.Initializer) &&
-                        IsNumber(typeMap.Get(declaration.Initializer)) => true,
-                    Stmt.Const declaration when declaration.Name.Lexeme == name &&
-                        declaration.TypeAnnotation == "number" &&
-                        !typeMap.IsUndefinedReachableNumericLocal(declaration.Initializer) &&
-                        IsNumber(typeMap.Get(declaration.Initializer)) => true,
-                    _ => initialized
-                };
-            }
-        }
-
-        if (!initialized)
-            return false;
-
-        var writes = new NumericWriteVisitor(name, typeMap);
-        foreach (var statement in source.Body!)
-            writes.Visit(statement);
-        return writes.Valid;
-    }
-
-    private static bool IsCapturedByAnotherCallable(
-        IEnumerable<Stmt> body,
-        Expr.ArrowFunction next,
-        string name,
-        ClosureAnalyzer closures)
-    {
-        var visitor = new OtherCaptureVisitor(next, name, closures);
-        foreach (var statement in body)
-            visitor.Visit(statement);
-        return visitor.Found;
-    }
-
-    private static bool IsNumber(TypeInfo? type) => type is
-        TypeInfo.Primitive { Type: TokenType.TYPE_NUMBER } or TypeInfo.NumberLiteral;
-
-    private sealed class NumericWriteVisitor(
-        string name,
-        TypeMap typeMap,
-        Expr.Assign? allowedUnknownAssignment = null) : AstVisitorBase
-    {
-        public bool Valid { get; private set; } = true;
-
-        protected override void VisitAssign(Expr.Assign expression)
-        {
-            if (expression.Name.Lexeme == name &&
-                !ReferenceEquals(expression, allowedUnknownAssignment) &&
-                !IsNumber(typeMap.Get(expression.Value)))
-                Valid = false;
-            base.VisitAssign(expression);
-        }
-
-        protected override void VisitCompoundAssign(Expr.CompoundAssign expression)
-        {
-            if (expression.Name.Lexeme == name &&
-                (expression.Operator.Type is not (TokenType.PLUS_EQUAL or TokenType.MINUS_EQUAL or
-                    TokenType.STAR_EQUAL or TokenType.SLASH_EQUAL or TokenType.PERCENT_EQUAL) ||
-                 !IsNumber(typeMap.Get(expression.Value))))
-                Valid = false;
-            base.VisitCompoundAssign(expression);
-        }
-
-        protected override void VisitLogicalAssign(Expr.LogicalAssign expression)
-        {
-            if (expression.Name.Lexeme == name)
-                Valid = false;
-            base.VisitLogicalAssign(expression);
-        }
-
-        protected override void VisitForOf(Stmt.ForOf statement)
-        {
-            if (statement.Variable.Lexeme == name)
-                Valid = false;
-            base.VisitForOf(statement);
-        }
-
-        protected override void VisitForIn(Stmt.ForIn statement)
-        {
-            if (statement.Variable.Lexeme == name)
-                Valid = false;
-            base.VisitForIn(statement);
-        }
-    }
-
-    private sealed class OtherCaptureVisitor(
-        Expr.ArrowFunction next, string name, ClosureAnalyzer closures) : AstVisitorBase
-    {
-        public bool Found { get; private set; }
-
-        protected override void VisitFunction(Stmt.Function statement)
-        {
-            if (closures.GetCaptures(statement).Contains(name))
-                Found = true;
-            base.VisitFunction(statement);
-        }
-
-        protected override void VisitArrowFunction(Expr.ArrowFunction expression)
-        {
-            if (!ReferenceEquals(expression, next) &&
-                closures.GetCaptures(expression).Contains(name))
-                Found = true;
-            base.VisitArrowFunction(expression);
         }
     }
 

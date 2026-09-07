@@ -1156,6 +1156,33 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
             ? OwnStringKeys().Where(key => !IsInternalSlot(key))
             : OwnStringKeys();
 
+    /// <summary>Copy untouched ordinary data properties without snapshots or descriptor objects.</summary>
+    internal bool TryCopyPlainSpreadFields(Dictionary<string, object?> destination)
+    {
+        if (GetType() != typeof(SharpTSObject) || IsPrimitiveWrapper
+            || _descriptors is not null || _accessorProperties is not null
+            || _stringPropertyOrder is not null || _symbolFields is not null
+            || _symbolAccessors is not null || _symbolDescriptors is not null)
+            return false;
+
+        // Preserve numeric key ordering and the interpreter's callable binding behavior by
+        // retaining the general path. Validate everything before modifying the destination.
+        foreach (var entry in _fields)
+            if (TryGetArrayIndex(entry.Key, out _) || entry.Value is ISharpTSCallable)
+                return false;
+
+        destination.EnsureCapacity(destination.Count + _fields.Count);
+        foreach (var entry in _fields)
+            destination[entry.Key] = entry.Value;
+        return true;
+    }
+
+    internal bool IsOwnEnumerableProperty(string name)
+        => HasOwnStringProperty(name) && GetPropertyFlags(name).Enumerable;
+
+    internal bool IsOwnEnumerableProperty(SharpTSSymbol symbol)
+        => HasSymbolProperty(symbol) && GetSymbolPropertyFlags(symbol).Enumerable;
+
     /// <summary>
     /// All own string-keyed property names in ECMA-262 OwnPropertyKeys order:
     /// canonical array indices ascending, then other strings in creation order.

@@ -22,5 +22,5 @@ function stableCustomIterator(n: number): number {
 const sizes: number[] = [10000, 100000];
 for (let i: number = 0; i < sizes.length; i++) {
     const n: number = sizes[i];
-    bench("custom-iterator", n, () => stableCustomIterator(n));
+    bench("custom-iterator", n, () => stableCustomIterator(n), n * (n - 1) / 2);
 }

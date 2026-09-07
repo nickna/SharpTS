@@ -22,6 +22,8 @@ public sealed class DiscardedNumericArrayWriteTests
             """);
 
         var instructions = ReadInstructions(FindFunction(assembly, "fill")).ToArray();
+        Assert.Contains(instructions, instruction =>
+            instruction.Operand is MethodBase { Name: "EnsureDoubleCapacity" });
         int setDouble = Array.FindIndex(instructions, instruction =>
             instruction.Operand is MethodBase { Name: "SetDouble" });
 
@@ -39,19 +41,22 @@ public sealed class DiscardedNumericArrayWriteTests
     [Fact]
     public void ObservedAssignment_RetainsResultProducingPath()
     {
-        Assembly assembly = Compile("""
+        const string source = """
             function set(values: number[], index: number, value: number): number {
                 return values[index] = value;
             }
-            """);
+            const values: number[] = [1, 2];
+            console.log(set(values, 1, 7), values[1]);
+            console.log(set(values, -1, 9), values.length);
+            """;
+        Assembly assembly = Compile(source);
 
         var instructions = ReadInstructions(FindFunction(assembly, "set")).ToArray();
         int setDouble = Array.FindIndex(instructions, instruction =>
             instruction.Operand is MethodBase { Name: "SetDouble" });
         Assert.True(setDouble >= 0, "Expected the numeric $Array SetDouble fast path.");
-        Assert.StartsWith("ldloc", instructions[setDouble + 1].OpCode.Name);
-        Assert.Equal(OpCodes.Box, instructions[setDouble + 2].OpCode);
-        Assert.Equal(typeof(double), instructions[setDouble + 2].Operand);
+        Assert.Equal("7 7\n9 2\n", TestHarness.RunCompiled(source));
+        Assert.Empty(TestHarness.CompileAndVerifyOnly(source));
     }
 
     [Fact]
@@ -140,6 +145,33 @@ public sealed class DiscardedNumericArrayWriteTests
         Assert.Empty(TestHarness.CompileAndVerifyOnly(source));
     }
 
+    [Fact]
+    public void ObjectBackedCapturedBound_DoesNotEmitCountedReservation()
+    {
+        Assembly assembly = Compile("""
+            function makeFill(n: number): any {
+                function fill(values: number[]): void {
+                    for (let i: number = 0; i < n; i++) {
+                        values[i] = i;
+                    }
+                }
+                return fill;
+            }
+            """);
+
+        var reservationCallers = assembly.GetTypes()
+            .Where(type => type.Name != "$Runtime")
+            .SelectMany(type => type.GetMethods(
+                BindingFlags.Public | BindingFlags.NonPublic |
+                BindingFlags.Static | BindingFlags.Instance))
+            .Where(method => method.GetMethodBody() != null)
+            .Where(method => ReadInstructions(method).Any(instruction =>
+                instruction.Operand is MethodBase { Name: "EnsureDoubleCapacity" }))
+            .ToArray();
+
+        Assert.Empty(reservationCallers);
+    }
+
     private static Assembly Compile(string source)
     {
         var statements = new Parser(new Lexer(source).ScanTokens()).ParseOrThrow();
@@ -161,6 +193,12 @@ public sealed class DiscardedNumericArrayWriteTests
         byte[] il = method.GetMethodBody()?.GetILAsByteArray()
             ?? throw new InvalidOperationException($"Method '{method.Name}' has no IL body.");
         Module module = method.Module;
+        Type[]? typeArguments = method.DeclaringType?.IsGenericType == true
+            ? method.DeclaringType.GetGenericArguments()
+            : null;
+        Type[]? methodArguments = method.IsGenericMethod
+            ? method.GetGenericArguments()
+            : null;
 
         for (int offset = 0; offset < il.Length;)
         {
@@ -174,8 +212,8 @@ public sealed class DiscardedNumericArrayWriteTests
             {
                 int token = BitConverter.ToInt32(il, offset);
                 operand = opCode.OperandType == OperandType.InlineMethod
-                    ? module.ResolveMethod(token)
-                    : module.ResolveType(token);
+                    ? module.ResolveMethod(token, typeArguments, methodArguments)
+                    : module.ResolveType(token, typeArguments, methodArguments);
             }
 
             int operandSize = opCode.OperandType switch

@@ -1,6 +1,6 @@
 **Worker allocation scaling implementation plan**
 
-Status: implemented and measured. See the [results and retained evidence](../performance/worker-allocation-scaling.md) for Windows/Linux comparisons, completed validation, and explicit limits. The numeric-literal change uses the bounded escape proof described below; escaping cases retain boxed storage.
+Status: implemented and measured, then integrated with main's overlapping optimizations. See the [results and retained evidence](../performance/worker-allocation-scaling.md) for historical Windows/Linux comparisons, integration details, completed validation, and explicit limits. The bounded escape proof now selects an additional specialization ahead of main's general numeric-literal path.
 
 Reduce the time and allocation required by `worker-allocation-scaling.ts`, preserve JavaScript semantics, and explain worker scaling with repeatable measurements. Keep the original 20,000-record workload, its interface declaration, and persistent-worker behavior as the end-to-end regression case.
 

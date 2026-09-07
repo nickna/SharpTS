@@ -29,8 +29,8 @@ function accumulate(n: number): number {
 
 const params: number[] = [1000, 100000, 1000000];
 for (let p: number = 0; p < params.length; p++) {
-    bench("int32-kernel", params[p], () => int32Kernel(params[p]));
+    bench("int32-kernel", params[p], () => int32Kernel(params[p]), 1 - (params[p] - 1) % 7 + (params[p] - 2) % 7);
 }
 for (let p: number = 0; p < params.length; p++) {
-    bench("accumulate", params[p], () => accumulate(params[p]));
+    bench("accumulate", params[p], () => accumulate(params[p]), 3 * params[p] * (params[p] - 1) / 2);
 }

@@ -48,4 +48,12 @@ public class NumericArrayWriteBenchmarks
     [Benchmark]
     public double BoxedEquivalentCSharp() =>
         NumericArrayWriteBaselines.BoxedEquivalent(N);
+
+    [Benchmark]
+    public double GrowingUnboxedCSharp() =>
+        NumericArrayWriteBaselines.GrowingUnboxed(N);
+
+    [Benchmark]
+    public double GrowingBoxedCSharp() =>
+        NumericArrayWriteBaselines.GrowingBoxed(N);
 }

@@ -21,6 +21,7 @@ internal static class NumericRestCallBindingAnalyzer
         var result = new Dictionary<Stmt.Function, List<Expr.Call>>(ReferenceEqualityComparer.Instance);
         var moduleNames = new Declarations();
         foreach (var statement in statements) moduleNames.Visit(statement);
+        if (moduleNames.HasUnresolvedBindingPattern) return result;
         // The function declaration itself contributes one. Any other declaration
         // of the name in the module prevents direct binding resolution.
         foreach (string name in globals.Keys.ToArray())
@@ -33,6 +34,7 @@ internal static class NumericRestCallBindingAnalyzer
             var names = new Declarations();
             foreach (var parameter in function.Parameters) names.Add(parameter.Name.Lexeme);
             foreach (var statement in function.Body) names.Visit(statement);
+            if (names.HasUnresolvedBindingPattern) continue;
             new Calls(globals, names, result, allowAliases: true).VisitStatements(function.Body);
         }
         return result;
@@ -41,6 +43,7 @@ internal static class NumericRestCallBindingAnalyzer
     private sealed class Declarations : AstVisitorBase
     {
         public Dictionary<string, int> Counts { get; } = new(StringComparer.Ordinal);
+        public bool HasUnresolvedBindingPattern { get; private set; }
         public void Add(string name) => Counts[name] = Counts.GetValueOrDefault(name) + 1;
         protected override void VisitVar(Stmt.Var stmt) { Add(stmt.Name.Lexeme); base.VisitVar(stmt); }
         protected override void VisitConst(Stmt.Const stmt) { Add(stmt.Name.Lexeme); base.VisitConst(stmt); }
@@ -55,6 +58,16 @@ internal static class NumericRestCallBindingAnalyzer
         {
             if (stmt.CatchParam != null) Add(stmt.CatchParam.Lexeme);
             base.VisitTryCatch(stmt);
+        }
+
+        protected override void VisitUsing(Stmt.Using stmt)
+        {
+            foreach (var binding in stmt.Bindings)
+            {
+                if (binding.Name != null) Add(binding.Name.Lexeme);
+                else HasUnresolvedBindingPattern = true;
+            }
+            base.VisitUsing(stmt);
         }
     }
 

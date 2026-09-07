@@ -1,5 +1,11 @@
 # Numeric arrays inside local records
 
+After integrating main at `5cc21d58`, this analysis is an additional private-record
+specialization ahead of the existing general numeric-literal emitter. Rejection
+means fallback to that emitter, whose native-value checks and boundary handling
+remain intact; it does not require boxed storage. The boxed-fallback descriptions
+below record the original standalone implementation and its measured scope.
+
 `LocalRecordArrayAnalyzer` extends the existing `$Array` numeric store to a
 bounded set of dense, nonempty literals. The canonical allocation kernel is
 eligible without modifying its interface, loops, or allocations. This follows

@@ -1,0 +1,1205 @@
+{
+  "schemaVersion": 1,
+  "note": "The full run used the initial open-static entry and predates two additional special-number cases. The final closed-entry run repeats the focused selection with the new cases and checks both constructors. Full-suite failures concern HTTP handles, TLS certificate access/handshakes, IPC, and standalone subprocess exit; the full suite is not green. After merging main for PR #1590, the focused selection passed 599 checks and the overlapping array/rest/queue/destructuring selection passed 142 checks (selections overlap). A BenchmarkDotNet Dry in-process smoke run completed all 24 selected cases; it is not throughput evidence.",
+  "runs": [
+    {
+      "run": "stage5",
+      "compilerSha256": "CBE56E41F96CB716CC645106A52007191DA678A6AFB3AB8F7F32659C3F8B1DC1",
+      "started": "2026-09-04T20:39:24.9130336-07:00",
+      "finished": "2026-09-04T20:39:55.7549384-07:00",
+      "total": 597,
+      "passed": 597,
+      "failed": 0,
+      "notExecuted": 0,
+      "failedTests": []
+    },
+    {
+      "run": "language-hot-paths-full",
+      "compilerSha256": "CBE56E41F96CB716CC645106A52007191DA678A6AFB3AB8F7F32659C3F8B1DC1",
+      "started": "2026-09-04T20:41:06.2490975-07:00",
+      "finished": "2026-09-04T21:01:50.5887506-07:00",
+      "total": 17966,
+      "passed": 17680,
+      "failed": 283,
+      "notExecuted": 0,
+      "failedTests": [
+        {
+          "name": "SharpTS.Tests.CompilerTests.StandaloneDllTests.Isolated_Cluster_ThrowsClearly_WhenSharpTsRuntimeAbsent",
+          "error": "Assert.Throws() Failure: Exception type was not an exact match\r\nExpected: typeof(System.Exception)\r\nActual:   typeof(System.TimeoutException)\r\n---- System.TimeoutException : Compiled standalone probe timed out after 15000 ms. Stdout:  Stderr: Unhandled exception. System.InvalidOperationException: cluster requires the SharpTS runtime (SharpTS.dll) to be present. Compile without --standalone so it is co-located with the output.\r\n   at $Runtime.ClusterInvoke(String, Object[])\r\n   at $Module_main.$Initialize()\r\n   at $Program.Main()\r\n"
+        },
+        {
+          "name": "SharpTS.Tests.CompilerTests.StandaloneDllTests.Isolated_Tls_ShouldExecuteWithoutSharpTsDll",
+          "error": "Assert.Equal() Failure: Strings differ\r\n           ↓ (pos 0)\r\nExpected: \"recv:hi-from-server\\nencrypted:true\\nprotoO\"···\r\nActual:   \"tls-client-error:Authentication failed, s\"···\r\n           ↑ (pos 0)"
+        },
+        {
+          "name": "SharpTS.Tests.CompilerTests.StandaloneDllTests.Isolated_Vm_ThrowsClearly_WhenSharpTsRuntimeAbsent",
+          "error": "Assert.Throws() Failure: Exception type was not an exact match\r\nExpected: typeof(System.Exception)\r\nActual:   typeof(System.TimeoutException)\r\n---- System.TimeoutException : Compiled standalone probe timed out after 15000 ms. Stdout:  Stderr: Unhandled exception. System.Exception: vm module is not supported in standalone compiled output (SharpTS runtime not present).\r\n   at $Runtime.VmGetConstants()\r\n   at $Module_main.$Initialize()\r\n   at $Program.Main()\r\n"
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.AsyncCallbackResumeTests.AsyncCallback_FetchAfterAwait_InListenCallback(mode: Compiled)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.AsyncCallbackResumeTests.AsyncCallback_FetchAfterAwait_InListenCallback(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.AsyncCallbackResumeTests.AsyncCallback_ResumesWithModuleScope_AfterAwait(mode: Compiled)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.AsyncCallbackResumeTests.AsyncCallback_ResumesWithModuleScope_AfterAwait(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.BuiltInModules.ChildProcessAsyncTests.Fork_IpcRoundTrip(mode: Compiled)",
+          "error": "Assert.Equal() Failure: Strings differ\r\n           ↓ (pos 0)\r\nExpected: \"parent got: got world\\n\"\r\nActual:   \"\""
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.BuiltInModules.ChildProcessAsyncTests.Fork_IpcRoundTrip(mode: Interpreted)",
+          "error": "Assert.Equal() Failure: Strings differ\r\n           ↓ (pos 0)\r\nExpected: \"parent got: got world\\n\"\r\nActual:   \"\""
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.BuiltInModules.ClusterModuleTests.Fork_WorkersShareHttpPort(mode: Interpreted)",
+          "error": "Assert.Contains() Failure: Sub-string not found\r\nString:    \"Runtime Error: Runtime Error: The handle \"···\r\nNot found: \"http response: worker-\""
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.BuiltInModules.EventLoopNativeIoTests.SlowFetch_KeepsInterpreterEventLoopAlive",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.EventLoopContinuationTests.TopLevelAsync_SequentialFetches_RunsContinuationAfterAwait(mode: Compiled)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.EventLoopContinuationTests.TopLevelAsync_SequentialFetches_RunsContinuationAfterAwait(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchCookieTests.Cookies_ClearJarRemovesAll(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchCookieTests.Cookies_ConcurrentFetchesDoNotRaceJar(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchCookieTests.Cookies_CrossHostIsolation(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchCookieTests.Cookies_ExpiredCookieNotSent(mode: Compiled)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchCookieTests.Cookies_ExpiredCookieNotSent(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchCookieTests.Cookies_FetchCookieJarClear_FromScript(mode: Compiled)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchCookieTests.Cookies_FetchCookieJarClear_FromScript(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchCookieTests.Cookies_FetchCookieJarGetCookies_FromScript(mode: Compiled)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchCookieTests.Cookies_FetchCookieJarGetCookies_FromScript(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchCookieTests.Cookies_FetchCookieJarSetCookie_FromScript(mode: Compiled)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchCookieTests.Cookies_FetchCookieJarSetCookie_FromScript(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchCookieTests.Cookies_GetCookieHeaderReturnsSentValue(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchCookieTests.Cookies_GetCookiesThrowsOnInvalidUrl(mode: Compiled)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchCookieTests.Cookies_GetCookiesThrowsOnInvalidUrl(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchCookieTests.Cookies_GetSetCookieReturnsArray(mode: Compiled)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchCookieTests.Cookies_GetSetCookieReturnsArray(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchCookieTests.Cookies_HeadersGetReturnsFirstSetCookie(mode: Compiled)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchCookieTests.Cookies_HeadersGetReturnsFirstSetCookie(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchCookieTests.Cookies_HttpModuleSharesJarWithFetch(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchCookieTests.Cookies_HttpOnlyCookieSentInSubsequentRequest(mode: Compiled)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchCookieTests.Cookies_HttpOnlyCookieSentInSubsequentRequest(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchCookieTests.Cookies_HttpRequestStoresAndSendsCookies(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchCookieTests.Cookies_IncludeBehavesLikeSameOriginForSameHost(mode: Compiled)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchCookieTests.Cookies_IncludeBehavesLikeSameOriginForSameHost(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchCookieTests.Cookies_OmitDoesNotSendStored(mode: Compiled)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchCookieTests.Cookies_OmitDoesNotSendStored(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchCookieTests.Cookies_OmitDoesNotStoreSetCookie(mode: Compiled)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchCookieTests.Cookies_OmitDoesNotStoreSetCookie(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchCookieTests.Cookies_SetCookieThrowsOnInvalidUrl(mode: Compiled)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchCookieTests.Cookies_SetCookieThrowsOnInvalidUrl(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchCookieTests.Cookies_StoredAndResent_DefaultCredentials(mode: Compiled)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchCookieTests.Cookies_StoredAndResent_DefaultCredentials(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchCookieTests.Cookies_StoredFromRedirectIntermediate(mode: Compiled)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchCookieTests.Cookies_StoredFromRedirectIntermediate(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchRedirectTests.Fetch_RedirectError_NonRedirectWorksNormally(mode: Compiled)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchRedirectTests.Fetch_RedirectError_NonRedirectWorksNormally(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchRedirectTests.Fetch_RedirectError_ThrowsOnRedirect(mode: Compiled)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchRedirectTests.Fetch_RedirectError_ThrowsOnRedirect(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchRedirectTests.Fetch_RedirectFollow_Default_FollowsRedirect(mode: Compiled)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchRedirectTests.Fetch_RedirectFollow_Default_FollowsRedirect(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchRedirectTests.Fetch_RedirectFollow_Explicit_FollowsRedirect(mode: Compiled)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchRedirectTests.Fetch_RedirectFollow_Explicit_FollowsRedirect(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchRedirectTests.Fetch_RedirectManual_NonRedirectWorksNormally(mode: Compiled)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchRedirectTests.Fetch_RedirectManual_NonRedirectWorksNormally(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchRedirectTests.Fetch_RedirectManual_OkIsFalse(mode: Compiled)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchRedirectTests.Fetch_RedirectManual_OkIsFalse(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchRedirectTests.Fetch_RedirectManual_Returns301(mode: Compiled)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchRedirectTests.Fetch_RedirectManual_Returns301(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchRedirectTests.Fetch_RedirectManual_Returns302(mode: Compiled)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchRedirectTests.Fetch_RedirectManual_Returns302(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchRedirectTests.Fetch_Response_RedirectedProperty_NoRedirect(mode: Compiled)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchRedirectTests.Fetch_Response_RedirectedProperty_NoRedirect(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchRedirectTests.Fetch_Response_TypeProperty(mode: Compiled)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchRedirectTests.Fetch_Response_TypeProperty(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchTests.Fetch_AbortSignal_AbortBeforeFetch(mode: Compiled)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchTests.Fetch_AbortSignal_AbortBeforeFetch(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchTests.Fetch_HeadMethod(mode: Compiled)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchTests.Fetch_HeadMethod(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchTests.Fetch_JsonBody(mode: Compiled)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchTests.Fetch_JsonBody(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchTests.Fetch_NoArguments_Throws(mode: Compiled)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchTests.Fetch_NoArguments_Throws(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchTests.Fetch_PatchMethod(mode: Compiled)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchTests.Fetch_PatchMethod(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchTests.Fetch_ResponseBody_BodyUsedAfterAccess(mode: Compiled)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchTests.Fetch_ResponseBody_BodyUsedAfterAccess(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchTests.Fetch_ResponseBody_Exists(mode: Compiled)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchTests.Fetch_ResponseBody_Exists(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchTests.Fetch_ResponseBody_IsReadable(mode: Compiled)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchTests.Fetch_ResponseBody_IsReadable(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchTests.Fetch_ResponseBody_ReadBinaryData(mode: Compiled)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchTests.Fetch_ResponseBody_ReadBinaryData(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchTests.Fetch_ResponseBody_ReadData(mode: Compiled)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchTests.Fetch_ResponseBody_ReadData(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchTests.Fetch_WithHeadersObject(mode: Compiled)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchTests.Fetch_WithHeadersObject(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchTests.FetchArrayBuffer_ReturnsBinary(mode: Compiled)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchTests.FetchArrayBuffer_ReturnsBinary(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchTests.FetchDeleteMethod_SendsCorrectMethod(mode: Compiled)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchTests.FetchDeleteMethod_SendsCorrectMethod(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchTests.FetchJson_ParsesResponse(mode: Compiled)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchTests.FetchJson_ParsesResponse(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchTests.FetchPost_SendsBody(mode: Compiled)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchTests.FetchPost_SendsBody(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchTests.FetchPutMethod_SendsCorrectMethod(mode: Compiled)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchTests.FetchPutMethod_SendsCorrectMethod(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchTests.FetchResponse_BodyUsed_TracksConsumption(mode: Compiled)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchTests.FetchResponse_BodyUsed_TracksConsumption(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchTests.FetchResponse_Clone_Works(mode: Compiled)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchTests.FetchResponse_Clone_Works(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchTests.FetchResponse_Headers_ForEach(mode: Compiled)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchTests.FetchResponse_Headers_ForEach(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchTests.FetchResponse_Headers_Get(mode: Compiled)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchTests.FetchResponse_Headers_Get(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchTests.FetchResponse_Headers_Has(mode: Compiled)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchTests.FetchResponse_Headers_Has(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchTests.FetchResponse_StatusText_ReturnsText(mode: Compiled)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchTests.FetchResponse_StatusText_ReturnsText(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchTests.FetchResponse_Url_ReturnsUrl(mode: Compiled)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchTests.FetchResponse_Url_ReturnsUrl(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchTests.FetchResponseHeaders_TypeofIsObject(mode: Compiled)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchTests.FetchResponseHeaders_TypeofIsObject(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchTests.FetchText_ReturnsBody(mode: Compiled)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchTests.FetchText_ReturnsBody(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchTests.FetchWithCustomHeaders_SendsHeaders(mode: Compiled)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchTests.FetchWithCustomHeaders_SendsHeaders(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchTests.Headers_Append_AddsMultipleValues(mode: Compiled)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchTests.Headers_Append_AddsMultipleValues(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchTests.Headers_CaseInsensitive(mode: Compiled)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchTests.Headers_CaseInsensitive(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchTests.Headers_Delete_RemovesHeader(mode: Compiled)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchTests.Headers_Delete_RemovesHeader(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchTests.Headers_Entries_ReturnsIterator(mode: Compiled)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchTests.Headers_Entries_ReturnsIterator(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchTests.Headers_ForEach_IteratesAll(mode: Compiled)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchTests.Headers_ForEach_IteratesAll(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchTests.Headers_Get_ReturnsNull(mode: Compiled)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchTests.Headers_Get_ReturnsNull(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchTests.Headers_Get_ReturnsValue(mode: Compiled)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchTests.Headers_Get_ReturnsValue(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchTests.Headers_Has_ReturnsBool(mode: Compiled)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchTests.Headers_Has_ReturnsBool(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchTests.Headers_Keys_ReturnsIterator(mode: Compiled)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchTests.Headers_Keys_ReturnsIterator(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchTests.Headers_Set_OverwritesValue(mode: Compiled)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchTests.Headers_Set_OverwritesValue(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchTests.Headers_Values_ReturnsIterator(mode: Compiled)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.FetchTests.Headers_Values_ReturnsIterator(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.HttpAgentPoolTests.Agent_Destroy_ClearsPool(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.HttpAgentPoolTests.Agent_KeepAlive_PopulatesFreeSockets(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.HttpAgentPoolTests.Agent_NoKeepAlive_LeavesFreeSocketsEmpty(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.HttpClientRequestTests.ClientRequest_GetHeaders_ReturnsObject(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.HttpClientRequestTests.ClientRequest_IsWritable_WithHeaderManipulation(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.HttpClientRequestTests.ClientRequest_PostStreamedBody_ResponseCallback(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.HttpClientRequestTests.ClientRequest_ResponseEvent_FiresWithIncomingMessage(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.HttpEventTests.HttpRequestDataEvent(mode: Compiled)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.HttpEventTests.HttpRequestDataEvent(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.HttpEventTests.HttpRequestHeaders(mode: Compiled)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.HttpEventTests.HttpRequestHeaders(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.HttpEventTests.HttpRequestRawHeaders(mode: Compiled)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.HttpEventTests.HttpRequestRawHeaders(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.HttpEventTests.HttpResponseWriteHeadStatusMessage(mode: Compiled)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.HttpEventTests.HttpResponseWriteHeadStatusMessage(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.HttpEventTests.HttpResponseWriteMultiple(mode: Compiled)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.HttpEventTests.HttpResponseWriteMultiple(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.HttpEventTests.HttpServerListeningAndCloseEvents(mode: Compiled)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.HttpEventTests.HttpServerListeningAndCloseEvents(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.HttpEventTests.HttpServerRequestEvent(mode: Compiled)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.HttpEventTests.HttpServerRequestEvent(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.HttpEventTests.HttpServerRequestEventEmitter(mode: Compiled)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.HttpEventTests.HttpServerRequestEventEmitter(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.HttpEventTests.HttpServerResponseStatusCode(mode: Compiled)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.HttpEventTests.HttpServerResponseStatusCode(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.HttpEventTests.HttpServerResponseWriteHead(mode: Compiled)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.HttpEventTests.HttpServerResponseWriteHead(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.HttpEventTests.HttpServerSetHeader(mode: Compiled)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.HttpEventTests.HttpServerSetHeader(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.HttpIncomingMessageTests.IncomingMessage_Destroy_StopsBodyConsumptionAndMarksAborted(mode: Compiled)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.HttpIncomingMessageTests.IncomingMessage_Destroy_StopsBodyConsumptionAndMarksAborted(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.HttpIncomingMessageTests.IncomingMessage_RawHeaders_IsAlternatingArray(mode: Compiled)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.HttpIncomingMessageTests.IncomingMessage_RawHeaders_IsAlternatingArray(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.HttpIncomingMessageTests.IncomingMessage_StreamsLargeBodyInBoundedChunks_AndMarksComplete(mode: Compiled)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.HttpIncomingMessageTests.IncomingMessage_StreamsLargeBodyInBoundedChunks_AndMarksComplete(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.HttpIncomingMessageTests.IncomingMessage_StreamsRequestBody(mode: Compiled)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.HttpIncomingMessageTests.IncomingMessage_StreamsRequestBody(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.HttpIncomingMessageTests.IncomingMessage_VersionSocketAndFields(mode: Compiled)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.HttpIncomingMessageTests.IncomingMessage_VersionSocketAndFields(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.HttpModuleTests.FetchIsGlobal(mode: Compiled)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.HttpModuleTests.FetchIsGlobal(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.HttpModuleTests.FetchJsonMethod(mode: Compiled)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.HttpModuleTests.FetchJsonMethod(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.HttpModuleTests.FetchResponseProperties(mode: Compiled)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.HttpModuleTests.FetchResponseProperties(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.HttpModuleTests.FetchReturnsPromise(mode: Compiled)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.HttpModuleTests.FetchReturnsPromise(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.HttpModuleTests.FetchTextMethod(mode: Compiled)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.HttpModuleTests.FetchTextMethod(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.HttpModuleTests.FetchWithPost(mode: Compiled)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.HttpModuleTests.FetchWithPost(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.HttpModuleTests.GlobalThisHasFetch_TypeCheck(mode: Compiled)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.HttpModuleTests.GlobalThisHasFetch_TypeCheck(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.HttpModuleTests.GlobalThisHasFetch(mode: Compiled)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.HttpModuleTests.GlobalThisHasFetch(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.HttpModuleTests.HttpCreateServer(mode: Compiled)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.HttpModuleTests.HttpCreateServer(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.HttpModuleTests.HttpGlobalAgent(mode: Compiled)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.HttpModuleTests.HttpGlobalAgent(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.HttpModuleTests.HttpListenZero_BindsEphemeralPort(mode: Compiled)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.HttpModuleTests.HttpListenZero_BindsEphemeralPort(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.HttpModuleTests.HttpMethods(mode: Compiled)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.HttpModuleTests.HttpMethods(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.HttpModuleTests.HttpModuleExports(mode: Compiled)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.HttpModuleTests.HttpModuleExports(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.HttpModuleTests.HttpModuleImport(mode: Compiled)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.HttpModuleTests.HttpModuleImport(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.HttpModuleTests.HttpStatusCodes(mode: Compiled)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.HttpModuleTests.HttpStatusCodes(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.HttpServerAdvancedEventsTests.Server_AdvancedEventListeners_AreRegistrable(mode: Compiled)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.HttpServerAdvancedEventsTests.Server_AdvancedEventListeners_AreRegistrable(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.HttpServerAdvancedEventsTests.Server_CheckContinue_FiresInsteadOfRequest(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.HttpServerLifecycleTests.Server_CanRelistenFromCloseEventWithoutLosingCallback(mode: Compiled)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.HttpServerLifecycleTests.Server_CanRelistenFromCloseEventWithoutLosingCallback(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.HttpServerLifecycleTests.Server_Close_DrainsInFlightRequestBeforeCloseEventAndCallback(mode: Compiled)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.HttpServerLifecycleTests.Server_Close_DrainsInFlightRequestBeforeCloseEventAndCallback(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.HttpServerLifecycleTests.Server_CloseAllConnections_AbortsActiveResponseWithoutDoubleCompletion(mode: Compiled)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.HttpServerLifecycleTests.Server_CloseAllConnections_AbortsActiveResponseWithoutDoubleCompletion(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.HttpServerLifecycleTests.Server_CloseAllConnections_DoesNotStopServer(mode: Compiled)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.HttpServerLifecycleTests.Server_CloseAllConnections_DoesNotStopServer(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.HttpServerLifecycleTests.Server_CloseAllConnections_KeepsListenerOpen(mode: Compiled)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.HttpServerLifecycleTests.Server_CloseAllConnections_KeepsListenerOpen(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.HttpServerLifecycleTests.Server_ConnectionEvent_Fires(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.HttpServerLifecycleTests.Server_ListenHost_UsesThirdArgumentCallbackAndReportsAddress(mode: Compiled)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.HttpServerLifecycleTests.Server_ListenHost_UsesThirdArgumentCallbackAndReportsAddress(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.HttpServerResponseTests.HttpResponseEnd_WritesBufferBytes(mode: Compiled)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.HttpServerResponseTests.HttpResponseEnd_WritesBufferBytes(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.HttpServerResponseTests.ServerResponse_ChunkedStreaming_BodyReceived(mode: Compiled)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.HttpServerResponseTests.ServerResponse_ChunkedStreaming_BodyReceived(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.HttpServerResponseTests.ServerResponse_ExtraMethods_Callable(mode: Compiled)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.HttpServerResponseTests.ServerResponse_ExtraMethods_Callable(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.HttpServerResponseTests.ServerResponse_ProbeConnection_WritesJsonSafeWhitespace(mode: Compiled)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.HttpServerResponseTests.ServerResponse_ProbeConnection_WritesJsonSafeWhitespace(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.HttpServerResponseTests.ServerResponse_StatusMessage_Writable(mode: Compiled)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.HttpServerResponseTests.ServerResponse_StatusMessage_Writable(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.HttpServerResponseTests.ServerResponse_Write_ReturnsBoolean(mode: Compiled)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.HttpServerResponseTests.ServerResponse_Write_ReturnsBoolean(mode: Interpreted)",
+          "error": "System.Net.HttpListenerException : The handle is invalid."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.HttpsModuleTests.Https_ServerClient_PostBody(mode: Interpreted)",
+          "error": "System.Security.Cryptography.CryptographicException : Access denied."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.HttpsModuleTests.Https_ServerClient_RoundTrip(mode: Interpreted)",
+          "error": "System.Security.Cryptography.CryptographicException : Access denied."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.HttpTypeSurfaceTests.HttpsCreateServerWithTlsOptions_TypeChecks(mode: Interpreted)",
+          "error": "System.Security.Cryptography.CryptographicException : Access denied."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.NetModuleTests.IpcSocket_BidirectionalEcho(mode: Compiled)",
+          "error": "System.TimeoutException : Compiled module execution exceeded 30s timeout. This likely indicates an infinite loop bug."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.NetModuleTests.IpcSocket_BidirectionalEcho(mode: Interpreted)",
+          "error": "System.TimeoutException : Interpreted module execution exceeded 30s timeout."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.NetModuleTests.IpcSocket_ConnectionEvent(mode: Compiled)",
+          "error": "System.TimeoutException : Compiled module execution exceeded 30s timeout. This likely indicates an infinite loop bug."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.NetModuleTests.IpcSocket_ConnectionEvent(mode: Interpreted)",
+          "error": "System.TimeoutException : Interpreted module execution exceeded 30s timeout."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.NetModuleTests.IpcSocket_MultipleClients(mode: Compiled)",
+          "error": "System.TimeoutException : Compiled module execution exceeded 30s timeout. This likely indicates an infinite loop bug."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.NetModuleTests.IpcSocket_MultipleClients(mode: Interpreted)",
+          "error": "System.TimeoutException : Interpreted module execution exceeded 30s timeout."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.NetModuleTests.IpcSocket_NetConnect(mode: Compiled)",
+          "error": "System.TimeoutException : Compiled module execution exceeded 30s timeout. This likely indicates an infinite loop bug."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.NetModuleTests.IpcSocket_NetConnect(mode: Interpreted)",
+          "error": "System.TimeoutException : Interpreted module execution exceeded 30s timeout."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.NetModuleTests.IpcSocket_OptionsObject(mode: Compiled)",
+          "error": "System.TimeoutException : Compiled module execution exceeded 30s timeout. This likely indicates an infinite loop bug."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.NetModuleTests.IpcSocket_OptionsObject(mode: Interpreted)",
+          "error": "System.TimeoutException : Interpreted module execution exceeded 30s timeout."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.NetModuleTests.IpcSocket_PipeBasic(mode: Compiled)",
+          "error": "System.TimeoutException : Compiled module execution exceeded 30s timeout. This likely indicates an infinite loop bug."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.NetModuleTests.IpcSocket_PipeBasic(mode: Interpreted)",
+          "error": "System.TimeoutException : Interpreted module execution exceeded 30s timeout."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.NetModuleTests.IpcSocket_Properties(mode: Compiled)",
+          "error": "System.TimeoutException : Compiled module execution exceeded 30s timeout. This likely indicates an infinite loop bug."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.NetModuleTests.IpcSocket_Properties(mode: Interpreted)",
+          "error": "System.TimeoutException : Interpreted module execution exceeded 30s timeout."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.NetModuleTests.IpcSocket_ServerAddress(mode: Compiled)",
+          "error": "System.TimeoutException : Compiled module execution exceeded 30s timeout. This likely indicates an infinite loop bug."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.NetModuleTests.IpcSocket_ServerAddress(mode: Interpreted)",
+          "error": "System.TimeoutException : Interpreted module execution exceeded 30s timeout."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.NetModuleTests.IpcSocket_ServerListenErrorEvent(mode: Compiled)",
+          "error": "System.TimeoutException : Compiled module execution exceeded 30s timeout. This likely indicates an infinite loop bug."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.NetModuleTests.IpcSocket_ServerListenErrorEvent(mode: Interpreted)",
+          "error": "System.TimeoutException : Interpreted module execution exceeded 30s timeout."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.TlsModuleTests.TlsClient_AlpnProtocol_Exposed(mode: Compiled)",
+          "error": "System.TimeoutException : Compiled module execution exceeded 30s timeout. This likely indicates an infinite loop bug."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.TlsModuleTests.TlsClient_AlpnProtocol_Exposed(mode: Interpreted)",
+          "error": "System.Security.Cryptography.CryptographicException : Access denied."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.TlsModuleTests.TlsConnect_ALPNProtocols(mode: Compiled)",
+          "error": "System.TimeoutException : Compiled module execution exceeded 30s timeout. This likely indicates an infinite loop bug."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.TlsModuleTests.TlsConnect_ALPNProtocols(mode: Interpreted)",
+          "error": "System.Security.Cryptography.CryptographicException : Access denied."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.TlsModuleTests.TlsRejectUnauthorized_Interpreted",
+          "error": "System.Security.Cryptography.CryptographicException : Access denied."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.TlsModuleTests.TlsRejectUnauthorized_Parity(mode: Interpreted)",
+          "error": "System.Security.Cryptography.CryptographicException : Access denied."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.TlsModuleTests.TlsRoundTrip_ServerToClientData_Parity(mode: Compiled)",
+          "error": "System.TimeoutException : Compiled module execution exceeded 30s timeout. This likely indicates an infinite loop bug."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.TlsModuleTests.TlsRoundTrip_ServerToClientData_Parity(mode: Interpreted)",
+          "error": "System.Security.Cryptography.CryptographicException : Access denied."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.TlsModuleTests.TlsServer_ALPNProtocols(mode: Compiled)",
+          "error": "System.TimeoutException : Compiled module execution exceeded 30s timeout. This likely indicates an infinite loop bug."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.TlsModuleTests.TlsServer_ALPNProtocols(mode: Interpreted)",
+          "error": "System.Security.Cryptography.CryptographicException : Access denied."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.TlsModuleTests.TlsServer_EmitsTlsClientError_ForInvalidHandshake(mode: Compiled)",
+          "error": "System.TimeoutException : Compiled module execution exceeded 30s timeout. This likely indicates an infinite loop bug."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.TlsModuleTests.TlsServer_EmitsTlsClientError_ForInvalidHandshake(mode: Interpreted)",
+          "error": "System.Security.Cryptography.CryptographicException : Access denied."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.TlsModuleTests.TlsServer_InterpreterTimeout_ReleasesListener",
+          "error": "Assert.Throws() Failure: Exception type was not an exact match\r\nExpected: typeof(System.TimeoutException)\r\nActual:   typeof(System.Security.Cryptography.CryptographicException)\r\n---- System.Security.Cryptography.CryptographicException : Access denied."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.TlsModuleTests.TlsServer_SNICallback_Accepted(mode: Interpreted)",
+          "error": "System.Security.Cryptography.CryptographicException : Access denied."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.TlsModuleTests.TlsServerAndClientHandshake",
+          "error": "System.Security.Cryptography.CryptographicException : Access denied."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.TlsModuleTests.TlsServerAndClientHandshake_Interpreted",
+          "error": "System.Security.Cryptography.CryptographicException : Access denied."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.TlsModuleTests.TlsSocket_Introspection_Parity(mode: Compiled)",
+          "error": "System.TimeoutException : Compiled module execution exceeded 30s timeout. This likely indicates an infinite loop bug."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.TlsModuleTests.TlsSocket_Introspection_Parity(mode: Interpreted)",
+          "error": "System.Security.Cryptography.CryptographicException : Access denied."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.TlsModuleTests.TlsSocket_PeerCertSubjectAltName_Parity(mode: Compiled)",
+          "error": "System.TimeoutException : Compiled module execution exceeded 30s timeout. This likely indicates an infinite loop bug."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.TlsModuleTests.TlsSocket_PeerCertSubjectAltName_Parity(mode: Interpreted)",
+          "error": "System.Security.Cryptography.CryptographicException : Access denied."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.TlsModuleTests.TlsSocket_WriteEchoAndClose_Parity(mode: Compiled)",
+          "error": "System.TimeoutException : Compiled module execution exceeded 30s timeout. This likely indicates an infinite loop bug."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.TlsModuleTests.TlsSocket_WriteEchoAndClose_Parity(mode: Interpreted)",
+          "error": "System.Security.Cryptography.CryptographicException : Access denied."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.TlsSecureContextTests.SecureContext_ServerHandshake(mode: Compiled)",
+          "error": "System.TimeoutException : Compiled module execution exceeded 30s timeout. This likely indicates an infinite loop bug."
+        },
+        {
+          "name": "SharpTS.Tests.SharedTests.TlsSecureContextTests.SecureContext_ServerHandshake(mode: Interpreted)",
+          "error": "System.Security.Cryptography.CryptographicException : Access denied."
+        }
+      ]
+    },
+    {
+      "run": "language-hot-paths-final-extra",
+      "compilerSha256": "CBE56E41F96CB716CC645106A52007191DA678A6AFB3AB8F7F32659C3F8B1DC1",
+      "started": "2026-09-04T21:04:50.2051608-07:00",
+      "finished": "2026-09-04T21:04:57.2047998-07:00",
+      "total": 10,
+      "passed": 10,
+      "failed": 0,
+      "notExecuted": 0,
+      "failedTests": []
+    },
+    {
+      "run": "language-hot-paths-closed",
+      "compilerSha256": "95DF7B5DFF347A5D28565216CF8315E48612C341AA6770DA8423065642BE544D",
+      "started": "2026-09-04T21:31:23.6496433-07:00",
+      "finished": "2026-09-04T21:31:53.6683193-07:00",
+      "total": 599,
+      "passed": 599,
+      "failed": 0,
+      "notExecuted": 0,
+      "failedTests": []
+    },
+    {
+      "run": "language-hot-paths-merge",
+      "compilerSha256": "F4A254F43C804D91E7E83CE53B1CF1DDABEF54FE59CB70163B47D8A2EEBCF4DE",
+      "started": "2026-09-04T22:31:31.4262733-07:00",
+      "finished": "2026-09-04T22:32:19.8494878-07:00",
+      "total": 599,
+      "passed": 599,
+      "failed": 0,
+      "notExecuted": 0,
+      "failedTests": []
+    },
+    {
+      "run": "language-hot-paths-merge-overlap",
+      "compilerSha256": "F4A254F43C804D91E7E83CE53B1CF1DDABEF54FE59CB70163B47D8A2EEBCF4DE",
+      "started": "2026-09-04T22:32:34.4022130-07:00",
+      "finished": "2026-09-04T22:32:53.4672452-07:00",
+      "total": 142,
+      "passed": 142,
+      "failed": 0,
+      "notExecuted": 0,
+      "failedTests": []
+    }
+  ]
+}

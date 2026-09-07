@@ -18,6 +18,17 @@ class Program
 {
     static void Main(string[] args)
     {
+        if (args is ["--allocation-smoke"])
+        {
+            foreach (int n in new[] { 2000, 20000 })
+            foreach (bool alias in new[] { false, true })
+            {
+                new Benchmarks.AllocationKernelBenchmarks { N = n, UseTypeAlias = alias }.Setup();
+                Console.WriteLine($"Validated allocation diagnostics: N={n}, UseTypeAlias={alias}");
+            }
+            return;
+        }
+
         if (args is ["--smoke"])
         {
             CompileEmbeddedTypeScript();
@@ -43,6 +54,7 @@ class Program
         var resources = assembly.GetManifestResourceNames()
             .Where(name => name.EndsWith(".ts", StringComparison.Ordinal))
             .Where(name => !JsonModuleBenchmark.ModuleOnlyResources.Contains(name))
+            .Where(name => !CustomIteratorModuleBenchmark.ModuleOnlyResources.Contains(name))
             .OrderBy(name => name, StringComparer.Ordinal)
             .ToArray();
 
@@ -71,5 +83,8 @@ class Program
             }
         }
         Console.WriteLine("Smoke-validated allocation kernel, construction and traversal");
+        CustomIteratorModuleBenchmark.Compile(true, "SmokeDynamicCustomIterator");
+        CustomIteratorModuleBenchmark.Compile(false, "SmokeStableCustomIterator");
+        Console.WriteLine("Smoke-compiled imported custom iterator module graphs");
     }
 }

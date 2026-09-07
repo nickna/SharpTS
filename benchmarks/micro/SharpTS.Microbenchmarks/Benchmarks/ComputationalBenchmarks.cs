@@ -85,7 +85,7 @@ public class FactorialBenchmarks : ComputationalBenchmarkBase
 {
     private Func<double, double> _factorial = null!;
 
-    [Params(20, 50, 100)]
+    [Params(10, 20, 100)]
     public int N { get; set; }
 
     [GlobalSetup]
@@ -95,10 +95,60 @@ public class FactorialBenchmarks : ComputationalBenchmarkBase
     public double SharpTS() => _factorial(N);
 
     [Benchmark]
-    public long Idiomatic() => IdiomaticCSharp.Factorial(N);
+    public double Idiomatic() => IdiomaticCSharp.Factorial(N);
 
     [Benchmark]
     public object? Equivalent() => EquivalentCSharp.Factorial((double)N);
+}
+
+[MemoryDiagnoser]
+public class BoundedArithmeticBenchmarks : ComputationalBenchmarkBase
+{
+    private Func<double, double> _arithmetic = null!;
+
+    [Params(1000, 10000, 100000)]
+    public int N { get; set; }
+
+    [GlobalSetup]
+    public void Setup() => _arithmetic = LoadCompiled("boundedArithmetic");
+
+    [Benchmark]
+    public double SharpTS() => _arithmetic(N);
+
+    [Benchmark(Baseline = true)]
+    public double Idiomatic()
+    {
+        double result = 0;
+        for (int i = 0; i < N; i++)
+            result = (result + i) % 65536;
+        return result;
+    }
+}
+
+[MemoryDiagnoser]
+public class StringScalingBenchmarks : ComputationalBenchmarkBase
+{
+    private Func<double, double> _scan = null!;
+
+    [Params(10000, 100000, 1000000)]
+    public int N { get; set; }
+
+    [GlobalSetup]
+    public void Setup() => _scan = LoadCompiled("stringWork");
+
+    [Benchmark]
+    public double SharpTS() => _scan(N);
+
+    [Benchmark(Baseline = true)]
+    public double Idiomatic()
+    {
+        var builder = new System.Text.StringBuilder();
+        for (int i = 0; i < N; i++) builder.Append("ab");
+        string text = builder.ToString();
+        double sum = 0;
+        for (int i = 0; i < text.Length; i++) sum += text[i];
+        return sum;
+    }
 }
 
 [MemoryDiagnoser]

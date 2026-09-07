@@ -16,12 +16,22 @@ namespace SharpTS.Compilation;
 /// </summary>
 public partial class ILEmitter
 {
-    protected override void EmitGet(Expr.Get g) => EmitGet(g, numericArrayLengthConsumer: false);
-
-    private void EmitGet(Expr.Get g, bool numericArrayLengthConsumer)
+    protected override void EmitGet(Expr.Get g)
     {
         if (TryEmitStableRecordDestructureGet(g))
             return;
+
+        // Promoted string-accumulator `.length` (#857): direct StringBuilder.Length. .NET StringBuilder
+        // .Length is UTF-16 code units, identical to JS string .length — no materialization.
+        if (!g.Optional && g.Name.Lexeme == "length" && g.Object is Expr.Variable accLenVar
+            && _ctx.TryGetPromotedStringAccumulator(accLenVar.Name.Lexeme) is { } accLenSb)
+        {
+            IL.Emit(OpCodes.Ldloc, accLenSb);
+            IL.Emit(OpCodes.Callvirt, _ctx.Types.GetProperty(_ctx.Types.StringBuilder, "Length").GetGetMethod()!);
+            IL.Emit(OpCodes.Conv_R8);
+            SetStackType(StackType.Double);
+            return;
+        }
 
         if (StringEmitter.TryEmitPrimitiveStringLengthGet(this, g))
             return;
@@ -336,18 +346,6 @@ public partial class ILEmitter
             return;
         }
 
-        // Promoted string-accumulator `.length` (#857): direct StringBuilder.Length. .NET StringBuilder
-        // .Length is UTF-16 code units, identical to JS string .length — no materialization.
-        if (!g.Optional && g.Name.Lexeme == "length" && g.Object is Expr.Variable accLenVar
-            && _ctx.TryGetPromotedStringAccumulator(accLenVar.Name.Lexeme) is { } accLenSb)
-        {
-            IL.Emit(OpCodes.Ldloc, accLenSb);
-            IL.Emit(OpCodes.Callvirt, _ctx.Types.GetProperty(_ctx.Types.StringBuilder, "Length").GetGetMethod()!);
-            IL.Emit(OpCodes.Conv_R8);
-            SetStackType(StackType.Double);
-            return;
-        }
-
         // Promoted numeric Map `.size` (#1482): keep Dictionary.Count as an
         // unboxed TypeScript number. The registry property contract otherwise
         // resets stack tracking to object because ordinary Map properties box.
@@ -362,6 +360,9 @@ public partial class ILEmitter
             return;
         }
 
+        if (!g.Optional && g.Name.Lexeme == "length" && ArrayEmitter.TryEmitLengthGet(this, g.Object))
+            return;
+
         // Try direct getter dispatch for known class instance types
         TypeInfo? objType = _ctx.TypeMap?.Get(g.Object);
         if (TryEmitDirectGetterCall(g.Object, objType, g.Name.Lexeme))
@@ -369,9 +370,6 @@ public partial class ILEmitter
 
         // Keep all specialized property routing above (flattened rest,
         // promoted queues/arrays, arguments) before the ordinary array path.
-        if (numericArrayLengthConsumer && new ArrayEmitter().TryEmitLengthAsDouble(this, g.Object))
-            return;
-
         // Type-first dispatch: Use TypeEmitterRegistry for property getters
         if (objType != null && _ctx.TypeEmitterRegistry != null)
         {
@@ -404,9 +402,24 @@ public partial class ILEmitter
             && objType is TypeInfo.Record recordType
             && _ctx.Runtime?.UndefinedInstance != null)
         {
-            if (TryEmitTypedRecordNumberGet(g, recordType))
+            JsonSerializationShapeAnalyzer.TryAnalyze(recordType, out var analyzed);
+            var shape = analyzed as JsonSerializationShape.Record;
+            if (TryEmitTypedRecordNumberGet(g, shape))
                 return;
-            EmitTypedRecordPropertyGet(g, recordType);
+            EmitTypedRecordPropertyGet(g, shape);
+            return;
+        }
+
+        // Interface declarations do not define object insertion order. Match an
+        // emitted carrier by its field names/types, then use its canonical order.
+        // The same runtime type/materialization guards protect class instances,
+        // aliases and structurally compatible values with a different layout.
+        if (!g.Optional && objType is TypeInfo.Interface interfaceType &&
+            TryGetInterfaceReadShape(interfaceType, out var interfaceShape))
+        {
+            if (TryEmitTypedRecordNumberGet(g, interfaceShape, requireMaterializationGuard: true))
+                return;
+            EmitTypedRecordPropertyGet(g, interfaceShape, requireMaterializationGuard: true);
             return;
         }
 
@@ -460,11 +473,11 @@ public partial class ILEmitter
     /// and its own materialization state; the cold arm preserves the general
     /// property lookup and ToNumber semantics.
     /// </summary>
-    private bool TryEmitTypedRecordNumberGet(Expr.Get g, TypeInfo.Record recordType)
+    private bool TryEmitTypedRecordNumberGet(Expr.Get g, JsonSerializationShape.Record? recordShape,
+        bool requireMaterializationGuard = false)
     {
         if (_ctx.ProgramType is null || _ctx.Runtime is not { } runtime ||
-            !JsonSerializationShapeAnalyzer.TryAnalyze(recordType, out var analyzedShape) ||
-            analyzedShape is not JsonSerializationShape.Record recordShape)
+            recordShape is null)
         {
             return false;
         }
@@ -545,7 +558,7 @@ public partial class ILEmitter
             IL.Emit(OpCodes.Stloc, compactExact);
             IL.Emit(OpCodes.Ldloc, compactExact);
             IL.Emit(OpCodes.Brfalse, fallback);
-            if (!_ctx.RuntimeFeatures!.CanAssumeCompactObjectRecordIsUnmaterialized(
+            if (requireMaterializationGuard || !_ctx.RuntimeFeatures!.CanAssumeCompactObjectRecordIsUnmaterialized(
                     fingerprint))
             {
                 IL.Emit(OpCodes.Ldloc, compactExact);
@@ -591,7 +604,8 @@ public partial class ILEmitter
     /// instances downcast to record shape, etc.) we fall through to the
     /// existing dispatch.
     /// </summary>
-    private void EmitTypedRecordPropertyGet(Expr.Get g, TypeInfo.Record recordType)
+    private void EmitTypedRecordPropertyGet(Expr.Get g, JsonSerializationShape.Record? recordShape,
+        bool requireMaterializationGuard = false)
     {
         EmitExpression(g.Object);
         EmitBoxIfNeeded(g.Object);
@@ -610,8 +624,7 @@ public partial class ILEmitter
         bool exactCarrierSpecialized = false;
 
         if (hasCompactCarrier && _ctx.ProgramType is not null &&
-            JsonSerializationShapeAnalyzer.TryAnalyze(recordType, out var analyzedShape) &&
-            analyzedShape is JsonSerializationShape.Record recordShape)
+            recordShape is not null)
         {
             int scalarIndex = -1;
             for (int index = 0; index < recordShape.Fields.Count; index++)
@@ -694,7 +707,7 @@ public partial class ILEmitter
                 }
                 IL.Emit(OpCodes.Ldloc, exactLocal);
                 IL.Emit(OpCodes.Brfalse, fallbackLabel);
-                if (!_ctx.RuntimeFeatures!.CanAssumeCompactObjectRecordIsUnmaterialized(
+                if (requireMaterializationGuard || !_ctx.RuntimeFeatures!.CanAssumeCompactObjectRecordIsUnmaterialized(
                         fingerprint))
                 {
                     IL.Emit(OpCodes.Ldloc, exactLocal);
@@ -1477,21 +1490,9 @@ public partial class ILEmitter
             IL.Emit(OpCodes.Br, endLabelNH);
 
             IL.MarkLabel(notTSArrayGet);
-            IL.Emit(OpCodes.Ldloc, objLocal);
-            IL.Emit(OpCodes.Isinst, _ctx.Types.ListOfObject);
-            IL.Emit(OpCodes.Brfalse, fallbackLabelNH);
-
-            // List<object?> path: cast + get_Item (int-indexed; ordinary arrays
-            // don't exceed int.MaxValue so no widening needed here).
-            IL.Emit(OpCodes.Ldloc, objLocal);
-            IL.Emit(OpCodes.Castclass, _ctx.Types.ListOfObject);
-            EmitExpressionAsDouble(gi.Index);
-            IL.Emit(OpCodes.Conv_I4);
-            IL.Emit(OpCodes.Callvirt, _ctx.Types.GetMethod(_ctx.Types.ListOfObject, "get_Item", _ctx.Types.Int32));
-            SetStackUnknown();
-            IL.Emit(OpCodes.Br, endLabelNH);
-
-            // Fallback: generic dispatch
+            // Indirect rest calls can supply a plain List with fewer elements
+            // than this read. Use canonical indexing so missing entries return
+            // undefined rather than throwing from List.get_Item.
             IL.MarkLabel(fallbackLabelNH);
             IL.Emit(OpCodes.Ldloc, objLocal);
             EmitExpression(gi.Index);
@@ -1564,7 +1565,7 @@ public partial class ILEmitter
 
     /// <summary>
     /// Emits a native-double numeric-consumer path for a statically-number[] read.
-    /// The hot arm is limited to a dense numeric-mode $Array and an exactly integral,
+    /// The hot arms accept dense numeric storage or present boxed doubles and an exactly integral,
     /// Int32 index. Every unsupported receiver/index shape takes the ordinary GetIndex
     /// path and then the caller's pre-existing ToNumber coercion, so raw/any consumers
     /// never enter this specialization and continue to observe the original JS value.
@@ -1592,19 +1593,32 @@ public partial class ILEmitter
         // Capture the receiver before evaluating the key. A hoisted exact-$Array
         // local already captured the stable binding at loop entry; parameters and
         // non-hoisted locals are spilled at this read site.
-        LocalBuilder? receiverLocal = null;
+        var receiverLocal = IL.DeclareLocal(_ctx.Types.Object);
         LocalBuilder? arrayLocal = null;
         if (hoisted is null)
         {
             EmitExpression(gi.Object);
             EmitBoxIfNeeded(gi.Object);
-            receiverLocal = IL.DeclareLocal(_ctx.Types.Object);
             IL.Emit(OpCodes.Stloc, receiverLocal);
 
             arrayLocal = IL.DeclareLocal(_ctx.Runtime!.TSArrayType);
             IL.Emit(OpCodes.Ldloc, receiverLocal);
             IL.Emit(OpCodes.Isinst, _ctx.Runtime.TSArrayType);
             IL.Emit(OpCodes.Stloc, arrayLocal);
+        }
+        else
+        {
+            // Capture the raw receiver before the key even when a hoisted cast
+            // failed. Reloading the binding after a side-effecting key is too late.
+            var captured = IL.DefineLabel();
+            IL.Emit(OpCodes.Ldloc, hoisted.Value.TypedLocal);
+            IL.Emit(OpCodes.Dup);
+            IL.Emit(OpCodes.Brtrue, captured);
+            IL.Emit(OpCodes.Pop);
+            EmitExpression(gi.Object);
+            EmitBoxIfNeeded(gi.Object);
+            IL.MarkLabel(captured);
+            IL.Emit(OpCodes.Stloc, receiverLocal);
         }
 
         EmitExpressionAsDouble(gi.Index);
@@ -1616,6 +1630,7 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Stloc, indexInt);
 
         var fallbackLabel = IL.DefineLabel();
+        var boxedLabel = IL.DefineLabel();
         var endLabel = IL.DefineLabel();
 
         // Conv_I4 is used only as a candidate. Round-tripping to double proves
@@ -1627,13 +1642,13 @@ public partial class ILEmitter
 
         var guardedArray = hoisted?.TypedLocal ?? arrayLocal!;
         IL.Emit(OpCodes.Ldloc, guardedArray);
-        IL.Emit(OpCodes.Brfalse, fallbackLabel);
+        IL.Emit(OpCodes.Brfalse, boxResult ? fallbackLabel : boxedLabel);
         if (!boxResult)
         {
             IL.Emit(OpCodes.Ldloc, guardedArray);
             IL.Emit(OpCodes.Ldloc, indexInt);
             IL.Emit(OpCodes.Callvirt, _ctx.Runtime!.TSArrayCanGetDouble);
-            IL.Emit(OpCodes.Brfalse, fallbackLabel);
+            IL.Emit(OpCodes.Brfalse, boxedLabel);
         }
 
         IL.Emit(OpCodes.Ldloc, guardedArray);
@@ -1642,28 +1657,24 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Callvirt, boxResult ? _ctx.Runtime!.TSArrayGetLong : _ctx.Runtime!.TSArrayGetDouble);
         IL.Emit(OpCodes.Br, endLabel);
 
+        if (!boxResult)
+        {
+            IL.MarkLabel(boxedLabel);
+            var boxedValue = IL.DeclareLocal(_ctx.Types.Double);
+            IL.Emit(OpCodes.Ldloc, receiverLocal);
+            IL.Emit(OpCodes.Ldloc, indexInt);
+            IL.Emit(OpCodes.Ldloca, boxedValue);
+            IL.Emit(OpCodes.Call, _ctx.Runtime.TSArrayTryGetBoxedDouble);
+            IL.Emit(OpCodes.Brfalse, fallbackLabel);
+            IL.Emit(OpCodes.Ldloc, boxedValue);
+            IL.Emit(OpCodes.Br, endLabel);
+        }
+
         // Cold arm: preserve the numeric key exactly (including fractional,
         // negative, and uint32-range values) and use the descriptor/prototype-
         // aware runtime lookup before applying the numeric consumer's ToNumber.
         IL.MarkLabel(fallbackLabel);
-        if (receiverLocal != null)
-        {
-            IL.Emit(OpCodes.Ldloc, receiverLocal);
-        }
-        else
-        {
-            // When the hoisted cast succeeded, it is the captured receiver. If it
-            // failed (ordinary object/list supplied through an alias), reload the
-            // side-effect-free variable binding for the generic fallback.
-            var haveReceiver = IL.DefineLabel();
-            IL.Emit(OpCodes.Ldloc, hoisted!.Value.TypedLocal);
-            IL.Emit(OpCodes.Dup);
-            IL.Emit(OpCodes.Brtrue, haveReceiver);
-            IL.Emit(OpCodes.Pop);
-            EmitExpression(gi.Object);
-            EmitBoxIfNeeded(gi.Object);
-            IL.MarkLabel(haveReceiver);
-        }
+        IL.Emit(OpCodes.Ldloc, receiverLocal);
         IL.Emit(OpCodes.Ldloc, indexDouble);
         IL.Emit(OpCodes.Box, _ctx.Types.Double);
         IL.Emit(OpCodes.Call, _ctx.Runtime!.GetIndex);
@@ -1677,21 +1688,19 @@ public partial class ILEmitter
     }
 
     /// <summary>
-    /// Emits a stack-neutral statement-position write through a guarded numeric
-    /// <c>$Array</c>. The ordinary result-producing path must reload and box the
-    /// assigned double so arbitrary expression consumers see the JS assignment
-    /// value. A discarded expression has no such consumer, so this specialization
-    /// keeps the fast arm unboxed while retaining the guarded generic fallback
+    /// Emits a write through a guarded numeric <c>$Array</c>, optionally leaving
+    /// the assigned double as the expression result. Discarded expressions leave
+    /// the stack empty. This keeps the fast arm unboxed with a generic fallback
     /// for non-<c>$Array</c> values passed through a cast. Loop-local receivers
     /// reuse the existing hoisted guard; parameters use the same guard per write.
     /// </summary>
-    private bool TryEmitDiscardedNumberArraySetIndex(Expr.SetIndex si)
+    private bool TryEmitDiscardedNumberArraySetIndex(Expr.SetIndex si, bool discardResult = true)
     {
-        if (_ctx.RuntimeFeatures?.UsesDynamicPropertyDescriptors == true
-            || si.Object is not Expr.Variable arrayVariable)
+        if (_ctx.RuntimeFeatures?.UsesDynamicPropertyDescriptors == true)
             return false;
 
-        var hoisted = _ctx.TryGetHoistedArray(arrayVariable.Name.Lexeme);
+        var hoisted = si.Object is Expr.Variable arrayVariable
+            ? _ctx.TryGetHoistedArray(arrayVariable.Name.Lexeme) : null;
         if (hoisted is not { Descriptor.Kind: ArrayElementsKind.Double }
             && ArrayElements.Resolve(_ctx.TypeMap?.Get(si.Object)) is not
                 { Kind: ArrayElementsKind.Double })
@@ -1712,8 +1721,8 @@ public partial class ILEmitter
 
         // Preserve reference evaluation order for the remaining operands:
         // index before RHS. Keep the original numeric key as a double for the
-        // array-like fallback (3.5 must remain property "3.5" there); only the
-        // guarded $Array arm narrows it exactly as the ordinary fast path does.
+        // fallback (3.5 must remain property "3.5" there); only the guarded
+        // $Array arm narrows keys after proving they are exact integer indices.
         EmitExpressionAsDouble(si.Index);
         var indexLocal = IL.DeclareLocal(_ctx.Types.Double);
         IL.Emit(OpCodes.Stloc, indexLocal);
@@ -1725,6 +1734,16 @@ public partial class ILEmitter
 
         var fallbackLabel = IL.DefineLabel();
         var endLabel = IL.DefineLabel();
+        // Narrow only exact non-negative Int32 keys. Other numeric keys are
+        // ordinary properties and must retain their original value.
+        IL.Emit(OpCodes.Ldloc, indexLocal);
+        IL.Emit(OpCodes.Ldc_R8, 0.0);
+        IL.Emit(OpCodes.Blt_Un, fallbackLabel);
+        IL.Emit(OpCodes.Ldloc, indexLocal);
+        IL.Emit(OpCodes.Ldloc, indexLocal);
+        IL.Emit(OpCodes.Conv_I4);
+        IL.Emit(OpCodes.Conv_R8);
+        IL.Emit(OpCodes.Bne_Un, fallbackLabel);
         if (hoisted is { } cached)
         {
             IL.Emit(OpCodes.Ldloc, cached.TypedLocal);
@@ -1772,6 +1791,11 @@ public partial class ILEmitter
         }
 
         IL.MarkLabel(endLabel);
+        if (!discardResult)
+        {
+            IL.Emit(OpCodes.Ldloc, valueLocal);
+            SetStackType(StackType.Double);
+        }
         return true;
     }
 
@@ -1952,6 +1976,9 @@ public partial class ILEmitter
             SetStackType(StackType.Double);
             return;
         }
+
+        if (TryEmitDiscardedNumberArraySetIndex(si, discardResult: false))
+            return;
 
         // Descriptor-driven fast path: when receiver is statically known to be an array,
         // emit direct List<T> access with auto-extension — skips runtime type dispatch,
@@ -2277,11 +2304,21 @@ public partial class ILEmitter
     /// <summary>
     /// Emits <c>s.charCodeAt(i)</c> for a promoted string-accumulator (StringBuilder slot): reads the
     /// UTF-16 code unit directly via the <c>this[int]</c> indexer (identical to JS charCodeAt), with an
-    /// out-of-range (incl. negative, via unsigned compare) result of NaN. Leaves a boxed double, matching
-    /// the string-method call convention. See EmitMethodCall and StringAccumulatorPromotionAnalyzer.
+    /// out-of-range (incl. negative, via unsigned compare) result of NaN. Read-only for loops use a
+    /// single contiguous snapshot instead of repeatedly searching builder chunks. Leaves a native double.
     /// </summary>
     private void EmitPromotedStringCharCodeAt(LocalBuilder sb, List<Expr> arguments)
     {
+        if (_stringScanSnapshots.TryGetValue(sb, out var snapshot))
+        {
+            IL.Emit(OpCodes.Ldloc, snapshot);
+            if (arguments.Count > 0) EmitExpressionAsDouble(arguments[0]);
+            else IL.Emit(OpCodes.Ldc_R8, 0.0);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.StringCharCodeAt);
+            SetStackType(StackType.Double);
+            return;
+        }
+
         var getLength = _ctx.Types.GetProperty(_ctx.Types.StringBuilder, "Length").GetGetMethod()!;
         var getChars = _ctx.Types.GetMethod(_ctx.Types.StringBuilder, "get_Chars", _ctx.Types.Int32);
 

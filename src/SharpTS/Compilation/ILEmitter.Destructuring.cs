@@ -203,6 +203,8 @@ public partial class ILEmitter
 
     private bool TryEmitStableRecordDestructureGet(Expr.Get expression)
     {
+        if (TryEmitNumericDestructuringLoad(expression, boxed: true))
+            return true;
         if (expression.Optional ||
             expression.Object is not Expr.Variable source ||
             !_stableRecordDestructureBindings.TryGetValue(
@@ -248,6 +250,8 @@ public partial class ILEmitter
 
     private bool TryEmitStableRecordDestructureGetAsDouble(Expr.Get expression)
     {
+        if (TryEmitNumericDestructuringLoad(expression, boxed: false))
+            return true;
         if (expression.Optional ||
             expression.Object is not Expr.Variable source ||
             !_stableRecordDestructureBindings.TryGetValue(

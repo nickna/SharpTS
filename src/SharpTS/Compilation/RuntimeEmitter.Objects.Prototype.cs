@@ -437,11 +437,14 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.ListOfObjectNullable));
         il.Emit(OpCodes.Stloc, resultLocal);
 
-        // Get symbol dictionary: var symbolDict = GetSymbolDict(obj);
+        // Return a fresh empty list without creating symbol storage on the source.
+        var returnResult = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.GetSymbolDictMethod);
+        il.Emit(OpCodes.Call, runtime.TryGetSymbolDictMethod);
         var symbolDictLocal = il.DeclareLocal(_types.DictionaryObjectObject);
         il.Emit(OpCodes.Stloc, symbolDictLocal);
+        il.Emit(OpCodes.Ldloc, symbolDictLocal);
+        il.Emit(OpCodes.Brfalse, returnResult);
 
         // Get keys and iterate: foreach (var key in symbolDict.Keys) result.Add(key);
         // symbolDict.Keys
@@ -479,6 +482,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(loopEnd);
 
         // Return result
+        il.MarkLabel(returnResult);
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ret);
     }

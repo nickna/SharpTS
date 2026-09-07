@@ -244,6 +244,8 @@ public partial class ILEmitter : StatementEmitterBase, IEmitterContext
                 break;
 
             case Stmt.Sequence seq:
+                if (TryEmitNumericDestructuringSequence(seq))
+                    break;
                 // Execute in current scope (no new environment)
                 foreach (var s in seq.Statements)
                     EmitStatement(s);

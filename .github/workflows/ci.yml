@@ -81,7 +81,8 @@ jobs:
     needs: workflow-policy
     if: needs.workflow-policy.outputs.mode == 'full'
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 20
+    # Windows needs room for the full core suite plus build and packaging gates.
+    timeout-minutes: ${{ matrix.os == 'windows-2025' && 30 || 20 }}
     strategy:
       # Don't let one platform's failure cancel the others — we want to see each
       # platform's real result independently (a flake on one shouldn't hide the rest).
@@ -181,7 +182,8 @@ jobs:
       # Run them on demand locally: dotnet test --filter "Category=npm"
       - name: Test core
         run: dotnet test tests/SharpTS.Tests/SharpTS.Tests.csproj --no-build --configuration Release --verbosity normal --filter "Category!=LiveNetwork&Category!=LoadSensitive&Category!=npm"
-        timeout-minutes: 10
+        # The passing Windows suite can exceed ten minutes on hosted runners.
+        timeout-minutes: ${{ matrix.os == 'windows-2025' && 15 || 10 }}
 
       - name: Test GUI conformance
         run: dotnet test tests/gui-conformance/SharpTS.Gui.Conformance.Tests/SharpTS.Gui.Conformance.Tests.csproj --no-build --configuration Release --verbosity normal --filter "Category!=LiveNetwork&Category!=LoadSensitive&Category!=npm"

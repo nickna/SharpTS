@@ -4,5 +4,5 @@ import { bench } from "./lib/bench.ts";
 const params: number[] = [1000, 10000, 100000];
 for (let p: number = 0; p < params.length; p++) {
     const n: number = params[p];
-    bench("array-methods", n, () => arrayMethodWork(n));
+    bench("array-methods", n, () => arrayMethodWork(n), 2 * Math.ceil(n / 2) * (Math.ceil(n / 2) - 1));
 }

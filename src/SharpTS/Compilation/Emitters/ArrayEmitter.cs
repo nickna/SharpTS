@@ -543,18 +543,17 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
     /// bypassing the full GetProperty runtime dispatch chain.
     /// </summary>
     public bool TryEmitPropertyGet(IEmitterContext emitter, Expr receiver, string propertyName)
-        => TryEmitPropertyGet(emitter, receiver, propertyName, boxResult: true);
-
-    public bool TryEmitLengthAsDouble(IEmitterContext emitter, Expr receiver)
     {
-        if (!TryEmitPropertyGet(emitter, receiver, "length", boxResult: false)) return false;
-        emitter.SetStackType(StackType.Double);
+        if (propertyName != "length" || !TryEmitLengthGet(emitter, receiver)) return false;
+        // Registry callers retain their object-result convention. The sync IL
+        // emitter calls TryEmitLengthGet directly to preserve native arithmetic.
+        emitter.Context.IL.Emit(OpCodes.Box, emitter.Context.Types.Double);
+        emitter.SetStackUnknown();
         return true;
     }
-
-    private bool TryEmitPropertyGet(IEmitterContext emitter, Expr receiver, string propertyName, bool boxResult)
+    /// <summary>Preserves the numeric length through arithmetic without a box/unbox round trip.</summary>
+    internal static bool TryEmitLengthGet(IEmitterContext emitter, Expr receiver)
     {
-        if (propertyName != "length") return false;
 
         var ctx = emitter.Context;
         var il = ctx.IL;
@@ -587,7 +586,6 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
                     il.Emit(OpCodes.Ldloc, h.TypedLocal);
                     il.Emit(OpCodes.Callvirt, ctx.Runtime!.TSArrayLongLengthGetter);
                     il.Emit(OpCodes.Conv_R8);
-                    if (boxResult) il.Emit(OpCodes.Box, ctx.Types.Double);
                     il.Emit(OpCodes.Br, endLabel);
                 }
                 else
@@ -607,7 +605,6 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
                         il.Emit(OpCodes.Castclass, ctx.Runtime!.ArgumentsType);
                         il.Emit(OpCodes.Ldfld, ctx.Runtime!.ArgumentsLengthField);
                         il.Emit(OpCodes.Conv_R8);
-                        if (boxResult) il.Emit(OpCodes.Box, ctx.Types.Double);
                         il.Emit(OpCodes.Br, endLabel);
                         il.MarkLabel(notArgsLengthLabel);
                     }
@@ -615,7 +612,6 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
                     il.Emit(OpCodes.Ldloc, h.TypedLocal);
                     il.Emit(OpCodes.Callvirt, ctx.Types.GetProperty(listType, "Count").GetGetMethod()!);
                     il.Emit(OpCodes.Conv_R8);
-                    if (boxResult) il.Emit(OpCodes.Box, ctx.Types.Double);
                     il.Emit(OpCodes.Br, endLabel);
                 }
 
@@ -624,9 +620,9 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
                 emitter.EmitBoxIfNeeded(receiver);
                 il.Emit(OpCodes.Call, ctx.Runtime!.GetLength);
                 il.Emit(OpCodes.Conv_R8);
-                if (boxResult) il.Emit(OpCodes.Box, ctx.Types.Double);
 
                 il.MarkLabel(endLabel);
+                emitter.SetStackType(StackType.Double);
                 return true;
             }
         }
@@ -655,7 +651,6 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
         il.Emit(OpCodes.Castclass, ctx.Runtime!.TSArrayType);
         il.Emit(OpCodes.Callvirt, ctx.Runtime!.TSArrayLongLengthGetter);
         il.Emit(OpCodes.Conv_R8);
-        if (boxResult) il.Emit(OpCodes.Box, ctx.Types.Double);
         il.Emit(OpCodes.Br, endLabelNH);
 
         il.MarkLabel(tsArrayCheckLabel);
@@ -671,7 +666,6 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
             il.Emit(OpCodes.Castclass, ctx.Runtime!.ArgumentsType);
             il.Emit(OpCodes.Ldfld, ctx.Runtime!.ArgumentsLengthField);
             il.Emit(OpCodes.Conv_R8);
-            if (boxResult) il.Emit(OpCodes.Box, ctx.Types.Double);
             il.Emit(OpCodes.Br, endLabelNH);
             il.MarkLabel(notArgsLengthNH);
         }
@@ -684,16 +678,15 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
         il.Emit(OpCodes.Castclass, listTypeNH);
         il.Emit(OpCodes.Callvirt, ctx.Types.GetProperty(listTypeNH, "Count").GetGetMethod()!);
         il.Emit(OpCodes.Conv_R8);
-        if (boxResult) il.Emit(OpCodes.Box, ctx.Types.Double);
         il.Emit(OpCodes.Br, endLabelNH);
 
         il.MarkLabel(fallbackLabelNH);
         il.Emit(OpCodes.Ldloc, objLocal);
         il.Emit(OpCodes.Call, ctx.Runtime!.GetLength);
         il.Emit(OpCodes.Conv_R8);
-        if (boxResult) il.Emit(OpCodes.Box, ctx.Types.Double);
 
         il.MarkLabel(endLabelNH);
+        emitter.SetStackType(StackType.Double);
         return true;
     }
 

@@ -75,6 +75,9 @@ public partial class ILEmitter
                 if (TryEmitIntegerCounterStringConcat(b))
                     break;
 
+                if (TryEmitPrimitiveNumberStringConcat(b))
+                    break;
+
                 // If both operands are statically string, emit a direct
                 // String.Concat(string, string) — skipping the dynamic
                 // $Runtime.Add type-dispatch + ToNumber/ToString probing every
@@ -3226,6 +3229,55 @@ public partial class ILEmitter
         var rightType = _ctx.TypeMap.Get(b.Right);
 
         return IsStringTypeInfo(leftType) && IsStringTypeInfo(rightType);
+    }
+
+    private bool TryEmitPrimitiveNumberStringConcat(Expr.Binary expression)
+    {
+        bool stringFirst = IsStringTypeInfo(_ctx.TypeMap?.Get(expression.Left)) &&
+            IsNumericType(_ctx.TypeMap?.Get(expression.Right));
+        bool numberFirst = IsNumericType(_ctx.TypeMap?.Get(expression.Left)) &&
+            IsStringTypeInfo(_ctx.TypeMap?.Get(expression.Right));
+        if (!stringFirst && !numberFirst) return false;
+
+        // Storage, not just the annotation, proves that the operand is primitive.
+        // Evaluate both sides before formatting to preserve side-effect order.
+        LocalBuilder Capture(Expr value)
+        {
+            EmitExpression(value);
+            var type = StackType == StackType.Double ? _ctx.Types.Double :
+                StackType == StackType.String ? _ctx.Types.String : _ctx.Types.Object;
+            if (type == _ctx.Types.Object) EmitBoxIfNeeded(value);
+            var local = IL.DeclareLocal(type);
+            IL.Emit(OpCodes.Stloc, local);
+            return local;
+        }
+        var left = Capture(expression.Left);
+        var right = Capture(expression.Right);
+        var number = stringFirst ? right : left;
+        var text = stringFirst ? left : right;
+        var fallback = IL.DefineLabel();
+        var end = IL.DefineLabel();
+        if (number.LocalType == _ctx.Types.Double && text.LocalType == _ctx.Types.String)
+        {
+            IL.Emit(OpCodes.Ldloc, text);
+            IL.Emit(OpCodes.Brfalse, fallback);
+            if (stringFirst) IL.Emit(OpCodes.Ldloc, text);
+            IL.Emit(OpCodes.Ldloc, number);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.FormatNumber);
+            if (numberFirst) IL.Emit(OpCodes.Ldloc, text);
+            IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(_ctx.Types.String, "Concat",
+                _ctx.Types.String, _ctx.Types.String));
+            IL.Emit(OpCodes.Br, end);
+        }
+        IL.MarkLabel(fallback);
+        IL.Emit(OpCodes.Ldloc, left);
+        if (left.LocalType == _ctx.Types.Double) IL.Emit(OpCodes.Box, _ctx.Types.Double);
+        IL.Emit(OpCodes.Ldloc, right);
+        if (right.LocalType == _ctx.Types.Double) IL.Emit(OpCodes.Box, _ctx.Types.Double);
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.Add);
+        IL.MarkLabel(end);
+        SetStackUnknown();
+        return true;
     }
 
     private bool TryEmitIntegerCounterStringConcat(Expr.Binary b)

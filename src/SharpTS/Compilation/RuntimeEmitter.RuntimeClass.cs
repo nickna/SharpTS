@@ -945,6 +945,7 @@ public partial class RuntimeEmitter
             [_types.Object, _types.String, _types.Object]);
         EmitInvokeValue(typeBuilder, runtime);
         EmitInvokeMethodValue(typeBuilder, runtime);
+        EmitInvokeMethodValue0(typeBuilder, runtime);
         EmitGetFieldsProperty(typeBuilder, runtime);
         EmitGetListProperty(typeBuilder, runtime);
         // GetMapProperty / GetSetProperty are the duck-typed property dispatchers

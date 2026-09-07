@@ -40,6 +40,7 @@ internal static class StableNumericRestFunctionAnalyzer
 
         var callsByTarget = NumericRestCallBindingAnalyzer.Analyze(statements, functions, stableFunctions);
         int remainingVariants = MaximumVariantsPerCompilation - results.Values.Sum(info => info.Variants.Count);
+        var indirectCandidates = new List<(Stmt.Function Function, string RestName, RestUsageAnalyzer Usage)>();
 
         foreach (var function in functions)
         {
@@ -67,6 +68,9 @@ internal static class StableNumericRestFunctionAnalyzer
             foreach (var statement in function.Body) literalUsage.Visit(statement);
             if (literalUsage.IsEligible)
             {
+                if (regularCount == 0 && literalUsage.MaximumReadIndex < 4
+                    && IsNumeric(typeMap.GetFunctionType(function.Name.Lexeme)?.ReturnType))
+                    indirectCandidates.Add((function, rest.Name.Lexeme, literalUsage));
                 var directCalls = new LiteralArityCollector(function.Name.Lexeme, regularCount,
                     literalUsage.MaximumReadIndex, typeMap);
                 foreach (var statement in statements) directCalls.Visit(statement);
@@ -112,6 +116,21 @@ internal static class StableNumericRestFunctionAnalyzer
             }
             if (variants.Count > 0)
                 results[function] = new Info(rest.Name.Lexeme, regularCount, variants);
+        }
+
+        // Function values can arrive through another module or a parameter, so
+        // an observed direct call is not required. Give existing direct variants
+        // priority, then expose one bounded four-double capability per target.
+        foreach (var (function, restName, usage) in indirectCandidates)
+        {
+            var variants = results.TryGetValue(function, out var existing)
+                ? existing.Variants.ToList() : [];
+            if (variants.Any(v => v.RestArity == 4 && v.HasLiteralIndices)
+                || variants.Count >= MaximumVariantsPerFunction || remainingVariants <= 0)
+                continue;
+            variants.Add(new Variant(4, usage.Reads, []));
+            remainingVariants--;
+            results[function] = new Info(restName, 0, variants);
         }
     }
 
@@ -347,6 +366,10 @@ internal static class StableNumericRestFunctionAnalyzer
         protected override void VisitSuper(Expr.Super expression) => Reject();
 
         protected override void VisitDestructuringAssign(Expr.DestructuringAssign expression) => Reject();
+
+        // Using bindings can shadow both the rest array and constant index
+        // parameters; their patterns are not visited as ordinary declarations.
+        protected override void VisitUsing(Stmt.Using statement) => Reject();
 
         protected override void VisitCall(Expr.Call expression)
         {

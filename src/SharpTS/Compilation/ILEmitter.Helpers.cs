@@ -322,6 +322,9 @@ public partial class ILEmitter
 
     public override void EmitExpressionAsDouble(Expr expr)
     {
+        if (expr is Expr.Call call && TryEmitTypedNumericIndirectCall(call))
+            return;
+
         if (expr is Expr.Call
             {
                 Optional: false, Arguments.Count: 0,
@@ -358,7 +361,7 @@ public partial class ILEmitter
         if (expr is Expr.Get { Optional: false, Name.Lexeme: "length" } arrayLength &&
             _ctx.TypeMap?.Get(arrayLength.Object) is TypeInfo.Array)
         {
-            EmitGet(arrayLength, numericArrayLengthConsumer: true);
+            EmitGet(arrayLength);
             EnsureDouble();
             return;
         }

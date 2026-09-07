@@ -44,6 +44,8 @@ function main(): Promise<any> {
     const totalItems: number = 20000;
     const moduleMeta: any = import.meta;
     const workerPath: string = moduleMeta.dirname + "/workers/allocation-worker.ts";
+    // Sum 4*i + 4 + (i % 100 < 10 ? 6 : 7), for 0 <= i < 20000.
+    // Keep the oracle independent of the kernel under test.
     const expected: number = 800178000;
 
     bench("worker-allocation-direct", totalItems, () => allocationChecksum(0, totalItems), expected);
