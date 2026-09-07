@@ -46,6 +46,8 @@ public partial class RuntimeEmitter
             runtime.BeginZlibEmission();
         if (features.UsesDns)
             runtime.BeginDnsEmission();
+        if (features.UsesDgram)
+            runtime.BeginDgramEmission();
 
         // Emit $Undefined singleton class first (other methods need this type)
         EmitUndefinedClass(moduleBuilder, runtime);
@@ -569,7 +571,7 @@ public partial class RuntimeEmitter
         {
             EmitDgramMessageClosureClass(moduleBuilder, runtime);
             EmitDgramReceiveWorkerBody(runtime);
-            EmitDatagramSocketFinalize(runtime);
+            EmitDatagramSocketFinalize(runtime.RequireDgram());
         }
 
         if (features.UsesTls)
@@ -612,6 +614,7 @@ public partial class RuntimeEmitter
         runtime.Dns?.CompleteEmission();
         runtime.Zlib?.CompleteEmission();
         runtime.Tls?.CompleteEmission();
+        runtime.Dgram?.CompleteEmission();
         return runtime;
     }
 }

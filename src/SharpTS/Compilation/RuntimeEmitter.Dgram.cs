@@ -11,14 +11,16 @@ public partial class RuntimeEmitter
 {
     private void EmitDgramModuleMethods(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
-        EmitDgramCreateSocket(typeBuilder, runtime);
+        var dgram = runtime.RequireDgram();
+        EmitDgramCreateSocket(typeBuilder, dgram);
+        runtime.RegisterBuiltInModuleMethod("dgram", "createSocket", dgram.CreateSocket);
     }
 
     /// <summary>
     /// Emits: public static object DgramCreateSocket(object? typeOrOptions, object? callback)
     /// Creates a $DatagramSocket instance using the emitted constructor (pure IL).
     /// </summary>
-    private void EmitDgramCreateSocket(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitDgramCreateSocket(TypeBuilder typeBuilder, EmittedDgramRuntime dgram)
     {
         var method = typeBuilder.DefineMethod(
             "DgramCreateSocket",
@@ -26,8 +28,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object, _types.Object]
         );
-        runtime.DgramCreateSocket = method;
-        runtime.RegisterBuiltInModuleMethod("dgram", "createSocket", method);
+        dgram.CreateSocket = method;
 
         var il = method.GetILGenerator();
 
@@ -55,7 +56,7 @@ public partial class RuntimeEmitter
 
         // return new $DatagramSocket(typeString)
         il.Emit(OpCodes.Ldloc, typeStringLocal);
-        il.Emit(OpCodes.Newobj, runtime.DatagramSocketCtor);
+        il.Emit(OpCodes.Newobj, dgram.SocketCtor);
         il.Emit(OpCodes.Ret);
     }
 }

@@ -1189,6 +1189,42 @@ public class StandaloneDllTests
     }
 
     [Fact]
+    public void Isolated_DgramModule_ShouldSendAndReceiveWithoutSharpTsDll()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as dgram from 'dgram';
+                import { createSocket } from 'dgram';
+                const receiver = dgram.createSocket('udp4');
+                receiver.on('message', (msg: any, rinfo: any) => {
+                    console.log(msg.toString());
+                    console.log(rinfo.address === '127.0.0.1');
+                    console.log(rinfo.size === 5);
+                    receiver.close();
+                });
+                receiver.bind(0, '127.0.0.1', () => {
+                    const sender = createSocket('udp4');
+                    sender.send('hello', receiver.address().port, '127.0.0.1', () => sender.close());
+                });
+                """
+        };
+
+        var (tempDir, dllPath) = CompileStandaloneModule(files, "main.ts");
+        try
+        {
+            Assert.DoesNotContain("SharpTS", GetAssemblyReferences(dllPath));
+            Assert.False(File.Exists(Path.Combine(tempDir, "SharpTS.dll")));
+            var output = ExecuteCompiledDllIsolated(dllPath, timeoutMs: 15000);
+            Assert.Equal("hello\ntrue\ntrue\n", output);
+        }
+        finally
+        {
+            CleanupTempDir(tempDir);
+        }
+    }
+
+    [Fact]
     public void Isolated_DnsModule_ShouldExecuteWithoutSharpTsDll()
     {
         var files = new Dictionary<string, string>

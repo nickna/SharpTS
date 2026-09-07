@@ -20,14 +20,14 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitDgramMessageClosureClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
+        var dgram = runtime.RequireDgram();
         var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$DgramMessageClosure",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object
         );
 
-        // Fields — use _dgramSocketTypeBuilder so Callvirt resolves Emit correctly
-        var socketField = typeBuilder.DefineField("_socket", _dgramSocketTypeBuilder, FieldAttributes.Private);
+        var socketField = typeBuilder.DefineField("_socket", dgram.SocketType, FieldAttributes.Private);
         var dataField = typeBuilder.DefineField("_data", typeof(byte[]), FieldAttributes.Private);
         var addressField = typeBuilder.DefineField("_address", _types.String, FieldAttributes.Private);
         var familyField = typeBuilder.DefineField("_family", _types.String, FieldAttributes.Private);
@@ -38,9 +38,9 @@ public partial class RuntimeEmitter
         var ctor = typeBuilder.DefineConstructor(
             MethodAttributes.Public,
             CallingConventions.Standard,
-            [_dgramSocketTypeBuilder, typeof(byte[]), _types.String, _types.String, _types.Double, _types.Double]
+            [dgram.SocketType, typeof(byte[]), _types.String, _types.String, _types.Double, _types.Double]
         );
-        _dgramMessageClosureCtor = ctor;
+        dgram.MessageClosureCtor = ctor;
 
         var ctorIL = ctor.GetILGenerator();
         ctorIL.Emit(OpCodes.Ldarg_0);
@@ -73,7 +73,7 @@ public partial class RuntimeEmitter
             typeof(void),
             Type.EmptyTypes
         );
-        _dgramMessageClosureRun = runMethod;
+        dgram.MessageClosureRun = runMethod;
 
         var il = runMethod.GetILGenerator();
 
@@ -163,7 +163,8 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitDgramReceiveWorkerBody(EmittedRuntime runtime)
     {
-        var il = _dgramReceiveWorkerMethod.GetILGenerator();
+        var dgram = runtime.RequireDgram();
+        var il = dgram.ReceiveWorker.GetILGenerator();
 
         var loopTop = il.DefineLabel();
         var loopExit = il.DefineLabel();
@@ -284,8 +285,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, familyStrLocal);
         il.Emit(OpCodes.Ldloc, portDblLocal);
         il.Emit(OpCodes.Ldloc, sizeDblLocal);
-        il.Emit(OpCodes.Newobj, _dgramMessageClosureCtor);
-        il.Emit(OpCodes.Ldftn, _dgramMessageClosureRun);
+        il.Emit(OpCodes.Newobj, dgram.MessageClosureCtor);
+        il.Emit(OpCodes.Ldftn, dgram.MessageClosureRun);
         il.Emit(OpCodes.Newobj, typeof(Action).GetConstructor([_types.Object, typeof(IntPtr)])!);
         il.Emit(OpCodes.Call, runtime.EventLoopSchedule);
 
