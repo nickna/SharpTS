@@ -921,375 +921,11 @@ public partial class TypeChecker
 
         try
         {
-            // Check instance field initializers (e.g. `x = 5`, `r = () => { ... }`) within the
-            // instance context so `this` and the class's type parameters resolve inside them. Static
-            // fields are checked separately at class scope. Inferred/Any field types skip the
-            // assignability check but the initializer is still type-checked.
-            foreach (var field in classStmt.Fields)
-            {
-                if (field.IsStatic || field.Initializer == null) continue;
-                TypeInfo initType = CheckExpr(field.Initializer);
-                var declaredTypes = field.IsPrivate ? classTypeForBody.PrivateFieldTypes : classTypeForBody.FieldTypes;
-                if (declaredTypes.TryGetValue(GetFieldMemberName(field), out var fieldDeclaredType)
-                    && fieldDeclaredType is not (TypeInfo.Inferred or TypeInfo.Any)
-                    && !IsCompatible(fieldDeclaredType, initType))
-                {
-                    throw new TypeCheckException($" Cannot assign type '{initType}' to field '{field.Name.Lexeme}' of type '{fieldDeclaredType}'.", tsCode: "TS2322");
-                }
-            }
-
-            // Only check methods that have bodies (skip overload signatures)
-            foreach (var method in classStmt.Methods.Where(m => m.Body != null))
-            {
-                // Check method decorators
-                DecoratorTarget methodTarget = method.IsStatic ? DecoratorTarget.StaticMethod : DecoratorTarget.Method;
-                CheckDecorators(method.Decorators, methodTarget);
-
-                // Check parameter decorators
-                foreach (var param in method.Parameters)
-                {
-                    CheckDecorators(param.Decorators, DecoratorTarget.Parameter);
-                }
-
-                // Methods and constructors both arrive here (the constructor is a Method named
-                // "constructor"), and only implementations do — the Where(Body != null) filter
-                // above already excluded overload signatures.
-                ReportImplicitAnyParameters(method.Parameters,
-                    isAmbient: classStmt.IsDeclare || method.IsAbstract);
-
-                // For static methods, use a different environment without this/super
-                TypeEnvironment methodEnv;
-                if (method.IsStatic)
-                {
-                    methodEnv = new TypeEnvironment(prevEnv); // No this/super
-                }
-                else
-                {
-                    methodEnv = new TypeEnvironment(_environment);
-                }
-
-                // Get the method type (could be Function or OverloadedFunction)
-                // For ES2022 private methods, look in PrivateMethodTypes/StaticPrivateMethodTypes
-                TypeInfo declaredMethodType;
-                if (method.ComputedKey != null)
-                {
-                    // Computed symbol-keyed methods carry the `<computed>` name, so they aren't keyed
-                    // in the method dictionaries by a static name. Well-known ones are stored under their
-                    // @@name; reuse that type. An arbitrary computed key has no modeled member — build a
-                    // signature inline just to bind parameter types for the body check.
-                    string? memberName = TryGetWellKnownSymbolMemberName(method.ComputedKey);
-                    var computedDict = method.IsStatic ? classTypeForBody.StaticMethods : classTypeForBody.Methods;
-                    if (memberName != null && computedDict.TryGetValue(memberName, out var computedType))
-                    {
-                        declaredMethodType = computedType;
-                    }
-                    else
-                    {
-                        var (cParamTypes, cRequired, cHasRest, cParamNames) = BuildFunctionSignature(
-                            method.Parameters, validateDefaults: true, contextName: "computed method");
-                        TypeInfo cReturn = ResolveAnnotation(method.ReturnType, method.ReturnTypeNode) ?? TypeInfo.Inferred.Shared;
-                        declaredMethodType = new TypeInfo.Function(cParamTypes, cReturn, cRequired, cHasRest, null, cParamNames);
-                    }
-                }
-                else if (method.IsPrivate)
-                {
-                    declaredMethodType = method.IsStatic
-                        ? classTypeForBody.StaticPrivateMethodTypes[method.Name.Lexeme]
-                        : classTypeForBody.PrivateMethodTypes[method.Name.Lexeme];
-                }
-                else
-                {
-                    declaredMethodType = method.IsStatic
-                        ? classTypeForBody.StaticMethods[method.Name.Lexeme]
-                        : classTypeForBody.Methods[method.Name.Lexeme];
-                }
-
-                // Get the actual function type (implementation for overloads)
-                TypeInfo.Function methodType = declaredMethodType switch
-                {
-                    TypeInfo.OverloadedFunction of => of.Implementation,
-                    TypeInfo.Function f => f,
-                    // SharpTS-only: internal invariant
-                    _ => throw new TypeCheckException($" Unexpected method type for '{method.Name.Lexeme}'.")
-                };
-
-                if (methodType.ThisType is { } explicitMethodThis)
-                    methodEnv.Define("this", explicitMethodThis);
-
-                // A script/namespace declaration can be checked once during module collection and
-                // again authoritatively. Re-resolve an explicit return annotation in the current
-                // pass so an earlier placeholder (notably a namespace-local interface) cannot leave
-                // the body permissively typed as any.
-                if (method.ReturnType != null)
-                {
-                    TypeInfo currentReturn = ResolveAnnotation(method.ReturnType, method.ReturnTypeNode)!;
-                    methodType = methodType with { ReturnType = currentReturn };
-                }
-
-                // Body-scope binding widens a bare `?`-optional parameter with `| undefined` (the
-                // caller may omit it) — the method's own callable signature (methodType) keeps the
-                // declared type.
-                var bodyParamTypes = WidenOptionalParamsForBody(methodType.ParamTypes, method.Parameters);
-                for (int i = 0; i < method.Parameters.Count; i++)
-                {
-                    DeclareValue(
-                        methodEnv,
-                        method.Parameters[i].Name,
-                        bodyParamTypes[i]);
-                }
-
-                // Save and set context - method bodies are isolated from outer loop/switch/label context
-                TypeEnvironment previousEnvFunc = _environment;
-                TypeInfo? previousReturnFunc = _currentFunctionReturnType;
-                TypeInfo? previousThisTypeFunc = _currentFunctionThisType;
-                var previousInferredFunc = _inferredReturnTypes;
-                var previousInferredYieldFunc = _inferredYieldTypes;
-                bool previousInStatic = _inStaticMethod;
-                bool previousInAsyncFunc = _inAsyncFunction;
-                bool previousInGeneratorFunc = _inGeneratorFunction;
-                int previousLoopDepthFunc = _loopDepth;
-                int previousSwitchDepthFunc = _switchDepth;
-                var previousActiveLabelsFunc = new Dictionary<string, ActiveLabel>(_activeLabels);
-
-                bool inferringMethodReturn = methodType.ReturnType is TypeInfo.Inferred;
-                _environment = methodEnv;
-                if (inferringMethodReturn)
-                {
-                    _inferredReturnTypes = new List<TypeInfo>();
-                    _currentFunctionReturnType = TypeInfo.Inferred.Shared;
-                }
-                else
-                {
-                    _currentFunctionReturnType = methodType.ReturnType;
-                }
-                // Collect yield operand types only while inferring a generator method's type (#548).
-                _inferredYieldTypes = inferringMethodReturn && method.IsGenerator ? new List<TypeInfo>() : null;
-                _currentFunctionThisType = methodType.ThisType;
-                _inStaticMethod = method.IsStatic;
-                _inAsyncFunction = method.IsAsync;
-                _inGeneratorFunction = method.IsGenerator;
-                _loopDepth = 0;
-                _switchDepth = 0;
-                _activeLabels.Clear();
-
-                // Isolate the narrowing context for this method body so narrowings
-                // from `if (x) return;` don't leak into sibling methods/accessors.
-                PushEmptyNarrowingScope();
-                PushDefiniteAssignmentScope();
-
-                try
-                {
-                    // Abstract methods have no body to check
-                    if (method.Body != null)
-                    {
-                        // Method bodies have ordinary function-declaration and lexical hoisting
-                        // semantics. GeneratorArrowLifter appends a synthesized __genArrow_N
-                        // declaration after the earlier forwarding reference, so predeclare both
-                        // declaration kinds before the source-order body pass.
-                        HoistFunctionDeclarations(method.Body);
-                        HoistLexicalDeclarations(method.Body);
-                        CheckClassBodyStatements(method.Body, recoverComputedSymbolDiagnostics);
-
-                        // #367/#372: object-slot number/boolean-typed locals, parameters, and returns
-                        // that an `any`/`undefined` value may have left holding the sentinel, so they
-                        // are not coerced to NaN/false.
-                        MarkUndefinedReachableNumericSlots(method.Body, method.Parameters);
-                    }
-
-                    // Resolve inferred method return type
-                    if (inferringMethodReturn && method.Body != null)
-                    {
-                        var collected = _inferredReturnTypes!;
-                        _inferredReturnTypes = null;
-
-                        TypeInfo inferredReturn;
-                        if (collected.Count == 0)
-                        {
-                            inferredReturn = TypeInfo.Void.Shared;
-                        }
-                        else
-                        {
-                            var distinct = collected.Distinct(TypeInfoEqualityComparer.Instance).ToList();
-                            inferredReturn = CollapseOrCreateUnion(distinct);
-                        }
-
-                        // A generator method's type argument is its YIELD type (#548), not the
-                        // `return`-derived inferredReturn; a non-generator async method wraps in Promise.
-                        // The resolved type is re-published below (anyInferredMethodReturnResolved), so
-                        // `new C().m()` reads the real Generator<…>/Promise<…> at the call site rather than
-                        // the `<inferred>` placeholder (#658/#661; the generator-method face was #687).
-                        if (method.IsGenerator)
-                            inferredReturn = BuildInferredGeneratorType(_inferredYieldTypes!, method.IsAsync);
-                        else if (method.IsAsync && inferredReturn is not TypeInfo.Void)
-                            inferredReturn = new TypeInfo.Promise(inferredReturn);
-
-                        // Update the method type in the class. Computed symbol-keyed methods are keyed
-                        // by their @@name (e.g. @@iterator), not the synthetic `<computed>` lexeme; an
-                        // arbitrary computed key (no well-known @@name) carries no static member to update.
-                        var updatedMethodType = new TypeInfo.Function(methodType.ParamTypes, inferredReturn, methodType.RequiredParams, methodType.HasRestParam, methodType.ThisType, methodType.ParamNames);
-                        string? mName = method.ComputedKey != null
-                            ? TryGetWellKnownSymbolMemberName(method.ComputedKey)
-                            : method.Name.Lexeme;
-                        if (mName != null)
-                        {
-                            if (method.IsPrivate)
-                            {
-                                if (method.IsStatic) mutableClass.StaticPrivateMethods[mName] = updatedMethodType;
-                                else mutableClass.PrivateMethods[mName] = updatedMethodType;
-                            }
-                            else
-                            {
-                                if (method.IsStatic) mutableClass.StaticMethods[mName] = updatedMethodType;
-                                else mutableClass.Methods[mName] = updatedMethodType;
-                            }
-                            // The frozen class call sites read still holds the <inferred> placeholder for
-                            // this method; flag a rebuild after the body pass (#658/#661).
-                            anyInferredMethodReturnResolved = true;
-                        }
-                    }
-
-                    if (_strictNullChecks && !inferringMethodReturn && method.Body is not null &&
-                        methodType.ReturnType is not TypeInfo.Void &&
-                        methodType.ReturnType is not TypeInfo.Generator &&
-                        methodType.ReturnType is not TypeInfo.AsyncGenerator &&
-                        methodType.ReturnType is not TypeInfo.TypePredicate { IsAssertion: true } &&
-                        methodType.ReturnType is not TypeInfo.AssertsNonNull &&
-                        !method.IsGenerator && !method.IsAsync &&
-                        !DoesBlockDefinitelyReturn(method.Body))
-                    {
-                        throw new TypeCheckException(
-                            $"Function '{method.Name.Lexeme}' must return a value of type '{methodType.ReturnType}'.",
-                            method.Name.Line,
-                            tsCode: "TS2366");
-                    }
-                }
-                finally
-                {
-                    PopDefiniteAssignmentScope();
-                    PopNarrowingScope();
-                    _environment = previousEnvFunc;
-                    _currentFunctionReturnType = previousReturnFunc;
-                    _currentFunctionThisType = previousThisTypeFunc;
-                    _inferredReturnTypes = previousInferredFunc;
-                    _inferredYieldTypes = previousInferredYieldFunc;
-                    _inStaticMethod = previousInStatic;
-                    _inAsyncFunction = previousInAsyncFunc;
-                    _inGeneratorFunction = previousInGeneratorFunc;
-                    _loopDepth = previousLoopDepthFunc;
-                    _switchDepth = previousSwitchDepthFunc;
-                    _activeLabels.Clear();
-                    foreach (var kvp in previousActiveLabelsFunc)
-                        _activeLabels[kvp.Key] = kvp.Value;
-                }
-            }
-
-            // Check accessor bodies
-            if (classStmt.Accessors != null)
-            {
-                foreach (var accessor in classStmt.Accessors)
-                {
-                    TypeEnvironment accessorEnv = new TypeEnvironment(_environment);
-                    string? accessorName = accessor.ComputedKey != null
-                        ? TryGetWellKnownSymbolMemberName(accessor.ComputedKey)
-                        : accessor.Name.Lexeme;
-
-                    TypeInfo accessorReturnType;
-                    if (accessor.Kind.Type == TokenType.GET)
-                    {
-                        accessorReturnType = accessorName != null
-                            ? mutableClass.Getters[accessorName]
-                            : (accessor.ReturnType != null ? ResolveAnnotation(accessor.ReturnType, accessor.ReturnTypeNode)! : TypeInfo.Any.Shared);
-                    }
-                    else
-                    {
-                        // Setter has void return type
-                        accessorReturnType = TypeInfo.Void.Shared;
-                        // Add setter parameter to environment
-                        if (accessor.SetterParam != null)
-                        {
-                            TypeInfo setterParamType = accessorName != null
-                                ? mutableClass.Setters[accessorName]
-                                : (accessor.SetterParam.Type != null ? ResolveAnnotation(accessor.SetterParam.Type, accessor.SetterParam.TypeAnnotationNode)! : TypeInfo.Any.Shared);
-                            DeclareValue(
-                                accessorEnv,
-                                accessor.SetterParam.Name,
-                                setterParamType);
-                        }
-                    }
-
-                    // Save and set context - accessor bodies are isolated from outer loop/switch/label context
-                    TypeEnvironment previousEnvAcc = _environment;
-                    TypeInfo? previousReturnAcc = _currentFunctionReturnType;
-                    var previousInferredAcc = _inferredReturnTypes;
-                    int previousLoopDepthAcc = _loopDepth;
-                    int previousSwitchDepthAcc = _switchDepth;
-                    var previousActiveLabelsAcc = new Dictionary<string, ActiveLabel>(_activeLabels);
-                    bool previousInStaticAcc = _inStaticMethod;
-
-                    _environment = accessorEnv;
-                    _currentFunctionReturnType = accessorReturnType;
-                    bool inferringGetter = accessor.Kind.Type == TokenType.GET
-                        && accessorReturnType is TypeInfo.Inferred;
-                    if (inferringGetter)
-                        _inferredReturnTypes = new List<TypeInfo>();
-                    _loopDepth = 0;
-                    _switchDepth = 0;
-                    _activeLabels.Clear();
-                    // Per JS spec, `this` inside a static accessor is the class constructor,
-                    // enabling patterns like `static get ANY(): Range { return new this("any"); }`.
-                    _inStaticMethod = accessor.IsStatic;
-
-                    // Isolate narrowing context so that narrowings don't leak between
-                    // accessors or into sibling methods.
-                    PushEmptyNarrowingScope();
-                    PushDefiniteAssignmentScope();
-
-                    try
-                    {
-                        CheckClassBodyStatements(accessor.Body, recoverComputedSymbolDiagnostics);
-
-                        if (inferringGetter && accessorName != null)
-                        {
-                            var distinct = _inferredReturnTypes!
-                                .Distinct(TypeInfoEqualityComparer.Instance)
-                                .ToList();
-                            TypeInfo inferred = distinct.Count == 0
-                                ? TypeInfo.Void.Shared
-                                : CollapseOrCreateUnion(distinct);
-                            mutableClass.Getters[accessorName] = inferred;
-
-                            // An unannotated setter parameter is contextually typed from its getter.
-                            var pairedSetter = classStmt.Accessors.FirstOrDefault(candidate =>
-                                candidate.Kind.Type == TokenType.SET
-                                && (candidate.ComputedKey != null
-                                    ? TryGetWellKnownSymbolMemberName(candidate.ComputedKey)
-                                    : candidate.Name.Lexeme) == accessorName);
-                            if (pairedSetter?.SetterParam?.Type == null)
-                                mutableClass.Setters[accessorName] = inferred;
-                            anyInferredMethodReturnResolved = true;
-                        }
-
-                        // #367/#372: object-slot number/boolean-typed locals and returns that may hold
-                        // the undefined sentinel. The setter parameter always uses an object slot, so
-                        // it never corrupts and is not passed.
-                        MarkUndefinedReachableNumericSlots(accessor.Body);
-                    }
-                    finally
-                    {
-                        PopDefiniteAssignmentScope();
-                        PopNarrowingScope();
-                        _environment = previousEnvAcc;
-                        _currentFunctionReturnType = previousReturnAcc;
-                        _inferredReturnTypes = previousInferredAcc;
-                        _loopDepth = previousLoopDepthAcc;
-                        _switchDepth = previousSwitchDepthAcc;
-                        _activeLabels.Clear();
-                        foreach (var kvp in previousActiveLabelsAcc)
-                            _activeLabels[kvp.Key] = kvp.Value;
-                        _inStaticMethod = previousInStaticAcc;
-                    }
-                }
-            }
+            CheckClassInstanceFieldInitializers(classStmt, classTypeForBody);
+            anyInferredMethodReturnResolved = CheckClassMethodBodies(
+                classStmt, classTypeForBody, mutableClass, prevEnv, recoverComputedSymbolDiagnostics);
+            anyInferredMethodReturnResolved |= CheckClassAccessorBodies(
+                classStmt, mutableClass, recoverComputedSymbolDiagnostics);
         }
         finally
         {
@@ -1368,6 +1004,400 @@ public partial class TypeChecker
         {
             _recoveryMode = previousRecoveryMode;
         }
+    }
+
+    // Called in the caller-owned instance environment. Each body stage restores its
+    // per-function state even on errors; the declaration owns class scope and recovery.
+    private void CheckClassInstanceFieldInitializers(Stmt.Class classStmt, TypeInfo.Class classTypeForBody)
+    {
+        // Check instance field initializers (e.g. `x = 5`, `r = () => { ... }`) within the
+        // instance context so `this` and the class's type parameters resolve inside them. Static
+        // fields are checked separately at class scope. Inferred/Any field types skip the
+        // assignability check but the initializer is still type-checked.
+        foreach (var field in classStmt.Fields)
+        {
+            if (field.IsStatic || field.Initializer == null) continue;
+            TypeInfo initType = CheckExpr(field.Initializer);
+            var declaredTypes = field.IsPrivate ? classTypeForBody.PrivateFieldTypes : classTypeForBody.FieldTypes;
+            if (declaredTypes.TryGetValue(GetFieldMemberName(field), out var fieldDeclaredType)
+                && fieldDeclaredType is not (TypeInfo.Inferred or TypeInfo.Any)
+                && !IsCompatible(fieldDeclaredType, initType))
+            {
+                throw new TypeCheckException($" Cannot assign type '{initType}' to field '{field.Name.Lexeme}' of type '{fieldDeclaredType}'.", tsCode: "TS2322");
+            }
+        }
+    }
+
+    // Returns whether mutable metadata changed and the frozen class must be republished.
+    private bool CheckClassMethodBodies(
+        Stmt.Class classStmt,
+        TypeInfo.Class classTypeForBody,
+        TypeInfo.MutableClass mutableClass,
+        TypeEnvironment outerEnvironment,
+        bool recoverComputedSymbolDiagnostics)
+    {
+        bool anyInferredMethodReturnResolved = false;
+        // Only check methods that have bodies (skip overload signatures)
+        foreach (var method in classStmt.Methods.Where(m => m.Body != null))
+        {
+            // Check method decorators
+            DecoratorTarget methodTarget = method.IsStatic ? DecoratorTarget.StaticMethod : DecoratorTarget.Method;
+            CheckDecorators(method.Decorators, methodTarget);
+
+            // Check parameter decorators
+            foreach (var param in method.Parameters)
+            {
+                CheckDecorators(param.Decorators, DecoratorTarget.Parameter);
+            }
+
+            // Methods and constructors both arrive here (the constructor is a Method named
+            // "constructor"), and only implementations do — the Where(Body != null) filter
+            // above already excluded overload signatures.
+            ReportImplicitAnyParameters(method.Parameters,
+                isAmbient: classStmt.IsDeclare || method.IsAbstract);
+
+            // For static methods, use a different environment without this/super
+            TypeEnvironment methodEnv;
+            if (method.IsStatic)
+            {
+                methodEnv = new TypeEnvironment(outerEnvironment); // No this/super
+            }
+            else
+            {
+                methodEnv = new TypeEnvironment(_environment);
+            }
+
+            // Get the method type (could be Function or OverloadedFunction)
+            // For ES2022 private methods, look in PrivateMethodTypes/StaticPrivateMethodTypes
+            TypeInfo declaredMethodType;
+            if (method.ComputedKey != null)
+            {
+                // Computed symbol-keyed methods carry the `<computed>` name, so they aren't keyed
+                // in the method dictionaries by a static name. Well-known ones are stored under their
+                // @@name; reuse that type. An arbitrary computed key has no modeled member — build a
+                // signature inline just to bind parameter types for the body check.
+                string? memberName = TryGetWellKnownSymbolMemberName(method.ComputedKey);
+                var computedDict = method.IsStatic ? classTypeForBody.StaticMethods : classTypeForBody.Methods;
+                if (memberName != null && computedDict.TryGetValue(memberName, out var computedType))
+                {
+                    declaredMethodType = computedType;
+                }
+                else
+                {
+                    var (cParamTypes, cRequired, cHasRest, cParamNames) = BuildFunctionSignature(
+                        method.Parameters, validateDefaults: true, contextName: "computed method");
+                    TypeInfo cReturn = ResolveAnnotation(method.ReturnType, method.ReturnTypeNode) ?? TypeInfo.Inferred.Shared;
+                    declaredMethodType = new TypeInfo.Function(cParamTypes, cReturn, cRequired, cHasRest, null, cParamNames);
+                }
+            }
+            else if (method.IsPrivate)
+            {
+                declaredMethodType = method.IsStatic
+                    ? classTypeForBody.StaticPrivateMethodTypes[method.Name.Lexeme]
+                    : classTypeForBody.PrivateMethodTypes[method.Name.Lexeme];
+            }
+            else
+            {
+                declaredMethodType = method.IsStatic
+                    ? classTypeForBody.StaticMethods[method.Name.Lexeme]
+                    : classTypeForBody.Methods[method.Name.Lexeme];
+            }
+
+            // Get the actual function type (implementation for overloads)
+            TypeInfo.Function methodType = declaredMethodType switch
+            {
+                TypeInfo.OverloadedFunction of => of.Implementation,
+                TypeInfo.Function f => f,
+                // SharpTS-only: internal invariant
+                _ => throw new TypeCheckException($" Unexpected method type for '{method.Name.Lexeme}'.")
+            };
+
+            if (methodType.ThisType is { } explicitMethodThis)
+                methodEnv.Define("this", explicitMethodThis);
+
+            // A script/namespace declaration can be checked once during module collection and
+            // again authoritatively. Re-resolve an explicit return annotation in the current
+            // pass so an earlier placeholder (notably a namespace-local interface) cannot leave
+            // the body permissively typed as any.
+            if (method.ReturnType != null)
+            {
+                TypeInfo currentReturn = ResolveAnnotation(method.ReturnType, method.ReturnTypeNode)!;
+                methodType = methodType with { ReturnType = currentReturn };
+            }
+
+            // Body-scope binding widens a bare `?`-optional parameter with `| undefined` (the
+            // caller may omit it) — the method's own callable signature (methodType) keeps the
+            // declared type.
+            var bodyParamTypes = WidenOptionalParamsForBody(methodType.ParamTypes, method.Parameters);
+            for (int i = 0; i < method.Parameters.Count; i++)
+            {
+                DeclareValue(
+                    methodEnv,
+                    method.Parameters[i].Name,
+                    bodyParamTypes[i]);
+            }
+
+            // Save and set context - method bodies are isolated from outer loop/switch/label context
+            TypeEnvironment previousEnvFunc = _environment;
+            TypeInfo? previousReturnFunc = _currentFunctionReturnType;
+            TypeInfo? previousThisTypeFunc = _currentFunctionThisType;
+            var previousInferredFunc = _inferredReturnTypes;
+            var previousInferredYieldFunc = _inferredYieldTypes;
+            bool previousInStatic = _inStaticMethod;
+            bool previousInAsyncFunc = _inAsyncFunction;
+            bool previousInGeneratorFunc = _inGeneratorFunction;
+            int previousLoopDepthFunc = _loopDepth;
+            int previousSwitchDepthFunc = _switchDepth;
+            var previousActiveLabelsFunc = new Dictionary<string, ActiveLabel>(_activeLabels);
+
+            bool inferringMethodReturn = methodType.ReturnType is TypeInfo.Inferred;
+            _environment = methodEnv;
+            if (inferringMethodReturn)
+            {
+                _inferredReturnTypes = new List<TypeInfo>();
+                _currentFunctionReturnType = TypeInfo.Inferred.Shared;
+            }
+            else
+            {
+                _currentFunctionReturnType = methodType.ReturnType;
+            }
+            // Collect yield operand types only while inferring a generator method's type (#548).
+            _inferredYieldTypes = inferringMethodReturn && method.IsGenerator ? new List<TypeInfo>() : null;
+            _currentFunctionThisType = methodType.ThisType;
+            _inStaticMethod = method.IsStatic;
+            _inAsyncFunction = method.IsAsync;
+            _inGeneratorFunction = method.IsGenerator;
+            _loopDepth = 0;
+            _switchDepth = 0;
+            _activeLabels.Clear();
+
+            // Isolate the narrowing context for this method body so narrowings
+            // from `if (x) return;` don't leak into sibling methods/accessors.
+            PushEmptyNarrowingScope();
+            PushDefiniteAssignmentScope();
+
+            try
+            {
+                // Abstract methods have no body to check
+                if (method.Body != null)
+                {
+                    // Method bodies have ordinary function-declaration and lexical hoisting
+                    // semantics. GeneratorArrowLifter appends a synthesized __genArrow_N
+                    // declaration after the earlier forwarding reference, so predeclare both
+                    // declaration kinds before the source-order body pass.
+                    HoistFunctionDeclarations(method.Body);
+                    HoistLexicalDeclarations(method.Body);
+                    CheckClassBodyStatements(method.Body, recoverComputedSymbolDiagnostics);
+
+                    // #367/#372: object-slot number/boolean-typed locals, parameters, and returns
+                    // that an `any`/`undefined` value may have left holding the sentinel, so they
+                    // are not coerced to NaN/false.
+                    MarkUndefinedReachableNumericSlots(method.Body, method.Parameters);
+                }
+
+                // Resolve inferred method return type
+                if (inferringMethodReturn && method.Body != null)
+                {
+                    var collected = _inferredReturnTypes!;
+                    _inferredReturnTypes = null;
+
+                    TypeInfo inferredReturn;
+                    if (collected.Count == 0)
+                    {
+                        inferredReturn = TypeInfo.Void.Shared;
+                    }
+                    else
+                    {
+                        var distinct = collected.Distinct(TypeInfoEqualityComparer.Instance).ToList();
+                        inferredReturn = CollapseOrCreateUnion(distinct);
+                    }
+
+                    // A generator method's type argument is its YIELD type (#548), not the
+                    // `return`-derived inferredReturn; a non-generator async method wraps in Promise.
+                    // The resolved type is re-published below (anyInferredMethodReturnResolved), so
+                    // `new C().m()` reads the real Generator<…>/Promise<…> at the call site rather than
+                    // the `<inferred>` placeholder (#658/#661; the generator-method face was #687).
+                    if (method.IsGenerator)
+                        inferredReturn = BuildInferredGeneratorType(_inferredYieldTypes!, method.IsAsync);
+                    else if (method.IsAsync && inferredReturn is not TypeInfo.Void)
+                        inferredReturn = new TypeInfo.Promise(inferredReturn);
+
+                    // Update the method type in the class. Computed symbol-keyed methods are keyed
+                    // by their @@name (e.g. @@iterator), not the synthetic `<computed>` lexeme; an
+                    // arbitrary computed key (no well-known @@name) carries no static member to update.
+                    var updatedMethodType = new TypeInfo.Function(methodType.ParamTypes, inferredReturn, methodType.RequiredParams, methodType.HasRestParam, methodType.ThisType, methodType.ParamNames);
+                    string? mName = method.ComputedKey != null
+                        ? TryGetWellKnownSymbolMemberName(method.ComputedKey)
+                        : method.Name.Lexeme;
+                    if (mName != null)
+                    {
+                        if (method.IsPrivate)
+                        {
+                            if (method.IsStatic) mutableClass.StaticPrivateMethods[mName] = updatedMethodType;
+                            else mutableClass.PrivateMethods[mName] = updatedMethodType;
+                        }
+                        else
+                        {
+                            if (method.IsStatic) mutableClass.StaticMethods[mName] = updatedMethodType;
+                            else mutableClass.Methods[mName] = updatedMethodType;
+                        }
+                        // The frozen class call sites read still holds the <inferred> placeholder for
+                        // this method; flag a rebuild after the body pass (#658/#661).
+                        anyInferredMethodReturnResolved = true;
+                    }
+                }
+
+                if (_strictNullChecks && !inferringMethodReturn && method.Body is not null &&
+                    methodType.ReturnType is not TypeInfo.Void &&
+                    methodType.ReturnType is not TypeInfo.Generator &&
+                    methodType.ReturnType is not TypeInfo.AsyncGenerator &&
+                    methodType.ReturnType is not TypeInfo.TypePredicate { IsAssertion: true } &&
+                    methodType.ReturnType is not TypeInfo.AssertsNonNull &&
+                    !method.IsGenerator && !method.IsAsync &&
+                    !DoesBlockDefinitelyReturn(method.Body))
+                {
+                    throw new TypeCheckException(
+                        $"Function '{method.Name.Lexeme}' must return a value of type '{methodType.ReturnType}'.",
+                        method.Name.Line,
+                        tsCode: "TS2366");
+                }
+            }
+            finally
+            {
+                PopDefiniteAssignmentScope();
+                PopNarrowingScope();
+                _environment = previousEnvFunc;
+                _currentFunctionReturnType = previousReturnFunc;
+                _currentFunctionThisType = previousThisTypeFunc;
+                _inferredReturnTypes = previousInferredFunc;
+                _inferredYieldTypes = previousInferredYieldFunc;
+                _inStaticMethod = previousInStatic;
+                _inAsyncFunction = previousInAsyncFunc;
+                _inGeneratorFunction = previousInGeneratorFunc;
+                _loopDepth = previousLoopDepthFunc;
+                _switchDepth = previousSwitchDepthFunc;
+                _activeLabels.Clear();
+                foreach (var kvp in previousActiveLabelsFunc)
+                    _activeLabels[kvp.Key] = kvp.Value;
+            }
+        }
+        return anyInferredMethodReturnResolved;
+    }
+
+    private bool CheckClassAccessorBodies(
+        Stmt.Class classStmt,
+        TypeInfo.MutableClass mutableClass,
+        bool recoverComputedSymbolDiagnostics)
+    {
+        bool anyInferredMethodReturnResolved = false;
+        // Check accessor bodies
+        if (classStmt.Accessors != null)
+        {
+            foreach (var accessor in classStmt.Accessors)
+            {
+                TypeEnvironment accessorEnv = new TypeEnvironment(_environment);
+                string? accessorName = accessor.ComputedKey != null
+                    ? TryGetWellKnownSymbolMemberName(accessor.ComputedKey)
+                    : accessor.Name.Lexeme;
+
+                TypeInfo accessorReturnType;
+                if (accessor.Kind.Type == TokenType.GET)
+                {
+                    accessorReturnType = accessorName != null
+                        ? mutableClass.Getters[accessorName]
+                        : (accessor.ReturnType != null ? ResolveAnnotation(accessor.ReturnType, accessor.ReturnTypeNode)! : TypeInfo.Any.Shared);
+                }
+                else
+                {
+                    // Setter has void return type
+                    accessorReturnType = TypeInfo.Void.Shared;
+                    // Add setter parameter to environment
+                    if (accessor.SetterParam != null)
+                    {
+                        TypeInfo setterParamType = accessorName != null
+                            ? mutableClass.Setters[accessorName]
+                            : (accessor.SetterParam.Type != null ? ResolveAnnotation(accessor.SetterParam.Type, accessor.SetterParam.TypeAnnotationNode)! : TypeInfo.Any.Shared);
+                        DeclareValue(
+                            accessorEnv,
+                            accessor.SetterParam.Name,
+                            setterParamType);
+                    }
+                }
+
+                // Save and set context - accessor bodies are isolated from outer loop/switch/label context
+                TypeEnvironment previousEnvAcc = _environment;
+                TypeInfo? previousReturnAcc = _currentFunctionReturnType;
+                var previousInferredAcc = _inferredReturnTypes;
+                int previousLoopDepthAcc = _loopDepth;
+                int previousSwitchDepthAcc = _switchDepth;
+                var previousActiveLabelsAcc = new Dictionary<string, ActiveLabel>(_activeLabels);
+                bool previousInStaticAcc = _inStaticMethod;
+
+                _environment = accessorEnv;
+                _currentFunctionReturnType = accessorReturnType;
+                bool inferringGetter = accessor.Kind.Type == TokenType.GET
+                    && accessorReturnType is TypeInfo.Inferred;
+                if (inferringGetter)
+                    _inferredReturnTypes = new List<TypeInfo>();
+                _loopDepth = 0;
+                _switchDepth = 0;
+                _activeLabels.Clear();
+                // Per JS spec, `this` inside a static accessor is the class constructor,
+                // enabling patterns like `static get ANY(): Range { return new this("any"); }`.
+                _inStaticMethod = accessor.IsStatic;
+
+                // Isolate narrowing context so that narrowings don't leak between
+                // accessors or into sibling methods.
+                PushEmptyNarrowingScope();
+                PushDefiniteAssignmentScope();
+
+                try
+                {
+                    CheckClassBodyStatements(accessor.Body, recoverComputedSymbolDiagnostics);
+
+                    if (inferringGetter && accessorName != null)
+                    {
+                        var distinct = _inferredReturnTypes!
+                            .Distinct(TypeInfoEqualityComparer.Instance)
+                            .ToList();
+                        TypeInfo inferred = distinct.Count == 0
+                            ? TypeInfo.Void.Shared
+                            : CollapseOrCreateUnion(distinct);
+                        mutableClass.Getters[accessorName] = inferred;
+
+                        // An unannotated setter parameter is contextually typed from its getter.
+                        var pairedSetter = classStmt.Accessors.FirstOrDefault(candidate =>
+                            candidate.Kind.Type == TokenType.SET
+                            && (candidate.ComputedKey != null
+                                ? TryGetWellKnownSymbolMemberName(candidate.ComputedKey)
+                                : candidate.Name.Lexeme) == accessorName);
+                        if (pairedSetter?.SetterParam?.Type == null)
+                            mutableClass.Setters[accessorName] = inferred;
+                        anyInferredMethodReturnResolved = true;
+                    }
+
+                    // #367/#372: object-slot number/boolean-typed locals and returns that may hold
+                    // the undefined sentinel. The setter parameter always uses an object slot, so
+                    // it never corrupts and is not passed.
+                    MarkUndefinedReachableNumericSlots(accessor.Body);
+                }
+                finally
+                {
+                    PopDefiniteAssignmentScope();
+                    PopNarrowingScope();
+                    _environment = previousEnvAcc;
+                    _currentFunctionReturnType = previousReturnAcc;
+                    _inferredReturnTypes = previousInferredAcc;
+                    _loopDepth = previousLoopDepthAcc;
+                    _switchDepth = previousSwitchDepthAcc;
+                    _activeLabels.Clear();
+                    foreach (var kvp in previousActiveLabelsAcc)
+                        _activeLabels[kvp.Key] = kvp.Value;
+                    _inStaticMethod = previousInStaticAcc;
+                }
+            }
+        }
+        return anyInferredMethodReturnResolved;
     }
 
     /// <summary>
