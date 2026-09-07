@@ -1,0 +1,20 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+
+# Retain the existing review settings while applying SharpTS's documentation policy.
+inheritance: true
+reviews:
+  pre_merge_checks:
+    # Coverage cannot distinguish supported public APIs from implementation methods.
+    # Review documentation against CONTRIBUTING.md instead of a percentage target.
+    docstrings:
+      mode: "off"
+  path_instructions:
+    - path: "**/*.cs"
+      instructions: >-
+        Follow the XML documentation policy in CONTRIBUTING.md. Require useful XML
+        documentation for new or changed supported consumer-facing APIs, including
+        externally consumed protected extension points. C# public visibility alone
+        does not make an implementation type a supported API. For internal/private
+        implementation methods and tests, request comments only for non-obvious
+        contracts or invariants; do not request blanket docstrings or percentage
+        coverage. Continue reporting correctness, security, and behavioral issues.

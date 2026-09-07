@@ -157,6 +157,42 @@ them but does not execute them.
   warnings — keep the count at zero
 - **Comments:** State constraints the code can't show; don't narrate the code
 
+### XML Documentation Policy
+
+- **Supported consumer-facing APIs:** Add or update XML documentation when changing
+  APIs intended for external callers, including public hosting/interop contracts and
+  protected extension points. Explain their purpose and any relevant parameter/return
+  semantics, exceptions, ownership, lifetime, threading, or cancellation requirements.
+  Use `<inheritdoc/>` when the inherited contract fully describes the implementation.
+  A C# `public` modifier alone does not make a compiler/runtime implementation type a
+  supported consumer API.
+- **Internal implementation and tests:** XML documentation is optional. Prefer clear
+  names and focused methods; do not add summaries that merely repeat the signature
+  or comments that narrate each step. Untouched code needs no documentation backfill.
+- **Non-obvious invariants:** Document constraints where maintainers need them, such as
+  emitted IL stack requirements, standalone-runtime restrictions, observable evaluation
+  order, and ownership or concurrency assumptions. Use a focused code comment or XML
+  remarks; put stable cross-cutting contracts in [ARCHITECTURE.md](ARCHITECTURE.md).
+
+SharpTS does not require a percentage of touched functions to have docstrings.
+[.coderabbit.yaml](.coderabbit.yaml) disables CodeRabbit's blanket docstring coverage
+pre-merge check and gives C# reviewers the policy above. The coverage check exposes
+only a mode and threshold, so it cannot enforce this distinction between supported
+APIs and implementation methods. Documentation findings should identify a missing
+contract required by this policy, rather than request comments to meet a quota.
+Correctness, security, and behavioral findings remain part of normal review.
+
+The repository configuration enables
+[configuration inheritance](https://docs.coderabbit.ai/configuration/configuration-inheritance)
+to preserve parent review settings while overriding the coverage check for SharpTS.
+Organization UI settings need not be changed for other repositories. Organization or
+workspace global overrides can still take precedence. To verify a review, inspect
+CodeRabbit's run configuration and pre-merge checks: the repository YAML should be in
+use and no percentage-based Docstring Coverage warning should appear. Maintainers can
+use `@coderabbitai configuration` on a PR to inspect the resolved configuration; if an
+organization/global override still enforces coverage, adjust that setting to match
+this policy. See CodeRabbit's [check reference](https://docs.coderabbit.ai/reference/configuration).
+
 ### AST Node Pattern
 
 All AST nodes are immutable records in `Parsing/AST.cs`:
