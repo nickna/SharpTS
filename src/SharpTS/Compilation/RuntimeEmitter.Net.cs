@@ -13,17 +13,22 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitNetModuleMethods(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
-        EmitNetCreateServer(typeBuilder, runtime);
-        EmitNetCreateConnection(typeBuilder, runtime);
-        EmitNetCreateSocket(typeBuilder, runtime);
-        EmitNetCreateBlockList(typeBuilder, runtime);
+        var net = runtime.RequireNet();
+        EmitNetCreateServer(typeBuilder, net);
+        EmitNetCreateConnection(typeBuilder, net);
+        EmitNetCreateSocket(typeBuilder, net);
+        EmitNetCreateBlockList(typeBuilder, net);
+        runtime.RegisterBuiltInModuleMethod("primitive:net", "createServer", net.CreateServer);
+        runtime.RegisterBuiltInModuleMethod("primitive:net", "createConnection", net.CreateConnection);
+        runtime.RegisterBuiltInModuleMethod("primitive:net", "createSocket", net.CreateSocket);
+        runtime.RegisterBuiltInModuleMethod("primitive:net", "createBlockList", net.CreateBlockList);
     }
 
     /// <summary>
     /// Emits: public static object NetCreateBlockList() — creates the opaque
     /// native handle used by the TypeScript BlockList facade.
     /// </summary>
-    private void EmitNetCreateBlockList(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitNetCreateBlockList(TypeBuilder typeBuilder, EmittedNetRuntime net)
     {
         var method = typeBuilder.DefineMethod(
             "NetCreateBlockList",
@@ -31,11 +36,10 @@ public partial class RuntimeEmitter
             _types.Object,
             Type.EmptyTypes
         );
-        runtime.NetCreateBlockList = method;
-        runtime.RegisterBuiltInModuleMethod("primitive:net", "createBlockList", method);
+        net.CreateBlockList = method;
 
         var il = method.GetILGenerator();
-        il.Emit(OpCodes.Newobj, runtime.BlockListCtor!);
+        il.Emit(OpCodes.Newobj, net.BlockListCtor);
         il.Emit(OpCodes.Ret);
     }
 
@@ -46,7 +50,7 @@ public partial class RuntimeEmitter
     /// as the first arg carries per-socket settings (highWaterMark) applied to
     /// accepted connections.
     /// </summary>
-    private void EmitNetCreateServer(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitNetCreateServer(TypeBuilder typeBuilder, EmittedNetRuntime net)
     {
         var method = typeBuilder.DefineMethod(
             "NetCreateServer",
@@ -54,11 +58,10 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object, _types.Object]
         );
-        runtime.NetCreateServer = method;
-        runtime.RegisterBuiltInModuleMethod("primitive:net", "createServer", method);
+        net.CreateServer = method;
 
         var il = method.GetILGenerator();
-        var serverLocal = il.DeclareLocal(_netServerTypeBuilder);
+        var serverLocal = il.DeclareLocal(net.ServerType);
         var cbLocal = il.DeclareLocal(_types.Object);
 
         // callback = (arg0 is Dictionary) ? arg1 : arg0
@@ -77,7 +80,7 @@ public partial class RuntimeEmitter
 
         // server = new $NetServer(callback)
         il.Emit(OpCodes.Ldloc, cbLocal);
-        il.Emit(OpCodes.Newobj, runtime.NetServerCtor);
+        il.Emit(OpCodes.Newobj, net.ServerCtor);
         il.Emit(OpCodes.Stloc, serverLocal);
 
         // if (arg0 is Dictionary) parse per-socket options
@@ -115,7 +118,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "TryGetValue", [_types.String, _types.Object.MakeByRefType()])!);
             il.Emit(OpCodes.Brfalse, noBlockList);
             il.Emit(OpCodes.Ldloc, valLocal);
-            il.Emit(OpCodes.Isinst, _blockListTypeBuilder);
+            il.Emit(OpCodes.Isinst, net.BlockListType);
             il.Emit(OpCodes.Brfalse, noBlockList);
             il.Emit(OpCodes.Ldloc, serverLocal);
             il.Emit(OpCodes.Ldloc, valLocal);
@@ -152,7 +155,7 @@ public partial class RuntimeEmitter
     /// Node signature: connect(options|port|path[, host][, connectListener]) —
     /// the socket's Connect does the positional-arg parsing.
     /// </summary>
-    private void EmitNetCreateConnection(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitNetCreateConnection(TypeBuilder typeBuilder, EmittedNetRuntime net)
     {
         var method = typeBuilder.DefineMethod(
             "NetCreateConnection",
@@ -160,14 +163,13 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object, _types.Object, _types.Object]
         );
-        runtime.NetCreateConnection = method;
-        runtime.RegisterBuiltInModuleMethod("primitive:net", "createConnection", method);
+        net.CreateConnection = method;
 
         var il = method.GetILGenerator();
 
         // var socket = new $NetSocket()
-        var socketLocal = il.DeclareLocal(runtime.NetSocketType);
-        il.Emit(OpCodes.Newobj, runtime.NetSocketCtor);
+        var socketLocal = il.DeclareLocal(net.SocketType);
+        il.Emit(OpCodes.Newobj, net.SocketCtor);
         il.Emit(OpCodes.Stloc, socketLocal);
 
         // socket.Connect(options, hostOrCallback, callback)
@@ -179,7 +181,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0); // options/port/path
         il.Emit(OpCodes.Ldarg_1); // host or callback
         il.Emit(OpCodes.Ldarg_2); // callback
-        il.Emit(OpCodes.Callvirt, runtime.NetSocketConnect);
+        il.Emit(OpCodes.Callvirt, net.SocketConnect);
         il.Emit(OpCodes.Pop);
 
         il.MarkLabel(noOptions);
@@ -193,7 +195,7 @@ public partial class RuntimeEmitter
     /// Creates an unconnected native Socket and applies constructor options.
     /// The public callable/newable Socket export lives in stdlib/node/net.ts.
     /// </summary>
-    private void EmitNetCreateSocket(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitNetCreateSocket(TypeBuilder typeBuilder, EmittedNetRuntime net)
     {
         var method = typeBuilder.DefineMethod(
             "NetCreateSocket",
@@ -201,12 +203,11 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object]
         );
-        runtime.NetCreateSocket = method;
-        runtime.RegisterBuiltInModuleMethod("primitive:net", "createSocket", method);
+        net.CreateSocket = method;
 
         var il = method.GetILGenerator();
-        var socketLocal = il.DeclareLocal(runtime.NetSocketType);
-        il.Emit(OpCodes.Newobj, runtime.NetSocketCtor);
+        var socketLocal = il.DeclareLocal(net.SocketType);
+        il.Emit(OpCodes.Newobj, net.SocketCtor);
         il.Emit(OpCodes.Stloc, socketLocal);
 
         var done = il.DefineLabel();

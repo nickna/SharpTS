@@ -198,6 +198,16 @@ directly; event-loop, Buffer, and EventEmitter dependencies remain on the shared
 fields and synchronous method helpers stay local to the emitter, and named-import dispatch remains
 in the shared built-in module registry.
 
+Net uses `Net` / `RequireNet()` for its module factories, TCP/IPC socket and server metadata,
+and native BlockList enforcement handles. `EmitAll` starts it for `UsesNet`, including net implied
+by HTTP, TLS, or fetch. Socket methods are declared before factories, TLS subclasses, and accept/read
+closures reference them; phase 2 uses those same component handles to emit bodies and finalize the
+socket and server types. Completion follows runtime and dependent-type finalization. Net factories
+and BlockList emission take `EmittedNetRuntime` directly; EventEmitter, Buffer, event-loop helpers,
+and module registration remain separate dependencies. Migrated type/method handles have no duplicate
+emitter fields. Socket/server fields, other transport methods, and closure construction state remain
+local to the emitter.
+
 During emission, each handle becomes readable as soon as its declaration is assigned, so forward
 references do not require a method body to exist yet. An early read names the missing declaration.
 Completion is an orchestration boundary, not an IL verifier: body emission and type finalization

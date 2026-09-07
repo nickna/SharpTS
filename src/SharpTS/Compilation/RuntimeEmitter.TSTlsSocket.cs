@@ -79,7 +79,7 @@ public partial class RuntimeEmitter
         var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$TlsSocket",
             TypeAttributes.Public | TypeAttributes.Class | TypeAttributes.BeforeFieldInit,
-            runtime.NetSocketType  // extends $NetSocket — inherits real socket I/O over the SslStream
+            runtime.RequireNet().SocketType  // extends $NetSocket — inherits real socket I/O over the SslStream
         );
         _tlsSocketTypeBuilder = typeBuilder;
         runtime.RequireTls().SocketType = typeBuilder;
@@ -101,7 +101,7 @@ public partial class RuntimeEmitter
         runtime.RequireTls().SocketCtor = ctor;
         var ctorIL = ctor.GetILGenerator();
         ctorIL.Emit(OpCodes.Ldarg_0);
-        ctorIL.Emit(OpCodes.Call, runtime.NetSocketCtor);
+        ctorIL.Emit(OpCodes.Call, runtime.RequireNet().SocketCtor);
         ctorIL.Emit(OpCodes.Ret);
 
         // Static helpers
@@ -710,7 +710,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(defaultLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.NetSocketGetMember);
+        il.Emit(OpCodes.Call, runtime.RequireNet().SocketGetMember);
         il.Emit(OpCodes.Ret);
     }
 

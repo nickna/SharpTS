@@ -20,7 +20,6 @@ namespace SharpTS.Compilation;
 public partial class RuntimeEmitter
 {
     // Field builders for $NetServer
-    private TypeBuilder _netServerTypeBuilder = null!;
     private FieldBuilder _netServerListenerField = null!;
     private FieldBuilder _netServerIsListeningField = null!;
     private FieldBuilder _netServerCtsField = null!;
@@ -66,7 +65,7 @@ public partial class RuntimeEmitter
             TypeAttributes.Public | TypeAttributes.BeforeFieldInit,
             runtime.TSEventEmitterType
         );
-        _netServerTypeBuilder = typeBuilder;
+        runtime.RequireNet().ServerType = typeBuilder;
         _ = typeBuilder;
 
         // ── Fields ──
@@ -150,7 +149,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitTSNetServerPhase2(EmittedRuntime runtime)
     {
-        var typeBuilder = _netServerTypeBuilder;
+        var typeBuilder = runtime.RequireNet().ServerType;
 
         // Emit method bodies
         EmitNetServerListenBody(typeBuilder, runtime);
@@ -174,7 +173,7 @@ public partial class RuntimeEmitter
             CallingConventions.Standard,
             [_types.Object]
         );
-        runtime.NetServerCtor = ctor;
+        runtime.RequireNet().ServerCtor = ctor;
 
         var il = ctor.GetILGenerator();
         // base()
@@ -585,7 +584,7 @@ public partial class RuntimeEmitter
     private void EmitTcpAcceptWorkerStart(ILGenerator callerIl, EmittedRuntime runtime)
     {
         // Emit a private _TcpAcceptWorker(object state) method that creates and runs the closure
-        var acceptWorker = _netServerTypeBuilder.DefineMethod(
+        var acceptWorker = runtime.RequireNet().ServerType.DefineMethod(
             "_TcpAcceptWorker",
             MethodAttributes.Private,
             typeof(void),
@@ -651,7 +650,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitIpcAcceptWorkerUnixStart(ILGenerator callerIl, EmittedRuntime runtime)
     {
-        var acceptWorker = _netServerTypeBuilder.DefineMethod(
+        var acceptWorker = runtime.RequireNet().ServerType.DefineMethod(
             "_IpcAcceptWorkerUnix",
             MethodAttributes.Private,
             typeof(void),
@@ -738,7 +737,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitIpcAcceptWorkerWindowsStart(ILGenerator callerIl, EmittedRuntime runtime)
     {
-        var acceptWorker = _netServerTypeBuilder.DefineMethod(
+        var acceptWorker = runtime.RequireNet().ServerType.DefineMethod(
             "_IpcAcceptWorkerWindows",
             MethodAttributes.Private,
             typeof(void),

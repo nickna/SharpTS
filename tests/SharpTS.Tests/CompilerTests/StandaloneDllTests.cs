@@ -1347,6 +1347,44 @@ public class StandaloneDllTests
         }
     }
 
+    [Fact]
+    public void Isolated_NetTransport_ShouldSendAndReceiveWithoutSharpTsDll()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import { createServer, createConnection, BlockList } from 'net';
+                const list = new BlockList();
+                list.addAddress('127.0.0.2');
+                const server = createServer({ blockList: list }, (socket: any) => {
+                    socket.setEncoding('utf8');
+                    let received = '';
+                    socket.on('data', (chunk: string) => { received += chunk; });
+                    socket.on('end', () => {
+                        console.log(received);
+                        socket.end();
+                        server.close();
+                    });
+                });
+                server.listen(0, '127.0.0.1', () => {
+                    const client = createConnection({ port: server.address().port, host: '127.0.0.1' });
+                    client.on('connect', () => client.end('hello from TCP'));
+                });
+                """
+        };
+
+        var (tempDir, dllPath) = CompileStandaloneModule(files, "main.ts");
+        try
+        {
+            Assert.DoesNotContain(GetAssemblyReferences(dllPath), r => r == "SharpTS");
+            Assert.Equal("hello from TCP\n", ExecuteCompiledDllIsolated(dllPath, timeoutMs: 15000));
+        }
+        finally
+        {
+            CleanupTempDir(tempDir);
+        }
+    }
+
     /// <summary>
     /// #1033 guardrail: a --compile'd tls client↔server program must complete a real SslStream
     /// handshake and exchange data with NO SharpTS.dll co-located. The handshake, introspection,

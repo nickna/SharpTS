@@ -33,8 +33,8 @@ public sealed class NetModuleEmitter : IBuiltInModuleEmitter
         {
             "createServer" => EmitCreateServer(emitter, arguments),
             "createConnection" => EmitCreateConnection(emitter, arguments),
-            "createSocket" => EmitOneArgCall(emitter, arguments, emitter.Context.Runtime!.NetCreateSocket),
-            "createBlockList" => EmitZeroArgCall(emitter, emitter.Context.Runtime!.NetCreateBlockList),
+            "createSocket" => EmitOneArgCall(emitter, arguments, emitter.Context.Runtime!.RequireNet().CreateSocket),
+            "createBlockList" => EmitZeroArgCall(emitter, emitter.Context.Runtime!.RequireNet().CreateBlockList),
             _ => false
         };
     }
@@ -88,7 +88,7 @@ public sealed class NetModuleEmitter : IBuiltInModuleEmitter
         }
 
         // Call $Runtime.NetCreateServer(optionsOrCallback, callback)
-        il.Emit(OpCodes.Call, ctx.Runtime!.NetCreateServer);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireNet().CreateServer);
         return true;
     }
 
@@ -113,7 +113,7 @@ public sealed class NetModuleEmitter : IBuiltInModuleEmitter
         }
 
         // Call $Runtime.NetCreateConnection(options, hostOrCallback, callback)
-        il.Emit(OpCodes.Call, ctx.Runtime!.NetCreateConnection);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireNet().CreateConnection);
         return true;
     }
 

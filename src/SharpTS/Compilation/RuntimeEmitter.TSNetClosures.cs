@@ -47,14 +47,14 @@ public partial class RuntimeEmitter
             typeof(object)
         );
 
-        var serverField = typeBuilder.DefineField("_server", _netServerTypeBuilder, FieldAttributes.Private);
+        var serverField = typeBuilder.DefineField("_server", runtime.RequireNet().ServerType, FieldAttributes.Private);
         var clientField = typeBuilder.DefineField("_client", typeof(TcpClient), FieldAttributes.Private);
 
         // Constructor: (server, client)
         var ctor = typeBuilder.DefineConstructor(
             MethodAttributes.Public,
             CallingConventions.Standard,
-            [_netServerTypeBuilder, typeof(TcpClient)]
+            [runtime.RequireNet().ServerType, typeof(TcpClient)]
         );
         {
             var il = ctor.GetILGenerator();
@@ -80,7 +80,7 @@ public partial class RuntimeEmitter
         );
         {
             var il = run.GetILGenerator();
-            var socketLocal = il.DeclareLocal(_netSocketTypeBuilder); // local 0: $NetSocket
+            var socketLocal = il.DeclareLocal(runtime.RequireNet().SocketType); // local 0: $NetSocket
 
             // BlockList rejection (#1069): a blocked peer is closed silently — no
             // 'connection' event, no socket construction (Node semantics).
@@ -102,10 +102,10 @@ public partial class RuntimeEmitter
                 il.Emit(OpCodes.Ldarg_0);
                 il.Emit(OpCodes.Ldfld, serverField);
                 il.Emit(OpCodes.Ldfld, _netServerBlockListField);
-                il.Emit(OpCodes.Castclass, runtime.BlockListType!);
+                il.Emit(OpCodes.Castclass, runtime.RequireNet().BlockListType);
                 il.Emit(OpCodes.Ldloc, epLocal);
                 il.Emit(OpCodes.Callvirt, typeof(System.Net.IPEndPoint).GetProperty("Address")!.GetGetMethod()!);
-                il.Emit(OpCodes.Callvirt, runtime.BlockListCheckIp!);
+                il.Emit(OpCodes.Callvirt, runtime.RequireNet().BlockListCheckIp);
                 il.Emit(OpCodes.Brfalse, noBlock);
                 // blocked: try { _client.Close() } catch { } ; return
                 il.BeginExceptionBlock();
@@ -139,13 +139,13 @@ public partial class RuntimeEmitter
 
                 il.MarkLabel(loopTop);
                 // if (_connections[i] is $NetSocket s && s._destroyed) RemoveAt(i)
-                var sockLocal = il.DeclareLocal(_netSocketTypeBuilder);
+                var sockLocal = il.DeclareLocal(runtime.RequireNet().SocketType);
                 il.Emit(OpCodes.Ldarg_0);
                 il.Emit(OpCodes.Ldfld, serverField);
                 il.Emit(OpCodes.Ldfld, _netServerConnectionsField);
                 il.Emit(OpCodes.Ldloc, iLocal);
                 il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "get_Item")!);
-                il.Emit(OpCodes.Isinst, _netSocketTypeBuilder);
+                il.Emit(OpCodes.Isinst, runtime.RequireNet().SocketType);
                 il.Emit(OpCodes.Stloc, sockLocal);
                 il.Emit(OpCodes.Ldloc, sockLocal);
                 il.Emit(OpCodes.Brfalse, nextIter);
@@ -214,7 +214,7 @@ public partial class RuntimeEmitter
             // var socket = new $NetSocket(_client)
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldfld, clientField);
-            il.Emit(OpCodes.Newobj, runtime.NetSocketCtorTcpClient);
+            il.Emit(OpCodes.Newobj, runtime.RequireNet().SocketCtorTcpClient);
             il.Emit(OpCodes.Stloc, socketLocal);
 
             EmitApplyServerSocketOptions(il, serverField, socketLocal);
@@ -268,7 +268,7 @@ public partial class RuntimeEmitter
 
             // socket.StartReading()
             il.Emit(OpCodes.Ldloc, socketLocal);
-            il.Emit(OpCodes.Callvirt, runtime.NetSocketStartReading);
+            il.Emit(OpCodes.Callvirt, runtime.RequireNet().SocketStartReading);
 
             il.Emit(OpCodes.Ret);
         }
@@ -290,7 +290,7 @@ public partial class RuntimeEmitter
             typeof(object)
         );
 
-        var serverField = typeBuilder.DefineField("_server", _netServerTypeBuilder, FieldAttributes.Private);
+        var serverField = typeBuilder.DefineField("_server", runtime.RequireNet().ServerType, FieldAttributes.Private);
         var streamField = typeBuilder.DefineField("_stream", typeof(Stream), FieldAttributes.Private);
         var pipePathField = typeBuilder.DefineField("_pipePath", _types.String, FieldAttributes.Private);
 
@@ -298,7 +298,7 @@ public partial class RuntimeEmitter
         var ctor = typeBuilder.DefineConstructor(
             MethodAttributes.Public,
             CallingConventions.Standard,
-            [_netServerTypeBuilder, typeof(Stream), _types.String]
+            [runtime.RequireNet().ServerType, typeof(Stream), _types.String]
         );
         {
             var il = ctor.GetILGenerator();
@@ -325,14 +325,14 @@ public partial class RuntimeEmitter
         );
         {
             var il = run.GetILGenerator();
-            var socketLocal = il.DeclareLocal(_netSocketTypeBuilder);
+            var socketLocal = il.DeclareLocal(runtime.RequireNet().SocketType);
 
             // var socket = new $NetSocket(_stream, _pipePath)
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldfld, streamField);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldfld, pipePathField);
-            il.Emit(OpCodes.Newobj, runtime.NetSocketCtorStream);
+            il.Emit(OpCodes.Newobj, runtime.RequireNet().SocketCtorStream);
             il.Emit(OpCodes.Stloc, socketLocal);
 
             EmitApplyServerSocketOptions(il, serverField, socketLocal);
@@ -346,7 +346,7 @@ public partial class RuntimeEmitter
 
             // socket.StartReading() — must start BEFORE callbacks so reader is pending
             il.Emit(OpCodes.Ldloc, socketLocal);
-            il.Emit(OpCodes.Callvirt, runtime.NetSocketStartReading);
+            il.Emit(OpCodes.Callvirt, runtime.RequireNet().SocketStartReading);
 
             // socket._readReady?.Wait(5000) — wait for read worker to be ready
             var skipWait = il.DefineLabel();
@@ -526,14 +526,14 @@ public partial class RuntimeEmitter
             typeof(object)
         );
 
-        var socketField = typeBuilder.DefineField("_socket", _netSocketTypeBuilder, FieldAttributes.Private);
+        var socketField = typeBuilder.DefineField("_socket", runtime.RequireNet().SocketType, FieldAttributes.Private);
         var chunkField = typeBuilder.DefineField("_chunk", _types.Object, FieldAttributes.Private);
 
         // Constructor: (socket, chunk)
         var ctor = typeBuilder.DefineConstructor(
             MethodAttributes.Public,
             CallingConventions.Standard,
-            [_netSocketTypeBuilder, _types.Object]
+            [runtime.RequireNet().SocketType, _types.Object]
         );
         {
             var il = ctor.GetILGenerator();
@@ -592,13 +592,13 @@ public partial class RuntimeEmitter
             typeof(object)
         );
 
-        var socketField = typeBuilder.DefineField("_socket", _netSocketTypeBuilder, FieldAttributes.Private);
+        var socketField = typeBuilder.DefineField("_socket", runtime.RequireNet().SocketType, FieldAttributes.Private);
 
         // Constructor: (socket)
         var ctor = typeBuilder.DefineConstructor(
             MethodAttributes.Public,
             CallingConventions.Standard,
-            [_netSocketTypeBuilder]
+            [runtime.RequireNet().SocketType]
         );
         {
             var il = ctor.GetILGenerator();
@@ -765,13 +765,13 @@ public partial class RuntimeEmitter
             typeof(object)
         );
 
-        var socketField = typeBuilder.DefineField("_socket", _netSocketTypeBuilder, FieldAttributes.Private);
+        var socketField = typeBuilder.DefineField("_socket", runtime.RequireNet().SocketType, FieldAttributes.Private);
 
         // Constructor: (socket)
         var ctor = typeBuilder.DefineConstructor(
             MethodAttributes.Public,
             CallingConventions.Standard,
-            [_netSocketTypeBuilder]
+            [runtime.RequireNet().SocketType]
         );
         {
             var il = ctor.GetILGenerator();
@@ -813,7 +813,7 @@ public partial class RuntimeEmitter
             // ── IPC path: StartReading → wait → emit connect ──
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldfld, socketField);
-            il.Emit(OpCodes.Callvirt, runtime.NetSocketStartReading);
+            il.Emit(OpCodes.Callvirt, runtime.RequireNet().SocketStartReading);
 
             // _socket._readReady?.Wait(5000)
             var skipIpcWait = il.DefineLabel();
@@ -855,7 +855,7 @@ public partial class RuntimeEmitter
             // _socket.StartReading()
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldfld, socketField);
-            il.Emit(OpCodes.Callvirt, runtime.NetSocketStartReading);
+            il.Emit(OpCodes.Callvirt, runtime.RequireNet().SocketStartReading);
 
             il.MarkLabel(done);
 
@@ -885,7 +885,7 @@ public partial class RuntimeEmitter
             typeof(object)
         );
 
-        var socketField = typeBuilder.DefineField("_socket", _netSocketTypeBuilder, FieldAttributes.Private);
+        var socketField = typeBuilder.DefineField("_socket", runtime.RequireNet().SocketType, FieldAttributes.Private);
         var errorMsgField = typeBuilder.DefineField("_errorMsg", _types.String, FieldAttributes.Private);
         var errorCodeField = typeBuilder.DefineField("_errorCode", _types.String, FieldAttributes.Private);
 
@@ -893,7 +893,7 @@ public partial class RuntimeEmitter
         var ctor = typeBuilder.DefineConstructor(
             MethodAttributes.Public,
             CallingConventions.Standard,
-            [_netSocketTypeBuilder, _types.String, _types.String]
+            [runtime.RequireNet().SocketType, _types.String, _types.String]
         );
         {
             var il = ctor.GetILGenerator();

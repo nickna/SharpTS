@@ -122,7 +122,7 @@ public partial class RuntimeEmitter
         // _socket.StartReading()  (inherited $NetSocket method — pumps 'data'/'end'/'close')
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, socketField);
-        il.Emit(OpCodes.Callvirt, runtime.NetSocketStartReading);
+        il.Emit(OpCodes.Callvirt, runtime.RequireNet().SocketStartReading);
 
         il.Emit(OpCodes.Ret);
 
@@ -229,7 +229,7 @@ public partial class RuntimeEmitter
         // _socket.StartReading()
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, socketField);
-        il.Emit(OpCodes.Callvirt, runtime.NetSocketStartReading);
+        il.Emit(OpCodes.Callvirt, runtime.RequireNet().SocketStartReading);
 
         // EventLoop.Unref() — release the in-flight-connect ref taken in TlsConnect
         il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
