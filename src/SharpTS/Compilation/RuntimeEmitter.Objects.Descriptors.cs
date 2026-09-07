@@ -7,6 +7,154 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
+    // Marks the shared descriptor-found label with an empty stack, then branches to the
+    // shared exit with one result object. Reads the stored descriptor and receiver (arg 0);
+    // internal labels and scratch locals belong to this stage.
+    private void EmitStoredPropertyDescriptorResult(
+        ILGenerator il, EmittedRuntime runtime,
+        LocalBuilder descriptorLocal, LocalBuilder resultDictLocal,
+        Label hasDescriptorLabel, Label endLabel)
+    {
+        // hasDescriptorLabel: Convert $CompiledPropertyDescriptor to JS object
+        il.MarkLabel(hasDescriptorLabel);
+        il.Emit(OpCodes.Newobj, _types.DictionaryStringObjectCtor);
+        il.Emit(OpCodes.Stloc, resultDictLocal);
+
+        // Check if it's an accessor property (has getter or setter)
+        var isAccessorLabel = il.DefineLabel();
+        var isDataLabel = il.DefineLabel();
+
+        il.Emit(OpCodes.Ldloc, descriptorLocal);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorGetter.GetGetMethod()!);
+        il.Emit(OpCodes.Brtrue, isAccessorLabel);
+        il.Emit(OpCodes.Ldloc, descriptorLocal);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorSetter.GetGetMethod()!);
+        il.Emit(OpCodes.Brtrue, isAccessorLabel);
+        il.Emit(OpCodes.Br, isDataLabel);
+
+        // Accessor property - set get and set. ECMA-262 §6.2.5.4
+        // FromPropertyDescriptor: an accessor descriptor result always has
+        // "get" and "set" keys even when one slot is empty (the missing slot
+        // serializes as JS undefined). Pre-fix the missing key wasn't present
+        // at all, causing `"set" in desc` to be false for getter-only
+        // accessors. Stash $Undefined.Instance when the slot is null.
+        il.MarkLabel(isAccessorLabel);
+
+        // Set get property
+        var noGetLabel = il.DefineLabel();
+        var afterGetLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, descriptorLocal);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorGetter.GetGetMethod()!);
+        il.Emit(OpCodes.Brfalse, noGetLabel);
+        il.Emit(OpCodes.Ldloc, resultDictLocal);
+        il.Emit(OpCodes.Ldstr, "get");
+        il.Emit(OpCodes.Ldloc, descriptorLocal);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorGetter.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item"));
+        il.Emit(OpCodes.Br, afterGetLabel);
+        il.MarkLabel(noGetLabel);
+        il.Emit(OpCodes.Ldloc, resultDictLocal);
+        il.Emit(OpCodes.Ldstr, "get");
+        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item"));
+        il.MarkLabel(afterGetLabel);
+
+        // Set set property
+        var noSetLabel = il.DefineLabel();
+        var afterSetLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, descriptorLocal);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorSetter.GetGetMethod()!);
+        il.Emit(OpCodes.Brfalse, noSetLabel);
+        il.Emit(OpCodes.Ldloc, resultDictLocal);
+        il.Emit(OpCodes.Ldstr, "set");
+        il.Emit(OpCodes.Ldloc, descriptorLocal);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorSetter.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item"));
+        il.Emit(OpCodes.Br, afterSetLabel);
+        il.MarkLabel(noSetLabel);
+        il.Emit(OpCodes.Ldloc, resultDictLocal);
+        il.Emit(OpCodes.Ldstr, "set");
+        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item"));
+        il.MarkLabel(afterSetLabel);
+
+        var afterAccessorLabel = il.DefineLabel();
+        il.Emit(OpCodes.Br, afterAccessorLabel);
+
+        // Data property - set value and writable. Frozen/sealed override the
+        // descriptor's stored writable/configurable: spec says Object.freeze
+        // mutates each descriptor, but we don't mutate storage — reflect at
+        // read time to keep the storage stable across {freeze, defrost} cycles.
+        il.MarkLabel(isDataLabel);
+        var pdsIsFrozenLocal = il.DeclareLocal(_types.Boolean);
+        var pdsIsSealedLocal = il.DeclareLocal(_types.Boolean);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, runtime.PDSIsFrozen);
+        il.Emit(OpCodes.Stloc, pdsIsFrozenLocal);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, runtime.PDSIsSealed);
+        il.Emit(OpCodes.Stloc, pdsIsSealedLocal);
+
+        // Set value
+        il.Emit(OpCodes.Ldloc, resultDictLocal);
+        il.Emit(OpCodes.Ldstr, "value");
+        il.Emit(OpCodes.Ldloc, descriptorLocal);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorValue.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item"));
+
+        // Set writable: stored value AND !frozen.
+        il.Emit(OpCodes.Ldloc, resultDictLocal);
+        il.Emit(OpCodes.Ldstr, "writable");
+        il.Emit(OpCodes.Ldloc, descriptorLocal);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorWritable.GetGetMethod()!);
+        il.Emit(OpCodes.Ldloc, pdsIsFrozenLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ceq);  // !frozen
+        il.Emit(OpCodes.And);
+        il.Emit(OpCodes.Box, _types.Boolean);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item"));
+
+        il.MarkLabel(afterAccessorLabel);
+
+        // Set enumerable (freeze/seal preserve enumerability).
+        il.Emit(OpCodes.Ldloc, resultDictLocal);
+        il.Emit(OpCodes.Ldstr, "enumerable");
+        il.Emit(OpCodes.Ldloc, descriptorLocal);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorEnumerable.GetGetMethod()!);
+        il.Emit(OpCodes.Box, _types.Boolean);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item"));
+
+        // Set configurable: stored value AND !(frozen OR sealed).
+        // For accessor (data path not entered), the pdsIs* locals are still
+        // computed in the data branch — when we reach here via accessor,
+        // they're default-zero (Boolean) which means the override AND yields
+        // the stored value. Compute them here for accessor independence.
+        var pdsCfgIsFrozenLocal = il.DeclareLocal(_types.Boolean);
+        var pdsCfgIsSealedLocal = il.DeclareLocal(_types.Boolean);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, runtime.PDSIsFrozen);
+        il.Emit(OpCodes.Stloc, pdsCfgIsFrozenLocal);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, runtime.PDSIsSealed);
+        il.Emit(OpCodes.Stloc, pdsCfgIsSealedLocal);
+
+        il.Emit(OpCodes.Ldloc, resultDictLocal);
+        il.Emit(OpCodes.Ldstr, "configurable");
+        il.Emit(OpCodes.Ldloc, descriptorLocal);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorConfigurable.GetGetMethod()!);
+        il.Emit(OpCodes.Ldloc, pdsCfgIsFrozenLocal);
+        il.Emit(OpCodes.Ldloc, pdsCfgIsSealedLocal);
+        il.Emit(OpCodes.Or);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ceq);  // !(frozen || sealed)
+        il.Emit(OpCodes.And);
+        il.Emit(OpCodes.Box, _types.Boolean);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item"));
+
+        il.Emit(OpCodes.Ldloc, resultDictLocal);
+        il.Emit(OpCodes.Br, endLabel);
+    }
+
     /// <summary>
     /// Helper: emits IL to set a boolean descriptor field
     /// (writable/enumerable/configurable) on the result dict to a constant
@@ -3096,144 +3244,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, resultDictLocal);
         il.Emit(OpCodes.Br, endLabel);
 
-        // hasDescriptorLabel: Convert $CompiledPropertyDescriptor to JS object
-        il.MarkLabel(hasDescriptorLabel);
-        il.Emit(OpCodes.Newobj, _types.DictionaryStringObjectCtor);
-        il.Emit(OpCodes.Stloc, resultDictLocal);
-
-        // Check if it's an accessor property (has getter or setter)
-        var isAccessorLabel = il.DefineLabel();
-        var isDataLabel = il.DefineLabel();
-
-        il.Emit(OpCodes.Ldloc, descriptorLocal);
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorGetter.GetGetMethod()!);
-        il.Emit(OpCodes.Brtrue, isAccessorLabel);
-        il.Emit(OpCodes.Ldloc, descriptorLocal);
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorSetter.GetGetMethod()!);
-        il.Emit(OpCodes.Brtrue, isAccessorLabel);
-        il.Emit(OpCodes.Br, isDataLabel);
-
-        // Accessor property - set get and set. ECMA-262 §6.2.5.4
-        // FromPropertyDescriptor: an accessor descriptor result always has
-        // "get" and "set" keys even when one slot is empty (the missing slot
-        // serializes as JS undefined). Pre-fix the missing key wasn't present
-        // at all, causing `"set" in desc` to be false for getter-only
-        // accessors. Stash $Undefined.Instance when the slot is null.
-        il.MarkLabel(isAccessorLabel);
-
-        // Set get property
-        var noGetLabel = il.DefineLabel();
-        var afterGetLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, descriptorLocal);
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorGetter.GetGetMethod()!);
-        il.Emit(OpCodes.Brfalse, noGetLabel);
-        il.Emit(OpCodes.Ldloc, resultDictLocal);
-        il.Emit(OpCodes.Ldstr, "get");
-        il.Emit(OpCodes.Ldloc, descriptorLocal);
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorGetter.GetGetMethod()!);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item"));
-        il.Emit(OpCodes.Br, afterGetLabel);
-        il.MarkLabel(noGetLabel);
-        il.Emit(OpCodes.Ldloc, resultDictLocal);
-        il.Emit(OpCodes.Ldstr, "get");
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item"));
-        il.MarkLabel(afterGetLabel);
-
-        // Set set property
-        var noSetLabel = il.DefineLabel();
-        var afterSetLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, descriptorLocal);
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorSetter.GetGetMethod()!);
-        il.Emit(OpCodes.Brfalse, noSetLabel);
-        il.Emit(OpCodes.Ldloc, resultDictLocal);
-        il.Emit(OpCodes.Ldstr, "set");
-        il.Emit(OpCodes.Ldloc, descriptorLocal);
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorSetter.GetGetMethod()!);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item"));
-        il.Emit(OpCodes.Br, afterSetLabel);
-        il.MarkLabel(noSetLabel);
-        il.Emit(OpCodes.Ldloc, resultDictLocal);
-        il.Emit(OpCodes.Ldstr, "set");
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item"));
-        il.MarkLabel(afterSetLabel);
-
-        var afterAccessorLabel = il.DefineLabel();
-        il.Emit(OpCodes.Br, afterAccessorLabel);
-
-        // Data property - set value and writable. Frozen/sealed override the
-        // descriptor's stored writable/configurable: spec says Object.freeze
-        // mutates each descriptor, but we don't mutate storage — reflect at
-        // read time to keep the storage stable across {freeze, defrost} cycles.
-        il.MarkLabel(isDataLabel);
-        var pdsIsFrozenLocal = il.DeclareLocal(_types.Boolean);
-        var pdsIsSealedLocal = il.DeclareLocal(_types.Boolean);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.PDSIsFrozen);
-        il.Emit(OpCodes.Stloc, pdsIsFrozenLocal);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.PDSIsSealed);
-        il.Emit(OpCodes.Stloc, pdsIsSealedLocal);
-
-        // Set value
-        il.Emit(OpCodes.Ldloc, resultDictLocal);
-        il.Emit(OpCodes.Ldstr, "value");
-        il.Emit(OpCodes.Ldloc, descriptorLocal);
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorValue.GetGetMethod()!);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item"));
-
-        // Set writable: stored value AND !frozen.
-        il.Emit(OpCodes.Ldloc, resultDictLocal);
-        il.Emit(OpCodes.Ldstr, "writable");
-        il.Emit(OpCodes.Ldloc, descriptorLocal);
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorWritable.GetGetMethod()!);
-        il.Emit(OpCodes.Ldloc, pdsIsFrozenLocal);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Ceq);  // !frozen
-        il.Emit(OpCodes.And);
-        il.Emit(OpCodes.Box, _types.Boolean);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item"));
-
-        il.MarkLabel(afterAccessorLabel);
-
-        // Set enumerable (freeze/seal preserve enumerability).
-        il.Emit(OpCodes.Ldloc, resultDictLocal);
-        il.Emit(OpCodes.Ldstr, "enumerable");
-        il.Emit(OpCodes.Ldloc, descriptorLocal);
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorEnumerable.GetGetMethod()!);
-        il.Emit(OpCodes.Box, _types.Boolean);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item"));
-
-        // Set configurable: stored value AND !(frozen OR sealed).
-        // For accessor (data path not entered), the pdsIs* locals are still
-        // computed in the data branch — when we reach here via accessor,
-        // they're default-zero (Boolean) which means the override AND yields
-        // the stored value. Compute them here for accessor independence.
-        var pdsCfgIsFrozenLocal = il.DeclareLocal(_types.Boolean);
-        var pdsCfgIsSealedLocal = il.DeclareLocal(_types.Boolean);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.PDSIsFrozen);
-        il.Emit(OpCodes.Stloc, pdsCfgIsFrozenLocal);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.PDSIsSealed);
-        il.Emit(OpCodes.Stloc, pdsCfgIsSealedLocal);
-
-        il.Emit(OpCodes.Ldloc, resultDictLocal);
-        il.Emit(OpCodes.Ldstr, "configurable");
-        il.Emit(OpCodes.Ldloc, descriptorLocal);
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorConfigurable.GetGetMethod()!);
-        il.Emit(OpCodes.Ldloc, pdsCfgIsFrozenLocal);
-        il.Emit(OpCodes.Ldloc, pdsCfgIsSealedLocal);
-        il.Emit(OpCodes.Or);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Ceq);  // !(frozen || sealed)
-        il.Emit(OpCodes.And);
-        il.Emit(OpCodes.Box, _types.Boolean);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item"));
-
-        il.Emit(OpCodes.Ldloc, resultDictLocal);
-        il.Emit(OpCodes.Br, endLabel);
+        EmitStoredPropertyDescriptorResult(il, runtime, descriptorLocal, resultDictLocal, hasDescriptorLabel, endLabel);
 
         // returnNullLabel: return undefined
         il.MarkLabel(returnNullLabel);

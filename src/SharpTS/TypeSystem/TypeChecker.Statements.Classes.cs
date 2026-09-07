@@ -277,6 +277,286 @@ public partial class TypeChecker
         }
     }
 
+    // Runs in the class type-parameter environment and populates the caller-owned mutable signature model.
+    private void CollectClassFieldTypes(Stmt.Class classStmt, TypeInfo.MutableClass mutableClass)
+    {
+        // Collect static property types, field access modifiers, and non-static field types
+        foreach (var field in classStmt.Fields)
+        {
+            // Check field decorators
+            DecoratorTarget fieldTarget = field.IsStatic ? DecoratorTarget.StaticField : DecoratorTarget.Field;
+            CheckDecorators(field.Decorators, fieldTarget);
+
+            string fieldName = GetFieldMemberName(field);
+            if (field.TypeAnnotationNode is { } fieldNode &&
+                ContainsSelfIndexedAccess(fieldNode, classStmt.Name.Lexeme, requireLiteralIndex: true))
+            {
+                RecordTypeError(new TypeCheckException(
+                    $"'{fieldName}' is referenced directly or indirectly in its own type annotation.",
+                    field.Name.Line,
+                    tsCode: "TS2502"));
+            }
+            TypeInfo fieldType = ResolveAnnotation(field.TypeAnnotation, field.TypeAnnotationNode)
+                ?? TypeInfo.Any.Shared;
+
+            // TS1166: a computed DATA-property name (a class field, unlike a method/accessor) must be a
+            // literal type or a 'unique symbol'. A plain, non-unique `symbol` — e.g. `[Symbol()]` —
+            // is not allowed; a well-known symbol (`[Symbol.iterator]`) is a unique symbol, so it's fine.
+            if (field.ComputedKey != null && CheckExpr(field.ComputedKey) is TypeInfo.Symbol)
+            {
+                RecordTypeError(new TypeCheckException(
+                    "A computed property name in a class property declaration must have a simple literal type or a 'unique symbol' type.",
+                    line: TryGetExprLine(field.ComputedKey) ?? field.Name.Line, tsCode: "TS1166"));
+            }
+
+            // Handle ES2022 private fields (#field)
+            if (field.IsPrivate)
+            {
+                if (field.IsStatic)
+                {
+                    mutableClass.StaticPrivateFields[fieldName] = fieldType;
+                }
+                else
+                {
+                    mutableClass.PrivateFields[fieldName] = fieldType;
+                }
+            }
+            else if (field.IsStatic)
+            {
+                mutableClass.StaticProperties[fieldName] = fieldType;
+            }
+            else
+            {
+                mutableClass.FieldTypes[fieldName] = fieldType;
+            }
+            if (!field.IsPrivate)
+            {
+                (field.IsStatic ? mutableClass.StaticFieldAccess : mutableClass.FieldAccess)[fieldName] = field.Access;
+            }
+            if (field.IsReadonly)
+            {
+                mutableClass.ReadonlyFields.Add(fieldName);
+            }
+        }
+    }
+
+    // Requires method signatures to be registered for duplicate detection; keeps pair validation in the same class environment.
+    private void CollectClassAccessorTypes(Stmt.Class classStmt, TypeInfo.MutableClass mutableClass)
+    {
+        // Collect accessor types
+        if (classStmt.Accessors != null)
+        {
+            // TS2300: two getters (or two setters) with the same name/static-ness are a duplicate
+            // identifier — a class, unlike an object literal, can't have two same-kind accessors for
+            // one member at all (a get+set PAIR is fine; that's tracked separately below). Covers both
+            // plain and well-known-symbol computed names (`get [Symbol.hasInstance]()` declared twice),
+            // neither of which had any duplicate-accessor detection before.
+            var seenGetters = new Dictionary<(bool IsStatic, string Name), int>();
+            var seenSetters = new Dictionary<(bool IsStatic, string Name), int>();
+            foreach (var accessor in classStmt.Accessors)
+            {
+                // Check accessor decorators
+                DecoratorTarget accessorTarget = accessor.Kind.Type == TokenType.GET
+                    ? DecoratorTarget.Getter
+                    : DecoratorTarget.Setter;
+                CheckDecorators(accessor.Decorators, accessorTarget);
+
+                string? canonicalName = accessor.ComputedKey != null
+                    ? TryGetWellKnownSymbolMemberName(accessor.ComputedKey)
+                    : accessor.Name.Lexeme;
+                if (canonicalName != null)
+                {
+                    int line = accessor.ComputedKey != null
+                        ? TryGetExprLine(accessor.ComputedKey) ?? accessor.Name.Line
+                        : accessor.Name.Line;
+                    string displayName = accessor.ComputedKey != null ? $"[Symbol.{canonicalName["@@".Length..]}]" : canonicalName;
+                    // A method already registered under this name (methods are processed above)
+                    // makes ANY accessor of the same name a duplicate too — a class member can't be
+                    // both a method and an accessor. tsc flags the accessor, not the method.
+                    var methodDict = accessor.IsStatic ? mutableClass.StaticMethods : mutableClass.Methods;
+                    var seen = accessor.Kind.Type == TokenType.GET ? seenGetters : seenSetters;
+                    var key = (accessor.IsStatic, canonicalName);
+                    if (methodDict.ContainsKey(canonicalName) || !seen.TryAdd(key, line))
+                    {
+                        RecordTypeError(new TypeCheckException(
+                            $" Duplicate identifier '{displayName}'.", line: line, tsCode: "TS2300"));
+                    }
+                }
+
+                // Arbitrary computed names have no stable member identity. Well-known and augmented
+                // unique symbols do, and use the same @@ key as interfaces/object literals.
+                if (canonicalName == null)
+                {
+                    continue;
+                }
+
+                string propName = canonicalName;
+
+                if (accessor.Kind.Type == TokenType.GET)
+                {
+                    TypeInfo getterRetType = accessor.ReturnType != null
+                        ? ResolveAnnotation(accessor.ReturnType, accessor.ReturnTypeNode)!
+                        : TypeInfo.Inferred.Shared;
+                    mutableClass.Getters[propName] = getterRetType;
+
+                    // Track abstract getters
+                    if (accessor.IsAbstract)
+                    {
+                        mutableClass.AbstractGetters.Add(propName);
+                    }
+                }
+                else // SET
+                {
+                    TypeInfo paramType = accessor.SetterParam?.Type != null
+                        ? ResolveAnnotation(accessor.SetterParam.Type, accessor.SetterParam.TypeAnnotationNode)!
+                        : TypeInfo.Inferred.Shared;
+                    mutableClass.Setters[propName] = paramType;
+
+                    // Track abstract setters
+                    if (accessor.IsAbstract)
+                    {
+                        mutableClass.AbstractSetters.Add(propName);
+                    }
+                }
+            }
+
+            // Validate that getter/setter pairs have matching types
+            foreach (var propName in mutableClass.Getters.Keys.Intersect(mutableClass.Setters.Keys))
+            {
+                TypeInfo getterType = mutableClass.Getters[propName];
+                TypeInfo setterType = mutableClass.Setters[propName];
+                if (getterType is TypeInfo.Inferred && setterType is not TypeInfo.Inferred)
+                {
+                    mutableClass.Getters[propName] = setterType;
+                }
+                else if (setterType is TypeInfo.Inferred && getterType is not TypeInfo.Inferred)
+                {
+                    mutableClass.Setters[propName] = getterType;
+                }
+                else if (!IsCompatible(getterType, setterType))
+                {
+                    throw new TypeCheckException($" Getter and setter for '{propName}' have incompatible types.", tsCode: "TS2380");
+                }
+            }
+        }
+    }
+
+    // Resolves auto-accessors in the active class environment, mutating signatures before the caller freezes them.
+    private void CollectClassAutoAccessorTypes(Stmt.Class classStmt, TypeInfo.MutableClass mutableClass, TypeInfo? superclass)
+    {
+        // Collect auto-accessor types (TypeScript 4.9+)
+        if (classStmt.AutoAccessors != null)
+        {
+            foreach (var autoAccessor in classStmt.AutoAccessors)
+            {
+                // Check auto-accessor decorators (Stage 3: kind = "accessor")
+                DecoratorTarget accessorTarget = DecoratorTarget.Getter; // Use Getter target for auto-accessors
+                CheckDecorators(autoAccessor.Decorators, accessorTarget);
+
+                string propName = autoAccessor.Name.Lexeme;
+
+                // Determine the type from annotation or initializer
+                TypeInfo accessorType;
+                if (autoAccessor.TypeAnnotation != null)
+                {
+                    accessorType = ResolveAnnotation(autoAccessor.TypeAnnotation, autoAccessor.TypeAnnotationNode)!;
+                }
+                else if (autoAccessor.Initializer != null)
+                {
+                    accessorType = CheckExpr(autoAccessor.Initializer);
+                }
+                else
+                {
+                    accessorType = TypeInfo.Any.Shared;
+                }
+
+                // Register as getter (always available)
+                mutableClass.Getters[propName] = accessorType;
+
+                // Register as setter (unless readonly)
+                if (!autoAccessor.IsReadonly)
+                {
+                    mutableClass.Setters[propName] = accessorType;
+                }
+
+                // Track as auto-accessor for decorator context
+                mutableClass.AutoAccessors.Add(propName);
+
+                // Validate override if specified
+                if (autoAccessor.IsOverride)
+                {
+                    if (superclass == null)
+                    {
+                        throw new TypeCheckException($" Cannot use 'override' for auto-accessor '{propName}' in a class that does not extend another class.", tsCode: "TS4112");
+                    }
+
+                    // Check if parent has a matching getter
+                    bool parentHasGetter = false;
+                    TypeInfo? currentSuperclass = superclass;
+                    while (currentSuperclass != null)
+                    {
+                        if (currentSuperclass is TypeInfo.Class sc && sc.Getters.ContainsKey(propName))
+                        {
+                            parentHasGetter = true;
+                            break;
+                        }
+                        currentSuperclass = currentSuperclass switch
+                        {
+                            TypeInfo.Class c => c.Superclass,
+                            TypeInfo.InstantiatedGeneric ig when ig.GenericDefinition is TypeInfo.GenericClass gc => gc.Superclass,
+                            _ => null
+                        };
+                    }
+
+                    if (!parentHasGetter)
+                    {
+                        throw new TypeCheckException($" Auto-accessor '{propName}' uses 'override' but parent class has no accessor with this name.", tsCode: "TS4113");
+                    }
+                }
+            }
+        }
+    }
+
+    // Owns the static-block environment and context flags; restores them even when body checking throws.
+    private void CheckClassStaticBlocks(Stmt.Class classStmt, TypeInfo.Class classTypeForBody)
+    {
+        // Type-check static blocks
+        if (classStmt.StaticInitializers != null)
+        {
+            // Create environment with static class context ('this' refers to the class constructor)
+            var staticBlockEnv = new TypeEnvironment(_environment);
+            staticBlockEnv.Define("this", classTypeForBody);
+
+            foreach (var initializer in classStmt.StaticInitializers)
+            {
+                if (initializer is Stmt.StaticBlock block)
+                {
+                    using var _ = new EnvironmentScope(this, staticBlockEnv);
+                    bool previousInStaticBlock = _inStaticBlock;
+                    bool previousInStaticMethod = _inStaticMethod;
+                    var previousClass = _currentClass;
+                    _inStaticBlock = true;
+                    _inStaticMethod = true;
+                    _currentClass = classTypeForBody;
+
+                    try
+                    {
+                        foreach (var stmt in block.Body)
+                        {
+                            CheckStmt(stmt);
+                        }
+                    }
+                    finally
+                    {
+                        _inStaticBlock = previousInStaticBlock;
+                        _inStaticMethod = previousInStaticMethod;
+                        _currentClass = previousClass;
+                    }
+                }
+            }
+        }
+    }
+
     private void CheckClassDeclaration(Stmt.Class classStmt)
     {
         bool previousRecoveryMode = _recoveryMode;
@@ -381,233 +661,12 @@ public partial class TypeChecker
 
         CollectNamedClassMethodSignatures(classStmt, mutableClass);
 
-        // Collect static property types, field access modifiers, and non-static field types
-        foreach (var field in classStmt.Fields)
-        {
-            // Check field decorators
-            DecoratorTarget fieldTarget = field.IsStatic ? DecoratorTarget.StaticField : DecoratorTarget.Field;
-            CheckDecorators(field.Decorators, fieldTarget);
+        CollectClassFieldTypes(classStmt, mutableClass);
 
-            string fieldName = GetFieldMemberName(field);
-            if (field.TypeAnnotationNode is { } fieldNode &&
-                ContainsSelfIndexedAccess(fieldNode, classStmt.Name.Lexeme, requireLiteralIndex: true))
-            {
-                RecordTypeError(new TypeCheckException(
-                    $"'{fieldName}' is referenced directly or indirectly in its own type annotation.",
-                    field.Name.Line,
-                    tsCode: "TS2502"));
-            }
-            TypeInfo fieldType = ResolveAnnotation(field.TypeAnnotation, field.TypeAnnotationNode)
-                ?? TypeInfo.Any.Shared;
+        CollectClassAccessorTypes(classStmt, mutableClass);
 
-            // TS1166: a computed DATA-property name (a class field, unlike a method/accessor) must be a
-            // literal type or a 'unique symbol'. A plain, non-unique `symbol` — e.g. `[Symbol()]` —
-            // is not allowed; a well-known symbol (`[Symbol.iterator]`) is a unique symbol, so it's fine.
-            if (field.ComputedKey != null && CheckExpr(field.ComputedKey) is TypeInfo.Symbol)
-            {
-                RecordTypeError(new TypeCheckException(
-                    "A computed property name in a class property declaration must have a simple literal type or a 'unique symbol' type.",
-                    line: TryGetExprLine(field.ComputedKey) ?? field.Name.Line, tsCode: "TS1166"));
-            }
+        CollectClassAutoAccessorTypes(classStmt, mutableClass, superclass);
 
-            // Handle ES2022 private fields (#field)
-            if (field.IsPrivate)
-            {
-                if (field.IsStatic)
-                {
-                    mutableClass.StaticPrivateFields[fieldName] = fieldType;
-                }
-                else
-                {
-                    mutableClass.PrivateFields[fieldName] = fieldType;
-                }
-            }
-            else if (field.IsStatic)
-            {
-                mutableClass.StaticProperties[fieldName] = fieldType;
-            }
-            else
-            {
-                mutableClass.FieldTypes[fieldName] = fieldType;
-            }
-            if (!field.IsPrivate)
-            {
-                (field.IsStatic ? mutableClass.StaticFieldAccess : mutableClass.FieldAccess)[fieldName] = field.Access;
-            }
-            if (field.IsReadonly)
-            {
-                mutableClass.ReadonlyFields.Add(fieldName);
-            }
-        }
-
-        // Collect accessor types
-        if (classStmt.Accessors != null)
-        {
-            // TS2300: two getters (or two setters) with the same name/static-ness are a duplicate
-            // identifier — a class, unlike an object literal, can't have two same-kind accessors for
-            // one member at all (a get+set PAIR is fine; that's tracked separately below). Covers both
-            // plain and well-known-symbol computed names (`get [Symbol.hasInstance]()` declared twice),
-            // neither of which had any duplicate-accessor detection before.
-            var seenGetters = new Dictionary<(bool IsStatic, string Name), int>();
-            var seenSetters = new Dictionary<(bool IsStatic, string Name), int>();
-            foreach (var accessor in classStmt.Accessors)
-            {
-                // Check accessor decorators
-                DecoratorTarget accessorTarget = accessor.Kind.Type == TokenType.GET
-                    ? DecoratorTarget.Getter
-                    : DecoratorTarget.Setter;
-                CheckDecorators(accessor.Decorators, accessorTarget);
-
-                string? canonicalName = accessor.ComputedKey != null
-                    ? TryGetWellKnownSymbolMemberName(accessor.ComputedKey)
-                    : accessor.Name.Lexeme;
-                if (canonicalName != null)
-                {
-                    int line = accessor.ComputedKey != null
-                        ? TryGetExprLine(accessor.ComputedKey) ?? accessor.Name.Line
-                        : accessor.Name.Line;
-                    string displayName = accessor.ComputedKey != null ? $"[Symbol.{canonicalName["@@".Length..]}]" : canonicalName;
-                    // A method already registered under this name (methods are processed above)
-                    // makes ANY accessor of the same name a duplicate too — a class member can't be
-                    // both a method and an accessor. tsc flags the accessor, not the method.
-                    var methodDict = accessor.IsStatic ? mutableClass.StaticMethods : mutableClass.Methods;
-                    var seen = accessor.Kind.Type == TokenType.GET ? seenGetters : seenSetters;
-                    var key = (accessor.IsStatic, canonicalName);
-                    if (methodDict.ContainsKey(canonicalName) || !seen.TryAdd(key, line))
-                    {
-                        RecordTypeError(new TypeCheckException(
-                            $" Duplicate identifier '{displayName}'.", line: line, tsCode: "TS2300"));
-                    }
-                }
-
-                // Arbitrary computed names have no stable member identity. Well-known and augmented
-                // unique symbols do, and use the same @@ key as interfaces/object literals.
-                if (canonicalName == null)
-                {
-                    continue;
-                }
-
-                string propName = canonicalName;
-
-                if (accessor.Kind.Type == TokenType.GET)
-                {
-                    TypeInfo getterRetType = accessor.ReturnType != null
-                        ? ResolveAnnotation(accessor.ReturnType, accessor.ReturnTypeNode)!
-                        : TypeInfo.Inferred.Shared;
-                    mutableClass.Getters[propName] = getterRetType;
-
-                    // Track abstract getters
-                    if (accessor.IsAbstract)
-                    {
-                        mutableClass.AbstractGetters.Add(propName);
-                    }
-                }
-                else // SET
-                {
-                    TypeInfo paramType = accessor.SetterParam?.Type != null
-                        ? ResolveAnnotation(accessor.SetterParam.Type, accessor.SetterParam.TypeAnnotationNode)!
-                        : TypeInfo.Inferred.Shared;
-                    mutableClass.Setters[propName] = paramType;
-
-                    // Track abstract setters
-                    if (accessor.IsAbstract)
-                    {
-                        mutableClass.AbstractSetters.Add(propName);
-                    }
-                }
-            }
-
-            // Validate that getter/setter pairs have matching types
-            foreach (var propName in mutableClass.Getters.Keys.Intersect(mutableClass.Setters.Keys))
-            {
-                TypeInfo getterType = mutableClass.Getters[propName];
-                TypeInfo setterType = mutableClass.Setters[propName];
-                if (getterType is TypeInfo.Inferred && setterType is not TypeInfo.Inferred)
-                {
-                    mutableClass.Getters[propName] = setterType;
-                }
-                else if (setterType is TypeInfo.Inferred && getterType is not TypeInfo.Inferred)
-                {
-                    mutableClass.Setters[propName] = getterType;
-                }
-                else if (!IsCompatible(getterType, setterType))
-                {
-                    throw new TypeCheckException($" Getter and setter for '{propName}' have incompatible types.", tsCode: "TS2380");
-                }
-            }
-        }
-
-        // Collect auto-accessor types (TypeScript 4.9+)
-        if (classStmt.AutoAccessors != null)
-        {
-            foreach (var autoAccessor in classStmt.AutoAccessors)
-            {
-                // Check auto-accessor decorators (Stage 3: kind = "accessor")
-                DecoratorTarget accessorTarget = DecoratorTarget.Getter; // Use Getter target for auto-accessors
-                CheckDecorators(autoAccessor.Decorators, accessorTarget);
-
-                string propName = autoAccessor.Name.Lexeme;
-
-                // Determine the type from annotation or initializer
-                TypeInfo accessorType;
-                if (autoAccessor.TypeAnnotation != null)
-                {
-                    accessorType = ResolveAnnotation(autoAccessor.TypeAnnotation, autoAccessor.TypeAnnotationNode)!;
-                }
-                else if (autoAccessor.Initializer != null)
-                {
-                    accessorType = CheckExpr(autoAccessor.Initializer);
-                }
-                else
-                {
-                    accessorType = TypeInfo.Any.Shared;
-                }
-
-                // Register as getter (always available)
-                mutableClass.Getters[propName] = accessorType;
-
-                // Register as setter (unless readonly)
-                if (!autoAccessor.IsReadonly)
-                {
-                    mutableClass.Setters[propName] = accessorType;
-                }
-
-                // Track as auto-accessor for decorator context
-                mutableClass.AutoAccessors.Add(propName);
-
-                // Validate override if specified
-                if (autoAccessor.IsOverride)
-                {
-                    if (superclass == null)
-                    {
-                        throw new TypeCheckException($" Cannot use 'override' for auto-accessor '{propName}' in a class that does not extend another class.", tsCode: "TS4112");
-                    }
-
-                    // Check if parent has a matching getter
-                    bool parentHasGetter = false;
-                    TypeInfo? currentSuperclass = superclass;
-                    while (currentSuperclass != null)
-                    {
-                        if (currentSuperclass is TypeInfo.Class sc && sc.Getters.ContainsKey(propName))
-                        {
-                            parentHasGetter = true;
-                            break;
-                        }
-                        currentSuperclass = currentSuperclass switch
-                        {
-                            TypeInfo.Class c => c.Superclass,
-                            TypeInfo.InstantiatedGeneric ig when ig.GenericDefinition is TypeInfo.GenericClass gc => gc.Superclass,
-                            _ => null
-                        };
-                    }
-
-                    if (!parentHasGetter)
-                    {
-                        throw new TypeCheckException($" Auto-accessor '{propName}' uses 'override' but parent class has no accessor with this name.", tsCode: "TS4113");
-                    }
-                }
-            }
-        }
         }
 
         // Freeze the mutable class and create GenericClass or regular Class based on type parameters.
@@ -824,41 +883,7 @@ public partial class TypeChecker
             }
         }
 
-        // Type-check static blocks
-        if (classStmt.StaticInitializers != null)
-        {
-            // Create environment with static class context ('this' refers to the class constructor)
-            var staticBlockEnv = new TypeEnvironment(_environment);
-            staticBlockEnv.Define("this", classTypeForBody);
-
-            foreach (var initializer in classStmt.StaticInitializers)
-            {
-                if (initializer is Stmt.StaticBlock block)
-                {
-                    using var _ = new EnvironmentScope(this, staticBlockEnv);
-                    bool previousInStaticBlock = _inStaticBlock;
-                    bool previousInStaticMethod = _inStaticMethod;
-                    var previousClass = _currentClass;
-                    _inStaticBlock = true;
-                    _inStaticMethod = true;
-                    _currentClass = classTypeForBody;
-
-                    try
-                    {
-                        foreach (var stmt in block.Body)
-                        {
-                            CheckStmt(stmt);
-                        }
-                    }
-                    finally
-                    {
-                        _inStaticBlock = previousInStaticBlock;
-                        _inStaticMethod = previousInStaticMethod;
-                        _currentClass = previousClass;
-                    }
-                }
-            }
-        }
+        CheckClassStaticBlocks(classStmt, classTypeForBody);
 
         // Third pass: body check
         TypeEnvironment classEnv = new(_environment);
