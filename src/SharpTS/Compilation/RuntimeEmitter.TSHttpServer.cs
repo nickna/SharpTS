@@ -2084,7 +2084,6 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object]
         );
-        runtime.TSHttpServerClose = method;
 
         var il = method.GetILGenerator();
 

@@ -22,7 +22,6 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.IEnumeratorOfObject, _types.IEnumerator, _types.IDisposable,
              _types.IEnumerableOfObject, _types.IEnumerable]);
-        runtime.ArrayIteratorType = typeBuilder;
 
         var arrayField = typeBuilder.DefineField(
             "_array", _types.ListOfObject, FieldAttributes.Private | FieldAttributes.InitOnly);
@@ -241,7 +240,6 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.IEnumeratorOfObject, _types.IEnumerator, _types.IDisposable,
              _types.IEnumerableOfObject, _types.IEnumerable]);
-        runtime.MapCollectionIteratorType = typeBuilder;
 
         var mapField = typeBuilder.DefineField("_map", _types.DictionaryObjectObject,
             FieldAttributes.Private | FieldAttributes.InitOnly);
@@ -441,7 +439,6 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.IEnumeratorOfObject, _types.IEnumerator, _types.IDisposable,
              _types.IEnumerableOfObject, _types.IEnumerable]);
-        runtime.SetCollectionIteratorType = typeBuilder;
 
         var setField = typeBuilder.DefineField("_set", _types.HashSetOfObject,
             FieldAttributes.Private | FieldAttributes.InitOnly);

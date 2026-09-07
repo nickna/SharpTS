@@ -140,7 +140,6 @@ public class EmittedRuntime
     // class creates its prototype through a compiler-only constructor and
     // registers it here when the class definition is evaluated.
     public Type ClassPrototypeMarkerType { get; set; } = null!;
-    public FieldBuilder ClassPrototypeCacheField { get; set; } = null!;
     public MethodBuilder GetClassPrototypeMethod { get; set; } = null!;
     public MethodBuilder RegisterClassPrototypeMethod { get; set; } = null!;
 
@@ -338,11 +337,8 @@ public class EmittedRuntime
     public MethodBuilder ArrayEntries { get; set; } = null!;
     public MethodBuilder ArrayKeys { get; set; } = null!;
     public MethodBuilder ArrayValues { get; set; } = null!;
-    public TypeBuilder ArrayIteratorType { get; set; } = null!;
     public ConstructorBuilder ArrayIteratorCtor { get; set; } = null!;
-    public TypeBuilder MapCollectionIteratorType { get; set; } = null!;
     public ConstructorBuilder MapCollectionIteratorCtor { get; set; } = null!;
-    public TypeBuilder SetCollectionIteratorType { get; set; } = null!;
     public ConstructorBuilder SetCollectionIteratorCtor { get; set; } = null!;
     public MethodBuilder ArrayLikeMaterialize { get; set; } = null!;
     // ECMA-262 RequireObjectCoercible(this) — throws TypeError if `this` is
@@ -980,7 +976,6 @@ public class EmittedRuntime
     public Dictionary<string, MethodBuilder> CompactObjectRecordIsMaterializedGetters { get; } = [];
     public Dictionary<string, MethodBuilder> CompactObjectRecordTryGetMaterializedDictionary { get; } = [];
     public MethodBuilder JsonScalarRecordShapeGetter { get; set; } = null!;
-    public MethodBuilder JsonScalarRecordValuesGetter { get; set; } = null!;
     public MethodBuilder JsonScalarRecordGetValue { get; set; } = null!;
     public MethodBuilder JsonScalarRecordIsMaterializedGetter { get; set; } = null!;
     public TypeBuilder TSRawJsonType { get; set; } = null!;
@@ -1119,8 +1114,6 @@ public class EmittedRuntime
     public MethodBuilder PromiseResolveValueMethod { get; set; } = null!;
     public MethodBuilder AdoptPromiseCombinatorResultMethod { get; set; } = null!;
     public MethodBuilder SettlePromiseCombinatorResultMethod { get; set; } = null!;
-    /// <summary>Custom NewPromiseCapability results that must not participate in SharpTS's non-standard top-level expression auto-await.</summary>
-    public FieldBuilder NonAutoAwaitPromisesField { get; set; } = null!;
     public MethodBuilder MarkNonAutoAwaitPromiseMethod { get; set; } = null!;
     public MethodBuilder ShouldAutoAwaitPromiseMethod { get; set; } = null!;
     /// <summary>$Runtime.CoerceAwaitableToTask(object value) -> Task&lt;object?&gt; — the await coercion for a value that is neither a $Promise nor a Task&lt;object?&gt;: an ordinary thenable (a value whose <c>then</c> member is callable) is adopted by invoking <c>then(resolve, reject)</c> into a fresh capability (#349); anything else becomes Task.FromResult(value). Called at every state-machine await's wrap-value site.</summary>
@@ -1454,7 +1447,6 @@ public class EmittedRuntime
     public MethodBuilder TSRegExpProtoToString { get; set; } = null!;
     public MethodBuilder TSRegExpTestMethod { get; set; } = null!;
     public MethodBuilder TSRegExpExecMethod { get; set; } = null!;
-    public MethodBuilder TSRegExpToStringMethod { get; set; } = null!;
     public MethodBuilder TSRegExpReplaceMethod { get; set; } = null!;
     // ECMA-262 (ES2025) RegExp.escape static — emitted standalone on $RegExp.
     public MethodBuilder TSRegExpEscapeMethod { get; set; } = null!;
@@ -2239,7 +2231,6 @@ public class EmittedRuntime
     public MethodBuilder TSKeyObjectImportDer { get; set; } = null!;
     public MethodBuilder TSKeyObjectGetOption { get; set; } = null!;
     public MethodBuilder TSKeyObjectDeriveSecret { get; set; } = null!;
-    public MethodBuilder CryptoDiffieHellman { get; set; } = null!;
 
     // HTTP module methods
     public MethodBuilder Fetch { get; set; } = null!;
@@ -2266,7 +2257,6 @@ public class EmittedRuntime
     // $HttpServer type - emitted for standalone HTTP server support
     public TypeBuilder TSHttpServerType { get; set; } = null!;
     public ConstructorBuilder TSHttpServerCtor { get; set; } = null!;
-    public MethodBuilder TSHttpServerClose { get; set; } = null!;
     public MethodBuilder TSHttpServerAddress { get; set; } = null!;
 
     // $HttpRequest type - emitted for standalone HTTP request support
