@@ -58,7 +58,6 @@ public partial class RuntimeEmitter
             MethodAttributes.HideBySig,
             _types.ObjectArray,
             Type.EmptyTypes);
-        runtime.JsonScalarRecordValuesGetter = valuesGetter;
         var baseValuesIl = valuesGetter.GetILGenerator();
         baseValuesIl.Emit(OpCodes.Ldnull);
         baseValuesIl.Emit(OpCodes.Ret);

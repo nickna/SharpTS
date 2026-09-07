@@ -130,7 +130,7 @@ public partial class RuntimeEmitter
         EmitTSRegExpResolveLastIndex(typeBuilder, runtime);
         EmitTSRegExpTest(typeBuilder, runtime);
         EmitTSRegExpExec(typeBuilder, runtime);
-        EmitTSRegExpToStringMethod(typeBuilder, runtime);
+        EmitTSRegExpToStringMethod(typeBuilder);
         EmitTSRegExpEscape(typeBuilder, runtime);
 
         // Internal methods for string operations
@@ -2004,7 +2004,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitTSRegExpToStringMethod(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSRegExpToStringMethod(TypeBuilder typeBuilder)
     {
         // public override string ToString() => $"/{_source}/{_flags}"
         var method = typeBuilder.DefineMethod(
@@ -2013,7 +2013,6 @@ public partial class RuntimeEmitter
             _types.String,
             Type.EmptyTypes
         );
-        runtime.TSRegExpToStringMethod = method;
 
         var il = method.GetILGenerator();
 

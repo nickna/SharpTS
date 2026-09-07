@@ -252,7 +252,6 @@ public partial class RuntimeEmitter
             "_classPrototypeCache",
             classPrototypeCacheType,
             FieldAttributes.Private | FieldAttributes.Static | FieldAttributes.InitOnly);
-        runtime.ClassPrototypeCacheField = classPrototypeCacheField;
         EmitClassPrototypeSupport(typeBuilder, runtime, classPrototypeCacheField);
 
         // CheckCancellation(): if (_cancelRequested) throw new
@@ -413,7 +412,6 @@ public partial class RuntimeEmitter
                 _types.ConditionalWeakTable,
                 FieldAttributes.Public | FieldAttributes.Static | FieldAttributes.InitOnly
             );
-            runtime.NonAutoAwaitPromisesField = nonAutoAwaitPromisesField;
 
             var markNonAutoAwaitPromise = typeBuilder.DefineMethod(
                 "MarkNonAutoAwaitPromise",

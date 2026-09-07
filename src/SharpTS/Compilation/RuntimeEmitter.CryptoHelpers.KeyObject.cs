@@ -459,7 +459,6 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.Object]);
-        runtime.CryptoDiffieHellman = method;
         var il = method.GetILGenerator();
         var privateKeyLocal = il.DeclareLocal(_types.Object);
         var publicKeyLocal = il.DeclareLocal(_types.Object);
