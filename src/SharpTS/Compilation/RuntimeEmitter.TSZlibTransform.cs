@@ -79,7 +79,7 @@ public partial class RuntimeEmitter
             CallingConventions.Standard,
             [_types.Int32, _types.Int32]  // kind, compressionLevel
         );
-        runtime.TSZlibTransformCtor = ctor;
+        runtime.RequireZlib().TransformCtor = ctor;
 
         var il = ctor.GetILGenerator();
 

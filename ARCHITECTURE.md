@@ -173,6 +173,14 @@ returning the runtime. Completion validates all required handles and promise wra
 subsequent writes. Consumers can read the component but cannot replace its handles or mutate its
 wrapper registry.
 
+Zlib follows the same contract through `Zlib` / `RequireZlib()`. `EmitAll` starts the component
+only when `UsesZlib` is enabled, before the transform constructor is emitted. `EmitZlibMethods`
+then emits compression and streaming handles in dependency order and registers named-import
+wrappers. `EmitAll` completes the component after type finalization. The 24 handles live only in
+`EmittedZlibRuntime`; module consumers use that component. Buffer and base stream types remain
+separate dependencies, and zlib retains
+its standalone output behavior.
+
 During emission, each handle becomes readable as soon as its declaration is assigned, so forward
 references do not require a method body to exist yet. An early read names the missing declaration.
 Completion is an orchestration boundary, not an IL verifier: body emission and type finalization
