@@ -32,6 +32,55 @@ public sealed class StablePrimitivePromiseThenTests
         Assert.Equal("45\n", TestHarness.Run(StableSource, mode));
     }
 
+    [Theory]
+    [InlineData("", true)]
+    [InlineData("const ordinary: any = {}; ordinary.value = 1;", true)]
+    [InlineData("eval('');", false)]
+    [InlineData("const prototype: any = Promise.prototype;", false)]
+    [InlineData("(Promise as any).extra = 1;", false)]
+    [InlineData("(Promise as any)['extra'] = 1;", false)]
+    [InlineData("(Promise as any).extra += 1;", false)]
+    [InlineData("(Promise as any)[0] += 1;", false)]
+    [InlineData("(Promise as any).extra ||= 1;", false)]
+    [InlineData("(Promise as any)['extra'] ??= 1;", false)]
+    [InlineData("delete (Promise as any).extra;", false)]
+    [InlineData("delete (Promise as any)['extra'];", false)]
+    [InlineData("Object.assign(Promise, {});", false)]
+    [InlineData("Object.defineProperty(Promise, 'extra', { value: 1 });", false)]
+    [InlineData("Object.defineProperties(Promise, { extra: { value: 1 } });", false)]
+    [InlineData("Reflect.set(Promise, 'extra', 1);", false)]
+    [InlineData("Reflect.deleteProperty(Promise, 'extra');", false)]
+    [InlineData("Object.setPrototypeOf(Promise, {});", false)]
+    [InlineData("const p: Promise<number> = Promise.resolve(0); (p as any).extra = 1;", false)]
+    [InlineData("((Promise as any)!)['extra'] = 1;", false)]
+    [InlineData("((Promise as any) satisfies any).extra = 1;", false)]
+    public void SharedMutationProof_GatesBothPrimitiveOptimizations(string mutation, bool optimized)
+    {
+        string source = mutation + "\n" + StableSource + """
+
+            async function gather(): Promise<number> {
+                const promises: Promise<number>[] = [];
+                promises.push(Promise.resolve(1));
+                const values: number[] = await Promise.all(promises);
+                return values[0];
+            }
+            gather();
+            """;
+
+        Assembly assembly = Compile(source);
+        foreach (string method in new[] { "PromiseThenPrimitive", "PromiseAllPrimitive" })
+            Assert.Equal(optimized, FindCallers(assembly, method).Count > 0);
+    }
+
+    [Fact]
+    public void PromiseReassignment_IsConservativelyRejectedBeforeBindingAnalysis()
+    {
+        // The checker currently rejects assignment to the built-in Promise binding;
+        // keep the mutation proof conservative for ASTs supplied by other callers.
+        var statements = new Parser(new Lexer("Promise = Promise;").ScanTokens()).ParseOrThrow();
+        Assert.True(PromiseMutationAnalyzer.HasObservableMutation(statements, new TypeMap()));
+    }
+
     [Theory, ModeData]
     public void StableNumericHandlerThrow_RejectsOnce(ExecutionMode mode)
     {

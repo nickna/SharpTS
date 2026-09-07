@@ -75,37 +75,13 @@ internal static class StableNumericLoopCaptureAnalyzer
 
     private static bool IsNumericLiteral(Expr expression)
     {
-        expression = Unwrap(expression);
+        expression = ExpressionUnwrapper.Unwrap(expression);
         return expression is Expr.Literal { Value: double }
             or Expr.Unary
         {
             Operator.Type: TokenType.MINUS,
             Right: Expr.Literal { Value: double }
         };
-    }
-
-    private static Expr Unwrap(Expr expression)
-    {
-        while (true)
-        {
-            switch (expression)
-            {
-                case Expr.Grouping grouping:
-                    expression = grouping.Expression;
-                    continue;
-                case Expr.TypeAssertion assertion:
-                    expression = assertion.Expression;
-                    continue;
-                case Expr.Satisfies satisfies:
-                    expression = satisfies.Expression;
-                    continue;
-                case Expr.NonNullAssertion nonNull:
-                    expression = nonNull.Expression;
-                    continue;
-                default:
-                    return expression;
-            }
-        }
     }
 
     private sealed class LoopVisitor(
@@ -646,7 +622,7 @@ internal static class StableNumericLoopCaptureAnalyzer
         protected override void VisitCall(Expr.Call expression)
         {
             if (!expression.Optional
-                && Unwrap(expression.Callee) is Expr.Variable { Name.Lexeme: "eval" })
+                && ExpressionUnwrapper.Unwrap(expression.Callee) is Expr.Variable { Name.Lexeme: "eval" })
             {
                 ContainsDirectEval = true;
             }
