@@ -3,11 +3,11 @@
   <!--
     Standalone TypeScript conformance runner.
     NOT included in SharpTS.sln: solution-level dotnet build and dotnet test
-    (what CI runs) does not pick it up. Invoke explicitly:
+    does not pick it up. CI invokes scripts/test-typescript-conformance.ps1.
+    To run all harness tests, invoke explicitly:
         dotnet test tests/conformance/SharpTS.TypeScriptConformance/SharpTS.TypeScriptConformance.csproj
     Requires the microsoft/TypeScript submodule at external/typescript/
-    (pinned to a specific tag, see README):
-        git submodule update init external/typescript
+    (pinned to a specific commit; see README for acquisition instructions).
   -->
 
   <PropertyGroup>

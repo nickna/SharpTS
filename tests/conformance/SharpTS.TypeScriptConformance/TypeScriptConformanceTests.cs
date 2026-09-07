@@ -21,7 +21,7 @@ public class TypeScriptConformanceBaselineCollection { }
 ///   2. Run each through <see cref="TypeScriptConformanceRunner"/>.
 ///   3. Compare outcomes to <c>baselines/interpreted.txt</c>.
 ///   4. Fail the fact on regression (good→bad) or new pass (bad→good);
-///      soft-report bucket changes.
+///      fail on other bucket changes and selection drift as well.
 ///
 /// Env switch:
 ///   <c>SHARPTS_TSCONFORMANCE_UPDATE_BASELINE=1</c> — write the baseline
@@ -37,21 +37,42 @@ public class TypeScriptConformanceTests
     [Fact]
     public async Task InterpretedBaseline()
     {
+        string? gateProfile = Environment.GetEnvironmentVariable("SHARPTS_TSCONFORMANCE_GATE_PROFILE");
+        bool gate = !string.IsNullOrEmpty(gateProfile);
+        if (gate && gateProfile is not ("smoke" or "full"))
+            throw new InvalidDataException($"Unknown TypeScript gate profile: {gateProfile}");
+        if (gate && GetBool("SHARPTS_TSCONFORMANCE_UPDATE_BASELINE"))
+            throw new InvalidOperationException("Baseline updates are forbidden in the TypeScript CI gate.");
+        bool smoke = gateProfile == "smoke";
         var root = TypeScriptConformancePaths.TryFindRoot();
         var projectDir = TypeScriptConformancePaths.TryFindProjectDir();
         if (root is null || projectDir is null)
         {
+            if (gate)
+                throw new DirectoryNotFoundException("TypeScript corpus is unavailable. Run scripts/test-typescript-conformance.ps1 to acquire it.");
             _output.WriteLine("external/typescript or tests/conformance/SharpTS.TypeScriptConformance/ not found — run `git submodule update --init external/typescript`");
             return;
         }
 
         var configDir = Path.Combine(projectDir, "config");
-        var configFile = Path.Combine(configDir, "subset.json");
+        var configFile = Path.Combine(configDir, smoke ? "smoke.json" : "subset.json");
         var config = TypeScriptConformanceConfig.Load(configFile);
+        if (config.TimeoutSeconds <= 0)
+            throw new InvalidDataException("TypeScript per-case timeout must be positive.");
         var skipDirectives = config.LoadSkipDirectives(configDir);
         var skipTests = config.LoadSkipTests(configDir);
 
         var files = EnumerateTestFiles(root, config.Folders, config.Files ?? []);
+        if (files.Count == 0)
+            throw new InvalidDataException("TypeScript conformance selection contains no tests.");
+        var baselinePath = Path.Combine(projectDir, "baselines", "interpreted.txt");
+        IReadOnlyDictionary<string, string>? gateBaseline = gate
+            ? TypeScriptConformanceGate.SelectBaseline(
+                TypeScriptConformanceGate.ReadBaseline(baselinePath, TypeScriptConformancePaths.GetCorpusRevision(root)),
+                files.Select(file => file.RelPath), smoke)
+            : null;
+        string? reportDirectory = Environment.GetEnvironmentVariable("SHARPTS_TSCONFORMANCE_REPORT_DIR");
+        using var report = string.IsNullOrEmpty(reportDirectory) ? null : new TypeScriptConformanceReport(reportDirectory);
         _output.WriteLine(
             $"enumerated {files.Count} test files from {config.Folders.Count} folder(s) " +
             $"and {config.Files?.Count ?? 0} explicit file(s)");
@@ -59,24 +80,28 @@ public class TypeScriptConformanceTests
         var runner = new TypeScriptConformanceRunner(root, skipDirectives, skipTests);
         var current = new SortedDictionary<string, string>(StringComparer.Ordinal);
         var counts = new Dictionary<TypeScriptConformanceOutcome, int>();
+        var results = new List<TypeScriptConformanceResult>();
 
-        var started = DateTime.UtcNow;
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+        var budget = TimeSpan.FromSeconds(smoke ? 120 : 600);
         foreach (var (relPath, absPath) in files)
         {
-            // A checker hang must not pin the entire corpus job. The config
-            // has always carried a per-test timeout; enforce it here and keep
-            // classifying subsequent files. The worker is a background
-            // ThreadPool task, so the test host can still terminate cleanly.
+            // A background task bounds the wait even if the checker hangs.
+            // Gate mode aborts below because the checker has no cooperative cancellation.
+            var remaining = budget - stopwatch.Elapsed;
+            if (gate && remaining <= TimeSpan.Zero)
+                throw new TimeoutException($"TypeScript {gateProfile} gate exceeded its {budget.TotalSeconds}s execution budget.");
+            var timeout = gate && remaining < config.Timeout ? remaining : config.Timeout;
             var runTask = Task.Run(() => runner.RunOne(absPath));
             TypeScriptConformanceResult result;
             var completed = await Task.WhenAny(
-                runTask, Task.Delay(TimeSpan.FromSeconds(config.TimeoutSeconds)));
+                runTask, Task.Delay(timeout));
             if (completed != runTask)
             {
                 result = new TypeScriptConformanceResult(
                     TypeScriptConformanceOutcome.TypeCheckError,
                     $"Timed out after {config.TimeoutSeconds}s.",
-                    "timeout");
+                    null);
                 _output.WriteLine($"timeout: {relPath}");
             }
             else
@@ -91,17 +116,24 @@ public class TypeScriptConformanceTests
             if (result.Outcome == TypeScriptConformanceOutcome.ParseError)
                 _output.WriteLine($"parse error: {relPath}: {result.Message}");
             current[relPath] = TypeScriptConformanceBaseline.EncodeBucket(result);
+            results.Add(result);
+            string? expectedBucket = null;
+            gateBaseline?.TryGetValue(relPath, out expectedBucket);
+            report?.Record(relPath, expectedBucket, result);
+            // A timed-out checker cannot be cancelled cooperatively. Stop the gate
+            // instead of starting concurrent checks alongside that abandoned task.
+            if (gate && completed != runTask)
+                throw new TimeoutException($"TypeScript case timed out: {relPath}. See diagnostic-diff.txt.");
             counts.TryGetValue(result.Outcome, out var c);
             counts[result.Outcome] = c + 1;
         }
-        var elapsed = DateTime.UtcNow - started;
+        var elapsed = stopwatch.Elapsed;
 
         _output.WriteLine(FormatSummary(counts, files.Count, elapsed));
 
-        var baselinePath = Path.Combine(projectDir, "baselines", "interpreted.txt");
         var updateBaseline = GetBool("SHARPTS_TSCONFORMANCE_UPDATE_BASELINE");
 
-        if (updateBaseline || !File.Exists(baselinePath))
+        if (updateBaseline)
         {
             // Sandboxed test hosts may be allowed to write only to an
             // artifact directory. Let CI/agents redirect the mechanical
@@ -127,15 +159,21 @@ public class TypeScriptConformanceTests
             return;
         }
 
-        var baseline = TypeScriptConformanceBaseline.Read(baselinePath);
+        if (!File.Exists(baselinePath))
+            throw new FileNotFoundException("Committed TypeScript baseline is missing. Updates require SHARPTS_TSCONFORMANCE_UPDATE_BASELINE=1.", baselinePath);
+        var baseline = gateBaseline ?? TypeScriptConformanceBaseline.Read(baselinePath);
         var diff = TypeScriptConformanceBaselineDiffer.Diff(baseline, current);
         LogDiff(diff);
+        if (gate)
+            TypeScriptConformanceGate.RequireMeaningfulResults(results);
+        report?.Complete(diff, files.Count, elapsed.TotalSeconds);
 
-        if (diff.HasHardFailures || diff.NewEntries.Count > 0 || diff.RemovedEntries.Count > 0)
+        if (TypeScriptConformanceGate.HasChanges(diff))
         {
             Assert.Fail(
                 $"baseline drift: " +
                 $"{diff.NewRegressions.Count} regressions, {diff.NewPasses.Count} new passes, " +
+                $"{diff.BucketChanges.Count} bucket changes, " +
                 $"{diff.NewEntries.Count} new entries, {diff.RemovedEntries.Count} removed entries. " +
                 $"Re-run with SHARPTS_TSCONFORMANCE_UPDATE_BASELINE=1 to update.");
         }
@@ -151,7 +189,7 @@ public class TypeScriptConformanceTests
     /// Walks each configured folder for TypeScript source files. Sorted by relative
     /// path so baselines don't flap between runs.
     /// </summary>
-    private static List<(string RelPath, string AbsPath)> EnumerateTestFiles(
+    internal static List<(string RelPath, string AbsPath)> EnumerateTestFiles(
         string typescriptRoot,
         IReadOnlyList<string> folders,
         IReadOnlyList<string> explicitFiles)
@@ -160,7 +198,8 @@ public class TypeScriptConformanceTests
         foreach (var folder in folders)
         {
             var absFolder = Path.Combine(typescriptRoot, folder.Replace('/', Path.DirectorySeparatorChar));
-            if (!Directory.Exists(absFolder)) continue;
+            if (!Directory.Exists(absFolder))
+                throw new DirectoryNotFoundException($"Configured TypeScript conformance folder does not exist: {folder}");
             foreach (var file in Directory.EnumerateFiles(absFolder, "*", SearchOption.AllDirectories)
                          .Where(path => Path.GetExtension(path) is ".ts" or ".tsx"))
             {
@@ -216,6 +255,6 @@ public class TypeScriptConformanceTests
         Dump("new passes", diff.NewPasses);
         Dump("new entries", diff.NewEntries);
         Dump("removed entries", diff.RemovedEntries);
-        Dump("bucket changes (soft)", diff.BucketChanges);
+        Dump("bucket changes", diff.BucketChanges);
     }
 }

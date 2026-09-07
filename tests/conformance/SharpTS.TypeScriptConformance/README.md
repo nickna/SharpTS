@@ -10,6 +10,123 @@ is complete. Per-node inferred-type baseline work is tracked separately in
 
 The corpus is vendored as a git submodule at `external/typescript/`, pinned to **`v6.0.3`**. TypeScript rewords its diagnostic messages between versions, so the pin is load-bearing for baseline stability — bumping it is intentional, not incidental.
 
+The exact revision is **`050880ce59e30b356b686bd3144efe24f875ebc8`**. The gate
+acquires only this submodule, verifies its HEAD against the repository gitlink and
+the committed baseline header, rejects modified/missing tracked or untracked input
+files, and checks the reference package version is `6.0.3`. Reference diagnostics
+are TypeScript's checked-in `tests/baselines/reference/*.errors.txt` at that same
+revision. No live `tsc`, npm installation, or Node runtime is needed; CI must not
+regenerate those reference outputs. .NET is selected through the root `global.json`.
+
+## Bounded CI gate
+
+From the repository root, in PowerShell 7:
+
+```powershell
+./scripts/test-typescript-conformance.ps1
+```
+
+This is the same command used by CI. It acquires the pinned corpus, builds the
+Release harness, runs its gate-policy tests and the baseline fact, and requires a
+fresh successful baseline summary and a non-empty TRX result. Other corpus facts
+(including the broad inferred-type parser sweep) are excluded by an explicit
+test filter so additions to those suites cannot silently expand the smoke budget.
+`-NoBuild` reuses a Release build; `-NoAcquire` validates an existing clean checkout
+without fetching it. `-ResultsDirectory <path>` relocates artifacts.
+
+The `typescript-conformance` job runs once on Ubuntu on the existing `full` CI
+route, for both pull requests and eligible main pushes. The aggregate `Gate`
+requires it to succeed. Documentation-only and proven C# trivia-only changes
+retain their existing routes and skip this job; the classifier and push path
+filters are unchanged. Harness/config/baseline/script/workflow changes select
+the full route. Test262 execution remains owned by #1280.
+
+`config/smoke.json` explicitly selects **32 files** from the existing
+`baselines/interpreted.txt`; there is no separate smoke baseline. Selected paths
+must exist and appear in the committed baseline. Coverage includes:
+
+| Area | Representative cases |
+|---|---|
+| Parser and recovery diagnostics | `invalidTaggedTemplateEscapeSequences`, `inferTypesInvalidExtendsDeclaration`, `jsxParsingError1`, `jsxUnclosedParserRecovery` |
+| Type relationships and inference | tuple/array and optional call signatures, conditional and mapped types, `keyof`/indexed-access valid and error cases, union/intersection/literal/`this` types |
+| Declarations and control flow | classes, functions, interfaces with call/construct signatures, generic base types, aliases, enums, decorators, assignment narrowing and `if` flow |
+| Libraries and modern syntax | symbols, Object values/entries, Promise finally, bigint library selection, logical assignment |
+| JSX and programs | tuple children, generic tag inference, ambient global modules and multi-file export-as-namespace |
+
+Every case retains the harness's `(line, TSnnnn)` diagnostic matching policy.
+The gate fails on regressions, new passes, any other bucket/skip-reason changes,
+unbaselined selections, or removed entries in a full run. It also fails for a
+missing/empty baseline, missing corpus/files/folders, an empty selection, or a
+run without meaningful checker comparisons. Both expected-error and valid-input
+cases must execute. Baseline-update mode is explicitly rejected by the gate.
+
+The smoke fact has a **120-second total execution budget**, with the existing
+**5-second per-case timeout**. A timeout stops the gate; it does not keep launching
+checks alongside an abandoned checker task. VSTest has a **3-minute hang timeout**
+without memory dumps, the acquisition/build/test step has an **8-minute ceiling**,
+and the job has **10 minutes** including artifact upload. These are ceilings, not
+performance assertions; normal runs should finish well below them.
+
+Local verification on Windows with .NET 10.0.400 (2026-09-07) measured the smoke
+comparison at 6.7 seconds and the broader 534-case comparison at 73.5 seconds;
+both matched the committed baseline. The smoke includes 21 expected-diagnostic
+inputs and 11 valid inputs. Hosted-runner timings will differ.
+
+CI always uploads the `typescript-conformance` artifact for seven days. Each run
+has its own directory containing:
+
+- `inputs.json`: corpus SHA, reference version, SDK and selected profile.
+- `cases.jsonl`: every completed case, old/new bucket, and expected/actual diagnostic tuples; flushed after each case.
+- `diagnostic-diff.txt`: changed cases with missing/extra diagnostics and error messages, plus removed entries.
+- `summary.json`: completed comparison, counts, elapsed time and all baseline changes.
+- `conformance.trx` and `test.log`: test failures and stack traces; `failure.txt` also explains setup or process failures.
+
+An interrupted run may have only partial artifacts. Absence of a fresh completed
+summary is itself a gate failure; stale artifacts cannot satisfy a later run.
+
+### Deliberate regression proof
+
+The gate was verified against an actual checker mutation, with the committed
+corpus and baseline untouched. In a disposable checkout, temporarily change
+`TypeChecker.GetDiagnostics()` in `src/SharpTS/TypeSystem/TypeChecker.cs` to return
+`[]`, then run:
+
+```powershell
+pwsh -NoProfile -File scripts/test-typescript-conformance.ps1 -NoAcquire `
+  -ResultsDirectory artifacts/typescript-regression
+$LASTEXITCODE # 1
+```
+
+The measured result was **12 Pass, 20 Fail**, with the baseline fact failing and
+all 16 gate-policy test cases passing. `summary.json` recorded `passed: false`
+and 20 `NewRegressions`. One excerpt from `diagnostic-diff.txt`:
+
+```text
+tests/cases/conformance/es2019/globalThisAmbientModules.ts: Pass -> Fail
+baseline expected 2, got 0; missing: [TS2339@L8, TS2339@L11]
+  expected: [{"Line":8,"TsCode":"TS2339"},{"Line":11,"TsCode":"TS2339"}]
+  actual:   []
+```
+
+That entry also contains the missing `(line, TSnnnn)` tuples and empty actual
+diagnostics. Restore the original checker and rebuild before running again;
+`-NoBuild` must not be used after changing or restoring the checker. The normal
+32- and 534-case baselines pass without changing any committed expectations.
+
+## Broader manual baseline run
+
+```powershell
+./scripts/test-typescript-conformance.ps1 -Profile full
+```
+
+This uses `config/subset.json` and compares all **534 committed cases**, including
+selection additions/removals, with the same acquisition, reporting and baseline
+policy. Its fact budget is ten minutes, per-case timeout five seconds, and VSTest
+hang timeout twelve minutes. Run it before broad checker refactors, corpus or
+selection updates, and during manual baseline reviews. It stays off the normal
+PR route. Run the standalone project without the script to include all harness
+unit and inferred-type infrastructure tests as well.
+
 ## Initial setup
 
 ```bash
@@ -24,7 +141,9 @@ git config --global core.longpaths true
 
 ## Running locally
 
-This project is **not** included in `SharpTS.sln`. Solution-level `dotnet build` and `dotnet test` (what CI runs) won't pick it up. Invoke explicitly:
+This project is **not** included in `SharpTS.sln`. Solution-level `dotnet build`
+and `dotnet test` won't pick it up; CI invokes the bounded gate separately. To run
+all harness tests locally, invoke explicitly:
 
 ```bash
 dotnet test tests/conformance/SharpTS.TypeScriptConformance/SharpTS.TypeScriptConformance.csproj

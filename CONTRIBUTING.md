@@ -142,9 +142,15 @@ Manual verification of both modes:
 
 Two conformance suites (not in `SharpTS.sln`, run explicitly) pin SharpTS
 against external corpora: `tests/conformance/SharpTS.Test262/` (ECMA-262) and
-`tests/conformance/SharpTS.TypeScriptConformance/` (type checker vs `tsc`). If your change could
-affect JS semantics or checker behavior, run the relevant suite — CI compiles
-them but does not execute them.
+`tests/conformance/SharpTS.TypeScriptConformance/` (type checker vs `tsc`). CI compiles
+both and executes a bounded 32-case TypeScript baseline gate on the `full` change
+route; documentation-only and proven C# trivia-only routes remain lightweight.
+Run `./scripts/test-typescript-conformance.ps1` to reproduce the gate, or add
+`-Profile full` for the broader 534-case baseline before broad checker changes.
+The script acquires the pinned corpus and never updates expectations. See the
+[runner guide](tests/conformance/SharpTS.TypeScriptConformance/README.md) for
+coverage, budgets and diagnostic artifacts. For JS semantic changes, run the
+relevant Test262 selection manually; its CI execution is tracked separately.
 
 ## Code Style Guidelines
 

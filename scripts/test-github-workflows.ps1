@@ -79,7 +79,7 @@ foreach ($requiredText in @(
         $errors.Add("ci.yml is missing change-routing contract text: $requiredText")
     }
 }
-foreach ($jobName in @('build', 'dap-macos-smoke', 'aot-ratchet', 'native-aot-compile-smoke')) {
+foreach ($jobName in @('build', 'typescript-conformance', 'dap-macos-smoke', 'aot-ratchet', 'native-aot-compile-smoke')) {
     $job = Get-WorkflowJob $ci $jobName 'ci.yml'
     if (-not $job.Contains('needs: workflow-policy', [StringComparison]::Ordinal) -or
         -not $job.Contains("if: needs.workflow-policy.outputs.mode == 'full'", [StringComparison]::Ordinal)) {
@@ -91,6 +91,18 @@ if (-not $lightweightJob.Contains("if: needs.workflow-policy.outputs.mode == 'cs
     $errors.Add('ci.yml lightweight-validation must run only for C# trivia changes.')
 }
 $ciGateJob = Get-WorkflowJob $ci 'gate' 'ci.yml'
+foreach ($requiredText in @('build, typescript-conformance,', "'typescript-conformance'")) {
+    if (-not $ciGateJob.Contains($requiredText, [StringComparison]::Ordinal)) {
+        $errors.Add("ci.yml Gate must require the TypeScript job in the full route and skip it in lightweight routes: $requiredText")
+    }
+}
+$typeScriptJob = Get-WorkflowJob $ci 'typescript-conformance' 'ci.yml'
+foreach ($requiredText in @('./scripts/test-typescript-conformance.ps1', 'if: always()',
+    'path: artifacts/typescript-conformance/', 'if-no-files-found: error', 'timeout-minutes: 10')) {
+    if (-not $typeScriptJob.Contains($requiredText, [StringComparison]::Ordinal)) {
+        $errors.Add("ci.yml TypeScript gate is missing execution/artifact budget contract: $requiredText")
+    }
+}
 foreach ($requiredText in @('CHANGE_MODE:', "'csharp-trivia-only'", "'docs-only'", "'lightweight-validation'")) {
     if (-not $ciGateJob.Contains($requiredText, [StringComparison]::Ordinal)) {
         $errors.Add("ci.yml Gate is missing routed-result validation text: $requiredText")
