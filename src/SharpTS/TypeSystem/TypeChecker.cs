@@ -918,7 +918,7 @@ public partial class TypeChecker
     private CancellationToken _cancellationToken;
 
     /// <summary>
-    /// When &gt; 0, <see cref="RecordTypeError(TypeCheckException)"/> and its overload are no-ops.
+    /// When &gt; 0, <see cref="RecordTypeError(TypeCheckException)"/> is a no-op.
     /// Set during speculative hoist-time return-type inference (#383), which checks a function body
     /// purely to learn its inferred return type and must not surface (duplicate) diagnostics — the
     /// real declaration pass reports them at their proper locations.
@@ -1416,79 +1416,82 @@ public partial class TypeChecker
         _standaloneSourceDocument = sourceDocument;
 
         _diagnostics.Clear();
+        bool previousRecoveryMode = _recoveryMode;
+        int? previousStatementLine = _currentStatementLine;
         _recoveryMode = true;
-        // Clear caches for fresh check
-        _compatibilityCache = null;
-        _expandedTypeAliasCache = null;
-        _compatibilityInProgress = null;
-        _implicitAnyReported = null;
-        _compatibilityCheckDepth = 0;
-        _narrowingContextStack.Clear();
-
-        // Module/top-level declarations live in their own declared-type frame so that
-        // GetDeclaredType / IsDeclaredTypeTracked treat them like function locals (#743).
-        // Clear first: the checker is reused across REPL lines and may retain frames from a
-        // prior check (function frames are normally popped, but be defensive on early-exit).
-        _declaredVariableTypesStack.Clear();
-        _definiteAssignmentStack.Clear();
-        PushDeclaredVariableScope();
-
-        // Pre-define built-ins
-        _environment.Define("console", TypeInfo.Any.Shared);
-        _environment.Define("Reflect", TypeInfo.Any.Shared);
-        _environment.Define("process", TypeInfo.Any.Shared);
-
-        // Pre-register type declarations
-        PreRegisterTypeDeclarations(statements);
-        ThrowIfCancellationRequested();
-
-        // Hoist class declarations (as Any for forward references in function bodies)
-        HoistClassDeclarations(statements);
-        ThrowIfCancellationRequested();
-
-        // Hoist function declarations
-        HoistFunctionDeclarations(statements);
-        ThrowIfCancellationRequested();
-
-        // Hoist var declarations (pre-define as any for forward reference support)
-        HoistVarDeclarations(statements);
-        ThrowIfCancellationRequested();
-
-        // Hoist let/const declarations (pre-define as any so an earlier function body can
-        // forward-reference a later block-scoped binding — #533)
-        HoistLexicalDeclarations(statements);
-
-        foreach (Stmt statement in statements)
+        _currentStatementLine = null;
+        try
         {
             ThrowIfCancellationRequested();
-            if (_diagnostics.HitErrorLimit)
-            {
-                _recoveryMode = false;
-                return new TypeCheckDiagnosticResult(_typeMap, _diagnostics.Diagnostics, HitErrorLimit: true);
-            }
+            // Clear caches for fresh check
+            _compatibilityCache = null;
+            _expandedTypeAliasCache = null;
+            _compatibilityInProgress = null;
+            _implicitAnyReported = null;
+            _compatibilityCheckDepth = 0;
+            _narrowingContextStack.Clear();
 
-            _currentStatementLine = TryGetStmtLine(statement);
-            try
+            // Module/top-level declarations live in their own declared-type frame so that
+            // GetDeclaredType / IsDeclaredTypeTracked treat them like function locals (#743).
+            // Clear first: the checker is reused across REPL lines and may retain frames from a
+            // prior check (function frames are normally popped, but be defensive on early-exit).
+            _declaredVariableTypesStack.Clear();
+            _definiteAssignmentStack.Clear();
+            PushDeclaredVariableScope();
+
+            // Pre-define built-ins
+            _environment.Define("console", TypeInfo.Any.Shared);
+            _environment.Define("Reflect", TypeInfo.Any.Shared);
+            _environment.Define("process", TypeInfo.Any.Shared);
+
+            // Pre-register type declarations
+            PreRegisterTypeDeclarations(statements);
+            ThrowIfCancellationRequested();
+
+            // Hoist class declarations (as Any for forward references in function bodies)
+            HoistClassDeclarations(statements);
+            ThrowIfCancellationRequested();
+
+            // Hoist function declarations
+            HoistFunctionDeclarations(statements);
+            ThrowIfCancellationRequested();
+
+            // Hoist var declarations (pre-define as any for forward reference support)
+            HoistVarDeclarations(statements);
+            ThrowIfCancellationRequested();
+
+            // Hoist let/const declarations (pre-define as any so an earlier function body can
+            // forward-reference a later block-scoped binding — #533)
+            HoistLexicalDeclarations(statements);
+
+            foreach (Stmt statement in statements)
             {
-                CheckStmt(statement);
+                ThrowIfCancellationRequested();
+                if (_diagnostics.HitErrorLimit)
+                {
+                    return new TypeCheckDiagnosticResult(_typeMap, _diagnostics.Diagnostics, HitErrorLimit: true);
+                }
+
+                _currentStatementLine = TryGetStmtLine(statement);
+                try
+                {
+                    CheckStmt(statement);
+                }
+                catch (TypeCheckException ex)
+                {
+                    RecordTypeError(ex);
+                }
             }
-            catch (TypeMismatchException ex)
-            {
-                RecordTypeError(ex);
-            }
-            catch (TypeCheckException ex)
-            {
-                RecordTypeError(ex);
-            }
-            catch (Exception ex)
-            {
-                RecordTypeError(ex.Message, _currentStatementLine);
-            }
+            // Cancellation during the final statement must not return a successful analysis.
+            ThrowIfCancellationRequested();
+
+            return new TypeCheckDiagnosticResult(_typeMap, _diagnostics.Diagnostics);
         }
-        _currentStatementLine = null;
-        _recoveryMode = false;
-
-        return new TypeCheckDiagnosticResult(_typeMap, _diagnostics.Diagnostics);
+        finally
+        {
+            _currentStatementLine = previousStatementLine;
+            _recoveryMode = previousRecoveryMode;
+        }
     }
 
     /// <summary>
@@ -1497,59 +1500,19 @@ public partial class TypeChecker
     private void RecordTypeError(TypeCheckException ex)
     {
         if (_suppressDiagnostics > 0) return;
-        // Extract the core message by removing the "Type Error: " or "Type Error at line X: " prefix
-        string message = ex.Message;
-        if (message.StartsWith("Type Error at line"))
+        Diagnostic diagnostic = ex.Diagnostic;
+        // Keep an explicit file and span; fill only missing attribution. The statement-line
+        // fallback lets @ts-ignore / @ts-expect-error target throw sites without token locations.
+        SourceLocation? location = diagnostic.Location is { } explicitLocation
+            ? explicitLocation with { FilePath = explicitLocation.FilePath ?? _filePath }
+            : _currentStatementLine is { } line ? new SourceLocation(_filePath, line) : null;
+        _diagnostics.Add(diagnostic with
         {
-            var colonIndex = message.IndexOf(": ", 15); // Skip past "Type Error at line X"
-            if (colonIndex > 0)
-                message = message[(colonIndex + 2)..];
-        }
-        else if (message.StartsWith("Type Error: "))
-        {
-            message = message["Type Error: ".Length..];
-        }
-
-        // Map exception type to diagnostic code
-        DiagnosticCode code = ex switch
-        {
-            TypeMismatchException => DiagnosticCode.TypeMismatch,
-            TypeOperationException => DiagnosticCode.TypeOperation,
-            _ => DiagnosticCode.TypeError
-        };
-
-        // Fall back to the current statement's line when the exception didn't carry one.
-        // Lets `// @ts-ignore` / `@ts-expect-error` line directives target diagnostics
-        // whose throw-sites don't (yet) plumb token-level line info.
-        int? line = ex.Line ?? _currentStatementLine;
-        SourceLocation? location = line.HasValue
-            ? new SourceLocation(_filePath, line.Value, ex.Column ?? 1)
-            : null;
-
-        // Preserve the canonical TSnnnn code from the throw site so the TS conformance
-        // runner (which diffs on (line, tsCode)) can match against *.errors.txt baselines.
-        string? tsCode = ex.Diagnostic.TsCode;
-
-        if (IsLenientModule())
-            _diagnostics.AddWarning(code, message, location, tsCode);
-        else
-            _diagnostics.AddError(code, message, location, tsCode);
-    }
-
-    /// <summary>
-    /// Records a type checking error from a raw message.
-    /// </summary>
-    private void RecordTypeError(string message, int? line = null)
-    {
-        if (_suppressDiagnostics > 0) return;
-
-        SourceLocation? location = line.HasValue
-            ? new SourceLocation(_filePath, line.Value)
-            : null;
-        if (IsLenientModule())
-            _diagnostics.AddWarning(DiagnosticCode.TypeError, message, location);
-        else
-            _diagnostics.AddError(DiagnosticCode.TypeError, message, location);
+            Location = location,
+            Severity = IsLenientModule() && diagnostic.Severity == DiagnosticSeverity.Error
+                ? DiagnosticSeverity.Warning
+                : diagnostic.Severity,
+        });
     }
 
     /// <summary>
@@ -2068,6 +2031,7 @@ public partial class TypeChecker
         _currentModule = null;
         _filePath = null;
         _currentStatementLine = null;
+        ThrowIfCancellationRequested();
         return _typeMap;
     }
 
@@ -2173,16 +2137,21 @@ public partial class TypeChecker
     {
         using (new EnvironmentScope(this, scriptEnv))
         {
-            try { PreRegisterTypeDeclarations(library.Statements); }
-            catch { /* keep binding the remaining declarations below */ }
-            try { HoistClassDeclarations(library.Statements); }
-            catch { }
-            try { HoistFunctionDeclarations(library.Statements); }
-            catch { }
-            try { HoistVarDeclarations(library.Statements); }
-            catch { }
-            try { HoistLexicalDeclarations(library.Statements); }
-            catch { }
+            // Default libraries are trusted declaration inputs. Unsupported type constructs
+            // may be skipped, but cancellation and compiler defects must reach the caller.
+            void BindDeclarations(Action bind)
+            {
+                ThrowIfCancellationRequested();
+                try { bind(); }
+                catch (TypeCheckException) { }
+                ThrowIfCancellationRequested();
+            }
+
+            BindDeclarations(() => PreRegisterTypeDeclarations(library.Statements));
+            BindDeclarations(() => HoistClassDeclarations(library.Statements));
+            BindDeclarations(() => HoistFunctionDeclarations(library.Statements));
+            BindDeclarations(() => HoistVarDeclarations(library.Statements));
+            BindDeclarations(() => HoistLexicalDeclarations(library.Statements));
 
             _suppressDiagnostics++;
             bool previousRecoveryMode = _recoveryMode;
@@ -2191,15 +2160,7 @@ public partial class TypeChecker
             {
                 foreach (var statement in library.Statements)
                 {
-                    try
-                    {
-                        CheckStmt(statement);
-                    }
-                    catch (Exception)
-                    {
-                        // A single declaration must not prevent later globals in
-                        // the same standard library from being available.
-                    }
+                    BindDeclarations(() => CheckStmt(statement));
                 }
             }
             finally
