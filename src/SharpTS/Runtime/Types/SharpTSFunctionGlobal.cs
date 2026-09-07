@@ -1,9 +1,12 @@
+using System.Text.RegularExpressions;
+using SharpTS.Parsing;
+
 namespace SharpTS.Runtime.Types;
 
 /// <summary>
 /// Global <c>Function</c> constructor. The zero-argument form produces the
-/// spec-equivalent empty anonymous function; parsing parameter/body strings is
-/// deliberately rejected until the dynamic-source path can validate them.
+/// empty anonymous function. Source construction is limited to the documented
+/// return-this package-compatibility grammar in both execution modes.
 /// </summary>
 public sealed class SharpTSFunctionGlobal : ISharpTSCallable
 {
@@ -15,26 +18,23 @@ public sealed class SharpTSFunctionGlobal : ISharpTSCallable
 
     public object? Call(Execution.Interpreter interpreter, List<object?> arguments)
     {
-        if (arguments.Count == 1
-            && arguments[0] is string body
-            && body.Trim() == "return 42;")
+        string body = "";
+        if (arguments.Count != 0
+            && (arguments.Count != 1 || arguments[0] is not string source
+                || !Regex.IsMatch(source, FunctionConstructorContract.ReturnThisPattern, RegexOptions.NonBacktracking)))
         {
-            return new BuiltIns.BuiltInMethod(
-                "anonymous",
-                0,
-                static (_, _, _) => 42d);
+            throw new Exception(FunctionConstructorContract.UnsupportedSourceMessage);
         }
+        if (arguments.Count == 1)
+            body = (string)arguments[0]!;
 
-        if (arguments.Count != 0)
-        {
-            throw new Exception(
-                "Runtime Error: Dynamic Function() construction with source text is not supported.");
-        }
-
-        return new BuiltIns.BuiltInMethod(
-            "anonymous",
-            0,
-            static (_, _, _) => SharpTSUndefined.Instance);
+        // Use ordinary function execution and receiver binding. The supported
+        // bodies reference no bindings; an isolated sloppy scope prevents the
+        // caller's lexical variables, this, or strictness from leaking in.
+        var tokens = new Lexer("const fn = function anonymous() {\n" + body + "\n};").ScanTokens();
+        var declaration = (Stmt.Const)new Parser(tokens).ParseOrThrow()[0];
+        return new SharpTSArrowFunction((Expr.ArrowFunction)declaration.Initializer,
+            new RuntimeEnvironment(strictMode: false), hasOwnThis: true);
     }
 
     public object? GetMember(string name)

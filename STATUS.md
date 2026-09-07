@@ -62,7 +62,7 @@ irrelevant: `strictNullChecks` defaults on, most other strictness flags default 
 | Promises and scheduling | ✅ | Promise combinators, timers, microtasks, abort signals/controllers |
 | Web-shaped APIs | ✅ | URL, URLSearchParams, TextEncoder/Decoder, fetch primitives, streams, Blob, FormData |
 | `eval` | ⚠️ | Direct lexical eval in the interpreter; compiled mode uses indirect runtime eval and cannot see compiled locals. |
-| `Function` constructor | ❌ | Constructing functions from source strings is not supported. |
+| `Function` constructor | ⚠️ | Zero-argument construction and a bounded `return this` global-discovery body work in both modes; all other source construction is rejected. See the [execution contract](docs/execution-modes.md#function-construction). |
 
 ## 4. Node.js built-in modules
 

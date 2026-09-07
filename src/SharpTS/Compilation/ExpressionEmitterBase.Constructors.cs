@@ -13,21 +13,10 @@ namespace SharpTS.Compilation;
 /// </summary>
 public abstract partial class ExpressionEmitterBase
 {
-    private void EmitFunctionConstructorShell(List<Expr> arguments)
+    private void EmitFunctionConstructor(List<Expr> arguments)
     {
-        // Preserve left-to-right argument evaluation even though compiled mode
-        // does not yet compile the constructor's source strings into a body.
-        foreach (var argument in arguments)
-        {
-            EmitExpression(argument);
-            IL.Emit(OpCodes.Pop);
-        }
-
-        IL.Emit(OpCodes.Ldnull); // target
-        IL.Emit(OpCodes.Ldnull); // MethodInfo: a valid no-body callable shell
-        IL.Emit(OpCodes.Ldstr, "anonymous");
-        IL.Emit(OpCodes.Ldc_I4, Math.Max(0, arguments.Count - 1));
-        IL.Emit(OpCodes.Newobj, Ctx.Runtime!.TSFunctionCtorWithCache);
+        EmitArgsArrayWithSpread(arguments);
+        IL.Emit(OpCodes.Call, Ctx.Runtime!.FunctionConstructor);
         SetStackUnknown();
     }
 
@@ -342,7 +331,8 @@ public abstract partial class ExpressionEmitterBase
                 return true;
 
             case "Function":
-                EmitFunctionConstructorShell(arguments);
+                if (Resolver.HasVariable("Function") || Ctx.HasVisibleValueBinding("Function")) return false;
+                EmitFunctionConstructor(arguments);
                 return true;
 
             // --- String / Number / Boolean primitive wrappers ---

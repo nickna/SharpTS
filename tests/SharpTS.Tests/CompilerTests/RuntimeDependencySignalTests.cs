@@ -41,6 +41,20 @@ public class RuntimeDependencySignalTests
     }
 
     [Fact]
+    public void FunctionConstructorContract_RequiresNoRuntime()
+    {
+        var compiler = CompilerFor("""
+            const ctor: any = Function;
+            console.log(ctor()());
+            console.log(typeof (new ctor("return this;"))());
+            try { Function("return 42;"); } catch { console.log("rejected"); }
+            """);
+
+        Assert.Empty(compiler.RequiredSharpTSRuntimeReasons);
+        Assert.Equal(SharpTSRuntimeRequirements.None, compiler.RequiredSharpTSRuntimeRequirements);
+    }
+
+    [Fact]
     public void DynamicEval_RequiresRuntime()
     {
         var reasons = ReasonsFor("""

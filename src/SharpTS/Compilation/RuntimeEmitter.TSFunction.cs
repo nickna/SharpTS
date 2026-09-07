@@ -456,6 +456,8 @@ public partial class RuntimeEmitter
         ctorCacheIL.MarkLabel(noCachedMethodLabel);
         ctorCacheIL.Emit(OpCodes.Ret);
 
+        EmitFunctionConstructor(typeBuilder, runtime);
+
         // Static factory: public static $TSFunction GetOrCreate(MethodInfo method, string name, int length).
         // Returns a cached $TSFunction for the given method + JS metadata, creating one if
         // not present. Used only for function DECLARATIONS (target=null), where

@@ -117,6 +117,16 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notStringTypeLabel);
 
+        var notFunctionType = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldtoken, runtime.TSFunctionType);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
+        il.Emit(OpCodes.Bne_Un, notFunctionType);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, runtime.FunctionConstructor);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(notFunctionType);
+
         // System.Type (built-in or user class reference) → Activator.CreateInstance(type, args)
         var notTypeLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);

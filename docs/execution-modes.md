@@ -187,6 +187,31 @@ For supported language and library features, interpreted and compiled programs s
 same observable result. Every normal feature test should run in both modes. A backend-specific test
 or behavior needs an explicit reason and documentation.
 
+### Function construction
+
+Both modes support `Function()` and `new Function()` as fresh, empty anonymous functions
+with length zero and an `undefined` return value. General construction from source strings
+is unsupported and throws at construction time, including empty strings, numeric returns,
+invalid source, parameter strings, and non-string arguments. Arguments are evaluated normally
+before this check; unsupported source is neither executed nor silently ignored.
+
+For lodash/core-js global discovery, both modes also support a single string containing
+`return this`, with optional surrounding ECMAScript whitespace, horizontal whitespace between
+the two keywords, and an optional trailing semicolon. This is a bounded compatibility grammar;
+comments, additional statements, parentheses, and line terminators between `return` and `this`
+are unsupported. `Function('return this')()` returns `globalThis`. The returned function uses
+ordinary sloppy function receiver binding: object receivers supplied by a method call, `call`,
+`apply`, or `bind` are preserved, and nullish receivers resolve to the global object. It does
+not capture the caller's scope, receiver, or strictness.
+
+These rules apply to direct calls, `new`, aliases, and access through `globalThis.Function`.
+A local binding named `Function` is invoked normally. Compiled support is emitted into the
+output assembly and adds no SharpTS runtime dependency or dynamic-source capability; the same
+contract works with `--standalone`. This compatibility surface does not imply support for
+general dynamic `Function` bodies or reuse `eval` semantics.
+
+### Backend deviations
+
 Known contractual deviations include:
 
 - Interpreted `eval` is lexical; compiled `eval` is indirect and cannot see compiled locals.

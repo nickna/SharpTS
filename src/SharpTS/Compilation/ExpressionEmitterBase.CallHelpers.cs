@@ -40,17 +40,11 @@ public abstract partial class ExpressionEmitterBase
         if (TryEmitCjsRequireCall(c))
             return;
 
-        if (TryEmitFunctionReturnThisIdiom(c))
-            return;
-
-        // Function(...) constructs a callable function object. Dynamic source
-        // compilation remains outside compiled mode, but the callable carrier
-        // itself must still have Function branding and identity semantics.
+        // Share the runtime contract with aliased and constructed calls.
         if (c.Callee is Expr.Variable { Name.Lexeme: "Function" }
-            && Ctx.Locals.GetLocal("Function") == null
-            && !Ctx.Functions.ContainsKey(Ctx.ResolveFunctionName("Function")))
+            && !Resolver.HasVariable("Function") && !Ctx.HasVisibleValueBinding("Function"))
         {
-            EmitFunctionConstructorShell(c.Arguments);
+            EmitFunctionConstructor(c.Arguments);
             return;
         }
 
@@ -1844,31 +1838,6 @@ public abstract partial class ExpressionEmitterBase
             return true;
         var objType = Ctx.TypeMap?.Get(obj);
         return objType != null && Ctx.TypeEmitterRegistry.GetStrategy(objType) != null;
-    }
-
-    /// <summary>
-    /// lodash/core-js global-detection idiom: <c>Function('return this')()</c>.
-    /// The Function constructor isn't supported in either mode, but this probe
-    /// just means "give me globalThis". Compiled mode represents globalThis in
-    /// value position as the runtime sentinel (#271, see EmitVariable), so emit
-    /// the same value — packages probing via
-    /// <c>freeGlobal || freeSelf || Function('return this')()</c> get a real
-    /// root object whose <c>.Object</c>/<c>.Math</c> resolve to real constructors.
-    /// </summary>
-    protected bool TryEmitFunctionReturnThisIdiom(Expr.Call c)
-    {
-        if (c.Arguments.Count == 0
-            && c.Callee is Expr.Call inner
-            && inner.Callee is Expr.Variable { Name.Lexeme: "Function" }
-            && inner.Arguments.Count == 1
-            && inner.Arguments[0] is Expr.Literal { Value: string body }
-            && body.Trim() == "return this")
-        {
-            IL.Emit(OpCodes.Ldsfld, Ctx.Runtime!.GlobalThisSingletonField);
-            SetStackUnknown();
-            return true;
-        }
-        return false;
     }
 
     /// <summary>
