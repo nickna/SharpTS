@@ -283,42 +283,7 @@ public partial class ILEmitter
     /// Emits a default value for the given type.
     /// Used when padding missing arguments (fallback when no overload matches).
     /// </summary>
-    public new void EmitDefaultForType(Type type)
-    {
-        if (type == typeof(double))
-        {
-            IL.Emit(OpCodes.Ldc_R8, 0.0);
-        }
-        else if (type == typeof(int))
-        {
-            IL.Emit(OpCodes.Ldc_I4_0);
-        }
-        else if (type == typeof(bool))
-        {
-            IL.Emit(OpCodes.Ldc_I4_0);
-        }
-        else if (type == typeof(float))
-        {
-            IL.Emit(OpCodes.Ldc_R4, 0.0f);
-        }
-        else if (type == typeof(long))
-        {
-            IL.Emit(OpCodes.Ldc_I8, 0L);
-        }
-        else if (type.IsValueType)
-        {
-            // For other value types, use initobj with a local
-            var local = IL.DeclareLocal(type);
-            IL.Emit(OpCodes.Ldloca, local);
-            IL.Emit(OpCodes.Initobj, type);
-            IL.Emit(OpCodes.Ldloc, local);
-        }
-        else
-        {
-            // Reference types default to null
-            IL.Emit(OpCodes.Ldnull);
-        }
-    }
+    public new void EmitDefaultForType(Type type) => base.EmitDefaultForType(type);
 
     public override void EmitExpressionAsDouble(Expr expr)
     {
