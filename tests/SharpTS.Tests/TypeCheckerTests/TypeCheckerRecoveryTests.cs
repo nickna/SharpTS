@@ -1,4 +1,5 @@
 using SharpTS.Diagnostics;
+using SharpTS.Modules;
 using SharpTS.Parsing;
 using SharpTS.TypeSystem;
 using SharpTS.TypeSystem.Exceptions;
@@ -12,6 +13,180 @@ namespace SharpTS.Tests.TypeCheckerTests;
 /// </summary>
 public class TypeCheckerRecoveryTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void UnexpectedFailure_PropagatesWithoutBecomingDiagnostic(bool defaultLibrary)
+    {
+        var failure = new InvalidOperationException("checker defect", new Exception("original cause"));
+        TypeChecker checker = CheckerWithCallback(() => throw failure);
+
+        Exception actual = Assert.Throws<InvalidOperationException>(() =>
+            CheckInjectedStatement(checker, defaultLibrary));
+
+        Assert.Same(failure, actual);
+        Assert.Empty(checker.GetDiagnostics());
+        Assert.Contains(nameof(CallbackType.ToString), actual.StackTrace);
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public void CancellationDuringLastStatement_Propagates(bool defaultLibrary, bool throwImmediately)
+    {
+        using var cancellation = new CancellationTokenSource();
+        TypeChecker checker = CheckerWithCallback(() =>
+        {
+            cancellation.Cancel();
+            if (throwImmediately)
+                cancellation.Token.ThrowIfCancellationRequested();
+        }).WithCancellation(cancellation.Token);
+
+        var failure = Assert.Throws<OperationCanceledException>(() =>
+            CheckInjectedStatement(checker, defaultLibrary));
+        Assert.Equal(cancellation.Token, failure.CancellationToken);
+        Assert.DoesNotContain(checker.GetDiagnostics(), diagnostic =>
+            diagnostic.Message.Contains("canceled", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void FailedRecovery_RestoresStrictChecking()
+    {
+        TypeChecker checker = CheckerWithCallback(() => throw new InvalidOperationException());
+        Assert.Throws<InvalidOperationException>(() => CheckInjectedStatement(checker, false));
+
+        Assert.Throws<TypeMismatchException>(() => checker.Check(ParseStatements(
+            "{ let value: number = 'wrong'; }")));
+    }
+
+    [Fact]
+    public void SpeculativeFunctionChecking_DoesNotHideInternalFailure()
+    {
+        var failure = new InvalidOperationException("inference defect");
+        TypeChecker checker = CheckerWithCallback(() => throw failure);
+
+        Assert.Same(failure, Assert.Throws<InvalidOperationException>(() =>
+            checker.CheckWithRecovery(ParseStatements("function infer() { let value: number = injected; }"))));
+        Assert.Empty(checker.GetDiagnostics());
+    }
+
+    [Theory]
+    [InlineData(DiagnosticSeverity.Error, false, DiagnosticSeverity.Error)]
+    [InlineData(DiagnosticSeverity.Warning, false, DiagnosticSeverity.Warning)]
+    [InlineData(DiagnosticSeverity.Info, false, DiagnosticSeverity.Info)]
+    [InlineData(DiagnosticSeverity.Error, true, DiagnosticSeverity.Warning)]
+    [InlineData(DiagnosticSeverity.Info, true, DiagnosticSeverity.Info)]
+    public void Recovery_PreservesStructuredDiagnostic(
+        DiagnosticSeverity severity, bool commonJs, DiagnosticSeverity expectedSeverity)
+    {
+        var original = new Diagnostic(
+            severity,
+            DiagnosticCode.TypeOperation,
+            "Type Error: this is the actual message: with punctuation",
+            new SourceLocation("original.ts", 7, 9, 8, 12),
+            new Dictionary<string, object> { ["context"] = "retained" },
+            "TS2349");
+        TypeChecker checker = CheckerWithCallback(() => throw new TypeCheckException(original))
+            .WithFilePath("fallback.ts");
+        if (commonJs)
+            SetCheckerField(checker, "_currentModule", new ParsedModule("dependency.cjs", []) { IsCommonJs = true });
+
+        Diagnostic actual = Assert.Single(CheckInjectedStatement(checker, false));
+
+        Assert.Equal(original with { Severity = expectedSeverity }, actual);
+        Assert.Same(original.Properties, actual.Properties);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Recovery_FillsOnlyMissingLocation(bool hasLocation)
+    {
+        var original = new Diagnostic(
+            DiagnosticSeverity.Error, DiagnosticCode.TypeError, "source error",
+            hasLocation ? new SourceLocation(null, 7, 9, 8, 12) : null,
+            TsCode: "TS2349");
+        TypeChecker checker = CheckerWithCallback(() => throw new TypeCheckException(original))
+            .WithFilePath("fallback.ts");
+
+        Diagnostic actual = Assert.Single(CheckInjectedStatement(checker, false));
+
+        Assert.Equal(hasLocation
+            ? new SourceLocation("fallback.ts", 7, 9, 8, 12)
+            : new SourceLocation("fallback.ts", 3), actual.Location);
+    }
+
+    [Fact]
+    public void DefaultLibrary_SourceErrorsDoNotPreventLaterGlobals()
+    {
+        string directory = Path.GetFullPath("recovery-test");
+        var library = new ParsedModule(Path.Combine(directory, "lib.test.d.ts"), ParseStatements(
+            "missing(); declare var available: string;"))
+        {
+            IsDefaultLibrary = true,
+            IsDeclarationFile = true,
+        };
+        var source = new ParsedModule(Path.Combine(directory, "main.ts"), ParseStatements(
+            "const value: number = available;"));
+        var checker = new TypeChecker();
+
+        checker.CheckModules([library, source], new ModuleResolver(directory));
+
+        Diagnostic error = Assert.Single(checker.GetDiagnostics());
+        Assert.Equal("TS2322", error.TsCode);
+        Assert.Equal(source.Path, error.FilePath);
+    }
+
+    private static IReadOnlyList<Diagnostic> CheckInjectedStatement(TypeChecker checker, bool defaultLibrary)
+    {
+        List<Stmt> statements = ParseStatements("\n\nlet value: number = injected;");
+        if (!defaultLibrary)
+            return checker.CheckWithRecovery(statements).Diagnostics;
+
+        string directory = Path.GetFullPath("recovery-test");
+        var library = new ParsedModule(Path.Combine(directory, "lib.test.d.ts"), statements)
+        {
+            IsDefaultLibrary = true,
+            IsDeclarationFile = true,
+        };
+        checker.CheckModules([library], new ModuleResolver(directory));
+        return checker.GetDiagnostics();
+    }
+
+    private static TypeChecker CheckerWithCallback(Action callback)
+    {
+        var checker = new TypeChecker();
+        var environment = new TypeEnvironment();
+        environment.Define("injected", new CallbackType(callback));
+        SetCheckerField(checker, "_environment", environment);
+        return checker;
+    }
+
+    private static void SetCheckerField(TypeChecker checker, string name, object value) =>
+        typeof(TypeChecker).GetField(name,
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+            .SetValue(checker, value);
+
+    // Formatting an assignment mismatch happens inside statement checking, after hoisting. This
+    // injects deterministic failures/cancellation without adding a production-only test hook.
+    private sealed record CallbackType(Action Callback) : TypeInfo
+    {
+        public override string ToString()
+        {
+            Callback();
+            return "callback type";
+        }
+    }
+
+    private static List<Stmt> ParseStatements(string source)
+    {
+        var parsed = new Parser(new Lexer(source).ScanTokens()).Parse();
+        Assert.True(parsed.IsSuccess);
+        return parsed.Statements;
+    }
+
     #region Helpers
 
     private static TypeCheckDiagnosticResult CheckWithRecovery(string source)

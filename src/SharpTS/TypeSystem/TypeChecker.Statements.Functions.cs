@@ -352,7 +352,7 @@ public partial class TypeChecker
         if (typeAnnotation is not null)
         {
             try { _environment.Define(name.Lexeme, ResolveAnnotation(typeAnnotation, typeAnnotationNode)!); }
-            catch { _environment.Define(name.Lexeme, TypeInfo.Any.Shared); }
+            catch (TypeCheckException) { _environment.Define(name.Lexeme, TypeInfo.Any.Shared); }
             return;
         }
 
@@ -838,9 +838,9 @@ public partial class TypeChecker
                 if (!suppress)
                     MarkUndefinedReachableNumericSlots(body, funcStmt.Parameters);
             }
-            catch (Exception) when (suppress)
+            catch (TypeCheckException) when (suppress)
             {
-                // Speculative inference is best-effort: degrade to the `any` placeholder on any failure.
+                // An expected source error leaves the speculative `any` placeholder in place.
                 bodyFailed = true;
             }
 

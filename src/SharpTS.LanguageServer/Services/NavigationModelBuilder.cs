@@ -4,6 +4,7 @@ using SharpTS.Configuration;
 using SharpTS.Modules;
 using SharpTS.Parsing;
 using SharpTS.TypeSystem;
+using SharpTS.TypeSystem.Exceptions;
 using Range = OmniSharp.Extensions.LanguageServer.Protocol.Models.Range;
 
 namespace SharpTS.LanguageServer.Services;
@@ -48,16 +49,10 @@ internal static class NavigationModelBuilder
         string? configPath = TsConfigLoader.Discover(directory);
         if (configPath is not null)
         {
+            NavigationWorkspace? configuredWorkspace = null;
             try
             {
-                ProjectBuildResult configured = TryBuildProject(
-                    absolutePath,
-                    overlay,
-                    NavigationWorkspace.FromProject(TsConfigLoader.Load(configPath)),
-                    requireMembership: true,
-                    cancellationToken);
-                if (configured.Model is not null)
-                    return configured.Model;
+                configuredWorkspace = NavigationWorkspace.FromProject(TsConfigLoader.Load(configPath));
             }
             catch (OperationCanceledException)
             {
@@ -66,6 +61,17 @@ internal static class NavigationModelBuilder
             catch
             {
                 // Fall through to an explicitly incomplete open-document model.
+            }
+            if (configuredWorkspace is not null)
+            {
+                ProjectBuildResult configured = TryBuildProject(
+                    absolutePath,
+                    overlay,
+                    configuredWorkspace,
+                    requireMembership: true,
+                    cancellationToken);
+                if (configured.Model is not null)
+                    return configured.Model;
             }
         }
 
@@ -122,9 +128,13 @@ internal static class NavigationModelBuilder
         bool requireMembership,
         CancellationToken cancellationToken)
     {
+        ModuleResolver resolver;
+        List<ParsedModule> modulesToCheck;
+        CheckedNavigationModel model;
+        bool isComplete;
         try
         {
-            var resolver = new ModuleResolver(
+            resolver = new ModuleResolver(
                 workspace.BasePath,
                 workspace.ResolutionOptions,
                 overlay,
@@ -226,19 +236,15 @@ internal static class NavigationModelBuilder
                 .WithFilePath(absolutePath)
                 .WithCancellation(cancellationToken);
             checker.SetDecoratorMode(workspace.DecoratorMode);
-            checker.CheckModules(
-                resolver.GetModulesInOrder(connectedRoots),
-                resolver);
-            var model = new CheckedNavigationModel(
+            modulesToCheck = resolver.GetModulesInOrder(connectedRoots);
+            model = new CheckedNavigationModel(
                 checker,
                 document,
                 new NavigationGraphScope(
                     workspace.ConfigPath,
                     workspace.RootFiles,
                     workspace.IsConfigured && isMember && allRootsLoaded));
-            return new ProjectBuildResult(
-                model,
-                workspace.IsConfigured && allRootsLoaded);
+            isComplete = workspace.IsConfigured && allRootsLoaded;
         }
         catch (OperationCanceledException)
         {
@@ -248,6 +254,20 @@ internal static class NavigationModelBuilder
         {
             return new ProjectBuildResult(null, IsComplete: false);
         }
+
+        // The checker already recovers expected source errors. Internal checking failures must
+        // reach the host's observation boundary instead of silently triggering a fallback model.
+        try
+        {
+            model.Checker.CheckModules(modulesToCheck, resolver);
+        }
+        catch (TypeCheckException)
+        {
+            // Source errors from a preparatory pass can still require a standalone check.
+            return new ProjectBuildResult(null, IsComplete: false);
+        }
+        cancellationToken.ThrowIfCancellationRequested();
+        return new ProjectBuildResult(model, isComplete);
     }
 
     private static HashSet<ParsedModule> FindConnectedComponent(

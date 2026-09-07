@@ -20,6 +20,7 @@ public sealed class DiagnosticsCoordinator : IDisposable
     private readonly DocumentDependencyGraph _graph;
     private readonly DiagnosticsSettings _settings;
     private readonly Action<PublishDiagnosticsParams> _publish;
+    private readonly Action<Exception> _reportFailure;
     private readonly TimeSpan _debounce;
     private readonly Dictionary<string, CancellationTokenSource> _documentCancellation =
         new(StringComparer.OrdinalIgnoreCase);
@@ -49,7 +50,8 @@ public sealed class DiagnosticsCoordinator : IDisposable
         DocumentDependencyGraph graph,
         DiagnosticsSettings settings,
         Action<PublishDiagnosticsParams> publish,
-        TimeSpan debounce)
+        TimeSpan debounce,
+        Action<Exception>? reportFailure = null)
     {
         _store = store;
         _diagnostics = diagnostics;
@@ -57,6 +59,9 @@ public sealed class DiagnosticsCoordinator : IDisposable
         _settings = settings;
         _publish = publish;
         _debounce = debounce;
+        // Stdio is the LSP transport. Internal failures belong on the host's stderr channel.
+        _reportFailure = reportFailure ?? (exception =>
+            Console.Error.WriteLine($"SharpTS background diagnostics failed: {exception}"));
     }
 
     public void Queue(string uri)
@@ -147,53 +152,39 @@ public sealed class DiagnosticsCoordinator : IDisposable
         string uri,
         CancellationToken cancellationToken)
     {
-        try
-        {
-            await Task.Delay(_debounce, cancellationToken);
-            if (!_store.TryCapture(uri, out DocumentRequestSnapshot? snapshot))
-                return;
+        await Task.Delay(_debounce, cancellationToken);
+        if (!_store.TryCapture(uri, out DocumentRequestSnapshot? snapshot))
+            return;
 
-            cancellationToken.ThrowIfCancellationRequested();
-            IReadOnlyList<Parsing.Stmt> statements = _diagnostics.GetStatements(
-                snapshot.Document,
-                cancellationToken);
-            IReadOnlySet<string> affected = _graph.Update(
-                snapshot.Document,
-                snapshot.TextOverlay,
-                statements,
-                cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
+        IReadOnlyList<Parsing.Stmt> statements = _diagnostics.GetStatements(
+            snapshot.Document,
+            cancellationToken);
+        IReadOnlySet<string> affected = _graph.Update(
+            snapshot.Document,
+            snapshot.TextOverlay,
+            statements,
+            cancellationToken);
 
-            await AnalyzeAndPublishAsync(snapshot, affected, cancellationToken);
-        }
-        catch (OperationCanceledException)
-        {
-            // A newer document/workspace version owns publication now.
-        }
+        await AnalyzeAndPublishAsync(snapshot, affected, cancellationToken);
     }
 
     private async Task RunAffectedDocumentsAsync(
         IEnumerable<string> affectedPaths,
         CancellationToken cancellationToken)
     {
-        try
+        await Task.Delay(_debounce, cancellationToken);
+        HashSet<string> pending = affectedPaths.ToHashSet(
+            StringComparer.OrdinalIgnoreCase);
+        foreach (DocumentSnapshot open in _store.SnapshotDocuments())
         {
-            await Task.Delay(_debounce, cancellationToken);
-            HashSet<string> pending = affectedPaths.ToHashSet(
-                StringComparer.OrdinalIgnoreCase);
-            foreach (DocumentSnapshot open in _store.SnapshotDocuments())
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                if (open.FilePath is null || !pending.Contains(open.FilePath))
-                    continue;
-                if (!_store.TryCapture(open.Uri, out DocumentRequestSnapshot? snapshot))
-                    continue;
+            cancellationToken.ThrowIfCancellationRequested();
+            if (open.FilePath is null || !pending.Contains(open.FilePath))
+                continue;
+            if (!_store.TryCapture(open.Uri, out DocumentRequestSnapshot? snapshot))
+                continue;
 
-                Publish(snapshot, snapshot.Document, cancellationToken);
-            }
-        }
-        catch (OperationCanceledException)
-        {
-            // A newer document/workspace version owns publication now.
+            Publish(snapshot, snapshot.Document, cancellationToken);
         }
     }
 
@@ -256,30 +247,40 @@ public sealed class DiagnosticsCoordinator : IDisposable
 
     private void Track(Task task)
     {
+        // Drain the observation, including failure reporting, rather than the faulted analysis.
+        var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         lock (_gate)
-            _pending.Add(task);
-        _ = ObserveAsync(task);
+            _pending.Add(completion.Task);
+        _ = ObserveAsync(task, completion);
     }
 
     [SuppressMessage(
         "Usage",
         "VSTHRD003",
         Justification = "Background diagnostic tasks are isolated, caught, and never synchronously blocked.")]
-    private async Task ObserveAsync(Task task)
+    private async Task ObserveAsync(Task task, TaskCompletionSource completion)
     {
         try
         {
             await task.ConfigureAwait(false);
         }
-        catch (Exception)
+        catch (OperationCanceledException)
+        {
+            // A newer document/workspace version owns publication now.
+        }
+        catch (Exception ex)
         {
             // Diagnostics are advisory. A failed analysis must not terminate the LSP process;
             // the next edit creates a fresh version and retries the pipeline.
+            _reportFailure(ex);
         }
         finally
         {
             lock (_gate)
-                _pending.Remove(task);
+            {
+                _pending.Remove(completion.Task);
+                completion.SetResult();
+            }
         }
     }
 
