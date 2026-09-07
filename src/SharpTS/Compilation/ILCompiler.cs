@@ -245,7 +245,6 @@ public partial class ILCompiler
     private bool _hosted;
     private TypeBuilder? _hostedRuntimeType;
     private TypeBuilder? _hostedFactoryType;
-    private readonly Dictionary<string, List<MethodBuilder>> _hostedModuleSteps = [];
     private readonly Dictionary<string, string> _hostedModuleRunnerKeys = [];
     private readonly Dictionary<string, FieldBuilder> _moduleInitializedFields = [];
 
