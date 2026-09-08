@@ -151,6 +151,7 @@ function useStateImpl(initial: any): any[] {
         hook = { kind: "state", value: typeof initial === "function" ? (initial as any)() : initial, pending: [], setter: null as any };
         hook.setter = (next: any): void => {
             if (!component.mounted) return;
+
             hook.pending.push(next);
             component.root.invalidate();
         };
@@ -180,6 +181,7 @@ function useReducerImpl(reducer: any, initial: any): any[] {
         hook = { kind: "reducer", value: initial, pending: [], reducer: reducer as any, dispatch: null as any };
         hook.dispatch = (action: any): void => {
             if (!component.mounted) return;
+
             hook.pending.push(action);
             component.root.invalidate();
         };
@@ -353,7 +355,7 @@ function keyAction(handler: any, reporter: EventErrorReporter = null, tracker: E
     let result: any = null;
     if (typeof handler === "function") {
         result = (key: string, ctrl: boolean, alt: boolean, shift: boolean, meta: boolean, repeat: boolean): boolean =>
-            invokePredicate(() => handler({ key, ctrl, alt, shift, meta, repeat }), false, reporter, tracker) === true;
+            invokePredicate(() => handler({ key, ctrl, alt, shift, meta, repeat, isTextInput: DesktopBridge.IsTextInputEvent() }), false, reporter, tracker) === true;
     }
     return result;
 }
@@ -418,7 +420,7 @@ function hasProperty(value: any, name: string): boolean {
 function withCommon(node: GuiVNode, safe: any,
     reporter: EventErrorReporter, tracker: EventWorkTracker): GuiVNode {
     const margin = thickness(safe.margin);
-    return DesktopBridge.WithCommon(node,
+    const common = DesktopBridge.WithCommon(node,
         safe.width === undefined ? NaN : safe.width, safe.height === undefined ? NaN : safe.height,
         safe.minWidth === undefined ? 0 : safe.minWidth, safe.minHeight === undefined ? 0 : safe.minHeight,
         safe.maxWidth === undefined ? Infinity : safe.maxWidth, safe.maxHeight === undefined ? Infinity : safe.maxHeight,
@@ -443,6 +445,24 @@ function withCommon(node: GuiVNode, safe: any,
         hasProperty(safe, "onPointerUp"), hasProperty(safe, "onPointerCancel"),
         safe.allowDrop === true, dragOverAction(safe.onDragOver, reporter, tracker), dropAction(safe.onDrop, reporter, tracker),
         hasProperty(safe, "onDragOver"), hasProperty(safe, "onDrop")) as any;
+    common = DesktopBridge.WithTextInput(common, safe.textWrapping || "noWrap", safe.showButtonSpinner !== false) as any;
+    return DesktopBridge.WithDesktopInput(common,
+        safe.cursor || "default", safe.keyDownRouting || "bubble", safe.isHitTestVisible !== false,
+        hasProperty(safe, "focusable"), safe.focusable === true, safe.tabIndex || 0,
+        safe.isDefault === true, safe.isCancel === true, safe.inputGesture || null,
+        safe.offsetX === undefined ? NaN : safe.offsetX, safe.offsetY === undefined ? NaN : safe.offsetY,
+        action(safe.onFocus, reporter, tracker), action(safe.onBlur, reporter, tracker),
+        action(safe.onEditStarted, reporter, tracker), action(safe.onEditCompleted, reporter, tracker),
+        jsonNotification(safe.onScrollChanged, reporter, tracker), jsonPredicate(safe.onWheel, reporter, tracker)) as any;
+}
+
+function jsonNotification(handler: any, reporter: EventErrorReporter, tracker: EventWorkTracker): any {
+    if (typeof handler !== "function") return null;
+    return (json: string): void => invokeEvent(() => handler(JSON.parse(json)), reporter, tracker);
+}
+function jsonPredicate(handler: any, reporter: EventErrorReporter, tracker: EventWorkTracker): any {
+    if (typeof handler !== "function") return null;
+    return (json: string): boolean => invokePredicate(() => handler(JSON.parse(json)), false, reporter, tracker) === true;
 }
 
 function withStyle(node: GuiVNode, safe: any): GuiVNode {
@@ -473,6 +493,7 @@ function functionId(type: any): number {
 }
 
 class ReactiveRoot {
+    public window: DesktopWindow | null = null;
     private managed: any = null;
     private scheduled = false;
     private disposed = false;
@@ -620,7 +641,7 @@ class ReactiveRoot {
         const eventTracker = (value: any): void => this.trackEventWork(value);
         const ref: any = safe.ref === undefined ? null : safe.ref;
         const contentControl = element.type === "Button" || element.type === "CheckBox" ||
-            element.type === "RadioButton" || element.type === "ToggleSwitch";
+            element.type === "ToggleButton" || element.type === "RadioButton" || element.type === "ToggleSwitch";
         const contentValues: GuiChild[] = [];
         if (contentControl) flatten(safe.children, contentValues);
         const retainedContent = contentControl && contentValues.length === 1 &&
@@ -640,8 +661,8 @@ class ReactiveRoot {
             case "ScrollViewer": node = DesktopBridge.CreateScrollViewer(safe.horizontalScrollBarVisibility || "auto", safe.verticalScrollBarVisibility || "auto", children.nodes, key, ref); break;
             case "Separator": node = DesktopBridge.CreateSeparator(key, ref); break;
             case "TextBlock": node = DesktopBridge.CreateTextBlock(textContent(safe.children), safe.fontSize === undefined ? NaN : safe.fontSize, safe.fontWeight || "normal", safe.fontStyle || "normal", safe.textWrapping || "noWrap", safe.textAlignment || "left", safe.foreground || null, key, ref); break;
-            case "Button": case "CheckBox": case "RadioButton": case "ToggleSwitch": case "MenuItem": node = DesktopBridge.CreateContentControl(element.type, element.type === "MenuItem" ? (safe.header || "") : (retainedContent ? "" : textContent(safe.children)), safe.isChecked === true, safe.groupName || null, action(safe.onClick, eventReporter, eventTracker), boolAction(safe.onCheckedChanged, eventReporter, eventTracker), safe.background || null, safe.foreground || null, pad[0], pad[1], pad[2], pad[3], safe.fontSize === undefined ? NaN : safe.fontSize, safe.fontWeight || "normal", safe.horizontalContentAlignment || "center", safe.verticalContentAlignment || "center", children.nodes, key, ref); break;
-            case "TextBox": case "PasswordBox": node = DesktopBridge.CreateTextBox(element.type, element.type === "PasswordBox" ? (safe.value || "") : (safe.text || ""), safe.placeholder || null, safe.isReadOnly === true, safe.acceptsReturn === true, safe.maxLength === undefined ? 0 : safe.maxLength, element.type === "PasswordBox" && safe.revealPassword !== true, stringAction(element.type === "PasswordBox" ? safe.onValueChanged : safe.onTextChanged, eventReporter, eventTracker), key, ref); break;
+            case "Button": case "CheckBox": case "ToggleButton": case "RadioButton": case "ToggleSwitch": case "MenuItem": node = DesktopBridge.CreateContentControl(element.type, element.type === "MenuItem" ? (safe.header || "") : (retainedContent ? "" : textContent(safe.children)), safe.isChecked === true, safe.groupName || null, action(safe.onClick, eventReporter, eventTracker), boolAction(safe.onCheckedChanged, eventReporter, eventTracker), safe.background || null, safe.foreground || null, pad[0], pad[1], pad[2], pad[3], safe.fontSize === undefined ? NaN : safe.fontSize, safe.fontWeight || "normal", safe.horizontalContentAlignment || "center", safe.verticalContentAlignment || "center", children.nodes, key, ref); break;
+            case "TextBox": case "PasswordBox": node = DesktopBridge.CreateTextBox(element.type, element.type === "PasswordBox" ? (safe.value || "") : (safe.text || ""), safe.placeholder || null, safe.isReadOnly === true, safe.acceptsReturn === true, safe.appearance || "normal", safe.maxLength === undefined ? 0 : safe.maxLength, element.type === "PasswordBox" && safe.revealPassword !== true, stringAction(element.type === "PasswordBox" ? safe.onValueChanged : safe.onTextChanged, eventReporter, eventTracker), key, ref); break;
             case "ComboBox": node = DesktopBridge.CreateComboBox((safe.items || []).slice(), safe.selectedIndex === undefined ? -1 : safe.selectedIndex, numberAction(safe.onSelectionChanged, eventReporter, eventTracker), key, ref); break;
             case "ListBox": node = DesktopBridge.CreateListBox((safe.items || []).slice(), (safe.selectedIndices || []).slice(), safe.selectionMode || "single", indicesAction(safe.onSelectionChanged, eventReporter, eventTracker), key, ref); break;
             case "ItemsControl": case "TreeView": case "Canvas": node = DesktopBridge.CreateItemsControl(element.type, children.nodes, key, ref); break;
@@ -954,13 +975,27 @@ function createVirtualDataGridImpl(props: VirtualDataGridProps<any>): GuiElement
  */
 export const createVirtualDataGrid: CreateVirtualDataGrid = createVirtualDataGridImpl;
 
+/** Returns the explicit desktop window containing this component. @category Application Lifecycle */
+export function useDesktopWindow(): DesktopWindow {
+    const window = requireComponent("useDesktopWindow").root.window;
+    if (window === null) throw new Error("This component requires createDesktopApplication().");
+    return window;
+}
+/** Atomically replaces a UTF-8 file after flushing a sibling temporary file. @category Desktop Services */
+export function writeTextFileAtomic(path: string, text: string): Promise<void> {
+    return DesktopBridge.WriteTextFileAtomicAsync(path, text) as any;
+}
+/** Reads a UTF-8 file off the dispatcher with a byte limit. @category Desktop Services */
+export function readTextFile(path: string, maximumBytes: number = 104857600): Promise<string> {
+    return DesktopBridge.ReadTextFileAsync(path, maximumBytes) as any;
+}
 /** Condition that ends the desktop application message loop. @category Application Lifecycle */
 export type DesktopShutdownMode = "onLastWindowClose" | "onMainWindowClose" | "explicit";
 /** Built-in native control kind that can be targeted by application styles. @category Core and Composition */
 export type DesktopControlKind =
     "Control" | "Window" | "StackPanel" | "ToolBar" | "WrapPanel" | "DockPanel" | "Grid" |
     "Border" | "StatusBar" | "ScrollViewer" | "TextBlock" | "Button" | "TextBox" |
-    "PasswordBox" | "CheckBox" | "RadioButton" | "ToggleSwitch" | "ComboBox" | "ListBox" |
+    "PasswordBox" | "ToggleButton" | "CheckBox" | "RadioButton" | "ToggleSwitch" | "ComboBox" | "ListBox" |
     "NumericUpDown" | "DatePicker" | "TimePicker" | "Slider" | "ProgressBar" | "Separator" |
     "Image" | "TabControl" | "TabItem" | "Menu" | "MenuItem";
 /** Literal value stored in an application resource dictionary. @category Core and Composition */
@@ -1003,6 +1038,12 @@ export interface DesktopStyleSetters {
     margin?: DesktopStyleValue;
     /** Space inside the control border. */
     padding?: DesktopStyleValue;
+    /** Border thickness for a templated control. */
+    borderThickness?: DesktopStyleValue;
+    /** Border brush for a templated control. */
+    borderBrush?: DesktopStyleValue;
+    /** Uniform corner radius for a templated control. */
+    cornerRadius?: DesktopStyleValue;
     /** Background brush or color. */
     background?: DesktopStyleValue;
     /** Foreground brush or color. */
@@ -1049,6 +1090,12 @@ export interface DesktopWindowOptions {
 }
 /** Live desktop window created by DesktopApplication. @category Application Lifecycle */
 export interface DesktopWindow {
+    /** Creates a native owned window in the same application. */
+    createOwnedWindow(element: GuiChild, modal?: boolean): DesktopWindow;
+    /** Captures the focused control so a dialog can restore keyboard focus. */
+    captureFocus(): () => void;
+    /** Clears focus so native fields can commit their drafts before a document workflow. */
+    clearFocus(): void;
     /** Whether the native window and reactive root have been disposed. */
     readonly isDisposed: boolean;
     /** Promise completed after the native window closes. */
@@ -1216,6 +1263,14 @@ export function createDesktopApplication(options: DesktopApplicationOptions = {}
             runner.setEventWorkTracker(DesktopBridge.CreateEventWorkTracker(root));
             const closed = root.Completion as Promise<void>;
             window = {
+                createOwnedWindow(element: GuiChild, modal: boolean = true): DesktopWindow {
+                    return application.createWindow(element, { owner: window, modal });
+                },
+                captureFocus(): () => void {
+                    const reference: any = DesktopBridge.CaptureFocus(root);
+                    return (): void => { if (!root.IsDisposed) reference.focus(); };
+                },
+                clearFocus(): void { DesktopBridge.ClearFocus(root); },
                 get isDisposed(): boolean { return root.IsDisposed; },
                 closed,
                 activate(): void { root.Activate(); },
@@ -1226,6 +1281,7 @@ export function createDesktopApplication(options: DesktopApplicationOptions = {}
                 dispose(): void { root.Dispose(); },
             };
             (window as any).__managedRoot = root;
+            runner.window = window;
             try { runner.renderNow(); }
             catch (error) {
                 try { root.Dispose(); }
@@ -1269,7 +1325,7 @@ export function createDesktopApplication(options: DesktopApplicationOptions = {}
 }
 
 /** Button selected when a native message dialog closes. @category Desktop Services */
-export type MessageDialogResult = "ok" | "cancel" | "yes" | "no";
+export type MessageDialogResult = "ok" | "cancel" | "yes" | "no" | "save" | "discard";
 /** Options for showMessageDialog. @category Desktop Services */
 export interface MessageDialogOptions {
     /** Native dialog title. */
@@ -1277,7 +1333,7 @@ export interface MessageDialogOptions {
     /** Message displayed in the dialog body. */
     message: string;
     /** Set of native buttons displayed by the dialog. @defaultValue "ok" */
-    buttons?: "ok" | "okCancel" | "yesNo";
+    buttons?: "ok" | "okCancel" | "yesNo" | "saveDiscardCancel";
 }
 /** Named file-extension pattern group used by native file dialogs. @category Desktop Services */
 export interface FileFilter {
@@ -1364,6 +1420,8 @@ export interface ImageDimensions {
 }
 /** Options for showOpenFileDialog. @category Desktop Services */
 export interface OpenFileDialogOptions {
+    /** Folder initially shown by the file picker, when available. */
+    initialDirectory?: string;
     /** Native dialog title. */
     title?: string;
     /** Whether the user can choose multiple files. @defaultValue false */
@@ -1491,7 +1549,7 @@ export function showMessageDialog(options: MessageDialogOptions): Promise<Messag
 export function showOpenFileDialog(options: OpenFileDialogOptions = {}): Promise<string[]> {
     const result = DesktopBridge.ShowOpenFileDialogJsonAsync(
         options.title || "", options.allowMultiple === true,
-        JSON.stringify(options.filters || [])) as Promise<string>;
+        JSON.stringify(options.filters || []), options.initialDirectory || "") as Promise<string>;
     return result.then(json => JSON.parse(json) as string[]);
 }
 
@@ -1741,4 +1799,23 @@ export function printFile(path: string): Promise<void> { return DesktopBridge.Pr
  */
 export function showNotification(options: DesktopNotificationOptions): Promise<void> {
     return DesktopBridge.ShowDesktopNotificationAsync(options.title, options.message || "", options.silent === true) as any;
+}
+
+/** A cancellable graphics operation. Progress is monotonic from zero to one; native codec/filter calls are indivisible. @category Desktop Services */
+export interface DrawingTask<T> {
+    readonly result: Promise<T>;
+    readonly progress: number;
+    cancel(): void;
+}
+/** Starts cancellable rasterization on a worker. Cancel also rejects result. @category Desktop Services */
+export function startDrawingImage(document: DrawingDocument, options: RenderDrawingToImageOptions = {}): DrawingTask<DrawingImage> {
+    const task = DesktopBridge.StartDrawingImage(JSON.stringify(document), JSON.stringify(options));
+    return { result: (task.Result as Promise<string>).then(json => JSON.parse(json) as DrawingImage),
+        get progress(): number { return task.Progress; }, cancel(): void { task.Cancel(); } };
+}
+/** Starts cancellable scanline flood filling on a worker. @category Desktop Services */
+export function startDrawingFill(document: DrawingDocument, options: DrawingFloodFillOptions): DrawingTask<DrawingFloodFillResult> {
+    const task = DesktopBridge.StartDrawingFill(JSON.stringify(document), JSON.stringify(options));
+    return { result: (task.Result as Promise<string>).then(json => JSON.parse(json) as DrawingFloodFillResult),
+        get progress(): number { return task.Progress; }, cancel(): void { task.Cancel(); } };
 }

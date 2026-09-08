@@ -9,6 +9,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Styling;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using SkiaSharp;
@@ -28,17 +29,7 @@ public sealed class DesktopRendererTests : IDisposable
 {
     static DesktopRendererTests()
     {
-        if (Application.Current is null)
-        {
-            AppBuilder.Configure<TestApplication>()
-                .UseSkia()
-                .UseHeadless(new AvaloniaHeadlessPlatformOptions
-                {
-                    UseHeadlessDrawing = false,
-                    ShouldRenderOnUIThread = true,
-                })
-                .SetupWithoutStarting();
-        }
+        DesktopTestPlatform.EnsureInitialized();
     }
 
     private readonly TraceRecorder _trace = new(Environment.CurrentManagedThreadId);
@@ -46,9 +37,11 @@ public sealed class DesktopRendererTests : IDisposable
     private readonly List<int> _shutdownRequests = [];
     private readonly Queue<Action> _guestMicrotasks = [];
     private bool _deferGuestMicrotasks;
+    private readonly Xunit.Abstractions.ITestOutputHelper _output;
 
-    public DesktopRendererTests()
+    public DesktopRendererTests(Xunit.Abstractions.ITestOutputHelper output)
     {
+        _output = output;
         _runtimeRegistration = DesktopBridge.Configure(
             _trace,
             (_, _) => { },
@@ -194,6 +187,7 @@ public sealed class DesktopRendererTests : IDisposable
         Assert.True(main.IsMainWindow);
         Assert.Same(main, dialog.Owner);
         Assert.True(dialog.IsModal);
+        Assert.Equal(WindowStartupLocation.CenterOwner, dialog.Window!.WindowStartupLocation);
         Assert.False(_runtimeRegistration.Context.ShouldRequestShutdown(dialog));
 
         dialog.Dispose();
@@ -285,6 +279,65 @@ public sealed class DesktopRendererTests : IDisposable
         using DesktopApplicationSession application =
             DesktopBridge.CreateDesktopApplication("explicit");
         Assert.ThrowsAny<ArgumentException>(() => application.ConfigureStyleResources(json));
+    }
+
+    [Fact]
+    public void PlainTextInputPreservesItsBackgroundAndOriginWhileFocused()
+    {
+        DesktopRoot root = CreateRoot();
+        GuiVNode editorNode = new("TextBox", Key: "editor", Text: "Inline text", TextBoxAppearance: "plain",
+            Background: "#22ffffff", Foreground: "#112233");
+        root.Render(Window(Panel(0, editorNode)) with { Theme = "dark" });
+        root.Window!.Styles.Add(new Avalonia.Themes.Fluent.FluentTheme());
+        root.Window!.Show();
+        var editor = Assert.IsType<TextBox>(root.FindControl("editor"));
+        var theme = new Avalonia.Themes.Fluent.FluentTheme();
+        Assert.True(theme.TryGetResource(typeof(TextBox), ThemeVariant.Dark, out object? nativeTheme));
+        editor.Theme = Assert.IsType<ControlTheme>(nativeTheme);
+        editor.Focus();
+        editor.ApplyTemplate();
+        root.Window.UpdateLayout();
+        Dispatcher.UIThread.RunJobs();
+        var border = editor.GetVisualDescendants().OfType<Border>().FirstOrDefault(item => item.Name == "PART_BorderElement");
+        Assert.True(border is not null, string.Join(", ", editor.GetVisualDescendants().OfType<Control>().Select(item => item.GetType().Name + ":" + item.Name)));
+        Assert.Equal(Color.Parse("#22ffffff"), Assert.IsAssignableFrom<ISolidColorBrush>(border.Background).Color);
+        Assert.Equal(new Thickness(0), border.BorderThickness);
+        Assert.Equal(new Thickness(0), editor.Padding);
+        Assert.Equal(Color.Parse("#112233"), Assert.IsAssignableFrom<ISolidColorBrush>(editor.CaretBrush).Color);
+        root.Render(Window(Panel(0, editorNode with { Text = "Updated inline text" })));
+        Assert.Equal(0, editor.MinHeight);
+        Assert.Equal(new Thickness(0), editor.Padding);
+        root.Render(Window(Panel(0, editorNode with { TextBoxAppearance = "normal", Background = null })));
+        Dispatcher.UIThread.RunJobs();
+        Assert.Same(editor, root.FindControl("editor"));
+        Assert.False(editor.Resources.ContainsKey("TextControlBackgroundFocused"));
+        Assert.NotEqual(new Thickness(0), editor.Padding);
+    }
+
+    [Fact]
+    public void DesktopApplication_StylesTextEditorChromeAndToggleButtons()
+    {
+        using DesktopApplicationSession application = DesktopBridge.CreateDesktopApplication("explicit");
+        application.ConfigureStyleResources("""
+            { "styles": [
+              { "selector": { "control": "TextBox", "classes": ["canvas-text"] },
+                "setters": { "borderThickness": 0, "padding": 0, "cornerRadius": 0 } },
+              { "selector": { "control": "ToggleButton" },
+                "setters": { "cornerRadius": 4, "borderBrush": "#336699" } }
+            ] }
+            """);
+        DesktopRoot root = application.CreateWindowRoot(() => { }, null, false, true);
+        root.Render(Window(Panel(0,
+            new GuiVNode("TextBox", Key: "editor", Classes: ["canvas-text"]),
+            new GuiVNode("ToggleButton", Key: "tool"))));
+        root.Window!.Show();
+        Dispatcher.UIThread.RunJobs();
+        var editor = Assert.IsType<TextBox>(root.FindControl("editor"));
+        var tool = Assert.IsType<ToggleButton>(root.FindControl("tool"));
+        Assert.Equal(new Thickness(0), editor.BorderThickness);
+        Assert.Equal(new Thickness(0), editor.Padding);
+        Assert.Equal(new CornerRadius(4), tool.CornerRadius);
+        Assert.Equal(Color.Parse("#336699"), Assert.IsAssignableFrom<ISolidColorBrush>(tool.BorderBrush).Color);
     }
 
     [Fact]
@@ -740,6 +793,155 @@ public sealed class DesktopRendererTests : IDisposable
             DesktopBridge.RenderDrawingToImageJsonAsync(
                 splitDocument,
                 "{\"effects\":[{\"kind\":\"gaussianBlur\",\"radius\":65}]}")));
+    }
+
+    [Fact]
+    public void GraphicsTasksCancelBeforePublishingAndReportCompletion()
+    {
+        using var started = new ManualResetEventSlim();
+        using var release = new ManualResetEventSlim();
+        var task = new DesktopGraphicsTask(() =>
+        {
+            started.Set();
+            release.Wait();
+            GraphicsWorkScope.Checkpoint(0.5);
+            return "should not publish";
+        });
+        Assert.True(started.Wait(TimeSpan.FromSeconds(5)));
+        task.Cancel();
+        release.Set();
+        Assert.ThrowsAny<OperationCanceledException>(() => CompleteBackgroundTask(task.Result));
+        task.Cancel(); // cancellation after completion is safe
+        var completed = DesktopBridge.StartDrawingImage("{\"width\":8,\"height\":8,\"layers\":[]}", "{}");
+        Assert.Contains("data:image/png", CompleteBackgroundString(completed.Result));
+        Assert.Equal(1, completed.Progress);
+    }
+
+    [Fact]
+    public void DrawingWorkloadsReportRasterCostsAndBoundNativeThumbnailStorage()
+    {
+        var points = Enumerable.Range(0, 10000).Select(i => new { x = i % 2048, y = (i * 7) % 2048 }).ToArray();
+        string json = JsonSerializer.Serialize(new[] { new { kind = "polyline", points, stroke = "#2468ac", strokeThickness = 4 } });
+        var commands = DrawingSurface.Parse(json);
+        foreach (int size in new[] { 2048, 512, 40 })
+        {
+            using (DrawingGraphics.RenderBitmap(size, size, commands, size / 2048d, size / 2048d)) { }
+            long allocated = GC.GetAllocatedBytesForCurrentThread();
+            var timer = System.Diagnostics.Stopwatch.StartNew();
+            for (int i = 0; i < 5; i++)
+                using (DrawingGraphics.RenderBitmap(size, size, commands, size / 2048d, size / 2048d)) { }
+            timer.Stop();
+            _output.WriteLine($"10000-point stroke, {size}px: {timer.Elapsed.TotalMilliseconds / 5:F2} ms/raster; {(GC.GetAllocatedBytesForCurrentThread() - allocated) / 5} managed bytes/raster; {size * size * 4L} bytes per BGRA buffer.");
+        }
+        using DesktopRoot root = CreateRoot();
+        root.Render(Window(new GuiVNode("StackPanel", Children: new GuiVNode[] {
+            new GuiVNode("DrawingCanvas", Key: "empty", Width: 40, Height: 40, CoordinateWidth: 8192, CoordinateHeight: 8192),
+            new GuiVNode("DrawingCanvas", Key: "thumbnail", Width: 40, Height: 40, CoordinateWidth: 2048, CoordinateHeight: 2048, DrawingJson: json)})));
+        root.Window!.Show();
+        Dispatcher.UIThread.RunJobs();
+        using var frame = root.Window.CaptureRenderedFrame();
+        var field = typeof(DrawingSurface).GetField("_bitmap", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+        Assert.Null(field.GetValue(root.FindControl("empty")));
+        var bitmap = Assert.IsAssignableFrom<Avalonia.Media.Imaging.Bitmap>(field.GetValue(root.FindControl("thumbnail")));
+        Assert.Equal(new PixelSize(40,40), bitmap.PixelSize);
+    }
+
+    [Fact]
+    public void CommandScopeInterceptsNativeTextKeysAndCompositeFocusTracksEditing()
+    {
+        int focused = 0, blurred = 0, commandCount = 0;
+        bool textContext = false;
+        using DesktopRoot root = CreateRoot();
+        root.Render(new GuiVNode("Window", Width: 400, Height: 240,
+            KeyDown: (key, ctrl, _, _, _, _) => {
+                textContext = DesktopBridge.IsTextInputEvent();
+                if (ctrl && key == "Enter") { commandCount++; return true; }
+                return false;
+            }, Children: new GuiVNode[] {new GuiVNode("StackPanel", Children: new GuiVNode[] {
+                new GuiVNode("TextBox", Key: "text", Text: "hello", AcceptsReturn: true),
+                new GuiVNode("NumericUpDown", Key: "number", NullableValue: 40) {
+                    Focused = () => focused++, Blurred = () => blurred++ }})}) { KeyDownRouting = "tunnel" });
+        root.Window!.Show(); Dispatcher.UIThread.RunJobs();
+        DesktopTestingBridge.Focus(root,"text");
+        DesktopTestingBridge.PressKey(root,"Ctrl+Enter");
+        Assert.True(textContext);
+        Assert.Equal(1, commandCount);
+        Assert.Equal("hello", DesktopTestingBridge.GetText(root,"text"));
+        var reference = new DesktopRef();
+        reference.Attach(new ControlRef(root.FindControl("number")!));
+        Assert.True(reference.focus());
+        Assert.Equal(1, focused);
+        DesktopBridge.ClearFocus(root);
+        Assert.Equal(1, blurred);
+    }
+
+    [Fact]
+    public void AtomicSavePreservesExistingFileWhenReplacementFails()
+    {
+        string directory = Path.Combine(Path.GetTempPath(), "sharpts-atomic-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        string path = Path.Combine(directory, "document.txt");
+        try
+        {
+            CompleteBackgroundTask(DesktopBridge.WriteTextFileAtomicAsync(path, "first مرحبا"));
+            CompleteBackgroundTask(DesktopBridge.WriteTextFileAtomicAsync(path, "second 日本語"));
+            Assert.Equal("second 日本語", File.ReadAllText(path));
+            Assert.Throws<IOException>(() => CompleteBackgroundTask(DesktopBridge.ReadTextFileAsync(path, 2)));
+            if (OperatingSystem.IsWindows())
+            {
+                using (File.Open(path, FileMode.Open, FileAccess.Read, FileShare.None))
+                {
+                    Exception? failure = Record.Exception(() => CompleteBackgroundTask(DesktopBridge.WriteTextFileAtomicAsync(path, "lost")));
+                    Assert.True(failure is IOException or UnauthorizedAccessException, failure?.ToString());
+                }
+                Assert.Equal("second 日本語", File.ReadAllText(path));
+                Assert.Single(Directory.GetFiles(directory));
+            }
+        }
+        finally { Directory.Delete(directory, recursive: true); }
+    }
+
+    [Fact]
+    public void ThumbnailRasterizationKeepsLogicalCoordinatesAtBoundedResolution()
+    {
+        DrawingSurface.DrawingModel[] commands = DrawingSurface.Parse("[{\"kind\":\"rectangle\",\"x\":0,\"y\":0,\"width\":4096,\"height\":4096,\"fill\":\"#ff0000\"}]");
+        using var bitmap = DrawingGraphics.RenderBitmap(40, 40, commands, 40d / 4096, 40d / 4096);
+        Assert.Equal(new PixelSize(40, 40), bitmap.PixelSize);
+        Assert.Equal(40 * 40 * 4, bitmap.PixelSize.Width * bitmap.PixelSize.Height * 4);
+    }
+
+    [Theory]
+    [InlineData("مرحبا بالعالم")]
+    [InlineData("日本語と café e\u0301")]
+    [InlineData("one two three\nfour five")]
+    public void ExportedTextUsesTheNativeLayout(string value)
+    {
+        string json = JsonSerializer.Serialize(new[] { new { kind = "text", text = value, x = 0, y = 0,
+            width = 140, height = 72, fill = "#ff0000", fontSize = 20, fontFamily = "sans-serif", textWrapping = "wrap" } });
+        DrawingSurface.DrawingModel command = DrawingSurface.Parse(json)[0];
+        using var bitmap = DrawingGraphics.RenderBitmap(140, 72, [command]);
+        Assert.Equal(new PixelSize(140,72), bitmap.PixelSize);
+        using var output = new MemoryStream();
+        bitmap.Save(output, Avalonia.Media.Imaging.PngBitmapEncoderOptions.Default);
+        using SKBitmap pixels = SKBitmap.Decode(output.ToArray());
+        Assert.Contains(pixels.Pixels, pixel => pixel.Red > 0 && pixel.Alpha > 0);
+        Assert.Contains(pixels.Pixels, pixel => pixel.Alpha > 0 && pixel.Alpha < 255);
+        Assert.All(pixels.Pixels.Where(pixel => pixel.Alpha > 0), pixel => Assert.Equal((byte)255, pixel.Red));
+        var nativeText = new TextBlock
+        {
+            Text = value, FontFamily = new FontFamily("sans-serif"), FontSize = 20,
+            Foreground = Brushes.Red, TextWrapping = TextWrapping.Wrap,
+            Width = 140, Height = 72, ClipToBounds = true,
+        };
+        nativeText.Measure(new Size(140, 72));
+        TextOptions.SetTextRenderingMode(nativeText, TextRenderingMode.Antialias);
+        nativeText.Arrange(new Rect(0, 0, 140, 72));
+        using var native = new Avalonia.Media.Imaging.RenderTargetBitmap(new PixelSize(140, 72));
+        native.Render(nativeText);
+        using var expected = new MemoryStream();
+        native.Save(expected, Avalonia.Media.Imaging.PngBitmapEncoderOptions.Default);
+        using SKBitmap expectedPixels = SKBitmap.Decode(expected.ToArray());
+        Assert.Equal(expectedPixels.Pixels, pixels.Pixels);
     }
 
     [Fact]

@@ -156,6 +156,9 @@ public class UnionTypeGenerator
         for (int i = 0; i < types.Count; i++)
         {
             Type mappedType = _typeMapper.MapTypeInfoStrict(types[i]);
+            // TypeScript void is a value alternative (undefined) in a union, not a
+            // CLR void field, parameter, or property. Store its sentinel as object.
+            if (mappedType == typeof(void)) mappedType = typeof(object);
             mappedTypes.Add(mappedType);
 
             var field = typeBuilder.DefineField(

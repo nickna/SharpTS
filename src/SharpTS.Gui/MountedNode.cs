@@ -82,6 +82,11 @@ internal sealed class MountedNode(GuiVNode vnode, NodeDescriptor descriptor, Con
     public string? LastNullableStringValue { get; set; }
     public int[] LastIndices { get; set; } = [];
     public List<Action> ExtraUnsubscribe { get; } = [];
+    public List<Action> InteractionUnsubscribe { get; } = [];
+    public GuiVNode InteractionNode { get; set; } = vnode;
+    public int InteractionMask { get; set; }
+    public bool EditActive { get; set; }
+    public bool ScrollNotificationPending { get; set; }
     public Action<object?>? RefCallback { get; set; }
     public object? RefIdentity { get; set; }
     public bool RefAttached { get; set; }

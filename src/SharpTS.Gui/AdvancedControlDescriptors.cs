@@ -216,9 +216,20 @@ internal sealed partial class DrawingSurface : Control, Avalonia.Rendering.ICust
     public override void Render(DrawingContext context)
     {
         base.Render(context);
+        if (_commands.Length == 0) return;
         if (double.IsFinite(CoordinateWidth) && double.IsFinite(CoordinateHeight))
         {
-            _bitmap ??= DrawingGraphics.RenderBitmap(CoordinateWidth, CoordinateHeight, _commands);
+            // Rasterize only the displayed resolution (bounded by logical resolution). Thumbnails
+            // and fit-to-window views must not allocate a full-size bitmap per layer.
+            double scaling = TopLevel.GetTopLevel(this)?.RenderScaling ?? 1;
+            int width = Math.Max(1, (int)Math.Ceiling(Math.Min(CoordinateWidth, Bounds.Width * scaling)));
+            int height = Math.Max(1, (int)Math.Ceiling(Math.Min(CoordinateHeight, Bounds.Height * scaling)));
+            if (_bitmap is not null && (_bitmap.PixelSize.Width != width || _bitmap.PixelSize.Height != height))
+            {
+                _bitmap.Dispose();
+                _bitmap = null;
+            }
+            _bitmap ??= DrawingGraphics.RenderBitmap(width, height, _commands, width / CoordinateWidth, height / CoordinateHeight);
             context.DrawImage(_bitmap, new Rect(_bitmap.Size), new Rect(Bounds.Size));
             return;
         }

@@ -23,13 +23,14 @@ internal static partial class DrawingGraphics
         ValidatePixelCount(pixelWidth, pixelHeight);
     }
 
-    internal static Bitmap RenderBitmap(double width, double height, DrawingSurface.DrawingModel[] commands)
+    internal static Bitmap RenderBitmap(double width, double height, DrawingSurface.DrawingModel[] commands, double scaleX = 1, double scaleY = 1)
     {
         int pixelWidth = ToPixels(width, nameof(width));
         int pixelHeight = ToPixels(height, nameof(height));
         ValidatePixelCount(pixelWidth, pixelHeight);
         using SKSurface surface = CreateSurface(pixelWidth, pixelHeight);
         surface.Canvas.Clear(SKColors.Transparent);
+        surface.Canvas.Scale((float)scaleX, (float)scaleY);
         DrawCommands(DesktopBridge.RequireContext(), surface.Canvas, commands);
 
         var bitmap = new WriteableBitmap(
@@ -115,6 +116,7 @@ internal static partial class DrawingGraphics
     internal static void RenderDocumentToPng(DesktopRuntimeContext context, string documentJson, string path)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        GraphicsWorkScope.Checkpoint();
         DrawingDocumentModel document = ParseDocument(context, documentJson);
         byte[] png;
         using (SKSurface surface = RenderDocument(context, document))
@@ -139,6 +141,7 @@ internal static partial class DrawingGraphics
         string documentJson,
         string optionsJson)
     {
+        GraphicsWorkScope.Checkpoint();
         DrawingDocumentModel document = ParseDocument(context, documentJson);
         DrawingRenderOptionsModel options = JsonSerializer.Deserialize(
             optionsJson, GraphicsJsonContext.Default.DrawingRenderOptionsModel)
@@ -165,6 +168,7 @@ internal static partial class DrawingGraphics
         double x,
         double y)
     {
+        GraphicsWorkScope.Checkpoint();
         DrawingDocumentModel document = ParseDocument(context, documentJson);
         ValidatePoint(document, x, y);
         using SKSurface surface = RenderDocument(context, document);
@@ -187,6 +191,7 @@ internal static partial class DrawingGraphics
         string documentJson,
         string optionsJson)
     {
+        GraphicsWorkScope.Checkpoint();
         DrawingDocumentModel document = ParseDocument(context, documentJson);
         DrawingFloodFillOptionsModel options = JsonSerializer.Deserialize(
             optionsJson, GraphicsJsonContext.Default.DrawingFloodFillOptionsModel)
@@ -225,8 +230,10 @@ internal static partial class DrawingGraphics
             return !visited[index] && WithinTolerance(bitmap.GetPixel(pixelX, pixelY), target, tolerance);
         }
 
+        int processed = 0;
         while (seeds.Count > 0)
         {
+            GraphicsWorkScope.Checkpoint(0.35 + 0.5 * processed / (width * (double)height));
             int seed = seeds.Pop();
             int y = seed / width;
             int x = seed - y * width;
@@ -240,6 +247,7 @@ internal static partial class DrawingGraphics
             {
                 int index = y * width + current;
                 visited[index] = true;
+                processed++;
                 bitmap.SetPixel(current, y, replacement);
 
                 if (y > 0)
@@ -282,8 +290,10 @@ internal static partial class DrawingGraphics
         {
             SKCanvas canvas = surface.Canvas;
             canvas.Clear(document.Background is null ? SKColors.Transparent : Color(document.Background, 255));
+            int layerIndex = 0;
             foreach (DrawingLayerModel layer in document.Layers)
             {
+                GraphicsWorkScope.Checkpoint(0.05 + 0.3 * layerIndex++ / Math.Max(1, document.Layers.Length));
                 if (!layer.IsVisible || layer.Opacity <= 0) continue;
                 using SKSurface layerSurface = CreateSurface(width, height);
                 layerSurface.Canvas.Clear(SKColors.Transparent);
@@ -319,6 +329,7 @@ internal static partial class DrawingGraphics
 
     private static byte[] Encode(SKImage image)
     {
+        GraphicsWorkScope.Checkpoint(0.9);
         using SKData data = image.Encode(SKEncodedImageFormat.Png, 100)
             ?? throw new InvalidOperationException("Could not encode the drawing as PNG.");
         return data.ToArray();
@@ -341,6 +352,7 @@ internal static partial class DrawingGraphics
     {
         foreach (DrawingSurface.DrawingModel command in commands)
         {
+            GraphicsWorkScope.Checkpoint();
             using var paint = new SKPaint
             {
                 IsAntialias = true,
@@ -414,100 +426,54 @@ internal static partial class DrawingGraphics
 
     private static void DrawText(SKCanvas canvas, SKPaint paint, DrawingSurface.DrawingModel command, byte alpha)
     {
-        SKFontStyle typefaceStyle = command.FontWeight is "bold" or "semibold"
-            ? command.FontStyle == "italic" ? SKFontStyle.BoldItalic : SKFontStyle.Bold
-            : command.FontStyle == "italic" ? SKFontStyle.Italic : SKFontStyle.Normal;
-        string? family = command.FontFamily is null or "" or "sans-serif" ? null : command.FontFamily;
-        SKTypeface? ownedTypeface = SKTypeface.FromFamilyName(family, typefaceStyle);
-        SKTypeface typeface = ownedTypeface ?? SKTypeface.Default;
-        try
+        // Use the same Avalonia text layout, fallback and shaping path as TextBox/TextBlock.
+        // Layout is a UI-thread API; the rest of the graphics job remains on its worker.
+        SKBitmap RenderText()
         {
-            paint.Style = SKPaintStyle.Fill;
-            paint.Color = Color(command.Fill!, alpha);
-            using var font = new SKFont(typeface, (float)command.FontSize);
-            var bounds = new SKRect(
-                (float)command.X,
-                (float)command.Y,
-                (float)(command.X + command.Width),
-                (float)(command.Y + command.Height));
-            canvas.Save();
+            double scaleX = Math.Clamp(Math.Abs(canvas.TotalMatrix.ScaleX), 0.001, 1);
+            double scaleY = Math.Clamp(Math.Abs(canvas.TotalMatrix.ScaleY), 0.001, 1);
+            int width = Math.Max(1, (int)Math.Ceiling(command.Width * scaleX));
+            int height = Math.Max(1, (int)Math.Ceiling(command.Height * scaleY));
+            var text = new Avalonia.Controls.TextBlock
+            {
+                Text = command.Text,
+                FontFamily = new FontFamily(command.FontFamily ?? "sans-serif"),
+                FontSize = command.FontSize,
+                FontWeight = CommonProperties.ParseFontWeight(command.FontWeight ?? "normal"),
+                FontStyle = CommonProperties.ParseFontStyle(command.FontStyle ?? "normal"),
+                Foreground = Brush.Parse(command.Fill!),
+                TextWrapping = command.TextWrapping == "wrap" ? TextWrapping.Wrap : TextWrapping.NoWrap,
+                TextAlignment = CommonProperties.ParseTextAlignment(command.TextAlignment ?? "left"),
+                Width = command.Width,
+                Height = command.Height,
+                ClipToBounds = true,
+            };
+            // LCD subpixel glyphs require an opaque destination and corrupt transparent artwork.
+            TextOptions.SetTextRenderingMode(text, TextRenderingMode.Antialias);
+            text.Measure(new Size(command.Width, command.Height));
+            text.Arrange(new Rect(0, 0, command.Width, command.Height));
+            var pixels = new SKBitmap(new SKImageInfo(width, height, SKColorType.Bgra8888, SKAlphaType.Premul));
             try
             {
-                canvas.ClipRect(bounds);
-                SKFontMetrics metrics = font.Metrics;
-                float lineHeight = Math.Max(1, metrics.Descent - metrics.Ascent + metrics.Leading);
-                float baseline = bounds.Top - metrics.Ascent;
-                foreach (string line in LayoutTextLines(font, command.Text!, bounds.Width, command.TextWrapping == "wrap"))
-                {
-                    if (baseline + metrics.Descent > bounds.Bottom) break;
-                    float lineWidth = font.MeasureText(line);
-                    float x = command.TextAlignment switch
-                    {
-                        "center" => bounds.Left + (bounds.Width - lineWidth) / 2,
-                        "right" => bounds.Right - lineWidth,
-                        _ => bounds.Left,
-                    };
-                    canvas.DrawText(line, x, baseline, SKTextAlign.Left, font, paint);
-                    baseline += lineHeight;
-                }
+                using var textCanvas = new SKCanvas(pixels);
+                textCanvas.Clear(SKColors.Transparent);
+                // Render into the CPU surface directly. This keeps GPU font-atlas/readback
+                // behavior out of retained artwork and exported images.
+                Avalonia.Skia.Helpers.DrawingContextHelper.RenderAsync(textCanvas, text,
+                    new Rect(0, 0, command.Width, command.Height), new Vector(96 * scaleX, 96 * scaleY))
+                    .GetAwaiter().GetResult();
+                return pixels;
             }
-            finally
-            {
-                canvas.Restore();
-            }
+            catch { pixels.Dispose(); throw; }
         }
-        finally
-        {
-            ownedTypeface?.Dispose();
-        }
-    }
-
-    private static IEnumerable<string> LayoutTextLines(SKFont font, string text, float width, bool wrap)
-    {
-        string normalized = text.Replace("\r\n", "\n", StringComparison.Ordinal).Replace('\r', '\n');
-        foreach (string paragraph in normalized.Split('\n'))
-        {
-            if (!wrap || paragraph.Length == 0)
-            {
-                yield return paragraph;
-                continue;
-            }
-
-            string[] words = paragraph.Split(' ', StringSplitOptions.None);
-            var line = new StringBuilder();
-            foreach (string word in words)
-            {
-                string candidate = line.Length == 0 ? word : line + " " + word;
-                if (line.Length == 0 || font.MeasureText(candidate) <= width)
-                {
-                    line.Clear();
-                    line.Append(candidate);
-                    continue;
-                }
-
-                yield return line.ToString();
-                line.Clear();
-                if (font.MeasureText(word) <= width)
-                {
-                    line.Append(word);
-                    continue;
-                }
-
-                var segment = new StringBuilder();
-                foreach (char character in word)
-                {
-                    string expanded = segment.ToString() + character;
-                    if (segment.Length > 0 && font.MeasureText(expanded) > width)
-                    {
-                        yield return segment.ToString();
-                        segment.Clear();
-                    }
-                    segment.Append(character);
-                }
-                line.Append(segment);
-            }
-            yield return line.ToString();
-        }
+        GraphicsWorkScope.Checkpoint();
+        using SKBitmap bitmap = Avalonia.Threading.Dispatcher.UIThread.CheckAccess()
+            ? RenderText()
+            : Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(RenderText).GetAwaiter().GetResult();
+        GraphicsWorkScope.Checkpoint();
+        paint.Color = SKColors.White.WithAlpha(alpha);
+        canvas.DrawBitmap(bitmap, new SKRect((float)command.X, (float)command.Y,
+            (float)(command.X + command.Width), (float)(command.Y + command.Height)), paint);
     }
 
     private static void DrawImage(
@@ -532,6 +498,7 @@ internal static partial class DrawingGraphics
         {
             foreach (DrawingEffectModel effect in effects)
             {
+                GraphicsWorkScope.Checkpoint(0.6);
                 if (effect.Kind == "gaussianBlur" && effect.Radius == 0) continue;
                 using SKImage image = current.Snapshot();
                 SKSurface next = CreateSurface(image.Width, image.Height);

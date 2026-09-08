@@ -138,28 +138,28 @@ public static class BuiltInTypes
                 [new TypeInfo.Function([elementType, NumberType, new TypeInfo.Array(elementType)], AnyType), AnyType],
                 new TypeInfo.Array(AnyType), RequiredParams: 1),
             "filter" => new TypeInfo.Function(
-                [new TypeInfo.Function([elementType, NumberType, new TypeInfo.Array(elementType)], BooleanType, RequiredParams: 1), AnyType],
+                [new TypeInfo.Function([elementType, NumberType, new TypeInfo.Array(elementType)], BooleanType), AnyType],
                 new TypeInfo.Array(elementType), RequiredParams: 1),
             "forEach" => new TypeInfo.Function(
-                [new TypeInfo.Function([elementType, NumberType, new TypeInfo.Array(elementType)], VoidType, RequiredParams: 1), AnyType],
+                [new TypeInfo.Function([elementType, NumberType, new TypeInfo.Array(elementType)], VoidType), AnyType],
                 VoidType, RequiredParams: 1),
             "find" => new TypeInfo.Function(
-                [new TypeInfo.Function([elementType, NumberType, new TypeInfo.Array(elementType)], BooleanType, RequiredParams: 1), AnyType],
+                [new TypeInfo.Function([elementType, NumberType, new TypeInfo.Array(elementType)], BooleanType), AnyType],
                 elementType, RequiredParams: 1),
             "findIndex" => new TypeInfo.Function(
-                [new TypeInfo.Function([elementType, NumberType, new TypeInfo.Array(elementType)], BooleanType, RequiredParams: 1), AnyType],
+                [new TypeInfo.Function([elementType, NumberType, new TypeInfo.Array(elementType)], BooleanType), AnyType],
                 NumberType, RequiredParams: 1),
             "some" => new TypeInfo.Function(
-                [new TypeInfo.Function([elementType, NumberType, new TypeInfo.Array(elementType)], BooleanType, RequiredParams: 1), AnyType],
+                [new TypeInfo.Function([elementType, NumberType, new TypeInfo.Array(elementType)], BooleanType), AnyType],
                 BooleanType, RequiredParams: 1),
             "every" => new TypeInfo.Function(
-                [new TypeInfo.Function([elementType, NumberType, new TypeInfo.Array(elementType)], BooleanType, RequiredParams: 1), AnyType],
+                [new TypeInfo.Function([elementType, NumberType, new TypeInfo.Array(elementType)], BooleanType), AnyType],
                 BooleanType, RequiredParams: 1),
             "reduce" => new TypeInfo.Function(
-                [new TypeInfo.Function([AnyType, elementType, NumberType, new TypeInfo.Array(elementType)], AnyType, RequiredParams: 2), AnyType],
+                [new TypeInfo.Function([AnyType, elementType, NumberType, new TypeInfo.Array(elementType)], AnyType), AnyType],
                 AnyType, RequiredParams: 1), // initialValue is optional
             "reduceRight" => new TypeInfo.Function(
-                [new TypeInfo.Function([AnyType, elementType, NumberType, new TypeInfo.Array(elementType)], AnyType, RequiredParams: 2), AnyType],
+                [new TypeInfo.Function([AnyType, elementType, NumberType, new TypeInfo.Array(elementType)], AnyType), AnyType],
                 AnyType, RequiredParams: 1), // initialValue is optional
             "includes" => new TypeInfo.Function([elementType, AnyType], BooleanType, RequiredParams: 1),
             // ECMA-262 23.1.3.17 / 23.1.3.18: fromIndex is coerced via

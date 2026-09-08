@@ -112,6 +112,7 @@ internal sealed partial class DesktopStyleResources
             "ScrollViewer" => TypedStyle<ScrollViewer>(classes),
             "TextBlock" => TypedStyle<TextBlock>(classes),
             "Button" => TypedStyle<Button>(classes),
+            "ToggleButton" => TypedStyle<ToggleButton>(classes),
             "TextBox" or "PasswordBox" => TypedStyle<TextBox>(classes),
             "CheckBox" => TypedStyle<CheckBox>(classes),
             "RadioButton" => TypedStyle<RadioButton>(classes),
@@ -154,13 +155,16 @@ internal sealed partial class DesktopStyleResources
         "fontWeight" when IsTemplated(control) => new Setter(TemplatedControl.FontWeightProperty, CommonProperties.ParseFontWeight(Text(value, property))),
         "fontStyle" when IsTemplated(control) => new Setter(TemplatedControl.FontStyleProperty, CommonProperties.ParseFontStyle(Text(value, property))),
         "padding" when IsTemplated(control) => new Setter(TemplatedControl.PaddingProperty, Thickness(value, property)),
+        "borderThickness" when IsTemplated(control) => new Setter(TemplatedControl.BorderThicknessProperty, Thickness(value, property)),
+        "borderBrush" when IsTemplated(control) => new Setter(TemplatedControl.BorderBrushProperty, Brush(value, property)),
+        "cornerRadius" when IsTemplated(control) => new Setter(TemplatedControl.CornerRadiusProperty, new CornerRadius(Number(value, property))),
         "horizontalAlignment" => new Setter(Layoutable.HorizontalAlignmentProperty, Horizontal(value, property)),
         "verticalAlignment" => new Setter(Layoutable.VerticalAlignmentProperty, Vertical(value, property)),
         _ => throw new ArgumentException($"Style property '{property}' is not supported for selector '{control}'."),
     };
 
     private static bool IsTemplated(string control) => control is
-        "Window" or "Button" or "TextBox" or "PasswordBox" or "CheckBox" or "RadioButton" or
+        "Window" or "Button" or "ToggleButton" or "TextBox" or "PasswordBox" or "CheckBox" or "RadioButton" or
         "ToggleSwitch" or "ComboBox" or "ListBox" or "NumericUpDown" or "DatePicker" or
         "TimePicker" or "Slider" or "ProgressBar" or "TabControl" or "TabItem" or "Menu" or "MenuItem";
 

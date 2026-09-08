@@ -27,10 +27,12 @@ export interface PaintDocument {
 
 export interface DocumentHistory {
     readonly document: PaintDocument;
-    readonly savedDocument: PaintDocument;
+    readonly savedDocument: PaintDocument | null;
     readonly past: readonly PaintDocument[];
     readonly future: readonly PaintDocument[];
     readonly dirty: boolean;
+    readonly pastLabels: readonly string[];
+    readonly futureLabels: readonly string[];
 }
 
 export interface PaintDraft {
@@ -75,13 +77,13 @@ export function createImportedDocument(width: number, height: number, dataUri: s
 }
 
 export function createHistory(document: PaintDocument): DocumentHistory {
-    return { document, savedDocument: document, past: [], future: [], dirty: false };
+    return { document, savedDocument: document, past: [], future: [], dirty: false, pastLabels: [], futureLabels: [] };
 }
 
-export function commitDocument(history: DocumentHistory, document: PaintDocument): DocumentHistory {
+export function commitDocument(history: DocumentHistory, document: PaintDocument, label: string = "Document change"): DocumentHistory {
     if (document === history.document) return history;
     const past = history.past.length >= 50 ? history.past.slice(history.past.length - 49) : history.past.slice();
-    return { ...history, document, past: [...past, history.document], future: [], dirty: document !== history.savedDocument };
+    return { ...history, document, past: [...past, history.document], pastLabels: [...history.pastLabels.slice(-49), label], future: [], futureLabels: [], dirty: document !== history.savedDocument };
 }
 
 export function undo(history: DocumentHistory): DocumentHistory {
@@ -92,6 +94,8 @@ export function undo(history: DocumentHistory): DocumentHistory {
         savedDocument: history.savedDocument,
         past: history.past.slice(0, history.past.length - 1),
         future: [history.document, ...history.future],
+        pastLabels: history.pastLabels.slice(0, -1),
+        futureLabels: [history.pastLabels[history.pastLabels.length - 1], ...history.futureLabels],
         dirty: previous !== history.savedDocument,
     };
 }
@@ -105,12 +109,14 @@ export function redo(history: DocumentHistory): DocumentHistory {
         savedDocument: history.savedDocument,
         past: [...past, history.document],
         future: history.future.slice(1),
+        pastLabels: [...history.pastLabels.slice(-49), history.futureLabels[0]],
+        futureLabels: history.futureLabels.slice(1),
         dirty: next !== history.savedDocument,
     };
 }
 
-export function markSaved(history: DocumentHistory): DocumentHistory {
-    return { ...history, savedDocument: history.document, dirty: false };
+export function markSaved(history: DocumentHistory, savedDocument: PaintDocument = history.document): DocumentHistory {
+    return { ...history, savedDocument, dirty: history.document !== savedDocument };
 }
 
 export function clampPoint(document: PaintDocument, point: PaintPoint): PaintPoint {
@@ -241,13 +247,13 @@ export function moveLayer(document: PaintDocument, layerId: string, direction: -
 
 export function renameLayer(document: PaintDocument, layerId: string, name: string): PaintDocument {
     const normalized = name.trim().slice(0, 80);
-    return mapLayer(document, layerId, layer => ({ ...layer, name: normalized === "" ? "Untitled layer" : normalized }));
+    return mapLayer(document, layerId, layer => layer.name === (normalized || "Untitled layer") ? layer : ({ ...layer, name: normalized || "Untitled layer" }));
 }
 export function setLayerVisibility(document: PaintDocument, layerId: string, isVisible: boolean): PaintDocument {
-    return mapLayer(document, layerId, layer => ({ ...layer, isVisible }));
+    return mapLayer(document, layerId, layer => layer.isVisible === isVisible ? layer : ({ ...layer, isVisible }));
 }
 export function setLayerOpacity(document: PaintDocument, layerId: string, opacity: number): PaintDocument {
-    return mapLayer(document, layerId, layer => ({ ...layer, opacity: Math.max(0, Math.min(1, opacity)) }));
+    return mapLayer(document, layerId, layer => layer.opacity === Math.max(0, Math.min(1, opacity)) ? layer : ({ ...layer, opacity: Math.max(0, Math.min(1, opacity)) }));
 }
 
 export function serializeProject(document: PaintDocument): string {
@@ -351,5 +357,7 @@ function createUniqueLayerId(document: PaintDocument): string {
 }
 function mapLayer(document: PaintDocument, layerId: string, update: (layer: PaintLayer) => PaintLayer): PaintDocument {
     const index = findLayerIndex(document, layerId);
-    return { ...document, layers: document.layers.map((layer, current) => current === index ? update(layer) : layer) };
+    const next = update(document.layers[index]);
+    if (next === document.layers[index]) return document;
+    return { ...document, layers: document.layers.map((layer, current) => current === index ? next : layer) };
 }

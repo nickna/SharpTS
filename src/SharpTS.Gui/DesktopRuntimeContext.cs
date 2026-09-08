@@ -112,7 +112,8 @@ internal sealed class DesktopRuntimeContext
             screen?.IsPrimary ?? true,
             workingArea.Width / scaling,
             workingArea.Height / scaling,
-            new DisplayBounds(workingArea.X, workingArea.Y, workingArea.Width, workingArea.Height));
+            new DisplayBounds(workingArea.X, workingArea.Y, workingArea.Width, workingArea.Height),
+            window.ActualThemeVariant == Avalonia.Styling.ThemeVariant.Dark ? "dark" : "light");
         return JsonSerializer.Serialize(metrics, DisplayJsonContext.Default.WindowMetricsInfo);
     }
 
@@ -449,7 +450,8 @@ internal sealed record WindowMetricsInfo(
     bool IsPrimary,
     double WorkingAreaWidth,
     double WorkingAreaHeight,
-    DisplayBounds PixelWorkingArea);
+    DisplayBounds PixelWorkingArea,
+    string Theme = "light");
 
 [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
 [JsonSerializable(typeof(DisplayInfo[]))]

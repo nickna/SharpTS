@@ -61,6 +61,44 @@ public sealed class HostInfrastructureTests
     }
 
     [Fact]
+    public async Task GuestCloseGuardRunsBeforeHostShutdownEvenWhenAddedAfterMount()
+    {
+        EnsureAvalonia();
+        var guest = new RecordingGuestRuntime();
+        var posted = new Queue<Action>();
+        var exits = new List<int>();
+        var failures = new List<Exception>();
+        var coordinator = new DesktopShutdownCoordinator(() => guest, posted.Enqueue, exits.Add, failures.Add);
+        var trace = new TraceRecorder(Environment.CurrentManagedThreadId);
+        using var registration = DesktopBridge.Configure(trace, (_, window) =>
+        {
+            coordinator.AttachWindow(window);
+            window.Show();
+        }, true, callback => callback(), callback => callback());
+        using var application = DesktopBridge.CreateDesktopApplication("explicit");
+        DesktopRoot root = application.CreateWindowRoot(() => { }, null, false, true);
+        var node = new GuiVNode("Window", Width: 400, Height: 240);
+        root.Render(node);
+        int requests = 0;
+        root.Render(node with { CloseRequested = () => { requests++; return true; } });
+        root.Window!.Close();
+        Assert.Equal(1, requests);
+        Assert.False(root.IsDisposed);
+        Assert.False(coordinator.IsShutdownStarted);
+        Assert.Equal(0, guest.ShutdownCount);
+        Assert.Empty(posted);
+
+        root.Render(node with { CloseRequested = () => false });
+        root.Window.Close();
+        Assert.True(coordinator.IsShutdownStarted);
+        Assert.Single(posted);
+        posted.Dequeue()();
+        await coordinator.Completion;
+        Assert.Equal([0], exits);
+        Assert.Empty(failures);
+    }
+
+    [Fact]
     public async Task ShutdownCoordinator_DefersAcceptedCloseAndHonorsEarlierCancellation()
     {
         EnsureAvalonia();
@@ -389,12 +427,7 @@ public sealed class HostInfrastructureTests
 
     private static void EnsureAvalonia()
     {
-        if (Application.Current is null)
-        {
-            AppBuilder.Configure<TestApplication>()
-                .UseHeadless(new AvaloniaHeadlessPlatformOptions())
-                .SetupWithoutStarting();
-        }
+        DesktopTestPlatform.EnsureInitialized();
     }
 
     private sealed class RecordingGuestRuntime : IGuestRuntime

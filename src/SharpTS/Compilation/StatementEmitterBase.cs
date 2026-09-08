@@ -1069,8 +1069,7 @@ public abstract class StatementEmitterBase : ExpressionEmitterBase
         IL.Emit(OpCodes.Castclass, typeof(System.Collections.IEnumerable));
         IL.Emit(OpCodes.Callvirt, getEnumerator);
 
-        var enumLocal = IL.DeclareLocal(typeof(System.Collections.IEnumerator));
-        IL.Emit(OpCodes.Stloc, enumLocal);
+        Action loadEnumerator = StoreForOfEnumerator(f);
 
         EnterLoop(endLabel, continueLabel);
 
@@ -1081,14 +1080,14 @@ public abstract class StatementEmitterBase : ExpressionEmitterBase
         EmitCancellationCheck();
 
         // Check MoveNext
-        IL.Emit(OpCodes.Ldloc, enumLocal);
+        loadEnumerator();
         IL.Emit(OpCodes.Callvirt, moveNext);
         IL.Emit(OpCodes.Brfalse, endLabel);
 
         // Set loop variable from Current
         EmitStoreLoopVariable(loopVarLocal, f.Variable.Lexeme, () =>
         {
-            IL.Emit(OpCodes.Ldloc, enumLocal);
+            loadEnumerator();
             IL.Emit(OpCodes.Callvirt, current);
         });
 
@@ -1100,6 +1099,14 @@ public abstract class StatementEmitterBase : ExpressionEmitterBase
 
         IL.MarkLabel(endLabel);
         ExitLoop();
+    }
+
+    /// <summary>Stores an iterator and supplies a load operation; async bodies can retain it across suspension.</summary>
+    protected virtual Action StoreForOfEnumerator(Stmt.ForOf loop)
+    {
+        var enumerator = IL.DeclareLocal(typeof(System.Collections.IEnumerator));
+        IL.Emit(OpCodes.Stloc, enumerator);
+        return () => IL.Emit(OpCodes.Ldloc, enumerator);
     }
 
     /// <summary>

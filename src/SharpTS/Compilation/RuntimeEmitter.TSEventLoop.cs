@@ -427,6 +427,24 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
+    private static void EmitQueueHostedPromiseJob(ILGenerator il, EmittedRuntime runtime)
+    {
+        // A native Task may settle between guest turns or on a worker. Use the
+        // host's thread-safe queue and wake it instead of waiting for UI input.
+        var ordinary = il.DefineLabel();
+        var hosted = il.DeclareLocal(typeof(SharpTSHostedRuntimeBase));
+        il.Emit(OpCodes.Call, runtime.EventLoopGetHostedRuntime!);
+        il.Emit(OpCodes.Stloc, hosted);
+        il.Emit(OpCodes.Ldloc, hosted);
+        il.Emit(OpCodes.Brfalse, ordinary);
+        il.Emit(OpCodes.Ldloc, hosted);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Callvirt, typeof(SharpTSHostedRuntimeBase).GetMethod(
+            nameof(SharpTSHostedRuntimeBase.EnqueueMicrotask))!);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(ordinary);
+    }
+
     private void EmitEventLoopSchedule(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(

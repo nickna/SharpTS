@@ -4,16 +4,16 @@ using System.Reflection.Emit;
 namespace SharpTS.Compilation;
 
 /// <summary>
-/// Emits per-delegate-type adapter classes that bridge a TS closure
-/// (<c>$TSFunction</c>) to a .NET delegate required by a <c>@DotNetType</c> API.
+/// Emits per-delegate-type adapters from a TypeScript callable value to a .NET
+/// delegate required by a <c>@DotNetType</c> API, including Promise callbacks.
 /// </summary>
 /// <remarks>
 /// <para>
 /// Each unique delegate type used as a parameter in the compiled program gets one
-/// adapter class emitted into the module. The adapter holds a <c>$TSFunction</c>
+/// adapter class emitted into the module. The adapter holds an <c>object</c>
 /// reference and exposes a method matching the delegate's <c>Invoke</c> signature;
 /// its body boxes each incoming arg into an <c>object[]</c>, calls
-/// <c>$TSFunction.Invoke(object[])</c>, and marshals the returned <c>object</c>
+/// the emitted runtime's <c>InvokeValue</c>, and marshals the returned <c>object</c>
 /// back to the delegate's declared return type.
 /// </para>
 /// <para>
@@ -76,10 +76,10 @@ public class DelegateAdapterEmitter
             TypeAttributes.NotPublic | TypeAttributes.Sealed | TypeAttributes.Class,
             _types.Object);
 
-        // private readonly $TSFunction _fn;
+        // private readonly object _fn;
         var fnField = typeBuilder.DefineField(
             "_fn",
-            _runtime.TSFunctionType,
+            _types.Object,
             FieldAttributes.Private | FieldAttributes.InitOnly);
 
         var ctor = EmitConstructor(typeBuilder, fnField);
@@ -94,7 +94,7 @@ public class DelegateAdapterEmitter
         var ctorBuilder = typeBuilder.DefineConstructor(
             MethodAttributes.Public,
             CallingConventions.HasThis,
-            [_runtime.TSFunctionType]);
+            [_types.Object]);
 
         var il = ctorBuilder.GetILGenerator();
 
@@ -145,7 +145,7 @@ public class DelegateAdapterEmitter
         }
 
         // _fn.Invoke(args) — stack: [_fn, args] → [object]
-        il.Emit(OpCodes.Callvirt, _runtime.TSFunctionInvoke);
+        il.Emit(OpCodes.Call, _runtime.InvokeValue);
 
         EmitUnboxForReturn(il, returnType);
         il.Emit(OpCodes.Ret);

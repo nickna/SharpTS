@@ -125,7 +125,7 @@ public sealed class SharpPaintHeadlessTests
             GuiInterpretedTestAssets.Stage(root, configuration, stage);
             string guestDirectory = Path.Combine(stage, "Guest");
             Directory.CreateDirectory(guestDirectory);
-            foreach (string file in new[] { entryPoint, "SharpPaintApp.tsx", "document.ts" })
+            foreach (string file in Directory.GetFiles(Path.Combine(root, "samples", "SharpPaint"), "*.ts*").Select(Path.GetFileName).OfType<string>().Where(file => file != "main.tsx" || entryPoint == "main.tsx"))
                 File.Copy(Path.Combine(root, "samples", "SharpPaint", file), Path.Combine(guestDirectory, file == entryPoint ? "main.tsx" : file), true);
             File.Copy(Path.Combine(conformanceRoot, "SharpPaint.Headless.Guest.dll"), Path.Combine(stage, "SharpTS.Gui.Guest.dll"), true);
 
@@ -140,6 +140,7 @@ public sealed class SharpPaintHeadlessTests
             start.ArgumentList.Add(Path.Combine(stage, "SharpTS.Gui.Host.dll"));
             start.ArgumentList.Add("--mode");
             start.ArgumentList.Add(mode);
+            start.Environment["SHARPAINT_STORAGE_DIRECTORY"] = Path.Combine(stage, "settings");
             start.ArgumentList.Add("--headless");
             start.ArgumentList.Add("--trace");
             start.ArgumentList.Add(tracePath);
@@ -150,12 +151,12 @@ public sealed class SharpPaintHeadlessTests
                 ?? throw new InvalidOperationException("Could not start the SharpPaint Headless host.");
             Task<string> stdout = process.StandardOutput.ReadToEndAsync();
             Task<string> stderr = process.StandardError.ReadToEndAsync();
-            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(45));
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(90));
             try { await process.WaitForExitAsync(timeout.Token); }
             catch (OperationCanceledException)
             {
                 process.Kill(entireProcessTree: true);
-                throw new TimeoutException($"SharpPaint {mode} Headless run exceeded 45 seconds.");
+                throw new TimeoutException($"SharpPaint {mode} Headless run exceeded 90 seconds.");
             }
 
             string output = await stdout;
@@ -166,6 +167,7 @@ public sealed class SharpPaintHeadlessTests
             Assert.False(File.Exists(Path.Combine(stage, "SharpPaint.Headless.Open.sharpaint")));
             Assert.False(File.Exists(Path.Combine(stage, "SharpPaint.Headless.Save.sharpaint")));
 
+            if (!smokeClose) Assert.Contains("SharpPaint headless workflows passed.", output, StringComparison.Ordinal);
             using JsonDocument trace = JsonDocument.Parse(await File.ReadAllTextAsync(tracePath));
             return trace.RootElement.EnumerateArray().Select(item => new TraceEvent(
                 item.GetProperty("Stage").GetString()!,

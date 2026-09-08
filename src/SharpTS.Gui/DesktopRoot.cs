@@ -14,7 +14,7 @@ using Avalonia.Threading;
 
 namespace SharpTS.Gui;
 
-public sealed class DesktopRoot : IDisposable
+public sealed partial class DesktopRoot : IDisposable
 {
     private readonly TraceRecorder _recorder;
     private readonly Action<DesktopRoot, Window> _showWindow;
@@ -39,7 +39,7 @@ public sealed class DesktopRoot : IDisposable
     private int _renderDepth;
     private Window? _observedWindow;
     private Window? _closedWindow;
-    private readonly TaskCompletionSource _completion =
+    private readonly TaskCompletionSource<object?> _completion =
         new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     internal DesktopRoot(
@@ -75,7 +75,7 @@ public sealed class DesktopRoot : IDisposable
     internal DesktopRoot? Owner { get; }
     internal bool IsModal { get; }
     internal bool IsMainWindow { get; }
-    public Task Completion => _completion.Task;
+    public Task<object?> Completion => _completion.Task;
     internal int ActiveSubscriptions => _activeSubscriptions;
     public bool IsDisposed => _disposed;
     internal RendererOperationCounts OperationCounts =>
@@ -91,6 +91,11 @@ public sealed class DesktopRoot : IDisposable
         return _eventWorkTracker;
     }
     internal bool HasPendingEventWork => _eventWorkTracker?.HasPending == true;
+    internal void WhenEventWorkIdle(Action callback)
+    {
+        if (_eventWorkTracker is null) callback();
+        else _eventWorkTracker.WhenIdle(callback);
+    }
 
     public void Render(GuiVNode root)
     {
@@ -120,8 +125,13 @@ public sealed class DesktopRoot : IDisposable
             _mounted = mounted;
             try
             {
+                if (Owner is not null)
+                    ((Window)mounted.Control).WindowStartupLocation = WindowStartupLocation.CenterOwner;
                 Application?.ApplyStyleResources((Window)mounted.Control);
                 ObserveWindow((Window)mounted.Control);
+                // The guest must be able to cancel before the host begins shutdown.
+                // Keep this handler installed even when no callback is currently supplied.
+                SynchronizeWindowClose(mounted);
                 _showWindow(this, (Window)mounted.Control);
                 ActivateSubtree(mounted);
                 _recorder.Record("mount", detail: root.SourceFile);
@@ -142,7 +152,7 @@ public sealed class DesktopRoot : IDisposable
                     _mounted = null;
                     _disposed = true;
                     _releaseRoot(this);
-                    _completion.TrySetResult();
+                    _completion.TrySetResult(null);
                     throw new AggregateException(
                         "SharpTS GUI initial mount failed and its detached native tree could not be released; the root was disposed.",
                         commitError, releaseError);
@@ -244,7 +254,7 @@ public sealed class DesktopRoot : IDisposable
                 _mounted = null;
             }
             _releaseRoot(this);
-            _completion.TrySetResult();
+            _completion.TrySetResult(null);
             _recorder.Record("unmount");
         }
     }
@@ -419,6 +429,7 @@ public sealed class DesktopRoot : IDisposable
             _recorder.Record("reconcile-update", detail: Describe(mounted));
 
         UpdateCallbacks(mounted, prepared.VNode);
+        SynchronizeExtendedInteraction(mounted, prepared.VNode);
         SynchronizeKeyboard(mounted);
         SynchronizePointer(mounted, prepared.VNode);
         SynchronizeWindowClose(mounted);
@@ -630,7 +641,7 @@ public sealed class DesktopRoot : IDisposable
             }
         }
         _releaseRoot(this);
-        _completion.TrySetResult();
+        _completion.TrySetResult(null);
         _recorder.Record("fatal-rollback-dispose");
     }
 
@@ -888,6 +899,7 @@ public sealed class DesktopRoot : IDisposable
                 }
             }
 
+            SynchronizeExtendedInteraction(mounted);
             SynchronizeKeyboard(mounted);
             SynchronizePointer(mounted, mounted.VNode);
             SynchronizeWindowClose(mounted);
@@ -909,11 +921,11 @@ public sealed class DesktopRoot : IDisposable
 
     private void UpdateSubscriptionState(MountedNode mounted)
     {
-        bool attached = mounted.PrimaryEventAttached ||
+        bool attached = mounted.PrimaryEventAttached || mounted.InteractionMask != 0 ||
             mounted.KeyDownHandler is not null || mounted.KeyUpHandler is not null ||
             mounted.PointerDownHandler is not null || mounted.PointerMoveHandler is not null ||
             mounted.PointerUpHandler is not null || mounted.PointerCancelHandler is not null ||
-            mounted.WindowClosingHandler is not null || mounted.WindowSizeChangedHandler is not null ||
+            (mounted.WindowClosingHandler is not null && mounted.LatestCloseRequested is not null) || mounted.WindowSizeChangedHandler is not null ||
             mounted.DragOverHandler is not null || mounted.DropHandler is not null;
         if (attached == mounted.EventAttached)
             return;
@@ -928,6 +940,13 @@ public sealed class DesktopRoot : IDisposable
             return;
         foreach (MountedNode child in mounted.Children)
             ReleaseSubtree(child);
+
+        // The stable close-ordering hook also exists on windows without guest callbacks.
+        if (mounted.WindowClosingHandler is not null && mounted.Control is Window closingWindow)
+        {
+            closingWindow.Closing -= mounted.WindowClosingHandler;
+            mounted.WindowClosingHandler = null;
+        }
 
         if (mounted.CapturedPointer is not null)
         {
@@ -964,7 +983,7 @@ public sealed class DesktopRoot : IDisposable
                     break;
             }
             if (mounted.KeyDownHandler is not null)
-                mounted.Control.KeyDown -= mounted.KeyDownHandler;
+                mounted.Control.RemoveHandler(InputElement.KeyDownEvent, mounted.KeyDownHandler);
             if (mounted.KeyUpHandler is not null)
                 mounted.Control.KeyUp -= mounted.KeyUpHandler;
             if (mounted.PointerDownHandler is not null)
@@ -975,8 +994,6 @@ public sealed class DesktopRoot : IDisposable
                 mounted.Control.PointerReleased -= mounted.PointerUpHandler;
             if (mounted.PointerCancelHandler is not null)
                 mounted.Control.PointerCaptureLost -= mounted.PointerCancelHandler;
-            if (mounted.WindowClosingHandler is not null && mounted.Control is Window closingWindow)
-                closingWindow.Closing -= mounted.WindowClosingHandler;
             if (mounted.WindowSizeChangedHandler is not null && mounted.Control is Window metricsWindow)
             {
                 metricsWindow.SizeChanged -= mounted.WindowSizeChangedHandler;
@@ -1012,6 +1029,8 @@ public sealed class DesktopRoot : IDisposable
             mounted.ValueHandler = null;
             UpdateSubscriptionState(mounted);
         }
+        foreach (Action unsubscribe in mounted.InteractionUnsubscribe) unsubscribe();
+        mounted.InteractionUnsubscribe.Clear();
         foreach (Action unsubscribe in mounted.ExtraUnsubscribe)
             unsubscribe();
         mounted.ExtraUnsubscribe.Clear();
@@ -1024,13 +1043,17 @@ public sealed class DesktopRoot : IDisposable
     {
         if (mounted.LatestKeyDown is not null && mounted.KeyDownHandler is null)
         {
-            EventHandler<KeyEventArgs> handler = (_, args) => DispatchKey(mounted, args, keyDown: true);
-            mounted.Control.KeyDown += handler;
+            EventHandler<KeyEventArgs> handler = (_, args) =>
+            {
+                var routing = mounted.VNode.KeyDownRouting == "tunnel" ? RoutingStrategies.Tunnel : RoutingStrategies.Bubble;
+                if (args.Route == routing) DispatchKey(mounted, args, keyDown: true);
+            };
+            mounted.Control.AddHandler(InputElement.KeyDownEvent, handler, RoutingStrategies.Tunnel | RoutingStrategies.Bubble);
             mounted.KeyDownHandler = handler;
         }
         else if (mounted.LatestKeyDown is null && mounted.KeyDownHandler is not null)
         {
-            mounted.Control.KeyDown -= mounted.KeyDownHandler;
+            mounted.Control.RemoveHandler(InputElement.KeyDownEvent, mounted.KeyDownHandler);
             mounted.KeyDownHandler = null;
             ClearHeldKeys();
         }
@@ -1158,7 +1181,7 @@ public sealed class DesktopRoot : IDisposable
     {
         if (mounted.Control is not Window window)
             return;
-        if (mounted.LatestCloseRequested is not null && mounted.WindowClosingHandler is null)
+        if (mounted.WindowClosingHandler is null)
         {
             EventHandler<WindowClosingEventArgs> handler = (_, args) =>
             {
@@ -1166,15 +1189,10 @@ public sealed class DesktopRoot : IDisposable
                 Func<bool>? latest = mounted.LatestCloseRequested;
                 if (latest is not null)
                     _invokeGuestCallback(() => handled = latest());
-                args.Cancel = handled;
+                args.Cancel |= handled;
             };
             window.Closing += handler;
             mounted.WindowClosingHandler = handler;
-        }
-        else if (mounted.LatestCloseRequested is null && mounted.WindowClosingHandler is not null)
-        {
-            window.Closing -= mounted.WindowClosingHandler;
-            mounted.WindowClosingHandler = null;
         }
         UpdateSubscriptionState(mounted);
     }
@@ -1190,7 +1208,7 @@ public sealed class DesktopRoot : IDisposable
             EventHandler scalingHandler = (_, _) => QueueWindowMetrics(mounted, window);
             EventHandler<AvaloniaPropertyChangedEventArgs> propertyHandler = (_, args) =>
             {
-                if (args.Property == Window.WindowStateProperty)
+                if (args.Property == Window.WindowStateProperty || args.Property == TopLevel.ActualThemeVariantProperty)
                     QueueWindowMetrics(mounted, window);
             };
             EventHandler screensHandler = (_, _) => QueueWindowMetrics(mounted, window);
@@ -1490,6 +1508,7 @@ public sealed class DesktopRoot : IDisposable
         if (latest is null) return;
         KeyModifiers modifiers = args.KeyModifiers;
         bool handled = false;
+        using var keyContext = DesktopBridge.EnterKeyContext(args.Source, mounted.Control);
         _invokeGuestCallback(() => handled = latest(
             NormalizeKey(args.Key, modifiers),
             modifiers.HasFlag(KeyModifiers.Control),
@@ -1585,6 +1604,12 @@ public sealed class DesktopRoot : IDisposable
             IndicesChanged = null,
             NullableValueChanged = null,
             NullableStringChanged = null,
+            Focused = null,
+            Blurred = null,
+            EditStarted = null,
+            EditCompleted = null,
+            Wheel = null,
+            ScrollChanged = null,
             KeyDown = null,
             KeyUp = null,
             PointerDown = null,
@@ -1766,6 +1791,22 @@ public sealed class DesktopRoot : IDisposable
         return null;
     }
 
+    // Transparent function components qualify keys. Tests may use a unique leaf key,
+    // while a fully qualified key remains available when multiple components repeat it.
+    internal Control? FindTestControl(string key)
+    {
+        if (FindControl(key) is { } exact) return exact;
+        var matches = new List<Control>();
+        void Visit(MountedNode node)
+        {
+            if (node.VNode.Key?.EndsWith("/$" + key, StringComparison.Ordinal) == true) matches.Add(node.Control);
+            foreach (MountedNode child in node.Children) Visit(child);
+        }
+        if (_mounted is not null) Visit(_mounted);
+        if (matches.Count > 1) throw new InvalidOperationException($"Test key '{key}' is ambiguous; use its qualified component key.");
+        return matches.SingleOrDefault();
+    }
+
     private static void CollectIdentities(MountedNode node, List<string> identities)
     {
         if (node.VNode.Key is not null)
@@ -1778,20 +1819,34 @@ public sealed class DesktopRoot : IDisposable
 public sealed class DesktopEventWorkTracker
 {
     private int _pending;
+    private readonly object _gate = new();
+    private readonly List<Action> _idleCallbacks = [];
 
     internal bool HasPending => Volatile.Read(ref _pending) != 0;
 
-    public void Begin() => Interlocked.Increment(ref _pending);
+    public void Begin() { lock (_gate) _pending++; }
+
+    internal void WhenIdle(Action callback)
+    {
+        lock (_gate)
+        {
+            if (_pending != 0) { _idleCallbacks.Add(callback); return; }
+        }
+        callback();
+    }
 
     public void Complete()
     {
-        int value = Interlocked.Decrement(ref _pending);
-        if (value < 0)
+        Action[] callbacks;
+        lock (_gate)
         {
-            Interlocked.Exchange(ref _pending, 0);
-            throw new InvalidOperationException("Desktop event-work accounting underflowed.");
+            if (_pending == 0) throw new InvalidOperationException("Desktop event-work accounting underflowed.");
+            if (--_pending != 0) return;
+            callbacks = _idleCallbacks.ToArray();
+            _idleCallbacks.Clear();
         }
+        foreach (Action callback in callbacks) callback();
     }
 
-    internal void Reset() => Interlocked.Exchange(ref _pending, 0);
+    internal void Reset() { lock (_gate) { _pending = 0; _idleCallbacks.Clear(); } }
 }

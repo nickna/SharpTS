@@ -246,3 +246,5 @@ resources, class/type selectors, styles, theme variants, and resource lookup are
 Multi-window orchestration is available through `createDesktopApplication`. Incompatible GUI API
 and descriptor contracts fail before payload loading. Complete proof applications are in
 `samples/Calculator` and `samples/SharpPaint`.
+
+See [desktop editing recipes](desktop-editing.md) for commands, modal dialogs, field transactions, viewport navigation, cancellable graphics, atomic files, and acceptance tests.

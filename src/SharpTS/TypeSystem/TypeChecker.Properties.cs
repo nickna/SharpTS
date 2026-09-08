@@ -709,6 +709,11 @@ public partial class TypeChecker
 
         TypeInfo objType = CheckExpr(set.Object);
 
+        // A generic interface is the same mutable object shape for writes as for reads.
+        if (objType is TypeInfo.InstantiatedGeneric instantiated &&
+            FlattenInstantiatedInterface(instantiated) is { } flattenedInterface)
+            objType = flattenedInterface;
+
         // A direct variable may have been flow-narrowed to one constituent by its initializer.
         // For a property present on every declared constituent, TypeScript checks a write against
         // the union of those declared member types (for example, writing `"a" | "b"` to a

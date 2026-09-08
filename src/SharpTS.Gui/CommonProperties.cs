@@ -27,6 +27,12 @@ internal static class CommonProperties
             ValidateFiniteNonNegative(value, "margin");
         if (!double.IsFinite(node.Opacity) || node.Opacity < 0 || node.Opacity > 1)
             throw new ArgumentOutOfRangeException("opacity", "opacity must be between zero and one.");
+        _ = DesktopInputProperties.ParseCursor(node.Cursor);
+        if (node.KeyDownRouting is not ("bubble" or "tunnel")) throw new ArgumentException("Invalid keyDownRouting.");
+        if (node.TabIndex < 0) throw new ArgumentOutOfRangeException("tabIndex");
+        foreach (double offset in new[] { node.OffsetX, node.OffsetY })
+            if (!double.IsNaN(offset)) ValidateFiniteNonNegative(offset, "offset");
+        if (node.InputGesture is not null) _ = KeyGesture.Parse(node.InputGesture);
         _ = ParseHorizontalAlignment(node.HorizontalAlignment);
         _ = ParseVerticalAlignment(node.VerticalAlignment);
         if (node.GridRow < 0 || node.GridColumn < 0)
@@ -57,7 +63,7 @@ internal static class CommonProperties
         bool applyWidth = true,
         bool applyHeight = true)
     {
-        bool changed = false;
+        bool changed = DesktopInputProperties.Apply(control, node);
         if (applyWidth)
             changed |= ApplyStyled(control, Layoutable.WidthProperty, EffectiveWidth(node),
                 IsSpecified(node, "width") || !double.IsNaN(node.Width) || node.Kind == "Window");

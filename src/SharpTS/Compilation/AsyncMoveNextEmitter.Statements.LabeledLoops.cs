@@ -137,8 +137,7 @@ public partial class AsyncMoveNextEmitter
         _il.Emit(OpCodes.Castclass, typeof(System.Collections.IEnumerable));
         _il.Emit(OpCodes.Callvirt, getEnumerator);
 
-        var enumLocal = _il.DeclareLocal(typeof(System.Collections.IEnumerator));
-        _il.Emit(OpCodes.Stloc, enumLocal);
+        Action loadEnumerator = StoreForOfEnumerator(f);
 
         var startLabel = _il.DefineLabel();
         var continueLabel = _il.DefineLabel();
@@ -146,14 +145,14 @@ public partial class AsyncMoveNextEmitter
         EnterLabeledLoop(outerBreakLabel, continueLabel, labelNames);
 
         _il.MarkLabel(startLabel);
-        _il.Emit(OpCodes.Ldloc, enumLocal);
+        loadEnumerator();
         _il.Emit(OpCodes.Callvirt, moveNext);
         _il.Emit(OpCodes.Brfalse, outerBreakLabel);
 
         if (varField != null)
         {
             _il.Emit(OpCodes.Ldarg_0);
-            _il.Emit(OpCodes.Ldloc, enumLocal);
+            loadEnumerator();
             _il.Emit(OpCodes.Callvirt, current);
             _il.Emit(OpCodes.Stfld, varField);
         }
@@ -161,7 +160,7 @@ public partial class AsyncMoveNextEmitter
         {
             var varLocal = _il.DeclareLocal(typeof(object));
             _ctx!.Locals.RegisterLocal(varName, varLocal);
-            _il.Emit(OpCodes.Ldloc, enumLocal);
+            loadEnumerator();
             _il.Emit(OpCodes.Callvirt, current);
             _il.Emit(OpCodes.Stloc, varLocal);
         }

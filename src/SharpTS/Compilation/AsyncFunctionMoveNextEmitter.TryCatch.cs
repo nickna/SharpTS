@@ -138,10 +138,11 @@ public abstract partial class AsyncFunctionMoveNextEmitter
                 // Create local for the exception parameter
                 var exLocal = IL.DeclareLocal(typeof(object));
                 Ctx.Locals.RegisterLocal(t.CatchParam.Lexeme, exLocal);
+                RegisterLoopLocal(t.CatchParam.Lexeme, exLocal);
 
                 // Wrap the .NET exception to TypeScript exception object
                 IL.Emit(OpCodes.Call, Ctx.Runtime!.WrapException);
-                IL.Emit(OpCodes.Stloc, exLocal);
+                EmitStoreVariable(t.CatchParam.Lexeme);
             }
             else
             {
@@ -261,8 +262,9 @@ public abstract partial class AsyncFunctionMoveNextEmitter
             {
                 var exLocal = IL.DeclareLocal(typeof(object));
                 Ctx.Locals.RegisterLocal(t.CatchParam.Lexeme, exLocal);
+                RegisterLoopLocal(t.CatchParam.Lexeme, exLocal);
                 IL.Emit(OpCodes.Ldloc, caughtExceptionLocal);
-                IL.Emit(OpCodes.Stloc, exLocal);
+                EmitStoreVariable(t.CatchParam.Lexeme);
             }
 
             // Clear the exception local since catch handled it

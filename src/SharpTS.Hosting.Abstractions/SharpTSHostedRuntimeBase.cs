@@ -36,6 +36,7 @@ public abstract class SharpTSHostedRuntimeBase : ISharpTSHostedRuntime
 
     private int _state = (int)SharpTSHostedRuntimeState.Created;
     private int _schedulerState;
+    private bool _allowShutdownMicrotasks;
     private int _repostRequested;
     private int _guestBoundaryDepth;
     private int _timerElapsed;
@@ -272,7 +273,9 @@ public abstract class SharpTSHostedRuntimeBase : ISharpTSHostedRuntime
     public void EnqueueMicrotask(Action callback)
     {
         ArgumentNullException.ThrowIfNull(callback);
-        if (!AcceptsGuestWork)
+        // beforeExit and cleanup can create Promise reactions that must drain
+        // before exit. External completions remain rejected during shutdown.
+        if (!AcceptsGuestWork && !(_allowShutdownMicrotasks && _dispatcher.CheckAccess()))
             return;
         _microtasks.Enqueue(callback);
         RequestTurn();
@@ -657,32 +660,40 @@ public abstract class SharpTSHostedRuntimeBase : ISharpTSHostedRuntime
         SharpTSHostedShutdownReason reason = _shutdownReason ?? SharpTSHostedShutdownReason.HostRequested;
         int exitCode = _exitCode;
 
-        if (reason != SharpTSHostedShutdownReason.ProcessExit)
+        _allowShutdownMicrotasks = true;
+        try
         {
-            EmitGuestBeforeExit(exitCode);
+            if (reason != SharpTSHostedShutdownReason.ProcessExit)
+            {
+                EmitGuestBeforeExit(exitCode);
+                DrainMicrotaskCheckpoint();
+            }
+
+            RejectGuestWork();
+            CancelHostTimer();
+            CancelGuestResources();
+
+            Action[] cleanup;
+            lock (_cleanupGate)
+                cleanup = _cleanup.ToArray();
+            for (int index = cleanup.Length - 1; index >= 0; index--)
+            {
+                try
+                {
+                    cleanup[index]();
+                }
+                catch (Exception exception)
+                {
+                    ReportError(exception, SharpTSHostedErrorPhase.Cleanup);
+                }
+            }
+
             DrainMicrotaskCheckpoint();
         }
-
-        RejectGuestWork();
-        CancelHostTimer();
-        CancelGuestResources();
-
-        Action[] cleanup;
-        lock (_cleanupGate)
-            cleanup = _cleanup.ToArray();
-        for (int index = cleanup.Length - 1; index >= 0; index--)
+        finally
         {
-            try
-            {
-                cleanup[index]();
-            }
-            catch (Exception exception)
-            {
-                ReportError(exception, SharpTSHostedErrorPhase.Cleanup);
-            }
+            _allowShutdownMicrotasks = false;
         }
-
-        DrainMicrotaskCheckpoint();
         if (reason != SharpTSHostedShutdownReason.ProcessExit)
             EmitGuestExit(exitCode);
 
