@@ -926,7 +926,8 @@ public sealed class DesktopRendererTests : IDisposable
         using SKBitmap pixels = SKBitmap.Decode(output.ToArray());
         Assert.Contains(pixels.Pixels, pixel => pixel.Red > 0 && pixel.Alpha > 0);
         Assert.Contains(pixels.Pixels, pixel => pixel.Alpha > 0 && pixel.Alpha < 255);
-        Assert.All(pixels.Pixels.Where(pixel => pixel.Alpha > 0), pixel => Assert.Equal((byte)255, pixel.Red));
+        Assert.All(pixels.Pixels.Where(pixel => pixel.Alpha > 0), pixel =>
+            Assert.Equal(new SKColor(255, 0, 0, pixel.Alpha), pixel));
         var nativeText = new TextBlock
         {
             Text = value, FontFamily = new FontFamily("sans-serif"), FontSize = 20,
@@ -941,7 +942,18 @@ public sealed class DesktopRendererTests : IDisposable
         using var expected = new MemoryStream();
         native.Save(expected, Avalonia.Media.Imaging.PngBitmapEncoderOptions.Default);
         using SKBitmap expectedPixels = SKBitmap.Decode(expected.ToArray());
-        Assert.Equal(expectedPixels.Pixels, pixels.Pixels);
+        // Native render targets and CPU export can round grayscale coverage by one alpha
+        // level on macOS. Keep pixel positions and visible RGB strict, allowing only 1/255
+        // coverage variation so this still catches layout drift and subpixel color corruption.
+        SKColor[] expectedColors = expectedPixels.Pixels;
+        SKColor[] actualColors = pixels.Pixels;
+        Assert.Equal(expectedColors.Length, actualColors.Length);
+        for (int i = 0; i < expectedColors.Length; i++)
+        {
+            Assert.True(Math.Abs(expectedColors[i].Alpha - actualColors[i].Alpha) <= 1,
+                $"Text coverage differs at ({i % pixels.Width}, {i / pixels.Width}): " +
+                $"expected {expectedColors[i]}, actual {actualColors[i]}.");
+        }
     }
 
     [Fact]

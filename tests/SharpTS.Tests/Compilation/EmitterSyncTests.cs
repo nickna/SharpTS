@@ -64,6 +64,9 @@ public class EmitterSyncTests
             //     emitters, which supply only the emitter-specific seams (exit label, state counter,
             //     resume-label marking, awaiter-field lookup) ---
             "EmitAwait",            // Core: suspend/resume the state machine on await
+            // A synchronous for-of whose body awaits must retain its enumerator across MoveNext
+            // calls; non-suspending loops still use the base implementation's local storage.
+            "StoreForOfEnumerator",
         },
         [typeof(IteratorMoveNextEmitter)] = new()
         {
