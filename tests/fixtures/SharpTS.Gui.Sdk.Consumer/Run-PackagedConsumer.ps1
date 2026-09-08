@@ -323,6 +323,7 @@ try {
         "gui/jsx-dev-runtime.ts",
         "gui/jsx-runtime.ts",
         "gui/package.json",
+        "gui/patterns.ts",
         "gui/runtime-types.ts",
         "gui/runtime.ts",
         "gui/testing.ts"
