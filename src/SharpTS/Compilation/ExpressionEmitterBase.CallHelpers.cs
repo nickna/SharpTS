@@ -1769,8 +1769,7 @@ public abstract partial class ExpressionEmitterBase
             // Store callee in temp (await-safe)
             EmitExpression(c.Callee);
             EnsureBoxed();
-            calleeLocal = IL.DeclareLocal(Types.Object);
-            IL.Emit(OpCodes.Stloc, calleeLocal);
+            calleeLocal = _helpers.SpillStoreObject();
         }
 
         // Optional link in the callee chain (a?.[0](), (x?.f)()): a nullish

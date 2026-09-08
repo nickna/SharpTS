@@ -12,7 +12,7 @@ internal interface IDesktopInteractionServices
 {
     bool SupportsHeadless { get; }
     Task<string> ShowMessageAsync(Window owner, string title, string message, string buttons);
-    Task<string[]> OpenFilesAsync(Window owner, string title, bool allowMultiple, string filtersJson);
+    Task<string[]> OpenFilesAsync(Window owner, string title, bool allowMultiple, string filtersJson, string? initialDirectory = null);
     Task<string?> SaveFileAsync(Window owner, string title, string suggestedFileName, string defaultExtension, string filtersJson);
     Task<string?> OpenFolderAsync(Window owner, string title);
     Task<string> ReadClipboardAsync(Window owner);
@@ -32,8 +32,8 @@ internal sealed class NativeDesktopInteractionServices : IDesktopInteractionServ
         DesktopServices.ShowMessageAsync(owner, title, message, buttons);
 
     public Task<string[]> OpenFilesAsync(
-        Window owner, string title, bool allowMultiple, string filtersJson) =>
-        DesktopServices.OpenFilesAsync(owner, title, allowMultiple, filtersJson);
+        Window owner, string title, bool allowMultiple, string filtersJson, string? initialDirectory = null) =>
+        DesktopServices.OpenFilesAsync(owner, title, allowMultiple, filtersJson, initialDirectory);
 
     public Task<string?> SaveFileAsync(
         Window owner, string title, string suggestedFileName,
@@ -71,7 +71,7 @@ internal sealed class ScriptedDesktopInteractionServices : IDesktopInteractionSe
         Task.FromResult(Dequeue(_messageResults, "message dialog"));
 
     public Task<string[]> OpenFilesAsync(
-        Window owner, string title, bool allowMultiple, string filtersJson) =>
+        Window owner, string title, bool allowMultiple, string filtersJson, string? initialDirectory = null) =>
         Task.FromResult(Dequeue(_openResults, "open-file dialog").ToArray());
 
     public Task<string?> SaveFileAsync(
@@ -105,12 +105,13 @@ internal static partial class DesktopServices
 {
     public static async Task<string> ShowMessageAsync(Window owner, string title, string message, string buttons)
     {
-        string result = buttons == "yesNo" ? "no" : buttons == "okCancel" ? "cancel" : "ok";
+        string result = buttons == "yesNo" ? "no" : buttons is "okCancel" or "saveDiscardCancel" ? "cancel" : "ok";
         var dialog = new Window
         {
             Title = string.IsNullOrWhiteSpace(title) ? owner.Title : title,
             Width = 420,
             MinHeight = 160,
+            SizeToContent = SizeToContent.Height,
             CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
         };
@@ -119,7 +120,7 @@ internal static partial class DesktopServices
         var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, HorizontalAlignment = HorizontalAlignment.Right };
         foreach ((string text, string value) in Buttons(buttons))
         {
-            var button = new Button { Content = text, MinWidth = 80, IsDefault = value is "ok" or "yes", IsCancel = value is "cancel" or "no" };
+            var button = new Button { Content = text, MinWidth = 80, IsDefault = value is "ok" or "yes" or "save", IsCancel = value is "cancel" or "no" };
             button.Click += (_, _) => { result = value; dialog.Close(); };
             actions.Children.Add(button);
         }
@@ -129,11 +130,12 @@ internal static partial class DesktopServices
         return result;
     }
 
-    public static async Task<string[]> OpenFilesAsync(Window owner, string title, bool allowMultiple, string filtersJson)
+    public static async Task<string[]> OpenFilesAsync(Window owner, string title, bool allowMultiple, string filtersJson, string? initialDirectory = null)
     {
         IReadOnlyList<IStorageFile> files = await owner.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
         {
             Title = Empty(title), AllowMultiple = allowMultiple, FileTypeFilter = Filters(filtersJson),
+            SuggestedStartLocation = string.IsNullOrWhiteSpace(initialDirectory) ? null : await owner.StorageProvider.TryGetFolderFromPathAsync(initialDirectory),
         });
         return files.Select(file => file.TryGetLocalPath()).Where(path => path is not null).Cast<string>().ToArray();
     }
@@ -186,6 +188,7 @@ internal static partial class DesktopServices
         "ok" => [("OK", "ok")],
         "okCancel" => [("OK", "ok"), ("Cancel", "cancel")],
         "yesNo" => [("Yes", "yes"), ("No", "no")],
+        "saveDiscardCancel" => [("Save", "save"), ("Don't Save", "discard"), ("Cancel", "cancel")],
         _ => throw new ArgumentException($"Unsupported message-dialog buttons '{buttons}'."),
     };
 

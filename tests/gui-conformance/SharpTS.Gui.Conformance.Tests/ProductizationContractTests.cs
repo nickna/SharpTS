@@ -164,6 +164,7 @@ public sealed class ProductizationContractTests
             "jsx-dev-runtime.ts",
             "jsx-runtime.ts",
             "package.json",
+            "patterns.ts",
             "runtime-types.ts",
             "runtime.ts",
             "testing.ts",

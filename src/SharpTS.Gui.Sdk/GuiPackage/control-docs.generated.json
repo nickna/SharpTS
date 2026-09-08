@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "schemaHash": "9d07a1a4b39807ac966b79f227cf81f012bd735c41c1cc340ea446bc69d48d27",
+  "schemaHash": "6fe60bd46613b86fa8ec8e2cb2e609e7510dd972e00435e14e49268fd738c778",
   "controls": [
     {
       "kind": "Window",
@@ -222,6 +222,17 @@
           "enumValues": null
         },
         {
+          "name": "keyDownRouting",
+          "type": "\u0022bubble\u0022 | \u0022tunnel\u0022",
+          "documentation": "Use tunnel for command scopes that must run before native text handling; bubble preserves ordinary child-first routing.",
+          "required": false,
+          "default": "bubble",
+          "enumValues": [
+            "bubble",
+            "tunnel"
+          ]
+        },
+        {
           "name": "onKeyUp",
           "type": "(event: KeyEvent) =\u003E boolean",
           "documentation": "Handles a normalized key-up event.",
@@ -289,6 +300,78 @@
           "name": "onDrop",
           "type": "(event: DropEvent) =\u003E void | Promise\u003Cunknown\u003E",
           "documentation": "Receives normalized text and local-file drop data.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "cursor",
+          "type": "\u0022default\u0022 | \u0022arrow\u0022 | \u0022cross\u0022 | \u0022hand\u0022 | \u0022ibeam\u0022 | \u0022sizeAll\u0022 | \u0022none\u0022 | \u0022wait\u0022",
+          "documentation": "Native pointer cursor; default inherits the parent cursor.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "isHitTestVisible",
+          "type": "boolean",
+          "documentation": "Whether the control participates in pointer hit testing.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "focusable",
+          "type": "boolean",
+          "documentation": "Overrides native keyboard focusability.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "tabIndex",
+          "type": "number",
+          "documentation": "Keyboard traversal order within the native focus scope.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onFocus",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called when this control receives keyboard focus.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onBlur",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called when this control loses keyboard focus.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onEditStarted",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called at the start of a slider pointer or keyboard edit.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onEditCompleted",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called after final value notification on release, key-up, or focus loss.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onWheel",
+          "type": "(event: WheelEvent) =\u003E boolean",
+          "documentation": "Handles native wheel input in local DIPs.",
           "required": false,
           "default": null,
           "enumValues": null
@@ -559,6 +642,17 @@
           "enumValues": null
         },
         {
+          "name": "keyDownRouting",
+          "type": "\u0022bubble\u0022 | \u0022tunnel\u0022",
+          "documentation": "Use tunnel for command scopes that must run before native text handling; bubble preserves ordinary child-first routing.",
+          "required": false,
+          "default": "bubble",
+          "enumValues": [
+            "bubble",
+            "tunnel"
+          ]
+        },
+        {
           "name": "onKeyUp",
           "type": "(event: KeyEvent) =\u003E boolean",
           "documentation": "Handles a normalized key-up event.",
@@ -626,6 +720,78 @@
           "name": "onDrop",
           "type": "(event: DropEvent) =\u003E void | Promise\u003Cunknown\u003E",
           "documentation": "Receives normalized text and local-file drop data.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "cursor",
+          "type": "\u0022default\u0022 | \u0022arrow\u0022 | \u0022cross\u0022 | \u0022hand\u0022 | \u0022ibeam\u0022 | \u0022sizeAll\u0022 | \u0022none\u0022 | \u0022wait\u0022",
+          "documentation": "Native pointer cursor; default inherits the parent cursor.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "isHitTestVisible",
+          "type": "boolean",
+          "documentation": "Whether the control participates in pointer hit testing.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "focusable",
+          "type": "boolean",
+          "documentation": "Overrides native keyboard focusability.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "tabIndex",
+          "type": "number",
+          "documentation": "Keyboard traversal order within the native focus scope.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onFocus",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called when this control receives keyboard focus.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onBlur",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called when this control loses keyboard focus.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onEditStarted",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called at the start of a slider pointer or keyboard edit.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onEditCompleted",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called after final value notification on release, key-up, or focus loss.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onWheel",
+          "type": "(event: WheelEvent) =\u003E boolean",
+          "documentation": "Handles native wheel input in local DIPs.",
           "required": false,
           "default": null,
           "enumValues": null
@@ -871,6 +1037,17 @@
           "enumValues": null
         },
         {
+          "name": "keyDownRouting",
+          "type": "\u0022bubble\u0022 | \u0022tunnel\u0022",
+          "documentation": "Use tunnel for command scopes that must run before native text handling; bubble preserves ordinary child-first routing.",
+          "required": false,
+          "default": "bubble",
+          "enumValues": [
+            "bubble",
+            "tunnel"
+          ]
+        },
+        {
           "name": "onKeyUp",
           "type": "(event: KeyEvent) =\u003E boolean",
           "documentation": "Handles a normalized key-up event.",
@@ -938,6 +1115,78 @@
           "name": "onDrop",
           "type": "(event: DropEvent) =\u003E void | Promise\u003Cunknown\u003E",
           "documentation": "Receives normalized text and local-file drop data.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "cursor",
+          "type": "\u0022default\u0022 | \u0022arrow\u0022 | \u0022cross\u0022 | \u0022hand\u0022 | \u0022ibeam\u0022 | \u0022sizeAll\u0022 | \u0022none\u0022 | \u0022wait\u0022",
+          "documentation": "Native pointer cursor; default inherits the parent cursor.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "isHitTestVisible",
+          "type": "boolean",
+          "documentation": "Whether the control participates in pointer hit testing.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "focusable",
+          "type": "boolean",
+          "documentation": "Overrides native keyboard focusability.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "tabIndex",
+          "type": "number",
+          "documentation": "Keyboard traversal order within the native focus scope.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onFocus",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called when this control receives keyboard focus.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onBlur",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called when this control loses keyboard focus.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onEditStarted",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called at the start of a slider pointer or keyboard edit.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onEditCompleted",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called after final value notification on release, key-up, or focus loss.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onWheel",
+          "type": "(event: WheelEvent) =\u003E boolean",
+          "documentation": "Handles native wheel input in local DIPs.",
           "required": false,
           "default": null,
           "enumValues": null
@@ -1183,6 +1432,17 @@
           "enumValues": null
         },
         {
+          "name": "keyDownRouting",
+          "type": "\u0022bubble\u0022 | \u0022tunnel\u0022",
+          "documentation": "Use tunnel for command scopes that must run before native text handling; bubble preserves ordinary child-first routing.",
+          "required": false,
+          "default": "bubble",
+          "enumValues": [
+            "bubble",
+            "tunnel"
+          ]
+        },
+        {
           "name": "onKeyUp",
           "type": "(event: KeyEvent) =\u003E boolean",
           "documentation": "Handles a normalized key-up event.",
@@ -1250,6 +1510,78 @@
           "name": "onDrop",
           "type": "(event: DropEvent) =\u003E void | Promise\u003Cunknown\u003E",
           "documentation": "Receives normalized text and local-file drop data.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "cursor",
+          "type": "\u0022default\u0022 | \u0022arrow\u0022 | \u0022cross\u0022 | \u0022hand\u0022 | \u0022ibeam\u0022 | \u0022sizeAll\u0022 | \u0022none\u0022 | \u0022wait\u0022",
+          "documentation": "Native pointer cursor; default inherits the parent cursor.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "isHitTestVisible",
+          "type": "boolean",
+          "documentation": "Whether the control participates in pointer hit testing.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "focusable",
+          "type": "boolean",
+          "documentation": "Overrides native keyboard focusability.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "tabIndex",
+          "type": "number",
+          "documentation": "Keyboard traversal order within the native focus scope.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onFocus",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called when this control receives keyboard focus.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onBlur",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called when this control loses keyboard focus.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onEditStarted",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called at the start of a slider pointer or keyboard edit.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onEditCompleted",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called after final value notification on release, key-up, or focus loss.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onWheel",
+          "type": "(event: WheelEvent) =\u003E boolean",
+          "documentation": "Handles native wheel input in local DIPs.",
           "required": false,
           "default": null,
           "enumValues": null
@@ -1495,6 +1827,17 @@
           "enumValues": null
         },
         {
+          "name": "keyDownRouting",
+          "type": "\u0022bubble\u0022 | \u0022tunnel\u0022",
+          "documentation": "Use tunnel for command scopes that must run before native text handling; bubble preserves ordinary child-first routing.",
+          "required": false,
+          "default": "bubble",
+          "enumValues": [
+            "bubble",
+            "tunnel"
+          ]
+        },
+        {
           "name": "onKeyUp",
           "type": "(event: KeyEvent) =\u003E boolean",
           "documentation": "Handles a normalized key-up event.",
@@ -1562,6 +1905,78 @@
           "name": "onDrop",
           "type": "(event: DropEvent) =\u003E void | Promise\u003Cunknown\u003E",
           "documentation": "Receives normalized text and local-file drop data.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "cursor",
+          "type": "\u0022default\u0022 | \u0022arrow\u0022 | \u0022cross\u0022 | \u0022hand\u0022 | \u0022ibeam\u0022 | \u0022sizeAll\u0022 | \u0022none\u0022 | \u0022wait\u0022",
+          "documentation": "Native pointer cursor; default inherits the parent cursor.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "isHitTestVisible",
+          "type": "boolean",
+          "documentation": "Whether the control participates in pointer hit testing.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "focusable",
+          "type": "boolean",
+          "documentation": "Overrides native keyboard focusability.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "tabIndex",
+          "type": "number",
+          "documentation": "Keyboard traversal order within the native focus scope.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onFocus",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called when this control receives keyboard focus.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onBlur",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called when this control loses keyboard focus.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onEditStarted",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called at the start of a slider pointer or keyboard edit.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onEditCompleted",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called after final value notification on release, key-up, or focus loss.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onWheel",
+          "type": "(event: WheelEvent) =\u003E boolean",
+          "documentation": "Handles native wheel input in local DIPs.",
           "required": false,
           "default": null,
           "enumValues": null
@@ -1796,6 +2211,17 @@
           "enumValues": null
         },
         {
+          "name": "keyDownRouting",
+          "type": "\u0022bubble\u0022 | \u0022tunnel\u0022",
+          "documentation": "Use tunnel for command scopes that must run before native text handling; bubble preserves ordinary child-first routing.",
+          "required": false,
+          "default": "bubble",
+          "enumValues": [
+            "bubble",
+            "tunnel"
+          ]
+        },
+        {
           "name": "onKeyUp",
           "type": "(event: KeyEvent) =\u003E boolean",
           "documentation": "Handles a normalized key-up event.",
@@ -1863,6 +2289,78 @@
           "name": "onDrop",
           "type": "(event: DropEvent) =\u003E void | Promise\u003Cunknown\u003E",
           "documentation": "Receives normalized text and local-file drop data.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "cursor",
+          "type": "\u0022default\u0022 | \u0022arrow\u0022 | \u0022cross\u0022 | \u0022hand\u0022 | \u0022ibeam\u0022 | \u0022sizeAll\u0022 | \u0022none\u0022 | \u0022wait\u0022",
+          "documentation": "Native pointer cursor; default inherits the parent cursor.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "isHitTestVisible",
+          "type": "boolean",
+          "documentation": "Whether the control participates in pointer hit testing.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "focusable",
+          "type": "boolean",
+          "documentation": "Overrides native keyboard focusability.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "tabIndex",
+          "type": "number",
+          "documentation": "Keyboard traversal order within the native focus scope.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onFocus",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called when this control receives keyboard focus.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onBlur",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called when this control loses keyboard focus.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onEditStarted",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called at the start of a slider pointer or keyboard edit.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onEditCompleted",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called after final value notification on release, key-up, or focus loss.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onWheel",
+          "type": "(event: WheelEvent) =\u003E boolean",
+          "documentation": "Handles native wheel input in local DIPs.",
           "required": false,
           "default": null,
           "enumValues": null
@@ -2105,6 +2603,17 @@
           "enumValues": null
         },
         {
+          "name": "keyDownRouting",
+          "type": "\u0022bubble\u0022 | \u0022tunnel\u0022",
+          "documentation": "Use tunnel for command scopes that must run before native text handling; bubble preserves ordinary child-first routing.",
+          "required": false,
+          "default": "bubble",
+          "enumValues": [
+            "bubble",
+            "tunnel"
+          ]
+        },
+        {
           "name": "onKeyUp",
           "type": "(event: KeyEvent) =\u003E boolean",
           "documentation": "Handles a normalized key-up event.",
@@ -2172,6 +2681,78 @@
           "name": "onDrop",
           "type": "(event: DropEvent) =\u003E void | Promise\u003Cunknown\u003E",
           "documentation": "Receives normalized text and local-file drop data.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "cursor",
+          "type": "\u0022default\u0022 | \u0022arrow\u0022 | \u0022cross\u0022 | \u0022hand\u0022 | \u0022ibeam\u0022 | \u0022sizeAll\u0022 | \u0022none\u0022 | \u0022wait\u0022",
+          "documentation": "Native pointer cursor; default inherits the parent cursor.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "isHitTestVisible",
+          "type": "boolean",
+          "documentation": "Whether the control participates in pointer hit testing.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "focusable",
+          "type": "boolean",
+          "documentation": "Overrides native keyboard focusability.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "tabIndex",
+          "type": "number",
+          "documentation": "Keyboard traversal order within the native focus scope.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onFocus",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called when this control receives keyboard focus.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onBlur",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called when this control loses keyboard focus.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onEditStarted",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called at the start of a slider pointer or keyboard edit.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onEditCompleted",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called after final value notification on release, key-up, or focus loss.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onWheel",
+          "type": "(event: WheelEvent) =\u003E boolean",
+          "documentation": "Handles native wheel input in local DIPs.",
           "required": false,
           "default": null,
           "enumValues": null
@@ -2438,6 +3019,17 @@
           "enumValues": null
         },
         {
+          "name": "keyDownRouting",
+          "type": "\u0022bubble\u0022 | \u0022tunnel\u0022",
+          "documentation": "Use tunnel for command scopes that must run before native text handling; bubble preserves ordinary child-first routing.",
+          "required": false,
+          "default": "bubble",
+          "enumValues": [
+            "bubble",
+            "tunnel"
+          ]
+        },
+        {
           "name": "onKeyUp",
           "type": "(event: KeyEvent) =\u003E boolean",
           "documentation": "Handles a normalized key-up event.",
@@ -2505,6 +3097,78 @@
           "name": "onDrop",
           "type": "(event: DropEvent) =\u003E void | Promise\u003Cunknown\u003E",
           "documentation": "Receives normalized text and local-file drop data.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "cursor",
+          "type": "\u0022default\u0022 | \u0022arrow\u0022 | \u0022cross\u0022 | \u0022hand\u0022 | \u0022ibeam\u0022 | \u0022sizeAll\u0022 | \u0022none\u0022 | \u0022wait\u0022",
+          "documentation": "Native pointer cursor; default inherits the parent cursor.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "isHitTestVisible",
+          "type": "boolean",
+          "documentation": "Whether the control participates in pointer hit testing.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "focusable",
+          "type": "boolean",
+          "documentation": "Overrides native keyboard focusability.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "tabIndex",
+          "type": "number",
+          "documentation": "Keyboard traversal order within the native focus scope.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onFocus",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called when this control receives keyboard focus.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onBlur",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called when this control loses keyboard focus.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onEditStarted",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called at the start of a slider pointer or keyboard edit.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onEditCompleted",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called after final value notification on release, key-up, or focus loss.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onWheel",
+          "type": "(event: WheelEvent) =\u003E boolean",
+          "documentation": "Handles native wheel input in local DIPs.",
           "required": false,
           "default": null,
           "enumValues": null
@@ -2771,6 +3435,17 @@
           "enumValues": null
         },
         {
+          "name": "keyDownRouting",
+          "type": "\u0022bubble\u0022 | \u0022tunnel\u0022",
+          "documentation": "Use tunnel for command scopes that must run before native text handling; bubble preserves ordinary child-first routing.",
+          "required": false,
+          "default": "bubble",
+          "enumValues": [
+            "bubble",
+            "tunnel"
+          ]
+        },
+        {
           "name": "onKeyUp",
           "type": "(event: KeyEvent) =\u003E boolean",
           "documentation": "Handles a normalized key-up event.",
@@ -2843,6 +3518,78 @@
           "enumValues": null
         },
         {
+          "name": "cursor",
+          "type": "\u0022default\u0022 | \u0022arrow\u0022 | \u0022cross\u0022 | \u0022hand\u0022 | \u0022ibeam\u0022 | \u0022sizeAll\u0022 | \u0022none\u0022 | \u0022wait\u0022",
+          "documentation": "Native pointer cursor; default inherits the parent cursor.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "isHitTestVisible",
+          "type": "boolean",
+          "documentation": "Whether the control participates in pointer hit testing.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "focusable",
+          "type": "boolean",
+          "documentation": "Overrides native keyboard focusability.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "tabIndex",
+          "type": "number",
+          "documentation": "Keyboard traversal order within the native focus scope.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onFocus",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called when this control receives keyboard focus.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onBlur",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called when this control loses keyboard focus.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onEditStarted",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called at the start of a slider pointer or keyboard edit.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onEditCompleted",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called after final value notification on release, key-up, or focus loss.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onWheel",
+          "type": "(event: WheelEvent) =\u003E boolean",
+          "documentation": "Handles native wheel input in local DIPs.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
           "name": "horizontalScrollBarVisibility",
           "type": "ScrollBarVisibility",
           "documentation": "Visibility policy for the horizontal scroll bar.",
@@ -2867,6 +3614,30 @@
             "hidden",
             "disabled"
           ]
+        },
+        {
+          "name": "offsetX",
+          "type": "number",
+          "documentation": "Requested horizontal offset in DIPs; omission preserves native scrolling.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "offsetY",
+          "type": "number",
+          "documentation": "Requested vertical offset in DIPs; omission preserves native scrolling.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onScrollChanged",
+          "type": "(event: ScrollEvent) =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Coalesced viewport, extent, and offset notification after layout.",
+          "required": false,
+          "default": null,
+          "enumValues": null
         }
       ]
     },
@@ -3090,6 +3861,17 @@
           "enumValues": null
         },
         {
+          "name": "keyDownRouting",
+          "type": "\u0022bubble\u0022 | \u0022tunnel\u0022",
+          "documentation": "Use tunnel for command scopes that must run before native text handling; bubble preserves ordinary child-first routing.",
+          "required": false,
+          "default": "bubble",
+          "enumValues": [
+            "bubble",
+            "tunnel"
+          ]
+        },
+        {
           "name": "onKeyUp",
           "type": "(event: KeyEvent) =\u003E boolean",
           "documentation": "Handles a normalized key-up event.",
@@ -3157,6 +3939,78 @@
           "name": "onDrop",
           "type": "(event: DropEvent) =\u003E void | Promise\u003Cunknown\u003E",
           "documentation": "Receives normalized text and local-file drop data.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "cursor",
+          "type": "\u0022default\u0022 | \u0022arrow\u0022 | \u0022cross\u0022 | \u0022hand\u0022 | \u0022ibeam\u0022 | \u0022sizeAll\u0022 | \u0022none\u0022 | \u0022wait\u0022",
+          "documentation": "Native pointer cursor; default inherits the parent cursor.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "isHitTestVisible",
+          "type": "boolean",
+          "documentation": "Whether the control participates in pointer hit testing.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "focusable",
+          "type": "boolean",
+          "documentation": "Overrides native keyboard focusability.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "tabIndex",
+          "type": "number",
+          "documentation": "Keyboard traversal order within the native focus scope.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onFocus",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called when this control receives keyboard focus.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onBlur",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called when this control loses keyboard focus.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onEditStarted",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called at the start of a slider pointer or keyboard edit.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onEditCompleted",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called after final value notification on release, key-up, or focus loss.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onWheel",
+          "type": "(event: WheelEvent) =\u003E boolean",
+          "documentation": "Handles native wheel input in local DIPs.",
           "required": false,
           "default": null,
           "enumValues": null
@@ -3455,6 +4309,17 @@
           "enumValues": null
         },
         {
+          "name": "keyDownRouting",
+          "type": "\u0022bubble\u0022 | \u0022tunnel\u0022",
+          "documentation": "Use tunnel for command scopes that must run before native text handling; bubble preserves ordinary child-first routing.",
+          "required": false,
+          "default": "bubble",
+          "enumValues": [
+            "bubble",
+            "tunnel"
+          ]
+        },
+        {
           "name": "onKeyUp",
           "type": "(event: KeyEvent) =\u003E boolean",
           "documentation": "Handles a normalized key-up event.",
@@ -3522,6 +4387,78 @@
           "name": "onDrop",
           "type": "(event: DropEvent) =\u003E void | Promise\u003Cunknown\u003E",
           "documentation": "Receives normalized text and local-file drop data.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "cursor",
+          "type": "\u0022default\u0022 | \u0022arrow\u0022 | \u0022cross\u0022 | \u0022hand\u0022 | \u0022ibeam\u0022 | \u0022sizeAll\u0022 | \u0022none\u0022 | \u0022wait\u0022",
+          "documentation": "Native pointer cursor; default inherits the parent cursor.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "isHitTestVisible",
+          "type": "boolean",
+          "documentation": "Whether the control participates in pointer hit testing.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "focusable",
+          "type": "boolean",
+          "documentation": "Overrides native keyboard focusability.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "tabIndex",
+          "type": "number",
+          "documentation": "Keyboard traversal order within the native focus scope.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onFocus",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called when this control receives keyboard focus.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onBlur",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called when this control loses keyboard focus.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onEditStarted",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called at the start of a slider pointer or keyboard edit.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onEditCompleted",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called after final value notification on release, key-up, or focus loss.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onWheel",
+          "type": "(event: WheelEvent) =\u003E boolean",
+          "documentation": "Handles native wheel input in local DIPs.",
           "required": false,
           "default": null,
           "enumValues": null
@@ -3636,6 +4573,22 @@
             "bottom",
             "stretch"
           ]
+        },
+        {
+          "name": "isDefault",
+          "type": "boolean",
+          "documentation": "Activates this button for Enter in its native window.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "isCancel",
+          "type": "boolean",
+          "documentation": "Activates this button for Escape in its native window.",
+          "required": false,
+          "default": null,
+          "enumValues": null
         },
         {
           "name": "onClick",
@@ -3867,6 +4820,17 @@
           "enumValues": null
         },
         {
+          "name": "keyDownRouting",
+          "type": "\u0022bubble\u0022 | \u0022tunnel\u0022",
+          "documentation": "Use tunnel for command scopes that must run before native text handling; bubble preserves ordinary child-first routing.",
+          "required": false,
+          "default": "bubble",
+          "enumValues": [
+            "bubble",
+            "tunnel"
+          ]
+        },
+        {
           "name": "onKeyUp",
           "type": "(event: KeyEvent) =\u003E boolean",
           "documentation": "Handles a normalized key-up event.",
@@ -3934,6 +4898,78 @@
           "name": "onDrop",
           "type": "(event: DropEvent) =\u003E void | Promise\u003Cunknown\u003E",
           "documentation": "Receives normalized text and local-file drop data.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "cursor",
+          "type": "\u0022default\u0022 | \u0022arrow\u0022 | \u0022cross\u0022 | \u0022hand\u0022 | \u0022ibeam\u0022 | \u0022sizeAll\u0022 | \u0022none\u0022 | \u0022wait\u0022",
+          "documentation": "Native pointer cursor; default inherits the parent cursor.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "isHitTestVisible",
+          "type": "boolean",
+          "documentation": "Whether the control participates in pointer hit testing.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "focusable",
+          "type": "boolean",
+          "documentation": "Overrides native keyboard focusability.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "tabIndex",
+          "type": "number",
+          "documentation": "Keyboard traversal order within the native focus scope.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onFocus",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called when this control receives keyboard focus.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onBlur",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called when this control loses keyboard focus.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onEditStarted",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called at the start of a slider pointer or keyboard edit.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onEditCompleted",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called after final value notification on release, key-up, or focus loss.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onWheel",
+          "type": "(event: WheelEvent) =\u003E boolean",
+          "documentation": "Handles native wheel input in local DIPs.",
           "required": false,
           "default": null,
           "enumValues": null
@@ -4082,12 +5118,34 @@
           "enumValues": null
         },
         {
+          "name": "appearance",
+          "type": "\u0022normal\u0022 | \u0022plain\u0022",
+          "documentation": "Plain appearance removes input chrome and padding for inline editing, preserving native selection, caret, and input behavior.",
+          "required": false,
+          "default": "normal",
+          "enumValues": [
+            "normal",
+            "plain"
+          ]
+        },
+        {
           "name": "maxLength",
           "type": "number",
           "documentation": "Maximum number of characters accepted by the text input.",
           "required": false,
           "default": 0,
           "enumValues": null
+        },
+        {
+          "name": "textWrapping",
+          "type": "\u0022noWrap\u0022 | \u0022wrap\u0022",
+          "documentation": "Whether text wraps when it exceeds the available width.",
+          "required": false,
+          "default": "noWrap",
+          "enumValues": [
+            "noWrap",
+            "wrap"
+          ]
         },
         {
           "name": "onTextChanged",
@@ -4319,6 +5377,17 @@
           "enumValues": null
         },
         {
+          "name": "keyDownRouting",
+          "type": "\u0022bubble\u0022 | \u0022tunnel\u0022",
+          "documentation": "Use tunnel for command scopes that must run before native text handling; bubble preserves ordinary child-first routing.",
+          "required": false,
+          "default": "bubble",
+          "enumValues": [
+            "bubble",
+            "tunnel"
+          ]
+        },
+        {
           "name": "onKeyUp",
           "type": "(event: KeyEvent) =\u003E boolean",
           "documentation": "Handles a normalized key-up event.",
@@ -4386,6 +5455,78 @@
           "name": "onDrop",
           "type": "(event: DropEvent) =\u003E void | Promise\u003Cunknown\u003E",
           "documentation": "Receives normalized text and local-file drop data.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "cursor",
+          "type": "\u0022default\u0022 | \u0022arrow\u0022 | \u0022cross\u0022 | \u0022hand\u0022 | \u0022ibeam\u0022 | \u0022sizeAll\u0022 | \u0022none\u0022 | \u0022wait\u0022",
+          "documentation": "Native pointer cursor; default inherits the parent cursor.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "isHitTestVisible",
+          "type": "boolean",
+          "documentation": "Whether the control participates in pointer hit testing.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "focusable",
+          "type": "boolean",
+          "documentation": "Overrides native keyboard focusability.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "tabIndex",
+          "type": "number",
+          "documentation": "Keyboard traversal order within the native focus scope.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onFocus",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called when this control receives keyboard focus.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onBlur",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called when this control loses keyboard focus.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onEditStarted",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called at the start of a slider pointer or keyboard edit.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onEditCompleted",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called after final value notification on release, key-up, or focus loss.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onWheel",
+          "type": "(event: WheelEvent) =\u003E boolean",
+          "documentation": "Handles native wheel input in local DIPs.",
           "required": false,
           "default": null,
           "enumValues": null
@@ -4763,6 +5904,17 @@
           "enumValues": null
         },
         {
+          "name": "keyDownRouting",
+          "type": "\u0022bubble\u0022 | \u0022tunnel\u0022",
+          "documentation": "Use tunnel for command scopes that must run before native text handling; bubble preserves ordinary child-first routing.",
+          "required": false,
+          "default": "bubble",
+          "enumValues": [
+            "bubble",
+            "tunnel"
+          ]
+        },
+        {
           "name": "onKeyUp",
           "type": "(event: KeyEvent) =\u003E boolean",
           "documentation": "Handles a normalized key-up event.",
@@ -4830,6 +5982,581 @@
           "name": "onDrop",
           "type": "(event: DropEvent) =\u003E void | Promise\u003Cunknown\u003E",
           "documentation": "Receives normalized text and local-file drop data.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "cursor",
+          "type": "\u0022default\u0022 | \u0022arrow\u0022 | \u0022cross\u0022 | \u0022hand\u0022 | \u0022ibeam\u0022 | \u0022sizeAll\u0022 | \u0022none\u0022 | \u0022wait\u0022",
+          "documentation": "Native pointer cursor; default inherits the parent cursor.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "isHitTestVisible",
+          "type": "boolean",
+          "documentation": "Whether the control participates in pointer hit testing.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "focusable",
+          "type": "boolean",
+          "documentation": "Overrides native keyboard focusability.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "tabIndex",
+          "type": "number",
+          "documentation": "Keyboard traversal order within the native focus scope.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onFocus",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called when this control receives keyboard focus.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onBlur",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called when this control loses keyboard focus.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onEditStarted",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called at the start of a slider pointer or keyboard edit.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onEditCompleted",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called after final value notification on release, key-up, or focus loss.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onWheel",
+          "type": "(event: WheelEvent) =\u003E boolean",
+          "documentation": "Handles native wheel input in local DIPs.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "foreground",
+          "type": "string",
+          "documentation": "Foreground brush or color used to render content.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "fontFamily",
+          "type": "string",
+          "documentation": "Font family used to render text.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "fontSize",
+          "type": "number",
+          "documentation": "Font size in device-independent pixels.",
+          "required": false,
+          "default": "NaN",
+          "enumValues": null
+        },
+        {
+          "name": "fontWeight",
+          "type": "FontWeight",
+          "documentation": "Weight used to render text.",
+          "required": false,
+          "default": "normal",
+          "enumValues": [
+            "normal",
+            "medium",
+            "semibold",
+            "bold"
+          ]
+        },
+        {
+          "name": "fontStyle",
+          "type": "\u0022normal\u0022 | \u0022italic\u0022",
+          "documentation": "Normal or italic font style.",
+          "required": false,
+          "default": "normal",
+          "enumValues": [
+            "normal",
+            "italic"
+          ]
+        },
+        {
+          "name": "textAlignment",
+          "type": "TextAlignment",
+          "documentation": "Horizontal alignment of rendered text.",
+          "required": false,
+          "default": "left",
+          "enumValues": [
+            "left",
+            "center",
+            "right",
+            "justify"
+          ]
+        },
+        {
+          "name": "background",
+          "type": "string",
+          "documentation": "Background brush or color value.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "padding",
+          "type": "Thickness",
+          "documentation": "Space between the control border and its content.",
+          "required": false,
+          "default": 0,
+          "enumValues": null
+        },
+        {
+          "name": "cornerRadius",
+          "type": "number",
+          "documentation": "Radius applied to the control corners.",
+          "required": false,
+          "default": 0,
+          "enumValues": null
+        },
+        {
+          "name": "horizontalContentAlignment",
+          "type": "HorizontalAlignment",
+          "documentation": "Horizontal alignment of content inside the control.",
+          "required": false,
+          "default": "center",
+          "enumValues": [
+            "left",
+            "center",
+            "right",
+            "stretch"
+          ]
+        },
+        {
+          "name": "verticalContentAlignment",
+          "type": "VerticalAlignment",
+          "documentation": "Vertical alignment of content inside the control.",
+          "required": false,
+          "default": "center",
+          "enumValues": [
+            "top",
+            "center",
+            "bottom",
+            "stretch"
+          ]
+        },
+        {
+          "name": "isChecked",
+          "type": "boolean",
+          "documentation": "Whether the toggle control is checked.",
+          "required": false,
+          "default": false,
+          "enumValues": null
+        },
+        {
+          "name": "onCheckedChanged",
+          "type": "(value: boolean) =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called after the checked state changes.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        }
+      ]
+    },
+    {
+      "kind": "ToggleButton",
+      "nativeType": "Avalonia.Controls.Primitives.ToggleButton",
+      "propsType": "ToggleButtonProps",
+      "handle": "unknown",
+      "children": {
+        "model": "content",
+        "minimum": 0,
+        "maximum": 1
+      },
+      "documentation": "Button with an accessible checked state, suitable for selectable tools.",
+      "props": [
+        {
+          "name": "ref",
+          "type": "ControlRef\u003CTHandle\u003E",
+          "documentation": "Receives the retained native control handle.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "width",
+          "type": "number",
+          "documentation": "Preferred control width in device-independent pixels.",
+          "required": false,
+          "default": "NaN",
+          "enumValues": null
+        },
+        {
+          "name": "height",
+          "type": "number",
+          "documentation": "Preferred control height in device-independent pixels.",
+          "required": false,
+          "default": "NaN",
+          "enumValues": null
+        },
+        {
+          "name": "minWidth",
+          "type": "number",
+          "documentation": "Minimum permitted control width.",
+          "required": false,
+          "default": 0,
+          "enumValues": null
+        },
+        {
+          "name": "minHeight",
+          "type": "number",
+          "documentation": "Minimum permitted control height.",
+          "required": false,
+          "default": 0,
+          "enumValues": null
+        },
+        {
+          "name": "maxWidth",
+          "type": "number",
+          "documentation": "Maximum permitted control width.",
+          "required": false,
+          "default": "Infinity",
+          "enumValues": null
+        },
+        {
+          "name": "maxHeight",
+          "type": "number",
+          "documentation": "Maximum permitted control height.",
+          "required": false,
+          "default": "Infinity",
+          "enumValues": null
+        },
+        {
+          "name": "margin",
+          "type": "Thickness",
+          "documentation": "Space outside the control.",
+          "required": false,
+          "default": 0,
+          "enumValues": null
+        },
+        {
+          "name": "horizontalAlignment",
+          "type": "HorizontalAlignment",
+          "documentation": "Horizontal alignment within the parent layout slot.",
+          "required": false,
+          "default": "stretch",
+          "enumValues": [
+            "left",
+            "center",
+            "right",
+            "stretch"
+          ]
+        },
+        {
+          "name": "verticalAlignment",
+          "type": "VerticalAlignment",
+          "documentation": "Vertical alignment within the parent layout slot.",
+          "required": false,
+          "default": "stretch",
+          "enumValues": [
+            "top",
+            "center",
+            "bottom",
+            "stretch"
+          ]
+        },
+        {
+          "name": "isVisible",
+          "type": "boolean",
+          "documentation": "Whether the control participates in rendering and layout.",
+          "required": false,
+          "default": true,
+          "enumValues": null
+        },
+        {
+          "name": "isEnabled",
+          "type": "boolean",
+          "documentation": "Whether the control accepts user interaction.",
+          "required": false,
+          "default": true,
+          "enumValues": null
+        },
+        {
+          "name": "opacity",
+          "type": "number",
+          "documentation": "Opacity from zero (transparent) to one (opaque).",
+          "required": false,
+          "default": 1,
+          "enumValues": null
+        },
+        {
+          "name": "toolTip",
+          "type": "string",
+          "documentation": "Text shown when the pointer pauses over the control.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "automationName",
+          "type": "string",
+          "documentation": "Accessible automation name exposed to assistive technology and test drivers.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "classes",
+          "type": "readonly string[]",
+          "documentation": "Avalonia style classes applied to the native control.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "canvasLeft",
+          "type": "number",
+          "documentation": "Canvas left coordinate when parented by Canvas.",
+          "required": false,
+          "default": "NaN",
+          "enumValues": null
+        },
+        {
+          "name": "canvasTop",
+          "type": "number",
+          "documentation": "Canvas top coordinate when parented by Canvas.",
+          "required": false,
+          "default": "NaN",
+          "enumValues": null
+        },
+        {
+          "name": "gridRow",
+          "type": "number",
+          "documentation": "Zero-based row index when the control is placed in a Grid.",
+          "required": false,
+          "default": 0,
+          "enumValues": null
+        },
+        {
+          "name": "gridColumn",
+          "type": "number",
+          "documentation": "Zero-based column index when the control is placed in a Grid.",
+          "required": false,
+          "default": 0,
+          "enumValues": null
+        },
+        {
+          "name": "gridRowSpan",
+          "type": "number",
+          "documentation": "Number of Grid rows occupied by the control.",
+          "required": false,
+          "default": 1,
+          "enumValues": null
+        },
+        {
+          "name": "gridColumnSpan",
+          "type": "number",
+          "documentation": "Number of Grid columns occupied by the control.",
+          "required": false,
+          "default": 1,
+          "enumValues": null
+        },
+        {
+          "name": "dock",
+          "type": "Dock",
+          "documentation": "Edge used when the control is placed in a DockPanel.",
+          "required": false,
+          "default": "left",
+          "enumValues": [
+            "left",
+            "top",
+            "right",
+            "bottom"
+          ]
+        },
+        {
+          "name": "onKeyDown",
+          "type": "(event: KeyEvent) =\u003E boolean",
+          "documentation": "Handles a normalized key-down event.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "keyDownRouting",
+          "type": "\u0022bubble\u0022 | \u0022tunnel\u0022",
+          "documentation": "Use tunnel for command scopes that must run before native text handling; bubble preserves ordinary child-first routing.",
+          "required": false,
+          "default": "bubble",
+          "enumValues": [
+            "bubble",
+            "tunnel"
+          ]
+        },
+        {
+          "name": "onKeyUp",
+          "type": "(event: KeyEvent) =\u003E boolean",
+          "documentation": "Handles a normalized key-up event.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "capturePointerOnPress",
+          "type": "boolean",
+          "documentation": "Captures a pressed pointer until release, cancellation, unmount, or disposal.",
+          "required": false,
+          "default": false,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerDown",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles a normalized pointer press.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerMove",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles normalized pointer movement.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerUp",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles a normalized pointer release.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerCancel",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles cancellation or loss of an active pointer capture using its last known local state.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "allowDrop",
+          "type": "boolean",
+          "documentation": "Allows native drag data to be dropped on this control.",
+          "required": false,
+          "default": false,
+          "enumValues": null
+        },
+        {
+          "name": "onDragOver",
+          "type": "(event: DropEvent) =\u003E DropEffect",
+          "documentation": "Chooses the accepted native drag effect.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onDrop",
+          "type": "(event: DropEvent) =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Receives normalized text and local-file drop data.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "cursor",
+          "type": "\u0022default\u0022 | \u0022arrow\u0022 | \u0022cross\u0022 | \u0022hand\u0022 | \u0022ibeam\u0022 | \u0022sizeAll\u0022 | \u0022none\u0022 | \u0022wait\u0022",
+          "documentation": "Native pointer cursor; default inherits the parent cursor.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "isHitTestVisible",
+          "type": "boolean",
+          "documentation": "Whether the control participates in pointer hit testing.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "focusable",
+          "type": "boolean",
+          "documentation": "Overrides native keyboard focusability.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "tabIndex",
+          "type": "number",
+          "documentation": "Keyboard traversal order within the native focus scope.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onFocus",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called when this control receives keyboard focus.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onBlur",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called when this control loses keyboard focus.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onEditStarted",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called at the start of a slider pointer or keyboard edit.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onEditCompleted",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called after final value notification on release, key-up, or focus loss.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onWheel",
+          "type": "(event: WheelEvent) =\u003E boolean",
+          "documentation": "Handles native wheel input in local DIPs.",
           "required": false,
           "default": null,
           "enumValues": null
@@ -5183,6 +6910,17 @@
           "enumValues": null
         },
         {
+          "name": "keyDownRouting",
+          "type": "\u0022bubble\u0022 | \u0022tunnel\u0022",
+          "documentation": "Use tunnel for command scopes that must run before native text handling; bubble preserves ordinary child-first routing.",
+          "required": false,
+          "default": "bubble",
+          "enumValues": [
+            "bubble",
+            "tunnel"
+          ]
+        },
+        {
           "name": "onKeyUp",
           "type": "(event: KeyEvent) =\u003E boolean",
           "documentation": "Handles a normalized key-up event.",
@@ -5250,6 +6988,78 @@
           "name": "onDrop",
           "type": "(event: DropEvent) =\u003E void | Promise\u003Cunknown\u003E",
           "documentation": "Receives normalized text and local-file drop data.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "cursor",
+          "type": "\u0022default\u0022 | \u0022arrow\u0022 | \u0022cross\u0022 | \u0022hand\u0022 | \u0022ibeam\u0022 | \u0022sizeAll\u0022 | \u0022none\u0022 | \u0022wait\u0022",
+          "documentation": "Native pointer cursor; default inherits the parent cursor.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "isHitTestVisible",
+          "type": "boolean",
+          "documentation": "Whether the control participates in pointer hit testing.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "focusable",
+          "type": "boolean",
+          "documentation": "Overrides native keyboard focusability.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "tabIndex",
+          "type": "number",
+          "documentation": "Keyboard traversal order within the native focus scope.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onFocus",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called when this control receives keyboard focus.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onBlur",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called when this control loses keyboard focus.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onEditStarted",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called at the start of a slider pointer or keyboard edit.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onEditCompleted",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called after final value notification on release, key-up, or focus loss.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onWheel",
+          "type": "(event: WheelEvent) =\u003E boolean",
+          "documentation": "Handles native wheel input in local DIPs.",
           "required": false,
           "default": null,
           "enumValues": null
@@ -5611,6 +7421,17 @@
           "enumValues": null
         },
         {
+          "name": "keyDownRouting",
+          "type": "\u0022bubble\u0022 | \u0022tunnel\u0022",
+          "documentation": "Use tunnel for command scopes that must run before native text handling; bubble preserves ordinary child-first routing.",
+          "required": false,
+          "default": "bubble",
+          "enumValues": [
+            "bubble",
+            "tunnel"
+          ]
+        },
+        {
           "name": "onKeyUp",
           "type": "(event: KeyEvent) =\u003E boolean",
           "documentation": "Handles a normalized key-up event.",
@@ -5678,6 +7499,78 @@
           "name": "onDrop",
           "type": "(event: DropEvent) =\u003E void | Promise\u003Cunknown\u003E",
           "documentation": "Receives normalized text and local-file drop data.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "cursor",
+          "type": "\u0022default\u0022 | \u0022arrow\u0022 | \u0022cross\u0022 | \u0022hand\u0022 | \u0022ibeam\u0022 | \u0022sizeAll\u0022 | \u0022none\u0022 | \u0022wait\u0022",
+          "documentation": "Native pointer cursor; default inherits the parent cursor.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "isHitTestVisible",
+          "type": "boolean",
+          "documentation": "Whether the control participates in pointer hit testing.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "focusable",
+          "type": "boolean",
+          "documentation": "Overrides native keyboard focusability.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "tabIndex",
+          "type": "number",
+          "documentation": "Keyboard traversal order within the native focus scope.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onFocus",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called when this control receives keyboard focus.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onBlur",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called when this control loses keyboard focus.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onEditStarted",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called at the start of a slider pointer or keyboard edit.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onEditCompleted",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called after final value notification on release, key-up, or focus loss.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onWheel",
+          "type": "(event: WheelEvent) =\u003E boolean",
+          "documentation": "Handles native wheel input in local DIPs.",
           "required": false,
           "default": null,
           "enumValues": null
@@ -6031,6 +7924,17 @@
           "enumValues": null
         },
         {
+          "name": "keyDownRouting",
+          "type": "\u0022bubble\u0022 | \u0022tunnel\u0022",
+          "documentation": "Use tunnel for command scopes that must run before native text handling; bubble preserves ordinary child-first routing.",
+          "required": false,
+          "default": "bubble",
+          "enumValues": [
+            "bubble",
+            "tunnel"
+          ]
+        },
+        {
           "name": "onKeyUp",
           "type": "(event: KeyEvent) =\u003E boolean",
           "documentation": "Handles a normalized key-up event.",
@@ -6098,6 +8002,78 @@
           "name": "onDrop",
           "type": "(event: DropEvent) =\u003E void | Promise\u003Cunknown\u003E",
           "documentation": "Receives normalized text and local-file drop data.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "cursor",
+          "type": "\u0022default\u0022 | \u0022arrow\u0022 | \u0022cross\u0022 | \u0022hand\u0022 | \u0022ibeam\u0022 | \u0022sizeAll\u0022 | \u0022none\u0022 | \u0022wait\u0022",
+          "documentation": "Native pointer cursor; default inherits the parent cursor.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "isHitTestVisible",
+          "type": "boolean",
+          "documentation": "Whether the control participates in pointer hit testing.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "focusable",
+          "type": "boolean",
+          "documentation": "Overrides native keyboard focusability.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "tabIndex",
+          "type": "number",
+          "documentation": "Keyboard traversal order within the native focus scope.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onFocus",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called when this control receives keyboard focus.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onBlur",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called when this control loses keyboard focus.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onEditStarted",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called at the start of a slider pointer or keyboard edit.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onEditCompleted",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called after final value notification on release, key-up, or focus loss.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onWheel",
+          "type": "(event: WheelEvent) =\u003E boolean",
+          "documentation": "Handles native wheel input in local DIPs.",
           "required": false,
           "default": null,
           "enumValues": null
@@ -6459,6 +8435,17 @@
           "enumValues": null
         },
         {
+          "name": "keyDownRouting",
+          "type": "\u0022bubble\u0022 | \u0022tunnel\u0022",
+          "documentation": "Use tunnel for command scopes that must run before native text handling; bubble preserves ordinary child-first routing.",
+          "required": false,
+          "default": "bubble",
+          "enumValues": [
+            "bubble",
+            "tunnel"
+          ]
+        },
+        {
           "name": "onKeyUp",
           "type": "(event: KeyEvent) =\u003E boolean",
           "documentation": "Handles a normalized key-up event.",
@@ -6526,6 +8513,78 @@
           "name": "onDrop",
           "type": "(event: DropEvent) =\u003E void | Promise\u003Cunknown\u003E",
           "documentation": "Receives normalized text and local-file drop data.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "cursor",
+          "type": "\u0022default\u0022 | \u0022arrow\u0022 | \u0022cross\u0022 | \u0022hand\u0022 | \u0022ibeam\u0022 | \u0022sizeAll\u0022 | \u0022none\u0022 | \u0022wait\u0022",
+          "documentation": "Native pointer cursor; default inherits the parent cursor.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "isHitTestVisible",
+          "type": "boolean",
+          "documentation": "Whether the control participates in pointer hit testing.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "focusable",
+          "type": "boolean",
+          "documentation": "Overrides native keyboard focusability.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "tabIndex",
+          "type": "number",
+          "documentation": "Keyboard traversal order within the native focus scope.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onFocus",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called when this control receives keyboard focus.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onBlur",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called when this control loses keyboard focus.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onEditStarted",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called at the start of a slider pointer or keyboard edit.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onEditCompleted",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called after final value notification on release, key-up, or focus loss.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onWheel",
+          "type": "(event: WheelEvent) =\u003E boolean",
+          "documentation": "Handles native wheel input in local DIPs.",
           "required": false,
           "default": null,
           "enumValues": null
@@ -6898,6 +8957,17 @@
           "enumValues": null
         },
         {
+          "name": "keyDownRouting",
+          "type": "\u0022bubble\u0022 | \u0022tunnel\u0022",
+          "documentation": "Use tunnel for command scopes that must run before native text handling; bubble preserves ordinary child-first routing.",
+          "required": false,
+          "default": "bubble",
+          "enumValues": [
+            "bubble",
+            "tunnel"
+          ]
+        },
+        {
           "name": "onKeyUp",
           "type": "(event: KeyEvent) =\u003E boolean",
           "documentation": "Handles a normalized key-up event.",
@@ -6965,6 +9035,78 @@
           "name": "onDrop",
           "type": "(event: DropEvent) =\u003E void | Promise\u003Cunknown\u003E",
           "documentation": "Receives normalized text and local-file drop data.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "cursor",
+          "type": "\u0022default\u0022 | \u0022arrow\u0022 | \u0022cross\u0022 | \u0022hand\u0022 | \u0022ibeam\u0022 | \u0022sizeAll\u0022 | \u0022none\u0022 | \u0022wait\u0022",
+          "documentation": "Native pointer cursor; default inherits the parent cursor.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "isHitTestVisible",
+          "type": "boolean",
+          "documentation": "Whether the control participates in pointer hit testing.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "focusable",
+          "type": "boolean",
+          "documentation": "Overrides native keyboard focusability.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "tabIndex",
+          "type": "number",
+          "documentation": "Keyboard traversal order within the native focus scope.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onFocus",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called when this control receives keyboard focus.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onBlur",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called when this control loses keyboard focus.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onEditStarted",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called at the start of a slider pointer or keyboard edit.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onEditCompleted",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called after final value notification on release, key-up, or focus loss.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onWheel",
+          "type": "(event: WheelEvent) =\u003E boolean",
+          "documentation": "Handles native wheel input in local DIPs.",
           "required": false,
           "default": null,
           "enumValues": null
@@ -7191,6 +9333,17 @@
           "enumValues": null
         },
         {
+          "name": "keyDownRouting",
+          "type": "\u0022bubble\u0022 | \u0022tunnel\u0022",
+          "documentation": "Use tunnel for command scopes that must run before native text handling; bubble preserves ordinary child-first routing.",
+          "required": false,
+          "default": "bubble",
+          "enumValues": [
+            "bubble",
+            "tunnel"
+          ]
+        },
+        {
           "name": "onKeyUp",
           "type": "(event: KeyEvent) =\u003E boolean",
           "documentation": "Handles a normalized key-up event.",
@@ -7258,6 +9411,78 @@
           "name": "onDrop",
           "type": "(event: DropEvent) =\u003E void | Promise\u003Cunknown\u003E",
           "documentation": "Receives normalized text and local-file drop data.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "cursor",
+          "type": "\u0022default\u0022 | \u0022arrow\u0022 | \u0022cross\u0022 | \u0022hand\u0022 | \u0022ibeam\u0022 | \u0022sizeAll\u0022 | \u0022none\u0022 | \u0022wait\u0022",
+          "documentation": "Native pointer cursor; default inherits the parent cursor.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "isHitTestVisible",
+          "type": "boolean",
+          "documentation": "Whether the control participates in pointer hit testing.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "focusable",
+          "type": "boolean",
+          "documentation": "Overrides native keyboard focusability.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "tabIndex",
+          "type": "number",
+          "documentation": "Keyboard traversal order within the native focus scope.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onFocus",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called when this control receives keyboard focus.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onBlur",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called when this control loses keyboard focus.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onEditStarted",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called at the start of a slider pointer or keyboard edit.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onEditCompleted",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called after final value notification on release, key-up, or focus loss.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onWheel",
+          "type": "(event: WheelEvent) =\u003E boolean",
+          "documentation": "Handles native wheel input in local DIPs.",
           "required": false,
           "default": null,
           "enumValues": null
@@ -7511,6 +9736,17 @@
           "enumValues": null
         },
         {
+          "name": "keyDownRouting",
+          "type": "\u0022bubble\u0022 | \u0022tunnel\u0022",
+          "documentation": "Use tunnel for command scopes that must run before native text handling; bubble preserves ordinary child-first routing.",
+          "required": false,
+          "default": "bubble",
+          "enumValues": [
+            "bubble",
+            "tunnel"
+          ]
+        },
+        {
           "name": "onKeyUp",
           "type": "(event: KeyEvent) =\u003E boolean",
           "documentation": "Handles a normalized key-up event.",
@@ -7578,6 +9814,78 @@
           "name": "onDrop",
           "type": "(event: DropEvent) =\u003E void | Promise\u003Cunknown\u003E",
           "documentation": "Receives normalized text and local-file drop data.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "cursor",
+          "type": "\u0022default\u0022 | \u0022arrow\u0022 | \u0022cross\u0022 | \u0022hand\u0022 | \u0022ibeam\u0022 | \u0022sizeAll\u0022 | \u0022none\u0022 | \u0022wait\u0022",
+          "documentation": "Native pointer cursor; default inherits the parent cursor.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "isHitTestVisible",
+          "type": "boolean",
+          "documentation": "Whether the control participates in pointer hit testing.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "focusable",
+          "type": "boolean",
+          "documentation": "Overrides native keyboard focusability.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "tabIndex",
+          "type": "number",
+          "documentation": "Keyboard traversal order within the native focus scope.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onFocus",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called when this control receives keyboard focus.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onBlur",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called when this control loses keyboard focus.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onEditStarted",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called at the start of a slider pointer or keyboard edit.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onEditCompleted",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called after final value notification on release, key-up, or focus loss.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onWheel",
+          "type": "(event: WheelEvent) =\u003E boolean",
+          "documentation": "Handles native wheel input in local DIPs.",
           "required": false,
           "default": null,
           "enumValues": null
@@ -7804,6 +10112,17 @@
           "enumValues": null
         },
         {
+          "name": "keyDownRouting",
+          "type": "\u0022bubble\u0022 | \u0022tunnel\u0022",
+          "documentation": "Use tunnel for command scopes that must run before native text handling; bubble preserves ordinary child-first routing.",
+          "required": false,
+          "default": "bubble",
+          "enumValues": [
+            "bubble",
+            "tunnel"
+          ]
+        },
+        {
           "name": "onKeyUp",
           "type": "(event: KeyEvent) =\u003E boolean",
           "documentation": "Handles a normalized key-up event.",
@@ -7871,6 +10190,78 @@
           "name": "onDrop",
           "type": "(event: DropEvent) =\u003E void | Promise\u003Cunknown\u003E",
           "documentation": "Receives normalized text and local-file drop data.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "cursor",
+          "type": "\u0022default\u0022 | \u0022arrow\u0022 | \u0022cross\u0022 | \u0022hand\u0022 | \u0022ibeam\u0022 | \u0022sizeAll\u0022 | \u0022none\u0022 | \u0022wait\u0022",
+          "documentation": "Native pointer cursor; default inherits the parent cursor.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "isHitTestVisible",
+          "type": "boolean",
+          "documentation": "Whether the control participates in pointer hit testing.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "focusable",
+          "type": "boolean",
+          "documentation": "Overrides native keyboard focusability.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "tabIndex",
+          "type": "number",
+          "documentation": "Keyboard traversal order within the native focus scope.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onFocus",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called when this control receives keyboard focus.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onBlur",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called when this control loses keyboard focus.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onEditStarted",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called at the start of a slider pointer or keyboard edit.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onEditCompleted",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called after final value notification on release, key-up, or focus loss.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onWheel",
+          "type": "(event: WheelEvent) =\u003E boolean",
+          "documentation": "Handles native wheel input in local DIPs.",
           "required": false,
           "default": null,
           "enumValues": null
@@ -8121,6 +10512,17 @@
           "enumValues": null
         },
         {
+          "name": "keyDownRouting",
+          "type": "\u0022bubble\u0022 | \u0022tunnel\u0022",
+          "documentation": "Use tunnel for command scopes that must run before native text handling; bubble preserves ordinary child-first routing.",
+          "required": false,
+          "default": "bubble",
+          "enumValues": [
+            "bubble",
+            "tunnel"
+          ]
+        },
+        {
           "name": "onKeyUp",
           "type": "(event: KeyEvent) =\u003E boolean",
           "documentation": "Handles a normalized key-up event.",
@@ -8188,6 +10590,78 @@
           "name": "onDrop",
           "type": "(event: DropEvent) =\u003E void | Promise\u003Cunknown\u003E",
           "documentation": "Receives normalized text and local-file drop data.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "cursor",
+          "type": "\u0022default\u0022 | \u0022arrow\u0022 | \u0022cross\u0022 | \u0022hand\u0022 | \u0022ibeam\u0022 | \u0022sizeAll\u0022 | \u0022none\u0022 | \u0022wait\u0022",
+          "documentation": "Native pointer cursor; default inherits the parent cursor.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "isHitTestVisible",
+          "type": "boolean",
+          "documentation": "Whether the control participates in pointer hit testing.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "focusable",
+          "type": "boolean",
+          "documentation": "Overrides native keyboard focusability.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "tabIndex",
+          "type": "number",
+          "documentation": "Keyboard traversal order within the native focus scope.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onFocus",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called when this control receives keyboard focus.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onBlur",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called when this control loses keyboard focus.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onEditStarted",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called at the start of a slider pointer or keyboard edit.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onEditCompleted",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called after final value notification on release, key-up, or focus loss.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onWheel",
+          "type": "(event: WheelEvent) =\u003E boolean",
+          "documentation": "Handles native wheel input in local DIPs.",
           "required": false,
           "default": null,
           "enumValues": null
@@ -8414,6 +10888,17 @@
           "enumValues": null
         },
         {
+          "name": "keyDownRouting",
+          "type": "\u0022bubble\u0022 | \u0022tunnel\u0022",
+          "documentation": "Use tunnel for command scopes that must run before native text handling; bubble preserves ordinary child-first routing.",
+          "required": false,
+          "default": "bubble",
+          "enumValues": [
+            "bubble",
+            "tunnel"
+          ]
+        },
+        {
           "name": "onKeyUp",
           "type": "(event: KeyEvent) =\u003E boolean",
           "documentation": "Handles a normalized key-up event.",
@@ -8481,6 +10966,78 @@
           "name": "onDrop",
           "type": "(event: DropEvent) =\u003E void | Promise\u003Cunknown\u003E",
           "documentation": "Receives normalized text and local-file drop data.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "cursor",
+          "type": "\u0022default\u0022 | \u0022arrow\u0022 | \u0022cross\u0022 | \u0022hand\u0022 | \u0022ibeam\u0022 | \u0022sizeAll\u0022 | \u0022none\u0022 | \u0022wait\u0022",
+          "documentation": "Native pointer cursor; default inherits the parent cursor.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "isHitTestVisible",
+          "type": "boolean",
+          "documentation": "Whether the control participates in pointer hit testing.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "focusable",
+          "type": "boolean",
+          "documentation": "Overrides native keyboard focusability.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "tabIndex",
+          "type": "number",
+          "documentation": "Keyboard traversal order within the native focus scope.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onFocus",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called when this control receives keyboard focus.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onBlur",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called when this control loses keyboard focus.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onEditStarted",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called at the start of a slider pointer or keyboard edit.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onEditCompleted",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called after final value notification on release, key-up, or focus loss.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onWheel",
+          "type": "(event: WheelEvent) =\u003E boolean",
+          "documentation": "Handles native wheel input in local DIPs.",
           "required": false,
           "default": null,
           "enumValues": null
@@ -8715,6 +11272,17 @@
           "enumValues": null
         },
         {
+          "name": "keyDownRouting",
+          "type": "\u0022bubble\u0022 | \u0022tunnel\u0022",
+          "documentation": "Use tunnel for command scopes that must run before native text handling; bubble preserves ordinary child-first routing.",
+          "required": false,
+          "default": "bubble",
+          "enumValues": [
+            "bubble",
+            "tunnel"
+          ]
+        },
+        {
           "name": "onKeyUp",
           "type": "(event: KeyEvent) =\u003E boolean",
           "documentation": "Handles a normalized key-up event.",
@@ -8782,6 +11350,78 @@
           "name": "onDrop",
           "type": "(event: DropEvent) =\u003E void | Promise\u003Cunknown\u003E",
           "documentation": "Receives normalized text and local-file drop data.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "cursor",
+          "type": "\u0022default\u0022 | \u0022arrow\u0022 | \u0022cross\u0022 | \u0022hand\u0022 | \u0022ibeam\u0022 | \u0022sizeAll\u0022 | \u0022none\u0022 | \u0022wait\u0022",
+          "documentation": "Native pointer cursor; default inherits the parent cursor.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "isHitTestVisible",
+          "type": "boolean",
+          "documentation": "Whether the control participates in pointer hit testing.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "focusable",
+          "type": "boolean",
+          "documentation": "Overrides native keyboard focusability.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "tabIndex",
+          "type": "number",
+          "documentation": "Keyboard traversal order within the native focus scope.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onFocus",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called when this control receives keyboard focus.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onBlur",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called when this control loses keyboard focus.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onEditStarted",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called at the start of a slider pointer or keyboard edit.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onEditCompleted",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called after final value notification on release, key-up, or focus loss.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onWheel",
+          "type": "(event: WheelEvent) =\u003E boolean",
+          "documentation": "Handles native wheel input in local DIPs.",
           "required": false,
           "default": null,
           "enumValues": null
@@ -9032,6 +11672,17 @@
           "enumValues": null
         },
         {
+          "name": "keyDownRouting",
+          "type": "\u0022bubble\u0022 | \u0022tunnel\u0022",
+          "documentation": "Use tunnel for command scopes that must run before native text handling; bubble preserves ordinary child-first routing.",
+          "required": false,
+          "default": "bubble",
+          "enumValues": [
+            "bubble",
+            "tunnel"
+          ]
+        },
+        {
           "name": "onKeyUp",
           "type": "(event: KeyEvent) =\u003E boolean",
           "documentation": "Handles a normalized key-up event.",
@@ -9099,6 +11750,78 @@
           "name": "onDrop",
           "type": "(event: DropEvent) =\u003E void | Promise\u003Cunknown\u003E",
           "documentation": "Receives normalized text and local-file drop data.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "cursor",
+          "type": "\u0022default\u0022 | \u0022arrow\u0022 | \u0022cross\u0022 | \u0022hand\u0022 | \u0022ibeam\u0022 | \u0022sizeAll\u0022 | \u0022none\u0022 | \u0022wait\u0022",
+          "documentation": "Native pointer cursor; default inherits the parent cursor.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "isHitTestVisible",
+          "type": "boolean",
+          "documentation": "Whether the control participates in pointer hit testing.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "focusable",
+          "type": "boolean",
+          "documentation": "Overrides native keyboard focusability.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "tabIndex",
+          "type": "number",
+          "documentation": "Keyboard traversal order within the native focus scope.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onFocus",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called when this control receives keyboard focus.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onBlur",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called when this control loses keyboard focus.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onEditStarted",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called at the start of a slider pointer or keyboard edit.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onEditCompleted",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called after final value notification on release, key-up, or focus loss.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onWheel",
+          "type": "(event: WheelEvent) =\u003E boolean",
+          "documentation": "Handles native wheel input in local DIPs.",
           "required": false,
           "default": null,
           "enumValues": null
@@ -9244,6 +11967,14 @@
           "documentation": "Current value of the control.",
           "required": false,
           "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "showButtonSpinner",
+          "type": "boolean",
+          "documentation": "Shows native increment/decrement buttons. Keyboard arrow editing remains available when hidden.",
+          "required": false,
+          "default": "true",
           "enumValues": null
         },
         {
@@ -9476,6 +12207,17 @@
           "enumValues": null
         },
         {
+          "name": "keyDownRouting",
+          "type": "\u0022bubble\u0022 | \u0022tunnel\u0022",
+          "documentation": "Use tunnel for command scopes that must run before native text handling; bubble preserves ordinary child-first routing.",
+          "required": false,
+          "default": "bubble",
+          "enumValues": [
+            "bubble",
+            "tunnel"
+          ]
+        },
+        {
           "name": "onKeyUp",
           "type": "(event: KeyEvent) =\u003E boolean",
           "documentation": "Handles a normalized key-up event.",
@@ -9543,6 +12285,78 @@
           "name": "onDrop",
           "type": "(event: DropEvent) =\u003E void | Promise\u003Cunknown\u003E",
           "documentation": "Receives normalized text and local-file drop data.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "cursor",
+          "type": "\u0022default\u0022 | \u0022arrow\u0022 | \u0022cross\u0022 | \u0022hand\u0022 | \u0022ibeam\u0022 | \u0022sizeAll\u0022 | \u0022none\u0022 | \u0022wait\u0022",
+          "documentation": "Native pointer cursor; default inherits the parent cursor.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "isHitTestVisible",
+          "type": "boolean",
+          "documentation": "Whether the control participates in pointer hit testing.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "focusable",
+          "type": "boolean",
+          "documentation": "Overrides native keyboard focusability.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "tabIndex",
+          "type": "number",
+          "documentation": "Keyboard traversal order within the native focus scope.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onFocus",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called when this control receives keyboard focus.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onBlur",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called when this control loses keyboard focus.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onEditStarted",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called at the start of a slider pointer or keyboard edit.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onEditCompleted",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called after final value notification on release, key-up, or focus loss.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onWheel",
+          "type": "(event: WheelEvent) =\u003E boolean",
+          "documentation": "Handles native wheel input in local DIPs.",
           "required": false,
           "default": null,
           "enumValues": null
@@ -9785,6 +12599,17 @@
           "enumValues": null
         },
         {
+          "name": "keyDownRouting",
+          "type": "\u0022bubble\u0022 | \u0022tunnel\u0022",
+          "documentation": "Use tunnel for command scopes that must run before native text handling; bubble preserves ordinary child-first routing.",
+          "required": false,
+          "default": "bubble",
+          "enumValues": [
+            "bubble",
+            "tunnel"
+          ]
+        },
+        {
           "name": "onKeyUp",
           "type": "(event: KeyEvent) =\u003E boolean",
           "documentation": "Handles a normalized key-up event.",
@@ -9852,6 +12677,78 @@
           "name": "onDrop",
           "type": "(event: DropEvent) =\u003E void | Promise\u003Cunknown\u003E",
           "documentation": "Receives normalized text and local-file drop data.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "cursor",
+          "type": "\u0022default\u0022 | \u0022arrow\u0022 | \u0022cross\u0022 | \u0022hand\u0022 | \u0022ibeam\u0022 | \u0022sizeAll\u0022 | \u0022none\u0022 | \u0022wait\u0022",
+          "documentation": "Native pointer cursor; default inherits the parent cursor.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "isHitTestVisible",
+          "type": "boolean",
+          "documentation": "Whether the control participates in pointer hit testing.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "focusable",
+          "type": "boolean",
+          "documentation": "Overrides native keyboard focusability.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "tabIndex",
+          "type": "number",
+          "documentation": "Keyboard traversal order within the native focus scope.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onFocus",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called when this control receives keyboard focus.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onBlur",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called when this control loses keyboard focus.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onEditStarted",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called at the start of a slider pointer or keyboard edit.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onEditCompleted",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called after final value notification on release, key-up, or focus loss.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onWheel",
+          "type": "(event: WheelEvent) =\u003E boolean",
+          "documentation": "Handles native wheel input in local DIPs.",
           "required": false,
           "default": null,
           "enumValues": null
@@ -10094,6 +12991,17 @@
           "enumValues": null
         },
         {
+          "name": "keyDownRouting",
+          "type": "\u0022bubble\u0022 | \u0022tunnel\u0022",
+          "documentation": "Use tunnel for command scopes that must run before native text handling; bubble preserves ordinary child-first routing.",
+          "required": false,
+          "default": "bubble",
+          "enumValues": [
+            "bubble",
+            "tunnel"
+          ]
+        },
+        {
           "name": "onKeyUp",
           "type": "(event: KeyEvent) =\u003E boolean",
           "documentation": "Handles a normalized key-up event.",
@@ -10161,6 +13069,78 @@
           "name": "onDrop",
           "type": "(event: DropEvent) =\u003E void | Promise\u003Cunknown\u003E",
           "documentation": "Receives normalized text and local-file drop data.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "cursor",
+          "type": "\u0022default\u0022 | \u0022arrow\u0022 | \u0022cross\u0022 | \u0022hand\u0022 | \u0022ibeam\u0022 | \u0022sizeAll\u0022 | \u0022none\u0022 | \u0022wait\u0022",
+          "documentation": "Native pointer cursor; default inherits the parent cursor.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "isHitTestVisible",
+          "type": "boolean",
+          "documentation": "Whether the control participates in pointer hit testing.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "focusable",
+          "type": "boolean",
+          "documentation": "Overrides native keyboard focusability.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "tabIndex",
+          "type": "number",
+          "documentation": "Keyboard traversal order within the native focus scope.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onFocus",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called when this control receives keyboard focus.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onBlur",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called when this control loses keyboard focus.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onEditStarted",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called at the start of a slider pointer or keyboard edit.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onEditCompleted",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called after final value notification on release, key-up, or focus loss.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onWheel",
+          "type": "(event: WheelEvent) =\u003E boolean",
+          "documentation": "Handles native wheel input in local DIPs.",
           "required": false,
           "default": null,
           "enumValues": null
@@ -10419,6 +13399,17 @@
           "enumValues": null
         },
         {
+          "name": "keyDownRouting",
+          "type": "\u0022bubble\u0022 | \u0022tunnel\u0022",
+          "documentation": "Use tunnel for command scopes that must run before native text handling; bubble preserves ordinary child-first routing.",
+          "required": false,
+          "default": "bubble",
+          "enumValues": [
+            "bubble",
+            "tunnel"
+          ]
+        },
+        {
           "name": "onKeyUp",
           "type": "(event: KeyEvent) =\u003E boolean",
           "documentation": "Handles a normalized key-up event.",
@@ -10486,6 +13477,78 @@
           "name": "onDrop",
           "type": "(event: DropEvent) =\u003E void | Promise\u003Cunknown\u003E",
           "documentation": "Receives normalized text and local-file drop data.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "cursor",
+          "type": "\u0022default\u0022 | \u0022arrow\u0022 | \u0022cross\u0022 | \u0022hand\u0022 | \u0022ibeam\u0022 | \u0022sizeAll\u0022 | \u0022none\u0022 | \u0022wait\u0022",
+          "documentation": "Native pointer cursor; default inherits the parent cursor.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "isHitTestVisible",
+          "type": "boolean",
+          "documentation": "Whether the control participates in pointer hit testing.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "focusable",
+          "type": "boolean",
+          "documentation": "Overrides native keyboard focusability.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "tabIndex",
+          "type": "number",
+          "documentation": "Keyboard traversal order within the native focus scope.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onFocus",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called when this control receives keyboard focus.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onBlur",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called when this control loses keyboard focus.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onEditStarted",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called at the start of a slider pointer or keyboard edit.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onEditCompleted",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called after final value notification on release, key-up, or focus loss.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onWheel",
+          "type": "(event: WheelEvent) =\u003E boolean",
+          "documentation": "Handles native wheel input in local DIPs.",
           "required": false,
           "default": null,
           "enumValues": null
@@ -10736,6 +13799,17 @@
           "enumValues": null
         },
         {
+          "name": "keyDownRouting",
+          "type": "\u0022bubble\u0022 | \u0022tunnel\u0022",
+          "documentation": "Use tunnel for command scopes that must run before native text handling; bubble preserves ordinary child-first routing.",
+          "required": false,
+          "default": "bubble",
+          "enumValues": [
+            "bubble",
+            "tunnel"
+          ]
+        },
+        {
           "name": "onKeyUp",
           "type": "(event: KeyEvent) =\u003E boolean",
           "documentation": "Handles a normalized key-up event.",
@@ -10803,6 +13877,78 @@
           "name": "onDrop",
           "type": "(event: DropEvent) =\u003E void | Promise\u003Cunknown\u003E",
           "documentation": "Receives normalized text and local-file drop data.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "cursor",
+          "type": "\u0022default\u0022 | \u0022arrow\u0022 | \u0022cross\u0022 | \u0022hand\u0022 | \u0022ibeam\u0022 | \u0022sizeAll\u0022 | \u0022none\u0022 | \u0022wait\u0022",
+          "documentation": "Native pointer cursor; default inherits the parent cursor.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "isHitTestVisible",
+          "type": "boolean",
+          "documentation": "Whether the control participates in pointer hit testing.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "focusable",
+          "type": "boolean",
+          "documentation": "Overrides native keyboard focusability.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "tabIndex",
+          "type": "number",
+          "documentation": "Keyboard traversal order within the native focus scope.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onFocus",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called when this control receives keyboard focus.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onBlur",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called when this control loses keyboard focus.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onEditStarted",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called at the start of a slider pointer or keyboard edit.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onEditCompleted",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called after final value notification on release, key-up, or focus loss.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onWheel",
+          "type": "(event: WheelEvent) =\u003E boolean",
+          "documentation": "Handles native wheel input in local DIPs.",
           "required": false,
           "default": null,
           "enumValues": null
@@ -11029,6 +14175,17 @@
           "enumValues": null
         },
         {
+          "name": "keyDownRouting",
+          "type": "\u0022bubble\u0022 | \u0022tunnel\u0022",
+          "documentation": "Use tunnel for command scopes that must run before native text handling; bubble preserves ordinary child-first routing.",
+          "required": false,
+          "default": "bubble",
+          "enumValues": [
+            "bubble",
+            "tunnel"
+          ]
+        },
+        {
           "name": "onKeyUp",
           "type": "(event: KeyEvent) =\u003E boolean",
           "documentation": "Handles a normalized key-up event.",
@@ -11096,6 +14253,78 @@
           "name": "onDrop",
           "type": "(event: DropEvent) =\u003E void | Promise\u003Cunknown\u003E",
           "documentation": "Receives normalized text and local-file drop data.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "cursor",
+          "type": "\u0022default\u0022 | \u0022arrow\u0022 | \u0022cross\u0022 | \u0022hand\u0022 | \u0022ibeam\u0022 | \u0022sizeAll\u0022 | \u0022none\u0022 | \u0022wait\u0022",
+          "documentation": "Native pointer cursor; default inherits the parent cursor.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "isHitTestVisible",
+          "type": "boolean",
+          "documentation": "Whether the control participates in pointer hit testing.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "focusable",
+          "type": "boolean",
+          "documentation": "Overrides native keyboard focusability.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "tabIndex",
+          "type": "number",
+          "documentation": "Keyboard traversal order within the native focus scope.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onFocus",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called when this control receives keyboard focus.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onBlur",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called when this control loses keyboard focus.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onEditStarted",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called at the start of a slider pointer or keyboard edit.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onEditCompleted",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called after final value notification on release, key-up, or focus loss.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onWheel",
+          "type": "(event: WheelEvent) =\u003E boolean",
+          "documentation": "Handles native wheel input in local DIPs.",
           "required": false,
           "default": null,
           "enumValues": null
@@ -11359,6 +14588,17 @@
           "enumValues": null
         },
         {
+          "name": "keyDownRouting",
+          "type": "\u0022bubble\u0022 | \u0022tunnel\u0022",
+          "documentation": "Use tunnel for command scopes that must run before native text handling; bubble preserves ordinary child-first routing.",
+          "required": false,
+          "default": "bubble",
+          "enumValues": [
+            "bubble",
+            "tunnel"
+          ]
+        },
+        {
           "name": "onKeyUp",
           "type": "(event: KeyEvent) =\u003E boolean",
           "documentation": "Handles a normalized key-up event.",
@@ -11426,6 +14666,78 @@
           "name": "onDrop",
           "type": "(event: DropEvent) =\u003E void | Promise\u003Cunknown\u003E",
           "documentation": "Receives normalized text and local-file drop data.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "cursor",
+          "type": "\u0022default\u0022 | \u0022arrow\u0022 | \u0022cross\u0022 | \u0022hand\u0022 | \u0022ibeam\u0022 | \u0022sizeAll\u0022 | \u0022none\u0022 | \u0022wait\u0022",
+          "documentation": "Native pointer cursor; default inherits the parent cursor.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "isHitTestVisible",
+          "type": "boolean",
+          "documentation": "Whether the control participates in pointer hit testing.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "focusable",
+          "type": "boolean",
+          "documentation": "Overrides native keyboard focusability.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "tabIndex",
+          "type": "number",
+          "documentation": "Keyboard traversal order within the native focus scope.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onFocus",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called when this control receives keyboard focus.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onBlur",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called when this control loses keyboard focus.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onEditStarted",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called at the start of a slider pointer or keyboard edit.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onEditCompleted",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called after final value notification on release, key-up, or focus loss.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onWheel",
+          "type": "(event: WheelEvent) =\u003E boolean",
+          "documentation": "Handles native wheel input in local DIPs.",
           "required": false,
           "default": null,
           "enumValues": null
@@ -11668,6 +14980,17 @@
           "enumValues": null
         },
         {
+          "name": "keyDownRouting",
+          "type": "\u0022bubble\u0022 | \u0022tunnel\u0022",
+          "documentation": "Use tunnel for command scopes that must run before native text handling; bubble preserves ordinary child-first routing.",
+          "required": false,
+          "default": "bubble",
+          "enumValues": [
+            "bubble",
+            "tunnel"
+          ]
+        },
+        {
           "name": "onKeyUp",
           "type": "(event: KeyEvent) =\u003E boolean",
           "documentation": "Handles a normalized key-up event.",
@@ -11735,6 +15058,78 @@
           "name": "onDrop",
           "type": "(event: DropEvent) =\u003E void | Promise\u003Cunknown\u003E",
           "documentation": "Receives normalized text and local-file drop data.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "cursor",
+          "type": "\u0022default\u0022 | \u0022arrow\u0022 | \u0022cross\u0022 | \u0022hand\u0022 | \u0022ibeam\u0022 | \u0022sizeAll\u0022 | \u0022none\u0022 | \u0022wait\u0022",
+          "documentation": "Native pointer cursor; default inherits the parent cursor.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "isHitTestVisible",
+          "type": "boolean",
+          "documentation": "Whether the control participates in pointer hit testing.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "focusable",
+          "type": "boolean",
+          "documentation": "Overrides native keyboard focusability.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "tabIndex",
+          "type": "number",
+          "documentation": "Keyboard traversal order within the native focus scope.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onFocus",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called when this control receives keyboard focus.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onBlur",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called when this control loses keyboard focus.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onEditStarted",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called at the start of a slider pointer or keyboard edit.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onEditCompleted",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called after final value notification on release, key-up, or focus loss.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onWheel",
+          "type": "(event: WheelEvent) =\u003E boolean",
+          "documentation": "Handles native wheel input in local DIPs.",
           "required": false,
           "default": null,
           "enumValues": null
@@ -11969,6 +15364,17 @@
           "enumValues": null
         },
         {
+          "name": "keyDownRouting",
+          "type": "\u0022bubble\u0022 | \u0022tunnel\u0022",
+          "documentation": "Use tunnel for command scopes that must run before native text handling; bubble preserves ordinary child-first routing.",
+          "required": false,
+          "default": "bubble",
+          "enumValues": [
+            "bubble",
+            "tunnel"
+          ]
+        },
+        {
           "name": "onKeyUp",
           "type": "(event: KeyEvent) =\u003E boolean",
           "documentation": "Handles a normalized key-up event.",
@@ -12036,6 +15442,78 @@
           "name": "onDrop",
           "type": "(event: DropEvent) =\u003E void | Promise\u003Cunknown\u003E",
           "documentation": "Receives normalized text and local-file drop data.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "cursor",
+          "type": "\u0022default\u0022 | \u0022arrow\u0022 | \u0022cross\u0022 | \u0022hand\u0022 | \u0022ibeam\u0022 | \u0022sizeAll\u0022 | \u0022none\u0022 | \u0022wait\u0022",
+          "documentation": "Native pointer cursor; default inherits the parent cursor.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "isHitTestVisible",
+          "type": "boolean",
+          "documentation": "Whether the control participates in pointer hit testing.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "focusable",
+          "type": "boolean",
+          "documentation": "Overrides native keyboard focusability.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "tabIndex",
+          "type": "number",
+          "documentation": "Keyboard traversal order within the native focus scope.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onFocus",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called when this control receives keyboard focus.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onBlur",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called when this control loses keyboard focus.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onEditStarted",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called at the start of a slider pointer or keyboard edit.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onEditCompleted",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called after final value notification on release, key-up, or focus loss.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onWheel",
+          "type": "(event: WheelEvent) =\u003E boolean",
+          "documentation": "Handles native wheel input in local DIPs.",
           "required": false,
           "default": null,
           "enumValues": null
@@ -12262,6 +15740,17 @@
           "enumValues": null
         },
         {
+          "name": "keyDownRouting",
+          "type": "\u0022bubble\u0022 | \u0022tunnel\u0022",
+          "documentation": "Use tunnel for command scopes that must run before native text handling; bubble preserves ordinary child-first routing.",
+          "required": false,
+          "default": "bubble",
+          "enumValues": [
+            "bubble",
+            "tunnel"
+          ]
+        },
+        {
           "name": "onKeyUp",
           "type": "(event: KeyEvent) =\u003E boolean",
           "documentation": "Handles a normalized key-up event.",
@@ -12334,6 +15823,78 @@
           "enumValues": null
         },
         {
+          "name": "cursor",
+          "type": "\u0022default\u0022 | \u0022arrow\u0022 | \u0022cross\u0022 | \u0022hand\u0022 | \u0022ibeam\u0022 | \u0022sizeAll\u0022 | \u0022none\u0022 | \u0022wait\u0022",
+          "documentation": "Native pointer cursor; default inherits the parent cursor.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "isHitTestVisible",
+          "type": "boolean",
+          "documentation": "Whether the control participates in pointer hit testing.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "focusable",
+          "type": "boolean",
+          "documentation": "Overrides native keyboard focusability.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "tabIndex",
+          "type": "number",
+          "documentation": "Keyboard traversal order within the native focus scope.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onFocus",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called when this control receives keyboard focus.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onBlur",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called when this control loses keyboard focus.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onEditStarted",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called at the start of a slider pointer or keyboard edit.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onEditCompleted",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
+          "documentation": "Called after final value notification on release, key-up, or focus loss.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onWheel",
+          "type": "(event: WheelEvent) =\u003E boolean",
+          "documentation": "Handles native wheel input in local DIPs.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
           "name": "header",
           "type": "string",
           "documentation": "Text displayed as the item header.",
@@ -12347,6 +15908,14 @@
           "documentation": "Whether the toggle control is checked.",
           "required": false,
           "default": false,
+          "enumValues": null
+        },
+        {
+          "name": "inputGesture",
+          "type": "string",
+          "documentation": "Native shortcut display, for example Ctrl\u002BShift\u002BS; command routing remains application controlled.",
+          "required": false,
+          "default": null,
           "enumValues": null
         },
         {

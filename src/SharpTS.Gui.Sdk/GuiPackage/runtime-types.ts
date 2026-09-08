@@ -29,6 +29,8 @@ export type WindowState = "normal" | "minimized" | "maximized" | "fullScreen";
 
 /** Coalesced post-layout metrics for the containing desktop window. @category Core and Composition */
 export interface WindowMetricsEvent {
+    /** Resolved native theme, including system theme changes. */
+    readonly theme: "light" | "dark";
     /** Arranged client width in device-independent pixels. */
     readonly clientWidth: number;
     /** Arranged client height in device-independent pixels. */
@@ -209,8 +211,30 @@ export type ButtonHandle = { readonly __buttonHandle: never };
 /** Opaque handle type for TextBox controls. @category Core and Composition */
 export type TextBoxHandle = { readonly __textBoxHandle: never };
 
+/** Native viewport dimensions and scroll offsets, in DIPs. @category Core and Composition */
+export interface ScrollEvent {
+    readonly offsetX: number;
+    readonly offsetY: number;
+    readonly viewportWidth: number;
+    readonly viewportHeight: number;
+    readonly extentWidth: number;
+    readonly extentHeight: number;
+}
+/** Native wheel event. @category Core and Composition */
+export interface WheelEvent {
+    readonly x: number;
+    readonly y: number;
+    readonly deltaX: number;
+    readonly deltaY: number;
+    readonly ctrl: boolean;
+    readonly alt: boolean;
+    readonly shift: boolean;
+    readonly meta: boolean;
+}
 /** Normalized native keyboard event. @category Core and Composition */
 export interface KeyEvent {
+    /** True when this event originates in an editable native text control. */
+    readonly isTextInput?: boolean;
     /** Platform-independent key name. */
     readonly key: string;
     /** Whether Control is pressed. */
@@ -246,6 +270,24 @@ export interface DropEvent {
 
 /** Props shared by all built-in controls. @category Core and Composition */
 export interface CommonProps<THandle = unknown> {
+    /** Native pointer cursor. Omit to inherit the parent cursor. */
+    cursor?: "default" | "arrow" | "cross" | "hand" | "ibeam" | "sizeAll" | "none" | "wait";
+    /** Allows overlays to render without intercepting pointer input. */
+    isHitTestVisible?: boolean;
+    /** Overrides native keyboard focusability. */
+    focusable?: boolean;
+    /** Keyboard traversal order within the native focus scope. */
+    tabIndex?: number;
+    /** Called when this control receives keyboard focus. */
+    onFocus?: () => void | Promise<unknown>;
+    /** Called when this control loses keyboard focus. */
+    onBlur?: () => void | Promise<unknown>;
+    /** Called at the start of a slider pointer or keyboard edit. */
+    onEditStarted?: () => void | Promise<unknown>;
+    /** Called after the final value notification on release, key-up, or focus loss. */
+    onEditCompleted?: () => void | Promise<unknown>;
+    /** Handles wheel deltas in native scroll units and local DIP coordinates. */
+    onWheel?: (event: WheelEvent) => boolean;
     /** Receives the retained native control handle. */
     ref?: ControlRef<THandle>;
     /** Preferred control width in device-independent pixels. */
@@ -294,6 +336,8 @@ export interface CommonProps<THandle = unknown> {
     canvasTop?: number;
     /** Handles a normalized key-down event. */
     onKeyDown?: (event: KeyEvent) => boolean;
+    /** Use tunnel to intercept commands before native text handling; defaults to bubble. */
+    keyDownRouting?: "bubble" | "tunnel";
     /** Handles a normalized key-up event. */
     onKeyUp?: (event: KeyEvent) => boolean;
     /** Captures a pressed pointer until release, cancellation, unmount, or disposal. */

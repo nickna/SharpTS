@@ -59,6 +59,7 @@ public sealed record GuiVNode(
     string? Placeholder = null,
     bool IsReadOnly = false,
     bool AcceptsReturn = false,
+    string TextBoxAppearance = "normal",
     int MaxLength = 0,
     bool IsPassword = false,
     string? GroupName = null,
@@ -115,6 +116,23 @@ public sealed record GuiVNode(
     int SourceLine = 0,
     int SourceColumn = 0)
 {
+    public bool ShowButtonSpinner { get; init; } = true;
+    public string Cursor { get; init; } = "default";
+    public string KeyDownRouting { get; init; } = "bubble";
+    public bool IsHitTestVisible { get; init; } = true;
+    public bool? Focusable { get; init; }
+    public int TabIndex { get; init; }
+    public bool IsDefault { get; init; }
+    public bool IsCancel { get; init; }
+    public string? InputGesture { get; init; }
+    public double OffsetX { get; init; } = double.NaN;
+    public double OffsetY { get; init; } = double.NaN;
+    public Action? Focused { get; init; }
+    public Action? Blurred { get; init; }
+    public Action? EditStarted { get; init; }
+    public Action? EditCompleted { get; init; }
+    public Action<string>? ScrollChanged { get; init; }
+    public Func<string, bool>? Wheel { get; init; }
     internal string? BoundaryPath { get; init; }
     internal string[] SpecifiedProperties { get; init; } = [];
 }

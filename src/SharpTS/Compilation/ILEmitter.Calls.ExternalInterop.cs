@@ -1291,9 +1291,15 @@ public partial class ILEmitter
     {
         var adapter = _ctx.TypeMapper.DelegateAdapters.GetOrEmit(delegateType);
 
-        // Cast the $TSFunction reference (currently typed as object on the stack) to
-        // the emitted $TSFunction type so the adapter ctor signature matches.
-        IL.Emit(OpCodes.Castclass, _ctx.Runtime!.TSFunctionType);
+        // Optional handlers must stay null; an adapter around null is a non-null
+        // delegate that subscribes an event and then crashes on its first invocation.
+        Label hasHandler = IL.DefineLabel();
+        Label done = IL.DefineLabel();
+        IL.Emit(OpCodes.Dup);
+        IL.Emit(OpCodes.Brtrue, hasHandler);
+        IL.Emit(OpCodes.Castclass, delegateType);
+        IL.Emit(OpCodes.Br, done);
+        IL.MarkLabel(hasHandler);
 
         // new Adapter(tsFunction) — consumes the $TSFunction, leaves the adapter on the stack.
         // That adapter also serves as the delegate's target instance for the ctor below.
@@ -1312,6 +1318,7 @@ public partial class ILEmitter
                 $"Delegate type '{delegateType.FullName}' lacks the standard (object, IntPtr) constructor.");
         IL.Emit(OpCodes.Newobj, delegateCtor);
 
+        IL.MarkLabel(done);
         SetStackUnknown();
     }
 }

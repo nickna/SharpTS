@@ -4,7 +4,7 @@ namespace SharpTS.Gui;
 internal static class GeneratedControlContract
 {
     internal const int SchemaVersion = 1;
-    internal const string SchemaHash = "9d07a1a4b39807ac966b79f227cf81f012bd735c41c1cc340ea446bc69d48d27";
+    internal const string SchemaHash = "6fe60bd46613b86fa8ec8e2cb2e609e7510dd972e00435e14e49268fd738c778";
     internal static NodeDescriptor[] CreateDescriptors() =>
     [
         new WindowDescriptor(),
@@ -21,6 +21,7 @@ internal static class GeneratedControlContract
         new TextBoxDescriptor(),
         new TextBoxDescriptor("PasswordBox"),
         new CheckBoxDescriptor(),
+        new CheckBoxDescriptor("ToggleButton"),
         new CheckBoxDescriptor("RadioButton"),
         new CheckBoxDescriptor("ToggleSwitch"),
         new ComboBoxDescriptor(),

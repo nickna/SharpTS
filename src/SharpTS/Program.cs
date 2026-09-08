@@ -1473,7 +1473,8 @@ static void VerifyCompiledAssembly(string outputPath, string? sdkPath, Reference
         .Distinct(StringComparer.OrdinalIgnoreCase);
     using var verifier = new ILVerifier(sdkPath, probeDirs);
     using var stream = File.OpenRead(outputPath);
-    verifier.VerifyAndReport(stream);
+    if (!verifier.VerifyAndReport(stream))
+        throw new InvalidOperationException("Emitted IL verification failed.");
 }
 
 static void CreateNuGetPackage(

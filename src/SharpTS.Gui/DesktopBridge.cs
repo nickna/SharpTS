@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text.Json;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
+using Avalonia.VisualTree;
 
 namespace SharpTS.Gui;
 
@@ -19,10 +20,19 @@ public sealed class DesktopRef
     internal void Attach(object? value) => Current = (ControlRef?)value;
     internal bool IsAttached => Current is not null;
     public bool isAttached => IsAttached;
-    public bool focus() => Current?.Control.Focus() == true;
+    public bool focus()
+    {
+        Control? control = Current?.Control;
+        if (control is NumericUpDown numeric)
+        {
+            numeric.ApplyTemplate();
+            control = numeric.GetVisualDescendants().OfType<TextBox>().FirstOrDefault() ?? control;
+        }
+        return control?.Focus() == true;
+    }
 }
 
-public static class DesktopBridge
+public static partial class DesktopBridge
 {
     public const int GuiApiVersion = 1;
     public const int CustomControlProviderApiVersion = 1;
@@ -354,6 +364,7 @@ public static class DesktopBridge
         string? placeholder,
         bool isReadOnly,
         bool acceptsReturn,
+        string appearance,
         double maxLength,
         bool isPassword,
         Action<string>? textChanged,
@@ -366,6 +377,7 @@ public static class DesktopBridge
             Placeholder: EmptyToNull(placeholder),
             IsReadOnly: isReadOnly,
             AcceptsReturn: acceptsReturn,
+            TextBoxAppearance: appearance,
             MaxLength: ToInteger(maxLength, nameof(maxLength)),
             IsPassword: isPassword,
             TextChanged: textChanged,
@@ -588,12 +600,12 @@ public static class DesktopBridge
             context.InteractionServices.ShowMessageAsync(owner, title, message, buttons)));
     }
 
-    public static Task<object?> ShowOpenFileDialogJsonAsync(string title, bool allowMultiple, string filtersJson)
+    public static Task<object?> ShowOpenFileDialogJsonAsync(string title, bool allowMultiple, string filtersJson, string? initialDirectory = null)
     {
         DesktopRuntimeContext context = RequireContext();
         Window owner = context.RequireWindowForServices();
         return context.ScheduleDesktopService(() => AsGuestStringListJsonAsync(
-            context.InteractionServices.OpenFilesAsync(owner, title, allowMultiple, filtersJson)));
+            context.InteractionServices.OpenFilesAsync(owner, title, allowMultiple, filtersJson, initialDirectory)));
     }
 
     public static Task<object?> ShowSaveFileDialogAsync(string title, string suggestedFileName, string defaultExtension, string filtersJson)

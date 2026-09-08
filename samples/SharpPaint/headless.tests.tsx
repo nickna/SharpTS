@@ -1,259 +1,285 @@
-import { createDesktopApplication } from "@sharpts/gui";
+import { createDesktopApplication, DesktopWindow } from "@sharpts/gui";
 import { createDesktopTestDriver, DesktopTestDriver } from "@sharpts/gui/testing";
-import { existsSync, unlinkSync, writeFileSync } from "fs";
+import { captureHeadlessSnapshot } from "@sharpts/gui/devtools";
+import { existsSync, unlinkSync, writeFileSync, readFileSync } from "fs";
 import { join } from "path";
 import { SharpPaintShowcase } from "./SharpPaintApp";
-import { createDocument, serializeProject } from "./document";
+import { PAINT_STYLES } from "./controls";
+import { createDocument, serializeProject, parseProject } from "./document";
 
 function expect(name: string, condition: boolean): void {
-    if (!condition) throw new Error("SharpPaint Headless assertion failed: " + name);
+    if (!condition) throw new Error("SharpPaint assertion failed: " + name);
 }
-
-const application = createDesktopApplication();
-let driver: DesktopTestDriver;
-let window: any = null;
-window = application.createWindow(<SharpPaintShowcase requestClose={() => window.close()} />, { main: true });
-driver = createDesktopTestDriver(window);
-let eraserWindow: any = null;
-eraserWindow = application.createWindow(<SharpPaintShowcase requestClose={() => eraserWindow.close()} />);
-const eraserDriver = createDesktopTestDriver(eraserWindow);
-let cancelWindow: any = null;
-cancelWindow = application.createWindow(<SharpPaintShowcase requestClose={() => cancelWindow.close()} />);
-const cancelDriver = createDesktopTestDriver(cancelWindow);
-let responsiveWindow: any = null;
-responsiveWindow = application.createWindow(<SharpPaintShowcase requestClose={() => responsiveWindow.close()} />);
-const responsiveDriver = createDesktopTestDriver(responsiveWindow);
-let fillWindow: any = null;
-fillWindow = application.createWindow(
-    <SharpPaintShowcase initialDocument={createDocument(320, 240)} requestClose={() => fillWindow.close()} />);
-const fillDriver = createDesktopTestDriver(fillWindow);
-let textWindow: any = null;
-textWindow = application.createWindow(<SharpPaintShowcase requestClose={() => textWindow.close()} />);
-const textDriver = createDesktopTestDriver(textWindow);
-let effectWindow: any = null;
-effectWindow = application.createWindow(
-    <SharpPaintShowcase initialDocument={createDocument(320, 240)} requestClose={() => effectWindow.close()} />);
-const effectDriver = createDesktopTestDriver(effectWindow);
-const STATUS_TIMEOUT_MS = 15_000;
-function waitForStatus(testDriver: DesktopTestDriver, expected: string, then: () => void, deadline: number = Date.now() + STATUS_TIMEOUT_MS): void {
-    const actual = testDriver.getText("status");
-    if (actual === expected) { then(); return; }
-    if (Date.now() >= deadline) throw new Error("Timed out waiting for status '" + expected + "'; actual status was '" + actual + "'.");
-    setTimeout((() => waitForStatus(testDriver, expected, then, deadline)) as any, 10);
+const app = createDesktopApplication({ styles: PAINT_STYLES });
+let window: DesktopWindow;
+window = app.createWindow(
+    <SharpPaintShowcase initialDocument={createDocument(320, 240)} requestClose={() => window.close()} />,
+    { main: true }
+);
+const driver: DesktopTestDriver = createDesktopTestDriver(window);
+const openPath = join(process.cwd(), "SharpPaint.Headless.Open.sharpaint");
+const savePath = join(process.cwd(), "SharpPaint.Headless.Save.sharpaint");
+function cleanup(): void {
+    for (const file of [openPath, savePath]) if (existsSync(file)) unlinkSync(file);
 }
-const openProjectPath = join(process.cwd(), "SharpPaint.Headless.Open.sharpaint");
-const saveProjectPath = join(process.cwd(), "SharpPaint.Headless.Save.sharpaint");
-function cleanupProjectArtifacts(): void {
-    for (const path of [openProjectPath, saveProjectPath]) {
-        try { if (existsSync(path)) unlinkSync(path); } catch (_) { }
+process.on("exit", cleanup);
+writeFileSync(openPath, serializeProject(createDocument(320, 240)), "utf8");
+function delay(ms: number = 25): Promise<void> {
+    return new Promise<void>((resolve) => setTimeout(() => resolve(), ms));
+}
+function rendered(test: DesktopTestDriver = driver): Promise<void> {
+    return new Promise<void>((resolve) => test.afterRender(() => resolve()));
+}
+async function status(value: string): Promise<void> {
+    const deadline = Date.now() + 15000;
+    while (driver.getText("status") !== value) {
+        if (Date.now() > deadline) {
+            console.log(driver.getText("status"));
+            throw new Error("Timed out: " + value);
+        }
+        await delay();
     }
 }
-process.on("exit", cleanupProjectArtifacts);
-writeFileSync(openProjectPath, serializeProject(createDocument(320, 240)), "utf8");
-
-expect("initial canvas", driver.getText("command-count") === "1 commands · 1 layers");
-expect("paint surface automation", driver.getProperty("paint-surface", "automationName") === "Paint surface");
-expect("brush glyph content", driver.getText("brush-glyph") === "✎");
-expect("brush label content", driver.getText("brush-label") === "Brush");
-expect("filled-shapes label content", driver.getText("filled-label") === "Filled shapes");
-
-function runResponsiveScenario(): void {
-    responsiveDriver.afterRender(() => {
-        setTimeout((() => {
-            responsiveDriver.setWindowClientSize(840, 560);
-            responsiveDriver.afterRender(() => {
-                expect("narrow mode is reported (" + responsiveDriver.getText("layout-mode") + ")",
-                    responsiveDriver.getText("layout-mode") === "narrow");
-                expect("narrow layout hides layers", responsiveDriver.getProperty("layers-panel", "isVisible") === "False");
-                expect("narrow layout exposes layers toggle", responsiveDriver.getProperty("layers-toggle", "isVisible") === "True");
-                expect("short layout hides deferred layer action", responsiveDriver.getProperty("merge-layer", "isVisible") === "False");
-                responsiveDriver.click("layers-toggle");
-                responsiveDriver.afterRender(() => {
-                    expect("narrow layers can be opened", responsiveDriver.getProperty("layers-panel", "isVisible") === "True");
-                    responsiveDriver.setWindowClientSize(1180, 720);
-                    responsiveDriver.afterRender(() => {
-                        expect("wide mode is reported", responsiveDriver.getText("layout-mode") === "wide");
-                        expect("wide layout retains layers", responsiveDriver.getProperty("layers-panel", "isVisible") === "True");
-                        expect("wide layout hides layers toggle", responsiveDriver.getProperty("layers-toggle", "isVisible") === "False");
-                        expect("wide layout restores deferred layer action", responsiveDriver.getProperty("merge-layer", "isVisible") === "True");
-                        runCancelScenario();
-                    });
-                });
-            });
-        }) as any, 25);
-    });
+function count(): string {
+    return driver.getText("command-count");
 }
-
-function runCancelScenario(): void {
-    cancelDriver.afterRender(() => {
-        cancelDriver.pressPointer("paint-surface", { x: 16, y: 18 });
-        cancelDriver.movePointer("paint-surface", { x: 48, y: 52 });
-        cancelDriver.cancelPointer("paint-surface");
-        cancelDriver.afterRender(() => {
-            expect("cancelled gesture is discarded", cancelDriver.getText("command-count") === "1 commands · 1 layers");
-            runFillScenario();
-        });
-    });
+function snapshot(name: string): void {
+    const directory = process.env.SHARPAINT_SNAPSHOTS;
+    if (directory) captureHeadlessSnapshot(join(directory, name + ".png"));
 }
-
-function runFillScenario(): void {
-    fillDriver.afterRender(() => {
-        fillDriver.click("#ef4444");
-        fillDriver.afterRender(() => {
-            fillDriver.click("fill");
-            fillDriver.afterRender(() => {
-                fillDriver.pressPointer("paint-surface", { x: 20, y: 20 });
-                fillDriver.releasePointer("paint-surface", { x: 20, y: 20 });
-                waitForStatus(fillDriver, "Filled selected region", () => {
-                    fillDriver.click("picker");
-                    fillDriver.afterRender(() => {
-                        fillDriver.pressPointer("paint-surface", { x: 20, y: 20 });
-                        fillDriver.releasePointer("paint-surface", { x: 20, y: 20 });
-                        waitForStatus(fillDriver, "Picked #EF4444", () => {
-                            expect("picker updates shared color", fillDriver.getText("custom-color") === "#ef4444");
-                            runTextScenario();
-                        });
-                    });
-                });
-            });
-        });
-    });
+async function draw(): Promise<void> {
+    driver.dragPointer("paint-surface", [
+        { x: 12, y: 14 },
+        { x: 40, y: 42 },
+        { x: 72, y: 58 }
+    ]);
+    await rendered();
 }
+async function run(): Promise<void> {
+    console.log("Starting workflows");
+    await rendered();
+    await delay(100);
+    console.log("Initial render ready");
+    expect("initial fixture dimensions", driver.getProperty("paint-surface", "width") === "320");
+    expect("initial commands", count() === "1 commands · 1 layers");
+    driver.click("add-layer");
+    await rendered();
+    driver.click("undo");
+    await rendered();
+    await draw();
+    expect("Add layer / Undo / Draw retains valid selection", count() === "2 commands · 1 layers");
+    driver.click("undo");
+    await rendered();
+    expect("undo stroke", count() === "1 commands · 1 layers");
+    driver.click("redo");
+    await rendered();
+    expect("redo stroke", count() === "2 commands · 1 layers");
 
-function runTextScenario(): void {
-    textDriver.afterRender(() => {
-        textDriver.click("text");
-        textDriver.afterRender(() => {
-            textDriver.dragPointer("paint-surface", [{ x: 30, y: 30 }, { x: 260, y: 120 }]);
-            textDriver.afterRender(() => {
-                textDriver.setTextBoxValue("text-editor", "SharpTS text");
-                textDriver.afterRender(() => {
-                    textDriver.click("apply-text");
-                    textDriver.afterRender(() => {
-                        expect("text commits one retained command", textDriver.getText("command-count") === "2 commands · 1 layers");
-                        expect("text commit status", textDriver.getText("status") === "Text committed");
-                        runEffectScenario();
-                    });
-                });
-            });
-        });
-    });
-}
+    console.log("Drawing and history passed");
+    driver.focus("layer-name");
+    driver.pressKey("Ctrl+A");
+    driver.typeText("R B text with spaces");
+    await rendered();
+    expect(
+        "typing preserves shortcut letters and spaces",
+        driver.getText("layer-name") === "R B text with spaces"
+    );
+    expect("typing does not change tool", driver.getProperty("brush-tool", "isChecked") === "True");
+    driver.pressKey("Enter");
+    await rendered();
+    driver.click("undo");
+    await rendered();
+    expect("one rename undo", driver.getText("layer-name") === "Background");
+    driver.focus("layer-name");
+    driver.pressKey("Ctrl+A");
+    driver.typeText("Canceled name");
+    await rendered();
+    driver.pressKey("Escape");
+    await rendered();
+    expect("escape cancels rename", driver.getText("layer-name") === "Background");
+    driver.focus("paint-surface");
 
-function runEffectScenario(): void {
-    effectDriver.afterRender(() => {
-        effectDriver.clickMenuItem("effect-invert");
-        waitForStatus(effectDriver, "Invert applied", () => {
-            expect("instant effect rasterizes selected layer", effectDriver.getText("command-count") === "1 commands · 1 layers");
-            effectDriver.clickMenuItem("effect-blur");
-            effectDriver.afterRender(() => {
-                expect("effect dialog opens", effectDriver.getText("effect-title") === "Gaussian blur");
-                effectDriver.click("preview-effect");
-                waitForStatus(effectDriver, "Effect preview ready", () => {
-                    expect("effect preview is non-destructive", effectDriver.getText("command-count") === "1 commands · 1 layers");
-                    effectDriver.click("apply-effect");
-                    waitForStatus(effectDriver, "Gaussian blur applied", runMainScenario);
-                });
-            });
-        });
-    });
-}
+    driver.pressPointer("layer-opacity", { x: 20, y: 12 });
+    driver.setSliderValue("layer-opacity", 20);
+    driver.setSliderValue("layer-opacity", 45);
+    driver.setSliderValue("layer-opacity", 70);
+    driver.releasePointer("layer-opacity", { x: 90, y: 12 });
+    await rendered();
+    driver.click("undo");
+    await rendered();
+    expect(
+        "opacity gesture has one undo entry",
+        driver.getProperty("layer-opacity-number", "value") === "100"
+    );
 
-function runMainScenario(): void {
-    driver.afterRender(() => {
-        driver.dragPointer("paint-surface", [{ x: 12, y: 14 }, { x: 40, y: 42 }, { x: 72, y: 58 }]);
-        driver.afterRender(() => {
-            expect("brush gesture commits once", driver.getText("command-count") === "2 commands · 1 layers");
-            driver.click("undo");
-            driver.afterRender(() => {
-                expect("undo gesture", driver.getText("command-count") === "1 commands · 1 layers");
-                driver.click("redo");
-                driver.afterRender(() => {
-                    expect("redo gesture", driver.getText("command-count") === "2 commands · 1 layers");
-                    driver.click("add-layer");
-                    driver.afterRender(() => {
-                        expect("add layer", driver.getText("command-count") === "2 commands · 2 layers");
-                        driver.setSliderValue("layer-opacity", 0.4);
-                        driver.afterRender(() => {
-                            expect("opacity is a document edit",
-                                driver.getText("status") === "Redid document change" ||
-                                driver.getText("command-count") === "2 commands · 2 layers");
-                            runEraserScenario();
-                        });
-                    });
-                });
-            });
-        });
-    });
-}
-
-function runEraserScenario(): void {
-    eraserDriver.afterRender(() => {
-        eraserDriver.click("eraser");
-        eraserDriver.afterRender(() => {
-            eraserDriver.dragPointer("paint-surface", [{ x: 20, y: 20 }, { x: 60, y: 60 }]);
-            eraserDriver.afterRender(() => {
-                expect("eraser gesture commits", eraserDriver.getText("command-count") === "2 commands · 1 layers");
-                driver.setSliderValue("zoom", 1.25);
-                driver.afterRender(() => {
-                    expect("view change preserves command state", driver.getText("command-count") === "2 commands · 2 layers");
-                    runFileScenario();
-                });
-            });
-        });
-    });
-}
-
-function runFileScenario(): void {
-    driver.queueMessageDialogResult("yes");
+    console.log("Fields passed");
+    driver.focus("paint-surface");
     driver.click("new");
-    driver.afterRender(() => {
-        expect("new button opens dialog (" + driver.getText("status") + ")", driver.getText("new-width") === "1024");
-        driver.click("cancel-new");
-        driver.afterRender(() => {
-            driver.queueMessageDialogResult("yes");
-            driver.queueOpenFileDialogResult([openProjectPath]);
-            driver.click("open");
-            driver.afterRender(() => {
-                expect("open button loads project (" + driver.getText("status") + ")",
-                    driver.getText("status") === "Opened SharpPaint.Headless.Open.sharpaint");
-                driver.dragPointer("paint-surface", [{ x: 12, y: 14 }, { x: 40, y: 42 }]);
-                driver.afterRender(() => {
-                    expect("pre-save edit is retained", driver.getText("command-count") === "2 commands · 1 layers");
-                    driver.click("save");
-                    driver.afterRender(() => {
-                        expect("save button reports success",
-                            driver.getText("status") === "Saved SharpPaint.Headless.Open.sharpaint");
-                        expect("save preserves undo", driver.getProperty("undo", "isEnabled") === "True");
-                        driver.click("undo");
-                        driver.afterRender(() => {
-                            expect("undo remains functional after save", driver.getText("command-count") === "1 commands · 1 layers");
-                            driver.click("redo");
-                            driver.afterRender(() => {
-                                expect("redo remains functional after save", driver.getText("command-count") === "2 commands · 1 layers");
-                                driver.queueSaveFileDialogResult(saveProjectPath);
-                                driver.clickMenuItem("menu-save-as");
-                                driver.afterRender(() => {
-                                    expect("save-as menu writes project", existsSync(saveProjectPath));
-                                    driver.clickMenuItem("menu-new");
-                                    driver.afterRender(() => {
-                                        expect("new menu item opens dialog", driver.getText("new-width") === "1024");
-                                        setTimeout((() => {
-                                            try { application.dispose(); }
-                                            finally { cleanupProjectArtifacts(); }
-                                        }) as any, 25);
-                                    });
-                                });
-                            });
-                        });
-                    });
-                });
-            });
-        });
-    });
-}
+    await delay(100);
+    const dialog = driver.ownedWindow("New document");
+    expect("new dimensions use exact input", dialog.getProperty("new-width", "value") === "1024");
+    expect("dialog starts in the width field", dialog.isFocused("new-width"));
+    dialog.pressKey("Tab");
+    expect("tab stays in the dialog", dialog.isFocused("new-height"));
+    dialog.pressKey("Escape");
+    await rendered();
+    expect("cancel new preserves document", count() === "2 commands · 1 layers");
+    expect("dialog restores canvas focus", driver.isFocused("paint-surface"));
 
-// Pointer tools report handled state synchronously, so fill/picker/effect work is
-// observed through status changes. Keep these full-document graphics scenarios
-// serial to make each assertion own the service work it initiated.
-runResponsiveScenario();
+    console.log("Dialog passed");
+    driver.click("swatch-#ef4444");
+    await rendered();
+    driver.click("fill-tool");
+    await rendered();
+    driver.pressPointer("paint-surface", { x: 150, y: 150 });
+    driver.releasePointer("paint-surface", { x: 150, y: 150 });
+    await status("Filled selected region");
+    driver.click("picker-tool");
+    await rendered();
+    driver.pressPointer("paint-surface", { x: 150, y: 150 });
+    driver.releasePointer("paint-surface", { x: 150, y: 150 });
+    await status("Color #EF4444");
+    expect("picker color", driver.getText("custom-color") === "#EF4444");
+
+    driver.click("text-tool");
+    console.log("Fill and picker passed");
+    await rendered();
+    driver.click("swatch-#111827");
+    await rendered();
+    driver.dragPointer("paint-surface", [
+        { x: 30, y: 30 },
+        { x: 260, y: 120 }
+    ]);
+    await rendered();
+    driver.typeText("SharpTS مرحبا 日本語");
+    await rendered();
+    driver.pressKey("Ctrl+Enter");
+    await rendered();
+    expect("retained text committed", count() === "2 commands · 1 layers");
+    snapshot("text");
+    driver.pressPointer("paint-surface", { x: 50, y: 50 });
+    driver.releasePointer("paint-surface", { x: 50, y: 50 });
+    await rendered();
+    expect("text reopens", driver.getText("text-editor") === "SharpTS مرحبا 日本語");
+    driver.pressKey("Escape");
+    await rendered();
+    expect("text cancel retains original", count() === "2 commands · 1 layers");
+
+    driver.clickMenuItem("effect-invert");
+    console.log("Text passed");
+    await status("Invert applied");
+    driver.clickMenuItem("effect-blur");
+    await status("Effect preview ready");
+    snapshot("effect");
+    driver.setNumericValue("effect-first-number", 8);
+    await status("Effect preview ready");
+    driver.click("cancel-effect");
+    await rendered();
+    expect("cancel effect preserves history", count() === "1 commands · 1 layers");
+
+    driver.queueMessageDialogResult("cancel");
+    console.log("Effects passed");
+    driver.click("open");
+    await rendered();
+    expect("cancel replacement preserves document", count() === "1 commands · 1 layers");
+    driver.queueMessageDialogResult("discard");
+    driver.queueOpenFileDialogResult([openPath]);
+    driver.click("open");
+    await rendered();
+    expect("open project", driver.getText("status") === "Opened SharpPaint.Headless.Open.sharpaint");
+    driver.click("brush-tool");
+    await rendered();
+    await draw();
+    driver.queueSaveFileDialogResult(savePath);
+    driver.clickMenuItem("menu-save-as");
+    await rendered();
+    expect(
+        "atomic save writes snapshot",
+        parseProject(readFileSync(savePath, "utf8") as string).layers[0].commands.length === 2
+    );
+    driver.click("undo");
+    await rendered();
+    expect("save keeps undo", count() === "1 commands · 1 layers");
+    driver.queueSaveFileDialogResult(join(process.cwd(), "missing-directory", "failure.sharpaint"));
+    driver.clickMenuItem("menu-save-as");
+    await rendered();
+    expect("failed save is visible", driver.getText("document-error").indexOf("Could not save") >= 0);
+    expect("failed save preserves document", count() === "1 commands · 1 layers");
+
+    driver.setWindowClientSize(840, 560);
+    await delay(100);
+    await rendered();
+    expect("narrow layout", driver.getText("layout-mode") === "narrow");
+    expect("zoom remains available", driver.getProperty("zoom-number", "isVisible") === "True");
+    driver.click("layers-toggle");
+    await rendered();
+    expect("layer panel can be reopened", driver.getProperty("add-layer", "isVisible") === "True");
+    snapshot("narrow");
+    driver.setRenderScaling(1.5);
+    await delay(100);
+    driver.click("fit");
+    await rendered();
+    expect("fit has nonzero canvas", Number(driver.getProperty("paint-surface", "width")) > 0);
+    driver.setNumericValue("zoom-number", 200);
+    await rendered();
+    expect("exact zoom", driver.getProperty("paint-surface", "width") === "640");
+    driver.setWindowClientSize(1120, 700);
+    await delay(100);
+    driver.click("add-layer");
+    await rendered();
+    await draw();
+    driver.click("merge-layer");
+    await status("Merged layers");
+    expect("merge down combines layers", count() === "1 commands · 1 layers");
+    console.log("Merge passed");
+    driver.queueMessageDialogResult("save");
+    driver.queueOpenFileDialogResult([openPath]);
+    driver.click("open");
+    await rendered();
+    expect(
+        "Save in replacement prompt writes the current document",
+        parseProject(readFileSync(savePath, "utf8") as string).layers[0].commands.length === 1
+    );
+    expect(
+        "Save in replacement prompt continues opening",
+        driver.getText("status") === "Opened SharpPaint.Headless.Open.sharpaint"
+    );
+    console.log("Save replacement passed");
+    driver.queueOpenFileDialogResult([savePath]);
+    driver.clickMenuItem("recover");
+    await rendered();
+    expect(
+        "recovery opens an unsaved document",
+        driver.getText("status") === "Recovered document · Save As to keep a new copy"
+    );
+    console.log("Recovery passed");
+    driver.queueMessageDialogResult("save");
+    driver.queueSaveFileDialogResult(null);
+    driver.click("open");
+    await rendered();
+    expect(
+        "canceling Save As cancels document replacement",
+        driver.getText("status") === "Recovered document · Save As to keep a new copy"
+    );
+    console.log("SharpPaint headless workflows passed.");
+}
+setTimeout(() => {
+    void run().then(
+        () => {
+            app.dispose();
+            cleanup();
+        },
+        (error) => {
+            console.error(String(error));
+            try {
+                console.error(driver.getText("document-error"));
+                console.error(driver.getText("document-error-details"));
+            } catch (_) {}
+            try {
+                console.error(driver.getText("fatal-error"));
+            } catch (_) {}
+            cleanup();
+            app.shutdown(1);
+        }
+    );
+}, 30);

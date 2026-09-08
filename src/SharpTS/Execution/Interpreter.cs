@@ -1050,6 +1050,9 @@ public partial class Interpreter : IDisposable
 
     internal void ProcessPendingCallbacks()
     {
+        // A hosted runtime owns event-loop turns. Pumping from an ordinary guest
+        // loop reenters synchronous rendering (and other application code).
+        if (_hostedOwnerThreadId.HasValue) return;
         // Process microtasks first - they always run before any macrotask (timers)
         // This ensures correct JavaScript event loop semantics during busy-wait loops
         ProcessMicrotasks();

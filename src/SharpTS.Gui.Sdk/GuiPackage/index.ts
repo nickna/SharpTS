@@ -1,3 +1,5 @@
+export { findCommand, commandButton, commandMenu, showDialog, createSerialTask, useLatestTask, fitZoom, anchoredZoomOffset } from "./patterns";
+export type { DesktopCommand, DialogContext, DialogOptions, SerialTask } from "./patterns";
 export {
     Fragment,
     ErrorBoundary,
@@ -19,6 +21,7 @@ export {
     CheckBox,
     RadioButton,
     ToggleSwitch,
+    ToggleButton,
     ComboBox,
     ListBox,
     NumericUpDown,
@@ -48,6 +51,9 @@ export {
     useCallback,
     useRef,
     createDesktopApplication,
+    useDesktopWindow,
+    writeTextFileAtomic,
+    readTextFile,
     showMessageDialog,
     showOpenFileDialog,
     showSaveFileDialog,
@@ -72,6 +78,8 @@ export {
 } from "./runtime";
 
 export type {
+    ScrollEvent,
+    WheelEvent,
     GuiChild,
     TextualChild,
     TextualChildArray,
@@ -201,3 +209,6 @@ export type {
     DesktopDisplayInfo,
     DesktopNotificationOptions,
 } from "./runtime";
+
+export { startDrawingImage, startDrawingFill } from "./runtime";
+export type { DrawingTask } from "./runtime";

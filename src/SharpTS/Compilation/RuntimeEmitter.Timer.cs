@@ -757,6 +757,7 @@ public partial class RuntimeEmitter
         var enqueueMethod = EmitterTypeHelpers.ResolveMethod(
             queueType, _types.GetMethod(_types.QueueOpen, "Enqueue")!);
         var queueIl = runtime.QueuePromiseJob.GetILGenerator();
+        if (_emitHosted) EmitQueueHostedPromiseJob(queueIl, runtime);
         var queueReady = queueIl.DefineLabel();
         queueIl.Emit(OpCodes.Ldsfld, microtaskQueueField);
         queueIl.Emit(OpCodes.Brtrue_S, queueReady);

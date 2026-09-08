@@ -16,6 +16,28 @@ namespace SharpTS.Tests.Hosting;
 public sealed class HostedInterpreterRuntimeTests
 {
     [Fact]
+    public void SynchronousLoopsDoNotPumpHostedTimersOrMicrotasks()
+    {
+        const string source = """
+            setTimeout(() => console.log("timer"), 0);
+            queueMicrotask(() => console.log("microtask"));
+            let count = 0;
+            while (count < 3) { count++; }
+            console.log("render finished");
+            export {};
+            """;
+        var dispatcher = new DeterministicHostDispatcher();
+        using var output = new StringWriter();
+        var errors = new RecordingErrorSink();
+        using var runtime = CreateRuntime(source, dispatcher, new RecordingLifetime(), errors, output);
+        Task initialization = runtime.InitializeAsync();
+        dispatcher.RunUntil(() => output.ToString().Contains("timer"));
+        initialization.GetAwaiter().GetResult();
+        Assert.Equal("render finished\nmicrotask\ntimer\n", output.ToString().Replace("\r\n", "\n"));
+        Assert.Empty(errors.Errors);
+    }
+
+    [Fact]
     public void CompiledHostedAssembly_IsAValidFrameworkReference()
     {
         SharpTSProgram program = CreateProgram("export const value = 42;");
@@ -217,6 +239,47 @@ public sealed class HostedInterpreterRuntimeTests
             output.GetOutput().Split(
                 [Environment.NewLine],
                 StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+    }
+
+    [Fact]
+    public void CompiledPromiseReactionsWakeAnIdleHostFromAnotherThread()
+    {
+        SharpTSProgram program = CreateProgram("""
+            Promise.resolve(1).then(value => value + 1);
+            process.on("beforeExit", () => {
+                Promise.resolve("shutdown-reaction").then(value => console.log(value));
+            });
+            export {};
+            """);
+        var compiler = new ILCompiler($"hosted_promise_wakeup_{Guid.NewGuid():N}");
+        compiler.EnableHostedOutput();
+        compiler.CompileModules(program.RuntimeModules.ToList(), program.Resolver, program.TypeMap);
+        var assembly = System.Reflection.Assembly.Load(compiler.SaveToBytes());
+        var dispatcher = new DeterministicHostDispatcher();
+        using var output = Infrastructure.AsyncLocalConsoleRedirector.Capture();
+        using ISharpTSHostedRuntime runtime = SharpTSHostedAssembly.CreateRuntime(
+            assembly, dispatcher, new RecordingLifetime(), new RecordingErrorSink());
+        Task initialization = runtime.InitializeAsync();
+        dispatcher.RunUntil(() => initialization.IsCompleted);
+        initialization.GetAwaiter().GetResult();
+        while (dispatcher.RunNext()) { }
+
+        var enqueue = assembly.GetType("$Runtime")!.GetMethod("QueuePromiseJob")!;
+        var calls = new List<(int Order, int Thread)>();
+        int posts = dispatcher.PostCount;
+        Task.Run(() =>
+        {
+            enqueue.Invoke(null, [new Action(() => calls.Add((1, Environment.CurrentManagedThreadId)))]);
+            enqueue.Invoke(null, [new Action(() => calls.Add((2, Environment.CurrentManagedThreadId)))]);
+        }).GetAwaiter().GetResult();
+
+        Assert.Empty(calls);
+        Assert.True(dispatcher.PostCount > posts, "An idle host must be woken without unrelated UI input.");
+        dispatcher.RunUntil(() => calls.Count == 2);
+        Assert.Equal([(1, dispatcher.OwnerThreadId), (2, dispatcher.OwnerThreadId)], calls);
+        Task shutdown = runtime.ShutdownAsync();
+        dispatcher.RunUntil(() => shutdown.IsCompleted);
+        Assert.Contains("shutdown-reaction", output.GetOutput());
     }
 
     [Fact]

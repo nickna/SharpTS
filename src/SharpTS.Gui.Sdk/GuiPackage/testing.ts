@@ -2,11 +2,17 @@ import { DesktopTestingBridge } from "dotnet:SharpTS.Gui";
 import type { DesktopWindow } from "./runtime.ts";
 
 /** Native property that can be read through DesktopTestDriver. @category Testing */
-export type DesktopTestProperty =
+export type DesktopTestProperty = "isChecked" | "value" | "width" | "height" |
     "automationName" | "background" | "foreground" | "toolTip" | "isEnabled" | "isVisible";
 
 /** Headless driver for locating and interacting with controls by their key. @category Testing */
 export interface DesktopTestDriver {
+    /** Finds an open owned dialog by its exact title. Throws when missing or ambiguous. */
+    ownedWindow(title: string): DesktopTestDriver;
+    /** Sends wheel input at a control-local point through native hit testing. */
+    wheel(key: string, x: number, y: number, deltaX: number, deltaY: number, ctrl?: boolean): void;
+    /** Sets an exact numeric value; this does not simulate typing or an edit gesture. */
+    setNumericValue(key: string, value: number): void;
     /** Runs a callback after pending async event, reactive render, and native commit work completes. */
     afterRender(callback: () => void): void;
     /** Activates the keyed control. */
@@ -14,15 +20,23 @@ export interface DesktopTestDriver {
     /** Invokes a keyed menu item through the native routed-click path. */
     clickMenuItem(key: string): void;
     /** Queues the result consumed by the next native message dialog. */
-    queueMessageDialogResult(result: "ok" | "cancel" | "yes" | "no"): void;
+    queueMessageDialogResult(result: "ok" | "cancel" | "yes" | "no" | "save" | "discard"): void;
     /** Queues local paths returned by the next native open-file dialog. */
     queueOpenFileDialogResult(paths: readonly string[]): void;
     /** Queues a local path, or null cancellation, for the next native save-file dialog. */
     queueSaveFileDialogResult(path: string | null): void;
     /** Queues a local path, or null cancellation, for the next native folder dialog. */
     queueFolderDialogResult(path: string | null): void;
-    /** Sends a normalized key press to the keyed control. */
+    /** Sends a key or gesture such as Ctrl+S or Shift+Tab through native focused-control routing. */
     pressKey(key: string): void;
+    /** Focuses a keyed native control. */
+    focus(key: string): boolean;
+    /** Reports whether the keyed control or one of its native parts has keyboard focus. */
+    isFocused(key: string): boolean;
+    /** Sends committed text input to the native focused control (including IME text). */
+    typeText(text: string): void;
+    /** Simulates the window moving to a display with a different DPI scale. */
+    setRenderScaling(scaling: number): void;
     /** Reads the keyed control's text content. @returns The normalized text content. */
     getText(key: string): string;
     /** Reads a supported native property from the keyed control. @returns The normalized property value. */
@@ -61,11 +75,20 @@ export function createDesktopTestDriver(window: DesktopWindow): DesktopTestDrive
     const managed: any = (window as any).__managedRoot;
     if (managed === undefined || managed === null)
         throw new Error("The supplied value is not an active SharpTS desktop root.");
+    return driverForRoot(managed);
+}
+
+function driverForRoot(managed: any): DesktopTestDriver {
     return {
+        ownedWindow(title: string): DesktopTestDriver { return driverForRoot(DesktopTestingBridge.FindOwnedWindow(managed, title)); },
+        wheel(key: string, x: number, y: number, deltaX: number, deltaY: number, ctrl: boolean = false): void {
+            DesktopTestingBridge.Wheel(managed, key, x, y, deltaX, deltaY, ctrl);
+        },
+        setNumericValue(key: string, value: number): void { DesktopTestingBridge.SetNumericValue(managed, key, value); },
         afterRender(callback: () => void): void { DesktopTestingBridge.AfterRender(managed, callback); },
         click(key: string): void { DesktopTestingBridge.Click(managed, key); },
         clickMenuItem(key: string): void { DesktopTestingBridge.ClickMenuItem(managed, key); },
-        queueMessageDialogResult(result: "ok" | "cancel" | "yes" | "no"): void {
+        queueMessageDialogResult(result: "ok" | "cancel" | "yes" | "no" | "save" | "discard"): void {
             DesktopTestingBridge.QueueMessageDialogResult(managed, result);
         },
         queueOpenFileDialogResult(paths: readonly string[]): void {
@@ -78,6 +101,10 @@ export function createDesktopTestDriver(window: DesktopWindow): DesktopTestDrive
             DesktopTestingBridge.QueueFolderDialogResult(managed, path);
         },
         pressKey(key: string): void { DesktopTestingBridge.PressKey(managed, key); },
+        focus(key: string): boolean { return DesktopTestingBridge.Focus(managed, key); },
+        isFocused(key: string): boolean { return DesktopTestingBridge.IsFocused(managed, key); },
+        typeText(text: string): void { DesktopTestingBridge.TypeText(managed, text); },
+        setRenderScaling(scaling: number): void { DesktopTestingBridge.SetRenderScaling(managed, scaling); },
         getText(key: string): string { return DesktopTestingBridge.GetText(managed, key); },
         getProperty(key: string, property: DesktopTestProperty): string {
             return DesktopTestingBridge.GetProperty(managed, key, property);

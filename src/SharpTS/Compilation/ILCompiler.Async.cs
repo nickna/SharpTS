@@ -844,10 +844,10 @@ public partial class ILCompiler
             }
         }
 
-        // Variables that need hoisting: declared before await AND used after await
-        // This result must be a new allocation since ownership is transferred to caller
-        var hoistedLocals = new HashSet<string>(_async.DeclaredBeforeAwait);
-        hoistedLocals.IntersectWith(_async.UsedAfterAwait);
+        // A declaration after the first await can cross a later await, and a loop
+        // backedge can revisit reads preceding its suspension. Preserve all local
+        // bindings in a suspending arrow until this walker has CFG-based liveness.
+        var hoistedLocals = awaitCount == 0 ? new HashSet<string>() : new HashSet<string>(_async.DeclaredVars);
 
         // Remove parameters from hoisted locals (they're stored separately). Parameters are never
         // renamed, so removing by source lexeme is correct.

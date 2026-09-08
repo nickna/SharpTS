@@ -95,6 +95,30 @@ public partial class AsyncStateAnalyzer
         }
     }
 
+    protected override void VisitWhile(Stmt.While stmt)
+    {
+        int count = _awaitPoints.Count;
+        base.VisitWhile(stmt);
+        if (_awaitPoints.Count == count) return;
+        var usages = new LoopBackedgeVariableCollector(_renames);
+        usages.Visit(stmt.Condition);
+        usages.Visit(stmt.Body);
+        foreach (string name in usages.Names)
+            if (_declaredVariables.Contains(name)) _variablesUsedAfterAwait.Add(name);
+    }
+
+    protected override void VisitDoWhile(Stmt.DoWhile stmt)
+    {
+        int count = _awaitPoints.Count;
+        base.VisitDoWhile(stmt);
+        if (_awaitPoints.Count == count) return;
+        var usages = new LoopBackedgeVariableCollector(_renames);
+        usages.Visit(stmt.Body);
+        usages.Visit(stmt.Condition);
+        foreach (string name in usages.Names)
+            if (_declaredVariables.Contains(name)) _variablesUsedAfterAwait.Add(name);
+    }
+
     /// <summary>
     /// Collects direct state-machine variable references from a repeating loop
     /// region without recording suspension points a second time. Nested

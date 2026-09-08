@@ -42,7 +42,9 @@ public static class DesktopTestingBridge
                 return;
             if (validated.HasPendingEventWork)
             {
-                context.PostGuestIdleProbe(CheckGuestWork);
+                // Wait for completion rather than continuously queueing probes that
+                // would starve the hosted timers the operation itself awaits.
+                validated.WhenEventWorkIdle(() => context.PostGuestIdleProbe(CheckGuestWork));
                 return;
             }
             context.PostGuestIdleProbe(ConfirmGuestIdle);
@@ -54,8 +56,30 @@ public static class DesktopTestingBridge
         });
     }
 
-    public static void Click(DesktopRoot root, string key) =>
-        RequireControl<Button>(root, key).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+    public static void Click(DesktopRoot root, string key)
+    {
+        Button button = RequireControl<Button>(root, key);
+        if (!button.IsEffectivelyEnabled) return;
+        if (button is ToggleButton toggle) toggle.IsChecked = button is RadioButton || toggle.IsChecked != true;
+        button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, button));
+    }
+
+    public static DesktopRoot FindOwnedWindow(DesktopRoot root, string title)
+    {
+        RequireRoot(root);
+        return DesktopBridge.RequireContext().Roots.Single(candidate => candidate.Owner == root && candidate.Window?.Title == title);
+    }
+
+    public static void Wheel(DesktopRoot root, string key, double x, double y, double deltaX, double deltaY, bool ctrl)
+    {
+        Window window = RequireWindow(RequireRoot(root));
+        Control control = RequireControl<Control>(root, key);
+        Point point = control.TranslatePoint(new Point(x, y), window) ?? throw new InvalidOperationException("Control is not arranged.");
+        window.MouseWheel(point, new Vector(deltaX, deltaY), ctrl ? RawInputModifiers.Control : RawInputModifiers.None);
+    }
+
+    public static void SetNumericValue(DesktopRoot root, string key, double value) =>
+        RequireControl<NumericUpDown>(root, key).Value = (decimal)value;
 
     public static void ClickMenuItem(DesktopRoot root, string key)
     {
@@ -78,31 +102,41 @@ public static class DesktopTestingBridge
 
     public static void PressKey(DesktopRoot root, string key)
     {
-        Window window = RequireRoot(root).Window
-            ?? throw new InvalidOperationException("The desktop test window is not mounted.");
-        Key nativeKey = key switch
+        Window window = RequireRoot(root).Window ?? throw new InvalidOperationException("Window is not mounted.");
+        string gestureText = key switch
         {
-            "0" => Key.D0, "1" => Key.D1, "2" => Key.D2, "3" => Key.D3, "4" => Key.D4,
-            "5" => Key.D5, "6" => Key.D6, "7" => Key.D7, "8" => Key.D8, "9" => Key.D9,
-            "+" => Key.Add, "-" => Key.Subtract, "*" => Key.Multiply, "/" => Key.Divide,
-            "." => Key.Decimal, "Enter" or "=" => Key.Return, "%" => Key.D5,
-            "Backspace" => Key.Back, "Delete" => Key.Delete, "Escape" => Key.Escape,
-            "c" or "C" => Key.C, "x" or "X" => Key.X,
-            _ => throw new ArgumentException($"Unsupported Headless key '{key}'.", nameof(key)),
+            "+" => "Add", "-" => "Subtract", "*" => "Multiply", "/" => "Divide",
+            "." => "Decimal", "=" => "Enter", "%" => "Shift+D5",
+            _ when key.Length == 1 && char.IsAsciiDigit(key[0]) => "D" + key,
+            _ => key,
         };
-        KeyModifiers modifiers = key == "%" ? KeyModifiers.Shift : KeyModifiers.None;
-        window.RaiseEvent(new KeyEventArgs
-        {
-            RoutedEvent = InputElement.KeyDownEvent,
-            Key = nativeKey,
-            KeyModifiers = modifiers,
-        });
-        window.RaiseEvent(new KeyEventArgs
-        {
-            RoutedEvent = InputElement.KeyUpEvent,
-            Key = nativeKey,
-            KeyModifiers = modifiers,
-        });
+        KeyGesture gesture = KeyGesture.Parse(gestureText);
+        var modifiers = (RawInputModifiers)gesture.KeyModifiers;
+        window.KeyPress(gesture.Key, modifiers, PhysicalKey.None, null);
+        // A default/cancel action can close the window during KeyDown.
+        if (!root.IsDisposed) window.KeyRelease(gesture.Key, modifiers, PhysicalKey.None, null);
+    }
+
+    public static bool Focus(DesktopRoot root, string key)
+    {
+        var reference = new DesktopRef();
+        reference.Attach(new ControlRef(RequireControl<Control>(root, key)));
+        return reference.focus();
+    }
+
+    public static bool IsFocused(DesktopRoot root, string key) => RequireControl<Control>(root, key).IsKeyboardFocusWithin;
+
+    public static void TypeText(DesktopRoot root, string text)
+    {
+        Window window = RequireRoot(root).Window ?? throw new InvalidOperationException("Window is not mounted.");
+        window.KeyTextInput(text);
+    }
+
+    public static void SetRenderScaling(DesktopRoot root, double scaling)
+    {
+        Window window = RequireRoot(root).Window ?? throw new InvalidOperationException("Window is not mounted.");
+        if (!double.IsFinite(scaling) || scaling <= 0) throw new ArgumentOutOfRangeException(nameof(scaling));
+        window.SetRenderScaling(scaling);
     }
 
     public static string GetText(DesktopRoot root, string key) => RequireControl<Control>(root, key) switch
@@ -115,6 +149,10 @@ public static class DesktopTestingBridge
 
     public static string GetProperty(DesktopRoot root, string key, string property) => property switch
     {
+        "isChecked" => (RequireControl<Control>(root, key) as ToggleButton)?.IsChecked.ToString() ?? "",
+        "value" => (RequireControl<Control>(root, key) as NumericUpDown)?.Value?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "",
+        "width" => RequireControl<Control>(root, key).Bounds.Width.ToString(System.Globalization.CultureInfo.InvariantCulture),
+        "height" => RequireControl<Control>(root, key).Bounds.Height.ToString(System.Globalization.CultureInfo.InvariantCulture),
         "automationName" => AutomationProperties.GetName(RequireControl<Control>(root, key)) ?? string.Empty,
         "background" => (RequireControl<Control>(root, key) as TemplatedControl)?.Background?.ToString() ?? string.Empty,
         "foreground" => (RequireControl<Control>(root, key) as TemplatedControl)?.Foreground?.ToString() ?? string.Empty,
@@ -267,7 +305,7 @@ public static class DesktopTestingBridge
     {
         DesktopRoot validated = RequireRoot(root);
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
-        return validated.FindControl(key) as T
+        return validated.FindTestControl(key) as T
             ?? throw new InvalidOperationException(
                 $"No {typeof(T).Name} with key '{key}' exists in the supplied desktop test window.");
     }

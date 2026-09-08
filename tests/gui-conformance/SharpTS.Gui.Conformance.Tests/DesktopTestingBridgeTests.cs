@@ -12,12 +12,7 @@ public sealed class DesktopTestingBridgeTests
 {
     static DesktopTestingBridgeTests()
     {
-        if (Application.Current is null)
-        {
-            AppBuilder.Configure<TestApplication>()
-                .UseHeadless(new AvaloniaHeadlessPlatformOptions())
-                .SetupWithoutStarting();
-        }
+        DesktopTestPlatform.EnsureInitialized();
     }
 
     [Fact]
@@ -275,7 +270,7 @@ public sealed class DesktopTestingBridgeTests
         }
 
         public Task<string[]> OpenFilesAsync(
-            Avalonia.Controls.Window owner, string title, bool allowMultiple, string filtersJson)
+            Avalonia.Controls.Window owner, string title, bool allowMultiple, string filtersJson, string? initialDirectory = null)
         {
             Calls.Add("open");
             return Task.FromResult(new[] { "C:\\paint\\one.sharpaint", "C:\\paint\\two.png" });

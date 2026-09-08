@@ -39,7 +39,8 @@
     "tree-view-item",
     "canvas",
     "rich-text-block",
-    "drawing-canvas"
+    "drawing-canvas",
+    "toggle-button"
   ],
   "propertyGroups": {
     "common": [
@@ -232,6 +233,14 @@
         "documentation": "Handles a normalized key-down event."
       },
       {
+        "name": "keyDownRouting",
+        "type": "\"bubble\" | \"tunnel\"",
+        "default": "bubble",
+        "setter": "event",
+        "enumValues": ["bubble", "tunnel"],
+        "documentation": "Use tunnel for command scopes that must run before native text handling; bubble preserves ordinary child-first routing."
+      },
+      {
         "name": "onKeyUp",
         "type": "(event: KeyEvent) => boolean",
         "setter": "event",
@@ -286,6 +295,60 @@
         "type": "(event: DropEvent) => void | Promise<unknown>",
         "setter": "event",
         "documentation": "Receives normalized text and local-file drop data."
+      },
+      {
+        "name": "cursor",
+        "type": "\"default\" | \"arrow\" | \"cross\" | \"hand\" | \"ibeam\" | \"sizeAll\" | \"none\" | \"wait\"",
+        "setter": "common",
+        "documentation": "Native pointer cursor; default inherits the parent cursor."
+      },
+      {
+        "name": "isHitTestVisible",
+        "type": "boolean",
+        "setter": "common",
+        "documentation": "Whether the control participates in pointer hit testing."
+      },
+      {
+        "name": "focusable",
+        "type": "boolean",
+        "setter": "common",
+        "documentation": "Overrides native keyboard focusability."
+      },
+      {
+        "name": "tabIndex",
+        "type": "number",
+        "setter": "common",
+        "documentation": "Keyboard traversal order within the native focus scope."
+      },
+      {
+        "name": "onFocus",
+        "type": "() => void | Promise<unknown>",
+        "setter": "common",
+        "documentation": "Called when this control receives keyboard focus."
+      },
+      {
+        "name": "onBlur",
+        "type": "() => void | Promise<unknown>",
+        "setter": "common",
+        "documentation": "Called when this control loses keyboard focus."
+      },
+      {
+        "name": "onEditStarted",
+        "type": "() => void | Promise<unknown>",
+        "setter": "common",
+        "documentation": "Called at the start of a slider pointer or keyboard edit."
+      },
+      {
+        "name": "onEditCompleted",
+        "type": "() => void | Promise<unknown>",
+        "setter": "common",
+        "documentation": "Called after final value notification on release, key-up, or focus loss."
+      },
+      {
+        "name": "onWheel",
+        "type": "(event: WheelEvent) => boolean",
+        "setter": "common",
+        "documentation": "Handles native wheel input in local DIPs."
       }
     ],
     "textStyle": [
@@ -829,9 +892,28 @@
             "disabled"
           ],
           "documentation": "Visibility policy for the vertical scroll bar."
+        },
+        {
+          "name": "offsetX",
+          "type": "number",
+          "setter": "common",
+          "documentation": "Requested horizontal offset in DIPs; omission preserves native scrolling."
+        },
+        {
+          "name": "offsetY",
+          "type": "number",
+          "setter": "common",
+          "documentation": "Requested vertical offset in DIPs; omission preserves native scrolling."
         }
       ],
-      "events": [],
+      "events": [
+        {
+          "name": "onScrollChanged",
+          "type": "(event: ScrollEvent) => void | Promise<unknown>",
+          "setter": "common",
+          "documentation": "Coalesced viewport, extent, and offset notification after layout."
+        }
+      ],
       "operations": [
         "focus"
       ],
@@ -893,7 +975,20 @@
         "textStyle",
         "contentStyle"
       ],
-      "props": [],
+      "props": [
+        {
+          "name": "isDefault",
+          "type": "boolean",
+          "setter": "common",
+          "documentation": "Activates this button for Enter in its native window."
+        },
+        {
+          "name": "isCancel",
+          "type": "boolean",
+          "setter": "common",
+          "documentation": "Activates this button for Escape in its native window."
+        }
+      ],
       "events": [
         {
           "name": "onClick",
@@ -955,12 +1050,31 @@
           "documentation": "Whether the text box accepts the Return key as a line break."
         },
         {
+          "name": "appearance",
+          "type": "\"normal\" | \"plain\"",
+          "default": "normal",
+          "setter": "text-input",
+          "enumValues": ["normal", "plain"],
+          "documentation": "Plain appearance removes input chrome and padding for inline editing, preserving native selection, caret, and input behavior."
+        },
+        {
           "name": "maxLength",
           "type": "number",
           "default": 0,
           "converter": "int32",
           "setter": "text-input",
           "documentation": "Maximum number of characters accepted by the text input."
+        },
+        {
+          "name": "textWrapping",
+          "type": "\"noWrap\" | \"wrap\"",
+          "default": "noWrap",
+          "setter": "text",
+          "enumValues": [
+            "noWrap",
+            "wrap"
+          ],
+          "documentation": "Whether text wraps when it exceeds the available width."
         }
       ],
       "events": [
@@ -1080,6 +1194,47 @@
       "documentation": "Boolean toggle with text or one retained content element.",
       "trimming": [
         "Avalonia.Controls.CheckBox"
+      ]
+    },
+    {
+      "kind": "ToggleButton",
+      "nativeType": "Avalonia.Controls.Primitives.ToggleButton",
+      "adapter": "toggle-button",
+      "children": {
+        "model": "content",
+        "minimum": 0,
+        "maximum": 1
+      },
+      "propsType": "ToggleButtonProps",
+      "handle": "unknown",
+      "groups": [
+        "common",
+        "textStyle",
+        "contentStyle"
+      ],
+      "props": [
+        {
+          "name": "isChecked",
+          "type": "boolean",
+          "default": false,
+          "setter": "toggle",
+          "documentation": "Whether the toggle control is checked."
+        }
+      ],
+      "events": [
+        {
+          "name": "onCheckedChanged",
+          "type": "(value: boolean) => void | Promise<unknown>",
+          "adapter": "bool-action",
+          "documentation": "Called after the checked state changes."
+        }
+      ],
+      "operations": [
+        "focus"
+      ],
+      "documentation": "Button with an accessible checked state, suitable for selectable tools.",
+      "trimming": [
+        "Avalonia.Controls.Primitives.ToggleButton"
       ]
     },
     {
@@ -1573,6 +1728,13 @@
           "default": null,
           "setter": "range",
           "documentation": "Current value of the control."
+        },
+        {
+          "name": "showButtonSpinner",
+          "type": "boolean",
+          "default": "true",
+          "setter": "numeric",
+          "documentation": "Shows native increment/decrement buttons. Keyboard arrow editing remains available when hidden."
         }
       ],
       "events": [
@@ -1977,6 +2139,12 @@
           "default": false,
           "setter": "toggle",
           "documentation": "Whether the toggle control is checked."
+        },
+        {
+          "name": "inputGesture",
+          "type": "string",
+          "setter": "common",
+          "documentation": "Native shortcut display, for example Ctrl+Shift+S; command routing remains application controlled."
         }
       ],
       "events": [

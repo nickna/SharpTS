@@ -1,70 +1,72 @@
 # SharpPaint
 
-SharpPaint is a Paint.NET-inspired desktop editor built in TypeScript and TSX with
-`SharpTS.Gui.Sdk`. It is deliberately ambitious: the sample demonstrates retained native layout,
-pointer capture, composited drawing, layers, history, filesystem access, native dialogs, PNG
-export, drag/drop, keyboard commands, and interpreted/compiled guest parity.
+A native image editor written in TypeScript and TSX with `SharpTS.Gui.Sdk`. The same application runs interpreted or compiled.
 
-## Run it
+## Run and verify
 
-After `SharpTS.Gui.Sdk` is available from a configured feed:
+From the repository, build and package the current SDK before launching:
 
 ```powershell
-dotnet run --project samples/SharpPaint -- --mode compiled
-dotnet run --project samples/SharpPaint -- --mode interpreted
-dotnet publish samples/SharpPaint/SharpPaint.csproj -c Release -r win-x64
+./samples/SharpPaint/run-local.ps1
+./samples/SharpPaint/run-local.ps1 -Mode interpreted
+./samples/SharpPaint/run-local.ps1 -Headless
 ```
 
-Inside this repository, `./samples/SharpPaint/run-local.ps1` builds and packs the current SDK
-before starting the unchanged sample. Pass `-Mode interpreted` for source execution or
-`-Headless` for a non-interactive startup smoke test.
+With the SDK on a configured feed, use `dotnet run --project samples/SharpPaint -- --mode compiled` or `--mode interpreted`. Publish with `dotnet publish samples/SharpPaint/SharpPaint.csproj -c Release -r win-x64`.
 
-## Functional surface
+The headless option above is a startup smoke test. Run the full workflow and measurement scenarios with:
 
-- Brush, eraser, line, rectangle, ellipse, contiguous Fill, composited Picker, and retained Text tools.
-- Outline or filled shapes, 16 swatches, custom hex color, and 1–64 px stroke sizes.
-- Gaussian blur, grayscale, invert, brightness/contrast, and hue/saturation effects for the selected layer.
-- Add, duplicate, rename, delete, reorder, hide, and fade layers.
-- Fifty document-level undo/redo steps and zoom from 25% to 400%.
-- Portable `.sharpaint` v1 projects with embedded imported PNGs.
-- PNG import/export, file drop, unsaved-change prompts, and keyboard shortcuts.
-- Adaptive width and height breakpoints that remain usable at small OS-scaled logical sizes.
+```powershell
+dotnet test tests/gui-conformance/SharpTS.Gui.Conformance.Tests -c Release --filter FullyQualifiedName~SharpPaintHeadlessTests
+dotnet test tests/gui-conformance/SharpTS.Gui.Conformance.Tests -c Release --filter FullyQualifiedName~DrawingWorkloadsReportRasterCosts --logger "console;verbosity=detailed"
+```
 
-The project format is intentionally operation-backed instead of promising Paint.NET file
-compatibility. Each layer stores validated drawing commands; imported and rasterized PNG bytes are
-embedded as data URIs so the project can move between machines without breaking references. Text
-remains a retained command. Fill and Effects rasterize only the selected layer, and Undo restores
-the original commands.
+## Editing
 
-## Controls
+- Brush, eraser, line, rectangle, ellipse, contiguous fill, composited picker, and retained text.
+- Framed canvas, checkerboard transparency, brush footprint, Fit, 100%, and exact 1–800% zoom.
+- Ctrl+wheel zooms around the pointer; Space-drag or middle-drag pans. Shift constrains lines to 45-degree increments and rectangles/ellipses to squares/circles.
+- Layer thumbnails, visibility, ordering, duplication, merge down, exact opacity, and draft names.
+- Rename commits on Enter or focus loss; Escape cancels. One opacity gesture produces one undo entry.
+- Fifty named undo/redo steps, retained across saves. Undo always leaves a valid selected layer.
+- Debounced effect previews beside the artwork, before/after comparison, exact values, and cancellation.
+- Click retained text with Text to edit again. Ctrl+Enter applies; Escape cancels.
+- RGB/ARGB hex colors, alpha, recent colors, and outlined swatches.
+- Native New dialog, Save / Don't Save / Cancel, recent files, PNG import/export, and file drop.
+- System light/dark theme, compact tool rail, scrollable inspectors, and a Layers toggle below 900 DIPs.
 
-- `B`, `E`, `L`, `R`, `O`: Brush, Eraser, Line, Rectangle, Ellipse.
-- `F`, `I`, `T`: Fill, Picker, Text. Apply text with `Ctrl+Enter`; cancel with `Escape`.
-- `Ctrl+N`, `Ctrl+O`, `Ctrl+S`, `Ctrl+Shift+S`, `Ctrl+E`: New, Open, Save, Save As, Export PNG.
-- `Ctrl+Z`, `Ctrl+Y`: Undo and redo. `+` / `-`: zoom.
+Tool shortcuts are `B E L R O F I T`; they leave text input alone. Document shortcuts are Ctrl+N/O/S, Ctrl+Shift+S, Ctrl+E (export), and Ctrl+Z/Y. Save finishes active field/text edits before capturing the document snapshot.
 
-## Gap matrix
+## Documents and recovery
 
-The disabled commands are part of the experiment: they make the next SharpTS investments
-discoverable without pretending the behavior exists.
+`.sharpaint` v1 stores validated drawing commands and embedded PNG data, with a maximum dimension of 8192 pixels and 64 layers. Text remains editable until a raster operation affects its layer. Fill and effects rasterize the selected layer; merge combines it with its immediate neighbor. Undo restores original commands. This is not a Paint.NET file-format implementation.
 
-| Deferred feature | Missing or immature capability | Likely SharpTS direction |
-| --- | --- | --- |
-| Selection/transform | Selection geometry, adorners, resize/rotate handles | Transform and overlay/adorner contract |
-| Merge down | Explicit cross-layer flattening semantics and selection/history UX | Layer-composition edit helper built on `renderDrawingToImage` |
-| Advanced blending | More isolated compositing modes | Expanded, portable blend-mode contract |
-| Advanced effects and plug-ins | Extensible filter discovery, progress, and cancellation | Reviewed plug-in and cancellable background-work contracts |
-| Very large documents | Command serialization and full-surface rerasterization costs | Incremental dirty-region rendering and retained scene handles |
+Project saves use asynchronous UTF-8 I/O, a flushed sibling temporary file, and atomic replacement. A failed write preserves the destination and leaves the document dirty. The saved checkpoint is the snapshot actually written, so edits made during saving cannot silently become clean.
 
-Pressure is normalized by SharpTS.Gui for mouse, pen, and touch input, but v1 intentionally uses a
-fixed width per gesture. Multi-document tabs, plug-ins, and Paint.NET format compatibility are out
-of scope.
+Two seconds after an edit, SharpPaint writes a recovery copy under the platform's local application-data directory in `SharpPaint`. Each window uses its own filename. Clean saves and approved normal closes remove that window's copy. After a crash, choose **File → Recover document**; recovery opens an unsaved document requiring Save As. Recent files use the same directory. `SHARPAINT_STORAGE_DIRECTORY` or the showcase's `storageDirectory` prop isolates storage for tests or portable installations. Recovery is best effort: edits within the debounce interval can be lost in a crash.
 
-## Responsive layout
+The document and file session live above the presentation error boundary. Retry preserves the document and history; the recovery screen also offers Save recovery copy.
 
-SharpPaint treats `Window.onMetricsChanged` dimensions as DIPs. A compact width uses an icon tool
-rail and smaller command controls; a narrow width collapses Layers behind a toolbar button; a short
-height bounds and scrolls layer properties. The palette scrolls horizontally and both side panes
-scroll vertically, so no pane can draw over the palette or status bar. These are content
-breakpoints, not inverse-DPI scaling—the application continues to honor the Windows accessibility
-scale selected by the user.
+## Build on this example
+
+| Module | Responsibility |
+| --- | --- |
+| `SharpPaintApp.tsx` | Shell, commands, presentation boundary |
+| `EditorCanvas.tsx` | Viewport, checkerboard, pointer navigation, text editor |
+| `LayerPanel.tsx`, `ToolOptions.tsx`, `EffectPanel.tsx` | Contextual editing controls |
+| `controls.tsx`, `NewDocumentDialog.tsx` | Icons, fields, palette, dialog content |
+| `editor-state.ts`, `document.ts` | Typed actions, history, paint semantics, portable format |
+| `document-session.tsx` | Serialized file workflow, dirty checkpoints, recovery |
+| `graphics-session.ts` | Cancellable jobs and stale-result protection |
+
+Use the SDK's small command, dialog, task, scroll, and focus primitives. Keep the application's document format and editing policy explicit. The [desktop editing recipes](../../docs/gui/desktop-editing.md) explain this boundary.
+
+## Performance and extensions
+
+Empty input-only drawing surfaces allocate no bitmap. Logical drawing surfaces rasterize at displayed resolution, bounded by document resolution, so a 40×40 thumbnail does not retain an 8192×8192 bitmap. Layers preserve isolated erasing. Text uses native Avalonia shaping, fallback, and wrapping for display and export; appearance depends on installed fonts.
+
+The repeatable workload reports raster timings, managed allocations, and BGRA buffer sizes for 10,000-point strokes at document, viewport, and thumbnail resolutions. These are raster costs, not end-to-end pointer latency or total native memory. Large exports/effects still need full-resolution buffers; edits still serialize command lists and invalidate changed layers. Tiled rendering, incremental strokes, and retained image handles need further profiling before promising very large documents.
+
+See [drawing measurements](PERFORMANCE.md) for the measured baseline, methodology, and remaining profiling work.
+
+General object transforms, advanced blending, plug-ins, multi-document tabs, variable-pressure brushes, and Paint.NET compatibility remain future extensions. The UI presents implemented features.

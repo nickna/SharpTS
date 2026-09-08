@@ -12,12 +12,7 @@ public sealed class CustomControlProviderTests
 {
     static CustomControlProviderTests()
     {
-        if (Application.Current is null)
-        {
-            AppBuilder.Configure<TestApplication>()
-                .UseHeadless(new AvaloniaHeadlessPlatformOptions())
-                .SetupWithoutStarting();
-        }
+        DesktopTestPlatform.EnsureInitialized();
     }
 
     [Fact]

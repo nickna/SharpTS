@@ -228,6 +228,13 @@ internal sealed class ScrollViewerDescriptor() : NodeDescriptor("ScrollViewer", 
             viewer.VerticalScrollBarVisibility = vertical;
             changed = true;
         }
+        double x = !double.IsNaN(next.OffsetX) && !next.OffsetX.Equals(previous.OffsetX) ? next.OffsetX : viewer.Offset.X;
+        double y = !double.IsNaN(next.OffsetY) && !next.OffsetY.Equals(previous.OffsetY) ? next.OffsetY : viewer.Offset.Y;
+        if (viewer.Offset != new Vector(x, y))
+        {
+            viewer.Offset = new Vector(x, y);
+            changed = true;
+        }
         return changed;
     }
 
@@ -345,11 +352,9 @@ internal sealed class ButtonDescriptor() : NodeDescriptor("Button", 0, 1)
         var button = (Button)control;
         bool changed = CommonProperties.Apply(button, next);
         changed |= CommonProperties.ApplyContent(button, next);
-        if (button.CornerRadius != new CornerRadius(next.CornerRadius))
-        {
-            button.CornerRadius = new CornerRadius(next.CornerRadius);
-            changed = true;
-        }
+        changed |= CommonProperties.ApplyStyled(button, TemplatedControl.CornerRadiusProperty,
+            new CornerRadius(next.CornerRadius),
+            CommonProperties.IsSpecified(next, "cornerRadius") || next.CornerRadius != 0);
         string content = next.Text ?? string.Empty;
         if (next.Children is not GuiVNode[] { Length: > 0 } && !Equals(button.Content, content))
         {
@@ -362,6 +367,12 @@ internal sealed class ButtonDescriptor() : NodeDescriptor("Button", 0, 1)
 
 internal sealed class TextBoxDescriptor(string kind = "TextBox") : NodeDescriptor(kind, 0, 0)
 {
+    public override void Validate(GuiVNode node)
+    {
+        if (node.TextBoxAppearance is not ("normal" or "plain"))
+            throw new ArgumentException("TextBox appearance must be normal or plain.");
+    }
+
     public override Control Create(GuiVNode node)
     {
         var textBox = new TextBox();
@@ -374,6 +385,7 @@ internal sealed class TextBoxDescriptor(string kind = "TextBox") : NodeDescripto
         var textBox = (TextBox)control;
         bool changed = CommonProperties.Apply(textBox, next);
         changed |= CommonProperties.ApplyTemplated(textBox, next);
+        changed |= DesktopTextInputAppearance.Apply(textBox, previous, next);
         TextAlignment alignment = CommonProperties.ParseTextAlignment(next.TextAlignment);
         if (textBox.TextAlignment != alignment)
         {
@@ -396,6 +408,8 @@ internal sealed class TextBoxDescriptor(string kind = "TextBox") : NodeDescripto
             textBox.IsReadOnly = next.IsReadOnly;
             changed = true;
         }
+        var wrapping = next.TextWrapping == "wrap" ? TextWrapping.Wrap : TextWrapping.NoWrap;
+        if (textBox.TextWrapping != wrapping) { textBox.TextWrapping = wrapping; changed = true; }
         if (textBox.AcceptsReturn != next.AcceptsReturn)
         {
             textBox.AcceptsReturn = next.AcceptsReturn;
@@ -422,6 +436,7 @@ internal sealed class CheckBoxDescriptor(string kind = "CheckBox") : NodeDescrip
     {
         ToggleButton checkBox = Kind switch
         {
+            "ToggleButton" => new ToggleButton(),
             "RadioButton" => new RadioButton { GroupName = node.GroupName },
             "ToggleSwitch" => new ToggleSwitch(),
             _ => new CheckBox(),
