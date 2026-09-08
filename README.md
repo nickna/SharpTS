@@ -77,6 +77,7 @@ The current capability matrix and known gaps are in [STATUS.md](STATUS.md).
 
 Start with the [documentation hub](docs/README.md) for task-oriented guides. Runnable examples are
 collected in the [samples cookbook](samples/README.md). Contributors should read
-[CONTRIBUTING.md](CONTRIBUTING.md) and [ARCHITECTURE.md](ARCHITECTURE.md).
+[CONTRIBUTING.md](CONTRIBUTING.md), [ARCHITECTURE.md](ARCHITECTURE.md), and the
+[test strategy and commands](tests/README.md).
 
 SharpTS is licensed under the [MIT License](LICENSE).

@@ -39,7 +39,7 @@ public class ShebangTests
     [InlineData("const before = 1;\n#!/usr/bin/env sharpts")]
     public void Lexer_HashbangOutsideOffsetZeroIsRejected(string source)
     {
-        var exception = Assert.Throws<Exception>(() => new Lexer(source).ScanTokens());
+        var exception = Assert.Throws<LexicalException>(() => new Lexer(source).ScanTokens());
 
         Assert.Contains("Unexpected character '#'", exception.Message);
     }

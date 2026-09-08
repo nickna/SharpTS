@@ -21,15 +21,11 @@ public class TypeScriptConformanceRunnerTests
     /// dependency. Whatever bucket it lands in is fine; we just need
     /// classification to succeed.
     /// </summary>
+    [Trait("Category", "Corpus")]
     [Fact]
     public void RunOne_ConditionalTypes1_ClassifiesIntoABucket()
     {
-        var root = TypeScriptConformancePaths.TryFindRoot();
-        if (root is null)
-        {
-            _output.WriteLine("external/typescript not initialized — skipping");
-            return;
-        }
+        var root = TypeScriptConformancePaths.RequireRoot();
 
         var testPath = Path.Combine(
             TypeScriptConformancePaths.ConformanceDir(root),
@@ -50,11 +46,11 @@ public class TypeScriptConformanceRunnerTests
         Assert.NotEqual(TypeScriptConformanceOutcome.HarnessError, result.Outcome);
     }
 
+    [Trait("Category", "Corpus")]
     [Fact]
     public void RunOne_Es2018IntlApis_MatchesTargetLibraryBaseline()
     {
-        var root = TypeScriptConformancePaths.TryFindRoot();
-        if (root is null) return;
+        var root = TypeScriptConformancePaths.RequireRoot();
         var path = Path.Combine(
             TypeScriptConformancePaths.ConformanceDir(root),
             "es2018",
@@ -67,11 +63,11 @@ public class TypeScriptConformanceRunnerTests
             result.Message ?? result.Outcome.ToString());
     }
 
+    [Trait("Category", "Corpus")]
     [Fact]
     public void RunOne_TsxElementResolution19_MatchesEmptyDiagnosticBaseline()
     {
-        var root = TypeScriptConformancePaths.TryFindRoot();
-        if (root is null) return;
+        var root = TypeScriptConformancePaths.RequireRoot();
         var path = Path.Combine(
             TypeScriptConformancePaths.ConformanceDir(root),
             "jsx",
@@ -84,11 +80,11 @@ public class TypeScriptConformanceRunnerTests
             result.Message ?? result.Outcome.ToString());
     }
 
+    [Trait("Category", "Corpus")]
     [Fact]
     public void RunOne_TsxReferenceToHarnessLib_ResolvesFixture()
     {
-        var root = TypeScriptConformancePaths.TryFindRoot();
-        if (root is null) return;
+        var root = TypeScriptConformancePaths.RequireRoot();
         var path = Path.Combine(
             TypeScriptConformancePaths.ConformanceDir(root),
             "jsx",
@@ -100,6 +96,7 @@ public class TypeScriptConformanceRunnerTests
         Assert.NotEqual(TypeScriptConformanceOutcome.HarnessError, result.Outcome);
     }
 
+    [Trait("Category", "Corpus")]
     [Theory]
     [InlineData("checkJsxNamespaceNamesQuestionableForms.tsx")]
     [InlineData("jsxAndTypeAssertion.tsx")]
@@ -125,8 +122,7 @@ public class TypeScriptConformanceRunnerTests
     [InlineData("unicodeEscapesInJsxtags.tsx")]
     public void RunOne_JsxSyntaxRecoveryCampaign_MatchesPinnedDiagnostics(string fileName)
     {
-        var root = TypeScriptConformancePaths.TryFindRoot();
-        if (root is null) return;
+        var root = TypeScriptConformancePaths.RequireRoot();
         var path = Path.Combine(TypeScriptConformancePaths.ConformanceDir(root), "jsx", fileName);
 
         var result = new TypeScriptConformanceRunner(root).RunOne(path);
@@ -135,6 +131,7 @@ public class TypeScriptConformanceRunnerTests
             $"{fileName}: {result.Message ?? result.Outcome.ToString()}");
     }
 
+    [Trait("Category", "Corpus")]
     [Theory]
     [InlineData("Symbols/ES5SymbolProperty3.ts")]
     [InlineData("Symbols/ES5SymbolProperty4.ts")]
@@ -161,8 +158,7 @@ public class TypeScriptConformanceRunnerTests
     [InlineData("es6/Symbols/symbolType9.ts")]
     public void RunOne_SymbolCampaign_MatchesPinnedDiagnostics(string relativePath)
     {
-        var root = TypeScriptConformancePaths.TryFindRoot();
-        if (root is null) return;
+        var root = TypeScriptConformancePaths.RequireRoot();
         var path = Path.Combine(
             TypeScriptConformancePaths.ConformanceDir(root),
             relativePath.Replace('/', Path.DirectorySeparatorChar));
@@ -173,6 +169,7 @@ public class TypeScriptConformanceRunnerTests
             $"{relativePath}: {result.Message ?? result.Outcome.ToString()}");
     }
 
+    [Trait("Category", "Corpus")]
     [Theory]
     [InlineData("Symbols/ES5SymbolProperty1.ts")]
     [InlineData("jsx/tsxElementResolution8.tsx")]
@@ -182,8 +179,7 @@ public class TypeScriptConformanceRunnerTests
     [InlineData("types/typeRelationships/subtypesAndSuperTypes/subtypesOfTypeParameterWithConstraints4.ts")]
     public void RunOne_SymbolChanges_PreserveExistingPasses(string relativePath)
     {
-        var root = TypeScriptConformancePaths.TryFindRoot();
-        if (root is null) return;
+        var root = TypeScriptConformancePaths.RequireRoot();
         var path = Path.Combine(
             TypeScriptConformancePaths.ConformanceDir(root),
             relativePath.Replace('/', Path.DirectorySeparatorChar));
@@ -194,6 +190,7 @@ public class TypeScriptConformanceRunnerTests
             $"{relativePath}: {result.Message ?? result.Outcome.ToString()}");
     }
 
+    [Trait("Category", "Corpus")]
     [Theory]
     [InlineData("jsx/jsxParsingError4.tsx")]
     [InlineData("jsx/tsxDynamicTagName1.tsx")]
@@ -204,8 +201,7 @@ public class TypeScriptConformanceRunnerTests
     [InlineData("types/typeRelationships/assignmentCompatibility/assignmentCompatWithObjectMembers.ts")]
     public void RunOne_JsxRecoveryChanges_PreserveExistingPasses(string relativePath)
     {
-        var root = TypeScriptConformancePaths.TryFindRoot();
-        if (root is null) return;
+        var root = TypeScriptConformancePaths.RequireRoot();
         var path = Path.Combine(
             TypeScriptConformancePaths.ConformanceDir(root),
             relativePath.Replace('/', Path.DirectorySeparatorChar));
@@ -216,6 +212,7 @@ public class TypeScriptConformanceRunnerTests
             $"{relativePath}: {result.Message ?? result.Outcome.ToString()}");
     }
 
+    [Trait("Category", "Corpus")]
     [Theory]
     [InlineData("jsx/correctlyMarkAliasAsReferences2.tsx")]
     [InlineData("jsx/correctlyMarkAliasAsReferences4.tsx")]
@@ -234,8 +231,7 @@ public class TypeScriptConformanceRunnerTests
     [InlineData("jsx/tsxReactEmit8.tsx")]
     public void RunOne_Issue1533ResolutionCohort_MatchesDiagnosticBaseline(string relativePath)
     {
-        var root = TypeScriptConformancePaths.TryFindRoot();
-        if (root is null) return;
+        var root = TypeScriptConformancePaths.RequireRoot();
         string path = Path.Combine(
             TypeScriptConformancePaths.ConformanceDir(root),
             relativePath.Replace('/', Path.DirectorySeparatorChar));
@@ -246,6 +242,7 @@ public class TypeScriptConformanceRunnerTests
             $"{relativePath}: {result.Message ?? result.Outcome.ToString()}");
     }
 
+    [Trait("Category", "Corpus")]
     [Theory]
     [InlineData("jsx/checkJsxGenericTagHasCorrectInferences.tsx")]
     [InlineData("jsx/checkJsxIntersectionElementPropsType.tsx")]
@@ -291,8 +288,7 @@ public class TypeScriptConformanceRunnerTests
     [InlineData("jsx/tsxUnionTypeComponent2.tsx")]
     public void RunOne_Issue1535GenericJsxCampaign_MatchesPinnedDiagnostics(string relativePath)
     {
-        var root = TypeScriptConformancePaths.TryFindRoot();
-        if (root is null) return;
+        var root = TypeScriptConformancePaths.RequireRoot();
         string path = Path.Combine(
             TypeScriptConformancePaths.ConformanceDir(root),
             relativePath.Replace('/', Path.DirectorySeparatorChar));
@@ -304,6 +300,7 @@ public class TypeScriptConformanceRunnerTests
             string.Join(", ", (result.ActualDiagnostics ?? []).Select(d => $"{d.TsCode}@L{d.Line}")));
     }
 
+    [Trait("Category", "Corpus")]
     [Theory]
     [InlineData("jsx/checkJsxChildrenProperty15.tsx")]
     [InlineData("jsx/tsxGenericAttributesType2.tsx")]
@@ -311,8 +308,7 @@ public class TypeScriptConformanceRunnerTests
     [InlineData("types/typeRelationships/assignmentCompatibility/assignmentCompatWithObjectMembers.ts")]
     public void RunOne_Issue1535GenericJsxCampaign_PreservesExistingPasses(string relativePath)
     {
-        var root = TypeScriptConformancePaths.TryFindRoot();
-        if (root is null) return;
+        var root = TypeScriptConformancePaths.RequireRoot();
         string path = Path.Combine(
             TypeScriptConformancePaths.ConformanceDir(root),
             relativePath.Replace('/', Path.DirectorySeparatorChar));
@@ -323,6 +319,7 @@ public class TypeScriptConformanceRunnerTests
             $"{relativePath}: {result.Message ?? result.Outcome.ToString()}");
     }
 
+    [Trait("Category", "Corpus")]
     [Theory]
     [InlineData("types/typeRelationships/assignmentCompatibility/assignmentCompatWithDiscriminatedUnion.ts")]
     [InlineData("types/typeRelationships/assignmentCompatibility/enumAssignability.ts")]
@@ -339,8 +336,7 @@ public class TypeScriptConformanceRunnerTests
     [InlineData("types/typeRelationships/subtypesAndSuperTypes/unionSubtypeIfEveryConstituentTypeIsSubtype.ts")]
     public void RunOne_RelationshipCampaign_MatchesPinnedDiagnostics(string relativePath)
     {
-        var root = TypeScriptConformancePaths.TryFindRoot();
-        if (root is null) return;
+        var root = TypeScriptConformancePaths.RequireRoot();
         var path = Path.Combine(
             TypeScriptConformancePaths.ConformanceDir(root),
             relativePath.Replace('/', Path.DirectorySeparatorChar));
@@ -351,14 +347,14 @@ public class TypeScriptConformanceRunnerTests
             $"{relativePath}: {result.Message ?? result.Outcome.ToString()}");
     }
 
+    [Trait("Category", "Corpus")]
     [Theory]
     [InlineData("es6/Symbols/symbolProperty1.ts")]
     [InlineData("jsx/tsxSpreadAttributesResolution13.tsx")]
     [InlineData("types/typeRelationships/assignmentCompatibility/assignmentCompatWithObjectMembersAccessibility.ts")]
     public void RunOne_RelationshipCampaign_PreservesExistingPasses(string relativePath)
     {
-        var root = TypeScriptConformancePaths.TryFindRoot();
-        if (root is null) return;
+        var root = TypeScriptConformancePaths.RequireRoot();
         var path = Path.Combine(
             TypeScriptConformancePaths.ConformanceDir(root),
             relativePath.Replace('/', Path.DirectorySeparatorChar));
@@ -369,6 +365,7 @@ public class TypeScriptConformanceRunnerTests
             $"{relativePath}: {result.Message ?? result.Outcome.ToString()}");
     }
 
+    [Trait("Category", "Corpus")]
     [Theory]
     [InlineData("es2022/arbitraryModuleNamespaceIdentifiers/arbitraryModuleNamespaceIdentifiers_syntax.ts")]
     [InlineData("jsx/jsxParsingError2.tsx")]
@@ -379,8 +376,7 @@ public class TypeScriptConformanceRunnerTests
     [InlineData("jsx/tsxReactEmitEntities.tsx")]
     public void RunOne_IntentionalSyntaxErrorsBecomeComparableDiagnostics(string relativePath)
     {
-        var root = TypeScriptConformancePaths.TryFindRoot();
-        if (root is null) return;
+        var root = TypeScriptConformancePaths.RequireRoot();
         var path = Path.Combine(
             TypeScriptConformancePaths.ConformanceDir(root),
             relativePath.Replace('/', Path.DirectorySeparatorChar));
@@ -392,6 +388,7 @@ public class TypeScriptConformanceRunnerTests
         Assert.NotEqual(TypeScriptConformanceOutcome.TypeCheckError, result.Outcome);
     }
 
+    [Trait("Category", "Corpus")]
     [Theory]
     [InlineData("es2019/importMeta/importMeta.ts")]
     [InlineData("es2020/modules/exportAsNamespace_nonExistent.ts")]
@@ -401,8 +398,7 @@ public class TypeScriptConformanceRunnerTests
     [InlineData("jsx/inline/inlineJsxFactoryLocalTypeGlobalFallback.tsx")]
     public void RunOne_ExpandedSubset_DoesNotCrashParserOrChecker(string relativePath)
     {
-        var root = TypeScriptConformancePaths.TryFindRoot();
-        if (root is null) return;
+        var root = TypeScriptConformancePaths.RequireRoot();
         var path = Path.Combine(
             TypeScriptConformancePaths.ConformanceDir(root),
             relativePath.Replace('/', Path.DirectorySeparatorChar));
@@ -414,6 +410,7 @@ public class TypeScriptConformanceRunnerTests
         Assert.NotEqual(TypeScriptConformanceOutcome.TypeCheckError, result.Outcome);
     }
 
+    [Trait("Category", "Corpus")]
     [Theory]
     [InlineData("es2019/globalThisAmbientModules.ts")]
     [InlineData("es2019/globalThisBlockscopedProperties.ts")]
@@ -426,9 +423,8 @@ public class TypeScriptConformanceRunnerTests
     [InlineData("types/conditional/inferTypesInvalidExtendsDeclaration.ts")]
     public void RunOne_ReducedSkipSurface_IsMeasured(string relativePath)
     {
-        var root = TypeScriptConformancePaths.TryFindRoot();
-        var projectDir = TypeScriptConformancePaths.TryFindProjectDir();
-        if (root is null || projectDir is null) return;
+        var root = TypeScriptConformancePaths.RequireRoot();
+        var projectDir = TypeScriptConformancePaths.RequireProjectDir();
 
         string configDir = Path.Combine(projectDir, "config");
         var config = TypeScriptConformanceConfig.Load(Path.Combine(configDir, "subset.json"));
@@ -457,6 +453,7 @@ public class TypeScriptConformanceRunnerTests
         Assert.Contains("Failed to read", result.Message);
     }
 
+    [Trait("Category", "Corpus")]
     [Theory]
     [InlineData("es2016/es2016IntlAPIs.ts")]
     [InlineData("es2017/useObjectValuesAndEntries2.ts")]
@@ -498,8 +495,7 @@ public class TypeScriptConformanceRunnerTests
     [InlineData("jsx/tsxEmit3.tsx")]
     public void RunOne_Issue1540Candidate_MatchesPinnedTypeScript(string relativePath)
     {
-        var root = TypeScriptConformancePaths.TryFindRoot();
-        if (root is null) return;
+        var root = TypeScriptConformancePaths.RequireRoot();
         string path = Path.Combine(
             TypeScriptConformancePaths.ConformanceDir(root),
             relativePath.Replace('/', Path.DirectorySeparatorChar));
@@ -778,6 +774,7 @@ public class TypeScriptConformanceRunnerTests
         Assert.DoesNotContain("TS7006", ActualCodes("// @strict: false\n" + ImplicitAnyParam));
     }
 
+    [Trait("Category", "Corpus")]
     [Theory]
     [InlineData("enums/enumBasics.ts")]
     [InlineData("expressions/assignmentOperator/assignmentTypeNarrowing.ts")]
@@ -800,8 +797,7 @@ public class TypeScriptConformanceRunnerTests
     [InlineData("types/thisType/thisTypeInFunctions.ts")]
     public void RunOne_Epic1281CoreSemanticFixes_MatchPinnedDiagnostics(string relativePath)
     {
-        var root = TypeScriptConformancePaths.TryFindRoot();
-        if (root is null) return;
+        var root = TypeScriptConformancePaths.RequireRoot();
         string path = Path.Combine(
             TypeScriptConformancePaths.ConformanceDir(root),
             relativePath.Replace('/', Path.DirectorySeparatorChar));
@@ -812,6 +808,7 @@ public class TypeScriptConformanceRunnerTests
             $"{relativePath}: {result.Message ?? result.Outcome.ToString()}");
     }
 
+    [Trait("Category", "Corpus")]
     [Theory]
     [InlineData("classes/classExpression.ts")]
     [InlineData("jsx/checkJsxChildrenProperty15.tsx")]
@@ -866,8 +863,7 @@ public class TypeScriptConformanceRunnerTests
     [InlineData("types/typeRelationships/subtypesAndSuperTypes/subtypesOfTypeParameterWithConstraints2.ts")]
     public void RunOne_Epic1281ResidualFixes_MatchPinnedDiagnostics(string relativePath)
     {
-        var root = TypeScriptConformancePaths.TryFindRoot();
-        if (root is null) return;
+        var root = TypeScriptConformancePaths.RequireRoot();
         string path = Path.Combine(
             TypeScriptConformancePaths.ConformanceDir(root),
             relativePath.Replace('/', Path.DirectorySeparatorChar));

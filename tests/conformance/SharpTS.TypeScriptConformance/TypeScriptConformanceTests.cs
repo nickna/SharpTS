@@ -34,6 +34,7 @@ public class TypeScriptConformanceTests
 
     public TypeScriptConformanceTests(ITestOutputHelper output) => _output = output;
 
+    [Trait("Category", "Corpus")]
     [Fact]
     public async Task InterpretedBaseline()
     {
@@ -44,15 +45,11 @@ public class TypeScriptConformanceTests
         if (gate && GetBool("SHARPTS_TSCONFORMANCE_UPDATE_BASELINE"))
             throw new InvalidOperationException("Baseline updates are forbidden in the TypeScript CI gate.");
         bool smoke = gateProfile == "smoke";
-        var root = TypeScriptConformancePaths.TryFindRoot();
-        var projectDir = TypeScriptConformancePaths.TryFindProjectDir();
-        if (root is null || projectDir is null)
-        {
-            if (gate)
-                throw new DirectoryNotFoundException("TypeScript corpus is unavailable. Run scripts/test-typescript-conformance.ps1 to acquire it.");
-            _output.WriteLine("external/typescript or tests/conformance/SharpTS.TypeScriptConformance/ not found — run `git submodule update --init external/typescript`");
-            return;
-        }
+        var root = TypeScriptConformancePaths.RequireRoot();
+        var projectDir = TypeScriptConformancePaths.RequireProjectDir();
+        var baselinePath = Path.Combine(projectDir, "baselines", "interpreted.txt");
+        if (!GetBool("SHARPTS_TSCONFORMANCE_UPDATE_BASELINE"))
+            SharpTS.Conformance.ConformanceInputs.RequireBaseline(baselinePath);
 
         var configDir = Path.Combine(projectDir, "config");
         var configFile = Path.Combine(configDir, smoke ? "smoke.json" : "subset.json");
@@ -65,7 +62,6 @@ public class TypeScriptConformanceTests
         var files = EnumerateTestFiles(root, config.Folders, config.Files ?? []);
         if (files.Count == 0)
             throw new InvalidDataException("TypeScript conformance selection contains no tests.");
-        var baselinePath = Path.Combine(projectDir, "baselines", "interpreted.txt");
         IReadOnlyDictionary<string, string>? gateBaseline = gate
             ? TypeScriptConformanceGate.SelectBaseline(
                 TypeScriptConformanceGate.ReadBaseline(baselinePath, TypeScriptConformancePaths.GetCorpusRevision(root)),

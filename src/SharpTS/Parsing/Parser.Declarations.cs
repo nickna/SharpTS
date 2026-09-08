@@ -85,7 +85,7 @@ public partial class Parser
             // Decorators are only valid on classes; reject them on other declare forms.
             if (decorators != null && decorators.Count > 0)
             {
-                throw new Exception($"Parse Error at line {decorators[0].AtToken.Line}: Decorators are not valid here. Decorators can only be applied to classes and class members.");
+                throw new ParseError($"Parse Error at line {decorators[0].AtToken.Line}: Decorators are not valid here. Decorators can only be applied to classes and class members.");
             }
 
             // Other ambient declarations: declare function/const/let/var/enum/interface/type/namespace
@@ -101,7 +101,7 @@ public partial class Parser
         // If decorators were found but next token is not a class, report error
         if (decorators != null && decorators.Count > 0)
         {
-            throw new Exception($"Parse Error at line {decorators[0].AtToken.Line}: Decorators are not valid here. Decorators can only be applied to classes and class members.");
+            throw new ParseError($"Parse Error at line {decorators[0].AtToken.Line}: Decorators are not valid here. Decorators can only be applied to classes and class members.");
         }
         if (Match(TokenType.CONST))
         {
@@ -228,7 +228,7 @@ public partial class Parser
             return NamespaceDeclaration(isAmbient: true);
         }
 
-        throw new Exception($"Parse Error at line {Peek().Line}: Expected 'class', 'function', 'const', 'let', 'var', 'enum', 'interface', 'type', 'namespace', 'module', or 'global' after 'declare'.");
+        throw new ParseError($"Parse Error at line {Peek().Line}: Expected 'class', 'function', 'const', 'let', 'var', 'enum', 'interface', 'type', 'namespace', 'module', or 'global' after 'declare'.");
     }
 
     private Stmt TypeAliasDeclaration()
@@ -357,7 +357,7 @@ public partial class Parser
                     List<Stmt.Parameter> setterParams = ParseSignatureParameters();
                     Consume(TokenType.RIGHT_PAREN, "Expect ')' after set accessor parameter.");
                     if (setterParams.Count != 1)
-                        throw new Exception("A set accessor must have exactly one parameter.");
+                        throw new ParseError("A set accessor must have exactly one parameter.");
                     accessorType = setterParams[0].Type ?? "any";
                     accessorTypeNode = setterParams[0].TypeAnnotationNode;
                 }
@@ -517,7 +517,7 @@ public partial class Parser
 
             return new Stmt.CallSignature(sigTypeParams, parameters, returnType, returnTypeNode);
         }
-        catch
+        catch (ParseError)
         {
             _current = saved;
             return null;
@@ -556,7 +556,7 @@ public partial class Parser
 
             return new Stmt.ConstructorSignature(sigTypeParams, parameters, returnType, returnTypeNode);
         }
-        catch
+        catch (ParseError)
         {
             _current = saved;
             return null;
@@ -848,12 +848,12 @@ public partial class Parser
 
         if (hasDefiniteAssignment && typeAnnotation == null)
         {
-            throw new Exception($"Parse Error at line {name.Line}: Definite assignment assertion '!' requires a type annotation.");
+            throw new ParseError($"Parse Error at line {name.Line}: Definite assignment assertion '!' requires a type annotation.");
         }
 
         if (hasDefiniteAssignment && isConst)
         {
-            throw new Exception($"Parse Error at line {name.Line}: 'const' declarations cannot use definite assignment assertion '!' (const must be initialized).");
+            throw new ParseError($"Parse Error at line {name.Line}: 'const' declarations cannot use definite assignment assertion '!' (const must be initialized).");
         }
 
         Expr? initializer = null;
@@ -864,7 +864,7 @@ public partial class Parser
 
         if (hasDefiniteAssignment && initializer != null)
         {
-            throw new Exception($"Parse Error at line {name.Line}: Definite assignment assertion '!' cannot be used with an initializer.");
+            throw new ParseError($"Parse Error at line {name.Line}: Definite assignment assertion '!' cannot be used with an initializer.");
         }
 
         if (isConst && initializer == null)
@@ -989,7 +989,7 @@ public partial class Parser
                 if ((Check(TokenType.IDENTIFIER) || IsContextualKeyword(Peek().Type))
                     && PeekNext().Type == TokenType.EQUAL)
                     return ParseImportWithEquals(isExported: true);
-                throw new Exception(
+                throw new ParseError(
                     $"Parse Error at line {Peek().Line}: Expected import alias after 'export import'.");
             }
 
@@ -1071,7 +1071,7 @@ public partial class Parser
                 return new Stmt.Export(exportKeyword, ns, null, null, null, false);
             }
 
-            throw new Exception($"Parse Error at line {Peek().Line}: Expected declaration after 'export' in declare block.");
+            throw new ParseError($"Parse Error at line {Peek().Line}: Expected declaration after 'export' in declare block.");
         }
 
         // Non-exported members
@@ -1111,7 +1111,7 @@ public partial class Parser
             return NamespaceDeclaration();
         }
 
-        throw new Exception($"Parse Error at line {Peek().Line}: Expected declaration in declare block.");
+        throw new ParseError($"Parse Error at line {Peek().Line}: Expected declaration in declare block.");
     }
 
     /// <summary>

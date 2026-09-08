@@ -1,0 +1,71 @@
+name: Conformance baselines
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '23 8 * * 1'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: conformance-baselines-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  baseline:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - suite: test262-interpreted
+            project: SharpTS.Test262
+            filter: FullyQualifiedName=SharpTS.Test262.Test262InterpretedTests.InterpretedBaseline
+          - suite: test262-compiled
+            project: SharpTS.Test262
+            filter: FullyQualifiedName=SharpTS.Test262.Test262CompiledTests.CompiledBaseline
+          - suite: typescript
+            project: SharpTS.TypeScriptConformance
+            filter: FullyQualifiedName=SharpTS.TypeScriptConformance.TypeScriptConformanceTests.InterpretedBaseline
+    env:
+      SHARPTS_TEST262_UPDATE_BASELINE: '0'
+      SHARPTS_TEST262_WIDE_SWEEP: '0'
+      SHARPTS_TEST262_DIFFERENTIAL_REPORT: '0'
+      SHARPTS_TSCONFORMANCE_UPDATE_BASELINE: '0'
+      SHARPTS_TEST262_WORKERS: '2'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          submodules: true
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+      - name: Validate committed baseline
+        shell: pwsh
+        env:
+          TEST_PROJECT: ${{ matrix.project }}
+          TEST_FILTER: ${{ matrix.filter }}
+        run: |
+          if ($env:TEST_PROJECT -eq 'SharpTS.TypeScriptConformance') {
+            $env:SHARPTS_TSCONFORMANCE_GATE_PROFILE = 'full'
+            $env:SHARPTS_TSCONFORMANCE_REPORT_DIR = Join-Path $PWD 'artifacts/conformance/details'
+          }
+          dotnet test "tests/conformance/$env:TEST_PROJECT/$env:TEST_PROJECT.csproj" `
+            -c Release --filter $env:TEST_FILTER --logger trx --results-directory artifacts/conformance
+          if ($LASTEXITCODE -ne 0) { throw 'Conformance baseline validation failed.' }
+      - name: Publish counts and timing
+        if: always()
+        shell: pwsh
+        env:
+          TEST_SUITE: ${{ matrix.suite }}
+        run: ./scripts/write-test-summary.ps1 -ResultsDirectory artifacts/conformance -Scope $env:TEST_SUITE
+      - name: Upload baseline results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: conformance-${{ matrix.suite }}
+          path: artifacts/conformance
+          retention-days: 7

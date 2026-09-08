@@ -276,7 +276,7 @@ public class Lexer(string source)
                         Advance();
                         if (Peek() == '+' || Peek() == '-') Advance();
                         if (!char.IsDigit(Peek()))
-                            throw new Exception($"Invalid number: expected digit after exponent at line {_line}");
+                            throw new LexicalException($"Invalid number: expected digit after exponent at line {_line}");
                         while (char.IsDigit(Peek())) Advance();
                     }
                     AddToken(TokenType.NUMBER, double.Parse(_source[_start.._current]));
@@ -346,7 +346,7 @@ public class Lexer(string source)
                 }
                 else
                 {
-                    throw new Exception($"Unexpected character '#' at line {_line}");
+                    throw new LexicalException($"Unexpected character '#' at line {_line}");
                 }
                 break;
             case '!':
@@ -551,7 +551,7 @@ public class Lexer(string source)
             // diagnostic to the parser in tolerant mode.
             else if (!JsxTolerant && next >= '0' && next <= '7')
             {
-                throw new Exception($"SyntaxError: Legacy octal literals are not allowed. Use '0o' prefix for octal numbers at line {_line}");
+                throw new LexicalException($"SyntaxError: Legacy octal literals are not allowed. Use '0o' prefix for octal numbers at line {_line}");
             }
         }
 
@@ -565,7 +565,7 @@ public class Lexer(string source)
                 char next = PeekNext();
                 if (!char.IsDigit(prev) || !char.IsDigit(next))
                 {
-                    throw new Exception($"Numeric separator must be between digits at line {_line}");
+                    throw new LexicalException($"Numeric separator must be between digits at line {_line}");
                 }
             }
             Advance();
@@ -604,7 +604,7 @@ public class Lexer(string source)
                 // Check for underscore immediately after decimal point (invalid)
                 if (Peek() == '_')
                 {
-                    throw new Exception($"Numeric separator must be between digits at line {_line}");
+                    throw new LexicalException($"Numeric separator must be between digits at line {_line}");
                 }
 
                 // Consume fractional digits and numeric separators
@@ -617,7 +617,7 @@ public class Lexer(string source)
                         char next = PeekNext();
                         if (!char.IsDigit(prev) || !char.IsDigit(next))
                         {
-                            throw new Exception($"Numeric separator must be between digits at line {_line}");
+                            throw new LexicalException($"Numeric separator must be between digits at line {_line}");
                         }
                     }
                     Advance();
@@ -633,7 +633,7 @@ public class Lexer(string source)
             Advance(); // consume e/E
             if (Peek() == '+' || Peek() == '-') Advance(); // optional sign
             if (!char.IsDigit(Peek()))
-                throw new Exception($"Invalid number: expected digit after exponent at line {_line}");
+                throw new LexicalException($"Invalid number: expected digit after exponent at line {_line}");
             while (char.IsDigit(Peek())) Advance();
         }
 
@@ -650,7 +650,7 @@ public class Lexer(string source)
 
         if (!IsHexDigit(Peek()))
         {
-            throw new Exception($"Invalid hexadecimal literal at line {_line}");
+            throw new LexicalException($"Invalid hexadecimal literal at line {_line}");
         }
 
         // Consume hex digits and numeric separators
@@ -662,7 +662,7 @@ public class Lexer(string source)
                 char next = PeekNext();
                 if (!IsHexDigit(prev) || !IsHexDigit(next))
                 {
-                    throw new Exception($"Numeric separator must be between digits at line {_line}");
+                    throw new LexicalException($"Numeric separator must be between digits at line {_line}");
                 }
             }
             Advance();
@@ -695,7 +695,7 @@ public class Lexer(string source)
 
         if (!IsBinaryDigit(Peek()))
         {
-            throw new Exception($"Invalid binary literal at line {_line}");
+            throw new LexicalException($"Invalid binary literal at line {_line}");
         }
 
         // Consume binary digits and numeric separators
@@ -707,7 +707,7 @@ public class Lexer(string source)
                 char next = PeekNext();
                 if (!IsBinaryDigit(prev) || !IsBinaryDigit(next))
                 {
-                    throw new Exception($"Numeric separator must be between digits at line {_line}");
+                    throw new LexicalException($"Numeric separator must be between digits at line {_line}");
                 }
             }
             Advance();
@@ -736,7 +736,7 @@ public class Lexer(string source)
 
         if (!IsOctalDigit(Peek()))
         {
-            throw new Exception($"Invalid octal literal at line {_line}");
+            throw new LexicalException($"Invalid octal literal at line {_line}");
         }
 
         // Consume octal digits and numeric separators
@@ -748,7 +748,7 @@ public class Lexer(string source)
                 char next = PeekNext();
                 if (!IsOctalDigit(prev) || !IsOctalDigit(next))
                 {
-                    throw new Exception($"Numeric separator must be between digits at line {_line}");
+                    throw new LexicalException($"Numeric separator must be between digits at line {_line}");
                 }
             }
             Advance();
@@ -831,7 +831,7 @@ public class Lexer(string source)
                             // \00 through \07 are octal escapes and not allowed
                             if (Peek() >= '0' && Peek() <= '7')
                             {
-                                throw new Exception($"SyntaxError: Octal escape sequences are not allowed in strict mode at line {_line}");
+                                throw new LexicalException($"SyntaxError: Octal escape sequences are not allowed in strict mode at line {_line}");
                             }
                             sb.Append('\0');
                             break;
@@ -843,7 +843,7 @@ public class Lexer(string source)
                         case '6':
                         case '7':
                             // \1 through \7 are octal escapes - not allowed
-                            throw new Exception($"SyntaxError: Octal escape sequences are not allowed in strict mode at line {_line}");
+                            throw new LexicalException($"SyntaxError: Octal escape sequences are not allowed in strict mode at line {_line}");
                         case 'b': sb.Append('\b'); break;
                         case 'f': sb.Append('\f'); break;
                         case 'v': sb.Append('\v'); break;
@@ -939,7 +939,7 @@ public class Lexer(string source)
             if (Peek() == '\n') _line++;
             Advance();
         }
-        throw new Exception($"Unterminated block comment at line {_line}");
+        throw new LexicalException($"Unterminated block comment at line {_line}");
     }
 
     /// <summary>
@@ -1047,7 +1047,7 @@ public class Lexer(string source)
         else
         {
             // Unknown attribute - error
-            throw new Exception($"Type Error at line {_line}: Invalid triple-slash directive. Expected 'path', 'types', 'lib', or 'no-default-lib' attribute.");
+            throw new LexicalException($"Type Error at line {_line}: Invalid triple-slash directive. Expected 'path', 'types', 'lib', or 'no-default-lib' attribute.");
         }
 
         // Skip whitespace after attribute name
@@ -1056,7 +1056,7 @@ public class Lexer(string source)
         // Expect '='
         if (Peek() != '=')
         {
-            throw new Exception($"Type Error at line {_line}: Invalid triple-slash directive. Expected '=' after attribute name.");
+            throw new LexicalException($"Type Error at line {_line}: Invalid triple-slash directive. Expected '=' after attribute name.");
         }
         Advance(); // consume '='
 
@@ -1067,7 +1067,7 @@ public class Lexer(string source)
         char quote = Peek();
         if (quote != '"' && quote != '\'')
         {
-            throw new Exception($"Type Error at line {_line}: Invalid triple-slash directive. Expected quoted value after '='.");
+            throw new LexicalException($"Type Error at line {_line}: Invalid triple-slash directive. Expected quoted value after '='.");
         }
         Advance(); // consume opening quote
 
@@ -1079,7 +1079,7 @@ public class Lexer(string source)
 
         if (Peek() != quote)
         {
-            throw new Exception($"Type Error at line {_line}: Invalid triple-slash directive. Unterminated string value.");
+            throw new LexicalException($"Type Error at line {_line}: Invalid triple-slash directive. Unterminated string value.");
         }
         Advance(); // consume closing quote
 
@@ -1091,13 +1091,13 @@ public class Lexer(string source)
         // Expect '/>' to close the directive
         if (Peek() != '/')
         {
-            throw new Exception($"Type Error at line {_line}: Invalid triple-slash directive. Expected '/>' to close directive.");
+            throw new LexicalException($"Type Error at line {_line}: Invalid triple-slash directive. Expected '/>' to close directive.");
         }
         Advance(); // consume '/'
 
         if (Peek() != '>')
         {
-            throw new Exception($"Type Error at line {_line}: Invalid triple-slash directive. Expected '>' after '/'.");
+            throw new LexicalException($"Type Error at line {_line}: Invalid triple-slash directive. Expected '>' after '/'.");
         }
         Advance(); // consume '>'
 
@@ -1178,7 +1178,7 @@ public class Lexer(string source)
             // Newlines are not allowed in regex literals
             if (c == '\n')
             {
-                throw new Exception($"Unterminated regex literal at line {_line}");
+                throw new LexicalException($"Unterminated regex literal at line {_line}");
             }
 
             pattern.Append(Advance());
@@ -1186,7 +1186,7 @@ public class Lexer(string source)
 
         if (IsAtEnd())
         {
-            throw new Exception($"Unterminated regex literal at line {_line}");
+            throw new LexicalException($"Unterminated regex literal at line {_line}");
         }
 
         Advance(); // Consume closing /

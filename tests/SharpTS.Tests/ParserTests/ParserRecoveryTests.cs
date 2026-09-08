@@ -10,6 +10,21 @@ namespace SharpTS.Tests.ParserTests;
 /// </summary>
 public class ParserRecoveryTests
 {
+    [Theory]
+    [InlineData("const value = /x/;")]
+    [InlineData("function f() { const value = /x/; }")]
+    [InlineData("class C { field = /x/; }")]
+    public void InternalFailure_IsNotConvertedToASourceDiagnostic(string source)
+    {
+        var tokens = new Lexer(source).ScanTokens();
+        int index = tokens.FindIndex(token => token.Type == TokenType.REGEX);
+        Assert.True(index >= 0);
+        var original = tokens[index];
+        // A broken lexer/parser boundary must surface as a defect, not successful recovery.
+        tokens[index] = new Token(original.Type, original.Lexeme, new object(), original.Line, original.Start);
+        Assert.Throws<InvalidCastException>(() => new Parser(tokens).Parse());
+    }
+
     #region Helpers
 
     private static ParseDiagnosticResult Parse(string source)

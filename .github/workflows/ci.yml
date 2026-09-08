@@ -156,14 +156,20 @@ jobs:
             --project benchmarks/micro/SharpTS.Microbenchmarks -- --smoke
         timeout-minutes: 10
 
-      # Keep cross-platform harness build coverage. TypeScript's executable baseline
-      # smoke lives in typescript-conformance; Test262 execution is tracked by #1280.
-      - name: Build conformance harnesses (compile-only)
-        shell: bash
+      # Harness unit tests deliberately need no external corpus checkout.
+      - name: Test conformance harnesses
+        shell: pwsh
         run: |
-          dotnet build tests/conformance/SharpTS.Test262/SharpTS.Test262.csproj --configuration Release
-          dotnet build tests/conformance/SharpTS.Test262.Worker/SharpTS.Test262.Worker.csproj --configuration Release
-          dotnet build tests/conformance/SharpTS.TypeScriptConformance/SharpTS.TypeScriptConformance.csproj --configuration Release
+          dotnet test tests/conformance/SharpTS.Test262/SharpTS.Test262.csproj --configuration Release --filter "Category!=Corpus&Category!=Diagnostic" --logger trx --results-directory artifacts/tests/test262-harness
+          if ($LASTEXITCODE -ne 0) { throw 'Test262 harness tests failed.' }
+          dotnet test tests/conformance/SharpTS.TypeScriptConformance/SharpTS.TypeScriptConformance.csproj --configuration Release --filter "Category!=Corpus&Category!=Diagnostic" --logger trx --results-directory artifacts/tests/typescript-harness
+          if ($LASTEXITCODE -ne 0) { throw 'TypeScript harness tests failed.' }
+          ./scripts/write-test-summary.ps1 -ResultsDirectory artifacts/tests/test262-harness -Scope 'Test262 harness'
+          ./scripts/write-test-summary.ps1 -ResultsDirectory artifacts/tests/typescript-harness -Scope 'TypeScript harness'
+
+      - name: Test selection and reporting
+        shell: pwsh
+        run: ./scripts/test-test-reporting.ps1
 
       # Category!=LiveNetwork excludes the opt-in tests that make real outbound
       # DNS/HTTP calls (tagged [Trait("Category","LiveNetwork")]); those depend on
@@ -182,12 +188,13 @@ jobs:
       # LiveNetwork; the host-literal guardrail can't see package-name installs.
       # Run them on demand locally: dotnet test --filter "Category=npm"
       - name: Test core
-        run: dotnet test tests/SharpTS.Tests/SharpTS.Tests.csproj --no-build --configuration Release --verbosity normal --filter "Category!=LiveNetwork&Category!=LoadSensitive&Category!=npm"
+        shell: pwsh
+        run: ./scripts/invoke-tests.ps1 -Suite Full -NoBuild
         # The passing Windows suite can exceed ten minutes on hosted runners.
         timeout-minutes: ${{ matrix.os == 'windows-2025' && 15 || 10 }}
 
       - name: Test GUI conformance
-        run: dotnet test tests/gui-conformance/SharpTS.Gui.Conformance.Tests/SharpTS.Gui.Conformance.Tests.csproj --no-build --configuration Release --verbosity normal --filter "Category!=LiveNetwork&Category!=LoadSensitive&Category!=npm"
+        run: dotnet test tests/gui-conformance/SharpTS.Gui.Conformance.Tests/SharpTS.Gui.Conformance.Tests.csproj --no-build --configuration Release --verbosity normal --filter "Category!=LiveNetwork&Category!=LoadSensitive&Category!=npm" --logger trx --results-directory artifacts/tests/gui
         timeout-minutes: 10
 
       - name: Test NuGet release helper
@@ -204,6 +211,72 @@ jobs:
       - name: Packaged SDK smoke test
         shell: pwsh
         run: ./scripts/test-packaged-sdk.ps1
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: tests-${{ matrix.os }}
+          path: artifacts/tests
+          retention-days: 7
+
+  coverage:
+    needs: workflow-policy
+    if: needs.workflow-policy.outputs.mode == 'full'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+      - name: Measure unit coverage in isolated build output
+        shell: pwsh
+        run: ./scripts/invoke-tests.ps1 -Suite Coverage
+      - name: Upload coverage and timing
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: unit-coverage
+          path: |
+            artifacts/tests/**/summary.*
+            artifacts/tests/**/*.trx
+            artifacts/tests/**/coverage.cobertura.xml
+            artifacts/tests/**/run.log
+          retention-days: 7
+
+  conformance:
+    needs: workflow-policy
+    if: needs.workflow-policy.outputs.mode == 'full'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          submodules: true
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+      - name: Run pinned PR conformance cases
+        shell: pwsh
+        run: |
+          dotnet test tests/conformance/SharpTS.Test262/SharpTS.Test262.csproj -c Release --filter "Category=CiSmoke" --logger trx --results-directory artifacts/tests/test262
+          if ($LASTEXITCODE -ne 0) { throw 'Test262 PR conformance failed.' }
+      - name: Summarize conformance cases
+        if: always()
+        shell: pwsh
+        run: |
+          ./scripts/write-test-summary.ps1 -ResultsDirectory artifacts/tests/test262 -Scope 'Test262 PR corpus (both modes)'
+      - name: Upload conformance results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: conformance-pr
+          path: artifacts/tests
+          retention-days: 7
 
   typescript-conformance:
     needs: workflow-policy
@@ -555,7 +628,7 @@ jobs:
   gate:
     name: Gate
     if: always()
-    needs: [workflow-policy, build, typescript-conformance, dap-macos-smoke, aot-ratchet, native-aot-compile-smoke, lightweight-validation]
+    needs: [workflow-policy, build, typescript-conformance, coverage, conformance, dap-macos-smoke, aot-ratchet, native-aot-compile-smoke, lightweight-validation]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
@@ -570,7 +643,7 @@ jobs:
             throw "CI change classification or workflow policy did not pass."
           }
 
-          $heavy = @('build', 'typescript-conformance', 'dap-macos-smoke', 'aot-ratchet', 'native-aot-compile-smoke')
+          $heavy = @('build', 'typescript-conformance', 'coverage', 'conformance', 'dap-macos-smoke', 'aot-ratchet', 'native-aot-compile-smoke')
           if ($env:CHANGE_MODE -eq 'full') {
             $bad = @($heavy | Where-Object { $needs.PSObject.Properties[$_].Value.result -ne 'success' })
             if ($needs.'lightweight-validation'.result -ne 'skipped') {

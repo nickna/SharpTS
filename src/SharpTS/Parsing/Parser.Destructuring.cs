@@ -433,7 +433,7 @@ public partial class Parser
                 break;
             }
             if (prop.Kind is not Expr.ObjectPropertyKind.Value || prop.Key is null)
-                throw new Exception("Invalid assignment target.");  // getters/setters/methods aren't patterns
+                throw new ParseError("Invalid assignment target.");  // getters/setters/methods aren't patterns
 
             Expr access = MakePropertyAccess(src, prop.Key, usedKeys, underDefault);
             LowerElementWithDefault(prop.Value, access, stmts, line, underDefault);
@@ -503,7 +503,7 @@ public partial class Parser
         Expr.Get g => new Expr.Set(g.Object, g.Name, value),
         Expr.GetIndex gi => new Expr.SetIndex(gi.Object, gi.Index, value),
         Expr.GetPrivate gp => new Expr.SetPrivate(gp.Object, gp.Name, value),
-        _ => throw new Exception("Invalid assignment target.")
+        _ => throw new ParseError("Invalid assignment target.")
     };
 
     private Expr MakePropertyAccess(Expr src, Expr.PropertyKey key, List<Expr> usedKeys, bool underDefault = false)
@@ -524,7 +524,7 @@ public partial class Parser
                 // (a `{[k]: v, ...rest}` pattern would over-include — a narrow, rare edge).
                 return new Expr.GetIndex(src, ck.Expression);
             default:
-                throw new Exception("Invalid assignment target.");
+                throw new ParseError("Invalid assignment target.");
         }
     }
 

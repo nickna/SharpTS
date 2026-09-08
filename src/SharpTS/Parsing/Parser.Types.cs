@@ -52,7 +52,7 @@ public partial class Parser
             var node = parser.TakeTypeNode();
             return parser.IsAtEnd() ? node : null; // reject partial parses ("number garbage")
         }
-        catch
+        catch (ParseError)
         {
             return null;
         }
@@ -89,7 +89,7 @@ public partial class Parser
             }
             else
             {
-                throw new Exception($"Parse Error at line {Previous().Line}: Expected identifier after 'asserts'.");
+                throw new ParseError($"Parse Error at line {Previous().Line}: Expected identifier after 'asserts'.");
             }
         }
 
@@ -531,7 +531,7 @@ public partial class Parser
                 return "unique symbol";
             }
             // If "unique" is not followed by "symbol", it's an error in type context
-            throw new Exception($"Parse Error at line {Previous().Line}: 'unique' must be followed by 'symbol' in type annotation.");
+            throw new ParseError($"Parse Error at line {Previous().Line}: 'unique' must be followed by 'symbol' in type annotation.");
         }
 
         // Handle typeof in type position: typeof someVariable, typeof obj.prop, typeof arr[0]
@@ -599,7 +599,7 @@ public partial class Parser
                     }
                     else
                     {
-                        throw new Exception("Expect number, string, or identifier in typeof index access.");
+                        throw new ParseError("Expect number, string, or identifier in typeof index access.");
                     }
                     Consume(TokenType.RIGHT_BRACKET, "Expect ']' after index.");
                     sb.Append(']');
@@ -624,7 +624,7 @@ public partial class Parser
                     } while (Match(TokenType.COMMA));
                 }
                 if (!MatchGreaterInTypeContext())
-                    throw new Exception(
+                    throw new ParseError(
                         $"Parse Error at line {Peek().Line}: Expect '>' after typeof type arguments.");
                 sb.Append('<');
                 sb.Append(string.Join(", ", typeArguments));
@@ -808,7 +808,7 @@ public partial class Parser
         }
         else
         {
-            throw new Exception("Expect type.");
+            throw new ParseError("Expect type.");
         }
 
         // Handle generic type arguments: Container<number>, Map<string, number>
@@ -1091,7 +1091,7 @@ public partial class Parser
                 }
                 else
                 {
-                    throw new Exception("Expect 'string', 'number', or 'symbol' as index signature key type.");
+                    throw new ParseError("Expect 'string', 'number', or 'symbol' as index signature key type.");
                 }
 
                 Consume(TokenType.RIGHT_BRACKET, "Expect ']' after index signature key type.");
@@ -1236,7 +1236,7 @@ public partial class Parser
             _current = saved;
             return isMapped;
         }
-        catch
+        catch (ParseError)
         {
             _current = saved;
             return false;
@@ -1264,7 +1264,7 @@ public partial class Parser
             }
             else
             {
-                throw new Exception("Parse Error: Expected 'readonly' after '+' in mapped type.");
+                throw new ParseError("Parse Error: Expected 'readonly' after '+' in mapped type.");
             }
         }
         else if (Match(TokenType.MINUS))
@@ -1277,7 +1277,7 @@ public partial class Parser
             }
             else
             {
-                throw new Exception("Parse Error: Expected 'readonly' after '-' in mapped type.");
+                throw new ParseError("Parse Error: Expected 'readonly' after '-' in mapped type.");
             }
         }
         else if (Match(TokenType.READONLY))
@@ -1325,7 +1325,7 @@ public partial class Parser
             }
             else
             {
-                throw new Exception("Parse Error: Expected '?' after '+' in mapped type.");
+                throw new ParseError("Parse Error: Expected '?' after '+' in mapped type.");
             }
         }
         else if (Match(TokenType.MINUS))
@@ -1337,7 +1337,7 @@ public partial class Parser
             }
             else
             {
-                throw new Exception("Parse Error: Expected '?' after '-' in mapped type.");
+                throw new ParseError("Parse Error: Expected '?' after '-' in mapped type.");
             }
         }
         else if (Match(TokenType.QUESTION))
@@ -1426,7 +1426,7 @@ public partial class Parser
             else if (sawDefault)
             {
                 // TypeScript requires: required type parameters cannot follow optional ones
-                throw new Exception($"Parse Error: Required type parameter '{name.Lexeme}' cannot follow optional type parameter with default.");
+                throw new ParseError($"Parse Error: Required type parameter '{name.Lexeme}' cannot follow optional type parameter with default.");
             }
 
             typeParams.Add(new TypeParam(name, constraint, defaultType, isConst, variance, constraintNode, defaultNode));
@@ -1489,7 +1489,7 @@ public partial class Parser
             argNodes = nodes;
             return args;
         }
-        catch
+        catch (ParseError)
         {
             _current = saved;
             return null;
@@ -1531,7 +1531,7 @@ public partial class Parser
             argNodes = nodes;
             return args;
         }
-        catch
+        catch (ParseError)
         {
             _current = saved;
             return null;

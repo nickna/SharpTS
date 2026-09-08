@@ -18,8 +18,7 @@ public class TypeErrorTests
             let x: number = "hello";
             """;
 
-        var ex = Assert.ThrowsAny<Exception>(() => TestHarness.RunInterpreted(source));
-        Assert.Contains("Type Error", ex.Message);
+        DiagnosticAssertions.SingleError(source, "TS2322", 1);
     }
 
     [Fact]
@@ -29,8 +28,7 @@ public class TypeErrorTests
             let x: string = 42;
             """;
 
-        var ex = Assert.ThrowsAny<Exception>(() => TestHarness.RunInterpreted(source));
-        Assert.Contains("Type Error", ex.Message);
+        DiagnosticAssertions.SingleError(source, "TS2322", 1);
     }
 
     [Fact]
@@ -40,8 +38,7 @@ public class TypeErrorTests
             let x: number = true;
             """;
 
-        var ex = Assert.ThrowsAny<Exception>(() => TestHarness.RunInterpreted(source));
-        Assert.Contains("Type Error", ex.Message);
+        DiagnosticAssertions.SingleError(source, "TS2322", 1);
     }
 
     [Fact]
@@ -51,8 +48,7 @@ public class TypeErrorTests
             let x: number = { value: 42 };
             """;
 
-        var ex = Assert.ThrowsAny<Exception>(() => TestHarness.RunInterpreted(source));
-        Assert.Contains("Type Error", ex.Message);
+        DiagnosticAssertions.SingleError(source, "TS2322", 1);
     }
 
     [Fact]
@@ -62,8 +58,7 @@ public class TypeErrorTests
             let x: number = [1, 2, 3];
             """;
 
-        var ex = Assert.ThrowsAny<Exception>(() => TestHarness.RunInterpreted(source));
-        Assert.Contains("Type Error", ex.Message);
+        DiagnosticAssertions.SingleError(source, "TS2322", 1);
     }
 
     #endregion
@@ -82,8 +77,7 @@ public class TypeErrorTests
             let p: Person = { name: "Alice" };
             """;
 
-        var ex = Assert.ThrowsAny<Exception>(() => TestHarness.RunInterpreted(source));
-        Assert.Contains("Type Error", ex.Message);
+        DiagnosticAssertions.SingleError(source, "TS2741", 6);
     }
 
     [Fact]
@@ -98,8 +92,7 @@ public class TypeErrorTests
             let p: Person = { name: "Alice", age: "thirty" };
             """;
 
-        var ex = Assert.ThrowsAny<Exception>(() => TestHarness.RunInterpreted(source));
-        Assert.Contains("Type Error", ex.Message);
+        DiagnosticAssertions.SingleError(source, "TS2322", 6);
     }
 
     [Fact]
@@ -114,8 +107,7 @@ public class TypeErrorTests
             console.log(p.age);
             """;
 
-        var ex = Assert.ThrowsAny<Exception>(() => TestHarness.RunInterpreted(source));
-        Assert.Contains("Type Error", ex.Message);
+        DiagnosticAssertions.SingleError(source, "TS2339", 6);
     }
 
     #endregion
@@ -133,8 +125,7 @@ public class TypeErrorTests
             greet(42);
             """;
 
-        var ex = Assert.ThrowsAny<Exception>(() => TestHarness.RunInterpreted(source));
-        Assert.Contains("Type Error", ex.Message);
+        DiagnosticAssertions.SingleError(source, "TS2345", 5);
     }
 
     [Fact]
@@ -148,8 +139,7 @@ public class TypeErrorTests
             add(1);
             """;
 
-        var ex = Assert.ThrowsAny<Exception>(() => TestHarness.RunInterpreted(source));
-        Assert.Contains("Type Error", ex.Message);
+        DiagnosticAssertions.SingleError(source, "TS2554", 5);
     }
 
     [Fact]
@@ -163,8 +153,7 @@ public class TypeErrorTests
             greet("Alice", "Bob");
             """;
 
-        var ex = Assert.ThrowsAny<Exception>(() => TestHarness.RunInterpreted(source));
-        Assert.Contains("Type Error", ex.Message);
+        DiagnosticAssertions.SingleError(source, "TS2554", 5);
     }
 
     [Fact]
@@ -176,8 +165,7 @@ public class TypeErrorTests
             }
             """;
 
-        var ex = Assert.ThrowsAny<Exception>(() => TestHarness.RunInterpreted(source));
-        Assert.Contains("Type Error", ex.Message);
+        DiagnosticAssertions.SingleError(source, "TS2322", 2);
     }
 
     [Fact]
@@ -189,8 +177,7 @@ public class TypeErrorTests
             }
             """;
 
-        var ex = Assert.ThrowsAny<Exception>(() => TestHarness.RunInterpreted(source));
-        Assert.Contains("Type Error", ex.Message);
+        DiagnosticAssertions.SingleError(source, "TS2366", 1);
     }
 
     #endregion
@@ -204,8 +191,7 @@ public class TypeErrorTests
             let arr: number[] = [1, 2, "three"];
             """;
 
-        var ex = Assert.ThrowsAny<Exception>(() => TestHarness.RunInterpreted(source));
-        Assert.Contains("Type Error", ex.Message);
+        DiagnosticAssertions.SingleError(source, "TS2322", 1);
     }
 
     [Fact]
@@ -216,8 +202,7 @@ public class TypeErrorTests
             arr.push("four");
             """;
 
-        var ex = Assert.ThrowsAny<Exception>(() => TestHarness.RunInterpreted(source));
-        Assert.Contains("Type Error", ex.Message);
+        DiagnosticAssertions.SingleError(source, "TS2345", 2);
     }
 
     [Fact]
@@ -228,8 +213,7 @@ public class TypeErrorTests
             let strs: string[] = nums;
             """;
 
-        var ex = Assert.ThrowsAny<Exception>(() => TestHarness.RunInterpreted(source));
-        Assert.Contains("Type Error", ex.Message);
+        DiagnosticAssertions.SingleError(source, "TS2322", 2);
     }
 
     #endregion
@@ -250,8 +234,7 @@ public class TypeErrorTests
             let cat: Cat = new Dog();
             """;
 
-        var ex = Assert.ThrowsAny<Exception>(() => TestHarness.RunInterpreted(source));
-        Assert.Contains("Type Error", ex.Message);
+        DiagnosticAssertions.SingleError(source, "TS2741", 8);
     }
 
     [Fact]
@@ -265,8 +248,7 @@ public class TypeErrorTests
             let dog: Dog = animal;
             """;
 
-        var exception = Record.Exception(() => TestHarness.RunInterpreted(source));
-        Assert.Null(exception);
+        DiagnosticAssertions.NoErrors(source);
     }
 
     [Fact]
@@ -280,8 +262,7 @@ public class TypeErrorTests
             let s = new Shape();
             """;
 
-        var ex = Assert.ThrowsAny<Exception>(() => TestHarness.RunInterpreted(source));
-        Assert.Contains("abstract", ex.Message.ToLower());
+        DiagnosticAssertions.SingleError(source, "TS2511", 5);
     }
 
     [Fact]
@@ -300,8 +281,7 @@ public class TypeErrorTests
             }
             """;
 
-        var ex = Assert.ThrowsAny<Exception>(() => TestHarness.RunInterpreted(source));
-        Assert.Contains("Type Error", ex.Message);
+        DiagnosticAssertions.SingleError(source, "TS2515", 5);
     }
 
     [Fact]
@@ -317,8 +297,7 @@ public class TypeErrorTests
             }
             """;
 
-        var ex = Assert.ThrowsAny<Exception>(() => TestHarness.RunInterpreted(source));
-        Assert.Contains("Type Error", ex.Message);
+        DiagnosticAssertions.SingleError(source, "TS4113", 5);
     }
 
     #endregion
@@ -338,8 +317,7 @@ public class TypeErrorTests
             }
             """;
 
-        var ex = Assert.ThrowsAny<Exception>(() => TestHarness.RunInterpreted(source));
-        Assert.Contains("Type Error", ex.Message);
+        DiagnosticAssertions.SingleError(source, "TS2420", 5);
     }
 
     [Fact]
@@ -357,8 +335,7 @@ public class TypeErrorTests
             }
             """;
 
-        var ex = Assert.ThrowsAny<Exception>(() => TestHarness.RunInterpreted(source));
-        Assert.Contains("Type Error", ex.Message);
+        DiagnosticAssertions.SingleError(source, "TS2420", 5);
     }
 
     #endregion
@@ -376,8 +353,7 @@ public class TypeErrorTests
             double("hello");
             """;
 
-        var ex = Assert.ThrowsAny<Exception>(() => TestHarness.RunInterpreted(source));
-        Assert.Contains("Type Error", ex.Message);
+        DiagnosticAssertions.SingleError(source, "TS2345", 5);
     }
 
     [Fact]
@@ -395,8 +371,7 @@ public class TypeErrorTests
             let repo = new Repository<number>();
             """;
 
-        var ex = Assert.ThrowsAny<Exception>(() => TestHarness.RunInterpreted(source));
-        Assert.Contains("Type Error", ex.Message);
+        DiagnosticAssertions.SingleError(source, "TS2344", 9);
     }
 
     [Fact]
@@ -410,8 +385,7 @@ public class TypeErrorTests
             getName({ age: 30 });
             """;
 
-        var ex = Assert.ThrowsAny<Exception>(() => TestHarness.RunInterpreted(source));
-        Assert.Contains("Type Error", ex.Message);
+        DiagnosticAssertions.SingleError(source, "TS2345", 5);
     }
 
     #endregion
@@ -425,8 +399,7 @@ public class TypeErrorTests
             let x: string = null;
             """;
 
-        var ex = Assert.ThrowsAny<Exception>(() => TestHarness.RunInterpreted(source));
-        Assert.Contains("Type Error", ex.Message);
+        DiagnosticAssertions.SingleError(source, "TS2322", 1);
     }
 
     [Fact]
@@ -436,8 +409,7 @@ public class TypeErrorTests
             let x: number = undefined;
             """;
 
-        var ex = Assert.ThrowsAny<Exception>(() => TestHarness.RunInterpreted(source));
-        Assert.Contains("Type Error", ex.Message);
+        DiagnosticAssertions.SingleError(source, "TS2322", 1);
     }
 
     #endregion
@@ -451,8 +423,7 @@ public class TypeErrorTests
             let x: string | number = true;
             """;
 
-        var ex = Assert.ThrowsAny<Exception>(() => TestHarness.RunInterpreted(source));
-        Assert.Contains("Type Error", ex.Message);
+        DiagnosticAssertions.SingleError(source, "TS2322", 1);
     }
 
     [Fact]
@@ -464,8 +435,7 @@ public class TypeErrorTests
             }
             """;
 
-        var ex = Assert.ThrowsAny<Exception>(() => TestHarness.RunInterpreted(source));
-        Assert.Contains("Type Error", ex.Message);
+        DiagnosticAssertions.SingleError(source, "TS2322", 2);
     }
 
     #endregion
@@ -485,8 +455,8 @@ public class TypeErrorTests
             }
             test();
             """;
-        // Should NOT throw a type error now.
-        TestHarness.RunInterpreted(source);
+
+        DiagnosticAssertions.NoErrors(source);
     }
 
     [Fact]
@@ -504,7 +474,8 @@ public class TypeErrorTests
             }
             Counter.increment();
             """;
-        TestHarness.RunInterpreted(source);
+
+        DiagnosticAssertions.NoErrors(source);
     }
 
     #endregion
@@ -518,8 +489,7 @@ public class TypeErrorTests
             let result = "hello" - "world";
             """;
 
-        var ex = Assert.ThrowsAny<Exception>(() => TestHarness.RunInterpreted(source));
-        Assert.Contains("Type Error", ex.Message);
+        DiagnosticAssertions.Errors(source, ("TS2363", 1), ("TS2362", 1));
     }
 
     [Fact]
@@ -529,8 +499,7 @@ public class TypeErrorTests
             let result = "hello" / 2;
             """;
 
-        var ex = Assert.ThrowsAny<Exception>(() => TestHarness.RunInterpreted(source));
-        Assert.Contains("Type Error", ex.Message);
+        DiagnosticAssertions.SingleError(source, "TS2362", 1);
     }
 
     #endregion
@@ -544,8 +513,7 @@ public class TypeErrorTests
             let tuple: [string, number] = [42, "hello"];
             """;
 
-        var ex = Assert.ThrowsAny<Exception>(() => TestHarness.RunInterpreted(source));
-        Assert.Contains("Type Error", ex.Message);
+        DiagnosticAssertions.SingleError(source, "TS2322", 1);
     }
 
     [Fact]
@@ -555,8 +523,7 @@ public class TypeErrorTests
             let tuple: [string, number] = ["hello"];
             """;
 
-        var ex = Assert.ThrowsAny<Exception>(() => TestHarness.RunInterpreted(source));
-        Assert.Contains("Type Error", ex.Message);
+        DiagnosticAssertions.SingleError(source, "TS2741", 1);
     }
 
     #endregion
@@ -576,8 +543,7 @@ public class TypeErrorTests
             process(true);
             """;
 
-        var ex = Assert.ThrowsAny<Exception>(() => TestHarness.RunInterpreted(source));
-        Assert.Contains("Type Error", ex.Message);
+        DiagnosticAssertions.SingleError(source, "TS2769", 7);
     }
 
     #endregion
@@ -593,8 +559,7 @@ public class TypeErrorTests
             }
             """;
 
-        Assert.ThrowsAny<Exception>(() => TestHarness.RunInterpreted(source));
-        // Should error about required param after optional
+        DiagnosticAssertions.SingleError(source, "TS1016", 1);
     }
 
     #endregion
@@ -613,8 +578,7 @@ public class TypeErrorTests
             getProperty(person, "invalid");
             """;
 
-        var ex = Assert.ThrowsAny<Exception>(() => TestHarness.RunInterpreted(source));
-        Assert.Contains("Type Error", ex.Message);
+        DiagnosticAssertions.SingleError(source, "TS2345", 6);
     }
 
     #endregion
@@ -634,12 +598,7 @@ public class TypeErrorTests
             a[4294967295] = "spec-legal";
             """;
 
-        // Type-checker must not reject; runtime may still reject (separate
-        // sparse-array layer of work).
-        var ex = Record.Exception(() => TestHarness.RunInterpreted(source));
-        Assert.False(
-            ex is not null && ex.Message.Contains("Type Error"),
-            $"unexpected type error: {ex?.Message}");
+        DiagnosticAssertions.NoErrors(source);
     }
 
     [Fact]
@@ -650,10 +609,7 @@ public class TypeErrorTests
             a[-1] = "not an array element";
             """;
 
-        var ex = Record.Exception(() => TestHarness.RunInterpreted(source));
-        Assert.False(
-            ex is not null && ex.Message.Contains("Type Error"),
-            $"unexpected type error: {ex?.Message}");
+        DiagnosticAssertions.NoErrors(source);
     }
 
     [Fact]
@@ -664,9 +620,7 @@ public class TypeErrorTests
             a[5] = "still wrong";
             """;
 
-        var ex = Assert.ThrowsAny<Exception>(() => TestHarness.RunInterpreted(source));
-        Assert.Contains("Type Error", ex.Message);
-        Assert.Contains("array of", ex.Message);
+        DiagnosticAssertions.SingleError(source, "TS2322", 2);
     }
 
     [Fact]
@@ -677,9 +631,7 @@ public class TypeErrorTests
             a[4294967294] = "still wrong";
             """;
 
-        var ex = Assert.ThrowsAny<Exception>(() => TestHarness.RunInterpreted(source));
-        Assert.Contains("Type Error", ex.Message);
-        Assert.Contains("array of", ex.Message);
+        DiagnosticAssertions.SingleError(source, "TS2322", 2);
     }
 
     #endregion

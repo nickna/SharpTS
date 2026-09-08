@@ -3,6 +3,7 @@ using Xunit.Abstractions;
 
 namespace SharpTS.Test262;
 
+[Trait("Category", "Diagnostic")]
 public sealed class Test262DifferentialReportModeTests
 {
     private readonly ITestOutputHelper _output;

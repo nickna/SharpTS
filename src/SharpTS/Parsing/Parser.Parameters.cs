@@ -111,7 +111,7 @@ public partial class Parser
             {
                 ArrayPattern ap => DesugarArrayPattern(ap, paramVar),
                 ObjectPattern op => DesugarObjectPattern(op, paramVar),
-                _ => throw new Exception("Unknown pattern type")
+                _ => throw new ParseError("Unknown pattern type")
             };
             prologue.Add(desugar);
         }

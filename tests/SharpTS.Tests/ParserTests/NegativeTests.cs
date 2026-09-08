@@ -33,77 +33,13 @@ public class NegativeTests
         return parser.Parse();
     }
 
-    /// <summary>
-    /// Attempts the full pipeline (lex, parse, typecheck) and returns true if any stage reports errors.
-    /// Returns false if the pipeline completes successfully with no errors.
-    /// Does NOT throw on errors - this is for testing that errors are handled gracefully.
-    /// </summary>
+    // A dedicated process makes both timeouts and stack overflows observable failures.
+    // Only documented lexical errors and returned diagnostics are expected failures.
     private static bool FailsGracefully(string source)
-    {
-        try
-        {
-            var tokens = TryLex(source);
-            var parser = new Parser(tokens);
-            var parseResult = parser.Parse();
+        => !SharpTS.Tests.Infrastructure.FrontendTestHarness.Check(source).IsSuccess;
 
-            if (!parseResult.IsSuccess)
-                return true;
-
-            var checker = new TypeChecker();
-            var typeCheckResult = checker.CheckWithRecovery(parseResult.Statements);
-
-            if (!typeCheckResult.IsSuccess)
-                return true;
-
-            return false; // No errors detected
-        }
-        catch
-        {
-            // Any exception is also "graceful" failure for our purposes
-            return true;
-        }
-    }
-
-    /// <summary>
-    /// Runs the pipeline with a timeout to catch infinite loops or stack overflows.
-    /// Returns true if the pipeline completes within the timeout (with or without errors).
-    /// Returns false if the timeout is exceeded.
-    /// </summary>
-    private static bool CompletesWithinTimeout(string source, int timeoutMs = 5000)
-    {
-        var task = Task.Run(() =>
-        {
-            try
-            {
-                var tokens = TryLex(source);
-                var parser = new Parser(tokens);
-                var parseResult = parser.Parse();
-
-                if (parseResult.IsSuccess)
-                {
-                    var checker = new TypeChecker();
-                    checker.CheckWithRecovery(parseResult.Statements);
-                }
-                return true;
-            }
-            catch
-            {
-                // Exceptions are fine - we just want to ensure it completes
-                return true;
-            }
-        });
-
-        return task.Wait(TimeSpan.FromMilliseconds(timeoutMs));
-    }
-
-    /// <summary>
-    /// Asserts that processing the source completes within timeout and either succeeds or reports errors gracefully.
-    /// </summary>
     private static void AssertHandlesGracefully(string source, int timeoutMs = 5000)
-    {
-        Assert.True(CompletesWithinTimeout(source, timeoutMs),
-            "Processing did not complete within timeout - possible infinite loop or stack overflow");
-    }
+        => SharpTS.Tests.Infrastructure.FrontendTestHarness.Check(source, timeoutMs);
 
     #endregion
 

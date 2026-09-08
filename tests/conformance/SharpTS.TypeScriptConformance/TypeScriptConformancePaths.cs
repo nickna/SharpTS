@@ -1,3 +1,5 @@
+using SharpTS.Conformance;
+
 namespace SharpTS.TypeScriptConformance;
 
 /// <summary>
@@ -7,6 +9,11 @@ namespace SharpTS.TypeScriptConformance;
 /// </summary>
 public static class TypeScriptConformancePaths
 {
+    public static string RequireRoot() => ConformanceInputs.RequireRoot(TryFindRoot(), "typescript");
+
+    public static string RequireProjectDir() => TryFindProjectDir()
+        ?? throw new InvalidOperationException("SharpTS.TypeScriptConformance project directory missing.");
+
     public static string GetCorpusRevision(string root)
     {
         var startInfo = new System.Diagnostics.ProcessStartInfo("git", "rev-parse HEAD")
@@ -31,7 +38,7 @@ public static class TypeScriptConformancePaths
     /// Walks up from <see cref="AppContext.BaseDirectory"/> looking for
     /// <c>external/typescript/src/compiler/checker.ts</c> (a TS-repo-unique
     /// sentinel). Returns null when the submodule hasn't been initialized —
-    /// callers should skip rather than fail.
+    /// corpus tests use RequireRoot to fail with setup instructions.
     /// </summary>
     public static string? TryFindRoot()
     {

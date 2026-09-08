@@ -79,7 +79,7 @@ foreach ($requiredText in @(
         $errors.Add("ci.yml is missing change-routing contract text: $requiredText")
     }
 }
-foreach ($jobName in @('build', 'typescript-conformance', 'dap-macos-smoke', 'aot-ratchet', 'native-aot-compile-smoke')) {
+foreach ($jobName in @('build', 'typescript-conformance', 'coverage', 'conformance', 'dap-macos-smoke', 'aot-ratchet', 'native-aot-compile-smoke')) {
     $job = Get-WorkflowJob $ci $jobName 'ci.yml'
     if (-not $job.Contains('needs: workflow-policy', [StringComparison]::Ordinal) -or
         -not $job.Contains("if: needs.workflow-policy.outputs.mode == 'full'", [StringComparison]::Ordinal)) {

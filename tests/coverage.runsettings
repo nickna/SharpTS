@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RunSettings>
+  <RunConfiguration>
+    <MaxCpuCount>1</MaxCpuCount>
+  </RunConfiguration>
+  <xUnit>
+    <MaxParallelThreads>4</MaxParallelThreads>
+    <ParallelAlgorithm>conservative</ParallelAlgorithm>
+  </xUnit>
+  <DataCollectionRunSettings>
+    <DataCollectors>
+      <DataCollector friendlyName="XPlat Code Coverage">
+        <Configuration>
+          <Format>cobertura</Format>
+          <Include>[SharpTS]*,[SharpTS.*]*</Include>
+          <Exclude>[*.Tests]*,[SharpTS.FrontendFixture]*,[SharpTS.ProcessTreeFixture]*</Exclude>
+          <IncludeTestAssembly>false</IncludeTestAssembly>
+          <ExcludeByFile>**/obj/**</ExcludeByFile>
+          <SingleHit>false</SingleHit>
+        </Configuration>
+      </DataCollector>
+    </DataCollectors>
+  </DataCollectionRunSettings>
+</RunSettings>
