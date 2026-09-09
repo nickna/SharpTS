@@ -17,7 +17,8 @@ public sealed partial class DesktopRoot
         int mask = (node.Focused is not null || node.Blurred is not null ? 1 : 0) |
             (node.Wheel is not null ? 2 : 0) |
             (node.ScrollChanged is not null && mounted.Control is ScrollViewer ? 4 : 0) |
-            (node.EditStarted is not null || node.EditCompleted is not null ? 8 : 0);
+            (node.EditStarted is not null || node.EditCompleted is not null ? 8 : 0) |
+            (node.PointerEntered is not null || node.PointerExited is not null ? 16 : 0);
         if (mask == mounted.InteractionMask) return;
         foreach (Action unsubscribe in mounted.InteractionUnsubscribe) unsubscribe();
         mounted.InteractionUnsubscribe.Clear();
@@ -32,6 +33,15 @@ public sealed partial class DesktopRoot
             if (!mounted.EditActive) return;
             mounted.EditActive = false;
             Notify(mounted.InteractionNode.EditCompleted);
+        }
+        if ((mask & 16) != 0)
+        {
+            EventHandler<PointerEventArgs> entered = (_, _) => Notify(mounted.InteractionNode.PointerEntered);
+            EventHandler<PointerEventArgs> exited = (_, _) => Notify(mounted.InteractionNode.PointerExited);
+            mounted.Control.PointerEntered += entered;
+            mounted.Control.PointerExited += exited;
+            mounted.InteractionUnsubscribe.Add(() => mounted.Control.PointerEntered -= entered);
+            mounted.InteractionUnsubscribe.Add(() => mounted.Control.PointerExited -= exited);
         }
         void BeginEdit()
         {

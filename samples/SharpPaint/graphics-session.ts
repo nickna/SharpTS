@@ -7,7 +7,7 @@ import {
     useState
 } from "@sharpts/gui";
 import type { DrawingDocument, DrawingEffect, DrawingTask } from "@sharpts/gui";
-import { AppAction, AppState, effectForDialog, effectName } from "./editor-state";
+import { AppAction, AppState, effectForDialog, effectName, finishText } from "./editor-state";
 import { PaintLayer } from "./document";
 
 export function useGraphicsSession(state: AppState, dispatch: (action: AppAction) => void) {
@@ -95,8 +95,20 @@ export function useGraphicsSession(state: AppState, dispatch: (action: AppAction
         }
     };
     const effect = (value: DrawingEffect, preview: boolean): void => {
+        const snapshot = preview ? state : finishText(state);
+        const selected = snapshot.history.document.layers.find(
+            (layer) => layer.id === snapshot.selectedLayerId
+        )!;
+        if (!preview) dispatch({ type: "finishText" });
         void run(
-            startDrawingImage(isolated(), { effects: [value] }),
+            startDrawingImage(
+                {
+                    width: document.width,
+                    height: document.height,
+                    layers: [{ isVisible: true, opacity: 1, commands: selected.commands }]
+                },
+                { effects: [value] }
+            ),
             preview ? "Rendering effect preview…" : "Applying effect…",
             (image) => {
                 if (preview)
@@ -104,7 +116,7 @@ export function useGraphicsSession(state: AppState, dispatch: (action: AppAction
                         type: "effectPreview",
                         preview: {
                             layerId: selected.id,
-                            revision: state.revision,
+                            revision: snapshot.revision,
                             signature: JSON.stringify(value),
                             command: {
                                 kind: "image",
@@ -121,20 +133,24 @@ export function useGraphicsSession(state: AppState, dispatch: (action: AppAction
                         type: "replaceLayer",
                         layerId: selected.id,
                         source: image.source,
-                        expectedRevision: state.revision,
+                        expectedRevision: snapshot.revision,
                         status: effectName(value) + " applied"
                     });
             }
         );
     };
     const merge = (): void => {
+        const snapshot = finishText(state);
+        dispatch({ type: "finishText" });
+        const document = snapshot.history.document;
+        const selected = document.layers.find((layer) => layer.id === snapshot.selectedLayerId)!;
         const index = document.layers.findIndex((layer) => layer.id === selected.id);
         if (index <= 0) return;
         void run(
             startDrawingImage(drawing(document.layers.slice(index - 1, index + 1))),
             "Merging layers…",
             (image) =>
-                dispatch({ type: "mergeLayer", source: image.source, expectedRevision: state.revision })
+                dispatch({ type: "mergeLayer", source: image.source, expectedRevision: snapshot.revision })
         );
     };
     useEffect(() => {

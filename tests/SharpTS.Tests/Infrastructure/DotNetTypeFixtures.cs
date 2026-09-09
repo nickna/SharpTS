@@ -13,6 +13,10 @@ public class CallbackFixture
     /// <summary>Passes a hard-coded string to the callback; verifies Action&lt;string&gt;.</summary>
     public void InvokeWithGreeting(Action<string> callback) => callback("hello");
 
+    public void InvokeWithIndices(Action<int[]> callback) => callback([0, 2, 5]);
+    public void InvokeWithNestedArrays(Action<string[][]> callback) => callback([["one", "two"], []]);
+    public void InvokeWithNullArray(Action<int[]?> callback) => callback(null);
+
     /// <summary>Invokes a Func and returns its result doubled; verifies Func&lt;int,int&gt; return flow.</summary>
     public int DoubleOf(Func<int, int> callback, int input) => callback(input) * 2;
 

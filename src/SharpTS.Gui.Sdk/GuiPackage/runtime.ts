@@ -264,6 +264,19 @@ export function useEffect(effect: () => any, deps?: readonly unknown[]): void {
     appendHook(component, { kind: "effect", effect, deps, cleanup: old === null ? null : old.cleanup, changed });
 }
 
+/** Returns the owning window's resolved light/dark theme and follows native theme changes. @category Hooks and State */
+export function useTheme(): "light" | "dark" {
+    const root = requireComponent("useTheme").root;
+    root.themeRequested = true;
+    const [theme, setTheme] = useState<"light" | "dark">(root.theme);
+    useEffect(() => {
+        root.themeListeners.push(setTheme);
+        setTheme(root.theme);
+        return () => { const index = root.themeListeners.indexOf(setTheme); if (index >= 0) root.themeListeners.splice(index, 1); };
+    }, []);
+    return theme as "light" | "dark";
+}
+
 interface CreateControlRef { <THandle>(): ControlRef<THandle>; }
 function createControlRefImpl(): any { return DesktopBridge.CreateRef(); }
 /**
@@ -446,6 +459,8 @@ function withCommon(node: GuiVNode, safe: any,
         safe.allowDrop === true, dragOverAction(safe.onDragOver, reporter, tracker), dropAction(safe.onDrop, reporter, tracker),
         hasProperty(safe, "onDragOver"), hasProperty(safe, "onDrop")) as any;
     common = DesktopBridge.WithTextInput(common, safe.textWrapping || "noWrap", safe.showButtonSpinner !== false) as any;
+    common = DesktopBridge.WithEditingPresentation(common, safe.formatString || "",
+        action(safe.onPointerEnter, reporter, tracker), action(safe.onPointerLeave, reporter, tracker)) as any;
     return DesktopBridge.WithDesktopInput(common,
         safe.cursor || "default", safe.keyDownRouting || "bubble", safe.isHitTestVisible !== false,
         hasProperty(safe, "focusable"), safe.focusable === true, safe.tabIndex || 0,
@@ -493,6 +508,14 @@ function functionId(type: any): number {
 }
 
 class ReactiveRoot {
+    public theme: "light" | "dark" = "light";
+    public themeRequested = false;
+    public themeListeners: ((theme: "light" | "dark") => void)[] = [];
+    public updateTheme(theme: "light" | "dark"): void {
+        if (this.theme === theme) return;
+        this.theme = theme;
+        for (const listener of this.themeListeners.slice()) listener(theme);
+    }
     public window: DesktopWindow | null = null;
     private managed: any = null;
     private scheduled = false;
@@ -652,7 +675,9 @@ class ReactiveRoot {
         let node: GuiVNode;
         const pad = thickness(safe.padding); const border = thickness(safe.borderThickness);
         switch (element.type) {
-            case "Window": node = DesktopBridge.CreateWindow(safe.title === undefined ? "SharpTS GUI" : safe.title, safe.width === undefined ? 720 : safe.width, safe.height === undefined ? 480 : safe.height, safe.canResize === undefined ? true : safe.canResize, safe.theme === undefined ? "system" : safe.theme, safe.onMetricsChanged !== undefined, windowMetricsAction(safe.onMetricsChanged, eventReporter, eventTracker), safe.onCloseRequested !== undefined, boolPredicate(safe.onCloseRequested, eventReporter, eventTracker), children.nodes, key, ref); break;
+            case "PathIcon": node = DesktopBridge.CreatePathIcon(safe.data, key, ref); break;
+            case "ColorView": case "ColorPicker": node = DesktopBridge.CreateColorView(element.type, safe.color || "#000000", stringAction(safe.onColorChanged, eventReporter, eventTracker), key, ref); break;
+            case "Window": node = DesktopBridge.CreateWindow(safe.title === undefined ? "SharpTS GUI" : safe.title, safe.width === undefined ? 720 : safe.width, safe.height === undefined ? 480 : safe.height, safe.canResize === undefined ? true : safe.canResize, safe.theme === undefined ? "system" : safe.theme, this.themeRequested || safe.onMetricsChanged !== undefined, windowMetricsAction((event: WindowMetricsEvent) => { this.updateTheme(event.theme); if (safe.onMetricsChanged) return safe.onMetricsChanged(event); }, eventReporter, eventTracker), safe.onCloseRequested !== undefined, boolPredicate(safe.onCloseRequested, eventReporter, eventTracker), children.nodes, key, ref); break;
             case "StackPanel": case "ToolBar": node = DesktopBridge.CreateStackPanel(element.type, safe.spacing === undefined ? 0 : safe.spacing, element.type === "ToolBar" ? "horizontal" : (safe.orientation === undefined ? "vertical" : safe.orientation), children.nodes, key, ref); break;
             case "WrapPanel": node = DesktopBridge.CreateWrapPanel(safe.spacing === undefined ? 0 : safe.spacing, safe.orientation === undefined ? "horizontal" : safe.orientation, children.nodes, key, ref); break;
             case "DockPanel": node = DesktopBridge.CreateDockPanel(safe.lastChildFill === undefined ? true : safe.lastChildFill, children.nodes, key, ref); break;
@@ -995,9 +1020,9 @@ export type DesktopShutdownMode = "onLastWindowClose" | "onMainWindowClose" | "e
 export type DesktopControlKind =
     "Control" | "Window" | "StackPanel" | "ToolBar" | "WrapPanel" | "DockPanel" | "Grid" |
     "Border" | "StatusBar" | "ScrollViewer" | "TextBlock" | "Button" | "TextBox" |
-    "PasswordBox" | "ToggleButton" | "CheckBox" | "RadioButton" | "ToggleSwitch" | "ComboBox" | "ListBox" |
+    "PasswordBox" | "ToggleButton" | "CheckBox" | "RadioButton" | "ToggleSwitch" | "ComboBox" | "ListBox" | "ListBoxItem" |
     "NumericUpDown" | "DatePicker" | "TimePicker" | "Slider" | "ProgressBar" | "Separator" |
-    "Image" | "TabControl" | "TabItem" | "Menu" | "MenuItem";
+    "Image" | "PathIcon" | "ColorView" | "ColorPicker" | "TabControl" | "TabItem" | "Menu" | "MenuItem";
 /** Literal value stored in an application resource dictionary. @category Core and Composition */
 export type DesktopResourceValue = string | number | boolean | Thickness;
 /** Reference to a named application resource. @category Core and Composition */
@@ -1009,6 +1034,8 @@ export interface DesktopResourceReference {
 export type DesktopStyleValue = DesktopResourceValue | DesktopResourceReference;
 /** Selects controls by native kind and optional style classes. @category Core and Composition */
 export interface DesktopStyleSelector {
+    /** Native interaction states; these follow the control automatically. */
+    states?: readonly ("pointerover" | "pressed" | "checked" | "disabled" | "focus-visible" | "focus-within")[];
     /** Native control kind matched by the selector. */
     control: DesktopControlKind;
     /** Style classes that must all be present. */
@@ -1090,6 +1117,8 @@ export interface DesktopWindowOptions {
 }
 /** Live desktop window created by DesktopApplication. @category Application Lifecycle */
 export interface DesktopWindow {
+    /** The native window's currently resolved theme. */
+    readonly theme: "light" | "dark";
     /** Creates a native owned window in the same application. */
     createOwnedWindow(element: GuiChild, modal?: boolean): DesktopWindow;
     /** Captures the focused control so a dialog can restore keyboard focus. */
@@ -1263,6 +1292,7 @@ export function createDesktopApplication(options: DesktopApplicationOptions = {}
             runner.setEventWorkTracker(DesktopBridge.CreateEventWorkTracker(root));
             const closed = root.Completion as Promise<void>;
             window = {
+                get theme(): "light" | "dark" { return DesktopBridge.GetWindowTheme(root) as "light" | "dark"; },
                 createOwnedWindow(element: GuiChild, modal: boolean = true): DesktopWindow {
                     return application.createWindow(element, { owner: window, modal });
                 },

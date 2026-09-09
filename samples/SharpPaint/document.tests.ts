@@ -1,3 +1,4 @@
+import { createDemoDocument } from "./demo";
 import {
     PaintDocument,
     addLayer,
@@ -122,4 +123,6 @@ rejects("negative ellipse radii", '{"format":"sharpaint","version":1,"width":10,
 rejects("unembedded image", '{"format":"sharpaint","version":1,"width":1,"height":1,"layers":[{"id":"x","name":"a","isVisible":true,"opacity":1,"commands":[{"kind":"image","source":"file.png","x":0,"y":0,"width":1,"height":1}]}]}');
 rejects("invalid text", '{"format":"sharpaint","version":1,"width":10,"height":10,"layers":[{"id":"x","name":"a","isVisible":true,"opacity":1,"commands":[{"kind":"text","text":"","x":0,"y":0,"width":5,"height":5,"fill":"#000000","fontFamily":"sans-serif","fontSize":12,"textAlignment":"left","textWrapping":"wrap"}]}]}');
 
+const demo=createDemoDocument();
+expect("demo is a valid portable project",parseProject(serializeProject(demo)).layers.length===5);
 console.log("SharpPaint model tests passed.");

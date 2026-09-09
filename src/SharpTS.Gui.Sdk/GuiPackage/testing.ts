@@ -7,6 +7,12 @@ export type DesktopTestProperty = "isChecked" | "value" | "width" | "height" |
 
 /** Headless driver for locating and interacting with controls by their key. @category Testing */
 export interface DesktopTestDriver {
+    /** Compares this window with a reviewed PNG baseline; exact by default. An explicit pixel budget permits minor native raster variance. Update explicitly replaces the baseline. */
+    assertSnapshot(baselinePath: string, update?: boolean, maxDifferentPixels?: number): string;
+    /** True when the entire arranged control is visible inside its window and scrolling ancestors. */
+    isInViewport(key: string): boolean;
+    /** Captures this driver's window, including an owned dialog, and returns the PNG hash. */
+    captureSnapshot(path: string): string;
     /** Finds an open owned dialog by its exact title. Throws when missing or ambiguous. */
     ownedWindow(title: string): DesktopTestDriver;
     /** Sends wheel input at a control-local point through native hit testing. */
@@ -55,6 +61,8 @@ export interface DesktopTestDriver {
     pressPointer(key: string, point: { readonly x: number; readonly y: number }): void;
     /** Moves an active primary mouse pointer to local coordinates on its keyed control. */
     movePointer(key: string, point: { readonly x: number; readonly y: number }): void;
+    /** Moves an unpressed mouse pointer; supports hover and pointer-enter/leave checks. */
+    hoverPointer(key: string, point: { readonly x: number; readonly y: number }): void;
     /** Releases an active primary mouse pointer at local coordinates on its keyed control. */
     releasePointer(key: string, point: { readonly x: number; readonly y: number }): void;
     /** Cancels an active captured primary mouse pointer on its keyed control. */
@@ -80,6 +88,9 @@ export function createDesktopTestDriver(window: DesktopWindow): DesktopTestDrive
 
 function driverForRoot(managed: any): DesktopTestDriver {
     return {
+        assertSnapshot(path: string, update: boolean = false, maxDifferentPixels: number = 0): string { return DesktopTestingBridge.AssertSnapshot(managed, path, update, maxDifferentPixels); },
+        isInViewport(key: string): boolean { return DesktopTestingBridge.IsInViewport(managed, key); },
+        captureSnapshot(path: string): string { return DesktopTestingBridge.CaptureSnapshot(managed, path); },
         ownedWindow(title: string): DesktopTestDriver { return driverForRoot(DesktopTestingBridge.FindOwnedWindow(managed, title)); },
         wheel(key: string, x: number, y: number, deltaX: number, deltaY: number, ctrl: boolean = false): void {
             DesktopTestingBridge.Wheel(managed, key, x, y, deltaX, deltaY, ctrl);
@@ -129,6 +140,9 @@ function driverForRoot(managed: any): DesktopTestDriver {
         },
         movePointer(key: string, point: { readonly x: number; readonly y: number }): void {
             DesktopTestingBridge.MovePointer(managed, key, point.x, point.y);
+        },
+        hoverPointer(key: string, point: { readonly x: number; readonly y: number }): void {
+            DesktopTestingBridge.HoverPointer(managed, key, point.x, point.y);
         },
         releasePointer(key: string, point: { readonly x: number; readonly y: number }): void {
             DesktopTestingBridge.ReleasePointer(managed, key, point.x, point.y);

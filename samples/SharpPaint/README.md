@@ -2,6 +2,10 @@
 
 A native image editor written in TypeScript and TSX with `SharpTS.Gui.Sdk`. The same application runs interpreted or compiled.
 
+Choose **Demo artwork** to explore an editable layered illustration, or start painting on the blank canvas. **F1** opens the shortcut reference. New documents include common screen, square, landscape, and portrait presets.
+
+![SharpPaint in dark mode with editable demo artwork](visual-baselines/windows/dark-workspace.png)
+
 ## Run and verify
 
 From the repository, build and package the current SDK before launching:
@@ -54,12 +58,19 @@ The document and file session live above the presentation error boundary. Retry 
 | `SharpPaintApp.tsx` | Shell, commands, presentation boundary |
 | `EditorCanvas.tsx` | Viewport, checkerboard, pointer navigation, text editor |
 | `LayerPanel.tsx`, `ToolOptions.tsx`, `EffectPanel.tsx` | Contextual editing controls |
-| `controls.tsx`, `NewDocumentDialog.tsx` | Icons, fields, palette, dialog content |
+| `controls.tsx`, `NewDocumentDialog.tsx` | Paint icons, shared SDK field imports, document presets |
+| `demo.ts`, `ShortcutHelp.tsx`, `RecoveryDialog.tsx` | Editable showcase artwork, help, named recovery copies |
 | `editor-state.ts`, `document.ts` | Typed actions, history, paint semantics, portable format |
 | `document-session.tsx` | Serialized file workflow, dirty checkpoints, recovery |
 | `graphics-session.ts` | Cancellable jobs and stale-result protection |
 
 Use the SDK's small command, dialog, task, scroll, and focus primitives. Keep the application's document format and editing policy explicit. The [desktop editing recipes](../../docs/gui/desktop-editing.md) explain this boundary.
+
+The sample now consumes shared `TextField`, `NumberField`, `Inspector`, `IconButton`, semantic palettes, native color editors, and viewport navigation. Layers use native list selection, arrow-key navigation, and Alt+Up/Down ordering; dragging a thumbnail also reorders. Short windows collapse layer properties, and narrow windows show the inspector as a drawer. Effect Apply/Cancel remain pinned. Fit follows available canvas space; manual zoom preserves the view center. Switching tools or layers commits text; Escape/Cancel explicitly discards its draft.
+
+Recovery copies are discoverable through a banner and a picker with document names and timestamps. Browse remains available for copies stored elsewhere. Selecting a recovery copy preserves the original and opens an unsaved document.
+
+The workflow suite also runs `editor-state.tests.ts` and `presentation.tests.tsx`. Set `SHARPAINT_SNAPSHOTS` to capture the matrix; see [visual baseline instructions](visual-baselines/README.md) to compare reviewed images. The test driver's visibility checks include clipping, rather than checking only a control's local visibility flag.
 
 ## Performance and extensions
 

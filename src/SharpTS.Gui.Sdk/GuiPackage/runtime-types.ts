@@ -270,6 +270,10 @@ export interface DropEvent {
 
 /** Props shared by all built-in controls. @category Core and Composition */
 export interface CommonProps<THandle = unknown> {
+    /** Called when the pointer enters the control. */
+    onPointerEnter?: () => void;
+    /** Called when the pointer leaves the control. */
+    onPointerLeave?: () => void;
     /** Native pointer cursor. Omit to inherit the parent cursor. */
     cursor?: "default" | "arrow" | "cross" | "hand" | "ibeam" | "sizeAll" | "none" | "wait";
     /** Allows overlays to render without intercepting pointer input. */

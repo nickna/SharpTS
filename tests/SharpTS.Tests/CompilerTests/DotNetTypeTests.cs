@@ -859,6 +859,31 @@ public class DotNetTypeTests
     #region Delegate / callback parameters (compile mode)
 
     [Fact]
+    public void CompiledDelegate_ArrayArgumentsAreGuestArrays()
+    {
+        var source = """
+            @DotNetType("SharpTS.Tests.Infrastructure.CallbackFixture")
+            declare class CallbackFixture {
+                constructor();
+                invokeWithIndices(callback: (indices: number[]) => void): void;
+                invokeWithNestedArrays(callback: (values: string[][]) => void): void;
+                invokeWithNullArray(callback: (values: number[] | null) => void): void;
+            }
+            const fx = new CallbackFixture();
+            fx.invokeWithIndices(indices => {
+                console.log(Array.isArray(indices), indices.length, indices[1]);
+                console.log(indices.map(value => value + 1).join(','));
+                console.log(JSON.stringify(indices));
+            });
+            fx.invokeWithNestedArrays(values => console.log(JSON.stringify(values), values[1].length));
+            fx.invokeWithNullArray(values => console.log(values === null));
+            """;
+
+        Assert.Equal("true 3 2\n1,3,6\n[0,2,5]\n[[\"one\",\"two\"],[]] 0\ntrue\n",
+            TestHarness.RunCompiledWithTestFixtures(source));
+    }
+
+    [Fact]
     public void CompiledFixture_NoDelegate_Smoke()
     {
         // Sanity check: can compile-mode even see the test fixture type?

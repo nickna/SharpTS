@@ -167,7 +167,7 @@ public sealed class SharpPaintHeadlessTests
             Assert.False(File.Exists(Path.Combine(stage, "SharpPaint.Headless.Open.sharpaint")));
             Assert.False(File.Exists(Path.Combine(stage, "SharpPaint.Headless.Save.sharpaint")));
 
-            if (!smokeClose) Assert.Contains("SharpPaint headless workflows passed.", output, StringComparison.Ordinal);
+            if (!smokeClose) Assert.True(output.Contains("SharpPaint headless workflows passed.", StringComparison.Ordinal), $"stdout: {output}\nstderr: {errors}");
             using JsonDocument trace = JsonDocument.Parse(await File.ReadAllTextAsync(tracePath));
             return trace.RootElement.EnumerateArray().Select(item => new TraceEvent(
                 item.GetProperty("Stage").GetString()!,

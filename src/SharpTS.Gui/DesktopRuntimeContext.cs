@@ -426,8 +426,8 @@ internal sealed class DesktopRuntimeContext
         _trayIcons.Remove(trayIcon);
     }
 
-    internal int CountApplicationRoots(DesktopApplicationSession application) =>
-        _roots.Count(root => ReferenceEquals(root.Application, application) && !root.IsDisposed);
+    internal int CountApplicationRoots(DesktopApplicationSession application, DesktopRoot? excluding = null) =>
+        _roots.Count(root => ReferenceEquals(root.Application, application) && !root.IsDisposed && !ReferenceEquals(root, excluding));
 }
 
 internal sealed record DisplayInfo(
@@ -522,7 +522,7 @@ public sealed class DesktopApplicationSession : IDisposable
 
     internal bool ShouldRequestShutdown(DesktopRoot closingRoot) => _shutdownMode switch
     {
-        "onLastWindowClose" => _context.CountApplicationRoots(this) <= 1,
+        "onLastWindowClose" => _context.CountApplicationRoots(this, excluding: closingRoot) == 0,
         "onMainWindowClose" => closingRoot.IsMainWindow,
         "explicit" => false,
         _ => throw new UnreachableException(),

@@ -158,6 +158,13 @@ public partial class CompilationContext
             }
         }
 
+        // Module-local declarations take precedence over the legacy simple-name map,
+        // which contains only the last module declaring a given name. State-machine
+        // bodies also use this resolver for calls to their private helpers.
+        string localName = ModuleQualify(simpleFunctionName);
+        if (Functions.ContainsKey(localName))
+            return localName;
+
         if (FunctionToModule != null && FunctionToModule.TryGetValue(simpleFunctionName, out var modulePath))
         {
             string sanitizedModule = SanitizeModuleName(Path.GetFileNameWithoutExtension(modulePath));

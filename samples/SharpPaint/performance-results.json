@@ -1,0 +1,114 @@
+{
+  "recordedUtc": "2026-09-08",
+  "cpu": "Intel Core i7-14700T",
+  "logicalProcessors": 28,
+  "os": "Windows x64 build 29639",
+  "runtime": ".NET 10.0.11",
+  "avalonia": "12.1.1",
+  "runs": [
+    {
+      "mode": "compiled",
+      "elapsedMilliseconds": 6941,
+      "peakWorkingSetBytes": 241606656,
+      "measurements": [
+        {
+          "scenario": "2048px document, 100 native points per stroke + settled frame and PNG capture",
+          "warmup": 2,
+          "measured": 10,
+          "p50Milliseconds": 53.9970703125,
+          "p95Milliseconds": 58.302001953125,
+          "samplesMilliseconds": [
+            38.78759765625,
+            38.83740234375,
+            40.523193359375,
+            42.694091796875,
+            53.9970703125,
+            54.200439453125,
+            55.134521484375,
+            55.6533203125,
+            56.48583984375,
+            58.302001953125
+          ]
+        },
+        {
+          "scenario": "Open blur inspector, replace four preview parameters, settled frame and PNG capture",
+          "warmup": 1,
+          "measured": 5,
+          "p50Milliseconds": 544.595947265625,
+          "p95Milliseconds": 631.442138671875,
+          "samplesMilliseconds": [
+            493.913330078125,
+            535.281005859375,
+            544.595947265625,
+            545.37060546875,
+            631.442138671875
+          ]
+        },
+        {
+          "scenario": "2048px PNG export through document command with scripted file dialog",
+          "warmup": 1,
+          "measured": 3,
+          "p50Milliseconds": 187.00537109375,
+          "p95Milliseconds": 187.19775390625,
+          "samplesMilliseconds": [
+            171.33447265625,
+            187.00537109375,
+            187.19775390625
+          ]
+        }
+      ]
+    },
+    {
+      "mode": "interpreted",
+      "elapsedMilliseconds": 23429,
+      "peakWorkingSetBytes": 317734912,
+      "measurements": [
+        {
+          "scenario": "2048px document, 100 native points per stroke + settled frame and PNG capture",
+          "warmup": 2,
+          "measured": 10,
+          "p50Milliseconds": 235.30810546875,
+          "p95Milliseconds": 260.781982421875,
+          "samplesMilliseconds": [
+            211.472900390625,
+            212.93798828125,
+            232.716552734375,
+            234.773193359375,
+            235.30810546875,
+            241.837158203125,
+            246.457763671875,
+            251.514404296875,
+            256.2236328125,
+            260.781982421875
+          ]
+        },
+        {
+          "scenario": "Open blur inspector, replace four preview parameters, settled frame and PNG capture",
+          "warmup": 1,
+          "measured": 5,
+          "p50Milliseconds": 1375.42431640625,
+          "p95Milliseconds": 1704.554443359375,
+          "samplesMilliseconds": [
+            1336.34130859375,
+            1364.469482421875,
+            1375.42431640625,
+            1407.067138671875,
+            1704.554443359375
+          ]
+        },
+        {
+          "scenario": "2048px PNG export through document command with scripted file dialog",
+          "warmup": 1,
+          "measured": 3,
+          "p50Milliseconds": 1106.92138671875,
+          "p95Milliseconds": 1187.736083984375,
+          "samplesMilliseconds": [
+            1100.04736328125,
+            1106.92138671875,
+            1187.736083984375
+          ]
+        }
+      ]
+    }
+  ]
+}

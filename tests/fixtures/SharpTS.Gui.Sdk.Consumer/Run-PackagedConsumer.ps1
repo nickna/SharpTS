@@ -307,9 +307,11 @@ try {
         "tools/net10.0/any/host/SharpTS.Gui.Host.dll",
         "tools/net10.0/any/host/SharpTS.dll",
         "tools/net10.0/any/host/SharpTS.Gui.dll",
+        "tools/net10.0/any/host/Avalonia.Controls.ColorPicker.dll",
         "tools/net10.0/any/aot-host/SharpTS.Gui.Host.dll",
         "tools/net10.0/any/aot-host/SharpTS.Hosting.Abstractions.dll",
-        "tools/net10.0/any/aot-host/SharpTS.Gui.dll"
+        "tools/net10.0/any/aot-host/SharpTS.Gui.dll",
+        "tools/net10.0/any/aot-host/Avalonia.Controls.ColorPicker.dll"
     )) {
         if ($entryNames -notcontains $required) {
             throw "GUI SDK package is missing '$required'."
@@ -318,6 +320,7 @@ try {
     $expectedGuiEntries = @(
         "gui/control-docs.generated.json",
         "gui/control-surface.generated.ts",
+        "gui/desktop-ui.tsx",
         "gui/devtools.ts",
         "gui/index.ts",
         "gui/jsx-dev-runtime.ts",
@@ -326,7 +329,8 @@ try {
         "gui/patterns.ts",
         "gui/runtime-types.ts",
         "gui/runtime.ts",
-        "gui/testing.ts"
+        "gui/testing.ts",
+        "gui/viewport.ts"
     ) | Sort-Object
     $actualGuiEntries = @($entryNames | Where-Object { $_.StartsWith("gui/", [StringComparison]::Ordinal) } | Sort-Object)
     if (Compare-Object $expectedGuiEntries $actualGuiEntries -SyncWindow 0) {

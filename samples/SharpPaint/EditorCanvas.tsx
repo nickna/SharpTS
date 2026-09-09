@@ -5,23 +5,14 @@ import {
     Grid,
     ScrollViewer,
     TextBox,
-    anchoredZoomOffset,
-    fitZoom,
+    useViewportNavigation,
     useControlRef,
     useEffect,
     useMemo,
-    useRef,
     useState
 } from "@sharpts/gui";
-import type {
-    BorderHandle,
-    DrawingCommand,
-    GuiElement,
-    PointerEvent,
-    ScrollEvent,
-    TextBoxHandle
-} from "@sharpts/gui";
-import { commandForDraft, PaintDocument, PaintLayer } from "./document";
+import type { BorderHandle, DrawingCommand, GuiElement, PointerEvent, TextBoxHandle } from "@sharpts/gui";
+import { commandForDraft, PaintLayer } from "./document";
 import { AppAction, AppState } from "./editor-state";
 import { Palette } from "./controls";
 
@@ -36,39 +27,19 @@ export function EditorCanvas(props: {
 }): GuiElement {
     const state = props.state;
     const document = state.history.document;
-    const [viewport, setViewport] = useState<ScrollEvent>({
-        offsetX: 0,
-        offsetY: 0,
-        viewportWidth: 0,
-        viewportHeight: 0,
-        extentWidth: 0,
-        extentHeight: 0
+    const navigation = useViewportNavigation({
+        width: document.width,
+        height: document.height,
+        zoom: state.zoom,
+        fit: state.zoomMode === "fit",
+        resetKey: String(state.documentVersion) + ":" + props.fitRequest,
+        onZoom: (zoom, automatic) => props.dispatch({ type: "zoom", zoom, automatic })
     });
-    const [offset, setOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+    const { viewport, offset, width, height, frameWidth, frameHeight, left, top, space } = navigation;
     const [cursor, setCursor] = useState<{ x: number; y: number } | null>(null);
-    const [space, setSpace] = useState<boolean>(false);
-    const pan = useRef<{ x: number; y: number; offsetX: number; offsetY: number } | null>(null);
-    const fitted = useRef<string>("");
     const textRef = useControlRef<TextBoxHandle>();
     const surfaceRef = useControlRef<BorderHandle>();
     const scale = state.zoom;
-    const width = document.width * scale;
-    const height = document.height * scale;
-    const frameWidth = Math.max(viewport.viewportWidth, width + 48);
-    const frameHeight = Math.max(viewport.viewportHeight, height + 48);
-    const left = Math.max(24, (frameWidth - width) / 2);
-    const top = Math.max(24, (frameHeight - height) / 2);
-    const fitKey = document.layers[0].id + ":" + props.fitRequest;
-    useEffect(() => {
-        if (viewport.viewportWidth <= 48 || viewport.viewportHeight <= 48 || fitted.current === fitKey)
-            return;
-        fitted.current = fitKey;
-        props.dispatch({
-            type: "zoom",
-            zoom: fitZoom(document.width, document.height, viewport.viewportWidth, viewport.viewportHeight)
-        });
-        setOffset({ x: 0, y: 0 });
-    }, [fitKey, viewport.viewportWidth, viewport.viewportHeight]);
     useEffect(() => {
         if (state.textDraft?.editing) textRef.focus();
     }, [state.textDraft?.editing]);
@@ -96,6 +67,8 @@ export function EditorCanvas(props: {
         width,
         height,
         props.palette.checker,
+        left,
+        top,
         viewport.offsetX,
         viewport.offsetY,
         viewport.viewportWidth,
@@ -129,51 +102,48 @@ export function EditorCanvas(props: {
                       centerY: cursor.y,
                       radiusX: (state.size * scale) / 2,
                       radiusY: (state.size * scale) / 2,
+                      stroke: "#ffffff",
+                      strokeThickness: 3
+                  },
+                  {
+                      kind: "ellipse",
+                      centerX: cursor.x,
+                      centerY: cursor.y,
+                      radiusX: (state.size * scale) / 2,
+                      radiusY: (state.size * scale) / 2,
                       stroke: "#172336",
                       strokeThickness: 1
                   }
               ]
             : [];
     return (
-        <Border background={props.palette.canvas}>
+        <Border
+            key="canvas-workspace"
+            background={props.palette.canvas}
+            focusable={true}
+            capturePointerOnPress={true}
+            onPointerDown={navigation.onPointerDown}
+            onPointerMove={navigation.onPointerMove}
+            onPointerUp={navigation.onPointerUp}
+            onPointerCancel={() => {
+                navigation.cancel();
+                return true;
+            }}
+            onPointerLeave={() => setCursor(null)}
+        >
             <ScrollViewer
                 key="canvas-viewport"
                 horizontalScrollBarVisibility="auto"
                 verticalScrollBarVisibility="auto"
                 offsetX={offset.x}
                 offsetY={offset.y}
-                onScrollChanged={setViewport}
-                onKeyDown={(event) => {
-                    if (!event.isTextInput && event.key === "Space") {
-                        setSpace(true);
-                        return true;
-                    }
-                    return false;
-                }}
-                onKeyUp={(event) => {
-                    if (event.key === "Space") {
-                        setSpace(false);
-                        return true;
-                    }
-                    return false;
-                }}
-                onBlur={() => setSpace(false)}
+                onScrollChanged={navigation.setViewport}
+                onKeyDown={navigation.onKeyDown}
+                onKeyUp={navigation.onKeyUp}
+                onBlur={navigation.cancel}
                 onWheel={(event) => {
                     if (!event.ctrl) return false;
-                    const next = Math.max(0.01, Math.min(8, scale * Math.pow(1.15, event.deltaY)));
-                    const nextLeft = Math.max(24, (viewport.viewportWidth - document.width * next) / 2);
-                    const nextTop = Math.max(24, (viewport.viewportHeight - document.height * next) / 2);
-                    setOffset({
-                        x: Math.max(
-                            0,
-                            ((viewport.offsetX + event.x - left) * next) / scale - event.x + nextLeft
-                        ),
-                        y: Math.max(
-                            0,
-                            ((viewport.offsetY + event.y - top) * next) / scale - event.y + nextTop
-                        )
-                    });
-                    props.dispatch({ type: "zoom", zoom: next });
+                    navigation.zoomAt(event.deltaY, event.x, event.y);
                     return true;
                 }}
             >
@@ -216,50 +186,22 @@ export function EditorCanvas(props: {
                                 cursor={space ? "sizeAll" : state.tool === "text" ? "ibeam" : "cross"}
                                 onPointerDown={(event) => {
                                     surfaceRef.focus();
-                                    if (space || event.button === "middle") {
-                                        pan.current = {
-                                            x: event.x - viewport.offsetX,
-                                            y: event.y - viewport.offsetY,
-                                            offsetX: viewport.offsetX,
-                                            offsetY: viewport.offsetY
-                                        };
-                                        return true;
-                                    }
+                                    if (space || event.button === "middle") return false;
                                     return props.onDown(event);
                                 }}
                                 onPointerMove={(event) => {
-                                    if (pan.current) {
-                                        setOffset({
-                                            x: Math.max(
-                                                0,
-                                                pan.current.offsetX +
-                                                    pan.current.x -
-                                                    event.x +
-                                                    viewport.offsetX
-                                            ),
-                                            y: Math.max(
-                                                0,
-                                                pan.current.offsetY +
-                                                    pan.current.y -
-                                                    event.y +
-                                                    viewport.offsetY
-                                            )
-                                        });
-                                        return true;
-                                    }
+                                    if (space || (event.buttons & 4) !== 0) return false;
                                     setCursor({ x: event.x, y: event.y });
                                     if ((event.buttons & 1) !== 0) return props.onMove(event);
                                     return false;
                                 }}
                                 onPointerUp={(event) => {
-                                    if (pan.current) {
-                                        pan.current = null;
-                                        return true;
-                                    }
+                                    if (space || event.button === "middle") return false;
                                     return props.onUp(event);
                                 }}
+                                onPointerLeave={() => setCursor(null)}
                                 onPointerCancel={() => {
-                                    pan.current = null;
+                                    navigation.cancel();
                                     props.dispatch({
                                         type: state.tool === "text" ? "cancelText" : "pointerCancel"
                                     });

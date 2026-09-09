@@ -117,6 +117,9 @@ public sealed record GuiVNode(
     int SourceColumn = 0)
 {
     public bool ShowButtonSpinner { get; init; } = true;
+    public string FormatString { get; init; } = "";
+    public Action? PointerEntered { get; init; }
+    public Action? PointerExited { get; init; }
     public string Cursor { get; init; } = "default";
     public string KeyDownRouting { get; init; } = "bubble";
     public bool IsHitTestVisible { get; init; } = true;

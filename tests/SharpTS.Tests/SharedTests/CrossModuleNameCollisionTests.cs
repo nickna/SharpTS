@@ -15,6 +15,65 @@ namespace SharpTS.Tests.SharedTests;
 public class CrossModuleNameCollisionTests
 {
     [Theory, ModeData]
+    public void AsyncLocalCaptureDoesNotBecomeAnotherModulesTopLevelCapture(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["lib.ts"] = """
+                export async function run(): Promise<void> {
+                    for (const theme of ['light', 'dark']) {
+                        const driver = { text: 'local' };
+                        await Promise.resolve();
+                        const capture = (): void => console.log(theme + ': ' + driver.text);
+                        capture();
+                    }
+                }
+                """,
+            ["main.ts"] = """
+                import { run } from './lib';
+                const driver = { text: 'main' };
+                function capture(): void { console.log(driver.text); }
+                run().then(() => capture());
+                """
+        };
+
+        Assert.Equal("light: local\ndark: local\nmain\n", TestHarness.RunModules(files, "main.ts", mode));
+    }
+
+    [Theory, ModeData]
+    public void AsyncBodyCallsItsOwnPrivateHelpersAcrossSuspension(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["lib.ts"] = """
+                function label(): string { return 'lib'; }
+                async function rendered(): Promise<string> {
+                    await Promise.resolve();
+                    return 'lib rendered';
+                }
+                export async function run(): Promise<void> {
+                    console.log(label());
+                    console.log(await rendered());
+                    await Promise.resolve();
+                    const callback = async () => {
+                        await Promise.resolve();
+                        console.log(label());
+                    };
+                    await callback();
+                }
+                """,
+            ["main.ts"] = """
+                import { run } from './lib';
+                function label(): string { return 'main'; }
+                function rendered(): Promise<string> { return Promise.resolve('main rendered'); }
+                run();
+                """
+        };
+
+        Assert.Equal("lib\nlib rendered\nlib\n", TestHarness.RunModules(files, "main.ts", mode));
+    }
+
+    [Theory, ModeData]
     public void ExportedFunctionSurvivesConstShadowingInImporter(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>

@@ -40,7 +40,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <GuiConformancePackageSource Include="..\..\..\src\SharpTS.Gui.Sdk\GuiPackage\index.ts;..\..\..\src\SharpTS.Gui.Sdk\GuiPackage\patterns.ts;..\..\..\src\SharpTS.Gui.Sdk\GuiPackage\devtools.ts;..\..\..\src\SharpTS.Gui.Sdk\GuiPackage\testing.ts;..\..\..\src\SharpTS.Gui.Sdk\GuiPackage\jsx-runtime.ts;..\..\..\src\SharpTS.Gui.Sdk\GuiPackage\jsx-dev-runtime.ts;..\..\..\src\SharpTS.Gui.Sdk\GuiPackage\runtime.ts;..\..\..\src\SharpTS.Gui.Sdk\GuiPackage\runtime-types.ts;..\..\..\src\SharpTS.Gui.Sdk\GuiPackage\control-surface.generated.ts;..\..\..\src\SharpTS.Gui.Sdk\GuiPackage\control-docs.generated.json;..\..\..\src\SharpTS.Gui.Sdk\GuiPackage\package.json;Fixtures\conformance.ts" />
+    <GuiConformancePackageSource Include="..\..\..\src\SharpTS.Gui.Sdk\GuiPackage\index.ts;..\..\..\src\SharpTS.Gui.Sdk\GuiPackage\patterns.ts;..\..\..\src\SharpTS.Gui.Sdk\GuiPackage\desktop-ui.tsx;..\..\..\src\SharpTS.Gui.Sdk\GuiPackage\viewport.ts;..\..\..\src\SharpTS.Gui.Sdk\GuiPackage\devtools.ts;..\..\..\src\SharpTS.Gui.Sdk\GuiPackage\testing.ts;..\..\..\src\SharpTS.Gui.Sdk\GuiPackage\jsx-runtime.ts;..\..\..\src\SharpTS.Gui.Sdk\GuiPackage\jsx-dev-runtime.ts;..\..\..\src\SharpTS.Gui.Sdk\GuiPackage\runtime.ts;..\..\..\src\SharpTS.Gui.Sdk\GuiPackage\runtime-types.ts;..\..\..\src\SharpTS.Gui.Sdk\GuiPackage\control-surface.generated.ts;..\..\..\src\SharpTS.Gui.Sdk\GuiPackage\control-docs.generated.json;..\..\..\src\SharpTS.Gui.Sdk\GuiPackage\package.json;Fixtures\conformance.ts" />
   </ItemGroup>
 
   <Target Name="PrepareGuiConformanceHost" AfterTargets="Build">

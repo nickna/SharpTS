@@ -159,6 +159,7 @@ public sealed class ProductizationContractTests
         [
             "control-docs.generated.json",
             "control-surface.generated.ts",
+            "desktop-ui.tsx",
             "devtools.ts",
             "index.ts",
             "jsx-dev-runtime.ts",
@@ -168,6 +169,7 @@ public sealed class ProductizationContractTests
             "runtime-types.ts",
             "runtime.ts",
             "testing.ts",
+            "viewport.ts",
         ];
         string[] actualGuiPayload = Directory.EnumerateFiles(packageRoot, "*", SearchOption.TopDirectoryOnly)
             .Select(path => Path.GetFileName(path)!)

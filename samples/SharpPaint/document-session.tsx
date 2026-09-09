@@ -1,5 +1,6 @@
 import {
-    createSerialTask,
+    useSerialTask,
+    commitDesktopEdits,
     getDesktopPlatformInfo,
     getImageDimensions,
     readTextFile,
@@ -15,20 +16,22 @@ import {
     useState,
     writeTextFileAtomic
 } from "@sharpts/gui";
-import { existsSync, mkdirSync, unlinkSync, readdirSync } from "fs";
-import { basename, dirname, extname, join } from "path";
+import { existsSync, mkdirSync, unlinkSync, readdirSync, statSync } from "fs";
+import { basename, extname, join } from "path";
 import { AppAction, AppState } from "./editor-state";
 import {
     createDocument,
     createImportedDocument,
-    createTextCommand,
     PaintDocument,
     parseProject,
     serializeProject
 } from "./document";
+import { RecoveryCopy, RecoveryDialog } from "./RecoveryDialog";
+import { createDemoDocument } from "./demo";
 import { DocumentSize, NewDocumentDialog } from "./NewDocumentDialog";
 
 export interface DocumentSession {
+    openDemo(): Promise<void>;
     open(file?: string): Promise<void>;
     createNew(): Promise<void>;
     saveProject(forceDialog?: boolean): Promise<void>;
@@ -41,6 +44,8 @@ export interface DocumentSession {
     clearError(): void;
     recoveryPath: string;
     recoveryCount: number;
+    pending: boolean;
+    finishEditing(): Promise<void>;
 }
 
 async function readProject(file: string): Promise<PaintDocument> {
@@ -66,13 +71,13 @@ export function useDocumentSession(
     const owner = useDesktopWindow();
     const current = useRef(state);
     current.current = state;
-    const workflow = useRef(createSerialTask());
+    const workflow = useSerialTask();
     const closing = useRef<boolean>(false);
     const alive = useRef<boolean>(true);
     const [recent, setRecent] = useState<string[]>([]);
     const [error, setError] = useState<string>("");
     const [errorDetails, setErrorDetails] = useState<string>("");
-    const [recoveryCount, setRecoveryCount] = useState<number>(0);
+    const [recoveryCopies, setRecoveryCopies] = useState<RecoveryCopy[]>([]);
     const sessionId = useRef(String(Date.now()) + "-" + Math.floor(Math.random() * 1000000));
     const settings = useRef(
         storageDirectory ||
@@ -87,12 +92,6 @@ export function useDocumentSession(
         []
     );
     useEffect(() => {
-        if (existsSync(settings.current))
-            setRecoveryCount(
-                (readdirSync(settings.current) as string[]).filter(
-                    (file) => file.startsWith("recovery-") && file.endsWith(".sharpaint")
-                ).length
-            );
         const file = join(settings.current, "recent.json");
         if (existsSync(file))
             void readTextFile(file, 32768)
@@ -103,6 +102,38 @@ export function useDocumentSession(
                 })
                 .catch(() => {});
     }, []);
+    const scanRecovery = async (): Promise<RecoveryCopy[]> => {
+        const copies: RecoveryCopy[] = [];
+        if (existsSync(settings.current))
+            for (const file of readdirSync(settings.current) as string[]) {
+                const path = join(settings.current, file);
+                if (!file.startsWith("recovery-") || !file.endsWith(".sharpaint") || path === recoveryPath)
+                    continue;
+                try {
+                    let name = "Untitled document";
+                    if (existsSync(path + ".json")) {
+                        const metadata = JSON.parse(await readTextFile(path + ".json", 8192));
+                        if (typeof metadata.name === "string") name = metadata.name;
+                    }
+                    copies.push({ path, name, savedAt: statSync(path).mtimeMs });
+                } catch (_) {
+                    /* Another window may have cleaned up a copy while scanning. */
+                }
+            }
+        copies.sort((a, b) => b.savedAt - a.savedAt);
+        if (alive.current) setRecoveryCopies(copies);
+        return copies;
+    };
+    useEffect(() => {
+        void scanRecovery().catch(() => {});
+        const timer = setInterval(() => {
+            void scanRecovery().catch(() => {});
+        }, 10000);
+        return () => clearInterval(timer);
+    }, []);
+    const removeOwnRecovery = (): void => {
+        for (const file of [recoveryPath, recoveryPath + ".json"]) if (existsSync(file)) unlinkSync(file);
+    };
     const remember = async (file: string): Promise<void> => {
         const next = [file, ...recent.filter((path) => path !== file)].slice(0, 8);
         setRecent(next);
@@ -124,29 +155,8 @@ export function useDocumentSession(
         );
         setErrorDetails(String(error));
     };
-    const finishEditing = async (): Promise<void> => {
-        owner.clearFocus();
-        await new Promise<void>((resolve) => setTimeout(() => resolve(), 0));
-        const editing = current.current;
-        const draft = editing.textDraft;
-        if (draft !== null && draft.editing) {
-            if (draft.text)
-                dispatch({
-                    type: "commitText",
-                    command: createTextCommand(
-                        draft.text,
-                        draft,
-                        editing.color,
-                        editing.fontFamily,
-                        editing.textSize,
-                        editing.textBold,
-                        editing.textItalic
-                    )
-                });
-            else dispatch({ type: "cancelText" });
-            await new Promise<void>((resolve) => setTimeout(() => resolve(), 0));
-        }
-    };
+    const finishEditing = (): Promise<void> =>
+        commitDesktopEdits(owner, () => dispatch({ type: "finishText" }));
     const save = async (forceDialog: boolean = false): Promise<boolean> => {
         await finishEditing();
         const snapshot = current.current.history.document;
@@ -221,7 +231,7 @@ export function useDocumentSession(
     };
     const run = async (label: string, work: () => Promise<void>): Promise<void> => {
         try {
-            await workflow.current.run(work);
+            await workflow.run(work);
         } catch (error) {
             fail(label, error);
         }
@@ -239,6 +249,16 @@ export function useDocumentSession(
             }
 
             if (file) await openPath(file);
+        });
+    const openDemo = (): Promise<void> =>
+        run("Could not open demo", async () => {
+            if (!(await canReplace())) return;
+            dispatch({
+                type: "load",
+                document: createDemoDocument(),
+                filePath: null,
+                status: "Demo artwork · Select Text to edit the title, or explore its layers"
+            });
         });
     const createNew = (): Promise<void> =>
         run("Could not create document", async () => {
@@ -281,7 +301,7 @@ export function useDocumentSession(
         void run("Could not close", async () => {
             if (!(await canReplace())) return;
             await recovery.current;
-            if (existsSync(recoveryPath)) unlinkSync(recoveryPath);
+            removeOwnRecovery();
             closing.current = true;
             requestClose();
         });
@@ -293,7 +313,7 @@ export function useDocumentSession(
         if (!state.history.dirty) {
             recovery.current = recovery.current
                 .then(() => {
-                    if (existsSync(recoveryPath)) unlinkSync(recoveryPath);
+                    removeOwnRecovery();
                 })
                 .catch(() => {});
             return;
@@ -304,6 +324,12 @@ export function useDocumentSession(
                 try {
                     mkdirSync(settings.current, { recursive: true });
                     await writeTextFileAtomic(recoveryPath, serializeProject(snapshot));
+                    await writeTextFileAtomic(
+                        recoveryPath + ".json",
+                        JSON.stringify({
+                            name: state.filePath ? basename(state.filePath) : "Untitled document"
+                        })
+                    );
                 } catch (error) {
                     if (alive.current)
                         dispatch({
@@ -317,13 +343,26 @@ export function useDocumentSession(
     }, [state.history.document, state.history.dirty]);
     const recover = (): Promise<void> =>
         run("Could not recover", async () => {
-            const files = await showOpenFileDialog({
-                title: "Recover a SharpPaint document",
-                initialDirectory: settings.current,
-                filters: [{ name: "Recovery copies", patterns: ["recovery-*.sharpaint"] }]
-            });
-            if (!files.length || !(await canReplace())) return;
-            const document = await readProject(files[0]);
+            const copies = await scanRecovery();
+            let file: string | null = copies.length
+                ? await showDialog<string>(owner, {
+                      title: "Recover your work",
+                      width: 500,
+                      height: 460,
+                      content: (dialog) => <RecoveryDialog copies={copies} dialog={dialog} />
+                  })
+                : "";
+            if (file === null) return;
+            if (file === "") {
+                const files = await showOpenFileDialog({
+                    title: "Recover a SharpPaint document",
+                    initialDirectory: settings.current,
+                    filters: [{ name: "Recovery copies", patterns: ["*.sharpaint"] }]
+                });
+                file = files.length ? files[0] : null;
+            }
+            if (file === null || !(await canReplace())) return;
+            const document = await readProject(file);
             if (!alive.current) return;
             dispatch({
                 type: "load",
@@ -335,6 +374,9 @@ export function useDocumentSession(
         });
     return {
         recover,
+        openDemo,
+        pending: workflow.busy,
+        finishEditing,
         open,
         createNew,
         saveProject,
@@ -348,6 +390,6 @@ export function useDocumentSession(
             setErrorDetails("");
         },
         recoveryPath,
-        recoveryCount
+        recoveryCount: recoveryCopies.length
     };
 }

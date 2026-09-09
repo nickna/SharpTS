@@ -34,6 +34,19 @@ public sealed class DesktopRef
 
 public static partial class DesktopBridge
 {
+    public static string GetWindowTheme(DesktopRoot root)
+    {
+        EnsureOwnerThread();
+        ArgumentNullException.ThrowIfNull(root);
+        ObjectDisposedException.ThrowIf(root.IsDisposed, root);
+        return root.Window?.ActualThemeVariant == Avalonia.Styling.ThemeVariant.Dark ? "dark" : "light";
+    }
+    public static GuiVNode CreatePathIcon(string data, string? key, Action<object?>? reference) =>
+        new("PathIcon", Key: key, Text: data, AttachRef: reference);
+    public static GuiVNode CreateColorView(string kind, string color, Action<string>? changed, string? key, Action<object?>? reference) =>
+        new(kind, Key: key, Text: color, TextChanged: changed, AttachRef: reference);
+    public static GuiVNode WithEditingPresentation(GuiVNode node, string format, Action? entered, Action? exited) =>
+        node with { FormatString = format, PointerEntered = entered, PointerExited = exited };
     public const int GuiApiVersion = 1;
     public const int CustomControlProviderApiVersion = 1;
     public const int DescriptorSchemaVersion = GeneratedControlContract.SchemaVersion;

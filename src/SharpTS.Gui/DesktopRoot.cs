@@ -325,7 +325,7 @@ public sealed partial class DesktopRoot : IDisposable
 
     private static InspectorNode InspectNode(MountedNode node)
     {
-        Rect bounds = node.Control.Bounds;
+        Rect bounds = DesktopGeometry.WindowBounds(node.Control);
         return new InspectorNode(
             node.VNode.Kind,
             node.VNode.Key,
@@ -333,8 +333,8 @@ public sealed partial class DesktopRoot : IDisposable
             node.VNode.SourceFile is null ? null : new InspectorSource(
                 node.VNode.SourceFile, node.VNode.SourceLine, node.VNode.SourceColumn),
             new InspectorBounds(bounds.X, bounds.Y, bounds.Width, bounds.Height),
-            node.Control.IsVisible,
-            node.Control.IsEnabled,
+            DesktopGeometry.IsVisible(node.Control),
+            node.Control.IsEffectivelyEnabled,
             node.Control.Classes.ToArray(),
             new InspectorProps(
                 node.VNode.Text,
@@ -395,7 +395,7 @@ public sealed partial class DesktopRoot : IDisposable
 
         GuiVNode previousNode = mounted.VNode;
         bool changed = false;
-        if (!SameNativeProperties(previousNode, prepared.VNode))
+        if (!SameNativeProperties(previousNode, prepared.VNode) || HasControlledStateDrift(mounted.Control, prepared.VNode))
         {
             mounted.SuppressEvents = true;
             try
@@ -672,6 +672,18 @@ public sealed partial class DesktopRoot : IDisposable
         {
             switch (mounted.Control)
             {
+                case ColorView color:
+                    {
+                        EventHandler<ColorChangedEventArgs> handler = (_, args) =>
+                        {
+                            if (!mounted.SuppressEvents && mounted.LatestTextChanged is { } changed)
+                                PostGuestNotification(mounted, () => changed($"#{args.NewColor.A:X2}{args.NewColor.R:X2}{args.NewColor.G:X2}{args.NewColor.B:X2}"));
+                        };
+                        color.ColorChanged += handler;
+                        mounted.ExtraUnsubscribe.Add(() => color.ColorChanged -= handler);
+                        MarkPrimarySubscribed(mounted);
+                        break;
+                    }
                 case TextBox textBox:
                 {
                     mounted.LastTextValue = textBox.Text ?? string.Empty;
@@ -1453,6 +1465,19 @@ public sealed partial class DesktopRoot : IDisposable
             if (_disposed || mounted.Released)
                 return;
             callback();
+            // A controlled callback may reject an edit without scheduling a render.
+            // Run after its queued guest state updates, then restore the latest contract.
+            _scheduleGuestMicrotask(() =>
+            {
+                if (_disposed || mounted.Released || !HasControlledStateDrift(mounted.Control, mounted.VNode)) return;
+                mounted.SuppressEvents = true;
+                try
+                {
+                    mounted.Descriptor.Update(mounted.Control, mounted.VNode, mounted.VNode);
+                    SynchronizeEventValue(mounted);
+                }
+                finally { mounted.SuppressEvents = false; }
+            });
         });
     }
 
@@ -1587,6 +1612,24 @@ public sealed partial class DesktopRoot : IDisposable
         return true;
     }
 
+    // A native edit can change a controlled value even when the guest rejects it and
+    // renders identical props. Comparing two VNodes alone cannot detect that drift.
+    private static bool HasControlledStateDrift(Control control, GuiVNode node) => control switch
+    {
+        ColorView color when CommonProperties.IsSpecified(node, "color") => color.Color != Avalonia.Media.Color.Parse(node.Text ?? "#000000"),
+        TextBox text when CommonProperties.IsSpecified(node, "text") => text.Text != (node.Text ?? ""),
+        ToggleButton toggle when CommonProperties.IsSpecified(node, "isChecked") => (toggle.IsChecked == true) != node.IsChecked,
+        NumericUpDown number when CommonProperties.IsSpecified(node, "value") => number.Value != (node.NullableValue is double value ? (decimal)value : null),
+        Slider slider when CommonProperties.IsSpecified(node, "value") => slider.Value != node.Value,
+        ComboBox combo when CommonProperties.IsSpecified(node, "selectedIndex") => combo.SelectedIndex != node.SelectedIndex,
+        TabControl tabs when CommonProperties.IsSpecified(node, "selectedIndex") => tabs.SelectedIndex != node.SelectedIndex,
+        TreeViewItem tree when CommonProperties.IsSpecified(node, "isExpanded") => tree.IsExpanded != node.IsExpanded,
+        ListBox list when CommonProperties.IsSpecified(node, "selectedIndices") =>
+            !(list.SelectedItems?.Cast<object>().Select(item => list.Items.IndexOf(item)).Order().ToArray() ?? [])
+                .SequenceEqual((node.SelectedIndices ?? []).Order()),
+        _ => false,
+    };
+
     private static bool SameNativeProperties(GuiVNode left, GuiVNode right)
     {
         GuiVNode Normalize(GuiVNode node) => node with
@@ -1616,6 +1659,8 @@ public sealed partial class DesktopRoot : IDisposable
             PointerMove = null,
             PointerUp = null,
             PointerCancel = null,
+            PointerEntered = null,
+            PointerExited = null,
             WindowMetricsChanged = null,
             CloseRequested = null,
             DragOver = null,

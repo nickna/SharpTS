@@ -140,7 +140,12 @@ public class DelegateAdapterEmitter
             il.Emit(OpCodes.Dup);
             EmitLdcI4(il, i);
             EmitLdarg(il, i + 1); // +1 for `this`
-            EmitBoxForTS(il, parameters[i].ParameterType);
+            Type parameterType = parameters[i].ParameterType;
+            if (parameterType.IsArray)
+                ClrArrayEmitter.EmitToGuest(il, parameterType, _types, _runtime,
+                    elementType => EmitBoxForTS(il, elementType));
+            else
+                EmitBoxForTS(il, parameterType);
             il.Emit(OpCodes.Stelem_Ref);
         }
 

@@ -1,0 +1,9 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="SharpTS.Gui.Host.GuiApplication">
+  <Application.Styles>
+    <FluentTheme />
+    <!-- Compile the include so NativeAOT retains the theme's resource loader. -->
+    <StyleInclude Source="avares://Avalonia.Controls.ColorPicker/Themes/Fluent/Fluent.xaml" />
+  </Application.Styles>
+</Application>
