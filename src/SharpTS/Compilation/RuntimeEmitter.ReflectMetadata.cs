@@ -231,7 +231,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, storeExistsLabel);
         // Return empty array
         il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, Type.EmptyTypes)!);
-        il.Emit(OpCodes.Newobj, runtime.TSArrayCtor);
+        il.Emit(OpCodes.Newobj, runtime.ArrayStorage.Ctor);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(storeExistsLabel);
 
@@ -282,7 +282,7 @@ public partial class RuntimeEmitter
 
         // Wrap in TSArray
         il.Emit(OpCodes.Ldloc, listLocal);
-        il.Emit(OpCodes.Newobj, runtime.TSArrayCtor);
+        il.Emit(OpCodes.Newobj, runtime.ArrayStorage.Ctor);
         il.Emit(OpCodes.Ret);
     }
 

@@ -23,7 +23,7 @@ public partial class ILEmitter
                 EmitExpressionAsDouble(a.Elements[i]);
                 IL.Emit(OpCodes.Stelem_R8);
             }
-            IL.Emit(OpCodes.Newobj, _ctx.Runtime!.TSArrayNumericLiteralCtor);
+            IL.Emit(OpCodes.Newobj, _ctx.Runtime!.ArrayStorage.NumericLiteralCtor);
             SetStackUnknown();
             return;
         }
@@ -55,13 +55,13 @@ public partial class ILEmitter
             // Literal initialization is private: append into the final backing store,
             // without calling observable Array.prototype methods or copying a list.
             IL.Emit(OpCodes.Ldc_I4, a.Elements.Count);
-            IL.Emit(OpCodes.Newobj, _ctx.Runtime!.TSArrayRestCtor);
+            IL.Emit(OpCodes.Newobj, _ctx.Runtime!.ArrayStorage.RestCtor);
             foreach (var element in a.Elements)
             {
                 IL.Emit(OpCodes.Dup);
                 EmitExpression(element);
                 EmitBoxIfNeeded(element);
-                IL.Emit(OpCodes.Call, _ctx.Runtime.TSArrayAppendRest);
+                IL.Emit(OpCodes.Call, _ctx.Runtime.ArrayStorage.AppendRest);
             }
             SetStackUnknown();
             return;
@@ -80,7 +80,7 @@ public partial class ILEmitter
                 if (a.IsHole(i))
                 {
                     // Elided position → true ECMA-262 hole, not an undefined element.
-                    IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.ArrayHoleInstance);
+                    IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.ArrayStorage.HoleInstance);
                 }
                 else
                 {
@@ -119,7 +119,7 @@ public partial class ILEmitter
                     IL.Emit(OpCodes.Ldc_I4, 0);
                     if (a.IsHole(i))
                     {
-                        IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.ArrayHoleInstance);
+                        IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.ArrayStorage.HoleInstance);
                     }
                     else
                     {
@@ -197,7 +197,7 @@ public partial class ILEmitter
                 IL.Emit(OpCodes.Box, _ctx.Types.Double);
             IL.Emit(numeric ? OpCodes.Stelem_R8 : OpCodes.Stelem_Ref);
         }
-        if (numeric) IL.Emit(OpCodes.Newobj, _ctx.Runtime!.TSArrayNumericLiteralCtor);
+        if (numeric) IL.Emit(OpCodes.Newobj, _ctx.Runtime!.ArrayStorage.NumericLiteralCtor);
         else IL.Emit(OpCodes.Call, _ctx.Runtime!.CreateArray);
         SetStackUnknown();
     }

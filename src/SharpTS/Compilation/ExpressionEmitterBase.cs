@@ -1391,7 +1391,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
                 if (elementLocals[i] == null)
                 {
                     // Elided position → true ECMA-262 hole, not an undefined element.
-                    IL.Emit(OpCodes.Ldsfld, Ctx.Runtime!.ArrayHoleInstance);
+                    IL.Emit(OpCodes.Ldsfld, Ctx.Runtime!.ArrayStorage.HoleInstance);
                 }
                 else
                 {
@@ -1424,7 +1424,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
                     IL.Emit(OpCodes.Ldc_I4_0);
                     if (elementLocals[i] == null)
                     {
-                        IL.Emit(OpCodes.Ldsfld, Ctx.Runtime!.ArrayHoleInstance);
+                        IL.Emit(OpCodes.Ldsfld, Ctx.Runtime!.ArrayStorage.HoleInstance);
                     }
                     else
                     {

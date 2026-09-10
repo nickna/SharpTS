@@ -49,7 +49,7 @@ public partial class ILCompiler
             case "$Array":
                 il.Emit(OpCodes.Ldc_I4_0);
                 il.Emit(OpCodes.Newarr, _types.Object);
-                il.Emit(OpCodes.Call, _runtime.TSArrayCtorFromCtorArgs);
+                il.Emit(OpCodes.Call, _runtime.ArrayStorage.CtorFromCtorArgs);
                 return;
 
             case "$Promise":

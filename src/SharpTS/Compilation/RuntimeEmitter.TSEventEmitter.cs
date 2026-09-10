@@ -808,7 +808,7 @@ public partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "Listeners",
             MethodAttributes.Public,
-            runtime.TSArrayType,
+            runtime.ArrayStorage.Type,
             [_types.String]
         );
         runtime.TSEventEmitterListeners = method;
@@ -867,13 +867,13 @@ public partial class RuntimeEmitter
         il.MarkLabel(loopEnd);
         // return new $Array(resultList)
         il.Emit(OpCodes.Ldloc, resultListLocal);
-        il.Emit(OpCodes.Newobj, runtime.TSArrayCtor);
+        il.Emit(OpCodes.Newobj, runtime.ArrayStorage.Ctor);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(emptyLabel);
         // return new $Array(new List<object?>())
         il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, Type.EmptyTypes)!);
-        il.Emit(OpCodes.Newobj, runtime.TSArrayCtor);
+        il.Emit(OpCodes.Newobj, runtime.ArrayStorage.Ctor);
         il.Emit(OpCodes.Ret);
     }
 
@@ -915,7 +915,7 @@ public partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "EventNames",
             MethodAttributes.Public,
-            runtime.TSArrayType,
+            runtime.ArrayStorage.Type,
             Type.EmptyTypes
         );
         runtime.TSEventEmitterEventNames = method;
@@ -967,7 +967,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(loopEnd);
         // return new $Array(resultList)
         il.Emit(OpCodes.Ldloc, resultListLocal);
-        il.Emit(OpCodes.Newobj, runtime.TSArrayCtor);
+        il.Emit(OpCodes.Newobj, runtime.ArrayStorage.Ctor);
         il.Emit(OpCodes.Ret);
     }
 
@@ -1206,7 +1206,7 @@ public partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "RawListeners",
             MethodAttributes.Public,
-            runtime.TSArrayType,
+            runtime.ArrayStorage.Type,
             [_types.String]
         );
 

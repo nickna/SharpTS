@@ -105,7 +105,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, receiverIsSynthableLabel);
         var checkSynthListLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSArrayType);
+        il.Emit(OpCodes.Isinst, runtime.ArrayStorage.Type);
         il.Emit(OpCodes.Brfalse, checkSynthListLabel);
         var synthArrayIndexLocal = il.DeclareLocal(_types.UInt32);
         il.Emit(OpCodes.Ldloc, propNameLocal);
@@ -123,10 +123,10 @@ public partial class RuntimeEmitter
             _types.String, "op_Equality", _types.String, _types.String));
         il.Emit(OpCodes.Brfalse, skipSynthExistingLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSArrayType);
+        il.Emit(OpCodes.Castclass, runtime.ArrayStorage.Type);
         il.Emit(OpCodes.Ldloc, synthArrayIndexLocal);
         il.Emit(OpCodes.Conv_U8);
-        il.Emit(OpCodes.Callvirt, runtime.TSArrayHasIndex);
+        il.Emit(OpCodes.Callvirt, runtime.ArrayStorage.HasIndex);
         il.Emit(OpCodes.Brfalse, skipSynthExistingLabel);
         il.Emit(OpCodes.Br, receiverIsSynthableLabel);
 
@@ -191,7 +191,7 @@ public partial class RuntimeEmitter
         // make length configurable/enumerable/accessor-shaped are rejected.
         var notIntrinsicArrayLengthLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSArrayType);
+        il.Emit(OpCodes.Isinst, runtime.ArrayStorage.Type);
         il.Emit(OpCodes.Brfalse, notIntrinsicArrayLengthLabel);
         il.Emit(OpCodes.Ldloc, propNameLocal);
         il.Emit(OpCodes.Ldstr, "length");
@@ -200,8 +200,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Newobj, runtime.CompiledPropertyDescriptorCtor);
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSArrayType);
-        il.Emit(OpCodes.Callvirt, runtime.TSArrayLongLengthGetter);
+        il.Emit(OpCodes.Castclass, runtime.ArrayStorage.Type);
+        il.Emit(OpCodes.Callvirt, runtime.ArrayStorage.LongLengthGetter);
         il.Emit(OpCodes.Conv_R8);
         il.Emit(OpCodes.Box, _types.Double);
         il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorValue.GetSetMethod()!);
@@ -446,7 +446,7 @@ public partial class RuntimeEmitter
         // the accessor path skips the data-value write below.
         var skipArrayIndexLengthGrowth = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSArrayType);
+        il.Emit(OpCodes.Isinst, runtime.ArrayStorage.Type);
         il.Emit(OpCodes.Brfalse, skipArrayIndexLengthGrowth);
         var definedArrayIndexLocal = il.DeclareLocal(_types.UInt32);
         il.Emit(OpCodes.Ldloc, propNameLocal);
@@ -465,20 +465,20 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, skipArrayIndexLengthGrowth);
         var arrayLengthAlreadyCoversIndex = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSArrayType);
-        il.Emit(OpCodes.Callvirt, runtime.TSArrayLongLengthGetter);
+        il.Emit(OpCodes.Castclass, runtime.ArrayStorage.Type);
+        il.Emit(OpCodes.Callvirt, runtime.ArrayStorage.LongLengthGetter);
         il.Emit(OpCodes.Ldloc, definedArrayIndexLocal);
         il.Emit(OpCodes.Conv_U8);
         il.Emit(OpCodes.Bgt_Un, arrayLengthAlreadyCoversIndex);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSArrayType);
+        il.Emit(OpCodes.Castclass, runtime.ArrayStorage.Type);
         il.Emit(OpCodes.Ldloc, definedArrayIndexLocal);
         il.Emit(OpCodes.Conv_U8);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Conv_U8);
         il.Emit(OpCodes.Add);
         il.Emit(OpCodes.Conv_I8);
-        il.Emit(OpCodes.Callvirt, runtime.TSArraySetLength);
+        il.Emit(OpCodes.Callvirt, runtime.ArrayStorage.SetLength);
         il.MarkLabel(arrayLengthAlreadyCoversIndex);
         il.MarkLabel(skipArrayIndexLengthGrowth);
     }
@@ -578,7 +578,7 @@ public partial class RuntimeEmitter
         var accessorCleanupNotArrayIndex = il.DefineLabel();
         var accessorArrayIndexLocal = il.DeclareLocal(_types.UInt32);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSArrayType);
+        il.Emit(OpCodes.Isinst, runtime.ArrayStorage.Type);
         il.Emit(OpCodes.Brfalse, accessorCleanupNotArrayIndex);
         il.Emit(OpCodes.Ldloc, propNameLocal);
         il.Emit(OpCodes.Ldloca, accessorArrayIndexLocal);
@@ -595,11 +595,11 @@ public partial class RuntimeEmitter
             _types.String, "op_Equality", _types.String, _types.String));
         il.Emit(OpCodes.Brfalse, accessorCleanupNotArrayIndex);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSArrayType);
+        il.Emit(OpCodes.Castclass, runtime.ArrayStorage.Type);
         il.Emit(OpCodes.Ldloc, accessorArrayIndexLocal);
         il.Emit(OpCodes.Conv_U8);
         il.Emit(OpCodes.Conv_I8);
-        il.Emit(OpCodes.Callvirt, runtime.TSArrayDeleteAt);
+        il.Emit(OpCodes.Callvirt, runtime.ArrayStorage.DeleteAt);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(accessorCleanupNotArrayIndex);
@@ -631,7 +631,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Bge, accessorCleanupReturn);
         il.Emit(OpCodes.Ldloc, accessorListLocal);
         il.Emit(OpCodes.Ldloc, accessorListIndexLocal);
-        il.Emit(OpCodes.Ldsfld, runtime.ArrayHoleInstance);
+        il.Emit(OpCodes.Ldsfld, runtime.ArrayStorage.HoleInstance);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "set_Item", _types.Int32, _types.Object));
         il.MarkLabel(accessorCleanupReturn);
         il.Emit(OpCodes.Ldarg_0);
@@ -783,7 +783,7 @@ public partial class RuntimeEmitter
         // already range-validated at the top of this method.
         var notListForLengthLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSArrayType);
+        il.Emit(OpCodes.Isinst, runtime.ArrayStorage.Type);
         il.Emit(OpCodes.Brfalse, notListForLengthLabel);
         il.Emit(OpCodes.Ldloc, propNameLocal);
         il.Emit(OpCodes.Ldstr, "length");
@@ -804,11 +804,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, notListForLengthLabel);
         // Convert value to uint32. Already validated.
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSArrayType);
+        il.Emit(OpCodes.Castclass, runtime.ArrayStorage.Type);
         il.Emit(OpCodes.Ldloc, valueToWriteLocal);
         il.Emit(OpCodes.Call, runtime.ToNumber);
         il.Emit(OpCodes.Conv_I8);
-        il.Emit(OpCodes.Callvirt, runtime.TSArraySetLength);
+        il.Emit(OpCodes.Callvirt, runtime.ArrayStorage.SetLength);
         il.Emit(OpCodes.Br, endLabel);
         il.MarkLabel(notListForLengthLabel);
     }
@@ -832,7 +832,7 @@ public partial class RuntimeEmitter
         // inherited index does not count as an own element for that decision.
         var notArrayIdxLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSArrayType);
+        il.Emit(OpCodes.Isinst, runtime.ArrayStorage.Type);
         il.Emit(OpCodes.Brfalse, notArrayIdxLabel);
         var arrIdxLocal = il.DeclareLocal(_types.UInt32);
         il.Emit(OpCodes.Ldloc, propNameLocal);
@@ -854,19 +854,19 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, wasGenericLocal);
         il.Emit(OpCodes.Brfalse, writeArrayIdxLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSArrayType);
+        il.Emit(OpCodes.Castclass, runtime.ArrayStorage.Type);
         il.Emit(OpCodes.Ldloc, arrIdxLocal);
         il.Emit(OpCodes.Conv_U8);
-        il.Emit(OpCodes.Callvirt, runtime.TSArrayHasIndex);
+        il.Emit(OpCodes.Callvirt, runtime.ArrayStorage.HasIndex);
         il.Emit(OpCodes.Brtrue, endLabel);
         il.MarkLabel(writeArrayIdxLabel);
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSArrayType);
+        il.Emit(OpCodes.Castclass, runtime.ArrayStorage.Type);
         il.Emit(OpCodes.Ldloc, arrIdxLocal);
         il.Emit(OpCodes.Conv_U8);
         il.Emit(OpCodes.Ldloc, valueToWriteLocal);
-        il.Emit(OpCodes.Callvirt, runtime.TSArraySetLong);
+        il.Emit(OpCodes.Callvirt, runtime.ArrayStorage.SetLong);
         il.Emit(OpCodes.Br, endLabel);
         il.MarkLabel(notArrayIdxLabel);
     }
@@ -915,7 +915,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, listIdxReceiverLocal);
         il.Emit(OpCodes.Ldloc, listIdxWriteLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "get_Item", _types.Int32));
-        il.Emit(OpCodes.Isinst, runtime.ArrayHoleType);
+        il.Emit(OpCodes.Isinst, runtime.ArrayStorage.HoleType);
         il.Emit(OpCodes.Brfalse, endLabel);
         il.MarkLabel(writeListIdxLabel);
         il.Emit(OpCodes.Ldloc, listIdxReceiverLocal);

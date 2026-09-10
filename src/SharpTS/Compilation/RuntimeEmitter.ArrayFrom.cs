@@ -18,7 +18,7 @@ public partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "ArrayFrom",
             MethodAttributes.Public | MethodAttributes.Static,
-            runtime.TSArrayType,
+            runtime.ArrayStorage.Type,
             [_types.Object, _types.Object, runtime.TSSymbolType, _types.Type, _types.Object]
         );
         runtime.ArrayFrom = method;
@@ -223,7 +223,7 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(streamingDoneLabel);
         il.Emit(OpCodes.Ldloc, resultLocal);
-        il.Emit(OpCodes.Newobj, runtime.TSArrayCtor);
+        il.Emit(OpCodes.Newobj, runtime.ArrayStorage.Ctor);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(eagerIterablePathLabel);
@@ -254,7 +254,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ldloc, normalizeIndexLocal);
         il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Item").GetGetMethod()!);
-        il.Emit(OpCodes.Isinst, runtime.ArrayHoleType);
+        il.Emit(OpCodes.Isinst, runtime.ArrayStorage.HoleType);
         il.Emit(OpCodes.Brfalse, normalizeNextLabel);
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ldloc, normalizeIndexLocal);
@@ -348,7 +348,7 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(returnLabel);
         // Wrap the List<object?> in $Array on the way out.
-        il.Emit(OpCodes.Newobj, runtime.TSArrayCtor);
+        il.Emit(OpCodes.Newobj, runtime.ArrayStorage.Ctor);
         il.Emit(OpCodes.Ret);
     }
 
@@ -362,7 +362,7 @@ public partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "ArrayOf",
             MethodAttributes.Public | MethodAttributes.Static,
-            runtime.TSArrayType,
+            runtime.ArrayStorage.Type,
             [_types.ObjectArray]
         );
         runtime.ArrayOf = method;
@@ -372,7 +372,7 @@ public partial class RuntimeEmitter
         // return new $Array(new List<object?>(args));
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, typeof(IEnumerable<object>)));
-        il.Emit(OpCodes.Newobj, runtime.TSArrayCtor);
+        il.Emit(OpCodes.Newobj, runtime.ArrayStorage.Ctor);
         il.Emit(OpCodes.Ret);
     }
 
@@ -492,7 +492,7 @@ public partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "ArrayConstructor",
             MethodAttributes.Public | MethodAttributes.Static,
-            runtime.TSArrayType,
+            runtime.ArrayStorage.Type,
             [_types.ObjectArray]
         );
         runtime.ArrayConstructor = method;
@@ -502,7 +502,7 @@ public partial class RuntimeEmitter
         var argLocal = il.DeclareLocal(_types.Object);
         var dLocal = il.DeclareLocal(_types.Double);
         var nLocal = il.DeclareLocal(_types.Int64);
-        var arrLocal = il.DeclareLocal(runtime.TSArrayType);
+        var arrLocal = il.DeclareLocal(runtime.ArrayStorage.Type);
 
         var emptyCaseLabel = il.DefineLabel();
         var singleArgLabel = il.DefineLabel();
@@ -534,7 +534,7 @@ public partial class RuntimeEmitter
         // --- empty: return new $Array(new List<object?>()) ---
         il.MarkLabel(emptyCaseLabel);
         il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.ListOfObject));
-        il.Emit(OpCodes.Newobj, runtime.TSArrayCtor);
+        il.Emit(OpCodes.Newobj, runtime.ArrayStorage.Ctor);
         il.Emit(OpCodes.Ret);
 
         // --- single-arg: check numeric-vs-other ---
@@ -604,11 +604,11 @@ public partial class RuntimeEmitter
         // arr.SetLength(n);
         // return arr;
         il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.ListOfObject));
-        il.Emit(OpCodes.Newobj, runtime.TSArrayCtor);
+        il.Emit(OpCodes.Newobj, runtime.ArrayStorage.Ctor);
         il.Emit(OpCodes.Stloc, arrLocal);
         il.Emit(OpCodes.Ldloc, arrLocal);
         il.Emit(OpCodes.Ldloc, nLocal);
-        il.Emit(OpCodes.Callvirt, runtime.TSArraySetLength);
+        il.Emit(OpCodes.Callvirt, runtime.ArrayStorage.SetLength);
         il.Emit(OpCodes.Ldloc, arrLocal);
         il.Emit(OpCodes.Ret);
 
@@ -618,14 +618,14 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Ldloc, argLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add")!);
-        il.Emit(OpCodes.Newobj, runtime.TSArrayCtor);
+        il.Emit(OpCodes.Newobj, runtime.ArrayStorage.Ctor);
         il.Emit(OpCodes.Ret);
 
         // --- multi-arg: $Array wrapping new List<object>(args) ---
         il.MarkLabel(multiArgLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, typeof(IEnumerable<object>)));
-        il.Emit(OpCodes.Newobj, runtime.TSArrayCtor);
+        il.Emit(OpCodes.Newobj, runtime.ArrayStorage.Ctor);
         il.Emit(OpCodes.Ret);
     }
 }

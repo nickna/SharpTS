@@ -189,7 +189,7 @@ public partial class RuntimeEmitter
     private void EmitSharpTSArrayGetBranch(ILGenerator il, EmittedRuntime runtime, Label notMatch)
     {
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSArrayType);
+        il.Emit(OpCodes.Isinst, runtime.ArrayStorage.Type);
         il.Emit(OpCodes.Brfalse, notMatch);
 
         // Object.defineProperty stores array index accessors in the shared
@@ -280,8 +280,8 @@ public partial class RuntimeEmitter
         // Use the LongLength getter — not the int-clamped Length — so `.length`
         // reads up to 2^32 - 1 survive (M3 acceptance: `a.length === 2147483649`).
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSArrayType);
-        il.Emit(OpCodes.Callvirt, runtime.TSArrayLongLengthGetter);
+        il.Emit(OpCodes.Castclass, runtime.ArrayStorage.Type);
+        il.Emit(OpCodes.Callvirt, runtime.ArrayStorage.LongLengthGetter);
         il.Emit(OpCodes.Conv_R8);
         il.Emit(OpCodes.Box, _types.Double);
         il.Emit(OpCodes.Ret);
@@ -321,7 +321,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Item").GetGetMethod()!);
         var tsArrayIndexPresent = il.DefineLabel();
         il.Emit(OpCodes.Dup);
-        il.Emit(OpCodes.Isinst, runtime.ArrayHoleType);
+        il.Emit(OpCodes.Isinst, runtime.ArrayStorage.HoleType);
         il.Emit(OpCodes.Brfalse, tsArrayIndexPresent);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Br, tsArrayPrototypeFallback);
@@ -491,7 +491,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Item").GetGetMethod()!);
         var listIndexPresentLabel = il.DefineLabel();
         il.Emit(OpCodes.Dup);
-        il.Emit(OpCodes.Isinst, runtime.ArrayHoleType);
+        il.Emit(OpCodes.Isinst, runtime.ArrayStorage.HoleType);
         il.Emit(OpCodes.Brfalse, listIndexPresentLabel);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Br, listPrototypeFallback);

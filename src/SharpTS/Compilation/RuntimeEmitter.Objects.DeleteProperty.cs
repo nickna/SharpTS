@@ -270,7 +270,7 @@ public partial class RuntimeEmitter
         // and converts a false result into the required TypeError.
         var tsArrayDelLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSArrayType);
+        il.Emit(OpCodes.Isinst, runtime.ArrayStorage.Type);
         il.Emit(OpCodes.Brtrue, tsArrayDelLabel);
 
         if (runtime.JsonScalarRecordType is not null)
@@ -657,10 +657,10 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldloc, tsArrIndexDescLocal);
             il.Emit(OpCodes.Brtrue, tsArrIndexSealedPropertyLabel);
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Castclass, runtime.TSArrayType);
+            il.Emit(OpCodes.Castclass, runtime.ArrayStorage.Type);
             il.Emit(OpCodes.Ldloc, tsArrDelIndexLocal);
             il.Emit(OpCodes.Conv_U8);
-            il.Emit(OpCodes.Callvirt, runtime.TSArrayHasIndex);
+            il.Emit(OpCodes.Callvirt, runtime.ArrayStorage.HasIndex);
             il.Emit(OpCodes.Brfalse, tsArrIndexNotSealedLabel);
             il.MarkLabel(tsArrIndexSealedPropertyLabel);
             il.Emit(OpCodes.Ldc_I4_0);
@@ -682,10 +682,10 @@ public partial class RuntimeEmitter
 
             // arr.DeleteAt(idx); return true;
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Castclass, runtime.TSArrayType);
+            il.Emit(OpCodes.Castclass, runtime.ArrayStorage.Type);
             il.Emit(OpCodes.Ldloc, tsArrDelIndexLocal);
             il.Emit(OpCodes.Conv_U8);
-            il.Emit(OpCodes.Callvirt, runtime.TSArrayDeleteAt);
+            il.Emit(OpCodes.Callvirt, runtime.ArrayStorage.DeleteAt);
             il.Emit(OpCodes.Ldc_I4_1);
             il.Emit(OpCodes.Ret);
 
