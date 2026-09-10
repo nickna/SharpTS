@@ -15,24 +15,29 @@ import {
     Window,
     commandButton,
     commandMenu,
-    findCommand,
+    commandKeyHandler,
+    useDesktopPalette,
+    useDesktopWindow,
+    showDialog,
     useReducer,
     useState
 } from "@sharpts/gui";
 import type { DesktopCommand, KeyEvent, PointerEvent } from "@sharpts/gui";
 import { basename } from "path";
-import { PaintDocument, PaintTool, createDocument, createTextCommand } from "./document";
+import { PaintDocument, PaintTool, createDocument } from "./document";
 import { AppAction, AppState, appReducer, initialState, toolLabel } from "./editor-state";
-import { DARK, LIGHT, Icon } from "./controls";
+import { Icon } from "./controls";
 import { EditorCanvas } from "./EditorCanvas";
 import { LayerPanel } from "./LayerPanel";
 import { EffectPanel } from "./EffectPanel";
 import { ColorPalette, ToolOptions } from "./ToolOptions";
 import { DocumentSession, useDocumentSession } from "./document-session";
+import { ShortcutHelp } from "./ShortcutHelp";
 import { useGraphicsSession } from "./graphics-session";
 
 export interface SharpPaintAppProps {
     readonly requestClose: () => void;
+    readonly theme?: "system" | "light" | "dark";
     readonly initialDocument?: PaintDocument;
     /** Override persistent storage for tests or portable installations. */
     readonly storageDirectory?: string;
@@ -49,37 +54,20 @@ function Editor(
 ): JSX.Element {
     const { state, dispatch } = props;
     const document = state.history.document;
-    const palette = state.theme === "dark" ? DARK : LIGHT;
+    const palette = useDesktopPalette();
+    const owner = useDesktopWindow();
     const narrow = state.windowWidth < 900;
     const compact = state.windowWidth < 1120;
     const showLayers = !narrow || state.layersPaneOpen;
     const selected = document.layers.find((layer) => layer.id === state.selectedLayerId)!;
     const [fitRequest, setFitRequest] = useState<number>(0);
     const [before, setBefore] = useState<boolean>(false);
+    const [recoveryDismissed, setRecoveryDismissed] = useState<boolean>(false);
     const [showErrorDetails, setShowErrorDetails] = useState<boolean>(false);
     const session = props.session;
     const graphics = useGraphicsSession(state, dispatch);
-    const commitText = (): void => {
-        const draft = state.textDraft;
-        if (draft === null || !draft.editing) return;
-        if (!draft.text) {
-            dispatch({ type: "cancelText" });
-            return;
-        }
-        dispatch({
-            type: "commitText",
-            command: createTextCommand(
-                draft.text,
-                draft,
-                state.color,
-                state.fontFamily,
-                state.textSize,
-                state.textBold,
-                state.textItalic
-            )
-        });
-    };
-    const enabled = state.busy === null && state.effectDialog === null;
+    const commitText = (): void => dispatch({ type: "finishText" });
+    const enabled = state.busy === null && state.effectDialog === null && !session.pending;
     const commands: DesktopCommand[] = [
         { id: "new", label: "New…", shortcut: "Ctrl+N", enabled, execute: session.createNew },
         { id: "open", label: "Open…", shortcut: "Ctrl+O", enabled, execute: () => session.open() },
@@ -96,9 +84,17 @@ function Editor(
             label: "Save As…",
             shortcut: "Ctrl+Shift+S",
             enabled,
+            allowInTextInput: true,
             execute: () => session.saveProject(true)
         },
-        { id: "export", label: "Export PNG…", shortcut: "Ctrl+E", enabled, execute: session.exportPng },
+        {
+            id: "export",
+            label: "Export PNG…",
+            shortcut: "Ctrl+E",
+            allowInTextInput: true,
+            enabled,
+            execute: session.exportPng
+        },
         {
             id: "undo",
             label:
@@ -123,9 +119,36 @@ function Editor(
             shortcut: SHORTCUTS[index],
             enabled,
             checked: state.tool === tool,
-            execute: () => dispatch({ type: "tool", tool })
-        }))
+            execute: async () => {
+                await session.finishEditing();
+                dispatch({ type: "tool", tool });
+            }
+        })),
+        {
+            id: "swap-colors",
+            label: "Swap colors",
+            shortcut: "X",
+            enabled,
+            execute: () => dispatch({ type: "swapColors" })
+        },
+        { id: "demo", label: "Open demo artwork", enabled, execute: session.openDemo },
+        {
+            id: "help",
+            label: "Keyboard shortcuts",
+            shortcut: "F1",
+            execute: () =>
+                showDialog(owner, {
+                    title: "SharpPaint shortcuts",
+                    width: 500,
+                    height: 480,
+                    content: (dialog) => <ShortcutHelp close={dialog.cancel} />
+                })
+        }
     ];
+    const command = (id: string): DesktopCommand => commands.find((item) => item.id === id)!;
+    const handleCommand = commandKeyHandler(commands, (error) =>
+        dispatch({ type: "status", status: "Could not complete command: " + String(error) })
+    );
     const onKeyDown = (event: KeyEvent): boolean => {
         if (state.textDraft?.editing) {
             if (event.ctrl && event.key === "Enter") {
@@ -137,15 +160,16 @@ function Editor(
                 return true;
             }
         }
-        if (event.key === "Escape" && !event.isTextInput && (state.effectDialog || state.busy)) {
+        if (event.key === "Escape" && (state.effectDialog || state.busy)) {
             graphics.cancel();
             dispatch({ type: "cancelEffect" });
             return true;
         }
-        const command = findCommand(commands, event);
-        if (!command) return false;
-        void command.execute();
-        return true;
+        if (state.effectDialog && event.ctrl && event.key === "Enter") {
+            graphics.apply();
+            return true;
+        }
+        return handleCommand(event);
     };
     const point = (event: PointerEvent): { x: number; y: number } => {
         let x = event.x / state.zoom,
@@ -205,7 +229,7 @@ function Editor(
             height={700}
             minWidth={720}
             minHeight={480}
-            theme="system"
+            theme={props.theme || "system"}
             onMetricsChanged={(event) => {
                 dispatch({ type: "metrics", width: event.clientWidth, height: event.clientHeight });
                 if (state.theme !== event.theme) dispatch({ type: "theme", theme: event.theme });
@@ -222,9 +246,10 @@ function Editor(
             <DockPanel lastChildFill={true}>
                 <Menu dock="top">
                     <MenuItem header="File">
-                        {commands.slice(0, 5).map((command) => (
+                        {["new", "open", "save", "save-as", "export"].map(command).map((command) => (
                             <MenuItem key={"menu-" + command.id} {...commandMenu(command)} />
                         ))}
+                        <MenuItem key="menu-demo" {...commandMenu(command("demo"))} />
                         <MenuItem header="Open recent" isEnabled={session.recent.length > 0}>
                             {session.recent.map((file) => (
                                 <MenuItem
@@ -244,12 +269,18 @@ function Editor(
                         />
                     </MenuItem>
                     <MenuItem header="Edit">
-                        {commands.slice(5, 7).map((command) => (
+                        {["undo", "redo"].map(command).map((command) => (
                             <MenuItem key={"menu-" + command.id} {...commandMenu(command)} />
                         ))}
                     </MenuItem>
                     <MenuItem header="View">
-                        <MenuItem header="Fit canvas" onClick={() => setFitRequest(fitRequest + 1)} />
+                        <MenuItem
+                            header="Fit canvas"
+                            onClick={() => {
+                                dispatch({ type: "fit" });
+                                setFitRequest(fitRequest + 1);
+                            }}
+                        />
                         <MenuItem header="Actual size" onClick={() => dispatch({ type: "zoom", zoom: 1 })} />
                     </MenuItem>
                     <MenuItem header="Effects" isEnabled={enabled}>
@@ -279,31 +310,42 @@ function Editor(
                             onClick={() => graphics.effect({ kind: "invert" }, false)}
                         />
                     </MenuItem>
+                    <MenuItem header="Help">
+                        <MenuItem key="menu-help" {...commandMenu(command("help"))} />
+                    </MenuItem>
                 </Menu>
                 <Border
                     dock="top"
                     background={palette.panel}
                     borderBrush={palette.border}
                     borderThickness={[0, 0, 0, 1] as const}
-                    padding={[10, 6] as const}
+                    padding={[4, 10] as const}
                 >
                     <StackPanel orientation="horizontal" spacing={6}>
-                        {commands.slice(0, 3).map((command) => (
-                            <Button key={command.id} {...commandButton(command)}>
+                        {["new", "open", "save"].map(command).map((command) => (
+                            <Button key={command.id} classes={["subtle"]} {...commandButton(command)}>
                                 {command.id === "new" ? "New" : command.id === "open" ? "Open" : "Save"}
                             </Button>
                         ))}
-                        {commands.slice(5, 7).map((command) => (
+                        {["undo", "redo"].map(command).map((command) => (
                             <Button
                                 key={command.id}
                                 {...commandButton(command)}
-                                width={32}
-                                height={32}
+                                width={30}
+                                height={30}
                                 padding={6}
                             >
-                                <Icon name={command.id} color={palette.text} />
+                                <Icon name={command.id} />
                             </Button>
                         ))}
+                        <Button
+                            key="demo"
+                            classes={["subtle"]}
+                            isVisible={state.windowWidth >= 900}
+                            {...commandButton(command("demo"))}
+                        >
+                            Demo artwork
+                        </Button>
                         <Button
                             key="layers-toggle"
                             isVisible={narrow}
@@ -320,13 +362,46 @@ function Editor(
                         </TextBlock>
                     </StackPanel>
                 </Border>
-                <Border dock="top" background={palette.surface} padding={[10, 6] as const}>
+                <Border
+                    dock="top"
+                    background={palette.surface}
+                    padding={[5, 10] as const}
+                    isEnabled={enabled}
+                >
                     <ToolOptions
                         state={state}
                         palette={palette}
                         dispatch={dispatch}
                         commitText={commitText}
                     />
+                </Border>
+                <Border
+                    key="recovery-banner"
+                    dock="top"
+                    isVisible={session.recoveryCount > 0 && !recoveryDismissed}
+                    background={palette.selected}
+                    padding={[4, 10] as const}
+                >
+                    <Grid columns="*,auto,auto" rows="auto">
+                        <TextBlock foreground={palette.text} verticalAlignment="center">
+                            {session.recoveryCount + " recovery copies available"}
+                        </TextBlock>
+                        <Button
+                            gridColumn={1}
+                            classes={["subtle"]}
+                            onClick={session.recover}
+                            isEnabled={enabled}
+                        >
+                            Review copies…
+                        </Button>
+                        <Button
+                            gridColumn={2}
+                            classes={["subtle"]}
+                            onClick={() => setRecoveryDismissed(true)}
+                        >
+                            Dismiss
+                        </Button>
+                    </Grid>
                 </Border>
                 <Border dock="top" isVisible={session.error !== ""} background={palette.panel} padding={10}>
                     <Grid columns="*,auto,auto" rows="auto,auto">
@@ -363,21 +438,26 @@ function Editor(
                         </ScrollViewer>
                     </Grid>
                 </Border>
-                <Border dock="bottom" background={palette.panel} padding={[10, 5] as const}>
-                    <Grid columns="*,auto,auto,auto" rows="auto">
+                <Border dock="bottom" background={palette.panel} padding={[3, 10] as const}>
+                    <Grid columns="*,auto,auto,64,auto" rows="30">
                         <TextBlock
                             key="status"
                             automationName="Status"
                             foreground={palette.muted}
                             verticalAlignment="center"
                         >
-                            {state.status}
+                            {state.status.length > (narrow ? 58 : 110)
+                                ? state.status.slice(0, narrow ? 57 : 109) + "…"
+                                : state.status}
                         </TextBlock>
                         <Button
                             key="fit"
                             gridColumn={1}
-                            onClick={() => setFitRequest(fitRequest + 1)}
-                            margin={[8, 0] as const}
+                            onClick={() => {
+                                dispatch({ type: "fit" });
+                                setFitRequest(fitRequest + 1);
+                            }}
+                            margin={[0, 4] as const}
                         >
                             Fit
                         </Button>
@@ -394,7 +474,9 @@ function Editor(
                             key="zoom-number"
                             gridColumn={3}
                             automationName="Zoom percent"
-                            width={92}
+                            width={64}
+                            height={30}
+                            formatString="0"
                             minimum={1}
                             maximum={800}
                             value={Math.round(state.zoom * 100)}
@@ -402,6 +484,14 @@ function Editor(
                                 if (value !== null) dispatch({ type: "zoom", zoom: value / 100 });
                             }}
                         />
+                        <TextBlock
+                            gridColumn={4}
+                            verticalAlignment="center"
+                            foreground={palette.muted}
+                            margin={[0, 4] as const}
+                        >
+                            %
+                        </TextBlock>
                         <TextBlock key="layout-mode" isVisible={false}>
                             {narrow
                                 ? "narrow"
@@ -418,29 +508,31 @@ function Editor(
                     background={palette.surface}
                     borderBrush={palette.border}
                     borderThickness={[0, 1, 0, 0] as const}
-                    padding={[10, 8] as const}
+                    padding={[5, 10] as const}
                 >
                     <ColorPalette state={state} palette={palette} dispatch={dispatch} />
                 </Border>
                 <Border
                     dock="bottom"
-                    isVisible={state.busy !== null}
+                    isVisible={state.busy !== null || session.pending}
                     background={palette.panel}
-                    padding={[12, 6] as const}
+                    padding={[4, 10] as const}
                 >
                     <Grid columns="*,120,auto" rows="auto">
                         <TextBlock foreground={palette.text} verticalAlignment="center">
-                            {state.busy || ""}
+                            {state.busy || "Working with your document…"}
                         </TextBlock>
                         <ProgressBar
                             gridColumn={1}
                             minimum={0}
                             maximum={1}
                             value={graphics.progress}
+                            isVisible={!session.pending}
                             margin={8}
                         />
                         <Button
                             key="cancel-operation"
+                            isVisible={!session.pending}
                             gridColumn={2}
                             onClick={() => {
                                 graphics.cancel();
@@ -452,9 +544,7 @@ function Editor(
                     </Grid>
                 </Border>
                 <Grid
-                    columns={
-                        "54,*," + (state.effectDialog !== null ? 260 : showLayers ? (compact ? 230 : 260) : 0)
-                    }
+                    columns={"48,*," + (narrow ? 0 : state.effectDialog !== null || showLayers ? 260 : 0)}
                     rows="*"
                 >
                     <Border
@@ -466,25 +556,22 @@ function Editor(
                             verticalScrollBarVisibility="auto"
                             horizontalScrollBarVisibility="disabled"
                         >
-                            <StackPanel spacing={5} margin={[6, 8] as const}>
+                            <StackPanel spacing={2} margin={[4, 5] as const}>
                                 {TOOLS.map((tool, index) => (
                                     <ToggleButton
                                         key={tool + "-tool"}
                                         isChecked={state.tool === tool}
                                         automationName={toolLabel(tool)}
                                         toolTip={toolLabel(tool) + " · " + SHORTCUTS[index]}
-                                        width={40}
-                                        height={36}
+                                        width={36}
+                                        height={30}
+                                        minHeight={30}
+                                        padding={6}
                                         background={state.tool === tool ? palette.selected : palette.panel}
                                         isEnabled={enabled}
-                                        onCheckedChanged={(value) => {
-                                            dispatch({ type: "tool", tool });
-                                        }}
+                                        onCheckedChanged={() => command(tool).execute()}
                                     >
-                                        <Icon
-                                            name={tool}
-                                            color={state.tool === tool ? "#ffffff" : palette.text}
-                                        />
+                                        <Icon name={tool} />
                                     </ToggleButton>
                                 ))}
                             </StackPanel>
@@ -515,7 +602,9 @@ function Editor(
                         />
                     </Border>
                     <Border
-                        gridColumn={2}
+                        gridColumn={narrow ? 1 : 2}
+                        width={260}
+                        horizontalAlignment={narrow ? "right" : "stretch"}
                         isVisible={state.effectDialog !== null || showLayers}
                         background={palette.panel}
                     >
@@ -530,12 +619,14 @@ function Editor(
                                 cancel={cancelEffect}
                             />
                         ) : (
-                            <LayerPanel
-                                state={state}
-                                palette={palette}
-                                dispatch={dispatch}
-                                onMerge={graphics.merge}
-                            />
+                            <Border isEnabled={!session.pending}>
+                                <LayerPanel
+                                    state={state}
+                                    palette={palette}
+                                    dispatch={dispatch}
+                                    onMerge={graphics.merge}
+                                />
+                            </Border>
                         )}
                     </Border>
                 </Grid>
@@ -558,7 +649,7 @@ export function SharpPaintShowcase(props: SharpPaintAppProps): JSX.Element {
                     title="SharpPaint · Recovery"
                     width={520}
                     height={360}
-                    theme="system"
+                    theme={props.theme || "system"}
                     onCloseRequested={session.requestWindowClose}
                 >
                     <Border padding={28}>

@@ -1,9 +1,11 @@
+import "./editor-state.tests";
 import { createDesktopApplication, DesktopWindow } from "@sharpts/gui";
 import { createDesktopTestDriver, DesktopTestDriver } from "@sharpts/gui/testing";
 import { captureHeadlessSnapshot } from "@sharpts/gui/devtools";
 import { existsSync, unlinkSync, writeFileSync, readFileSync } from "fs";
 import { join } from "path";
 import { SharpPaintShowcase } from "./SharpPaintApp";
+import { runPresentationChecks } from "./presentation.tests";
 import { PAINT_STYLES } from "./controls";
 import { createDocument, serializeProject, parseProject } from "./document";
 
@@ -225,6 +227,8 @@ async function run(): Promise<void> {
     expect("exact zoom", driver.getProperty("paint-surface", "width") === "640");
     driver.setWindowClientSize(1120, 700);
     await delay(100);
+    driver.click("fit");
+    await rendered();
     driver.click("add-layer");
     await rendered();
     await draw();
@@ -261,6 +265,7 @@ async function run(): Promise<void> {
         "canceling Save As cancels document replacement",
         driver.getText("status") === "Recovered document · Save As to keep a new copy"
     );
+    await runPresentationChecks(app);
     console.log("SharpPaint headless workflows passed.");
 }
 setTimeout(() => {

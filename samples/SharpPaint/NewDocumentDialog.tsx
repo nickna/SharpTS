@@ -1,5 +1,6 @@
 import {
     Border,
+    ComboBox,
     Button,
     Grid,
     NumericUpDown,
@@ -18,6 +19,7 @@ export interface DocumentSize {
 export function NewDocumentDialog(props: { dialog: DialogContext<DocumentSize> }): GuiElement {
     const [width, setWidth] = useState<number | null>(1024);
     const [height, setHeight] = useState<number | null>(768);
+    const [preset, setPreset] = useState<number>(1);
     const focus = useControlRef<unknown>();
     useEffect(() => {
         focus.focus();
@@ -38,7 +40,34 @@ export function NewDocumentDialog(props: { dialog: DialogContext<DocumentSize> }
                 <TextBlock fontSize={22} fontWeight="semibold">
                     New document
                 </TextBlock>
-                <TextBlock textWrapping="wrap">Choose the canvas size in pixels.</TextBlock>
+                <TextBlock textWrapping="wrap">Choose a preset or enter a canvas size in pixels.</TextBlock>
+                <ComboBox
+                    key="new-preset"
+                    horizontalAlignment="stretch"
+                    selectedIndex={preset}
+                    automationName="Canvas preset"
+                    items={[
+                        "Custom",
+                        "Screen · 1024 × 768",
+                        "Square · 1080 × 1080",
+                        "Landscape · 1920 × 1080",
+                        "Portrait · 1080 × 1920"
+                    ]}
+                    onSelectionChanged={(index) => {
+                        setPreset(index);
+                        const sizes = [
+                            [1024, 768],
+                            [1024, 768],
+                            [1080, 1080],
+                            [1920, 1080],
+                            [1080, 1920]
+                        ];
+                        if (index > 0) {
+                            setWidth(sizes[index][0]);
+                            setHeight(sizes[index][1]);
+                        }
+                    }}
+                />
                 <Grid columns="92,*" rows="auto,auto">
                     <TextBlock verticalAlignment="center">Width</TextBlock>
                     <NumericUpDown
@@ -49,8 +78,12 @@ export function NewDocumentDialog(props: { dialog: DialogContext<DocumentSize> }
                         minimum={1}
                         maximum={8192}
                         increment={1}
+                        formatString="0"
                         value={width}
-                        onValueChanged={setWidth}
+                        onValueChanged={(value) => {
+                            setWidth(value);
+                            setPreset(0);
+                        }}
                     />
                     <TextBlock gridRow={1} verticalAlignment="center">
                         Height
@@ -63,8 +96,12 @@ export function NewDocumentDialog(props: { dialog: DialogContext<DocumentSize> }
                         minimum={1}
                         maximum={8192}
                         increment={1}
+                        formatString="0"
                         value={height}
-                        onValueChanged={setHeight}
+                        onValueChanged={(value) => {
+                            setHeight(value);
+                            setPreset(0);
+                        }}
                     />
                 </Grid>
                 <TextBlock isVisible={!valid} textWrapping="wrap">
@@ -76,6 +113,7 @@ export function NewDocumentDialog(props: { dialog: DialogContext<DocumentSize> }
                     </Button>
                     <Button
                         key="create-new"
+                        classes={["primary"]}
                         automationName="Create document"
                         isDefault={true}
                         isEnabled={valid}

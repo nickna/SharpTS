@@ -100,6 +100,11 @@ internal sealed partial class DesktopStyleResources
         if (classes.Any(string.IsNullOrWhiteSpace) || classes.Any(value => value[0] == ':') ||
             classes.Distinct(StringComparer.Ordinal).Count() != classes.Length)
             throw new ArgumentException("Style selector classes must be unique, non-empty user class names.");
+        string[] states = selector.States ?? [];
+        if (states.Distinct(StringComparer.Ordinal).Count() != states.Length ||
+            states.Any(state => state is not ("pointerover" or "pressed" or "checked" or "disabled" or "focus-visible" or "focus-within")))
+            throw new ArgumentException("Unsupported or duplicate native style state.");
+        classes = [.. classes, .. states.Select(state => ":" + state)];
         return selector.Control switch
         {
             "Control" => TypedStyle<Control>(classes),
@@ -119,6 +124,7 @@ internal sealed partial class DesktopStyleResources
             "ToggleSwitch" => TypedStyle<ToggleSwitch>(classes),
             "ComboBox" => TypedStyle<ComboBox>(classes),
             "ListBox" => TypedStyle<ListBox>(classes),
+            "ListBoxItem" => TypedStyle<ListBoxItem>(classes),
             "NumericUpDown" => TypedStyle<NumericUpDown>(classes),
             "DatePicker" => TypedStyle<DatePicker>(classes),
             "TimePicker" => TypedStyle<TimePicker>(classes),
@@ -126,6 +132,9 @@ internal sealed partial class DesktopStyleResources
             "ProgressBar" => TypedStyle<ProgressBar>(classes),
             "Separator" => TypedStyle<Separator>(classes),
             "Image" => TypedStyle<Image>(classes),
+            "PathIcon" => TypedStyle<PathIcon>(classes),
+            "ColorView" => TypedStyle<ColorView>(classes),
+            "ColorPicker" => TypedStyle<ColorPicker>(classes),
             "TabControl" => TypedStyle<TabControl>(classes),
             "TabItem" => TypedStyle<TabItem>(classes),
             "Menu" => TypedStyle<Menu>(classes),
@@ -165,8 +174,8 @@ internal sealed partial class DesktopStyleResources
 
     private static bool IsTemplated(string control) => control is
         "Window" or "Button" or "ToggleButton" or "TextBox" or "PasswordBox" or "CheckBox" or "RadioButton" or
-        "ToggleSwitch" or "ComboBox" or "ListBox" or "NumericUpDown" or "DatePicker" or
-        "TimePicker" or "Slider" or "ProgressBar" or "TabControl" or "TabItem" or "Menu" or "MenuItem";
+        "ToggleSwitch" or "ComboBox" or "ListBox" or "ListBoxItem" or "NumericUpDown" or "DatePicker" or
+        "TimePicker" or "Slider" or "ProgressBar" or "PathIcon" or "ColorView" or "ColorPicker" or "TabControl" or "TabItem" or "Menu" or "MenuItem";
 
     private static object Primitive(JsonElement value, string description) => value.ValueKind switch
     {
@@ -214,7 +223,7 @@ internal sealed partial class DesktopStyleResources
 
     private sealed record ContractModel(Dictionary<string, JsonElement>? Resources, StyleModel[]? Styles);
     private sealed record StyleModel(SelectorModel? Selector, Dictionary<string, JsonElement>? Setters);
-    private sealed record SelectorModel(string Control, string[]? Classes);
+    private sealed record SelectorModel(string Control, string[]? Classes, string[]? States);
     [JsonSourceGenerationOptions(PropertyNameCaseInsensitive = true)]
     [JsonSerializable(typeof(ContractModel))]
     private sealed partial class StyleJsonContext : JsonSerializerContext;

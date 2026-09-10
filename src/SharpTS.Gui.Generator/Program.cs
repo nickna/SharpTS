@@ -185,6 +185,9 @@ static string DescriptorExpression(string adapter) => adapter switch
     "canvas" => "new CanvasDescriptor()",
     "rich-text-block" => "new RichTextBlockDescriptor()",
     "drawing-canvas" => "new DrawingCanvasDescriptor()",
+    "path-icon" => "new PathIconDescriptor()",
+    "color-view" => "new ColorViewDescriptor(\"ColorView\")",
+    "color-picker" => "new ColorViewDescriptor(\"ColorPicker\")",
     _ => throw new InvalidOperationException($"No descriptor adapter implementation for '{adapter}'."),
 };
 

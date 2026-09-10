@@ -1,5 +1,7 @@
-import { Button, CheckBox, ScrollViewer, StackPanel, TextBlock } from "@sharpts/gui";
+import { Button, CheckBox, Grid, Inspector, StackPanel, TextBlock } from "@sharpts/gui";
+
 import { AppAction, AppState, effectTitle } from "./editor-state";
+
 import { NumberField, Palette } from "./controls";
 
 export function EffectPanel(props: {
@@ -12,51 +14,70 @@ export function EffectPanel(props: {
     cancel: () => void;
 }): JSX.Element {
     const { state, palette, dispatch } = props;
+
     const dialog = state.effectDialog!;
-    const blur = dialog.kind === "gaussianBlur";
-    const hue = dialog.kind === "hueSaturation";
+
+    const blur = dialog.kind === "gaussianBlur",
+        hue = dialog.kind === "hueSaturation";
+
     return (
-        <ScrollViewer verticalScrollBarVisibility="auto" horizontalScrollBarVisibility="disabled">
-            <StackPanel key="effect-dialog" spacing={14} margin={14}>
-                <TextBlock fontSize={16} fontWeight="semibold" foreground={palette.text}>
-                    {effectTitle(dialog.kind)}
+        <Inspector
+            title={effectTitle(dialog.kind)}
+            actions={
+                <Grid columns="*,8,*" rows="32">
+                    <Button key="cancel-effect" onClick={props.cancel}>
+                        Cancel
+                    </Button>
+
+                    <Button
+                        key="apply-effect"
+                        gridColumn={2}
+                        classes={["primary"]}
+                        isEnabled={state.busy === null}
+                        onClick={props.apply}
+                    >
+                        Apply
+                    </Button>
+                </Grid>
+            }
+        >
+            <StackPanel key="effect-dialog" spacing={16}>
+                <TextBlock foreground={palette.muted} textWrapping="wrap" fontSize={12}>
+                    Preview on the selected layer. Undo restores the original.
                 </TextBlock>
-                <TextBlock foreground={palette.muted} textWrapping="wrap">
-                    Preview updates as you edit. Apply replaces the selected layer with the rendered result;
-                    Undo restores its editable commands.
-                </TextBlock>
+
                 <NumberField
                     id="effect-first"
-                    label={blur ? "Radius (px)" : hue ? "Hue (degrees)" : "Brightness"}
-                    value={dialog.first}
-                    minimum={blur ? 0 : hue ? -180 : -1}
-                    maximum={blur ? 64 : hue ? 180 : 1}
-                    step={blur || hue ? 1 : 0.05}
-                    palette={palette}
-                    onChange={(first) => dispatch({ type: "effectParameter", first })}
+                    label={blur ? "Radius (px)" : hue ? "Hue (°)" : "Brightness (%)"}
+                    value={blur || hue ? dialog.first : Math.round(dialog.first * 100)}
+                    minimum={blur ? 0 : hue ? -180 : -100}
+                    maximum={blur ? 64 : hue ? 180 : 100}
+                    step={1}
+                    onChange={(first) =>
+                        dispatch({ type: "effectParameter", first: blur || hue ? first : first / 100 })
+                    }
                 />
+
                 {blur ? null : (
                     <NumberField
                         id="effect-second"
-                        label={hue ? "Saturation" : "Contrast"}
-                        value={dialog.second}
-                        minimum={-1}
-                        maximum={1}
-                        step={0.05}
-                        palette={palette}
-                        onChange={(second) => dispatch({ type: "effectParameter", second })}
+                        label={hue ? "Saturation (%)" : "Contrast (%)"}
+                        value={Math.round(dialog.second * 100)}
+                        minimum={-100}
+                        maximum={100}
+                        step={1}
+                        onChange={(second) => dispatch({ type: "effectParameter", second: second / 100 })}
                     />
                 )}
+
                 <CheckBox key="effect-before" isChecked={props.before} onCheckedChanged={props.setBefore}>
                     Show original
                 </CheckBox>
-                <Button key="apply-effect" isEnabled={state.busy === null} onClick={props.apply}>
-                    Apply effect
-                </Button>
-                <Button key="cancel-effect" onClick={props.cancel}>
-                    Cancel
-                </Button>
+
+                <TextBlock foreground={palette.muted} fontSize={12}>
+                    Ctrl+Enter to apply · Esc to cancel
+                </TextBlock>
             </StackPanel>
-        </ScrollViewer>
+        </Inspector>
     );
 }

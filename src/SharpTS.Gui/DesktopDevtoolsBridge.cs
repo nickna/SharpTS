@@ -1,3 +1,4 @@
+using SkiaSharp;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Media.Imaging;
@@ -25,6 +26,14 @@ public static class DesktopDevtoolsBridge
     public static string CaptureHeadlessSnapshot(string path)
     {
         byte[] png = RenderHeadlessPng();
+        return WriteSnapshot(path, png);
+    }
+
+    internal static string CaptureWindowSnapshot(Window window, string path) =>
+        WriteSnapshot(path, RenderHeadlessPng(window));
+
+    private static string WriteSnapshot(string path, byte[] png)
+    {
         string fullPath = Path.GetFullPath(path);
         Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
         File.WriteAllBytes(fullPath, png);
@@ -32,8 +41,14 @@ public static class DesktopDevtoolsBridge
     }
 
     public static string AssertHeadlessSnapshot(string baselinePath, bool update)
+        => AssertSnapshot(RenderHeadlessPng(), baselinePath, update);
+
+    internal static string AssertWindowSnapshot(Window window, string baselinePath, bool update, int maxDifferentPixels = 0)
+        => AssertSnapshot(RenderHeadlessPng(window), baselinePath, update, maxDifferentPixels);
+
+    private static string AssertSnapshot(byte[] actual, string baselinePath, bool update, int maxDifferentPixels = 0)
     {
-        byte[] actual = RenderHeadlessPng();
+        ArgumentOutOfRangeException.ThrowIfNegative(maxDifferentPixels);
         string fullPath = Path.GetFullPath(baselinePath);
         string actualPath = Path.ChangeExtension(fullPath, ".actual.png");
         if (update)
@@ -48,7 +63,7 @@ public static class DesktopDevtoolsBridge
                 $"Headless visual baseline '{fullPath}' does not exist. Re-run with update enabled to create it.",
                 fullPath);
         byte[] expected = File.ReadAllBytes(fullPath);
-        if (!expected.AsSpan().SequenceEqual(actual))
+        if (!SnapshotsMatch(expected, actual, maxDifferentPixels))
         {
             File.WriteAllBytes(actualPath, actual);
             throw new InvalidOperationException(
@@ -59,12 +74,31 @@ public static class DesktopDevtoolsBridge
         return SnapshotHash(actual);
     }
 
-    private static byte[] RenderHeadlessPng()
+    // Exact by default. An explicit pixel budget can accommodate native edge
+    // rasterization variance; dimensions and every remaining pixel must match.
+    internal static bool SnapshotsMatch(byte[] expected, byte[] actual, int maxDifferentPixels)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(maxDifferentPixels);
+        if (expected.AsSpan().SequenceEqual(actual)) return true;
+        if (maxDifferentPixels == 0) return false;
+        using var left = SKBitmap.Decode(expected);
+        using var right = SKBitmap.Decode(actual);
+        if (left is null || right is null || left.Width != right.Width || left.Height != right.Height)
+            return false;
+        int different = 0;
+        for (int y = 0; y < left.Height; y++)
+            for (int x = 0; x < left.Width; x++)
+                if (left.GetPixel(x, y) != right.GetPixel(x, y) && ++different > maxDifferentPixels)
+                    return false;
+        return true;
+    }
+
+    private static byte[] RenderHeadlessPng(Window? target = null)
     {
         Context.EnsureOwnerThread();
         if (!Context.IsHeadless)
             throw new InvalidOperationException("Visual snapshot capture is available only in Headless mode.");
-        Window window = Context.CurrentRoot?.Window
+        Window window = target ?? Context.CurrentRoot?.Window
             ?? throw new InvalidOperationException("No desktop Window is mounted.");
         using Bitmap bitmap = window.CaptureRenderedFrame()
             ?? throw new InvalidOperationException("The Headless Window did not produce a rendered frame.");

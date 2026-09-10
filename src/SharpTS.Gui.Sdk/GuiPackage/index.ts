@@ -1,6 +1,14 @@
+export { useViewportNavigation } from "./viewport";
 export { findCommand, commandButton, commandMenu, showDialog, createSerialTask, useLatestTask, fitZoom, anchoredZoomOffset } from "./patterns";
 export type { DesktopCommand, DialogContext, DialogOptions, SerialTask } from "./patterns";
+export { useSerialTask, commandKeyHandler, commitDesktopEdits, centeredZoomOffset, viewportPoint } from "./patterns";
+export { Field, TextField, NumberField, Inspector, IconButton, useTextDraft, useDesktopPalette, LIGHT_PALETTE, DARK_PALETTE, DESKTOP_STYLES, normalizeHexColor } from "./desktop-ui";
+export type { DesktopPalette } from "./desktop-ui";
 export {
+    PathIcon,
+    ColorView,
+    ColorPicker,
+    useTheme,
     Fragment,
     ErrorBoundary,
     Window,
@@ -130,6 +138,9 @@ export type {
 } from "./runtime-types";
 
 export type {
+    PathIconProps,
+    ColorViewProps,
+    ColorPickerProps,
     WindowProps,
     StackPanelProps,
     WrapPanelProps,

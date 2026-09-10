@@ -63,6 +63,7 @@ export interface TextDraft {
     readonly text: string;
     readonly editing: boolean;
     readonly commandIndex: number;
+    readonly layerId: string;
 }
 
 export type EffectDialogKind = "gaussianBlur" | "brightnessContrast" | "hueSaturation";
@@ -90,9 +91,13 @@ export interface AppState {
     readonly selectedLayerId: string;
     readonly tool: PaintTool;
     readonly color: string;
+    readonly backgroundColor: string;
+    readonly recentColors: readonly string[];
     readonly size: number;
     readonly filled: boolean;
     readonly zoom: number;
+    readonly zoomMode: "fit" | "manual";
+    readonly documentVersion: number;
     readonly draft: PaintDraft | null;
     readonly draftColor: string;
     readonly draftSize: number;
@@ -122,7 +127,11 @@ export type AppAction =
     | { type: "color"; color: string }
     | { type: "size"; size: number }
     | { type: "filled"; filled: boolean }
-    | { type: "zoom"; zoom: number }
+    | { type: "zoom"; zoom: number; automatic?: boolean }
+    | { type: "fit" }
+    | { type: "finishText" }
+    | { type: "backgroundColor"; color: string }
+    | { type: "swapColors" }
     | { type: "pointerDown"; point: { x: number; y: number } }
     | { type: "pointerMove"; point: { x: number; y: number } }
     | { type: "pointerUp"; point: { x: number; y: number } }
@@ -131,10 +140,11 @@ export type AppAction =
     | { type: "redo" }
     | { type: "selectLayer"; layerId: string }
     | { type: "addLayer" }
+    | { type: "reorderLayer"; layerId: string; index: number }
     | { type: "duplicateLayer" }
     | { type: "deleteLayer" }
     | { type: "moveLayer"; direction: "up" | "down" }
-    | { type: "renameLayer"; name: string }
+    | { type: "renameLayer"; name: string; layerId?: string }
     | { type: "visibility"; layerId: string; value: boolean }
     | { type: "opacity"; value: number }
     | { type: "beginOpacity" }
@@ -170,9 +180,13 @@ export function initialState(document: PaintDocument = createDocument()): AppSta
         selectedLayerId: document.layers[0].id,
         tool: "brush",
         color: DEFAULT_COLOR,
+        backgroundColor: "#ffffff",
+        recentColors: [],
         size: 8,
         filled: false,
         zoom: 0.75,
+        zoomMode: "fit",
+        documentVersion: 0,
         draft: null,
         draftColor: DEFAULT_COLOR,
         draftSize: 8,
@@ -257,8 +271,109 @@ function requireDrawingTool(tool: PaintTool): DrawingTool {
     throw new Error("The selected tool does not create a drawing gesture.");
 }
 
+function finishOpacity(state: AppState): AppState {
+    if (state.opacityStart === null) return state;
+    const history = commitDocument(
+        { ...state.history, document: state.opacityStart },
+        state.history.document,
+        "Change opacity"
+    );
+    return { ...state, history, opacityStart: null };
+}
+
+export function finishText(state: AppState): AppState {
+    const draft = state.textDraft;
+    if (!draft || !draft.editing) return state;
+    const layer = state.history.document.layers.find((layer) => layer.id === draft.layerId);
+    if (!layer) return { ...state, textDraft: null };
+    if (!draft.text) {
+        if (draft.commandIndex < 0) return { ...state, textDraft: null };
+        return {
+            ...updateDocument(
+                state,
+                replaceLayerCommands(
+                    state.history.document,
+                    layer.id,
+                    layer.commands.filter((_, index) => index !== draft.commandIndex)
+                ),
+                state.selectedLayerId,
+                "Delete text"
+            ),
+            textDraft: null
+        };
+    }
+    const command = createTextCommand(
+        draft.text,
+        draft,
+        state.color,
+        state.fontFamily,
+        state.textSize,
+        state.textBold,
+        state.textItalic
+    );
+    if (
+        draft.commandIndex >= 0 &&
+        JSON.stringify(layer.commands[draft.commandIndex]) === JSON.stringify(command)
+    )
+        return { ...state, textDraft: null };
+    const document =
+        draft.commandIndex < 0
+            ? appendCommand(state.history.document, layer.id, command)
+            : replaceLayerCommands(
+                  state.history.document,
+                  layer.id,
+                  layer.commands.map((value, index) => (index === draft.commandIndex ? command : value))
+              );
+    return {
+        ...updateDocument(
+            state,
+            document,
+            state.selectedLayerId,
+            draft.commandIndex < 0 ? "Add text" : "Edit text"
+        ),
+        textDraft: null,
+        status: "Text committed"
+    };
+}
+
 export function appReducer(state: AppState, action: AppAction): AppState {
+    if (
+        (
+            [
+                "tool",
+                "selectLayer",
+                "addLayer",
+                "duplicateLayer",
+                "deleteLayer",
+                "moveLayer",
+                "reorderLayer",
+                "visibility",
+                "showEffect",
+                "textStart",
+                "undo",
+                "redo",
+                "beginOpacity",
+                "renameLayer"
+            ] as string[]
+        ).indexOf(action.type) >= 0
+    )
+        state = finishText(finishOpacity(state));
     switch (action.type) {
+        case "finishText":
+            return finishText(finishOpacity(state));
+        case "fit":
+            return { ...state, zoomMode: "fit" };
+        case "backgroundColor":
+            return validColor(action.color)
+                ? { ...state, backgroundColor: action.color.toLowerCase() }
+                : state;
+        case "swapColors":
+            return {
+                ...state,
+                color: state.backgroundColor,
+                backgroundColor: state.color,
+                status: "Colors swapped"
+            };
         case "tool": {
             const tool = action.tool;
             return {
@@ -272,9 +387,18 @@ export function appReducer(state: AppState, action: AppAction): AppState {
             };
         }
         case "color": {
-            const color = action.color;
+            let color = action.color.trim().toLowerCase();
+            if (color.length === 9 && color.slice(1, 3) === "ff") color = "#" + color.slice(3);
             return validColor(color)
-                ? { ...state, color: color.toLowerCase(), status: "Color " + color.toUpperCase() }
+                ? {
+                      ...state,
+                      color,
+                      recentColors: [color, ...state.recentColors.filter((value) => value !== color)].slice(
+                          0,
+                          6
+                      ),
+                      status: "Color " + color.toUpperCase()
+                  }
                 : state;
         }
         case "size":
@@ -282,7 +406,11 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         case "filled":
             return { ...state, filled: action.filled };
         case "zoom":
-            return { ...state, zoom: Math.max(0.01, Math.min(8, action.zoom)) };
+            return {
+                ...state,
+                zoom: Math.max(0.01, Math.min(8, action.zoom)),
+                zoomMode: action.automatic ? state.zoomMode : "manual"
+            };
         case "pointerDown": {
             const point = clampPoint(state.history.document, action.point);
             return {
@@ -383,6 +511,16 @@ export function appReducer(state: AppState, action: AppAction): AppState {
                 status: "Deleted layer"
             };
         }
+        case "reorderLayer": {
+            const document = state.history.document;
+            const index = document.layers.findIndex((layer) => layer.id === action.layerId);
+            const target = Math.max(0, Math.min(document.layers.length - 1, action.index));
+            if (index < 0 || index === target) return state;
+            const layers = document.layers.slice();
+            const layer = layers.splice(index, 1)[0];
+            layers.splice(target, 0, layer);
+            return updateDocument(state, { ...document, layers }, layer.id, "Reorder layer");
+        }
         case "moveLayer": {
             const direction = (action.direction === "up" ? 1 : -1) as -1 | 1;
             return {
@@ -398,7 +536,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         case "renameLayer":
             return updateDocument(
                 state,
-                renameLayer(state.history.document, state.selectedLayerId, action.name),
+                renameLayer(state.history.document, action.layerId || state.selectedLayerId, action.name),
                 state.selectedLayerId,
                 "Rename layer"
             );
@@ -413,15 +551,8 @@ export function appReducer(state: AppState, action: AppAction): AppState {
             return { ...state, theme: action.theme };
         case "beginOpacity":
             return state.opacityStart === null ? { ...state, opacityStart: state.history.document } : state;
-        case "endOpacity": {
-            if (state.opacityStart === null) return state;
-            const history = commitDocument(
-                { ...state.history, document: state.opacityStart },
-                state.history.document,
-                "Change opacity"
-            );
-            return { ...state, history, opacityStart: null };
-        }
+        case "endOpacity":
+            return finishOpacity(state);
         case "opacity": {
             const document = setLayerOpacity(state.history.document, state.selectedLayerId, action.value);
             if (state.opacityStart === null)
@@ -441,6 +572,8 @@ export function appReducer(state: AppState, action: AppAction): AppState {
                     : createHistory(loaded),
                 selectedLayerId: loaded.layers[loaded.layers.length - 1].id,
                 filePath: action.filePath,
+                zoomMode: "fit",
+                documentVersion: state.documentVersion + 1,
                 revision: state.revision + 1,
                 draft: null,
                 textDraft: null,
@@ -504,6 +637,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
                             height: command.height,
                             text: command.text,
                             editing: true,
+                            layerId: layer.id,
                             commandIndex: index
                         },
                         status: "Editing text · Ctrl+Enter to apply"
@@ -522,6 +656,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
                     height: 1,
                     text: "",
                     editing: false,
+                    layerId: layer.id,
                     commandIndex: -1
                 },
                 cursor: point,

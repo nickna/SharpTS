@@ -853,14 +853,16 @@ public sealed class DesktopRendererTests : IDisposable
         bool textContext = false;
         using DesktopRoot root = CreateRoot();
         root.Render(new GuiVNode("Window", Width: 400, Height: 240,
-            KeyDown: (key, ctrl, _, _, _, _) => {
+            KeyDown: (key, ctrl, _, _, _, _) =>
+            {
                 textContext = DesktopBridge.IsTextInputEvent();
                 if (ctrl && key == "Enter") { commandCount++; return true; }
                 return false;
             }, Children: new GuiVNode[] {new GuiVNode("StackPanel", Children: new GuiVNode[] {
                 new GuiVNode("TextBox", Key: "text", Text: "hello", AcceptsReturn: true),
                 new GuiVNode("NumericUpDown", Key: "number", NullableValue: 40) {
-                    Focused = () => focused++, Blurred = () => blurred++ }})}) { KeyDownRouting = "tunnel" });
+                    Focused = () => focused++, Blurred = () => blurred++ }})})
+        { KeyDownRouting = "tunnel" });
         root.Window!.Show(); Dispatcher.UIThread.RunJobs();
         DesktopTestingBridge.Focus(root,"text");
         DesktopTestingBridge.PressKey(root,"Ctrl+Enter");
@@ -930,9 +932,14 @@ public sealed class DesktopRendererTests : IDisposable
             Assert.Equal(new SKColor(255, 0, 0, pixel.Alpha), pixel));
         var nativeText = new TextBlock
         {
-            Text = value, FontFamily = new FontFamily("sans-serif"), FontSize = 20,
-            Foreground = Brushes.Red, TextWrapping = TextWrapping.Wrap,
-            Width = 140, Height = 72, ClipToBounds = true,
+            Text = value,
+            FontFamily = new FontFamily("sans-serif"),
+            FontSize = 20,
+            Foreground = Brushes.Red,
+            TextWrapping = TextWrapping.Wrap,
+            Width = 140,
+            Height = 72,
+            ClipToBounds = true,
         };
         nativeText.Measure(new Size(140, 72));
         TextOptions.SetTextRenderingMode(nativeText, TextRenderingMode.Antialias);
@@ -1712,6 +1719,171 @@ public sealed class DesktopRendererTests : IDisposable
         Assert.True(root.IsDisposed);
         Assert.Null(root.Window);
         Assert.Contains(_trace.Snapshot(), item => item.Stage == "fatal-rollback-dispose");
+    }
+
+    [Fact]
+    public void ControlledNativeValuesAreRestoredWhenTheGuestRejectsAnEdit()
+    {
+        using DesktopRoot root = CreateRoot();
+        int notifications = 0;
+        GuiVNode toggle = new("ToggleButton", Key: "controlled-toggle", IsChecked: true,
+            CheckedChanged: _ => notifications++)
+        { SpecifiedProperties = ["isChecked"] };
+        GuiVNode numeric = new("NumericUpDown", Key: "controlled-number", NullableValue: 1, Maximum: 100,
+            NullableValueChanged: _ => notifications++)
+        { SpecifiedProperties = ["value"] };
+        GuiVNode text = new("TextBox", Key: "controlled-text", Text: "accepted") { SpecifiedProperties = ["text"] };
+        GuiVNode tree = Window(Panel(4, toggle, numeric, text));
+        root.Render(tree);
+        var button = Assert.IsType<ToggleButton>(root.FindControl("controlled-toggle"));
+        var number = Assert.IsType<NumericUpDown>(root.FindControl("controlled-number"));
+        var editor = Assert.IsType<TextBox>(root.FindControl("controlled-text"));
+        button.IsChecked = false;
+        number.Value = 0;
+        editor.Text = "rejected";
+        Dispatcher.UIThread.RunJobs();
+        int before = notifications;
+        Assert.True(button.IsChecked); // Rejected callback is corrected even without a guest render.
+        Assert.Equal(1, number.Value);
+        root.Render(tree);
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(button.IsChecked);
+        Assert.Equal(1, number.Value);
+        Assert.Equal("accepted", editor.Text);
+        Assert.Equal(before, notifications); // Reconciliation must not emit a second user edit.
+        root.Render(Window(Panel(4, toggle, numeric, text with { Text = "valid draft" })));
+        Assert.Equal("valid draft", editor.Text);
+    }
+
+    [Fact]
+    public void HoverPointerDispatchesEnterAndLeaveWithoutAPressedGesture()
+    {
+        using DesktopRoot root = CreateRoot();
+        int entered = 0, exited = 0;
+        root.Render(Window(Panel(4,
+            new GuiVNode("Border", Key: "hover", Width: 80, Height: 40, Background: "Transparent")
+            {
+                PointerEntered = () => entered++,
+                PointerExited = () => exited++
+            },
+            new GuiVNode("Border", Key: "outside", Width: 80, Height: 40, Background: "Transparent"))));
+        root.Window!.Show();
+        Dispatcher.UIThread.RunJobs();
+        DesktopTestingBridge.HoverPointer(root, "outside", 20, 20);
+        entered = exited = 0;
+        DesktopTestingBridge.HoverPointer(root, "hover", 20, 20);
+        DesktopTestingBridge.HoverPointer(root, "outside", 20, 20);
+        Assert.Equal(1, entered);
+        Assert.Equal(1, exited);
+    }
+
+    [Fact]
+    public void SnapshotToleranceIsExplicitAndNeverIgnoresImageDimensions()
+    {
+        static byte[] Png(int width, int changed)
+        {
+            using var bitmap = new SKBitmap(width, 1);
+            bitmap.Erase(SKColors.Black);
+            for (int x = 0; x < changed; x++) bitmap.SetPixel(x, 0, SKColors.White);
+            using var data = bitmap.Encode(SKEncodedImageFormat.Png, 100);
+            return data.ToArray();
+        }
+        byte[] baseline = Png(3, 0), actual = Png(3, 1);
+        Assert.False(DesktopDevtoolsBridge.SnapshotsMatch(baseline, actual, 0));
+        Assert.True(DesktopDevtoolsBridge.SnapshotsMatch(baseline, actual, 1));
+        Assert.False(DesktopDevtoolsBridge.SnapshotsMatch(baseline, Png(3, 2), 1));
+        Assert.False(DesktopDevtoolsBridge.SnapshotsMatch(baseline, Png(4, 0), 10));
+        Assert.Throws<ArgumentOutOfRangeException>(() => DesktopDevtoolsBridge.SnapshotsMatch(baseline, actual, -1));
+    }
+
+    [Fact]
+    public void EditorControlsSupportNativeColorFormattingAndStateStyles()
+    {
+        using DesktopRoot root = CreateRoot();
+        string? changed = null;
+        GuiVNode color = DesktopBridge.CreateColorView("ColorView", "#ff336699", value => changed = value, "color", null);
+        GuiVNode number = new("NumericUpDown", Key: "number", NullableValue: 0.1234, Maximum: 1) { FormatString = "0.##" };
+        root.Render(Window(Panel(4, color, number, DesktopBridge.CreatePathIcon("M0 0L10 10L0 10Z", "icon", null))));
+        var view = Assert.IsType<ColorView>(root.FindControl("color"));
+        Assert.Equal(Color.Parse("#336699"), view.Color);
+        view.Color = Colors.Red;
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal("#FFFF0000", changed);
+        Assert.Equal("0.##", Assert.IsType<NumericUpDown>(root.FindControl("number")).FormatString);
+        Assert.NotNull(Assert.IsType<PathIcon>(root.FindControl("icon")).Data);
+        Assert.Throws<InvalidDataException>(() => root.Render(Window(DesktopBridge.CreatePathIcon("not a path", "invalid", null))));
+    }
+
+    [Fact]
+    public void InspectorReportsWindowCoordinatesAndEffectiveVisibility()
+    {
+        using DesktopRoot root = CreateRoot();
+        GuiVNode child = new("Button", Key: "inside", Text: "Inside", Width: 80, Height: 30);
+        GuiVNode clipped = new("Button", Key: "clipped", Text: "Clipped", Width: 80, Height: 120);
+        GuiVNode hidden = new("Border", Key: "hidden-parent", IsVisible: false, Children: new GuiVNode[] { new("Button", Key: "hidden", Text: "Hidden") });
+        root.Render(Window(new("Border", PaddingLeft: 20, PaddingTop: 20, PaddingRight: 20, PaddingBottom: 20, Children: new GuiVNode[]{new("Grid",Columns:"*",Rows:"50,50,auto",Children:new GuiVNode[]{
+            child,new("ScrollViewer",Key:"scroll",GridRow:1,Children:new[]{clipped}),hidden with { GridRow=2 }})})));
+        root.Window!.Show();
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(DesktopTestingBridge.IsInViewport(root, "inside"));
+        Assert.False(DesktopTestingBridge.IsInViewport(root, "clipped"));
+        Assert.False(DesktopTestingBridge.IsInViewport(root, "hidden"));
+        var inspection = root.GetInspectorSnapshot()!.Children[0].Children[0].Children[0];
+        Assert.True(inspection.Bounds.X >= 20);
+    }
+
+    [Fact]
+    public void RetainedTextKeepsItsLogicalBoundsAtFractionalZoom()
+    {
+        var commands = DrawingSurface.Parse("""
+            [{"kind":"text","text":"Wide glyphs\nSecond line","x":0,"y":0,"width":240,"height":100,"fontSize":24,"fill":"#ffffff","fontFamily":"sans-serif","textWrapping":"wrap"}]
+            """);
+        static (int Width, int Height) Ink(Avalonia.Media.Imaging.Bitmap image)
+        {
+            using var stream = new MemoryStream(); image.Save(stream, Avalonia.Media.Imaging.PngBitmapEncoderOptions.Default); stream.Position = 0;
+            using var bitmap = SKBitmap.Decode(stream);
+            int left = bitmap.Width, top = bitmap.Height, right = 0, bottom = 0;
+            for (int y = 0; y < bitmap.Height; y++) for (int x = 0; x < bitmap.Width; x++)
+                if (bitmap.GetPixel(x, y).Alpha > 32) { left = Math.Min(left, x); right = Math.Max(right, x); top = Math.Min(top, y); bottom = Math.Max(bottom, y); }
+            return (right - left + 1, bottom - top + 1);
+        }
+        using var full = DrawingGraphics.RenderBitmap(240, 100, commands);
+        using var half = DrawingGraphics.RenderBitmap(120, 50, commands, 0.5, 0.5);
+        var a = Ink(full); var b = Ink(half);
+        Assert.InRange(Math.Abs(a.Width - 2 * b.Width), 0, 4);
+        Assert.InRange(Math.Abs(a.Height - 2 * b.Height), 0, 4);
+        Assert.True(b.Height > 15);
+    }
+
+    [Fact]
+    public void NativeStateSelectorsFollowControlsWithoutGuestStyleUpdates()
+    {
+        using var application = DesktopBridge.CreateDesktopApplication("explicit");
+        application.ConfigureStyleResources("""
+            {"styles":[{"selector":{"control":"ToggleButton","states":["checked"]},"setters":{"opacity":0.6}}]}
+            """);
+        using var root = application.CreateWindowRoot(() => { }, null, false, true);
+        root.Render(Window(new("ToggleButton", Key: "state", Text: "State")));
+        root.Window!.Show(); Dispatcher.UIThread.RunJobs();
+        var button = Assert.IsType<ToggleButton>(root.FindControl("state"));
+        Assert.Equal(1, button.Opacity);
+        button.IsChecked = true; Dispatcher.UIThread.RunJobs();
+        Assert.Equal(0.6, button.Opacity);
+        button.IsChecked = false; Dispatcher.UIThread.RunJobs();
+        Assert.Equal(1, button.Opacity);
+    }
+
+    [Fact]
+    public void DisposingASecondaryWindowDoesNotRequestApplicationShutdown()
+    {
+        using var application = DesktopBridge.CreateDesktopApplication("onLastWindowClose");
+        using var first = application.CreateWindowRoot(() => { }, null, false, true);
+        using var second = application.CreateWindowRoot(() => { }, null, false, false);
+        first.Render(Window()); second.Render(Window());
+        Assert.False(application.ShouldRequestShutdown(second));
+        second.Dispose();
+        Assert.False(application.ShouldRequestShutdown(second));
+        Assert.True(application.ShouldRequestShutdown(first));
     }
 
     private static GuiVNode Window(

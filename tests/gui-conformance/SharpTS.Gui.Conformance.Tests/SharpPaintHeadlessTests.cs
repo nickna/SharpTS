@@ -7,6 +7,10 @@ namespace SharpTS.Gui.Conformance.Tests;
 public sealed class SharpPaintHeadlessTests
 {
     private static readonly TimeSpan ModelTestTimeout = TimeSpan.FromSeconds(30);
+    // The workflow now includes both themes, compact layouts, and DPI transitions.
+    // Leave room for hosted Windows runners; this is a hang guard, not a benchmark.
+    private static readonly TimeSpan WorkflowTestTimeout = TimeSpan.FromMinutes(3);
+    private static readonly TimeSpan SmokeTestTimeout = TimeSpan.FromSeconds(90);
     private static readonly TimeSpan ProcessCleanupTimeout = TimeSpan.FromSeconds(5);
 
     [Fact]
@@ -104,10 +108,26 @@ public sealed class SharpPaintHeadlessTests
         Assert.Contains(events, item => item.Stage == "unmount");
     }
 
+    [Theory]
+    [InlineData("interpreted")]
+    [InlineData("compiled")]
+    public async Task HeadlessTimeoutTerminatesProcessAndObservesOutput(string mode)
+    {
+        TimeoutException exception = await Assert.ThrowsAsync<TimeoutException>(() =>
+            RunAsync(mode, executionTimeout: TimeSpan.Zero));
+
+        Assert.Contains($"SharpPaint {mode} Headless run exceeded 0 seconds.", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("exited with code", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("cleanup completed", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("stdout:", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("stderr:", exception.Message, StringComparison.Ordinal);
+    }
+
     private static async Task<TraceEvent[]> RunAsync(
         string mode,
         string entryPoint = "headless.tests.tsx",
-        bool smokeClose = false)
+        bool smokeClose = false,
+        TimeSpan? executionTimeout = null)
     {
         string root = FindRepositoryRoot();
 #if DEBUG
@@ -151,12 +171,19 @@ public sealed class SharpPaintHeadlessTests
                 ?? throw new InvalidOperationException("Could not start the SharpPaint Headless host.");
             Task<string> stdout = process.StandardOutput.ReadToEndAsync();
             Task<string> stderr = process.StandardError.ReadToEndAsync();
-            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(90));
+            TimeSpan limit = executionTimeout ?? (smokeClose ? SmokeTestTimeout : WorkflowTestTimeout);
+            using var timeout = new CancellationTokenSource(limit);
             try { await process.WaitForExitAsync(timeout.Token); }
-            catch (OperationCanceledException)
+            catch (OperationCanceledException exception) when (timeout.IsCancellationRequested)
             {
-                process.Kill(entireProcessTree: true);
-                throw new TimeoutException($"SharpPaint {mode} Headless run exceeded 90 seconds.");
+                string diagnostics = await TerminateAndObserveProcessAsync(
+                    process,
+                    stdout,
+                    stderr,
+                    ProcessCleanupTimeout);
+                throw new TimeoutException(
+                    $"SharpPaint {mode} Headless run exceeded {limit.TotalSeconds:F0} seconds. {diagnostics}",
+                    exception);
             }
 
             string output = await stdout;
@@ -167,7 +194,7 @@ public sealed class SharpPaintHeadlessTests
             Assert.False(File.Exists(Path.Combine(stage, "SharpPaint.Headless.Open.sharpaint")));
             Assert.False(File.Exists(Path.Combine(stage, "SharpPaint.Headless.Save.sharpaint")));
 
-            if (!smokeClose) Assert.Contains("SharpPaint headless workflows passed.", output, StringComparison.Ordinal);
+            if (!smokeClose) Assert.True(output.Contains("SharpPaint headless workflows passed.", StringComparison.Ordinal), $"stdout: {output}\nstderr: {errors}");
             using JsonDocument trace = JsonDocument.Parse(await File.ReadAllTextAsync(tracePath));
             return trace.RootElement.EnumerateArray().Select(item => new TraceEvent(
                 item.GetProperty("Stage").GetString()!,

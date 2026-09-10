@@ -1,12 +1,9 @@
 using Avalonia;
-using Avalonia.Themes.Fluent;
+using Avalonia.Markup.Xaml;
 
 namespace SharpTS.Gui.Host;
 
-public sealed class GuiApplication : Application
+public sealed partial class GuiApplication : Application
 {
-    public override void Initialize()
-    {
-        Styles.Add(new FluentTheme());
-    }
+    public override void Initialize() => AvaloniaXamlLoader.Load(this);
 }

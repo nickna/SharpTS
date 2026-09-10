@@ -105,8 +105,13 @@ public static class DesktopTestingBridge
         Window window = RequireRoot(root).Window ?? throw new InvalidOperationException("Window is not mounted.");
         string gestureText = key switch
         {
-            "+" => "Add", "-" => "Subtract", "*" => "Multiply", "/" => "Divide",
-            "." => "Decimal", "=" => "Enter", "%" => "Shift+D5",
+            "+" => "Add",
+            "-" => "Subtract",
+            "*" => "Multiply",
+            "/" => "Divide",
+            "." => "Decimal",
+            "=" => "Enter",
+            "%" => "Shift+D5",
             _ when key.Length == 1 && char.IsAsciiDigit(key[0]) => "D" + key,
             _ => key,
         };
@@ -186,6 +191,15 @@ public static class DesktopTestingBridge
         Dispatcher.UIThread.RunJobs();
     }
 
+    public static bool IsInViewport(DesktopRoot root, string key) =>
+        DesktopGeometry.IsInViewport(RequireControl<Control>(root, key));
+
+    public static string CaptureSnapshot(DesktopRoot root, string path) =>
+        DesktopDevtoolsBridge.CaptureWindowSnapshot(RequireWindow(RequireRoot(root)), path);
+
+    public static string AssertSnapshot(DesktopRoot root, string path, bool update, int maxDifferentPixels = 0) =>
+        DesktopDevtoolsBridge.AssertWindowSnapshot(RequireWindow(RequireRoot(root)), path, update, maxDifferentPixels);
+
     public static void PressPointer(DesktopRoot root, string key, double x, double y)
     {
         DesktopRoot validated = RequireRoot(root);
@@ -223,6 +237,16 @@ public static class DesktopTestingBridge
         RequireWindow(validated).MouseMove(
             TranslatePoint(target, RequireWindow(validated), x, y),
             RawInputModifiers.LeftMouseButton);
+    }
+
+    public static void HoverPointer(DesktopRoot root, string key, double x, double y)
+    {
+        DesktopRoot validated = RequireRoot(root);
+        if (ActivePointers.TryGetValue(validated, out _))
+            throw new InvalidOperationException("Release the active test pointer before hovering.");
+        Window window = RequireWindow(validated);
+        window.MouseMove(TranslatePoint(RequireControl<Control>(validated, key), window, x, y),
+            RawInputModifiers.None);
     }
 
     public static void ReleasePointer(DesktopRoot root, string key, double x, double y)

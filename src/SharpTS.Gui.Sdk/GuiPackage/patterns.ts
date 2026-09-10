@@ -1,4 +1,4 @@
-import { createElement, useEffect, useRef } from "./runtime";
+import { createElement, useEffect, useRef, useState } from "./runtime";
 import type { DesktopWindow } from "./runtime";
 import type { ControlRef, GuiElement, GuiChild, KeyEvent } from "./runtime-types";
 
@@ -77,6 +77,8 @@ export interface DialogContext<T> {
 /** Options for a native dialog. @category Application Lifecycle */
 export interface DialogOptions<T> {
     title: string;
+    /** Defaults to the owner's resolved theme. */
+    theme?: "system" | "light" | "dark";
     width?: number;
     height?: number;
     initialFocus?: ControlRef<unknown>;
@@ -97,7 +99,7 @@ function DialogFrame(props: { options: DialogOptions<any>; dialog: DialogContext
         width: options.width || 420,
         height: options.height || 280,
         canResize: false,
-        theme: "system",
+        theme: options.theme || "system",
         keyDownRouting: "tunnel",
         onKeyDown: (event: KeyEvent): boolean => {
             if (event.key === "Escape") {
@@ -125,7 +127,13 @@ function showDialogImpl(owner: DesktopWindow, options: DialogOptions<any>): Prom
             }
         };
         try {
-            window = owner.createOwnedWindow(createElement(DialogFrame, { options, dialog: context }), true);
+            window = owner.createOwnedWindow(
+                createElement(DialogFrame, {
+                    options: { ...options, theme: options.theme || owner.theme },
+                    dialog: context
+                }),
+                true
+            );
 
             window.closed.then(() => {
                 restore();
@@ -165,6 +173,75 @@ export function createSerialTask(): SerialTask {
         },
         run
     };
+}
+
+/** Reactive serialized workflow state, sharing createSerialTask's reentrancy contract. @category Hooks and State */
+export function useSerialTask(): SerialTask {
+    const task = useRef<SerialTask>(createSerialTask());
+    const [busy, setBusy] = useState<boolean>(false);
+    const alive = useRef<boolean>(true);
+    useEffect(
+        () => () => {
+            alive.current = false;
+        },
+        []
+    );
+    return {
+        busy,
+        async run(work: () => Promise<void>): Promise<boolean> {
+            return await task.current.run(async () => {
+                setBusy(true);
+                try {
+                    await work();
+                } finally {
+                    if (alive.current) setBusy(false);
+                }
+            });
+        }
+    };
+}
+
+/** Command routing with one rejection handler and no theft of native text shortcuts. @category Core and Composition */
+export function commandKeyHandler(
+    commands: readonly DesktopCommand[],
+    onError: (error: unknown) => void
+): (event: KeyEvent) => boolean {
+    return (event: KeyEvent): boolean => {
+        const command = findCommand(commands, event);
+        if (!command) return false;
+        try {
+            const result = command.execute();
+            if (result) result.catch(onError);
+        } catch (error) {
+            onError(error);
+        }
+        return true;
+    };
+}
+
+/** Yield after native focus/blur notifications before reading the resulting guest state. @category Application Lifecycle */
+export async function commitDesktopEdits(owner: DesktopWindow, commit: () => void): Promise<void> {
+    owner.clearFocus();
+    await new Promise<void>((resolve) => setTimeout(() => resolve(), 0));
+    commit();
+    await new Promise<void>((resolve) => setTimeout(() => resolve(), 0));
+}
+
+/** Converts a viewport point into logical content coordinates with centered margins. @category Core and Composition */
+export function viewportPoint(pointer: number, offset: number, margin: number, zoom: number): number {
+    return (pointer + offset - margin) / zoom;
+}
+
+/** Anchors zoom in a centered scrollable viewport, preserving its content point. @category Core and Composition */
+export function centeredZoomOffset(
+    offset: number,
+    pointer: number,
+    oldZoom: number,
+    newZoom: number,
+    oldMargin: number,
+    newMargin: number
+): number {
+    return Math.max(0, viewportPoint(pointer, offset, oldMargin, oldZoom) * newZoom - pointer + newMargin);
 }
 
 /** Guards asynchronous results and cancels the previous job on replacement or unmount. @category Hooks and State */

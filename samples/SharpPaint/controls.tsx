@@ -1,279 +1,48 @@
-import {
-    Border,
-    Button,
-    DrawingCanvas,
-    Grid,
-    NumericUpDown,
-    Slider,
-    StackPanel,
-    TextBlock,
-    TextBox,
-    useEffect,
-    useRef,
-    useState
-} from "@sharpts/gui";
-import type { DesktopStyle, DrawingCommand, GuiElement } from "@sharpts/gui";
+import { PathIcon, IconButton as DesktopIconButton, DESKTOP_STYLES } from "@sharpts/gui";
+import type { DesktopPalette, GuiElement } from "@sharpts/gui";
+export { TextField, NumberField } from "@sharpts/gui";
+export type Palette = DesktopPalette;
+export const PAINT_STYLES = DESKTOP_STYLES;
 
-export const PAINT_STYLES: DesktopStyle[] = [
-    { selector: { control: "Button" }, setters: { cornerRadius: 4 } },
-    { selector: { control: "ToggleButton" }, setters: { cornerRadius: 4 } }
-];
-
-export interface Palette {
-    canvas: string;
-    panel: string;
-    surface: string;
-    border: string;
-    text: string;
-    muted: string;
-    accent: string;
-    selected: string;
-    danger: string;
-    checker: string;
-}
-export const LIGHT: Palette = {
-    canvas: "#dce1e8",
-    panel: "#f4f6fa",
-    surface: "#ffffff",
-    border: "#c6cfdb",
-    text: "#172336",
-    muted: "#536276",
-    accent: "#2365d1",
-    selected: "#dceaff",
-    danger: "#b3261e",
-    checker: "#d4d9e0"
+// Paint-specific geometry remains in the sample. The SDK supplies rendering,
+// native foreground inheritance, accessible button chrome, and state styling.
+export const ICONS: { [name: string]: string } = {
+    brush: "M3 14 L13 4 L16 7 L6 17 L2 18 Z M14 2 L18 6 L16 8 L12 4 Z",
+    eraser: "M2 12 L11 3 L18 10 L10 18 L7 18 Z M5 12 L8 15 L11 12 L8 9 Z M10 18 L19 18 L19 20 L8 20 Z",
+    line: "M2 17 L17 2 L19 4 L4 19 Z",
+    rectangle: "M2 4 L18 4 L18 17 L2 17 Z M4 6 L4 15 L16 15 L16 6 Z",
+    ellipse: "M10 3 A8 7 0 1 1 10 17 A8 7 0 1 1 10 3 Z M10 5 A6 5 0 1 0 10 15 A6 5 0 1 0 10 5 Z",
+    fill: "M3 10 L10 3 L17 10 L10 17 Z M6 10 L14 10 L10 6 Z M17 13 Q22 19 17 20 Q13 19 17 13 Z",
+    picker: "M2 18 L4 13 L13 4 L16 7 L7 16 Z M12 2 L18 8 L20 6 L14 0 Z",
+    text: "M2 3 L18 3 L18 6 L12 6 L12 17 L15 17 L15 19 L5 19 L5 17 L8 17 L8 6 L2 6 Z",
+    add: "M9 2 L11 2 L11 9 L18 9 L18 11 L11 11 L11 18 L9 18 L9 11 L2 11 L2 9 L9 9 Z",
+    remove: "M4 6 L16 6 L15 18 L5 18 Z M2 3 L8 3 L8 1 L12 1 L12 3 L18 3 L18 5 L2 5 Z",
+    duplicate: "M3 2 L15 2 L15 4 L5 4 L5 14 L3 14 Z M7 6 L19 6 L19 19 L7 19 Z M9 8 L9 17 L17 17 L17 8 Z",
+    up: "M2 10 L10 2 L18 10 L16 12 L11 7 L11 19 L9 19 L9 7 L4 12 Z",
+    down: "M2 10 L4 8 L9 13 L9 1 L11 1 L11 13 L16 8 L18 10 L10 18 Z",
+    undo: "M2 7 L8 1 L8 5 L13 5 Q19 5 19 12 L19 17 L16 17 L16 12 Q16 8 12 8 L8 8 L8 12 Z",
+    redo: "M18 7 L12 1 L12 5 L7 5 Q1 5 1 12 L1 17 L4 17 L4 12 Q4 8 8 8 L12 8 L12 12 Z",
+    merge: "M4 1 L6 1 L6 7 L10 11 L14 7 L14 1 L16 1 L16 8 L11 13 L11 16 L15 16 L10 21 L5 16 L9 16 L9 13 L4 8 Z"
 };
-export const DARK: Palette = {
-    canvas: "#10151d",
-    panel: "#1a2230",
-    surface: "#232e3e",
-    border: "#3d4a5d",
-    text: "#edf2fa",
-    muted: "#b2bfd2",
-    accent: "#8cb9ff",
-    selected: "#29476c",
-    danger: "#ffb4ab",
-    checker: "#c0c5cc"
-};
-
-/** A draft survives invalid intermediate input; only a valid committed edit reaches the model. */
-export function TextField(props: {
-    id: string;
-    label: string;
-    value: string;
-    palette: Palette;
-    maxLength?: number;
-    validate?: (value: string) => string | null;
-    onCommit: (value: string) => void;
-}): GuiElement {
-    const [draft, setDraft] = useState<string>(props.value);
-    const [error, setError] = useState<string>("");
-    const value = useRef<string>(props.value);
-    useEffect(() => {
-        value.current = props.value;
-        setDraft(props.value);
-        setError("");
-    }, [props.value]);
-    const commit = (): void => {
-        const message = props.validate ? props.validate(value.current) : null;
-        if (message) {
-            setError(message);
-            return;
-        }
-        setError("");
-        if (value.current !== props.value) props.onCommit(value.current);
-    };
+export function Icon(props: { name: string }): GuiElement {
     return (
-        <StackPanel spacing={4}>
-            <TextBlock fontSize={12} foreground={props.palette.muted} textWrapping="wrap">
-                {props.label}
-            </TextBlock>
-            <TextBox
-                key={props.id}
-                automationName={props.label}
-                text={draft}
-                maxLength={props.maxLength || 80}
-                onTextChanged={(text) => {
-                    value.current = text;
-                    setDraft(text);
-                }}
-                onBlur={commit}
-                onKeyDown={(event) => {
-                    if (event.key === "Enter") {
-                        commit();
-                        return true;
-                    }
-                    if (event.key === "Escape") {
-                        value.current = props.value;
-                        setDraft(props.value);
-                        setError("");
-                        return true;
-                    }
-                    return false;
-                }}
-            />
-            <TextBlock
-                key={props.id + "-error"}
-                isVisible={error !== ""}
-                foreground={props.palette.danger}
-                textWrapping="wrap"
-            >
-                {error}
-            </TextBlock>
-        </StackPanel>
+        <PathIcon width={17} height={17} data={ICONS[props.name] || ICONS.brush} isHitTestVisible={false} />
     );
 }
-
-export function NumberField(props: {
-    id: string;
-    label: string;
-    value: number;
-    minimum: number;
-    maximum: number;
-    step?: number;
-    palette: Palette;
-    onChange: (value: number) => void;
-    onBegin?: () => void;
-    onEnd?: () => void;
-}): GuiElement {
-    return (
-        <StackPanel spacing={4}>
-            <TextBlock fontSize={12} foreground={props.palette.muted}>
-                {props.label}
-            </TextBlock>
-            <Grid columns="*,76" rows="auto">
-                <Slider
-                    key={props.id}
-                    automationName={props.label}
-                    minimum={props.minimum}
-                    maximum={props.maximum}
-                    value={props.value}
-                    margin={[0, 0, 10, 0] as const}
-                    onValueChanged={props.onChange}
-                    onEditStarted={() => {
-                        if (props.onBegin) props.onBegin();
-                    }}
-                    onEditCompleted={() => {
-                        if (props.onEnd) props.onEnd();
-                    }}
-                />
-                <NumericUpDown
-                    showButtonSpinner={false}
-                    key={props.id + "-number"}
-                    gridColumn={1}
-                    automationName={props.label + " value"}
-                    minimum={props.minimum}
-                    maximum={props.maximum}
-                    increment={props.step || 1}
-                    value={props.value}
-                    verticalAlignment="center"
-                    onFocus={() => {
-                        if (props.onBegin) props.onBegin();
-                    }}
-                    onBlur={() => {
-                        if (props.onEnd) props.onEnd();
-                    }}
-                    onValueChanged={(value) => {
-                        if (value !== null) props.onChange(value);
-                    }}
-                />
-            </Grid>
-        </StackPanel>
-    );
-}
-
-/** Small path icons avoid OS-dependent Unicode glyph fallback. */
-export function Icon(props: { name: string; color: string }): GuiElement {
-    const stroke = props.color;
-    const line = (x1: number, y1: number, x2: number, y2: number): DrawingCommand => ({
-        kind: "line",
-        x1,
-        y1,
-        x2,
-        y2,
-        stroke,
-        strokeThickness: 1.7
-    });
-    let commands: DrawingCommand[] = [];
-    if (props.name === "brush")
-        commands = [line(4, 14, 14, 4), line(3, 15, 6, 15), line(3, 15, 3, 12), line(12, 4, 14, 6)];
-    else if (props.name === "eraser")
-        commands = [
-            line(3, 11, 10, 4),
-            line(10, 4, 15, 9),
-            line(15, 9, 8, 16),
-            line(8, 16, 3, 11),
-            line(6, 8, 11, 13),
-            line(7, 16, 16, 16)
-        ];
-    else if (props.name === "line") commands = [line(3, 15, 15, 3)];
-    else if (props.name === "rectangle")
-        commands = [{ kind: "rectangle", x: 3, y: 4, width: 12, height: 10, stroke, strokeThickness: 1.7 }];
-    else if (props.name === "ellipse")
-        commands = [
-            { kind: "ellipse", centerX: 9, centerY: 9, radiusX: 6, radiusY: 5, stroke, strokeThickness: 1.7 }
-        ];
-    else if (props.name === "fill")
-        commands = [
-            line(3, 9, 9, 3),
-            line(9, 3, 14, 8),
-            line(14, 8, 8, 14),
-            line(8, 14, 3, 9),
-            line(4, 9, 13, 9),
-            line(14, 13, 14, 16)
-        ];
-    else if (props.name === "picker")
-        commands = [line(4, 14, 13, 5), line(10, 3, 15, 8), line(3, 15, 6, 14), line(3, 15, 4, 12)];
-    else if (props.name === "text") commands = [line(3, 4, 15, 4), line(9, 4, 9, 15), line(6, 15, 12, 15)];
-    else if (props.name === "add") commands = [line(9, 3, 9, 15), line(3, 9, 15, 9)];
-    else if (props.name === "remove") commands = [line(3, 9, 15, 9)];
-    else if (props.name === "duplicate")
-        commands = [
-            { kind: "rectangle", x: 6, y: 6, width: 9, height: 9, stroke, strokeThickness: 1.5 },
-            line(3, 12, 3, 3),
-            line(3, 3, 12, 3)
-        ];
-    else if (props.name === "up") commands = [line(9, 15, 9, 3), line(9, 3, 4, 8), line(9, 3, 14, 8)];
-    else if (props.name === "down") commands = [line(9, 3, 9, 15), line(9, 15, 4, 10), line(9, 15, 14, 10)];
-    else if (props.name === "undo")
-        commands = [
-            line(4, 6, 13, 6),
-            line(13, 6, 15, 9),
-            line(15, 9, 15, 14),
-            line(4, 6, 8, 2),
-            line(4, 6, 8, 10)
-        ];
-    else if (props.name === "redo")
-        commands = [
-            line(14, 6, 5, 6),
-            line(5, 6, 3, 9),
-            line(3, 9, 3, 14),
-            line(14, 6, 10, 2),
-            line(14, 6, 10, 10)
-        ];
-    return <DrawingCanvas width={18} height={18} commands={commands} isHitTestVisible={false} />;
-}
-
 export function IconButton(props: {
     id: string;
     label: string;
     icon: string;
-    palette: Palette;
     enabled?: boolean;
     onClick: () => void;
 }): GuiElement {
     return (
-        <Button
-            key={props.id}
-            width={32}
-            height={32}
-            padding={6}
-            automationName={props.label}
-            toolTip={props.label}
-            isEnabled={props.enabled !== false}
+        <DesktopIconButton
+            id={props.id}
+            label={props.label}
+            data={ICONS[props.icon]}
+            enabled={props.enabled !== false}
             onClick={props.onClick}
-        >
-            <Icon name={props.icon} color={props.palette.text} />
-        </Button>
+        />
     );
 }

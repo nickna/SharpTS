@@ -450,8 +450,14 @@ internal static partial class DrawingGraphics
             };
             // LCD subpixel glyphs require an opaque destination and corrupt transparent artwork.
             TextOptions.SetTextRenderingMode(text, TextRenderingMode.Antialias);
-            text.Measure(new Size(command.Width, command.Height));
-            text.Arrange(new Rect(0, 0, command.Width, command.Height));
+            // The helper's DPI describes the target; it does not scale visual layout.
+            // Keep logical line wrapping, then transform the visual into the raster bounds.
+            text.RenderTransformOrigin = RelativePoint.TopLeft;
+            text.RenderTransform = new ScaleTransform(scaleX, scaleY);
+            var textRoot = new Avalonia.Controls.Canvas { Width = width, Height = height, ClipToBounds = true };
+            textRoot.Children.Add(text);
+            textRoot.Measure(new Size(width, height));
+            textRoot.Arrange(new Rect(0, 0, width, height));
             var pixels = new SKBitmap(new SKImageInfo(width, height, SKColorType.Bgra8888, SKAlphaType.Premul));
             try
             {
@@ -459,8 +465,8 @@ internal static partial class DrawingGraphics
                 textCanvas.Clear(SKColors.Transparent);
                 // Render into the CPU surface directly. This keeps GPU font-atlas/readback
                 // behavior out of retained artwork and exported images.
-                Avalonia.Skia.Helpers.DrawingContextHelper.RenderAsync(textCanvas, text,
-                    new Rect(0, 0, command.Width, command.Height), new Vector(96 * scaleX, 96 * scaleY))
+                Avalonia.Skia.Helpers.DrawingContextHelper.RenderAsync(textCanvas, textRoot,
+                    new Rect(0, 0, width, height), new Vector(96, 96))
                     .GetAwaiter().GetResult();
                 return pixels;
             }

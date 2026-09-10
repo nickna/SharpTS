@@ -123,6 +123,7 @@ internal sealed class NumericUpDownDescriptor() : NodeDescriptor("NumericUpDown"
         var value = (NumericUpDown)control; bool changed = CommonProperties.Apply(value, next);
         changed |= CommonProperties.ApplyTemplated(value, next);
         if (value.ShowButtonSpinner != next.ShowButtonSpinner) { value.ShowButtonSpinner = next.ShowButtonSpinner; changed = true; }
+        if (value.FormatString != next.FormatString) { value.FormatString = next.FormatString; changed = true; }
         decimal minimum = (decimal)next.Minimum, maximum = (decimal)next.Maximum, increment = (decimal)next.Increment;
         decimal? current = next.NullableValue is double number ? (decimal)number : null;
         if (value.Minimum != minimum) { value.Minimum = minimum; changed = true; }

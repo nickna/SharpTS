@@ -10,6 +10,7 @@
 
   <ItemGroup>
     <PackageReference Include="Avalonia" />
+    <PackageReference Include="Avalonia.Controls.ColorPicker" />
     <PackageReference Include="Avalonia.Headless" />
     <PackageReference Include="Avalonia.Skia" />
     <ProjectReference Include="..\SharpTS.Gui.Generator\SharpTS.Gui.Generator.csproj"

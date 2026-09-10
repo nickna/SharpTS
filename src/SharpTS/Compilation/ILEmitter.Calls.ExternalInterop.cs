@@ -896,58 +896,7 @@ public partial class ILEmitter
     /// <summary>Materializes a CLR array on the stack as an emitted guest <c>$Array</c>.</summary>
     private void EmitExternalArrayReturn(Type arrayType)
     {
-        Type elementType = arrayType.GetElementType()!;
-        var source = IL.DeclareLocal(arrayType);
-        var elements = IL.DeclareLocal(_ctx.Types.ObjectArray);
-        var index = IL.DeclareLocal(_ctx.Types.Int32);
-        IL.Emit(OpCodes.Stloc, source);
-
-        var nonNull = IL.DefineLabel();
-        var finished = IL.DefineLabel();
-        IL.Emit(OpCodes.Ldloc, source);
-        IL.Emit(OpCodes.Brtrue, nonNull);
-        IL.Emit(OpCodes.Ldnull);
-        IL.Emit(OpCodes.Br, finished);
-        IL.MarkLabel(nonNull);
-
-        IL.Emit(OpCodes.Ldloc, source);
-        IL.Emit(OpCodes.Ldlen);
-        IL.Emit(OpCodes.Conv_I4);
-        IL.Emit(OpCodes.Newarr, _ctx.Types.Object);
-        IL.Emit(OpCodes.Stloc, elements);
-        IL.Emit(OpCodes.Ldc_I4_0);
-        IL.Emit(OpCodes.Stloc, index);
-
-        var loop = IL.DefineLabel();
-        var done = IL.DefineLabel();
-        IL.MarkLabel(loop);
-        IL.Emit(OpCodes.Ldloc, index);
-        IL.Emit(OpCodes.Ldloc, source);
-        IL.Emit(OpCodes.Ldlen);
-        IL.Emit(OpCodes.Conv_I4);
-        IL.Emit(OpCodes.Bge, done);
-
-        IL.Emit(OpCodes.Ldloc, elements);
-        IL.Emit(OpCodes.Ldloc, index);
-        IL.Emit(OpCodes.Ldloc, source);
-        IL.Emit(OpCodes.Ldloc, index);
-        IL.Emit(OpCodes.Ldelem, elementType);
-        if (elementType.IsArray)
-            EmitExternalArrayReturn(elementType);
-        else
-            BoxResultIfValueType(elementType);
-        IL.Emit(OpCodes.Stelem_Ref);
-
-        IL.Emit(OpCodes.Ldloc, index);
-        IL.Emit(OpCodes.Ldc_I4_1);
-        IL.Emit(OpCodes.Add);
-        IL.Emit(OpCodes.Stloc, index);
-        IL.Emit(OpCodes.Br, loop);
-        IL.MarkLabel(done);
-
-        IL.Emit(OpCodes.Ldloc, elements);
-        IL.Emit(OpCodes.Call, _ctx.Runtime!.CreateArray);
-        IL.MarkLabel(finished);
+        ClrArrayEmitter.EmitToGuest(IL, arrayType, _ctx.Types, _ctx.Runtime!, BoxResultIfValueType);
         SetStackUnknown();
     }
 

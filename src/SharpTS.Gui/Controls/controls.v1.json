@@ -40,7 +40,10 @@
     "canvas",
     "rich-text-block",
     "drawing-canvas",
-    "toggle-button"
+    "toggle-button",
+    "path-icon",
+    "color-view",
+    "color-picker"
   ],
   "propertyGroups": {
     "common": [
@@ -237,7 +240,10 @@
         "type": "\"bubble\" | \"tunnel\"",
         "default": "bubble",
         "setter": "event",
-        "enumValues": ["bubble", "tunnel"],
+        "enumValues": [
+          "bubble",
+          "tunnel"
+        ],
         "documentation": "Use tunnel for command scopes that must run before native text handling; bubble preserves ordinary child-first routing."
       },
       {
@@ -349,6 +355,18 @@
         "type": "(event: WheelEvent) => boolean",
         "setter": "common",
         "documentation": "Handles native wheel input in local DIPs."
+      },
+      {
+        "name": "onPointerEnter",
+        "type": "() => void",
+        "setter": "common",
+        "documentation": "Called when the pointer enters the control."
+      },
+      {
+        "name": "onPointerLeave",
+        "type": "() => void",
+        "setter": "common",
+        "documentation": "Called when the pointer leaves the control."
       }
     ],
     "textStyle": [
@@ -1054,7 +1072,10 @@
           "type": "\"normal\" | \"plain\"",
           "default": "normal",
           "setter": "text-input",
-          "enumValues": ["normal", "plain"],
+          "enumValues": [
+            "normal",
+            "plain"
+          ],
           "documentation": "Plain appearance removes input chrome and padding for inline editing, preserving native selection, caret, and input behavior."
         },
         {
@@ -1735,6 +1756,12 @@
           "default": "true",
           "setter": "numeric",
           "documentation": "Shows native increment/decrement buttons. Keyboard arrow editing remains available when hidden."
+        },
+        {
+          "name": "formatString",
+          "type": "string",
+          "setter": "numeric",
+          "documentation": "Native numeric display format, for example 0 or 0.##. Does not change the value precision."
         }
       ],
       "events": [
@@ -2161,6 +2188,122 @@
       "documentation": "Menu command or submenu.",
       "trimming": [
         "Avalonia.Controls.MenuItem"
+      ]
+    },
+    {
+      "kind": "PathIcon",
+      "nativeType": "Avalonia.Controls.PathIcon",
+      "adapter": "path-icon",
+      "children": {
+        "model": "none",
+        "minimum": 0,
+        "maximum": 0
+      },
+      "propsType": "PathIconProps",
+      "handle": "unknown",
+      "groups": [
+        "common",
+        "textStyle",
+        "contentStyle"
+      ],
+      "props": [
+        {
+          "name": "data",
+          "type": "string",
+          "required": true,
+          "setter": "content",
+          "documentation": "Filled SVG path geometry."
+        }
+      ],
+      "events": [],
+      "operations": [
+        "focus"
+      ],
+      "documentation": "Tintable native vector icon.",
+      "trimming": [
+        "Avalonia.Controls.PathIcon"
+      ]
+    },
+    {
+      "kind": "ColorView",
+      "nativeType": "Avalonia.Controls.ColorView",
+      "adapter": "color-view",
+      "children": {
+        "model": "none",
+        "minimum": 0,
+        "maximum": 0
+      },
+      "propsType": "ColorViewProps",
+      "handle": "unknown",
+      "groups": [
+        "common",
+        "textStyle",
+        "contentStyle"
+      ],
+      "props": [
+        {
+          "name": "color",
+          "type": "string",
+          "required": true,
+          "setter": "content",
+          "documentation": "Selected RGB/ARGB color."
+        }
+      ],
+      "events": [
+        {
+          "name": "onColorChanged",
+          "type": "(color: string) => void | Promise<unknown>",
+          "adapter": "string-action",
+          "documentation": "Called after the selected color changes."
+        }
+      ],
+      "operations": [
+        "focus"
+      ],
+      "documentation": "Native spectrum, palette, component and alpha color editor.",
+      "trimming": [
+        "Avalonia.Controls.ColorView"
+      ]
+    },
+    {
+      "kind": "ColorPicker",
+      "nativeType": "Avalonia.Controls.ColorPicker",
+      "adapter": "color-picker",
+      "children": {
+        "model": "none",
+        "minimum": 0,
+        "maximum": 0
+      },
+      "propsType": "ColorPickerProps",
+      "handle": "unknown",
+      "groups": [
+        "common",
+        "textStyle",
+        "contentStyle"
+      ],
+      "props": [
+        {
+          "name": "color",
+          "type": "string",
+          "required": true,
+          "setter": "content",
+          "documentation": "Selected RGB/ARGB color."
+        }
+      ],
+      "events": [
+        {
+          "name": "onColorChanged",
+          "type": "(color: string) => void | Promise<unknown>",
+          "adapter": "string-action",
+          "documentation": "Called after the selected color changes."
+        }
+      ],
+      "operations": [
+        "focus"
+      ],
+      "documentation": "Native spectrum, palette, component and alpha color editor in a drop-down.",
+      "trimming": [
+        "Avalonia.Controls.ColorPicker"
       ]
     }
   ]
