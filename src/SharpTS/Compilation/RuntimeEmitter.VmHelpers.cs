@@ -67,7 +67,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.MethodInfo, "Invoke", _types.Object, _types.ObjectArray));
 
         // return $Runtime.Resolve(dict)  →  native $Promise
-        il.Emit(OpCodes.Call, runtime.TSPromiseResolve);
+        il.Emit(OpCodes.Call, runtime.RequirePromise().TypeResolve);
         il.Emit(OpCodes.Ret);
     }
 

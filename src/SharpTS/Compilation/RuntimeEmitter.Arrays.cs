@@ -1238,13 +1238,13 @@ public partial class RuntimeEmitter
             var notResolveCallbackForNamesLabel = il.DefineLabel();
             var promiseCallbackNamesLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.PromiseResolveCallbackType);
+            il.Emit(OpCodes.Isinst, runtime.RequirePromise().ResolveCallbackType);
             il.Emit(OpCodes.Brfalse, notResolveCallbackForNamesLabel);
             il.Emit(OpCodes.Br, promiseCallbackNamesLabel);
             il.MarkLabel(notResolveCallbackForNamesLabel);
             var notPromiseCallbackForNamesLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.PromiseRejectCallbackType);
+            il.Emit(OpCodes.Isinst, runtime.RequirePromise().RejectCallbackType);
             il.Emit(OpCodes.Brfalse, notPromiseCallbackForNamesLabel);
             il.MarkLabel(promiseCallbackNamesLabel);
             AddName("length");

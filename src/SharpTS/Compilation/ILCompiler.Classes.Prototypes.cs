@@ -54,7 +54,7 @@ public partial class ILCompiler
 
             case "$Promise":
                 il.Emit(OpCodes.Ldnull);
-                il.Emit(OpCodes.Call, _runtime.TSPromiseCtor);
+                il.Emit(OpCodes.Call, _runtime.RequirePromise().Ctor);
                 return;
 
             case "$AggregateError":

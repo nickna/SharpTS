@@ -12,9 +12,9 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitPromiseKeyedMethodBodies(EmittedRuntime runtime)
     {
-        EmitPromiseKeyedBody(runtime.PromiseAllKeyed, runtime.PromiseAll, runtime);
+        EmitPromiseKeyedBody(runtime.RequirePromise().AllKeyed, runtime.RequirePromise().All, runtime);
         EmitPromiseKeyedBody(
-            runtime.PromiseAllSettledKeyed, runtime.PromiseAllSettled, runtime);
+            runtime.RequirePromise().AllSettledKeyed, runtime.RequirePromise().AllSettled, runtime);
         EmitPromiseKeyedMapResultBody(runtime);
     }
 
@@ -41,7 +41,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(rejectInput);
         il.Emit(OpCodes.Ldstr, "Promise keyed combinator requires an object argument");
         il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.PromiseReject);
+        il.Emit(OpCodes.Call, runtime.RequirePromise().Reject);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(validInput);
@@ -148,11 +148,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldtoken, _types.TaskOfObject);
         il.Emit(OpCodes.Call, _types.GetMethod(
             _types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
-        if (settlementMethod == runtime.PromiseAll)
+        if (settlementMethod == runtime.RequirePromise().All)
             il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Call, settlementMethod);
         il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Ldftn, runtime.PromiseKeyedMapResult);
+        il.Emit(OpCodes.Ldftn, runtime.RequirePromise().KeyedMapResult);
         il.Emit(OpCodes.Newobj, _types.GetConstructor(
             callbackType, _types.Object, _types.IntPtr));
         il.Emit(OpCodes.Ldloc, keys);
@@ -163,7 +163,7 @@ public partial class RuntimeEmitter
 
     private void EmitPromiseKeyedMapResultBody(EmittedRuntime runtime)
     {
-        var il = runtime.PromiseKeyedMapResult.GetILGenerator();
+        var il = runtime.RequirePromise().KeyedMapResult.GetILGenerator();
         var listType = _types.ListOfObject;
         var keys = il.DeclareLocal(listType);
         var values = il.DeclareLocal(listType);

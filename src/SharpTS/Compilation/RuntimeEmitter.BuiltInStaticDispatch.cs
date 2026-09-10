@@ -188,23 +188,23 @@ public partial class RuntimeEmitter
         // their compile-time static emitters.
         if (_features.UsesPromise)
         {
-            EmitLookup(_types.TaskOfObject, "resolve", runtime.PromiseResolveStatic, 1);
-            EmitLookup(_types.TaskOfObject, "reject", runtime.PromiseRejectStatic, 1);
-            EmitLookup(_types.TaskOfObject, "all", runtime.PromiseAllStatic, 1);
-            EmitLookup(_types.TaskOfObject, "allKeyed", runtime.PromiseAllKeyedStatic, 1);
-            EmitLookup(_types.TaskOfObject, "race", runtime.PromiseRaceStatic, 1);
-            EmitLookup(_types.TaskOfObject, "allSettled", runtime.PromiseAllSettledStatic, 1);
-            EmitLookup(_types.TaskOfObject, "allSettledKeyed", runtime.PromiseAllSettledKeyedStatic, 1);
-            EmitLookup(_types.TaskOfObject, "any", runtime.PromiseAnyStatic, 1);
+            EmitLookup(_types.TaskOfObject, "resolve", runtime.RequirePromise().ResolveStatic, 1);
+            EmitLookup(_types.TaskOfObject, "reject", runtime.RequirePromise().RejectStatic, 1);
+            EmitLookup(_types.TaskOfObject, "all", runtime.RequirePromise().AllStatic, 1);
+            EmitLookup(_types.TaskOfObject, "allKeyed", runtime.RequirePromise().AllKeyedStatic, 1);
+            EmitLookup(_types.TaskOfObject, "race", runtime.RequirePromise().RaceStatic, 1);
+            EmitLookup(_types.TaskOfObject, "allSettled", runtime.RequirePromise().AllSettledStatic, 1);
+            EmitLookup(_types.TaskOfObject, "allSettledKeyed", runtime.RequirePromise().AllSettledKeyedStatic, 1);
+            EmitLookup(_types.TaskOfObject, "any", runtime.RequirePromise().AnyStatic, 1);
             // Guest classes that `extend Promise` derive from the emitted wrapper.
-            EmitLookup(runtime.TSPromiseType, "resolve", runtime.PromiseResolveStatic, 1);
-            EmitLookup(runtime.TSPromiseType, "reject", runtime.PromiseRejectStatic, 1);
-            EmitLookup(runtime.TSPromiseType, "all", runtime.PromiseAllStatic, 1);
-            EmitLookup(runtime.TSPromiseType, "allKeyed", runtime.PromiseAllKeyedStatic, 1);
-            EmitLookup(runtime.TSPromiseType, "race", runtime.PromiseRaceStatic, 1);
-            EmitLookup(runtime.TSPromiseType, "allSettled", runtime.PromiseAllSettledStatic, 1);
-            EmitLookup(runtime.TSPromiseType, "allSettledKeyed", runtime.PromiseAllSettledKeyedStatic, 1);
-            EmitLookup(runtime.TSPromiseType, "any", runtime.PromiseAnyStatic, 1);
+            EmitLookup(runtime.RequirePromise().Type, "resolve", runtime.RequirePromise().ResolveStatic, 1);
+            EmitLookup(runtime.RequirePromise().Type, "reject", runtime.RequirePromise().RejectStatic, 1);
+            EmitLookup(runtime.RequirePromise().Type, "all", runtime.RequirePromise().AllStatic, 1);
+            EmitLookup(runtime.RequirePromise().Type, "allKeyed", runtime.RequirePromise().AllKeyedStatic, 1);
+            EmitLookup(runtime.RequirePromise().Type, "race", runtime.RequirePromise().RaceStatic, 1);
+            EmitLookup(runtime.RequirePromise().Type, "allSettled", runtime.RequirePromise().AllSettledStatic, 1);
+            EmitLookup(runtime.RequirePromise().Type, "allSettledKeyed", runtime.RequirePromise().AllSettledKeyedStatic, 1);
+            EmitLookup(runtime.RequirePromise().Type, "any", runtime.RequirePromise().AnyStatic, 1);
         }
         EmitLookup(runtime.TSErrorType, "isError", runtime.ErrorIsError, 1);
 

@@ -118,11 +118,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, valueLocal);
 
         il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Isinst, runtime.TSPromiseType);
+        il.Emit(OpCodes.Isinst, runtime.RequirePromise().Type);
         il.Emit(OpCodes.Brfalse, notPromise);
         il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Castclass, runtime.TSPromiseType);
-        il.Emit(OpCodes.Callvirt, runtime.TSPromiseTaskGetter);
+        il.Emit(OpCodes.Castclass, runtime.RequirePromise().Type);
+        il.Emit(OpCodes.Callvirt, runtime.RequirePromise().TaskGetter);
         il.Emit(OpCodes.Stloc, taskLocal);
         il.Emit(OpCodes.Br, haveTask);
 
@@ -139,7 +139,7 @@ public partial class RuntimeEmitter
         // adoption path used by compiled await expressions.
         il.MarkLabel(notTask);
         il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Call, runtime.CoerceAwaitableToTaskMethod);
+        il.Emit(OpCodes.Call, runtime.RequirePromise().CoerceAwaitableToTaskMethod);
         il.Emit(OpCodes.Stloc, taskLocal);
 
         il.MarkLabel(haveTask);

@@ -12,10 +12,10 @@ public partial class RuntimeEmitter
     // Promise class fields
     private FieldBuilder _tsPromiseTaskField = null!;
 
-    private void EmitTSPromiseClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private void EmitTSPromiseClass(ModuleBuilder moduleBuilder, EmittedPromiseRuntime promise)
     {
         // First emit the PromiseRejectedException class (needed by Reject method)
-        EmitTSPromiseRejectedException(moduleBuilder, runtime);
+        EmitTSPromiseRejectedException(moduleBuilder, promise);
 
         // Define class: public class $Promise
         var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
@@ -23,7 +23,7 @@ public partial class RuntimeEmitter
             TypeAttributes.Public | TypeAttributes.Class | TypeAttributes.BeforeFieldInit,
             _types.Object
         );
-        runtime.TSPromiseType = typeBuilder;
+        promise.Type = typeBuilder;
 
         // Field: private readonly Task<object?> _task
         _tsPromiseTaskField = typeBuilder.DefineField(
@@ -33,37 +33,37 @@ public partial class RuntimeEmitter
         );
 
         // Constructor: public $Promise(Task<object?> task)
-        EmitTSPromiseConstructor(typeBuilder, runtime);
+        EmitTSPromiseConstructor(typeBuilder, promise);
 
         // Property: Task (getter)
-        EmitTSPromiseTaskProperty(typeBuilder, runtime);
+        EmitTSPromiseTaskProperty(typeBuilder, promise);
 
         // Static method: Resolve(object? value)
-        EmitTSPromiseResolve(typeBuilder, runtime);
+        EmitTSPromiseResolve(typeBuilder, promise);
 
         // Static method: Reject(object? reason)
-        EmitTSPromiseReject(typeBuilder, runtime);
+        EmitTSPromiseReject(typeBuilder, promise);
 
         // Method: GetValueAsync()
-        EmitTSPromiseGetValueAsync(typeBuilder, runtime);
+        EmitTSPromiseGetValueAsync(typeBuilder, promise);
 
         // Property: IsCompleted
-        EmitTSPromiseIsCompletedProperty(typeBuilder, runtime);
+        EmitTSPromiseIsCompletedProperty(typeBuilder, promise);
 
         // Override: ToString()
-        EmitTSPromiseToString(typeBuilder, runtime);
+        EmitTSPromiseToString(typeBuilder, promise);
 
         typeBuilder.CreateType();
     }
 
-    private void EmitTSPromiseConstructor(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSPromiseConstructor(TypeBuilder typeBuilder, EmittedPromiseRuntime promise)
     {
         var ctor = typeBuilder.DefineConstructor(
             MethodAttributes.Public,
             CallingConventions.Standard,
             [_types.TaskOfObject]
         );
-        runtime.TSPromiseCtor = ctor;
+        promise.Ctor = ctor;
 
         var il = ctor.GetILGenerator();
 
@@ -79,7 +79,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitTSPromiseTaskProperty(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSPromiseTaskProperty(TypeBuilder typeBuilder, EmittedPromiseRuntime promise)
     {
         var prop = typeBuilder.DefineProperty(
             "Task",
@@ -94,7 +94,7 @@ public partial class RuntimeEmitter
             _types.TaskOfObject,
             Type.EmptyTypes
         );
-        runtime.TSPromiseTaskGetter = getter;
+        promise.TaskGetter = getter;
 
         var il = getter.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
@@ -104,45 +104,45 @@ public partial class RuntimeEmitter
         prop.SetGetMethod(getter);
     }
 
-    private void EmitTSPromiseResolve(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSPromiseResolve(TypeBuilder typeBuilder, EmittedPromiseRuntime promise)
     {
         var method = typeBuilder.DefineMethod(
             "Resolve",
             MethodAttributes.Public | MethodAttributes.Static,
-            runtime.TSPromiseType,
+            promise.Type,
             [_types.Object]
         );
-        runtime.TSPromiseResolve = method;
+        promise.TypeResolve = method;
 
         var il = method.GetILGenerator();
         var notPromiseLabel = il.DefineLabel();
 
         // If value is already a $Promise, return it
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSPromiseType);
+        il.Emit(OpCodes.Isinst, promise.Type);
         il.Emit(OpCodes.Brfalse, notPromiseLabel);
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSPromiseType);
+        il.Emit(OpCodes.Castclass, promise.Type);
         il.Emit(OpCodes.Ret);
 
         // Otherwise, create new Promise from Task.FromResult(value)
         il.MarkLabel(notPromiseLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Call, EmitGenerics.MakeGenericMethod(_types.GetMethod(_types.Task, "FromResult")!, _types.Object));
-        il.Emit(OpCodes.Newobj, runtime.TSPromiseCtor);
+        il.Emit(OpCodes.Newobj, promise.Ctor);
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitTSPromiseReject(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSPromiseReject(TypeBuilder typeBuilder, EmittedPromiseRuntime promise)
     {
         var method = typeBuilder.DefineMethod(
             "Reject",
             MethodAttributes.Public | MethodAttributes.Static,
-            runtime.TSPromiseType,
+            promise.Type,
             [_types.Object]
         );
-        runtime.TSPromiseReject = method;
+        promise.TypeReject = method;
 
         var il = method.GetILGenerator();
         var tcsLocal = il.DeclareLocal(_types.TaskCompletionSourceOfObject);
@@ -154,17 +154,17 @@ public partial class RuntimeEmitter
         // tcs.SetException(new $PromiseRejectedException(reason));
         il.Emit(OpCodes.Ldloc, tcsLocal);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Newobj, runtime.TSPromiseRejectedExceptionCtor);
+        il.Emit(OpCodes.Newobj, promise.RejectedExceptionCtor);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.TaskCompletionSourceOfObject, "SetException", _types.Exception));
 
         // return new $Promise(tcs.Task);
         il.Emit(OpCodes.Ldloc, tcsLocal);
         il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.TaskCompletionSourceOfObject, "Task").GetGetMethod()!);
-        il.Emit(OpCodes.Newobj, runtime.TSPromiseCtor);
+        il.Emit(OpCodes.Newobj, promise.Ctor);
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitTSPromiseGetValueAsync(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSPromiseGetValueAsync(TypeBuilder typeBuilder, EmittedPromiseRuntime promise)
     {
         // This is an async method, but for simplicity, we'll emit it as a regular method
         // that returns Task<object?> and handles promise flattening.
@@ -179,7 +179,7 @@ public partial class RuntimeEmitter
             _types.TaskOfObject,
             Type.EmptyTypes
         );
-        runtime.TSPromiseGetValueAsync = method;
+        promise.GetValueAsync = method;
 
         var il = method.GetILGenerator();
 
@@ -190,7 +190,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitTSPromiseIsCompletedProperty(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSPromiseIsCompletedProperty(TypeBuilder typeBuilder, EmittedPromiseRuntime promise)
     {
         var prop = typeBuilder.DefineProperty(
             "IsCompleted",
@@ -215,7 +215,7 @@ public partial class RuntimeEmitter
         prop.SetGetMethod(getter);
     }
 
-    private void EmitTSPromiseToString(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSPromiseToString(TypeBuilder typeBuilder, EmittedPromiseRuntime promise)
     {
         var method = typeBuilder.DefineMethod(
             "ToString",
@@ -255,7 +255,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitTSPromiseRejectedException(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private void EmitTSPromiseRejectedException(ModuleBuilder moduleBuilder, EmittedPromiseRuntime promise)
     {
         // Define class: public class $PromiseRejectedException : Exception
         var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
@@ -263,7 +263,7 @@ public partial class RuntimeEmitter
             TypeAttributes.Public | TypeAttributes.Class | TypeAttributes.BeforeFieldInit,
             _types.Exception
         );
-        runtime.TSPromiseRejectedExceptionType = typeBuilder;
+        promise.RejectedExceptionType = typeBuilder;
 
         // Field: private readonly object? _reason
         var reasonField = typeBuilder.DefineField(
@@ -278,7 +278,7 @@ public partial class RuntimeEmitter
             CallingConventions.Standard,
             [_types.Object]
         );
-        runtime.TSPromiseRejectedExceptionCtor = ctor;
+        promise.RejectedExceptionCtor = ctor;
 
         var il = ctor.GetILGenerator();
         var hasReasonLabel = il.DefineLabel();
@@ -318,7 +318,7 @@ public partial class RuntimeEmitter
             _types.Object,
             Type.EmptyTypes
         );
-        runtime.TSPromiseRejectedExceptionReasonGetter = getter;
+        promise.RejectedExceptionReasonGetter = getter;
 
         var getIL = getter.GetILGenerator();
         getIL.Emit(OpCodes.Ldarg_0);

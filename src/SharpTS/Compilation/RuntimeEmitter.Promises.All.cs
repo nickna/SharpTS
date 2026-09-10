@@ -107,7 +107,7 @@ public partial class RuntimeEmitter
             _features.UsesArrayPrototypeMutation
             || _features.UsesDynamicPropertyDescriptors
             || _features.UsesClassPrototypeMutation
-                ? runtime.AdoptPromiseCombinatorResultMethod
+                ? runtime.RequirePromise().AdoptPromiseCombinatorResultMethod
                 : null;
 
         EmitCombinatorWrapper(il, sm.Type, sm.StateField, sm.IterableField, sm.BuilderField, sm.BuilderType,
@@ -118,7 +118,7 @@ public partial class RuntimeEmitter
                 il.Emit(OpCodes.Ldarg_0);
             }, sm.ConstructorField, () => il.Emit(OpCodes.Ldarg_1),
             sm.CapabilityField, () => il.Emit(OpCodes.Ldarg_2),
-            markNonAutoAwaitMethod: runtime.MarkNonAutoAwaitPromiseMethod,
+            markNonAutoAwaitMethod: runtime.RequirePromise().MarkNonAutoAwaitPromiseMethod,
             adoptResultMethod: adoptResultMethod,
             stablePrimitiveField: sm.StablePrimitiveField,
             emitStablePrimitiveValue: () => il.Emit(

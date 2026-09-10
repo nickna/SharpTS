@@ -21,7 +21,7 @@ public partial class RuntimeEmitter
         // even without `import()`.
         EmitModuleRegistry(typeBuilder, runtime);
         if (_features.UsesPromise)
-            EmitWrapTaskAsPromise(typeBuilder, runtime);
+            EmitWrapTaskAsPromise(typeBuilder, runtime.RequirePromise());
         // The two `import(specifier)`-specific helpers are gated separately:
         // only emit when UsesDynamicImport is set.
         if (_features.UsesDynamicImport)
@@ -118,21 +118,21 @@ public partial class RuntimeEmitter
     /// Emits WrapTaskAsPromise: wraps Task&lt;object?&gt; in $Promise.
     /// Signature: $Promise WrapTaskAsPromise(Task&lt;object?&gt; task)
     /// </summary>
-    private void EmitWrapTaskAsPromise(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitWrapTaskAsPromise(TypeBuilder typeBuilder, EmittedPromiseRuntime promise)
     {
         var method = typeBuilder.DefineMethod(
             "WrapTaskAsPromise",
             MethodAttributes.Public | MethodAttributes.Static,
-            runtime.TSPromiseType,
+            promise.Type,
             [_types.TaskOfObject]
         );
-        runtime.WrapTaskAsPromise = method;
+        promise.WrapTaskAsPromise = method;
 
         var il = method.GetILGenerator();
 
         // return new $Promise(task);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Newobj, runtime.TSPromiseCtor);
+        il.Emit(OpCodes.Newobj, promise.Ctor);
         il.Emit(OpCodes.Ret);
     }
 

@@ -98,7 +98,7 @@ public sealed class FsPromisesModuleEmitter : IBuiltInModuleEmitter
         il.Emit(OpCodes.Call, ctx.Runtime!.FsReadFileAsync);
 
         // Wrap Task in Promise
-        il.Emit(OpCodes.Call, ctx.Runtime!.WrapTaskAsPromise);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequirePromise().WrapTaskAsPromise);
 
         return true;
     }
@@ -112,7 +112,7 @@ public sealed class FsPromisesModuleEmitter : IBuiltInModuleEmitter
         {
             // Return rejected promise for invalid args
             il.Emit(OpCodes.Ldstr, "path and data are required");
-            il.Emit(OpCodes.Call, ctx.Runtime!.TSPromiseReject);
+            il.Emit(OpCodes.Call, ctx.Runtime!.RequirePromise().TypeReject);
             return true;
         }
 
@@ -137,7 +137,7 @@ public sealed class FsPromisesModuleEmitter : IBuiltInModuleEmitter
 
         // Call runtime helper
         il.Emit(OpCodes.Call, ctx.Runtime!.FsWriteFileAsync);
-        il.Emit(OpCodes.Call, ctx.Runtime!.WrapTaskAsPromise);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequirePromise().WrapTaskAsPromise);
 
         return true;
     }
@@ -150,7 +150,7 @@ public sealed class FsPromisesModuleEmitter : IBuiltInModuleEmitter
         if (arguments.Count < 2)
         {
             il.Emit(OpCodes.Ldstr, "path and data are required");
-            il.Emit(OpCodes.Call, ctx.Runtime!.TSPromiseReject);
+            il.Emit(OpCodes.Call, ctx.Runtime!.RequirePromise().TypeReject);
             return true;
         }
 
@@ -171,7 +171,7 @@ public sealed class FsPromisesModuleEmitter : IBuiltInModuleEmitter
         }
 
         il.Emit(OpCodes.Call, ctx.Runtime!.FsAppendFileAsync);
-        il.Emit(OpCodes.Call, ctx.Runtime!.WrapTaskAsPromise);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequirePromise().WrapTaskAsPromise);
 
         return true;
     }
@@ -184,7 +184,7 @@ public sealed class FsPromisesModuleEmitter : IBuiltInModuleEmitter
         if (arguments.Count == 0)
         {
             il.Emit(OpCodes.Ldstr, "path is required");
-            il.Emit(OpCodes.Call, ctx.Runtime!.TSPromiseReject);
+            il.Emit(OpCodes.Call, ctx.Runtime!.RequirePromise().TypeReject);
             return true;
         }
 
@@ -192,7 +192,7 @@ public sealed class FsPromisesModuleEmitter : IBuiltInModuleEmitter
         emitter.EmitBoxIfNeeded(arguments[0]);
 
         il.Emit(OpCodes.Call, ctx.Runtime!.FsStatAsync);
-        il.Emit(OpCodes.Call, ctx.Runtime!.WrapTaskAsPromise);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequirePromise().WrapTaskAsPromise);
 
         return true;
     }
@@ -205,7 +205,7 @@ public sealed class FsPromisesModuleEmitter : IBuiltInModuleEmitter
         if (arguments.Count == 0)
         {
             il.Emit(OpCodes.Ldstr, "path is required");
-            il.Emit(OpCodes.Call, ctx.Runtime!.TSPromiseReject);
+            il.Emit(OpCodes.Call, ctx.Runtime!.RequirePromise().TypeReject);
             return true;
         }
 
@@ -213,7 +213,7 @@ public sealed class FsPromisesModuleEmitter : IBuiltInModuleEmitter
         emitter.EmitBoxIfNeeded(arguments[0]);
 
         il.Emit(OpCodes.Call, ctx.Runtime!.FsLstatAsync);
-        il.Emit(OpCodes.Call, ctx.Runtime!.WrapTaskAsPromise);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequirePromise().WrapTaskAsPromise);
 
         return true;
     }
@@ -226,7 +226,7 @@ public sealed class FsPromisesModuleEmitter : IBuiltInModuleEmitter
         if (arguments.Count == 0)
         {
             il.Emit(OpCodes.Ldstr, "path is required");
-            il.Emit(OpCodes.Call, ctx.Runtime!.TSPromiseReject);
+            il.Emit(OpCodes.Call, ctx.Runtime!.RequirePromise().TypeReject);
             return true;
         }
 
@@ -234,7 +234,7 @@ public sealed class FsPromisesModuleEmitter : IBuiltInModuleEmitter
         emitter.EmitBoxIfNeeded(arguments[0]);
 
         il.Emit(OpCodes.Call, ctx.Runtime!.FsUnlinkAsync);
-        il.Emit(OpCodes.Call, ctx.Runtime!.WrapTaskAsPromise);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequirePromise().WrapTaskAsPromise);
 
         return true;
     }
@@ -247,7 +247,7 @@ public sealed class FsPromisesModuleEmitter : IBuiltInModuleEmitter
         if (arguments.Count == 0)
         {
             il.Emit(OpCodes.Ldstr, "path is required");
-            il.Emit(OpCodes.Call, ctx.Runtime!.TSPromiseReject);
+            il.Emit(OpCodes.Call, ctx.Runtime!.RequirePromise().TypeReject);
             return true;
         }
 
@@ -265,7 +265,7 @@ public sealed class FsPromisesModuleEmitter : IBuiltInModuleEmitter
         }
 
         il.Emit(OpCodes.Call, ctx.Runtime!.FsMkdirAsync);
-        il.Emit(OpCodes.Call, ctx.Runtime!.WrapTaskAsPromise);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequirePromise().WrapTaskAsPromise);
 
         return true;
     }
@@ -278,7 +278,7 @@ public sealed class FsPromisesModuleEmitter : IBuiltInModuleEmitter
         if (arguments.Count == 0)
         {
             il.Emit(OpCodes.Ldstr, "path is required");
-            il.Emit(OpCodes.Call, ctx.Runtime!.TSPromiseReject);
+            il.Emit(OpCodes.Call, ctx.Runtime!.RequirePromise().TypeReject);
             return true;
         }
 
@@ -296,7 +296,7 @@ public sealed class FsPromisesModuleEmitter : IBuiltInModuleEmitter
         }
 
         il.Emit(OpCodes.Call, ctx.Runtime!.FsRmdirAsync);
-        il.Emit(OpCodes.Call, ctx.Runtime!.WrapTaskAsPromise);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequirePromise().WrapTaskAsPromise);
 
         return true;
     }
@@ -309,7 +309,7 @@ public sealed class FsPromisesModuleEmitter : IBuiltInModuleEmitter
         if (arguments.Count == 0)
         {
             il.Emit(OpCodes.Ldstr, "path is required");
-            il.Emit(OpCodes.Call, ctx.Runtime!.TSPromiseReject);
+            il.Emit(OpCodes.Call, ctx.Runtime!.RequirePromise().TypeReject);
             return true;
         }
 
@@ -327,7 +327,7 @@ public sealed class FsPromisesModuleEmitter : IBuiltInModuleEmitter
         }
 
         il.Emit(OpCodes.Call, ctx.Runtime!.FsRmAsync);
-        il.Emit(OpCodes.Call, ctx.Runtime!.WrapTaskAsPromise);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequirePromise().WrapTaskAsPromise);
 
         return true;
     }
@@ -340,7 +340,7 @@ public sealed class FsPromisesModuleEmitter : IBuiltInModuleEmitter
         if (arguments.Count == 0)
         {
             il.Emit(OpCodes.Ldstr, "path is required");
-            il.Emit(OpCodes.Call, ctx.Runtime!.TSPromiseReject);
+            il.Emit(OpCodes.Call, ctx.Runtime!.RequirePromise().TypeReject);
             return true;
         }
 
@@ -358,7 +358,7 @@ public sealed class FsPromisesModuleEmitter : IBuiltInModuleEmitter
         }
 
         il.Emit(OpCodes.Call, ctx.Runtime!.FsReaddirAsync);
-        il.Emit(OpCodes.Call, ctx.Runtime!.WrapTaskAsPromise);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequirePromise().WrapTaskAsPromise);
 
         return true;
     }
@@ -371,7 +371,7 @@ public sealed class FsPromisesModuleEmitter : IBuiltInModuleEmitter
         if (arguments.Count < 2)
         {
             il.Emit(OpCodes.Ldstr, "oldPath and newPath are required");
-            il.Emit(OpCodes.Call, ctx.Runtime!.TSPromiseReject);
+            il.Emit(OpCodes.Call, ctx.Runtime!.RequirePromise().TypeReject);
             return true;
         }
 
@@ -382,7 +382,7 @@ public sealed class FsPromisesModuleEmitter : IBuiltInModuleEmitter
         emitter.EmitBoxIfNeeded(arguments[1]);
 
         il.Emit(OpCodes.Call, ctx.Runtime!.FsRenameAsync);
-        il.Emit(OpCodes.Call, ctx.Runtime!.WrapTaskAsPromise);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequirePromise().WrapTaskAsPromise);
 
         return true;
     }
@@ -395,7 +395,7 @@ public sealed class FsPromisesModuleEmitter : IBuiltInModuleEmitter
         if (arguments.Count < 2)
         {
             il.Emit(OpCodes.Ldstr, "src and dest are required");
-            il.Emit(OpCodes.Call, ctx.Runtime!.TSPromiseReject);
+            il.Emit(OpCodes.Call, ctx.Runtime!.RequirePromise().TypeReject);
             return true;
         }
 
@@ -416,7 +416,7 @@ public sealed class FsPromisesModuleEmitter : IBuiltInModuleEmitter
         }
 
         il.Emit(OpCodes.Call, ctx.Runtime!.FsCopyFileAsync);
-        il.Emit(OpCodes.Call, ctx.Runtime!.WrapTaskAsPromise);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequirePromise().WrapTaskAsPromise);
 
         return true;
     }
@@ -429,7 +429,7 @@ public sealed class FsPromisesModuleEmitter : IBuiltInModuleEmitter
         if (arguments.Count == 0)
         {
             il.Emit(OpCodes.Ldstr, "path is required");
-            il.Emit(OpCodes.Call, ctx.Runtime!.TSPromiseReject);
+            il.Emit(OpCodes.Call, ctx.Runtime!.RequirePromise().TypeReject);
             return true;
         }
 
@@ -447,7 +447,7 @@ public sealed class FsPromisesModuleEmitter : IBuiltInModuleEmitter
         }
 
         il.Emit(OpCodes.Call, ctx.Runtime!.FsAccessAsync);
-        il.Emit(OpCodes.Call, ctx.Runtime!.WrapTaskAsPromise);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequirePromise().WrapTaskAsPromise);
 
         return true;
     }
@@ -460,7 +460,7 @@ public sealed class FsPromisesModuleEmitter : IBuiltInModuleEmitter
         if (arguments.Count < 2)
         {
             il.Emit(OpCodes.Ldstr, "path and mode are required");
-            il.Emit(OpCodes.Call, ctx.Runtime!.TSPromiseReject);
+            il.Emit(OpCodes.Call, ctx.Runtime!.RequirePromise().TypeReject);
             return true;
         }
 
@@ -471,7 +471,7 @@ public sealed class FsPromisesModuleEmitter : IBuiltInModuleEmitter
         emitter.EmitBoxIfNeeded(arguments[1]);
 
         il.Emit(OpCodes.Call, ctx.Runtime!.FsChmodAsync);
-        il.Emit(OpCodes.Call, ctx.Runtime!.WrapTaskAsPromise);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequirePromise().WrapTaskAsPromise);
 
         return true;
     }
@@ -484,7 +484,7 @@ public sealed class FsPromisesModuleEmitter : IBuiltInModuleEmitter
         if (arguments.Count == 0)
         {
             il.Emit(OpCodes.Ldstr, "path is required");
-            il.Emit(OpCodes.Call, ctx.Runtime!.TSPromiseReject);
+            il.Emit(OpCodes.Call, ctx.Runtime!.RequirePromise().TypeReject);
             return true;
         }
 
@@ -502,7 +502,7 @@ public sealed class FsPromisesModuleEmitter : IBuiltInModuleEmitter
         }
 
         il.Emit(OpCodes.Call, ctx.Runtime!.FsTruncateAsync);
-        il.Emit(OpCodes.Call, ctx.Runtime!.WrapTaskAsPromise);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequirePromise().WrapTaskAsPromise);
 
         return true;
     }
@@ -515,7 +515,7 @@ public sealed class FsPromisesModuleEmitter : IBuiltInModuleEmitter
         if (arguments.Count < 3)
         {
             il.Emit(OpCodes.Ldstr, "path, atime, and mtime are required");
-            il.Emit(OpCodes.Call, ctx.Runtime!.TSPromiseReject);
+            il.Emit(OpCodes.Call, ctx.Runtime!.RequirePromise().TypeReject);
             return true;
         }
 
@@ -529,7 +529,7 @@ public sealed class FsPromisesModuleEmitter : IBuiltInModuleEmitter
         emitter.EmitBoxIfNeeded(arguments[2]);
 
         il.Emit(OpCodes.Call, ctx.Runtime!.FsUtimesAsync);
-        il.Emit(OpCodes.Call, ctx.Runtime!.WrapTaskAsPromise);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequirePromise().WrapTaskAsPromise);
 
         return true;
     }
@@ -542,7 +542,7 @@ public sealed class FsPromisesModuleEmitter : IBuiltInModuleEmitter
         if (arguments.Count == 0)
         {
             il.Emit(OpCodes.Ldstr, "path is required");
-            il.Emit(OpCodes.Call, ctx.Runtime!.TSPromiseReject);
+            il.Emit(OpCodes.Call, ctx.Runtime!.RequirePromise().TypeReject);
             return true;
         }
 
@@ -550,7 +550,7 @@ public sealed class FsPromisesModuleEmitter : IBuiltInModuleEmitter
         emitter.EmitBoxIfNeeded(arguments[0]);
 
         il.Emit(OpCodes.Call, ctx.Runtime!.FsReadlinkAsync);
-        il.Emit(OpCodes.Call, ctx.Runtime!.WrapTaskAsPromise);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequirePromise().WrapTaskAsPromise);
 
         return true;
     }
@@ -563,7 +563,7 @@ public sealed class FsPromisesModuleEmitter : IBuiltInModuleEmitter
         if (arguments.Count == 0)
         {
             il.Emit(OpCodes.Ldstr, "path is required");
-            il.Emit(OpCodes.Call, ctx.Runtime!.TSPromiseReject);
+            il.Emit(OpCodes.Call, ctx.Runtime!.RequirePromise().TypeReject);
             return true;
         }
 
@@ -571,7 +571,7 @@ public sealed class FsPromisesModuleEmitter : IBuiltInModuleEmitter
         emitter.EmitBoxIfNeeded(arguments[0]);
 
         il.Emit(OpCodes.Call, ctx.Runtime!.FsRealpathAsync);
-        il.Emit(OpCodes.Call, ctx.Runtime!.WrapTaskAsPromise);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequirePromise().WrapTaskAsPromise);
 
         return true;
     }
@@ -584,7 +584,7 @@ public sealed class FsPromisesModuleEmitter : IBuiltInModuleEmitter
         if (arguments.Count < 2)
         {
             il.Emit(OpCodes.Ldstr, "target and path are required");
-            il.Emit(OpCodes.Call, ctx.Runtime!.TSPromiseReject);
+            il.Emit(OpCodes.Call, ctx.Runtime!.RequirePromise().TypeReject);
             return true;
         }
 
@@ -605,7 +605,7 @@ public sealed class FsPromisesModuleEmitter : IBuiltInModuleEmitter
         }
 
         il.Emit(OpCodes.Call, ctx.Runtime!.FsSymlinkAsync);
-        il.Emit(OpCodes.Call, ctx.Runtime!.WrapTaskAsPromise);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequirePromise().WrapTaskAsPromise);
 
         return true;
     }
@@ -618,7 +618,7 @@ public sealed class FsPromisesModuleEmitter : IBuiltInModuleEmitter
         if (arguments.Count < 2)
         {
             il.Emit(OpCodes.Ldstr, "existingPath and newPath are required");
-            il.Emit(OpCodes.Call, ctx.Runtime!.TSPromiseReject);
+            il.Emit(OpCodes.Call, ctx.Runtime!.RequirePromise().TypeReject);
             return true;
         }
 
@@ -629,7 +629,7 @@ public sealed class FsPromisesModuleEmitter : IBuiltInModuleEmitter
         emitter.EmitBoxIfNeeded(arguments[1]);
 
         il.Emit(OpCodes.Call, ctx.Runtime!.FsLinkAsync);
-        il.Emit(OpCodes.Call, ctx.Runtime!.WrapTaskAsPromise);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequirePromise().WrapTaskAsPromise);
 
         return true;
     }
@@ -642,7 +642,7 @@ public sealed class FsPromisesModuleEmitter : IBuiltInModuleEmitter
         if (arguments.Count == 0)
         {
             il.Emit(OpCodes.Ldstr, "prefix is required");
-            il.Emit(OpCodes.Call, ctx.Runtime!.TSPromiseReject);
+            il.Emit(OpCodes.Call, ctx.Runtime!.RequirePromise().TypeReject);
             return true;
         }
 
@@ -650,7 +650,7 @@ public sealed class FsPromisesModuleEmitter : IBuiltInModuleEmitter
         emitter.EmitBoxIfNeeded(arguments[0]);
 
         il.Emit(OpCodes.Call, ctx.Runtime!.FsMkdtempAsync);
-        il.Emit(OpCodes.Call, ctx.Runtime!.WrapTaskAsPromise);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequirePromise().WrapTaskAsPromise);
 
         return true;
     }

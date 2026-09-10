@@ -279,7 +279,7 @@ public partial class RuntimeEmitter
         if (_features.UsesPromise)
         {
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.TSPromiseType);
+            il.Emit(OpCodes.Isinst, runtime.RequirePromise().Type);
             il.Emit(OpCodes.Brtrue, pdsStoreLabel);
             // The intrinsic Promise representation is Task<object?>.
             il.Emit(OpCodes.Ldarg_0);
@@ -591,7 +591,7 @@ public partial class RuntimeEmitter
         if (_features.UsesPromise)
         {
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.TSPromiseType);
+            il.Emit(OpCodes.Isinst, runtime.RequirePromise().Type);
             il.Emit(OpCodes.Brtrue, fieldsPdsStoreLabel);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Isinst, _types.TaskOfObject);

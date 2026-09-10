@@ -438,10 +438,10 @@ public partial class RuntimeEmitter
             // Promise resolving functions are callable built-ins even though
             // their optimized CLR representation is not a $TSFunction/delegate.
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.PromiseResolveCallbackType);
+            il.Emit(OpCodes.Isinst, runtime.RequirePromise().ResolveCallbackType);
             il.Emit(OpCodes.Brtrue, functionLabel);
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.PromiseRejectCallbackType);
+            il.Emit(OpCodes.Isinst, runtime.RequirePromise().RejectCallbackType);
             il.Emit(OpCodes.Brtrue, functionLabel);
         }
 
@@ -762,7 +762,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
             il.Emit(OpCodes.Bne_Un, notTaskTargetLabel);
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.TSPromiseType);
+            il.Emit(OpCodes.Isinst, runtime.RequirePromise().Type);
             il.Emit(OpCodes.Brtrue, trueLabel);
             il.MarkLabel(notTaskTargetLabel);
         }

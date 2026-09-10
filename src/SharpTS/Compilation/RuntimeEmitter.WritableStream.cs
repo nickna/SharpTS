@@ -254,11 +254,11 @@ public partial class RuntimeEmitter
         // $Promise check
         il.MarkLabel(notTaskLabel);
         il.Emit(OpCodes.Ldloc, resultLocal);
-        il.Emit(OpCodes.Isinst, runtime.TSPromiseType);
+        il.Emit(OpCodes.Isinst, runtime.RequirePromise().Type);
         il.Emit(OpCodes.Brfalse, notPromiseLabel);
         il.Emit(OpCodes.Ldloc, resultLocal);
-        il.Emit(OpCodes.Castclass, runtime.TSPromiseType);
-        il.Emit(OpCodes.Callvirt, runtime.TSPromiseGetValueAsync);
+        il.Emit(OpCodes.Castclass, runtime.RequirePromise().Type);
+        il.Emit(OpCodes.Callvirt, runtime.RequirePromise().GetValueAsync);
         il.Emit(OpCodes.Br, doneLabel);
 
         // Default: Task.FromResult(result ?? undefined)

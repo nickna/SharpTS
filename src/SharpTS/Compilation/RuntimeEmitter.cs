@@ -40,6 +40,8 @@ public partial class RuntimeEmitter
         if (_emitHosted)
             _features.UsesPromise = true;
         var runtime = new EmittedRuntime();
+        if (features.UsesPromise)
+            runtime.BeginPromiseEmission();
         if (features.UsesNet)
             runtime.BeginNetEmission();
         if (features.UsesTls)
@@ -151,7 +153,7 @@ public partial class RuntimeEmitter
         // Emit $Promise class for standalone Promise support.
         // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSPromise
         if (features.UsesPromise)
-            EmitTSPromiseClass(moduleBuilder, runtime);
+            EmitTSPromiseClass(moduleBuilder, runtime.RequirePromise());
 
         // Emit $ArrayHole singleton first — $Array methods reference
         // $ArrayHole.Instance for padding intermediate positions on sparse writes
@@ -618,6 +620,7 @@ public partial class RuntimeEmitter
         runtime.Tls?.CompleteEmission();
         runtime.Dgram?.CompleteEmission();
         runtime.Net?.CompleteEmission();
+        runtime.Promise?.CompleteEmission();
         return runtime;
     }
 }

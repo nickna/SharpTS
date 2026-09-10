@@ -7,7 +7,7 @@ public partial class RuntimeEmitter
 {
     private void DefinePromisePrototypePopulateShell(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
-        runtime.PromisePrototypePopulateMethod = typeBuilder.DefineMethod(
+        runtime.RequirePromise().PrototypePopulateMethod = typeBuilder.DefineMethod(
             "_PromisePrototypePopulate",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Void,
@@ -20,7 +20,7 @@ public partial class RuntimeEmitter
     /// receiver to <c>Task&lt;object&gt;</c> (handles raw Task and $Promise wrapper),
     /// then dispatches to the corresponding state-machine helper. Used as
     /// MethodInfo backing for the <c>$TSFunction</c> wrappers installed on
-    /// <see cref="EmittedRuntime.PromisePrototypeField"/>.
+    /// <see cref="EmittedPromiseRuntime.PrototypeField"/>.
     /// </summary>
     private void EmitPromisePrototypeHelpers(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
@@ -37,7 +37,7 @@ public partial class RuntimeEmitter
             m.DefineParameter(1, ParameterAttributes.None, "__this");
             m.DefineParameter(2, ParameterAttributes.None, "onFulfilled");
             m.DefineParameter(3, ParameterAttributes.None, "onRejected");
-            runtime.PromiseThenHelperMethod = m;
+            runtime.RequirePromise().ThenHelperMethod = m;
 
             var il = m.GetILGenerator();
             // ECMA-262 §27.2.5.4 step 2: If IsPromise(promise) is false, throw
@@ -46,7 +46,7 @@ public partial class RuntimeEmitter
             EmitThrowIfNullOrUndefined(il, runtime, "Promise.prototype.then called on null or undefined");
             var isPromiseOkLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.TSPromiseType);
+            il.Emit(OpCodes.Isinst, runtime.RequirePromise().Type);
             il.Emit(OpCodes.Brtrue, isPromiseOkLabel);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Isinst, _types.TaskOfObject);
@@ -54,16 +54,16 @@ public partial class RuntimeEmitter
             GuestErrorEmitter.ThrowTypeError(il, runtime, "Promise.prototype.then called on non-Promise");
             il.MarkLabel(isPromiseOkLabel);
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Call, runtime.ObservePromiseConstructorMethod);
+            il.Emit(OpCodes.Call, runtime.RequirePromise().ObservePromiseConstructorMethod);
             var taskLocal = il.DeclareLocal(_types.TaskOfObject);
             EmitUnwrapToTask(il, runtime, taskLocal);
             il.Emit(OpCodes.Ldloc, taskLocal);
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Ldarg_2);
-            il.Emit(OpCodes.Call, runtime.PromiseThen);
+            il.Emit(OpCodes.Call, runtime.RequirePromise().Then);
             // Promise-subclass receivers get subclass-typed results (#242).
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Call, runtime.WrapDerivedPromiseResultMethod);
+            il.Emit(OpCodes.Call, runtime.RequirePromise().WrapDerivedPromiseResultMethod);
             il.Emit(OpCodes.Ret);
         }
 
@@ -76,7 +76,7 @@ public partial class RuntimeEmitter
                 [_types.Object, _types.Object]);
             m.DefineParameter(1, ParameterAttributes.None, "__this");
             m.DefineParameter(2, ParameterAttributes.None, "onRejected");
-            runtime.PromiseCatchHelperMethod = m;
+            runtime.RequirePromise().CatchHelperMethod = m;
 
             var il = m.GetILGenerator();
             // ECMA-262 §27.2.5.1: catch(onRejected) is `this.then(undefined, onRejected)`.
@@ -98,7 +98,7 @@ public partial class RuntimeEmitter
                 [_types.Object, _types.Object]);
             m.DefineParameter(1, ParameterAttributes.None, "__this");
             m.DefineParameter(2, ParameterAttributes.None, "onFinally");
-            runtime.PromiseFinallyHelperMethod = m;
+            runtime.RequirePromise().FinallyHelperMethod = m;
 
             var il = m.GetILGenerator();
             EmitThrowIfNullOrUndefined(il, runtime, "Promise.prototype.finally called on null or undefined");
@@ -208,7 +208,7 @@ public partial class RuntimeEmitter
 
             // promise = PromiseResolve(%Promise%, result)
             il.Emit(OpCodes.Ldloc, resultLocal);
-            il.Emit(OpCodes.Call, runtime.CoerceAwaitableToTaskMethod);
+            il.Emit(OpCodes.Call, runtime.RequirePromise().CoerceAwaitableToTaskMethod);
             il.Emit(OpCodes.Stloc, promiseLocal);
 
             // thunk = new ValueThunk(valueOrReason, throws)
@@ -375,7 +375,7 @@ public partial class RuntimeEmitter
         // the user installed an own `then` descriptor on the instance, in
         // which case spec requires invoking that user-installed function.
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSPromiseType);
+        il.Emit(OpCodes.Isinst, runtime.RequirePromise().Type);
         il.Emit(OpCodes.Brfalse, notTSPromiseLabel);
         // Check PDS for own "then" — if present, user has installed it →
         // user-then path (preserves spec-compliant `Invoke(this, "then", ...)`).
@@ -385,8 +385,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, userThenPathLabel);
         // No user override → extract Task and use fast path.
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSPromiseType);
-        il.Emit(OpCodes.Callvirt, runtime.TSPromiseTaskGetter);
+        il.Emit(OpCodes.Castclass, runtime.RequirePromise().Type);
+        il.Emit(OpCodes.Callvirt, runtime.RequirePromise().TaskGetter);
         il.Emit(OpCodes.Stloc, taskLocal);
         il.Emit(OpCodes.Br, fastPathLabel);
 
@@ -407,13 +407,13 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(fastPathLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.ObservePromiseConstructorMethod);
+        il.Emit(OpCodes.Call, runtime.RequirePromise().ObservePromiseConstructorMethod);
         il.Emit(OpCodes.Ldloc, taskLocal);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, isCatch ? runtime.PromiseCatch : runtime.PromiseFinally);
+        il.Emit(OpCodes.Call, isCatch ? runtime.RequirePromise().Catch : runtime.RequirePromise().Finally);
         // Promise-subclass receivers get subclass-typed results (#242).
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.WrapDerivedPromiseResultMethod);
+        il.Emit(OpCodes.Call, runtime.RequirePromise().WrapDerivedPromiseResultMethod);
         il.Emit(OpCodes.Br, endLabel);
 
         // Branch C: user object — look up `then`, validate callable, invoke.
@@ -498,11 +498,11 @@ public partial class RuntimeEmitter
         var doneLabel = il.DefineLabel();
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSPromiseType);
+        il.Emit(OpCodes.Isinst, runtime.RequirePromise().Type);
         il.Emit(OpCodes.Brfalse, notTSPromiseLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSPromiseType);
-        il.Emit(OpCodes.Callvirt, runtime.TSPromiseTaskGetter);
+        il.Emit(OpCodes.Castclass, runtime.RequirePromise().Type);
+        il.Emit(OpCodes.Callvirt, runtime.RequirePromise().TaskGetter);
         il.Emit(OpCodes.Stloc, taskLocal);
         il.Emit(OpCodes.Br, doneLabel);
 
@@ -519,24 +519,24 @@ public partial class RuntimeEmitter
     }
 
     /// <summary>
-    /// Populates <see cref="EmittedRuntime.PromisePrototypeField"/> with
+    /// Populates <see cref="EmittedPromiseRuntime.PrototypeField"/> with
     /// <c>$TSFunction</c> wrappers for then/catch/finally + a constructor
     /// pointer to <c>typeof(Task&lt;object&gt;)</c> + non-enumerable PDS
     /// descriptors (ECMA-262 §17 spec attrs for built-in methods).
     /// </summary>
     private void EmitPromisePrototypePopulate(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
-        var method = runtime.PromisePrototypePopulateMethod;
+        var method = runtime.RequirePromise().PrototypePopulateMethod;
         var il = method.GetILGenerator();
         var setItem = _types.GetMethod(_types.DictionaryStringObject, "set_Item",
             _types.String, _types.Object);
 
-        EmitPrototypePopulateGuard(il, runtime.PromisePrototypeField);
+        EmitPrototypePopulateGuard(il, runtime.RequirePromise().PrototypeField);
 
         var descLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
 
         // Promise.prototype.constructor === Promise (= typeof(Task<object>)).
-        EmitInstallConstructor(il, runtime, runtime.PromisePrototypeField, descLocal, setItem, () =>
+        EmitInstallConstructor(il, runtime, runtime.RequirePromise().PrototypeField, descLocal, setItem, () =>
         {
             il.Emit(OpCodes.Ldtoken, _types.TaskOfObject);
             il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
@@ -546,19 +546,19 @@ public partial class RuntimeEmitter
         // take the receiver as __this (named at their emit site — nameThisParam:
         // false skips the rename).
         void Wire(string jsName, MethodBuilder helper, int jsLength)
-            => EmitWirePrototypeMethod(il, runtime, runtime.PromisePrototypeField, descLocal,
+            => EmitWirePrototypeMethod(il, runtime, runtime.RequirePromise().PrototypeField, descLocal,
                 setItem, jsName, helper, jsLength, nameThisParam: false);
 
         // ECMA-262 §27.2.5: then/catch take 2 and 1 args respectively;
         // finally takes 1 (onFinally). Spec lengths matter for length.js tests.
-        Wire("then",    runtime.PromiseThenHelperMethod,    2);
-        Wire("catch",   runtime.PromiseCatchHelperMethod,   1);
-        Wire("finally", runtime.PromiseFinallyHelperMethod, 1);
+        Wire("then",    runtime.RequirePromise().ThenHelperMethod,    2);
+        Wire("catch",   runtime.RequirePromise().CatchHelperMethod,   1);
+        Wire("finally", runtime.RequirePromise().FinallyHelperMethod, 1);
 
         // ECMA-262 §27.2.5.5: Promise.prototype[@@toStringTag] = "Promise".
         // Attributes per spec: writable:false, enumerable:false, configurable:true.
         // GetSymbolDict(PromisePrototype)[SymbolToStringTag] = "Promise".
-        il.Emit(OpCodes.Ldsfld, runtime.PromisePrototypeField);
+        il.Emit(OpCodes.Ldsfld, runtime.RequirePromise().PrototypeField);
         il.Emit(OpCodes.Call, runtime.GetSymbolDictMethod);
         il.Emit(OpCodes.Ldsfld, runtime.SymbolToStringTag);
         il.Emit(OpCodes.Ldstr, "Promise");

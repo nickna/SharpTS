@@ -416,7 +416,7 @@ public partial class AsyncGeneratorMoveNextEmitter
         var haveTaskLabel = _il.DefineLabel();
 
         _il.Emit(OpCodes.Dup);
-        _il.Emit(OpCodes.Isinst, _ctx!.Runtime!.TSPromiseType);
+        _il.Emit(OpCodes.Isinst, _ctx!.Runtime!.RequirePromise().Type);
         _il.Emit(OpCodes.Brtrue, isPromiseLabel);
 
         // Not a $Promise - check if it's a Task<object>
@@ -428,7 +428,7 @@ public partial class AsyncGeneratorMoveNextEmitter
         // non-Promise then/catch/finally species result, #349); non-thenables
         // become Task.FromResult(value).
         _il.MarkLabel(wrapValueLabel);
-        _il.Emit(OpCodes.Call, _ctx!.Runtime!.CoerceAwaitableToTaskMethod);
+        _il.Emit(OpCodes.Call, _ctx!.Runtime!.RequirePromise().CoerceAwaitableToTaskMethod);
         _il.Emit(OpCodes.Stloc, taskLocal);
         _il.Emit(OpCodes.Br, haveTaskLabel);
 
@@ -440,8 +440,8 @@ public partial class AsyncGeneratorMoveNextEmitter
 
         // Is a $Promise - extract its Task property
         _il.MarkLabel(isPromiseLabel);
-        _il.Emit(OpCodes.Castclass, _ctx.Runtime.TSPromiseType);
-        _il.Emit(OpCodes.Callvirt, _ctx.Runtime.TSPromiseTaskGetter);
+        _il.Emit(OpCodes.Castclass, _ctx.Runtime.RequirePromise().Type);
+        _il.Emit(OpCodes.Callvirt, _ctx.Runtime.RequirePromise().TaskGetter);
         _il.Emit(OpCodes.Stloc, taskLocal);
 
         _il.MarkLabel(haveTaskLabel);

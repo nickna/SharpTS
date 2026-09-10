@@ -225,7 +225,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldfld, stablePrimitiveField);
         }
-        il.Emit(OpCodes.Call, runtime.NormalizePromiseListMethod);
+        il.Emit(OpCodes.Call, runtime.RequirePromise().NormalizePromiseListMethod);
         il.Emit(OpCodes.Stfld, iterableField);
     }
 

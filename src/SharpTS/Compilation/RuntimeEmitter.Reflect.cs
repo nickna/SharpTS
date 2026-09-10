@@ -1259,7 +1259,7 @@ public partial class RuntimeEmitter
         // executor must throw before GetPrototypeFromConstructor(newTarget), so
         // a bound newTarget with an abrupt prototype getter cannot mask the
         // required TypeError (ECMA-262 Promise constructor steps 2-3).
-        if (runtime.PromiseFromExecutor is not null)
+        if (runtime.Promise is not null)
         {
             var notPromiseTypeLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
@@ -1284,7 +1284,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldloc, argsLocal);
             il.Emit(OpCodes.Ldc_I4_0);
             il.Emit(OpCodes.Ldelem_Ref);
-            il.Emit(OpCodes.Call, runtime.PromiseFromExecutor);
+            il.Emit(OpCodes.Call, runtime.RequirePromise().FromExecutor);
             il.Emit(OpCodes.Ret);
 
             il.MarkLabel(notPromiseTypeLabel);

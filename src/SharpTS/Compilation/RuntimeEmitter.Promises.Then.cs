@@ -163,14 +163,14 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, runtime.BoundArrayMethodType);
         il.Emit(OpCodes.Brtrue, attachHandler);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Isinst, runtime.PromiseResolveCallbackType);
+        il.Emit(OpCodes.Isinst, runtime.RequirePromise().ResolveCallbackType);
         il.Emit(OpCodes.Brtrue, attachHandler);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Isinst, runtime.PromiseRejectCallbackType);
+        il.Emit(OpCodes.Isinst, runtime.RequirePromise().RejectCallbackType);
         il.Emit(OpCodes.Brfalse, attachDone);
         il.MarkLabel(attachHandler);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.NotifyPromiseRejectionHandler);
+        il.Emit(OpCodes.Call, runtime.RequirePromise().NotifyPromiseRejectionHandler);
         il.MarkLabel(attachDone);
 
         // Initialize state machine: var sm = default($PromiseThen_SM);
@@ -375,11 +375,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, onFulfilledCallableLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, sm.OnFulfilledField);
-        il.Emit(OpCodes.Isinst, runtime.PromiseResolveCallbackType);
+        il.Emit(OpCodes.Isinst, runtime.RequirePromise().ResolveCallbackType);
         il.Emit(OpCodes.Brtrue, onFulfilledCallableLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, sm.OnFulfilledField);
-        il.Emit(OpCodes.Isinst, runtime.PromiseRejectCallbackType);
+        il.Emit(OpCodes.Isinst, runtime.RequirePromise().RejectCallbackType);
         il.Emit(OpCodes.Brtrue, onFulfilledCallableLabel);
         il.Emit(OpCodes.Br, noCallbackLabel);
         il.MarkLabel(onFulfilledCallableLabel);
@@ -406,7 +406,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldfld, sm.OnFulfilledField);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, sm.ValueField);
-        il.Emit(OpCodes.Call, runtime.InvokeCallback);
+        il.Emit(OpCodes.Call, runtime.RequirePromise().InvokeCallback);
         il.Emit(OpCodes.Stloc, callbackResultLocal);
 
         // Primitive values cannot be thenables. Complete the reaction directly
@@ -448,7 +448,7 @@ public partial class RuntimeEmitter
         // Task-backed native Promise (an own `then` override must win), and
         // turns an abrupt getter into a rejected task.
         il.Emit(OpCodes.Ldloc, callbackResultLocal);
-        il.Emit(OpCodes.Call, runtime.PromiseResolveValueMethod);
+        il.Emit(OpCodes.Call, runtime.RequirePromise().ResolveValueMethod);
         il.Emit(OpCodes.Callvirt, _types.TaskOfObjectGetAwaiter);
         var flattenAwaiterLocal = il.DeclareLocal(awaiterType);
         il.Emit(OpCodes.Stloc, flattenAwaiterLocal);
@@ -553,11 +553,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, onRejectedCallableLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, sm.OnRejectedField);
-        il.Emit(OpCodes.Isinst, runtime.PromiseResolveCallbackType);
+        il.Emit(OpCodes.Isinst, runtime.RequirePromise().ResolveCallbackType);
         il.Emit(OpCodes.Brtrue, onRejectedCallableLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, sm.OnRejectedField);
-        il.Emit(OpCodes.Isinst, runtime.PromiseRejectCallbackType);
+        il.Emit(OpCodes.Isinst, runtime.RequirePromise().RejectCallbackType);
         il.Emit(OpCodes.Brtrue, onRejectedCallableLabel);
         il.Emit(OpCodes.Br, noRejectCallbackLabel);
         il.MarkLabel(onRejectedCallableLabel);
@@ -585,7 +585,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldfld, sm.OnRejectedField);
         il.Emit(OpCodes.Ldloc, exceptionLocal);
         il.Emit(OpCodes.Call, runtime.WrapException);
-        il.Emit(OpCodes.Call, runtime.InvokeCallback);
+        il.Emit(OpCodes.Call, runtime.RequirePromise().InvokeCallback);
         il.Emit(OpCodes.Stloc, resultLocal);
         il.Emit(OpCodes.Leave, handlerInvokeDoneLabel);
         il.BeginCatchBlock(typeof(Exception));
@@ -605,7 +605,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, handlerExceptionLocal);
         il.Emit(OpCodes.Brtrue, rejectionHandlerNonTaskLabel);
         il.Emit(OpCodes.Ldloc, resultLocal);
-        il.Emit(OpCodes.Call, runtime.PromiseResolveValueMethod);
+        il.Emit(OpCodes.Call, runtime.RequirePromise().ResolveValueMethod);
         il.Emit(OpCodes.Stloc, rejectionTaskLocal);
         il.Emit(OpCodes.Ldloc, rejectionTaskLocal);
         il.Emit(OpCodes.Callvirt, _types.TaskOfObjectGetAwaiter);
@@ -788,7 +788,7 @@ public partial class RuntimeEmitter
             // PerformPromiseThen marks a rejected source handled when the
             // callable rejection reaction is attached, before the job runs.
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Call, runtime!.NotifyPromiseRejectionHandler);
+            il.Emit(OpCodes.Call, runtime!.RequirePromise().NotifyPromiseRejectionHandler);
         }
 
         il.Emit(OpCodes.Ldloca, smLocal);

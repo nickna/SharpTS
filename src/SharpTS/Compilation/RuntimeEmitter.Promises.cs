@@ -204,32 +204,32 @@ public partial class RuntimeEmitter
         // Static value-form methods need NewPromiseCapability before the
         // executor-support bodies are filled at the end of this emitter.
         // Predeclare the shared helper so those wrappers can reference it.
-        runtime.NewPromiseCapabilityResultMethod ??= typeBuilder.DefineMethod(
+        runtime.RequirePromise().NewPromiseCapabilityResultMethod = typeBuilder.DefineMethod(
             "NewPromiseCapabilityResult",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.Object, _types.TaskOfObject]);
-        runtime.PreparePromiseCapabilityMethod ??= typeBuilder.DefineMethod(
+        runtime.RequirePromise().PreparePromiseCapabilityMethod = typeBuilder.DefineMethod(
             "PreparePromiseCapability",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.Object]);
-        runtime.AdoptPromiseCapabilityMethod ??= typeBuilder.DefineMethod(
+        runtime.RequirePromise().AdoptPromiseCapabilityMethod = typeBuilder.DefineMethod(
             "AdoptPromiseCapability",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.Object, _types.TaskOfObject]);
-        runtime.AdoptCompletedPromiseCapabilityMethod ??= typeBuilder.DefineMethod(
+        runtime.RequirePromise().AdoptCompletedPromiseCapabilityMethod = typeBuilder.DefineMethod(
             "AdoptCompletedPromiseCapability",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.Object, _types.TaskOfObject]);
-        runtime.GetPromiseCapabilityResolveMethod ??= typeBuilder.DefineMethod(
+        runtime.RequirePromise().GetPromiseCapabilityResolveMethod = typeBuilder.DefineMethod(
             "GetPromiseCapabilityResolve",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.Object]);
-        runtime.GetPromiseCapabilityRejectMethod ??= typeBuilder.DefineMethod(
+        runtime.RequirePromise().GetPromiseCapabilityRejectMethod = typeBuilder.DefineMethod(
             "GetPromiseCapabilityReject",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
@@ -244,7 +244,7 @@ public partial class RuntimeEmitter
             taskType,
             [_types.Object]
         );
-        runtime.PromiseResolve = resolve;
+        runtime.RequirePromise().Resolve = resolve;
         {
             var il = resolve.GetILGenerator();
             var notTaskLabel = il.DefineLabel();
@@ -252,7 +252,7 @@ public partial class RuntimeEmitter
             var taskLocal = il.DeclareLocal(taskType);
             var tcsType = typeof(TaskCompletionSource<object?>);
             var tcsLocal = il.DeclareLocal(tcsType);
-            var callbackLocal = il.DeclareLocal(runtime.PromiseResolveCallbackType);
+            var callbackLocal = il.DeclareLocal(runtime.RequirePromise().ResolveCallbackType);
 
             // Check if value is already a Task<object?>
             il.Emit(OpCodes.Ldarg_0);
@@ -284,7 +284,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldloc, tcsLocal);
             il.Emit(OpCodes.Newobj, typeof(System.Runtime.CompilerServices.StrongBox<bool>)
                 .GetConstructor(Type.EmptyTypes)!);
-            il.Emit(OpCodes.Newobj, runtime.PromiseResolveCallbackCtor);
+            il.Emit(OpCodes.Newobj, runtime.RequirePromise().ResolveCallbackCtor);
             il.Emit(OpCodes.Stloc, callbackLocal);
             il.Emit(OpCodes.Ldloc, callbackLocal);
             il.Emit(OpCodes.Ldc_I4_1);
@@ -293,7 +293,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldc_I4_0);
             il.Emit(OpCodes.Ldloc, taskLocal);
             il.Emit(OpCodes.Stelem_Ref);
-            il.Emit(OpCodes.Callvirt, runtime.PromiseResolveCallbackInvoke);
+            il.Emit(OpCodes.Callvirt, runtime.RequirePromise().ResolveCallbackInvoke);
             il.Emit(OpCodes.Pop);
             il.Emit(OpCodes.Ldloc, tcsLocal);
             il.Emit(OpCodes.Callvirt, tcsType.GetProperty("Task")!.GetGetMethod()!);
@@ -304,7 +304,7 @@ public partial class RuntimeEmitter
             // it is callable.
             il.MarkLabel(notTaskLabel);
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Call, runtime.PromiseResolveValueMethod);
+            il.Emit(OpCodes.Call, runtime.RequirePromise().ResolveValueMethod);
             il.Emit(OpCodes.Ret);
         }
 
@@ -316,12 +316,12 @@ public partial class RuntimeEmitter
             taskType,
             [_types.Object]
         );
-        runtime.PromiseReject = reject;
+        runtime.RequirePromise().Reject = reject;
         {
             var il = reject.GetILGenerator();
             // Create $PromiseRejectedException from reason (preserves original value in Reason property)
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Newobj, runtime.TSPromiseRejectedExceptionCtor);
+            il.Emit(OpCodes.Newobj, runtime.RequirePromise().RejectedExceptionCtor);
             // Call Task.FromException<object?>(exception) - keep typeof() for arity-based generic lookup
             var fromException = EmitGenerics.MakeGenericMethod(typeof(Task).GetMethod("FromException", 1, [typeof(Exception)])!, _types.Object);
             il.Emit(OpCodes.Call, fromException);
@@ -341,7 +341,7 @@ public partial class RuntimeEmitter
             [_types.Object, _types.Object]);
         resolveStatic.DefineParameter(1, ParameterAttributes.None, "__this");
         resolveStatic.DefineParameter(2, ParameterAttributes.None, "value");
-        runtime.PromiseResolveStatic = resolveStatic;
+        runtime.RequirePromise().ResolveStatic = resolveStatic;
         {
             var il = resolveStatic.GetILGenerator();
             EmitPromiseStaticThisObjectCheck(il, runtime,
@@ -355,9 +355,9 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Beq, intrinsicLabel);
 
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Call, runtime.PreparePromiseCapabilityMethod);
+            il.Emit(OpCodes.Call, runtime.RequirePromise().PreparePromiseCapabilityMethod);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Call, runtime.ResolvePreparedPromiseCapabilityMethod);
+            il.Emit(OpCodes.Call, runtime.RequirePromise().ResolvePreparedPromiseCapabilityMethod);
             il.Emit(OpCodes.Ret);
 
             il.MarkLabel(intrinsicLabel);
@@ -373,7 +373,7 @@ public partial class RuntimeEmitter
             [_types.Object, _types.Object]);
         rejectStatic.DefineParameter(1, ParameterAttributes.None, "__this");
         rejectStatic.DefineParameter(2, ParameterAttributes.None, "reason");
-        runtime.PromiseRejectStatic = rejectStatic;
+        runtime.RequirePromise().RejectStatic = rejectStatic;
         {
             var il = rejectStatic.GetILGenerator();
             EmitPromiseStaticThisObjectCheck(il, runtime,
@@ -389,7 +389,7 @@ public partial class RuntimeEmitter
             _types.Object,
             Type.EmptyTypes
         );
-        runtime.PromiseWithResolvers = withResolvers;
+        runtime.RequirePromise().WithResolvers = withResolvers;
         {
             var il = withResolvers.GetILGenerator();
 
@@ -547,29 +547,20 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ret);
         }
 
-        // Predeclare the promise/thenable adoption helper. Its body is emitted
-        // later with the capability support, but combinator normalization must
-        // be able to reference it now.
-        runtime.CoerceAwaitableToTaskMethod ??= typeBuilder.DefineMethod(
-            "CoerceAwaitableToTask",
-            MethodAttributes.Public | MethodAttributes.Static,
-            _types.TaskOfObject,
-            [_types.Object]);
-
         // Reserve NormalizePromiseList before the combinators so their state
         // machines can reference it. Its body is emitted after the iterator
         // protocol helpers and $IteratorWrapper exist.
-        runtime.NormalizePromiseListMethod = typeBuilder.DefineMethod(
+        runtime.RequirePromise().NormalizePromiseListMethod = typeBuilder.DefineMethod(
             "NormalizePromiseList",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.Object, _types.Object, _types.Object, _types.Int32, _types.Boolean]);
-        runtime.AdoptPromiseCombinatorResultMethod = typeBuilder.DefineMethod(
+        runtime.RequirePromise().AdoptPromiseCombinatorResultMethod = typeBuilder.DefineMethod(
             "AdoptPromiseCombinatorResult",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.TaskOfObject,
             [_types.TaskOfObject]);
-        runtime.SettlePromiseCombinatorResultMethod = typeBuilder.DefineMethod(
+        runtime.RequirePromise().SettlePromiseCombinatorResultMethod = typeBuilder.DefineMethod(
             "SettlePromiseCombinatorResult",
             MethodAttributes.Private | MethodAttributes.Static,
             _types.Void,
@@ -583,7 +574,7 @@ public partial class RuntimeEmitter
             taskType,
             [_types.Object, _types.Object, _types.Object]
         );
-        runtime.PromiseAll = all;
+        runtime.RequirePromise().All = all;
         EmitPromiseAllWrapper(all.GetILGenerator(), promiseAllSM, runtime, stablePrimitive: false);
 
         var allPrimitive = typeBuilder.DefineMethod(
@@ -592,7 +583,7 @@ public partial class RuntimeEmitter
             taskType,
             [_types.Object, _types.Object, _types.Object]
         );
-        runtime.PromiseAllPrimitive = allPrimitive;
+        runtime.RequirePromise().AllPrimitive = allPrimitive;
         var primitiveAllSettlement = DefineCompletedPrimitivePromiseAllSettlement(
             moduleBuilder);
         EmitCompletedPrimitivePromiseAll(
@@ -609,7 +600,7 @@ public partial class RuntimeEmitter
             taskType,
             [_types.Object, _types.Object, _types.Object]
         );
-        runtime.PromiseRace = race;
+        runtime.RequirePromise().Race = race;
         EmitPromiseRaceWrapper(race.GetILGenerator(), promiseRaceSM, runtime);
         EmitPromiseRaceMoveNext(promiseRaceSM, runtime);
         promiseRaceSM.Type.CreateType();
@@ -634,7 +625,7 @@ public partial class RuntimeEmitter
             taskType,
             [_types.Object, _types.Object]
         );
-        runtime.PromiseAllSettled = allSettled;
+        runtime.RequirePromise().AllSettled = allSettled;
         EmitPromiseAllSettledWrapper(allSettled.GetILGenerator(), promiseAllSettledSM, processElementSettled, runtime);
         EmitPromiseAllSettledMoveNext(promiseAllSettledSM, processElementSettled, runtime);
         promiseAllSettledSM.Type.CreateType();
@@ -642,13 +633,13 @@ public partial class RuntimeEmitter
         // Await Dictionary proposal combinators. Their shells are declared
         // here with the other Promise statics; bodies are emitted later, once
         // own-key, descriptor, symbol, and prototype helpers are available.
-        runtime.PromiseAllKeyed = typeBuilder.DefineMethod(
+        runtime.RequirePromise().AllKeyed = typeBuilder.DefineMethod(
             "PromiseAllKeyed", MethodAttributes.Public | MethodAttributes.Static,
             taskType, [_types.Object]);
-        runtime.PromiseAllSettledKeyed = typeBuilder.DefineMethod(
+        runtime.RequirePromise().AllSettledKeyed = typeBuilder.DefineMethod(
             "PromiseAllSettledKeyed", MethodAttributes.Public | MethodAttributes.Static,
             taskType, [_types.Object]);
-        runtime.PromiseKeyedMapResult = typeBuilder.DefineMethod(
+        runtime.RequirePromise().KeyedMapResult = typeBuilder.DefineMethod(
             "PromiseKeyedMapResult", MethodAttributes.Private | MethodAttributes.Static,
             _types.Object, [taskType, _types.Object]);
 
@@ -691,7 +682,7 @@ public partial class RuntimeEmitter
             taskType,
             [_types.Object, _types.Object, _types.Object]
         );
-        runtime.PromiseAny = any;
+        runtime.RequirePromise().Any = any;
         EmitPromiseAnyWrapper(any.GetILGenerator(), promiseAnySM, runtime);
         EmitPromiseAnyMoveNext(promiseAnySM, anyState, anyElementState,
             handleAnyCompletionShim, runtime);
@@ -718,12 +709,12 @@ public partial class RuntimeEmitter
                 passCapabilityToIntrinsic: jsName is "all" or "race" or "any",
                 prepareIntrinsicCapability: jsName == "race");
         }
-        EmitAllRaceVariantStaticWrapper("PromiseAllStatic", "all", all, m => runtime.PromiseAllStatic = m);
-        EmitAllRaceVariantStaticWrapper("PromiseAllKeyedStatic", "allKeyed", runtime.PromiseAllKeyed, m => runtime.PromiseAllKeyedStatic = m);
-        EmitAllRaceVariantStaticWrapper("PromiseRaceStatic", "race", race, m => runtime.PromiseRaceStatic = m);
-        EmitAllRaceVariantStaticWrapper("PromiseAllSettledStatic", "allSettled", allSettled, m => runtime.PromiseAllSettledStatic = m);
-        EmitAllRaceVariantStaticWrapper("PromiseAllSettledKeyedStatic", "allSettledKeyed", runtime.PromiseAllSettledKeyed, m => runtime.PromiseAllSettledKeyedStatic = m);
-        EmitAllRaceVariantStaticWrapper("PromiseAnyStatic", "any", any, m => runtime.PromiseAnyStatic = m);
+        EmitAllRaceVariantStaticWrapper("PromiseAllStatic", "all", all, m => runtime.RequirePromise().AllStatic = m);
+        EmitAllRaceVariantStaticWrapper("PromiseAllKeyedStatic", "allKeyed", runtime.RequirePromise().AllKeyed, m => runtime.RequirePromise().AllKeyedStatic = m);
+        EmitAllRaceVariantStaticWrapper("PromiseRaceStatic", "race", race, m => runtime.RequirePromise().RaceStatic = m);
+        EmitAllRaceVariantStaticWrapper("PromiseAllSettledStatic", "allSettled", allSettled, m => runtime.RequirePromise().AllSettledStatic = m);
+        EmitAllRaceVariantStaticWrapper("PromiseAllSettledKeyedStatic", "allSettledKeyed", runtime.RequirePromise().AllSettledKeyed, m => runtime.RequirePromise().AllSettledKeyedStatic = m);
+        EmitAllRaceVariantStaticWrapper("PromiseAnyStatic", "any", any, m => runtime.RequirePromise().AnyStatic = m);
 
         // Callback invocation helpers must be emitted first (used by then/finally)
         EmitCallbackHelpers(typeBuilder, runtime);
@@ -737,7 +728,7 @@ public partial class RuntimeEmitter
             taskType,
             [taskType, _types.Object, _types.Object]
         );
-        runtime.PromiseThen = then;
+        runtime.RequirePromise().Then = then;
         EmitPromiseThenWrapper(then.GetILGenerator(), promiseThenSM, runtime);
         EmitPromiseThenMoveNext(promiseThenSM, runtime, promiseJobAwaiterType);
         promiseThenSM.Type.CreateType();
@@ -757,7 +748,7 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             taskType,
             [taskType, objectPrimitiveHandlerType]);
-        runtime.PromiseThenObjectPrimitive = objectPrimitiveThen;
+        runtime.RequirePromise().ThenObjectPrimitive = objectPrimitiveThen;
         EmitPrimitivePromiseThenWrapper(
             objectPrimitiveThen.GetILGenerator(), objectPrimitivePromiseThenSM);
         EmitPrimitivePromiseThenMoveNext(
@@ -784,7 +775,7 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             taskType,
             [taskType, primitiveHandlerType, primitiveRejectHandlerType]);
-        runtime.PromiseThenPrimitiveWithRejection = primitiveWithRejection;
+        runtime.RequirePromise().ThenPrimitiveWithRejection = primitiveWithRejection;
         EmitPrimitivePromiseThenWrapper(
             primitiveWithRejection.GetILGenerator(), primitiveWithRejectionSM, runtime);
         EmitPrimitivePromiseThenWithRejectionMoveNext(
@@ -823,7 +814,7 @@ public partial class RuntimeEmitter
             taskType,
             [taskType, typeof(Func<double, double>)]
         );
-        runtime.PromiseThenPrimitive = primitiveThen;
+        runtime.RequirePromise().ThenPrimitive = primitiveThen;
         EmitPrimitivePromiseChainAppend(
             primitiveThen.GetILGenerator(),
             primitiveChain,
@@ -840,7 +831,7 @@ public partial class RuntimeEmitter
             taskType,
             [taskType, _types.Object]
         );
-        runtime.PromiseCatch = catchMethod;
+        runtime.RequirePromise().Catch = catchMethod;
         {
             var il = catchMethod.GetILGenerator();
             il.Emit(OpCodes.Ldarg_0);  // task
@@ -859,7 +850,7 @@ public partial class RuntimeEmitter
             taskType,
             [taskType, _types.Object]
         );
-        runtime.PromiseFinally = finallyMethod;
+        runtime.RequirePromise().Finally = finallyMethod;
         EmitPromiseFinallyWrapper(finallyMethod.GetILGenerator(), promiseFinallySM);
         EmitPromiseFinallyMoveNext(
             promiseFinallySM, runtime, promiseJobAwaiterType);
@@ -885,7 +876,7 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             _types.TaskOfObject,
             [_types.TaskOfObject]);
-        runtime.TrackTopLevelPromiseReaction = method;
+        runtime.RequirePromise().TrackTopLevelPromiseReaction = method;
 
         var il = method.GetILGenerator();
         var done = il.DefineLabel();
@@ -1002,7 +993,7 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(customConstructorLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.PreparePromiseCapabilityMethod);
+        il.Emit(OpCodes.Call, runtime.RequirePromise().PreparePromiseCapabilityMethod);
         il.Emit(OpCodes.Stloc, capabilityLocal);
 
         il.MarkLabel(invokeIntrinsicLabel);
@@ -1019,7 +1010,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, returnIntrinsicLabel);
         il.Emit(OpCodes.Ldloc, capabilityLocal);
         il.Emit(OpCodes.Ldloc, taskLocal);
-        il.Emit(OpCodes.Call, runtime.AdoptCompletedPromiseCapabilityMethod);
+        il.Emit(OpCodes.Call, runtime.RequirePromise().AdoptCompletedPromiseCapabilityMethod);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(returnIntrinsicLabel);
@@ -1041,7 +1032,7 @@ public partial class RuntimeEmitter
             typeof(object),
             [typeof(object), typeof(object)]
         );
-        runtime.InvokeCallback = invokeCallback;
+        runtime.RequirePromise().InvokeCallback = invokeCallback;
         {
             var il = invokeCallback.GetILGenerator();
             var nullLabel = il.DefineLabel();
@@ -1120,7 +1111,7 @@ public partial class RuntimeEmitter
             typeof(object),
             [typeof(object)]
         );
-        runtime.InvokeCallbackNoArgs = invokeCallbackNoArgs;
+        runtime.RequirePromise().InvokeCallbackNoArgs = invokeCallbackNoArgs;
         {
             var il = invokeCallbackNoArgs.GetILGenerator();
             var nullLabel = il.DefineLabel();

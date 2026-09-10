@@ -2469,14 +2469,14 @@ public abstract partial class ExpressionEmitterBase
 
             if (TryEmitArrowAsDelegate(objectHandler, typeof(Func<object, object>)))
             {
-                IL.Emit(OpCodes.Call, Ctx.Runtime!.PromiseThenObjectPrimitive);
+                IL.Emit(OpCodes.Call, Ctx.Runtime!.RequirePromise().ThenObjectPrimitive);
             }
             else
             {
                 EmitExpression(objectHandler);
                 EnsureBoxed();
                 IL.Emit(OpCodes.Ldnull);
-                IL.Emit(OpCodes.Call, Ctx.Runtime!.PromiseThen);
+                IL.Emit(OpCodes.Call, Ctx.Runtime!.RequirePromise().Then);
             }
             SetStackUnknown();
             return;
@@ -2531,13 +2531,13 @@ public abstract partial class ExpressionEmitterBase
                 {
                     IL.Emit(OpCodes.Ldloc, fulfilledLocal);
                     IL.Emit(OpCodes.Ldloc, rejectedLocal);
-                    IL.Emit(OpCodes.Call, Ctx.Runtime!.PromiseThenPrimitiveWithRejection);
+                    IL.Emit(OpCodes.Call, Ctx.Runtime!.RequirePromise().ThenPrimitiveWithRejection);
                 }
                 else
                 {
                     EmitBoxedArgOrNull(arguments, 0);
                     EmitBoxedArgOrNull(arguments, 1);
-                    IL.Emit(OpCodes.Call, Ctx.Runtime!.PromiseThen);
+                    IL.Emit(OpCodes.Call, Ctx.Runtime!.RequirePromise().Then);
                 }
             }
             else if (arguments is [Expr.ArrowFunction handler])
@@ -2545,13 +2545,13 @@ public abstract partial class ExpressionEmitterBase
                 IL.Emit(OpCodes.Ldloc, promiseLocal);
                 if (TryEmitArrowAsDelegate(handler, typeof(Func<double, double>)))
                 {
-                    IL.Emit(OpCodes.Call, Ctx.Runtime!.PromiseThenPrimitive);
+                    IL.Emit(OpCodes.Call, Ctx.Runtime!.RequirePromise().ThenPrimitive);
                 }
                 else
                 {
                     EmitBoxedArgOrNull(arguments, 0);
                     IL.Emit(OpCodes.Ldnull);
-                    IL.Emit(OpCodes.Call, Ctx.Runtime!.PromiseThen);
+                    IL.Emit(OpCodes.Call, Ctx.Runtime!.RequirePromise().Then);
                 }
             }
             else
@@ -2562,7 +2562,7 @@ public abstract partial class ExpressionEmitterBase
                 IL.Emit(OpCodes.Ldloc, promiseLocal);
                 EmitBoxedArgOrNull(arguments, 0);
                 EmitBoxedArgOrNull(arguments, 1);
-                IL.Emit(OpCodes.Call, Ctx.Runtime!.PromiseThen);
+                IL.Emit(OpCodes.Call, Ctx.Runtime!.RequirePromise().Then);
             }
             SetStackUnknown();
             return;
@@ -2585,8 +2585,8 @@ public abstract partial class ExpressionEmitterBase
             IL.Emit(OpCodes.Ldloc, promiseReceiverLocal);
             EmitBoxedArgOrNull(arguments, 0);
             IL.Emit(OpCodes.Call, methodName == "catch"
-                ? Ctx.Runtime!.PromiseCatchHelperMethod
-                : Ctx.Runtime!.PromiseFinallyHelperMethod);
+                ? Ctx.Runtime!.RequirePromise().CatchHelperMethod
+                : Ctx.Runtime!.RequirePromise().FinallyHelperMethod);
             SetStackUnknown();
             return;
         }
@@ -2601,18 +2601,18 @@ public abstract partial class ExpressionEmitterBase
                 EmitBoxedArgOrNull(arguments, 1);
                 IL.Emit(OpCodes.Stloc, onRejectedLocal);
                 IL.Emit(OpCodes.Ldloc, promiseReceiverLocal);
-                IL.Emit(OpCodes.Call, Ctx.Runtime!.ObservePromiseConstructorMethod);
+                IL.Emit(OpCodes.Call, Ctx.Runtime!.RequirePromise().ObservePromiseConstructorMethod);
                 IL.Emit(OpCodes.Ldloc, promiseReceiverLocal);
-                IL.Emit(OpCodes.Call, Ctx.Runtime!.UnwrapPromiseReceiverMethod);
+                IL.Emit(OpCodes.Call, Ctx.Runtime!.RequirePromise().UnwrapPromiseReceiverMethod);
                 IL.Emit(OpCodes.Ldloc, onFulfilledLocal);
                 IL.Emit(OpCodes.Ldloc, onRejectedLocal);
-                IL.Emit(OpCodes.Call, Ctx.Runtime!.PromiseThen);
+                IL.Emit(OpCodes.Call, Ctx.Runtime!.RequirePromise().Then);
                 break;
         }
 
         // Subclass receivers get subclass-typed results (species-lite, #242).
         IL.Emit(OpCodes.Ldloc, promiseReceiverLocal);
-        IL.Emit(OpCodes.Call, Ctx.Runtime!.WrapDerivedPromiseResultMethod);
+        IL.Emit(OpCodes.Call, Ctx.Runtime!.RequirePromise().WrapDerivedPromiseResultMethod);
         SetStackUnknown();
     }
 

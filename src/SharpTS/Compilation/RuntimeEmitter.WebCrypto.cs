@@ -476,7 +476,7 @@ public partial class RuntimeEmitter
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Call, fromResult);
-        il.Emit(OpCodes.Newobj, runtime.TSPromiseCtor);
+        il.Emit(OpCodes.Newobj, runtime.RequirePromise().Ctor);
         il.Emit(OpCodes.Ret);
 
         // object WcRejected(Exception ex) — new $Promise(Task.FromException(ex)).
@@ -488,7 +488,7 @@ public partial class RuntimeEmitter
             .GetMethod("FromException", 1, [typeof(Exception)])!, _types.Object);
         ril.Emit(OpCodes.Ldarg_0);
         ril.Emit(OpCodes.Call, fromException);
-        ril.Emit(OpCodes.Newobj, runtime.TSPromiseCtor);
+        ril.Emit(OpCodes.Newobj, runtime.RequirePromise().Ctor);
         ril.Emit(OpCodes.Ret);
     }
 

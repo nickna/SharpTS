@@ -740,13 +740,13 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Call, _ctx.Runtime!.DynamicImportModule);
 
         // Wrap Task<object?> in SharpTSPromise
-        EmitCallUnknown(_ctx.Runtime!.WrapTaskAsPromise);
+        EmitCallUnknown(_ctx.Runtime!.RequirePromise().WrapTaskAsPromise);
 
         // A bare import() expression returns an ordinary Promise. Do not let
         // the standalone entry point's top-level auto-await convenience turn
         // an intentionally ignored rejection into an uncaught program error.
         IL.Emit(OpCodes.Dup);
-        IL.Emit(OpCodes.Call, _ctx.Runtime!.MarkNonAutoAwaitPromiseMethod);
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.RequirePromise().MarkNonAutoAwaitPromiseMethod);
     }
 
     /// <summary>

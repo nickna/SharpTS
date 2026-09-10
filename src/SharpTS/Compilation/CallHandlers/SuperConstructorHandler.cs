@@ -53,7 +53,7 @@ public class SuperConstructorHandler : ICallHandler
         // Built-in Promise (#242): run the executor through
         // PromiseFromExecutor and chain the resulting Task<object?> to
         // $Promise's constructor.
-        if (ctx.CurrentSuperclassName == "Promise" && ctx.Runtime?.TSPromiseCtor != null)
+        if (ctx.CurrentSuperclassName == "Promise" && ctx.Runtime?.Promise is not null)
         {
             EmitSuperPromiseCtorCall(emitter, call.Arguments);
             return true;
@@ -246,8 +246,8 @@ public class SuperConstructorHandler : ICallHandler
         {
             il.Emit(OpCodes.Ldnull);
         }
-        il.Emit(OpCodes.Call, ctx.Runtime!.PromiseFromExecutor);
-        il.Emit(OpCodes.Call, ctx.Runtime!.TSPromiseCtor);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequirePromise().FromExecutor);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequirePromise().Ctor);
 
         il.Emit(OpCodes.Ldnull); // super() returns undefined
         emitter.SetStackUnknown();

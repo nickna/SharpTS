@@ -168,8 +168,8 @@ public partial class ILCompiler
             // `constructor(executor) { super(executor) }`.
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_1); // executor (object?)
-            il.Emit(OpCodes.Call, _runtime.PromiseFromExecutor);
-            il.Emit(OpCodes.Call, _runtime.TSPromiseCtor);
+            il.Emit(OpCodes.Call, _runtime.RequirePromise().FromExecutor);
+            il.Emit(OpCodes.Call, _runtime.RequirePromise().Ctor);
         }
         else if (constructor == null && qualifiedSuperclass != null && isErrorSubclass)
         {
