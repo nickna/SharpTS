@@ -189,7 +189,7 @@ public partial class ILCompiler
             // promise object representation (wraps Task<object?>) — await,
             // then/catch/finally, and instanceof Promise apply to instances
             // unchanged.
-            baseType = _runtime.TSPromiseType;
+            baseType = _runtime.RequirePromise().Type;
         }
         else if (qualifiedSuperclassName != null && classStmt.SuperclassExpr != null
             && Expr.GetSuperclassLeafName(classStmt.SuperclassExpr) is

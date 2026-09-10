@@ -25,26 +25,15 @@ public partial class RuntimeEmitter
     private void EmitPromiseExecutorSupport(TypeBuilder runtimeType, EmittedRuntime runtime, ModuleBuilder moduleBuilder)
     {
         // Emit the PromiseFromExecutor method
-        EmitPromiseFromExecutorMethod(runtimeType, runtime, runtime.PromiseResolveCallbackType, runtime.PromiseRejectCallbackType);
+        EmitPromiseFromExecutorMethod(runtimeType, runtime, runtime.RequirePromise().ResolveCallbackType, runtime.RequirePromise().RejectCallbackType);
         EmitPromiseFromDirectExecutorMethod(runtimeType, runtime,
-            runtime.PromiseResolveCallbackType, runtime.PromiseRejectCallbackType);
+            runtime.RequirePromise().ResolveCallbackType, runtime.RequirePromise().RejectCallbackType);
 
         // Promise-subclass support (#242): receiver unwrapping + derived-result wrapping
         EmitUnwrapPromiseReceiverMethod(runtimeType, runtime);
 
-        // Pre-declare the general NewPromiseCapability helper (#349) so
-        // WrapDerivedPromiseResult can call it; the body and the $PromiseCapability
-        // type are emitted later (EmitPromiseCapabilitySupport, after
-        // ConstructDynamicValue) when all of its dependencies are available. The
-        // species is typed `object` (not `Type`): a class species arrives as a Type
-        // token, but a function-valued species or a non-constructor arrives as its
-        // raw value, and ConstructDynamicValue dispatches all three (Type →
-        // Activator, function → NewOnFunction, non-constructor → TypeError, #390).
-        runtime.NewPromiseCapabilityResultMethod ??= runtimeType.DefineMethod(
-            "NewPromiseCapabilityResult",
-            MethodAttributes.Public | MethodAttributes.Static,
-            _types.Object,
-            [_types.Object, _types.TaskOfObject]);
+        // NewPromiseCapabilityResult was declared by EmitPromiseMethods. Its body
+        // is filled by EmitPromiseCapabilitySupport after ConstructDynamicValue.
 
         EmitObservePromiseConstructorMethod(runtimeType, runtime);
         EmitWrapDerivedPromiseResultMethod(runtimeType, runtime);
@@ -64,7 +53,7 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Void,
             [_types.Object]);
-        runtime.ObservePromiseConstructorMethod = method;
+        runtime.RequirePromise().ObservePromiseConstructorMethod = method;
 
         var il = method.GetILGenerator();
         var getterLocal = il.DeclareLocal(_types.Object);
@@ -119,8 +108,8 @@ public partial class RuntimeEmitter
             var thenIl = invokeThenMethod.GetILGenerator();
             var tcsLocal = thenIl.DeclareLocal(_types.TaskCompletionSourceOfObject);
             var settledLocal = thenIl.DeclareLocal(_types.Object);
-            var resolveLocal = thenIl.DeclareLocal(runtime.PromiseResolveCallbackType);
-            var rejectLocal = thenIl.DeclareLocal(runtime.PromiseRejectCallbackType);
+            var resolveLocal = thenIl.DeclareLocal(runtime.RequirePromise().ResolveCallbackType);
+            var rejectLocal = thenIl.DeclareLocal(runtime.RequirePromise().RejectCallbackType);
 
             thenIl.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(
                 _types.TaskCompletionSourceOfObject));
@@ -133,12 +122,12 @@ public partial class RuntimeEmitter
 
             thenIl.Emit(OpCodes.Ldloc, tcsLocal);
             thenIl.Emit(OpCodes.Ldloc, settledLocal);
-            thenIl.Emit(OpCodes.Newobj, runtime.PromiseResolveCallbackCtor);
+            thenIl.Emit(OpCodes.Newobj, runtime.RequirePromise().ResolveCallbackCtor);
             thenIl.Emit(OpCodes.Stloc, resolveLocal);
 
             thenIl.Emit(OpCodes.Ldloc, tcsLocal);
             thenIl.Emit(OpCodes.Ldloc, settledLocal);
-            thenIl.Emit(OpCodes.Newobj, runtime.PromiseRejectCallbackCtor);
+            thenIl.Emit(OpCodes.Newobj, runtime.RequirePromise().RejectCallbackCtor);
             thenIl.Emit(OpCodes.Stloc, rejectLocal);
 
             thenIl.Emit(OpCodes.Ldarg_0);
@@ -240,7 +229,7 @@ public partial class RuntimeEmitter
             closeIl.Emit(OpCodes.Throw);
         }
 
-        var method = runtime.NormalizePromiseListMethod;
+        var method = runtime.RequirePromise().NormalizePromiseListMethod;
 
         var il = method.GetILGenerator();
         var listType = _types.ListOfObject;
@@ -286,7 +275,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, _types.GetMethod(
             _types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
         il.Emit(OpCodes.Beq, resolveCaptureDoneLabel);
-        il.Emit(OpCodes.Ldtoken, runtime.TSPromiseType);
+        il.Emit(OpCodes.Ldtoken, runtime.RequirePromise().Type);
         il.Emit(OpCodes.Call, _types.GetMethod(
             _types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
         il.Emit(OpCodes.Ldloc, constructorTypeLocal);
@@ -397,7 +386,7 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(fastTaskScanTSPromiseLabel);
         il.Emit(OpCodes.Ldloc, elementLocal);
-        il.Emit(OpCodes.Isinst, runtime.TSPromiseType);
+        il.Emit(OpCodes.Isinst, runtime.RequirePromise().Type);
         il.Emit(OpCodes.Stloc, resolvedElementLocal);
         il.Emit(OpCodes.Ldloc, resolvedElementLocal);
         il.Emit(OpCodes.Brfalse, ordinaryListNormalizationLabel);
@@ -410,8 +399,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, ordinaryListNormalizationLabel);
         il.MarkLabel(stableTSPromiseTaskLabel);
         il.Emit(OpCodes.Ldloc, resolvedElementLocal);
-        il.Emit(OpCodes.Castclass, runtime.TSPromiseType);
-        il.Emit(OpCodes.Callvirt, runtime.TSPromiseTaskGetter);
+        il.Emit(OpCodes.Castclass, runtime.RequirePromise().Type);
+        il.Emit(OpCodes.Callvirt, runtime.RequirePromise().TaskGetter);
         il.Emit(OpCodes.Stloc, resolvedElementLocal);
 
         il.MarkLabel(fastTaskScanStoreLabel);
@@ -630,10 +619,10 @@ public partial class RuntimeEmitter
             targetIl.Emit(OpCodes.Isinst, _types.TaskOfObject);
             targetIl.Emit(OpCodes.Brtrue, capabilityResolutionReadyLabel);
             targetIl.Emit(OpCodes.Ldloc, resolvedElementLocal);
-            targetIl.Emit(OpCodes.Isinst, runtime.TSPromiseType);
+            targetIl.Emit(OpCodes.Isinst, runtime.RequirePromise().Type);
             targetIl.Emit(OpCodes.Brtrue, capabilityResolutionReadyLabel);
             targetIl.Emit(OpCodes.Ldloc, resolvedElementLocal);
-            targetIl.Emit(OpCodes.Call, runtime.PromiseResolveValueMethod);
+            targetIl.Emit(OpCodes.Call, runtime.RequirePromise().ResolveValueMethod);
             targetIl.Emit(OpCodes.Stloc, resolvedElementLocal);
             targetIl.MarkLabel(capabilityResolutionReadyLabel);
 
@@ -669,7 +658,7 @@ public partial class RuntimeEmitter
             targetIl.Emit(OpCodes.Ldloc, resolvedElementLocal);
             targetIl.Emit(OpCodes.Ldloc, thenFunctionLocal);
             targetIl.Emit(OpCodes.Ldarg_2);
-            targetIl.Emit(OpCodes.Call, runtime.GetPromiseCapabilityResolveMethod);
+            targetIl.Emit(OpCodes.Call, runtime.RequirePromise().GetPromiseCapabilityResolveMethod);
             targetIl.Emit(OpCodes.Ldnull);
             targetIl.Emit(OpCodes.Call, invokeThenMethod);
             targetIl.Emit(OpCodes.Br, normalizedLabel);
@@ -701,7 +690,7 @@ public partial class RuntimeEmitter
             targetIl.Emit(OpCodes.Ldloc, thenFunctionLocal);
             targetIl.Emit(OpCodes.Ldnull);
             targetIl.Emit(OpCodes.Ldarg_2);
-            targetIl.Emit(OpCodes.Call, runtime.GetPromiseCapabilityRejectMethod);
+            targetIl.Emit(OpCodes.Call, runtime.RequirePromise().GetPromiseCapabilityRejectMethod);
             targetIl.Emit(OpCodes.Call, invokeThenMethod);
             targetIl.Emit(OpCodes.Br, normalizedLabel);
 
@@ -728,12 +717,12 @@ public partial class RuntimeEmitter
             targetIl.Emit(OpCodes.Dup);
             targetIl.Emit(OpCodes.Ldc_I4_0);
             targetIl.Emit(OpCodes.Ldarg_2);
-            targetIl.Emit(OpCodes.Call, runtime.GetPromiseCapabilityResolveMethod);
+            targetIl.Emit(OpCodes.Call, runtime.RequirePromise().GetPromiseCapabilityResolveMethod);
             targetIl.Emit(OpCodes.Stelem_Ref);
             targetIl.Emit(OpCodes.Dup);
             targetIl.Emit(OpCodes.Ldc_I4_1);
             targetIl.Emit(OpCodes.Ldarg_2);
-            targetIl.Emit(OpCodes.Call, runtime.GetPromiseCapabilityRejectMethod);
+            targetIl.Emit(OpCodes.Call, runtime.RequirePromise().GetPromiseCapabilityRejectMethod);
             targetIl.Emit(OpCodes.Stelem_Ref);
             targetIl.Emit(OpCodes.Call, runtime.InvokeMethodValue);
             targetIl.Emit(OpCodes.Pop);
@@ -774,7 +763,7 @@ public partial class RuntimeEmitter
 
             targetIl.MarkLabel(checkNativePromiseObjectLabel);
             targetIl.Emit(OpCodes.Ldloc, resolvedElementLocal);
-            targetIl.Emit(OpCodes.Isinst, runtime.TSPromiseType);
+            targetIl.Emit(OpCodes.Isinst, runtime.RequirePromise().Type);
             targetIl.Emit(OpCodes.Brfalse, ordinaryResolutionLabel);
             targetIl.Emit(OpCodes.Ldloc, resolvedElementLocal);
             targetIl.Emit(OpCodes.Ldstr, "then");
@@ -788,11 +777,11 @@ public partial class RuntimeEmitter
             targetIl.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
             targetIl.Emit(OpCodes.Brfalse, useOrdinaryCoercionLabel);
             targetIl.Emit(OpCodes.Ldloc, resolvedElementLocal);
-            targetIl.Emit(OpCodes.Call, runtime.PromiseResolveValueMethod);
+            targetIl.Emit(OpCodes.Call, runtime.RequirePromise().ResolveValueMethod);
             targetIl.Emit(OpCodes.Br, normalizedLabel);
             targetIl.MarkLabel(useOrdinaryCoercionLabel);
             targetIl.Emit(OpCodes.Ldloc, resolvedElementLocal);
-            targetIl.Emit(OpCodes.Call, runtime.CoerceAwaitableToTaskMethod);
+            targetIl.Emit(OpCodes.Call, runtime.RequirePromise().CoerceAwaitableToTaskMethod);
             targetIl.Emit(OpCodes.Br, normalizedLabel);
 
             targetIl.MarkLabel(invokeObservableThenLabel);
@@ -828,7 +817,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitPromiseCombinatorResultAdoption(EmittedRuntime runtime)
     {
-        var settle = runtime.SettlePromiseCombinatorResultMethod;
+        var settle = runtime.RequirePromise().SettlePromiseCombinatorResultMethod;
         {
             var il = settle.GetILGenerator();
             var callbacksLocal = il.DeclareLocal(_types.ObjectArray);
@@ -877,14 +866,14 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldloc, callbacksLocal);
             il.Emit(OpCodes.Ldc_I4_1);
             il.Emit(OpCodes.Ldelem_Ref);
-            il.Emit(OpCodes.Castclass, runtime.PromiseRejectCallbackType);
+            il.Emit(OpCodes.Castclass, runtime.RequirePromise().RejectCallbackType);
             il.Emit(OpCodes.Ldc_I4_1);
             il.Emit(OpCodes.Newarr, _types.Object);
             il.Emit(OpCodes.Dup);
             il.Emit(OpCodes.Ldc_I4_0);
             il.Emit(OpCodes.Ldloc, reasonLocal);
             il.Emit(OpCodes.Stelem_Ref);
-            il.Emit(OpCodes.Callvirt, runtime.PromiseRejectCallbackInvoke);
+            il.Emit(OpCodes.Callvirt, runtime.RequirePromise().RejectCallbackInvoke);
             il.Emit(OpCodes.Pop);
             il.Emit(OpCodes.Br, doneLabel);
 
@@ -892,7 +881,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldloc, callbacksLocal);
             il.Emit(OpCodes.Ldc_I4_0);
             il.Emit(OpCodes.Ldelem_Ref);
-            il.Emit(OpCodes.Castclass, runtime.PromiseResolveCallbackType);
+            il.Emit(OpCodes.Castclass, runtime.RequirePromise().ResolveCallbackType);
             il.Emit(OpCodes.Ldc_I4_1);
             il.Emit(OpCodes.Newarr, _types.Object);
             il.Emit(OpCodes.Dup);
@@ -901,20 +890,20 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Callvirt, _types.GetProperty(
                 _types.TaskOfObject, "Result").GetGetMethod()!);
             il.Emit(OpCodes.Stelem_Ref);
-            il.Emit(OpCodes.Callvirt, runtime.PromiseResolveCallbackInvoke);
+            il.Emit(OpCodes.Callvirt, runtime.RequirePromise().ResolveCallbackInvoke);
             il.Emit(OpCodes.Pop);
 
             il.MarkLabel(doneLabel);
             il.Emit(OpCodes.Ret);
         }
 
-        var adopt = runtime.AdoptPromiseCombinatorResultMethod;
+        var adopt = runtime.RequirePromise().AdoptPromiseCombinatorResultMethod;
         {
             var il = adopt.GetILGenerator();
             var tcsLocal = il.DeclareLocal(_types.TaskCompletionSourceOfObject);
             var settledLocal = il.DeclareLocal(_types.Object);
-            var resolveLocal = il.DeclareLocal(runtime.PromiseResolveCallbackType);
-            var rejectLocal = il.DeclareLocal(runtime.PromiseRejectCallbackType);
+            var resolveLocal = il.DeclareLocal(runtime.RequirePromise().ResolveCallbackType);
+            var rejectLocal = il.DeclareLocal(runtime.RequirePromise().RejectCallbackType);
             var callbacksLocal = il.DeclareLocal(_types.ObjectArray);
             var scheduleLabel = il.DefineLabel();
             var doneLabel = il.DefineLabel();
@@ -936,11 +925,11 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Stloc, settledLocal);
             il.Emit(OpCodes.Ldloc, tcsLocal);
             il.Emit(OpCodes.Ldloc, settledLocal);
-            il.Emit(OpCodes.Newobj, runtime.PromiseResolveCallbackCtor);
+            il.Emit(OpCodes.Newobj, runtime.RequirePromise().ResolveCallbackCtor);
             il.Emit(OpCodes.Stloc, resolveLocal);
             il.Emit(OpCodes.Ldloc, tcsLocal);
             il.Emit(OpCodes.Ldloc, settledLocal);
-            il.Emit(OpCodes.Newobj, runtime.PromiseRejectCallbackCtor);
+            il.Emit(OpCodes.Newobj, runtime.RequirePromise().RejectCallbackCtor);
             il.Emit(OpCodes.Stloc, rejectLocal);
 
             il.Emit(OpCodes.Ldc_I4_2);
@@ -1008,17 +997,17 @@ public partial class RuntimeEmitter
             _types.TaskOfObject,
             [_types.Object]
         );
-        runtime.UnwrapPromiseReceiverMethod = method;
+        runtime.RequirePromise().UnwrapPromiseReceiverMethod = method;
 
         var il = method.GetILGenerator();
         var notPromiseObjLabel = il.DefineLabel();
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSPromiseType);
+        il.Emit(OpCodes.Isinst, runtime.RequirePromise().Type);
         il.Emit(OpCodes.Brfalse, notPromiseObjLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSPromiseType);
-        il.Emit(OpCodes.Callvirt, runtime.TSPromiseTaskGetter);
+        il.Emit(OpCodes.Castclass, runtime.RequirePromise().Type);
+        il.Emit(OpCodes.Callvirt, runtime.RequirePromise().TaskGetter);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(notPromiseObjLabel);
@@ -1052,7 +1041,7 @@ public partial class RuntimeEmitter
     /// the two (SymbolRegistryKey/CloseSymbolAccessor) and a species naming a
     /// generic subclass is closed via SymbolClosedOwner before construction.
     /// A species that is NOT a $Promise subclass (a general guest constructor)
-    /// is routed to <see cref="EmittedRuntime.NewPromiseCapabilityResultMethod"/>
+    /// is routed to <see cref="EmittedPromiseRuntime.NewPromiseCapabilityResultMethod"/>
     /// (#349): the (object)→PromiseFromExecutor task-adoption path below only
     /// works for $Promise subclasses, so a general class is constructed with a
     /// real capturing executor and the result task adopted into its capability.
@@ -1065,7 +1054,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.TaskOfObject, _types.Object]
         );
-        runtime.WrapDerivedPromiseResultMethod = method;
+        runtime.RequirePromise().WrapDerivedPromiseResultMethod = method;
 
         var il = method.GetILGenerator();
         var returnResultLabel = il.DefineLabel();
@@ -1084,7 +1073,7 @@ public partial class RuntimeEmitter
 
         // if (receiver is not $Promise) return result;
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, runtime.TSPromiseType);
+        il.Emit(OpCodes.Isinst, runtime.RequirePromise().Type);
         il.Emit(OpCodes.Brfalse, returnResultLabel);
 
         // var recvType = receiver.GetType();
@@ -1093,7 +1082,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, typeLocal);
         // if (recvType == typeof($Promise)) return result;
         il.Emit(OpCodes.Ldloc, typeLocal);
-        il.Emit(OpCodes.Ldtoken, runtime.TSPromiseType);
+        il.Emit(OpCodes.Ldtoken, runtime.RequirePromise().Type);
         il.Emit(OpCodes.Call, getTypeFromHandle);
         il.Emit(OpCodes.Beq, returnResultLabel);
 
@@ -1228,14 +1217,14 @@ public partial class RuntimeEmitter
         // if (!typeof($Promise).IsAssignableFrom(speciesType))
         //     return NewPromiseCapabilityResult(speciesType, result);
         var promiseSubclassLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldtoken, runtime.TSPromiseType);
+        il.Emit(OpCodes.Ldtoken, runtime.RequirePromise().Type);
         il.Emit(OpCodes.Call, getTypeFromHandle);
         il.Emit(OpCodes.Ldloc, speciesTypeLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "IsAssignableFrom", _types.Type));
         il.Emit(OpCodes.Brtrue, promiseSubclassLabel);
         il.Emit(OpCodes.Ldloc, speciesTypeLocal);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.NewPromiseCapabilityResultMethod);
+        il.Emit(OpCodes.Call, runtime.RequirePromise().NewPromiseCapabilityResultMethod);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(promiseSubclassLabel);
 
@@ -1273,7 +1262,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(generalFromValueLabel);
         il.Emit(OpCodes.Ldloc, speciesValLocal);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.NewPromiseCapabilityResultMethod);
+        il.Emit(OpCodes.Call, runtime.RequirePromise().NewPromiseCapabilityResultMethod);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(returnResultLabel);
@@ -1520,11 +1509,11 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Isinst, _types.TaskOfObject);
             il.Emit(OpCodes.Brfalse, resolveOrdinaryValueLabel);
             il.Emit(OpCodes.Ldloc, valueLocal);
-            il.Emit(OpCodes.Call, runtime.CoerceAwaitableToTaskMethod);
+            il.Emit(OpCodes.Call, runtime.RequirePromise().CoerceAwaitableToTaskMethod);
             il.Emit(OpCodes.Br, haveAdoptedTaskLabel);
             il.MarkLabel(resolveOrdinaryValueLabel);
             il.Emit(OpCodes.Ldloc, valueLocal);
-            il.Emit(OpCodes.Call, runtime.PromiseResolveValueMethod);
+            il.Emit(OpCodes.Call, runtime.RequirePromise().ResolveValueMethod);
             il.MarkLabel(haveAdoptedTaskLabel);
             il.Emit(OpCodes.Stloc, adoptedTaskLocal);
             // Resolving a promise with itself rejects with TypeError rather than
@@ -1581,9 +1570,9 @@ public partial class RuntimeEmitter
         }
 
         typeBuilder.CreateType();
-        runtime.PromiseResolveCallbackType = typeBuilder;
-        runtime.PromiseResolveCallbackCtor = ctor;
-        runtime.PromiseResolveCallbackInvoke = invokeMethod;
+        runtime.RequirePromise().ResolveCallbackType = typeBuilder;
+        runtime.RequirePromise().ResolveCallbackCtor = ctor;
+        runtime.RequirePromise().ResolveCallbackInvoke = invokeMethod;
         return typeBuilder;
     }
 
@@ -1701,7 +1690,7 @@ public partial class RuntimeEmitter
             // SharpTSPromiseRejectedException; #232 reason-preservation).
             il.Emit(OpCodes.Ldloc, tcsLocal);
             il.Emit(OpCodes.Ldloc, reasonLocal);
-            il.Emit(OpCodes.Newobj, runtime.TSPromiseRejectedExceptionCtor);
+            il.Emit(OpCodes.Newobj, runtime.RequirePromise().RejectedExceptionCtor);
             var trySetException = typeof(TaskCompletionSource<object?>).GetMethod("TrySetException", [typeof(Exception)])!;
             il.Emit(OpCodes.Callvirt, trySetException);
             il.Emit(OpCodes.Pop);
@@ -1712,9 +1701,9 @@ public partial class RuntimeEmitter
         }
 
         typeBuilder.CreateType();
-        runtime.PromiseRejectCallbackType = typeBuilder;
-        runtime.PromiseRejectCallbackCtor = ctor;
-        runtime.PromiseRejectCallbackInvoke = invokeMethod;
+        runtime.RequirePromise().RejectCallbackType = typeBuilder;
+        runtime.RequirePromise().RejectCallbackCtor = ctor;
+        runtime.RequirePromise().RejectCallbackInvoke = invokeMethod;
         return typeBuilder;
     }
 
@@ -1733,7 +1722,7 @@ public partial class RuntimeEmitter
             _types.TaskOfObject,
             [_types.Object]
         );
-        runtime.PromiseFromExecutor = method;
+        runtime.RequirePromise().FromExecutor = method;
 
         var il = method.GetILGenerator();
 
@@ -1771,13 +1760,13 @@ public partial class RuntimeEmitter
         // var resolveCallback = new $PromiseResolveCallback(tcs, lockObj);
         il.Emit(OpCodes.Ldloc, tcsLocal);
         il.Emit(OpCodes.Ldloc, lockLocal);
-        il.Emit(OpCodes.Newobj, runtime.PromiseResolveCallbackCtor);
+        il.Emit(OpCodes.Newobj, runtime.RequirePromise().ResolveCallbackCtor);
         il.Emit(OpCodes.Stloc, resolveLocal);
 
         // var rejectCallback = new $PromiseRejectCallback(tcs, lockObj);
         il.Emit(OpCodes.Ldloc, tcsLocal);
         il.Emit(OpCodes.Ldloc, lockLocal);
-        il.Emit(OpCodes.Newobj, runtime.PromiseRejectCallbackCtor);
+        il.Emit(OpCodes.Newobj, runtime.RequirePromise().RejectCallbackCtor);
         il.Emit(OpCodes.Stloc, rejectLocal);
 
         // Create args array [resolveCallback, rejectCallback]
@@ -1827,7 +1816,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, exLocal);
         il.Emit(OpCodes.Call, runtime.WrapException);
         il.Emit(OpCodes.Stelem_Ref);
-        il.Emit(OpCodes.Callvirt, runtime.PromiseRejectCallbackInvoke);
+        il.Emit(OpCodes.Callvirt, runtime.RequirePromise().RejectCallbackInvoke);
         il.Emit(OpCodes.Pop);
 
         il.Emit(OpCodes.Leave, endTryLabel);
@@ -1870,7 +1859,7 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             _types.TaskOfObject,
             [executorType]);
-        runtime.PromiseFromDirectExecutor = method;
+        runtime.RequirePromise().FromDirectExecutor = method;
 
         var il = method.GetILGenerator();
         var tcsLocal = il.DeclareLocal(typeof(TaskCompletionSource<object?>));
@@ -1890,12 +1879,12 @@ public partial class RuntimeEmitter
 
         il.Emit(OpCodes.Ldloc, tcsLocal);
         il.Emit(OpCodes.Ldloc, settledLocal);
-        il.Emit(OpCodes.Newobj, runtime.PromiseResolveCallbackCtor);
+        il.Emit(OpCodes.Newobj, runtime.RequirePromise().ResolveCallbackCtor);
         il.Emit(OpCodes.Stloc, resolveLocal);
 
         il.Emit(OpCodes.Ldloc, tcsLocal);
         il.Emit(OpCodes.Ldloc, settledLocal);
-        il.Emit(OpCodes.Newobj, runtime.PromiseRejectCallbackCtor);
+        il.Emit(OpCodes.Newobj, runtime.RequirePromise().RejectCallbackCtor);
         il.Emit(OpCodes.Stloc, rejectLocal);
 
         var completedLabel = il.DefineLabel();
@@ -1917,7 +1906,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, exLocal);
         il.Emit(OpCodes.Call, runtime.WrapException);
         il.Emit(OpCodes.Stelem_Ref);
-        il.Emit(OpCodes.Callvirt, runtime.PromiseRejectCallbackInvoke);
+        il.Emit(OpCodes.Callvirt, runtime.RequirePromise().RejectCallbackInvoke);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Leave, completedLabel);
         il.EndExceptionBlock();

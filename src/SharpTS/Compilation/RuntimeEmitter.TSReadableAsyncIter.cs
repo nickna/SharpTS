@@ -130,7 +130,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, tcsErrLocal);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, _tsReadableErrorField);
-        il.Emit(OpCodes.Newobj, runtime.TSPromiseRejectedExceptionCtor);
+        il.Emit(OpCodes.Newobj, runtime.RequirePromise().RejectedExceptionCtor);
         il.Emit(OpCodes.Callvirt, trySetException);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Ldloc, tcsErrLocal);
@@ -320,7 +320,7 @@ public partial class RuntimeEmitter
 
         il.Emit(OpCodes.Ldloc, wLocal);
         il.Emit(OpCodes.Ldarg_1); // error
-        il.Emit(OpCodes.Newobj, runtime.TSPromiseRejectedExceptionCtor);
+        il.Emit(OpCodes.Newobj, runtime.RequirePromise().RejectedExceptionCtor);
         il.Emit(OpCodes.Callvirt, trySetException);
         il.Emit(OpCodes.Pop);
 

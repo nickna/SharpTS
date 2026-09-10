@@ -247,13 +247,13 @@ public partial class RuntimeEmitter
         // Invoke callback with no args: result = InvokeCallbackNoArgs(onFinally)
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, sm.OnFinallyField);
-        il.Emit(OpCodes.Call, runtime.InvokeCallbackNoArgs);
+        il.Emit(OpCodes.Call, runtime.RequirePromise().InvokeCallbackNoArgs);
         il.Emit(OpCodes.Stloc, callbackResultLocal);
 
         // Await PromiseResolve(result), including the observable `then` lookup
         // required for native promises whose method was overridden.
         il.Emit(OpCodes.Ldloc, callbackResultLocal);
-        il.Emit(OpCodes.Call, runtime.PromiseResolveValueMethod);
+        il.Emit(OpCodes.Call, runtime.RequirePromise().ResolveValueMethod);
         il.Emit(OpCodes.Callvirt, _types.TaskOfObjectGetAwaiter);
         var callbackAwaiterLocal = il.DeclareLocal(awaiterType);
         il.Emit(OpCodes.Stloc, callbackAwaiterLocal);

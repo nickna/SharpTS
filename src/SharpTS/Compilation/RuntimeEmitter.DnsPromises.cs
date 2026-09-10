@@ -500,7 +500,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, _dnsRunAsync);
 
         // WrapTaskAsPromise
-        il.Emit(OpCodes.Call, runtime.WrapTaskAsPromise);
+        il.Emit(OpCodes.Call, runtime.RequirePromise().WrapTaskAsPromise);
         il.Emit(OpCodes.Ret);
 
         runtime.RequireDns().RegisterPromiseWrapper(methodName, wrapper);
@@ -559,7 +559,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, _dnsRunAsync);
 
         // WrapTaskAsPromise
-        il.Emit(OpCodes.Call, runtime.WrapTaskAsPromise);
+        il.Emit(OpCodes.Call, runtime.RequirePromise().WrapTaskAsPromise);
         il.Emit(OpCodes.Ret);
 
         runtime.RequireDns().RegisterPromiseWrapper(methodName, wrapper);

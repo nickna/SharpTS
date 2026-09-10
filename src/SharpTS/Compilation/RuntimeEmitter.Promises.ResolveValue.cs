@@ -14,7 +14,7 @@ public partial class RuntimeEmitter
         ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
         var jobType = EmitPromiseResolveThenableJob(moduleBuilder, runtime);
-        var method = runtime.PromiseResolveValueMethod;
+        var method = runtime.RequirePromise().ResolveValueMethod;
         var il = method.GetILGenerator();
         var tcsType = _types.TaskCompletionSourceOfObject;
         var resultLocal = il.DeclareLocal(_types.TaskOfObject);
@@ -122,9 +122,9 @@ public partial class RuntimeEmitter
         var valueField = typeBuilder.DefineField("Value", _types.Object, FieldAttributes.Private);
         var thenField = typeBuilder.DefineField("Then", _types.Object, FieldAttributes.Private);
         var resolveField = typeBuilder.DefineField(
-            "Resolve", runtime.PromiseResolveCallbackType, FieldAttributes.Private);
+            "Resolve", runtime.RequirePromise().ResolveCallbackType, FieldAttributes.Private);
         var rejectField = typeBuilder.DefineField(
-            "Reject", runtime.PromiseRejectCallbackType, FieldAttributes.Private);
+            "Reject", runtime.RequirePromise().RejectCallbackType, FieldAttributes.Private);
 
         var ctor = typeBuilder.DefineConstructor(
             MethodAttributes.Public,
@@ -147,12 +147,12 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_3);
             il.Emit(OpCodes.Ldloc, boxLocal);
-            il.Emit(OpCodes.Newobj, runtime.PromiseResolveCallbackCtor);
+            il.Emit(OpCodes.Newobj, runtime.RequirePromise().ResolveCallbackCtor);
             il.Emit(OpCodes.Stfld, resolveField);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_3);
             il.Emit(OpCodes.Ldloc, boxLocal);
-            il.Emit(OpCodes.Newobj, runtime.PromiseRejectCallbackCtor);
+            il.Emit(OpCodes.Newobj, runtime.RequirePromise().RejectCallbackCtor);
             il.Emit(OpCodes.Stfld, rejectField);
             il.Emit(OpCodes.Ret);
         }
@@ -195,7 +195,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldloc, exceptionLocal);
             il.Emit(OpCodes.Call, runtime.WrapException);
             il.Emit(OpCodes.Stelem_Ref);
-            il.Emit(OpCodes.Callvirt, runtime.PromiseRejectCallbackInvoke);
+            il.Emit(OpCodes.Callvirt, runtime.RequirePromise().RejectCallbackInvoke);
             il.Emit(OpCodes.Pop);
             il.Emit(OpCodes.Leave, doneLabel);
             il.EndExceptionBlock();

@@ -1496,7 +1496,7 @@ public partial class RuntimeEmitter
             var notPromiseSubclassLabel = il.DefineLabel();
             var promiseSubclassMissLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.TSPromiseType);
+            il.Emit(OpCodes.Isinst, runtime.RequirePromise().Type);
             il.Emit(OpCodes.Brfalse, notPromiseSubclassLabel);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Isinst, runtime.IHasFieldsInterface);
@@ -1514,7 +1514,7 @@ public partial class RuntimeEmitter
             il.MarkLabel(notPromiseSubclassLabel);
 
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.TSPromiseType);
+            il.Emit(OpCodes.Isinst, runtime.RequirePromise().Type);
             il.Emit(OpCodes.Brtrue, promiseLabel);
         }
 
@@ -1686,13 +1686,13 @@ public partial class RuntimeEmitter
             var notPromiseResolveCallbackLabel = il.DefineLabel();
             var promiseCallbackMetadataLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.PromiseResolveCallbackType);
+            il.Emit(OpCodes.Isinst, runtime.RequirePromise().ResolveCallbackType);
             il.Emit(OpCodes.Brfalse, notPromiseResolveCallbackLabel);
             il.Emit(OpCodes.Br, promiseCallbackMetadataLabel);
             il.MarkLabel(notPromiseResolveCallbackLabel);
             var notPromiseCallbackLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.PromiseRejectCallbackType);
+            il.Emit(OpCodes.Isinst, runtime.RequirePromise().RejectCallbackType);
             il.Emit(OpCodes.Brfalse, notPromiseCallbackLabel);
             il.MarkLabel(promiseCallbackMetadataLabel);
             var promiseCallbackNotLengthLabel = il.DefineLabel();
@@ -1900,8 +1900,8 @@ public partial class RuntimeEmitter
                 il.Emit(OpCodes.Ldtoken, _types.TaskOfObject);
                 il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
                 il.Emit(OpCodes.Bne_Un, notPromiseProtoLabel);
-                il.Emit(OpCodes.Call, runtime.PromisePrototypePopulateMethod);
-                il.Emit(OpCodes.Ldsfld, runtime.PromisePrototypeField);
+                il.Emit(OpCodes.Call, runtime.RequirePromise().PrototypePopulateMethod);
+                il.Emit(OpCodes.Ldsfld, runtime.RequirePromise().PrototypeField);
                 il.Emit(OpCodes.Ret);
                 il.MarkLabel(notPromiseProtoLabel);
             }
@@ -2242,7 +2242,7 @@ public partial class RuntimeEmitter
             {
                 var noBaseBuiltInLabel = il.DefineLabel();
                 il.Emit(OpCodes.Ldloc, walkTypeLocal);
-                il.Emit(OpCodes.Ldtoken, runtime.TSPromiseType);
+                il.Emit(OpCodes.Ldtoken, runtime.RequirePromise().Type);
                 il.Emit(OpCodes.Call, _types.GetMethod(
                     _types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
                 il.Emit(OpCodes.Bne_Un, noBaseBuiltInLabel);
@@ -2575,7 +2575,7 @@ public partial class RuntimeEmitter
 
         // Check if obj is $Promise
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSPromiseType);
+        il.Emit(OpCodes.Isinst, runtime.RequirePromise().Type);
         il.Emit(OpCodes.Brtrue, isTSPromiseLabel);
 
         // It's a raw Task<object?>, use directly
@@ -2587,8 +2587,8 @@ public partial class RuntimeEmitter
         // It's a $Promise, extract the Task property
         il.MarkLabel(isTSPromiseLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSPromiseType);
-        il.Emit(OpCodes.Callvirt, runtime.TSPromiseTaskGetter);
+        il.Emit(OpCodes.Castclass, runtime.RequirePromise().Type);
+        il.Emit(OpCodes.Callvirt, runtime.RequirePromise().TaskGetter);
         il.Emit(OpCodes.Stloc, taskLocal);
 
         il.MarkLabel(haveTaskLabel);
@@ -2611,9 +2611,9 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldstr, jsName);
             il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
             il.Emit(OpCodes.Brfalse, notThisLabel);
-            il.Emit(OpCodes.Call, runtime.PromisePrototypePopulateMethod);
+            il.Emit(OpCodes.Call, runtime.RequirePromise().PrototypePopulateMethod);
             var protoValLocal = il.DeclareLocal(_types.Object);
-            il.Emit(OpCodes.Ldsfld, runtime.PromisePrototypeField);
+            il.Emit(OpCodes.Ldsfld, runtime.RequirePromise().PrototypeField);
             il.Emit(OpCodes.Ldstr, jsName);
             il.Emit(OpCodes.Ldloca, protoValLocal);
             il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "TryGetValue",
@@ -2645,14 +2645,14 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
         il.Emit(OpCodes.Brfalse, notPromiseCtorLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSPromiseType);
+        il.Emit(OpCodes.Isinst, runtime.RequirePromise().Type);
         il.Emit(OpCodes.Brfalse, defaultPromiseCtorLabel);
         var ctorTypeLocal = il.DeclareLocal(_types.Type);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Object, "GetType"));
         il.Emit(OpCodes.Stloc, ctorTypeLocal);
         il.Emit(OpCodes.Ldloc, ctorTypeLocal);
-        il.Emit(OpCodes.Ldtoken, runtime.TSPromiseType);
+        il.Emit(OpCodes.Ldtoken, runtime.RequirePromise().Type);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
         il.Emit(OpCodes.Beq, defaultPromiseCtorLabel);
         il.Emit(OpCodes.Ldloc, ctorTypeLocal);

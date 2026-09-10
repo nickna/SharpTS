@@ -55,7 +55,7 @@ public sealed class PromiseStaticEmitter : IStaticTypeEmitterStrategy
                 {
                     il.Emit(OpCodes.Ldnull);
                 }
-                il.Emit(OpCodes.Call, ctx.Runtime!.PromiseResolve);
+                il.Emit(OpCodes.Call, ctx.Runtime!.RequirePromise().Resolve);
                 return true;
 
             case "reject":
@@ -69,7 +69,7 @@ public sealed class PromiseStaticEmitter : IStaticTypeEmitterStrategy
                 {
                     il.Emit(OpCodes.Ldnull);
                 }
-                il.Emit(OpCodes.Call, ctx.Runtime!.PromiseReject);
+                il.Emit(OpCodes.Call, ctx.Runtime!.RequirePromise().Reject);
                 return true;
 
             case "all":
@@ -88,13 +88,13 @@ public sealed class PromiseStaticEmitter : IStaticTypeEmitterStrategy
                 il.Emit(OpCodes.Call,
                     arguments.Count > 0
                     && ctx.TypeMap?.IsStablePrimitivePromiseAllIterable(arguments[0]) == true
-                        ? ctx.Runtime!.PromiseAllPrimitive
-                        : ctx.Runtime!.PromiseAll);
+                        ? ctx.Runtime!.RequirePromise().AllPrimitive
+                        : ctx.Runtime!.RequirePromise().All);
                 return true;
 
             case "allKeyed":
                 EmitSingleArgument(emitter, arguments);
-                il.Emit(OpCodes.Call, ctx.Runtime!.PromiseAllKeyed);
+                il.Emit(OpCodes.Call, ctx.Runtime!.RequirePromise().AllKeyed);
                 return true;
 
             case "race":
@@ -112,7 +112,7 @@ public sealed class PromiseStaticEmitter : IStaticTypeEmitterStrategy
                 {
                     il.Emit(OpCodes.Ldnull);
                 }
-                il.Emit(OpCodes.Call, ctx.Runtime!.PromiseRaceStatic);
+                il.Emit(OpCodes.Call, ctx.Runtime!.RequirePromise().RaceStatic);
                 return true;
 
             case "allSettled":
@@ -127,12 +127,12 @@ public sealed class PromiseStaticEmitter : IStaticTypeEmitterStrategy
                     il.Emit(OpCodes.Ldnull);
                 }
                 EmitBasePromiseConstructor(ctx);
-                il.Emit(OpCodes.Call, ctx.Runtime!.PromiseAllSettled);
+                il.Emit(OpCodes.Call, ctx.Runtime!.RequirePromise().AllSettled);
                 return true;
 
             case "allSettledKeyed":
                 EmitSingleArgument(emitter, arguments);
-                il.Emit(OpCodes.Call, ctx.Runtime!.PromiseAllSettledKeyed);
+                il.Emit(OpCodes.Call, ctx.Runtime!.RequirePromise().AllSettledKeyed);
                 return true;
 
             case "any":
@@ -148,12 +148,12 @@ public sealed class PromiseStaticEmitter : IStaticTypeEmitterStrategy
                 }
                 EmitBasePromiseConstructor(ctx);
                 il.Emit(OpCodes.Ldnull); // no custom capability on intrinsic Promise.any
-                il.Emit(OpCodes.Call, ctx.Runtime!.PromiseAny);
+                il.Emit(OpCodes.Call, ctx.Runtime!.RequirePromise().Any);
                 return true;
 
             case "withResolvers":
                 // Promise.withResolvers() - returns Task<object?> wrapping {promise, resolve, reject}
-                il.Emit(OpCodes.Call, ctx.Runtime!.PromiseWithResolvers);
+                il.Emit(OpCodes.Call, ctx.Runtime!.RequirePromise().WithResolvers);
                 return true;
 
             default:
@@ -176,15 +176,15 @@ public sealed class PromiseStaticEmitter : IStaticTypeEmitterStrategy
         // `Promise` is always an Object).
         MethodInfo? method = propertyName switch
         {
-            "resolve"        => runtime.PromiseResolveStatic,
-            "reject"         => runtime.PromiseRejectStatic,
-            "all"            => runtime.PromiseAllStatic,
-            "allKeyed"       => runtime.PromiseAllKeyedStatic,
-            "race"           => runtime.PromiseRaceStatic,
-            "allSettled"     => runtime.PromiseAllSettledStatic,
-            "allSettledKeyed" => runtime.PromiseAllSettledKeyedStatic,
-            "any"            => runtime.PromiseAnyStatic,
-            "withResolvers"  => runtime.PromiseWithResolvers,
+            "resolve"        => runtime.RequirePromise().ResolveStatic,
+            "reject"         => runtime.RequirePromise().RejectStatic,
+            "all"            => runtime.RequirePromise().AllStatic,
+            "allKeyed"       => runtime.RequirePromise().AllKeyedStatic,
+            "race"           => runtime.RequirePromise().RaceStatic,
+            "allSettled"     => runtime.RequirePromise().AllSettledStatic,
+            "allSettledKeyed" => runtime.RequirePromise().AllSettledKeyedStatic,
+            "any"            => runtime.RequirePromise().AnyStatic,
+            "withResolvers"  => runtime.RequirePromise().WithResolvers,
             _ => null
         };
         if (method == null) return false;

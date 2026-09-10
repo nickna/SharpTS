@@ -762,11 +762,11 @@ public partial class RuntimeEmitter
         il.MarkLabel(pullNotTaskLabel);
         // if (pullResult is $Promise p) p.GetValueAsync().GetAwaiter().GetResult()
         il.Emit(OpCodes.Ldloc, pullResultLocal);
-        il.Emit(OpCodes.Isinst, runtime.TSPromiseType);
+        il.Emit(OpCodes.Isinst, runtime.RequirePromise().Type);
         il.Emit(OpCodes.Brfalse, pullNotPromiseLabel);
         il.Emit(OpCodes.Ldloc, pullResultLocal);
-        il.Emit(OpCodes.Castclass, runtime.TSPromiseType);
-        il.Emit(OpCodes.Callvirt, runtime.TSPromiseTaskGetter);
+        il.Emit(OpCodes.Castclass, runtime.RequirePromise().Type);
+        il.Emit(OpCodes.Callvirt, runtime.RequirePromise().TaskGetter);
         EmitSyncAwaitTaskOfObject(il, pullAwaiterLocal);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Br, pullAwaitDoneLabel);
@@ -1311,11 +1311,11 @@ public partial class RuntimeEmitter
         // else if (result is $Promise p) sync-await(p.GetValueAsync())
         il.MarkLabel(notTaskLabel);
         il.Emit(OpCodes.Ldloc, resultLocal);
-        il.Emit(OpCodes.Isinst, runtime.TSPromiseType);
+        il.Emit(OpCodes.Isinst, runtime.RequirePromise().Type);
         il.Emit(OpCodes.Brfalse, notPromiseLabel);
         il.Emit(OpCodes.Ldloc, resultLocal);
-        il.Emit(OpCodes.Castclass, runtime.TSPromiseType);
-        il.Emit(OpCodes.Callvirt, runtime.TSPromiseGetValueAsync);
+        il.Emit(OpCodes.Castclass, runtime.RequirePromise().Type);
+        il.Emit(OpCodes.Callvirt, runtime.RequirePromise().GetValueAsync);
         EmitSyncAwaitTaskOfObject(il, awaiterLocal);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Br, doneLabel);
@@ -1363,11 +1363,11 @@ public partial class RuntimeEmitter
         // else if (result is $Promise p) { coopTask = p.GetValueAsync(); goto haveTask }
         il.MarkLabel(notTaskLabel);
         il.Emit(OpCodes.Ldloc, resultLocal);
-        il.Emit(OpCodes.Isinst, runtime.TSPromiseType);
+        il.Emit(OpCodes.Isinst, runtime.RequirePromise().Type);
         il.Emit(OpCodes.Brfalse, notPromiseLabel);
         il.Emit(OpCodes.Ldloc, resultLocal);
-        il.Emit(OpCodes.Castclass, runtime.TSPromiseType);
-        il.Emit(OpCodes.Callvirt, runtime.TSPromiseGetValueAsync);
+        il.Emit(OpCodes.Castclass, runtime.RequirePromise().Type);
+        il.Emit(OpCodes.Callvirt, runtime.RequirePromise().GetValueAsync);
         il.Emit(OpCodes.Stloc, coopTaskLocal);
         il.Emit(OpCodes.Br, haveTaskLabel);
 

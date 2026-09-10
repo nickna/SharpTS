@@ -213,7 +213,7 @@ public abstract partial class AsyncFunctionMoveNextEmitter
         var haveTaskLabel = IL.DefineLabel();
 
         IL.Emit(OpCodes.Dup);
-        IL.Emit(OpCodes.Isinst, Ctx.Runtime!.TSPromiseType);
+        IL.Emit(OpCodes.Isinst, Ctx.Runtime!.RequirePromise().Type);
         IL.Emit(OpCodes.Brtrue, isPromiseLabel);
 
         IL.Emit(OpCodes.Dup);
@@ -223,7 +223,7 @@ public abstract partial class AsyncFunctionMoveNextEmitter
         IL.MarkLabel(wrapValueLabel);
         // Adopt an ordinary thenable (e.g. a general non-Promise then/catch/finally
         // species result, #349); non-thenables become Task.FromResult(value).
-        IL.Emit(OpCodes.Call, Ctx.Runtime!.CoerceAwaitableToTaskMethod);
+        IL.Emit(OpCodes.Call, Ctx.Runtime!.RequirePromise().CoerceAwaitableToTaskMethod);
         IL.Emit(OpCodes.Stloc, taskLocal);
         IL.Emit(OpCodes.Br, haveTaskLabel);
 
@@ -233,8 +233,8 @@ public abstract partial class AsyncFunctionMoveNextEmitter
         IL.Emit(OpCodes.Br, haveTaskLabel);
 
         IL.MarkLabel(isPromiseLabel);
-        IL.Emit(OpCodes.Castclass, Ctx.Runtime.TSPromiseType);
-        IL.Emit(OpCodes.Callvirt, Ctx.Runtime.TSPromiseTaskGetter);
+        IL.Emit(OpCodes.Castclass, Ctx.Runtime.RequirePromise().Type);
+        IL.Emit(OpCodes.Callvirt, Ctx.Runtime.RequirePromise().TaskGetter);
         IL.Emit(OpCodes.Stloc, taskLocal);
 
         IL.MarkLabel(haveTaskLabel);

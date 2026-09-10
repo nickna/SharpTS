@@ -219,11 +219,11 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Void,
             [_types.Object]);
-        runtime.ObserveDiscardedPromiseResult = method;
+        runtime.RequirePromise().ObserveDiscardedPromiseResult = method;
 
         var il = method.GetILGenerator();
         var task = il.DeclareLocal(_types.TaskOfObject);
-        var wrapper = il.DeclareLocal(runtime.TSPromiseType);
+        var wrapper = il.DeclareLocal(runtime.RequirePromise().Type);
         var tracker = il.DeclareLocal(trackerType);
         var haveTask = il.DefineLabel();
         var haveTable = il.DefineLabel();
@@ -238,12 +238,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, task);
         il.Emit(OpCodes.Brtrue, haveTask);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSPromiseType);
+        il.Emit(OpCodes.Isinst, runtime.RequirePromise().Type);
         il.Emit(OpCodes.Stloc, wrapper);
         il.Emit(OpCodes.Ldloc, wrapper);
         il.Emit(OpCodes.Brfalse, ret);
         il.Emit(OpCodes.Ldloc, wrapper);
-        il.Emit(OpCodes.Callvirt, runtime.TSPromiseTaskGetter);
+        il.Emit(OpCodes.Callvirt, runtime.RequirePromise().TaskGetter);
         il.Emit(OpCodes.Stloc, task);
         il.MarkLabel(haveTask);
 
@@ -331,7 +331,7 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Void,
             [_types.TaskOfObject]);
-        runtime.NotifyPromiseRejectionHandler = method;
+        runtime.RequirePromise().NotifyPromiseRejectionHandler = method;
 
         var il = method.GetILGenerator();
         var tracker = il.DeclareLocal(trackerType);

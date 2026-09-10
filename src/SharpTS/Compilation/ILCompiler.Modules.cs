@@ -456,7 +456,7 @@ public partial class ILCompiler
             var done = il.DefineLabel();
             var task = il.DeclareLocal(_types.TaskOfObject);
             il.Emit(OpCodes.Ldloc, reactionResult);
-            il.Emit(OpCodes.Call, _runtime.ShouldAutoAwaitPromiseMethod);
+            il.Emit(OpCodes.Call, _runtime.RequirePromise().ShouldAutoAwaitPromiseMethod);
             il.Emit(OpCodes.Brfalse, done);
 
             il.Emit(OpCodes.Ldloc, reactionResult);
@@ -467,16 +467,16 @@ public partial class ILCompiler
             il.Emit(OpCodes.Brtrue, haveTask);
 
             il.Emit(OpCodes.Ldloc, reactionResult);
-            il.Emit(OpCodes.Isinst, _runtime.TSPromiseType);
+            il.Emit(OpCodes.Isinst, _runtime.RequirePromise().Type);
             il.Emit(OpCodes.Brfalse, done);
             il.Emit(OpCodes.Ldloc, reactionResult);
-            il.Emit(OpCodes.Castclass, _runtime.TSPromiseType);
-            il.Emit(OpCodes.Callvirt, _runtime.TSPromiseTaskGetter);
+            il.Emit(OpCodes.Castclass, _runtime.RequirePromise().Type);
+            il.Emit(OpCodes.Callvirt, _runtime.RequirePromise().TaskGetter);
             il.Emit(OpCodes.Stloc, task);
 
             il.MarkLabel(haveTask);
             il.Emit(OpCodes.Ldloc, task);
-            il.Emit(OpCodes.Call, _runtime.TrackTopLevelPromiseReaction);
+            il.Emit(OpCodes.Call, _runtime.RequirePromise().TrackTopLevelPromiseReaction);
             il.Emit(OpCodes.Pop);
             il.MarkLabel(done);
             return;
@@ -501,7 +501,7 @@ public partial class ILCompiler
         {
             // Custom capabilities opt out of SharpTS's standalone auto-await.
             il.Emit(OpCodes.Ldloc, exprResult);
-            il.Emit(OpCodes.Call, _runtime.ShouldAutoAwaitPromiseMethod);
+            il.Emit(OpCodes.Call, _runtime.RequirePromise().ShouldAutoAwaitPromiseMethod);
             il.Emit(OpCodes.Brfalse, notTaskLabel);
         }
 
@@ -514,13 +514,13 @@ public partial class ILCompiler
         {
             // Check for $Promise (async function return type)
             il.Emit(OpCodes.Ldloc, exprResult);
-            il.Emit(OpCodes.Isinst, _runtime.TSPromiseType);
+            il.Emit(OpCodes.Isinst, _runtime.RequirePromise().Type);
             il.Emit(OpCodes.Brfalse, notTaskLabel);
 
             // It's a $Promise - extract its underlying Task
             il.Emit(OpCodes.Ldloc, exprResult);
-            il.Emit(OpCodes.Castclass, _runtime.TSPromiseType);
-            il.Emit(OpCodes.Callvirt, _runtime.TSPromiseTaskGetter);
+            il.Emit(OpCodes.Castclass, _runtime.RequirePromise().Type);
+            il.Emit(OpCodes.Callvirt, _runtime.RequirePromise().TaskGetter);
             il.Emit(OpCodes.Br, waitForTaskLabel);
         }
         else

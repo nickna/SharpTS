@@ -208,6 +208,17 @@ and module registration remain separate dependencies. Migrated type/method handl
 emitter fields. Socket/server fields, other transport methods, and closure construction state remain
 local to the emitter.
 
+Promise uses `Promise` / `RequirePromise()` for its 77 type, capability, resolving-callback,
+combinator, prototype, adoption, and reaction handles. `EmitAll` starts it for `UsesPromise`,
+including implied async/module features and hosted emission. Adoption helpers are declared before
+resolving callbacks, and capability helpers before static wrappers; later body emitters reuse those
+declarations. Completion follows runtime and dependent-type finalization. Promise type emission,
+task wrapping, and capability-only helpers accept `EmittedPromiseRuntime` directly. State-machine
+carriers and the Promise task field stay local to the emitter. The shared FIFO `QueuePromiseJob`,
+timer/stream Promise APIs, and filesystem/module registries remain owned by their respective
+infrastructure or feature families; they are not duplicate Promise handles and remain in the
+residual migration scope of #1599.
+
 During emission, each handle becomes readable as soon as its declaration is assigned, so forward
 references do not require a method body to exist yet. An early read names the missing declaration.
 Completion is an orchestration boundary, not an IL verifier: body emission and type finalization

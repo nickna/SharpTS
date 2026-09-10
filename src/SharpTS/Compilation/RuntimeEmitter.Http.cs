@@ -1035,7 +1035,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, runtime.JsonParse);
 
         // Wrap in a resolved Promise
-        il.Emit(OpCodes.Call, runtime.TSPromiseResolve);
+        il.Emit(OpCodes.Call, runtime.RequirePromise().TypeResolve);
 
         il.Emit(OpCodes.Ret);
     }
@@ -1065,7 +1065,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stfld, _fetchResponseBodyConsumedField);
 
         // Wrap in a resolved Promise
-        il.Emit(OpCodes.Call, runtime.TSPromiseResolve);
+        il.Emit(OpCodes.Call, runtime.RequirePromise().TypeResolve);
 
         il.Emit(OpCodes.Ret);
     }
@@ -1095,7 +1095,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stfld, _fetchResponseBodyConsumedField);
 
         // Wrap in a resolved Promise
-        il.Emit(OpCodes.Call, runtime.TSPromiseResolve);
+        il.Emit(OpCodes.Call, runtime.RequirePromise().TypeResolve);
 
         il.Emit(OpCodes.Ret);
     }
@@ -1391,7 +1391,7 @@ public partial class RuntimeEmitter
 
             var il = method.GetILGenerator();
             il.Emit(OpCodes.Ldstr, "HttpClient not available");
-            il.Emit(OpCodes.Call, runtime.TSPromiseReject);
+            il.Emit(OpCodes.Call, runtime.RequirePromise().TypeReject);
             il.Emit(OpCodes.Ret);
             return;
         }
@@ -1460,7 +1460,7 @@ public partial class RuntimeEmitter
         fetchIL.Emit(OpCodes.Call, EmitGenerics.MakeGenericMethod(typeof(Task).GetMethod("Run", 1, [_types.MakeGenericType(typeof(Func<>), Type.MakeGenericMethodParameter(0))])!, typeof(object)));
 
         // WrapTaskAsPromise(task) — returns pending $Promise
-        fetchIL.Emit(OpCodes.Call, runtime.WrapTaskAsPromise);
+        fetchIL.Emit(OpCodes.Call, runtime.RequirePromise().WrapTaskAsPromise);
         fetchIL.Emit(OpCodes.Ret);
     }
 
@@ -3501,7 +3501,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Stfld, _requestBodyConsumedField);
         // Wrap in Promise
-        il.Emit(OpCodes.Call, runtime.TSPromiseResolve);
+        il.Emit(OpCodes.Call, runtime.RequirePromise().TypeResolve);
         il.Emit(OpCodes.Ret);
     }
 
@@ -3535,7 +3535,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Stfld, _requestBodyConsumedField);
-        il.Emit(OpCodes.Call, runtime.TSPromiseResolve);
+        il.Emit(OpCodes.Call, runtime.RequirePromise().TypeResolve);
         il.Emit(OpCodes.Ret);
     }
 
@@ -3573,7 +3573,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Stfld, _requestBodyConsumedField);
-        il.Emit(OpCodes.Call, runtime.TSPromiseResolve);
+        il.Emit(OpCodes.Call, runtime.RequirePromise().TypeResolve);
         il.Emit(OpCodes.Ret);
     }
 
@@ -3846,7 +3846,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Stfld, _responseBodyConsumedField);
 
-        il.Emit(OpCodes.Call, runtime.TSPromiseResolve);
+        il.Emit(OpCodes.Call, runtime.RequirePromise().TypeResolve);
         il.Emit(OpCodes.Ret);
     }
 
@@ -3865,7 +3865,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Stfld, _responseBodyConsumedField);
 
-        il.Emit(OpCodes.Call, runtime.TSPromiseResolve);
+        il.Emit(OpCodes.Call, runtime.RequirePromise().TypeResolve);
         il.Emit(OpCodes.Ret);
     }
 
@@ -3882,7 +3882,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Stfld, _responseBodyConsumedField);
 
-        il.Emit(OpCodes.Call, runtime.TSPromiseResolve);
+        il.Emit(OpCodes.Call, runtime.RequirePromise().TypeResolve);
         il.Emit(OpCodes.Ret);
     }
 

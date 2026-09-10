@@ -421,11 +421,11 @@ public partial class RuntimeEmitter
         {
             var notPromise = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Isinst, runtime.TSPromiseType);
+            il.Emit(OpCodes.Isinst, runtime.RequirePromise().Type);
             il.Emit(OpCodes.Brfalse, notPromise);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Castclass, runtime.TSPromiseType);
-            il.Emit(OpCodes.Callvirt, runtime.TSPromiseTaskGetter);
+            il.Emit(OpCodes.Castclass, runtime.RequirePromise().Type);
+            il.Emit(OpCodes.Callvirt, runtime.RequirePromise().TaskGetter);
             il.Emit(OpCodes.Stloc, taskLocal);
             il.Emit(OpCodes.Br, haveTask);
             il.MarkLabel(notPromise);
@@ -462,11 +462,11 @@ public partial class RuntimeEmitter
         {
             var notRejected = il.DefineLabel();
             il.Emit(OpCodes.Ldloc, innerLocal);
-            il.Emit(OpCodes.Isinst, runtime.TSPromiseRejectedExceptionType);
+            il.Emit(OpCodes.Isinst, runtime.RequirePromise().RejectedExceptionType);
             il.Emit(OpCodes.Brfalse, notRejected);
             il.Emit(OpCodes.Ldloc, innerLocal);
-            il.Emit(OpCodes.Castclass, runtime.TSPromiseRejectedExceptionType);
-            il.Emit(OpCodes.Callvirt, runtime.TSPromiseRejectedExceptionReasonGetter);
+            il.Emit(OpCodes.Castclass, runtime.RequirePromise().RejectedExceptionType);
+            il.Emit(OpCodes.Callvirt, runtime.RequirePromise().RejectedExceptionReasonGetter);
             il.Emit(OpCodes.Stloc, reasonLocal);
             il.Emit(OpCodes.Br, haveReason);
             il.MarkLabel(notRejected);

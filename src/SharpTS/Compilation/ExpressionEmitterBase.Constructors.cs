@@ -459,7 +459,7 @@ public abstract partial class ExpressionEmitterBase
                     && TryEmitArrowAsDelegate(
                         executorArrow, typeof(Func<object, object, object>)))
                 {
-                    IL.Emit(OpCodes.Call, Ctx.Runtime!.PromiseFromDirectExecutor);
+                    IL.Emit(OpCodes.Call, Ctx.Runtime!.RequirePromise().FromDirectExecutor);
                     SetStackUnknown();
                     return true;
                 }
@@ -489,7 +489,7 @@ public abstract partial class ExpressionEmitterBase
                         IL.Emit(OpCodes.Ldloc, executor);
                     }
                 }
-                IL.Emit(OpCodes.Call, Ctx.Runtime!.PromiseFromExecutor);
+                IL.Emit(OpCodes.Call, Ctx.Runtime!.RequirePromise().FromExecutor);
                 SetStackUnknown();
                 return true;
 

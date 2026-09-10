@@ -250,7 +250,7 @@ public partial class RuntimeEmitter
         if (_features.UsesPromise)
         {
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.PromiseResolveCallbackType);
+            il.Emit(OpCodes.Isinst, runtime.RequirePromise().ResolveCallbackType);
             il.Emit(OpCodes.Brtrue, functionDescriptorCheckLabel);
         }
         il.Emit(OpCodes.Ldarg_0);
@@ -259,7 +259,7 @@ public partial class RuntimeEmitter
         if (_features.UsesPromise)
         {
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.PromiseRejectCallbackType);
+            il.Emit(OpCodes.Isinst, runtime.RequirePromise().RejectCallbackType);
             il.Emit(OpCodes.Brfalse, notTSFunctionForDescLabel);
         }
         else

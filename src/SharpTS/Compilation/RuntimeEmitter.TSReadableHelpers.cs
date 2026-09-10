@@ -120,7 +120,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, countLocal);
         il.Emit(OpCodes.Brtrue, haveItems);
         il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
-        il.Emit(OpCodes.Call, runtime.TSPromiseResolve);
+        il.Emit(OpCodes.Call, runtime.RequirePromise().TypeResolve);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(haveItems);
         // acc = items[0]; i = 1;
@@ -165,7 +165,7 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(endLoop);
         il.Emit(OpCodes.Ldloc, accLocal);
-        il.Emit(OpCodes.Call, runtime.TSPromiseResolve);
+        il.Emit(OpCodes.Call, runtime.RequirePromise().TypeResolve);
         il.Emit(OpCodes.Ret);
     }
 
@@ -248,7 +248,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldloc, iLocal);
             il.Emit(OpCodes.Callvirt, ListItemGetter);
         }
-        il.Emit(OpCodes.Call, runtime.TSPromiseResolve);
+        il.Emit(OpCodes.Call, runtime.RequirePromise().TypeResolve);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(endLoop);
@@ -267,7 +267,7 @@ public partial class RuntimeEmitter
         {
             il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
         }
-        il.Emit(OpCodes.Call, runtime.TSPromiseResolve);
+        il.Emit(OpCodes.Call, runtime.RequirePromise().TypeResolve);
         il.Emit(OpCodes.Ret);
     }
 

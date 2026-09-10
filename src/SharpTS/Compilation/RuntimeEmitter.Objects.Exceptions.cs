@@ -96,13 +96,13 @@ public partial class RuntimeEmitter
         if (_features.UsesPromise)
         {
             il.Emit(OpCodes.Ldloc, exLocal);
-            il.Emit(OpCodes.Isinst, runtime.TSPromiseRejectedExceptionType);
+            il.Emit(OpCodes.Isinst, runtime.RequirePromise().RejectedExceptionType);
             il.Emit(OpCodes.Brfalse, checkDataCloneErrorLabel);
 
             // It's a $PromiseRejectedException - return its Reason property
             il.Emit(OpCodes.Ldloc, exLocal);
-            il.Emit(OpCodes.Castclass, runtime.TSPromiseRejectedExceptionType);
-            il.Emit(OpCodes.Call, runtime.TSPromiseRejectedExceptionReasonGetter);
+            il.Emit(OpCodes.Castclass, runtime.RequirePromise().RejectedExceptionType);
+            il.Emit(OpCodes.Call, runtime.RequirePromise().RejectedExceptionReasonGetter);
             il.Emit(OpCodes.Ret);
         }
 

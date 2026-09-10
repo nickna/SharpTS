@@ -674,7 +674,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, asyncMethod);
 
         // Wrap the Task in a Promise
-        il.Emit(OpCodes.Call, runtime.WrapTaskAsPromise);
+        il.Emit(OpCodes.Call, runtime.RequirePromise().WrapTaskAsPromise);
 
         il.Emit(OpCodes.Ret);
 

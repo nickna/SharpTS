@@ -332,8 +332,8 @@ public partial class RuntimeEmitter
                 il.Emit(OpCodes.Ldarg_0);
             }, sm.ConstructorField, () => il.Emit(OpCodes.Ldarg_1),
             sm.CapabilityField, () => il.Emit(OpCodes.Ldarg_2),
-            runtime.MarkNonAutoAwaitPromiseMethod,
-            runtime.AdoptPromiseCombinatorResultMethod);
+            runtime.RequirePromise().MarkNonAutoAwaitPromiseMethod,
+            runtime.RequirePromise().AdoptPromiseCombinatorResultMethod);
 
     /// <summary>
     /// Emits the MoveNext body for PromiseAny state machine.

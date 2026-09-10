@@ -16,7 +16,7 @@ public partial class RuntimeEmitter
 {
     /// <summary>
     /// Emits the <c>$PromiseCapability</c> holder type and fills the
-    /// pre-declared <see cref="EmittedRuntime.NewPromiseCapabilityResultMethod"/>
+    /// pre-declared <see cref="EmittedPromiseRuntime.NewPromiseCapabilityResultMethod"/>
     /// body. Must be called AFTER <c>EmitConstructDynamicValue</c> and after the
     /// $Runtime helpers it depends on (<c>InvokeValue</c>, <c>WrapException</c>,
     /// <c>ConstructDynamicValue</c>) are emitted, but while <c>$Runtime</c> is
@@ -29,8 +29,8 @@ public partial class RuntimeEmitter
         EmitAdoptPromiseCapabilityBody(runtime);
         EmitAdoptCompletedPromiseCapabilityBody(runtime);
         EmitResolvePreparedPromiseCapabilityBody(runtime);
-        EmitPromiseCapabilitySlotGetterBodies(runtime);
-        EmitNewPromiseCapabilityResultBody(runtime);
+        EmitPromiseCapabilitySlotGetterBodies(runtime.RequirePromise());
+        EmitNewPromiseCapabilityResultBody(runtime.RequirePromise());
         EmitCoerceAwaitableToTask(runtime);
     }
 
@@ -45,7 +45,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitCoerceAwaitableToTask(EmittedRuntime runtime)
     {
-        var method = runtime.CoerceAwaitableToTaskMethod;
+        var method = runtime.RequirePromise().CoerceAwaitableToTaskMethod;
 
         var il = method.GetILGenerator();
         var wrapLabel = il.DefineLabel();
@@ -69,11 +69,11 @@ public partial class RuntimeEmitter
 
         var notPromiseLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSPromiseType);
+        il.Emit(OpCodes.Isinst, runtime.RequirePromise().Type);
         il.Emit(OpCodes.Brfalse, notPromiseLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSPromiseType);
-        il.Emit(OpCodes.Callvirt, runtime.TSPromiseTaskGetter);
+        il.Emit(OpCodes.Castclass, runtime.RequirePromise().Type);
+        il.Emit(OpCodes.Callvirt, runtime.RequirePromise().TaskGetter);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notPromiseLabel);
 
@@ -116,13 +116,13 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldloc, tcsLocal);
         il.Emit(OpCodes.Ldloc, lockLocal);
-        il.Emit(OpCodes.Newobj, runtime.PromiseResolveCallbackCtor);
+        il.Emit(OpCodes.Newobj, runtime.RequirePromise().ResolveCallbackCtor);
         il.Emit(OpCodes.Stelem_Ref);
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Ldloc, tcsLocal);
         il.Emit(OpCodes.Ldloc, lockLocal);
-        il.Emit(OpCodes.Newobj, runtime.PromiseRejectCallbackCtor);
+        il.Emit(OpCodes.Newobj, runtime.RequirePromise().RejectCallbackCtor);
         il.Emit(OpCodes.Stelem_Ref);
         il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
         il.Emit(OpCodes.Pop);
@@ -133,7 +133,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, tcsLocal);
         il.Emit(OpCodes.Ldloc, exLocal);
         il.Emit(OpCodes.Call, runtime.WrapException);
-        il.Emit(OpCodes.Newobj, runtime.TSPromiseRejectedExceptionCtor);
+        il.Emit(OpCodes.Newobj, runtime.RequirePromise().RejectedExceptionCtor);
         il.Emit(OpCodes.Callvirt, tcsType.GetMethod("TrySetException", [_types.Exception])!);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Leave, endTryLabel);
@@ -308,13 +308,13 @@ public partial class RuntimeEmitter
         }
 
         typeBuilder.CreateType();
-        runtime.PromiseCapabilityType = typeBuilder;
-        runtime.PromiseCapabilityCtor = ctor;
-        runtime.PromiseCapabilityResolveField = resolveField;
-        runtime.PromiseCapabilityRejectField = rejectField;
-        runtime.PromiseCapabilityInstanceField = instanceField;
-        runtime.PromiseCapabilityCaptureMethod = capture;
-        runtime.PromiseCapabilitySettleMethod = settle;
+        runtime.RequirePromise().CapabilityType = typeBuilder;
+        runtime.RequirePromise().CapabilityCtor = ctor;
+        runtime.RequirePromise().CapabilityResolveField = resolveField;
+        runtime.RequirePromise().CapabilityRejectField = rejectField;
+        runtime.RequirePromise().CapabilityInstanceField = instanceField;
+        runtime.RequirePromise().CapabilityCaptureMethod = capture;
+        runtime.RequirePromise().CapabilitySettleMethod = settle;
     }
 
     /// <summary>
@@ -326,18 +326,18 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitPreparePromiseCapabilityBody(EmittedRuntime runtime)
     {
-        var il = runtime.PreparePromiseCapabilityMethod.GetILGenerator();
-        var capabilityType = runtime.PromiseCapabilityType;
+        var il = runtime.RequirePromise().PreparePromiseCapabilityMethod.GetILGenerator();
+        var capabilityType = runtime.RequirePromise().CapabilityType;
         var funcType = _types.FuncObjectArrayToObject;
         var capabilityLocal = il.DeclareLocal(capabilityType);
         var instanceLocal = il.DeclareLocal(_types.Object);
         var executorLocal = il.DeclareLocal(funcType);
 
-        il.Emit(OpCodes.Newobj, runtime.PromiseCapabilityCtor);
+        il.Emit(OpCodes.Newobj, runtime.RequirePromise().CapabilityCtor);
         il.Emit(OpCodes.Stloc, capabilityLocal);
 
         il.Emit(OpCodes.Ldloc, capabilityLocal);
-        il.Emit(OpCodes.Ldftn, runtime.PromiseCapabilityCaptureMethod);
+        il.Emit(OpCodes.Ldftn, runtime.RequirePromise().CapabilityCaptureMethod);
         il.Emit(OpCodes.Newobj, _types.GetConstructor(funcType, [_types.Object, typeof(IntPtr)])!);
         il.Emit(OpCodes.Stloc, executorLocal);
 
@@ -353,7 +353,7 @@ public partial class RuntimeEmitter
             _types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
         il.Emit(OpCodes.Bne_Un, constructGeneralLabel);
         il.Emit(OpCodes.Ldloc, executorLocal);
-        il.Emit(OpCodes.Call, runtime.PromiseFromExecutor);
+        il.Emit(OpCodes.Call, runtime.RequirePromise().FromExecutor);
         il.Emit(OpCodes.Stloc, instanceLocal);
         il.Emit(OpCodes.Br, haveInstanceLabel);
 
@@ -370,15 +370,15 @@ public partial class RuntimeEmitter
         il.MarkLabel(haveInstanceLabel);
 
         EmitRequireCallableCapabilitySlot(il, runtime, capabilityLocal,
-            runtime.PromiseCapabilityResolveField);
+            runtime.RequirePromise().CapabilityResolveField);
         EmitRequireCallableCapabilitySlot(il, runtime, capabilityLocal,
-            runtime.PromiseCapabilityRejectField);
+            runtime.RequirePromise().CapabilityRejectField);
 
         il.Emit(OpCodes.Ldloc, capabilityLocal);
         il.Emit(OpCodes.Ldloc, instanceLocal);
-        il.Emit(OpCodes.Stfld, runtime.PromiseCapabilityInstanceField);
+        il.Emit(OpCodes.Stfld, runtime.RequirePromise().CapabilityInstanceField);
         il.Emit(OpCodes.Ldloc, instanceLocal);
-        il.Emit(OpCodes.Call, runtime.MarkNonAutoAwaitPromiseMethod);
+        il.Emit(OpCodes.Call, runtime.RequirePromise().MarkNonAutoAwaitPromiseMethod);
         il.Emit(OpCodes.Ldloc, capabilityLocal);
         il.Emit(OpCodes.Ret);
     }
@@ -405,8 +405,8 @@ public partial class RuntimeEmitter
     /// <summary>Adopts a task into a previously prepared capability.</summary>
     private void EmitAdoptPromiseCapabilityBody(EmittedRuntime runtime)
     {
-        var il = runtime.AdoptPromiseCapabilityMethod.GetILGenerator();
-        var capabilityType = runtime.PromiseCapabilityType;
+        var il = runtime.RequirePromise().AdoptPromiseCapabilityMethod.GetILGenerator();
+        var capabilityType = runtime.RequirePromise().CapabilityType;
         var actionType = typeof(Action<Task<object?>>);
         var schedulerType = typeof(TaskScheduler);
         var syncContextType = typeof(SynchronizationContext);
@@ -430,7 +430,7 @@ public partial class RuntimeEmitter
 
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloc, capabilityLocal);
-        il.Emit(OpCodes.Ldftn, runtime.PromiseCapabilitySettleMethod);
+        il.Emit(OpCodes.Ldftn, runtime.RequirePromise().CapabilitySettleMethod);
         il.Emit(OpCodes.Newobj, actionType.GetConstructor([_types.Object, typeof(IntPtr)])!);
         il.Emit(OpCodes.Call, typeof(CancellationToken).GetProperty("None")!.GetGetMethod()!);
         il.Emit(OpCodes.Ldc_I4, (int)TaskContinuationOptions.ExecuteSynchronously);
@@ -441,7 +441,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Pop);
 
         il.Emit(OpCodes.Ldloc, capabilityLocal);
-        il.Emit(OpCodes.Ldfld, runtime.PromiseCapabilityInstanceField);
+        il.Emit(OpCodes.Ldfld, runtime.RequirePromise().CapabilityInstanceField);
         il.Emit(OpCodes.Ret);
     }
 
@@ -453,11 +453,11 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitAdoptCompletedPromiseCapabilityBody(EmittedRuntime runtime)
     {
-        var il = runtime.AdoptCompletedPromiseCapabilityMethod.GetILGenerator();
+        var il = runtime.RequirePromise().AdoptCompletedPromiseCapabilityMethod.GetILGenerator();
         var schedulePendingLabel = il.DefineLabel();
         var settleFaultedLabel = il.DefineLabel();
         var returnPromiseLabel = il.DefineLabel();
-        var capabilityType = runtime.PromiseCapabilityType;
+        var capabilityType = runtime.RequirePromise().CapabilityType;
         var capabilityLocal = il.DeclareLocal(capabilityType);
         var exceptionLocal = il.DeclareLocal(_types.Exception);
 
@@ -483,13 +483,13 @@ public partial class RuntimeEmitter
         il.BeginExceptionBlock();
         il.Emit(OpCodes.Ldloc, capabilityLocal);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.PromiseCapabilitySettleMethod);
+        il.Emit(OpCodes.Call, runtime.RequirePromise().CapabilitySettleMethod);
         il.Emit(OpCodes.Leave, returnPromiseLabel);
 
         il.BeginCatchBlock(_types.Exception);
         il.Emit(OpCodes.Stloc, exceptionLocal);
         il.Emit(OpCodes.Ldloc, capabilityLocal);
-        il.Emit(OpCodes.Ldfld, runtime.PromiseCapabilityRejectField);
+        il.Emit(OpCodes.Ldfld, runtime.RequirePromise().CapabilityRejectField);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Newarr, _types.Object);
         il.Emit(OpCodes.Dup);
@@ -505,31 +505,31 @@ public partial class RuntimeEmitter
         il.MarkLabel(settleFaultedLabel);
         il.Emit(OpCodes.Ldloc, capabilityLocal);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.PromiseCapabilitySettleMethod);
+        il.Emit(OpCodes.Call, runtime.RequirePromise().CapabilitySettleMethod);
 
         il.MarkLabel(returnPromiseLabel);
         il.Emit(OpCodes.Ldloc, capabilityLocal);
-        il.Emit(OpCodes.Ldfld, runtime.PromiseCapabilityInstanceField);
+        il.Emit(OpCodes.Ldfld, runtime.RequirePromise().CapabilityInstanceField);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(schedulePendingLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.AdoptPromiseCapabilityMethod);
+        il.Emit(OpCodes.Call, runtime.RequirePromise().AdoptPromiseCapabilityMethod);
         il.Emit(OpCodes.Ret);
     }
 
     private void EmitResolvePreparedPromiseCapabilityBody(EmittedRuntime runtime)
     {
-        var il = runtime.ResolvePreparedPromiseCapabilityMethod.GetILGenerator();
-        var capabilityType = runtime.PromiseCapabilityType;
+        var il = runtime.RequirePromise().ResolvePreparedPromiseCapabilityMethod.GetILGenerator();
+        var capabilityType = runtime.RequirePromise().CapabilityType;
         var capabilityLocal = il.DeclareLocal(capabilityType);
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, capabilityType);
         il.Emit(OpCodes.Stloc, capabilityLocal);
         il.Emit(OpCodes.Ldloc, capabilityLocal);
-        il.Emit(OpCodes.Ldfld, runtime.PromiseCapabilityResolveField);
+        il.Emit(OpCodes.Ldfld, runtime.RequirePromise().CapabilityResolveField);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Newarr, _types.Object);
         il.Emit(OpCodes.Dup);
@@ -539,22 +539,22 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, runtime.InvokeValue);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Ldloc, capabilityLocal);
-        il.Emit(OpCodes.Ldfld, runtime.PromiseCapabilityInstanceField);
+        il.Emit(OpCodes.Ldfld, runtime.RequirePromise().CapabilityInstanceField);
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitPromiseCapabilitySlotGetterBodies(EmittedRuntime runtime)
+    private void EmitPromiseCapabilitySlotGetterBodies(EmittedPromiseRuntime promise)
     {
-        EmitGetter(runtime.GetPromiseCapabilityResolveMethod,
-            runtime.PromiseCapabilityResolveField);
-        EmitGetter(runtime.GetPromiseCapabilityRejectMethod,
-            runtime.PromiseCapabilityRejectField);
+        EmitGetter(promise.GetPromiseCapabilityResolveMethod,
+            promise.CapabilityResolveField);
+        EmitGetter(promise.GetPromiseCapabilityRejectMethod,
+            promise.CapabilityRejectField);
 
         void EmitGetter(MethodBuilder method, FieldInfo field)
         {
             var il = method.GetILGenerator();
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Castclass, runtime.PromiseCapabilityType);
+            il.Emit(OpCodes.Castclass, promise.CapabilityType);
             il.Emit(OpCodes.Ldfld, field);
             il.Emit(OpCodes.Ret);
         }
@@ -585,14 +585,14 @@ public partial class RuntimeEmitter
     /// <paramref name="result"/> onto the current SynchronizationContext, and
     /// returns the constructed object.
     /// </summary>
-    private void EmitNewPromiseCapabilityResultBody(EmittedRuntime runtime)
+    private void EmitNewPromiseCapabilityResultBody(EmittedPromiseRuntime promise)
     {
-        var method = runtime.NewPromiseCapabilityResultMethod;
+        var method = promise.NewPromiseCapabilityResultMethod;
         var il = method.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.PreparePromiseCapabilityMethod);
+        il.Emit(OpCodes.Call, promise.PreparePromiseCapabilityMethod);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.AdoptPromiseCapabilityMethod);
+        il.Emit(OpCodes.Call, promise.AdoptPromiseCapabilityMethod);
         il.Emit(OpCodes.Ret);
     }
 }

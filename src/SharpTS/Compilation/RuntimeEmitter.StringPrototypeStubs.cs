@@ -638,11 +638,11 @@ public partial class RuntimeEmitter
         // populate with "Promise". Emit a direct brand check here so
         // `Object.prototype.toString.call(promise) === "[object Promise]"`
         // without depending on prototype-chain walks at runtime.
-        if (runtime.TSPromiseType != null)
+        if (runtime.Promise is not null)
         {
             var notTSPromiseLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.TSPromiseType);
+            il.Emit(OpCodes.Isinst, runtime.RequirePromise().Type);
             il.Emit(OpCodes.Brfalse, notTSPromiseLabel);
             EmitTag("[object Promise]");
             il.MarkLabel(notTSPromiseLabel);

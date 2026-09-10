@@ -1207,12 +1207,12 @@ public abstract class StatementEmitterBase : ExpressionEmitterBase
             // (custom async iterators may return $TSPromise via WrapTaskAsPromise)
             var notTSPromiseLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldloc, nextResultLocal);
-            il.Emit(OpCodes.Isinst, runtime.TSPromiseType);
+            il.Emit(OpCodes.Isinst, runtime.RequirePromise().Type);
             il.Emit(OpCodes.Brfalse, notTSPromiseLabel);
             // Replace nextResultLocal with the inner Task
             il.Emit(OpCodes.Ldloc, nextResultLocal);
-            il.Emit(OpCodes.Castclass, runtime.TSPromiseType);
-            il.Emit(OpCodes.Callvirt, runtime.TSPromiseTaskGetter);
+            il.Emit(OpCodes.Castclass, runtime.RequirePromise().Type);
+            il.Emit(OpCodes.Callvirt, runtime.RequirePromise().TaskGetter);
             il.Emit(OpCodes.Stloc, nextResultLocal);
             il.MarkLabel(notTSPromiseLabel);
 
@@ -1302,11 +1302,11 @@ public abstract class StatementEmitterBase : ExpressionEmitterBase
                 // If $TSPromise, replace with inner Task<object?>
                 var returnNotTSPromiseLabel = il.DefineLabel();
                 il.Emit(OpCodes.Ldloc, returnResultLocal);
-                il.Emit(OpCodes.Isinst, runtime.TSPromiseType);
+                il.Emit(OpCodes.Isinst, runtime.RequirePromise().Type);
                 il.Emit(OpCodes.Brfalse, returnNotTSPromiseLabel);
                 il.Emit(OpCodes.Ldloc, returnResultLocal);
-                il.Emit(OpCodes.Castclass, runtime.TSPromiseType);
-                il.Emit(OpCodes.Callvirt, runtime.TSPromiseTaskGetter);
+                il.Emit(OpCodes.Castclass, runtime.RequirePromise().Type);
+                il.Emit(OpCodes.Callvirt, runtime.RequirePromise().TaskGetter);
                 il.Emit(OpCodes.Stloc, returnResultLocal);
                 il.MarkLabel(returnNotTSPromiseLabel);
 

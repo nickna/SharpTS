@@ -147,7 +147,7 @@ public partial class ILCompiler
             }
             else if (superclassName == "Promise")
             {
-                baseType = _runtime.TSPromiseType;
+                baseType = _runtime.RequirePromise().Type;
             }
         }
 
@@ -717,8 +717,8 @@ public partial class ILCompiler
             else if (superclassName == "Promise")
             {
                 il.Emit(OpCodes.Ldarg_1);
-                il.Emit(OpCodes.Call, _runtime.PromiseFromExecutor);
-                il.Emit(OpCodes.Call, _runtime.TSPromiseCtor);
+                il.Emit(OpCodes.Call, _runtime.RequirePromise().FromExecutor);
+                il.Emit(OpCodes.Call, _runtime.RequirePromise().Ctor);
             }
             else if (Runtime.BuiltIns.BuiltInNames.IsErrorTypeName(superclassName ?? ""))
             {

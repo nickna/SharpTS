@@ -240,7 +240,7 @@ public partial class RuntimeEmitter
         // Promise.prototype is entirely absent from Promise-free assemblies.
         if (_features.UsesPromise)
         {
-            runtime.PromisePrototypeField = typeBuilder.DefineField(
+            runtime.RequirePromise().PrototypeField = typeBuilder.DefineField(
                 "_promisePrototype",
                 _types.DictionaryStringObject,
                 FieldAttributes.Public | FieldAttributes.Static);
@@ -418,7 +418,7 @@ public partial class RuntimeEmitter
                 MethodAttributes.Public | MethodAttributes.Static,
                 _types.Void,
                 [_types.Object]);
-            runtime.MarkNonAutoAwaitPromiseMethod = markNonAutoAwaitPromise;
+            runtime.RequirePromise().MarkNonAutoAwaitPromiseMethod = markNonAutoAwaitPromise;
             {
                 var il = markNonAutoAwaitPromise.GetILGenerator();
                 var doneLabel = il.DefineLabel();
@@ -438,7 +438,7 @@ public partial class RuntimeEmitter
                 MethodAttributes.Public | MethodAttributes.Static,
                 _types.Boolean,
                 [_types.Object]);
-            runtime.ShouldAutoAwaitPromiseMethod = shouldAutoAwaitPromise;
+            runtime.RequirePromise().ShouldAutoAwaitPromiseMethod = shouldAutoAwaitPromise;
             {
                 var il = shouldAutoAwaitPromise.GetILGenerator();
                 var valueLocal = il.DeclareLocal(_types.Object);
@@ -648,7 +648,7 @@ public partial class RuntimeEmitter
         {
             // Promise.prototype starts empty; populated lazily on first read.
             cctorIL.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.DictionaryStringObject));
-            cctorIL.Emit(OpCodes.Stsfld, runtime.PromisePrototypeField);
+            cctorIL.Emit(OpCodes.Stsfld, runtime.RequirePromise().PrototypeField);
         }
 
         cctorIL.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(classPrototypeCacheType));
@@ -814,21 +814,21 @@ public partial class RuntimeEmitter
         EmitJsLessOrEqual(typeBuilder, runtime);
         EmitUpdateNumeric(typeBuilder, runtime);
         EmitIsTruthy(typeBuilder, runtime);
-        // Promise resolving callbacks need the adoption helper token before
-        // EmitPromiseMethods fills in its body later in this method.
+        // Promise resolving callbacks need these adoption tokens before their
+        // bodies are filled by the resolve-value and capability emitters.
         if (_features.UsesPromise)
         {
-            runtime.CoerceAwaitableToTaskMethod ??= typeBuilder.DefineMethod(
+            runtime.RequirePromise().CoerceAwaitableToTaskMethod = typeBuilder.DefineMethod(
                 "CoerceAwaitableToTask",
                 MethodAttributes.Public | MethodAttributes.Static,
                 _types.TaskOfObject,
                 [_types.Object]);
-            runtime.PromiseResolveValueMethod ??= typeBuilder.DefineMethod(
+            runtime.RequirePromise().ResolveValueMethod = typeBuilder.DefineMethod(
                 "PromiseResolveValue",
                 MethodAttributes.Public | MethodAttributes.Static,
                 _types.TaskOfObject,
                 [_types.Object]);
-            runtime.ResolvePreparedPromiseCapabilityMethod ??= typeBuilder.DefineMethod(
+            runtime.RequirePromise().ResolvePreparedPromiseCapabilityMethod = typeBuilder.DefineMethod(
                 "ResolvePreparedPromiseCapability",
                 MethodAttributes.Public | MethodAttributes.Static,
                 _types.Object,
@@ -1434,7 +1434,7 @@ public partial class RuntimeEmitter
         // were never created.
         if (_features.UsesRegExp)
             EmitRegExpPrototypePopulate(typeBuilder, runtime);
-        // Promise.prototype helpers + populate. Helpers wrap runtime.PromiseThen
+        // Promise.prototype helpers + populate. Helpers wrap runtime.RequirePromise().Then
         // /PromiseCatch/PromiseFinally with an `__this`-aware signature so
         // `Promise.prototype.then.call(p, fn)` routes correctly. Must come
         // after EmitPromiseMethods so the helper bodies can reference the

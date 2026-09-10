@@ -711,16 +711,6 @@ public class EmittedRuntime
     public FieldBuilder RegExpPrototypeField { get; set; } = null!;
     /// <summary>Idempotent populate for <see cref="RegExpPrototypeField"/>.</summary>
     public MethodBuilder RegExpPrototypePopulateMethod { get; set; } = null!;
-    /// <summary>Promise.prototype singleton dict (ECMA-262 §27.2.5): then/catch/finally/constructor + @@toStringTag.</summary>
-    public FieldBuilder PromisePrototypeField { get; set; } = null!;
-    /// <summary>Idempotent populate for <see cref="PromisePrototypeField"/>.</summary>
-    public MethodBuilder PromisePrototypePopulateMethod { get; set; } = null!;
-    /// <summary>$Runtime.PromiseThenHelper(__this, args) — wraps PromiseThen for Promise.prototype.then.call patterns.</summary>
-    public MethodBuilder PromiseThenHelperMethod { get; set; } = null!;
-    /// <summary>$Runtime.PromiseCatchHelper(__this, args) — wraps PromiseCatch for Promise.prototype.catch.call patterns.</summary>
-    public MethodBuilder PromiseCatchHelperMethod { get; set; } = null!;
-    /// <summary>$Runtime.PromiseFinallyHelper(__this, args) — wraps PromiseFinally for Promise.prototype.finally.call patterns.</summary>
-    public MethodBuilder PromiseFinallyHelperMethod { get; set; } = null!;
     /// <summary>$Runtime.FunctionProtoCall(__this, args) — ECMA-262 §20.2.3.3 Function.prototype.call. Dispatches __this with args[0] as thisArg, args[1..] as call args.</summary>
     /// <summary>$Runtime.FunctionProtoApply(__this, args) — ECMA-262 §20.2.3.1 Function.prototype.apply. Dispatches __this with args[0] as thisArg, args[1] (array-like) as call args.</summary>
     /// <summary>$Runtime.FunctionProtoBind(__this, args) — ECMA-262 §20.2.3.2 Function.prototype.bind. Returns a $BoundTSFunction (or shim) capturing __this + thisArg + boundArgs.</summary>
@@ -1054,89 +1044,18 @@ public class EmittedRuntime
     public MethodBuilder BigIntGreaterThanOrEqual { get; set; } = null!;
     public MethodBuilder UpdateNumeric { get; set; } = null!;
 
-    // Promise support
-    public MethodBuilder PromiseResolve { get; set; } = null!;
-    public MethodBuilder PromiseReject { get; set; } = null!;
-    // Value-form `Promise.resolve` / `Promise.reject` wrappers that validate
-    // `this` is Object per ECMA-262 §27.2.5.1 step 2. Used by the $TSFunction
-    // value-form path so `let r = Promise.resolve; r.call(undefined, x)` throws.
-    public MethodBuilder PromiseResolveStatic { get; set; } = null!;
-    public MethodBuilder PromiseRejectStatic { get; set; } = null!;
-    // Same pattern for all/race/allSettled/any — value-form invocation must
-    // validate `this` is Object before delegating to the iteration helper.
-    public MethodBuilder PromiseAllStatic { get; set; } = null!;
-    public MethodBuilder PromiseAllKeyedStatic { get; set; } = null!;
-    public MethodBuilder PromiseRaceStatic { get; set; } = null!;
-    public MethodBuilder PromiseAllSettledStatic { get; set; } = null!;
-    public MethodBuilder PromiseAllSettledKeyedStatic { get; set; } = null!;
-    public MethodBuilder PromiseAnyStatic { get; set; } = null!;
-    public MethodBuilder PromiseAll { get; set; } = null!;
-    public MethodBuilder PromiseAllPrimitive { get; set; } = null!;
-    public MethodBuilder PromiseAllKeyed { get; set; } = null!;
-    public MethodBuilder PromiseRace { get; set; } = null!;
-    public MethodBuilder PromiseThen { get; set; } = null!;
-    /// <summary>$Runtime.PromiseThenObjectPrimitive(Task&lt;object?&gt;, Func&lt;object,object&gt;) -> Task&lt;object?&gt; — fulfillment-only direct Promise.all reaction whose boxed callback result is statically primitive.</summary>
-    public MethodBuilder PromiseThenObjectPrimitive { get; set; } = null!;
-    /// <summary>$Runtime.PromiseThenPrimitive(Task&lt;object?&gt;, Func&lt;double,double&gt;) -> Task&lt;object?&gt; — stable intrinsic fulfillment-only numeric continuation whose primitive callback result cannot require thenable adoption.</summary>
-    public MethodBuilder PromiseThenPrimitive { get; set; } = null!;
-    /// <summary>$Runtime.PromiseThenPrimitiveWithRejection(Task&lt;object?&gt;, Func&lt;double,double&gt;, Func&lt;object,double&gt;) -> Task&lt;object?&gt; — stable intrinsic numeric continuation with a typed rejection handler and no thenable-result adoption.</summary>
-    public MethodBuilder PromiseThenPrimitiveWithRejection { get; set; } = null!;
-    public MethodBuilder PromiseCatch { get; set; } = null!;
-    public MethodBuilder PromiseFinally { get; set; } = null!;
-    /// <summary>Keeps standalone event-loop execution alive until a discarded top-level Promise reaction settles, without pumping it before the current script job completes.</summary>
-    public MethodBuilder TrackTopLevelPromiseReaction { get; set; } = null!;
-    public MethodBuilder PromiseAllSettled { get; set; } = null!;
-    public MethodBuilder PromiseAllSettledKeyed { get; set; } = null!;
-    public MethodBuilder PromiseKeyedMapResult { get; set; } = null!;
-    public MethodBuilder PromiseAny { get; set; } = null!;
-    public MethodBuilder PromiseFromExecutor { get; set; } = null!;
-    /// <summary>$Runtime.PromiseFromDirectExecutor(Func&lt;object,object,object&gt;) -> Task&lt;object?&gt; — compiler-only fast path for an inline, two-argument Promise executor arrow whose CLR signature is known. Avoids materializing a $TSFunction and redispatching the executor through InvokeMethodValue.</summary>
-    public MethodBuilder PromiseFromDirectExecutor { get; set; } = null!;
-    public MethodBuilder PromiseWithResolvers { get; set; } = null!;
-    /// <summary>$Runtime.UnwrapPromiseReceiver(object) -> Task&lt;object?&gt; — $Promise (incl. #242 subclasses) → .Task; anything else is cast to Task&lt;object?&gt;. Used by then/catch/finally emission so promise-typed receivers work regardless of representation.</summary>
-    public MethodBuilder UnwrapPromiseReceiverMethod { get; set; } = null!;
-    /// <summary>$Runtime.NormalizePromiseList(object, object, object, int, bool) -> object — incrementally resolves and wires Promise combinator elements while preserving observable iterator order. Kind 3 is Promise.all; the final flag selects a compiler-proven stable primitive input.</summary>
-    public MethodBuilder NormalizePromiseListMethod { get; set; } = null!;
-    /// <summary>$Runtime.WrapDerivedPromiseResult(Task&lt;object?&gt; result, object receiver) -> object — completes species-based result construction for subclass then/catch/finally results after ObservePromiseConstructor has performed the synchronous own-constructor access (#242). For a $Promise SUBCLASS species, constructs a receiver-typed promise around the result task via the subclass's (object executor) constructor (PromiseFromExecutor adopts the task); for a general non-Promise species, routes to NewPromiseCapabilityResult (#349); for %Promise% (or no subclass receiver) returns the task unchanged.</summary>
-    public MethodBuilder WrapDerivedPromiseResultMethod { get; set; } = null!;
-    /// <summary>$Runtime.ObservePromiseConstructor(object receiver) -> void — synchronously performs the observable own <c>constructor</c> getter step before a then/catch/finally reaction is scheduled. WrapDerivedPromiseResult handles the remaining species/result construction after the reaction task exists.</summary>
-    public MethodBuilder ObservePromiseConstructorMethod { get; set; } = null!;
-    /// <summary>$Runtime.NewPromiseCapabilityResult(object species, Task&lt;object?&gt; result) -> object — the general NewPromiseCapability (#349/#390): constructs <c>new species(executor)</c> through ConstructDynamicValue (a Type class species → Activator, a function-valued species → the JS new protocol, a non-constructor → TypeError per §7.3.22 step 5), capturing the resolve/reject the executor is handed via a <see cref="PromiseCapabilityType"/> holder, then adopts <c>result</c> into that capability (settlement scheduled on the event-loop SynchronizationContext) and returns the constructed (non-Promise) object. Body emitted late (after ConstructDynamicValue); the stub is pre-declared so WrapDerivedPromiseResult can call it.</summary>
-    public MethodBuilder NewPromiseCapabilityResultMethod { get; set; } = null!;
-    /// <summary>$Runtime.PreparePromiseCapability(object constructor) -> object — synchronously performs NewPromiseCapability through construction and callable resolve/reject validation, returning the opaque capability holder. Promise static wrappers call this before starting their operation so constructor side effects and validation have spec order.</summary>
-    public MethodBuilder PreparePromiseCapabilityMethod { get; set; } = null!;
-    /// <summary>$Runtime.AdoptPromiseCapability(object capability, Task&lt;object?&gt; result) -> object — schedules settlement of a prepared capability from <c>result</c> and returns its constructed promise object.</summary>
-    public MethodBuilder AdoptPromiseCapabilityMethod { get; set; } = null!;
-    public MethodBuilder AdoptCompletedPromiseCapabilityMethod { get; set; } = null!;
-    public MethodBuilder ResolvePreparedPromiseCapabilityMethod { get; set; } = null!;
-    public MethodBuilder GetPromiseCapabilityResolveMethod { get; set; } = null!;
-    public MethodBuilder GetPromiseCapabilityRejectMethod { get; set; } = null!;
-    public MethodBuilder PromiseResolveValueMethod { get; set; } = null!;
-    public MethodBuilder AdoptPromiseCombinatorResultMethod { get; set; } = null!;
-    public MethodBuilder SettlePromiseCombinatorResultMethod { get; set; } = null!;
-    public MethodBuilder MarkNonAutoAwaitPromiseMethod { get; set; } = null!;
-    public MethodBuilder ShouldAutoAwaitPromiseMethod { get; set; } = null!;
-    /// <summary>$Runtime.CoerceAwaitableToTask(object value) -> Task&lt;object?&gt; — the await coercion for a value that is neither a $Promise nor a Task&lt;object?&gt;: an ordinary thenable (a value whose <c>then</c> member is callable) is adopted by invoking <c>then(resolve, reject)</c> into a fresh capability (#349); anything else becomes Task.FromResult(value). Called at every state-machine await's wrap-value site.</summary>
-    public MethodBuilder CoerceAwaitableToTaskMethod { get; set; } = null!;
-    /// <summary>$PromiseCapability — the host executor handed to a general (non-Promise) species constructor by NewPromiseCapabilityResult (#349): captures the resolve/reject functions (Capture, exposed as a Func&lt;object[],object&gt;) and drives them when the source task settles (Settle, an Action&lt;Task&lt;object&gt;&gt; continuation).</summary>
-    public TypeBuilder PromiseCapabilityType { get; set; } = null!;
-    public ConstructorBuilder PromiseCapabilityCtor { get; set; } = null!;
-    public FieldBuilder PromiseCapabilityResolveField { get; set; } = null!;
-    public FieldBuilder PromiseCapabilityRejectField { get; set; } = null!;
-    public FieldBuilder PromiseCapabilityInstanceField { get; set; } = null!;
-    public MethodBuilder PromiseCapabilityCaptureMethod { get; set; } = null!;
-    public MethodBuilder PromiseCapabilitySettleMethod { get; set; } = null!;
-    public TypeBuilder PromiseResolveCallbackType { get; set; } = null!;
-    public ConstructorBuilder PromiseResolveCallbackCtor { get; set; } = null!;
-    public MethodBuilder PromiseResolveCallbackInvoke { get; set; } = null!;
-    public TypeBuilder PromiseRejectCallbackType { get; set; } = null!;
-    public ConstructorBuilder PromiseRejectCallbackCtor { get; set; } = null!;
-    public MethodBuilder PromiseRejectCallbackInvoke { get; set; } = null!;
+    /// <summary>Promise metadata, or null when Promise support is tree-shaken.</summary>
+    public EmittedPromiseRuntime? Promise { get; private set; }
 
-    // Promise callback helpers (direct $TSFunction.Invoke without reflection)
-    public MethodBuilder InvokeCallback { get; set; } = null!;
-    public MethodBuilder InvokeCallbackNoArgs { get; set; } = null!;
+    internal void BeginPromiseEmission()
+    {
+        if (Promise is not null)
+            throw new InvalidOperationException("Promise metadata emission has already started.");
+        Promise = new EmittedPromiseRuntime();
+    }
 
+    public EmittedPromiseRuntime RequirePromise() => Promise
+        ?? throw new InvalidOperationException("Promise runtime was not enabled for this compilation.");
 
     // Timer support ($TSTimeout type and global functions)
     public TypeBuilder TSTimeoutType { get; set; } = null!;
@@ -1538,33 +1457,8 @@ public class EmittedRuntime
     public ConstructorBuilder ThrownValueExceptionCtor { get; set; } = null!;
     public MethodBuilder ThrownValueExceptionValueGetter { get; set; } = null!;
 
-    // Promise type - emitted for standalone assemblies
-    // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSPromise
-    public Type TSPromiseType { get; set; } = null!;
-    public ConstructorBuilder TSPromiseCtor { get; set; } = null!;
-    public MethodBuilder TSPromiseTaskGetter { get; set; } = null!;
-    public MethodBuilder TSPromiseResolve { get; set; } = null!;
-    public MethodBuilder TSPromiseReject { get; set; } = null!;
-    public MethodBuilder TSPromiseGetValueAsync { get; set; } = null!;
-    /// <summary>
-    /// Observes a Task/$Promise returned from a callback whose result is otherwise
-    /// discarded, enabling process unhandled-rejection lifecycle events.
-    /// </summary>
-    public MethodBuilder ObserveDiscardedPromiseResult { get; set; } = null!;
-    /// <summary>
-    /// Marks a source promise handled when a callable rejection reaction is
-    /// attached through then/catch.
-    /// </summary>
-    public MethodBuilder NotifyPromiseRejectionHandler { get; set; } = null!;
-
-    // Promise rejected exception
-    public Type TSPromiseRejectedExceptionType { get; set; } = null!;
-    public ConstructorBuilder TSPromiseRejectedExceptionCtor { get; set; } = null!;
-    public MethodBuilder TSPromiseRejectedExceptionReasonGetter { get; set; } = null!;
-
     // Dynamic import support
     public MethodBuilder DynamicImportModule { get; set; } = null!;
-    public MethodBuilder WrapTaskAsPromise { get; set; } = null!;
 
     // $ArrayHole singleton — sentinel for ECMA-262 array holes (index in range but never written).
     // NOTE: Must stay in sync with SharpTS.Runtime.Types.ArrayHole

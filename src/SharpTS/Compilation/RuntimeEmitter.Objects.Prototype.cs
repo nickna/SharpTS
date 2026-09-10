@@ -725,14 +725,14 @@ public partial class RuntimeEmitter
         // Promise instances ($TSPromise + raw Task<object>) → Promise.prototype
         // per ECMA-262 §27.2.5. Without this, Object.getPrototypeOf(promise)
         // returns null and `Promise.prototype.isPrototypeOf(p)` fails.
-        if (runtime.TSPromiseType != null)
+        if (runtime.Promise is not null)
         {
             var notTSPromiseForProtoLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.TSPromiseType);
+            il.Emit(OpCodes.Isinst, runtime.RequirePromise().Type);
             il.Emit(OpCodes.Brfalse, notTSPromiseForProtoLabel);
-            il.Emit(OpCodes.Call, runtime.PromisePrototypePopulateMethod);
-            il.Emit(OpCodes.Ldsfld, runtime.PromisePrototypeField);
+            il.Emit(OpCodes.Call, runtime.RequirePromise().PrototypePopulateMethod);
+            il.Emit(OpCodes.Ldsfld, runtime.RequirePromise().PrototypeField);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(notTSPromiseForProtoLabel);
         }
@@ -742,8 +742,8 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Isinst, _types.TaskOfObject);
             il.Emit(OpCodes.Brfalse, notTaskForProtoLabel);
-            il.Emit(OpCodes.Call, runtime.PromisePrototypePopulateMethod);
-            il.Emit(OpCodes.Ldsfld, runtime.PromisePrototypeField);
+            il.Emit(OpCodes.Call, runtime.RequirePromise().PrototypePopulateMethod);
+            il.Emit(OpCodes.Ldsfld, runtime.RequirePromise().PrototypeField);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(notTaskForProtoLabel);
         }
@@ -781,14 +781,14 @@ public partial class RuntimeEmitter
         {
             var notResolveCallbackForProtoLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.PromiseResolveCallbackType);
+            il.Emit(OpCodes.Isinst, runtime.RequirePromise().ResolveCallbackType);
             il.Emit(OpCodes.Brfalse, notResolveCallbackForProtoLabel);
             il.Emit(OpCodes.Ldsfld, runtime.FunctionPrototypeField);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(notResolveCallbackForProtoLabel);
             var notRejectCallbackForProtoLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.PromiseRejectCallbackType);
+            il.Emit(OpCodes.Isinst, runtime.RequirePromise().RejectCallbackType);
             il.Emit(OpCodes.Brfalse, notRejectCallbackForProtoLabel);
             il.Emit(OpCodes.Ldsfld, runtime.FunctionPrototypeField);
             il.Emit(OpCodes.Ret);
