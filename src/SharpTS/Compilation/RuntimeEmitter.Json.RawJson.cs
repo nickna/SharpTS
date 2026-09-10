@@ -88,7 +88,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, parsed);
         var primitive = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, parsed);
-        il.Emit(OpCodes.Isinst, runtime.TSArrayType);
+        il.Emit(OpCodes.Isinst, runtime.ArrayStorage.Type);
         il.Emit(OpCodes.Brtrue, invalidBoundary);
         il.Emit(OpCodes.Ldloc, parsed);
         il.Emit(OpCodes.Isinst, _types.ListOfObject);

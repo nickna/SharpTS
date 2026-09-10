@@ -700,7 +700,7 @@ public partial class RuntimeEmitter
         var holeAppendedLabel = il.DefineLabel();
         var notHoleLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, elemLocal);
-        il.Emit(OpCodes.Isinst, runtime.ArrayHoleType);
+        il.Emit(OpCodes.Isinst, runtime.ArrayStorage.HoleType);
         il.Emit(OpCodes.Brfalse, notHoleLabel);
         il.Emit(OpCodes.Ldloc, sbLocal);
         il.Emit(OpCodes.Ldstr, "null");

@@ -1316,7 +1316,7 @@ public partial class RuntimeEmitter
         EmitFlagCheck(X509KeyUsageFlags.DecipherOnly, "Decipher Only");
 
         il.Emit(OpCodes.Ldloc, listLocal);
-        il.Emit(OpCodes.Newobj, runtime.TSArrayCtor);
+        il.Emit(OpCodes.Newobj, runtime.ArrayStorage.Ctor);
         il.Emit(OpCodes.Ret);
         prop.SetGetMethod(getter);
     }
@@ -1401,7 +1401,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Blt, jBody);
 
         il.Emit(OpCodes.Ldloc, listLocal);
-        il.Emit(OpCodes.Newobj, runtime.TSArrayCtor);
+        il.Emit(OpCodes.Newobj, runtime.ArrayStorage.Ctor);
         il.Emit(OpCodes.Ret);
         prop.SetGetMethod(getter);
     }

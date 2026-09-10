@@ -57,7 +57,7 @@ public partial class RuntimeEmitter
         // produces the guest TypeError mandated by GetIterator.
         var groupByMaterializeLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSArrayType);
+        il.Emit(OpCodes.Isinst, runtime.ArrayStorage.Type);
         il.Emit(OpCodes.Brtrue, groupByMaterializeLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, _types.ListOfObject);
@@ -147,7 +147,7 @@ public partial class RuntimeEmitter
         // Create new list, wrap in $Array, store in dict
         // existing = new $Array(new List<object?>())
         il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, _types.EmptyTypes));
-        il.Emit(OpCodes.Newobj, runtime.TSArrayCtor);
+        il.Emit(OpCodes.Newobj, runtime.ArrayStorage.Ctor);
         il.Emit(OpCodes.Stloc, existingLocal);
         // dict[keyStr] = existing
         il.Emit(OpCodes.Ldloc, dictLocal);
@@ -160,8 +160,8 @@ public partial class RuntimeEmitter
         // Get elements from existing $Array and add current element
         // ((existing as $Array).Elements).Add(list[i])
         il.Emit(OpCodes.Ldloc, existingLocal);
-        il.Emit(OpCodes.Castclass, runtime.TSArrayType);
-        il.Emit(OpCodes.Callvirt, runtime.TSArrayElementsGetter);
+        il.Emit(OpCodes.Castclass, runtime.ArrayStorage.Type);
+        il.Emit(OpCodes.Callvirt, runtime.ArrayStorage.ElementsGetter);
         il.Emit(OpCodes.Ldloc, listLocal);
         il.Emit(OpCodes.Ldloc, indexLocal);
         il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Item").GetGetMethod()!);
@@ -235,7 +235,7 @@ public partial class RuntimeEmitter
         // host-IEnumerable compatibility fallback can accept the value.
         var materialize = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSArrayType);
+        il.Emit(OpCodes.Isinst, runtime.ArrayStorage.Type);
         il.Emit(OpCodes.Brtrue, materialize);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, _types.ListOfObject);
@@ -307,7 +307,7 @@ public partial class RuntimeEmitter
 
         // Key doesn't exist: create new $Array, store in map
         il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, _types.EmptyTypes));
-        il.Emit(OpCodes.Newobj, runtime.TSArrayCtor);
+        il.Emit(OpCodes.Newobj, runtime.ArrayStorage.Ctor);
         il.Emit(OpCodes.Stloc, existingLocal);
         // MapSet(map, key, existing)
         il.Emit(OpCodes.Ldloc, mapLocal);
@@ -327,8 +327,8 @@ public partial class RuntimeEmitter
         // Add current element to existing $Array
         il.MarkLabel(addElementLabel);
         il.Emit(OpCodes.Ldloc, existingLocal);
-        il.Emit(OpCodes.Castclass, runtime.TSArrayType);
-        il.Emit(OpCodes.Callvirt, runtime.TSArrayElementsGetter);
+        il.Emit(OpCodes.Castclass, runtime.ArrayStorage.Type);
+        il.Emit(OpCodes.Callvirt, runtime.ArrayStorage.ElementsGetter);
         il.Emit(OpCodes.Ldloc, listLocal);
         il.Emit(OpCodes.Ldloc, indexLocal);
         il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Item").GetGetMethod()!);

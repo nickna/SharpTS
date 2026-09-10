@@ -79,7 +79,7 @@ public partial class RuntimeEmitter
         // $Array (wrapper around List<object?>) - check before List
         var tsArrayLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSArrayType);
+        il.Emit(OpCodes.Isinst, runtime.ArrayStorage.Type);
         il.Emit(OpCodes.Brtrue, tsArrayLabel);
 
         // Descriptor-driven: check each array backing type
@@ -293,7 +293,7 @@ public partial class RuntimeEmitter
         // TSArrayType is non-null here by contract: the dispatch above (Isinst TSArrayType)
         // already passed it to il.Emit, which throws on null. A redundant != null guard here
         // would only poison nullable flow analysis for the unconditional casts further down.
-        EmitProtoSymbolFallback(runtime.TSArrayType, runtime.ArrayPrototypeField, runtime.ArrayPrototypePopulateMethod);
+        EmitProtoSymbolFallback(runtime.ArrayStorage.Type, runtime.ArrayPrototypeField, runtime.ArrayPrototypePopulateMethod);
         // Functions inherit symbol-keyed properties from Function.prototype,
         // including Symbol.isConcatSpreadable. The own symbol dictionary was
         // already checked above; only a miss reaches this fallback.
@@ -681,9 +681,9 @@ public partial class RuntimeEmitter
 
         var tsArrayOwnIndex = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSArrayType);
+        il.Emit(OpCodes.Castclass, runtime.ArrayStorage.Type);
         il.Emit(OpCodes.Ldloc, tsArrayGetIdx);
-        il.Emit(OpCodes.Callvirt, runtime.TSArrayHasIndex);
+        il.Emit(OpCodes.Callvirt, runtime.ArrayStorage.HasIndex);
         il.Emit(OpCodes.Brtrue, tsArrayOwnIndex);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
@@ -692,9 +692,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
         il.MarkLabel(tsArrayOwnIndex);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSArrayType);
+        il.Emit(OpCodes.Castclass, runtime.ArrayStorage.Type);
         il.Emit(OpCodes.Ldloc, tsArrayGetIdx);
-        il.Emit(OpCodes.Callvirt, runtime.TSArrayGetLong);
+        il.Emit(OpCodes.Callvirt, runtime.ArrayStorage.GetLong);
         il.Emit(OpCodes.Ret);
 
         // Descriptor-driven: emit get handler for each backing type.
@@ -829,7 +829,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Stloc, listElementLocal);
             var notHoleLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldloc, listElementLocal);
-            il.Emit(OpCodes.Isinst, runtime.ArrayHoleType);
+            il.Emit(OpCodes.Isinst, runtime.ArrayStorage.HoleType);
             il.Emit(OpCodes.Brfalse, notHoleLabel);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_1);
@@ -1157,7 +1157,7 @@ public partial class RuntimeEmitter
         // $Array (wrapper around List<object?>) - check before List
         var tsArraySetLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSArrayType);
+        il.Emit(OpCodes.Isinst, runtime.ArrayStorage.Type);
         il.Emit(OpCodes.Brtrue, tsArraySetLabel);
 
         // Descriptor-driven: check each array backing type
@@ -1598,10 +1598,10 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, nullLabel);
         il.MarkLabel(tsArraySetRawStorage);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSArrayType);
+        il.Emit(OpCodes.Castclass, runtime.ArrayStorage.Type);
         il.Emit(OpCodes.Ldloc, idxLong);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Callvirt, runtime.TSArraySetLong);
+        il.Emit(OpCodes.Callvirt, runtime.ArrayStorage.SetLong);
         il.Emit(OpCodes.Ret);
 
         // Descriptor-driven: emit set handler for each backing type
@@ -1870,7 +1870,7 @@ public partial class RuntimeEmitter
         // the pre-M3 code just returned true without mutating.
         var tsArrayDeleteIdxLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSArrayType);
+        il.Emit(OpCodes.Isinst, runtime.ArrayStorage.Type);
         il.Emit(OpCodes.Brtrue, tsArrayDeleteIdxLabel);
 
         // $Arguments / legacy List<object> array carriers use ArrayHole for
@@ -2066,7 +2066,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Castclass, _types.ListOfObject);
             il.Emit(OpCodes.Ldloc, listDeleteIndexLocal);
-            il.Emit(OpCodes.Ldsfld, runtime.ArrayHoleInstance);
+            il.Emit(OpCodes.Ldsfld, runtime.ArrayStorage.HoleInstance);
             il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "set_Item", [_types.Int32, _types.Object]));
             il.MarkLabel(listDeleteDone);
             il.Emit(OpCodes.Ldc_I4_1);

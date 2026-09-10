@@ -397,11 +397,11 @@ public partial class RuntimeEmitter
         // $Array → .Elements
         var notTSArray = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSArrayType);
+        il.Emit(OpCodes.Isinst, runtime.ArrayStorage.Type);
         il.Emit(OpCodes.Brfalse, notTSArray);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSArrayType);
-        il.Emit(OpCodes.Callvirt, runtime.TSArrayElementsGetter);
+        il.Emit(OpCodes.Castclass, runtime.ArrayStorage.Type);
+        il.Emit(OpCodes.Callvirt, runtime.ArrayStorage.ElementsGetter);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notTSArray);
 
@@ -664,7 +664,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, addValueLabel);
         il.MarkLabel(addHoleLabel);
         il.Emit(OpCodes.Ldloc, listLocal);
-        il.Emit(OpCodes.Ldsfld, runtime.ArrayHoleInstance);
+        il.Emit(OpCodes.Ldsfld, runtime.ArrayStorage.HoleInstance);
         il.MarkLabel(addValueLabel);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", _types.Object));
 
@@ -837,7 +837,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, afterEntry);
         il.MarkLabel(noEntry);
         il.Emit(OpCodes.Ldloc, listLocal);
-        il.Emit(OpCodes.Ldsfld, runtime.ArrayHoleInstance);
+        il.Emit(OpCodes.Ldsfld, runtime.ArrayStorage.HoleInstance);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", _types.Object));
         il.MarkLabel(afterEntry);
 
@@ -1019,7 +1019,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, wasPresent);
         il.MarkLabel(pushHole_dict);
         il.Emit(OpCodes.Ldloc, listLocal);
-        il.Emit(OpCodes.Ldsfld, runtime.ArrayHoleInstance);
+        il.Emit(OpCodes.Ldsfld, runtime.ArrayStorage.HoleInstance);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", _types.Object));
         il.Emit(OpCodes.Br, afterPush);
         il.MarkLabel(wasPresent);
@@ -1291,7 +1291,7 @@ public partial class RuntimeEmitter
         var suppliedFromIndex = il.DefineLabel();
         var startReady = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Isinst, runtime.ArrayHoleType);
+        il.Emit(OpCodes.Isinst, runtime.ArrayStorage.HoleType);
         il.Emit(OpCodes.Brfalse, suppliedFromIndex);
         if (findLast)
         {
@@ -1557,7 +1557,7 @@ public partial class RuntimeEmitter
 
         // hole?
         il.Emit(OpCodes.Ldloc, elemLocal);
-        il.Emit(OpCodes.Isinst, runtime.ArrayHoleType);
+        il.Emit(OpCodes.Isinst, runtime.ArrayStorage.HoleType);
         il.Emit(OpCodes.Brtrue, skipAppend);
         // null?
         il.Emit(OpCodes.Ldloc, elemLocal);
@@ -1826,7 +1826,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, copyAddedLabel);
         il.MarkLabel(copyHoleLabel);
         il.Emit(OpCodes.Ldloc, resultLocal);
-        il.Emit(OpCodes.Ldsfld, runtime.ArrayHoleInstance);
+        il.Emit(OpCodes.Ldsfld, runtime.ArrayStorage.HoleInstance);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", _types.Object));
         il.MarkLabel(copyAddedLabel);
         il.Emit(OpCodes.Ldloc, copyIndexLocal);
@@ -2141,7 +2141,7 @@ public partial class RuntimeEmitter
 
             // Absent: list.Add($ArrayHole.Instance)
             il.Emit(OpCodes.Ldloc, listLocal);
-            il.Emit(OpCodes.Ldsfld, runtime.ArrayHoleInstance);
+            il.Emit(OpCodes.Ldsfld, runtime.ArrayStorage.HoleInstance);
             il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", _types.Object));
             il.Emit(OpCodes.Br, afterAdd);
 
@@ -2236,7 +2236,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
         il.Emit(OpCodes.Blt, loadListValue);
-        il.Emit(OpCodes.Ldsfld, runtime.ArrayHoleInstance);
+        il.Emit(OpCodes.Ldsfld, runtime.ArrayStorage.HoleInstance);
         il.Emit(OpCodes.Stloc, listValLocal);
         il.Emit(OpCodes.Br, listValueReady);
         il.MarkLabel(loadListValue);
@@ -2263,7 +2263,7 @@ public partial class RuntimeEmitter
         // deciding whether iteration skips the index.
         var notTSArrayReceiver = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, rcvrLocal);
-        il.Emit(OpCodes.Isinst, runtime.TSArrayType);
+        il.Emit(OpCodes.Isinst, runtime.ArrayStorage.Type);
         il.Emit(OpCodes.Brfalse, notTSArrayReceiver);
         il.Emit(OpCodes.Ldarga_S, (byte)1);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Int32, "ToString", Type.EmptyTypes)!);
@@ -2273,7 +2273,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
         il.Emit(OpCodes.Brtrue, loadArrayPropertyLabel);
         il.Emit(OpCodes.Ldloc, listValLocal);
-        il.Emit(OpCodes.Isinst, runtime.ArrayHoleType);
+        il.Emit(OpCodes.Isinst, runtime.ArrayStorage.HoleType);
         il.Emit(OpCodes.Brfalse, returnListValLabel);
         il.Emit(OpCodes.Ldloc, rcvrLocal);
         il.Emit(OpCodes.Ldloc, keyStrLocal);
@@ -2300,7 +2300,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
         il.Emit(OpCodes.Brtrue, loadArrayPropertyLabel);
         il.Emit(OpCodes.Ldloc, listValLocal);
-        il.Emit(OpCodes.Isinst, runtime.ArrayHoleType);
+        il.Emit(OpCodes.Isinst, runtime.ArrayStorage.HoleType);
         il.Emit(OpCodes.Brfalse, returnListValLabel);
         il.Emit(OpCodes.Ldloc, rcvrLocal);
         il.Emit(OpCodes.Ldloc, keyStrLocal);
@@ -2424,7 +2424,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(returnHoleLabel);
-        il.Emit(OpCodes.Ldsfld, runtime.ArrayHoleInstance);
+        il.Emit(OpCodes.Ldsfld, runtime.ArrayStorage.HoleInstance);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(returnListValLabel);
@@ -2565,7 +2565,7 @@ public partial class RuntimeEmitter
         // its intrinsic/custom prototype when absent.
         var notTSArrayLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, currentLocal);
-        il.Emit(OpCodes.Isinst, runtime.TSArrayType);
+        il.Emit(OpCodes.Isinst, runtime.ArrayStorage.Type);
         il.Emit(OpCodes.Brfalse, notTSArrayLabel);
         il.Emit(OpCodes.Ldloc, currentLocal);
         il.Emit(OpCodes.Ldarg_1);
@@ -2578,9 +2578,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Int64, "TryParse", [_types.String, _types.Int64.MakeByRefType()])!);
         il.Emit(OpCodes.Brfalse, tsArrayWalkPrototype);
         il.Emit(OpCodes.Ldloc, currentLocal);
-        il.Emit(OpCodes.Castclass, runtime.TSArrayType);
+        il.Emit(OpCodes.Castclass, runtime.ArrayStorage.Type);
         il.Emit(OpCodes.Ldloc, tsArrayIdxLocal);
-        il.Emit(OpCodes.Callvirt, runtime.TSArrayHasIndex);
+        il.Emit(OpCodes.Callvirt, runtime.ArrayStorage.HasIndex);
         il.Emit(OpCodes.Brtrue, trueLabel);
         il.MarkLabel(tsArrayWalkPrototype);
         il.Emit(OpCodes.Ldloc, currentLocal);
@@ -2632,7 +2632,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, listForCheckLocal);
         il.Emit(OpCodes.Ldloc, listIdxLocal);
         il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Item").GetGetMethod()!);
-        il.Emit(OpCodes.Isinst, runtime.ArrayHoleType);
+        il.Emit(OpCodes.Isinst, runtime.ArrayStorage.HoleType);
         il.Emit(OpCodes.Brtrue, walkListPrototypeLabel);
         il.Emit(OpCodes.Br, trueLabel);
 

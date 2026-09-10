@@ -11,7 +11,7 @@ public partial class RuntimeEmitter
     {
         var appendDouble = typeBuilder.DefineMethod("AppendRestDouble", MethodAttributes.Assembly,
             _types.Void, [_types.Double]);
-        runtime.TSArrayAppendRestDouble = appendDouble;
+        runtime.ArrayStorage.AppendRestDouble = appendDouble;
         appendDouble.SetImplementationFlags(MethodImplAttributes.AggressiveInlining);
         var il = appendDouble.GetILGenerator();
         var boxed = il.DefineLabel();
@@ -20,19 +20,19 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, boxed);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.TSArrayPushDouble);
+        il.Emit(OpCodes.Call, runtime.ArrayStorage.PushDouble);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(boxed);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Box, _types.Double);
-        il.Emit(OpCodes.Call, runtime.TSArrayAppendRest);
+        il.Emit(OpCodes.Call, runtime.ArrayStorage.AppendRest);
         il.Emit(OpCodes.Ret);
 
         var appendValue = typeBuilder.DefineMethod("AppendRestValue",
             MethodAttributes.Assembly | MethodAttributes.Static, _types.Void,
             [_types.ListOfObject, _types.Object]);
-        runtime.TSArrayAppendRestValue = appendValue;
+        runtime.ArrayStorage.AppendRestValue = appendValue;
         appendValue.SetImplementationFlags(MethodImplAttributes.AggressiveInlining);
         il = appendValue.GetILGenerator();
         var plain = il.DefineLabel();
@@ -44,7 +44,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, plain);
         il.Emit(OpCodes.Ldloc, destination);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.TSArrayAppendRest);
+        il.Emit(OpCodes.Call, runtime.ArrayStorage.AppendRest);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(plain);
         il.Emit(OpCodes.Ldarg_0);
@@ -57,7 +57,7 @@ public partial class RuntimeEmitter
         var reserve = typeBuilder.DefineMethod("ReserveRest",
             MethodAttributes.Assembly | MethodAttributes.Static, _types.Void,
             [_types.ListOfObject, _types.Int32]);
-        runtime.TSArrayReserveRest = reserve;
+        runtime.ArrayStorage.ReserveRest = reserve;
         il = reserve.GetILGenerator();
         destination = il.DeclareLocal(typeBuilder);
         var capacity = il.DeclareLocal(_types.Int32);
@@ -110,7 +110,7 @@ public partial class RuntimeEmitter
         var appendSource = typeBuilder.DefineMethod("AppendNumericRestSource",
             MethodAttributes.Assembly | MethodAttributes.Static, _types.Void,
             [_types.ListOfObject, typeBuilder]);
-        runtime.TSArrayAppendNumericRestSource = appendSource;
+        runtime.ArrayStorage.AppendNumericRestSource = appendSource;
         il = appendSource.GetILGenerator();
         destination = il.DeclareLocal(typeBuilder);
         var index = il.DeclareLocal(_types.Int32);

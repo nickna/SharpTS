@@ -160,7 +160,7 @@ public partial class ILCompiler
             // implicit `constructor(...args) { super(...args) }` argument list.
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Call, _runtime.TSArrayCtorFromCtorArgs);
+            il.Emit(OpCodes.Call, _runtime.ArrayStorage.CtorFromCtorArgs);
         }
         else if (constructor == null && isDirectPromiseSubclass)
         {

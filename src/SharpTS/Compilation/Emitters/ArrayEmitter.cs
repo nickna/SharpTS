@@ -353,7 +353,7 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
                 }
                 else
                 {
-                    il.Emit(OpCodes.Ldsfld, ctx.Runtime!.ArrayHoleInstance);
+                    il.Emit(OpCodes.Ldsfld, ctx.Runtime!.ArrayStorage.HoleInstance);
                 }
                 il.Emit(OpCodes.Call, methodName == "indexOf" ? ctx.Runtime!.ArrayIndexOf : ctx.Runtime!.ArrayLastIndexOf);
                 il.Emit(OpCodes.Box, ctx.Types.Double);
@@ -533,7 +533,7 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
         if (returnsNewArray)
         {
             // Stack: [list]  → want: [new $Array(list)]
-            il.Emit(OpCodes.Newobj, ctx.Runtime!.TSArrayCtor);
+            il.Emit(OpCodes.Newobj, ctx.Runtime!.ArrayStorage.Ctor);
         }
     }
 
@@ -584,7 +584,7 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
                     // and report 0, so a loop-condition `i < arr.length` never runs. A $Array is never the
                     // arguments object, so no $Arguments check is needed on this arm.
                     il.Emit(OpCodes.Ldloc, h.TypedLocal);
-                    il.Emit(OpCodes.Callvirt, ctx.Runtime!.TSArrayLongLengthGetter);
+                    il.Emit(OpCodes.Callvirt, ctx.Runtime!.ArrayStorage.LongLengthGetter);
                     il.Emit(OpCodes.Conv_R8);
                     il.Emit(OpCodes.Br, endLabel);
                 }
@@ -645,11 +645,11 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
         // int.MaxValue; M3 acceptance demands `a.length === 2147483649` works).
         var tsArrayCheckLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, objLocal);
-        il.Emit(OpCodes.Isinst, ctx.Runtime!.TSArrayType);
+        il.Emit(OpCodes.Isinst, ctx.Runtime!.ArrayStorage.Type);
         il.Emit(OpCodes.Brfalse, tsArrayCheckLabel);
         il.Emit(OpCodes.Ldloc, objLocal);
-        il.Emit(OpCodes.Castclass, ctx.Runtime!.TSArrayType);
-        il.Emit(OpCodes.Callvirt, ctx.Runtime!.TSArrayLongLengthGetter);
+        il.Emit(OpCodes.Castclass, ctx.Runtime!.ArrayStorage.Type);
+        il.Emit(OpCodes.Callvirt, ctx.Runtime!.ArrayStorage.LongLengthGetter);
         il.Emit(OpCodes.Conv_R8);
         il.Emit(OpCodes.Br, endLabelNH);
 
@@ -719,14 +719,14 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
         // and would otherwise read the empty base list. EnsureBoxed is a no-op
         // for boxed-mode arrays.
         var deoptDone = il.DefineLabel();
-        var arrLocal = il.DeclareLocal(ctx.Runtime!.TSArrayType);
+        var arrLocal = il.DeclareLocal(ctx.Runtime!.ArrayStorage.Type);
         il.Emit(OpCodes.Ldloc, objLocal);
-        il.Emit(OpCodes.Isinst, ctx.Runtime.TSArrayType);
+        il.Emit(OpCodes.Isinst, ctx.Runtime.ArrayStorage.Type);
         il.Emit(OpCodes.Stloc, arrLocal);
         il.Emit(OpCodes.Ldloc, arrLocal);
         il.Emit(OpCodes.Brfalse, deoptDone);
         il.Emit(OpCodes.Ldloc, arrLocal);
-        il.Emit(OpCodes.Callvirt, ctx.Runtime.TSArrayEnsureBoxed);
+        il.Emit(OpCodes.Callvirt, ctx.Runtime.ArrayStorage.EnsureBoxed);
         il.MarkLabel(deoptDone);
 
         var isListLabel = il.DefineLabel();
@@ -740,7 +740,7 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
         // Check if it's $Array - get Elements
         var tsArrayLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, objLocal);
-        il.Emit(OpCodes.Isinst, ctx.Runtime!.TSArrayType);
+        il.Emit(OpCodes.Isinst, ctx.Runtime!.ArrayStorage.Type);
         il.Emit(OpCodes.Brtrue, tsArrayLabel);
 
         // Check if it's a typed array (List<double>, List<bool>) via IList interface.
@@ -759,8 +759,8 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
         // $Array path
         il.MarkLabel(tsArrayLabel);
         il.Emit(OpCodes.Ldloc, objLocal);
-        il.Emit(OpCodes.Castclass, ctx.Runtime!.TSArrayType);
-        il.Emit(OpCodes.Callvirt, ctx.Runtime.TSArrayElementsGetter);
+        il.Emit(OpCodes.Castclass, ctx.Runtime!.ArrayStorage.Type);
+        il.Emit(OpCodes.Callvirt, ctx.Runtime.ArrayStorage.ElementsGetter);
         il.Emit(OpCodes.Br, endLabel);
 
         // Typed list path: convert IList to List<object?> via boxing loop.

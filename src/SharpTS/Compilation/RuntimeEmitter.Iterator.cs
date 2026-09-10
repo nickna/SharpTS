@@ -1175,7 +1175,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, count);
         il.Emit(OpCodes.Ldloc, destination);
         il.Emit(OpCodes.Ldloc, count);
-        il.Emit(OpCodes.Call, runtime.TSArrayReserveRest);
+        il.Emit(OpCodes.Call, runtime.ArrayStorage.ReserveRest);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Stloc, index);
         var loop = il.DefineLabel();
@@ -1192,14 +1192,14 @@ public partial class RuntimeEmitter
         // Spread fills holes with actual undefined values, never the internal
         // hole sentinel. The no-prototype-mutation proof permits this conversion.
         il.Emit(OpCodes.Ldloc, value);
-        il.Emit(OpCodes.Isinst, runtime.ArrayHoleType);
+        il.Emit(OpCodes.Isinst, runtime.ArrayStorage.HoleType);
         il.Emit(OpCodes.Brfalse, present);
         il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
         il.Emit(OpCodes.Stloc, value);
         il.MarkLabel(present);
         il.Emit(OpCodes.Ldloc, destination);
         il.Emit(OpCodes.Ldloc, value);
-        il.Emit(OpCodes.Call, runtime.TSArrayAppendRestValue);
+        il.Emit(OpCodes.Call, runtime.ArrayStorage.AppendRestValue);
         il.Emit(OpCodes.Ldloc, index);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Add);
@@ -1216,7 +1216,7 @@ public partial class RuntimeEmitter
 
         void AppendValue()
         {
-            if (appendToExisting) il.Emit(OpCodes.Call, runtime.TSArrayAppendRestValue);
+            if (appendToExisting) il.Emit(OpCodes.Call, runtime.ArrayStorage.AppendRestValue);
             else il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", _types.Object));
         }
 
@@ -1268,26 +1268,26 @@ public partial class RuntimeEmitter
         // use the long-indexed GetLong / HasIndex accessors directly.
         var notTSArrayLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSArrayType);
+        il.Emit(OpCodes.Isinst, runtime.ArrayStorage.Type);
         il.Emit(OpCodes.Brfalse, notTSArrayLabel);
         if (appendToExisting && !_features.UsesArrayPrototypeMutation)
         {
             var boxedSource = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Castclass, runtime.TSArrayType);
-            il.Emit(OpCodes.Call, runtime.TSArrayIsNumericGetter);
+            il.Emit(OpCodes.Castclass, runtime.ArrayStorage.Type);
+            il.Emit(OpCodes.Call, runtime.ArrayStorage.IsNumericGetter);
             il.Emit(OpCodes.Brfalse, boxedSource);
             il.Emit(OpCodes.Ldloc, resultLocal);
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Castclass, runtime.TSArrayType);
-            il.Emit(OpCodes.Call, runtime.TSArrayAppendNumericRestSource);
+            il.Emit(OpCodes.Castclass, runtime.ArrayStorage.Type);
+            il.Emit(OpCodes.Call, runtime.ArrayStorage.AppendNumericRestSource);
             il.Emit(OpCodes.Ldloc, resultLocal);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(boxedSource);
         }
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSArrayType);
-        il.Emit(OpCodes.Callvirt, runtime.TSArrayElementsGetter);
+        il.Emit(OpCodes.Castclass, runtime.ArrayStorage.Type);
+        il.Emit(OpCodes.Callvirt, runtime.ArrayStorage.ElementsGetter);
         if (appendToExisting)
         {
             var elements = il.DeclareLocal(_types.ListOfObject);
@@ -1303,8 +1303,8 @@ public partial class RuntimeEmitter
                 il.Emit(OpCodes.Callvirt, _types.GetPropertyGetter(_types.ListOfObject, "Count"));
                 il.Emit(OpCodes.Conv_I8);
                 il.Emit(OpCodes.Ldarg_0);
-                il.Emit(OpCodes.Castclass, runtime.TSArrayType);
-                il.Emit(OpCodes.Callvirt, runtime.TSArrayLongLengthGetter);
+                il.Emit(OpCodes.Castclass, runtime.ArrayStorage.Type);
+                il.Emit(OpCodes.Callvirt, runtime.ArrayStorage.LongLengthGetter);
                 il.Emit(OpCodes.Bne_Un, indexed);
                 EmitAppendDenseIteratorSource(il, runtime, resultLocal, elements);
                 il.Emit(OpCodes.Ldloc, resultLocal);
@@ -1320,8 +1320,8 @@ public partial class RuntimeEmitter
             il.MarkLabel(check);
             il.Emit(OpCodes.Ldloc, index);
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Castclass, runtime.TSArrayType);
-            il.Emit(OpCodes.Callvirt, runtime.TSArrayLongLengthGetter);
+            il.Emit(OpCodes.Castclass, runtime.ArrayStorage.Type);
+            il.Emit(OpCodes.Callvirt, runtime.ArrayStorage.LongLengthGetter);
             il.Emit(OpCodes.Bge, done);
             il.Emit(OpCodes.Ldloc, resultLocal);
             il.Emit(OpCodes.Ldarg_0);

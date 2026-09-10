@@ -506,10 +506,10 @@ public partial class CompilationContext
     {
         if (Runtime == null || !Locals.TryGetLocal(name, out var local)) return null;
         var type = Locals.GetLocalType(name);
-        if (type == Runtime.NumberQueue.Type) return (local, Runtime.NumberQueue);
-        if (type == Runtime.BooleanQueue.Type) return (local, Runtime.BooleanQueue);
-        if (type == Runtime.NumberQueueWithHoles.Type) return (local, Runtime.NumberQueueWithHoles);
-        if (type == Runtime.BooleanQueueWithHoles.Type) return (local, Runtime.BooleanQueueWithHoles);
+        if (type == Runtime.ArrayStorage.NumberQueue.Type) return (local, Runtime.ArrayStorage.NumberQueue);
+        if (type == Runtime.ArrayStorage.BooleanQueue.Type) return (local, Runtime.ArrayStorage.BooleanQueue);
+        if (type == Runtime.ArrayStorage.NumberQueueWithHoles.Type) return (local, Runtime.ArrayStorage.NumberQueueWithHoles);
+        if (type == Runtime.ArrayStorage.BooleanQueueWithHoles.Type) return (local, Runtime.ArrayStorage.BooleanQueueWithHoles);
         return null;
     }
 

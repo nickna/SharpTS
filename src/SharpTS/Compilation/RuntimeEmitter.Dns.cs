@@ -897,7 +897,7 @@ public partial class RuntimeEmitter
         }
         else
         {
-            il.Emit(OpCodes.Newobj, runtime.TSArrayCtor);
+            il.Emit(OpCodes.Newobj, runtime.ArrayStorage.Ctor);
         }
         il.Emit(OpCodes.Stloc, resultLocal);
     }
@@ -3789,7 +3789,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, outListLocal);
         il.Emit(OpCodes.Ldloc, itemLocal);
         il.Emit(OpCodes.Castclass, _types.ListOfObject);
-        il.Emit(OpCodes.Newobj, runtime.TSArrayCtor);
+        il.Emit(OpCodes.Newobj, runtime.ArrayStorage.Ctor);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add")!);
         il.Emit(OpCodes.Br, continueLabel);
 
@@ -3816,7 +3816,7 @@ public partial class RuntimeEmitter
 
         // return new $Array(outList)
         il.Emit(OpCodes.Ldloc, outListLocal);
-        il.Emit(OpCodes.Newobj, runtime.TSArrayCtor);
+        il.Emit(OpCodes.Newobj, runtime.ArrayStorage.Ctor);
         il.Emit(OpCodes.Ret);
     }
 
@@ -4144,7 +4144,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add")!);
 
         il.Emit(OpCodes.Ldloc, listLocal);
-        il.Emit(OpCodes.Newobj, runtime.TSArrayCtor);
+        il.Emit(OpCodes.Newobj, runtime.ArrayStorage.Ctor);
         il.Emit(OpCodes.Stloc, resultLocal);
 
         // callback(null, result)

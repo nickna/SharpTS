@@ -179,7 +179,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, nextLabel);
         var elementReadyLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, elementLocal);
-        il.Emit(OpCodes.Isinst, runtime.ArrayHoleType);
+        il.Emit(OpCodes.Isinst, runtime.ArrayStorage.HoleType);
         il.Emit(OpCodes.Brfalse, elementReadyLabel);
         // A hole can still be present through Array.prototype. Re-read the
         // original receiver with ordinary property lookup so inherited indexed
@@ -502,7 +502,7 @@ public partial class RuntimeEmitter
         // $Array
         var notTSArrayLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSArrayType);
+        il.Emit(OpCodes.Isinst, runtime.ArrayStorage.Type);
         il.Emit(OpCodes.Brfalse, notTSArrayLabel);
         EmitTag("[object Array]");
         il.MarkLabel(notTSArrayLabel);

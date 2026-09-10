@@ -322,13 +322,13 @@ public partial class RuntimeEmitter
         var plainList = il.DefineLabel();
         var shortened = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSArrayType);
+        il.Emit(OpCodes.Isinst, runtime.ArrayStorage.Type);
         il.Emit(OpCodes.Brfalse, plainList);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSArrayType);
+        il.Emit(OpCodes.Castclass, runtime.ArrayStorage.Type);
         il.Emit(OpCodes.Ldloc, lastIndexLocal);
         il.Emit(OpCodes.Conv_I8);
-        il.Emit(OpCodes.Callvirt, runtime.TSArraySetLength);
+        il.Emit(OpCodes.Callvirt, runtime.ArrayStorage.SetLength);
         il.Emit(OpCodes.Br, shortened);
         il.MarkLabel(plainList);
         il.Emit(OpCodes.Ldarg_0);
@@ -521,7 +521,7 @@ public partial class RuntimeEmitter
         var generic = il.DefineLabel();
         var fastList = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSArrayType);
+        il.Emit(OpCodes.Isinst, runtime.ArrayStorage.Type);
         il.Emit(OpCodes.Brfalse, fastList);
         il.Emit(OpCodes.Br, generic);
         il.MarkLabel(fastList);
@@ -646,24 +646,24 @@ public partial class RuntimeEmitter
         runtime.ArrayShiftNumber = method;
         var il = method.GetILGenerator();
         var fallback = il.DefineLabel();
-        var array = il.DeclareLocal(runtime.TSArrayType);
+        var array = il.DeclareLocal(runtime.ArrayStorage.Type);
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Brfalse, fallback);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Object, "GetType"));
-        il.Emit(OpCodes.Ldtoken, runtime.TSArrayType);
+        il.Emit(OpCodes.Ldtoken, runtime.ArrayStorage.Type);
         il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
         il.Emit(OpCodes.Ceq);
         il.Emit(OpCodes.Brfalse, fallback);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSArrayType);
+        il.Emit(OpCodes.Castclass, runtime.ArrayStorage.Type);
         il.Emit(OpCodes.Stloc, array);
         il.Emit(OpCodes.Ldloc, array);
-        il.Emit(OpCodes.Callvirt, runtime.TSArrayCanMutateNumericGetter);
+        il.Emit(OpCodes.Callvirt, runtime.ArrayStorage.CanMutateNumericGetter);
         il.Emit(OpCodes.Brfalse, fallback);
         il.Emit(OpCodes.Ldloc, array);
-        il.Emit(OpCodes.Callvirt, runtime.TSArrayShiftNumeric);
+        il.Emit(OpCodes.Callvirt, runtime.ArrayStorage.ShiftNumeric);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(fallback);
@@ -743,25 +743,25 @@ public partial class RuntimeEmitter
         runtime.ArrayUnshiftNumber = method;
         var il = method.GetILGenerator();
         var fallback = il.DefineLabel();
-        var array = il.DeclareLocal(runtime.TSArrayType);
+        var array = il.DeclareLocal(runtime.ArrayStorage.Type);
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Brfalse, fallback);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Object, "GetType"));
-        il.Emit(OpCodes.Ldtoken, runtime.TSArrayType);
+        il.Emit(OpCodes.Ldtoken, runtime.ArrayStorage.Type);
         il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
         il.Emit(OpCodes.Ceq);
         il.Emit(OpCodes.Brfalse, fallback);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSArrayType);
+        il.Emit(OpCodes.Castclass, runtime.ArrayStorage.Type);
         il.Emit(OpCodes.Stloc, array);
         il.Emit(OpCodes.Ldloc, array);
-        il.Emit(OpCodes.Callvirt, runtime.TSArrayCanMutateNumericGetter);
+        il.Emit(OpCodes.Callvirt, runtime.ArrayStorage.CanMutateNumericGetter);
         il.Emit(OpCodes.Brfalse, fallback);
         il.Emit(OpCodes.Ldloc, array);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, runtime.TSArrayUnshiftNumeric);
+        il.Emit(OpCodes.Callvirt, runtime.ArrayStorage.UnshiftNumeric);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(fallback);
@@ -884,7 +884,7 @@ public partial class RuntimeEmitter
         var generic = il.DefineLabel();
         var fastList = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSArrayType);
+        il.Emit(OpCodes.Isinst, runtime.ArrayStorage.Type);
         il.Emit(OpCodes.Brfalse, fastList);
         il.Emit(OpCodes.Br, generic);
         il.MarkLabel(fastList);
@@ -1018,7 +1018,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, fallback);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Object, "GetType"));
-        il.Emit(OpCodes.Ldtoken, runtime.TSArrayType);
+        il.Emit(OpCodes.Ldtoken, runtime.ArrayStorage.Type);
         il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
         il.Emit(OpCodes.Ceq);
         il.Emit(OpCodes.Brfalse, fallback);
@@ -1026,13 +1026,13 @@ public partial class RuntimeEmitter
         // A numeric-mode array has no boxed base-list elements yet. Deopt before
         // looking at Count or calling the boxed append helper.
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSArrayType);
-        il.Emit(OpCodes.Callvirt, runtime.TSArrayEnsureBoxed);
+        il.Emit(OpCodes.Castclass, runtime.ArrayStorage.Type);
+        il.Emit(OpCodes.Callvirt, runtime.ArrayStorage.EnsureBoxed);
 
         // Sparse arrays need ArrayPushProto's full long-length/index machinery.
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSArrayType);
-        il.Emit(OpCodes.Callvirt, runtime.TSArrayLongLengthGetter);
+        il.Emit(OpCodes.Castclass, runtime.ArrayStorage.Type);
+        il.Emit(OpCodes.Callvirt, runtime.ArrayStorage.LongLengthGetter);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, _types.ListOfObject);
         il.Emit(OpCodes.Callvirt,
@@ -1081,7 +1081,7 @@ public partial class RuntimeEmitter
         var generic = il.DefineLabel();
         var fastList = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSArrayType);
+        il.Emit(OpCodes.Isinst, runtime.ArrayStorage.Type);
         il.Emit(OpCodes.Brfalse, fastList);
         il.Emit(OpCodes.Br, generic);
         il.MarkLabel(fastList);
@@ -1365,7 +1365,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, next);
         il.MarkLabel(hole);
         il.Emit(OpCodes.Ldloc, result);
-        il.Emit(OpCodes.Ldsfld, runtime.ArrayHoleInstance);
+        il.Emit(OpCodes.Ldsfld, runtime.ArrayStorage.HoleInstance);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", _types.Object));
         il.MarkLabel(next);
         il.Emit(OpCodes.Ldloc, k);
@@ -1654,7 +1654,7 @@ public partial class RuntimeEmitter
         // Add()'d directly into the result list.
         var flatContinueLoop = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, itemLocal);
-        il.Emit(OpCodes.Isinst, runtime.ArrayHoleType);
+        il.Emit(OpCodes.Isinst, runtime.ArrayStorage.HoleType);
         il.Emit(OpCodes.Brtrue, flatContinueLoop);
 
         // if (depth > 0 && item is List<object> nestedList)
@@ -1763,7 +1763,7 @@ public partial class RuntimeEmitter
         // and structurally-absent slots return $ArrayHole.
         var flatMapContinue = il.DefineLabel();
         EmitElementLoad(il, iLocal, runtime, isLazyLocal);
-        il.Emit(OpCodes.Isinst, runtime.ArrayHoleType);
+        il.Emit(OpCodes.Isinst, runtime.ArrayStorage.HoleType);
         il.Emit(OpCodes.Brtrue, flatMapContinue);
 
         // args[0] = LoadArrayLikeElement(list, i) — lazy-aware
@@ -1821,7 +1821,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "get_Item", _types.Int32));
             il.Emit(OpCodes.Stloc, innerElement);
             il.Emit(OpCodes.Ldloc, innerElement);
-            il.Emit(OpCodes.Isinst, runtime.ArrayHoleType);
+            il.Emit(OpCodes.Isinst, runtime.ArrayStorage.HoleType);
             il.Emit(OpCodes.Brtrue, innerSkip);
             il.Emit(OpCodes.Ldloc, resultLocal);
             il.Emit(OpCodes.Ldloc, innerElement);
@@ -1966,27 +1966,27 @@ public partial class RuntimeEmitter
         runtime.ArraySliceNumber = method;
 
         var il = method.GetILGenerator();
-        var array = il.DeclareLocal(runtime.TSArrayType);
+        var array = il.DeclareLocal(runtime.ArrayStorage.Type);
         var count = il.DeclareLocal(_types.Int32);
         var fallback = il.DefineLabel();
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSArrayType);
+        il.Emit(OpCodes.Isinst, runtime.ArrayStorage.Type);
         il.Emit(OpCodes.Stloc, array);
         il.Emit(OpCodes.Ldloc, array);
         il.Emit(OpCodes.Brfalse, fallback);
         il.Emit(OpCodes.Ldloc, array);
-        il.Emit(OpCodes.Callvirt, runtime.TSArrayIsNumericGetter);
+        il.Emit(OpCodes.Callvirt, runtime.ArrayStorage.IsNumericGetter);
         il.Emit(OpCodes.Brfalse, fallback);
         il.Emit(OpCodes.Ldloc, array);
-        il.Emit(OpCodes.Callvirt, runtime.TSArrayNumericCountGetter);
+        il.Emit(OpCodes.Callvirt, runtime.ArrayStorage.NumericCountGetter);
         il.Emit(OpCodes.Stloc, count);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, count);
         il.Emit(OpCodes.Call, runtime.ArraySortCanUseDenseFastPath);
         il.Emit(OpCodes.Brfalse, fallback);
         il.Emit(OpCodes.Ldloc, array);
-        il.Emit(OpCodes.Callvirt, runtime.TSArrayCloneNumeric);
+        il.Emit(OpCodes.Callvirt, runtime.ArrayStorage.CloneNumeric);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(fallback);
@@ -1994,7 +1994,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Newarr, _types.Object);
         il.Emit(OpCodes.Call, runtime.ArraySlice);
-        il.Emit(OpCodes.Newobj, runtime.TSArrayCtor);
+        il.Emit(OpCodes.Newobj, runtime.ArrayStorage.Ctor);
         il.Emit(OpCodes.Ret);
     }
 
@@ -2016,7 +2016,7 @@ public partial class RuntimeEmitter
         runtime.ArraySortNumeric = method;
 
         var il = method.GetILGenerator();
-        var array = il.DeclareLocal(runtime.TSArrayType);
+        var array = il.DeclareLocal(runtime.ArrayStorage.Type);
         var count = il.DeclareLocal(_types.Int32);
         var frozenMarker = il.DeclareLocal(_types.Object);
         var fallback = il.DefineLabel();
@@ -2024,12 +2024,12 @@ public partial class RuntimeEmitter
         var returnReceiver = il.DefineLabel();
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSArrayType);
+        il.Emit(OpCodes.Isinst, runtime.ArrayStorage.Type);
         il.Emit(OpCodes.Stloc, array);
         il.Emit(OpCodes.Ldloc, array);
         il.Emit(OpCodes.Brfalse, fallbackReady);
         il.Emit(OpCodes.Ldloc, array);
-        il.Emit(OpCodes.Callvirt, runtime.TSArrayIsNumericGetter);
+        il.Emit(OpCodes.Callvirt, runtime.ArrayStorage.IsNumericGetter);
         il.Emit(OpCodes.Brfalse, fallback);
 
         // Preserve the existing frozen-array behavior without materializing a
@@ -2045,7 +2045,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, returnReceiver);
 
         il.Emit(OpCodes.Ldloc, array);
-        il.Emit(OpCodes.Callvirt, runtime.TSArrayNumericCountGetter);
+        il.Emit(OpCodes.Callvirt, runtime.ArrayStorage.NumericCountGetter);
         il.Emit(OpCodes.Stloc, count);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, count);
@@ -2053,12 +2053,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, fallback);
         il.Emit(OpCodes.Ldloc, array);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, runtime.TSArraySortNumeric);
+        il.Emit(OpCodes.Callvirt, runtime.ArrayStorage.SortNumeric);
         il.Emit(OpCodes.Br, returnReceiver);
 
         il.MarkLabel(fallback);
         il.Emit(OpCodes.Ldloc, array);
-        il.Emit(OpCodes.Callvirt, runtime.TSArrayEnsureBoxed);
+        il.Emit(OpCodes.Callvirt, runtime.ArrayStorage.EnsureBoxed);
         il.MarkLabel(fallbackReady);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, _types.ListOfObject);
@@ -2118,32 +2118,32 @@ public partial class RuntimeEmitter
         // packed-double $Array deliberately has an empty inherited List, so a
         // Count mismatch gets one representation-aware retry before bailing.
         var backingLengthReady = il.DefineLabel();
-        var numericArray = il.DeclareLocal(runtime.TSArrayType);
+        var numericArray = il.DeclareLocal(runtime.ArrayStorage.Type);
         il.Emit(OpCodes.Ldloc, receiverList);
         il.Emit(OpCodes.Callvirt,
             _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Beq, backingLengthReady);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSArrayType);
+        il.Emit(OpCodes.Isinst, runtime.ArrayStorage.Type);
         il.Emit(OpCodes.Stloc, numericArray);
         il.Emit(OpCodes.Ldloc, numericArray);
         il.Emit(OpCodes.Brfalse, returnFalse);
         il.Emit(OpCodes.Ldloc, numericArray);
-        il.Emit(OpCodes.Callvirt, runtime.TSArrayIsNumericGetter);
+        il.Emit(OpCodes.Callvirt, runtime.ArrayStorage.IsNumericGetter);
         il.Emit(OpCodes.Brfalse, returnFalse);
         il.Emit(OpCodes.Ldloc, numericArray);
-        il.Emit(OpCodes.Callvirt, runtime.TSArrayNumericCountGetter);
+        il.Emit(OpCodes.Callvirt, runtime.ArrayStorage.NumericCountGetter);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Bne_Un, returnFalse);
         il.MarkLabel(backingLengthReady);
 
         var notTSArray = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSArrayType);
+        il.Emit(OpCodes.Isinst, runtime.ArrayStorage.Type);
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Brfalse, notTSArray);
-        il.Emit(OpCodes.Callvirt, runtime.TSArrayLongLengthGetter);
+        il.Emit(OpCodes.Callvirt, runtime.ArrayStorage.LongLengthGetter);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Conv_I8);
         il.Emit(OpCodes.Bne_Un, returnFalse);
@@ -2475,7 +2475,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, isUndefinedLabel);
 
         il.Emit(OpCodes.Ldloc, elementLocal);
-        il.Emit(OpCodes.Isinst, runtime.ArrayHoleType);
+        il.Emit(OpCodes.Isinst, runtime.ArrayStorage.HoleType);
         il.Emit(OpCodes.Brtrue, observeProperties ? densePathFoundHole : isUndefinedLabel);
 
         // Not undefined or hole: defined.Add(element)
@@ -2939,7 +2939,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Brfalse, observableWriteBack);
             il.Emit(OpCodes.Ldloc, observableReceiverLocal!);
             il.Emit(OpCodes.Castclass, _types.ListOfObject);
-            il.Emit(OpCodes.Ldsfld, runtime.ArrayHoleInstance);
+            il.Emit(OpCodes.Ldsfld, runtime.ArrayStorage.HoleInstance);
             il.Emit(OpCodes.Callvirt,
                 _types.GetMethod(_types.ListOfObject, "Contains", _types.Object));
             il.Emit(OpCodes.Brtrue, observableWriteBack);
@@ -3720,7 +3720,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, deletedNext);
         il.MarkLabel(deletedHole);
         il.Emit(OpCodes.Ldloc, deleted);
-        il.Emit(OpCodes.Ldsfld, runtime.ArrayHoleInstance);
+        il.Emit(OpCodes.Ldsfld, runtime.ArrayStorage.HoleInstance);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", _types.Object));
         il.MarkLabel(deletedNext);
         il.Emit(OpCodes.Ldloc, k);

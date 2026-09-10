@@ -180,7 +180,7 @@ public partial class ILCompiler
             // itself inherits List<object?> — every IList-based array dispatch
             // (push/length/iteration/Array.isArray/instanceof Array) applies
             // to instances unchanged.
-            baseType = _runtime.TSArrayType;
+            baseType = _runtime.ArrayStorage.Type;
         }
         else if (qualifiedSuperclassName != null && classStmt.SuperclassExpr != null
             && Expr.GetSuperclassLeafName(classStmt.SuperclassExpr) == "Promise")

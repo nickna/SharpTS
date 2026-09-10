@@ -394,7 +394,7 @@ public partial class RuntimeEmitter
         var notArray = il.DefineLabel();
         var afterPush = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, mappedLocal);
-        il.Emit(OpCodes.Isinst, runtime.TSArrayType);
+        il.Emit(OpCodes.Isinst, runtime.ArrayStorage.Type);
         il.Emit(OpCodes.Brfalse, notArray);
 
         // var elems = ((TSArray)mapped).Elements; for j: r.Push(elems[j]);
@@ -402,8 +402,8 @@ public partial class RuntimeEmitter
         var jLocal = il.DeclareLocal(_types.Int32);
         var elemCountLocal = il.DeclareLocal(_types.Int32);
         il.Emit(OpCodes.Ldloc, mappedLocal);
-        il.Emit(OpCodes.Castclass, runtime.TSArrayType);
-        il.Emit(OpCodes.Callvirt, runtime.TSArrayElementsGetter);
+        il.Emit(OpCodes.Castclass, runtime.ArrayStorage.Type);
+        il.Emit(OpCodes.Callvirt, runtime.ArrayStorage.ElementsGetter);
         il.Emit(OpCodes.Stloc, elemsLocal);
         il.Emit(OpCodes.Ldloc, elemsLocal);
         il.Emit(OpCodes.Callvirt, ListCountGetter);
@@ -495,7 +495,7 @@ public partial class RuntimeEmitter
         // r.Push(new $Array(pair));
         il.Emit(OpCodes.Ldloc, rLocal);
         il.Emit(OpCodes.Ldloc, pairLocal);
-        il.Emit(OpCodes.Newobj, runtime.TSArrayCtor);
+        il.Emit(OpCodes.Newobj, runtime.ArrayStorage.Ctor);
         il.Emit(OpCodes.Callvirt, runtime.TSReadablePush);
         il.Emit(OpCodes.Pop);
 

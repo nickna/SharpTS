@@ -54,7 +54,7 @@ public class ArrayDestructureHandler : ICallHandler
             il.Emit(OpCodes.Ldtoken, ctx.Runtime.RuntimeType);
             il.Emit(OpCodes.Call, ctx.Types.GetMethod(ctx.Types.Type, "GetTypeFromHandle"));
             il.Emit(OpCodes.Call, ctx.Runtime.IterateToList);
-            il.Emit(OpCodes.Newobj, ctx.Runtime.TSArrayCtor);
+            il.Emit(OpCodes.Newobj, ctx.Runtime.ArrayStorage.Ctor);
             return true;
         }
 

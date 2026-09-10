@@ -68,9 +68,9 @@ public partial class ILEmitter
             _ctx.TypeMap?.Get(call.Arguments[0]) is not (TypeInfo.Array or TypeInfo.Tuple))
             return;
 
-        var arrayLocal = IL.DeclareLocal(_ctx.Runtime!.TSArrayType);
+        var arrayLocal = IL.DeclareLocal(_ctx.Runtime!.ArrayStorage.Type);
         IL.Emit(OpCodes.Ldloc, objectLocal);
-        IL.Emit(OpCodes.Isinst, _ctx.Runtime.TSArrayType);
+        IL.Emit(OpCodes.Isinst, _ctx.Runtime.ArrayStorage.Type);
         IL.Emit(OpCodes.Stloc, arrayLocal);
         _stableArrayDestructureBindings[declaration.Name.Lexeme] =
             new StableArrayDestructureBinding(objectLocal, arrayLocal);
@@ -137,7 +137,7 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Brfalse, fallback);
         IL.Emit(OpCodes.Ldloc, binding.ArrayLocal);
         IL.Emit(OpCodes.Ldc_I8, checked((long)index));
-        IL.Emit(OpCodes.Callvirt, _ctx.Runtime!.TSArrayGetLong);
+        IL.Emit(OpCodes.Callvirt, _ctx.Runtime!.ArrayStorage.GetLong);
         IL.Emit(OpCodes.Br, end);
 
         IL.MarkLabel(fallback);
@@ -170,11 +170,11 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Brfalse, genericReceiver);
         IL.Emit(OpCodes.Ldloc, binding.ArrayLocal);
         IL.Emit(OpCodes.Ldc_I4, intIndex);
-        IL.Emit(OpCodes.Callvirt, _ctx.Runtime!.TSArrayCanGetDouble);
+        IL.Emit(OpCodes.Callvirt, _ctx.Runtime!.ArrayStorage.CanGetDouble);
         IL.Emit(OpCodes.Brfalse, boxedArrayValue);
         IL.Emit(OpCodes.Ldloc, binding.ArrayLocal);
         IL.Emit(OpCodes.Ldc_I4, intIndex);
-        IL.Emit(OpCodes.Callvirt, _ctx.Runtime.TSArrayGetDouble);
+        IL.Emit(OpCodes.Callvirt, _ctx.Runtime.ArrayStorage.GetDouble);
         IL.Emit(OpCodes.Stloc, result);
         IL.Emit(OpCodes.Br, end);
 
@@ -182,7 +182,7 @@ public partial class ILEmitter
         IL.MarkLabel(boxedArrayValue);
         IL.Emit(OpCodes.Ldloc, binding.ArrayLocal);
         IL.Emit(OpCodes.Ldc_I8, (long)intIndex);
-        IL.Emit(OpCodes.Callvirt, _ctx.Runtime.TSArrayGetLong);
+        IL.Emit(OpCodes.Callvirt, _ctx.Runtime.ArrayStorage.GetLong);
         IL.Emit(OpCodes.Call, _ctx.Runtime.ConvertToNumber);
         IL.Emit(OpCodes.Stloc, result);
         IL.Emit(OpCodes.Br, end);
