@@ -2705,7 +2705,7 @@ public abstract partial class ExpressionEmitterBase
                     IL.Emit(OpCodes.Ldnull);
                 // ArrayIncludes already returns a boxed bool — do not re-box
                 // (double-boxing reinterprets the object reference as a bool).
-                IL.Emit(OpCodes.Call, Ctx.Runtime!.ArrayIncludes);
+                IL.Emit(OpCodes.Call, Ctx.Runtime!.ArrayOperations.Includes);
                 break;
             case "indexOf":
             case "lastIndexOf":
@@ -2717,7 +2717,7 @@ public abstract partial class ExpressionEmitterBase
                     EmitBoxedArgOrNull(arguments, 1);
                 else
                     IL.Emit(OpCodes.Ldsfld, Ctx.Runtime!.ArrayStorage.HoleInstance);
-                IL.Emit(OpCodes.Call, methodName == "indexOf" ? Ctx.Runtime!.ArrayIndexOf : Ctx.Runtime!.ArrayLastIndexOf);
+                IL.Emit(OpCodes.Call, methodName == "indexOf" ? Ctx.Runtime!.ArrayOperations.IndexOf : Ctx.Runtime!.ArrayOperations.LastIndexOf);
                 IL.Emit(OpCodes.Box, typeof(double));
                 break;
             case "slice":
@@ -2729,7 +2729,7 @@ public abstract partial class ExpressionEmitterBase
                     EmitExpression(arguments[i]); EnsureBoxed();
                     IL.Emit(OpCodes.Stelem_Ref);
                 }
-                IL.Emit(OpCodes.Call, Ctx.Runtime!.ArraySlice);
+                IL.Emit(OpCodes.Call, Ctx.Runtime!.ArrayOperations.Slice);
                 break;
             case "concat":
                 // ECMA-262: concat(...items) is variadic. Pass args as object[]
@@ -2737,7 +2737,7 @@ public abstract partial class ExpressionEmitterBase
                 // A `...spread` arg is flattened first (#952) so concat sees the
                 // expanded elements, not the source array as one nested item.
                 EmitArgsArrayWithSpread(arguments);
-                IL.Emit(OpCodes.Call, Ctx.Runtime!.ArrayConcat);
+                IL.Emit(OpCodes.Call, Ctx.Runtime!.ArrayOperations.Concat);
                 break;
         }
 

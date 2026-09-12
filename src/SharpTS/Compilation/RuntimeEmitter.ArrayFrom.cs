@@ -21,7 +21,7 @@ public partial class RuntimeEmitter
             runtime.ArrayStorage.Type,
             [_types.Object, _types.Object, runtime.TSSymbolType, _types.Type, _types.Object]
         );
-        runtime.ArrayFrom = method;
+        runtime.ArrayOperations.From = method;
 
         var il = method.GetILGenerator();
 
@@ -109,7 +109,7 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(arrayLikePathLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.ArrayLikeMaterialize);
+        il.Emit(OpCodes.Call, runtime.ArrayOperations.Materialize);
         il.Emit(OpCodes.Stloc, resultLocal);
         il.Emit(OpCodes.Br, afterListInit);
 
@@ -365,7 +365,7 @@ public partial class RuntimeEmitter
             runtime.ArrayStorage.Type,
             [_types.ObjectArray]
         );
-        runtime.ArrayOf = method;
+        runtime.ArrayOperations.Of = method;
 
         var il = method.GetILGenerator();
 
@@ -390,7 +390,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.ObjectArray]
         );
-        runtime.ArrayFromAdapter = method;
+        runtime.ArrayOperations.FromAdapter = method;
 
         var il = method.GetILGenerator();
         var argsLocal = il.DeclareLocal(_types.ObjectArray);
@@ -464,7 +464,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldtoken, runtime.RuntimeType);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
         il.Emit(OpCodes.Ldloc, thisArgLocal);
-        il.Emit(OpCodes.Call, runtime.ArrayFrom);
+        il.Emit(OpCodes.Call, runtime.ArrayOperations.From);
         il.Emit(OpCodes.Ret);
     }
 
@@ -495,7 +495,7 @@ public partial class RuntimeEmitter
             runtime.ArrayStorage.Type,
             [_types.ObjectArray]
         );
-        runtime.ArrayConstructor = method;
+        runtime.ArrayOperations.Constructor = method;
 
         var il = method.GetILGenerator();
         var lenLocal = il.DeclareLocal(_types.Int32);

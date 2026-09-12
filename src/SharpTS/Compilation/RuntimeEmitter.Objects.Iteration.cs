@@ -1412,7 +1412,7 @@ public partial class RuntimeEmitter
             _types.Boolean,
             [_types.Object]
         );
-        runtime.IsArray = method;
+        runtime.ArrayOperations.IsArray = method;
 
         var il = method.GetILGenerator();
         var trueLabel = il.DefineLabel();
@@ -1474,7 +1474,7 @@ public partial class RuntimeEmitter
         // do `Array.prototype.X = ...`), so reference-equality unlocks the
         // spec without changing the prototype's actual storage type.
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldsfld, runtime.ArrayPrototypeField);
+        il.Emit(OpCodes.Ldsfld, runtime.ArrayOperations.PrototypeField);
         il.Emit(OpCodes.Ceq);
         il.Emit(OpCodes.Brtrue, trueLabel);
 

@@ -67,8 +67,8 @@ public partial class RuntimeEmitter
         // wired to the generic ToString stub which returned Convert.ToString
         // (System.Object[] for compiled List<object>) — broke any Test262
         // test that did `arr.toString()` directly.
-        runtime.ArrayProtoToStringHelper = EmitArrayProtoToStringHelper(typeBuilder, runtime);
-        runtime.ArrayProtoToLocaleStringHelper = EmitArrayProtoToLocaleStringHelper(typeBuilder, runtime);
+        runtime.ArrayOperations.ProtoToStringHelper = EmitArrayProtoToStringHelper(typeBuilder, runtime);
+        runtime.ArrayOperations.ProtoToLocaleStringHelper = EmitArrayProtoToLocaleStringHelper(typeBuilder, runtime);
     }
 
     private MethodBuilder EmitArrayProtoToStringHelper(TypeBuilder typeBuilder, EmittedRuntime runtime)
@@ -100,9 +100,9 @@ public partial class RuntimeEmitter
         // to a List<object>. Then ArrayJoin with undefined separator (spec
         // default ","). Mirrors ECMA-262 23.1.3.32 step 2.
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.ArrayLikeMaterialize);
+        il.Emit(OpCodes.Call, runtime.ArrayOperations.Materialize);
         il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
-        il.Emit(OpCodes.Call, runtime.ArrayJoin);
+        il.Emit(OpCodes.Call, runtime.ArrayOperations.Join);
         il.Emit(OpCodes.Ret);
 
         return method;
@@ -139,7 +139,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(receiverDefinedLabel);
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.ArrayLikeMaterialize);
+        il.Emit(OpCodes.Call, runtime.ArrayOperations.Materialize);
         il.Emit(OpCodes.Stloc, listLocal);
         il.Emit(OpCodes.Ldstr, "");
         il.Emit(OpCodes.Stloc, resultLocal);
@@ -468,7 +468,7 @@ public partial class RuntimeEmitter
 
         var notArrayProtoLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldsfld, runtime.ArrayPrototypeField);
+        il.Emit(OpCodes.Ldsfld, runtime.ArrayOperations.PrototypeField);
         il.Emit(OpCodes.Bne_Un, notArrayProtoLabel);
         EmitTag("[object Array]");
         il.MarkLabel(notArrayProtoLabel);
@@ -562,7 +562,7 @@ public partial class RuntimeEmitter
         EmitFunctionBranch(runtime.FunctionCallWrapperType);
         EmitFunctionBranch(runtime.FunctionApplyWrapperType);
         EmitFunctionBranch(_types.Delegate);
-        EmitFunctionBranch(runtime.BoundArrayMethodType);
+        EmitFunctionBranch(runtime.ArrayOperations.BoundMethodType);
         if (_features.UsesMap)
             EmitFunctionBranch(runtime.BoundMapMethodType);
         if (_features.UsesSet)

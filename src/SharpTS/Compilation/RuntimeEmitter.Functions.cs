@@ -382,13 +382,13 @@ public partial class RuntimeEmitter
         var notBAMLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, targetField);
-        il.Emit(OpCodes.Isinst, runtime.BoundArrayMethodType);
+        il.Emit(OpCodes.Isinst, runtime.ArrayOperations.BoundMethodType);
         il.Emit(OpCodes.Brfalse, notBAMLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, targetField);
-        il.Emit(OpCodes.Castclass, runtime.BoundArrayMethodType);
+        il.Emit(OpCodes.Castclass, runtime.ArrayOperations.BoundMethodType);
         il.Emit(OpCodes.Ldloc, argsLocal);
-        il.Emit(OpCodes.Callvirt, runtime.BoundArrayMethodInvoke);
+        il.Emit(OpCodes.Callvirt, runtime.ArrayOperations.BoundMethodInvoke);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notBAMLabel);
 
@@ -1285,7 +1285,7 @@ public partial class RuntimeEmitter
         AcceptCallable(runtime.TSFunctionType);
         AcceptCallable(runtime.BoundTSFunctionType);
         AcceptCallable(runtime.BoundAnyFunctionType);
-        AcceptCallable(runtime.BoundArrayMethodType);
+        AcceptCallable(runtime.ArrayOperations.BoundMethodType);
         if (_features.UsesMap)
             AcceptCallable(runtime.BoundMapMethodType);
         if (_features.UsesSet)
@@ -1313,7 +1313,7 @@ public partial class RuntimeEmitter
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, targetField);
-        il.Emit(OpCodes.Isinst, runtime.BoundArrayMethodType);
+        il.Emit(OpCodes.Isinst, runtime.ArrayOperations.BoundMethodType);
         il.Emit(OpCodes.Brfalse, otherCallableLabel);
         il.Emit(OpCodes.Ldloc, thisArgLocal);
         il.Emit(OpCodes.Isinst, _types.ListOfObject);
@@ -1334,9 +1334,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Castclass, _types.ListOfObject);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, targetField);
-        il.Emit(OpCodes.Castclass, runtime.BoundArrayMethodType);
-        il.Emit(OpCodes.Ldfld, runtime.BoundArrayMethodNameField);
-        il.Emit(OpCodes.Newobj, runtime.BoundArrayMethodCtor);
+        il.Emit(OpCodes.Castclass, runtime.ArrayOperations.BoundMethodType);
+        il.Emit(OpCodes.Ldfld, runtime.ArrayOperations.BoundMethodNameField);
+        il.Emit(OpCodes.Newobj, runtime.ArrayOperations.BoundMethodCtor);
         il.Emit(OpCodes.Ldloc, boundArgsLocal);
         il.Emit(OpCodes.Newobj, runtime.BoundAnyFunctionCtor);
         il.Emit(OpCodes.Ret);
@@ -1495,7 +1495,7 @@ public partial class RuntimeEmitter
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, targetField);
-        il.Emit(OpCodes.Isinst, runtime.BoundArrayMethodType);
+        il.Emit(OpCodes.Isinst, runtime.ArrayOperations.BoundMethodType);
         var notBoundArrayMethodLabel = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, notBoundArrayMethodLabel);
         il.Emit(OpCodes.Ldloc, thisArgLocal);
@@ -1565,11 +1565,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Castclass, _types.ListOfObject);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, targetField);
-        il.Emit(OpCodes.Castclass, runtime.BoundArrayMethodType);
-        il.Emit(OpCodes.Ldfld, runtime.BoundArrayMethodNameField);
-        il.Emit(OpCodes.Newobj, runtime.BoundArrayMethodCtor);
+        il.Emit(OpCodes.Castclass, runtime.ArrayOperations.BoundMethodType);
+        il.Emit(OpCodes.Ldfld, runtime.ArrayOperations.BoundMethodNameField);
+        il.Emit(OpCodes.Newobj, runtime.ArrayOperations.BoundMethodCtor);
         il.Emit(OpCodes.Ldloc, callArgsLocal);
-        il.Emit(OpCodes.Callvirt, runtime.BoundArrayMethodInvoke);
+        il.Emit(OpCodes.Callvirt, runtime.ArrayOperations.BoundMethodInvoke);
         il.Emit(OpCodes.Ret);
 
         if (_features.UsesMap)

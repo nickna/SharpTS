@@ -38,7 +38,7 @@ public partial class RuntimeEmitter
             MethodAttributes.Public,
             CallingConventions.Standard,
             [_types.ListOfObject, _types.Int32]);
-        runtime.ArrayIteratorCtor = ctor;
+        runtime.ArrayOperations.IteratorCtor = ctor;
         var ctorIl = ctor.GetILGenerator();
         ctorIl.Emit(OpCodes.Ldarg_0);
         ctorIl.Emit(OpCodes.Call, _types.GetConstructor(_types.Object, Type.EmptyTypes)!);

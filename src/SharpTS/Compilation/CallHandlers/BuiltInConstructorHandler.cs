@@ -98,7 +98,7 @@ public class BuiltInConstructorHandler : ICallHandler
     /// Emits <c>Array(…)</c> called without <c>new</c> (issue #61). Per
     /// ECMAScript §23.1.1 the call form is identical to the construct form:
     /// <c>Array(3)</c> === <c>new Array(3)</c>. Route through the same
-    /// <c>$Runtime.ArrayConstructor</c> helper as the <c>new</c> path.
+    /// <c>$Runtime.Constructor</c> helper as the <c>new</c> path.
     /// </summary>
     private static bool EmitArray(IEmitterContext emitter, Expr.Call call)
     {
@@ -115,7 +115,7 @@ public class BuiltInConstructorHandler : ICallHandler
             emitter.EmitBoxIfNeeded(call.Arguments[i]);
             il.Emit(OpCodes.Stelem_Ref);
         }
-        il.Emit(OpCodes.Call, ctx.Runtime!.ArrayConstructor);
+        il.Emit(OpCodes.Call, ctx.Runtime!.ArrayOperations.Constructor);
         emitter.SetStackUnknown();
         return true;
     }

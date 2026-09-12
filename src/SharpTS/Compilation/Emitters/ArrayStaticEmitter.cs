@@ -30,7 +30,7 @@ public sealed class ArrayStaticEmitter : IStaticTypeEmitterStrategy
                 {
                     il.Emit(OpCodes.Ldnull);
                 }
-                il.Emit(OpCodes.Call, ctx.Runtime!.IsArray);
+                il.Emit(OpCodes.Call, ctx.Runtime!.ArrayOperations.IsArray);
                 il.Emit(OpCodes.Box, ctx.Types.Boolean);
                 return true;
             case "from":
@@ -75,7 +75,7 @@ public sealed class ArrayStaticEmitter : IStaticTypeEmitterStrategy
                     il.Emit(OpCodes.Ldsfld, ctx.Runtime!.UndefinedInstance);
                 }
 
-                il.Emit(OpCodes.Call, ctx.Runtime!.ArrayFrom);
+                il.Emit(OpCodes.Call, ctx.Runtime!.ArrayOperations.From);
                 return true;
             case "of":
                 // Create an object[] from all arguments
@@ -91,7 +91,7 @@ public sealed class ArrayStaticEmitter : IStaticTypeEmitterStrategy
                     il.Emit(OpCodes.Stelem_Ref);
                 }
 
-                il.Emit(OpCodes.Call, ctx.Runtime!.ArrayOf);
+                il.Emit(OpCodes.Call, ctx.Runtime!.ArrayOperations.Of);
                 return true;
             default:
                 return false;
@@ -143,8 +143,8 @@ public sealed class ArrayStaticEmitter : IStaticTypeEmitterStrategy
         if (propertyName == "prototype")
         {
             var protoIL = ctx.IL;
-            protoIL.Emit(OpCodes.Call, runtime.ArrayPrototypePopulateMethod);
-            protoIL.Emit(OpCodes.Ldsfld, runtime.ArrayPrototypeField);
+            protoIL.Emit(OpCodes.Call, runtime.ArrayOperations.PrototypePopulateMethod);
+            protoIL.Emit(OpCodes.Ldsfld, runtime.ArrayOperations.PrototypeField);
             return true;
         }
 
@@ -163,9 +163,9 @@ public sealed class ArrayStaticEmitter : IStaticTypeEmitterStrategy
 
         (MethodInfo? method, string jsName, int jsLength) info = propertyName switch
         {
-            "isArray" => (runtime.IsArray, "isArray", 1),
-            "from"    => (runtime.ArrayFromAdapter, "from", 1),
-            "of"      => (runtime.ArrayOf, "of", 0),
+            "isArray" => (runtime.ArrayOperations.IsArray, "isArray", 1),
+            "from"    => (runtime.ArrayOperations.FromAdapter, "from", 1),
+            "of"      => (runtime.ArrayOperations.Of, "of", 0),
             _ => (null, "", 0)
         };
         if (info.method == null) return false;

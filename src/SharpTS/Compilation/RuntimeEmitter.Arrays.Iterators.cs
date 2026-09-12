@@ -26,7 +26,7 @@ public partial class RuntimeEmitter
         rcvrLocal = il.DeclareLocal(_types.Object);
         isLazyLocal = il.DeclareLocal(_types.Boolean);
 
-        il.Emit(OpCodes.Ldsfld, runtime.LazyArrayLikeReceiverField);
+        il.Emit(OpCodes.Ldsfld, runtime.ArrayOperations.CurrentReceiverField);
         il.Emit(OpCodes.Stloc, rcvrLocal);
 
         // Direct `array.map/reduce/...` calls do not pass through the generic
@@ -79,7 +79,7 @@ public partial class RuntimeEmitter
     /// <c>$Runtime.LoadArrayLikeElement(list, idx)</c> on the lazy path,
     /// branching on <c>isLazyLocal</c>. Leaves the element value on the stack.
     /// </summary>
-    private void EmitElementLoad(ILGenerator il, LocalBuilder indexLocal, EmittedRuntime runtime, LocalBuilder isLazyLocal)
+    private void EmitElementLoad(ILGenerator il, LocalBuilder indexLocal, EmittedArrayOperationsRuntime arrays, LocalBuilder isLazyLocal)
     {
         var lazyPathLabel = il.DefineLabel();
         var doneLabel = il.DefineLabel();
@@ -96,7 +96,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(lazyPathLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, indexLocal);
-        il.Emit(OpCodes.Call, runtime.LoadArrayLikeElement);
+        il.Emit(OpCodes.Call, arrays.LoadArrayLikeElement);
 
         il.MarkLabel(doneLabel);
     }
@@ -187,7 +187,7 @@ public partial class RuntimeEmitter
     /// </remarks>
     private void EmitSkipIfHole(ILGenerator il, LocalBuilder indexLocal, Label skipLabel, EmittedRuntime runtime, LocalBuilder isLazyLocal)
     {
-        EmitElementLoad(il, indexLocal, runtime, isLazyLocal);
+        EmitElementLoad(il, indexLocal, runtime.ArrayOperations, isLazyLocal);
         il.Emit(OpCodes.Isinst, runtime.ArrayStorage.HoleType);
         il.Emit(OpCodes.Brtrue, skipLabel);
     }
@@ -203,7 +203,7 @@ public partial class RuntimeEmitter
     {
         var notHoleLabel = il.DefineLabel();
         var doneLabel = il.DefineLabel();
-        EmitElementLoad(il, indexLocal, runtime, isLazyLocal);
+        EmitElementLoad(il, indexLocal, runtime.ArrayOperations, isLazyLocal);
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Isinst, runtime.ArrayStorage.HoleType);
         il.Emit(OpCodes.Brfalse, notHoleLabel);
@@ -251,7 +251,7 @@ public partial class RuntimeEmitter
     /// from the call frame, not by aliasing our args[]. So reusing the same
     /// args[] across iterations is sound.
     /// </remarks>
-    private void EmitInitCallbackArgs(ILGenerator il, EmittedRuntime runtime, out LocalBuilder argsLocal)
+    private void EmitInitCallbackArgs(ILGenerator il, EmittedArrayOperationsRuntime arrays, out LocalBuilder argsLocal)
     {
         argsLocal = il.DeclareLocal(_types.ObjectArray);
 
@@ -264,7 +264,7 @@ public partial class RuntimeEmitter
         // the helper invocation — receiver doesn't change per iteration)
         il.Emit(OpCodes.Ldloc, argsLocal);
         il.Emit(OpCodes.Ldc_I4_2);
-        il.Emit(OpCodes.Ldsfld, runtime.CurrentArrayLikeReceiverField);
+        il.Emit(OpCodes.Ldsfld, arrays.CurrentReceiverField);
         var useOriginalLabel = il.DefineLabel();
         var afterReceiverLabel = il.DefineLabel();
         il.Emit(OpCodes.Dup);
@@ -283,7 +283,7 @@ public partial class RuntimeEmitter
     /// body then writes args[0]=acc, args[1]=element, args[2]=index per
     /// iteration without re-allocating.
     /// </summary>
-    private void EmitInitReduceArgs(ILGenerator il, EmittedRuntime runtime, out LocalBuilder argsLocal)
+    private void EmitInitReduceArgs(ILGenerator il, EmittedArrayOperationsRuntime arrays, out LocalBuilder argsLocal)
     {
         argsLocal = il.DeclareLocal(_types.ObjectArray);
 
@@ -295,7 +295,7 @@ public partial class RuntimeEmitter
         // args[3] = $Runtime._currentArrayLikeReceiver ?? list
         il.Emit(OpCodes.Ldloc, argsLocal);
         il.Emit(OpCodes.Ldc_I4_3);
-        il.Emit(OpCodes.Ldsfld, runtime.CurrentArrayLikeReceiverField);
+        il.Emit(OpCodes.Ldsfld, arrays.CurrentReceiverField);
         var useOriginalLabel = il.DefineLabel();
         var afterReceiverLabel = il.DefineLabel();
         il.Emit(OpCodes.Dup);
@@ -406,7 +406,7 @@ public partial class RuntimeEmitter
         // _currentCallbackThisArg thread-static (set by ArrayEmitter when the
         // user passes a 2nd arg to forEach/map/etc, e.g. `arr.forEach(cb, ctx)`).
         // args[2] (receiver) was pre-filled by EmitInitCallbackArgs.
-        il.Emit(OpCodes.Ldsfld, runtime.CurrentCallbackThisArgField);
+        il.Emit(OpCodes.Ldsfld, runtime.ArrayOperations.CallbackThisArgField);
         il.Emit(OpCodes.Ldarg_1); // callback
         il.Emit(OpCodes.Ldloc, argsLocal);
         il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
@@ -420,7 +420,7 @@ public partial class RuntimeEmitter
             _types.ListOfObject,
             [_types.ListOfObject, _types.Object]
         );
-        runtime.ArrayMap = method;
+        runtime.ArrayOperations.Map = method;
 
         var il = method.GetILGenerator();
         EmitThrowIfCallbackNotCallable(il, runtime, 1, "Array.prototype.map");
@@ -428,7 +428,7 @@ public partial class RuntimeEmitter
         // Hoist the lazy check once at entry so per-element loads branch on
         // a stack-resident bool instead of re-reading the thread-static.
         EmitHoistedLazyCheck(il, runtime, out var isLazyLocal, out _);
-        EmitInitCallbackArgs(il, runtime, out var argsLocal);
+        EmitInitCallbackArgs(il, runtime.ArrayOperations, out var argsLocal);
         EmitDetectSkipIndexBox(il, runtime, out var skipIndexBoxLocal);
 
         // var result = new List<object>(list.Count). Map's output length is
@@ -523,7 +523,7 @@ public partial class RuntimeEmitter
             _types.ListOfObject,
             [_types.ListOfObject, funcObjectObject]
         );
-        runtime.ArrayMapDirect = method;
+        runtime.ArrayOperations.MapDirect = method;
 
         var il = method.GetILGenerator();
 
@@ -607,7 +607,7 @@ public partial class RuntimeEmitter
             _types.ListOfObject,
             [_types.ListOfObject, funcObjectObject]
         );
-        runtime.ArrayFilterDirect = method;
+        runtime.ArrayOperations.FilterDirect = method;
 
         var il = method.GetILGenerator();
         var listCountGetter = _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!;
@@ -685,7 +685,7 @@ public partial class RuntimeEmitter
             _types.ListOfObject,
             [_types.ListOfObject, funcObjectBool]
         );
-        runtime.ArrayFilterDirectBool = method;
+        runtime.ArrayOperations.FilterDirectBool = method;
 
         var il = method.GetILGenerator();
         var listCountGetter = _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!;
@@ -758,7 +758,7 @@ public partial class RuntimeEmitter
             _types.Void,
             [_types.ListOfObject, funcObjectObject]
         );
-        runtime.ArrayForEachDirect = method;
+        runtime.ArrayOperations.ForEachDirect = method;
 
         var il = method.GetILGenerator();
         var listCountGetter = _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!;
@@ -820,7 +820,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.ListOfObject, funcObjectObject]
         );
-        runtime.ArrayFindDirect = method;
+        runtime.ArrayOperations.FindDirect = method;
 
         var il = method.GetILGenerator();
         var listCountGetter = _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!;
@@ -889,7 +889,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.ListOfObject, funcObjectBool]
         );
-        runtime.ArrayFindDirectBool = method;
+        runtime.ArrayOperations.FindDirectBool = method;
 
         var il = method.GetILGenerator();
         var listCountGetter = _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!;
@@ -955,7 +955,7 @@ public partial class RuntimeEmitter
             _types.Double,
             [_types.ListOfObject, funcObjectObject]
         );
-        runtime.ArrayFindIndexDirect = method;
+        runtime.ArrayOperations.FindIndexDirect = method;
 
         var il = method.GetILGenerator();
         var listCountGetter = _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!;
@@ -1022,7 +1022,7 @@ public partial class RuntimeEmitter
             _types.Double,
             [_types.ListOfObject, funcObjectBool]
         );
-        runtime.ArrayFindIndexDirectBool = method;
+        runtime.ArrayOperations.FindIndexDirectBool = method;
 
         var il = method.GetILGenerator();
         var listCountGetter = _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!;
@@ -1086,7 +1086,7 @@ public partial class RuntimeEmitter
     {
         EmitPredicateAllOrAnyDirect(typeBuilder, runtime, name: "ArraySomeDirect",
             shortCircuitOnTruthy: true, defaultResult: false,
-            assignTo: m => runtime.ArraySomeDirect = m);
+            assignTo: m => runtime.ArrayOperations.SomeDirect = m);
     }
 
     /// <summary>
@@ -1097,7 +1097,7 @@ public partial class RuntimeEmitter
     {
         EmitPredicateAllOrAnyDirect(typeBuilder, runtime, name: "ArrayEveryDirect",
             shortCircuitOnTruthy: false, defaultResult: true,
-            assignTo: m => runtime.ArrayEveryDirect = m);
+            assignTo: m => runtime.ArrayOperations.EveryDirect = m);
     }
 
     /// <summary>
@@ -1108,14 +1108,14 @@ public partial class RuntimeEmitter
     {
         EmitPredicateAllOrAnyDirectBool(typeBuilder, runtime, name: "ArraySomeDirectBool",
             shortCircuitOnTruthy: true, defaultResult: false,
-            assignTo: m => runtime.ArraySomeDirectBool = m);
+            assignTo: m => runtime.ArrayOperations.SomeDirectBool = m);
     }
 
     private void EmitArrayEveryDirectBool(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         EmitPredicateAllOrAnyDirectBool(typeBuilder, runtime, name: "ArrayEveryDirectBool",
             shortCircuitOnTruthy: false, defaultResult: true,
-            assignTo: m => runtime.ArrayEveryDirectBool = m);
+            assignTo: m => runtime.ArrayOperations.EveryDirectBool = m);
     }
 
     private void EmitPredicateAllOrAnyDirectBool(TypeBuilder typeBuilder, EmittedRuntime runtime,
@@ -1259,13 +1259,13 @@ public partial class RuntimeEmitter
             _types.ListOfObject,
             [_types.ListOfObject, _types.Object]
         );
-        runtime.ArrayFilter = method;
+        runtime.ArrayOperations.Filter = method;
 
         var il = method.GetILGenerator();
         EmitThrowIfCallbackNotCallable(il, runtime, 1, "Array.prototype.filter");
 
         EmitHoistedLazyCheck(il, runtime, out var isLazyLocal, out _);
-        EmitInitCallbackArgs(il, runtime, out var argsLocal);
+        EmitInitCallbackArgs(il, runtime.ArrayOperations, out var argsLocal);
         EmitDetectSkipIndexBox(il, runtime, out var skipIndexBoxLocal);
 
         // var result = new List<object>(list.Count). Filter's output is bounded
@@ -1319,7 +1319,7 @@ public partial class RuntimeEmitter
         // tests counting getter invocations may flag this; tests that check
         // value-flow correctness pass.
         il.Emit(OpCodes.Ldloc, resultLocal);
-        EmitElementLoad(il, indexLocal, runtime, isLazyLocal);
+        EmitElementLoad(il, indexLocal, runtime.ArrayOperations, isLazyLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", _types.Object));
 
         il.MarkLabel(skipAdd);
@@ -1344,13 +1344,13 @@ public partial class RuntimeEmitter
             _types.Void,
             [_types.ListOfObject, _types.Object]
         );
-        runtime.ArrayForEach = method;
+        runtime.ArrayOperations.ForEach = method;
 
         var il = method.GetILGenerator();
         EmitThrowIfCallbackNotCallable(il, runtime, 1, "Array.prototype.forEach");
 
         EmitHoistedLazyCheck(il, runtime, out var isLazyLocal, out _);
-        EmitInitCallbackArgs(il, runtime, out var argsLocal);
+        EmitInitCallbackArgs(il, runtime.ArrayOperations, out var argsLocal);
         EmitDetectSkipIndexBox(il, runtime, out var skipIndexBoxLocal);
 
         // var i = 0
@@ -1400,13 +1400,13 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.ListOfObject, _types.Object]
         );
-        runtime.ArrayFind = method;
+        runtime.ArrayOperations.Find = method;
 
         var il = method.GetILGenerator();
         EmitThrowIfCallbackNotCallable(il, runtime, 1, "Array.prototype.find");
 
         EmitHoistedLazyCheck(il, runtime, out var isLazyLocal, out _);
-        EmitInitCallbackArgs(il, runtime, out var argsLocal);
+        EmitInitCallbackArgs(il, runtime.ArrayOperations, out var argsLocal);
         EmitDetectSkipIndexBox(il, runtime, out var skipIndexBoxLocal);
 
         var indexLocal = il.DeclareLocal(_types.Int32);
@@ -1458,13 +1458,13 @@ public partial class RuntimeEmitter
             _types.Double,
             [_types.ListOfObject, _types.Object]
         );
-        runtime.ArrayFindIndex = method;
+        runtime.ArrayOperations.FindIndex = method;
 
         var il = method.GetILGenerator();
         EmitThrowIfCallbackNotCallable(il, runtime, 1, "Array.prototype.findIndex");
 
         EmitHoistedLazyCheck(il, runtime, out var isLazyLocal, out _);
-        EmitInitCallbackArgs(il, runtime, out var argsLocal);
+        EmitInitCallbackArgs(il, runtime.ArrayOperations, out var argsLocal);
         EmitDetectSkipIndexBox(il, runtime, out var skipIndexBoxLocal);
 
         var indexLocal = il.DeclareLocal(_types.Int32);
@@ -1516,13 +1516,13 @@ public partial class RuntimeEmitter
             _types.Object,  // Return boxed bool to match ILEmitter expectations
             [_types.ListOfObject, _types.Object]
         );
-        runtime.ArraySome = method;
+        runtime.ArrayOperations.Some = method;
 
         var il = method.GetILGenerator();
         EmitThrowIfCallbackNotCallable(il, runtime, 1, "Array.prototype.some");
 
         EmitHoistedLazyCheck(il, runtime, out var isLazyLocal, out _);
-        EmitInitCallbackArgs(il, runtime, out var argsLocal);
+        EmitInitCallbackArgs(il, runtime.ArrayOperations, out var argsLocal);
         EmitDetectSkipIndexBox(il, runtime, out var skipIndexBoxLocal);
 
         var indexLocal = il.DeclareLocal(_types.Int32);
@@ -1576,13 +1576,13 @@ public partial class RuntimeEmitter
             _types.Object,  // Return boxed bool to match ILEmitter expectations
             [_types.ListOfObject, _types.Object]
         );
-        runtime.ArrayEvery = method;
+        runtime.ArrayOperations.Every = method;
 
         var il = method.GetILGenerator();
         EmitThrowIfCallbackNotCallable(il, runtime, 1, "Array.prototype.every");
 
         EmitHoistedLazyCheck(il, runtime, out var isLazyLocal, out _);
-        EmitInitCallbackArgs(il, runtime, out var argsLocal);
+        EmitInitCallbackArgs(il, runtime.ArrayOperations, out var argsLocal);
         EmitDetectSkipIndexBox(il, runtime, out var skipIndexBoxLocal);
 
         var indexLocal = il.DeclareLocal(_types.Int32);
@@ -1639,13 +1639,13 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.ListOfObject, _types.Object]
         );
-        runtime.ArrayFindLast = method;
+        runtime.ArrayOperations.FindLast = method;
 
         var il = method.GetILGenerator();
         EmitThrowIfCallbackNotCallable(il, runtime, 1, "Array.prototype.findLast");
 
         EmitHoistedLazyCheck(il, runtime, out var isLazyLocal, out _);
-        EmitInitCallbackArgs(il, runtime, out var argsLocal);
+        EmitInitCallbackArgs(il, runtime.ArrayOperations, out var argsLocal);
         EmitDetectSkipIndexBox(il, runtime, out var skipIndexBoxLocal);
 
         // int i = list.Count - 1
@@ -1696,13 +1696,13 @@ public partial class RuntimeEmitter
             _types.Double,
             [_types.ListOfObject, _types.Object]
         );
-        runtime.ArrayFindLastIndex = method;
+        runtime.ArrayOperations.FindLastIndex = method;
 
         var il = method.GetILGenerator();
         EmitThrowIfCallbackNotCallable(il, runtime, 1, "Array.prototype.findLastIndex");
 
         EmitHoistedLazyCheck(il, runtime, out var isLazyLocal, out _);
-        EmitInitCallbackArgs(il, runtime, out var argsLocal);
+        EmitInitCallbackArgs(il, runtime.ArrayOperations, out var argsLocal);
         EmitDetectSkipIndexBox(il, runtime, out var skipIndexBoxLocal);
 
         // int i = list.Count - 1
@@ -1762,7 +1762,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.ListOfObject, func3, _types.Object]
         );
-        runtime.ArrayReduceDirect = method;
+        runtime.ArrayOperations.ReduceDirect = method;
 
         var il = method.GetILGenerator();
         var listCountGetter = _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!;
@@ -1823,7 +1823,7 @@ public partial class RuntimeEmitter
     /// <c>double ArrayReduceDouble(List&lt;double&gt; src, Func&lt;double,double,double&gt; f, double init)</c>.
     /// Pure-BCL (no SharpTS reference) — standalone-DLL safe.
     /// </summary>
-    private void EmitArrayReduceDouble(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitArrayReduceDouble(TypeBuilder typeBuilder, EmittedArrayOperationsRuntime arrays)
     {
         var func3 = typeof(Func<double, double, double>);
         var method = typeBuilder.DefineMethod(
@@ -1832,7 +1832,7 @@ public partial class RuntimeEmitter
             _types.Double,
             [_types.ListOfDouble, func3, _types.Double]
         );
-        runtime.ArrayReduceDouble = method;
+        arrays.ReduceDouble = method;
 
         var il = method.GetILGenerator();
         var listCountGetter = _types.GetProperty(_types.ListOfDouble, "Count").GetGetMethod()!;
@@ -1882,7 +1882,7 @@ public partial class RuntimeEmitter
     /// <c>List&lt;double&gt; ArrayMapDouble(List&lt;double&gt; src, Func&lt;double,double&gt; f)</c>.
     /// Pure-BCL — standalone-DLL safe.
     /// </summary>
-    private void EmitArrayMapDouble(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitArrayMapDouble(TypeBuilder typeBuilder, EmittedArrayOperationsRuntime arrays)
     {
         var func2 = typeof(Func<double, double>);
         var method = typeBuilder.DefineMethod(
@@ -1891,7 +1891,7 @@ public partial class RuntimeEmitter
             _types.ListOfDouble,
             [_types.ListOfDouble, func2]
         );
-        runtime.ArrayMapDouble = method;
+        arrays.MapDouble = method;
 
         var il = method.GetILGenerator();
         var listCountGetter = _types.GetProperty(_types.ListOfDouble, "Count").GetGetMethod()!;
@@ -1946,7 +1946,7 @@ public partial class RuntimeEmitter
     /// <c>List&lt;double&gt; ArrayFilterDouble(List&lt;double&gt; src, Func&lt;double,bool&gt; p)</c>.
     /// Pure-BCL — standalone-DLL safe.
     /// </summary>
-    private void EmitArrayFilterDouble(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitArrayFilterDouble(TypeBuilder typeBuilder, EmittedArrayOperationsRuntime arrays)
     {
         var func2 = typeof(Func<double, bool>);
         var method = typeBuilder.DefineMethod(
@@ -1955,7 +1955,7 @@ public partial class RuntimeEmitter
             _types.ListOfDouble,
             [_types.ListOfDouble, func2]
         );
-        runtime.ArrayFilterDouble = method;
+        arrays.FilterDouble = method;
 
         var il = method.GetILGenerator();
         var listCountGetter = _types.GetProperty(_types.ListOfDouble, "Count").GetGetMethod()!;
@@ -2018,7 +2018,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.ListOfObject, _types.ObjectArray]
         );
-        runtime.ArrayReduce = method;
+        runtime.ArrayOperations.Reduce = method;
 
         var il = method.GetILGenerator();
 
@@ -2090,7 +2090,7 @@ public partial class RuntimeEmitter
         // Hoist the args[4] allocation once per helper invocation; pre-fill
         // args[3] = receiver (constant for the duration). Per-iter writes
         // only touch args[0..2].
-        EmitInitReduceArgs(il, runtime, out var argsLocal);
+        EmitInitReduceArgs(il, runtime.ArrayOperations, out var argsLocal);
 
         // Check if initial value provided (args.Length > 1)
         var hasInitial = il.DefineLabel();
@@ -2120,7 +2120,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Bge, scanEnd);
         // Load exactly once. Re-loading at scanFound invoked an indexed getter
         // twice before the first callback.
-        EmitElementLoad(il, scanLocal, runtime, isLazyLocal);
+        EmitElementLoad(il, scanLocal, runtime.ArrayOperations, isLazyLocal);
         il.Emit(OpCodes.Stloc, scanValueLocal);
         il.Emit(OpCodes.Ldloc, scanValueLocal);
         il.Emit(OpCodes.Isinst, runtime.ArrayStorage.HoleType);
@@ -2165,7 +2165,7 @@ public partial class RuntimeEmitter
 
         // Resolve presence and value once. The hole sentinel represents
         // HasProperty=false; a present accessor must execute exactly one Get.
-        EmitElementLoad(il, indexLocal, runtime, isLazyLocal);
+        EmitElementLoad(il, indexLocal, runtime.ArrayOperations, isLazyLocal);
         il.Emit(OpCodes.Stloc, elementLocal);
         il.Emit(OpCodes.Ldloc, elementLocal);
         il.Emit(OpCodes.Isinst, runtime.ArrayStorage.HoleType);
@@ -2223,7 +2223,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.ListOfObject, _types.ObjectArray]
         );
-        runtime.ArrayReduceRight = method;
+        runtime.ArrayOperations.ReduceRight = method;
 
         var il = method.GetILGenerator();
 
@@ -2287,7 +2287,7 @@ public partial class RuntimeEmitter
         // Hoist the args[4] allocation once per helper invocation; pre-fill
         // args[3] = receiver (constant for the duration). Per-iter writes
         // only touch args[0..2].
-        EmitInitReduceArgs(il, runtime, out var argsLocal);
+        EmitInitReduceArgs(il, runtime.ArrayOperations, out var argsLocal);
 
         // Check if initial value provided (args.Length > 1)
         var hasInitial = il.DefineLabel();
@@ -2317,7 +2317,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Blt, scanEnd);
         // if (!(LoadArrayLikeElement(list, scan) is ArrayHole)) goto found (lazy-aware)
-        EmitElementLoad(il, scanLocal, runtime, isLazyLocal);
+        EmitElementLoad(il, scanLocal, runtime.ArrayOperations, isLazyLocal);
         il.Emit(OpCodes.Stloc, scanValueLocal);
         il.Emit(OpCodes.Ldloc, scanValueLocal);
         il.Emit(OpCodes.Isinst, runtime.ArrayStorage.HoleType);
@@ -2364,7 +2364,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Blt, loopEnd);
 
         // Resolve presence and value once (symmetric to reduce).
-        EmitElementLoad(il, indexLocal, runtime, isLazyLocal);
+        EmitElementLoad(il, indexLocal, runtime.ArrayOperations, isLazyLocal);
         il.Emit(OpCodes.Stloc, elementLocal);
         il.Emit(OpCodes.Ldloc, elementLocal);
         il.Emit(OpCodes.Isinst, runtime.ArrayStorage.HoleType);
@@ -2415,7 +2415,7 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits ArrayEntries: returns an iterator yielding [index, value] pairs.
     /// </summary>
-    private void EmitArrayEntries(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitArrayEntries(TypeBuilder typeBuilder, EmittedArrayOperationsRuntime arrays)
     {
         var method = typeBuilder.DefineMethod(
             "ArrayEntries",
@@ -2423,19 +2423,19 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.ListOfObject]
         );
-        runtime.ArrayEntries = method;
+        arrays.Entries = method;
 
         var il = method.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_2);
-        il.Emit(OpCodes.Newobj, runtime.ArrayIteratorCtor);
+        il.Emit(OpCodes.Newobj, arrays.IteratorCtor);
         il.Emit(OpCodes.Ret);
     }
 
     /// <summary>
     /// Emits ArrayKeys: returns an iterator yielding array indices.
     /// </summary>
-    private void EmitArrayKeys(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitArrayKeys(TypeBuilder typeBuilder, EmittedArrayOperationsRuntime arrays)
     {
         var method = typeBuilder.DefineMethod(
             "ArrayKeys",
@@ -2443,19 +2443,19 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.ListOfObject]
         );
-        runtime.ArrayKeys = method;
+        arrays.Keys = method;
 
         var il = method.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Newobj, runtime.ArrayIteratorCtor);
+        il.Emit(OpCodes.Newobj, arrays.IteratorCtor);
         il.Emit(OpCodes.Ret);
     }
 
     /// <summary>
     /// Emits ArrayValues: returns an iterator yielding array elements.
     /// </summary>
-    private void EmitArrayValues(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitArrayValues(TypeBuilder typeBuilder, EmittedArrayOperationsRuntime arrays)
     {
         var method = typeBuilder.DefineMethod(
             "ArrayValues",
@@ -2463,13 +2463,13 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.ListOfObject]
         );
-        runtime.ArrayValues = method;
+        arrays.Values = method;
 
         var il = method.GetILGenerator();
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Newobj, runtime.ArrayIteratorCtor);
+        il.Emit(OpCodes.Newobj, arrays.IteratorCtor);
         il.Emit(OpCodes.Ret);
     }
 }

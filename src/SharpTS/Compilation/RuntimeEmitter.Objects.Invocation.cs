@@ -50,7 +50,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object, _types.String]
         );
-        runtime.GetArrayMethod = method;
+        runtime.ArrayOperations.GetMethod = method;
 
         var il = method.GetILGenerator();
         var nullLabel = il.DefineLabel();
@@ -199,7 +199,7 @@ public partial class RuntimeEmitter
 
         var boundArrayMethodLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.BoundArrayMethodType);
+        il.Emit(OpCodes.Isinst, runtime.ArrayOperations.BoundMethodType);
         il.Emit(OpCodes.Brtrue, boundArrayMethodLabel);
 
         // $BoundTypedArrayMethod (#940) — value-position call (`const f = a.fill; f(x)`).
@@ -284,7 +284,7 @@ public partial class RuntimeEmitter
         var notArrayTypeLabel = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, notArrayTypeLabel);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.ArrayConstructor);
+        il.Emit(OpCodes.Call, runtime.ArrayOperations.Constructor);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notArrayTypeLabel);
 
@@ -521,9 +521,9 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(boundArrayMethodLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.BoundArrayMethodType);
+        il.Emit(OpCodes.Castclass, runtime.ArrayOperations.BoundMethodType);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, runtime.BoundArrayMethodInvoke);
+        il.Emit(OpCodes.Callvirt, runtime.ArrayOperations.BoundMethodInvoke);
         il.Emit(OpCodes.Ret);
 
         if (_features.HasAnyTypedArray)
@@ -743,12 +743,12 @@ public partial class RuntimeEmitter
         var notBoundArrayMethodLabel = il.DefineLabel();
         var useOriginalBamLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, runtime.BoundArrayMethodType);
+        il.Emit(OpCodes.Isinst, runtime.ArrayOperations.BoundMethodType);
         il.Emit(OpCodes.Brfalse, notBoundArrayMethodLabel);
 
-        var bamLocal = il.DeclareLocal(runtime.BoundArrayMethodType);
+        var bamLocal = il.DeclareLocal(runtime.ArrayOperations.BoundMethodType);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Castclass, runtime.BoundArrayMethodType);
+        il.Emit(OpCodes.Castclass, runtime.ArrayOperations.BoundMethodType);
         il.Emit(OpCodes.Stloc, bamLocal);
 
         // If receiver is null/undefined → use bamLocal as-is (legacy behavior).
@@ -761,7 +761,7 @@ public partial class RuntimeEmitter
         // If receiver === bamLocal._list → use bamLocal as-is.
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, bamLocal);
-        il.Emit(OpCodes.Ldfld, runtime.BoundArrayMethodListField);
+        il.Emit(OpCodes.Ldfld, runtime.ArrayOperations.BoundMethodListField);
         il.Emit(OpCodes.Ceq);
         il.Emit(OpCodes.Brtrue, useOriginalBamLabel);
 
@@ -770,18 +770,18 @@ public partial class RuntimeEmitter
         // callback's array slot (per ECMA-262) sees `f`, not the materialized
         // copy. Mirrors the Array.prototype.X.call(receiver, ...) pattern path.
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Stsfld, runtime.CurrentArrayLikeReceiverField);
+        il.Emit(OpCodes.Stsfld, runtime.ArrayOperations.CurrentReceiverField);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.ArrayLikeMaterialize);
+        il.Emit(OpCodes.Call, runtime.ArrayOperations.Materialize);
         il.Emit(OpCodes.Ldloc, bamLocal);
-        il.Emit(OpCodes.Ldfld, runtime.BoundArrayMethodNameField);
-        il.Emit(OpCodes.Newobj, runtime.BoundArrayMethodCtor);
+        il.Emit(OpCodes.Ldfld, runtime.ArrayOperations.BoundMethodNameField);
+        il.Emit(OpCodes.Newobj, runtime.ArrayOperations.BoundMethodCtor);
         il.Emit(OpCodes.Stloc, bamLocal);
 
         il.MarkLabel(useOriginalBamLabel);
         il.Emit(OpCodes.Ldloc, bamLocal);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Callvirt, runtime.BoundArrayMethodInvoke);
+        il.Emit(OpCodes.Callvirt, runtime.ArrayOperations.BoundMethodInvoke);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(notBoundArrayMethodLabel);

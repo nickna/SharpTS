@@ -469,7 +469,7 @@ public partial class RuntimeEmitter
         var lenValLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Ldstr, "value");
-        il.Emit(OpCodes.Call, runtime.HasArrayLikeProperty);
+        il.Emit(OpCodes.Call, runtime.ArrayOperations.HasArrayLikeProperty);
         il.Emit(OpCodes.Brfalse, skipArrayLenCheck);
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Ldstr, "value");
@@ -667,7 +667,7 @@ public partial class RuntimeEmitter
             // distinguished from an absent field without firing a getter.
             il.Emit(OpCodes.Ldarg_2);
             il.Emit(OpCodes.Ldstr, field);
-            il.Emit(OpCodes.Call, runtime.HasArrayLikeProperty);
+            il.Emit(OpCodes.Call, runtime.ArrayOperations.HasArrayLikeProperty);
             il.Emit(OpCodes.Brtrue, stashLabel);
             il.Emit(OpCodes.Br, skipLabel);
 

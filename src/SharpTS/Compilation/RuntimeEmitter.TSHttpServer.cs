@@ -205,7 +205,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
 
         // rawTrailers → empty List<object?> (Array.isArray-compatible, same shape as rawHeaders;
-        // runtime.CreateArray is not yet assigned at the $HttpRequest emit phase).
+        // runtime.ArrayOperations.Create is not yet assigned at the $HttpRequest emit phase).
         il.MarkLabel(rawTrailersLabel);
         il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.ListOfObject));
         il.Emit(OpCodes.Ret);

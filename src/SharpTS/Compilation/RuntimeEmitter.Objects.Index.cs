@@ -289,11 +289,11 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ret);
             il.MarkLabel(notThisRcvLabel);
         }
-        EmitProtoSymbolFallback(_types.ListOfObject, runtime.ArrayPrototypeField, runtime.ArrayPrototypePopulateMethod);
+        EmitProtoSymbolFallback(_types.ListOfObject, runtime.ArrayOperations.PrototypeField, runtime.ArrayOperations.PrototypePopulateMethod);
         // TSArrayType is non-null here by contract: the dispatch above (Isinst TSArrayType)
         // already passed it to il.Emit, which throws on null. A redundant != null guard here
         // would only poison nullable flow analysis for the unconditional casts further down.
-        EmitProtoSymbolFallback(runtime.ArrayStorage.Type, runtime.ArrayPrototypeField, runtime.ArrayPrototypePopulateMethod);
+        EmitProtoSymbolFallback(runtime.ArrayStorage.Type, runtime.ArrayOperations.PrototypeField, runtime.ArrayOperations.PrototypePopulateMethod);
         // Functions inherit symbol-keyed properties from Function.prototype,
         // including Symbol.isConcatSpreadable. The own symbol dictionary was
         // already checked above; only a miss reaches this fallback.
@@ -1699,7 +1699,7 @@ public partial class RuntimeEmitter
                 il.Emit(OpCodes.Ldarg_1);
                 il.Emit(OpCodes.Call, _types.GetMethod(_types.Convert, "ToInt32", _types.Object));
                 il.Emit(OpCodes.Ldarg_2);
-                il.Emit(OpCodes.Call, desc.GetSetArrayElementMethod(runtime));
+                il.Emit(OpCodes.Call, desc.GetSetArrayElementMethod(runtime.ArrayOperations));
             }
             else
             {
@@ -1713,7 +1713,7 @@ public partial class RuntimeEmitter
                 il.Emit(OpCodes.Call, _types.GetMethod(_types.Convert, "ToInt32", _types.Object));
                 il.Emit(OpCodes.Ldarg_2);
                 il.Emit(OpCodes.Call, convertMethod);
-                il.Emit(OpCodes.Call, desc.GetSetArrayElementMethod(runtime));
+                il.Emit(OpCodes.Call, desc.GetSetArrayElementMethod(runtime.ArrayOperations));
             }
             il.Emit(OpCodes.Ret);
         }

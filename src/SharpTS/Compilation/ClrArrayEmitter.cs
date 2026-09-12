@@ -58,7 +58,7 @@ internal static class ClrArrayEmitter
         il.MarkLabel(done);
 
         il.Emit(OpCodes.Ldloc, elements);
-        il.Emit(OpCodes.Call, runtime.CreateArray);
+        il.Emit(OpCodes.Call, runtime.ArrayOperations.Create);
         il.MarkLabel(finished);
     }
 }

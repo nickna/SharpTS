@@ -539,7 +539,7 @@ public partial class ILEmitter
             IL.Emit(OpCodes.Stelem_Ref);
         }
 
-        IL.Emit(OpCodes.Call, _ctx.Runtime!.CreateArray);
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.ArrayOperations.Create);
     }
 
     private void EmitExternalDefaultValue(ParameterInfo parameter)

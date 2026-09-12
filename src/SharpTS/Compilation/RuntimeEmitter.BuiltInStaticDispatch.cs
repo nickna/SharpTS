@@ -94,7 +94,7 @@ public partial class RuntimeEmitter
         }
 
         // Array.* — stored-as-value Array reference accessing static members.
-        EmitLookup(_types.IListOfObject, "isArray", runtime.IsArray, 1);
+        EmitLookup(_types.IListOfObject, "isArray", runtime.ArrayOperations.IsArray, 1);
 
         // Number.* — bare `Number` identifier now resolves to typeof(double)
         // via issue #62, so the value-form path lands here.

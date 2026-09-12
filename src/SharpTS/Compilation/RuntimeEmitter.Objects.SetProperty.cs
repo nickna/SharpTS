@@ -1842,7 +1842,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Callvirt, runtime.ArrayStorage.HasIndex);
             il.Emit(OpCodes.Brtrue, arrayIndexedRawStoreLabel);
             var arrayInheritedSetterLocal = il.DeclareLocal(_types.Object);
-            il.Emit(OpCodes.Ldsfld, runtime.ArrayPrototypeField);
+            il.Emit(OpCodes.Ldsfld, runtime.ArrayOperations.PrototypeField);
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Ldloca, arrayInheritedSetterLocal);
             il.Emit(OpCodes.Call, runtime.PDSTryGetSetter);
@@ -2421,7 +2421,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Convert, "ToInt64", _types.Object));
         il.Emit(OpCodes.Callvirt, runtime.ArrayStorage.HasIndex);
         il.Emit(OpCodes.Brtrue, strictArrayNoInheritedSetterLabel);
-        il.Emit(OpCodes.Ldsfld, runtime.ArrayPrototypeField);
+        il.Emit(OpCodes.Ldsfld, runtime.ArrayOperations.PrototypeField);
         il.Emit(OpCodes.Stloc, strictArrayPrototypeLocal);
 
         il.MarkLabel(strictArrayPrototypeLoop);
@@ -2589,7 +2589,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Castclass, _types.ListOfObjectNullable);
         il.Emit(OpCodes.Ldloc, strictListIndexLocal);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Call, runtime.SetArrayElement);
+        il.Emit(OpCodes.Call, runtime.ArrayOperations.SetElement);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(dictLabel);
