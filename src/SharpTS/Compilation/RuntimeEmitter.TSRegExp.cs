@@ -3349,7 +3349,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
         il.MarkLabel(nativeHasMatchesLabel);
         il.Emit(OpCodes.Ldloc, arrLocal);
-        il.Emit(OpCodes.Newobj, runtime.TSArrayCtor);
+        il.Emit(OpCodes.Newobj, runtime.ArrayStorage.Ctor);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(slowMatchLabel);
@@ -3463,7 +3463,7 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(returnArrLabel);
         il.Emit(OpCodes.Ldloc, arrLocal);
-        il.Emit(OpCodes.Newobj, runtime.TSArrayCtor);
+        il.Emit(OpCodes.Newobj, runtime.ArrayStorage.Ctor);
         il.Emit(OpCodes.Ret);
     }
 

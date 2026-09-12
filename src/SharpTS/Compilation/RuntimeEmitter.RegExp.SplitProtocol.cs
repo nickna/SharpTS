@@ -463,7 +463,7 @@ public partial class RuntimeEmitter
     private static void EmitReturnArray(ILGenerator il, EmittedRuntime runtime, LocalBuilder result)
     {
         il.Emit(OpCodes.Ldloc, result);
-        il.Emit(OpCodes.Newobj, runtime.TSArrayCtor);
+        il.Emit(OpCodes.Newobj, runtime.ArrayStorage.Ctor);
         il.Emit(OpCodes.Ret);
     }
 }

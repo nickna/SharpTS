@@ -56,7 +56,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Call, runtime.IterateToList);
-        il.Emit(OpCodes.Newobj, runtime.TSArrayCtor);
+        il.Emit(OpCodes.Newobj, runtime.ArrayStorage.Ctor);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(passThroughLabel);
@@ -509,7 +509,7 @@ public partial class RuntimeEmitter
 
             // Skip holes.
             il.Emit(OpCodes.Ldloc, elemLocal);
-            il.Emit(OpCodes.Isinst, runtime.ArrayHoleType);
+            il.Emit(OpCodes.Isinst, runtime.ArrayStorage.HoleType);
             il.Emit(OpCodes.Brtrue, advance);
 
             // result.Add(elem);
@@ -1090,7 +1090,7 @@ public partial class RuntimeEmitter
 
             // Skip holes.
             il.Emit(OpCodes.Ldloc, elemLocal);
-            il.Emit(OpCodes.Isinst, runtime.ArrayHoleType);
+            il.Emit(OpCodes.Isinst, runtime.ArrayStorage.HoleType);
             il.Emit(OpCodes.Brtrue, advance);
 
             // entry = new List<object> { i.ToString(), elem }; result.Add(entry);

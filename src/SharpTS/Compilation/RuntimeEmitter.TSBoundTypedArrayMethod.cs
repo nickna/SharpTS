@@ -176,9 +176,9 @@ public partial class RuntimeEmitter
         // else if (source is $Array) -> element-wise via GetElement (coerced by the element setter)
         il.MarkLabel(notTyped);
         var notArray = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, sourceLoc); il.Emit(OpCodes.Isinst, runtime.TSArrayType); il.Emit(OpCodes.Brfalse, notArray);
-        il.Emit(OpCodes.Ldloc, sourceLoc); il.Emit(OpCodes.Castclass, runtime.TSArrayType);
-        il.Emit(OpCodes.Callvirt, runtime.TSArrayLengthGetter); il.Emit(OpCodes.Stloc, lenLoc);
+        il.Emit(OpCodes.Ldloc, sourceLoc); il.Emit(OpCodes.Isinst, runtime.ArrayStorage.Type); il.Emit(OpCodes.Brfalse, notArray);
+        il.Emit(OpCodes.Ldloc, sourceLoc); il.Emit(OpCodes.Castclass, runtime.ArrayStorage.Type);
+        il.Emit(OpCodes.Callvirt, runtime.ArrayStorage.LengthGetter); il.Emit(OpCodes.Stloc, lenLoc);
         // if (offset + len > _array.Length) throw RangeError
         var okRange = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, offsetLoc); il.Emit(OpCodes.Ldloc, lenLoc); il.Emit(OpCodes.Add);

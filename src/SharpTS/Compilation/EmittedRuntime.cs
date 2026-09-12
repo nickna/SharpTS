@@ -17,10 +17,9 @@ namespace SharpTS.Compilation;
 /// <seealso cref="ILEmitter"/>
 public class EmittedRuntime
 {
-    public ArrayQueueTypeInfo NumberQueue { get; set; } = null!;
-    public ArrayQueueTypeInfo BooleanQueue { get; set; } = null!;
-    public ArrayQueueTypeInfo NumberQueueWithHoles { get; set; } = null!;
-    public ArrayQueueTypeInfo BooleanQueueWithHoles { get; set; } = null!;
+    /// <summary>Required array storage metadata, emitted for every compilation.</summary>
+    public EmittedArrayStorageRuntime ArrayStorage { get; } = new();
+
     /// <summary>
     /// Human-readable reasons this compilation emitted late binding into the SharpTS runtime
     /// assembly (e.g. "eval()", "Proxy", "Intl"). Populated during emission by
@@ -1460,76 +1459,12 @@ public class EmittedRuntime
     // Dynamic import support
     public MethodBuilder DynamicImportModule { get; set; } = null!;
 
-    // $ArrayHole singleton — sentinel for ECMA-262 array holes (index in range but never written).
-    // NOTE: Must stay in sync with SharpTS.Runtime.Types.ArrayHole
-    public Type ArrayHoleType { get; set; } = null!;
-    public FieldInfo ArrayHoleInstance { get; set; } = null!;
-
-    // $Array type - emitted for standalone assemblies
-    // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSArray
-    public Type TSArrayType { get; set; } = null!;
-
     /// <summary>
     /// $CallArgsPool.Get(int arity) — returns a thread-static object[]
     /// of the given arity (cached for arities 1..4, fresh allocation
     /// for ≥5). Used at method-call sites to avoid per-call newarr.
     /// </summary>
     public MethodBuilder CallArgsPoolGet { get; set; } = null!;
-    public ConstructorBuilder TSArrayCtor { get; set; } = null!;
-    public ConstructorBuilder TSArrayLiteralCtor { get; set; } = null!;
-    public ConstructorBuilder TSArrayNumericLiteralCtor { get; set; } = null!;
-    public ConstructorBuilder TSArrayRestCtor { get; set; } = null!;
-    public MethodBuilder TSArrayCreateNumericRest { get; set; } = null!;
-    public MethodBuilder TSArrayAppendRest { get; set; } = null!;
-    public MethodBuilder TSArrayAppendRestDouble { get; set; } = null!;
-    public MethodBuilder TSArrayAppendRestValue { get; set; } = null!;
-    public MethodBuilder TSArrayReserveRest { get; set; } = null!;
-    public MethodBuilder TSArrayAppendNumericRestSource { get; set; } = null!;
-    public MethodBuilder TSArrayFinishRest { get; set; } = null!;
-    /// <summary>$Array(object?[] ctorArgs) — ECMA-262 Array-constructor semantics for guest classes extending Array (#233): implicit ctors and super(...) chain through this.</summary>
-    public ConstructorBuilder TSArrayCtorFromCtorArgs { get; set; } = null!;
-    public MethodBuilder TSArrayElementsGetter { get; set; } = null!;
-    public MethodBuilder TSArrayFreeze { get; set; } = null!;
-    public MethodBuilder TSArrayGet { get; set; } = null!;
-    public MethodBuilder TSArraySet { get; set; } = null!;
-
-    // Stage E.2 additions (long-indexed sparse/hole-aware API).
-    // Mirrors SharpTSArray public surface. Legacy int-indexed Get/Set above
-    // continue to work (they widen to the long path internally).
-    // Count is inherited from List<object?> — no custom getter.
-    public MethodBuilder TSArrayLongLengthGetter { get; set; } = null!;
-    public MethodBuilder TSArrayLengthGetter { get; set; } = null!;
-    public MethodBuilder TSArrayHasIndex { get; set; } = null!;
-    public MethodBuilder TSArrayGetLong { get; set; } = null!;
-    public MethodBuilder TSArraySetLong { get; set; } = null!;
-    public MethodBuilder TSArraySetStrictLong { get; set; } = null!;
-    public MethodBuilder TSArraySetLength { get; set; } = null!;
-    public MethodBuilder TSArrayDeleteAt { get; set; } = null!;
-
-    // Unboxed packed-double elements-kind accessors (number[] unboxing project).
-    // GetDouble/SetDouble/PushDouble are the fast paths the compiler emits at
-    // statically-number[] sites; EnsureBoxed is the deopt (numeric -> boxed).
-    public MethodBuilder TSArrayCanGetDouble { get; set; } = null!;
-    public MethodBuilder TSArrayTryGetBoxedDouble { get; set; } = null!;
-    public MethodBuilder TSArrayGetDouble { get; set; } = null!;
-    public MethodBuilder TSArraySetDouble { get; set; } = null!;
-    public MethodBuilder TSArrayPushDouble { get; set; } = null!;
-    public MethodBuilder TSArrayEnsureDoubleCapacity { get; set; } = null!;
-    public MethodBuilder TSArrayEnsureBoxed { get; set; } = null!;
-    public MethodBuilder TSArrayIsNumericGetter { get; set; } = null!;
-    public MethodBuilder TSArrayNumericCountGetter { get; set; } = null!;
-    public MethodBuilder TSArrayCanMutateNumericGetter { get; set; } = null!;
-    public MethodBuilder TSArrayShiftNumeric { get; set; } = null!;
-    public MethodBuilder TSArrayUnshiftNumeric { get; set; } = null!;
-    public MethodBuilder TSArrayCloneNumeric { get; set; } = null!;
-    public MethodBuilder TSArraySortNumeric { get; set; } = null!;
-    // Flips an empty $Array into numeric (unboxed double[]) mode — emitted at
-    // statically-number[] array-creation sites so escaping number[] arrays start
-    // unboxed. No-op on a non-empty / sparse array (stays boxed).
-    public MethodBuilder TSArrayMarkNumeric { get; set; } = null!;
-    // Sets $Array._isNonExtensible so the unboxed PushDouble fast path refuses to append; called by
-    // Object.seal / Object.preventExtensions (which otherwise only register the array externally).
-    public MethodBuilder TSArrayMarkNonExtensible { get; set; } = null!;
 
     // $IHasFields interface - for unified property access on user classes and $Object
     // Note: These use MethodInfo instead of MethodBuilder because we need the actual

@@ -500,10 +500,10 @@ public partial class ILEmitter
             if (_ctx.TypeMap.IsPromotableQueueLocal(v.Name))
             {
                 var queue = promoElemTok == TokenType.TYPE_NUMBER
-                    ? _ctx.Runtime!.NumberQueue : _ctx.Runtime!.BooleanQueue;
+                    ? _ctx.Runtime!.ArrayStorage.NumberQueue : _ctx.Runtime!.ArrayStorage.BooleanQueue;
                 if (_ctx.TypeMap.QueueLocalHasWrites(v.Name))
                     queue = promoElemTok == TokenType.TYPE_NUMBER
-                        ? _ctx.Runtime!.NumberQueueWithHoles : _ctx.Runtime!.BooleanQueueWithHoles;
+                        ? _ctx.Runtime!.ArrayStorage.NumberQueueWithHoles : _ctx.Runtime!.ArrayStorage.BooleanQueueWithHoles;
                 var queueLocal = _ctx.Locals.DeclareLocal(v.Name.Lexeme, queue.Type);
                 IL.Emit(OpCodes.Newobj, queue.Constructor);
                 IL.Emit(OpCodes.Stloc, queueLocal);
@@ -920,7 +920,7 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Newarr, _ctx.Types.Object);
         IL.Emit(OpCodes.Call, _ctx.Runtime!.CreateArray);            // [$Array] (empty)
         IL.Emit(OpCodes.Dup);                                        // [$Array, $Array]
-        IL.Emit(OpCodes.Callvirt, _ctx.Runtime!.TSArrayMarkNumeric); // [$Array]
+        IL.Emit(OpCodes.Callvirt, _ctx.Runtime!.ArrayStorage.MarkNumeric); // [$Array]
         SetStackUnknown();
     }
 
@@ -1859,7 +1859,7 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Call, typeof(Math).GetMethod(
             nameof(Math.Ceiling), [_ctx.Types.Double])!);
         IL.Emit(OpCodes.Conv_I4);
-        IL.Emit(OpCodes.Callvirt, _ctx.Runtime.TSArrayEnsureDoubleCapacity);
+        IL.Emit(OpCodes.Callvirt, _ctx.Runtime.ArrayStorage.EnsureDoubleCapacity);
 
         _ctx.ILBuilder.MarkLabel(skip);
         SetStackUnknown();
@@ -1970,7 +1970,7 @@ public partial class ILEmitter
             // to boxed and reintroduces the per-element boxing this project removed (#927 step 1). Bool/
             // Object kinds keep their List<T> hoist ($Array : List<object?> covers Object directly).
             var hoistType = desc.Kind == ArrayElementsKind.Double
-                ? _ctx.Runtime!.TSArrayType
+                ? _ctx.Runtime!.ArrayStorage.Type
                 : desc.GetListType(_ctx.Types);
             var typedLocal = IL.DeclareLocal(hoistType);
 
@@ -1990,10 +1990,10 @@ public partial class ILEmitter
                 // cached List<object> reads require its boxed representation.
                 var notNumericArray = IL.DefineLabel();
                 IL.Emit(OpCodes.Dup);
-                IL.Emit(OpCodes.Isinst, _ctx.Runtime!.TSArrayType);
+                IL.Emit(OpCodes.Isinst, _ctx.Runtime!.ArrayStorage.Type);
                 IL.Emit(OpCodes.Dup);
                 IL.Emit(OpCodes.Brfalse, notNumericArray);
-                IL.Emit(OpCodes.Callvirt, _ctx.Runtime.TSArrayEnsureBoxed);
+                IL.Emit(OpCodes.Callvirt, _ctx.Runtime.ArrayStorage.EnsureBoxed);
                 var ready = IL.DefineLabel();
                 IL.Emit(OpCodes.Br, ready);
                 IL.MarkLabel(notNumericArray);
@@ -2749,11 +2749,11 @@ public partial class ILEmitter
             // $Array wrapper → .Elements
             var notTSArrayLabel = builder.DefineLabel("forof_arr_not_tsarr");
             IL.Emit(OpCodes.Ldloc, iterableLocal);
-            IL.Emit(OpCodes.Isinst, _ctx.Runtime!.TSArrayType);
+            IL.Emit(OpCodes.Isinst, _ctx.Runtime!.ArrayStorage.Type);
             IL.Emit(OpCodes.Brfalse, notTSArrayLabel);
             IL.Emit(OpCodes.Ldloc, iterableLocal);
-            IL.Emit(OpCodes.Castclass, _ctx.Runtime!.TSArrayType);
-            IL.Emit(OpCodes.Callvirt, _ctx.Runtime!.TSArrayElementsGetter);
+            IL.Emit(OpCodes.Castclass, _ctx.Runtime!.ArrayStorage.Type);
+            IL.Emit(OpCodes.Callvirt, _ctx.Runtime!.ArrayStorage.ElementsGetter);
             IL.Emit(OpCodes.Stloc, listLocal);
             IL.Emit(OpCodes.Br, loopHeadLabel);
 
@@ -2826,7 +2826,7 @@ public partial class ILEmitter
             var notHoleLabel = builder.DefineLabel("forof_arr_not_hole");
             var unholedLabel = builder.DefineLabel("forof_arr_unholed");
             IL.Emit(OpCodes.Dup);
-            IL.Emit(OpCodes.Isinst, _ctx.Runtime!.ArrayHoleType);
+            IL.Emit(OpCodes.Isinst, _ctx.Runtime!.ArrayStorage.HoleType);
             IL.Emit(OpCodes.Brfalse, notHoleLabel);
             IL.Emit(OpCodes.Pop);
             IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.UndefinedInstance);

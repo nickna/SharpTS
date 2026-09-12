@@ -55,10 +55,10 @@ public partial class RuntimeEmitter
 
         // Emit $Undefined singleton class first (other methods need this type)
         EmitUndefinedClass(moduleBuilder, runtime);
-        runtime.NumberQueue = EmitArrayQueue(moduleBuilder, runtime, ArrayElements.Double);
-        runtime.BooleanQueue = EmitArrayQueue(moduleBuilder, runtime, ArrayElements.Bool);
-        runtime.NumberQueueWithHoles = EmitArrayQueue(moduleBuilder, runtime, ArrayElements.Double, true);
-        runtime.BooleanQueueWithHoles = EmitArrayQueue(moduleBuilder, runtime, ArrayElements.Bool, true);
+        runtime.ArrayStorage.NumberQueue = EmitArrayQueue(moduleBuilder, runtime, ArrayElements.Double);
+        runtime.ArrayStorage.BooleanQueue = EmitArrayQueue(moduleBuilder, runtime, ArrayElements.Bool);
+        runtime.ArrayStorage.NumberQueueWithHoles = EmitArrayQueue(moduleBuilder, runtime, ArrayElements.Double, true);
+        runtime.ArrayStorage.BooleanQueueWithHoles = EmitArrayQueue(moduleBuilder, runtime, ArrayElements.Bool, true);
         EmitLexicalUninitializedClass(moduleBuilder, runtime);
 
         // Marker used only to give compiler-generated prototype constructors a
@@ -159,7 +159,7 @@ public partial class RuntimeEmitter
         // $ArrayHole.Instance for padding intermediate positions on sparse writes
         // and `a.length = N` extensions.
         // NOTE: Must stay in sync with SharpTS.Runtime.Types.ArrayHole
-        EmitArrayHoleClass(moduleBuilder, runtime);
+        EmitArrayHoleClass(moduleBuilder, runtime.ArrayStorage);
 
         // Per-thread args[] pool used by method-call dispatch to skip
         // newarr per `obj.method(a, b)` invocation. Lives on a separate
@@ -615,6 +615,7 @@ public partial class RuntimeEmitter
             EmitBoundDHMethodFinalize(runtime);
         }
 
+        runtime.ArrayStorage.CompleteEmission();
         runtime.Dns?.CompleteEmission();
         runtime.Zlib?.CompleteEmission();
         runtime.Tls?.CompleteEmission();

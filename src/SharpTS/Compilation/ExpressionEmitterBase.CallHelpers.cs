@@ -918,15 +918,15 @@ public abstract partial class ExpressionEmitterBase
                 var missing = IL.DefineLabel();
                 var ready = IL.DefineLabel();
                 IL.Emit(OpCodes.Ldloc, expanded);
-                IL.Emit(OpCodes.Castclass, Ctx.Runtime!.TSArrayType);
-                IL.Emit(OpCodes.Call, Ctx.Runtime.TSArrayLengthGetter);
+                IL.Emit(OpCodes.Castclass, Ctx.Runtime!.ArrayStorage.Type);
+                IL.Emit(OpCodes.Call, Ctx.Runtime.ArrayStorage.LengthGetter);
                 IL.Emit(OpCodes.Ldc_I4, i);
                 IL.Emit(OpCodes.Ble, missing);
                 IL.Emit(OpCodes.Ldloc, expanded);
-                IL.Emit(OpCodes.Castclass, Ctx.Runtime!.TSArrayType);
+                IL.Emit(OpCodes.Castclass, Ctx.Runtime!.ArrayStorage.Type);
                 IL.Emit(OpCodes.Ldc_I4, i);
                 IL.Emit(OpCodes.Conv_I8);
-                IL.Emit(OpCodes.Call, Ctx.Runtime.TSArrayGetLong);
+                IL.Emit(OpCodes.Call, Ctx.Runtime.ArrayStorage.GetLong);
                 EmitCoerceBoxedToType(targetParams[i].ParameterType);
                 IL.Emit(OpCodes.Br, ready);
                 IL.MarkLabel(missing);
@@ -934,10 +934,10 @@ public abstract partial class ExpressionEmitterBase
                 IL.MarkLabel(ready);
             }
             IL.Emit(OpCodes.Ldloc, expanded);
-            IL.Emit(OpCodes.Castclass, Ctx.Runtime!.TSArrayType);
+            IL.Emit(OpCodes.Castclass, Ctx.Runtime!.ArrayStorage.Type);
             IL.Emit(OpCodes.Dup);
             IL.Emit(OpCodes.Ldc_I4, regularCount);
-            IL.Emit(OpCodes.Call, Ctx.Runtime.TSArrayFinishRest);
+            IL.Emit(OpCodes.Call, Ctx.Runtime.ArrayStorage.FinishRest);
             return;
         }
 
@@ -995,15 +995,15 @@ public abstract partial class ExpressionEmitterBase
         bool numericRest = allowNumericStorage && !hasSuspension && restArgsCount > 0
             && argLocals.Skip(regularCount).All(local => local.LocalType == Types.Double);
         IL.Emit(OpCodes.Ldc_I4, restArgsCount);
-        if (numericRest) IL.Emit(OpCodes.Call, Ctx.Runtime!.TSArrayCreateNumericRest);
-        else IL.Emit(OpCodes.Newobj, Ctx.Runtime!.TSArrayRestCtor);
+        if (numericRest) IL.Emit(OpCodes.Call, Ctx.Runtime!.ArrayStorage.CreateNumericRest);
+        else IL.Emit(OpCodes.Newobj, Ctx.Runtime!.ArrayStorage.RestCtor);
         for (int i = 0; i < restArgsCount; i++)
         {
             IL.Emit(OpCodes.Dup);
             IL.Emit(OpCodes.Ldloc, argLocals[regularCount + i]);
             if (!numericRest && argLocals[regularCount + i].LocalType == Types.Double)
                 IL.Emit(OpCodes.Box, Types.Double);
-            IL.Emit(OpCodes.Call, numericRest ? Ctx.Runtime.TSArrayPushDouble : Ctx.Runtime.TSArrayAppendRest);
+            IL.Emit(OpCodes.Call, numericRest ? Ctx.Runtime.ArrayStorage.PushDouble : Ctx.Runtime.ArrayStorage.AppendRest);
         }
     }
 
@@ -1017,8 +1017,8 @@ public abstract partial class ExpressionEmitterBase
         // Numeric builders reserve at the first known spread length. A scalar
         // prefix uses the normal small numeric capacity, not expression count.
         IL.Emit(OpCodes.Ldc_I4, numeric ? 0 : arguments.Count);
-        if (numeric) IL.Emit(OpCodes.Call, Ctx.Runtime!.TSArrayCreateNumericRest);
-        else IL.Emit(OpCodes.Newobj, Ctx.Runtime!.TSArrayRestCtor);
+        if (numeric) IL.Emit(OpCodes.Call, Ctx.Runtime!.ArrayStorage.CreateNumericRest);
+        else IL.Emit(OpCodes.Newobj, Ctx.Runtime!.ArrayStorage.RestCtor);
         var target = _helpers.SpillStoreObject();
         foreach (var argument in arguments)
         {
@@ -1030,9 +1030,9 @@ public abstract partial class ExpressionEmitterBase
                 var scalar = IL.DeclareLocal(native ? Types.Double : Types.Object);
                 IL.Emit(OpCodes.Stloc, scalar);
                 IL.Emit(OpCodes.Ldloc, target);
-                IL.Emit(OpCodes.Castclass, Ctx.Runtime.TSArrayType);
+                IL.Emit(OpCodes.Castclass, Ctx.Runtime.ArrayStorage.Type);
                 IL.Emit(OpCodes.Ldloc, scalar);
-                IL.Emit(OpCodes.Call, native ? Ctx.Runtime.TSArrayAppendRestDouble : Ctx.Runtime.TSArrayAppendRest);
+                IL.Emit(OpCodes.Call, native ? Ctx.Runtime.ArrayStorage.AppendRestDouble : Ctx.Runtime.ArrayStorage.AppendRest);
                 continue;
             }
             var value = SpillBoxed(argument is Expr.Spread spread ? spread.Expression : argument);
@@ -1050,9 +1050,9 @@ public abstract partial class ExpressionEmitterBase
             else
             {
                 IL.Emit(OpCodes.Ldloc, target);
-                IL.Emit(OpCodes.Castclass, Ctx.Runtime.TSArrayType);
+                IL.Emit(OpCodes.Castclass, Ctx.Runtime.ArrayStorage.Type);
                 IL.Emit(OpCodes.Ldloc, value);
-                IL.Emit(OpCodes.Call, Ctx.Runtime.TSArrayAppendRest);
+                IL.Emit(OpCodes.Call, Ctx.Runtime.ArrayStorage.AppendRest);
             }
         }
         return target;
@@ -2716,7 +2716,7 @@ public abstract partial class ExpressionEmitterBase
                 if (arguments.Count > 1)
                     EmitBoxedArgOrNull(arguments, 1);
                 else
-                    IL.Emit(OpCodes.Ldsfld, Ctx.Runtime!.ArrayHoleInstance);
+                    IL.Emit(OpCodes.Ldsfld, Ctx.Runtime!.ArrayStorage.HoleInstance);
                 IL.Emit(OpCodes.Call, methodName == "indexOf" ? Ctx.Runtime!.ArrayIndexOf : Ctx.Runtime!.ArrayLastIndexOf);
                 IL.Emit(OpCodes.Box, typeof(double));
                 break;

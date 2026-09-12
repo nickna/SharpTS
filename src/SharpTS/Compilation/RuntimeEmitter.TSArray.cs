@@ -10,8 +10,8 @@ namespace SharpTS.Compilation;
 /// <remarks>
 /// Stage E.2 M1 (infrastructure, no behavior change): the class now carries the
 /// sparse/hole-aware fields and long-indexed methods needed by later milestones.
-/// Existing callers (IL emitters that invoke <see cref="EmittedRuntime.TSArrayGet"/>,
-/// <see cref="EmittedRuntime.TSArraySet"/>, <see cref="EmittedRuntime.TSArrayElementsGetter"/>)
+/// Existing callers (IL emitters that invoke <see cref="EmittedArrayStorageRuntime.Get"/>,
+/// <see cref="EmittedArrayStorageRuntime.Set"/>, <see cref="EmittedArrayStorageRuntime.ElementsGetter"/>)
 /// continue to observe pre-Stage-E semantics: constructor populates <c>_dense</c>
 /// from the input list, <c>_length == _dense.Count</c>, <c>_sparse == null</c>,
 /// and legacy int-indexed Get/Set bounds-check against <c>_dense.Count</c>. The
@@ -69,11 +69,6 @@ public partial class RuntimeEmitter
     private MethodInfo? _tsArrayListGetItem;
     private MethodInfo? _tsArrayListSetItem;
 
-    // The deopt method (numeric -> boxed). Defined early in EmitTSArrayClass so
-    // the base-list methods emitted below can call it via EmitTSArrayDeoptGuard;
-    // its body is emitted later in EmitTSArrayNumericAccessors.
-    private MethodBuilder _tsArrayEnsureBoxedMethod = null!;
-
     private void InitTSArrayMethodCache()
     {
         _tsArraySparseTryGetValue = _types.GetMethod(_tsArraySparseType, "TryGetValue", [_types.UInt32, _types.Object.MakeByRefType()])!;
@@ -119,7 +114,7 @@ public partial class RuntimeEmitter
             TypeAttributes.Public | TypeAttributes.Class | TypeAttributes.BeforeFieldInit,
             _types.ListOfObject
         );
-        runtime.TSArrayType = typeBuilder;
+        runtime.ArrayStorage.Type = typeBuilder;
 
         // Sparse-aware fields. The dense backing is the base-List's own storage;
         // `_dense` is kept as an alias field for code clarity but points at `this`.
@@ -143,12 +138,11 @@ public partial class RuntimeEmitter
         // EmitTSArrayNumericAccessors) so the base-list methods below can guard
         // themselves with EmitTSArrayDeoptGuard — any boxed-representation access
         // on a numeric-mode array first materializes the unboxed store.
-        _tsArrayEnsureBoxedMethod = typeBuilder.DefineMethod("EnsureBoxed",
+        runtime.ArrayStorage.EnsureBoxed = typeBuilder.DefineMethod("EnsureBoxed",
             MethodAttributes.Public | MethodAttributes.HideBySig, _types.Void, System.Type.EmptyTypes);
-        runtime.TSArrayEnsureBoxed = _tsArrayEnsureBoxedMethod;
 
-        EmitTSArrayConstructor(typeBuilder, runtime);
-        EmitTSArrayNumericLiteralConstructor(typeBuilder, runtime);
+        EmitTSArrayConstructor(typeBuilder, runtime.ArrayStorage);
+        EmitTSArrayNumericLiteralConstructor(typeBuilder, runtime.ArrayStorage);
 
         // Elements returns `this` (the inherited List<object?>). In practice
         // callers that cared about the sparse tail have migrated to the
@@ -158,7 +152,7 @@ public partial class RuntimeEmitter
         // interop paths), and (b) as a semantic marker in emitted IL vs.
         // an opaque Castclass. Kept post-Stage E as a shallow forward-
         // compatible helper; safe because the dense prefix IS the instance.
-        EmitTSArrayElementsProperty(typeBuilder, runtime);
+        EmitTSArrayElementsProperty(typeBuilder, runtime.ArrayStorage);
 
         // Private helpers emitted first — all public getters/methods below
         // call SyncLength to absorb mutations that went through inherited
@@ -168,14 +162,14 @@ public partial class RuntimeEmitter
         // undefined.
         var syncLength = EmitTSArraySyncLength(typeBuilder, runtime);
         var materializeDense = EmitTSArrayMaterializeDense(typeBuilder, runtime);
-        var tryCollapseSparse = EmitTSArrayTryCollapseSparse(typeBuilder, runtime);
-        var getCore = EmitTSArrayGetCore(typeBuilder, runtime);
+        var tryCollapseSparse = EmitTSArrayTryCollapseSparse(typeBuilder, runtime.ArrayStorage);
+        var getCore = EmitTSArrayGetCore(typeBuilder, runtime.ArrayStorage);
         var setCore = EmitTSArraySetCore(typeBuilder, runtime);
         var setCoreWithExtend = EmitTSArraySetCoreWithExtend(typeBuilder, runtime, setCore);
         _ = materializeDense;  // reserved for M5 mutator emitters
 
-        EmitTSArrayLongLengthProperty(typeBuilder, runtime, syncLength);
-        EmitTSArrayLengthProperty(typeBuilder, runtime, syncLength);
+        EmitTSArrayLongLengthProperty(typeBuilder, runtime.ArrayStorage, syncLength);
+        EmitTSArrayLengthProperty(typeBuilder, runtime.ArrayStorage, syncLength);
         // No custom Count property — inherited from List<object?>. The public
         // Count + interface ICollection<T>.Count / IReadOnlyCollection<T>.Count
         // all come from the base class. `arr.Count == arr._dense.Count`, which
@@ -185,14 +179,14 @@ public partial class RuntimeEmitter
         EmitTSArrayIsFrozenProperty(typeBuilder, runtime);
         EmitTSArrayIsSealedProperty(typeBuilder, runtime);
 
-        EmitTSArrayFreeze(typeBuilder, runtime);
-        EmitTSArraySeal(typeBuilder, runtime);
+        EmitTSArrayFreeze(typeBuilder, runtime.ArrayStorage);
+        EmitTSArraySeal(typeBuilder, runtime.ArrayStorage);
 
         // Legacy int-indexed methods (pre-Stage-E surface; unchanged semantics).
-        EmitTSArrayGet(typeBuilder, runtime);
-        EmitTSArraySet(typeBuilder, runtime);
+        EmitTSArrayGet(typeBuilder, runtime.ArrayStorage);
+        EmitTSArraySet(typeBuilder, runtime.ArrayStorage);
 
-        EmitTSArrayHasIndex(typeBuilder, runtime, syncLength);
+        EmitTSArrayHasIndex(typeBuilder, runtime.ArrayStorage, syncLength);
         EmitTSArrayGetRaw(typeBuilder, runtime, getCore, syncLength);
         EmitTSArrayGetLong(typeBuilder, runtime, getCore, syncLength);
         EmitTSArraySetLong(typeBuilder, runtime, setCoreWithExtend, syncLength);
@@ -204,7 +198,7 @@ public partial class RuntimeEmitter
         // must be emitted after SetLength, whose MethodBuilder it calls.
         EmitTSArraySubclassConstructor(typeBuilder, runtime);
 
-        EmitTSArrayToString(typeBuilder, runtime);
+        EmitTSArrayToString(typeBuilder, runtime.ArrayStorage);
         // IList<object?> impl is inherited from List<object?> — no explicit
         // bridges needed (was the old composition-based approach).
 
@@ -229,14 +223,14 @@ public partial class RuntimeEmitter
     /// materialization. Idempotent (EnsureBoxed self-guards), so redundant
     /// guards across delegating methods are harmless.
     /// </summary>
-    private void EmitTSArrayDeoptGuard(ILGenerator il)
+    private void EmitTSArrayDeoptGuard(ILGenerator il, EmittedArrayStorageRuntime arrays)
     {
         var skip = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, _tsArrayIsNumericField);
         il.Emit(OpCodes.Brfalse, skip);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, _tsArrayEnsureBoxedMethod);
+        il.Emit(OpCodes.Call, arrays.EnsureBoxed);
         il.MarkLabel(skip);
     }
 
@@ -256,11 +250,11 @@ public partial class RuntimeEmitter
     {
         var skip = il.DefineLabel();
         loadValue();
-        il.Emit(OpCodes.Isinst, runtime.TSArrayType);
+        il.Emit(OpCodes.Isinst, runtime.ArrayStorage.Type);
         il.Emit(OpCodes.Brfalse, skip);
         loadValue();
-        il.Emit(OpCodes.Castclass, runtime.TSArrayType);
-        il.Emit(OpCodes.Callvirt, runtime.TSArrayEnsureBoxed);
+        il.Emit(OpCodes.Castclass, runtime.ArrayStorage.Type);
+        il.Emit(OpCodes.Callvirt, runtime.ArrayStorage.EnsureBoxed);
         il.MarkLabel(skip);
     }
 
@@ -285,23 +279,23 @@ public partial class RuntimeEmitter
 
         // EnsureBoxed's builder was defined early (so base-list methods can guard
         // on it); we only emit its body here. The other accessors are defined now.
-        var ensureBoxed = _tsArrayEnsureBoxedMethod;
+        var ensureBoxed = runtime.ArrayStorage.EnsureBoxed;
         var canGetDouble = typeBuilder.DefineMethod("CanGetDouble",
             MethodAttributes.Public | MethodAttributes.HideBySig, _types.Boolean, [_types.Int32]);
-        runtime.TSArrayCanGetDouble = canGetDouble;
+        runtime.ArrayStorage.CanGetDouble = canGetDouble;
         var getDouble = typeBuilder.DefineMethod("GetDouble",
             MethodAttributes.Public | MethodAttributes.HideBySig, _types.Double, [_types.Int32]);
-        runtime.TSArrayGetDouble = getDouble;
+        runtime.ArrayStorage.GetDouble = getDouble;
         EmitTryGetBoxedDouble(typeBuilder, runtime);
         var setDouble = typeBuilder.DefineMethod("SetDouble",
             MethodAttributes.Public | MethodAttributes.HideBySig, _types.Void, [_types.Int32, _types.Double]);
-        runtime.TSArraySetDouble = setDouble;
+        runtime.ArrayStorage.SetDouble = setDouble;
         var pushDouble = typeBuilder.DefineMethod("PushDouble",
             MethodAttributes.Public | MethodAttributes.HideBySig, _types.Void, [_types.Double]);
-        runtime.TSArrayPushDouble = pushDouble;
+        runtime.ArrayStorage.PushDouble = pushDouble;
         var ensureDoubleCapacity = typeBuilder.DefineMethod("EnsureDoubleCapacity",
             MethodAttributes.Public | MethodAttributes.HideBySig, _types.Void, [_types.Int32]);
-        runtime.TSArrayEnsureDoubleCapacity = ensureDoubleCapacity;
+        runtime.ArrayStorage.EnsureDoubleCapacity = ensureDoubleCapacity;
         // #927 step 2: these are the per-element hot paths the compiler emits at statically-number[]
         // sites. They are non-virtual (HideBySig), so a `callvirt` on a $Array-typed receiver
         // devirtualizes; AggressiveInlining lets the JIT fold the field loads + bounds check into the
@@ -343,40 +337,40 @@ public partial class RuntimeEmitter
         }
         var markNumeric = typeBuilder.DefineMethod("MarkNumeric",
             MethodAttributes.Public | MethodAttributes.HideBySig, _types.Void, System.Type.EmptyTypes);
-        runtime.TSArrayMarkNumeric = markNumeric;
+        runtime.ArrayStorage.MarkNumeric = markNumeric;
         var markNonExtensible = typeBuilder.DefineMethod("MarkNonExtensible",
             MethodAttributes.Public | MethodAttributes.HideBySig, _types.Void, System.Type.EmptyTypes);
-        runtime.TSArrayMarkNonExtensible = markNonExtensible;
+        runtime.ArrayStorage.MarkNonExtensible = markNonExtensible;
         var isNumericGetter = typeBuilder.DefineMethod("get_IsNumeric",
             MethodAttributes.Assembly | MethodAttributes.SpecialName | MethodAttributes.HideBySig,
             _types.Boolean, Type.EmptyTypes);
-        runtime.TSArrayIsNumericGetter = isNumericGetter;
+        runtime.ArrayStorage.IsNumericGetter = isNumericGetter;
         var numericCountGetter = typeBuilder.DefineMethod("get_NumericCount",
             MethodAttributes.Assembly | MethodAttributes.SpecialName | MethodAttributes.HideBySig,
             _types.Int32, Type.EmptyTypes);
-        runtime.TSArrayNumericCountGetter = numericCountGetter;
+        runtime.ArrayStorage.NumericCountGetter = numericCountGetter;
         var canMutateNumericGetter = typeBuilder.DefineMethod("get_CanMutateNumeric",
             MethodAttributes.Assembly | MethodAttributes.SpecialName | MethodAttributes.HideBySig,
             _types.Boolean, Type.EmptyTypes);
-        runtime.TSArrayCanMutateNumericGetter = canMutateNumericGetter;
+        runtime.ArrayStorage.CanMutateNumericGetter = canMutateNumericGetter;
         var shiftNumeric = typeBuilder.DefineMethod("ShiftNumeric",
             MethodAttributes.Assembly | MethodAttributes.HideBySig,
             _types.Object, Type.EmptyTypes);
-        runtime.TSArrayShiftNumeric = shiftNumeric;
+        runtime.ArrayStorage.ShiftNumeric = shiftNumeric;
         var unshiftNumeric = typeBuilder.DefineMethod("UnshiftNumeric",
             MethodAttributes.Assembly | MethodAttributes.HideBySig,
             _types.Double, [_types.DoubleArray]);
-        runtime.TSArrayUnshiftNumeric = unshiftNumeric;
+        runtime.ArrayStorage.UnshiftNumeric = unshiftNumeric;
         var cloneNumeric = typeBuilder.DefineMethod("CloneNumeric",
             MethodAttributes.Assembly | MethodAttributes.HideBySig,
             typeBuilder, Type.EmptyTypes);
-        runtime.TSArrayCloneNumeric = cloneNumeric;
+        runtime.ArrayStorage.CloneNumeric = cloneNumeric;
         var numericComparatorType = typeof(Func<double, double, double>);
         var sortNumeric = typeBuilder.DefineMethod("SortNumeric",
             MethodAttributes.Assembly | MethodAttributes.HideBySig,
             _types.Void, [numericComparatorType]);
         sortNumeric.SetImplementationFlags(MethodImplAttributes.AggressiveOptimization);
-        runtime.TSArraySortNumeric = sortNumeric;
+        runtime.ArrayStorage.SortNumeric = sortNumeric;
 
         // These representation probes are consumed only by guarded emitted-runtime
         // helpers. They expose no backing storage and do not force materialization.
@@ -574,7 +568,7 @@ public partial class RuntimeEmitter
             var done = il.DefineLabel();
 
             il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.ListOfObject));
-            il.Emit(OpCodes.Newobj, runtime.TSArrayCtor);
+            il.Emit(OpCodes.Newobj, runtime.ArrayStorage.Ctor);
             il.Emit(OpCodes.Stloc, result);
             il.Emit(OpCodes.Ldloc, result);
             il.Emit(OpCodes.Ldc_I4_1);
@@ -1023,7 +1017,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Conv_I8);
             il.Emit(OpCodes.Ldarg_2);
             il.Emit(OpCodes.Box, _types.Double);
-            il.Emit(OpCodes.Call, runtime.TSArraySetLong);
+            il.Emit(OpCodes.Call, runtime.ArrayStorage.SetLong);
             il.Emit(OpCodes.Ret);
 
             il.MarkLabel(notNumeric);
@@ -1032,7 +1026,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Conv_I8);
             il.Emit(OpCodes.Ldarg_2);
             il.Emit(OpCodes.Box, _types.Double);
-            il.Emit(OpCodes.Call, runtime.TSArraySetLong);
+            il.Emit(OpCodes.Call, runtime.ArrayStorage.SetLong);
             il.Emit(OpCodes.Ret);
         }
 
@@ -1169,7 +1163,7 @@ public partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod("TryGetBoxedDouble",
             MethodAttributes.Public | MethodAttributes.Static, _types.Boolean,
             [_types.Object, _types.Int32, _types.Double.MakeByRefType()]);
-        runtime.TSArrayTryGetBoxedDouble = method;
+        runtime.ArrayStorage.TryGetBoxedDouble = method;
         method.SetImplementationFlags(MethodImplAttributes.AggressiveInlining);
         var il = method.GetILGenerator();
         var array = il.DeclareLocal(typeBuilder);
@@ -1239,7 +1233,7 @@ public partial class RuntimeEmitter
     {
         var ctor = typeBuilder.DefineConstructor(MethodAttributes.Assembly,
             CallingConventions.Standard, [_types.Int32]);
-        runtime.TSArrayRestCtor = ctor;
+        runtime.ArrayStorage.RestCtor = ctor;
         var il = ctor.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
@@ -1248,7 +1242,7 @@ public partial class RuntimeEmitter
 
         var numeric = typeBuilder.DefineMethod("CreateNumericRest",
             MethodAttributes.Assembly | MethodAttributes.Static, typeBuilder, [_types.Int32]);
-        runtime.TSArrayCreateNumericRest = numeric;
+        runtime.ArrayStorage.CreateNumericRest = numeric;
         il = numeric.GetILGenerator();
         var result = il.DeclareLocal(typeBuilder);
         var ready = il.DefineLabel();
@@ -1270,7 +1264,7 @@ public partial class RuntimeEmitter
 
         var append = typeBuilder.DefineMethod("AppendRest", MethodAttributes.Assembly,
             _types.Void, [_types.Object]);
-        runtime.TSArrayAppendRest = append;
+        runtime.ArrayStorage.AppendRest = append;
         il = append.GetILGenerator();
         var boxedAppend = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
@@ -1283,11 +1277,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Unbox_Any, _types.Double);
-        il.Emit(OpCodes.Call, runtime.TSArrayPushDouble);
+        il.Emit(OpCodes.Call, runtime.ArrayStorage.PushDouble);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(deopt);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.TSArrayEnsureBoxed);
+        il.Emit(OpCodes.Call, runtime.ArrayStorage.EnsureBoxed);
         il.MarkLabel(boxedAppend);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
@@ -1305,7 +1299,7 @@ public partial class RuntimeEmitter
         // whichever private store survived expansion and synchronize length.
         var finish = typeBuilder.DefineMethod("FinishRest", MethodAttributes.Assembly,
             _types.Void, [_types.Int32]);
-        runtime.TSArrayFinishRest = finish;
+        runtime.ArrayStorage.FinishRest = finish;
         il = finish.GetILGenerator();
         var boxedFinish = il.DefineLabel();
         var removed = il.DeclareLocal(_types.Int32);
@@ -1361,13 +1355,13 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitTSArrayNumericLiteralConstructor(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSArrayNumericLiteralConstructor(TypeBuilder typeBuilder, EmittedArrayStorageRuntime arrays)
     {
         // The emitter hands over a fresh, dense double[]; no other value can
         // observe its storage. Holes continue to use the ordinary literal path.
         var ctor = typeBuilder.DefineConstructor(MethodAttributes.Assembly,
             CallingConventions.Standard, [_types.DoubleArray]);
-        runtime.TSArrayNumericLiteralCtor = ctor;
+        arrays.NumericLiteralCtor = ctor;
         var il = ctor.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Call, _types.GetDefaultConstructor(_types.ListOfObject));
@@ -1390,14 +1384,14 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitTSArrayConstructor(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSArrayConstructor(TypeBuilder typeBuilder, EmittedArrayStorageRuntime arrays)
     {
         var ctor = typeBuilder.DefineConstructor(
             MethodAttributes.Public,
             CallingConventions.Standard,
             [_types.ListOfObject]
         );
-        runtime.TSArrayCtor = ctor;
+        arrays.Ctor = ctor;
 
         // Internal element construction is distinct from the object[] overload
         // implementing Array(...args), where one number denotes a length.
@@ -1405,7 +1399,7 @@ public partial class RuntimeEmitter
             MethodAttributes.Public,
             CallingConventions.Standard,
             [_types.IEnumerableOfObject]);
-        runtime.TSArrayLiteralCtor = literalCtor;
+        arrays.LiteralCtor = literalCtor;
         var forwardingIl = ctor.GetILGenerator();
         forwardingIl.Emit(OpCodes.Ldarg_0);
         forwardingIl.Emit(OpCodes.Ldarg_1);
@@ -1444,7 +1438,7 @@ public partial class RuntimeEmitter
             CallingConventions.Standard,
             [_types.ObjectArray]
         );
-        runtime.TSArrayCtorFromCtorArgs = ctor;
+        runtime.ArrayStorage.CtorFromCtorArgs = ctor;
 
         var il = ctor.GetILGenerator();
         var elementsLabel = il.DefineLabel();
@@ -1475,7 +1469,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldelem_Ref);
         il.Emit(OpCodes.Unbox_Any, _types.Double);
         il.Emit(OpCodes.Conv_I8);
-        il.Emit(OpCodes.Call, runtime.TSArraySetLength);
+        il.Emit(OpCodes.Call, runtime.ArrayStorage.SetLength);
         il.Emit(OpCodes.Br, doneLabel);
 
         // else: append each ctor arg as an element, then sync _length.
@@ -1510,33 +1504,33 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitTSArrayElementsProperty(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSArrayElementsProperty(TypeBuilder typeBuilder, EmittedArrayStorageRuntime arrays)
     {
         var prop = typeBuilder.DefineProperty("Elements", PropertyAttributes.None, _types.ListOfObject, null);
         var getter = typeBuilder.DefineMethod(
             "get_Elements",
             MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.HideBySig,
             _types.ListOfObject, Type.EmptyTypes);
-        runtime.TSArrayElementsGetter = getter;
+        arrays.ElementsGetter = getter;
 
         var il = getter.GetILGenerator();
         // Elements hands out the inherited List<object?> directly; a numeric-mode
         // array's base list is empty, so materialize first.
-        EmitTSArrayDeoptGuard(il);
+        EmitTSArrayDeoptGuard(il, arrays);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ret);
 
         prop.SetGetMethod(getter);
     }
 
-    private void EmitTSArrayLongLengthProperty(TypeBuilder typeBuilder, EmittedRuntime runtime, MethodBuilder syncLength)
+    private void EmitTSArrayLongLengthProperty(TypeBuilder typeBuilder, EmittedArrayStorageRuntime arrays, MethodBuilder syncLength)
     {
         var prop = typeBuilder.DefineProperty("LongLength", PropertyAttributes.None, _types.Int64, null);
         var getter = typeBuilder.DefineMethod(
             "get_LongLength",
             MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.HideBySig,
             _types.Int64, Type.EmptyTypes);
-        runtime.TSArrayLongLengthGetter = getter;
+        arrays.LongLengthGetter = getter;
 
         var il = getter.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
@@ -1548,14 +1542,14 @@ public partial class RuntimeEmitter
         prop.SetGetMethod(getter);
     }
 
-    private void EmitTSArrayLengthProperty(TypeBuilder typeBuilder, EmittedRuntime runtime, MethodBuilder syncLength)
+    private void EmitTSArrayLengthProperty(TypeBuilder typeBuilder, EmittedArrayStorageRuntime arrays, MethodBuilder syncLength)
     {
         var prop = typeBuilder.DefineProperty("Length", PropertyAttributes.None, _types.Int32, null);
         var getter = typeBuilder.DefineMethod(
             "get_Length",
             MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.HideBySig,
             _types.Int32, Type.EmptyTypes);
-        runtime.TSArrayLengthGetter = getter;
+        arrays.LengthGetter = getter;
 
         var il = getter.GetILGenerator();
         var clampLabel = il.DefineLabel();
@@ -1613,13 +1607,13 @@ public partial class RuntimeEmitter
         prop.SetGetMethod(getter);
     }
 
-    private void EmitTSArrayFreeze(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSArrayFreeze(TypeBuilder typeBuilder, EmittedArrayStorageRuntime arrays)
     {
         var method = typeBuilder.DefineMethod("Freeze", MethodAttributes.Public, _types.Void, Type.EmptyTypes);
-        runtime.TSArrayFreeze = method;
+        arrays.Freeze = method;
 
         var il = method.GetILGenerator();
-        EmitTSArrayDeoptGuard(il);
+        EmitTSArrayDeoptGuard(il, arrays);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Stfld, _tsArrayIsFrozenField);
@@ -1631,26 +1625,26 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitTSArraySeal(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSArraySeal(TypeBuilder typeBuilder, EmittedArrayStorageRuntime arrays)
     {
         var method = typeBuilder.DefineMethod("Seal", MethodAttributes.Public, _types.Void, Type.EmptyTypes);
         _ = method;
 
         var il = method.GetILGenerator();
-        EmitTSArrayDeoptGuard(il);
+        EmitTSArrayDeoptGuard(il, arrays);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Stfld, _tsArrayIsSealedField);
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitTSArrayGet(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSArrayGet(TypeBuilder typeBuilder, EmittedArrayStorageRuntime arrays)
     {
         var method = typeBuilder.DefineMethod("Get", MethodAttributes.Public, _types.Object, [_types.Int32]);
-        runtime.TSArrayGet = method;
+        arrays.Get = method;
 
         var il = method.GetILGenerator();
-        EmitTSArrayDeoptGuard(il);
+        EmitTSArrayDeoptGuard(il, arrays);
         var throwLabel = il.DefineLabel();
 
         il.Emit(OpCodes.Ldarg_1);
@@ -1673,13 +1667,13 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Throw);
     }
 
-    private void EmitTSArraySet(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSArraySet(TypeBuilder typeBuilder, EmittedArrayStorageRuntime arrays)
     {
         var method = typeBuilder.DefineMethod("Set", MethodAttributes.Public, _types.Void, [_types.Int32, _types.Object]);
-        runtime.TSArraySet = method;
+        arrays.Set = method;
 
         var il = method.GetILGenerator();
-        EmitTSArrayDeoptGuard(il);
+        EmitTSArrayDeoptGuard(il, arrays);
         var frozenLabel = il.DefineLabel();
         var throwLabel = il.DefineLabel();
 
@@ -1768,7 +1762,7 @@ public partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod("MaterializeDense", MethodAttributes.Private, _types.Void, Type.EmptyTypes);
 
         var il = method.GetILGenerator();
-        EmitTSArrayDeoptGuard(il);
+        EmitTSArrayDeoptGuard(il, runtime.ArrayStorage);
         var sparseBranch = il.DefineLabel();
         var throwRangeLabel = il.DefineLabel();
         var loopHead = il.DefineLabel();
@@ -1822,7 +1816,7 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(padHoleLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldsfld, runtime.ArrayHoleInstance);
+        il.Emit(OpCodes.Ldsfld, runtime.ArrayStorage.HoleInstance);
         il.Emit(OpCodes.Callvirt, _tsArrayListAdd!);
 
         il.MarkLabel(afterAddLabel);
@@ -1845,12 +1839,12 @@ public partial class RuntimeEmitter
     /// <c>private void TryCollapseSparse()</c> — drops the sparse dict when
     /// empty OR fully covered by the dense prefix.
     /// </summary>
-    private MethodBuilder EmitTSArrayTryCollapseSparse(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private MethodBuilder EmitTSArrayTryCollapseSparse(TypeBuilder typeBuilder, EmittedArrayStorageRuntime arrays)
     {
         var method = typeBuilder.DefineMethod("TryCollapseSparse", MethodAttributes.Private, _types.Void, Type.EmptyTypes);
 
         var il = method.GetILGenerator();
-        EmitTSArrayDeoptGuard(il);
+        EmitTSArrayDeoptGuard(il, arrays);
         var collapseLabel = il.DefineLabel();
         var doneLabel = il.DefineLabel();
 
@@ -1889,12 +1883,12 @@ public partial class RuntimeEmitter
     /// <c>$ArrayHole.Instance</c> for holes. Callers ensure index is in range
     /// (<c>0 &lt;= index &lt; _length</c>).
     /// </summary>
-    private MethodBuilder EmitTSArrayGetCore(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private MethodBuilder EmitTSArrayGetCore(TypeBuilder typeBuilder, EmittedArrayStorageRuntime arrays)
     {
         var method = typeBuilder.DefineMethod("GetCore", MethodAttributes.Private, _types.Object, [_types.Int64]);
 
         var il = method.GetILGenerator();
-        EmitTSArrayDeoptGuard(il);
+        EmitTSArrayDeoptGuard(il, arrays);
         var sparsePathLabel = il.DefineLabel();
         var returnHoleLabel = il.DefineLabel();
         var lookupLabel = il.DefineLabel();
@@ -1935,7 +1929,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(returnHoleLabel);
-        il.Emit(OpCodes.Ldsfld, runtime.ArrayHoleInstance);
+        il.Emit(OpCodes.Ldsfld, arrays.HoleInstance);
         il.Emit(OpCodes.Ret);
 
         return method;
@@ -1951,7 +1945,7 @@ public partial class RuntimeEmitter
             [_types.Int64, _types.Object]);
 
         var il = method.GetILGenerator();
-        EmitTSArrayDeoptGuard(il);
+        EmitTSArrayDeoptGuard(il, runtime.ArrayStorage);
         var sparseLabel = il.DefineLabel();
         var denseLabel = il.DefineLabel();
 
@@ -1997,7 +1991,7 @@ public partial class RuntimeEmitter
             [_types.Int64, _types.Object]);
 
         var il = method.GetILGenerator();
-        EmitTSArrayDeoptGuard(il);
+        EmitTSArrayDeoptGuard(il, runtime.ArrayStorage);
         var denseEntryLabel = il.DefineLabel();
         var sparseWriteReturn = il.DefineLabel();
         var skipLenUpdate = il.DefineLabel();
@@ -2086,7 +2080,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Bgt, padLoopExit);
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldsfld, runtime.ArrayHoleInstance);
+        il.Emit(OpCodes.Ldsfld, runtime.ArrayStorage.HoleInstance);
         il.Emit(OpCodes.Callvirt, _tsArrayListAdd!);
         il.Emit(OpCodes.Br, padLoopHead);
 
@@ -2137,13 +2131,13 @@ public partial class RuntimeEmitter
     /// <c>public bool HasIndex(long index)</c> — ECMA-262 HasProperty for
     /// numeric indices. False for holes and out-of-range indices.
     /// </summary>
-    private void EmitTSArrayHasIndex(TypeBuilder typeBuilder, EmittedRuntime runtime, MethodBuilder syncLength)
+    private void EmitTSArrayHasIndex(TypeBuilder typeBuilder, EmittedArrayStorageRuntime arrays, MethodBuilder syncLength)
     {
         var method = typeBuilder.DefineMethod("HasIndex", MethodAttributes.Public, _types.Boolean, [_types.Int64]);
-        runtime.TSArrayHasIndex = method;
+        arrays.HasIndex = method;
 
         var il = method.GetILGenerator();
-        EmitTSArrayDeoptGuard(il);
+        EmitTSArrayDeoptGuard(il, arrays);
         var returnFalseLabel = il.DefineLabel();
         var sparseBranchLabel = il.DefineLabel();
         var checkDenseHoleLabel = il.DefineLabel();
@@ -2179,7 +2173,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Conv_I4);
         il.Emit(OpCodes.Callvirt, _tsArrayListGetItem!);
-        il.Emit(OpCodes.Isinst, runtime.ArrayHoleType);
+        il.Emit(OpCodes.Isinst, arrays.HoleType);
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ceq);   // 1 if result was null → not a hole → true
         il.Emit(OpCodes.Ret);
@@ -2214,7 +2208,7 @@ public partial class RuntimeEmitter
         _ = method;
 
         var il = method.GetILGenerator();
-        EmitTSArrayDeoptGuard(il);
+        EmitTSArrayDeoptGuard(il, runtime.ArrayStorage);
         var oobLabel = il.DefineLabel();
 
         il.Emit(OpCodes.Ldarg_0);
@@ -2249,7 +2243,7 @@ public partial class RuntimeEmitter
     private void EmitTSArrayGetLong(TypeBuilder typeBuilder, EmittedRuntime runtime, MethodBuilder getCore, MethodBuilder syncLength)
     {
         var method = typeBuilder.DefineMethod("Get", MethodAttributes.Public, _types.Object, [_types.Int64]);
-        runtime.TSArrayGetLong = method;
+        runtime.ArrayStorage.GetLong = method;
 
         var il = method.GetILGenerator();
         var oobLabel = il.DefineLabel();
@@ -2300,7 +2294,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, vLocal);
 
         il.Emit(OpCodes.Ldloc, vLocal);
-        il.Emit(OpCodes.Isinst, runtime.ArrayHoleType);
+        il.Emit(OpCodes.Isinst, runtime.ArrayStorage.HoleType);
         il.Emit(OpCodes.Brfalse, notHoleLabel);
         il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
         il.Emit(OpCodes.Ret);
@@ -2324,10 +2318,10 @@ public partial class RuntimeEmitter
     {
         var method = typeBuilder.DefineMethod("Set", MethodAttributes.Public, _types.Void,
             [_types.Int64, _types.Object]);
-        runtime.TSArraySetLong = method;
+        runtime.ArrayStorage.SetLong = method;
 
         var il = method.GetILGenerator();
-        EmitTSArrayDeoptGuard(il);
+        EmitTSArrayDeoptGuard(il, runtime.ArrayStorage);
         var frozenReturnLabel = il.DefineLabel();
         var negThrowLabel = il.DefineLabel();
         var maxThrowLabel = il.DefineLabel();
@@ -2377,10 +2371,10 @@ public partial class RuntimeEmitter
     {
         var method = typeBuilder.DefineMethod("SetStrict", MethodAttributes.Public, _types.Void,
             [_types.Int64, _types.Object, _types.Boolean]);
-        runtime.TSArraySetStrictLong = method;
+        runtime.ArrayStorage.SetStrictLong = method;
 
         var il = method.GetILGenerator();
-        EmitTSArrayDeoptGuard(il);
+        EmitTSArrayDeoptGuard(il, runtime.ArrayStorage);
         var notFrozenLabel = il.DefineLabel();
         var frozenReturnLabel = il.DefineLabel();
         var negThrowLabel = il.DefineLabel();
@@ -2433,10 +2427,10 @@ public partial class RuntimeEmitter
     private void EmitTSArraySetLength(TypeBuilder typeBuilder, EmittedRuntime runtime, MethodBuilder tryCollapseSparse, MethodBuilder syncLength)
     {
         var method = typeBuilder.DefineMethod("SetLength", MethodAttributes.Public, _types.Void, [_types.Int64]);
-        runtime.TSArraySetLength = method;
+        runtime.ArrayStorage.SetLength = method;
 
         var il = method.GetILGenerator();
-        EmitTSArrayDeoptGuard(il);
+        EmitTSArrayDeoptGuard(il, runtime.ArrayStorage);
         var negThrowLabel = il.DefineLabel();
         var tooBigThrowLabel = il.DefineLabel();
         var notFrozenLabel = il.DefineLabel();
@@ -2748,7 +2742,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Bge, padLoopExit);
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldsfld, runtime.ArrayHoleInstance);
+        il.Emit(OpCodes.Ldsfld, runtime.ArrayStorage.HoleInstance);
         il.Emit(OpCodes.Callvirt, _tsArrayListAdd!);
         il.Emit(OpCodes.Br, padLoopHead);
 
@@ -2828,10 +2822,10 @@ public partial class RuntimeEmitter
     private void EmitTSArrayDeleteAt(TypeBuilder typeBuilder, EmittedRuntime runtime, MethodBuilder syncLength)
     {
         var method = typeBuilder.DefineMethod("DeleteAt", MethodAttributes.Public, _types.Void, [_types.Int64]);
-        runtime.TSArrayDeleteAt = method;
+        runtime.ArrayStorage.DeleteAt = method;
 
         var il = method.GetILGenerator();
-        EmitTSArrayDeoptGuard(il);
+        EmitTSArrayDeoptGuard(il, runtime.ArrayStorage);
         var retLabel = il.DefineLabel();
         var denseDeleteLabel = il.DefineLabel();
         var sparseDeleteCheckLabel = il.DefineLabel();
@@ -2871,7 +2865,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Conv_I4);
-        il.Emit(OpCodes.Ldsfld, runtime.ArrayHoleInstance);
+        il.Emit(OpCodes.Ldsfld, runtime.ArrayStorage.HoleInstance);
         il.Emit(OpCodes.Callvirt, _tsArrayListSetItem!);
         il.Emit(OpCodes.Ret);
 
@@ -2891,7 +2885,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitTSArrayToString(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSArrayToString(TypeBuilder typeBuilder, EmittedArrayStorageRuntime arrays)
     {
         var method = typeBuilder.DefineMethod(
             "ToString",
@@ -2902,7 +2896,7 @@ public partial class RuntimeEmitter
         _ = method;
 
         var il = method.GetILGenerator();
-        EmitTSArrayDeoptGuard(il);
+        EmitTSArrayDeoptGuard(il, arrays);
 
         // ToString renders _dense elements joined by comma — matches pre-refactor
         // behavior exactly. Hole-aware join lives in the array built-ins (M5).

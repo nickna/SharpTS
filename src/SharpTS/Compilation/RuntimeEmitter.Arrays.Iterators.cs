@@ -59,7 +59,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, runtime.CompactObjectRecordInterface);
         il.Emit(OpCodes.Brtrue, isLazyTrue);
         il.Emit(OpCodes.Ldloc, rcvrLocal);
-        il.Emit(OpCodes.Isinst, runtime.TSArrayType);
+        il.Emit(OpCodes.Isinst, runtime.ArrayStorage.Type);
         il.Emit(OpCodes.Brtrue, isLazyTrue);
         il.Emit(OpCodes.Ldloc, rcvrLocal);
         il.Emit(OpCodes.Isinst, _types.ListOfObject);
@@ -188,7 +188,7 @@ public partial class RuntimeEmitter
     private void EmitSkipIfHole(ILGenerator il, LocalBuilder indexLocal, Label skipLabel, EmittedRuntime runtime, LocalBuilder isLazyLocal)
     {
         EmitElementLoad(il, indexLocal, runtime, isLazyLocal);
-        il.Emit(OpCodes.Isinst, runtime.ArrayHoleType);
+        il.Emit(OpCodes.Isinst, runtime.ArrayStorage.HoleType);
         il.Emit(OpCodes.Brtrue, skipLabel);
     }
 
@@ -205,7 +205,7 @@ public partial class RuntimeEmitter
         var doneLabel = il.DefineLabel();
         EmitElementLoad(il, indexLocal, runtime, isLazyLocal);
         il.Emit(OpCodes.Dup);
-        il.Emit(OpCodes.Isinst, runtime.ArrayHoleType);
+        il.Emit(OpCodes.Isinst, runtime.ArrayStorage.HoleType);
         il.Emit(OpCodes.Brfalse, notHoleLabel);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
@@ -483,7 +483,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(holeLabel);
         // Hole-preserving output: push $ArrayHole.Instance to the result list.
         il.Emit(OpCodes.Ldloc, resultLocal);
-        il.Emit(OpCodes.Ldsfld, runtime.ArrayHoleInstance);
+        il.Emit(OpCodes.Ldsfld, runtime.ArrayStorage.HoleInstance);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", _types.Object));
 
         il.MarkLabel(addedLabel);
@@ -563,7 +563,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, listIndexerGetter);
         il.Emit(OpCodes.Stloc, elementLocal);
         il.Emit(OpCodes.Ldloc, elementLocal);
-        il.Emit(OpCodes.Isinst, runtime.ArrayHoleType);
+        il.Emit(OpCodes.Isinst, runtime.ArrayStorage.HoleType);
         il.Emit(OpCodes.Brtrue, holeLabel);
 
         // result.Add(cb(element))
@@ -577,7 +577,7 @@ public partial class RuntimeEmitter
         // result.Add($ArrayHole.Instance)
         il.MarkLabel(holeLabel);
         il.Emit(OpCodes.Ldloc, resultLocal);
-        il.Emit(OpCodes.Ldsfld, runtime.ArrayHoleInstance);
+        il.Emit(OpCodes.Ldsfld, runtime.ArrayStorage.HoleInstance);
         il.Emit(OpCodes.Callvirt, listAdd);
 
         il.MarkLabel(addedLabel);
@@ -642,7 +642,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, listIndexerGetter);
         il.Emit(OpCodes.Stloc, elementLocal);
         il.Emit(OpCodes.Ldloc, elementLocal);
-        il.Emit(OpCodes.Isinst, runtime.ArrayHoleType);
+        il.Emit(OpCodes.Isinst, runtime.ArrayStorage.HoleType);
         il.Emit(OpCodes.Brtrue, skipAdd);
 
         // if (!IsTruthy(cb(element))) goto skipAdd
@@ -719,7 +719,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, listIndexerGetter);
         il.Emit(OpCodes.Stloc, elementLocal);
         il.Emit(OpCodes.Ldloc, elementLocal);
-        il.Emit(OpCodes.Isinst, runtime.ArrayHoleType);
+        il.Emit(OpCodes.Isinst, runtime.ArrayStorage.HoleType);
         il.Emit(OpCodes.Brtrue, skipAdd);
 
         il.Emit(OpCodes.Ldarg_1);
@@ -786,7 +786,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, listIndexerGetter);
         il.Emit(OpCodes.Stloc, elementLocal);
         il.Emit(OpCodes.Ldloc, elementLocal);
-        il.Emit(OpCodes.Isinst, runtime.ArrayHoleType);
+        il.Emit(OpCodes.Isinst, runtime.ArrayStorage.HoleType);
         il.Emit(OpCodes.Brtrue, skipCall);
 
         // cb(element); discard return.
@@ -848,7 +848,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, listIndexerGetter);
         il.Emit(OpCodes.Stloc, elementLocal);
         il.Emit(OpCodes.Ldloc, elementLocal);
-        il.Emit(OpCodes.Isinst, runtime.ArrayHoleType);
+        il.Emit(OpCodes.Isinst, runtime.ArrayStorage.HoleType);
         var notHole = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, notHole);
         il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
@@ -916,7 +916,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, listIndexerGetter);
         il.Emit(OpCodes.Stloc, elementLocal);
         il.Emit(OpCodes.Ldloc, elementLocal);
-        il.Emit(OpCodes.Isinst, runtime.ArrayHoleType);
+        il.Emit(OpCodes.Isinst, runtime.ArrayStorage.HoleType);
         var notHole = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, notHole);
         il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
@@ -982,7 +982,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, listIndexerGetter);
         il.Emit(OpCodes.Stloc, elementLocal);
         il.Emit(OpCodes.Ldloc, elementLocal);
-        il.Emit(OpCodes.Isinst, runtime.ArrayHoleType);
+        il.Emit(OpCodes.Isinst, runtime.ArrayStorage.HoleType);
         var notHole = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, notHole);
         il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
@@ -1049,7 +1049,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, listIndexerGetter);
         il.Emit(OpCodes.Stloc, elementLocal);
         il.Emit(OpCodes.Ldloc, elementLocal);
-        il.Emit(OpCodes.Isinst, runtime.ArrayHoleType);
+        il.Emit(OpCodes.Isinst, runtime.ArrayStorage.HoleType);
         var notHole = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, notHole);
         il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
@@ -1156,7 +1156,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, listIndexerGetter);
         il.Emit(OpCodes.Stloc, elementLocal);
         il.Emit(OpCodes.Ldloc, elementLocal);
-        il.Emit(OpCodes.Isinst, runtime.ArrayHoleType);
+        il.Emit(OpCodes.Isinst, runtime.ArrayStorage.HoleType);
         il.Emit(OpCodes.Brtrue, advance);
 
         il.Emit(OpCodes.Ldarg_1);
@@ -1225,7 +1225,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, listIndexerGetter);
         il.Emit(OpCodes.Stloc, elementLocal);
         il.Emit(OpCodes.Ldloc, elementLocal);
-        il.Emit(OpCodes.Isinst, runtime.ArrayHoleType);
+        il.Emit(OpCodes.Isinst, runtime.ArrayStorage.HoleType);
         il.Emit(OpCodes.Brtrue, advance);
 
         il.Emit(OpCodes.Ldarg_1);
@@ -1795,7 +1795,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, listIndexerGetter);
         il.Emit(OpCodes.Stloc, elementLocal);
         il.Emit(OpCodes.Ldloc, elementLocal);
-        il.Emit(OpCodes.Isinst, runtime.ArrayHoleType);
+        il.Emit(OpCodes.Isinst, runtime.ArrayStorage.HoleType);
         il.Emit(OpCodes.Brtrue, advance);
 
         // acc = cb(acc, element)
@@ -2123,7 +2123,7 @@ public partial class RuntimeEmitter
         EmitElementLoad(il, scanLocal, runtime, isLazyLocal);
         il.Emit(OpCodes.Stloc, scanValueLocal);
         il.Emit(OpCodes.Ldloc, scanValueLocal);
-        il.Emit(OpCodes.Isinst, runtime.ArrayHoleType);
+        il.Emit(OpCodes.Isinst, runtime.ArrayStorage.HoleType);
         il.Emit(OpCodes.Brfalse, scanFound);
         il.Emit(OpCodes.Ldloc, scanLocal);
         il.Emit(OpCodes.Ldc_I4_1);
@@ -2168,7 +2168,7 @@ public partial class RuntimeEmitter
         EmitElementLoad(il, indexLocal, runtime, isLazyLocal);
         il.Emit(OpCodes.Stloc, elementLocal);
         il.Emit(OpCodes.Ldloc, elementLocal);
-        il.Emit(OpCodes.Isinst, runtime.ArrayHoleType);
+        il.Emit(OpCodes.Isinst, runtime.ArrayStorage.HoleType);
         il.Emit(OpCodes.Brtrue, reduceAdvance);
 
         // Per-iter: write into the pre-allocated args[4]. args[3] is constant
@@ -2320,7 +2320,7 @@ public partial class RuntimeEmitter
         EmitElementLoad(il, scanLocal, runtime, isLazyLocal);
         il.Emit(OpCodes.Stloc, scanValueLocal);
         il.Emit(OpCodes.Ldloc, scanValueLocal);
-        il.Emit(OpCodes.Isinst, runtime.ArrayHoleType);
+        il.Emit(OpCodes.Isinst, runtime.ArrayStorage.HoleType);
         il.Emit(OpCodes.Brfalse, scanFound);
         il.Emit(OpCodes.Ldloc, scanLocal);
         il.Emit(OpCodes.Ldc_I4_1);
@@ -2367,7 +2367,7 @@ public partial class RuntimeEmitter
         EmitElementLoad(il, indexLocal, runtime, isLazyLocal);
         il.Emit(OpCodes.Stloc, elementLocal);
         il.Emit(OpCodes.Ldloc, elementLocal);
-        il.Emit(OpCodes.Isinst, runtime.ArrayHoleType);
+        il.Emit(OpCodes.Isinst, runtime.ArrayStorage.HoleType);
         il.Emit(OpCodes.Brtrue, reduceRightAdvance);
 
         // Per-iter: write into the pre-allocated args[4]. args[3] is constant

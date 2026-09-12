@@ -1130,8 +1130,8 @@ public partial class RuntimeEmitter
         // Array \`length\` special case: read list.Count for compare.
         var afterArrayLenOverride = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSArrayType);
-        var arrayLenLocal = il.DeclareLocal(runtime.TSArrayType);
+        il.Emit(OpCodes.Isinst, runtime.ArrayStorage.Type);
+        var arrayLenLocal = il.DeclareLocal(runtime.ArrayStorage.Type);
         il.Emit(OpCodes.Stloc, arrayLenLocal);
         il.Emit(OpCodes.Ldloc, arrayLenLocal);
         il.Emit(OpCodes.Brfalse, afterArrayLenOverride);
@@ -1141,7 +1141,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, afterArrayLenOverride);
         // existingValueForCompare = (double)array.[[ArrayLength]]
         il.Emit(OpCodes.Ldloc, arrayLenLocal);
-        il.Emit(OpCodes.Callvirt, runtime.TSArrayLongLengthGetter);
+        il.Emit(OpCodes.Callvirt, runtime.ArrayStorage.LongLengthGetter);
         il.Emit(OpCodes.Conv_R8);
         il.Emit(OpCodes.Box, _types.Double);
         il.Emit(OpCodes.Stloc, existingValueForCompare);

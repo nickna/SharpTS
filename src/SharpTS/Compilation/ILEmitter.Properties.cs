@@ -1401,7 +1401,7 @@ public partial class ILEmitter
                         IL.Emit(OpCodes.Ldloc, h.TypedLocal);
                         EmitExpressionAsDouble(gi.Index);
                         IL.Emit(OpCodes.Conv_I8);
-                        IL.Emit(OpCodes.Callvirt, _ctx.Runtime!.TSArrayGetLong);
+                        IL.Emit(OpCodes.Callvirt, _ctx.Runtime!.ArrayStorage.GetLong);
                         SetStackUnknown();
                         IL.Emit(OpCodes.Br, endLabel);
                     }
@@ -1478,14 +1478,14 @@ public partial class ILEmitter
             // $Array first (inherits List<object?>; checking List first
             // truncates large indices via Conv_I4 and would throw or misread
             // for uint32-range writes). TSArrayGetLong handles OOB and holes.
-            IL.Emit(OpCodes.Isinst, _ctx.Runtime!.TSArrayType);
+            IL.Emit(OpCodes.Isinst, _ctx.Runtime!.ArrayStorage.Type);
             var notTSArrayGet = IL.DefineLabel();
             IL.Emit(OpCodes.Brfalse, notTSArrayGet);
             IL.Emit(OpCodes.Ldloc, objLocal);
-            IL.Emit(OpCodes.Castclass, _ctx.Runtime!.TSArrayType);
+            IL.Emit(OpCodes.Castclass, _ctx.Runtime!.ArrayStorage.Type);
             EmitExpressionAsDouble(gi.Index);
             IL.Emit(OpCodes.Conv_I8);
-            IL.Emit(OpCodes.Callvirt, _ctx.Runtime!.TSArrayGetLong);
+            IL.Emit(OpCodes.Callvirt, _ctx.Runtime!.ArrayStorage.GetLong);
             SetStackUnknown();
             IL.Emit(OpCodes.Br, endLabelNH);
 
@@ -1601,9 +1601,9 @@ public partial class ILEmitter
             EmitBoxIfNeeded(gi.Object);
             IL.Emit(OpCodes.Stloc, receiverLocal);
 
-            arrayLocal = IL.DeclareLocal(_ctx.Runtime!.TSArrayType);
+            arrayLocal = IL.DeclareLocal(_ctx.Runtime!.ArrayStorage.Type);
             IL.Emit(OpCodes.Ldloc, receiverLocal);
-            IL.Emit(OpCodes.Isinst, _ctx.Runtime.TSArrayType);
+            IL.Emit(OpCodes.Isinst, _ctx.Runtime.ArrayStorage.Type);
             IL.Emit(OpCodes.Stloc, arrayLocal);
         }
         else
@@ -1647,14 +1647,14 @@ public partial class ILEmitter
         {
             IL.Emit(OpCodes.Ldloc, guardedArray);
             IL.Emit(OpCodes.Ldloc, indexInt);
-            IL.Emit(OpCodes.Callvirt, _ctx.Runtime!.TSArrayCanGetDouble);
+            IL.Emit(OpCodes.Callvirt, _ctx.Runtime!.ArrayStorage.CanGetDouble);
             IL.Emit(OpCodes.Brfalse, boxedLabel);
         }
 
         IL.Emit(OpCodes.Ldloc, guardedArray);
         IL.Emit(OpCodes.Ldloc, indexInt);
         if (boxResult) IL.Emit(OpCodes.Conv_I8);
-        IL.Emit(OpCodes.Callvirt, boxResult ? _ctx.Runtime!.TSArrayGetLong : _ctx.Runtime!.TSArrayGetDouble);
+        IL.Emit(OpCodes.Callvirt, boxResult ? _ctx.Runtime!.ArrayStorage.GetLong : _ctx.Runtime!.ArrayStorage.GetDouble);
         IL.Emit(OpCodes.Br, endLabel);
 
         if (!boxResult)
@@ -1664,7 +1664,7 @@ public partial class ILEmitter
             IL.Emit(OpCodes.Ldloc, receiverLocal);
             IL.Emit(OpCodes.Ldloc, indexInt);
             IL.Emit(OpCodes.Ldloca, boxedValue);
-            IL.Emit(OpCodes.Call, _ctx.Runtime.TSArrayTryGetBoxedDouble);
+            IL.Emit(OpCodes.Call, _ctx.Runtime.ArrayStorage.TryGetBoxedDouble);
             IL.Emit(OpCodes.Brfalse, fallbackLabel);
             IL.Emit(OpCodes.Ldloc, boxedValue);
             IL.Emit(OpCodes.Br, endLabel);
@@ -1753,15 +1753,15 @@ public partial class ILEmitter
         else
         {
             IL.Emit(OpCodes.Ldloc, receiverLocal!);
-            IL.Emit(OpCodes.Isinst, _ctx.Runtime!.TSArrayType);
+            IL.Emit(OpCodes.Isinst, _ctx.Runtime!.ArrayStorage.Type);
             IL.Emit(OpCodes.Brfalse, fallbackLabel);
             IL.Emit(OpCodes.Ldloc, receiverLocal!);
-            IL.Emit(OpCodes.Castclass, _ctx.Runtime!.TSArrayType);
+            IL.Emit(OpCodes.Castclass, _ctx.Runtime!.ArrayStorage.Type);
         }
         IL.Emit(OpCodes.Ldloc, indexLocal);
         IL.Emit(OpCodes.Conv_I4);
         IL.Emit(OpCodes.Ldloc, valueLocal);
-        IL.Emit(OpCodes.Callvirt, _ctx.Runtime!.TSArraySetDouble);
+        IL.Emit(OpCodes.Callvirt, _ctx.Runtime!.ArrayStorage.SetDouble);
         IL.Emit(OpCodes.Br, endLabel);
 
         // A value asserted to number[] can still be an arbitrary array-like at
@@ -2015,7 +2015,7 @@ public partial class ILEmitter
                     // Hoisted numeric $Array (#927 step 1): SetDouble stores the unboxed double straight
                     // into the double[] store (mode-checked — a boxed $Array delegates to the boxed setter,
                     // so this is behaviour-identical for both modes). h.TypedLocal is the hoisted $Array.
-                    IL.Emit(OpCodes.Callvirt, _ctx.Runtime!.TSArraySetDouble);
+                    IL.Emit(OpCodes.Callvirt, _ctx.Runtime!.ArrayStorage.SetDouble);
                 else
                     IL.Emit(OpCodes.Call, h.Descriptor.GetSetArrayElementMethod(_ctx.Runtime!));
                 IL.Emit(OpCodes.Ldloc, typedValueLocal);
@@ -2110,15 +2110,15 @@ public partial class ILEmitter
                 if (desc.Kind == ArrayElementsKind.Double)
                 {
                     IL.Emit(OpCodes.Ldloc, objLocal);
-                    IL.Emit(OpCodes.Isinst, _ctx.Runtime!.TSArrayType);
+                    IL.Emit(OpCodes.Isinst, _ctx.Runtime!.ArrayStorage.Type);
                     var notTSArraySet = IL.DefineLabel();
                     IL.Emit(OpCodes.Brfalse, notTSArraySet);
                     IL.Emit(OpCodes.Ldloc, objLocal);
-                    IL.Emit(OpCodes.Castclass, _ctx.Runtime!.TSArrayType);
+                    IL.Emit(OpCodes.Castclass, _ctx.Runtime!.ArrayStorage.Type);
                     EmitExpressionAsDouble(si.Index);
                     IL.Emit(OpCodes.Conv_I4);
                     IL.Emit(OpCodes.Ldloc, typedValueLocalNH);
-                    IL.Emit(OpCodes.Callvirt, _ctx.Runtime!.TSArraySetDouble);
+                    IL.Emit(OpCodes.Callvirt, _ctx.Runtime!.ArrayStorage.SetDouble);
                     IL.Emit(OpCodes.Ldloc, typedValueLocalNH);
                     desc.EmitBoxElement(IL, _ctx.Types);
                     SetStackUnknown();
@@ -2282,21 +2282,21 @@ public partial class ILEmitter
     {
         EmitExpression(receiver);
         EmitBoxIfNeeded(receiver);
-        IL.Emit(OpCodes.Castclass, _ctx.Runtime!.TSArrayType);
-        var arrLocal = IL.DeclareLocal(_ctx.Runtime!.TSArrayType);
+        IL.Emit(OpCodes.Castclass, _ctx.Runtime!.ArrayStorage.Type);
+        var arrLocal = IL.DeclareLocal(_ctx.Runtime!.ArrayStorage.Type);
         IL.Emit(OpCodes.Stloc, arrLocal);
 
         for (int i = 0; i < arguments.Count; i++)
         {
             IL.Emit(OpCodes.Ldloc, arrLocal);
             EmitExpressionAsDouble(arguments[i]);
-            IL.Emit(OpCodes.Callvirt, _ctx.Runtime!.TSArrayPushDouble);
+            IL.Emit(OpCodes.Callvirt, _ctx.Runtime!.ArrayStorage.PushDouble);
         }
 
         // push() returns the new length. _length is authoritative in both modes
         // (PushDouble maintains it numeric; SyncLength reconciles it boxed).
         IL.Emit(OpCodes.Ldloc, arrLocal);
-        IL.Emit(OpCodes.Callvirt, _ctx.Runtime!.TSArrayLongLengthGetter);
+        IL.Emit(OpCodes.Callvirt, _ctx.Runtime!.ArrayStorage.LongLengthGetter);
         IL.Emit(OpCodes.Conv_R8);
         SetStackType(StackType.Double);
     }
@@ -2368,16 +2368,16 @@ public partial class ILEmitter
         // large indices through Conv_I4 (2147483648 → int.MinValue), then
         // SetArrayElement's pad-loop OOMs. The long-indexed TSArraySetLong
         // handles uint32 range and sparse transitions natively.
-        IL.Emit(OpCodes.Isinst, _ctx.Runtime!.TSArrayType);
+        IL.Emit(OpCodes.Isinst, _ctx.Runtime!.ArrayStorage.Type);
         var notTSArrayLabel = IL.DefineLabel();
         IL.Emit(OpCodes.Brfalse, notTSArrayLabel);
 
         IL.Emit(OpCodes.Ldloc, objLocal);
-        IL.Emit(OpCodes.Castclass, _ctx.Runtime!.TSArrayType);
+        IL.Emit(OpCodes.Castclass, _ctx.Runtime!.ArrayStorage.Type);
         EmitExpressionAsDouble(si.Index);
         IL.Emit(OpCodes.Conv_I8);
         IL.Emit(OpCodes.Ldloc, valueLocal);
-        IL.Emit(OpCodes.Callvirt, _ctx.Runtime!.TSArraySetLong);
+        IL.Emit(OpCodes.Callvirt, _ctx.Runtime!.ArrayStorage.SetLong);
         IL.Emit(OpCodes.Ldloc, valueLocal);
         IL.Emit(OpCodes.Br, endLabel);
 

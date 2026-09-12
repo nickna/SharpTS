@@ -1090,11 +1090,11 @@ public partial class ILCompiler
             // A rest argument can be a numeric $Array with an empty base list.
             var plainList = il.DefineLabel();
             il.Emit(OpCodes.Ldarg, argIndex);
-            il.Emit(OpCodes.Isinst, ctx.Runtime!.TSArrayType);
+            il.Emit(OpCodes.Isinst, ctx.Runtime!.ArrayStorage.Type);
             il.Emit(OpCodes.Brfalse, plainList);
             il.Emit(OpCodes.Ldarg, argIndex);
-            il.Emit(OpCodes.Castclass, ctx.Runtime.TSArrayType);
-            il.Emit(OpCodes.Call, ctx.Runtime.TSArrayEnsureBoxed);
+            il.Emit(OpCodes.Castclass, ctx.Runtime.ArrayStorage.Type);
+            il.Emit(OpCodes.Call, ctx.Runtime.ArrayStorage.EnsureBoxed);
             il.MarkLabel(plainList);
             var addRange = ctx.Types.GetMethod(
                 targetListType,

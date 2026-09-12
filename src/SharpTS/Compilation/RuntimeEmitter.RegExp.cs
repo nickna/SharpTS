@@ -943,7 +943,7 @@ public partial class RuntimeEmitter
         // MatchAll already returns List<object?>, so hand it straight to the
         // $Array ctor with no intermediate copy. return new $Array(matches)
         il.Emit(OpCodes.Ldloc, matchesLocal);
-        il.Emit(OpCodes.Newobj, runtime.TSArrayCtor);
+        il.Emit(OpCodes.Newobj, runtime.ArrayStorage.Ctor);
         il.Emit(OpCodes.Ret);
 
         // RegExpCreate(pattern, undefined), then Invoke(rx, @@match, « str »).
@@ -1435,7 +1435,7 @@ public partial class RuntimeEmitter
         var matchCollLocal = il.DeclareLocal(typeof(MatchCollection));
         var matchLocal = il.DeclareLocal(typeof(Match));
         var matchElementsLocal = il.DeclareLocal(_types.ListOfObject);
-        var matchArrayLocal = il.DeclareLocal(runtime.TSArrayType);
+        var matchArrayLocal = il.DeclareLocal(runtime.ArrayStorage.Type);
         var iLocal = il.DeclareLocal(_types.Int32);
         var countLocal = il.DeclareLocal(_types.Int32);
         var groupIndexLocal = il.DeclareLocal(_types.Int32);
@@ -1547,7 +1547,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(groupLoopEndLabel);
 
         il.Emit(OpCodes.Ldloc, matchElementsLocal);
-        il.Emit(OpCodes.Newobj, runtime.TSArrayCtor);
+        il.Emit(OpCodes.Newobj, runtime.ArrayStorage.Ctor);
         il.Emit(OpCodes.Stloc, matchArrayLocal);
 
         il.Emit(OpCodes.Ldloc, matchArrayLocal);

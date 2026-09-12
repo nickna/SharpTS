@@ -1276,7 +1276,7 @@ public partial class RuntimeEmitter
         var notArraySubclassLabel = il.DefineLabel();
         var arraySubclassMissLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSArrayType);
+        il.Emit(OpCodes.Isinst, runtime.ArrayStorage.Type);
         il.Emit(OpCodes.Brfalse, notArraySubclassLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, runtime.IHasFieldsInterface);

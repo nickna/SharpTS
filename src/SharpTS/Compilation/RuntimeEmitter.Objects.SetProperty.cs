@@ -782,7 +782,7 @@ public partial class RuntimeEmitter
         // neither), and BEFORE SetFieldsProperty fallthrough.
         var tsArraySetPropLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSArrayType);
+        il.Emit(OpCodes.Isinst, runtime.ArrayStorage.Type);
         il.Emit(OpCodes.Brtrue, tsArraySetPropLabel);
 
         // Dictionary
@@ -1194,9 +1194,9 @@ public partial class RuntimeEmitter
 
             il.MarkLabel(validLengthLabel);
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Castclass, runtime.TSArrayType);
+            il.Emit(OpCodes.Castclass, runtime.ArrayStorage.Type);
             il.Emit(OpCodes.Ldloc, u32Local);
-            il.Emit(OpCodes.Callvirt, runtime.TSArraySetLength);
+            il.Emit(OpCodes.Callvirt, runtime.ArrayStorage.SetLength);
             il.Emit(OpCodes.Ret);
 
             il.MarkLabel(notLengthLabel);
@@ -1780,7 +1780,7 @@ public partial class RuntimeEmitter
         // non-writable throws then reuses the non-strict store logic.
         var arraySetStrictLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSArrayType);
+        il.Emit(OpCodes.Isinst, runtime.ArrayStorage.Type);
         il.Emit(OpCodes.Brtrue, arraySetStrictLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, _types.ListOfObject);
@@ -1814,7 +1814,7 @@ public partial class RuntimeEmitter
             var arrayNamedPropertyLabel = il.DefineLabel();
             var arrayPropertyIndexLocal = il.DeclareLocal(_types.UInt32);
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.TSArrayType);
+            il.Emit(OpCodes.Isinst, runtime.ArrayStorage.Type);
             il.Emit(OpCodes.Brfalse, arrayNamedPropertyLabel);
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Ldloca, arrayPropertyIndexLocal);
@@ -1836,10 +1836,10 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Brtrue, arrayNamedPropertyLabel);
             var arrayIndexedRawStoreLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Castclass, runtime.TSArrayType);
+            il.Emit(OpCodes.Castclass, runtime.ArrayStorage.Type);
             il.Emit(OpCodes.Ldloc, arrayPropertyIndexLocal);
             il.Emit(OpCodes.Conv_U8);
-            il.Emit(OpCodes.Callvirt, runtime.TSArrayHasIndex);
+            il.Emit(OpCodes.Callvirt, runtime.ArrayStorage.HasIndex);
             il.Emit(OpCodes.Brtrue, arrayIndexedRawStoreLabel);
             var arrayInheritedSetterLocal = il.DeclareLocal(_types.Object);
             il.Emit(OpCodes.Ldsfld, runtime.ArrayPrototypeField);
@@ -1861,12 +1861,12 @@ public partial class RuntimeEmitter
 
             il.MarkLabel(arrayIndexedRawStoreLabel);
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Castclass, runtime.TSArrayType);
+            il.Emit(OpCodes.Castclass, runtime.ArrayStorage.Type);
             il.Emit(OpCodes.Ldloc, arrayPropertyIndexLocal);
             il.Emit(OpCodes.Conv_I8);
             il.Emit(OpCodes.Ldarg_2);
             il.Emit(OpCodes.Ldarg_3);
-            il.Emit(OpCodes.Callvirt, runtime.TSArraySetStrictLong);
+            il.Emit(OpCodes.Callvirt, runtime.ArrayStorage.SetStrictLong);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(arrayNamedPropertyLabel);
 
@@ -2309,7 +2309,7 @@ public partial class RuntimeEmitter
 
         // Check if $Array (for strict mode support)
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSArrayType);
+        il.Emit(OpCodes.Isinst, runtime.ArrayStorage.Type);
         il.Emit(OpCodes.Brtrue, sharpTSArrayLabel);
 
         // List<object?>
@@ -2416,10 +2416,10 @@ public partial class RuntimeEmitter
         // hole, however, OrdinarySet must walk every inherited object looking
         // for an indexed accessor before creating a new own element.
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSArrayType);
+        il.Emit(OpCodes.Castclass, runtime.ArrayStorage.Type);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Convert, "ToInt64", _types.Object));
-        il.Emit(OpCodes.Callvirt, runtime.TSArrayHasIndex);
+        il.Emit(OpCodes.Callvirt, runtime.ArrayStorage.HasIndex);
         il.Emit(OpCodes.Brtrue, strictArrayNoInheritedSetterLabel);
         il.Emit(OpCodes.Ldsfld, runtime.ArrayPrototypeField);
         il.Emit(OpCodes.Stloc, strictArrayPrototypeLocal);
@@ -2452,12 +2452,12 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(strictArrayNoInheritedSetterLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSArrayType);
+        il.Emit(OpCodes.Castclass, runtime.ArrayStorage.Type);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Convert, "ToInt64", _types.Object));
         il.Emit(OpCodes.Ldarg_2); // value
         il.Emit(OpCodes.Ldarg_3); // strictMode
-        il.Emit(OpCodes.Callvirt, runtime.TSArraySetStrictLong);
+        il.Emit(OpCodes.Callvirt, runtime.ArrayStorage.SetStrictLong);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(nullLabel);

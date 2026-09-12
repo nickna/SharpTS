@@ -377,7 +377,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, count);
         il.Emit(OpCodes.Blt, loop);
         il.Emit(OpCodes.Ldloc, groups);
-        il.Emit(OpCodes.Newobj, runtime.TSArrayCtor);
+        il.Emit(OpCodes.Newobj, runtime.ArrayStorage.Ctor);
         il.Emit(OpCodes.Ret);
     }
 

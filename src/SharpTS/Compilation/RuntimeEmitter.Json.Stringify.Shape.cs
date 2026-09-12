@@ -332,7 +332,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "get_Item", [_types.Int32])!);
         il.Emit(OpCodes.Stloc, valueLocal);
         il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Isinst, runtime.ArrayHoleType);
+        il.Emit(OpCodes.Isinst, runtime.ArrayStorage.HoleType);
         il.Emit(OpCodes.Brtrue, falseLabel);
         il.Emit(OpCodes.Ldloc, valueLocal);
         il.Emit(OpCodes.Ldloc, shapeLocal);
@@ -661,7 +661,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, arrayGuarded);
         var arrayTypeAccepted = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, runtime.TSArrayType);
+        il.Emit(OpCodes.Isinst, runtime.ArrayStorage.Type);
         il.Emit(OpCodes.Brtrue, arrayTypeAccepted);
         EmitExactRuntimeTypeCheck(il, 1, _types.ListOfObject, invalidShape);
         il.MarkLabel(arrayTypeAccepted);
@@ -675,10 +675,10 @@ public partial class RuntimeEmitter
         var arrayNotTsArray = il.DefineLabel();
         var arrayBoxed = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, runtime.TSArrayType);
+        il.Emit(OpCodes.Isinst, runtime.ArrayStorage.Type);
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Brfalse, arrayNotTsArray);
-        il.Emit(OpCodes.Callvirt, runtime.TSArrayEnsureBoxed);
+        il.Emit(OpCodes.Callvirt, runtime.ArrayStorage.EnsureBoxed);
         il.Emit(OpCodes.Br, arrayBoxed);
         il.MarkLabel(arrayNotTsArray);
         il.Emit(OpCodes.Pop);

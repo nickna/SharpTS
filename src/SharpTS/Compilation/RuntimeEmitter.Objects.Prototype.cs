@@ -230,11 +230,11 @@ public partial class RuntimeEmitter
         // can't reach).
         var notTSArrayPxLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSArrayType);
+        il.Emit(OpCodes.Isinst, runtime.ArrayStorage.Type);
         il.Emit(OpCodes.Brfalse, notTSArrayPxLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSArrayType);
-        il.Emit(OpCodes.Callvirt, runtime.TSArrayMarkNonExtensible);
+        il.Emit(OpCodes.Castclass, runtime.ArrayStorage.Type);
+        il.Emit(OpCodes.Callvirt, runtime.ArrayStorage.MarkNonExtensible);
         il.MarkLabel(notTSArrayPxLabel);
 
         // Call $PropertyDescriptorStore.PreventExtensions(obj) - fully standalone, no reflection

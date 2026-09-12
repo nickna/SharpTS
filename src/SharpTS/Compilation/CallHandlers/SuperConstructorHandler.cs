@@ -44,7 +44,7 @@ public class SuperConstructorHandler : ICallHandler
         // which applies ECMA-262 Array(...) semantics (single numeric arg
         // sets the length; otherwise args become elements). Only reached when
         // no user class claimed the name via ClassRegistry above.
-        if (ctx.CurrentSuperclassName == "Array" && ctx.Runtime?.TSArrayCtorFromCtorArgs != null)
+        if (ctx.CurrentSuperclassName == "Array" && ctx.Runtime?.ArrayStorage.CtorFromCtorArgs != null)
         {
             EmitSuperArrayCtorCall(emitter, call.Arguments);
             return true;
@@ -218,7 +218,7 @@ public class SuperConstructorHandler : ICallHandler
             emitter.EmitBoxIfNeeded(arguments[i]);
             il.Emit(OpCodes.Stelem_Ref);
         }
-        il.Emit(OpCodes.Call, ctx.Runtime!.TSArrayCtorFromCtorArgs);
+        il.Emit(OpCodes.Call, ctx.Runtime!.ArrayStorage.CtorFromCtorArgs);
 
         il.Emit(OpCodes.Ldnull); // super() returns undefined
         emitter.SetStackUnknown();

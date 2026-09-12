@@ -944,7 +944,7 @@ public partial class RuntimeEmitter
         // return false).
         var tsArrayHasLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, runtime.TSArrayType);
+        il.Emit(OpCodes.Isinst, runtime.ArrayStorage.Type);
         il.Emit(OpCodes.Brtrue, tsArrayHasLabel);
 
         // Check if obj is List<object> (array)
@@ -1094,9 +1094,9 @@ public partial class RuntimeEmitter
 
             // arr.HasIndex(idx) — handles sparse + hole semantics.
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Castclass, runtime.TSArrayType);
+            il.Emit(OpCodes.Castclass, runtime.ArrayStorage.Type);
             il.Emit(OpCodes.Ldloc, tsArrIndexLocal);
-            il.Emit(OpCodes.Callvirt, runtime.TSArrayHasIndex);
+            il.Emit(OpCodes.Callvirt, runtime.ArrayStorage.HasIndex);
             il.Emit(OpCodes.Ret);
         }
 

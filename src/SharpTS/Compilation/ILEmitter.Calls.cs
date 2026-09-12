@@ -826,7 +826,7 @@ public partial class ILEmitter
                 else
                 {
                     if (methodName is "indexOf" or "lastIndexOf")
-                        IL.Emit(OpCodes.Ldsfld, runtime.ArrayHoleInstance);
+                        IL.Emit(OpCodes.Ldsfld, runtime.ArrayStorage.HoleInstance);
                     else if (methodName == "join")
                         IL.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
                     else
@@ -855,7 +855,7 @@ public partial class ILEmitter
                 else
                 {
                     if (methodName is "indexOf" or "lastIndexOf")
-                        IL.Emit(OpCodes.Ldsfld, runtime.ArrayHoleInstance);
+                        IL.Emit(OpCodes.Ldsfld, runtime.ArrayStorage.HoleInstance);
                     else
                         IL.Emit(OpCodes.Ldnull);
                 }

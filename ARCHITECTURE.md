@@ -219,6 +219,18 @@ timer/stream Promise APIs, and filesystem/module registries remain owned by thei
 infrastructure or feature families; they are not duplicate Promise handles and remain in the
 residual migration scope of #1599.
 
+Array storage uses the required `ArrayStorage` component for its 47 declarations: the `$Array`
+and `$ArrayHole` types, constructors, sparse and packed-double accessors, rest builders, and four
+immutable numeric/boolean queue records. These types are always emitted, including for minimal
+tree-shaken programs, so the component is created with `EmittedRuntime` rather than gated on an
+optional feature. `EnsureBoxed` is declared before the base-list methods that call it; its later
+body emission uses the same component handle without an emitter-local alias. Array-only helpers
+accept `EmittedArrayStorageRuntime` directly, while descriptor, error, and undefined dependencies
+still require the shared runtime. `EmitAll` completes storage after runtime finalization, validating
+queue declarations as well as array handles. Boolean queues intentionally omit unboxed numeric
+reads. Array operations, prototype and bound-method helpers, iterators, ArrayBuffer/TypedArray
+metadata, and the shared call-argument pool remain separate residual work under #1599.
+
 During emission, each handle becomes readable as soon as its declaration is assigned, so forward
 references do not require a method body to exist yet. An early read names the missing declaration.
 Completion is an orchestration boundary, not an IL verifier: body emission and type finalization

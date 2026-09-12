@@ -10,7 +10,7 @@ public partial class RuntimeEmitter
     /// (index in [0, length) that was never written).
     /// Mirror of <c>SharpTS.Runtime.Types.ArrayHole</c> for standalone assemblies.
     /// </summary>
-    private void EmitArrayHoleClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private void EmitArrayHoleClass(ModuleBuilder moduleBuilder, EmittedArrayStorageRuntime arrays)
     {
         // public sealed class $ArrayHole
         var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
@@ -58,7 +58,7 @@ public partial class RuntimeEmitter
         toStringIL.Emit(OpCodes.Ret);
 
         var createdType = typeBuilder.CreateType()!;
-        runtime.ArrayHoleType = createdType;
-        runtime.ArrayHoleInstance = createdType.GetField("Instance")!;
+        arrays.HoleType = createdType;
+        arrays.HoleInstance = createdType.GetField("Instance")!;
     }
 }

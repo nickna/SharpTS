@@ -143,7 +143,7 @@ public partial class ILCompiler
             }
             else if (superclassName == "Array")
             {
-                baseType = _runtime.TSArrayType;
+                baseType = _runtime.ArrayStorage.Type;
             }
             else if (superclassName == "Promise")
             {
@@ -712,7 +712,7 @@ public partial class ILCompiler
             if (superclassName == "Array")
             {
                 il.Emit(OpCodes.Ldarg_1);
-                il.Emit(OpCodes.Call, _runtime.TSArrayCtorFromCtorArgs);
+                il.Emit(OpCodes.Call, _runtime.ArrayStorage.CtorFromCtorArgs);
             }
             else if (superclassName == "Promise")
             {

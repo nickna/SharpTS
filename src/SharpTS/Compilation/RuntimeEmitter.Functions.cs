@@ -1736,7 +1736,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, isArrayLabel);
 
         il.Emit(OpCodes.Ldloc, argsArrayLocal);
-        il.Emit(OpCodes.Isinst, runtime.TSArrayType);
+        il.Emit(OpCodes.Isinst, runtime.ArrayStorage.Type);
         il.Emit(OpCodes.Brtrue, isTSArrayLabel);
 
         // Unknown type - empty array
@@ -1759,8 +1759,8 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(isTSArrayLabel);
         il.Emit(OpCodes.Ldloc, argsArrayLocal);
-        il.Emit(OpCodes.Castclass, runtime.TSArrayType);
-        il.Emit(OpCodes.Callvirt, runtime.TSArrayElementsGetter);
+        il.Emit(OpCodes.Castclass, runtime.ArrayStorage.Type);
+        il.Emit(OpCodes.Callvirt, runtime.ArrayStorage.ElementsGetter);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObjectNullable, "ToArray")!);
         il.Emit(OpCodes.Stloc, callArgsLocal);
         il.Emit(OpCodes.Br, afterConvertLabel);

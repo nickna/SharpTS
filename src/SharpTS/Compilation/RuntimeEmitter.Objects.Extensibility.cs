@@ -34,11 +34,11 @@ public partial class RuntimeEmitter
         // that predate the $Array encapsulation.
         var notTSArrayLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSArrayType);
+        il.Emit(OpCodes.Isinst, runtime.ArrayStorage.Type);
         il.Emit(OpCodes.Brfalse, notTSArrayLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSArrayType);
-        il.Emit(OpCodes.Callvirt, runtime.TSArrayFreeze);
+        il.Emit(OpCodes.Castclass, runtime.ArrayStorage.Type);
+        il.Emit(OpCodes.Callvirt, runtime.ArrayStorage.Freeze);
         il.MarkLabel(notTSArrayLabel);
 
         // Mirror for $Object: set its internal _isFrozen/_isSealed/_isNonExtensible
@@ -153,11 +153,11 @@ public partial class RuntimeEmitter
         // ArrayPush consults, which PushDouble can't reach).
         var notTSArraySealLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSArrayType);
+        il.Emit(OpCodes.Isinst, runtime.ArrayStorage.Type);
         il.Emit(OpCodes.Brfalse, notTSArraySealLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSArrayType);
-        il.Emit(OpCodes.Callvirt, runtime.TSArrayMarkNonExtensible);
+        il.Emit(OpCodes.Castclass, runtime.ArrayStorage.Type);
+        il.Emit(OpCodes.Callvirt, runtime.ArrayStorage.MarkNonExtensible);
         il.MarkLabel(notTSArraySealLabel);
 
         // Call $PropertyDescriptorStore.Seal(obj) - fully standalone, no reflection

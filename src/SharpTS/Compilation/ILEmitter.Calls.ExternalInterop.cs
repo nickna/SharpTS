@@ -840,11 +840,11 @@ public partial class ILEmitter
         var ordinaryList = IL.DefineLabel();
         var listReady = IL.DefineLabel();
         IL.Emit(OpCodes.Ldloc, source);
-        IL.Emit(OpCodes.Isinst, _ctx.Runtime!.TSArrayType);
+        IL.Emit(OpCodes.Isinst, _ctx.Runtime!.ArrayStorage.Type);
         IL.Emit(OpCodes.Brfalse, ordinaryList);
         IL.Emit(OpCodes.Ldloc, source);
-        IL.Emit(OpCodes.Castclass, _ctx.Runtime.TSArrayType);
-        IL.Emit(OpCodes.Callvirt, _ctx.Runtime.TSArrayElementsGetter);
+        IL.Emit(OpCodes.Castclass, _ctx.Runtime.ArrayStorage.Type);
+        IL.Emit(OpCodes.Callvirt, _ctx.Runtime.ArrayStorage.ElementsGetter);
         IL.Emit(OpCodes.Castclass, typeof(System.Collections.IList));
         IL.Emit(OpCodes.Stloc, list);
         IL.Emit(OpCodes.Br, listReady);

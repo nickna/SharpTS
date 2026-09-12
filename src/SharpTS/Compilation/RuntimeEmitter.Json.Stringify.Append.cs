@@ -413,7 +413,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, indexLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(
             _types.ListOfObject, "get_Item", [_types.Int32]));
-        il.Emit(OpCodes.Isinst, runtime.ArrayHoleType);
+        il.Emit(OpCodes.Isinst, runtime.ArrayStorage.HoleType);
         il.Emit(OpCodes.Brfalse, notHole);
         EmitAppendNullLiteral(il);
         il.Emit(OpCodes.Br, appended);

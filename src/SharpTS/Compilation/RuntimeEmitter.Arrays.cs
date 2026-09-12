@@ -86,7 +86,7 @@ public partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "CreateArray",
             MethodAttributes.Public | MethodAttributes.Static,
-            runtime.TSArrayType,
+            runtime.ArrayStorage.Type,
             [_types.ObjectArray]
         );
         runtime.CreateArray = method;
@@ -94,7 +94,7 @@ public partial class RuntimeEmitter
         var il = method.GetILGenerator();
         // Copy the literal elements directly into the final array's storage.
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Newobj, runtime.TSArrayLiteralCtor);
+        il.Emit(OpCodes.Newobj, runtime.ArrayStorage.LiteralCtor);
         il.Emit(OpCodes.Ret);
     }
 
@@ -127,7 +127,7 @@ public partial class RuntimeEmitter
 
         // $Array (wrapper around List<object?>) - check before typed lists
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSArrayType);
+        il.Emit(OpCodes.Isinst, runtime.ArrayStorage.Type);
         il.Emit(OpCodes.Brtrue, tsArrayLabel);
 
         // Descriptor-driven: emit isinst check for each backing type
@@ -157,8 +157,8 @@ public partial class RuntimeEmitter
         // report 0 instead of 10_000_000.
         il.MarkLabel(tsArrayLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSArrayType);
-        il.Emit(OpCodes.Callvirt, runtime.TSArrayLengthGetter);
+        il.Emit(OpCodes.Castclass, runtime.ArrayStorage.Type);
+        il.Emit(OpCodes.Callvirt, runtime.ArrayStorage.LengthGetter);
         il.Emit(OpCodes.Ret);
 
         // Descriptor-driven: emit Count handler for each backing type
@@ -196,7 +196,7 @@ public partial class RuntimeEmitter
 
         // $Array (wrapper around List<object?>) - check before List
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSArrayType);
+        il.Emit(OpCodes.Isinst, runtime.ArrayStorage.Type);
         il.Emit(OpCodes.Brtrue, tsArrayElLabel);
 
         // List
@@ -222,13 +222,13 @@ public partial class RuntimeEmitter
         var tsArrayGetItemResult = il.DeclareLocal(_types.Object);
         var tsArrayGetItemNotHole = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSArrayType);
-        il.Emit(OpCodes.Callvirt, runtime.TSArrayElementsGetter);
+        il.Emit(OpCodes.Castclass, runtime.ArrayStorage.Type);
+        il.Emit(OpCodes.Callvirt, runtime.ArrayStorage.ElementsGetter);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "get_Item", _types.Int32));
         il.Emit(OpCodes.Stloc, tsArrayGetItemResult);
         il.Emit(OpCodes.Ldloc, tsArrayGetItemResult);
-        il.Emit(OpCodes.Isinst, runtime.ArrayHoleType);
+        il.Emit(OpCodes.Isinst, runtime.ArrayStorage.HoleType);
         il.Emit(OpCodes.Brfalse, tsArrayGetItemNotHole);
         il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
         il.Emit(OpCodes.Ret);
@@ -473,7 +473,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, listLocal);
         il.Emit(OpCodes.Ldloc, indexLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "get_Item", [_types.Int32])!);
-        il.Emit(OpCodes.Isinst, runtime.ArrayHoleType);
+        il.Emit(OpCodes.Isinst, runtime.ArrayStorage.HoleType);
         il.Emit(OpCodes.Brtrue, listLoopSkip);
 
         // Indexed array/list properties can carry descriptor metadata in PDS.
@@ -1134,7 +1134,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Castclass, _types.ListOfObject);
         il.Emit(OpCodes.Ldloc, iLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "get_Item", [_types.Int32])!);
-        il.Emit(OpCodes.Isinst, runtime.ArrayHoleType);
+        il.Emit(OpCodes.Isinst, runtime.ArrayStorage.HoleType);
         il.Emit(OpCodes.Brtrue, listLoopSkip);
 
         // names.Add(i.ToString())
@@ -1524,7 +1524,7 @@ public partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "ConcatArrays",
             MethodAttributes.Public | MethodAttributes.Static,
-            runtime.TSArrayType,
+            runtime.ArrayStorage.Type,
             [_types.ObjectArray, runtime.TSSymbolType, _types.Type]  // Added iteratorSymbol and runtimeType
         );
         runtime.ConcatArrays = method;
@@ -1575,7 +1575,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(loopEnd);
         // Wrap the List<object?> in $Array on the way out.
         il.Emit(OpCodes.Ldloc, resultLocal);
-        il.Emit(OpCodes.Newobj, runtime.TSArrayCtor);
+        il.Emit(OpCodes.Newobj, runtime.ArrayStorage.Ctor);
         il.Emit(OpCodes.Ret);
     }
 
@@ -1738,12 +1738,12 @@ public partial class RuntimeEmitter
             var notNumeric = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldfld, listField);
-            il.Emit(OpCodes.Isinst, runtime.TSArrayType);
+            il.Emit(OpCodes.Isinst, runtime.ArrayStorage.Type);
             il.Emit(OpCodes.Brfalse, notNumeric);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldfld, listField);
-            il.Emit(OpCodes.Castclass, runtime.TSArrayType);
-            il.Emit(OpCodes.Callvirt, runtime.TSArrayEnsureBoxed);
+            il.Emit(OpCodes.Castclass, runtime.ArrayStorage.Type);
+            il.Emit(OpCodes.Callvirt, runtime.ArrayStorage.EnsureBoxed);
             il.MarkLabel(notNumeric);
         }
 
@@ -2014,7 +2014,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Br, afterSecond);
             il.MarkLabel(noSecond);
             if (methodName is "indexOf" or "lastIndexOf")
-                il.Emit(OpCodes.Ldsfld, runtime.ArrayHoleInstance);
+                il.Emit(OpCodes.Ldsfld, runtime.ArrayStorage.HoleInstance);
             else
                 il.Emit(OpCodes.Ldnull);
             il.MarkLabel(afterSecond);

@@ -1016,15 +1016,15 @@ public partial class RuntimeEmitter
             var arrILocal = il.DeclareLocal(_types.Int32);
 
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.TSArrayType);
+            il.Emit(OpCodes.Isinst, runtime.ArrayStorage.Type);
             il.Emit(OpCodes.Brfalse, isTypedArrayLabel);
 
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Castclass, runtime.TSArrayType);
+            il.Emit(OpCodes.Castclass, runtime.ArrayStorage.Type);
             il.Emit(OpCodes.Stloc, tsArrLocal);
             il.Emit(OpCodes.Ldloc, tsArrLocal);
-            il.Emit(OpCodes.Castclass, runtime.TSArrayType);
-            il.Emit(OpCodes.Callvirt, runtime.TSArrayLengthGetter);
+            il.Emit(OpCodes.Castclass, runtime.ArrayStorage.Type);
+            il.Emit(OpCodes.Callvirt, runtime.ArrayStorage.LengthGetter);
             il.Emit(OpCodes.Stloc, arrLengthLocal);
             il.Emit(OpCodes.Ldloc, arrLengthLocal);
             il.Emit(OpCodes.Newobj, lengthCtor);
