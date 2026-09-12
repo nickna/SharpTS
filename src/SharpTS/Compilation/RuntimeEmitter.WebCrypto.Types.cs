@@ -13,78 +13,58 @@ namespace SharpTS.Compilation;
 /// </summary>
 public partial class RuntimeEmitter
 {
-    private TypeBuilder _cryptoKeyType = null!;
-    private ConstructorBuilder _cryptoKeyCtor = null!;
-    private FieldBuilder _ckKind = null!;       // "secret" | "public" | "private"
-    private FieldBuilder _ckExtractable = null!;
-    private FieldBuilder _ckAlgorithm = null!;  // Dictionary<string, object>
-    private FieldBuilder _ckUsages = null!;     // caller-provided usages value
-    private FieldBuilder _ckMaterial = null!;   // raw secret / PKCS#8 / SPKI bytes
-    private FieldBuilder _ckAlgoName = null!;   // UPPER WebCrypto name
-    private FieldBuilder _ckHash = null!;       // lowercase digest or null
-    private FieldBuilder _ckCurve = null!;      // canonical curve or null
-
-    private ConstructorBuilder _subtleCtor = null!;
-    private MethodBuilder _subtleGenerateKeyCore = null!;
-    private MethodBuilder _subtleImportKeyCore = null!;
-    private MethodBuilder _subtleExportKeyCore = null!;
-    private MethodBuilder _subtleEncDecCore = null!;
-    private MethodBuilder _subtleSignVerifyCore = null!;
-    private MethodBuilder _subtleDeriveBitsCore = null!;
 
     /// <summary>Entry point: emits the three WebCrypto types + the singleton accessor body.</summary>
     private void EmitWebCryptoTypes(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
-        EmitCryptoKeyType(moduleBuilder, runtime);
+        var webCrypto = runtime.WebCrypto.RequireImplementation();
+        EmitCryptoKeyType(moduleBuilder, webCrypto);
         EmitSubtleCryptoType(moduleBuilder, runtime);
         EmitWebCryptoType(moduleBuilder, runtime);
 
         // crypto.getRandomValues(x) / named import — uniform module wrapper on $Runtime.
-        var wrapper = _runtimeTypeBuilder!.DefineMethod(
+        var wrapper = runtime.RuntimeType.DefineMethod(
             "CryptoWrapper_getRandomValues",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.Object]);
         var wil = wrapper.GetILGenerator();
-        wil.Emit(OpCodes.Call, runtime.GetWebCryptoObject);
-        wil.Emit(OpCodes.Castclass, _webCryptoType);
+        wil.Emit(OpCodes.Call, runtime.WebCrypto.GetObject);
+        wil.Emit(OpCodes.Castclass, webCrypto.Type);
         wil.Emit(OpCodes.Ldarg_0);
-        wil.Emit(OpCodes.Callvirt, _webCryptoGetRandomValues);
+        wil.Emit(OpCodes.Callvirt, webCrypto.GetRandomValues);
         wil.Emit(OpCodes.Ret);
         runtime.RegisterBuiltInModuleMethod("crypto", "getRandomValues", wrapper);
     }
 
-    private TypeBuilder _webCryptoType = null!;
-    private MethodBuilder _webCryptoGetRandomValues = null!;
-
     // ───────────────────────────── $CryptoKey ─────────────────────────────
 
-    private void EmitCryptoKeyType(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private void EmitCryptoKeyType(ModuleBuilder moduleBuilder, EmittedWebCryptoImplementation webCrypto)
     {
         var tb = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$CryptoKey",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.Class,
             _types.Object);
-        _cryptoKeyType = tb;
+        webCrypto.CryptoKeyType = tb;
 
-        _ckKind = tb.DefineField("Kind", _types.String, FieldAttributes.Public);
-        _ckExtractable = tb.DefineField("Ext", _types.Boolean, FieldAttributes.Public);
-        _ckAlgorithm = tb.DefineField("Algo", _types.Object, FieldAttributes.Public);
-        _ckUsages = tb.DefineField("UsagesValue", _types.Object, FieldAttributes.Public);
-        _ckMaterial = tb.DefineField("Material", _types.ByteArray, FieldAttributes.Public);
-        _ckAlgoName = tb.DefineField("AlgoName", _types.String, FieldAttributes.Public);
-        _ckHash = tb.DefineField("HashName", _types.String, FieldAttributes.Public);
-        _ckCurve = tb.DefineField("Curve", _types.String, FieldAttributes.Public);
+        webCrypto.KeyKindField = tb.DefineField("Kind", _types.String, FieldAttributes.Public);
+        webCrypto.KeyExtractableField = tb.DefineField("Ext", _types.Boolean, FieldAttributes.Public);
+        webCrypto.KeyAlgorithmField = tb.DefineField("Algo", _types.Object, FieldAttributes.Public);
+        webCrypto.KeyUsagesField = tb.DefineField("UsagesValue", _types.Object, FieldAttributes.Public);
+        webCrypto.KeyMaterialField = tb.DefineField("Material", _types.ByteArray, FieldAttributes.Public);
+        webCrypto.KeyAlgoNameField = tb.DefineField("AlgoName", _types.String, FieldAttributes.Public);
+        webCrypto.KeyHashField = tb.DefineField("HashName", _types.String, FieldAttributes.Public);
+        webCrypto.KeyCurveField = tb.DefineField("Curve", _types.String, FieldAttributes.Public);
 
         // ctor(kind, extractable, algorithm, usages, material, algoName, hash, curve)
-        _cryptoKeyCtor = tb.DefineConstructor(
+        webCrypto.CryptoKeyCtor = tb.DefineConstructor(
             MethodAttributes.Public, CallingConventions.Standard,
             [_types.String, _types.Boolean, _types.Object, _types.Object, _types.ByteArray, _types.String, _types.String, _types.String]);
-        var il = _cryptoKeyCtor.GetILGenerator();
+        var il = webCrypto.CryptoKeyCtor.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Call, _types.GetDefaultConstructor(_types.Object));
         (FieldBuilder Field, int Arg)[] inits =
-            [(_ckKind, 1), (_ckExtractable, 2), (_ckAlgorithm, 3), (_ckUsages, 4), (_ckMaterial, 5), (_ckAlgoName, 6), (_ckHash, 7), (_ckCurve, 8)];
+            [(webCrypto.KeyKindField, 1), (webCrypto.KeyExtractableField, 2), (webCrypto.KeyAlgorithmField, 3), (webCrypto.KeyUsagesField, 4), (webCrypto.KeyMaterialField, 5), (webCrypto.KeyAlgoNameField, 6), (webCrypto.KeyHashField, 7), (webCrypto.KeyCurveField, 8)];
         foreach (var (field, arg) in inits)
         {
             il.Emit(OpCodes.Ldarg_0);
@@ -97,23 +77,23 @@ public partial class RuntimeEmitter
         EmitSimpleGetter(tb, "type", _types.String, gil =>
         {
             gil.Emit(OpCodes.Ldarg_0);
-            gil.Emit(OpCodes.Ldfld, _ckKind);
+            gil.Emit(OpCodes.Ldfld, webCrypto.KeyKindField);
         });
         EmitSimpleGetter(tb, "extractable", _types.Object, gil =>
         {
             gil.Emit(OpCodes.Ldarg_0);
-            gil.Emit(OpCodes.Ldfld, _ckExtractable);
+            gil.Emit(OpCodes.Ldfld, webCrypto.KeyExtractableField);
             gil.Emit(OpCodes.Box, _types.Boolean);
         });
         EmitSimpleGetter(tb, "algorithm", _types.Object, gil =>
         {
             gil.Emit(OpCodes.Ldarg_0);
-            gil.Emit(OpCodes.Ldfld, _ckAlgorithm);
+            gil.Emit(OpCodes.Ldfld, webCrypto.KeyAlgorithmField);
         });
         EmitSimpleGetter(tb, "usages", _types.Object, gil =>
         {
             gil.Emit(OpCodes.Ldarg_0);
-            gil.Emit(OpCodes.Ldfld, _ckUsages);
+            gil.Emit(OpCodes.Ldfld, webCrypto.KeyUsagesField);
         });
 
         tb.CreateType();
@@ -137,22 +117,23 @@ public partial class RuntimeEmitter
 
     private void EmitSubtleCryptoType(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
+        var webCrypto = runtime.WebCrypto.RequireImplementation();
         var tb = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$SubtleCrypto",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.Class,
             _types.Object);
 
-        _subtleCtor = tb.DefineDefaultConstructor(MethodAttributes.Public);
+        webCrypto.SubtleCtor = tb.DefineDefaultConstructor(MethodAttributes.Public);
 
         // Static cores first (instance wrappers call them).
-        _subtleImportKeyCore = EmitSubtleImportKeyCore(tb, runtime);
-        _subtleExportKeyCore = EmitSubtleExportKeyCore(tb, runtime);
-        _subtleEncDecCore = EmitSubtleEncDecCore(tb, runtime);
-        _subtleSignVerifyCore = EmitSubtleSignVerifyCore(tb, runtime);
-        _subtleDeriveBitsCore = EmitSubtleDeriveBitsCore(tb, runtime);
-        _subtleGenerateKeyCore = EmitSubtleGenerateKeyCore(tb, runtime);
+        webCrypto.SubtleImportKeyCore = EmitSubtleImportKeyCore(tb, runtime);
+        webCrypto.SubtleExportKeyCore = EmitSubtleExportKeyCore(tb, webCrypto);
+        webCrypto.SubtleEncDecCore = EmitSubtleEncDecCore(tb, webCrypto);
+        webCrypto.SubtleSignVerifyCore = EmitSubtleSignVerifyCore(tb, webCrypto);
+        webCrypto.SubtleDeriveBitsCore = EmitSubtleDeriveBitsCore(tb, webCrypto);
+        webCrypto.SubtleGenerateKeyCore = EmitSubtleGenerateKeyCore(tb, runtime);
 
-        EmitSubtlePromiseWrappers(tb, runtime);
+        EmitSubtlePromiseWrappers(tb, webCrypto);
 
         tb.CreateType();
     }
@@ -164,7 +145,7 @@ public partial class RuntimeEmitter
     /// methods reject rather than throw — this also keeps guest try/catch-around-await
     /// working in compiled async bodies).
     /// </summary>
-    private void EmitPromiseMethod(TypeBuilder tb, string name, int paramCount, Action<ILGenerator> emitBody)
+    private void EmitPromiseMethod(EmittedWebCryptoImplementation webCrypto, TypeBuilder tb, string name, int paramCount, Action<ILGenerator> emitBody)
     {
         var paramTypes = new Type[paramCount];
         for (int i = 0; i < paramCount; i++) paramTypes[i] = _types.Object;
@@ -177,12 +158,12 @@ public partial class RuntimeEmitter
 
         il.BeginExceptionBlock();
         emitBody(il);
-        il.Emit(OpCodes.Call, _wcResolved);
+        il.Emit(OpCodes.Call, webCrypto.Resolved);
         il.Emit(OpCodes.Stloc, resultLocal);
         il.Emit(OpCodes.Leave, end);
 
         il.BeginCatchBlock(typeof(Exception));
-        il.Emit(OpCodes.Call, _wcRejected);
+        il.Emit(OpCodes.Call, webCrypto.Rejected);
         il.Emit(OpCodes.Stloc, resultLocal);
         il.Emit(OpCodes.Leave, end);
         il.EndExceptionBlock();
@@ -213,18 +194,18 @@ public partial class RuntimeEmitter
     }
 
     /// <summary>Loads a $CryptoKey field after castclass-ing the object argument.</summary>
-    private void EmitLoadKeyField(ILGenerator il, int argIndex, FieldBuilder field)
+    private void EmitLoadKeyField(EmittedWebCryptoImplementation webCrypto, ILGenerator il, int argIndex, FieldBuilder field)
     {
         il.Emit(OpCodes.Ldarg, argIndex);
-        il.Emit(OpCodes.Castclass, _cryptoKeyType);
+        il.Emit(OpCodes.Castclass, webCrypto.CryptoKeyType);
         il.Emit(OpCodes.Ldfld, field);
     }
 
-    private void EmitEnsureCryptoKey(ILGenerator il, int argIndex, string op)
+    private void EmitEnsureCryptoKey(EmittedWebCryptoImplementation webCrypto, ILGenerator il, int argIndex, string op)
     {
         var ok = il.DefineLabel();
         il.Emit(OpCodes.Ldarg, argIndex);
-        il.Emit(OpCodes.Isinst, _cryptoKeyType);
+        il.Emit(OpCodes.Isinst, webCrypto.CryptoKeyType);
         il.Emit(OpCodes.Brtrue, ok);
         EmitThrowMessage(il, $"crypto.subtle.{op}: a CryptoKey is required");
         il.MarkLabel(ok);
@@ -257,126 +238,126 @@ public partial class RuntimeEmitter
     /// <summary>
     /// The public subtle methods: thin resolved/rejected-$Promise wrappers over the cores.
     /// </summary>
-    private void EmitSubtlePromiseWrappers(TypeBuilder tb, EmittedRuntime runtime)
+    private void EmitSubtlePromiseWrappers(TypeBuilder tb, EmittedWebCryptoImplementation webCrypto)
     {
         // digest(algorithm, data)
-        EmitPromiseMethod(tb, "digest", 2, il =>
+        EmitPromiseMethod(webCrypto, tb, "digest", 2, il =>
         {
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Call, _wcMapHash);
+            il.Emit(OpCodes.Call, webCrypto.MapHash);
             il.Emit(OpCodes.Ldarg_2);
-            il.Emit(OpCodes.Call, _wcToBytes);
-            il.Emit(OpCodes.Call, _wcDigest);
-            il.Emit(OpCodes.Call, _wcToArrayBuffer);
+            il.Emit(OpCodes.Call, webCrypto.ToBytes);
+            il.Emit(OpCodes.Call, webCrypto.Digest);
+            il.Emit(OpCodes.Call, webCrypto.ToArrayBuffer);
         });
 
         // generateKey(algorithm, extractable, usages)
-        EmitPromiseMethod(tb, "generateKey", 3, il =>
+        EmitPromiseMethod(webCrypto, tb, "generateKey", 3, il =>
         {
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Ldarg_2);
             il.Emit(OpCodes.Ldarg_3);
-            il.Emit(OpCodes.Call, _subtleGenerateKeyCore);
+            il.Emit(OpCodes.Call, webCrypto.SubtleGenerateKeyCore);
         });
 
         // importKey(format, keyData, algorithm, extractable, usages)
-        EmitPromiseMethod(tb, "importKey", 5, il =>
+        EmitPromiseMethod(webCrypto, tb, "importKey", 5, il =>
         {
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Ldarg_2);
             il.Emit(OpCodes.Ldarg_3);
             il.Emit(OpCodes.Ldarg, 4);
             il.Emit(OpCodes.Ldarg, 5);
-            il.Emit(OpCodes.Call, _subtleImportKeyCore);
+            il.Emit(OpCodes.Call, webCrypto.SubtleImportKeyCore);
         });
 
         // exportKey(format, key)
-        EmitPromiseMethod(tb, "exportKey", 2, il =>
+        EmitPromiseMethod(webCrypto, tb, "exportKey", 2, il =>
         {
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Ldarg_2);
-            il.Emit(OpCodes.Call, _subtleExportKeyCore);
+            il.Emit(OpCodes.Call, webCrypto.SubtleExportKeyCore);
         });
 
         // encrypt/decrypt(algorithm, key, data)
         foreach (var (name, encrypt) in new[] { ("encrypt", true), ("decrypt", false) })
         {
-            EmitPromiseMethod(tb, name, 3, il =>
+            EmitPromiseMethod(webCrypto, tb, name, 3, il =>
             {
                 il.Emit(OpCodes.Ldarg_1);
                 il.Emit(OpCodes.Ldarg_2);
                 il.Emit(OpCodes.Ldarg_3);
-                il.Emit(OpCodes.Call, _wcToBytes);
+                il.Emit(OpCodes.Call, webCrypto.ToBytes);
                 il.Emit(encrypt ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
-                il.Emit(OpCodes.Call, _subtleEncDecCore);
-                il.Emit(OpCodes.Call, _wcToArrayBuffer);
+                il.Emit(OpCodes.Call, webCrypto.SubtleEncDecCore);
+                il.Emit(OpCodes.Call, webCrypto.ToArrayBuffer);
             });
         }
 
         // sign(algorithm, key, data)
-        EmitPromiseMethod(tb, "sign", 3, il =>
+        EmitPromiseMethod(webCrypto, tb, "sign", 3, il =>
         {
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Ldarg_2);
             il.Emit(OpCodes.Ldarg_3);
-            il.Emit(OpCodes.Call, _wcToBytes);
+            il.Emit(OpCodes.Call, webCrypto.ToBytes);
             il.Emit(OpCodes.Ldnull);
-            il.Emit(OpCodes.Call, _subtleSignVerifyCore);
+            il.Emit(OpCodes.Call, webCrypto.SubtleSignVerifyCore);
             il.Emit(OpCodes.Castclass, _types.ByteArray);
-            il.Emit(OpCodes.Call, _wcToArrayBuffer);
+            il.Emit(OpCodes.Call, webCrypto.ToArrayBuffer);
         });
 
         // verify(algorithm, key, signature, data)
-        EmitPromiseMethod(tb, "verify", 4, il =>
+        EmitPromiseMethod(webCrypto, tb, "verify", 4, il =>
         {
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Ldarg_2);
             il.Emit(OpCodes.Ldarg, 4);
-            il.Emit(OpCodes.Call, _wcToBytes);
+            il.Emit(OpCodes.Call, webCrypto.ToBytes);
             il.Emit(OpCodes.Ldarg_3);
-            il.Emit(OpCodes.Call, _wcToBytes);
-            il.Emit(OpCodes.Call, _subtleSignVerifyCore);
+            il.Emit(OpCodes.Call, webCrypto.ToBytes);
+            il.Emit(OpCodes.Call, webCrypto.SubtleSignVerifyCore);
         });
 
         // deriveBits(algorithm, baseKey, length)
-        EmitPromiseMethod(tb, "deriveBits", 3, il =>
+        EmitPromiseMethod(webCrypto, tb, "deriveBits", 3, il =>
         {
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Ldarg_2);
             il.Emit(OpCodes.Ldarg_3);
             il.Emit(OpCodes.Ldc_I4_M1);
-            il.Emit(OpCodes.Call, _wcIntParam);
-            il.Emit(OpCodes.Call, _subtleDeriveBitsCore);
-            il.Emit(OpCodes.Call, _wcToArrayBuffer);
+            il.Emit(OpCodes.Call, webCrypto.IntParameter);
+            il.Emit(OpCodes.Call, webCrypto.SubtleDeriveBitsCore);
+            il.Emit(OpCodes.Call, webCrypto.ToArrayBuffer);
         });
 
         // deriveKey(algorithm, baseKey, derivedKeyType, extractable, usages)
-        EmitPromiseMethod(tb, "deriveKey", 5, il => EmitDeriveKeyBody(il));
+        EmitPromiseMethod(webCrypto, tb, "deriveKey", 5, il => EmitDeriveKeyBody(webCrypto, il));
 
         // wrapKey(format, key, wrappingKey, wrapAlgo)
-        EmitPromiseMethod(tb, "wrapKey", 4, il =>
+        EmitPromiseMethod(webCrypto, tb, "wrapKey", 4, il =>
         {
             il.Emit(OpCodes.Ldarg, 4); // wrapAlgo
             il.Emit(OpCodes.Ldarg_3);  // wrappingKey
             il.Emit(OpCodes.Ldarg_1);  // format
             il.Emit(OpCodes.Ldarg_2);  // key
-            il.Emit(OpCodes.Call, _subtleExportKeyCore);
-            il.Emit(OpCodes.Call, _wcToBytes);
+            il.Emit(OpCodes.Call, webCrypto.SubtleExportKeyCore);
+            il.Emit(OpCodes.Call, webCrypto.ToBytes);
             il.Emit(OpCodes.Ldc_I4_1); // encrypt
-            il.Emit(OpCodes.Call, _subtleEncDecCore);
-            il.Emit(OpCodes.Call, _wcToArrayBuffer);
+            il.Emit(OpCodes.Call, webCrypto.SubtleEncDecCore);
+            il.Emit(OpCodes.Call, webCrypto.ToArrayBuffer);
         });
 
         // unwrapKey(format, wrapped, unwrappingKey, unwrapAlgo, unwrappedKeyAlgo, extractable, usages)
-        EmitPromiseMethod(tb, "unwrapKey", 7, il =>
+        EmitPromiseMethod(webCrypto, tb, "unwrapKey", 7, il =>
         {
             var ptLocal = il.DeclareLocal(_types.ByteArray);
             il.Emit(OpCodes.Ldarg, 4);  // unwrapAlgo
             il.Emit(OpCodes.Ldarg_3);   // unwrappingKey
             il.Emit(OpCodes.Ldarg_2);   // wrappedKey
-            il.Emit(OpCodes.Call, _wcToBytes);
+            il.Emit(OpCodes.Call, webCrypto.ToBytes);
             il.Emit(OpCodes.Ldc_I4_0);  // decrypt
-            il.Emit(OpCodes.Call, _subtleEncDecCore);
+            il.Emit(OpCodes.Call, webCrypto.SubtleEncDecCore);
             il.Emit(OpCodes.Stloc, ptLocal);
 
             il.Emit(OpCodes.Ldarg_1);   // format
@@ -384,13 +365,14 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg, 5);  // unwrappedKeyAlgo
             il.Emit(OpCodes.Ldarg, 6);  // extractable
             il.Emit(OpCodes.Ldarg, 7);  // usages
-            il.Emit(OpCodes.Call, _subtleImportKeyCore);
+            il.Emit(OpCodes.Call, webCrypto.SubtleImportKeyCore);
         });
     }
 
     // static object GenerateKeyCore(object algorithm, object extractable, object usages)
     private MethodBuilder EmitSubtleGenerateKeyCore(TypeBuilder tb, EmittedRuntime runtime)
     {
+        var webCrypto = runtime.WebCrypto.RequireImplementation();
         var m = tb.DefineMethod("GenerateKeyCore", MethodAttributes.Public | MethodAttributes.Static,
             _types.Object, [_types.Object, _types.Object, _types.Object]);
         var il = m.GetILGenerator();
@@ -404,7 +386,7 @@ public partial class RuntimeEmitter
         var curveLocal = il.DeclareLocal(_types.String);
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, _wcAlgoName);
+        il.Emit(OpCodes.Call, webCrypto.AlgorithmName);
         il.Emit(OpCodes.Stloc, nameLocal);
 
         il.Emit(OpCodes.Ldarg_1);
@@ -419,9 +401,9 @@ public partial class RuntimeEmitter
                 var lenOk = il.DefineLabel();
                 il.Emit(OpCodes.Ldarg_0);
                 il.Emit(OpCodes.Ldstr, "length");
-                il.Emit(OpCodes.Call, _wcParam);
+                il.Emit(OpCodes.Call, webCrypto.Parameter);
                 il.Emit(OpCodes.Ldc_I4_M1);
-                il.Emit(OpCodes.Call, _wcIntParam);
+                il.Emit(OpCodes.Call, webCrypto.IntParameter);
                 il.Emit(OpCodes.Stloc, lenLocal);
 
                 foreach (var valid in new[] { 128, 192, 256 })
@@ -452,7 +434,7 @@ public partial class RuntimeEmitter
                 il.Emit(OpCodes.Ldstr, aes);
                 il.Emit(OpCodes.Ldnull);
                 il.Emit(OpCodes.Ldnull);
-                il.Emit(OpCodes.Newobj, _cryptoKeyCtor);
+                il.Emit(OpCodes.Newobj, webCrypto.CryptoKeyCtor);
                 il.Emit(OpCodes.Ret);
             });
         }
@@ -462,8 +444,8 @@ public partial class RuntimeEmitter
         {
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldstr, "hash");
-            il.Emit(OpCodes.Call, _wcParam);
-            il.Emit(OpCodes.Call, _wcMapHash);
+            il.Emit(OpCodes.Call, webCrypto.Parameter);
+            il.Emit(OpCodes.Call, webCrypto.MapHash);
             il.Emit(OpCodes.Stloc, hashLocal);
 
             // default length: sha384/sha512 → 1024, else 512
@@ -487,9 +469,9 @@ public partial class RuntimeEmitter
 
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldstr, "length");
-            il.Emit(OpCodes.Call, _wcParam);
+            il.Emit(OpCodes.Call, webCrypto.Parameter);
             il.Emit(OpCodes.Ldloc, lenLocal);
-            il.Emit(OpCodes.Call, _wcIntParam);
+            il.Emit(OpCodes.Call, webCrypto.IntParameter);
             il.Emit(OpCodes.Stloc, lenLocal);
 
             var lenOk = il.DefineLabel();
@@ -526,7 +508,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldstr, "HMAC");
             il.Emit(OpCodes.Ldloc, hashLocal);
             il.Emit(OpCodes.Ldnull);
-            il.Emit(OpCodes.Newobj, _cryptoKeyCtor);
+            il.Emit(OpCodes.Newobj, webCrypto.CryptoKeyCtor);
             il.Emit(OpCodes.Ret);
         });
 
@@ -539,9 +521,9 @@ public partial class RuntimeEmitter
 
                 il.Emit(OpCodes.Ldarg_0);
                 il.Emit(OpCodes.Ldstr, "modulusLength");
-                il.Emit(OpCodes.Call, _wcParam);
+                il.Emit(OpCodes.Call, webCrypto.Parameter);
                 il.Emit(OpCodes.Ldc_I4_M1);
-                il.Emit(OpCodes.Call, _wcIntParam);
+                il.Emit(OpCodes.Call, webCrypto.IntParameter);
                 il.Emit(OpCodes.Stloc, lenLocal);
 
                 var modOk = il.DefineLabel();
@@ -553,12 +535,12 @@ public partial class RuntimeEmitter
 
                 il.Emit(OpCodes.Ldarg_0);
                 il.Emit(OpCodes.Ldstr, "hash");
-                il.Emit(OpCodes.Call, _wcParam);
-                il.Emit(OpCodes.Call, _wcMapHash);
+                il.Emit(OpCodes.Call, webCrypto.Parameter);
+                il.Emit(OpCodes.Call, webCrypto.MapHash);
                 il.Emit(OpCodes.Stloc, hashLocal);
 
                 il.Emit(OpCodes.Ldloc, lenLocal);
-                il.Emit(OpCodes.Call, _wcGenRsa);
+                il.Emit(OpCodes.Call, webCrypto.GenRsa);
                 il.Emit(OpCodes.Stloc, pairLocal);
 
                 var hashDict = EmitNewDict(il);
@@ -573,7 +555,7 @@ public partial class RuntimeEmitter
                 });
                 EmitDictAdd(il, algDict, "hash", () => il.Emit(OpCodes.Ldloc, hashDict));
 
-                EmitKeyPairResult(il, runtime, rsa, algDict, pairLocal, extLocal, hashLocal, curveNull: true);
+                EmitKeyPairResult(il, webCrypto, rsa, algDict, pairLocal, extLocal, hashLocal, curveNull: true);
             });
         }
 
@@ -584,19 +566,19 @@ public partial class RuntimeEmitter
             {
                 il.Emit(OpCodes.Ldarg_0);
                 il.Emit(OpCodes.Ldstr, "namedCurve");
-                il.Emit(OpCodes.Call, _wcParam);
-                il.Emit(OpCodes.Call, _wcCanonicalCurve);
+                il.Emit(OpCodes.Call, webCrypto.Parameter);
+                il.Emit(OpCodes.Call, webCrypto.CanonicalCurve);
                 il.Emit(OpCodes.Stloc, curveLocal);
 
                 il.Emit(OpCodes.Ldloc, curveLocal);
-                il.Emit(OpCodes.Call, _wcGenEc);
+                il.Emit(OpCodes.Call, webCrypto.GenEc);
                 il.Emit(OpCodes.Stloc, pairLocal);
 
                 var algDict = EmitNewDict(il);
                 EmitDictAdd(il, algDict, "name", () => il.Emit(OpCodes.Ldstr, ec));
                 EmitDictAdd(il, algDict, "namedCurve", () => il.Emit(OpCodes.Ldloc, curveLocal));
 
-                EmitKeyPairResult(il, runtime, ec, algDict, pairLocal, extLocal, hashLocal: null, curveNull: false, curveLocal);
+                EmitKeyPairResult(il, webCrypto, ec, algDict, pairLocal, extLocal, hashLocal: null, curveNull: false, curveLocal);
             });
         }
 
@@ -638,7 +620,7 @@ public partial class RuntimeEmitter
     /// Builds { publicKey, privateKey } from a WcGen* pair array and returns it resolved.
     /// pair[0] = SPKI (public), pair[1] = PKCS#8 (private).
     /// </summary>
-    private void EmitKeyPairResult(ILGenerator il, EmittedRuntime runtime, string algoName,
+    private void EmitKeyPairResult(ILGenerator il, EmittedWebCryptoImplementation webCrypto, string algoName,
         LocalBuilder algDict, LocalBuilder pairLocal, LocalBuilder extLocal, LocalBuilder? hashLocal,
         bool curveNull, LocalBuilder? curveLocal = null)
     {
@@ -667,7 +649,7 @@ public partial class RuntimeEmitter
                 il.Emit(OpCodes.Ldnull);
             else
                 il.Emit(OpCodes.Ldloc, curveLocal!);
-            il.Emit(OpCodes.Newobj, _cryptoKeyCtor);
+            il.Emit(OpCodes.Newobj, webCrypto.CryptoKeyCtor);
             il.Emit(OpCodes.Stloc, target);
         }
 
@@ -685,6 +667,7 @@ public partial class RuntimeEmitter
     // static object ImportKeyCore(object format, object keyData, object algorithm, object extractable, object usages)
     private MethodBuilder EmitSubtleImportKeyCore(TypeBuilder tb, EmittedRuntime runtime)
     {
+        var webCrypto = runtime.WebCrypto.RequireImplementation();
         var m = tb.DefineMethod("ImportKeyCore", MethodAttributes.Public | MethodAttributes.Static,
             _types.Object, [_types.Object, _types.Object, _types.Object, _types.Object, _types.Object]);
         var il = m.GetILGenerator();
@@ -708,7 +691,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(fmtOk);
 
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Call, _wcAlgoName);
+        il.Emit(OpCodes.Call, webCrypto.AlgorithmName);
         il.Emit(OpCodes.Stloc, nameLocal);
 
         il.Emit(OpCodes.Ldarg_3);
@@ -730,7 +713,7 @@ public partial class RuntimeEmitter
                 il.MarkLabel(rawOk);
 
                 il.Emit(OpCodes.Ldarg_1);
-                il.Emit(OpCodes.Call, _wcToBytes);
+                il.Emit(OpCodes.Call, webCrypto.ToBytes);
                 il.Emit(OpCodes.Stloc, materialLocal);
 
                 if (secret is "AES-GCM" or "AES-CBC")
@@ -753,8 +736,8 @@ public partial class RuntimeEmitter
                 {
                     il.Emit(OpCodes.Ldarg_2);
                     il.Emit(OpCodes.Ldstr, "hash");
-                    il.Emit(OpCodes.Call, _wcParam);
-                    il.Emit(OpCodes.Call, _wcMapHash);
+                    il.Emit(OpCodes.Call, webCrypto.Parameter);
+                    il.Emit(OpCodes.Call, webCrypto.MapHash);
                     il.Emit(OpCodes.Stloc, hashLocal);
 
                     var hashDict = EmitNewDict(il);
@@ -793,7 +776,7 @@ public partial class RuntimeEmitter
                 else
                     il.Emit(OpCodes.Ldnull);
                 il.Emit(OpCodes.Ldnull);
-                il.Emit(OpCodes.Newobj, _cryptoKeyCtor);
+                il.Emit(OpCodes.Newobj, webCrypto.CryptoKeyCtor);
                 il.Emit(OpCodes.Ret);
             });
         }
@@ -806,12 +789,12 @@ public partial class RuntimeEmitter
                 var canonical = rsa == "RSASSA-PKCS1-V1_5" ? "RSASSA-PKCS1-v1_5" : rsa;
                 il.Emit(OpCodes.Ldarg_2);
                 il.Emit(OpCodes.Ldstr, "hash");
-                il.Emit(OpCodes.Call, _wcParam);
-                il.Emit(OpCodes.Call, _wcMapHash);
+                il.Emit(OpCodes.Call, webCrypto.Parameter);
+                il.Emit(OpCodes.Call, webCrypto.MapHash);
                 il.Emit(OpCodes.Stloc, hashLocal);
 
                 var kindLocal = il.DeclareLocal(_types.String);
-                EmitDerImportKind(il, fmtLocal, materialLocal, kindLocal, isRsa: true, sizeLocal);
+                EmitDerImportKind(webCrypto, il, fmtLocal, materialLocal, kindLocal, isRsa: true, sizeLocal);
 
                 var hashDict = EmitNewDict(il);
                 EmitDictAdd(il, hashDict, "name", () => EmitWebHashName(il, hashLocal));
@@ -833,7 +816,7 @@ public partial class RuntimeEmitter
                 il.Emit(OpCodes.Ldstr, rsa);
                 il.Emit(OpCodes.Ldloc, hashLocal);
                 il.Emit(OpCodes.Ldnull);
-                il.Emit(OpCodes.Newobj, _cryptoKeyCtor);
+                il.Emit(OpCodes.Newobj, webCrypto.CryptoKeyCtor);
                 il.Emit(OpCodes.Ret);
             });
         }
@@ -845,8 +828,8 @@ public partial class RuntimeEmitter
             {
                 il.Emit(OpCodes.Ldarg_2);
                 il.Emit(OpCodes.Ldstr, "namedCurve");
-                il.Emit(OpCodes.Call, _wcParam);
-                il.Emit(OpCodes.Call, _wcCanonicalCurve);
+                il.Emit(OpCodes.Call, webCrypto.Parameter);
+                il.Emit(OpCodes.Call, webCrypto.CanonicalCurve);
                 il.Emit(OpCodes.Stloc, curveLocal);
 
                 var kindLocal = il.DeclareLocal(_types.String);
@@ -860,16 +843,16 @@ public partial class RuntimeEmitter
                 il.Emit(OpCodes.Call, strEq);
                 il.Emit(OpCodes.Brfalse, notRaw);
                 il.Emit(OpCodes.Ldarg_1);
-                il.Emit(OpCodes.Call, _wcToBytes);
+                il.Emit(OpCodes.Call, webCrypto.ToBytes);
                 il.Emit(OpCodes.Ldloc, curveLocal);
-                il.Emit(OpCodes.Call, _wcEcRawToSpki);
+                il.Emit(OpCodes.Call, webCrypto.EcRawToSpki);
                 il.Emit(OpCodes.Stloc, materialLocal);
                 il.Emit(OpCodes.Ldstr, "public");
                 il.Emit(OpCodes.Stloc, kindLocal);
                 il.Emit(OpCodes.Br, afterImport);
                 il.MarkLabel(notRaw);
 
-                EmitDerImportKind(il, fmtLocal, materialLocal, kindLocal, isRsa: false, sizeLocal);
+                EmitDerImportKind(webCrypto, il, fmtLocal, materialLocal, kindLocal, isRsa: false, sizeLocal);
                 il.MarkLabel(afterImport);
 
                 var algDict = EmitNewDict(il);
@@ -884,7 +867,7 @@ public partial class RuntimeEmitter
                 il.Emit(OpCodes.Ldstr, ec);
                 il.Emit(OpCodes.Ldnull);
                 il.Emit(OpCodes.Ldloc, curveLocal);
-                il.Emit(OpCodes.Newobj, _cryptoKeyCtor);
+                il.Emit(OpCodes.Newobj, webCrypto.CryptoKeyCtor);
                 il.Emit(OpCodes.Ret);
             });
         }
@@ -902,7 +885,7 @@ public partial class RuntimeEmitter
     /// Shared spki/pkcs8 import: sets material, kind, and (for RSA) sizeLocal; throws on
     /// other formats (jwk is a compiled-mode ceiling).
     /// </summary>
-    private void EmitDerImportKind(ILGenerator il, LocalBuilder fmtLocal, LocalBuilder materialLocal,
+    private void EmitDerImportKind(EmittedWebCryptoImplementation webCrypto, ILGenerator il, LocalBuilder fmtLocal, LocalBuilder materialLocal,
         LocalBuilder kindLocal, bool isRsa, LocalBuilder sizeLocal)
     {
         var strEq = _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String);
@@ -917,19 +900,19 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Brfalse, next);
 
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Call, _wcToBytes);
+            il.Emit(OpCodes.Call, webCrypto.ToBytes);
             il.Emit(OpCodes.Stloc, materialLocal);
 
             il.Emit(OpCodes.Ldloc, materialLocal);
             il.Emit(isPrivate ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
             if (isRsa)
             {
-                il.Emit(OpCodes.Call, _wcImportRsaCheck);
+                il.Emit(OpCodes.Call, webCrypto.ImportRsaCheck);
                 il.Emit(OpCodes.Stloc, sizeLocal);
             }
             else
             {
-                il.Emit(OpCodes.Call, _wcImportEcCheck);
+                il.Emit(OpCodes.Call, webCrypto.ImportEcCheck);
             }
 
             il.Emit(OpCodes.Ldstr, kind);
@@ -945,14 +928,14 @@ public partial class RuntimeEmitter
     }
 
     // static object ExportKeyCore(object format, object key)
-    private MethodBuilder EmitSubtleExportKeyCore(TypeBuilder tb, EmittedRuntime runtime)
+    private MethodBuilder EmitSubtleExportKeyCore(TypeBuilder tb, EmittedWebCryptoImplementation webCrypto)
     {
         var m = tb.DefineMethod("ExportKeyCore", MethodAttributes.Public | MethodAttributes.Static,
             _types.Object, [_types.Object, _types.Object]);
         var il = m.GetILGenerator();
         var strEq = _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String);
 
-        EmitEnsureCryptoKey(il, 1, "exportKey");
+        EmitEnsureCryptoKey(webCrypto, il, 1, "exportKey");
 
         var fmtLocal = il.DeclareLocal(_types.String);
         var kindLocal = il.DeclareLocal(_types.String);
@@ -961,12 +944,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Castclass, _types.String);
         il.Emit(OpCodes.Stloc, fmtLocal);
 
-        EmitLoadKeyField(il, 1, _ckKind);
+        EmitLoadKeyField(webCrypto, il, 1, webCrypto.KeyKindField);
         il.Emit(OpCodes.Stloc, kindLocal);
 
         // extractable check
         var extOk = il.DefineLabel();
-        EmitLoadKeyField(il, 1, _ckExtractable);
+        EmitLoadKeyField(webCrypto, il, 1, webCrypto.KeyExtractableField);
         il.Emit(OpCodes.Brtrue, extOk);
         EmitThrowMessage(il, "crypto.subtle.exportKey: key is not extractable");
         il.MarkLabel(extOk);
@@ -977,19 +960,19 @@ public partial class RuntimeEmitter
             // secret → material
             EmitIfEquals(il, kindLocal, "secret", () =>
             {
-                EmitLoadKeyField(il, 1, _ckMaterial);
-                il.Emit(OpCodes.Call, _wcToArrayBuffer);
+                EmitLoadKeyField(webCrypto, il, 1, webCrypto.KeyMaterialField);
+                il.Emit(OpCodes.Call, webCrypto.ToArrayBuffer);
                 il.Emit(OpCodes.Ret);
             });
             // EC public → uncompressed point
             EmitIfEquals(il, kindLocal, "public", () =>
             {
                 var noCurve = il.DefineLabel();
-                EmitLoadKeyField(il, 1, _ckCurve);
+                EmitLoadKeyField(webCrypto, il, 1, webCrypto.KeyCurveField);
                 il.Emit(OpCodes.Brfalse, noCurve);
-                EmitLoadKeyField(il, 1, _ckMaterial);
-                il.Emit(OpCodes.Call, _wcEcSpkiToRaw);
-                il.Emit(OpCodes.Call, _wcToArrayBuffer);
+                EmitLoadKeyField(webCrypto, il, 1, webCrypto.KeyMaterialField);
+                il.Emit(OpCodes.Call, webCrypto.EcSpkiToRaw);
+                il.Emit(OpCodes.Call, webCrypto.ToArrayBuffer);
                 il.Emit(OpCodes.Ret);
                 il.MarkLabel(noCurve);
             });
@@ -1004,8 +987,8 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldstr, "public");
             il.Emit(OpCodes.Call, strEq);
             il.Emit(OpCodes.Brfalse, bad);
-            EmitLoadKeyField(il, 1, _ckMaterial);
-            il.Emit(OpCodes.Call, _wcToArrayBuffer);
+            EmitLoadKeyField(webCrypto, il, 1, webCrypto.KeyMaterialField);
+            il.Emit(OpCodes.Call, webCrypto.ToArrayBuffer);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(bad);
             EmitThrowMessage(il, "crypto.subtle.exportKey: 'spki' is only valid for public keys");
@@ -1019,8 +1002,8 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldstr, "private");
             il.Emit(OpCodes.Call, strEq);
             il.Emit(OpCodes.Brfalse, bad);
-            EmitLoadKeyField(il, 1, _ckMaterial);
-            il.Emit(OpCodes.Call, _wcToArrayBuffer);
+            EmitLoadKeyField(webCrypto, il, 1, webCrypto.KeyMaterialField);
+            il.Emit(OpCodes.Call, webCrypto.ToArrayBuffer);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(bad);
             EmitThrowMessage(il, "crypto.subtle.exportKey: 'pkcs8' is only valid for private keys");
@@ -1039,12 +1022,12 @@ public partial class RuntimeEmitter
             EmitDictAdd(il, jwkDict, "kty", () => il.Emit(OpCodes.Ldstr, "oct"));
             EmitDictAdd(il, jwkDict, "k", () =>
             {
-                EmitLoadKeyField(il, 1, _ckMaterial);
-                il.Emit(OpCodes.Call, _wcBase64Url);
+                EmitLoadKeyField(webCrypto, il, 1, webCrypto.KeyMaterialField);
+                il.Emit(OpCodes.Call, webCrypto.Base64Url);
             });
             EmitDictAdd(il, jwkDict, "ext", () =>
             {
-                EmitLoadKeyField(il, 1, _ckExtractable);
+                EmitLoadKeyField(webCrypto, il, 1, webCrypto.KeyExtractableField);
                 il.Emit(OpCodes.Box, _types.Boolean);
             });
             il.Emit(OpCodes.Ldloc, jwkDict);
@@ -1058,18 +1041,18 @@ public partial class RuntimeEmitter
     }
 
     // static byte[] EncDecCore(object algorithm, object key, byte[] input, bool encrypt)
-    private MethodBuilder EmitSubtleEncDecCore(TypeBuilder tb, EmittedRuntime runtime)
+    private MethodBuilder EmitSubtleEncDecCore(TypeBuilder tb, EmittedWebCryptoImplementation webCrypto)
     {
         var m = tb.DefineMethod("EncDecCore", MethodAttributes.Public | MethodAttributes.Static,
             _types.ByteArray, [_types.Object, _types.Object, _types.ByteArray, _types.Boolean]);
         var il = m.GetILGenerator();
         var strEq = _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String);
 
-        EmitEnsureCryptoKey(il, 1, "encrypt/decrypt");
+        EmitEnsureCryptoKey(webCrypto, il, 1, "encrypt/decrypt");
 
         var nameLocal = il.DeclareLocal(_types.String);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, _wcAlgoName);
+        il.Emit(OpCodes.Call, webCrypto.AlgorithmName);
         il.Emit(OpCodes.Stloc, nameLocal);
 
         EmitIfEquals(il, nameLocal, "AES-GCM", () =>
@@ -1081,20 +1064,20 @@ public partial class RuntimeEmitter
 
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldstr, "iv");
-            il.Emit(OpCodes.Call, _wcParam);
-            il.Emit(OpCodes.Call, _wcToBytes);
+            il.Emit(OpCodes.Call, webCrypto.Parameter);
+            il.Emit(OpCodes.Call, webCrypto.ToBytes);
             il.Emit(OpCodes.Stloc, ivLocal);
 
             var noAad = il.DefineLabel();
             var aadDone = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldstr, "additionalData");
-            il.Emit(OpCodes.Call, _wcParam);
+            il.Emit(OpCodes.Call, webCrypto.Parameter);
             il.Emit(OpCodes.Stloc, aadObjLocal);
             il.Emit(OpCodes.Ldloc, aadObjLocal);
             il.Emit(OpCodes.Brfalse, noAad);
             il.Emit(OpCodes.Ldloc, aadObjLocal);
-            il.Emit(OpCodes.Call, _wcToBytes);
+            il.Emit(OpCodes.Call, webCrypto.ToBytes);
             il.Emit(OpCodes.Stloc, aadLocal);
             il.Emit(OpCodes.Br, aadDone);
             il.MarkLabel(noAad);
@@ -1104,18 +1087,18 @@ public partial class RuntimeEmitter
 
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldstr, "tagLength");
-            il.Emit(OpCodes.Call, _wcParam);
+            il.Emit(OpCodes.Call, webCrypto.Parameter);
             il.Emit(OpCodes.Ldc_I4, 128);
-            il.Emit(OpCodes.Call, _wcIntParam);
+            il.Emit(OpCodes.Call, webCrypto.IntParameter);
             il.Emit(OpCodes.Stloc, tagLocal);
 
-            EmitLoadKeyField(il, 1, _ckMaterial);
+            EmitLoadKeyField(webCrypto, il, 1, webCrypto.KeyMaterialField);
             il.Emit(OpCodes.Ldloc, ivLocal);
             il.Emit(OpCodes.Ldloc, aadLocal);
             il.Emit(OpCodes.Ldloc, tagLocal);
             il.Emit(OpCodes.Ldarg_2);
             il.Emit(OpCodes.Ldarg_3);
-            il.Emit(OpCodes.Call, _wcAesGcm);
+            il.Emit(OpCodes.Call, webCrypto.AesGcm);
             il.Emit(OpCodes.Ret);
         });
 
@@ -1124,15 +1107,15 @@ public partial class RuntimeEmitter
             var ivLocal = il.DeclareLocal(_types.ByteArray);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldstr, "iv");
-            il.Emit(OpCodes.Call, _wcParam);
-            il.Emit(OpCodes.Call, _wcToBytes);
+            il.Emit(OpCodes.Call, webCrypto.Parameter);
+            il.Emit(OpCodes.Call, webCrypto.ToBytes);
             il.Emit(OpCodes.Stloc, ivLocal);
 
-            EmitLoadKeyField(il, 1, _ckMaterial);
+            EmitLoadKeyField(webCrypto, il, 1, webCrypto.KeyMaterialField);
             il.Emit(OpCodes.Ldloc, ivLocal);
             il.Emit(OpCodes.Ldarg_2);
             il.Emit(OpCodes.Ldarg_3);
-            il.Emit(OpCodes.Call, _wcAesCbc);
+            il.Emit(OpCodes.Call, webCrypto.AesCbc);
             il.Emit(OpCodes.Ret);
         });
 
@@ -1142,20 +1125,20 @@ public partial class RuntimeEmitter
             var noLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldstr, "label");
-            il.Emit(OpCodes.Call, _wcParam);
+            il.Emit(OpCodes.Call, webCrypto.Parameter);
             il.Emit(OpCodes.Brfalse, noLabel);
             EmitThrowMessage(il, "crypto.subtle: RSA-OAEP labels are not supported on this runtime (.NET BCL OAEP has no label parameter)");
             il.MarkLabel(noLabel);
 
             var isPrivLocal = il.DeclareLocal(_types.Boolean);
-            EmitLoadKeyField(il, 1, _ckKind);
+            EmitLoadKeyField(webCrypto, il, 1, webCrypto.KeyKindField);
             il.Emit(OpCodes.Ldstr, "private");
             il.Emit(OpCodes.Call, strEq);
             il.Emit(OpCodes.Stloc, isPrivLocal);
 
             var hashLocal = il.DeclareLocal(_types.String);
             var haveHash = il.DefineLabel();
-            EmitLoadKeyField(il, 1, _ckHash);
+            EmitLoadKeyField(webCrypto, il, 1, webCrypto.KeyHashField);
             il.Emit(OpCodes.Stloc, hashLocal);
             il.Emit(OpCodes.Ldloc, hashLocal);
             il.Emit(OpCodes.Brtrue, haveHash);
@@ -1163,12 +1146,12 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Stloc, hashLocal);
             il.MarkLabel(haveHash);
 
-            EmitLoadKeyField(il, 1, _ckMaterial);
+            EmitLoadKeyField(webCrypto, il, 1, webCrypto.KeyMaterialField);
             il.Emit(OpCodes.Ldloc, isPrivLocal);
             il.Emit(OpCodes.Ldloc, hashLocal);
             il.Emit(OpCodes.Ldarg_2);
             il.Emit(OpCodes.Ldarg_3);
-            il.Emit(OpCodes.Call, _wcRsaOaep);
+            il.Emit(OpCodes.Call, webCrypto.RsaOaep);
             il.Emit(OpCodes.Ret);
         });
 
@@ -1182,27 +1165,27 @@ public partial class RuntimeEmitter
     }
 
     // static object SignVerifyCore(object algorithm, object key, byte[] data, byte[]? sig)
-    private MethodBuilder EmitSubtleSignVerifyCore(TypeBuilder tb, EmittedRuntime runtime)
+    private MethodBuilder EmitSubtleSignVerifyCore(TypeBuilder tb, EmittedWebCryptoImplementation webCrypto)
     {
         var m = tb.DefineMethod("SignVerifyCore", MethodAttributes.Public | MethodAttributes.Static,
             _types.Object, [_types.Object, _types.Object, _types.ByteArray, _types.ByteArray]);
         var il = m.GetILGenerator();
         var strEq = _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String);
 
-        EmitEnsureCryptoKey(il, 1, "sign/verify");
+        EmitEnsureCryptoKey(webCrypto, il, 1, "sign/verify");
 
         var nameLocal = il.DeclareLocal(_types.String);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, _wcAlgoName);
+        il.Emit(OpCodes.Call, webCrypto.AlgorithmName);
         il.Emit(OpCodes.Stloc, nameLocal);
 
         EmitIfEquals(il, nameLocal, "HMAC", () =>
         {
             var computedLocal = il.DeclareLocal(_types.ByteArray);
-            EmitLoadKeyField(il, 1, _ckHash);
-            EmitLoadKeyField(il, 1, _ckMaterial);
+            EmitLoadKeyField(webCrypto, il, 1, webCrypto.KeyHashField);
+            EmitLoadKeyField(webCrypto, il, 1, webCrypto.KeyMaterialField);
             il.Emit(OpCodes.Ldarg_2);
-            il.Emit(OpCodes.Call, _wcHmac);
+            il.Emit(OpCodes.Call, webCrypto.Hmac);
             il.Emit(OpCodes.Stloc, computedLocal);
 
             var verifyLabel = il.DefineLabel();
@@ -1234,34 +1217,34 @@ public partial class RuntimeEmitter
                     var saltOk = il.DefineLabel();
                     il.Emit(OpCodes.Ldarg_0);
                     il.Emit(OpCodes.Ldstr, "saltLength");
-                    il.Emit(OpCodes.Call, _wcParam);
+                    il.Emit(OpCodes.Call, webCrypto.Parameter);
                     il.Emit(OpCodes.Ldc_I4_M1);
-                    il.Emit(OpCodes.Call, _wcIntParam);
+                    il.Emit(OpCodes.Call, webCrypto.IntParameter);
                     il.Emit(OpCodes.Stloc, saltLocal);
                     il.Emit(OpCodes.Ldloc, saltLocal);
                     il.Emit(OpCodes.Ldc_I4_0);
                     il.Emit(OpCodes.Blt, saltOk); // unspecified
                     il.Emit(OpCodes.Ldloc, saltLocal);
-                    EmitLoadKeyField(il, 1, _ckHash);
-                    il.Emit(OpCodes.Call, _wcDigestLen);
+                    EmitLoadKeyField(webCrypto, il, 1, webCrypto.KeyHashField);
+                    il.Emit(OpCodes.Call, webCrypto.DigestLen);
                     il.Emit(OpCodes.Beq, saltOk);
                     EmitThrowMessage(il, "crypto.subtle: RSA-PSS saltLength is not supported on this runtime (.NET always uses the digest length)");
                     il.MarkLabel(saltOk);
                 }
 
                 var isPrivLocal = il.DeclareLocal(_types.Boolean);
-                EmitLoadKeyField(il, 1, _ckKind);
+                EmitLoadKeyField(webCrypto, il, 1, webCrypto.KeyKindField);
                 il.Emit(OpCodes.Ldstr, "private");
                 il.Emit(OpCodes.Call, strEq);
                 il.Emit(OpCodes.Stloc, isPrivLocal);
 
-                EmitLoadKeyField(il, 1, _ckMaterial);
+                EmitLoadKeyField(webCrypto, il, 1, webCrypto.KeyMaterialField);
                 il.Emit(OpCodes.Ldloc, isPrivLocal);
-                EmitLoadKeyField(il, 1, _ckHash);
+                EmitLoadKeyField(webCrypto, il, 1, webCrypto.KeyHashField);
                 il.Emit(pss ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
                 il.Emit(OpCodes.Ldarg_2);
                 il.Emit(OpCodes.Ldarg_3);
-                il.Emit(OpCodes.Call, _wcRsaSignVerify);
+                il.Emit(OpCodes.Call, webCrypto.RsaSignVerify);
                 il.Emit(OpCodes.Ret);
             });
         }
@@ -1271,22 +1254,22 @@ public partial class RuntimeEmitter
             var hashLocal = il.DeclareLocal(_types.String);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldstr, "hash");
-            il.Emit(OpCodes.Call, _wcParam);
-            il.Emit(OpCodes.Call, _wcMapHash);
+            il.Emit(OpCodes.Call, webCrypto.Parameter);
+            il.Emit(OpCodes.Call, webCrypto.MapHash);
             il.Emit(OpCodes.Stloc, hashLocal);
 
             var isPrivLocal = il.DeclareLocal(_types.Boolean);
-            EmitLoadKeyField(il, 1, _ckKind);
+            EmitLoadKeyField(webCrypto, il, 1, webCrypto.KeyKindField);
             il.Emit(OpCodes.Ldstr, "private");
             il.Emit(OpCodes.Call, strEq);
             il.Emit(OpCodes.Stloc, isPrivLocal);
 
-            EmitLoadKeyField(il, 1, _ckMaterial);
+            EmitLoadKeyField(webCrypto, il, 1, webCrypto.KeyMaterialField);
             il.Emit(OpCodes.Ldloc, isPrivLocal);
             il.Emit(OpCodes.Ldloc, hashLocal);
             il.Emit(OpCodes.Ldarg_2);
             il.Emit(OpCodes.Ldarg_3);
-            il.Emit(OpCodes.Call, _wcEcdsaSignVerify);
+            il.Emit(OpCodes.Call, webCrypto.EcdsaSignVerify);
             il.Emit(OpCodes.Ret);
         });
 
@@ -1300,13 +1283,13 @@ public partial class RuntimeEmitter
     }
 
     // static byte[] DeriveBitsCore(object algorithm, object baseKey, int lengthBits)
-    private MethodBuilder EmitSubtleDeriveBitsCore(TypeBuilder tb, EmittedRuntime runtime)
+    private MethodBuilder EmitSubtleDeriveBitsCore(TypeBuilder tb, EmittedWebCryptoImplementation webCrypto)
     {
         var m = tb.DefineMethod("DeriveBitsCore", MethodAttributes.Public | MethodAttributes.Static,
             _types.ByteArray, [_types.Object, _types.Object, _types.Int32]);
         var il = m.GetILGenerator();
 
-        EmitEnsureCryptoKey(il, 1, "deriveBits");
+        EmitEnsureCryptoKey(webCrypto, il, 1, "deriveBits");
 
         // length must be a positive multiple of 8
         var lenOk = il.DefineLabel();
@@ -1325,7 +1308,7 @@ public partial class RuntimeEmitter
         var nameLocal = il.DeclareLocal(_types.String);
         var lenBytesLocal = il.DeclareLocal(_types.Int32);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, _wcAlgoName);
+        il.Emit(OpCodes.Call, webCrypto.AlgorithmName);
         il.Emit(OpCodes.Stloc, nameLocal);
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Ldc_I4_8);
@@ -1340,21 +1323,21 @@ public partial class RuntimeEmitter
 
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldstr, "hash");
-            il.Emit(OpCodes.Call, _wcParam);
-            il.Emit(OpCodes.Call, _wcMapHash);
+            il.Emit(OpCodes.Call, webCrypto.Parameter);
+            il.Emit(OpCodes.Call, webCrypto.MapHash);
             il.Emit(OpCodes.Stloc, hashLocal);
 
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldstr, "salt");
-            il.Emit(OpCodes.Call, _wcParam);
-            il.Emit(OpCodes.Call, _wcToBytes);
+            il.Emit(OpCodes.Call, webCrypto.Parameter);
+            il.Emit(OpCodes.Call, webCrypto.ToBytes);
             il.Emit(OpCodes.Stloc, saltLocal);
 
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldstr, "iterations");
-            il.Emit(OpCodes.Call, _wcParam);
+            il.Emit(OpCodes.Call, webCrypto.Parameter);
             il.Emit(OpCodes.Ldc_I4_M1);
-            il.Emit(OpCodes.Call, _wcIntParam);
+            il.Emit(OpCodes.Call, webCrypto.IntParameter);
             il.Emit(OpCodes.Stloc, iterLocal);
 
             var iterOk = il.DefineLabel();
@@ -1364,12 +1347,12 @@ public partial class RuntimeEmitter
             EmitThrowMessage(il, "crypto.subtle.deriveBits: PBKDF2 requires iterations");
             il.MarkLabel(iterOk);
 
-            EmitLoadKeyField(il, 1, _ckMaterial);
+            EmitLoadKeyField(webCrypto, il, 1, webCrypto.KeyMaterialField);
             il.Emit(OpCodes.Ldloc, saltLocal);
             il.Emit(OpCodes.Ldloc, iterLocal);
             il.Emit(OpCodes.Ldloc, hashLocal);
             il.Emit(OpCodes.Ldloc, lenBytesLocal);
-            il.Emit(OpCodes.Call, _wcPbkdf2);
+            il.Emit(OpCodes.Call, webCrypto.Pbkdf2);
             il.Emit(OpCodes.Ret);
         });
 
@@ -1381,8 +1364,8 @@ public partial class RuntimeEmitter
 
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldstr, "hash");
-            il.Emit(OpCodes.Call, _wcParam);
-            il.Emit(OpCodes.Call, _wcMapHash);
+            il.Emit(OpCodes.Call, webCrypto.Parameter);
+            il.Emit(OpCodes.Call, webCrypto.MapHash);
             il.Emit(OpCodes.Stloc, hashLocal);
 
             void EmitOptionalBytes(string param, LocalBuilder target)
@@ -1391,10 +1374,10 @@ public partial class RuntimeEmitter
                 var done = il.DefineLabel();
                 il.Emit(OpCodes.Ldarg_0);
                 il.Emit(OpCodes.Ldstr, param);
-                il.Emit(OpCodes.Call, _wcParam);
+                il.Emit(OpCodes.Call, webCrypto.Parameter);
                 il.Emit(OpCodes.Dup);
                 il.Emit(OpCodes.Brfalse, missing);
-                il.Emit(OpCodes.Call, _wcToBytes);
+                il.Emit(OpCodes.Call, webCrypto.ToBytes);
                 il.Emit(OpCodes.Stloc, target);
                 il.Emit(OpCodes.Br, done);
                 il.MarkLabel(missing);
@@ -1408,11 +1391,11 @@ public partial class RuntimeEmitter
             EmitOptionalBytes("info", infoLocal);
 
             il.Emit(OpCodes.Ldloc, hashLocal);
-            EmitLoadKeyField(il, 1, _ckMaterial);
+            EmitLoadKeyField(webCrypto, il, 1, webCrypto.KeyMaterialField);
             il.Emit(OpCodes.Ldloc, lenBytesLocal);
             il.Emit(OpCodes.Ldloc, saltLocal);
             il.Emit(OpCodes.Ldloc, infoLocal);
-            il.Emit(OpCodes.Call, _wcHkdf);
+            il.Emit(OpCodes.Call, webCrypto.Hkdf);
             il.Emit(OpCodes.Ret);
         });
 
@@ -1422,20 +1405,20 @@ public partial class RuntimeEmitter
             var pubLocal = il.DeclareLocal(_types.Object);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldstr, "public");
-            il.Emit(OpCodes.Call, _wcParam);
+            il.Emit(OpCodes.Call, webCrypto.Parameter);
             il.Emit(OpCodes.Stloc, pubLocal);
             il.Emit(OpCodes.Ldloc, pubLocal);
-            il.Emit(OpCodes.Isinst, _cryptoKeyType);
+            il.Emit(OpCodes.Isinst, webCrypto.CryptoKeyType);
             il.Emit(OpCodes.Brtrue, pubOk);
             EmitThrowMessage(il, "crypto.subtle.deriveBits: ECDH requires { public: CryptoKey }");
             il.MarkLabel(pubOk);
 
-            EmitLoadKeyField(il, 1, _ckMaterial);
+            EmitLoadKeyField(webCrypto, il, 1, webCrypto.KeyMaterialField);
             il.Emit(OpCodes.Ldloc, pubLocal);
-            il.Emit(OpCodes.Castclass, _cryptoKeyType);
-            il.Emit(OpCodes.Ldfld, _ckMaterial);
+            il.Emit(OpCodes.Castclass, webCrypto.CryptoKeyType);
+            il.Emit(OpCodes.Ldfld, webCrypto.KeyMaterialField);
             il.Emit(OpCodes.Ldloc, lenBytesLocal);
-            il.Emit(OpCodes.Call, _wcEcdhDerive);
+            il.Emit(OpCodes.Call, webCrypto.EcdhDerive);
             il.Emit(OpCodes.Ret);
         });
 
@@ -1453,7 +1436,7 @@ public partial class RuntimeEmitter
     /// the target length, derives, and leaves the imported $CryptoKey (raw) on the stack.
     /// Emitted inside EmitPromiseMethod's try block (instance method — args start at 1).
     /// </summary>
-    private void EmitDeriveKeyBody(ILGenerator il)
+    private void EmitDeriveKeyBody(EmittedWebCryptoImplementation webCrypto, ILGenerator il)
     {
         var strEq = _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String);
 
@@ -1462,7 +1445,7 @@ public partial class RuntimeEmitter
         var bitsLocal = il.DeclareLocal(_types.ByteArray);
 
         il.Emit(OpCodes.Ldarg_3);
-        il.Emit(OpCodes.Call, _wcAlgoName);
+        il.Emit(OpCodes.Call, webCrypto.AlgorithmName);
         il.Emit(OpCodes.Stloc, targetLocal);
 
         // AES targets: length from derivedKeyType
@@ -1488,9 +1471,9 @@ public partial class RuntimeEmitter
         il.MarkLabel(isAes);
         il.Emit(OpCodes.Ldarg_3);
         il.Emit(OpCodes.Ldstr, "length");
-        il.Emit(OpCodes.Call, _wcParam);
+        il.Emit(OpCodes.Call, webCrypto.Parameter);
         il.Emit(OpCodes.Ldc_I4_M1);
-        il.Emit(OpCodes.Call, _wcIntParam);
+        il.Emit(OpCodes.Call, webCrypto.IntParameter);
         il.Emit(OpCodes.Stloc, lenLocal);
         il.Emit(OpCodes.Br, haveLen);
 
@@ -1500,8 +1483,8 @@ public partial class RuntimeEmitter
             var hashLocal = il.DeclareLocal(_types.String);
             il.Emit(OpCodes.Ldarg_3);
             il.Emit(OpCodes.Ldstr, "hash");
-            il.Emit(OpCodes.Call, _wcParam);
-            il.Emit(OpCodes.Call, _wcMapHash);
+            il.Emit(OpCodes.Call, webCrypto.Parameter);
+            il.Emit(OpCodes.Call, webCrypto.MapHash);
             il.Emit(OpCodes.Stloc, hashLocal);
 
             var use1024 = il.DefineLabel();
@@ -1523,9 +1506,9 @@ public partial class RuntimeEmitter
 
             il.Emit(OpCodes.Ldarg_3);
             il.Emit(OpCodes.Ldstr, "length");
-            il.Emit(OpCodes.Call, _wcParam);
+            il.Emit(OpCodes.Call, webCrypto.Parameter);
             il.Emit(OpCodes.Ldloc, lenLocal);
-            il.Emit(OpCodes.Call, _wcIntParam);
+            il.Emit(OpCodes.Call, webCrypto.IntParameter);
             il.Emit(OpCodes.Stloc, lenLocal);
         }
 
@@ -1533,7 +1516,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Ldloc, lenLocal);
-        il.Emit(OpCodes.Call, _subtleDeriveBitsCore);
+        il.Emit(OpCodes.Call, webCrypto.SubtleDeriveBitsCore);
         il.Emit(OpCodes.Stloc, bitsLocal);
 
         // ImportKeyCore("raw", bits, derivedKeyType, extractable, usages)
@@ -1542,18 +1525,19 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_3);
         il.Emit(OpCodes.Ldarg, 4);
         il.Emit(OpCodes.Ldarg, 5);
-        il.Emit(OpCodes.Call, _subtleImportKeyCore);
+        il.Emit(OpCodes.Call, webCrypto.SubtleImportKeyCore);
     }
 
     // ───────────────────────────── $WebCrypto ─────────────────────────────
 
     private void EmitWebCryptoType(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
+        var webCrypto = runtime.WebCrypto.RequireImplementation();
         var tb = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$WebCrypto",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.Class,
             _types.Object);
-        _webCryptoType = tb;
+        webCrypto.Type = tb;
 
         // static singleton fields
         var instanceField = tb.DefineField("_instance", _types.Object, FieldAttributes.Public | FieldAttributes.Static);
@@ -1568,7 +1552,7 @@ public partial class RuntimeEmitter
             var have = il.DefineLabel();
             il.Emit(OpCodes.Ldsfld, subtleField);
             il.Emit(OpCodes.Brtrue, have);
-            il.Emit(OpCodes.Newobj, _subtleCtor);
+            il.Emit(OpCodes.Newobj, webCrypto.SubtleCtor);
             il.Emit(OpCodes.Stsfld, subtleField);
             il.MarkLabel(have);
             il.Emit(OpCodes.Ldsfld, subtleField);
@@ -1577,7 +1561,7 @@ public partial class RuntimeEmitter
         // getRandomValues(object) → object (fills in place, returns the argument)
         var grv = tb.DefineMethod("getRandomValues", MethodAttributes.Public | MethodAttributes.HideBySig,
             _types.Object, [_types.Object]);
-        _webCryptoGetRandomValues = grv;
+        webCrypto.GetRandomValues = grv;
         {
             var il = grv.GetILGenerator();
             var fill = typeof(System.Security.Cryptography.RandomNumberGenerator)
@@ -1677,7 +1661,7 @@ public partial class RuntimeEmitter
         var created = tb.CreateType()!;
 
         // Fill the Phase1-reserved GetWebCryptoObject body: lazily-created singleton.
-        var body = (MethodBuilder)runtime.GetWebCryptoObject;
+        var body = (MethodBuilder)runtime.WebCrypto.GetObject;
         var bil = body.GetILGenerator();
         var haveInstance = bil.DefineLabel();
         bil.Emit(OpCodes.Ldsfld, instanceField);
@@ -1689,11 +1673,19 @@ public partial class RuntimeEmitter
         bil.Emit(OpCodes.Ret);
     }
 
-    /// <summary>Stub GetWebCryptoObject body for programs compiled without crypto.</summary>
-    private void EmitGetWebCryptoObjectStub(EmittedRuntime runtime)
+    internal void DeclareGetWebCryptoObject(TypeBuilder typeBuilder, EmittedWebCryptoRuntime webCrypto)
     {
-        var body = (MethodBuilder)runtime.GetWebCryptoObject;
-        var il = body.GetILGenerator();
+        webCrypto.GetObject = typeBuilder.DefineMethod(
+            "GetWebCryptoObject",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object,
+            Type.EmptyTypes);
+    }
+
+    /// <summary>Stub GetWebCryptoObject body for programs compiled without crypto.</summary>
+    internal void EmitGetWebCryptoObjectStub(EmittedWebCryptoRuntime webCrypto)
+    {
+        var il = webCrypto.GetObject.GetILGenerator();
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ret);
     }

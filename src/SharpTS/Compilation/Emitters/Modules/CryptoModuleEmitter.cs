@@ -107,10 +107,10 @@ public sealed class CryptoModuleEmitter : IBuiltInModuleEmitter
                 return true;
             // WebCrypto (#1063): crypto.webcrypto and crypto.subtle
             case "webcrypto":
-                il.Emit(OpCodes.Call, ctx.Runtime!.GetWebCryptoObject);
+                il.Emit(OpCodes.Call, ctx.Runtime!.WebCrypto.GetObject);
                 return true;
             case "subtle":
-                il.Emit(OpCodes.Call, ctx.Runtime!.GetWebCryptoObject);
+                il.Emit(OpCodes.Call, ctx.Runtime!.WebCrypto.GetObject);
                 il.Emit(OpCodes.Ldstr, "subtle");
                 il.Emit(OpCodes.Call, ctx.Runtime!.GetProperty);
                 return true;

@@ -1540,7 +1540,7 @@ public partial class RuntimeEmitter
         else
         {
             // The Phase1-reserved GetWebCryptoObject must still get a body.
-            EmitGetWebCryptoObjectStub(runtime);
+            EmitGetWebCryptoObjectStub(runtime.WebCrypto);
         }
         // Util inspect helper bodies (console.dir depends on them; the rest of
         // the emitted util surface died when util moved to stdlib/node/util.ts).

@@ -2510,5 +2510,5 @@ public class EmittedRuntime
     // WebCrypto (#1063) — GetWebCryptoObject() → the $WebCrypto singleton
     // (globalThis.crypto / crypto.webcrypto). Reserved in DefineRuntimeClassPhase1;
     // body filled by EmitWebCryptoTypes (or the null stub when crypto is unused).
-    public MethodBuilder GetWebCryptoObject { get; set; } = null!;
+    public EmittedWebCryptoRuntime WebCrypto { get; } = new();
 }

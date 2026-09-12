@@ -107,11 +107,7 @@ public partial class RuntimeEmitter
         // Body emitted by EmitWebCryptoTypes (crypto in use) or the stub; the
         // signature must exist earlier because GlobalThisGetProperty resolves
         // `globalThis.crypto` through it.
-        runtime.GetWebCryptoObject = typeBuilder.DefineMethod(
-            "GetWebCryptoObject",
-            MethodAttributes.Public | MethodAttributes.Static,
-            _types.Object,
-            Type.EmptyTypes);
+        DeclareGetWebCryptoObject(typeBuilder, runtime.WebCrypto);
 
         // Reserve GlobalThisGetProperty(string) → object and
         // GlobalThisSetProperty(string, object) → void. EmitGlobalThisMethods

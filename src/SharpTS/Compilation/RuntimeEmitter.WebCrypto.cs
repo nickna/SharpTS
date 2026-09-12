@@ -13,36 +13,6 @@ namespace SharpTS.Compilation;
 public partial class RuntimeEmitter
 {
     // Cross-file references for the $SubtleCrypto/$WebCrypto type emitters.
-    private MethodBuilder _wcHashAlg = null!;        // (string) → HashAlgorithmName
-    private MethodBuilder _wcMapHash = null!;        // (object) → string (lowercase)
-    private MethodBuilder _wcAlgoName = null!;       // (object) → string (UPPER)
-    private MethodBuilder _wcParam = null!;          // (object, string) → object (undefined→null)
-    private MethodBuilder _wcIntParam = null!;       // (object, int) → int
-    private MethodBuilder _wcToBytes = null!;        // (object) → byte[]
-    private MethodBuilder _wcToArrayBuffer = null!;  // (byte[]) → object
-    private MethodBuilder _wcResolved = null!;       // (object) → object ($Promise)
-    private MethodBuilder _wcRejected = null!;       // (Exception) → object (rejected $Promise)
-    private MethodBuilder _wcThrow = null!;          // (string) → object (throws)
-    private MethodBuilder _wcDigest = null!;         // (string, byte[]) → byte[]
-    private MethodBuilder _wcHmac = null!;           // (string, byte[], byte[]) → byte[]
-    private MethodBuilder _wcDigestLen = null!;      // (string) → int
-    private MethodBuilder _wcAesGcm = null!;         // (byte[], byte[], byte[]?, int, byte[], bool) → byte[]
-    private MethodBuilder _wcAesCbc = null!;         // (byte[], byte[], byte[], bool) → byte[]
-    private MethodBuilder _wcRsaOaep = null!;        // (byte[], bool, string, byte[], bool) → byte[]
-    private MethodBuilder _wcRsaSignVerify = null!;  // (byte[], bool, string, bool, byte[], byte[]?) → object
-    private MethodBuilder _wcEcdsaSignVerify = null!;// (byte[], bool, string, byte[], byte[]?) → object
-    private MethodBuilder _wcPbkdf2 = null!;         // (byte[], byte[], int, string, int) → byte[]
-    private MethodBuilder _wcHkdf = null!;           // (string, byte[], int, byte[], byte[]) → byte[]
-    private MethodBuilder _wcEcdhDerive = null!;     // (byte[], byte[], int) → byte[]
-    private MethodBuilder _wcGenRsa = null!;         // (int) → object[] { spki, pkcs8 }
-    private MethodBuilder _wcGenEc = null!;          // (string) → object[] { spki, pkcs8 }
-    private MethodBuilder _wcCurve = null!;          // (string canonical) → ECCurve
-    private MethodBuilder _wcCanonicalCurve = null!; // (object) → string ("P-256"...)
-    private MethodBuilder _wcEcRawToSpki = null!;    // (byte[], string) → byte[]
-    private MethodBuilder _wcEcSpkiToRaw = null!;    // (byte[]) → byte[]
-    private MethodBuilder _wcImportRsaCheck = null!; // (byte[], bool) → int (KeySize)
-    private MethodBuilder _wcImportEcCheck = null!;  // (byte[], bool) → void
-    private MethodBuilder _wcBase64Url = null!;      // (byte[]) → string
 
     private static readonly (string Lower, string Web)[] _wcHashes =
         [("sha1", "SHA-1"), ("sha256", "SHA-256"), ("sha384", "SHA-384"), ("sha512", "SHA-512")];
@@ -52,55 +22,56 @@ public partial class RuntimeEmitter
     /// <summary>Emits all WebCrypto byte-level helpers onto $Runtime.</summary>
     private void EmitWebCryptoRuntimeHelpers(TypeBuilder tb, EmittedRuntime runtime)
     {
-        EmitWcThrow(tb);
-        EmitWcHashAlg(tb);
-        EmitWcDigestLen(tb);
+        var webCrypto = runtime.WebCrypto.RequireImplementation();
+        EmitWcThrow(webCrypto, tb);
+        EmitWcHashAlg(webCrypto, tb);
+        EmitWcDigestLen(webCrypto, tb);
         EmitWcMapHash(tb, runtime);
         EmitWcAlgoName(tb, runtime);
         EmitWcParam(tb, runtime);
-        EmitWcIntParam(tb);
+        EmitWcIntParam(webCrypto, tb);
         EmitWcToBytes(tb, runtime);
         EmitWcToArrayBuffer(tb, runtime);
         EmitWcResolved(tb, runtime);
-        EmitWcDigest(tb);
-        EmitWcHmac(tb);
-        EmitWcAesGcm(tb);
-        EmitWcAesCbc(tb);
-        EmitWcRsaOaep(tb);
-        EmitWcRsaSignVerify(tb);
-        EmitWcEcdsaSignVerify(tb);
-        EmitWcPbkdf2(tb);
-        EmitWcHkdf(tb);
-        EmitWcEcdhDerive(tb);
-        EmitWcCurve(tb);
-        EmitWcCanonicalCurve(tb, runtime);
-        EmitWcGenRsa(tb);
-        EmitWcGenEc(tb);
-        EmitWcEcRawToSpki(tb);
-        EmitWcEcSpkiToRaw(tb);
-        EmitWcImportRsaCheck(tb);
-        EmitWcImportEcCheck(tb);
-        EmitWcBase64Url(tb);
+        EmitWcDigest(webCrypto, tb);
+        EmitWcHmac(webCrypto, tb);
+        EmitWcAesGcm(webCrypto, tb);
+        EmitWcAesCbc(webCrypto, tb);
+        EmitWcRsaOaep(webCrypto, tb);
+        EmitWcRsaSignVerify(webCrypto, tb);
+        EmitWcEcdsaSignVerify(webCrypto, tb);
+        EmitWcPbkdf2(webCrypto, tb);
+        EmitWcHkdf(webCrypto, tb);
+        EmitWcEcdhDerive(webCrypto, tb);
+        EmitWcCurve(webCrypto, tb);
+        EmitWcCanonicalCurve(tb, webCrypto);
+        EmitWcGenRsa(webCrypto, tb);
+        EmitWcGenEc(webCrypto, tb);
+        EmitWcEcRawToSpki(webCrypto, tb);
+        EmitWcEcSpkiToRaw(webCrypto, tb);
+        EmitWcImportRsaCheck(webCrypto, tb);
+        EmitWcImportEcCheck(webCrypto, tb);
+        EmitWcBase64Url(webCrypto, tb);
     }
 
     private MethodBuilder WcDefine(TypeBuilder tb, string name, Type returnType, Type[] args)
         => tb.DefineMethod(name, MethodAttributes.Public | MethodAttributes.Static, returnType, args);
 
     /// <summary>Emits: object WcThrow(string message) — throws ArgumentException.</summary>
-    private void EmitWcThrow(TypeBuilder tb)
+    private void EmitWcThrow(EmittedWebCryptoImplementation webCrypto, TypeBuilder tb)
     {
-        _wcThrow = WcDefine(tb, "WcThrow", _types.Object, [_types.String]);
-        var il = _wcThrow.GetILGenerator();
+        webCrypto.Throw = WcDefine(tb, "WcThrow", _types.Object, [_types.String]);
+        var il = webCrypto.Throw.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Newobj, _types.ArgumentExceptionCtorString);
         il.Emit(OpCodes.Throw);
     }
 
     /// <summary>Emits: HashAlgorithmName WcHashAlg(string lower).</summary>
-    private void EmitWcHashAlg(TypeBuilder tb)
+    private void EmitWcHashAlg(EmittedWebCryptoImplementation webCrypto, TypeBuilder tb)
     {
-        _wcHashAlg = WcDefine(tb, "WcHashAlg", typeof(HashAlgorithmName), [_types.String]);
-        var il = _wcHashAlg.GetILGenerator();
+        webCrypto.HashAlgorithm = WcDefine(tb, "WcHashAlg", typeof(HashAlgorithmName), [_types.String]);
+        var il = webCrypto.HashAlgorithm.GetILGenerator();
         var strEq = _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String);
 
         foreach (var (lower, _) in _wcHashes)
@@ -123,10 +94,10 @@ public partial class RuntimeEmitter
     }
 
     /// <summary>Emits: int WcDigestLen(string lower).</summary>
-    private void EmitWcDigestLen(TypeBuilder tb)
+    private void EmitWcDigestLen(EmittedWebCryptoImplementation webCrypto, TypeBuilder tb)
     {
-        _wcDigestLen = WcDefine(tb, "WcDigestLen", _types.Int32, [_types.String]);
-        var il = _wcDigestLen.GetILGenerator();
+        webCrypto.DigestLen = WcDefine(tb, "WcDigestLen", _types.Int32, [_types.String]);
+        var il = webCrypto.DigestLen.GetILGenerator();
         var strEq = _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String);
         (string, int)[] lens = [("sha1", 20), ("sha256", 32), ("sha384", 48), ("sha512", 64)];
         foreach (var (lower, len) in lens)
@@ -149,8 +120,9 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitWcMapHash(TypeBuilder tb, EmittedRuntime runtime)
     {
-        _wcMapHash = WcDefine(tb, "WcMapHash", _types.String, [_types.Object]);
-        var il = _wcMapHash.GetILGenerator();
+        var webCrypto = runtime.WebCrypto.RequireImplementation();
+        webCrypto.MapHash = WcDefine(tb, "WcMapHash", _types.String, [_types.Object]);
+        var il = webCrypto.MapHash.GetILGenerator();
         var strEq = _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String);
 
         var nameLocal = il.DeclareLocal(_types.String);
@@ -207,8 +179,9 @@ public partial class RuntimeEmitter
     /// <summary>Emits: string WcAlgoName(object) — string or { name } → UPPER name.</summary>
     private void EmitWcAlgoName(TypeBuilder tb, EmittedRuntime runtime)
     {
-        _wcAlgoName = WcDefine(tb, "WcAlgoName", _types.String, [_types.Object]);
-        var il = _wcAlgoName.GetILGenerator();
+        var webCrypto = runtime.WebCrypto.RequireImplementation();
+        webCrypto.AlgorithmName = WcDefine(tb, "WcAlgoName", _types.String, [_types.Object]);
+        var il = webCrypto.AlgorithmName.GetILGenerator();
 
         var nameLocal = il.DeclareLocal(_types.String);
         var isStringLabel = il.DefineLabel();
@@ -250,8 +223,9 @@ public partial class RuntimeEmitter
     /// <summary>Emits: object WcParam(object algo, string name) — property read, undefined → null.</summary>
     private void EmitWcParam(TypeBuilder tb, EmittedRuntime runtime)
     {
-        _wcParam = WcDefine(tb, "WcParam", _types.Object, [_types.Object, _types.String]);
-        var il = _wcParam.GetILGenerator();
+        var webCrypto = runtime.WebCrypto.RequireImplementation();
+        webCrypto.Parameter = WcDefine(tb, "WcParam", _types.Object, [_types.Object, _types.String]);
+        var il = webCrypto.Parameter.GetILGenerator();
 
         var nullLabel = il.DefineLabel();
         var valueLocal = il.DeclareLocal(_types.Object);
@@ -278,10 +252,10 @@ public partial class RuntimeEmitter
     }
 
     /// <summary>Emits: int WcIntParam(object boxed, int defaultValue).</summary>
-    private void EmitWcIntParam(TypeBuilder tb)
+    private void EmitWcIntParam(EmittedWebCryptoImplementation webCrypto, TypeBuilder tb)
     {
-        _wcIntParam = WcDefine(tb, "WcIntParam", _types.Int32, [_types.Object, _types.Int32]);
-        var il = _wcIntParam.GetILGenerator();
+        webCrypto.IntParameter = WcDefine(tb, "WcIntParam", _types.Int32, [_types.Object, _types.Int32]);
+        var il = webCrypto.IntParameter.GetILGenerator();
 
         var defaultLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
@@ -306,8 +280,9 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitWcToBytes(TypeBuilder tb, EmittedRuntime runtime)
     {
-        _wcToBytes = WcDefine(tb, "WcToBytes", _types.ByteArray, [_types.Object]);
-        var il = _wcToBytes.GetILGenerator();
+        var webCrypto = runtime.WebCrypto.RequireImplementation();
+        webCrypto.ToBytes = WcDefine(tb, "WcToBytes", _types.ByteArray, [_types.Object]);
+        var il = webCrypto.ToBytes.GetILGenerator();
 
         var throwLabel = il.DefineLabel();
 
@@ -437,8 +412,9 @@ public partial class RuntimeEmitter
     /// <summary>Emits: object WcToArrayBuffer(byte[]) — new $ArrayBuffer with copied contents.</summary>
     private void EmitWcToArrayBuffer(TypeBuilder tb, EmittedRuntime runtime)
     {
-        _wcToArrayBuffer = WcDefine(tb, "WcToArrayBuffer", _types.Object, [_types.ByteArray]);
-        var il = _wcToArrayBuffer.GetILGenerator();
+        var webCrypto = runtime.WebCrypto.RequireImplementation();
+        webCrypto.ToArrayBuffer = WcDefine(tb, "WcToArrayBuffer", _types.Object, [_types.ByteArray]);
+        var il = webCrypto.ToArrayBuffer.GetILGenerator();
 
         var abLocal = il.DeclareLocal(_types.Object);
 
@@ -468,8 +444,9 @@ public partial class RuntimeEmitter
     /// <summary>Emits: object WcResolved(object value) — new $Promise(Task.FromResult(value)).</summary>
     private void EmitWcResolved(TypeBuilder tb, EmittedRuntime runtime)
     {
-        _wcResolved = WcDefine(tb, "WcResolved", _types.Object, [_types.Object]);
-        var il = _wcResolved.GetILGenerator();
+        var webCrypto = runtime.WebCrypto.RequireImplementation();
+        webCrypto.Resolved = WcDefine(tb, "WcResolved", _types.Object, [_types.Object]);
+        var il = webCrypto.Resolved.GetILGenerator();
 
         var fromResult = EmitGenerics.MakeGenericMethod(typeof(System.Threading.Tasks.Task)
             .GetMethod("FromResult")!, _types.Object);
@@ -482,8 +459,8 @@ public partial class RuntimeEmitter
         // object WcRejected(Exception ex) — new $Promise(Task.FromException(ex)).
         // WebCrypto methods reject rather than throw, which also keeps guest
         // try/catch-around-await working in compiled async bodies.
-        _wcRejected = WcDefine(tb, "WcRejected", _types.Object, [typeof(Exception)]);
-        var ril = _wcRejected.GetILGenerator();
+        webCrypto.Rejected = WcDefine(tb, "WcRejected", _types.Object, [typeof(Exception)]);
+        var ril = webCrypto.Rejected.GetILGenerator();
         var fromException = EmitGenerics.MakeGenericMethod(typeof(System.Threading.Tasks.Task)
             .GetMethod("FromException", 1, [typeof(Exception)])!, _types.Object);
         ril.Emit(OpCodes.Ldarg_0);
@@ -493,10 +470,10 @@ public partial class RuntimeEmitter
     }
 
     /// <summary>Emits: byte[] WcDigest(string lower, byte[] data).</summary>
-    private void EmitWcDigest(TypeBuilder tb)
+    private void EmitWcDigest(EmittedWebCryptoImplementation webCrypto, TypeBuilder tb)
     {
-        _wcDigest = WcDefine(tb, "WcDigest", _types.ByteArray, [_types.String, _types.ByteArray]);
-        var il = _wcDigest.GetILGenerator();
+        webCrypto.Digest = WcDefine(tb, "WcDigest", _types.ByteArray, [_types.String, _types.ByteArray]);
+        var il = webCrypto.Digest.GetILGenerator();
         var strEq = _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String);
 
         (string Lower, MethodInfo HashData)[] impls =
@@ -524,10 +501,10 @@ public partial class RuntimeEmitter
     }
 
     /// <summary>Emits: byte[] WcHmac(string lower, byte[] key, byte[] data).</summary>
-    private void EmitWcHmac(TypeBuilder tb)
+    private void EmitWcHmac(EmittedWebCryptoImplementation webCrypto, TypeBuilder tb)
     {
-        _wcHmac = WcDefine(tb, "WcHmac", _types.ByteArray, [_types.String, _types.ByteArray, _types.ByteArray]);
-        var il = _wcHmac.GetILGenerator();
+        webCrypto.Hmac = WcDefine(tb, "WcHmac", _types.ByteArray, [_types.String, _types.ByteArray, _types.ByteArray]);
+        var il = webCrypto.Hmac.GetILGenerator();
         var strEq = _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String);
 
         (string Lower, MethodInfo HashData)[] impls =
@@ -559,11 +536,11 @@ public partial class RuntimeEmitter
     /// Emits: byte[] WcAesGcm(byte[] key, byte[] iv, byte[]? aad, int tagBits, byte[] data, bool encrypt).
     /// WebCrypto layout: encrypt output / decrypt input is ciphertext || tag.
     /// </summary>
-    private void EmitWcAesGcm(TypeBuilder tb)
+    private void EmitWcAesGcm(EmittedWebCryptoImplementation webCrypto, TypeBuilder tb)
     {
-        _wcAesGcm = WcDefine(tb, "WcAesGcm", _types.ByteArray,
+        webCrypto.AesGcm = WcDefine(tb, "WcAesGcm", _types.ByteArray,
             [_types.ByteArray, _types.ByteArray, _types.ByteArray, _types.Int32, _types.ByteArray, _types.Boolean]);
-        var il = _wcAesGcm.GetILGenerator();
+        var il = webCrypto.AesGcm.GetILGenerator();
 
         var tagLenLocal = il.DeclareLocal(_types.Int32);
         var gcmLocal = il.DeclareLocal(typeof(AesGcm));
@@ -739,11 +716,11 @@ public partial class RuntimeEmitter
     }
 
     /// <summary>Emits: byte[] WcAesCbc(byte[] key, byte[] iv, byte[] data, bool encrypt) — PKCS7.</summary>
-    private void EmitWcAesCbc(TypeBuilder tb)
+    private void EmitWcAesCbc(EmittedWebCryptoImplementation webCrypto, TypeBuilder tb)
     {
-        _wcAesCbc = WcDefine(tb, "WcAesCbc", _types.ByteArray,
+        webCrypto.AesCbc = WcDefine(tb, "WcAesCbc", _types.ByteArray,
             [_types.ByteArray, _types.ByteArray, _types.ByteArray, _types.Boolean]);
-        var il = _wcAesCbc.GetILGenerator();
+        var il = webCrypto.AesCbc.GetILGenerator();
 
         var aesLocal = il.DeclareLocal(typeof(Aes));
         var resultLocal = il.DeclareLocal(_types.ByteArray);
@@ -811,11 +788,11 @@ public partial class RuntimeEmitter
     }
 
     /// <summary>Emits: byte[] WcRsaOaep(byte[] der, bool isPrivate, string hashLower, byte[] data, bool encrypt).</summary>
-    private void EmitWcRsaOaep(TypeBuilder tb)
+    private void EmitWcRsaOaep(EmittedWebCryptoImplementation webCrypto, TypeBuilder tb)
     {
-        _wcRsaOaep = WcDefine(tb, "WcRsaOaep", _types.ByteArray,
+        webCrypto.RsaOaep = WcDefine(tb, "WcRsaOaep", _types.ByteArray,
             [_types.ByteArray, _types.Boolean, _types.String, _types.ByteArray, _types.Boolean]);
-        var il = _wcRsaOaep.GetILGenerator();
+        var il = webCrypto.RsaOaep.GetILGenerator();
         var strEq = _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String);
 
         var rsaLocal = il.DeclareLocal(typeof(RSA));
@@ -877,11 +854,11 @@ public partial class RuntimeEmitter
     /// Emits: object WcRsaSignVerify(byte[] der, bool isPrivate, string hashLower, bool pss, byte[] data, byte[]? sig).
     /// sig == null → sign (returns byte[]); otherwise verify (returns boxed bool).
     /// </summary>
-    private void EmitWcRsaSignVerify(TypeBuilder tb)
+    private void EmitWcRsaSignVerify(EmittedWebCryptoImplementation webCrypto, TypeBuilder tb)
     {
-        _wcRsaSignVerify = WcDefine(tb, "WcRsaSignVerify", _types.Object,
+        webCrypto.RsaSignVerify = WcDefine(tb, "WcRsaSignVerify", _types.Object,
             [_types.ByteArray, _types.Boolean, _types.String, _types.Boolean, _types.ByteArray, _types.ByteArray]);
-        var il = _wcRsaSignVerify.GetILGenerator();
+        var il = webCrypto.RsaSignVerify.GetILGenerator();
 
         var rsaLocal = il.DeclareLocal(typeof(RSA));
         var hashLocal = il.DeclareLocal(typeof(HashAlgorithmName));
@@ -893,7 +870,7 @@ public partial class RuntimeEmitter
         EmitWcImportInto(il, rsaLocal, typeof(RSA), derArgIndex: 0, isPrivateArgIndex: 1);
 
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Call, _wcHashAlg);
+        il.Emit(OpCodes.Call, webCrypto.HashAlgorithm);
         il.Emit(OpCodes.Stloc, hashLocal);
 
         var pkcs1Label = il.DefineLabel();
@@ -944,11 +921,11 @@ public partial class RuntimeEmitter
     /// Emits: object WcEcdsaSignVerify(byte[] der, bool isPrivate, string hashLower, byte[] data, byte[]? sig).
     /// WebCrypto ECDSA signatures are IEEE P1363 (raw r||s).
     /// </summary>
-    private void EmitWcEcdsaSignVerify(TypeBuilder tb)
+    private void EmitWcEcdsaSignVerify(EmittedWebCryptoImplementation webCrypto, TypeBuilder tb)
     {
-        _wcEcdsaSignVerify = WcDefine(tb, "WcEcdsaSignVerify", _types.Object,
+        webCrypto.EcdsaSignVerify = WcDefine(tb, "WcEcdsaSignVerify", _types.Object,
             [_types.ByteArray, _types.Boolean, _types.String, _types.ByteArray, _types.ByteArray]);
-        var il = _wcEcdsaSignVerify.GetILGenerator();
+        var il = webCrypto.EcdsaSignVerify.GetILGenerator();
 
         var ecLocal = il.DeclareLocal(typeof(ECDsa));
         var hashLocal = il.DeclareLocal(typeof(HashAlgorithmName));
@@ -959,7 +936,7 @@ public partial class RuntimeEmitter
         EmitWcImportInto(il, ecLocal, typeof(ECDsa), derArgIndex: 0, isPrivateArgIndex: 1);
 
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Call, _wcHashAlg);
+        il.Emit(OpCodes.Call, webCrypto.HashAlgorithm);
         il.Emit(OpCodes.Stloc, hashLocal);
 
         var verifyLabel = il.DefineLabel();
@@ -994,17 +971,17 @@ public partial class RuntimeEmitter
     }
 
     /// <summary>Emits: byte[] WcPbkdf2(byte[] pw, byte[] salt, int iterations, string hashLower, int lenBytes).</summary>
-    private void EmitWcPbkdf2(TypeBuilder tb)
+    private void EmitWcPbkdf2(EmittedWebCryptoImplementation webCrypto, TypeBuilder tb)
     {
-        _wcPbkdf2 = WcDefine(tb, "WcPbkdf2", _types.ByteArray,
+        webCrypto.Pbkdf2 = WcDefine(tb, "WcPbkdf2", _types.ByteArray,
             [_types.ByteArray, _types.ByteArray, _types.Int32, _types.String, _types.Int32]);
-        var il = _wcPbkdf2.GetILGenerator();
+        var il = webCrypto.Pbkdf2.GetILGenerator();
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Ldarg_3);
-        il.Emit(OpCodes.Call, _wcHashAlg);
+        il.Emit(OpCodes.Call, webCrypto.HashAlgorithm);
         il.Emit(OpCodes.Ldarg, 4);
         il.Emit(OpCodes.Call, typeof(Rfc2898DeriveBytes).GetMethod("Pbkdf2",
             [typeof(byte[]), typeof(byte[]), typeof(int), typeof(HashAlgorithmName), typeof(int)])!);
@@ -1012,14 +989,14 @@ public partial class RuntimeEmitter
     }
 
     /// <summary>Emits: byte[] WcHkdf(string hashLower, byte[] ikm, int lenBytes, byte[] salt, byte[] info).</summary>
-    private void EmitWcHkdf(TypeBuilder tb)
+    private void EmitWcHkdf(EmittedWebCryptoImplementation webCrypto, TypeBuilder tb)
     {
-        _wcHkdf = WcDefine(tb, "WcHkdf", _types.ByteArray,
+        webCrypto.Hkdf = WcDefine(tb, "WcHkdf", _types.ByteArray,
             [_types.String, _types.ByteArray, _types.Int32, _types.ByteArray, _types.ByteArray]);
-        var il = _wcHkdf.GetILGenerator();
+        var il = webCrypto.Hkdf.GetILGenerator();
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, _wcHashAlg);
+        il.Emit(OpCodes.Call, webCrypto.HashAlgorithm);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Ldarg_3);
@@ -1030,11 +1007,11 @@ public partial class RuntimeEmitter
     }
 
     /// <summary>Emits: byte[] WcEcdhDerive(byte[] privPkcs8, byte[] pubSpki, int lenBytes).</summary>
-    private void EmitWcEcdhDerive(TypeBuilder tb)
+    private void EmitWcEcdhDerive(EmittedWebCryptoImplementation webCrypto, TypeBuilder tb)
     {
-        _wcEcdhDerive = WcDefine(tb, "WcEcdhDerive", _types.ByteArray,
+        webCrypto.EcdhDerive = WcDefine(tb, "WcEcdhDerive", _types.ByteArray,
             [_types.ByteArray, _types.ByteArray, _types.Int32]);
-        var il = _wcEcdhDerive.GetILGenerator();
+        var il = webCrypto.EcdhDerive.GetILGenerator();
 
         var privLocal = il.DeclareLocal(typeof(ECDiffieHellman));
         var pubLocal = il.DeclareLocal(typeof(ECDiffieHellman));
@@ -1108,10 +1085,10 @@ public partial class RuntimeEmitter
     }
 
     /// <summary>Emits: ECCurve WcCurve(string canonical) — "P-256"/"P-384"/"P-521" → named curve.</summary>
-    private void EmitWcCurve(TypeBuilder tb)
+    private void EmitWcCurve(EmittedWebCryptoImplementation webCrypto, TypeBuilder tb)
     {
-        _wcCurve = WcDefine(tb, "WcCurve", typeof(ECCurve), [_types.String]);
-        var il = _wcCurve.GetILGenerator();
+        webCrypto.Curve = WcDefine(tb, "WcCurve", typeof(ECCurve), [_types.String]);
+        var il = webCrypto.Curve.GetILGenerator();
         var strEq = _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String);
 
         (string Name, string Prop)[] curves = [("P-256", "nistP256"), ("P-384", "nistP384"), ("P-521", "nistP521")];
@@ -1132,10 +1109,10 @@ public partial class RuntimeEmitter
     }
 
     /// <summary>Emits: string WcCanonicalCurve(object) — curve name/aliases → "P-256" form.</summary>
-    private void EmitWcCanonicalCurve(TypeBuilder tb, EmittedRuntime runtime)
+    private void EmitWcCanonicalCurve(TypeBuilder tb, EmittedWebCryptoImplementation webCrypto)
     {
-        _wcCanonicalCurve = WcDefine(tb, "WcCanonicalCurve", _types.String, [_types.Object]);
-        var il = _wcCanonicalCurve.GetILGenerator();
+        webCrypto.CanonicalCurve = WcDefine(tb, "WcCanonicalCurve", _types.String, [_types.Object]);
+        var il = webCrypto.CanonicalCurve.GetILGenerator();
         var strEq = _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String);
 
         var lowerLocal = il.DeclareLocal(_types.String);
@@ -1181,10 +1158,10 @@ public partial class RuntimeEmitter
     }
 
     /// <summary>Emits: object[] WcGenRsa(int modulusLength) — [spki, pkcs8].</summary>
-    private void EmitWcGenRsa(TypeBuilder tb)
+    private void EmitWcGenRsa(EmittedWebCryptoImplementation webCrypto, TypeBuilder tb)
     {
-        _wcGenRsa = WcDefine(tb, "WcGenRsa", typeof(object[]), [_types.Int32]);
-        var il = _wcGenRsa.GetILGenerator();
+        webCrypto.GenRsa = WcDefine(tb, "WcGenRsa", typeof(object[]), [_types.Int32]);
+        var il = webCrypto.GenRsa.GetILGenerator();
 
         var rsaLocal = il.DeclareLocal(typeof(RSA));
         var arrLocal = il.DeclareLocal(typeof(object[]));
@@ -1216,16 +1193,16 @@ public partial class RuntimeEmitter
     }
 
     /// <summary>Emits: object[] WcGenEc(string canonical) — [spki, pkcs8].</summary>
-    private void EmitWcGenEc(TypeBuilder tb)
+    private void EmitWcGenEc(EmittedWebCryptoImplementation webCrypto, TypeBuilder tb)
     {
-        _wcGenEc = WcDefine(tb, "WcGenEc", typeof(object[]), [_types.String]);
-        var il = _wcGenEc.GetILGenerator();
+        webCrypto.GenEc = WcDefine(tb, "WcGenEc", typeof(object[]), [_types.String]);
+        var il = webCrypto.GenEc.GetILGenerator();
 
         var ecLocal = il.DeclareLocal(typeof(ECDsa));
         var arrLocal = il.DeclareLocal(typeof(object[]));
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, _wcCurve);
+        il.Emit(OpCodes.Call, webCrypto.Curve);
         il.Emit(OpCodes.Call, _types.GetMethod(typeof(ECDsa), "Create", [typeof(ECCurve)])!);
         il.Emit(OpCodes.Stloc, ecLocal);
 
@@ -1255,10 +1232,10 @@ public partial class RuntimeEmitter
     /// Emits: byte[] WcEcRawToSpki(byte[] raw, string canonical) — uncompressed point 04||X||Y → SPKI DER.
     /// Compressed points (02/03) are a documented compiled-mode ceiling.
     /// </summary>
-    private void EmitWcEcRawToSpki(TypeBuilder tb)
+    private void EmitWcEcRawToSpki(EmittedWebCryptoImplementation webCrypto, TypeBuilder tb)
     {
-        _wcEcRawToSpki = WcDefine(tb, "WcEcRawToSpki", _types.ByteArray, [_types.ByteArray, _types.String]);
-        var il = _wcEcRawToSpki.GetILGenerator();
+        webCrypto.EcRawToSpki = WcDefine(tb, "WcEcRawToSpki", _types.ByteArray, [_types.ByteArray, _types.String]);
+        var il = webCrypto.EcRawToSpki.GetILGenerator();
 
         var fieldLenLocal = il.DeclareLocal(_types.Int32);
         var xLocal = il.DeclareLocal(_types.ByteArray);
@@ -1326,7 +1303,7 @@ public partial class RuntimeEmitter
 
         il.Emit(OpCodes.Ldloca, paramsLocal);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, _wcCurve);
+        il.Emit(OpCodes.Call, webCrypto.Curve);
         il.Emit(OpCodes.Stfld, typeof(ECParameters).GetField("Curve")!);
 
         il.Emit(OpCodes.Ldloca, paramsLocal);
@@ -1355,10 +1332,10 @@ public partial class RuntimeEmitter
     }
 
     /// <summary>Emits: byte[] WcEcSpkiToRaw(byte[] spki) — SPKI DER → uncompressed point 04||X||Y.</summary>
-    private void EmitWcEcSpkiToRaw(TypeBuilder tb)
+    private void EmitWcEcSpkiToRaw(EmittedWebCryptoImplementation webCrypto, TypeBuilder tb)
     {
-        _wcEcSpkiToRaw = WcDefine(tb, "WcEcSpkiToRaw", _types.ByteArray, [_types.ByteArray]);
-        var il = _wcEcSpkiToRaw.GetILGenerator();
+        webCrypto.EcSpkiToRaw = WcDefine(tb, "WcEcSpkiToRaw", _types.ByteArray, [_types.ByteArray]);
+        var il = webCrypto.EcSpkiToRaw.GetILGenerator();
 
         var ecLocal = il.DeclareLocal(typeof(ECDsa));
         var paramsLocal = il.DeclareLocal(typeof(ECParameters));
@@ -1437,10 +1414,10 @@ public partial class RuntimeEmitter
     }
 
     /// <summary>Emits: int WcImportRsaCheck(byte[] der, bool isPrivate) — validates, returns KeySize.</summary>
-    private void EmitWcImportRsaCheck(TypeBuilder tb)
+    private void EmitWcImportRsaCheck(EmittedWebCryptoImplementation webCrypto, TypeBuilder tb)
     {
-        _wcImportRsaCheck = WcDefine(tb, "WcImportRsaCheck", _types.Int32, [_types.ByteArray, _types.Boolean]);
-        var il = _wcImportRsaCheck.GetILGenerator();
+        webCrypto.ImportRsaCheck = WcDefine(tb, "WcImportRsaCheck", _types.Int32, [_types.ByteArray, _types.Boolean]);
+        var il = webCrypto.ImportRsaCheck.GetILGenerator();
 
         var rsaLocal = il.DeclareLocal(typeof(RSA));
         var sizeLocal = il.DeclareLocal(_types.Int32);
@@ -1459,10 +1436,10 @@ public partial class RuntimeEmitter
     }
 
     /// <summary>Emits: void WcImportEcCheck(byte[] der, bool isPrivate) — validates the DER imports.</summary>
-    private void EmitWcImportEcCheck(TypeBuilder tb)
+    private void EmitWcImportEcCheck(EmittedWebCryptoImplementation webCrypto, TypeBuilder tb)
     {
-        _wcImportEcCheck = WcDefine(tb, "WcImportEcCheck", typeof(void), [_types.ByteArray, _types.Boolean]);
-        var il = _wcImportEcCheck.GetILGenerator();
+        webCrypto.ImportEcCheck = WcDefine(tb, "WcImportEcCheck", typeof(void), [_types.ByteArray, _types.Boolean]);
+        var il = webCrypto.ImportEcCheck.GetILGenerator();
 
         var ecLocal = il.DeclareLocal(typeof(ECDsa));
         il.Emit(OpCodes.Call, _types.GetMethod(typeof(ECDsa), "Create", Type.EmptyTypes)!);
@@ -1474,10 +1451,10 @@ public partial class RuntimeEmitter
     }
 
     /// <summary>Emits: string WcBase64Url(byte[]).</summary>
-    private void EmitWcBase64Url(TypeBuilder tb)
+    private void EmitWcBase64Url(EmittedWebCryptoImplementation webCrypto, TypeBuilder tb)
     {
-        _wcBase64Url = WcDefine(tb, "WcBase64Url", _types.String, [_types.ByteArray]);
-        var il = _wcBase64Url.GetILGenerator();
+        webCrypto.Base64Url = WcDefine(tb, "WcBase64Url", _types.String, [_types.ByteArray]);
+        var il = webCrypto.Base64Url.GetILGenerator();
 
         // Convert.ToBase64String(bytes).TrimEnd('=').Replace('+','-').Replace('/','_')
         il.Emit(OpCodes.Ldarg_0);
