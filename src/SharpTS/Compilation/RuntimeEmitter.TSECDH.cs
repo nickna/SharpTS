@@ -10,7 +10,6 @@ namespace SharpTS.Compilation;
 /// </summary>
 public partial class RuntimeEmitter
 {
-    private TypeBuilder _tsECDHTypeBuilder = null!;
     private FieldBuilder _tsECDHEcdhField = null!;
     private FieldBuilder _tsECDHCurveNameField = null!;
     private FieldBuilder _tsECDHFieldLenField = null!;
@@ -19,64 +18,63 @@ public partial class RuntimeEmitter
     /// Phase 1: Define type, fields, and constructor.
     /// Called before EmitRuntimeClass.
     /// </summary>
-    private void EmitTSECDHTypeDefinition(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    internal void EmitTSECDHTypeDefinition(ModuleBuilder moduleBuilder, EmittedCryptoRuntime crypto)
     {
         // Define class: public sealed class $ECDH
-        _tsECDHTypeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
+        crypto.ECDHType = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$ECDH",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object
         );
-        runtime.TSECDHType = _tsECDHTypeBuilder;
 
         // Fields
-        _tsECDHEcdhField = _tsECDHTypeBuilder.DefineField("_ecdh", typeof(ECDiffieHellman), FieldAttributes.Private);
-        _tsECDHCurveNameField = _tsECDHTypeBuilder.DefineField("_curveName", _types.String, FieldAttributes.Private);
-        _tsECDHFieldLenField = _tsECDHTypeBuilder.DefineField("_fieldLen", _types.Int32, FieldAttributes.Private);
+        _tsECDHEcdhField = crypto.ECDHType.DefineField("_ecdh", typeof(ECDiffieHellman), FieldAttributes.Private);
+        _tsECDHCurveNameField = crypto.ECDHType.DefineField("_curveName", _types.String, FieldAttributes.Private);
+        _tsECDHFieldLenField = crypto.ECDHType.DefineField("_fieldLen", _types.Int32, FieldAttributes.Private);
 
         // Constructor only in Phase 1
-        EmitTSECDHCtor(_tsECDHTypeBuilder, runtime);
+        EmitTSECDHCtor(crypto.ECDHType, crypto);
         // All methods that use runtime helpers are added in Phase 2
 
         // Define GetMember signature in Phase 1 so GetProperty can reference it.
         // The IL body is emitted in Phase 2 (EmitTSECDHGetMember).
-        var getMemberMethod = _tsECDHTypeBuilder.DefineMethod(
+        var getMemberMethod = crypto.ECDHType.DefineMethod(
             "GetMember",
             MethodAttributes.Public,
             _types.Object,
             [_types.String]
         );
-        runtime.TSECDHGetMember = getMemberMethod;
+        crypto.ECDHGetMember = getMemberMethod;
     }
 
     /// <summary>
     /// Phase 2: Add all methods and finalize type.
     /// Called after EmitRuntimeClass (needs runtime helpers DecodeInput/EncodeResult).
     /// </summary>
-    private void EmitTSECDHFinalize(EmittedRuntime runtime)
+    private void EmitTSECDHFinalize(EmittedCryptoRuntime crypto)
     {
         // Methods - order matters due to dependencies
         // GetPublicKey must come before GenerateKeys (GenerateKeys calls GetPublicKey)
-        EmitTSECDHGetPublicKey(_tsECDHTypeBuilder, runtime);
-        EmitTSECDHGetPrivateKey(_tsECDHTypeBuilder, runtime);
-        EmitTSECDHSetPrivateKey(_tsECDHTypeBuilder, runtime);
-        EmitTSECDHGenerateKeys(_tsECDHTypeBuilder, runtime);
-        EmitTSECDHComputeSecret(_tsECDHTypeBuilder, runtime);
-        EmitTSECDHGetMember(_tsECDHTypeBuilder, runtime);
-        _tsECDHTypeBuilder.CreateType();
+        EmitTSECDHGetPublicKey(crypto.ECDHType, crypto);
+        EmitTSECDHGetPrivateKey(crypto.ECDHType, crypto);
+        EmitTSECDHSetPrivateKey(crypto.ECDHType, crypto);
+        EmitTSECDHGenerateKeys(crypto.ECDHType, crypto);
+        EmitTSECDHComputeSecret(crypto.ECDHType, crypto);
+        EmitTSECDHGetMember(crypto.ECDHType, crypto);
+        crypto.ECDHType.CreateType();
     }
 
     /// <summary>
     /// Emits: public $ECDH(string curveName)
     /// </summary>
-    private void EmitTSECDHCtor(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSECDHCtor(TypeBuilder typeBuilder, EmittedCryptoRuntime crypto)
     {
         var ctor = typeBuilder.DefineConstructor(
             MethodAttributes.Public,
             CallingConventions.Standard,
             [_types.String]
         );
-        runtime.TSECDHCtor = ctor;
+        crypto.ECDHCtor = ctor;
 
         var il = ctor.GetILGenerator();
 
@@ -190,7 +188,7 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits: public object GenerateKeys(string? encoding, string? format)
     /// </summary>
-    private void EmitTSECDHGenerateKeys(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSECDHGenerateKeys(TypeBuilder typeBuilder, EmittedCryptoRuntime crypto)
     {
         var method = typeBuilder.DefineMethod(
             "GenerateKeys",
@@ -198,7 +196,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.String, _types.String]
         );
-        runtime.TSECDHGenerateKeys = method;
+        crypto.ECDHGenerateKeys = method;
 
         var il = method.GetILGenerator();
 
@@ -221,14 +219,14 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Call, runtime.TSECDHGetPublicKey);
+        il.Emit(OpCodes.Call, crypto.ECDHGetPublicKey);
         il.Emit(OpCodes.Ret);
     }
 
     /// <summary>
     /// Emits: public object ComputeSecret(object otherPublicKey, string? inputEncoding, string? outputEncoding)
     /// </summary>
-    private void EmitTSECDHComputeSecret(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSECDHComputeSecret(TypeBuilder typeBuilder, EmittedCryptoRuntime crypto)
     {
         var method = typeBuilder.DefineMethod(
             "ComputeSecret",
@@ -236,7 +234,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object, _types.String, _types.String]
         );
-        runtime.TSECDHComputeSecret = method;
+        crypto.ECDHComputeSecret = method;
 
         var il = method.GetILGenerator();
 
@@ -244,7 +242,7 @@ public partial class RuntimeEmitter
         var otherBytesLocal = il.DeclareLocal(_types.ByteArray);
         il.Emit(OpCodes.Ldarg_1);  // otherPublicKey
         il.Emit(OpCodes.Ldarg_2);  // inputEncoding
-        il.Emit(OpCodes.Call, runtime.TSECDHDecodeInput);
+        il.Emit(OpCodes.Call, crypto.ECDHDecodeInput);
         il.Emit(OpCodes.Stloc, otherBytesLocal);
 
         // Create an ECDiffieHellman for the other party
@@ -259,20 +257,20 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, otherBytesLocal);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, _tsECDHFieldLenField);
-        il.Emit(OpCodes.Call, runtime.TSECDHComputeSecretHelper);
+        il.Emit(OpCodes.Call, crypto.ECDHComputeSecretHelper);
         il.Emit(OpCodes.Stloc, secretLocal);
 
         // Encode and return the result
         il.Emit(OpCodes.Ldloc, secretLocal);
         il.Emit(OpCodes.Ldarg_3);  // outputEncoding
-        il.Emit(OpCodes.Call, runtime.TSECDHEncodeResult);
+        il.Emit(OpCodes.Call, crypto.ECDHEncodeResult);
         il.Emit(OpCodes.Ret);
     }
 
     /// <summary>
     /// Emits: public object GetPublicKey(string? encoding, string? format)
     /// </summary>
-    private void EmitTSECDHGetPublicKey(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSECDHGetPublicKey(TypeBuilder typeBuilder, EmittedCryptoRuntime crypto)
     {
         var method = typeBuilder.DefineMethod(
             "GetPublicKey",
@@ -280,7 +278,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.String, _types.String]
         );
-        runtime.TSECDHGetPublicKey = method;
+        crypto.ECDHGetPublicKey = method;
 
         var il = method.GetILGenerator();
 
@@ -306,18 +304,18 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, _tsECDHFieldLenField);
         il.Emit(OpCodes.Ldarg_2);  // format
-        il.Emit(OpCodes.Call, runtime.EcdhEncodePoint);
+        il.Emit(OpCodes.Call, crypto.EcdhEncodePoint);
 
         // Encode and return the result
         il.Emit(OpCodes.Ldarg_1);  // encoding
-        il.Emit(OpCodes.Call, runtime.TSECDHEncodeResult);
+        il.Emit(OpCodes.Call, crypto.ECDHEncodeResult);
         il.Emit(OpCodes.Ret);
     }
 
     /// <summary>
     /// Emits: public object GetPrivateKey(string? encoding)
     /// </summary>
-    private void EmitTSECDHGetPrivateKey(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSECDHGetPrivateKey(TypeBuilder typeBuilder, EmittedCryptoRuntime crypto)
     {
         var method = typeBuilder.DefineMethod(
             "GetPrivateKey",
@@ -325,7 +323,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.String]
         );
-        runtime.TSECDHGetPrivateKey = method;
+        crypto.ECDHGetPrivateKey = method;
 
         var il = method.GetILGenerator();
 
@@ -340,14 +338,14 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloca, paramsLocal);
         il.Emit(OpCodes.Ldfld, typeof(ECParameters).GetField("D")!);
         il.Emit(OpCodes.Ldarg_1);  // encoding
-        il.Emit(OpCodes.Call, runtime.TSECDHEncodeResult);
+        il.Emit(OpCodes.Call, crypto.ECDHEncodeResult);
         il.Emit(OpCodes.Ret);
     }
 
     /// <summary>
     /// Emits: public void SetPrivateKey(object key, string? encoding)
     /// </summary>
-    private void EmitTSECDHSetPrivateKey(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSECDHSetPrivateKey(TypeBuilder typeBuilder, EmittedCryptoRuntime crypto)
     {
         var method = typeBuilder.DefineMethod(
             "SetPrivateKey",
@@ -355,7 +353,7 @@ public partial class RuntimeEmitter
             null,
             [_types.Object, _types.String]
         );
-        runtime.TSECDHSetPrivateKey = method;
+        crypto.ECDHSetPrivateKey = method;
 
         var il = method.GetILGenerator();
 
@@ -363,7 +361,7 @@ public partial class RuntimeEmitter
         var keyBytesLocal = il.DeclareLocal(_types.ByteArray);
         il.Emit(OpCodes.Ldarg_1);  // key
         il.Emit(OpCodes.Ldarg_2);  // encoding
-        il.Emit(OpCodes.Call, runtime.TSECDHDecodeInput);
+        il.Emit(OpCodes.Call, crypto.ECDHDecodeInput);
         il.Emit(OpCodes.Stloc, keyBytesLocal);
 
         // Create a ReadOnlySpan<byte> from the byte array
@@ -386,10 +384,10 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits: public object? GetMember(string name)
     /// </summary>
-    private void EmitTSECDHGetMember(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSECDHGetMember(TypeBuilder typeBuilder, EmittedCryptoRuntime crypto)
     {
         // MethodBuilder was already defined in EmitTSECDHTypeDefinition (Phase 1)
-        var method = runtime.TSECDHGetMember;
+        var method = crypto.ECDHGetMember;
 
         var il = method.GetILGenerator();
 
@@ -440,7 +438,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, "GenerateKeys");
         il.Emit(OpCodes.Ldc_I4_0);  // minArgs
         il.Emit(OpCodes.Ldc_I4_2);  // maxArgs
-        il.Emit(OpCodes.Newobj, runtime.BoundECDHMethodCtor);
+        il.Emit(OpCodes.Newobj, crypto.BoundECDHMethodCtor);
         il.Emit(OpCodes.Ret);
 
         // computeSecret: Return bound method
@@ -449,7 +447,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, "ComputeSecret");
         il.Emit(OpCodes.Ldc_I4_1);  // minArgs
         il.Emit(OpCodes.Ldc_I4_3);  // maxArgs
-        il.Emit(OpCodes.Newobj, runtime.BoundECDHMethodCtor);
+        il.Emit(OpCodes.Newobj, crypto.BoundECDHMethodCtor);
         il.Emit(OpCodes.Ret);
 
         // getPublicKey: Return bound method
@@ -458,7 +456,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, "GetPublicKey");
         il.Emit(OpCodes.Ldc_I4_0);  // minArgs
         il.Emit(OpCodes.Ldc_I4_2);  // maxArgs
-        il.Emit(OpCodes.Newobj, runtime.BoundECDHMethodCtor);
+        il.Emit(OpCodes.Newobj, crypto.BoundECDHMethodCtor);
         il.Emit(OpCodes.Ret);
 
         // getPrivateKey: Return bound method
@@ -467,7 +465,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, "GetPrivateKey");
         il.Emit(OpCodes.Ldc_I4_0);  // minArgs
         il.Emit(OpCodes.Ldc_I4_1);  // maxArgs
-        il.Emit(OpCodes.Newobj, runtime.BoundECDHMethodCtor);
+        il.Emit(OpCodes.Newobj, crypto.BoundECDHMethodCtor);
         il.Emit(OpCodes.Ret);
 
         // setPrivateKey: Return bound method
@@ -476,7 +474,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, "SetPrivateKey");
         il.Emit(OpCodes.Ldc_I4_1);  // minArgs
         il.Emit(OpCodes.Ldc_I4_2);  // maxArgs
-        il.Emit(OpCodes.Newobj, runtime.BoundECDHMethodCtor);
+        il.Emit(OpCodes.Newobj, crypto.BoundECDHMethodCtor);
         il.Emit(OpCodes.Ret);
 
         // Default - return null
@@ -490,18 +488,19 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitTSECDHHelpers(TypeBuilder runtimeTypeBuilder, EmittedRuntime runtime)
     {
+        var crypto = runtime.RequireCrypto();
         EmitEcPointHelpers(runtimeTypeBuilder, runtime);
         EmitTSECDHEncodeResult(runtimeTypeBuilder, runtime);
         EmitTSECDHDecodeInput(runtimeTypeBuilder, runtime);
-        EmitCryptoEcdhConvertKey(runtimeTypeBuilder, runtime);
-        EmitTSECDHComputeSecretHelper(runtimeTypeBuilder, runtime);
+        EmitCryptoEcdhConvertKey(runtimeTypeBuilder, crypto);
+        EmitTSECDHComputeSecretHelper(runtimeTypeBuilder, crypto);
     }
 
     /// <summary>
     /// Emits: public static byte[] ComputeSecretHelper(ECDiffieHellman ecdh, byte[] otherPublicKeyBytes)
     /// This helper handles the Span conversion that can't be done directly in IL.
     /// </summary>
-    private void EmitTSECDHComputeSecretHelper(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSECDHComputeSecretHelper(TypeBuilder typeBuilder, EmittedCryptoRuntime crypto)
     {
         // byte[] ECDHComputeSecretHelper(ECDiffieHellman self, byte[] otherBytes, int fieldLen)
         var method = typeBuilder.DefineMethod(
@@ -510,7 +509,7 @@ public partial class RuntimeEmitter
             _types.ByteArray,
             [typeof(ECDiffieHellman), _types.ByteArray, _types.Int32]
         );
-        runtime.TSECDHComputeSecretHelper = method;
+        crypto.ECDHComputeSecretHelper = method;
 
         var il = method.GetILGenerator();
 
@@ -639,7 +638,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4, 0x03);
         il.Emit(OpCodes.Ceq);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Call, runtime.EcdhDecompressY);
+        il.Emit(OpCodes.Call, crypto.EcdhDecompressY);
         il.Emit(OpCodes.Stloc, yLocal);
 
         il.MarkLabel(coordinatesReadyLabel);
@@ -716,7 +715,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.ByteArray, _types.String]
         );
-        runtime.TSECDHEncodeResult = method;
+        runtime.RequireCrypto().ECDHEncodeResult = method;
 
         var il = method.GetILGenerator();
 
@@ -780,7 +779,7 @@ public partial class RuntimeEmitter
             _types.ByteArray,
             [_types.Object, _types.String]
         );
-        runtime.TSECDHDecodeInput = method;
+        runtime.RequireCrypto().ECDHDecodeInput = method;
 
         var il = method.GetILGenerator();
 
@@ -876,14 +875,14 @@ public partial class RuntimeEmitter
     /// Emits the first-class crypto.ECDH.convertKey wrapper. The object-shaped
     /// signature lets $TSFunction supply optional arguments normally.
     /// </summary>
-    private void EmitCryptoEcdhConvertKey(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitCryptoEcdhConvertKey(TypeBuilder typeBuilder, EmittedCryptoRuntime crypto)
     {
         var method = typeBuilder.DefineMethod(
             "CryptoWrapper_ECDH_convertKey",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.Object, _types.Object, _types.Object, _types.Object, _types.Object]);
-        runtime.CryptoEcdhConvertKey = method;
+        crypto.EcdhConvertKey = method;
 
         var il = method.GetILGenerator();
         var curveLocal = il.DeclareLocal(_types.String);
@@ -963,7 +962,7 @@ public partial class RuntimeEmitter
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, inputEncodingLocal);
-        il.Emit(OpCodes.Call, runtime.TSECDHDecodeInput);
+        il.Emit(OpCodes.Call, crypto.ECDHDecodeInput);
         il.Emit(OpCodes.Stloc, bytesLocal);
 
         var compressed = il.DefineLabel();
@@ -1030,7 +1029,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4, 0x03);
         il.Emit(OpCodes.Ceq);
         il.Emit(OpCodes.Ldloc, fieldLenLocal);
-        il.Emit(OpCodes.Call, runtime.EcdhDecompressY);
+        il.Emit(OpCodes.Call, crypto.EcdhDecompressY);
         il.Emit(OpCodes.Stloc, yLocal);
 
         il.MarkLabel(coordinatesReady);
@@ -1038,9 +1037,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, yLocal);
         il.Emit(OpCodes.Ldloc, fieldLenLocal);
         il.Emit(OpCodes.Ldloc, formatLocal);
-        il.Emit(OpCodes.Call, runtime.EcdhEncodePoint);
+        il.Emit(OpCodes.Call, crypto.EcdhEncodePoint);
         il.Emit(OpCodes.Ldloc, outputEncodingLocal);
-        il.Emit(OpCodes.Call, runtime.TSECDHEncodeResult);
+        il.Emit(OpCodes.Call, crypto.ECDHEncodeResult);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(invalidPoint);
@@ -1081,7 +1080,7 @@ public partial class RuntimeEmitter
     /// Phase 1: Define $BoundECDHMethod type, fields, and constructor.
     /// Called after $ECDH type definition (needs TSECDHType).
     /// </summary>
-    private void EmitBoundECDHMethodTypeDefinition(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private void EmitBoundECDHMethodTypeDefinition(ModuleBuilder moduleBuilder, EmittedCryptoRuntime crypto)
     {
         _boundECDHMethodTypeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$BoundECDHMethod",
@@ -1091,7 +1090,7 @@ public partial class RuntimeEmitter
         _ = _boundECDHMethodTypeBuilder;
 
         // Fields
-        _boundECDHMethodEcdhField = _boundECDHMethodTypeBuilder.DefineField("_ecdh", runtime.TSECDHType, FieldAttributes.Private);
+        _boundECDHMethodEcdhField = _boundECDHMethodTypeBuilder.DefineField("_ecdh", crypto.ECDHType, FieldAttributes.Private);
         _boundECDHMethodMethodNameField = _boundECDHMethodTypeBuilder.DefineField("_methodName", _types.String, FieldAttributes.Private);
         var minArgsField = _boundECDHMethodTypeBuilder.DefineField("_minArgs", _types.Int32, FieldAttributes.Private);
         var maxArgsField = _boundECDHMethodTypeBuilder.DefineField("_maxArgs", _types.Int32, FieldAttributes.Private);
@@ -1100,9 +1099,9 @@ public partial class RuntimeEmitter
         var ctor = _boundECDHMethodTypeBuilder.DefineConstructor(
             MethodAttributes.Public,
             CallingConventions.Standard,
-            [runtime.TSECDHType, _types.String, _types.Int32, _types.Int32]
+            [crypto.ECDHType, _types.String, _types.Int32, _types.Int32]
         );
-        runtime.BoundECDHMethodCtor = ctor;
+        crypto.BoundECDHMethodCtor = ctor;
 
         var ctorIl = ctor.GetILGenerator();
         ctorIl.Emit(OpCodes.Ldarg_0);
@@ -1126,7 +1125,7 @@ public partial class RuntimeEmitter
     /// Phase 2: Add Invoke method and finalize $BoundECDHMethod type.
     /// Called after ECDH methods are defined (Invoke calls them).
     /// </summary>
-    private void EmitBoundECDHMethodFinalize(EmittedRuntime runtime)
+    private void EmitBoundECDHMethodFinalize(EmittedCryptoRuntime crypto)
     {
         // Invoke method: public object? Invoke(object[] args)
         var invoke = _boundECDHMethodTypeBuilder.DefineMethod(
@@ -1196,7 +1195,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Castclass, _types.String);
         il.Emit(OpCodes.Ldloc_1);  // format
         il.Emit(OpCodes.Castclass, _types.String);
-        il.Emit(OpCodes.Callvirt, runtime.TSECDHGenerateKeys);
+        il.Emit(OpCodes.Callvirt, crypto.ECDHGenerateKeys);
         il.Emit(OpCodes.Ret);
 
         // ComputeSecret(otherPublicKey, inputEncoding?, outputEncoding?)
@@ -1211,7 +1210,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Castclass, _types.String);
         il.Emit(OpCodes.Ldloc_2);  // outputEncoding
         il.Emit(OpCodes.Castclass, _types.String);
-        il.Emit(OpCodes.Callvirt, runtime.TSECDHComputeSecret);
+        il.Emit(OpCodes.Callvirt, crypto.ECDHComputeSecret);
         il.Emit(OpCodes.Ret);
 
         // GetPublicKey(encoding?, format?)
@@ -1224,7 +1223,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Castclass, _types.String);
         il.Emit(OpCodes.Ldloc_1);  // format
         il.Emit(OpCodes.Castclass, _types.String);
-        il.Emit(OpCodes.Callvirt, runtime.TSECDHGetPublicKey);
+        il.Emit(OpCodes.Callvirt, crypto.ECDHGetPublicKey);
         il.Emit(OpCodes.Ret);
 
         // GetPrivateKey(encoding?)
@@ -1234,7 +1233,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldfld, _boundECDHMethodEcdhField);
         il.Emit(OpCodes.Ldloc_0);  // encoding
         il.Emit(OpCodes.Castclass, _types.String);
-        il.Emit(OpCodes.Callvirt, runtime.TSECDHGetPrivateKey);
+        il.Emit(OpCodes.Callvirt, crypto.ECDHGetPrivateKey);
         il.Emit(OpCodes.Ret);
 
         // SetPrivateKey(key, encoding?)
@@ -1246,7 +1245,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc_0);  // key
         il.Emit(OpCodes.Ldloc_1);  // encoding
         il.Emit(OpCodes.Castclass, _types.String);
-        il.Emit(OpCodes.Callvirt, runtime.TSECDHSetPrivateKey);
+        il.Emit(OpCodes.Callvirt, crypto.ECDHSetPrivateKey);
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ret);
 

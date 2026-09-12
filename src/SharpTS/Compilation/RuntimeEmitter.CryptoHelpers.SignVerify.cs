@@ -19,7 +19,7 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             _types.String,
             [_types.Object, _types.Boolean]);
-        runtime.CryptoKeyToPem = method;
+        runtime.RequireCrypto().KeyToPem = method;
 
         var il = method.GetILGenerator();
         var notStringLabel = il.DefineLabel();
@@ -72,24 +72,25 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitCryptoSignOneShot(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
+        var crypto = runtime.RequireCrypto();
         var method = typeBuilder.DefineMethod(
             "CryptoSignOneShot",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.String, _types.Object, _types.Object]);
-        runtime.CryptoSignDataEx = method;
+        crypto.SignDataEx = method;
 
         var il = method.GetILGenerator();
 
         // SignDataBytes(CryptoKeyToPem(key, true), CryptoBytesFromAny(data), CryptoSignHashName(algorithm))
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Call, runtime.CryptoKeyToPem);
+        il.Emit(OpCodes.Call, crypto.KeyToPem);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.CryptoBytesFromAny);
+        il.Emit(OpCodes.Call, crypto.BytesFromAny);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.CryptoSignHashName);
-        il.Emit(OpCodes.Call, runtime.SignDataBytes);
+        il.Emit(OpCodes.Call, crypto.SignHashName);
+        il.Emit(OpCodes.Call, crypto.SignDataBytes);
         // → $Buffer
         il.Emit(OpCodes.Newobj, runtime.TSBufferCtor);
         il.Emit(OpCodes.Ret);
@@ -99,28 +100,28 @@ public partial class RuntimeEmitter
     /// Emits: public static object CryptoVerifyOneShot(string algorithm, object data, object key, object signature)
     /// One-shot crypto.verify → boxed bool (#1055).
     /// </summary>
-    private void EmitCryptoVerifyOneShot(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitCryptoVerifyOneShot(TypeBuilder typeBuilder, EmittedCryptoRuntime crypto)
     {
         var method = typeBuilder.DefineMethod(
             "CryptoVerifyOneShot",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.String, _types.Object, _types.Object, _types.Object]);
-        runtime.CryptoVerifyDataEx = method;
+        crypto.VerifyDataEx = method;
 
         var il = method.GetILGenerator();
 
         // VerifyDataBytes(CryptoKeyToPem(key, false), CryptoBytesFromAny(data), CryptoSignHashName(algorithm), CryptoBytesFromAny(signature))
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Call, runtime.CryptoKeyToPem);
+        il.Emit(OpCodes.Call, crypto.KeyToPem);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.CryptoBytesFromAny);
+        il.Emit(OpCodes.Call, crypto.BytesFromAny);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.CryptoSignHashName);
+        il.Emit(OpCodes.Call, crypto.SignHashName);
         il.Emit(OpCodes.Ldarg_3);
-        il.Emit(OpCodes.Call, runtime.CryptoBytesFromAny);
-        il.Emit(OpCodes.Call, runtime.VerifyDataBytes);
+        il.Emit(OpCodes.Call, crypto.BytesFromAny);
+        il.Emit(OpCodes.Call, crypto.VerifyDataBytes);
         il.Emit(OpCodes.Box, _types.Boolean);
         il.Emit(OpCodes.Ret);
     }
@@ -131,12 +132,13 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitCryptoHashOneShot(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
+        var crypto = runtime.RequireCrypto();
         var method = typeBuilder.DefineMethod(
             "CryptoHashOneShot",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.String, _types.Object, _types.String]);
-        runtime.CryptoHashOneShot = method;
+        crypto.HashOneShot = method;
 
         var il = method.GetILGenerator();
         var digestLocal = il.DeclareLocal(_types.ByteArray);
@@ -145,9 +147,9 @@ public partial class RuntimeEmitter
         // digest = CryptoHashData(algorithm, CryptoBytesFromAny(data), -1)
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.CryptoBytesFromAny);
+        il.Emit(OpCodes.Call, crypto.BytesFromAny);
         il.Emit(OpCodes.Ldc_I4_M1);
-        il.Emit(OpCodes.Call, runtime.CryptoHashData);
+        il.Emit(OpCodes.Call, crypto.HashData);
         il.Emit(OpCodes.Stloc, digestLocal);
 
         // enc = encoding ?? "hex"
@@ -173,7 +175,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(notBufferLabel);
         il.Emit(OpCodes.Ldloc, digestLocal);
         il.Emit(OpCodes.Ldloc, encLocal);
-        il.Emit(OpCodes.Call, runtime.CryptoEncodeBytes);
+        il.Emit(OpCodes.Call, crypto.EncodeBytes);
         il.Emit(OpCodes.Ret);
     }
 
@@ -181,14 +183,14 @@ public partial class RuntimeEmitter
     /// Emits: public static byte[] SignDataBytes(string privateKeyPem, byte[] data, HashAlgorithmName hashAlgorithm)
     /// Signs data using RSA or EC private key. Uses try/catch to detect key type.
     /// </summary>
-    private void EmitSignDataBytes(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitSignDataBytes(TypeBuilder typeBuilder, EmittedCryptoRuntime crypto)
     {
         var method = typeBuilder.DefineMethod(
             "SignDataBytes",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.ByteArray,
             [_types.String, _types.ByteArray, _types.HashAlgorithmName]);
-        runtime.SignDataBytes = method;
+        crypto.SignDataBytes = method;
 
         var il = method.GetILGenerator();
 
@@ -268,14 +270,14 @@ public partial class RuntimeEmitter
     /// Emits: public static bool VerifyDataBytes(string publicKeyPem, byte[] data, HashAlgorithmName hashAlgorithm, byte[] signature)
     /// Verifies a signature using RSA or EC public key. Uses try/catch to detect key type.
     /// </summary>
-    private void EmitVerifyDataBytes(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitVerifyDataBytes(TypeBuilder typeBuilder, EmittedCryptoRuntime crypto)
     {
         var method = typeBuilder.DefineMethod(
             "VerifyDataBytes",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Boolean,
             [_types.String, _types.ByteArray, _types.HashAlgorithmName, _types.ByteArray]);
-        runtime.VerifyDataBytes = method;
+        crypto.VerifyDataBytes = method;
 
         var il = method.GetILGenerator();
 

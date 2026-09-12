@@ -11,12 +11,13 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitCryptoCreateSecretKey(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
+        var crypto = runtime.RequireCrypto();
         var method = typeBuilder.DefineMethod(
             "CryptoCreateSecretKey",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.Object, _types.Object]);
-        runtime.CryptoCreateSecretKey = method;
+        crypto.CreateSecretKey = method;
 
         var il = method.GetILGenerator();
 
@@ -160,7 +161,7 @@ public partial class RuntimeEmitter
         // Create and return new $TSKeyObject(keyBytes)
         il.MarkLabel(createKeyObjectLabel);
         il.Emit(OpCodes.Ldloc, keyBytesLocal);
-        il.Emit(OpCodes.Newobj, runtime.TSKeyObjectCtorSecret);
+        il.Emit(OpCodes.Newobj, crypto.KeyObjectCtorSecret);
         il.Emit(OpCodes.Ret);
     }
 
@@ -170,12 +171,13 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitCryptoCreatePublicKey(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
+        var crypto = runtime.RequireCrypto();
         var method = typeBuilder.DefineMethod(
             "CryptoCreatePublicKey",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.Object]);
-        runtime.CryptoCreatePublicKey = method;
+        crypto.CreatePublicKey = method;
 
         var il = method.GetILGenerator();
 
@@ -196,11 +198,11 @@ public partial class RuntimeEmitter
         // createPublicKey(private/public KeyObject) derives/copies the public key.
         var notKeyObject = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSKeyObjectCtorAsym.DeclaringType!);
+        il.Emit(OpCodes.Isinst, crypto.KeyObjectCtorAsym.DeclaringType!);
         il.Emit(OpCodes.Brfalse, notKeyObject);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSKeyObjectCtorAsym.DeclaringType!);
-        il.Emit(OpCodes.Callvirt, runtime.TSKeyObjectToPublicKey);
+        il.Emit(OpCodes.Castclass, crypto.KeyObjectCtorAsym.DeclaringType!);
+        il.Emit(OpCodes.Callvirt, crypto.KeyObjectToPublicKey);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notKeyObject);
 
@@ -283,7 +285,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, optionIsDer);
         il.Emit(OpCodes.Ldloc, keyValueLocal);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Call, runtime.TSKeyObjectImportJwk);
+        il.Emit(OpCodes.Call, crypto.KeyObjectImportJwk);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(optionIsDer);
         il.Emit(OpCodes.Ldloc, formatLocal);
@@ -293,7 +295,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, keyValueLocal);
         il.Emit(OpCodes.Ldloc, typeLocal);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Call, runtime.TSKeyObjectImportDer);
+        il.Emit(OpCodes.Call, crypto.KeyObjectImportDer);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(optionIsPem);
         il.Emit(OpCodes.Ldloc, keyValueLocal);
@@ -310,7 +312,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(createKeyObjectLabel);
         il.Emit(OpCodes.Ldloc, pemLocal);
         il.Emit(OpCodes.Ldc_I4_0); // isPrivate = false
-        il.Emit(OpCodes.Newobj, runtime.TSKeyObjectCtorAsym);
+        il.Emit(OpCodes.Newobj, crypto.KeyObjectCtorAsym);
         il.Emit(OpCodes.Ret);
     }
 
@@ -320,12 +322,13 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitCryptoCreatePrivateKey(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
+        var crypto = runtime.RequireCrypto();
         var method = typeBuilder.DefineMethod(
             "CryptoCreatePrivateKey",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.Object]);
-        runtime.CryptoCreatePrivateKey = method;
+        crypto.CreatePrivateKey = method;
 
         var il = method.GetILGenerator();
 
@@ -420,7 +423,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, optionIsDer);
         il.Emit(OpCodes.Ldloc, keyValueLocal);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Call, runtime.TSKeyObjectImportJwk);
+        il.Emit(OpCodes.Call, crypto.KeyObjectImportJwk);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(optionIsDer);
         il.Emit(OpCodes.Ldloc, formatLocal);
@@ -430,7 +433,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, keyValueLocal);
         il.Emit(OpCodes.Ldloc, typeLocal);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Call, runtime.TSKeyObjectImportDer);
+        il.Emit(OpCodes.Call, crypto.KeyObjectImportDer);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(optionIsPem);
         il.Emit(OpCodes.Ldloc, keyValueLocal);
@@ -447,13 +450,14 @@ public partial class RuntimeEmitter
         il.MarkLabel(createKeyObjectLabel);
         il.Emit(OpCodes.Ldloc, pemLocal);
         il.Emit(OpCodes.Ldc_I4_1); // isPrivate = true
-        il.Emit(OpCodes.Newobj, runtime.TSKeyObjectCtorAsym);
+        il.Emit(OpCodes.Newobj, crypto.KeyObjectCtorAsym);
         il.Emit(OpCodes.Ret);
     }
 
     /// <summary>crypto.diffieHellman({ privateKey, publicKey }) for EC KeyObjects.</summary>
     private void EmitCryptoDiffieHellman(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
+        var crypto = runtime.RequireCrypto();
         var method = typeBuilder.DefineMethod(
             "CryptoWrapper_diffieHellman",
             MethodAttributes.Public | MethodAttributes.Static,
@@ -462,16 +466,16 @@ public partial class RuntimeEmitter
         var il = method.GetILGenerator();
         var privateKeyLocal = il.DeclareLocal(_types.Object);
         var publicKeyLocal = il.DeclareLocal(_types.Object);
-        var keyObjectType = runtime.TSKeyObjectCtorAsym.DeclaringType!;
+        var keyObjectType = crypto.KeyObjectCtorAsym.DeclaringType!;
         var invalid = il.DefineLabel();
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "privateKey");
-        il.Emit(OpCodes.Call, runtime.TSKeyObjectGetOption);
+        il.Emit(OpCodes.Call, crypto.KeyObjectGetOption);
         il.Emit(OpCodes.Stloc, privateKeyLocal);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "publicKey");
-        il.Emit(OpCodes.Call, runtime.TSKeyObjectGetOption);
+        il.Emit(OpCodes.Call, crypto.KeyObjectGetOption);
         il.Emit(OpCodes.Stloc, publicKeyLocal);
         il.Emit(OpCodes.Ldloc, privateKeyLocal);
         il.Emit(OpCodes.Isinst, keyObjectType);
@@ -482,7 +486,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, privateKeyLocal);
         il.Emit(OpCodes.Castclass, keyObjectType);
         il.Emit(OpCodes.Ldloc, publicKeyLocal);
-        il.Emit(OpCodes.Callvirt, runtime.TSKeyObjectDeriveSecret);
+        il.Emit(OpCodes.Callvirt, crypto.KeyObjectDeriveSecret);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(invalid);

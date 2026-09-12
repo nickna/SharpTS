@@ -44,14 +44,15 @@ public partial class RuntimeEmitter
 
     private void EmitCryptoPrimitivesClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
+        var crypto = runtime.RequireCrypto();
         var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$CryptoPrimitives",
             TypeAttributes.Public | TypeAttributes.Abstract | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object);
 
-        EmitCryptoValidateHashName(typeBuilder, runtime);
-        EmitCryptoHashData(typeBuilder, runtime);
-        EmitCryptoSignHashName(typeBuilder, runtime);
+        EmitCryptoValidateHashName(typeBuilder, crypto);
+        EmitCryptoHashData(typeBuilder, crypto);
+        EmitCryptoSignHashName(typeBuilder, crypto);
         EmitCryptoEncodeBytes(typeBuilder, runtime);
         EmitCryptoBytesFromAny(typeBuilder, runtime);
 
@@ -63,14 +64,14 @@ public partial class RuntimeEmitter
     /// Normalizes and validates a createHash/crypto.hash algorithm name, throwing
     /// for unknown names and platform-unsupported SHA-3/SHAKE.
     /// </summary>
-    private void EmitCryptoValidateHashName(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitCryptoValidateHashName(TypeBuilder typeBuilder, EmittedCryptoRuntime crypto)
     {
         var method = typeBuilder.DefineMethod(
             "CryptoValidateHashName",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.String,
             [_types.String]);
-        runtime.CryptoValidateHashName = method;
+        crypto.ValidateHashName = method;
 
         var il = method.GetILGenerator();
         var lowerLocal = il.DeclareLocal(_types.String);
@@ -115,21 +116,21 @@ public partial class RuntimeEmitter
     /// Emits: public static byte[] CryptoHashData(string algorithm, byte[] data, int outputLength)
     /// One-shot digest over the full algorithm table; outputLength applies to XOFs only.
     /// </summary>
-    private void EmitCryptoHashData(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitCryptoHashData(TypeBuilder typeBuilder, EmittedCryptoRuntime crypto)
     {
         var method = typeBuilder.DefineMethod(
             "CryptoHashData",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.ByteArray,
             [_types.String, _types.ByteArray, _types.Int32]);
-        runtime.CryptoHashData = method;
+        crypto.HashData = method;
 
         var il = method.GetILGenerator();
         var lowerLocal = il.DeclareLocal(_types.String);
 
         // lower = CryptoValidateHashName(algorithm) — also enforces the platform gates
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.CryptoValidateHashName);
+        il.Emit(OpCodes.Call, crypto.ValidateHashName);
         il.Emit(OpCodes.Stloc, lowerLocal);
 
         foreach (var (name, hashData, _, xofDefault) in _hashTable)
@@ -178,14 +179,14 @@ public partial class RuntimeEmitter
     /// Emits: public static HashAlgorithmName CryptoSignHashName(string algorithm)
     /// Strips a leading "rsa-"/"ecdsa-" and parses the digest for Sign/Verify (#1055).
     /// </summary>
-    private void EmitCryptoSignHashName(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitCryptoSignHashName(TypeBuilder typeBuilder, EmittedCryptoRuntime crypto)
     {
         var method = typeBuilder.DefineMethod(
             "CryptoSignHashName",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.HashAlgorithmName,
             [_types.String]);
-        runtime.CryptoSignHashName = method;
+        crypto.SignHashName = method;
 
         var il = method.GetILGenerator();
         var lowerLocal = il.DeclareLocal(_types.String);
@@ -244,7 +245,7 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.ByteArray, _types.String]);
-        runtime.CryptoEncodeBytes = method;
+        runtime.RequireCrypto().EncodeBytes = method;
 
         var il = method.GetILGenerator();
         var bufferLabel = il.DefineLabel();
@@ -316,7 +317,7 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             _types.ByteArray,
             [_types.Object]);
-        runtime.CryptoBytesFromAny = method;
+        runtime.RequireCrypto().BytesFromAny = method;
 
         var il = method.GetILGenerator();
         var notStringLabel = il.DefineLabel();

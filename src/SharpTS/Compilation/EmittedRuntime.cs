@@ -1759,137 +1759,18 @@ public class EmittedRuntime
     public FieldBuilder CachedFetchFunction { get; set; } = null!;
     public FieldBuilder GlobalThisProperties { get; set; } = null!;
 
-    // Crypto module methods
-    public MethodBuilder CryptoCreateHash { get; set; } = null!;
-    public MethodBuilder CryptoRandomBytes { get; set; } = null!;
-    public MethodBuilder CryptoRandomFillSync { get; set; } = null!;
+    /// <summary>Node crypto metadata, or null when crypto is tree-shaken from this compilation.</summary>
+    public EmittedCryptoRuntime? Crypto { get; private set; }
 
-    // $Hash type - emitted for standalone crypto support
-    // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSHash
-    public ConstructorBuilder TSHashCtor { get; set; } = null!;
+    internal void BeginCryptoEmission()
+    {
+        if (Crypto is not null)
+            throw new InvalidOperationException("Crypto metadata emission has already started.");
+        Crypto = new EmittedCryptoRuntime();
+    }
 
-    // $Hmac type - emitted for standalone crypto support
-    // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSHmac
-    public MethodBuilder CryptoCreateHmac { get; set; } = null!;
-    public ConstructorBuilder TSHmacCtor { get; set; } = null!;
-
-    // $Cipher type - emitted for standalone crypto support
-    // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSCipher
-    public MethodBuilder CryptoCreateCipheriv { get; set; } = null!;
-    public ConstructorBuilder TSCipherCtor { get; set; } = null!;
-
-    // $Decipher type - emitted for standalone crypto support
-    // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSDecipher
-    public MethodBuilder CryptoCreateDecipheriv { get; set; } = null!;
-    public ConstructorBuilder TSDecipherCtor { get; set; } = null!;
-
-    // PBKDF2 and scrypt key derivation
-    public MethodBuilder CryptoPbkdf2Sync { get; set; } = null!;
-    public MethodBuilder CryptoScryptSync { get; set; } = null!;
-    public MethodBuilder ScryptDeriveBytes { get; set; } = null!;
-    // Scrypt helper methods (pure IL implementation)
-    public MethodBuilder ScryptRotateLeft { get; set; } = null!;
-    public MethodBuilder ScryptSalsa20Core { get; set; } = null!;
-    public MethodBuilder ScryptBlockMix { get; set; } = null!;
-    public MethodBuilder ScryptROMix { get; set; } = null!;
-
-    // Timing-safe comparison
-    public MethodBuilder CryptoTimingSafeEqual { get; set; } = null!;
-
-    // $Sign type - emitted for standalone crypto signing support
-    // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSSign
-    public MethodBuilder CryptoCreateSign { get; set; } = null!;
-    public ConstructorBuilder TSSignCtor { get; set; } = null!;
-    public MethodBuilder SignDataBytes { get; set; } = null!;  // Pure IL signing helper
-
-    // $Verify type - emitted for standalone crypto verification support
-    // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSVerify
-    public MethodBuilder CryptoCreateVerify { get; set; } = null!;
-    public ConstructorBuilder TSVerifyCtor { get; set; } = null!;
-    public MethodBuilder VerifyDataBytes { get; set; } = null!;  // Pure IL verification helper
-
-    // AES-GCM helper methods (needed because AesGcm uses Span<T> parameters)
-
-    // Crypto info methods (getHashes, getCiphers)
-    public MethodBuilder CryptoGetHashes { get; set; } = null!;
-    public MethodBuilder CryptoGetCiphers { get; set; } = null!;
-
-    // Key pair generation
-    public MethodBuilder CryptoGenerateKeyPairSync { get; set; } = null!;
-
-    // DiffieHellman support
-    public MethodBuilder CryptoCreateDiffieHellman { get; set; } = null!;
-    public MethodBuilder CryptoGetDiffieHellman { get; set; } = null!;
-    public Type TSDiffieHellmanType { get; set; } = null!;
-    public ConstructorBuilder TSDiffieHellmanCtorPrimeLength { get; set; } = null!;
-    public ConstructorBuilder TSDiffieHellmanCtorPrimeGenerator { get; set; } = null!;
-    public ConstructorBuilder TSDiffieHellmanCtorGroup { get; set; } = null!;
-    public MethodBuilder TSDHGenerateKeys { get; set; } = null!;
-    public MethodBuilder TSDHComputeSecret { get; set; } = null!;
-    public MethodBuilder TSDHGetPrime { get; set; } = null!;
-    public MethodBuilder TSDHGetGenerator { get; set; } = null!;
-    public MethodBuilder TSDHGetPublicKey { get; set; } = null!;
-    public MethodBuilder TSDHGetPrivateKey { get; set; } = null!;
-    public MethodBuilder TSDHSetPublicKey { get; set; } = null!;
-    public MethodBuilder TSDHSetPrivateKey { get; set; } = null!;
-    public MethodBuilder TSDHGetMember { get; set; } = null!;
-    public MethodBuilder TSDHEncodeResult { get; set; } = null!;
-    public MethodBuilder TSDHDecodeInput { get; set; } = null!;
-    public MethodBuilder TSDHGenerateRandomPrime { get; set; } = null!;
-    public MethodBuilder TSDHIsProbablePrime { get; set; } = null!;
-    public MethodBuilder TSDHBigIntFromBytes { get; set; } = null!;
-    public ConstructorBuilder BoundDHMethodCtor { get; set; } = null!;
-
-    // ECDH support
-    public MethodBuilder CryptoCreateECDH { get; set; } = null!;
-    public Type TSECDHType { get; set; } = null!;
-    public ConstructorBuilder TSECDHCtor { get; set; } = null!;
-    public MethodBuilder TSECDHGenerateKeys { get; set; } = null!;
-    public MethodBuilder TSECDHComputeSecret { get; set; } = null!;
-    public MethodBuilder TSECDHGetPublicKey { get; set; } = null!;
-    public MethodBuilder TSECDHGetPrivateKey { get; set; } = null!;
-    public MethodBuilder TSECDHSetPrivateKey { get; set; } = null!;
-    public MethodBuilder TSECDHGetMember { get; set; } = null!;
-    public MethodBuilder TSECDHEncodeResult { get; set; } = null!;
-    public MethodBuilder TSECDHDecodeInput { get; set; } = null!;
-    public MethodBuilder EcdhDecompressY { get; set; } = null!;
-    public MethodBuilder CryptoEcdhConvertKey { get; set; } = null!;
-    public MethodBuilder TSECDHComputeSecretHelper { get; set; } = null!;
-    public ConstructorBuilder BoundECDHMethodCtor { get; set; } = null!;
-
-    // RSA encryption/decryption
-    public MethodBuilder CryptoPublicEncrypt { get; set; } = null!;
-    public MethodBuilder CryptoPrivateDecrypt { get; set; } = null!;
-    public MethodBuilder CryptoPrivateEncrypt { get; set; } = null!;
-    public MethodBuilder CryptoPublicDecrypt { get; set; } = null!;
-
-    // RSA helpers (standalone - no SharpTS.dll dependency)
-    public MethodBuilder ExtractKeyPem { get; set; } = null!;
-    public MethodBuilder RsaEncryptRaw { get; set; } = null!;
-    public MethodBuilder RsaDecryptRaw { get; set; } = null!;
-
-    // Key pair generation helpers (standalone)
-    public MethodBuilder GetOptionInt { get; set; } = null!;
-    public MethodBuilder GetOptionString { get; set; } = null!;
-    public MethodBuilder GenerateRsaKeyPairRaw { get; set; } = null!;
-    public MethodBuilder GenerateEcKeyPairRaw { get; set; } = null!;
-
-    // HKDF key derivation
-    public MethodBuilder CryptoHkdfSync { get; set; } = null!;
-
-    // KeyObject support
-    public MethodBuilder CryptoCreateSecretKey { get; set; } = null!;
-    public MethodBuilder CryptoCreatePublicKey { get; set; } = null!;
-    public MethodBuilder CryptoCreatePrivateKey { get; set; } = null!;
-    public ConstructorBuilder TSKeyObjectCtorSecret { get; set; } = null!;
-    public ConstructorBuilder TSKeyObjectCtorAsym { get; set; } = null!;
-    public ConstructorBuilder TSKeyObjectCtorRsa { get; set; } = null!;
-    public ConstructorBuilder TSKeyObjectCtorEc { get; set; } = null!;
-    public MethodBuilder TSKeyObjectToPublicKey { get; set; } = null!;
-    public MethodBuilder TSKeyObjectImportJwk { get; set; } = null!;
-    public MethodBuilder TSKeyObjectImportDer { get; set; } = null!;
-    public MethodBuilder TSKeyObjectGetOption { get; set; } = null!;
-    public MethodBuilder TSKeyObjectDeriveSecret { get; set; } = null!;
+    public EmittedCryptoRuntime RequireCrypto() => Crypto
+        ?? throw new InvalidOperationException("Crypto runtime was not enabled for this compilation.");
 
     // HTTP module methods
     public MethodBuilder Fetch { get; set; } = null!;
@@ -2625,37 +2506,6 @@ public class EmittedRuntime
     public TypeBuilder TransformStreamType { get; set; } = null!;
     public ConstructorBuilder TransformStreamCtor { get; set; } = null!;
     public MethodBuilder BuildTransformSink { get; set; } = null!;
-
-    // ============================================================
-    // crypto epic #1054 — $CryptoPrimitives shared helpers and the
-    // options-aware sign/verify cores (#1055/#1056/#1057/#1058/#1062).
-    // Null when UsesCrypto is off; all consumers live in crypto emit files.
-    // ============================================================
-    public MethodBuilder CryptoValidateHashName { get; set; } = null!;
-    public MethodBuilder CryptoHashData { get; set; } = null!;
-    public MethodBuilder CryptoSignHashName { get; set; } = null!;
-    public MethodBuilder CryptoEncodeBytes { get; set; } = null!;
-    public MethodBuilder CryptoBytesFromAny { get; set; } = null!;
-    // One-shot sign/verify/hash cores on $Runtime (#1055)
-    public MethodBuilder CryptoSignDataEx { get; set; } = null!;
-    public MethodBuilder CryptoVerifyDataEx { get; set; } = null!;
-    public MethodBuilder CryptoHashOneShot { get; set; } = null!;
-    public MethodBuilder CryptoKeyToPem { get; set; } = null!;
-    // crypto.constants / getCipherInfo / getCurves (#1056/#1057/#1058)
-    public MethodBuilder CryptoGetConstants { get; set; } = null!;
-    public MethodBuilder CryptoGetCipherInfo { get; set; } = null!;
-    public MethodBuilder CryptoGetCurves { get; set; } = null!;
-    // Primes (#1062) — Miller-Rabin over System.Numerics.BigInteger, pure IL
-    public MethodBuilder CryptoIsProbablyPrime { get; set; } = null!;
-    public MethodBuilder CryptoGeneratePrimeCore { get; set; } = null!;
-    public MethodBuilder CryptoGeneratePrimeSyncObj { get; set; } = null!;
-    public MethodBuilder CryptoCheckPrimeSyncObj { get; set; } = null!;
-
-    // crypto KeyObject/ECDH completeness (#1059/#1060)
-    /// <summary>Encodes an ECPoint per Node point-conversion format (uncompressed/compressed/hybrid).</summary>
-    public MethodBuilder EcdhEncodePoint { get; set; } = null!;
-
-    public ConstructorBuilder? X509CertificateCtor { get; set; }
 
     // WebCrypto (#1063) — GetWebCryptoObject() → the $WebCrypto singleton
     // (globalThis.crypto / crypto.webcrypto). Reserved in DefineRuntimeClassPhase1;

@@ -10,41 +10,42 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitCryptoMethods(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
+        var crypto = runtime.RequireCrypto();
         // Scrypt helpers (must be emitted first - scrypt methods are used by EmitCryptoScryptSync)
-        EmitScryptMethods(typeBuilder, runtime);
+        EmitScryptMethods(typeBuilder, crypto);
 
         // Option readers first — CryptoCreateHash and the RSA/cipher option paths use them (#1054)
         EmitGetOptionInt(typeBuilder, runtime);
         EmitGetOptionString(typeBuilder, runtime);
 
-        EmitCryptoCreateHash(typeBuilder, runtime);
-        EmitCryptoCreateHmac(typeBuilder, runtime);
-        EmitCryptoCreateCipheriv(typeBuilder, runtime);
-        EmitCryptoCreateDecipheriv(typeBuilder, runtime);
+        EmitCryptoCreateHash(typeBuilder, crypto);
+        EmitCryptoCreateHmac(typeBuilder, crypto);
+        EmitCryptoCreateCipheriv(typeBuilder, crypto);
+        EmitCryptoCreateDecipheriv(typeBuilder, crypto);
         EmitCryptoRandomBytes(typeBuilder, runtime);
         EmitCryptoRandomFillSync(typeBuilder, runtime);
         EmitCryptoPbkdf2Sync(typeBuilder, runtime);
         EmitCryptoScryptSync(typeBuilder, runtime);
-        EmitCryptoTimingSafeEqual(typeBuilder, runtime);
-        EmitCryptoCreateSign(typeBuilder, runtime);
-        EmitCryptoCreateVerify(typeBuilder, runtime);
+        EmitCryptoTimingSafeEqual(typeBuilder, crypto);
+        EmitCryptoCreateSign(typeBuilder, crypto);
+        EmitCryptoCreateVerify(typeBuilder, crypto);
         EmitCryptoGetHashes(typeBuilder, runtime);
         EmitCryptoGetCiphers(typeBuilder, runtime);
 
         // Standalone helpers (must be emitted before methods that use them)
         // RSA helpers
         EmitExtractKeyPem(typeBuilder, runtime);
-        EmitRsaEncryptRaw(typeBuilder, runtime);
-        EmitRsaDecryptRaw(typeBuilder, runtime);
+        EmitRsaEncryptRaw(typeBuilder, crypto);
+        EmitRsaDecryptRaw(typeBuilder, crypto);
         // Key pair generation helpers
-        EmitGenerateRsaKeyPairRaw(typeBuilder, runtime);
-        EmitGenerateEcKeyPairRaw(typeBuilder, runtime);
+        EmitGenerateRsaKeyPairRaw(typeBuilder, crypto);
+        EmitGenerateEcKeyPairRaw(typeBuilder, crypto);
 
         // Methods that use the standalone helpers
         EmitCryptoGenerateKeyPairSync(typeBuilder, runtime);
-        EmitCryptoCreateDiffieHellman(typeBuilder, runtime);
-        EmitCryptoGetDiffieHellman(typeBuilder, runtime);
-        EmitCryptoCreateECDH(typeBuilder, runtime);
+        EmitCryptoCreateDiffieHellman(typeBuilder, crypto);
+        EmitCryptoGetDiffieHellman(typeBuilder, crypto);
+        EmitCryptoCreateECDH(typeBuilder, crypto);
 
         // RSA encryption/decryption (uses ExtractKeyPem, RsaEncryptRaw, RsaDecryptRaw)
         EmitCryptoPublicEncrypt(typeBuilder, runtime);
@@ -56,8 +57,8 @@ public partial class RuntimeEmitter
         EmitCryptoHkdfSync(typeBuilder, runtime);
 
         // Sign/Verify helpers (standalone)
-        EmitSignDataBytes(typeBuilder, runtime);
-        EmitVerifyDataBytes(typeBuilder, runtime);
+        EmitSignDataBytes(typeBuilder, crypto);
+        EmitVerifyDataBytes(typeBuilder, crypto);
 
         // ECDH helpers (standalone)
         EmitTSECDHHelpers(typeBuilder, runtime);
@@ -73,7 +74,7 @@ public partial class RuntimeEmitter
         // these helpers live on the $Runtime type.
         EmitCryptoKeyToPem(typeBuilder, runtime);
         EmitCryptoSignOneShot(typeBuilder, runtime);
-        EmitCryptoVerifyOneShot(typeBuilder, runtime);
+        EmitCryptoVerifyOneShot(typeBuilder, crypto);
         EmitCryptoHashOneShot(typeBuilder, runtime);
         EmitCryptoGetConstants(typeBuilder, runtime);
         EmitCryptoGetCipherInfo(typeBuilder, runtime);
@@ -93,13 +94,14 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitCryptoMethodWrappers(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
+        var crypto = runtime.RequireCrypto();
         // createHash(algorithm, options?) -> $Hash
         EmitCryptoMethodWrapper(typeBuilder, runtime, "createHash", 2, il =>
         {
             il.Emit(OpCodes.Ldarg_0);
             EmitObjectToString(il);
             il.Emit(OpCodes.Ldarg_1);  // options (can be null)
-            il.Emit(OpCodes.Call, runtime.CryptoCreateHash);
+            il.Emit(OpCodes.Call, crypto.CreateHash);
         });
 
         // createHmac(algorithm, key) -> $Hmac
@@ -109,7 +111,7 @@ public partial class RuntimeEmitter
             EmitObjectToString(il);
             il.Emit(OpCodes.Ldarg_1);
             EmitObjectToKeyBytes(il);
-            il.Emit(OpCodes.Call, runtime.CryptoCreateHmac);
+            il.Emit(OpCodes.Call, crypto.CreateHmac);
         });
 
         // randomBytes(size) -> $Array
@@ -117,7 +119,7 @@ public partial class RuntimeEmitter
         {
             il.Emit(OpCodes.Ldarg_0);
             EmitObjectToInt32(il);
-            il.Emit(OpCodes.Call, runtime.CryptoRandomBytes);
+            il.Emit(OpCodes.Call, crypto.RandomBytes);
         });
 
         // randomUUID() -> string
@@ -182,7 +184,7 @@ public partial class RuntimeEmitter
             EmitObjectToKeyBytes(il);
             il.Emit(OpCodes.Ldarg_2);
             EmitObjectToKeyBytes(il);
-            il.Emit(OpCodes.Call, runtime.CryptoCreateCipheriv);
+            il.Emit(OpCodes.Call, crypto.CreateCipheriv);
         });
 
         // createDecipheriv(algorithm, key, iv) -> $Decipher
@@ -194,7 +196,7 @@ public partial class RuntimeEmitter
             EmitObjectToKeyBytes(il);
             il.Emit(OpCodes.Ldarg_2);
             EmitObjectToKeyBytes(il);
-            il.Emit(OpCodes.Call, runtime.CryptoCreateDecipheriv);
+            il.Emit(OpCodes.Call, crypto.CreateDecipheriv);
         });
 
         // pbkdf2Sync(password, salt, iterations, keylen, digest) -> Buffer
@@ -210,7 +212,7 @@ public partial class RuntimeEmitter
             EmitObjectToInt32(il);
             il.Emit(OpCodes.Ldarg, 4);
             EmitObjectToString(il);
-            il.Emit(OpCodes.Call, runtime.CryptoPbkdf2Sync);
+            il.Emit(OpCodes.Call, crypto.Pbkdf2Sync);
         });
 
         // scryptSync(password, salt, keylen, options?) -> Buffer
@@ -223,7 +225,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_2);
             EmitObjectToInt32(il);
             il.Emit(OpCodes.Ldarg_3);  // options (can be null)
-            il.Emit(OpCodes.Call, runtime.CryptoScryptSync);
+            il.Emit(OpCodes.Call, crypto.ScryptSync);
         });
 
         // timingSafeEqual(a, b) -> boolean
@@ -233,7 +235,7 @@ public partial class RuntimeEmitter
             EmitObjectToKeyBytes(il);
             il.Emit(OpCodes.Ldarg_1);
             EmitObjectToKeyBytes(il);
-            il.Emit(OpCodes.Call, runtime.CryptoTimingSafeEqual);
+            il.Emit(OpCodes.Call, crypto.TimingSafeEqual);
         });
 
         // createSign(algorithm) -> $Sign
@@ -241,7 +243,7 @@ public partial class RuntimeEmitter
         {
             il.Emit(OpCodes.Ldarg_0);
             EmitObjectToString(il);
-            il.Emit(OpCodes.Call, runtime.CryptoCreateSign);
+            il.Emit(OpCodes.Call, crypto.CreateSign);
         });
 
         // createVerify(algorithm) -> $Verify
@@ -249,19 +251,19 @@ public partial class RuntimeEmitter
         {
             il.Emit(OpCodes.Ldarg_0);
             EmitObjectToString(il);
-            il.Emit(OpCodes.Call, runtime.CryptoCreateVerify);
+            il.Emit(OpCodes.Call, crypto.CreateVerify);
         });
 
         // getHashes() -> $Array
         EmitCryptoMethodWrapper(typeBuilder, runtime, "getHashes", 0, il =>
         {
-            il.Emit(OpCodes.Call, runtime.CryptoGetHashes);
+            il.Emit(OpCodes.Call, crypto.GetHashes);
         });
 
         // getCiphers() -> $Array
         EmitCryptoMethodWrapper(typeBuilder, runtime, "getCiphers", 0, il =>
         {
-            il.Emit(OpCodes.Call, runtime.CryptoGetCiphers);
+            il.Emit(OpCodes.Call, crypto.GetCiphers);
         });
 
         // generateKeyPairSync(type, options?) -> $Object
@@ -270,7 +272,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_0);
             EmitObjectToString(il);
             il.Emit(OpCodes.Ldarg_1);  // options (can be null)
-            il.Emit(OpCodes.Call, runtime.CryptoGenerateKeyPairSync);
+            il.Emit(OpCodes.Call, crypto.GenerateKeyPairSync);
         });
 
         // createDiffieHellman(primeOrLength, generator?) -> $DiffieHellman
@@ -278,7 +280,7 @@ public partial class RuntimeEmitter
         {
             il.Emit(OpCodes.Ldarg_0);  // prime or length
             il.Emit(OpCodes.Ldarg_1);  // generator (can be null)
-            il.Emit(OpCodes.Call, runtime.CryptoCreateDiffieHellman);
+            il.Emit(OpCodes.Call, crypto.CreateDiffieHellman);
         });
 
         // getDiffieHellman(groupName) -> $DiffieHellman
@@ -286,7 +288,7 @@ public partial class RuntimeEmitter
         {
             il.Emit(OpCodes.Ldarg_0);
             EmitObjectToString(il);
-            il.Emit(OpCodes.Call, runtime.CryptoGetDiffieHellman);
+            il.Emit(OpCodes.Call, crypto.GetDiffieHellman);
         });
 
         // createECDH(curveName) -> $ECDH
@@ -294,7 +296,7 @@ public partial class RuntimeEmitter
         {
             il.Emit(OpCodes.Ldarg_0);
             EmitObjectToString(il);
-            il.Emit(OpCodes.Call, runtime.CryptoCreateECDH);
+            il.Emit(OpCodes.Call, crypto.CreateECDH);
         });
 
         // publicEncrypt(key, buffer) -> Buffer
@@ -303,7 +305,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_0);  // key (as object)
             il.Emit(OpCodes.Ldarg_1);
             EmitObjectToKeyBytes(il);  // buffer as byte[]
-            il.Emit(OpCodes.Call, runtime.CryptoPublicEncrypt);
+            il.Emit(OpCodes.Call, crypto.PublicEncrypt);
         });
 
         // privateDecrypt(key, buffer) -> Buffer
@@ -312,7 +314,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_0);  // key (as object)
             il.Emit(OpCodes.Ldarg_1);
             EmitObjectToKeyBytes(il);  // buffer as byte[]
-            il.Emit(OpCodes.Call, runtime.CryptoPrivateDecrypt);
+            il.Emit(OpCodes.Call, crypto.PrivateDecrypt);
         });
 
         // privateEncrypt(key, buffer) -> Buffer
@@ -321,7 +323,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_0);  // key (as object)
             il.Emit(OpCodes.Ldarg_1);
             EmitObjectToKeyBytes(il);  // buffer as byte[]
-            il.Emit(OpCodes.Call, runtime.CryptoPrivateEncrypt);
+            il.Emit(OpCodes.Call, crypto.PrivateEncrypt);
         });
 
         // publicDecrypt(key, buffer) -> Buffer
@@ -330,7 +332,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_0);  // key (as object)
             il.Emit(OpCodes.Ldarg_1);
             EmitObjectToKeyBytes(il);  // buffer as byte[]
-            il.Emit(OpCodes.Call, runtime.CryptoPublicDecrypt);
+            il.Emit(OpCodes.Call, crypto.PublicDecrypt);
         });
 
         // hkdfSync(digest, ikm, salt, info, keylen) -> Buffer
@@ -346,7 +348,7 @@ public partial class RuntimeEmitter
             EmitObjectToKeyBytes(il);  // info
             il.Emit(OpCodes.Ldarg, 4);
             EmitObjectToInt32(il);  // keylen
-            il.Emit(OpCodes.Call, runtime.CryptoHkdfSync);
+            il.Emit(OpCodes.Call, crypto.HkdfSync);
         });
 
         // createSecretKey(key, encoding?) -> KeyObject
@@ -354,21 +356,21 @@ public partial class RuntimeEmitter
         {
             il.Emit(OpCodes.Ldarg_0);  // key (as object)
             il.Emit(OpCodes.Ldarg_1);  // encoding (can be null)
-            il.Emit(OpCodes.Call, runtime.CryptoCreateSecretKey);
+            il.Emit(OpCodes.Call, crypto.CreateSecretKey);
         });
 
         // createPublicKey(key) -> KeyObject
         EmitCryptoMethodWrapper(typeBuilder, runtime, "createPublicKey", 1, il =>
         {
             il.Emit(OpCodes.Ldarg_0);  // key (as object)
-            il.Emit(OpCodes.Call, runtime.CryptoCreatePublicKey);
+            il.Emit(OpCodes.Call, crypto.CreatePublicKey);
         });
 
         // createPrivateKey(key) -> KeyObject
         EmitCryptoMethodWrapper(typeBuilder, runtime, "createPrivateKey", 1, il =>
         {
             il.Emit(OpCodes.Ldarg_0);  // key (as object)
-            il.Emit(OpCodes.Call, runtime.CryptoCreatePrivateKey);
+            il.Emit(OpCodes.Call, crypto.CreatePrivateKey);
         });
 
         // === Async (callback-based) wrappers ===
@@ -388,7 +390,7 @@ public partial class RuntimeEmitter
             EmitObjectToInt32(il);
             il.Emit(OpCodes.Ldarg, 4);
             EmitObjectToString(il);
-            il.Emit(OpCodes.Call, runtime_.CryptoPbkdf2Sync);
+            il.Emit(OpCodes.Call, runtime_.RequireCrypto().Pbkdf2Sync);
         });
 
         // scrypt(password, salt, keylen, options_or_callback, callback?) -> null
@@ -409,7 +411,7 @@ public partial class RuntimeEmitter
             EmitObjectToKeyBytes(il);
             il.Emit(OpCodes.Ldarg, 4);
             EmitObjectToInt32(il);
-            il.Emit(OpCodes.Call, runtime_.CryptoHkdfSync);
+            il.Emit(OpCodes.Call, runtime_.RequireCrypto().HkdfSync);
         });
 
         // generateKeyPair(type, options, callback) -> null
@@ -426,7 +428,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Ldarg_2);
             EmitObjectToStringOrNull(il);
-            il.Emit(OpCodes.Call, runtime.CryptoHashOneShot);
+            il.Emit(OpCodes.Call, crypto.HashOneShot);
         });
 
         // sign(algorithm, data, key, callback?) -> Buffer (sync form; callback form handled by module emitter)
@@ -436,7 +438,7 @@ public partial class RuntimeEmitter
             EmitObjectToStringOrNull(il);
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Ldarg_2);
-            il.Emit(OpCodes.Call, runtime.CryptoSignDataEx);
+            il.Emit(OpCodes.Call, crypto.SignDataEx);
         });
 
         // verify(algorithm, data, key, signature, callback?) -> bool
@@ -447,7 +449,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Ldarg_2);
             il.Emit(OpCodes.Ldarg_3);
-            il.Emit(OpCodes.Call, runtime.CryptoVerifyDataEx);
+            il.Emit(OpCodes.Call, crypto.VerifyDataEx);
         });
 
         // getCipherInfo(nameOrNid, options?) -> object|undefined
@@ -455,13 +457,13 @@ public partial class RuntimeEmitter
         {
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Call, runtime.CryptoGetCipherInfo);
+            il.Emit(OpCodes.Call, crypto.GetCipherInfo);
         });
 
         // getCurves() -> string[]
         EmitCryptoMethodWrapper(typeBuilder, runtime, "getCurves", 0, il =>
         {
-            il.Emit(OpCodes.Call, runtime.CryptoGetCurves);
+            il.Emit(OpCodes.Call, crypto.GetCurves);
         });
 
         // generatePrimeSync(size, options?) -> Buffer|bigint
@@ -470,7 +472,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_0);
             EmitObjectToInt32(il);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Call, runtime.CryptoGeneratePrimeSyncObj);
+            il.Emit(OpCodes.Call, crypto.GeneratePrimeSyncObj);
         });
 
         // checkPrimeSync(candidate, options?) -> bool
@@ -478,7 +480,7 @@ public partial class RuntimeEmitter
         {
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Call, runtime.CryptoCheckPrimeSyncObj);
+            il.Emit(OpCodes.Call, crypto.CheckPrimeSyncObj);
         });
 
         // Callback-based async wrappers owned by this slice: randomFill, generatePrime,
@@ -753,7 +755,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_2);
         EmitObjectToInt32(il);
         il.Emit(OpCodes.Ldloc, optionsLocal);
-        il.Emit(OpCodes.Call, runtime.CryptoScryptSync);
+        il.Emit(OpCodes.Call, runtime.RequireCrypto().ScryptSync);
         il.Emit(OpCodes.Stloc, resultLocal);
 
         // callback.Invoke([null, result])
@@ -825,7 +827,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0); // type
         EmitObjectToString(il);
         il.Emit(OpCodes.Ldarg_1); // options
-        il.Emit(OpCodes.Call, runtime.CryptoGenerateKeyPairSync);
+        il.Emit(OpCodes.Call, runtime.RequireCrypto().GenerateKeyPairSync);
         il.Emit(OpCodes.Stloc, resultLocal);
 
         // callback.Invoke([null, publicKey, privateKey])

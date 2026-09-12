@@ -40,6 +40,8 @@ public partial class RuntimeEmitter
         if (_emitHosted)
             _features.UsesPromise = true;
         var runtime = new EmittedRuntime();
+        if (features.UsesCrypto)
+            runtime.BeginCryptoEmission();
         if (features.UsesPromise)
             runtime.BeginPromiseEmission();
         if (features.UsesNet)
@@ -227,14 +229,14 @@ public partial class RuntimeEmitter
             EmitTSHmacClass(moduleBuilder, runtime);
             EmitTSCipherClass(moduleBuilder, runtime);
             EmitTSDecipherClass(moduleBuilder, runtime);
-            EmitTSSignTypeDefinition(moduleBuilder, runtime);
-            EmitTSVerifyTypeDefinition(moduleBuilder, runtime);
+            EmitTSSignTypeDefinition(moduleBuilder, runtime.RequireCrypto());
+            EmitTSVerifyTypeDefinition(moduleBuilder, runtime.RequireCrypto());
             EmitTSKeyObjectClass(moduleBuilder, runtime);
             EmitTSX509Class(moduleBuilder, runtime); // crypto.X509Certificate (#1064); needs $TSKeyObject
-            EmitTSECDHTypeDefinition(moduleBuilder, runtime);
-            EmitBoundECDHMethodTypeDefinition(moduleBuilder, runtime);
+            EmitTSECDHTypeDefinition(moduleBuilder, runtime.RequireCrypto());
+            EmitBoundECDHMethodTypeDefinition(moduleBuilder, runtime.RequireCrypto());
             EmitTSDHTypeDefinition(moduleBuilder, runtime);
-            EmitBoundDHMethodTypeDefinition(moduleBuilder, runtime);
+            EmitBoundDHMethodTypeDefinition(moduleBuilder, runtime.RequireCrypto());
         }
 
         // Emit $EventLoop singleton (must come before timer types and net/http types that call Ref/Unref/Schedule)
@@ -609,14 +611,15 @@ public partial class RuntimeEmitter
         {
             EmitTSSignFinalize(runtime);
             EmitTSVerifyFinalize(runtime);
-            EmitTSECDHFinalize(runtime);
-            EmitBoundECDHMethodFinalize(runtime);
+            EmitTSECDHFinalize(runtime.RequireCrypto());
+            EmitBoundECDHMethodFinalize(runtime.RequireCrypto());
             EmitTSDHFinalize(runtime);
-            EmitBoundDHMethodFinalize(runtime);
+            EmitBoundDHMethodFinalize(runtime.RequireCrypto());
         }
 
         runtime.ArrayStorage.CompleteEmission();
         runtime.ArrayOperations.CompleteEmission();
+        runtime.Crypto?.CompleteEmission();
         runtime.Dns?.CompleteEmission();
         runtime.Zlib?.CompleteEmission();
         runtime.Tls?.CompleteEmission();

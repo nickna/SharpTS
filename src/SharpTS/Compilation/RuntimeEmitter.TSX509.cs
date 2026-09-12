@@ -20,6 +20,7 @@ public partial class RuntimeEmitter
 {
     private void EmitTSX509Class(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
+        var crypto = runtime.RequireCrypto();
         var tb = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$X509Certificate",
             TypeAttributes.Public | TypeAttributes.Class | TypeAttributes.BeforeFieldInit,
@@ -47,7 +48,7 @@ public partial class RuntimeEmitter
 
         var ctor = EmitX509Ctor(tb, runtime, certField, subjectField, issuerField, cnField,
             sanField, dnsField, ipsField, emailsField, caField, formatName, extractCn);
-        runtime.X509CertificateCtor = ctor;
+        crypto.X509CertificateCtor = ctor;
 
         // --- simple string/bool property getters over precomputed fields ---
         EmitX509FieldGetter(tb, "subject", "get_Subject", subjectField);
@@ -64,7 +65,7 @@ public partial class RuntimeEmitter
         EmitX509FingerprintGetter(tb, "fingerprint256", "get_Fingerprint256", certField, colonHex, "SHA256");
         EmitX509FingerprintGetter(tb, "fingerprint512", "get_Fingerprint512", certField, colonHex, "SHA512");
         EmitX509RawGetter(tb, runtime, certField);
-        EmitX509PublicKeyGetter(tb, runtime, certField);
+        EmitX509PublicKeyGetter(tb, crypto, certField);
         EmitX509KeyUsageGetter(tb, runtime, certField);
         EmitX509ExtKeyUsageGetter(tb, runtime, certField);
         EmitX509InfoAccessGetter(tb);
@@ -96,7 +97,7 @@ public partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Newobj, runtime.X509CertificateCtor!);
+        il.Emit(OpCodes.Newobj, runtime.RequireCrypto().X509CertificateCtor!);
         il.Emit(OpCodes.Ret);
 
         runtime.RegisterBuiltInModuleMethod("crypto", "X509Certificate", method);
@@ -1197,7 +1198,7 @@ public partial class RuntimeEmitter
     }
 
     /// <summary>Emits: string SpkiPem(X509Certificate2) — used by publicKey and checkIssued.</summary>
-    private void EmitX509PublicKeyGetter(TypeBuilder tb, EmittedRuntime runtime, FieldBuilder certField)
+    private void EmitX509PublicKeyGetter(TypeBuilder tb, EmittedCryptoRuntime crypto, FieldBuilder certField)
     {
         // helper: static string SpkiPem(X509Certificate2)
         var spkiPem = tb.DefineMethod("SpkiPem",
@@ -1225,7 +1226,7 @@ public partial class RuntimeEmitter
         gil.Emit(OpCodes.Ldfld, certField);
         gil.Emit(OpCodes.Call, spkiPem);
         gil.Emit(OpCodes.Ldc_I4_0); // isPrivate: false
-        gil.Emit(OpCodes.Newobj, runtime.TSKeyObjectCtorAsym);
+        gil.Emit(OpCodes.Newobj, crypto.KeyObjectCtorAsym);
         gil.Emit(OpCodes.Ret);
         prop.SetGetMethod(getter);
     }

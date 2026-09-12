@@ -11,7 +11,6 @@ namespace SharpTS.Compilation;
 /// </summary>
 public partial class RuntimeEmitter
 {
-    private TypeBuilder _tsDHTypeBuilder = null!;
     private FieldBuilder _tsDHPrimeField = null!;
     private FieldBuilder _tsDHGeneratorField = null!;
     private FieldBuilder _tsDHPrivateKeyField = null!;
@@ -34,57 +33,57 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitTSDHTypeDefinition(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
+        var crypto = runtime.RequireCrypto();
         // Define class: public sealed class $DiffieHellman
-        _tsDHTypeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
+        crypto.DiffieHellmanType = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$DiffieHellman",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object
         );
-        runtime.TSDiffieHellmanType = _tsDHTypeBuilder;
 
         // Instance fields
-        _tsDHPrimeField = _tsDHTypeBuilder.DefineField("_prime", typeof(BigInteger), FieldAttributes.Private);
-        _tsDHGeneratorField = _tsDHTypeBuilder.DefineField("_generator", typeof(BigInteger), FieldAttributes.Private);
-        _tsDHPrivateKeyField = _tsDHTypeBuilder.DefineField("_privateKey", typeof(BigInteger?), FieldAttributes.Private);
-        _tsDHPublicKeyField = _tsDHTypeBuilder.DefineField("_publicKey", typeof(BigInteger?), FieldAttributes.Private);
-        _tsDHIsGroupField = _tsDHTypeBuilder.DefineField("_isGroup", _types.Boolean, FieldAttributes.Private);
+        _tsDHPrimeField = crypto.DiffieHellmanType.DefineField("_prime", typeof(BigInteger), FieldAttributes.Private);
+        _tsDHGeneratorField = crypto.DiffieHellmanType.DefineField("_generator", typeof(BigInteger), FieldAttributes.Private);
+        _tsDHPrivateKeyField = crypto.DiffieHellmanType.DefineField("_privateKey", typeof(BigInteger?), FieldAttributes.Private);
+        _tsDHPublicKeyField = crypto.DiffieHellmanType.DefineField("_publicKey", typeof(BigInteger?), FieldAttributes.Private);
+        _tsDHIsGroupField = crypto.DiffieHellmanType.DefineField("_isGroup", _types.Boolean, FieldAttributes.Private);
 
         // Static fields for MODP primes (initialized in static constructor)
-        _modp1PrimeField = _tsDHTypeBuilder.DefineField("Modp1Prime", _types.ByteArray, FieldAttributes.Private | FieldAttributes.Static);
-        _modp2PrimeField = _tsDHTypeBuilder.DefineField("Modp2Prime", _types.ByteArray, FieldAttributes.Private | FieldAttributes.Static);
-        _modp5PrimeField = _tsDHTypeBuilder.DefineField("Modp5Prime", _types.ByteArray, FieldAttributes.Private | FieldAttributes.Static);
-        _modp14PrimeField = _tsDHTypeBuilder.DefineField("Modp14Prime", _types.ByteArray, FieldAttributes.Private | FieldAttributes.Static);
-        _modp15PrimeField = _tsDHTypeBuilder.DefineField("Modp15Prime", _types.ByteArray, FieldAttributes.Private | FieldAttributes.Static);
-        _modp16PrimeField = _tsDHTypeBuilder.DefineField("Modp16Prime", _types.ByteArray, FieldAttributes.Private | FieldAttributes.Static);
-        _modp17PrimeField = _tsDHTypeBuilder.DefineField("Modp17Prime", _types.ByteArray, FieldAttributes.Private | FieldAttributes.Static);
-        _modp18PrimeField = _tsDHTypeBuilder.DefineField("Modp18Prime", _types.ByteArray, FieldAttributes.Private | FieldAttributes.Static);
+        _modp1PrimeField = crypto.DiffieHellmanType.DefineField("Modp1Prime", _types.ByteArray, FieldAttributes.Private | FieldAttributes.Static);
+        _modp2PrimeField = crypto.DiffieHellmanType.DefineField("Modp2Prime", _types.ByteArray, FieldAttributes.Private | FieldAttributes.Static);
+        _modp5PrimeField = crypto.DiffieHellmanType.DefineField("Modp5Prime", _types.ByteArray, FieldAttributes.Private | FieldAttributes.Static);
+        _modp14PrimeField = crypto.DiffieHellmanType.DefineField("Modp14Prime", _types.ByteArray, FieldAttributes.Private | FieldAttributes.Static);
+        _modp15PrimeField = crypto.DiffieHellmanType.DefineField("Modp15Prime", _types.ByteArray, FieldAttributes.Private | FieldAttributes.Static);
+        _modp16PrimeField = crypto.DiffieHellmanType.DefineField("Modp16Prime", _types.ByteArray, FieldAttributes.Private | FieldAttributes.Static);
+        _modp17PrimeField = crypto.DiffieHellmanType.DefineField("Modp17Prime", _types.ByteArray, FieldAttributes.Private | FieldAttributes.Static);
+        _modp18PrimeField = crypto.DiffieHellmanType.DefineField("Modp18Prime", _types.ByteArray, FieldAttributes.Private | FieldAttributes.Static);
 
         // Static constructor to initialize MODP primes
-        EmitTSDHStaticConstructor(_tsDHTypeBuilder);
+        EmitTSDHStaticConstructor(crypto.DiffieHellmanType);
 
         // Helper methods needed by constructors and CryptoCreateDiffieHellman
         // Order matters: BigIntFromBytes first, then IsProbablePrime (uses BigIntFromBytes),
         // then GenerateRandomPrime (uses both)
-        EmitTSDHBigIntFromBytes(_tsDHTypeBuilder, runtime);
-        EmitTSDHIsProbablePrime(_tsDHTypeBuilder, runtime);
-        EmitTSDHGenerateRandomPrime(_tsDHTypeBuilder, runtime);
+        EmitTSDHBigIntFromBytes(crypto.DiffieHellmanType, crypto);
+        EmitTSDHIsProbablePrime(crypto.DiffieHellmanType, crypto);
+        EmitTSDHGenerateRandomPrime(crypto.DiffieHellmanType, crypto);
         // DecodeInput is needed by CryptoCreateDiffieHellman which runs during EmitRuntimeClass
-        EmitTSDHDecodeInput(_tsDHTypeBuilder, runtime);
+        EmitTSDHDecodeInput(crypto.DiffieHellmanType, runtime);
 
         // Constructors
-        EmitTSDHCtorPrimeLength(_tsDHTypeBuilder, runtime);
-        EmitTSDHCtorPrimeGenerator(_tsDHTypeBuilder, runtime);
-        EmitTSDHCtorGroup(_tsDHTypeBuilder, runtime);
+        EmitTSDHCtorPrimeLength(crypto.DiffieHellmanType, crypto);
+        EmitTSDHCtorPrimeGenerator(crypto.DiffieHellmanType, crypto);
+        EmitTSDHCtorGroup(crypto.DiffieHellmanType, crypto);
 
         // Define GetMember signature in Phase 1 so GetProperty can reference it.
         // The IL body is emitted in Phase 2 (EmitTSDHGetMember).
-        var getMemberMethod = _tsDHTypeBuilder.DefineMethod(
+        var getMemberMethod = crypto.DiffieHellmanType.DefineMethod(
             "GetMember",
             MethodAttributes.Public,
             _types.Object,
             [_types.String]
         );
-        runtime.TSDHGetMember = getMemberMethod;
+        crypto.DHGetMember = getMemberMethod;
     }
 
     /// <summary>
@@ -93,22 +92,23 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitTSDHFinalize(EmittedRuntime runtime)
     {
+        var crypto = runtime.RequireCrypto();
         // Helper methods first (EncodeResult is needed by other methods)
-        EmitTSDHEncodeResult(_tsDHTypeBuilder, runtime);
+        EmitTSDHEncodeResult(crypto.DiffieHellmanType, runtime);
 
         // Methods
-        EmitTSDHGenerateKeys(_tsDHTypeBuilder, runtime);
-        EmitTSDHComputeSecret(_tsDHTypeBuilder, runtime);
-        EmitTSDHGetPrime(_tsDHTypeBuilder, runtime);
-        EmitTSDHGetGenerator(_tsDHTypeBuilder, runtime);
-        EmitTSDHGetPublicKey(_tsDHTypeBuilder, runtime);
-        EmitTSDHGetPrivateKey(_tsDHTypeBuilder, runtime);
-        EmitTSDHSetPublicKey(_tsDHTypeBuilder, runtime);
-        EmitTSDHSetPrivateKey(_tsDHTypeBuilder, runtime);
-        EmitTSDHGetMember(_tsDHTypeBuilder, runtime);
+        EmitTSDHGenerateKeys(crypto.DiffieHellmanType, crypto);
+        EmitTSDHComputeSecret(crypto.DiffieHellmanType, crypto);
+        EmitTSDHGetPrime(crypto.DiffieHellmanType, crypto);
+        EmitTSDHGetGenerator(crypto.DiffieHellmanType, crypto);
+        EmitTSDHGetPublicKey(crypto.DiffieHellmanType, crypto);
+        EmitTSDHGetPrivateKey(crypto.DiffieHellmanType, crypto);
+        EmitTSDHSetPublicKey(crypto.DiffieHellmanType, crypto);
+        EmitTSDHSetPrivateKey(crypto.DiffieHellmanType, crypto);
+        EmitTSDHGetMember(crypto.DiffieHellmanType, crypto);
         // Note: DecodeInput, GenerateRandomPrime and IsProbablePrime are emitted in Phase 1
 
-        _tsDHTypeBuilder.CreateType();
+        crypto.DiffieHellmanType.CreateType();
     }
 
     /// <summary>
@@ -152,7 +152,7 @@ public partial class RuntimeEmitter
     /// Creates a BigInteger from byte array with isUnsigned=true, isBigEndian=true.
     /// This helper method is needed because BigInteger constructor takes ReadOnlySpan<byte>, not byte[].
     /// </summary>
-    private void EmitTSDHBigIntFromBytes(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSDHBigIntFromBytes(TypeBuilder typeBuilder, EmittedCryptoRuntime crypto)
     {
         var method = typeBuilder.DefineMethod(
             "BigIntFromBytes",
@@ -160,7 +160,7 @@ public partial class RuntimeEmitter
             typeof(BigInteger),
             [typeof(byte[])]
         );
-        runtime.TSDHBigIntFromBytes = method;
+        crypto.DHBigIntFromBytes = method;
 
         var il = method.GetILGenerator();
 
@@ -343,14 +343,14 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits: public $DiffieHellman(int primeLength)
     /// </summary>
-    private void EmitTSDHCtorPrimeLength(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSDHCtorPrimeLength(TypeBuilder typeBuilder, EmittedCryptoRuntime crypto)
     {
         var ctor = typeBuilder.DefineConstructor(
             MethodAttributes.Public,
             CallingConventions.Standard,
             [_types.Int32]
         );
-        runtime.TSDiffieHellmanCtorPrimeLength = ctor;
+        crypto.DiffieHellmanCtorPrimeLength = ctor;
 
         var il = ctor.GetILGenerator();
 
@@ -372,7 +372,7 @@ public partial class RuntimeEmitter
         // _prime = GenerateRandomPrime(primeLength)
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);  // primeLength
-        il.Emit(OpCodes.Call, runtime.TSDHGenerateRandomPrime);
+        il.Emit(OpCodes.Call, crypto.DHGenerateRandomPrime);
         il.Emit(OpCodes.Stfld, _tsDHPrimeField);
 
         il.Emit(OpCodes.Ret);
@@ -381,14 +381,14 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits: public $DiffieHellman(byte[] prime, byte[]? generator)
     /// </summary>
-    private void EmitTSDHCtorPrimeGenerator(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSDHCtorPrimeGenerator(TypeBuilder typeBuilder, EmittedCryptoRuntime crypto)
     {
         var ctor = typeBuilder.DefineConstructor(
             MethodAttributes.Public,
             CallingConventions.Standard,
             [_types.ByteArray, _types.ByteArray]
         );
-        runtime.TSDiffieHellmanCtorPrimeGenerator = ctor;
+        crypto.DiffieHellmanCtorPrimeGenerator = ctor;
 
         var il = ctor.GetILGenerator();
 
@@ -404,7 +404,7 @@ public partial class RuntimeEmitter
         // _prime = BigIntFromBytes(prime)
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);  // prime bytes
-        il.Emit(OpCodes.Call, runtime.TSDHBigIntFromBytes);
+        il.Emit(OpCodes.Call, crypto.DHBigIntFromBytes);
         il.Emit(OpCodes.Stfld, _tsDHPrimeField);
 
         // if (generator != null) _generator = BigIntFromBytes(generator) else _generator = 2
@@ -417,7 +417,7 @@ public partial class RuntimeEmitter
         // generator != null
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_2);  // generator bytes
-        il.Emit(OpCodes.Call, runtime.TSDHBigIntFromBytes);
+        il.Emit(OpCodes.Call, crypto.DHBigIntFromBytes);
         il.Emit(OpCodes.Stfld, _tsDHGeneratorField);
         il.Emit(OpCodes.Br, doneLabel);
 
@@ -435,14 +435,14 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits: public $DiffieHellman(string groupName)
     /// </summary>
-    private void EmitTSDHCtorGroup(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSDHCtorGroup(TypeBuilder typeBuilder, EmittedCryptoRuntime crypto)
     {
         var ctor = typeBuilder.DefineConstructor(
             MethodAttributes.Public,
             CallingConventions.Standard,
             [_types.String]
         );
-        runtime.TSDiffieHellmanCtorGroup = ctor;
+        crypto.DiffieHellmanCtorGroup = ctor;
 
         var il = ctor.GetILGenerator();
 
@@ -510,7 +510,7 @@ public partial class RuntimeEmitter
         // _prime = new BigInteger(primeLocal, isUnsigned: true, isBigEndian: true)
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, primeLocal);
-        il.Emit(OpCodes.Call, runtime.TSDHBigIntFromBytes);
+        il.Emit(OpCodes.Call, crypto.DHBigIntFromBytes);
         il.Emit(OpCodes.Stfld, _tsDHPrimeField);
 
         // _generator = 2 (all predefined groups use generator 2)
@@ -541,7 +541,7 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits: public object GenerateKeys(string? encoding)
     /// </summary>
-    private void EmitTSDHGenerateKeys(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSDHGenerateKeys(TypeBuilder typeBuilder, EmittedCryptoRuntime crypto)
     {
         var method = typeBuilder.DefineMethod(
             "GenerateKeys",
@@ -549,7 +549,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.String]
         );
-        runtime.TSDHGenerateKeys = method;
+        crypto.DHGenerateKeys = method;
 
         var il = method.GetILGenerator();
 
@@ -576,7 +576,7 @@ public partial class RuntimeEmitter
         // _privateKey = new BigInteger(privateBytes, isUnsigned: true, isBigEndian: true)
         var privateKeyLocal = il.DeclareLocal(typeof(BigInteger));
         il.Emit(OpCodes.Ldloc, privateBytesLocal);
-        il.Emit(OpCodes.Call, runtime.TSDHBigIntFromBytes);
+        il.Emit(OpCodes.Call, crypto.DHBigIntFromBytes);
         il.Emit(OpCodes.Stloc, privateKeyLocal);
 
         // _privateKey = _privateKey % (_prime - 1)
@@ -628,14 +628,14 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Call, typeof(BigInteger).GetMethod("ToByteArray", [_types.Boolean, _types.Boolean])!);
         il.Emit(OpCodes.Ldarg_1);  // encoding
-        il.Emit(OpCodes.Call, runtime.TSDHEncodeResult);
+        il.Emit(OpCodes.Call, crypto.DHEncodeResult);
         il.Emit(OpCodes.Ret);
     }
 
     /// <summary>
     /// Emits: public object ComputeSecret(object otherPublicKey, string? inputEncoding, string? outputEncoding)
     /// </summary>
-    private void EmitTSDHComputeSecret(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSDHComputeSecret(TypeBuilder typeBuilder, EmittedCryptoRuntime crypto)
     {
         var method = typeBuilder.DefineMethod(
             "ComputeSecret",
@@ -643,7 +643,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object, _types.String, _types.String]
         );
-        runtime.TSDHComputeSecret = method;
+        crypto.DHComputeSecret = method;
 
         var il = method.GetILGenerator();
 
@@ -662,13 +662,13 @@ public partial class RuntimeEmitter
         var otherBytesLocal = il.DeclareLocal(_types.ByteArray);
         il.Emit(OpCodes.Ldarg_1);  // otherPublicKey
         il.Emit(OpCodes.Ldarg_2);  // inputEncoding
-        il.Emit(OpCodes.Call, runtime.TSDHDecodeInput);
+        il.Emit(OpCodes.Call, crypto.DHDecodeInput);
         il.Emit(OpCodes.Stloc, otherBytesLocal);
 
         // BigInteger other = new BigInteger(otherBytes, isUnsigned: true, isBigEndian: true)
         var otherLocal = il.DeclareLocal(typeof(BigInteger));
         il.Emit(OpCodes.Ldloc, otherBytesLocal);
-        il.Emit(OpCodes.Call, runtime.TSDHBigIntFromBytes);
+        il.Emit(OpCodes.Call, crypto.DHBigIntFromBytes);
         il.Emit(OpCodes.Stloc, otherLocal);
 
         // BigInteger secret = BigInteger.ModPow(other, _privateKey.Value, _prime)
@@ -688,14 +688,14 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Call, typeof(BigInteger).GetMethod("ToByteArray", [_types.Boolean, _types.Boolean])!);
         il.Emit(OpCodes.Ldarg_3);  // outputEncoding
-        il.Emit(OpCodes.Call, runtime.TSDHEncodeResult);
+        il.Emit(OpCodes.Call, crypto.DHEncodeResult);
         il.Emit(OpCodes.Ret);
     }
 
     /// <summary>
     /// Emits: public object GetPrime(string? encoding)
     /// </summary>
-    private void EmitTSDHGetPrime(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSDHGetPrime(TypeBuilder typeBuilder, EmittedCryptoRuntime crypto)
     {
         var method = typeBuilder.DefineMethod(
             "GetPrime",
@@ -703,7 +703,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.String]
         );
-        runtime.TSDHGetPrime = method;
+        crypto.DHGetPrime = method;
 
         var il = method.GetILGenerator();
 
@@ -713,14 +713,14 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Call, typeof(BigInteger).GetMethod("ToByteArray", [_types.Boolean, _types.Boolean])!);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.TSDHEncodeResult);
+        il.Emit(OpCodes.Call, crypto.DHEncodeResult);
         il.Emit(OpCodes.Ret);
     }
 
     /// <summary>
     /// Emits: public object GetGenerator(string? encoding)
     /// </summary>
-    private void EmitTSDHGetGenerator(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSDHGetGenerator(TypeBuilder typeBuilder, EmittedCryptoRuntime crypto)
     {
         var method = typeBuilder.DefineMethod(
             "GetGenerator",
@@ -728,7 +728,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.String]
         );
-        runtime.TSDHGetGenerator = method;
+        crypto.DHGetGenerator = method;
 
         var il = method.GetILGenerator();
 
@@ -738,14 +738,14 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Call, typeof(BigInteger).GetMethod("ToByteArray", [_types.Boolean, _types.Boolean])!);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.TSDHEncodeResult);
+        il.Emit(OpCodes.Call, crypto.DHEncodeResult);
         il.Emit(OpCodes.Ret);
     }
 
     /// <summary>
     /// Emits: public object GetPublicKey(string? encoding)
     /// </summary>
-    private void EmitTSDHGetPublicKey(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSDHGetPublicKey(TypeBuilder typeBuilder, EmittedCryptoRuntime crypto)
     {
         var method = typeBuilder.DefineMethod(
             "GetPublicKey",
@@ -753,7 +753,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.String]
         );
-        runtime.TSDHGetPublicKey = method;
+        crypto.DHGetPublicKey = method;
 
         var il = method.GetILGenerator();
 
@@ -779,14 +779,14 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Call, typeof(BigInteger).GetMethod("ToByteArray", [_types.Boolean, _types.Boolean])!);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.TSDHEncodeResult);
+        il.Emit(OpCodes.Call, crypto.DHEncodeResult);
         il.Emit(OpCodes.Ret);
     }
 
     /// <summary>
     /// Emits: public object GetPrivateKey(string? encoding)
     /// </summary>
-    private void EmitTSDHGetPrivateKey(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSDHGetPrivateKey(TypeBuilder typeBuilder, EmittedCryptoRuntime crypto)
     {
         var method = typeBuilder.DefineMethod(
             "GetPrivateKey",
@@ -794,7 +794,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.String]
         );
-        runtime.TSDHGetPrivateKey = method;
+        crypto.DHGetPrivateKey = method;
 
         var il = method.GetILGenerator();
 
@@ -820,14 +820,14 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Call, typeof(BigInteger).GetMethod("ToByteArray", [_types.Boolean, _types.Boolean])!);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.TSDHEncodeResult);
+        il.Emit(OpCodes.Call, crypto.DHEncodeResult);
         il.Emit(OpCodes.Ret);
     }
 
     /// <summary>
     /// Emits: public void SetPublicKey(object key, string? encoding)
     /// </summary>
-    private void EmitTSDHSetPublicKey(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSDHSetPublicKey(TypeBuilder typeBuilder, EmittedCryptoRuntime crypto)
     {
         var method = typeBuilder.DefineMethod(
             "SetPublicKey",
@@ -835,7 +835,7 @@ public partial class RuntimeEmitter
             null,
             [_types.Object, _types.String]
         );
-        runtime.TSDHSetPublicKey = method;
+        crypto.DHSetPublicKey = method;
 
         var il = method.GetILGenerator();
 
@@ -853,13 +853,13 @@ public partial class RuntimeEmitter
         var keyBytesLocal = il.DeclareLocal(_types.ByteArray);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Call, runtime.TSDHDecodeInput);
+        il.Emit(OpCodes.Call, crypto.DHDecodeInput);
         il.Emit(OpCodes.Stloc, keyBytesLocal);
 
         // _publicKey = new BigInteger(keyBytes, ...)
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, keyBytesLocal);
-        il.Emit(OpCodes.Call, runtime.TSDHBigIntFromBytes);
+        il.Emit(OpCodes.Call, crypto.DHBigIntFromBytes);
         il.Emit(OpCodes.Newobj, typeof(BigInteger?).GetConstructor([typeof(BigInteger)])!);
         il.Emit(OpCodes.Stfld, _tsDHPublicKeyField);
 
@@ -869,7 +869,7 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits: public void SetPrivateKey(object key, string? encoding)
     /// </summary>
-    private void EmitTSDHSetPrivateKey(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSDHSetPrivateKey(TypeBuilder typeBuilder, EmittedCryptoRuntime crypto)
     {
         var method = typeBuilder.DefineMethod(
             "SetPrivateKey",
@@ -877,7 +877,7 @@ public partial class RuntimeEmitter
             null,
             [_types.Object, _types.String]
         );
-        runtime.TSDHSetPrivateKey = method;
+        crypto.DHSetPrivateKey = method;
 
         var il = method.GetILGenerator();
 
@@ -895,13 +895,13 @@ public partial class RuntimeEmitter
         var keyBytesLocal = il.DeclareLocal(_types.ByteArray);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Call, runtime.TSDHDecodeInput);
+        il.Emit(OpCodes.Call, crypto.DHDecodeInput);
         il.Emit(OpCodes.Stloc, keyBytesLocal);
 
         // _privateKey = new BigInteger(keyBytes, ...)
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, keyBytesLocal);
-        il.Emit(OpCodes.Call, runtime.TSDHBigIntFromBytes);
+        il.Emit(OpCodes.Call, crypto.DHBigIntFromBytes);
         il.Emit(OpCodes.Newobj, typeof(BigInteger?).GetConstructor([typeof(BigInteger)])!);
         il.Emit(OpCodes.Stfld, _tsDHPrivateKeyField);
 
@@ -912,10 +912,10 @@ public partial class RuntimeEmitter
     /// Emits: public object? GetMember(string name)
     /// Returns bound methods for each DH operation.
     /// </summary>
-    private void EmitTSDHGetMember(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSDHGetMember(TypeBuilder typeBuilder, EmittedCryptoRuntime crypto)
     {
         // MethodBuilder was already defined in EmitTSDHTypeDefinition (Phase 1)
-        var method = runtime.TSDHGetMember;
+        var method = crypto.DHGetMember;
 
         var il = method.GetILGenerator();
 
@@ -951,7 +951,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, "GenerateKeys");
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Newobj, runtime.BoundDHMethodCtor);
+        il.Emit(OpCodes.Newobj, crypto.BoundDHMethodCtor);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(computeSecretLabel);
@@ -959,7 +959,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, "ComputeSecret");
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Ldc_I4_3);
-        il.Emit(OpCodes.Newobj, runtime.BoundDHMethodCtor);
+        il.Emit(OpCodes.Newobj, crypto.BoundDHMethodCtor);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(getPrimeLabel);
@@ -967,7 +967,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, "GetPrime");
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Newobj, runtime.BoundDHMethodCtor);
+        il.Emit(OpCodes.Newobj, crypto.BoundDHMethodCtor);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(getGeneratorLabel);
@@ -975,7 +975,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, "GetGenerator");
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Newobj, runtime.BoundDHMethodCtor);
+        il.Emit(OpCodes.Newobj, crypto.BoundDHMethodCtor);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(getPublicKeyLabel);
@@ -983,7 +983,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, "GetPublicKey");
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Newobj, runtime.BoundDHMethodCtor);
+        il.Emit(OpCodes.Newobj, crypto.BoundDHMethodCtor);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(getPrivateKeyLabel);
@@ -991,7 +991,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, "GetPrivateKey");
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Newobj, runtime.BoundDHMethodCtor);
+        il.Emit(OpCodes.Newobj, crypto.BoundDHMethodCtor);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(setPublicKeyLabel);
@@ -999,7 +999,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, "SetPublicKey");
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Ldc_I4_2);
-        il.Emit(OpCodes.Newobj, runtime.BoundDHMethodCtor);
+        il.Emit(OpCodes.Newobj, crypto.BoundDHMethodCtor);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(setPrivateKeyLabel);
@@ -1007,7 +1007,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, "SetPrivateKey");
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Ldc_I4_2);
-        il.Emit(OpCodes.Newobj, runtime.BoundDHMethodCtor);
+        il.Emit(OpCodes.Newobj, crypto.BoundDHMethodCtor);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(verifyErrorLabel);
@@ -1039,7 +1039,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.ByteArray, _types.String]
         );
-        runtime.TSDHEncodeResult = method;
+        runtime.RequireCrypto().DHEncodeResult = method;
 
         var il = method.GetILGenerator();
 
@@ -1095,7 +1095,7 @@ public partial class RuntimeEmitter
             _types.ByteArray,
             [_types.Object, _types.String]
         );
-        runtime.TSDHDecodeInput = method;
+        runtime.RequireCrypto().DHDecodeInput = method;
 
         var il = method.GetILGenerator();
 
@@ -1181,7 +1181,7 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits: private static BigInteger GenerateRandomPrime(int bitLength)
     /// </summary>
-    private void EmitTSDHGenerateRandomPrime(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSDHGenerateRandomPrime(TypeBuilder typeBuilder, EmittedCryptoRuntime crypto)
     {
         var method = typeBuilder.DefineMethod(
             "GenerateRandomPrime",
@@ -1189,7 +1189,7 @@ public partial class RuntimeEmitter
             typeof(BigInteger),
             [_types.Int32]
         );
-        runtime.TSDHGenerateRandomPrime = method;
+        crypto.DHGenerateRandomPrime = method;
 
         var il = method.GetILGenerator();
 
@@ -1245,13 +1245,13 @@ public partial class RuntimeEmitter
         // BigInteger candidate = new BigInteger(bytes, isUnsigned: true, isBigEndian: true)
         var candidateLocal = il.DeclareLocal(typeof(BigInteger));
         il.Emit(OpCodes.Ldloc, bytesLocal);
-        il.Emit(OpCodes.Call, runtime.TSDHBigIntFromBytes);
+        il.Emit(OpCodes.Call, crypto.DHBigIntFromBytes);
         il.Emit(OpCodes.Stloc, candidateLocal);
 
         // if (IsProbablePrime(candidate, 10)) return candidate
         il.Emit(OpCodes.Ldloc, candidateLocal);
         il.Emit(OpCodes.Ldc_I4, 10);
-        il.Emit(OpCodes.Call, runtime.TSDHIsProbablePrime);
+        il.Emit(OpCodes.Call, crypto.DHIsProbablePrime);
         il.Emit(OpCodes.Brfalse, loopStartLabel);
 
         il.Emit(OpCodes.Ldloc, candidateLocal);
@@ -1262,7 +1262,7 @@ public partial class RuntimeEmitter
     /// Emits: private static bool IsProbablePrime(BigInteger n, int k)
     /// Miller-Rabin primality test.
     /// </summary>
-    private void EmitTSDHIsProbablePrime(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSDHIsProbablePrime(TypeBuilder typeBuilder, EmittedCryptoRuntime crypto)
     {
         var method = typeBuilder.DefineMethod(
             "IsProbablePrime",
@@ -1270,7 +1270,7 @@ public partial class RuntimeEmitter
             _types.Boolean,
             [typeof(BigInteger), _types.Int32]
         );
-        runtime.TSDHIsProbablePrime = method;
+        crypto.DHIsProbablePrime = method;
 
         var il = method.GetILGenerator();
 
@@ -1362,7 +1362,7 @@ public partial class RuntimeEmitter
         // BigInteger a = new BigInteger(aBytes, isUnsigned: true, isBigEndian: true)
         var aLocal = il.DeclareLocal(typeof(BigInteger));
         il.Emit(OpCodes.Ldloc, aBytesLocal);
-        il.Emit(OpCodes.Call, runtime.TSDHBigIntFromBytes);
+        il.Emit(OpCodes.Call, crypto.DHBigIntFromBytes);
         il.Emit(OpCodes.Stloc, aLocal);
 
         // a = (a % (n - 4)) + 2  (to get a in [2, n-2])
@@ -1475,7 +1475,7 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Phase 1: Define $BoundDHMethod type, fields, and constructor.
     /// </summary>
-    private void EmitBoundDHMethodTypeDefinition(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private void EmitBoundDHMethodTypeDefinition(ModuleBuilder moduleBuilder, EmittedCryptoRuntime crypto)
     {
         _boundDHMethodTypeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$BoundDHMethod",
@@ -1484,7 +1484,7 @@ public partial class RuntimeEmitter
         );
         _ = _boundDHMethodTypeBuilder;
 
-        _boundDHMethodDhField = _boundDHMethodTypeBuilder.DefineField("_dh", runtime.TSDiffieHellmanType, FieldAttributes.Private);
+        _boundDHMethodDhField = _boundDHMethodTypeBuilder.DefineField("_dh", crypto.DiffieHellmanType, FieldAttributes.Private);
         _boundDHMethodMethodNameField = _boundDHMethodTypeBuilder.DefineField("_methodName", _types.String, FieldAttributes.Private);
         var minArgsField = _boundDHMethodTypeBuilder.DefineField("_minArgs", _types.Int32, FieldAttributes.Private);
         var maxArgsField = _boundDHMethodTypeBuilder.DefineField("_maxArgs", _types.Int32, FieldAttributes.Private);
@@ -1492,9 +1492,9 @@ public partial class RuntimeEmitter
         var ctor = _boundDHMethodTypeBuilder.DefineConstructor(
             MethodAttributes.Public,
             CallingConventions.Standard,
-            [runtime.TSDiffieHellmanType, _types.String, _types.Int32, _types.Int32]
+            [crypto.DiffieHellmanType, _types.String, _types.Int32, _types.Int32]
         );
-        runtime.BoundDHMethodCtor = ctor;
+        crypto.BoundDHMethodCtor = ctor;
 
         var ctorIl = ctor.GetILGenerator();
         ctorIl.Emit(OpCodes.Ldarg_0);
@@ -1517,7 +1517,7 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Phase 2: Add Invoke method and finalize $BoundDHMethod type.
     /// </summary>
-    private void EmitBoundDHMethodFinalize(EmittedRuntime runtime)
+    private void EmitBoundDHMethodFinalize(EmittedCryptoRuntime crypto)
     {
         var invoke = _boundDHMethodTypeBuilder.DefineMethod(
             "Invoke",
@@ -1561,7 +1561,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldfld, _boundDHMethodDhField);
         il.Emit(OpCodes.Ldloc_0);
         il.Emit(OpCodes.Castclass, _types.String);
-        il.Emit(OpCodes.Callvirt, runtime.TSDHGenerateKeys);
+        il.Emit(OpCodes.Callvirt, crypto.DHGenerateKeys);
         il.Emit(OpCodes.Ret);
 
         // ComputeSecret(other, inputEncoding?, outputEncoding?)
@@ -1576,7 +1576,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Castclass, _types.String);
         il.Emit(OpCodes.Ldloc_2);
         il.Emit(OpCodes.Castclass, _types.String);
-        il.Emit(OpCodes.Callvirt, runtime.TSDHComputeSecret);
+        il.Emit(OpCodes.Callvirt, crypto.DHComputeSecret);
         il.Emit(OpCodes.Ret);
 
         // GetPrime(encoding?)
@@ -1586,7 +1586,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldfld, _boundDHMethodDhField);
         il.Emit(OpCodes.Ldloc_0);
         il.Emit(OpCodes.Castclass, _types.String);
-        il.Emit(OpCodes.Callvirt, runtime.TSDHGetPrime);
+        il.Emit(OpCodes.Callvirt, crypto.DHGetPrime);
         il.Emit(OpCodes.Ret);
 
         // GetGenerator(encoding?)
@@ -1596,7 +1596,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldfld, _boundDHMethodDhField);
         il.Emit(OpCodes.Ldloc_0);
         il.Emit(OpCodes.Castclass, _types.String);
-        il.Emit(OpCodes.Callvirt, runtime.TSDHGetGenerator);
+        il.Emit(OpCodes.Callvirt, crypto.DHGetGenerator);
         il.Emit(OpCodes.Ret);
 
         // GetPublicKey(encoding?)
@@ -1606,7 +1606,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldfld, _boundDHMethodDhField);
         il.Emit(OpCodes.Ldloc_0);
         il.Emit(OpCodes.Castclass, _types.String);
-        il.Emit(OpCodes.Callvirt, runtime.TSDHGetPublicKey);
+        il.Emit(OpCodes.Callvirt, crypto.DHGetPublicKey);
         il.Emit(OpCodes.Ret);
 
         // GetPrivateKey(encoding?)
@@ -1616,7 +1616,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldfld, _boundDHMethodDhField);
         il.Emit(OpCodes.Ldloc_0);
         il.Emit(OpCodes.Castclass, _types.String);
-        il.Emit(OpCodes.Callvirt, runtime.TSDHGetPrivateKey);
+        il.Emit(OpCodes.Callvirt, crypto.DHGetPrivateKey);
         il.Emit(OpCodes.Ret);
 
         // SetPublicKey(key, encoding?)
@@ -1628,7 +1628,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc_0);
         il.Emit(OpCodes.Ldloc_1);
         il.Emit(OpCodes.Castclass, _types.String);
-        il.Emit(OpCodes.Callvirt, runtime.TSDHSetPublicKey);
+        il.Emit(OpCodes.Callvirt, crypto.DHSetPublicKey);
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ret);
 
@@ -1641,7 +1641,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc_0);
         il.Emit(OpCodes.Ldloc_1);
         il.Emit(OpCodes.Castclass, _types.String);
-        il.Emit(OpCodes.Callvirt, runtime.TSDHSetPrivateKey);
+        il.Emit(OpCodes.Callvirt, crypto.DHSetPrivateKey);
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ret);
 

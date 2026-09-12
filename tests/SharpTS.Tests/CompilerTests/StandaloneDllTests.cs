@@ -837,6 +837,35 @@ public class StandaloneDllTests
         }
     }
 
+    [Fact]
+    public void NodeCryptoAndWebCryptoIntegrationVerifyAndRunStandalone()
+    {
+        const string source = """
+            import * as crypto from 'crypto';
+            console.log(crypto.createHash('sha256').update('abc').digest('hex').length);
+            async function main() {
+                const digest = await crypto.subtle.digest('SHA-256', Buffer.from('abc'));
+                console.log(Buffer.from(digest).toString('hex'));
+                console.log(crypto.randomUUID().length);
+            }
+            main();
+            """;
+        var files = new Dictionary<string, string> { ["main.ts"] = source };
+        var errors = TestHarness.CompileModulesAndVerifyOnly(files, "main.ts");
+        Assert.True(errors.Count == 0, string.Join(Environment.NewLine, errors));
+        var (tempDir, dllPath) = CompileStandaloneModule(files, "main.ts");
+        try
+        {
+            Assert.False(File.Exists(Path.Combine(tempDir, "SharpTS.dll")));
+            Assert.Equal("64\nba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad\n36\n",
+                ExecuteCompiledDllIsolated(dllPath, timeoutMs: 15000));
+        }
+        finally
+        {
+            CleanupTempDir(tempDir);
+        }
+    }
+
     /// <summary>
     /// Phase 23 guardrail: Scans compiled DLL for forbidden SharpTS late-binding strings.
     /// These strings should NOT appear in standalone output as they indicate runtime dependency.

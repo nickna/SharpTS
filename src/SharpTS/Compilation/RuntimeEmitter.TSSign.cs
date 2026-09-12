@@ -21,7 +21,7 @@ public partial class RuntimeEmitter
     /// Called before EmitRuntimeClass. Shares the definition with $Verify via
     /// <see cref="EmitStreamingSignVerifyTypeDefinition"/>.
     /// </summary>
-    private void EmitTSSignTypeDefinition(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private void EmitTSSignTypeDefinition(ModuleBuilder moduleBuilder, EmittedCryptoRuntime crypto)
     {
         var parts = EmitStreamingSignVerifyTypeDefinition(moduleBuilder, "$Sign",
             unsupportedAlgorithmPrefix: "Unsupported signing algorithm: ",
@@ -30,16 +30,16 @@ public partial class RuntimeEmitter
         _tsSignHashAlgorithmField = parts.HashAlgorithmField;
         _tsSignDataField = parts.DataField;
         _tsSignFinalizedField = parts.FinalizedField;
-        runtime.TSSignCtor = parts.Ctor;
+        crypto.SignCtor = parts.Ctor;
     }
 
     /// <summary>
     /// Phase 2: Add Sign method and finalize type.
-    /// Called after EmitRuntimeClass (needs runtime.SignDataBytes).
+    /// Called after EmitRuntimeClass (needs runtime.RequireCrypto().SignDataBytes).
     /// </summary>
     private void EmitTSSignFinalize(EmittedRuntime runtime)
     {
-        // Sign method needs runtime.SignDataBytes
+        // Sign method needs runtime.RequireCrypto().SignDataBytes
         EmitTSSignSign(_tsSignTypeBuilder, runtime);
 
         _tsSignTypeBuilder.CreateType();
@@ -80,7 +80,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, dataBytesLocal);  // dataBytes
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, _tsSignHashAlgorithmField);  // hashAlgorithm
-        il.Emit(OpCodes.Call, runtime.SignDataBytes);
+        il.Emit(OpCodes.Call, runtime.RequireCrypto().SignDataBytes);
         il.Emit(OpCodes.Stloc, signatureBytesLocal);
 
         // Handle encoding

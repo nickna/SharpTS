@@ -29,7 +29,7 @@ public partial class RuntimeEmitter
         _tsHmacFinalizedField = typeBuilder.DefineField("_finalized", _types.Boolean, FieldAttributes.Private);
 
         // Constructor: $Hmac(string algorithm, byte[] key)
-        EmitTSHmacCtor(typeBuilder, runtime);
+        EmitTSHmacCtor(typeBuilder, runtime.RequireCrypto());
 
         // Methods
         EmitTSHmacUpdate(typeBuilder, runtime);
@@ -41,14 +41,14 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits: public $Hmac(string algorithm, byte[] key)
     /// </summary>
-    private void EmitTSHmacCtor(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSHmacCtor(TypeBuilder typeBuilder, EmittedCryptoRuntime crypto)
     {
         var ctor = typeBuilder.DefineConstructor(
             MethodAttributes.Public,
             CallingConventions.Standard,
             [_types.String, _types.MakeArrayType(_types.Byte)]
         );
-        runtime.TSHmacCtor = ctor;
+        crypto.HmacCtor = ctor;
 
         var il = ctor.GetILGenerator();
 

@@ -55,7 +55,7 @@ public partial class RuntimeEmitter
         EmitTSCipherGcmEncryptHelper(typeBuilder, runtime);
 
         // Constructor
-        EmitTSCipherCtor(typeBuilder, runtime);
+        EmitTSCipherCtor(typeBuilder, runtime.RequireCrypto());
 
         // Methods
         EmitTSCipherUpdate(typeBuilder, runtime);
@@ -71,9 +71,9 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits: public $Cipher(string algorithm, byte[] key, byte[] iv)
     /// </summary>
-    private void EmitTSCipherCtor(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSCipherCtor(TypeBuilder typeBuilder, EmittedCryptoRuntime crypto)
     {
-        runtime.TSCipherCtor = EmitStreamingCipherCtor(typeBuilder, CipherFields(), isEncrypt: true,
+        crypto.CipherCtor = EmitStreamingCipherCtor(typeBuilder, CipherFields(), isEncrypt: true,
             [_tsCipherPlaintextBufferField]);
     }
 
