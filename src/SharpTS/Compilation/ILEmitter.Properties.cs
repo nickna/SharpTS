@@ -1906,7 +1906,7 @@ public partial class ILEmitter
             IL.Emit(OpCodes.Ldloc, promSet.Local);
             IL.Emit(OpCodes.Ldloc, idxLocal);
             IL.Emit(OpCodes.Ldloc, valLocal);
-            IL.Emit(OpCodes.Call, promSet.Descriptor.GetSetArrayElementMethod(_ctx.Runtime!));
+            IL.Emit(OpCodes.Call, promSet.Descriptor.GetSetArrayElementMethod(_ctx.Runtime!.ArrayOperations));
 
             // Auto-extension may replace List<T>'s backing array. Refresh the
             // loop-local span before a later indexed access uses it.
@@ -2017,7 +2017,7 @@ public partial class ILEmitter
                     // so this is behaviour-identical for both modes). h.TypedLocal is the hoisted $Array.
                     IL.Emit(OpCodes.Callvirt, _ctx.Runtime!.ArrayStorage.SetDouble);
                 else
-                    IL.Emit(OpCodes.Call, h.Descriptor.GetSetArrayElementMethod(_ctx.Runtime!));
+                    IL.Emit(OpCodes.Call, h.Descriptor.GetSetArrayElementMethod(_ctx.Runtime!.ArrayOperations));
                 IL.Emit(OpCodes.Ldloc, typedValueLocal);
                 // Box the assigned value so this branch leaves `object` like the fallback path at
                 // endLabel (the assignment result is consumed via StackType=Unknown), #751.
@@ -2092,7 +2092,7 @@ public partial class ILEmitter
                 EmitExpressionAsDouble(si.Index);
                 IL.Emit(OpCodes.Conv_I4);
                 IL.Emit(OpCodes.Ldloc, typedValueLocalNH);
-                IL.Emit(OpCodes.Call, desc.GetSetArrayElementMethod(_ctx.Runtime!));
+                IL.Emit(OpCodes.Call, desc.GetSetArrayElementMethod(_ctx.Runtime!.ArrayOperations));
                 IL.Emit(OpCodes.Ldloc, typedValueLocalNH);
                 // Box so this branch converges on `object` with the sibling paths at endLabelNH
                 // (see the hoisted set path above for the full rationale, #751).
@@ -2190,8 +2190,8 @@ public partial class ILEmitter
     private void EmitPromotedArrayPush(LocalBuilder list, ArrayElementsDescriptor desc, List<Expr> arguments)
     {
         var pushMethod = desc.Kind == ArrayElementsKind.Double
-            ? _ctx.Runtime!.ArrayPushDouble
-            : _ctx.Runtime!.ArrayPushBool;
+            ? _ctx.Runtime!.ArrayOperations.PushDouble
+            : _ctx.Runtime!.ArrayOperations.PushBool;
 
         if (arguments.Count == 0)
         {
@@ -2221,8 +2221,8 @@ public partial class ILEmitter
     {
         IL.Emit(OpCodes.Ldloc, list);
         IL.Emit(OpCodes.Call, desc.Kind == ArrayElementsKind.Double
-            ? _ctx.Runtime!.ArrayShiftDouble
-            : _ctx.Runtime!.ArrayShiftBool);
+            ? _ctx.Runtime!.ArrayOperations.ShiftDouble
+            : _ctx.Runtime!.ArrayOperations.ShiftBool);
         SetStackUnknown();
     }
 
@@ -2256,8 +2256,8 @@ public partial class ILEmitter
         }
 
         var helper = desc.Kind == ArrayElementsKind.Double
-            ? _ctx.Runtime!.ArrayUnshiftDouble
-            : _ctx.Runtime!.ArrayUnshiftBool;
+            ? _ctx.Runtime!.ArrayOperations.UnshiftDouble
+            : _ctx.Runtime!.ArrayOperations.UnshiftBool;
         for (int i = arguments.Count - 1; i >= 0; i--)
         {
             IL.Emit(OpCodes.Ldloc, list);
@@ -2407,7 +2407,7 @@ public partial class ILEmitter
         EmitExpressionAsDouble(si.Index);
         IL.Emit(OpCodes.Conv_I4);
         IL.Emit(OpCodes.Ldloc, valueLocal);
-        IL.Emit(OpCodes.Call, _ctx.Runtime!.SetArrayElement);
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.ArrayOperations.SetElement);
         IL.Emit(OpCodes.Ldloc, valueLocal);
         IL.Emit(OpCodes.Br, endLabel);
 

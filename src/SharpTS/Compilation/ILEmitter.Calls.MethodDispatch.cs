@@ -161,7 +161,7 @@ public partial class ILEmitter
         EmitBoxIfNeeded(methodGet.Object);
         EmitExpression(arguments[0]);
         EmitBoxIfNeeded(arguments[0]);
-        IL.Emit(OpCodes.Call, _ctx.Runtime!.ArrayPushOneDiscarded);
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.ArrayOperations.PushOneDiscarded);
         SetStackUnknown();
         return true;
     }
@@ -248,7 +248,7 @@ public partial class ILEmitter
                 IL.Emit(OpCodes.Ldloc, includesPromotion.Local);
                 EmitExpressionAsDouble(arguments[0]);
                 EmitExpressionAsDouble(arguments[1]);
-                IL.Emit(OpCodes.Call, _ctx.Runtime!.ArrayIncludesDouble);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.ArrayOperations.IncludesDouble);
             }
             else
             {
@@ -360,7 +360,7 @@ public partial class ILEmitter
         {
             EmitExpression(methodGet.Object);
             EmitBoxIfNeeded(methodGet.Object);
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.ArrayShiftNumber);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.ArrayOperations.ShiftNumber);
             SetStackUnknown();
             return;
         }
@@ -385,7 +385,7 @@ public partial class ILEmitter
                 EmitExpressionAsDouble(arguments[i]);
                 IL.Emit(OpCodes.Stelem_R8);
             }
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.ArrayUnshiftNumber);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.ArrayOperations.UnshiftNumber);
             SetStackType(StackType.Double);
             return;
         }
@@ -908,7 +908,7 @@ public partial class ILEmitter
                 EmitExpandCallArgs();
             }
 
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.CreateArray);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.ArrayOperations.Create);
         }
         else
         {

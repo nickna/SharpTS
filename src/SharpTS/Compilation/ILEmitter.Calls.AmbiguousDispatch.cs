@@ -288,7 +288,7 @@ public partial class ILEmitter
                 // `true` almost always and flakily `false` when the pointer's
                 // low byte happened to be 0. (Contrast ArrayIndexOf below, which
                 // returns a native double, so its Box is correct.)
-                IL.Emit(OpCodes.Call, _ctx.Runtime!.ArrayIncludes);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.ArrayOperations.Includes);
                 break;
 
             case "indexOf":
@@ -311,7 +311,7 @@ public partial class ILEmitter
                 {
                     IL.Emit(OpCodes.Ldnull);
                 }
-                IL.Emit(OpCodes.Call, methodName == "indexOf" ? _ctx.Runtime!.ArrayIndexOf : _ctx.Runtime!.ArrayLastIndexOf);
+                IL.Emit(OpCodes.Call, methodName == "indexOf" ? _ctx.Runtime!.ArrayOperations.IndexOf : _ctx.Runtime!.ArrayOperations.LastIndexOf);
                 IL.Emit(OpCodes.Box, _ctx.Types.Double);
                 break;
 
@@ -326,14 +326,14 @@ public partial class ILEmitter
                     EmitBoxIfNeeded(arguments[i]);
                     IL.Emit(OpCodes.Stelem_Ref);
                 }
-                IL.Emit(OpCodes.Call, _ctx.Runtime!.ArraySlice);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.ArrayOperations.Slice);
                 break;
 
             case "concat":
                 // ECMA-262: concat(...items) is variadic. Pass args as object[], with any
                 // `...spread` flattened first (#952) so concat appends/spreads each element.
                 EmitArgsArrayWithSpread(arguments);
-                IL.Emit(OpCodes.Call, _ctx.Runtime!.ArrayConcat);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.ArrayOperations.Concat);
                 break;
 
         }

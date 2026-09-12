@@ -228,8 +228,21 @@ body emission uses the same component handle without an emitter-local alias. Arr
 accept `EmittedArrayStorageRuntime` directly, while descriptor, error, and undefined dependencies
 still require the shared runtime. `EmitAll` completes storage after runtime finalization, validating
 queue declarations as well as array handles. Boolean queues intentionally omit unboxed numeric
-reads. Array operations, prototype and bound-method helpers, iterators, ArrayBuffer/TypedArray
-metadata, and the shared call-argument pool remain separate residual work under #1599.
+reads. Array operations have a separate component described below. ArrayBuffer/TypedArray
+metadata and the shared call-argument pool remain separate residual work under #1599.
+
+Array operations use the required `ArrayOperations` component for 108 declarations: construction
+and static helpers, ordinary and specialized operations, prototype population, bound-method
+dispatch, the live array iterator constructor, and array-like receiver/callback context. Like
+storage, these helpers are emitted even for minimal tree-shaken programs. Bound-method invocation,
+prototype population, and array-like materializers/loaders are declared before their consumers
+and filled in later through the same handles. Declaration-only and operation-only helpers accept
+`EmittedArrayOperationsRuntime` directly; storage, invocation, descriptors, and coercion remain
+separate dependencies. The original and lazy array-like receiver paths share one checked handle
+for the existing thread-static field, without duplicate metadata storage. `EmitAll` completes
+operations after runtime and bound-method finalization. General iteration/destructuring helpers,
+collection iterators, generic element/length/key access, coercion, static-member dispatch, and
+call-argument expansion remain in their respective residual families under #1599.
 
 During emission, each handle becomes readable as soon as its declaration is assigned, so forward
 references do not require a method body to exist yet. An early read names the missing declaration.

@@ -11,7 +11,7 @@ public partial class RuntimeEmitter
     /// Auto-extends the list with default entries if index &gt;= Count (JS semantics).
     /// Descriptor-driven: one implementation for all backing types (List&lt;double&gt;, List&lt;bool&gt;, List&lt;object?&gt;).
     /// </summary>
-    private void EmitSetArrayElementFor(TypeBuilder typeBuilder, EmittedRuntime runtime, ArrayElementsDescriptor desc)
+    private void EmitSetArrayElementFor(TypeBuilder typeBuilder, EmittedArrayOperationsRuntime arrays, ArrayElementsDescriptor desc)
     {
         var listType = desc.GetListType(_types);
         var elemType = desc.GetElementType(_types);
@@ -26,12 +26,12 @@ public partial class RuntimeEmitter
             [listType, _types.Int32, elemType]
         );
 
-        // Assign to the correct EmittedRuntime property
+        // Assign to the correct array operation declaration
         switch (desc.Kind)
         {
-            case ArrayElementsKind.Double: runtime.SetArrayElementDouble = method; break;
-            case ArrayElementsKind.Bool: runtime.SetArrayElementBool = method; break;
-            default: runtime.SetArrayElement = method; break;
+            case ArrayElementsKind.Double: arrays.SetElementDouble = method; break;
+            case ArrayElementsKind.Bool: arrays.SetElementBool = method; break;
+            default: arrays.SetElement = method; break;
         }
 
         var il = method.GetILGenerator();
@@ -89,7 +89,7 @@ public partial class RuntimeEmitter
             runtime.ArrayStorage.Type,
             [_types.ObjectArray]
         );
-        runtime.CreateArray = method;
+        runtime.ArrayOperations.Create = method;
 
         var il = method.GetILGenerator();
         // Copy the literal elements directly into the final array's storage.
@@ -1527,7 +1527,7 @@ public partial class RuntimeEmitter
             runtime.ArrayStorage.Type,
             [_types.ObjectArray, runtime.TSSymbolType, _types.Type]  // Added iteratorSymbol and runtimeType
         );
-        runtime.ConcatArrays = method;
+        runtime.ArrayOperations.ConcatSources = method;
 
         var il = method.GetILGenerator();
         // var result = new List<object>();
@@ -1662,7 +1662,7 @@ public partial class RuntimeEmitter
     /// Phase 1: Define $BoundArrayMethod type, fields, and constructor.
     /// Must be called before EmitRuntimeClass so GetListProperty can use the constructor.
     /// </summary>
-    internal void EmitBoundArrayMethodTypeDefinition(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    internal void EmitBoundArrayMethodTypeDefinition(ModuleBuilder moduleBuilder, EmittedArrayOperationsRuntime arrays)
     {
         // Define class: public sealed class $BoundArrayMethod
         var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
@@ -1670,14 +1670,14 @@ public partial class RuntimeEmitter
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object
         );
-        runtime.BoundArrayMethodType = typeBuilder;
+        arrays.BoundMethodType = typeBuilder;
 
         // Fields. Use Assembly visibility so GetProperty's callable-wrapper handler
         // can read `_methodName` to return the method name for `arr.push.name === 'push'`.
         var listField = typeBuilder.DefineField("_list", _types.ListOfObject, FieldAttributes.Assembly);
         var methodNameField = typeBuilder.DefineField("_methodName", _types.String, FieldAttributes.Assembly);
-        runtime.BoundArrayMethodListField = listField;
-        runtime.BoundArrayMethodNameField = methodNameField;
+        arrays.BoundMethodListField = listField;
+        arrays.BoundMethodNameField = methodNameField;
 
         // Constructor: public $BoundArrayMethod(List<object> list, string methodName)
         var ctorBuilder = typeBuilder.DefineConstructor(
@@ -1685,7 +1685,7 @@ public partial class RuntimeEmitter
             CallingConventions.Standard,
             [_types.ListOfObject, _types.String]
         );
-        runtime.BoundArrayMethodCtor = ctorBuilder;
+        arrays.BoundMethodCtor = ctorBuilder;
 
         var ctorIL = ctorBuilder.GetILGenerator();
         // Call base constructor
@@ -1709,7 +1709,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.ObjectArray]
         );
-        runtime.BoundArrayMethodInvoke = invokeBuilder;
+        arrays.BoundMethodInvoke = invokeBuilder;
     }
 
     /// <summary>
@@ -1718,10 +1718,10 @@ public partial class RuntimeEmitter
     /// </summary>
     internal void EmitBoundArrayMethodFinalize(EmittedRuntime runtime)
     {
-        var typeBuilder = runtime.BoundArrayMethodType;
-        var listField = runtime.BoundArrayMethodListField;
-        var methodNameField = runtime.BoundArrayMethodNameField;
-        var invokeBuilder = runtime.BoundArrayMethodInvoke;
+        var typeBuilder = runtime.ArrayOperations.BoundMethodType;
+        var listField = runtime.ArrayOperations.BoundMethodListField;
+        var methodNameField = runtime.ArrayOperations.BoundMethodNameField;
+        var invokeBuilder = runtime.ArrayOperations.BoundMethodInvoke;
 
         var il = invokeBuilder.GetILGenerator();
 
@@ -1886,10 +1886,10 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldfld, listField);
             EmitArgZeroOrUndefined();
-            il.Emit(OpCodes.Call, runtime.ArraySort);
+            il.Emit(OpCodes.Call, runtime.ArrayOperations.Sort);
             il.Emit(OpCodes.Pop);
 
-            il.Emit(OpCodes.Ldsfld, runtime.CurrentArrayLikeReceiverField);
+            il.Emit(OpCodes.Ldsfld, runtime.ArrayOperations.CurrentReceiverField);
             il.Emit(OpCodes.Dup);
             il.Emit(OpCodes.Brtrue, haveOriginalReceiver);
             il.Emit(OpCodes.Pop);
@@ -1920,7 +1920,7 @@ public partial class RuntimeEmitter
             // Save prior thread-static value so nested forEach/map calls don't
             // see ours leak out.
             var savedThisArg = il.DeclareLocal(_types.Object);
-            il.Emit(OpCodes.Ldsfld, runtime.CurrentCallbackThisArgField);
+            il.Emit(OpCodes.Ldsfld, runtime.ArrayOperations.CallbackThisArgField);
             il.Emit(OpCodes.Stloc, savedThisArg);
 
             // Stash args[1] into _currentCallbackThisArg; default to $Undefined
@@ -1938,7 +1938,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldc_I4_1);
             il.Emit(OpCodes.Ldelem_Ref);
             il.MarkLabel(afterStashLabel);
-            il.Emit(OpCodes.Stsfld, runtime.CurrentCallbackThisArgField);
+            il.Emit(OpCodes.Stsfld, runtime.ArrayOperations.CallbackThisArgField);
 
             // Wrap the call in try/finally so the thread-static is restored
             // even if the callback throws (Test262Error etc).
@@ -1956,7 +1956,7 @@ public partial class RuntimeEmitter
 
             il.BeginFinallyBlock();
             il.Emit(OpCodes.Ldloc, savedThisArg);
-            il.Emit(OpCodes.Stsfld, runtime.CurrentCallbackThisArgField);
+            il.Emit(OpCodes.Stsfld, runtime.ArrayOperations.CallbackThisArgField);
             il.EndExceptionBlock();
 
             il.Emit(OpCodes.Ldloc, resultLocal);
@@ -2048,55 +2048,55 @@ public partial class RuntimeEmitter
         }
 
         // No-arg methods
-        EmitNoArgCase("pop", runtime.ArrayPop);
-        EmitNoArgCase("shift", runtime.ArrayShiftProto);
-        EmitNoArgCase("reverse", runtime.ArrayReverseProto);
-        EmitNoArgCase("toReversed", runtime.ArrayToReversed);
-        EmitNoArgCase("entries", runtime.ArrayEntries);
-        EmitNoArgCase("keys", runtime.ArrayKeys);
-        EmitNoArgCase("values", runtime.ArrayValues);
+        EmitNoArgCase("pop", runtime.ArrayOperations.Pop);
+        EmitNoArgCase("shift", runtime.ArrayOperations.ShiftProto);
+        EmitNoArgCase("reverse", runtime.ArrayOperations.ReverseProto);
+        EmitNoArgCase("toReversed", runtime.ArrayOperations.ToReversed);
+        EmitNoArgCase("entries", runtime.ArrayOperations.Entries);
+        EmitNoArgCase("keys", runtime.ArrayOperations.Keys);
+        EmitNoArgCase("values", runtime.ArrayOperations.Values);
 
         // JS-variadic methods forward the complete argument list so their
         // observable indexed writes and final length update stay atomic.
-        EmitArgsArrayCase("push", runtime.ArrayPushProto);
-        EmitArgsArrayCase("unshift", runtime.ArrayUnshiftProto);
+        EmitArgsArrayCase("push", runtime.ArrayOperations.PushProto);
+        EmitArgsArrayCase("unshift", runtime.ArrayOperations.UnshiftProto);
 
         // Single-arg methods (runtime helper takes `object`, not `object[]`).
         // Aligns with Emitters/ArrayEmitter.cs which also uses the shared
         // EmitterArgumentHelpers.EmitBoxedArgumentOrNull for these methods, so
         // dynamic bound dispatch matches the direct-call path.
         // indexOf/lastIndexOf take searchElement + optional fromIndex.
-        EmitSearchCase("indexOf", runtime.ArrayIndexOf, missingSearchIsUndefined: true);
-        EmitSearchCase("lastIndexOf", runtime.ArrayLastIndexOf, missingSearchIsUndefined: true);
-        EmitSearchCase("includes", runtime.ArrayIncludes, missingSearchIsUndefined: true);
-        EmitArgsArrayCase("concat", runtime.ArrayConcat);
-        EmitSingleArgCase("join", runtime.ArrayJoin, missingIsUndefined: true);
+        EmitSearchCase("indexOf", runtime.ArrayOperations.IndexOf, missingSearchIsUndefined: true);
+        EmitSearchCase("lastIndexOf", runtime.ArrayOperations.LastIndexOf, missingSearchIsUndefined: true);
+        EmitSearchCase("includes", runtime.ArrayOperations.Includes, missingSearchIsUndefined: true);
+        EmitArgsArrayCase("concat", runtime.ArrayOperations.Concat);
+        EmitSingleArgCase("join", runtime.ArrayOperations.Join, missingIsUndefined: true);
         // Callback methods accept (callback, thisArg). thisArg is plumbed via
         // the `_currentCallbackThisArg` thread-static; see EmitCallbackCase.
-        EmitCallbackCase("map", runtime.ArrayMap);
-        EmitCallbackCase("filter", runtime.ArrayFilter);
-        EmitCallbackCase("forEach", runtime.ArrayForEach);
-        EmitCallbackCase("find", runtime.ArrayFind);
-        EmitCallbackCase("findIndex", runtime.ArrayFindIndex);
-        EmitCallbackCase("findLast", runtime.ArrayFindLast);
-        EmitCallbackCase("findLastIndex", runtime.ArrayFindLastIndex);
-        EmitCallbackCase("some", runtime.ArraySome);
-        EmitCallbackCase("every", runtime.ArrayEvery);
+        EmitCallbackCase("map", runtime.ArrayOperations.Map);
+        EmitCallbackCase("filter", runtime.ArrayOperations.Filter);
+        EmitCallbackCase("forEach", runtime.ArrayOperations.ForEach);
+        EmitCallbackCase("find", runtime.ArrayOperations.Find);
+        EmitCallbackCase("findIndex", runtime.ArrayOperations.FindIndex);
+        EmitCallbackCase("findLast", runtime.ArrayOperations.FindLast);
+        EmitCallbackCase("findLastIndex", runtime.ArrayOperations.FindLastIndex);
+        EmitCallbackCase("some", runtime.ArrayOperations.Some);
+        EmitCallbackCase("every", runtime.ArrayOperations.Every);
         EmitSortCase();
-        EmitOptionalCallableCase("toSorted", runtime.ArrayToSorted);
-        EmitSingleArgCase("flat", runtime.ArrayFlat);
-        EmitCallbackCase("flatMap", runtime.ArrayFlatMap);
-        EmitSingleArgCase("at", runtime.ArrayAt);
+        EmitOptionalCallableCase("toSorted", runtime.ArrayOperations.ToSorted);
+        EmitSingleArgCase("flat", runtime.ArrayOperations.Flat);
+        EmitCallbackCase("flatMap", runtime.ArrayOperations.FlatMap);
+        EmitSingleArgCase("at", runtime.ArrayOperations.At);
 
         // object[]-args methods (runtime helper takes the whole object[] args).
-        EmitArgsArrayCase("slice", runtime.ArraySlice);
-        EmitArgsArrayCase("reduce", runtime.ArrayReduce);
-        EmitArgsArrayCase("reduceRight", runtime.ArrayReduceRight);
-        EmitArgsArrayCase("splice", runtime.ArraySplice);
-        EmitArgsArrayCase("toSpliced", runtime.ArrayToSpliced);
-        EmitArgsArrayCase("with", runtime.ArrayWith);
-        EmitArgsArrayCase("fill", runtime.ArrayFill);
-        EmitArgsArrayCase("copyWithin", runtime.ArrayCopyWithin);
+        EmitArgsArrayCase("slice", runtime.ArrayOperations.Slice);
+        EmitArgsArrayCase("reduce", runtime.ArrayOperations.Reduce);
+        EmitArgsArrayCase("reduceRight", runtime.ArrayOperations.ReduceRight);
+        EmitArgsArrayCase("splice", runtime.ArrayOperations.Splice);
+        EmitArgsArrayCase("toSpliced", runtime.ArrayOperations.ToSpliced);
+        EmitArgsArrayCase("with", runtime.ArrayOperations.With);
+        EmitArgsArrayCase("fill", runtime.ArrayOperations.Fill);
+        EmitArgsArrayCase("copyWithin", runtime.ArrayOperations.CopyWithin);
 
         // toString / toLocaleString — call ArrayProtoToStringHelper(__this).
         // Helper takes the receiver as `__this`-named param and internally
@@ -2111,7 +2111,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Call, _types.StringOpEquality);
             il.Emit(OpCodes.Brfalse, skipLabel);
 
-            il.Emit(OpCodes.Ldsfld, runtime.ArrayPrototypeField);
+            il.Emit(OpCodes.Ldsfld, runtime.ArrayOperations.PrototypeField);
             il.Emit(OpCodes.Ldstr, methodName);
             il.Emit(OpCodes.Call, runtime.GetProperty);
             var liveMethodLocal = il.DeclareLocal(_types.Object);

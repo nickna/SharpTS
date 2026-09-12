@@ -455,7 +455,7 @@ public partial class RuntimeEmitter
         // for dynamic property access on arrays/maps/sets (duck typing across module boundaries)
         // and by `.bind` on non-$TSFunction targets.
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.BoundArrayMethodType);
+        il.Emit(OpCodes.Isinst, runtime.ArrayOperations.BoundMethodType);
         il.Emit(OpCodes.Brtrue, functionLabel);
 
         if (_features.UsesMap)
@@ -911,7 +911,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Call, runtime.ToJsString);
-        il.Emit(OpCodes.Call, runtime.HasArrayLikeProperty);
+        il.Emit(OpCodes.Call, runtime.ArrayOperations.HasArrayLikeProperty);
         il.Emit(OpCodes.Brfalse, continueSpecializedHasIn);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Ret);

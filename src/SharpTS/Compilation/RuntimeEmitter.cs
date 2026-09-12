@@ -380,7 +380,7 @@ public partial class RuntimeEmitter
 
         // Emit $BoundArrayMethod type and constructor (Phase 1)
         // Must come before EmitRuntimeClass so GetListProperty can use the constructor
-        EmitBoundArrayMethodTypeDefinition(moduleBuilder, runtime);
+        EmitBoundArrayMethodTypeDefinition(moduleBuilder, runtime.ArrayOperations);
 
         // Emit $BoundMapMethod / $BoundSetMethod types and constructors (Phase 1)
         // Must come before EmitRuntimeClass so GetMapProperty/GetSetProperty can use them.
@@ -616,6 +616,7 @@ public partial class RuntimeEmitter
         }
 
         runtime.ArrayStorage.CompleteEmission();
+        runtime.ArrayOperations.CompleteEmission();
         runtime.Dns?.CompleteEmission();
         runtime.Zlib?.CompleteEmission();
         runtime.Tls?.CompleteEmission();

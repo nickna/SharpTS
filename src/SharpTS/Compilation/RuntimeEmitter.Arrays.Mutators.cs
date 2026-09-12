@@ -261,7 +261,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.ListOfObject]
         );
-        runtime.ArrayPop = method;
+        runtime.ArrayOperations.Pop = method;
 
         var il = method.GetILGenerator();
         var emptyLabel = il.DefineLabel();
@@ -369,7 +369,7 @@ public partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "ArrayPopProto", MethodAttributes.Public | MethodAttributes.Static,
             _types.Object, [_types.Object]);
-        runtime.ArrayPopProto = method;
+        runtime.ArrayOperations.PopProto = method;
         var il = method.GetILGenerator();
 
         var generic = il.DefineLabel();
@@ -378,7 +378,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, generic);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, _types.ListOfObject);
-        il.Emit(OpCodes.Call, runtime.ArrayPop);
+        il.Emit(OpCodes.Call, runtime.ArrayOperations.Pop);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(generic);
@@ -435,7 +435,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.ListOfObject]
         );
-        runtime.ArrayShift = method;
+        runtime.ArrayOperations.Shift = method;
 
         var il = method.GetILGenerator();
         var emptyLabel = il.DefineLabel();
@@ -485,8 +485,8 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [listType]);
-        if (desc.Kind == ArrayElementsKind.Double) runtime.ArrayShiftDouble = method;
-        else runtime.ArrayShiftBool = method;
+        if (desc.Kind == ArrayElementsKind.Double) runtime.ArrayOperations.ShiftDouble = method;
+        else runtime.ArrayOperations.ShiftBool = method;
 
         var il = method.GetILGenerator();
         var nonEmpty = il.DefineLabel();
@@ -515,7 +515,7 @@ public partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "ArrayShiftProto", MethodAttributes.Public | MethodAttributes.Static,
             _types.Object, [_types.Object]);
-        runtime.ArrayShiftProto = method;
+        runtime.ArrayOperations.ShiftProto = method;
         var il = method.GetILGenerator();
 
         var generic = il.DefineLabel();
@@ -530,7 +530,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, generic);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, _types.ListOfObject);
-        il.Emit(OpCodes.Call, runtime.ArrayShift);
+        il.Emit(OpCodes.Call, runtime.ArrayOperations.Shift);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(generic);
@@ -582,7 +582,7 @@ public partial class RuntimeEmitter
         var next = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, receiver);
         il.Emit(OpCodes.Ldloc, fromKey);
-        il.Emit(OpCodes.Call, runtime.HasArrayLikeProperty);
+        il.Emit(OpCodes.Call, runtime.ArrayOperations.HasArrayLikeProperty);
         il.Emit(OpCodes.Brfalse, deleteTarget);
         il.Emit(OpCodes.Ldloc, receiver);
         il.Emit(OpCodes.Ldloc, fromKey);
@@ -643,7 +643,7 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.Object]);
-        runtime.ArrayShiftNumber = method;
+        runtime.ArrayOperations.ShiftNumber = method;
         var il = method.GetILGenerator();
         var fallback = il.DefineLabel();
         var array = il.DeclareLocal(runtime.ArrayStorage.Type);
@@ -668,7 +668,7 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(fallback);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.ArrayShiftProto);
+        il.Emit(OpCodes.Call, runtime.ArrayOperations.ShiftProto);
         il.Emit(OpCodes.Ret);
     }
 
@@ -680,7 +680,7 @@ public partial class RuntimeEmitter
             _types.Double,
             [_types.ListOfObject, _types.Object]
         );
-        runtime.ArrayUnshift = method;
+        runtime.ArrayOperations.Unshift = method;
 
         var il = method.GetILGenerator();
         var frozenLabel = il.DefineLabel();
@@ -714,8 +714,8 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Double,
             [listType, elementType]);
-        if (desc.Kind == ArrayElementsKind.Double) runtime.ArrayUnshiftDouble = method;
-        else runtime.ArrayUnshiftBool = method;
+        if (desc.Kind == ArrayElementsKind.Double) runtime.ArrayOperations.UnshiftDouble = method;
+        else runtime.ArrayOperations.UnshiftBool = method;
 
         var il = method.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
@@ -740,7 +740,7 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Double,
             [_types.Object, _types.DoubleArray]);
-        runtime.ArrayUnshiftNumber = method;
+        runtime.ArrayOperations.UnshiftNumber = method;
         var il = method.GetILGenerator();
         var fallback = il.DefineLabel();
         var array = il.DeclareLocal(runtime.ArrayStorage.Type);
@@ -797,7 +797,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(done);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, boxed);
-        il.Emit(OpCodes.Call, runtime.ArrayUnshiftProto);
+        il.Emit(OpCodes.Call, runtime.ArrayOperations.UnshiftProto);
         il.Emit(OpCodes.Ret);
     }
 
@@ -805,7 +805,7 @@ public partial class RuntimeEmitter
     // unboxed double/bool to a bare List<T> and returns the new length. No frozen/
     // sealed check — a promoted local is provably non-escaping and so can never be
     // Object.freeze'd (that needs an argument-pass escape, which disqualifies promotion).
-    private void EmitArrayPushTyped(TypeBuilder typeBuilder, EmittedRuntime runtime, ArrayElementsDescriptor desc)
+    private void EmitArrayPushTyped(TypeBuilder typeBuilder, EmittedArrayOperationsRuntime arrays, ArrayElementsDescriptor desc)
     {
         var listType = desc.GetListType(_types);
         var elemType = desc.GetElementType(_types);
@@ -815,8 +815,8 @@ public partial class RuntimeEmitter
             _types.Double,
             [listType, elemType]
         );
-        if (desc.Kind == ArrayElementsKind.Double) runtime.ArrayPushDouble = method;
-        else runtime.ArrayPushBool = method;
+        if (desc.Kind == ArrayElementsKind.Double) arrays.PushDouble = method;
+        else arrays.PushBool = method;
 
         var il = method.GetILGenerator();
         // list.Add(value)
@@ -838,7 +838,7 @@ public partial class RuntimeEmitter
             _types.Double,
             [_types.ListOfObject, _types.Object]
         );
-        runtime.ArrayPush = method;
+        runtime.ArrayOperations.Push = method;
 
         var il = method.GetILGenerator();
         var frozenLabel = il.DefineLabel();
@@ -878,7 +878,7 @@ public partial class RuntimeEmitter
         var paramArrayCtor = typeof(ParamArrayAttribute).GetConstructor(Type.EmptyTypes)!;
         method.DefineParameter(2, System.Reflection.ParameterAttributes.None, "items")
             .SetCustomAttribute(paramArrayCtor, CustomAttributeEncoder.EmptyBlob);
-        runtime.ArrayPushProto = method;
+        runtime.ArrayOperations.PushProto = method;
 
         var il = method.GetILGenerator();
         var generic = il.DefineLabel();
@@ -1007,7 +1007,7 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Void,
             [_types.Object, _types.Object]);
-        runtime.ArrayPushOneDiscarded = method;
+        runtime.ArrayOperations.PushOneDiscarded = method;
 
         var il = method.GetILGenerator();
         var fallback = il.DefineLabel();
@@ -1043,7 +1043,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, _types.ListOfObject);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.ArrayPush);
+        il.Emit(OpCodes.Call, runtime.ArrayOperations.Push);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Ret);
 
@@ -1055,7 +1055,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Stelem_Ref);
-        il.Emit(OpCodes.Call, runtime.ArrayPushProto);
+        il.Emit(OpCodes.Call, runtime.ArrayOperations.PushProto);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Ret);
     }
@@ -1075,7 +1075,7 @@ public partial class RuntimeEmitter
         var paramArrayCtor = typeof(ParamArrayAttribute).GetConstructor(Type.EmptyTypes)!;
         method.DefineParameter(2, System.Reflection.ParameterAttributes.None, "items")
             .SetCustomAttribute(paramArrayCtor, CustomAttributeEncoder.EmptyBlob);
-        runtime.ArrayUnshiftProto = method;
+        runtime.ArrayOperations.UnshiftProto = method;
 
         var il = method.GetILGenerator();
         var generic = il.DefineLabel();
@@ -1180,7 +1180,7 @@ public partial class RuntimeEmitter
         var shiftNext = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, receiver);
         il.Emit(OpCodes.Ldloc, fromKey);
-        il.Emit(OpCodes.Call, runtime.HasArrayLikeProperty);
+        il.Emit(OpCodes.Call, runtime.ArrayOperations.HasArrayLikeProperty);
         il.Emit(OpCodes.Brfalse, deleteTarget);
         il.Emit(OpCodes.Ldloc, receiver);
         il.Emit(OpCodes.Ldloc, fromKey);
@@ -1256,7 +1256,7 @@ public partial class RuntimeEmitter
             _types.ListOfObject,
             [_types.Object, _types.ObjectArray]
         );
-        runtime.ArraySlice = method;
+        runtime.ArrayOperations.Slice = method;
 
         var il = method.GetILGenerator();
         var (receiver, length) = EmitGenericArrayReceiverAndLength(il, runtime);
@@ -1355,7 +1355,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, key);
         il.Emit(OpCodes.Ldloc, receiver);
         il.Emit(OpCodes.Ldloc, key);
-        il.Emit(OpCodes.Call, runtime.HasArrayLikeProperty);
+        il.Emit(OpCodes.Call, runtime.ArrayOperations.HasArrayLikeProperty);
         il.Emit(OpCodes.Brfalse, hole);
         il.Emit(OpCodes.Ldloc, result);
         il.Emit(OpCodes.Ldloc, receiver);
@@ -1386,7 +1386,7 @@ public partial class RuntimeEmitter
             _types.ListOfObject,
             [_types.ListOfObject]
         );
-        runtime.ArrayReverse = method;
+        runtime.ArrayOperations.Reverse = method;
 
         var il = method.GetILGenerator();
         var frozenLabel = il.DefineLabel();
@@ -1416,7 +1416,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object]
         );
-        runtime.ArrayReverseProto = method;
+        runtime.ArrayOperations.ReverseProto = method;
 
         var il = method.GetILGenerator();
         var (receiver, length) = EmitGenericArrayReceiverAndLength(il, runtime);
@@ -1462,7 +1462,7 @@ public partial class RuntimeEmitter
 
         il.Emit(OpCodes.Ldloc, receiver);
         il.Emit(OpCodes.Ldloc, lowerKey);
-        il.Emit(OpCodes.Call, runtime.HasArrayLikeProperty);
+        il.Emit(OpCodes.Call, runtime.ArrayOperations.HasArrayLikeProperty);
         il.Emit(OpCodes.Stloc, lowerExists);
         var noLowerValue = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, lowerExists);
@@ -1475,7 +1475,7 @@ public partial class RuntimeEmitter
 
         il.Emit(OpCodes.Ldloc, receiver);
         il.Emit(OpCodes.Ldloc, upperKey);
-        il.Emit(OpCodes.Call, runtime.HasArrayLikeProperty);
+        il.Emit(OpCodes.Call, runtime.ArrayOperations.HasArrayLikeProperty);
         il.Emit(OpCodes.Stloc, upperExists);
         var noUpperValue = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, upperExists);
@@ -1548,7 +1548,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitArrayFlat(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitArrayFlat(TypeBuilder typeBuilder, EmittedArrayOperationsRuntime arrays)
     {
         // ArrayFlat(List<object> list, object? depthArg) -> List<object>
         var method = typeBuilder.DefineMethod(
@@ -1557,7 +1557,7 @@ public partial class RuntimeEmitter
             _types.ListOfObject,
             [_types.ListOfObject, _types.Object]
         );
-        runtime.ArrayFlat = method;
+        arrays.Flat = method;
 
         var il = method.GetILGenerator();
 
@@ -1601,7 +1601,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ldloc, depthLocal);
-        il.Emit(OpCodes.Call, runtime.ArrayFlatHelper);
+        il.Emit(OpCodes.Call, arrays.FlatHelper);
 
         // return result
         il.Emit(OpCodes.Ldloc, resultLocal);
@@ -1617,7 +1617,7 @@ public partial class RuntimeEmitter
             _types.Void,
             [_types.ListOfObject, _types.ListOfObject, _types.Int32]
         );
-        runtime.ArrayFlatHelper = method;
+        runtime.ArrayOperations.FlatHelper = method;
 
         var il = method.GetILGenerator();
 
@@ -1711,7 +1711,7 @@ public partial class RuntimeEmitter
             _types.ListOfObject,
             [_types.ListOfObject, _types.Object]
         );
-        runtime.ArrayFlatMap = method;
+        runtime.ArrayOperations.FlatMap = method;
 
         var il = method.GetILGenerator();
         EmitThrowIfCallbackNotCallable(il, runtime, 1, "Array.prototype.flatMap");
@@ -1762,14 +1762,14 @@ public partial class RuntimeEmitter
         // re-reads them via GetProperty so getter side effects propagate
         // and structurally-absent slots return $ArrayHole.
         var flatMapContinue = il.DefineLabel();
-        EmitElementLoad(il, iLocal, runtime, isLazyLocal);
+        EmitElementLoad(il, iLocal, runtime.ArrayOperations, isLazyLocal);
         il.Emit(OpCodes.Isinst, runtime.ArrayStorage.HoleType);
         il.Emit(OpCodes.Brtrue, flatMapContinue);
 
         // args[0] = LoadArrayLikeElement(list, i) — lazy-aware
         il.Emit(OpCodes.Ldloc, argsLocal);
         il.Emit(OpCodes.Ldc_I4_0);
-        EmitElementLoad(il, iLocal, runtime, isLazyLocal);
+        EmitElementLoad(il, iLocal, runtime.ArrayOperations, isLazyLocal);
         il.Emit(OpCodes.Stelem_Ref);
 
         // args[1] = (double)i
@@ -1875,7 +1875,7 @@ public partial class RuntimeEmitter
         );
         method.SetCustomAttribute(
             runtime.PadUndefinedAttrCtor, CustomAttributeEncoder.EmptyBlob);
-        runtime.ArraySort = method;
+        runtime.ArrayOperations.Sort = method;
 
         var il = method.GetILGenerator();
         EmitThrowIfCallbackNotCallable(
@@ -1909,7 +1909,7 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             _types.ListOfObject,
             [_types.ListOfObject, comparatorType]);
-        runtime.ArraySortDirect = method;
+        runtime.ArrayOperations.SortDirect = method;
 
         var il = method.GetILGenerator();
         var frozenLabel = il.DefineLabel();
@@ -1932,7 +1932,7 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             _types.ListOfObject,
             [_types.ListOfObject, numericComparatorType]);
-        runtime.ArraySortDirectNumber = numericMethod;
+        runtime.ArrayOperations.SortDirectNumber = numericMethod;
 
         il = numericMethod.GetILGenerator();
         frozenLabel = il.DefineLabel();
@@ -1963,7 +1963,7 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.Object]);
-        runtime.ArraySliceNumber = method;
+        runtime.ArrayOperations.SliceNumber = method;
 
         var il = method.GetILGenerator();
         var array = il.DeclareLocal(runtime.ArrayStorage.Type);
@@ -1983,7 +1983,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, count);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, count);
-        il.Emit(OpCodes.Call, runtime.ArraySortCanUseDenseFastPath);
+        il.Emit(OpCodes.Call, runtime.ArrayOperations.SortCanUseDenseFastPath);
         il.Emit(OpCodes.Brfalse, fallback);
         il.Emit(OpCodes.Ldloc, array);
         il.Emit(OpCodes.Callvirt, runtime.ArrayStorage.CloneNumeric);
@@ -1993,7 +1993,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Newarr, _types.Object);
-        il.Emit(OpCodes.Call, runtime.ArraySlice);
+        il.Emit(OpCodes.Call, runtime.ArrayOperations.Slice);
         il.Emit(OpCodes.Newobj, runtime.ArrayStorage.Ctor);
         il.Emit(OpCodes.Ret);
     }
@@ -2013,7 +2013,7 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.Object, typedComparator, boxedComparator]);
-        runtime.ArraySortNumeric = method;
+        runtime.ArrayOperations.SortNumeric = method;
 
         var il = method.GetILGenerator();
         var array = il.DeclareLocal(runtime.ArrayStorage.Type);
@@ -2049,7 +2049,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, count);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, count);
-        il.Emit(OpCodes.Call, runtime.ArraySortCanUseDenseFastPath);
+        il.Emit(OpCodes.Call, runtime.ArrayOperations.SortCanUseDenseFastPath);
         il.Emit(OpCodes.Brfalse, fallback);
         il.Emit(OpCodes.Ldloc, array);
         il.Emit(OpCodes.Ldarg_1);
@@ -2063,7 +2063,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, _types.ListOfObject);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Call, runtime.ArraySortDirectNumber);
+        il.Emit(OpCodes.Call, runtime.ArrayOperations.SortDirectNumber);
         il.Emit(OpCodes.Pop);
 
         il.MarkLabel(returnReceiver);
@@ -2084,7 +2084,7 @@ public partial class RuntimeEmitter
             MethodAttributes.Private | MethodAttributes.Static,
             _types.Boolean,
             [_types.Object, _types.Int32]);
-        runtime.ArraySortCanUseDenseFastPath = method;
+        runtime.ArrayOperations.SortCanUseDenseFastPath = method;
 
         var il = method.GetILGenerator();
         var receiverList = il.DeclareLocal(_types.ListOfObject);
@@ -2156,14 +2156,14 @@ public partial class RuntimeEmitter
         // Default arrays inherit directly from the intrinsic Array.prototype,
         // which must still inherit directly from Object.prototype. Relevant
         // indexed properties anywhere on that standard chain force bailout.
-        il.Emit(OpCodes.Ldsfld, runtime.ArrayPrototypeField);
+        il.Emit(OpCodes.Ldsfld, runtime.ArrayOperations.PrototypeField);
         il.Emit(OpCodes.Call, runtime.PDSGetPrototype);
         il.Emit(OpCodes.Ldsfld, runtime.ObjectPrototypeField);
         il.Emit(OpCodes.Bne_Un, returnFalse);
         il.Emit(OpCodes.Ldsfld, runtime.ObjectPrototypeField);
         il.Emit(OpCodes.Call, runtime.PDSHasPrototypeEntry);
         il.Emit(OpCodes.Brtrue, returnFalse);
-        il.Emit(OpCodes.Ldsfld, runtime.ArrayPrototypeField);
+        il.Emit(OpCodes.Ldsfld, runtime.ArrayOperations.PrototypeField);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, runtime.PDSHasIndexedOwnProperty);
         il.Emit(OpCodes.Brtrue, returnFalse);
@@ -2193,7 +2193,7 @@ public partial class RuntimeEmitter
             [_types.Object, _types.Object]);
         method.SetCustomAttribute(
             runtime.PadUndefinedAttrCtor, CustomAttributeEncoder.EmptyBlob);
-        runtime.ArraySortProto = method;
+        runtime.ArrayOperations.SortProto = method;
 
         var il = method.GetILGenerator();
         // Validate comparefn before ToObject/LengthOfArrayLike. A poisoned
@@ -2219,23 +2219,23 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Call, runtime.ToObjectMethod);
         il.Emit(OpCodes.Stloc, receiver);
-        il.Emit(OpCodes.Ldsfld, runtime.CurrentArrayLikeReceiverField);
+        il.Emit(OpCodes.Ldsfld, runtime.ArrayOperations.CurrentReceiverField);
         il.Emit(OpCodes.Stloc, previousReceiver);
 
         il.BeginExceptionBlock();
         il.Emit(OpCodes.Ldloc, receiver);
-        il.Emit(OpCodes.Stsfld, runtime.CurrentArrayLikeReceiverField);
+        il.Emit(OpCodes.Stsfld, runtime.ArrayOperations.CurrentReceiverField);
         il.Emit(OpCodes.Ldloc, receiver);
-        il.Emit(OpCodes.Call, runtime.ArrayLikeMaterializeForIteration);
+        il.Emit(OpCodes.Call, runtime.ArrayOperations.MaterializeForIteration);
         il.Emit(OpCodes.Stloc, materialized);
         il.Emit(OpCodes.Ldloc, materialized);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.ArraySort);
+        il.Emit(OpCodes.Call, runtime.ArrayOperations.Sort);
         il.Emit(OpCodes.Pop);
 
         il.BeginFinallyBlock();
         il.Emit(OpCodes.Ldloc, previousReceiver);
-        il.Emit(OpCodes.Stsfld, runtime.CurrentArrayLikeReceiverField);
+        il.Emit(OpCodes.Stsfld, runtime.ArrayOperations.CurrentReceiverField);
         il.EndExceptionBlock();
 
         il.Emit(OpCodes.Ldloc, receiver);
@@ -2254,7 +2254,7 @@ public partial class RuntimeEmitter
         );
         method.SetCustomAttribute(
             runtime.PadUndefinedAttrCtor, CustomAttributeEncoder.EmptyBlob);
-        runtime.ArrayToSorted = method;
+        runtime.ArrayOperations.ToSorted = method;
 
         var il = method.GetILGenerator();
         EmitThrowIfCallbackNotCallable(
@@ -2314,7 +2314,7 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             _types.ListOfObject,
             [_types.Object, _types.Object]);
-        runtime.ArrayToSortedGeneric = method;
+        runtime.ArrayOperations.ToSortedGeneric = method;
 
         var il = method.GetILGenerator();
         var previousReceiver = il.DeclareLocal(_types.Object);
@@ -2323,21 +2323,21 @@ public partial class RuntimeEmitter
         EmitThrowIfCallbackNotCallable(
             il, runtime, 1, "Array.prototype.toSorted comparator", allowUndefined: true);
 
-        il.Emit(OpCodes.Ldsfld, runtime.CurrentArrayLikeReceiverField);
+        il.Emit(OpCodes.Ldsfld, runtime.ArrayOperations.CurrentReceiverField);
         il.Emit(OpCodes.Stloc, previousReceiver);
 
         il.BeginExceptionBlock();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Stsfld, runtime.CurrentArrayLikeReceiverField);
+        il.Emit(OpCodes.Stsfld, runtime.ArrayOperations.CurrentReceiverField);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.ArrayLikeMaterializeForCopy);
+        il.Emit(OpCodes.Call, runtime.ArrayOperations.MaterializeForCopy);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.ArrayToSorted);
+        il.Emit(OpCodes.Call, runtime.ArrayOperations.ToSorted);
         il.Emit(OpCodes.Stloc, result);
 
         il.BeginFinallyBlock();
         il.Emit(OpCodes.Ldloc, previousReceiver);
-        il.Emit(OpCodes.Stsfld, runtime.CurrentArrayLikeReceiverField);
+        il.Emit(OpCodes.Stsfld, runtime.ArrayOperations.CurrentReceiverField);
         il.EndExceptionBlock();
 
         il.Emit(OpCodes.Ldloc, result);
@@ -2422,7 +2422,7 @@ public partial class RuntimeEmitter
         {
             il.Emit(OpCodes.Ldloc, observableReceiverLocal!);
             il.Emit(OpCodes.Ldloc, sortLengthLocal);
-            il.Emit(OpCodes.Call, runtime.ArraySortCanUseDenseFastPath);
+            il.Emit(OpCodes.Call, runtime.ArrayOperations.SortCanUseDenseFastPath);
             il.Emit(OpCodes.Stloc, denseFastPathLocal!);
         }
 
@@ -2453,7 +2453,7 @@ public partial class RuntimeEmitter
                 _types.GetProperty(_types.ListOfObject, "Item").GetGetMethod()!);
             il.Emit(OpCodes.Br, elementLoaded);
             il.MarkLabel(observableElementLoad);
-            EmitElementLoad(il, iLocal, runtime, isLazyLocal!);
+            EmitElementLoad(il, iLocal, runtime.ArrayOperations, isLazyLocal!);
             il.MarkLabel(elementLoaded);
         }
         else
@@ -2935,7 +2935,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Brfalse, observableWriteBack);
             il.Emit(OpCodes.Ldloc, observableReceiverLocal!);
             il.Emit(OpCodes.Ldloc, sortLengthLocal);
-            il.Emit(OpCodes.Call, runtime.ArraySortCanUseDenseFastPath);
+            il.Emit(OpCodes.Call, runtime.ArrayOperations.SortCanUseDenseFastPath);
             il.Emit(OpCodes.Brfalse, observableWriteBack);
             il.Emit(OpCodes.Ldloc, observableReceiverLocal!);
             il.Emit(OpCodes.Castclass, _types.ListOfObject);
@@ -3369,7 +3369,7 @@ public partial class RuntimeEmitter
             _types.ListOfObject,
             [_types.ListOfObject, _types.ObjectArray]
         );
-        runtime.ArraySplice = method;
+        runtime.ArrayOperations.Splice = method;
 
         var il = method.GetILGenerator();
 
@@ -3550,7 +3550,7 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             _types.ListOfObject,
             [_types.Object, _types.ObjectArray]);
-        runtime.ArraySpliceProto = method;
+        runtime.ArrayOperations.SpliceProto = method;
 
         var il = method.GetILGenerator();
         var generic = il.DefineLabel();
@@ -3560,7 +3560,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, _types.ListOfObject);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.ArraySplice);
+        il.Emit(OpCodes.Call, runtime.ArrayOperations.Splice);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(generic);
@@ -3710,7 +3710,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, fromKey);
         il.Emit(OpCodes.Ldloc, receiver);
         il.Emit(OpCodes.Ldloc, fromKey);
-        il.Emit(OpCodes.Call, runtime.HasArrayLikeProperty);
+        il.Emit(OpCodes.Call, runtime.ArrayOperations.HasArrayLikeProperty);
         il.Emit(OpCodes.Brfalse, deletedHole);
         il.Emit(OpCodes.Ldloc, deleted);
         il.Emit(OpCodes.Ldloc, receiver);
@@ -3766,7 +3766,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, toKey);
         il.Emit(OpCodes.Ldloc, receiver);
         il.Emit(OpCodes.Ldloc, fromKey);
-        il.Emit(OpCodes.Call, runtime.HasArrayLikeProperty);
+        il.Emit(OpCodes.Call, runtime.ArrayOperations.HasArrayLikeProperty);
         il.Emit(OpCodes.Brfalse, leftDelete);
         il.Emit(OpCodes.Ldloc, receiver);
         il.Emit(OpCodes.Ldloc, fromKey);
@@ -3849,7 +3849,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, toKey);
         il.Emit(OpCodes.Ldloc, receiver);
         il.Emit(OpCodes.Ldloc, fromKey);
-        il.Emit(OpCodes.Call, runtime.HasArrayLikeProperty);
+        il.Emit(OpCodes.Call, runtime.ArrayOperations.HasArrayLikeProperty);
         il.Emit(OpCodes.Brfalse, rightDelete);
         il.Emit(OpCodes.Ldloc, receiver);
         il.Emit(OpCodes.Ldloc, fromKey);
@@ -3928,7 +3928,7 @@ public partial class RuntimeEmitter
             _types.ListOfObject,
             [_types.ListOfObject]
         );
-        runtime.ArrayToReversed = method;
+        runtime.ArrayOperations.ToReversed = method;
 
         var il = method.GetILGenerator();
 
@@ -3987,7 +3987,7 @@ public partial class RuntimeEmitter
             _types.ListOfObject,
             [_types.ListOfObject, _types.ObjectArray]
         );
-        runtime.ArrayWith = method;
+        runtime.ArrayOperations.With = method;
 
         var il = method.GetILGenerator();
 
@@ -4126,7 +4126,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.ListOfObject, _types.Object]
         );
-        runtime.ArrayAt = method;
+        runtime.ArrayOperations.At = method;
 
         var il = method.GetILGenerator();
 
@@ -4200,7 +4200,7 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             _types.ListOfObject,
             [_types.Object, _types.ObjectArray]);
-        runtime.ArrayToSplicedProto = method;
+        runtime.ArrayOperations.ToSplicedProto = method;
 
         var il = method.GetILGenerator();
         var (receiver, length) = EmitGenericArrayReceiverAndLength(il, runtime);
@@ -4419,7 +4419,7 @@ public partial class RuntimeEmitter
             _types.ListOfObject,
             [_types.ListOfObject, _types.ObjectArray]
         );
-        runtime.ArrayToSpliced = method;
+        runtime.ArrayOperations.ToSpliced = method;
 
         var il = method.GetILGenerator();
 
@@ -4633,7 +4633,7 @@ public partial class RuntimeEmitter
             _types.ListOfObject,
             [_types.ListOfObject, _types.ObjectArray]
         );
-        runtime.ArrayFill = method;
+        runtime.ArrayOperations.Fill = method;
 
         var il = method.GetILGenerator();
         var frozenLabel = il.DefineLabel();
@@ -4812,7 +4812,7 @@ public partial class RuntimeEmitter
         var paramArrayCtor = typeof(ParamArrayAttribute).GetConstructor(Type.EmptyTypes)!;
         method.DefineParameter(2, System.Reflection.ParameterAttributes.None, "args")
             .SetCustomAttribute(paramArrayCtor, CustomAttributeEncoder.EmptyBlob);
-        runtime.ArrayFillProto = method;
+        runtime.ArrayOperations.FillProto = method;
 
         var il = method.GetILGenerator();
         var (receiver, length) = EmitGenericArrayReceiverAndLength(il, runtime);
@@ -4913,7 +4913,7 @@ public partial class RuntimeEmitter
             _types.ListOfObject,
             [_types.ListOfObject, _types.ObjectArray]
         );
-        runtime.ArrayCopyWithin = method;
+        runtime.ArrayOperations.CopyWithin = method;
 
         var il = method.GetILGenerator();
         var frozenLabel = il.DefineLabel();
@@ -5139,7 +5139,7 @@ public partial class RuntimeEmitter
         var backwardNext = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, fromKeyLocal);
-        il.Emit(OpCodes.Call, runtime.HasArrayLikeProperty);
+        il.Emit(OpCodes.Call, runtime.ArrayOperations.HasArrayLikeProperty);
         il.Emit(OpCodes.Brfalse, backwardDeleteTarget);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, fromKeyLocal);
@@ -5205,7 +5205,7 @@ public partial class RuntimeEmitter
         var forwardNext = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, fromKeyLocal);
-        il.Emit(OpCodes.Call, runtime.HasArrayLikeProperty);
+        il.Emit(OpCodes.Call, runtime.ArrayOperations.HasArrayLikeProperty);
         il.Emit(OpCodes.Brfalse, forwardDeleteTarget);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, fromKeyLocal);
@@ -5265,7 +5265,7 @@ public partial class RuntimeEmitter
         var paramArrayCtor = typeof(ParamArrayAttribute).GetConstructor(Type.EmptyTypes)!;
         method.DefineParameter(2, System.Reflection.ParameterAttributes.None, "args")
             .SetCustomAttribute(paramArrayCtor, CustomAttributeEncoder.EmptyBlob);
-        runtime.ArrayCopyWithinProto = method;
+        runtime.ArrayOperations.CopyWithinProto = method;
 
         var il = method.GetILGenerator();
         var (receiver, length) = EmitGenericArrayReceiverAndLength(il, runtime);
@@ -5394,7 +5394,7 @@ public partial class RuntimeEmitter
         var next = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, receiver);
         il.Emit(OpCodes.Ldloc, fromKey);
-        il.Emit(OpCodes.Call, runtime.HasArrayLikeProperty);
+        il.Emit(OpCodes.Call, runtime.ArrayOperations.HasArrayLikeProperty);
         il.Emit(OpCodes.Brfalse, deleteTarget);
         il.Emit(OpCodes.Ldloc, receiver);
         il.Emit(OpCodes.Ldloc, fromKey);

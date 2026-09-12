@@ -20,6 +20,9 @@ public class EmittedRuntime
     /// <summary>Required array storage metadata, emitted for every compilation.</summary>
     public EmittedArrayStorageRuntime ArrayStorage { get; } = new();
 
+    /// <summary>Required array operation metadata, emitted for every compilation.</summary>
+    public EmittedArrayOperationsRuntime ArrayOperations { get; } = new();
+
     /// <summary>
     /// Human-readable reasons this compilation emitted late binding into the SharpTS runtime
     /// assembly (e.g. "eval()", "Proxy", "Intl"). Populated during emission by
@@ -227,11 +230,6 @@ public class EmittedRuntime
     public new MethodBuilder Equals { get; set; } = null!;
     public MethodBuilder StrictEquals { get; set; } = null!;
 
-    // Array methods
-    public MethodBuilder SetArrayElement { get; set; } = null!;
-    public MethodBuilder SetArrayElementDouble { get; set; } = null!;
-    public MethodBuilder SetArrayElementBool { get; set; } = null!;
-    public MethodBuilder CreateArray { get; set; } = null!;
     public MethodBuilder GetLength { get; set; } = null!;
     public MethodBuilder GetElement { get; set; } = null!;
     public MethodBuilder GetKeys { get; set; } = null!;
@@ -241,105 +239,14 @@ public class EmittedRuntime
     public MethodBuilder CreateProxyOwnKeysList { get; set; } = null!;
     public MethodBuilder GetValues { get; set; } = null!;
     public MethodBuilder GetEntries { get; set; } = null!;
-    public MethodBuilder IsArray { get; set; } = null!;
-    public MethodBuilder ArrayFrom { get; set; } = null!;
-    /// <summary>Stage 4y: ArrayFrom wrapped for value-form (object[] adapter).</summary>
-    public MethodBuilder ArrayFromAdapter { get; set; } = null!;
-    public MethodBuilder ArrayOf { get; set; } = null!;
-    // Array(…) / new Array(…) dispatch (issue #61).
-    public MethodBuilder ArrayConstructor { get; set; } = null!;
     // Runtime dispatcher for built-in static member access on stored Type
     // tokens (issue #63). Returns a $TSFunction wrapper matching what the
     // compile-time ArrayStaticEmitter / NumberStaticEmitter / etc. would emit.
     public MethodBuilder LookupBuiltInStaticMember { get; set; } = null!;
-    public MethodBuilder ConcatArrays { get; set; } = null!;
     public MethodBuilder ExpandCallArgs { get; set; } = null!;
-    public MethodBuilder ArrayPop { get; set; } = null!;
-    public MethodBuilder ArrayPopProto { get; set; } = null!;
-    public MethodBuilder ArrayShift { get; set; } = null!;
-    public MethodBuilder ArrayShiftDouble { get; set; } = null!;
-    public MethodBuilder ArrayShiftBool { get; set; } = null!;
-    public MethodBuilder ArrayShiftProto { get; set; } = null!;
-    public MethodBuilder ArrayShiftNumber { get; set; } = null!;
-    public MethodBuilder ArrayUnshift { get; set; } = null!;
-    public MethodBuilder ArrayUnshiftDouble { get; set; } = null!;
-    public MethodBuilder ArrayUnshiftBool { get; set; } = null!;
-    public MethodBuilder ArrayUnshiftNumber { get; set; } = null!;
-    public MethodBuilder ArraySlice { get; set; } = null!;
-    public MethodBuilder ArraySliceNumber { get; set; } = null!;
-    public MethodBuilder ArrayMap { get; set; } = null!;
-    public MethodBuilder ArrayMapDirect { get; set; } = null!;
-    public MethodBuilder ArrayMapDouble { get; set; } = null!;
-    public MethodBuilder ArrayFilterDouble { get; set; } = null!;
-    public MethodBuilder ArrayFilter { get; set; } = null!;
-    public MethodBuilder ArrayFilterDirect { get; set; } = null!;
-    public MethodBuilder ArrayFilterDirectBool { get; set; } = null!;
-    public MethodBuilder ArrayForEach { get; set; } = null!;
-    public MethodBuilder ArrayForEachDirect { get; set; } = null!;
-    public MethodBuilder ArrayPush { get; set; } = null!;
-    public MethodBuilder ArrayPushOneDiscarded { get; set; } = null!;
-    public MethodBuilder ArrayPushDouble { get; set; } = null!;
-    public MethodBuilder ArrayPushBool { get; set; } = null!;
-    public MethodBuilder ArrayPushProto { get; set; } = null!;
-    public MethodBuilder ArrayUnshiftProto { get; set; } = null!;
-    public MethodBuilder ArrayFind { get; set; } = null!;
-    public MethodBuilder ArrayFindDirect { get; set; } = null!;
-    public MethodBuilder ArrayFindDirectBool { get; set; } = null!;
-    public MethodBuilder ArrayFindIndex { get; set; } = null!;
-    public MethodBuilder ArrayFindIndexDirect { get; set; } = null!;
-    public MethodBuilder ArrayFindIndexDirectBool { get; set; } = null!;
-    public MethodBuilder ArraySome { get; set; } = null!;
-    public MethodBuilder ArraySomeDirect { get; set; } = null!;
-    public MethodBuilder ArraySomeDirectBool { get; set; } = null!;
-    public MethodBuilder ArrayEvery { get; set; } = null!;
-    public MethodBuilder ArrayEveryDirect { get; set; } = null!;
-    public MethodBuilder ArrayEveryDirectBool { get; set; } = null!;
-    public MethodBuilder ArrayReduce { get; set; } = null!;
-    public MethodBuilder ArrayReduceDirect { get; set; } = null!;
-    public MethodBuilder ArrayReduceDouble { get; set; } = null!;
-    public MethodBuilder ArrayReduceRight { get; set; } = null!;
-    public MethodBuilder ArrayIncludes { get; set; } = null!;
-    public MethodBuilder ArrayIncludesProto { get; set; } = null!;
-    public MethodBuilder ArrayIncludesDouble { get; set; } = null!;
-    public MethodBuilder ArrayIndexOf { get; set; } = null!;
-    public MethodBuilder ArrayLastIndexOf { get; set; } = null!;
-    public MethodBuilder ArrayJoin { get; set; } = null!;
-    public MethodBuilder ArrayConcat { get; set; } = null!;
-    public MethodBuilder ArrayReverse { get; set; } = null!;
-    public MethodBuilder ArrayReverseProto { get; set; } = null!;
-    public MethodBuilder ArrayFlat { get; set; } = null!;
-    public MethodBuilder ArrayFlatMap { get; set; } = null!;
-    public MethodBuilder ArrayFlatHelper { get; set; } = null!;
-    public MethodBuilder ArraySort { get; set; } = null!;
-    public MethodBuilder ArraySortDirect { get; set; } = null!;
-    public MethodBuilder ArraySortDirectNumber { get; set; } = null!;
-    public MethodBuilder ArraySortNumeric { get; set; } = null!;
-    public MethodBuilder ArraySortProto { get; set; } = null!;
-    public MethodBuilder ArraySortCanUseDenseFastPath { get; set; } = null!;
-    public MethodBuilder ArrayToSorted { get; set; } = null!;
-    public MethodBuilder ArrayToSortedGeneric { get; set; } = null!;
-    public MethodBuilder ArrayLikeMaterializeForCopy { get; set; } = null!;
-    public MethodBuilder ArraySplice { get; set; } = null!;
-    public MethodBuilder ArraySpliceProto { get; set; } = null!;
-    public MethodBuilder ArrayToSpliced { get; set; } = null!;
-    public MethodBuilder ArrayToSplicedProto { get; set; } = null!;
     public MethodBuilder ToIntegerOrInfinity { get; set; } = null!;
-    public MethodBuilder ArrayFindLast { get; set; } = null!;
-    public MethodBuilder ArrayFindLastIndex { get; set; } = null!;
-    public MethodBuilder ArrayToReversed { get; set; } = null!;
-    public MethodBuilder ArrayWith { get; set; } = null!;
-    public MethodBuilder ArrayAt { get; set; } = null!;
-    public MethodBuilder ArrayFill { get; set; } = null!;
-    public MethodBuilder ArrayFillProto { get; set; } = null!;
-    public MethodBuilder ArrayCopyWithin { get; set; } = null!;
-    public MethodBuilder ArrayCopyWithinProto { get; set; } = null!;
-    public MethodBuilder ArrayEntries { get; set; } = null!;
-    public MethodBuilder ArrayKeys { get; set; } = null!;
-    public MethodBuilder ArrayValues { get; set; } = null!;
-    public ConstructorBuilder ArrayIteratorCtor { get; set; } = null!;
     public ConstructorBuilder MapCollectionIteratorCtor { get; set; } = null!;
     public ConstructorBuilder SetCollectionIteratorCtor { get; set; } = null!;
-    public MethodBuilder ArrayLikeMaterialize { get; set; } = null!;
     // ECMA-262 RequireObjectCoercible(this) — throws TypeError if `this` is
     // null or undefined. Called from $TSFunction.CoercePrimitiveArgs via
     // late-bound reflection so the IL emitted before TSError ctors are built
@@ -462,7 +369,6 @@ public class EmittedRuntime
     public FieldBuilder ReflectedMethodCacheField { get; set; } = null!;
     public MethodBuilder SetFieldsProperty { get; set; } = null!;
     public MethodBuilder SetFieldsPropertyStrict { get; set; } = null!;
-    public MethodBuilder GetArrayMethod { get; set; } = null!;
     public MethodBuilder GetListProperty { get; set; } = null!;
     public MethodBuilder MergeIntoObject { get; set; } = null!;
     public MethodBuilder MergeIntoTSObject { get; set; } = null!;
@@ -489,53 +395,6 @@ public class EmittedRuntime
     /// fast path in compiled code where arity is exact).
     /// </summary>
     public FieldBuilder CurrentArgumentsField { get; set; } = null!;
-
-    // Thread-static "original array-like receiver" slot. The Array.prototype.X.call(receiver, ...)
-    // pattern matcher sets it before invoking the runtime helper; EmitCallbackArgsAndInvoke
-    // reads it when populating the callback's 4th argument (so the callback sees the ORIGINAL
-    // receiver per ECMA-262, not the materialized temp list). Null when no prototype.call
-    // context is active — direct `arr.forEach(cb)` calls keep passing the List as the 4th arg.
-    public FieldBuilder CurrentArrayLikeReceiverField { get; set; } = null!;
-
-    // Aliases <see cref="CurrentArrayLikeReceiverField"/>. Originally a
-    // dedicated [ThreadStatic] field; the aliasing was forced by the
-    // layout-sensitive .NET 10 tier-0 JIT bug behind issue #39 (fixed
-    // upstream in 10.0.x servicing, so a dedicated field would be safe
-    // again). Kept because it works cleanly: the dispatch site already
-    // stores the original receiver there, and LoadArrayLikeElement
-    // disambiguates eager vs lazy by inspecting the receiver's type at
-    // load time (Dict / TSObject → lazy, otherwise eager).
-    public FieldBuilder LazyArrayLikeReceiverField { get; set; } = null!;
-
-    // Lazy-aware materializer used by Array.prototype.* iterator helpers.
-    // For receivers whose elements may have descriptor side effects
-    // (TSObject / Dictionary), returns a placeholder List&lt;object&gt; sized
-    // to length so subsequent LoadArrayLikeElement calls re-read each slot
-    // via $Runtime.GetProperty. Eager-receiver branches (List, $Array,
-    // string, $Arguments, ObjectArray) delegate to ArrayLikeMaterialize.
-    public MethodBuilder ArrayLikeMaterializeForIteration { get; set; } = null!;
-
-    // Element reader for iterator helpers. Reads _currentArrayLikeReceiver:
-    // if it's a Dict or $Object (lazy-eligible), returns
-    // $Runtime.GetProperty(receiver, idx.ToString()); otherwise returns
-    // list[idx]. The type check disambiguates lazy iteration from the
-    // existing "callback's array-slot" use of _currentArrayLikeReceiver.
-    public MethodBuilder LoadArrayLikeElement { get; set; } = null!;
-
-    // ECMA-262 7.3.10 HasProperty for Dict + $Object receivers, used by the
-    // iterator-helper element loader to distinguish "absent" from "present
-    // but undefined". Walks own dict._fields, own PDS, then the prototype
-    // chain (PDSGetPrototype). Does not invoke any get accessors —
-    // existence-only check, so set-only accessors and getters that throw
-    // don't fire spuriously. Returns a CLR bool.
-    public MethodBuilder HasArrayLikeProperty { get; set; } = null!;
-
-    // Thread-static "callback thisArg" for `arr.forEach(cb, thisArg)` and
-    // similar Array prototype methods. ArrayEmitter / $BoundArrayMethod sets
-    // it when the user passes a thisArg; EmitCallbackArgsAndInvoke reads it
-    // as the receiver passed to InvokeMethodValue, then clears it. Null
-    // means no thisArg (callback's `this` becomes undefined per spec).
-    public FieldBuilder CurrentCallbackThisArgField { get; set; } = null!;
 
     // Math singleton (Dictionary<string, object>). ECMA-262 treats Math as an
     // ordinary extensible object — user code can assign `Math.length = 1;
@@ -582,24 +441,6 @@ public class EmittedRuntime
     /// <summary>Reflect singleton — the value-form ES namespace object.</summary>
     public FieldBuilder? ReflectSingletonField { get; set; }
     /// <summary>
-    /// Array.prototype singleton dictionary populated at cctor time with
-    /// <c>$TSFunction</c> wrappers around <c>$Runtime.Array*</c> helpers.
-    /// Read by ArrayStaticEmitter when user code does <c>Array.prototype</c>
-    /// or <c>Array.prototype.X</c> as a value access (the pattern matcher
-    /// in ILEmitter.Calls.cs still handles <c>Array.prototype.X.call(...)</c>
-    /// syntactically, so this dict is mostly used for typeof/identity/value
-    /// probes — including the Test262 <c>isConstructor</c> harness which
-    /// queries <c>Array.prototype.sort</c>.
-    /// </summary>
-    public FieldBuilder ArrayPrototypeField { get; set; } = null!;
-    /// <summary>
-    /// <c>$Runtime._ArrayPrototypePopulate()</c> — called from cctor's tail
-    /// to fill <see cref="ArrayPrototypeField"/> with <c>$TSFunction</c>
-    /// wrappers around the <c>Array*</c> helpers. Must be wired up after all
-    /// the Array helper MethodBuilders are defined.
-    /// </summary>
-    public MethodBuilder ArrayPrototypePopulateMethod { get; set; } = null!;
-    /// <summary>
     /// Populates <see cref="MathSingletonField"/> with $TSFunction wrappers for
     /// the Math static methods (max/min/floor/…) so value-form access
     /// (<c>const m = Math; m.max(1,2)</c>) resolves. Idempotent. See issue #276.
@@ -643,10 +484,6 @@ public class EmittedRuntime
     public MethodBuilder PDSGetEnumerableExtraKeys { get; set; } = null!;
     /// <summary>$PropertyDescriptorStore.GetAllExtraKeys(obj, dict) — like the Enumerable variant but does NOT filter by the Enumerable bit. Used by Object.getOwnPropertyNames (ECMA-262 §20.1.2.10) which returns both enumerable AND non-enumerable own string-keyed properties.</summary>
     public MethodBuilder PDSGetAllExtraKeys { get; set; } = null!;
-    /// <summary>$Runtime.ArrayProtoToString(this) — ECMA-262 23.1.3.32. Returns join of elements with default separator (",").</summary>
-    public MethodBuilder ArrayProtoToStringHelper { get; set; } = null!;
-    /// <summary>$Runtime.ArrayProtoToLocaleString(this) — ECMA-262 23.1.3.33. Invokes each present element's live toLocaleString method and joins the results with commas.</summary>
-    public MethodBuilder ArrayProtoToLocaleStringHelper { get; set; } = null!;
     /// <summary>Populates <see cref="BooleanPrototypeField"/> with $TSFunction wrappers for toString/valueOf; idempotent.</summary>
     public MethodBuilder BooleanPrototypePopulateMethod { get; set; } = null!;
     /// <summary>Populates <see cref="DatePrototypeField"/> with $TSFunction wrappers for the Date.prototype methods; idempotent.</summary>
@@ -816,13 +653,6 @@ public class EmittedRuntime
     public ConstructorBuilder FunctionApplyWrapperCtor { get; set; } = null!;
     public MethodBuilder FunctionApplyWrapperInvoke { get; set; } = null!;
     public MethodBuilder GetFunctionMethod { get; set; } = null!;
-
-    // Bound array method for dynamic array property access
-    public TypeBuilder BoundArrayMethodType { get; set; } = null!;
-    public ConstructorBuilder BoundArrayMethodCtor { get; set; } = null!;
-    public MethodBuilder BoundArrayMethodInvoke { get; set; } = null!;
-    public FieldBuilder BoundArrayMethodListField { get; set; } = null!;
-    public FieldBuilder BoundArrayMethodNameField { get; set; } = null!;
 
     // $Arguments : List<object> — marker subclass for the JS arguments object.
     // Used to brand sloppy-arguments instances so the brand-tagger returns

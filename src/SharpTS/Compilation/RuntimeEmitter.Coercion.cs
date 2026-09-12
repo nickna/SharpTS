@@ -750,7 +750,7 @@ public partial class RuntimeEmitter
         // prototype slot before the intrinsic join fallback below so String
         // coercion observes overrides (for example assigning
         // Object.prototype.toString or a user function to that slot).
-        il.Emit(OpCodes.Ldsfld, runtime.ArrayPrototypeField);
+        il.Emit(OpCodes.Ldsfld, runtime.ArrayOperations.PrototypeField);
         il.Emit(OpCodes.Ldstr, "toString");
         il.Emit(OpCodes.Call, runtime.GetProperty);
         var arrayToStringMethodLocal = il.DeclareLocal(_types.Object);

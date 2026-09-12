@@ -831,7 +831,7 @@ public partial class RuntimeEmitter
                 il.Emit(OpCodes.Ldc_I4_1);
                 il.Emit(OpCodes.Ldloc, valueLocal);
                 il.Emit(OpCodes.Stelem_Ref);
-                il.Emit(OpCodes.Call, runtime.CreateArray);
+                il.Emit(OpCodes.Call, runtime.ArrayOperations.Create);
                 break;
         }
 
@@ -851,7 +851,7 @@ public partial class RuntimeEmitter
         // Convert result list to array and wrap
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Callvirt, listOfObjectType.GetMethod("ToArray")!);
-        il.Emit(OpCodes.Call, runtime.CreateArray);
+        il.Emit(OpCodes.Call, runtime.ArrayOperations.Create);
         il.Emit(OpCodes.Ret);
     }
 
@@ -2745,7 +2745,7 @@ public partial class RuntimeEmitter
         }
 
         // Wrap in $Array
-        il.Emit(OpCodes.Call, runtime.CreateArray);
+        il.Emit(OpCodes.Call, runtime.ArrayOperations.Create);
         il.Emit(OpCodes.Ret);
     }
 

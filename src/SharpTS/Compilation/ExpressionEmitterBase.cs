@@ -1400,7 +1400,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
                 IL.Emit(OpCodes.Stelem_Ref);
             }
 
-            IL.Emit(OpCodes.Call, Ctx.Runtime!.CreateArray);
+            IL.Emit(OpCodes.Call, Ctx.Runtime!.ArrayOperations.Create);
         }
         else
         {
@@ -1431,7 +1431,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
                         IL.Emit(OpCodes.Ldloc, elementLocals[i]!);
                     }
                     IL.Emit(OpCodes.Stelem_Ref);
-                    IL.Emit(OpCodes.Call, Ctx.Runtime!.CreateArray);
+                    IL.Emit(OpCodes.Call, Ctx.Runtime!.ArrayOperations.Create);
                 }
 
                 IL.Emit(OpCodes.Stelem_Ref);
@@ -1440,7 +1440,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
             IL.Emit(OpCodes.Ldsfld, Ctx.Runtime!.SymbolIterator);
             IL.Emit(OpCodes.Ldtoken, Ctx.Runtime!.RuntimeType);
             IL.Emit(OpCodes.Call, Types.TypeGetTypeFromHandle);
-            IL.Emit(OpCodes.Call, Ctx.Runtime!.ConcatArrays);
+            IL.Emit(OpCodes.Call, Ctx.Runtime!.ArrayOperations.ConcatSources);
         }
         SetStackUnknown();
     }

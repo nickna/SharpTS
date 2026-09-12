@@ -56,12 +56,11 @@ public sealed class ArrayElementsDescriptor(
         _ => types.Object
     };
 
-    /// <summary>Gets the emitted SetArrayElement method from EmittedRuntime.</summary>
-    public MethodBuilder GetSetArrayElementMethod(EmittedRuntime runtime) => Kind switch
+    public MethodBuilder GetSetArrayElementMethod(EmittedArrayOperationsRuntime arrays) => Kind switch
     {
-        ArrayElementsKind.Double => runtime.SetArrayElementDouble,
-        ArrayElementsKind.Bool => runtime.SetArrayElementBool,
-        _ => runtime.SetArrayElement
+        ArrayElementsKind.Double => arrays.SetElementDouble,
+        ArrayElementsKind.Bool => arrays.SetElementBool,
+        _ => arrays.SetElement
     };
 
     /// <summary>Emits the default value for auto-extension (0.0, false, or null).</summary>

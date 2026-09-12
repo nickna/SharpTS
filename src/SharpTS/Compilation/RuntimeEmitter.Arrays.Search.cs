@@ -40,7 +40,7 @@ public partial class RuntimeEmitter
         var paramArrayCtor = typeof(ParamArrayAttribute).GetConstructor(Type.EmptyTypes)!;
         method.DefineParameter(2, ParameterAttributes.None, "args")
             .SetCustomAttribute(paramArrayCtor, CustomAttributeEncoder.EmptyBlob);
-        runtime.ArrayIncludesProto = method;
+        runtime.ArrayOperations.IncludesProto = method;
 
         var il = method.GetILGenerator();
         var haveSearch = il.DefineLabel();
@@ -70,7 +70,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Ldelem_Ref);
         il.MarkLabel(afterFromIndex);
-        il.Emit(OpCodes.Call, runtime.ArrayIncludes);
+        il.Emit(OpCodes.Call, runtime.ArrayOperations.Includes);
         il.Emit(OpCodes.Ret);
     }
 
@@ -90,7 +90,7 @@ public partial class RuntimeEmitter
             [_types.ListOfDouble, _types.Double, _types.Double]);
         method.SetImplementationFlags(
             MethodImplAttributes.AggressiveInlining | MethodImplAttributes.AggressiveOptimization);
-        runtime.ArrayIncludesDouble = method;
+        runtime.ArrayOperations.IncludesDouble = method;
 
         var il = method.GetILGenerator();
         var len = il.DeclareLocal(_types.Int32);
@@ -185,7 +185,7 @@ public partial class RuntimeEmitter
             _types.Object,  // Return boxed bool to match ILEmitter expectations
             [_types.ListOfObject, _types.Object, _types.Object]
         );
-        runtime.ArrayIncludes = method;
+        runtime.ArrayOperations.Includes = method;
 
         var il = method.GetILGenerator();
 
@@ -270,7 +270,7 @@ public partial class RuntimeEmitter
     }
 
     /// <summary>
-    /// Emits <c>$Runtime.ArrayLikeMaterialize(object receiver) -&gt; List&lt;object&gt;</c>.
+    /// Emits <c>$Runtime.LikeMaterialize(object receiver) -&gt; List&lt;object&gt;</c>.
     /// Mirrors <c>ArrayPrototypeMethodWrapper.TryMaterializeArrayLike</c> on the
     /// interpreter side (<c>Runtime/Types/SharpTSArrayGlobal.cs</c>) — ECMA-262
     /// requires Array.prototype.* to accept any array-like (anything with a
@@ -295,9 +295,9 @@ public partial class RuntimeEmitter
     /// filled in by EmitArrayLikeMaterialize, which depends on $Runtime
     /// helpers (GetProperty, ToNumber) emitted later in EmitRuntimeClass.
     /// </summary>
-    internal void DeclareArrayLikeMaterialize(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    internal void DeclareArrayLikeMaterialize(TypeBuilder typeBuilder, EmittedArrayOperationsRuntime arrays)
     {
-        runtime.ArrayLikeMaterialize = typeBuilder.DefineMethod(
+        arrays.Materialize = typeBuilder.DefineMethod(
             "ArrayLikeMaterialize",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.ListOfObject,
@@ -307,7 +307,7 @@ public partial class RuntimeEmitter
 
     private void EmitArrayLikeMaterialize(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
-        var method = runtime.ArrayLikeMaterialize;
+        var method = runtime.ArrayOperations.Materialize;
         var il = method.GetILGenerator();
 
         var throwLabel = il.DefineLabel();
@@ -653,7 +653,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Int32, "ToString", Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, idxKeyLocal);
         il.Emit(OpCodes.Ldloc, idxKeyLocal);
-        il.Emit(OpCodes.Call, runtime.HasArrayLikeProperty);
+        il.Emit(OpCodes.Call, runtime.ArrayOperations.HasArrayLikeProperty);
         var addHoleLabel = il.DefineLabel();
         var addValueLabel = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, addHoleLabel);
@@ -1222,9 +1222,9 @@ public partial class RuntimeEmitter
             [_types.Object, _types.Object, _types.Object]
         );
         if (findLast)
-            runtime.ArrayLastIndexOf = method;
+            runtime.ArrayOperations.LastIndexOf = method;
         else
-            runtime.ArrayIndexOf = method;
+            runtime.ArrayOperations.IndexOf = method;
 
         var il = method.GetILGenerator();
         var lenLocal = il.DeclareLocal(_types.Double);
@@ -1441,7 +1441,7 @@ public partial class RuntimeEmitter
         var getElement = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, keyLocal);
-        il.Emit(OpCodes.Call, runtime.HasArrayLikeProperty);
+        il.Emit(OpCodes.Call, runtime.ArrayOperations.HasArrayLikeProperty);
         il.Emit(OpCodes.Brfalse, advance);
         il.MarkLabel(getElement);
 
@@ -1492,7 +1492,7 @@ public partial class RuntimeEmitter
         // through a $TSFunction prototype wrapper.
         method.SetCustomAttribute(
             runtime.PadUndefinedAttrCtor, CustomAttributeEncoder.EmptyBlob);
-        runtime.ArrayJoin = method;
+        runtime.ArrayOperations.Join = method;
 
         var il = method.GetILGenerator();
 
@@ -1607,7 +1607,7 @@ public partial class RuntimeEmitter
         var paramArrayCtor = typeof(ParamArrayAttribute).GetConstructor(Type.EmptyTypes)!;
         method.DefineParameter(2, System.Reflection.ParameterAttributes.None, "items")
             .SetCustomAttribute(paramArrayCtor, CustomAttributeEncoder.EmptyBlob);
-        runtime.ArrayConcat = method;
+        runtime.ArrayOperations.Concat = method;
 
         var il = method.GetILGenerator();
 
@@ -1711,7 +1711,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(defaultSpreadabilityLabel);
         // IsArray recursively unwraps proxies and rejects revoked proxies.
         il.Emit(OpCodes.Ldloc, elementLocal);
-        il.Emit(OpCodes.Call, runtime.IsArray);
+        il.Emit(OpCodes.Call, runtime.ArrayOperations.IsArray);
         il.Emit(OpCodes.Stloc, spreadableLocal);
         il.MarkLabel(spreadabilityKnownLabel);
 
@@ -1804,7 +1804,7 @@ public partial class RuntimeEmitter
         var copyAddedLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, elementLocal);
         il.Emit(OpCodes.Ldloc, copyKeyLocal);
-        il.Emit(OpCodes.Call, runtime.HasArrayLikeProperty);
+        il.Emit(OpCodes.Call, runtime.ArrayOperations.HasArrayLikeProperty);
         il.Emit(OpCodes.Brfalse, copyHoleLabel);
         il.Emit(OpCodes.Ldloc, resultLocal);
         var concatListElement = il.DefineLabel();
@@ -1849,7 +1849,7 @@ public partial class RuntimeEmitter
     }
 
     /// <summary>
-    /// Emits <c>$Runtime.ArrayLikeMaterializeForIteration(object receiver) -&gt; List&lt;object&gt;</c>.
+    /// Emits <c>$Runtime.LikeMaterializeForIteration(object receiver) -&gt; List&lt;object&gt;</c>.
     /// Iterator-helper companion to <see cref="DeclareArrayLikeMaterialize"/>:
     /// for receivers that may carry descriptor side effects (Dictionary,
     /// $Object), returns a placeholder list of <c>length</c> nulls. The
@@ -1861,9 +1861,9 @@ public partial class RuntimeEmitter
     /// observed) is honored. Eager-receiver branches (List, $Array, string,
     /// $Arguments, ObjectArray, primitives) delegate to ArrayLikeMaterialize.
     /// </summary>
-    internal void DeclareArrayLikeMaterializeForIteration(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    internal void DeclareArrayLikeMaterializeForIteration(TypeBuilder typeBuilder, EmittedArrayOperationsRuntime arrays)
     {
-        runtime.ArrayLikeMaterializeForIteration = typeBuilder.DefineMethod(
+        arrays.MaterializeForIteration = typeBuilder.DefineMethod(
             "ArrayLikeMaterializeForIteration",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.ListOfObject,
@@ -1873,7 +1873,7 @@ public partial class RuntimeEmitter
 
     private void EmitArrayLikeMaterializeForIteration(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
-        var method = runtime.ArrayLikeMaterializeForIteration;
+        var method = runtime.ArrayOperations.MaterializeForIteration;
         var il = method.GetILGenerator();
 
         // null/undefined → throw via the existing materializer (it handles the
@@ -1944,7 +1944,7 @@ public partial class RuntimeEmitter
         // and use list[i] instead of GetProperty.
         il.MarkLabel(delegateLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.ArrayLikeMaterialize);
+        il.Emit(OpCodes.Call, runtime.ArrayOperations.Materialize);
         il.Emit(OpCodes.Ret);
     }
 
@@ -1961,7 +1961,7 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             _types.ListOfObject,
             [_types.Object]);
-        runtime.ArrayLikeMaterializeForCopy = method;
+        runtime.ArrayOperations.MaterializeForCopy = method;
 
         var il = method.GetILGenerator();
 
@@ -1984,7 +1984,7 @@ public partial class RuntimeEmitter
         // Arrays, arguments, strings, and primitive wrappers have bounded CLR
         // storage and retain the established materialization behavior.
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.ArrayLikeMaterializeForIteration);
+        il.Emit(OpCodes.Call, runtime.ArrayOperations.MaterializeForIteration);
         il.Emit(OpCodes.Ret);
     }
 
@@ -2200,9 +2200,9 @@ public partial class RuntimeEmitter
     /// non-lazy receivers are fully populated by the eager materializer, so
     /// falling through to <c>list[idx]</c> remains correct for them.
     /// </remarks>
-    internal void DeclareLoadArrayLikeElement(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    internal void DeclareLoadArrayLikeElement(TypeBuilder typeBuilder, EmittedArrayOperationsRuntime arrays)
     {
-        runtime.LoadArrayLikeElement = typeBuilder.DefineMethod(
+        arrays.LoadArrayLikeElement = typeBuilder.DefineMethod(
             "LoadArrayLikeElement",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
@@ -2212,7 +2212,7 @@ public partial class RuntimeEmitter
 
     private void EmitLoadArrayLikeElement(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
-        var method = runtime.LoadArrayLikeElement;
+        var method = runtime.ArrayOperations.LoadArrayLikeElement;
         var il = method.GetILGenerator();
 
         var rcvrLocal = il.DeclareLocal(_types.Object);
@@ -2249,7 +2249,7 @@ public partial class RuntimeEmitter
         // var rcvr = _currentArrayLikeReceiver ?? list. Direct array method
         // calls bypass the generic dispatcher that initializes the field, but
         // arg0 is still their original observable receiver.
-        il.Emit(OpCodes.Ldsfld, runtime.LazyArrayLikeReceiverField);
+        il.Emit(OpCodes.Ldsfld, runtime.ArrayOperations.CurrentReceiverField);
         il.Emit(OpCodes.Stloc, rcvrLocal);
         var haveReceiverLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, rcvrLocal);
@@ -2277,7 +2277,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, returnListValLabel);
         il.Emit(OpCodes.Ldloc, rcvrLocal);
         il.Emit(OpCodes.Ldloc, keyStrLocal);
-        il.Emit(OpCodes.Call, runtime.HasArrayLikeProperty);
+        il.Emit(OpCodes.Call, runtime.ArrayOperations.HasArrayLikeProperty);
         il.Emit(OpCodes.Brfalse, returnHoleLabel);
         il.MarkLabel(loadArrayPropertyLabel);
         il.Emit(OpCodes.Ldloc, rcvrLocal);
@@ -2304,7 +2304,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, returnListValLabel);
         il.Emit(OpCodes.Ldloc, rcvrLocal);
         il.Emit(OpCodes.Ldloc, keyStrLocal);
-        il.Emit(OpCodes.Call, runtime.HasArrayLikeProperty);
+        il.Emit(OpCodes.Call, runtime.ArrayOperations.HasArrayLikeProperty);
         il.Emit(OpCodes.Brfalse, returnHoleLabel);
         il.Emit(OpCodes.Br, loadArrayPropertyLabel);
         il.MarkLabel(notListReceiver);
@@ -2368,7 +2368,7 @@ public partial class RuntimeEmitter
         // returning undefined) from HasProperty=false (skip via $ArrayHole).
         il.Emit(OpCodes.Ldloc, dictLocal);
         il.Emit(OpCodes.Ldloc, keyStrLocal);
-        il.Emit(OpCodes.Call, runtime.HasArrayLikeProperty);
+        il.Emit(OpCodes.Call, runtime.ArrayOperations.HasArrayLikeProperty);
         il.Emit(OpCodes.Brfalse, returnHoleLabel);
         // Found somewhere on the chain — fire GetProperty (which walks the
         // chain itself and invokes accessors).
@@ -2396,7 +2396,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, tsoKeyStrLocal);
         il.Emit(OpCodes.Ldloc, rcvrLocal);
         il.Emit(OpCodes.Ldloc, tsoKeyStrLocal);
-        il.Emit(OpCodes.Call, runtime.HasArrayLikeProperty);
+        il.Emit(OpCodes.Call, runtime.ArrayOperations.HasArrayLikeProperty);
         il.Emit(OpCodes.Brfalse, returnHoleLabel);
         il.Emit(OpCodes.Ldloc, rcvrLocal);
         il.Emit(OpCodes.Ldloc, tsoKeyStrLocal);
@@ -2416,7 +2416,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, tsoKeyStrLocal);
         il.Emit(OpCodes.Ldloc, rcvrLocal);
         il.Emit(OpCodes.Ldloc, tsoKeyStrLocal);
-        il.Emit(OpCodes.Call, runtime.HasArrayLikeProperty);
+        il.Emit(OpCodes.Call, runtime.ArrayOperations.HasArrayLikeProperty);
         il.Emit(OpCodes.Brfalse, returnHoleLabel);
         il.Emit(OpCodes.Ldloc, rcvrLocal);
         il.Emit(OpCodes.Ldloc, tsoKeyStrLocal);
@@ -2441,9 +2441,9 @@ public partial class RuntimeEmitter
     /// HasProperty=false (absent → return $ArrayHole) from HasProperty=true
     /// with undefined value (present → callback fires with undefined).
     /// </summary>
-    internal void DeclareHasArrayLikeProperty(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    internal void DeclareHasArrayLikeProperty(TypeBuilder typeBuilder, EmittedArrayOperationsRuntime arrays)
     {
-        runtime.HasArrayLikeProperty = typeBuilder.DefineMethod(
+        arrays.HasArrayLikeProperty = typeBuilder.DefineMethod(
             "HasArrayLikeProperty",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Boolean,
@@ -2453,7 +2453,7 @@ public partial class RuntimeEmitter
 
     private void EmitHasArrayLikeProperty(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
-        var method = runtime.HasArrayLikeProperty;
+        var method = runtime.ArrayOperations.HasArrayLikeProperty;
         var il = method.GetILGenerator();
 
         var currentLocal = il.DeclareLocal(_types.Object);

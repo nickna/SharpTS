@@ -577,7 +577,7 @@ public partial class RuntimeEmitter
         var noArrayMethodLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.GetArrayMethod);
+        il.Emit(OpCodes.Call, runtime.ArrayOperations.GetMethod);
         var arrayMethodLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Stloc, arrayMethodLocal);
         il.Emit(OpCodes.Ldloc, arrayMethodLocal);
@@ -937,7 +937,7 @@ public partial class RuntimeEmitter
             // Create $BoundArrayMethod(list, name) and return
             il.Emit(OpCodes.Ldarg_0); // list
             il.Emit(OpCodes.Ldarg_1); // name
-            il.Emit(OpCodes.Newobj, runtime.BoundArrayMethodCtor);
+            il.Emit(OpCodes.Newobj, runtime.ArrayOperations.BoundMethodCtor);
             il.Emit(OpCodes.Ret);
 
             il.MarkLabel(skipLabel);
@@ -968,7 +968,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(reallyNullLabel);
         var arrayProtoFallbackLabel = il.DefineLabel();
         var objectProtoFallbackLabel = il.DefineLabel();
-        il.Emit(OpCodes.Call, runtime.ArrayPrototypePopulateMethod);
+        il.Emit(OpCodes.Call, runtime.ArrayOperations.PrototypePopulateMethod);
         // Accessor descriptors live in the descriptor store rather than the
         // prototype dictionary's data-value slot. Invoke an inherited
         // Array.prototype getter with the original array as receiver before
@@ -976,7 +976,7 @@ public partial class RuntimeEmitter
         // observed by Promise resolving functions).
         var arrayProtoGetterLocal = il.DeclareLocal(_types.Object);
         var noArrayProtoGetterLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldsfld, runtime.ArrayPrototypeField);
+        il.Emit(OpCodes.Ldsfld, runtime.ArrayOperations.PrototypeField);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloca, arrayProtoGetterLocal);
         il.Emit(OpCodes.Call, runtime.PDSTryGetGetter);
@@ -996,7 +996,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
         il.MarkLabel(noArrayProtoGetterLabel);
         var arrayProtoValLocal = il.DeclareLocal(_types.Object);
-        il.Emit(OpCodes.Ldsfld, runtime.ArrayPrototypeField);
+        il.Emit(OpCodes.Ldsfld, runtime.ArrayOperations.PrototypeField);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloca, arrayProtoValLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "TryGetValue",
@@ -1719,7 +1719,7 @@ public partial class RuntimeEmitter
         }
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.BoundArrayMethodType);
+        il.Emit(OpCodes.Isinst, runtime.ArrayOperations.BoundMethodType);
         il.Emit(OpCodes.Brtrue, callableWrapperLabel);
         if (_features.UsesMap)
         {
@@ -2311,11 +2311,11 @@ public partial class RuntimeEmitter
 
         var notBAMNameLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.BoundArrayMethodType);
+        il.Emit(OpCodes.Isinst, runtime.ArrayOperations.BoundMethodType);
         il.Emit(OpCodes.Brfalse, notBAMNameLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.BoundArrayMethodType);
-        il.Emit(OpCodes.Ldfld, runtime.BoundArrayMethodNameField);
+        il.Emit(OpCodes.Castclass, runtime.ArrayOperations.BoundMethodType);
+        il.Emit(OpCodes.Ldfld, runtime.ArrayOperations.BoundMethodNameField);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notBAMNameLabel);
 

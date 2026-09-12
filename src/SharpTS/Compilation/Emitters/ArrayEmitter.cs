@@ -53,7 +53,7 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
             emitter.EnsureBoxed();
             il.Emit(OpCodes.Castclass, ctx.Types.ListOfDouble);
             emitter.EmitExpressionAsDouble(value);
-            il.Emit(OpCodes.Call, ctx.Runtime!.ArrayPushDouble);
+            il.Emit(OpCodes.Call, ctx.Runtime!.ArrayOperations.PushDouble);
             emitter.SetStackType(StackType.Double);
             return true;
         }
@@ -122,7 +122,7 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
         switch (methodName)
         {
             case "pop":
-                il.Emit(OpCodes.Call, ctx.Runtime!.ArrayPop);
+                il.Emit(OpCodes.Call, ctx.Runtime!.ArrayOperations.Pop);
                 break;
 
             case "shift":
@@ -131,14 +131,14 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
                 // indexed prototype accessors and length descriptors.
                 il.Emit(OpCodes.Pop);
                 il.Emit(OpCodes.Ldloc, receiverLocal);
-                il.Emit(OpCodes.Call, ctx.Runtime!.ArrayShiftProto);
+                il.Emit(OpCodes.Call, ctx.Runtime!.ArrayOperations.ShiftProto);
                 break;
 
             case "unshift":
                 il.Emit(OpCodes.Pop);
                 il.Emit(OpCodes.Ldloc, receiverLocal);
                 emitter.EmitArgsArray(arguments, argLocals);
-                il.Emit(OpCodes.Call, ctx.Runtime!.ArrayUnshiftProto);
+                il.Emit(OpCodes.Call, ctx.Runtime!.ArrayOperations.UnshiftProto);
                 il.Emit(OpCodes.Box, ctx.Types.Double);
                 break;
 
@@ -146,13 +146,13 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
                 il.Emit(OpCodes.Pop);
                 il.Emit(OpCodes.Ldloc, receiverLocal);
                 emitter.EmitArgsArray(arguments, argLocals);
-                il.Emit(OpCodes.Call, ctx.Runtime!.ArrayPushProto);
+                il.Emit(OpCodes.Call, ctx.Runtime!.ArrayOperations.PushProto);
                 il.Emit(OpCodes.Box, ctx.Types.Double);
                 break;
 
             case "slice":
                 emitter.EmitArgsArray(arguments, argLocals);
-                il.Emit(OpCodes.Call, ctx.Runtime!.ArraySlice);
+                il.Emit(OpCodes.Call, ctx.Runtime!.ArrayOperations.Slice);
                 break;
 
             case "map":
@@ -160,10 +160,10 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
                 // Fast path: arr.map(literal-non-capturing-arrow) — direct
                 // delegate dispatch, skipping $TSFunction allocation and the
                 // MethodInvoker boundary. See issue #96 Phase A.
-                if (TryEmitDirectDelegateCall(emitter, arguments, ctx.Runtime!.ArrayMapDirect))
+                if (TryEmitDirectDelegateCall(emitter, arguments, ctx.Runtime!.ArrayOperations.MapDirect))
                     break;
                 var saved = EmitCallbackAndStashThisArg(emitter, arguments);
-                il.Emit(OpCodes.Call, ctx.Runtime!.ArrayMap);
+                il.Emit(OpCodes.Call, ctx.Runtime!.ArrayOperations.Map);
                 var resLocal = il.DeclareLocal(ctx.Types.ListOfObject);
                 il.Emit(OpCodes.Stloc, resLocal);
                 EmitRestoreCallbackThisArg(emitter, saved);
@@ -173,10 +173,10 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
 
             case "filter":
             {
-                if (TryEmitDirectDelegateCall(emitter, arguments, ctx.Runtime!.ArrayFilterDirect, ctx.Runtime!.ArrayFilterDirectBool))
+                if (TryEmitDirectDelegateCall(emitter, arguments, ctx.Runtime!.ArrayOperations.FilterDirect, ctx.Runtime!.ArrayOperations.FilterDirectBool))
                     break;
                 var saved = EmitCallbackAndStashThisArg(emitter, arguments);
-                il.Emit(OpCodes.Call, ctx.Runtime!.ArrayFilter);
+                il.Emit(OpCodes.Call, ctx.Runtime!.ArrayOperations.Filter);
                 var resLocal = il.DeclareLocal(ctx.Types.ListOfObject);
                 il.Emit(OpCodes.Stloc, resLocal);
                 EmitRestoreCallbackThisArg(emitter, saved);
@@ -189,13 +189,13 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
                 // Spec: forEach returns undefined (not null). Push
                 // $Undefined.Instance so `arr.forEach(...) === undefined`
                 // holds — test262 callback-related tests rely on this.
-                if (TryEmitDirectDelegateCall(emitter, arguments, ctx.Runtime!.ArrayForEachDirect))
+                if (TryEmitDirectDelegateCall(emitter, arguments, ctx.Runtime!.ArrayOperations.ForEachDirect))
                 {
                     il.Emit(OpCodes.Ldsfld, ctx.Runtime!.UndefinedInstance);
                     break;
                 }
                 var saved = EmitCallbackAndStashThisArg(emitter, arguments);
-                il.Emit(OpCodes.Call, ctx.Runtime!.ArrayForEach);
+                il.Emit(OpCodes.Call, ctx.Runtime!.ArrayOperations.ForEach);
                 EmitRestoreCallbackThisArg(emitter, saved);
                 il.Emit(OpCodes.Ldsfld, ctx.Runtime!.UndefinedInstance);
                 break;
@@ -203,10 +203,10 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
 
             case "find":
             {
-                if (TryEmitDirectDelegateCall(emitter, arguments, ctx.Runtime!.ArrayFindDirect, ctx.Runtime!.ArrayFindDirectBool))
+                if (TryEmitDirectDelegateCall(emitter, arguments, ctx.Runtime!.ArrayOperations.FindDirect, ctx.Runtime!.ArrayOperations.FindDirectBool))
                     break;
                 var saved = EmitCallbackAndStashThisArg(emitter, arguments);
-                il.Emit(OpCodes.Call, ctx.Runtime!.ArrayFind);
+                il.Emit(OpCodes.Call, ctx.Runtime!.ArrayOperations.Find);
                 var resLocal = il.DeclareLocal(ctx.Types.Object);
                 il.Emit(OpCodes.Stloc, resLocal);
                 EmitRestoreCallbackThisArg(emitter, saved);
@@ -216,13 +216,13 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
 
             case "findIndex":
             {
-                if (TryEmitDirectDelegateCall(emitter, arguments, ctx.Runtime!.ArrayFindIndexDirect, ctx.Runtime!.ArrayFindIndexDirectBool))
+                if (TryEmitDirectDelegateCall(emitter, arguments, ctx.Runtime!.ArrayOperations.FindIndexDirect, ctx.Runtime!.ArrayOperations.FindIndexDirectBool))
                 {
                     il.Emit(OpCodes.Box, ctx.Types.Double); // helper returns double
                     break;
                 }
                 var saved = EmitCallbackAndStashThisArg(emitter, arguments);
-                il.Emit(OpCodes.Call, ctx.Runtime!.ArrayFindIndex);
+                il.Emit(OpCodes.Call, ctx.Runtime!.ArrayOperations.FindIndex);
                 var resLocal = il.DeclareLocal(ctx.Types.Double);
                 il.Emit(OpCodes.Stloc, resLocal);
                 EmitRestoreCallbackThisArg(emitter, saved);
@@ -233,10 +233,10 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
 
             case "some":
             {
-                if (TryEmitDirectDelegateCall(emitter, arguments, ctx.Runtime!.ArraySomeDirect, ctx.Runtime!.ArraySomeDirectBool))
+                if (TryEmitDirectDelegateCall(emitter, arguments, ctx.Runtime!.ArrayOperations.SomeDirect, ctx.Runtime!.ArrayOperations.SomeDirectBool))
                     break;
                 var saved = EmitCallbackAndStashThisArg(emitter, arguments);
-                il.Emit(OpCodes.Call, ctx.Runtime!.ArraySome);
+                il.Emit(OpCodes.Call, ctx.Runtime!.ArrayOperations.Some);
                 var resLocal = il.DeclareLocal(ctx.Types.Object);
                 il.Emit(OpCodes.Stloc, resLocal);
                 EmitRestoreCallbackThisArg(emitter, saved);
@@ -246,10 +246,10 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
 
             case "every":
             {
-                if (TryEmitDirectDelegateCall(emitter, arguments, ctx.Runtime!.ArrayEveryDirect, ctx.Runtime!.ArrayEveryDirectBool))
+                if (TryEmitDirectDelegateCall(emitter, arguments, ctx.Runtime!.ArrayOperations.EveryDirect, ctx.Runtime!.ArrayOperations.EveryDirectBool))
                     break;
                 var saved = EmitCallbackAndStashThisArg(emitter, arguments);
-                il.Emit(OpCodes.Call, ctx.Runtime!.ArrayEvery);
+                il.Emit(OpCodes.Call, ctx.Runtime!.ArrayOperations.Every);
                 var resLocal = il.DeclareLocal(ctx.Types.Object);
                 il.Emit(OpCodes.Stloc, resLocal);
                 EmitRestoreCallbackThisArg(emitter, saved);
@@ -264,12 +264,12 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
                 if (argLocals == null && TryEmitReduceDirectCall(emitter, arguments))
                     break;
                 emitter.EmitArgsArray(arguments, argLocals);
-                il.Emit(OpCodes.Call, ctx.Runtime!.ArrayReduce);
+                il.Emit(OpCodes.Call, ctx.Runtime!.ArrayOperations.Reduce);
                 break;
 
             case "reduceRight":
                 emitter.EmitArgsArray(arguments, argLocals);
-                il.Emit(OpCodes.Call, ctx.Runtime!.ArrayReduceRight);
+                il.Emit(OpCodes.Call, ctx.Runtime!.ArrayOperations.ReduceRight);
                 break;
 
             case "join":
@@ -277,7 +277,7 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
                     EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0, argLocals);
                 else
                     il.Emit(OpCodes.Ldsfld, ctx.Runtime!.UndefinedInstance);
-                il.Emit(OpCodes.Call, ctx.Runtime!.ArrayJoin);
+                il.Emit(OpCodes.Call, ctx.Runtime!.ArrayOperations.Join);
                 break;
 
             case "concat":
@@ -300,7 +300,7 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
                 {
                     emitter.EmitArgsArray(arguments, argLocals);
                 }
-                il.Emit(OpCodes.Call, ctx.Runtime!.ArrayConcat);
+                il.Emit(OpCodes.Call, ctx.Runtime!.ArrayOperations.Concat);
                 break;
 
             case "reverse":
@@ -310,17 +310,17 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
                 // Array.prototype.reverse.call rather than List.Reverse().
                 il.Emit(OpCodes.Pop);
                 il.Emit(OpCodes.Ldloc, receiverLocal);
-                il.Emit(OpCodes.Call, ctx.Runtime!.ArrayReverseProto);
+                il.Emit(OpCodes.Call, ctx.Runtime!.ArrayOperations.ReverseProto);
                 break;
 
             case "flat":
                 EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0, argLocals);
-                il.Emit(OpCodes.Call, ctx.Runtime!.ArrayFlat);
+                il.Emit(OpCodes.Call, ctx.Runtime!.ArrayOperations.Flat);
                 break;
 
             case "flatMap":
                 EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0, argLocals);
-                il.Emit(OpCodes.Call, ctx.Runtime!.ArrayFlatMap);
+                il.Emit(OpCodes.Call, ctx.Runtime!.ArrayOperations.FlatMap);
                 break;
 
             case "includes":
@@ -329,7 +329,7 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
                 else
                     EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0, argLocals);
                 EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 1, argLocals);
-                il.Emit(OpCodes.Call, ctx.Runtime!.ArrayIncludes);
+                il.Emit(OpCodes.Call, ctx.Runtime!.ArrayOperations.Includes);
                 break;
 
             case "indexOf":
@@ -355,7 +355,7 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
                 {
                     il.Emit(OpCodes.Ldsfld, ctx.Runtime!.ArrayStorage.HoleInstance);
                 }
-                il.Emit(OpCodes.Call, methodName == "indexOf" ? ctx.Runtime!.ArrayIndexOf : ctx.Runtime!.ArrayLastIndexOf);
+                il.Emit(OpCodes.Call, methodName == "indexOf" ? ctx.Runtime!.ArrayOperations.IndexOf : ctx.Runtime!.ArrayOperations.LastIndexOf);
                 il.Emit(OpCodes.Box, ctx.Types.Double);
                 break;
 
@@ -368,7 +368,7 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
                     il.Emit(OpCodes.Ldsfld, ctx.Runtime!.UndefinedInstance);
                 else
                     EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0, argLocals);
-                il.Emit(OpCodes.Call, ctx.Runtime!.ArraySort);
+                il.Emit(OpCodes.Call, ctx.Runtime!.ArrayOperations.Sort);
                 break;
 
             case "toSorted":
@@ -376,23 +376,23 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
                     il.Emit(OpCodes.Ldsfld, ctx.Runtime!.UndefinedInstance);
                 else
                     EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0, argLocals);
-                il.Emit(OpCodes.Call, ctx.Runtime!.ArrayToSorted);
+                il.Emit(OpCodes.Call, ctx.Runtime!.ArrayOperations.ToSorted);
                 break;
 
             case "splice":
                 emitter.EmitArgsArray(arguments, argLocals);
-                il.Emit(OpCodes.Call, ctx.Runtime!.ArraySplice);
+                il.Emit(OpCodes.Call, ctx.Runtime!.ArrayOperations.Splice);
                 break;
 
             case "toSpliced":
                 emitter.EmitArgsArray(arguments, argLocals);
-                il.Emit(OpCodes.Call, ctx.Runtime!.ArrayToSpliced);
+                il.Emit(OpCodes.Call, ctx.Runtime!.ArrayOperations.ToSpliced);
                 break;
 
             case "findLast":
             {
                 var saved = EmitCallbackAndStashThisArg(emitter, arguments);
-                il.Emit(OpCodes.Call, ctx.Runtime!.ArrayFindLast);
+                il.Emit(OpCodes.Call, ctx.Runtime!.ArrayOperations.FindLast);
                 var resLocal = il.DeclareLocal(ctx.Types.Object);
                 il.Emit(OpCodes.Stloc, resLocal);
                 EmitRestoreCallbackThisArg(emitter, saved);
@@ -403,7 +403,7 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
             case "findLastIndex":
             {
                 var saved = EmitCallbackAndStashThisArg(emitter, arguments);
-                il.Emit(OpCodes.Call, ctx.Runtime!.ArrayFindLastIndex);
+                il.Emit(OpCodes.Call, ctx.Runtime!.ArrayOperations.FindLastIndex);
                 var resLocal = il.DeclareLocal(ctx.Types.Double);
                 il.Emit(OpCodes.Stloc, resLocal);
                 EmitRestoreCallbackThisArg(emitter, saved);
@@ -413,39 +413,39 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
             }
 
             case "toReversed":
-                il.Emit(OpCodes.Call, ctx.Runtime!.ArrayToReversed);
+                il.Emit(OpCodes.Call, ctx.Runtime!.ArrayOperations.ToReversed);
                 break;
 
             case "with":
                 emitter.EmitArgsArray(arguments, argLocals);
-                il.Emit(OpCodes.Call, ctx.Runtime!.ArrayWith);
+                il.Emit(OpCodes.Call, ctx.Runtime!.ArrayOperations.With);
                 break;
 
             case "at":
                 EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0, argLocals);
-                il.Emit(OpCodes.Call, ctx.Runtime!.ArrayAt);
+                il.Emit(OpCodes.Call, ctx.Runtime!.ArrayOperations.At);
                 break;
 
             case "fill":
                 emitter.EmitArgsArray(arguments, argLocals);
-                il.Emit(OpCodes.Call, ctx.Runtime!.ArrayFill);
+                il.Emit(OpCodes.Call, ctx.Runtime!.ArrayOperations.Fill);
                 break;
 
             case "copyWithin":
                 emitter.EmitArgsArray(arguments, argLocals);
-                il.Emit(OpCodes.Call, ctx.Runtime!.ArrayCopyWithin);
+                il.Emit(OpCodes.Call, ctx.Runtime!.ArrayOperations.CopyWithin);
                 break;
 
             case "entries":
-                il.Emit(OpCodes.Call, ctx.Runtime!.ArrayEntries);
+                il.Emit(OpCodes.Call, ctx.Runtime!.ArrayOperations.Entries);
                 break;
 
             case "keys":
-                il.Emit(OpCodes.Call, ctx.Runtime!.ArrayKeys);
+                il.Emit(OpCodes.Call, ctx.Runtime!.ArrayOperations.Keys);
                 break;
 
             case "values":
-                il.Emit(OpCodes.Call, ctx.Runtime!.ArrayValues);
+                il.Emit(OpCodes.Call, ctx.Runtime!.ArrayOperations.Values);
                 break;
 
             // ECMA-262 23.1.3.32 / 23.1.3.33: Array.prototype.toString /
@@ -461,7 +461,7 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
                 // `Array.prototype.toString = Object.prototype.toString` is
                 // observed by subsequently-created and existing arrays.
                 il.Emit(OpCodes.Pop);
-                il.Emit(OpCodes.Ldsfld, ctx.Runtime!.ArrayPrototypeField);
+                il.Emit(OpCodes.Ldsfld, ctx.Runtime!.ArrayOperations.PrototypeField);
                 il.Emit(OpCodes.Ldstr, methodName);
                 il.Emit(OpCodes.Call, ctx.Runtime!.GetProperty);
                 var toStringMethodLocal = il.DeclareLocal(ctx.Types.Object);
@@ -855,7 +855,7 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
 
         // Save previous thread-static so nested forEach/map calls don't leak.
         var savedLocal = il.DeclareLocal(ctx.Types.Object);
-        il.Emit(OpCodes.Ldsfld, runtime.CurrentCallbackThisArgField);
+        il.Emit(OpCodes.Ldsfld, runtime.ArrayOperations.CallbackThisArgField);
         il.Emit(OpCodes.Stloc, savedLocal);
 
         // Stash thisArg (arg 1) into the thread-static. When no thisArg is
@@ -871,7 +871,7 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
         {
             il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
         }
-        il.Emit(OpCodes.Stsfld, runtime.CurrentCallbackThisArgField);
+        il.Emit(OpCodes.Stsfld, runtime.ArrayOperations.CallbackThisArgField);
 
         return savedLocal;
     }
@@ -954,7 +954,7 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
 
         emitter.EmitExpression(receiver);
         emitter.EmitBoxIfNeeded(receiver);
-        ctx.IL.Emit(OpCodes.Call, ctx.Runtime!.ArraySliceNumber);
+        ctx.IL.Emit(OpCodes.Call, ctx.Runtime!.ArrayOperations.SliceNumber);
         emitter.SetStackUnknown();
         return true;
     }
@@ -1022,7 +1022,7 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
         ctx.IL.Emit(OpCodes.Ldftn, boxedAdapter);
         ctx.IL.Emit(OpCodes.Newobj,
             boxedComparator.GetConstructor([typeof(object), typeof(IntPtr)])!);
-        ctx.IL.Emit(OpCodes.Call, ctx.Runtime!.ArraySortNumeric);
+        ctx.IL.Emit(OpCodes.Call, ctx.Runtime!.ArrayOperations.SortNumeric);
         emitter.SetStackUnknown();
         return true;
     }
@@ -1235,7 +1235,7 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
         // Push initial value (boxed object).
         emitter.EmitExpression(arguments[1]);
         emitter.EmitBoxIfNeeded(arguments[1]);
-        ctx.IL.Emit(OpCodes.Call, ctx.Runtime!.ArrayReduceDirect);
+        ctx.IL.Emit(OpCodes.Call, ctx.Runtime!.ArrayOperations.ReduceDirect);
         return true;
     }
 
@@ -1291,8 +1291,8 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
         }
 
         ctx.IL.Emit(OpCodes.Call, numberReturn
-            ? ctx.Runtime!.ArraySortDirectNumber
-            : ctx.Runtime!.ArraySortDirect);
+            ? ctx.Runtime!.ArrayOperations.SortDirectNumber
+            : ctx.Runtime!.ArrayOperations.SortDirect);
         return true;
     }
 
@@ -1305,7 +1305,7 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
         var ctx = emitter.Context;
         var il = ctx.IL;
         il.Emit(OpCodes.Ldloc, savedLocal);
-        il.Emit(OpCodes.Stsfld, ctx.Runtime!.CurrentCallbackThisArgField);
+        il.Emit(OpCodes.Stsfld, ctx.Runtime!.ArrayOperations.CallbackThisArgField);
     }
 
     #endregion

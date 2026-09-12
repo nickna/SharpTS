@@ -660,7 +660,7 @@ public partial class RuntimeEmitter
     private static void EmitArrayIteratorWrapper(ILGenerator il, EmittedRuntime runtime)
     {
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Newobj, runtime.ArrayIteratorCtor);
+        il.Emit(OpCodes.Newobj, runtime.ArrayOperations.IteratorCtor);
     }
 
     private void EmitMapForEach(TypeBuilder typeBuilder, EmittedRuntime runtime)

@@ -909,7 +909,7 @@ public partial class ILEmitter
     }
 
     /// <summary>
-    /// Emits an empty numeric <c>$Array</c> onto the stack: <c>$Runtime.CreateArray(new
+    /// Emits an empty numeric <c>$Array</c> onto the stack: <c>$Runtime.Create(new
     /// object[0])</c> (a fresh empty <c>$Array</c>) followed by <c>MarkNumeric()</c>,
     /// which flips it into unboxed <c>double[]</c> mode. Leaves the <c>$Array</c>
     /// reference on the stack.
@@ -918,7 +918,7 @@ public partial class ILEmitter
     {
         IL.Emit(OpCodes.Ldc_I4_0);
         IL.Emit(OpCodes.Newarr, _ctx.Types.Object);
-        IL.Emit(OpCodes.Call, _ctx.Runtime!.CreateArray);            // [$Array] (empty)
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.ArrayOperations.Create);            // [$Array] (empty)
         IL.Emit(OpCodes.Dup);                                        // [$Array, $Array]
         IL.Emit(OpCodes.Callvirt, _ctx.Runtime!.ArrayStorage.MarkNumeric); // [$Array]
         SetStackUnknown();

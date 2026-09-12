@@ -460,7 +460,7 @@ public partial class ILEmitter
 
     /// <summary>
     /// Detects <c>Array.prototype.METHOD.call(receiver, ...args)</c> and emits:
-    /// <c>ArrayMETHOD($Runtime.ArrayLikeMaterialize(receiver), ...args)</c>.
+    /// <c>ArrayMETHOD($Runtime.LikeMaterialize(receiver), ...args)</c>.
     /// Only non-mutating methods are supported — mutating methods (push/pop/shift/
     /// unshift/splice/sort/reverse/copyWithin/fill) need to write indexed
     /// properties back onto the original receiver, which is out of scope here
@@ -499,45 +499,45 @@ public partial class ILEmitter
         // packaged into an `object[]`. boxes describes the return-type boxing.
         (MethodInfo Method, string Kind, Type Box)? sig = methodName switch
         {
-            "every"         => (runtime.ArrayEvery,      "single",    _ctx.Types.Boolean),
-            "some"          => (runtime.ArraySome,       "single",    _ctx.Types.Boolean),
-            "filter"        => (runtime.ArrayFilter,     "single",    _ctx.Types.Object),
-            "map"           => (runtime.ArrayMap,        "single",    _ctx.Types.Object),
-            "forEach"       => (runtime.ArrayForEach,    "single",    _ctx.Types.Object),
-            "find"          => (runtime.ArrayFind,       "single",    _ctx.Types.Object),
-            "findIndex"     => (runtime.ArrayFindIndex,  "single",    _ctx.Types.Double),
-            "findLast"      => (runtime.ArrayFindLast,   "single",    _ctx.Types.Object),
-            "findLastIndex" => (runtime.ArrayFindLastIndex,"single",  _ctx.Types.Double),
-            "includes"      => (runtime.ArrayIncludes,   "search",    _ctx.Types.Boolean),
-            "join"          => (runtime.ArrayJoin,       "single",    _ctx.Types.Object),
-            "concat"        => (runtime.ArrayConcat,     "argsArray", _ctx.Types.Object),
-            "flat"          => (runtime.ArrayFlat,       "single",    _ctx.Types.Object),
-            "flatMap"       => (runtime.ArrayFlatMap,    "single",    _ctx.Types.Object),
-            "at"            => (runtime.ArrayAt,         "single",    _ctx.Types.Object),
-            "reduce"        => (runtime.ArrayReduce,     "argsArray", _ctx.Types.Object),
-            "reduceRight"   => (runtime.ArrayReduceRight,"argsArray", _ctx.Types.Object),
-            "slice"         => (runtime.ArraySlice,      "argsArray", _ctx.Types.Object),
-            "indexOf"       => (runtime.ArrayIndexOf,    "search",    _ctx.Types.Double),
-            "lastIndexOf"   => (runtime.ArrayLastIndexOf,"search",    _ctx.Types.Double),
-            "entries"       => (runtime.ArrayEntries,    "noArg",     _ctx.Types.Object),
-            "keys"          => (runtime.ArrayKeys,       "noArg",     _ctx.Types.Object),
-            "values"        => (runtime.ArrayValues,     "noArg",     _ctx.Types.Object),
-            "toReversed"    => (runtime.ArrayToReversed, "noArg",     _ctx.Types.Object),
-            "sort"          => (runtime.ArraySortProto,  "single",    _ctx.Types.Object),
-            "toSorted"      => (runtime.ArrayToSorted,   "single",    _ctx.Types.Object),
-            "toSpliced"     => (runtime.ArrayToSplicedProto,"argsArray",_ctx.Types.Object),
-            "with"          => (runtime.ArrayWith,       "argsArray", _ctx.Types.Object),
+            "every"         => (runtime.ArrayOperations.Every,      "single",    _ctx.Types.Boolean),
+            "some"          => (runtime.ArrayOperations.Some,       "single",    _ctx.Types.Boolean),
+            "filter"        => (runtime.ArrayOperations.Filter,     "single",    _ctx.Types.Object),
+            "map"           => (runtime.ArrayOperations.Map,        "single",    _ctx.Types.Object),
+            "forEach"       => (runtime.ArrayOperations.ForEach,    "single",    _ctx.Types.Object),
+            "find"          => (runtime.ArrayOperations.Find,       "single",    _ctx.Types.Object),
+            "findIndex"     => (runtime.ArrayOperations.FindIndex,  "single",    _ctx.Types.Double),
+            "findLast"      => (runtime.ArrayOperations.FindLast,   "single",    _ctx.Types.Object),
+            "findLastIndex" => (runtime.ArrayOperations.FindLastIndex,"single",  _ctx.Types.Double),
+            "includes"      => (runtime.ArrayOperations.Includes,   "search",    _ctx.Types.Boolean),
+            "join"          => (runtime.ArrayOperations.Join,       "single",    _ctx.Types.Object),
+            "concat"        => (runtime.ArrayOperations.Concat,     "argsArray", _ctx.Types.Object),
+            "flat"          => (runtime.ArrayOperations.Flat,       "single",    _ctx.Types.Object),
+            "flatMap"       => (runtime.ArrayOperations.FlatMap,    "single",    _ctx.Types.Object),
+            "at"            => (runtime.ArrayOperations.At,         "single",    _ctx.Types.Object),
+            "reduce"        => (runtime.ArrayOperations.Reduce,     "argsArray", _ctx.Types.Object),
+            "reduceRight"   => (runtime.ArrayOperations.ReduceRight,"argsArray", _ctx.Types.Object),
+            "slice"         => (runtime.ArrayOperations.Slice,      "argsArray", _ctx.Types.Object),
+            "indexOf"       => (runtime.ArrayOperations.IndexOf,    "search",    _ctx.Types.Double),
+            "lastIndexOf"   => (runtime.ArrayOperations.LastIndexOf,"search",    _ctx.Types.Double),
+            "entries"       => (runtime.ArrayOperations.Entries,    "noArg",     _ctx.Types.Object),
+            "keys"          => (runtime.ArrayOperations.Keys,       "noArg",     _ctx.Types.Object),
+            "values"        => (runtime.ArrayOperations.Values,     "noArg",     _ctx.Types.Object),
+            "toReversed"    => (runtime.ArrayOperations.ToReversed, "noArg",     _ctx.Types.Object),
+            "sort"          => (runtime.ArrayOperations.SortProto,  "single",    _ctx.Types.Object),
+            "toSorted"      => (runtime.ArrayOperations.ToSorted,   "single",    _ctx.Types.Object),
+            "toSpliced"     => (runtime.ArrayOperations.ToSplicedProto,"argsArray",_ctx.Types.Object),
+            "with"          => (runtime.ArrayOperations.With,       "argsArray", _ctx.Types.Object),
             // These prototype-specific helpers implement the generic
             // array-like algorithms directly against the original receiver
             // (Get/Set/Delete + LengthOfArrayLike). They must not go through
             // ArrayLikeMaterialize, which would mutate only a detached list.
-            "push"           => (runtime.ArrayPushProto,  "argsArray", _ctx.Types.Double),
-            "pop"            => (runtime.ArrayPopProto,   "noArg",     _ctx.Types.Object),
-            "shift"          => (runtime.ArrayShiftProto, "noArg",     _ctx.Types.Object),
-            "unshift"        => (runtime.ArrayUnshiftProto,"argsArray",_ctx.Types.Double),
-            "reverse"        => (runtime.ArrayReverseProto,"noArg",    _ctx.Types.Object),
-            "fill"           => (runtime.ArrayFillProto,  "argsArray", _ctx.Types.Object),
-            "copyWithin"     => (runtime.ArrayCopyWithinProto,"argsArray",_ctx.Types.Object),
+            "push"           => (runtime.ArrayOperations.PushProto,  "argsArray", _ctx.Types.Double),
+            "pop"            => (runtime.ArrayOperations.PopProto,   "noArg",     _ctx.Types.Object),
+            "shift"          => (runtime.ArrayOperations.ShiftProto, "noArg",     _ctx.Types.Object),
+            "unshift"        => (runtime.ArrayOperations.UnshiftProto,"argsArray",_ctx.Types.Double),
+            "reverse"        => (runtime.ArrayOperations.ReverseProto,"noArg",    _ctx.Types.Object),
+            "fill"           => (runtime.ArrayOperations.FillProto,  "argsArray", _ctx.Types.Object),
+            "copyWithin"     => (runtime.ArrayOperations.CopyWithinProto,"argsArray",_ctx.Types.Object),
             _ => null,
         };
         if (sig is null)
@@ -601,7 +601,7 @@ public partial class ILEmitter
             {
                 IL.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
             }
-            IL.Emit(OpCodes.Call, runtime.ArrayToSortedGeneric);
+            IL.Emit(OpCodes.Call, runtime.ArrayOperations.ToSortedGeneric);
             SetStackUnknown();
             return true;
         }
@@ -619,7 +619,7 @@ public partial class ILEmitter
             {
                 IL.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
             }
-            IL.Emit(OpCodes.Call, runtime.ArraySortProto);
+            IL.Emit(OpCodes.Call, runtime.ArrayOperations.SortProto);
             SetStackUnknown();
             return true;
         }
@@ -666,7 +666,7 @@ public partial class ILEmitter
         }
 
         var prevReceiverLocal = IL.DeclareLocal(_ctx.Types.Object);
-        IL.Emit(OpCodes.Ldsfld, runtime.CurrentArrayLikeReceiverField);
+        IL.Emit(OpCodes.Ldsfld, runtime.ArrayOperations.CurrentReceiverField);
         IL.Emit(OpCodes.Stloc, prevReceiverLocal);
         // ECMA-262 §23.1.3: O = ToObject(this value). The callback's final
         // "array" argument is O, so a primitive receiver must surface as its
@@ -679,7 +679,7 @@ public partial class ILEmitter
         // identical to O for every shape this path supports. (#454)
         IL.Emit(OpCodes.Ldloc, receiverLocal);
         IL.Emit(OpCodes.Call, runtime.ToObjectMethod);
-        IL.Emit(OpCodes.Stsfld, runtime.CurrentArrayLikeReceiverField);
+        IL.Emit(OpCodes.Stsfld, runtime.ArrayOperations.CurrentReceiverField);
 
         var methodArgs = c.Arguments.Skip(1).ToList();
 
@@ -786,8 +786,8 @@ public partial class ILEmitter
         if (methodName != "concat" && !usesOriginalReceiver)
         {
             IL.Emit(OpCodes.Call, useLazyMaterializer
-                ? runtime.ArrayLikeMaterializeForIteration
-                : runtime.ArrayLikeMaterialize);
+                ? runtime.ArrayOperations.MaterializeForIteration
+                : runtime.ArrayOperations.Materialize);
         }
 
         // For iterator methods that accept thisArg (callbackfn, thisArg) per
@@ -801,7 +801,7 @@ public partial class ILEmitter
         if (hasThisArgSlot)
         {
             prevThisArgLocal = IL.DeclareLocal(_ctx.Types.Object);
-            IL.Emit(OpCodes.Ldsfld, runtime.CurrentCallbackThisArgField);
+            IL.Emit(OpCodes.Ldsfld, runtime.ArrayOperations.CallbackThisArgField);
             IL.Emit(OpCodes.Stloc, prevThisArgLocal);
             if (methodArgs.Count >= 2)
             {
@@ -812,7 +812,7 @@ public partial class ILEmitter
             {
                 IL.Emit(OpCodes.Ldnull);
             }
-            IL.Emit(OpCodes.Stsfld, runtime.CurrentCallbackThisArgField);
+            IL.Emit(OpCodes.Stsfld, runtime.ArrayOperations.CallbackThisArgField);
         }
 
         switch (kind)
@@ -900,11 +900,11 @@ public partial class ILEmitter
         var resultTmp = IL.DeclareLocal(_ctx.Types.Object);
         IL.Emit(OpCodes.Stloc, resultTmp);
         IL.Emit(OpCodes.Ldloc, prevReceiverLocal);
-        IL.Emit(OpCodes.Stsfld, runtime.CurrentArrayLikeReceiverField);
+        IL.Emit(OpCodes.Stsfld, runtime.ArrayOperations.CurrentReceiverField);
         if (prevThisArgLocal != null)
         {
             IL.Emit(OpCodes.Ldloc, prevThisArgLocal);
-            IL.Emit(OpCodes.Stsfld, runtime.CurrentCallbackThisArgField);
+            IL.Emit(OpCodes.Stsfld, runtime.ArrayOperations.CallbackThisArgField);
         }
         IL.Emit(OpCodes.Ldloc, resultTmp);
 

@@ -2562,7 +2562,7 @@ public partial class RuntimeEmitter
         // List<object> branch — for borrowed Array.prototype.X helpers whose
         // first param is List<object> (the receiver). Materialize non-list
         // receivers (Dictionary, $Object, string, object[]) into a new list
-        // via $Runtime.ArrayLikeMaterialize so the helper's Castclass succeeds.
+        // via $Runtime.LikeMaterialize so the helper's Castclass succeeds.
         il.MarkLabel(listBranch);
 
         // if (arg == null) continue — null receiver typically already failed

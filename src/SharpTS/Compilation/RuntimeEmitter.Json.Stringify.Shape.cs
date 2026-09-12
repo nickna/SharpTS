@@ -149,9 +149,9 @@ public partial class RuntimeEmitter
         EmitPrototypeHasNoJsonHook(
             il, runtime.ObjectPrototypeField, scratch, unsafeLabel, runtime,
             expectsObjectPrototype: false);
-        il.Emit(OpCodes.Call, runtime.ArrayPrototypePopulateMethod);
+        il.Emit(OpCodes.Call, runtime.ArrayOperations.PrototypePopulateMethod);
         EmitPrototypeHasNoJsonHook(
-            il, runtime.ArrayPrototypeField, scratch, unsafeLabel, runtime,
+            il, runtime.ArrayOperations.PrototypeField, scratch, unsafeLabel, runtime,
             expectsObjectPrototype: true);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Ret);

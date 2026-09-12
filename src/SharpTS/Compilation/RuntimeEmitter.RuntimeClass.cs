@@ -55,7 +55,7 @@ public partial class RuntimeEmitter
             FieldAttributes.Public | FieldAttributes.Static);
         runtime.CancelRequestedField = cancelRequestedField;
 
-        // Thread-static "original array-like receiver" — see EmittedRuntime for
+        // Thread-static "original array-like receiver" — see EmittedArrayOperationsRuntime for
         // full rationale. Set by the Array.prototype.X.call(receiver, ...) pattern
         // matcher; read by EmitCallbackArgsAndInvoke when populating the callback's
         // 4th argument.
@@ -65,7 +65,6 @@ public partial class RuntimeEmitter
             FieldAttributes.Public | FieldAttributes.Static);
         var threadStaticCtor = typeof(ThreadStaticAttribute).GetConstructor(Type.EmptyTypes)!;
         currentArrayLikeReceiverField.SetCustomAttribute(threadStaticCtor, CustomAttributeEncoder.EmptyBlob);
-        runtime.CurrentArrayLikeReceiverField = currentArrayLikeReceiverField;
         // Reuse `_currentArrayLikeReceiver` for the lazy iteration signal too.
         // (Historically forced by the layout-sensitive .NET 10 tier-0 JIT bug
         // behind issue #39 — fixed upstream in 10.0.x servicing, so adding
@@ -73,7 +72,7 @@ public partial class RuntimeEmitter
         // semantically clean: the dispatch site already sets the field to the
         // original receiver, and LoadArrayLikeElement can decide eager vs lazy
         // by inspecting the receiver's type.
-        runtime.LazyArrayLikeReceiverField = currentArrayLikeReceiverField;
+        runtime.ArrayOperations.CurrentReceiverField = currentArrayLikeReceiverField;
 
         // Thread-static "callback thisArg" for `arr.forEach(cb, thisArg)` and
         // similar Array prototype methods. Set by ArrayEmitter / $BoundArrayMethod
@@ -84,7 +83,7 @@ public partial class RuntimeEmitter
             _types.Object,
             FieldAttributes.Public | FieldAttributes.Static);
         currentCallbackThisArgField.SetCustomAttribute(threadStaticCtor, CustomAttributeEncoder.EmptyBlob);
-        runtime.CurrentCallbackThisArgField = currentCallbackThisArgField;
+        runtime.ArrayOperations.CallbackThisArgField = currentCallbackThisArgField;
 
         // Math singleton — a shared Dictionary<string, object> that user code
         // can mutate (`Math.length = 1`). `Math.PI` etc. still go through
@@ -174,7 +173,7 @@ public partial class RuntimeEmitter
             "_arrayPrototype",
             _types.DictionaryStringObject,
             FieldAttributes.Public | FieldAttributes.Static);
-        runtime.ArrayPrototypeField = arrayPrototypeField;
+        runtime.ArrayOperations.PrototypeField = arrayPrototypeField;
 
         // Object.prototype singleton — populated lazily with hasOwnProperty/
         // isPrototypeOf/toString/valueOf/etc. wrappers.
@@ -521,7 +520,7 @@ public partial class RuntimeEmitter
         // because populate is only invoked when Object.prototype is explicitly
         // referenced. Idempotent — populate methods early-return if Count > 0.
         DefineObjectPrototypePopulateShell(typeBuilder, runtime);
-        DefineArrayPrototypePopulateShell(typeBuilder, runtime);
+        DefineArrayPrototypePopulateShell(typeBuilder, runtime.ArrayOperations);
         DefineMathSingletonPopulateShell(typeBuilder, runtime);
         DefineJsonSingletonPopulateShell(typeBuilder, runtime);
         if (_features.UsesReflect)
@@ -740,7 +739,7 @@ public partial class RuntimeEmitter
         // fall through to Object.prototype.toString) hit populated dicts.
         // Each populate is idempotent (early-returns if Count > 0).
         cctorIL.Emit(OpCodes.Call, runtime.ObjectPrototypePopulateMethod);
-        cctorIL.Emit(OpCodes.Call, runtime.ArrayPrototypePopulateMethod);
+        cctorIL.Emit(OpCodes.Call, runtime.ArrayOperations.PrototypePopulateMethod);
         cctorIL.Emit(OpCodes.Call, runtime.NumberPrototypePopulateMethod);
         if (_features.UsesBigInt)
             cctorIL.Emit(OpCodes.Call, runtime.BigIntPrototypePopulateMethod);
@@ -919,14 +918,14 @@ public partial class RuntimeEmitter
         // Pre-declare ArrayLikeMaterialize's MethodBuilder so InvokeMethodValue
         // can reference it for the $BoundArrayMethod receiver-rebind path.
         // The body is filled in later (EmitArrayLikeMaterialize, line 544).
-        DeclareArrayLikeMaterialize(typeBuilder, runtime);
+        DeclareArrayLikeMaterialize(typeBuilder, runtime.ArrayOperations);
         // Companion lazy-aware materializer + element reader for iterator
         // helpers (issue #90). Pre-declared so the iterator emitters can
         // reference them; bodies emitted after EmitGetProperty (which they
         // call).
-        DeclareArrayLikeMaterializeForIteration(typeBuilder, runtime);
-        DeclareLoadArrayLikeElement(typeBuilder, runtime);
-        DeclareHasArrayLikeProperty(typeBuilder, runtime);
+        DeclareArrayLikeMaterializeForIteration(typeBuilder, runtime.ArrayOperations);
+        DeclareLoadArrayLikeElement(typeBuilder, runtime.ArrayOperations);
+        DeclareHasArrayLikeProperty(typeBuilder, runtime.ArrayOperations);
         // Promise combinators are emitted before the iterator wrapper, but
         // their normalization path consumes arbitrary iterables. Reserve the
         // method token now and fill its body in EmitIteratorMethodsAdvanced.
@@ -1046,7 +1045,7 @@ public partial class RuntimeEmitter
         // the Arrays section below. That left SetIndex's object-list branch unable to call it,
         // so we emit all of them up front now (including Object) for JS-spec auto-extend semantics.
         foreach (var desc in ArrayElements.All)
-            EmitSetArrayElementFor(typeBuilder, runtime, desc);
+            EmitSetArrayElementFor(typeBuilder, runtime.ArrayOperations, desc);
         // Note: TypedArray detection helpers are emitted earlier (before GetProperty)
         EmitGetIndex(typeBuilder, runtime);
         // DisposeResource uses the shared Symbol indexed-get path so descriptor
@@ -1188,16 +1187,16 @@ public partial class RuntimeEmitter
         // Array callback methods must come after InvokeValue and IsTruthy
         EmitArrayMap(typeBuilder, runtime);
         EmitArrayMapDirect(typeBuilder, runtime);
-        EmitArrayMapDouble(typeBuilder, runtime);
-        EmitArrayFilterDouble(typeBuilder, runtime);
+        EmitArrayMapDouble(typeBuilder, runtime.ArrayOperations);
+        EmitArrayFilterDouble(typeBuilder, runtime.ArrayOperations);
         EmitArrayFilter(typeBuilder, runtime);
         EmitArrayFilterDirect(typeBuilder, runtime);
         EmitArrayFilterDirectBool(typeBuilder, runtime);
         EmitArrayForEach(typeBuilder, runtime);
         EmitArrayForEachDirect(typeBuilder, runtime);
         EmitArrayPush(typeBuilder, runtime);
-        EmitArrayPushTyped(typeBuilder, runtime, ArrayElements.Double);
-        EmitArrayPushTyped(typeBuilder, runtime, ArrayElements.Bool);
+        EmitArrayPushTyped(typeBuilder, runtime.ArrayOperations, ArrayElements.Double);
+        EmitArrayPushTyped(typeBuilder, runtime.ArrayOperations, ArrayElements.Bool);
         EmitArrayPushProto(typeBuilder, runtime);
         EmitArrayPushOneDiscarded(typeBuilder, runtime);
         EmitArrayFind(typeBuilder, runtime);
@@ -1216,7 +1215,7 @@ public partial class RuntimeEmitter
         EmitArrayEveryDirectBool(typeBuilder, runtime);
         EmitArrayReduce(typeBuilder, runtime);
         EmitArrayReduceDirect(typeBuilder, runtime);
-        EmitArrayReduceDouble(typeBuilder, runtime);
+        EmitArrayReduceDouble(typeBuilder, runtime.ArrayOperations);
         EmitArrayReduceRight(typeBuilder, runtime);
         // Search helpers use ToIntegerOrInfinity for spec-compliant fromIndex clamping.
         EmitToIntegerOrInfinityHelper(typeBuilder, runtime);
@@ -1244,7 +1243,7 @@ public partial class RuntimeEmitter
         EmitArrayReverse(typeBuilder, runtime);
         EmitArrayReverseProto(typeBuilder, runtime);
         EmitArrayFlatHelper(typeBuilder, runtime); // Must be before EmitArrayFlat
-        EmitArrayFlat(typeBuilder, runtime);
+        EmitArrayFlat(typeBuilder, runtime.ArrayOperations);
         EmitArrayFlatMap(typeBuilder, runtime);
         EmitArrayFrom(typeBuilder, runtime);
         EmitArrayOf(typeBuilder, runtime);
@@ -1270,9 +1269,9 @@ public partial class RuntimeEmitter
         EmitArrayFillProto(typeBuilder, runtime);
         EmitArrayCopyWithin(typeBuilder, runtime);
         EmitArrayCopyWithinProto(typeBuilder, runtime);
-        EmitArrayEntries(typeBuilder, runtime);
-        EmitArrayKeys(typeBuilder, runtime);
-        EmitArrayValues(typeBuilder, runtime);
+        EmitArrayEntries(typeBuilder, runtime.ArrayOperations);
+        EmitArrayKeys(typeBuilder, runtime.ArrayOperations);
+        EmitArrayValues(typeBuilder, runtime.ArrayOperations);
         // Stubs used as MethodInfo backing for prototype $TSFunction wrappers
         // when no dedicated $Runtime helper exists (toString/toLocaleString/
         // match/search/etc.). Must be emitted before any prototype populate.

@@ -90,7 +90,7 @@ public partial class ILEmitter
                 IL.Emit(OpCodes.Stelem_Ref);
             }
 
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.CreateArray);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.ArrayOperations.Create);
         }
         else
         {
@@ -127,7 +127,7 @@ public partial class ILEmitter
                         EmitBoxIfNeeded(a.Elements[i]);
                     }
                     IL.Emit(OpCodes.Stelem_Ref);
-                    IL.Emit(OpCodes.Call, _ctx.Runtime!.CreateArray);
+                    IL.Emit(OpCodes.Call, _ctx.Runtime!.ArrayOperations.Create);
                 }
 
                 IL.Emit(OpCodes.Stelem_Ref);
@@ -137,7 +137,7 @@ public partial class ILEmitter
             IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.SymbolIterator);
             IL.Emit(OpCodes.Ldtoken, _ctx.Runtime!.RuntimeType);
             IL.Emit(OpCodes.Call, Types.TypeGetTypeFromHandle);
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.ConcatArrays);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.ArrayOperations.ConcatSources);
         }
         // The stack now holds a List<object?> reference. Reset the stack-type
         // tracker so a subsequent EmitBoxIfNeeded doesn't reinterpret the
@@ -198,7 +198,7 @@ public partial class ILEmitter
             IL.Emit(numeric ? OpCodes.Stelem_R8 : OpCodes.Stelem_Ref);
         }
         if (numeric) IL.Emit(OpCodes.Newobj, _ctx.Runtime!.ArrayStorage.NumericLiteralCtor);
-        else IL.Emit(OpCodes.Call, _ctx.Runtime!.CreateArray);
+        else IL.Emit(OpCodes.Call, _ctx.Runtime!.ArrayOperations.Create);
         SetStackUnknown();
     }
 

@@ -404,7 +404,7 @@ public abstract class StatementEmitterBase : ExpressionEmitterBase
             EnsureBoxed();
             IL.Emit(OpCodes.Castclass, Ctx.Types.ListOfDouble);
             EmitExpressionAsDouble(stableValue);
-            IL.Emit(OpCodes.Call, Ctx.Runtime!.ArrayPushDouble);
+            IL.Emit(OpCodes.Call, Ctx.Runtime!.ArrayOperations.PushDouble);
             IL.Emit(OpCodes.Pop);
             SetStackUnknown();
             return true;
@@ -434,7 +434,7 @@ public abstract class StatementEmitterBase : ExpressionEmitterBase
         EnsureBoxed();
         EmitExpression(arguments[0]);
         EnsureBoxed();
-        IL.Emit(OpCodes.Call, Ctx.Runtime!.ArrayPushOneDiscarded);
+        IL.Emit(OpCodes.Call, Ctx.Runtime!.ArrayOperations.PushOneDiscarded);
         SetStackUnknown();
         return true;
     }

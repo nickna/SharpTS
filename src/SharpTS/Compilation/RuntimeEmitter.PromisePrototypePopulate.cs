@@ -435,7 +435,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, runtime.BoundTSFunctionType);
         il.Emit(OpCodes.Brtrue, thenCallableLabel);
         il.Emit(OpCodes.Ldloc, thenLocal);
-        il.Emit(OpCodes.Isinst, runtime.BoundArrayMethodType);
+        il.Emit(OpCodes.Isinst, runtime.ArrayOperations.BoundMethodType);
         il.Emit(OpCodes.Brtrue, thenCallableLabel);
         // Not callable — throw TypeError. Message is parameterized so finally
         // callers don't see a "Promise.prototype.catch:" prefix.

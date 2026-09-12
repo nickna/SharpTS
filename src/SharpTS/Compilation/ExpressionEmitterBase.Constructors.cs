@@ -538,7 +538,7 @@ public abstract partial class ExpressionEmitterBase
                 return true;
 
             // --- Array (issue #61): JS-spec dispatch for new Array(…) / Array(…).
-            // Emit args as object[] and route through $Runtime.ArrayConstructor
+            // Emit args as object[] and route through $Runtime.Constructor
             // which handles: 0 args → []; 1 numeric arg → length-n nulls; 1
             // non-numeric arg → [arg]; N args → [a, b, c, …].
             case "Array":
@@ -552,7 +552,7 @@ public abstract partial class ExpressionEmitterBase
                     EnsureBoxed();
                     IL.Emit(OpCodes.Stelem_Ref);
                 }
-                IL.Emit(OpCodes.Call, Ctx.Runtime!.ArrayConstructor);
+                IL.Emit(OpCodes.Call, Ctx.Runtime!.ArrayOperations.Constructor);
                 SetStackUnknown();
                 return true;
 
