@@ -13,12 +13,13 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitCryptoGenerateKeyPairSync(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
+        var crypto = runtime.RequireCrypto();
         var method = typeBuilder.DefineMethod(
             "CryptoGenerateKeyPairSync",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.String, _types.Object]);
-        runtime.CryptoGenerateKeyPairSync = method;
+        crypto.GenerateKeyPairSync = method;
 
         var il = method.GetILGenerator();
 
@@ -52,14 +53,14 @@ public partial class RuntimeEmitter
         // RSA key generation
         il.MarkLabel(rsaLabel);
         il.Emit(OpCodes.Ldarg_1);  // options
-        il.Emit(OpCodes.Call, runtime.GenerateRsaKeyPairRaw);
+        il.Emit(OpCodes.Call, crypto.GenerateRsaKeyPairRaw);
         il.Emit(OpCodes.Stloc, tupleLocal);
         il.Emit(OpCodes.Br, createObjectLabel);
 
         // EC key generation
         il.MarkLabel(ecLabel);
         il.Emit(OpCodes.Ldarg_1);  // options
-        il.Emit(OpCodes.Call, runtime.GenerateEcKeyPairRaw);
+        il.Emit(OpCodes.Call, crypto.GenerateEcKeyPairRaw);
         il.Emit(OpCodes.Stloc, tupleLocal);
         il.Emit(OpCodes.Br, createObjectLabel);
 
@@ -101,14 +102,14 @@ public partial class RuntimeEmitter
     /// Emits: public static object CryptoCreateDiffieHellman(object primeOrLength, object? generator)
     /// Creates a DiffieHellman object using the emitted $DiffieHellman class.
     /// </summary>
-    private void EmitCryptoCreateDiffieHellman(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitCryptoCreateDiffieHellman(TypeBuilder typeBuilder, EmittedCryptoRuntime crypto)
     {
         var method = typeBuilder.DefineMethod(
             "CryptoCreateDiffieHellman",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.Object, _types.Object]);
-        runtime.CryptoCreateDiffieHellman = method;
+        crypto.CreateDiffieHellman = method;
 
         var il = method.GetILGenerator();
 
@@ -122,7 +123,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Unbox_Any, _types.Double);
         il.Emit(OpCodes.Conv_I4);
-        il.Emit(OpCodes.Newobj, runtime.TSDiffieHellmanCtorPrimeLength);
+        il.Emit(OpCodes.Newobj, crypto.DiffieHellmanCtorPrimeLength);
         il.Emit(OpCodes.Ret);
 
         // Not a number - decode prime and generator bytes
@@ -132,7 +133,7 @@ public partial class RuntimeEmitter
         var primeLocal = il.DeclareLocal(_types.ByteArray);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldnull);  // encoding
-        il.Emit(OpCodes.Call, runtime.TSDHDecodeInput);
+        il.Emit(OpCodes.Call, crypto.DHDecodeInput);
         il.Emit(OpCodes.Stloc, primeLocal);
 
         // Decode generator bytes (if not null)
@@ -143,7 +144,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, generatorNullLabel);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Call, runtime.TSDHDecodeInput);
+        il.Emit(OpCodes.Call, crypto.DHDecodeInput);
         il.Emit(OpCodes.Stloc, generatorLocal);
         il.Emit(OpCodes.Br, afterGeneratorLabel);
         il.MarkLabel(generatorNullLabel);
@@ -154,7 +155,7 @@ public partial class RuntimeEmitter
         // Use prime/generator constructor: new $DiffieHellman(prime, generator)
         il.Emit(OpCodes.Ldloc, primeLocal);
         il.Emit(OpCodes.Ldloc, generatorLocal);
-        il.Emit(OpCodes.Newobj, runtime.TSDiffieHellmanCtorPrimeGenerator);
+        il.Emit(OpCodes.Newobj, crypto.DiffieHellmanCtorPrimeGenerator);
         il.Emit(OpCodes.Ret);
     }
 
@@ -162,20 +163,20 @@ public partial class RuntimeEmitter
     /// Emits: public static object CryptoGetDiffieHellman(string groupName)
     /// Gets a predefined DiffieHellman group using the emitted $DiffieHellman class.
     /// </summary>
-    private void EmitCryptoGetDiffieHellman(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitCryptoGetDiffieHellman(TypeBuilder typeBuilder, EmittedCryptoRuntime crypto)
     {
         var method = typeBuilder.DefineMethod(
             "CryptoGetDiffieHellman",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.String]);
-        runtime.CryptoGetDiffieHellman = method;
+        crypto.GetDiffieHellman = method;
 
         var il = method.GetILGenerator();
 
         // Use group constructor: new $DiffieHellman(groupName)
         il.Emit(OpCodes.Ldarg_0);  // groupName
-        il.Emit(OpCodes.Newobj, runtime.TSDiffieHellmanCtorGroup);
+        il.Emit(OpCodes.Newobj, crypto.DiffieHellmanCtorGroup);
         il.Emit(OpCodes.Ret);
     }
 
@@ -183,20 +184,20 @@ public partial class RuntimeEmitter
     /// Emits: public static object CryptoCreateECDH(string curveName)
     /// Creates an ECDH object using the emitted $ECDH class.
     /// </summary>
-    private void EmitCryptoCreateECDH(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitCryptoCreateECDH(TypeBuilder typeBuilder, EmittedCryptoRuntime crypto)
     {
         var method = typeBuilder.DefineMethod(
             "CryptoCreateECDH",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.String]);
-        runtime.CryptoCreateECDH = method;
+        crypto.CreateECDH = method;
 
         var il = method.GetILGenerator();
 
         // Create new $ECDH(curveName)
         il.Emit(OpCodes.Ldarg_0);  // curveName
-        il.Emit(OpCodes.Newobj, runtime.TSECDHCtor);
+        il.Emit(OpCodes.Newobj, crypto.ECDHCtor);
         il.Emit(OpCodes.Ret);
     }
 
@@ -211,7 +212,7 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Int32,
             [_types.Object, _types.String, _types.Int32]);
-        runtime.GetOptionInt = method;
+        runtime.RequireCrypto().GetOptionInt = method;
 
         var il = method.GetILGenerator();
         var returnDefaultLabel = il.DefineLabel();
@@ -253,7 +254,7 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             _types.String,
             [_types.Object, _types.String, _types.String]);
-        runtime.GetOptionString = method;
+        runtime.RequireCrypto().GetOptionString = method;
 
         var il = method.GetILGenerator();
         var returnDefaultLabel = il.DefineLabel();
@@ -289,7 +290,7 @@ public partial class RuntimeEmitter
     /// Emits: public static (string, string) GenerateRsaKeyPairRaw(object? options)
     /// Generates RSA key pair and returns (publicKeyPem, privateKeyPem).
     /// </summary>
-    private void EmitGenerateRsaKeyPairRaw(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitGenerateRsaKeyPairRaw(TypeBuilder typeBuilder, EmittedCryptoRuntime crypto)
     {
         var tupleType = typeof(ValueTuple<string, string>);
         var method = typeBuilder.DefineMethod(
@@ -297,7 +298,7 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             tupleType,
             [_types.Object]);
-        runtime.GenerateRsaKeyPairRaw = method;
+        crypto.GenerateRsaKeyPairRaw = method;
 
         var il = method.GetILGenerator();
 
@@ -306,7 +307,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);  // options
         il.Emit(OpCodes.Ldstr, "modulusLength");
         il.Emit(OpCodes.Ldc_I4, 2048);
-        il.Emit(OpCodes.Call, runtime.GetOptionInt);
+        il.Emit(OpCodes.Call, crypto.GetOptionInt);
         il.Emit(OpCodes.Stloc, modulusLengthLocal);
 
         // using var rsa = RSA.Create(modulusLength)
@@ -349,7 +350,7 @@ public partial class RuntimeEmitter
     /// Emits: public static (string, string) GenerateEcKeyPairRaw(object? options)
     /// Generates EC key pair and returns (publicKeyPem, privateKeyPem).
     /// </summary>
-    private void EmitGenerateEcKeyPairRaw(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitGenerateEcKeyPairRaw(TypeBuilder typeBuilder, EmittedCryptoRuntime crypto)
     {
         var tupleType = typeof(ValueTuple<string, string>);
         var method = typeBuilder.DefineMethod(
@@ -357,7 +358,7 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             tupleType,
             [_types.Object]);
-        runtime.GenerateEcKeyPairRaw = method;
+        crypto.GenerateEcKeyPairRaw = method;
 
         var il = method.GetILGenerator();
 
@@ -366,7 +367,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);  // options
         il.Emit(OpCodes.Ldstr, "namedCurve");
         il.Emit(OpCodes.Ldstr, "prime256v1");
-        il.Emit(OpCodes.Call, runtime.GetOptionString);
+        il.Emit(OpCodes.Call, crypto.GetOptionString);
         il.Emit(OpCodes.Stloc, curveNameLocal);
 
         // Map curveName to ECCurve

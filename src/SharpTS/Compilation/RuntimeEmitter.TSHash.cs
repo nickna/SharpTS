@@ -9,7 +9,7 @@ namespace SharpTS.Compilation;
 /// </summary>
 /// <remarks>
 /// $Hash buffers updated data in a MemoryStream and computes the digest one-shot
-/// via $CryptoPrimitives.CryptoHashData — that's what makes hash.copy() (#1058)
+/// via $CryptoPrimitives.RequireCrypto().HashData — that's what makes hash.copy() (#1058)
 /// and the XOF hashes with outputLength (#1062) expressible.
 /// </remarks>
 public partial class RuntimeEmitter
@@ -21,6 +21,7 @@ public partial class RuntimeEmitter
 
     private void EmitTSHashClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
+        var crypto = runtime.RequireCrypto();
         // Define class: public sealed class $Hash
         var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$Hash",
@@ -35,11 +36,11 @@ public partial class RuntimeEmitter
         _tsHashFinalizedField = typeBuilder.DefineField("_finalized", _types.Boolean, FieldAttributes.Private);
 
         // Constructor
-        EmitTSHashCtor(typeBuilder, runtime);
+        EmitTSHashCtor(typeBuilder, crypto);
 
         // Methods
-        EmitTSHashUpdate(typeBuilder, runtime);
-        EmitTSHashDigest(typeBuilder, runtime);
+        EmitTSHashUpdate(typeBuilder, crypto);
+        EmitTSHashDigest(typeBuilder, crypto);
         EmitTSHashCopy(typeBuilder, runtime);
 
         typeBuilder.CreateType();
@@ -48,14 +49,14 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits: public $Hash(string algorithm, int outputLength)
     /// </summary>
-    private void EmitTSHashCtor(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSHashCtor(TypeBuilder typeBuilder, EmittedCryptoRuntime crypto)
     {
         var ctor = typeBuilder.DefineConstructor(
             MethodAttributes.Public,
             CallingConventions.Standard,
             [_types.String, _types.Int32]
         );
-        runtime.TSHashCtor = ctor;
+        crypto.HashCtor = ctor;
 
         var il = ctor.GetILGenerator();
 
@@ -66,7 +67,7 @@ public partial class RuntimeEmitter
         // _algorithm = CryptoValidateHashName(algorithm)  (throws on unknown/unsupported)
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.CryptoValidateHashName);
+        il.Emit(OpCodes.Call, crypto.ValidateHashName);
         il.Emit(OpCodes.Stfld, _tsHashAlgorithmField);
 
         // _outputLength = outputLength
@@ -90,7 +91,7 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits: public $Hash Update(object data) — accepts string (UTF-8), $Buffer, or byte[].
     /// </summary>
-    private void EmitTSHashUpdate(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSHashUpdate(TypeBuilder typeBuilder, EmittedCryptoRuntime crypto)
     {
         var method = typeBuilder.DefineMethod(
             "Update",
@@ -107,7 +108,7 @@ public partial class RuntimeEmitter
         // var bytes = CryptoBytesFromAny(data)
         var bytesLocal = il.DeclareLocal(_types.ByteArray);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.CryptoBytesFromAny);
+        il.Emit(OpCodes.Call, crypto.BytesFromAny);
         il.Emit(OpCodes.Stloc, bytesLocal);
 
         // _data.Write(bytes, 0, bytes.Length)
@@ -128,7 +129,7 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits: public object Digest(string? encoding)
     /// </summary>
-    private void EmitTSHashDigest(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSHashDigest(TypeBuilder typeBuilder, EmittedCryptoRuntime crypto)
     {
         var method = typeBuilder.DefineMethod(
             "Digest",
@@ -155,9 +156,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, typeof(MemoryStream).GetMethod("ToArray", Type.EmptyTypes)!);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, _tsHashOutputLengthField);
-        il.Emit(OpCodes.Call, runtime.CryptoHashData);
+        il.Emit(OpCodes.Call, crypto.HashData);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.CryptoEncodeBytes);
+        il.Emit(OpCodes.Call, crypto.EncodeBytes);
         il.Emit(OpCodes.Ret);
     }
 
@@ -210,7 +211,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, _tsHashAlgorithmField);
         il.Emit(OpCodes.Ldloc, outputLengthLocal);
-        il.Emit(OpCodes.Newobj, runtime.TSHashCtor);
+        il.Emit(OpCodes.Newobj, runtime.RequireCrypto().HashCtor);
         il.Emit(OpCodes.Stloc, copyLocal);
 
         // this._data.WriteTo(copy._data)  — same-class private field access is legal

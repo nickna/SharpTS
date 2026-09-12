@@ -19,7 +19,7 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             Type.EmptyTypes);
-        runtime.CryptoGetConstants = method;
+        runtime.RequireCrypto().GetConstants = method;
 
         var il = method.GetILGenerator();
         il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.DictionaryStringObject));
@@ -58,7 +58,7 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.Object, _types.Object]);
-        runtime.CryptoGetCipherInfo = method;
+        runtime.RequireCrypto().GetCipherInfo = method;
 
         var il = method.GetILGenerator();
 
@@ -207,7 +207,7 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             Type.EmptyTypes);
-        runtime.CryptoGetCurves = method;
+        runtime.RequireCrypto().GetCurves = method;
 
         var il = method.GetILGenerator();
         il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, Type.EmptyTypes)!);

@@ -14,9 +14,10 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitEcPointHelpers(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
+        var crypto = runtime.RequireCrypto();
         EmitEcdhPadTo(typeBuilder, runtime);
-        EmitEcdhDecompressY(typeBuilder, runtime);
-        EmitEcdhEncodePoint(typeBuilder, runtime);
+        EmitEcdhDecompressY(typeBuilder, crypto);
+        EmitEcdhEncodePoint(typeBuilder, crypto);
     }
 
     private MethodBuilder _ecdhPadTo = null!;
@@ -25,14 +26,14 @@ public partial class RuntimeEmitter
     /// byte[] EcdhDecompressY(byte[] xBytes, bool odd, int fieldLen) — recovers
     /// the Y coordinate for a compressed point on the supported NIST curves.
     /// </summary>
-    private void EmitEcdhDecompressY(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitEcdhDecompressY(TypeBuilder typeBuilder, EmittedCryptoRuntime crypto)
     {
         var method = typeBuilder.DefineMethod(
             "EcdhDecompressY",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.ByteArray,
             [_types.ByteArray, _types.Boolean, _types.Int32]);
-        runtime.EcdhDecompressY = method;
+        crypto.EcdhDecompressY = method;
 
         var il = method.GetILGenerator();
         var pLocal = il.DeclareLocal(typeof(BigInteger));
@@ -263,14 +264,14 @@ public partial class RuntimeEmitter
     /// byte[] EcdhEncodePoint(byte[] x, byte[] y, int fieldLen, string format) —
     /// builds an uncompressed (04||X||Y), compressed (02/03||X), or hybrid (06/07||X||Y) point.
     /// </summary>
-    private void EmitEcdhEncodePoint(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitEcdhEncodePoint(TypeBuilder typeBuilder, EmittedCryptoRuntime crypto)
     {
         var method = typeBuilder.DefineMethod(
             "EcdhEncodePoint",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.ByteArray,
             [_types.ByteArray, _types.ByteArray, _types.Int32, _types.String]);
-        runtime.EcdhEncodePoint = method;
+        crypto.EcdhEncodePoint = method;
 
         var il = method.GetILGenerator();
         var xLocal = il.DeclareLocal(_types.ByteArray);

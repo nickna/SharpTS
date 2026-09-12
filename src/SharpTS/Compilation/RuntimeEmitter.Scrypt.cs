@@ -17,33 +17,33 @@ public partial class RuntimeEmitter
     /// Emits all scrypt-related methods.
     /// Must be called during runtime class emission.
     /// </summary>
-    private void EmitScryptMethods(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitScryptMethods(TypeBuilder typeBuilder, EmittedCryptoRuntime crypto)
     {
         // Emit helper methods first (order matters due to dependencies)
         // RotateLeft is used by Salsa20Core
-        EmitScryptRotateLeft(typeBuilder, runtime);
+        EmitScryptRotateLeft(typeBuilder, crypto);
         // Salsa20Core is used by BlockMix
-        EmitScryptSalsa20Core(typeBuilder, runtime);
+        EmitScryptSalsa20Core(typeBuilder, crypto);
         // BlockMix is used by ROMix
-        EmitScryptBlockMix(typeBuilder, runtime);
+        EmitScryptBlockMix(typeBuilder, crypto);
         // ROMix is used by DeriveBytes
-        EmitScryptROMix(typeBuilder, runtime);
+        EmitScryptROMix(typeBuilder, crypto);
         // DeriveBytes is the main entry point
-        EmitScryptDeriveBytesImpl(typeBuilder, runtime);
+        EmitScryptDeriveBytesImpl(typeBuilder, crypto);
     }
 
     /// <summary>
     /// Emits: private static uint RotateLeft(uint value, int count)
     /// Returns (value &lt;&lt; count) | (value >> (32 - count))
     /// </summary>
-    private void EmitScryptRotateLeft(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitScryptRotateLeft(TypeBuilder typeBuilder, EmittedCryptoRuntime crypto)
     {
         var method = typeBuilder.DefineMethod(
             "ScryptRotateLeft",
             MethodAttributes.Private | MethodAttributes.Static,
             typeof(uint),
             [typeof(uint), _types.Int32]);
-        runtime.ScryptRotateLeft = method;
+        crypto.ScryptRotateLeft = method;
 
         var il = method.GetILGenerator();
 
@@ -66,14 +66,14 @@ public partial class RuntimeEmitter
     /// Emits: private static void Salsa20Core(byte[] block)
     /// Applies the Salsa20/8 core function in-place on a 64-byte block.
     /// </summary>
-    private void EmitScryptSalsa20Core(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitScryptSalsa20Core(TypeBuilder typeBuilder, EmittedCryptoRuntime crypto)
     {
         var method = typeBuilder.DefineMethod(
             "ScryptSalsa20Core",
             MethodAttributes.Private | MethodAttributes.Static,
             _types.Void,
             [_types.ByteArray]);
-        runtime.ScryptSalsa20Core = method;
+        crypto.ScryptSalsa20Core = method;
 
         var il = method.GetILGenerator();
 
@@ -134,77 +134,77 @@ public partial class RuntimeEmitter
 
         // Column round - emit all 16 operations
         // x[4] ^= RotateLeft(x[0] + x[12], 7);
-        EmitSalsa20Op(il, xLocal, runtime, 4, 0, 12, 7);
+        EmitSalsa20Op(il, xLocal, crypto, 4, 0, 12, 7);
         // x[8] ^= RotateLeft(x[4] + x[0], 9);
-        EmitSalsa20Op(il, xLocal, runtime, 8, 4, 0, 9);
+        EmitSalsa20Op(il, xLocal, crypto, 8, 4, 0, 9);
         // x[12] ^= RotateLeft(x[8] + x[4], 13);
-        EmitSalsa20Op(il, xLocal, runtime, 12, 8, 4, 13);
+        EmitSalsa20Op(il, xLocal, crypto, 12, 8, 4, 13);
         // x[0] ^= RotateLeft(x[12] + x[8], 18);
-        EmitSalsa20Op(il, xLocal, runtime, 0, 12, 8, 18);
+        EmitSalsa20Op(il, xLocal, crypto, 0, 12, 8, 18);
 
         // x[9] ^= RotateLeft(x[5] + x[1], 7);
-        EmitSalsa20Op(il, xLocal, runtime, 9, 5, 1, 7);
+        EmitSalsa20Op(il, xLocal, crypto, 9, 5, 1, 7);
         // x[13] ^= RotateLeft(x[9] + x[5], 9);
-        EmitSalsa20Op(il, xLocal, runtime, 13, 9, 5, 9);
+        EmitSalsa20Op(il, xLocal, crypto, 13, 9, 5, 9);
         // x[1] ^= RotateLeft(x[13] + x[9], 13);
-        EmitSalsa20Op(il, xLocal, runtime, 1, 13, 9, 13);
+        EmitSalsa20Op(il, xLocal, crypto, 1, 13, 9, 13);
         // x[5] ^= RotateLeft(x[1] + x[13], 18);
-        EmitSalsa20Op(il, xLocal, runtime, 5, 1, 13, 18);
+        EmitSalsa20Op(il, xLocal, crypto, 5, 1, 13, 18);
 
         // x[14] ^= RotateLeft(x[10] + x[6], 7);
-        EmitSalsa20Op(il, xLocal, runtime, 14, 10, 6, 7);
+        EmitSalsa20Op(il, xLocal, crypto, 14, 10, 6, 7);
         // x[2] ^= RotateLeft(x[14] + x[10], 9);
-        EmitSalsa20Op(il, xLocal, runtime, 2, 14, 10, 9);
+        EmitSalsa20Op(il, xLocal, crypto, 2, 14, 10, 9);
         // x[6] ^= RotateLeft(x[2] + x[14], 13);
-        EmitSalsa20Op(il, xLocal, runtime, 6, 2, 14, 13);
+        EmitSalsa20Op(il, xLocal, crypto, 6, 2, 14, 13);
         // x[10] ^= RotateLeft(x[6] + x[2], 18);
-        EmitSalsa20Op(il, xLocal, runtime, 10, 6, 2, 18);
+        EmitSalsa20Op(il, xLocal, crypto, 10, 6, 2, 18);
 
         // x[3] ^= RotateLeft(x[15] + x[11], 7);
-        EmitSalsa20Op(il, xLocal, runtime, 3, 15, 11, 7);
+        EmitSalsa20Op(il, xLocal, crypto, 3, 15, 11, 7);
         // x[7] ^= RotateLeft(x[3] + x[15], 9);
-        EmitSalsa20Op(il, xLocal, runtime, 7, 3, 15, 9);
+        EmitSalsa20Op(il, xLocal, crypto, 7, 3, 15, 9);
         // x[11] ^= RotateLeft(x[7] + x[3], 13);
-        EmitSalsa20Op(il, xLocal, runtime, 11, 7, 3, 13);
+        EmitSalsa20Op(il, xLocal, crypto, 11, 7, 3, 13);
         // x[15] ^= RotateLeft(x[11] + x[7], 18);
-        EmitSalsa20Op(il, xLocal, runtime, 15, 11, 7, 18);
+        EmitSalsa20Op(il, xLocal, crypto, 15, 11, 7, 18);
 
         // Row round
         // x[1] ^= RotateLeft(x[0] + x[3], 7);
-        EmitSalsa20Op(il, xLocal, runtime, 1, 0, 3, 7);
+        EmitSalsa20Op(il, xLocal, crypto, 1, 0, 3, 7);
         // x[2] ^= RotateLeft(x[1] + x[0], 9);
-        EmitSalsa20Op(il, xLocal, runtime, 2, 1, 0, 9);
+        EmitSalsa20Op(il, xLocal, crypto, 2, 1, 0, 9);
         // x[3] ^= RotateLeft(x[2] + x[1], 13);
-        EmitSalsa20Op(il, xLocal, runtime, 3, 2, 1, 13);
+        EmitSalsa20Op(il, xLocal, crypto, 3, 2, 1, 13);
         // x[0] ^= RotateLeft(x[3] + x[2], 18);
-        EmitSalsa20Op(il, xLocal, runtime, 0, 3, 2, 18);
+        EmitSalsa20Op(il, xLocal, crypto, 0, 3, 2, 18);
 
         // x[6] ^= RotateLeft(x[5] + x[4], 7);
-        EmitSalsa20Op(il, xLocal, runtime, 6, 5, 4, 7);
+        EmitSalsa20Op(il, xLocal, crypto, 6, 5, 4, 7);
         // x[7] ^= RotateLeft(x[6] + x[5], 9);
-        EmitSalsa20Op(il, xLocal, runtime, 7, 6, 5, 9);
+        EmitSalsa20Op(il, xLocal, crypto, 7, 6, 5, 9);
         // x[4] ^= RotateLeft(x[7] + x[6], 13);
-        EmitSalsa20Op(il, xLocal, runtime, 4, 7, 6, 13);
+        EmitSalsa20Op(il, xLocal, crypto, 4, 7, 6, 13);
         // x[5] ^= RotateLeft(x[4] + x[7], 18);
-        EmitSalsa20Op(il, xLocal, runtime, 5, 4, 7, 18);
+        EmitSalsa20Op(il, xLocal, crypto, 5, 4, 7, 18);
 
         // x[11] ^= RotateLeft(x[10] + x[9], 7);
-        EmitSalsa20Op(il, xLocal, runtime, 11, 10, 9, 7);
+        EmitSalsa20Op(il, xLocal, crypto, 11, 10, 9, 7);
         // x[8] ^= RotateLeft(x[11] + x[10], 9);
-        EmitSalsa20Op(il, xLocal, runtime, 8, 11, 10, 9);
+        EmitSalsa20Op(il, xLocal, crypto, 8, 11, 10, 9);
         // x[9] ^= RotateLeft(x[8] + x[11], 13);
-        EmitSalsa20Op(il, xLocal, runtime, 9, 8, 11, 13);
+        EmitSalsa20Op(il, xLocal, crypto, 9, 8, 11, 13);
         // x[10] ^= RotateLeft(x[9] + x[8], 18);
-        EmitSalsa20Op(il, xLocal, runtime, 10, 9, 8, 18);
+        EmitSalsa20Op(il, xLocal, crypto, 10, 9, 8, 18);
 
         // x[12] ^= RotateLeft(x[15] + x[14], 7);
-        EmitSalsa20Op(il, xLocal, runtime, 12, 15, 14, 7);
+        EmitSalsa20Op(il, xLocal, crypto, 12, 15, 14, 7);
         // x[13] ^= RotateLeft(x[12] + x[15], 9);
-        EmitSalsa20Op(il, xLocal, runtime, 13, 12, 15, 9);
+        EmitSalsa20Op(il, xLocal, crypto, 13, 12, 15, 9);
         // x[14] ^= RotateLeft(x[13] + x[12], 13);
-        EmitSalsa20Op(il, xLocal, runtime, 14, 13, 12, 13);
+        EmitSalsa20Op(il, xLocal, crypto, 14, 13, 12, 13);
         // x[15] ^= RotateLeft(x[14] + x[13], 18);
-        EmitSalsa20Op(il, xLocal, runtime, 15, 14, 13, 18);
+        EmitSalsa20Op(il, xLocal, crypto, 15, 14, 13, 18);
 
         // i++
         il.Emit(OpCodes.Ldloc, iLocal);
@@ -285,7 +285,7 @@ public partial class RuntimeEmitter
     /// Helper to emit a single Salsa20 quarter-round operation.
     /// Emits: x[target] ^= RotateLeft(x[a] + x[b], shift)
     /// </summary>
-    private void EmitSalsa20Op(ILGenerator il, LocalBuilder xLocal, EmittedRuntime runtime, int target, int a, int b, int shift)
+    private void EmitSalsa20Op(ILGenerator il, LocalBuilder xLocal, EmittedCryptoRuntime crypto, int target, int a, int b, int shift)
     {
         // x[target] ^= RotateLeft(x[a] + x[b], shift)
         il.Emit(OpCodes.Ldloc, xLocal);
@@ -305,7 +305,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldelem_U4);
         il.Emit(OpCodes.Add);
         il.Emit(OpCodes.Ldc_I4, shift);
-        il.Emit(OpCodes.Call, runtime.ScryptRotateLeft);
+        il.Emit(OpCodes.Call, crypto.ScryptRotateLeft);
 
         // XOR and store
         il.Emit(OpCodes.Xor);
@@ -316,14 +316,14 @@ public partial class RuntimeEmitter
     /// Emits: private static void ScryptBlockMix(byte[] B, int r)
     /// Applies the scrypt BlockMix function in-place.
     /// </summary>
-    private void EmitScryptBlockMix(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitScryptBlockMix(TypeBuilder typeBuilder, EmittedCryptoRuntime crypto)
     {
         var method = typeBuilder.DefineMethod(
             "ScryptBlockMix",
             MethodAttributes.Private | MethodAttributes.Static,
             _types.Void,
             [_types.ByteArray, _types.Int32]);
-        runtime.ScryptBlockMix = method;
+        crypto.ScryptBlockMix = method;
 
         var il = method.GetILGenerator();
 
@@ -412,7 +412,7 @@ public partial class RuntimeEmitter
 
         // Apply Salsa20/8 core
         il.Emit(OpCodes.Ldloc, XLocal);
-        il.Emit(OpCodes.Call, runtime.ScryptSalsa20Core);
+        il.Emit(OpCodes.Call, crypto.ScryptSalsa20Core);
 
         // Calculate destination offset: destOffset = (i / 2) * 64 + (i % 2) * r * 64
         // (i / 2) * 64
@@ -463,14 +463,14 @@ public partial class RuntimeEmitter
     /// Emits: private static void ScryptROMix(byte[] B, int N, int r)
     /// Applies the scrypt ROMix function in-place.
     /// </summary>
-    private void EmitScryptROMix(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitScryptROMix(TypeBuilder typeBuilder, EmittedCryptoRuntime crypto)
     {
         var method = typeBuilder.DefineMethod(
             "ScryptROMix",
             MethodAttributes.Private | MethodAttributes.Static,
             _types.Void,
             [_types.ByteArray, _types.Int32, _types.Int32]);
-        runtime.ScryptROMix = method;
+        crypto.ScryptROMix = method;
 
         var il = method.GetILGenerator();
 
@@ -513,7 +513,7 @@ public partial class RuntimeEmitter
         // ScryptBlockMix(B, r)
         il.Emit(OpCodes.Ldarg_0);  // B
         il.Emit(OpCodes.Ldarg_2);  // r
-        il.Emit(OpCodes.Call, runtime.ScryptBlockMix);
+        il.Emit(OpCodes.Call, crypto.ScryptBlockMix);
 
         // i++
         il.Emit(OpCodes.Ldloc, iLocal);
@@ -595,7 +595,7 @@ public partial class RuntimeEmitter
         // ScryptBlockMix(B, r)
         il.Emit(OpCodes.Ldarg_0);  // B
         il.Emit(OpCodes.Ldarg_2);  // r
-        il.Emit(OpCodes.Call, runtime.ScryptBlockMix);
+        il.Emit(OpCodes.Call, crypto.ScryptBlockMix);
 
         // i++
         il.Emit(OpCodes.Ldloc, iLocal);
@@ -612,14 +612,14 @@ public partial class RuntimeEmitter
     /// Emits: public static byte[] ScryptDeriveBytes(byte[] password, byte[] salt, int N, int r, int p, int dkLen)
     /// Main scrypt key derivation function.
     /// </summary>
-    private void EmitScryptDeriveBytesImpl(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitScryptDeriveBytesImpl(TypeBuilder typeBuilder, EmittedCryptoRuntime crypto)
     {
         var method = typeBuilder.DefineMethod(
             "ScryptDeriveBytes",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.ByteArray,
             [_types.ByteArray, _types.ByteArray, _types.Int32, _types.Int32, _types.Int32, _types.Int32]);
-        runtime.ScryptDeriveBytes = method;
+        crypto.ScryptDeriveBytes = method;
 
         var il = method.GetILGenerator();
 
@@ -712,7 +712,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, blockLocal);
         il.Emit(OpCodes.Ldarg_2);  // N
         il.Emit(OpCodes.Ldarg_3);  // r
-        il.Emit(OpCodes.Call, runtime.ScryptROMix);
+        il.Emit(OpCodes.Call, crypto.ScryptROMix);
 
         // Array.Copy(block, 0, B, i * blockSize, blockSize);
         il.Emit(OpCodes.Ldloc, blockLocal);

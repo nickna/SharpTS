@@ -17,7 +17,7 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.MakeArrayType(_types.Byte), _types.MakeArrayType(_types.Byte), _types.Int32, _types.Int32, _types.String]);
-        runtime.CryptoPbkdf2Sync = method;
+        runtime.RequireCrypto().Pbkdf2Sync = method;
 
         var il = method.GetILGenerator();
 
@@ -127,12 +127,13 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitCryptoScryptSync(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
+        var crypto = runtime.RequireCrypto();
         var method = typeBuilder.DefineMethod(
             "CryptoScryptSync",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.MakeArrayType(_types.Byte), _types.MakeArrayType(_types.Byte), _types.Int32, _types.Object]);
-        runtime.CryptoScryptSync = method;
+        crypto.ScryptSync = method;
 
         // Note: ScryptDeriveBytes is already emitted by EmitScryptMethods (called at start of EmitCryptoMethods)
 
@@ -214,7 +215,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, rLocal);  // r
         il.Emit(OpCodes.Ldloc, pLocal);  // p
         il.Emit(OpCodes.Ldarg_2);  // keylen
-        il.Emit(OpCodes.Call, runtime.ScryptDeriveBytes);
+        il.Emit(OpCodes.Call, crypto.ScryptDeriveBytes);
 
         // Return new $Buffer(derivedKey)
         il.Emit(OpCodes.Newobj, runtime.TSBufferCtor);
@@ -304,7 +305,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.String, _types.MakeArrayType(_types.Byte), _types.MakeArrayType(_types.Byte),
              _types.MakeArrayType(_types.Byte), _types.Int32]);
-        runtime.CryptoHkdfSync = method;
+        runtime.RequireCrypto().HkdfSync = method;
 
         var il = method.GetILGenerator();
 

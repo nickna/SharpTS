@@ -48,7 +48,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitCryptoCompletionWrappers(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
-        var genSync = EmitCryptoGenerateSecretKeyCore(typeBuilder, runtime);
+        var genSync = EmitCryptoGenerateSecretKeyCore(typeBuilder, runtime.RequireCrypto());
 
         // generateKeySync(type, options) -> $TSKeyObject
         EmitCryptoMethodWrapper(typeBuilder, runtime, "generateKeySync", 2, il =>
@@ -94,7 +94,7 @@ public partial class RuntimeEmitter
     /// 'hmac'/'aes' + { length } bits and returns a secret $TSKeyObject. Mirrors the interp
     /// CryptoModuleInterpreter.GenerateSecretKey error messages exactly.
     /// </summary>
-    private MethodBuilder EmitCryptoGenerateSecretKeyCore(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private MethodBuilder EmitCryptoGenerateSecretKeyCore(TypeBuilder typeBuilder, EmittedCryptoRuntime crypto)
     {
         var method = typeBuilder.DefineMethod(
             "GenerateSecretKeyCore",
@@ -115,7 +115,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldstr, "length");
         il.Emit(OpCodes.Ldc_I4_M1);
-        il.Emit(OpCodes.Call, runtime.GetOptionInt);
+        il.Emit(OpCodes.Call, crypto.GetOptionInt);
         il.Emit(OpCodes.Stloc, lengthLocal);
 
         var aesLabel = il.DefineLabel();
@@ -174,7 +174,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_8);
         il.Emit(OpCodes.Div);
         il.Emit(OpCodes.Call, _types.RandomNumberGeneratorGetBytes);
-        il.Emit(OpCodes.Newobj, runtime.TSKeyObjectCtorSecret);
+        il.Emit(OpCodes.Newobj, crypto.KeyObjectCtorSecret);
         il.Emit(OpCodes.Ret);
 
         return method;

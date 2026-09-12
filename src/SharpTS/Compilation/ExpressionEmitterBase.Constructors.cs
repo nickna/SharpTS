@@ -185,11 +185,11 @@ public abstract partial class ExpressionEmitterBase
             // Resolver — migrated to stdlib/node/dns.ts. Like AsyncLocalStorage,
             // it is now an ordinary imported TS class wrapping a primitive handle.
 
-            // crypto.X509Certificate (#1064). Guarded on the emitted ctor being
-            // present (UsesCrypto) so a user class with the same name still resolves.
-            case "X509Certificate" when Ctx.Runtime?.X509CertificateCtor != null:
+            // crypto.X509Certificate (#1064). Guard on feature availability so a
+            // user class with the same name still resolves when crypto is absent.
+            case "X509Certificate" when Ctx.Runtime?.Crypto is not null:
                 EmitBoxedArgOrNull(arguments, 0);
-                IL.Emit(OpCodes.Newobj, Ctx.Runtime!.X509CertificateCtor);
+                IL.Emit(OpCodes.Newobj, Ctx.Runtime!.RequireCrypto().X509CertificateCtor);
                 SetStackUnknown();
                 return true;
 

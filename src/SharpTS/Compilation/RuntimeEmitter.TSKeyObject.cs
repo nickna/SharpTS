@@ -16,6 +16,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitTSKeyObjectClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
+        var crypto = runtime.RequireCrypto();
         // Define class: public class $TSKeyObject
         var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$TSKeyObject",
@@ -60,7 +61,7 @@ public partial class RuntimeEmitter
         secretCtorIL.Emit(OpCodes.Stfld, symmetricKeyField);
         secretCtorIL.Emit(OpCodes.Ret);
 
-        runtime.TSKeyObjectCtorSecret = secretCtor;
+        crypto.KeyObjectCtorSecret = secretCtor;
 
         // Constructor for asymmetric keys: public $TSKeyObject(string pem, bool isPrivate)
         var asymCtor = typeBuilder.DefineConstructor(
@@ -204,14 +205,14 @@ public partial class RuntimeEmitter
         asymCtorIL.MarkLabel(doneLabel);
         asymCtorIL.Emit(OpCodes.Ret);
 
-        runtime.TSKeyObjectCtorAsym = asymCtor;
+        crypto.KeyObjectCtorAsym = asymCtor;
 
         // Constructors used by JWK/DER import and public-key derivation.
         EmitTSKeyObjectManagedConstructors(
             typeBuilder, typeField, asymKeyTypeField, rsaKeyField, ecdsaKeyField, runtime);
 
         var getOption = EmitTSKeyObjectGetOption(typeBuilder, runtime);
-        runtime.TSKeyObjectGetOption = getOption;
+        crypto.KeyObjectGetOption = getOption;
         var base64UrlEncode = EmitTSKeyObjectBase64UrlEncode(typeBuilder);
         var base64UrlDecode = EmitTSKeyObjectBase64UrlDecode(typeBuilder);
 
@@ -292,9 +293,9 @@ public partial class RuntimeEmitter
         }
 
         EmitCtor(typeof(RSA), rsaKeyField, 1,
-            ctor => runtime.TSKeyObjectCtorRsa = ctor);
+            ctor => runtime.RequireCrypto().KeyObjectCtorRsa = ctor);
         EmitCtor(typeof(ECDsa), ecdsaKeyField, 2,
-            ctor => runtime.TSKeyObjectCtorEc = ctor);
+            ctor => runtime.RequireCrypto().KeyObjectCtorEc = ctor);
     }
 
     /// <summary>Reads a string-keyed option from emitted objects/dictionaries.</summary>
@@ -971,7 +972,7 @@ public partial class RuntimeEmitter
             MethodAttributes.Public,
             _types.Object,
             Type.EmptyTypes);
-        runtime.TSKeyObjectToPublicKey = method;
+        runtime.RequireCrypto().KeyObjectToPublicKey = method;
         var il = method.GetILGenerator();
         var asymmetric = il.DefineLabel();
         var ec = il.DefineLabel();
@@ -992,7 +993,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt,
             typeof(RSA).GetMethod("ExportSubjectPublicKeyInfoPem", Type.EmptyTypes)!);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Newobj, runtime.TSKeyObjectCtorAsym);
+        il.Emit(OpCodes.Newobj, runtime.RequireCrypto().KeyObjectCtorAsym);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(ec);
         il.Emit(OpCodes.Ldarg_0);
@@ -1000,7 +1001,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt,
             typeof(ECDsa).GetMethod("ExportSubjectPublicKeyInfoPem", Type.EmptyTypes)!);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Newobj, runtime.TSKeyObjectCtorAsym);
+        il.Emit(OpCodes.Newobj, runtime.RequireCrypto().KeyObjectCtorAsym);
         il.Emit(OpCodes.Ret);
     }
 
@@ -1015,7 +1016,7 @@ public partial class RuntimeEmitter
             MethodAttributes.Public,
             _types.Object,
             [_types.Object]);
-        runtime.TSKeyObjectDeriveSecret = method;
+        runtime.RequireCrypto().KeyObjectDeriveSecret = method;
         var il = method.GetILGenerator();
         var otherLocal = il.DeclareLocal(typeBuilder);
         var privateEcdhLocal = il.DeclareLocal(typeof(ECDiffieHellman));
@@ -1097,7 +1098,7 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.Object, _types.Boolean]);
-        runtime.TSKeyObjectImportJwk = method;
+        runtime.RequireCrypto().KeyObjectImportJwk = method;
         var il = method.GetILGenerator();
         var kty = il.DeclareLocal(_types.String);
         var rsaLabel = il.DefineLabel();
@@ -1131,7 +1132,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, getOption);
         il.Emit(OpCodes.Castclass, _types.String);
         il.Emit(OpCodes.Call, base64UrlDecode);
-        il.Emit(OpCodes.Newobj, runtime.TSKeyObjectCtorSecret);
+        il.Emit(OpCodes.Newobj, runtime.RequireCrypto().KeyObjectCtorSecret);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(rsaLabel);
@@ -1169,7 +1170,7 @@ public partial class RuntimeEmitter
             typeof(RSA).GetMethod("ImportParameters", [typeof(RSAParameters)])!);
         il.Emit(OpCodes.Ldloc, rsa);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Newobj, runtime.TSKeyObjectCtorRsa);
+        il.Emit(OpCodes.Newobj, runtime.RequireCrypto().KeyObjectCtorRsa);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(ecLabel);
@@ -1247,7 +1248,7 @@ public partial class RuntimeEmitter
             typeof(ECDsa).GetMethod("ImportParameters", [typeof(ECParameters)])!);
         il.Emit(OpCodes.Ldloc, ecdsa);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Newobj, runtime.TSKeyObjectCtorEc);
+        il.Emit(OpCodes.Newobj, runtime.RequireCrypto().KeyObjectCtorEc);
         il.Emit(OpCodes.Ret);
     }
 
@@ -1260,7 +1261,7 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.Object, _types.String, _types.Boolean]);
-        runtime.TSKeyObjectImportDer = method;
+        runtime.RequireCrypto().KeyObjectImportDer = method;
         var il = method.GetILGenerator();
         var bytes = il.DeclareLocal(_types.ByteArray);
         var span = il.DeclareLocal(typeof(ReadOnlySpan<byte>));
@@ -1370,7 +1371,7 @@ public partial class RuntimeEmitter
                 [typeof(ReadOnlySpan<byte>), _types.Int32.MakeByRefType()]));
             il.Emit(OpCodes.Ldloc, rsa);
             il.Emit(isPrivate ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
-            il.Emit(OpCodes.Newobj, runtime.TSKeyObjectCtorRsa);
+            il.Emit(OpCodes.Newobj, runtime.RequireCrypto().KeyObjectCtorRsa);
             if (leaveTarget.HasValue)
             {
                 il.Emit(OpCodes.Stloc, result);
@@ -1396,7 +1397,7 @@ public partial class RuntimeEmitter
                 [typeof(ReadOnlySpan<byte>), _types.Int32.MakeByRefType()]));
             il.Emit(OpCodes.Ldloc, ec);
             il.Emit(isPrivate ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
-            il.Emit(OpCodes.Newobj, runtime.TSKeyObjectCtorEc);
+            il.Emit(OpCodes.Newobj, runtime.RequireCrypto().KeyObjectCtorEc);
             if (leaveTarget.HasValue)
             {
                 il.Emit(OpCodes.Stloc, result);

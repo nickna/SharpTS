@@ -10,14 +10,14 @@ public partial class RuntimeEmitter
     /// Emits: public static object CryptoCreateHash(string algorithm, object options)
     /// options may carry { outputLength } for the XOF hashes (#1062).
     /// </summary>
-    private void EmitCryptoCreateHash(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitCryptoCreateHash(TypeBuilder typeBuilder, EmittedCryptoRuntime crypto)
     {
         var method = typeBuilder.DefineMethod(
             "CryptoCreateHash",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.String, _types.Object]);
-        runtime.CryptoCreateHash = method;
+        crypto.CreateHash = method;
 
         var il = method.GetILGenerator();
 
@@ -26,43 +26,43 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldstr, "outputLength");
         il.Emit(OpCodes.Ldc_I4_M1);
-        il.Emit(OpCodes.Call, runtime.GetOptionInt);
-        il.Emit(OpCodes.Newobj, runtime.TSHashCtor);
+        il.Emit(OpCodes.Call, crypto.GetOptionInt);
+        il.Emit(OpCodes.Newobj, crypto.HashCtor);
         il.Emit(OpCodes.Ret);
     }
 
     /// <summary>
     /// Emits: public static object CryptoCreateHmac(string algorithm, byte[] key)
     /// </summary>
-    private void EmitCryptoCreateHmac(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitCryptoCreateHmac(TypeBuilder typeBuilder, EmittedCryptoRuntime crypto)
     {
         var method = typeBuilder.DefineMethod(
             "CryptoCreateHmac",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.String, _types.MakeArrayType(_types.Byte)]);
-        runtime.CryptoCreateHmac = method;
+        crypto.CreateHmac = method;
 
         var il = method.GetILGenerator();
 
         // new $Hmac(algorithm, key) - use emitted type for standalone compatibility
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Newobj, runtime.TSHmacCtor);
+        il.Emit(OpCodes.Newobj, crypto.HmacCtor);
         il.Emit(OpCodes.Ret);
     }
 
     /// <summary>
     /// Emits: public static object CryptoCreateCipheriv(string algorithm, byte[] key, byte[] iv)
     /// </summary>
-    private void EmitCryptoCreateCipheriv(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitCryptoCreateCipheriv(TypeBuilder typeBuilder, EmittedCryptoRuntime crypto)
     {
         var method = typeBuilder.DefineMethod(
             "CryptoCreateCipheriv",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.String, _types.MakeArrayType(_types.Byte), _types.MakeArrayType(_types.Byte)]);
-        runtime.CryptoCreateCipheriv = method;
+        crypto.CreateCipheriv = method;
 
         var il = method.GetILGenerator();
 
@@ -70,21 +70,21 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Newobj, runtime.TSCipherCtor);
+        il.Emit(OpCodes.Newobj, crypto.CipherCtor);
         il.Emit(OpCodes.Ret);
     }
 
     /// <summary>
     /// Emits: public static object CryptoCreateDecipheriv(string algorithm, byte[] key, byte[] iv)
     /// </summary>
-    private void EmitCryptoCreateDecipheriv(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitCryptoCreateDecipheriv(TypeBuilder typeBuilder, EmittedCryptoRuntime crypto)
     {
         var method = typeBuilder.DefineMethod(
             "CryptoCreateDecipheriv",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.String, _types.MakeArrayType(_types.Byte), _types.MakeArrayType(_types.Byte)]);
-        runtime.CryptoCreateDecipheriv = method;
+        crypto.CreateDecipheriv = method;
 
         var il = method.GetILGenerator();
 
@@ -92,7 +92,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Newobj, runtime.TSDecipherCtor);
+        il.Emit(OpCodes.Newobj, crypto.DecipherCtor);
         il.Emit(OpCodes.Ret);
     }
 
@@ -107,7 +107,7 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.Int32]);
-        runtime.CryptoRandomBytes = method;
+        runtime.RequireCrypto().RandomBytes = method;
 
         var il = method.GetILGenerator();
 
@@ -132,7 +132,7 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.Object, _types.Int32, _types.Int32]);
-        runtime.CryptoRandomFillSync = method;
+        runtime.RequireCrypto().RandomFillSync = method;
 
         var il = method.GetILGenerator();
 
@@ -192,14 +192,14 @@ public partial class RuntimeEmitter
     /// Returns a boxed boolean indicating whether the buffers are equal using constant-time comparison.
     /// Throws if the buffers have different lengths (Node.js behavior).
     /// </summary>
-    private void EmitCryptoTimingSafeEqual(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitCryptoTimingSafeEqual(TypeBuilder typeBuilder, EmittedCryptoRuntime crypto)
     {
         var method = typeBuilder.DefineMethod(
             "CryptoTimingSafeEqual",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.MakeArrayType(_types.Byte), _types.MakeArrayType(_types.Byte)]);
-        runtime.CryptoTimingSafeEqual = method;
+        crypto.TimingSafeEqual = method;
 
         var il = method.GetILGenerator();
 
@@ -264,40 +264,40 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits: public static object CryptoCreateSign(string algorithm)
     /// </summary>
-    private void EmitCryptoCreateSign(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitCryptoCreateSign(TypeBuilder typeBuilder, EmittedCryptoRuntime crypto)
     {
         var method = typeBuilder.DefineMethod(
             "CryptoCreateSign",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.String]);
-        runtime.CryptoCreateSign = method;
+        crypto.CreateSign = method;
 
         var il = method.GetILGenerator();
 
         // new $Sign(algorithm) - use emitted type for standalone compatibility
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Newobj, runtime.TSSignCtor);
+        il.Emit(OpCodes.Newobj, crypto.SignCtor);
         il.Emit(OpCodes.Ret);
     }
 
     /// <summary>
     /// Emits: public static object CryptoCreateVerify(string algorithm)
     /// </summary>
-    private void EmitCryptoCreateVerify(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitCryptoCreateVerify(TypeBuilder typeBuilder, EmittedCryptoRuntime crypto)
     {
         var method = typeBuilder.DefineMethod(
             "CryptoCreateVerify",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.String]);
-        runtime.CryptoCreateVerify = method;
+        crypto.CreateVerify = method;
 
         var il = method.GetILGenerator();
 
         // new $Verify(algorithm) - use emitted type for standalone compatibility
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Newobj, runtime.TSVerifyCtor);
+        il.Emit(OpCodes.Newobj, crypto.VerifyCtor);
         il.Emit(OpCodes.Ret);
     }
 
@@ -312,7 +312,7 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             Type.EmptyTypes);
-        runtime.CryptoGetHashes = method;
+        runtime.RequireCrypto().GetHashes = method;
 
         var il = method.GetILGenerator();
 
@@ -354,7 +354,7 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             Type.EmptyTypes);
-        runtime.CryptoGetCiphers = method;
+        runtime.RequireCrypto().GetCiphers = method;
 
         var il = method.GetILGenerator();
 

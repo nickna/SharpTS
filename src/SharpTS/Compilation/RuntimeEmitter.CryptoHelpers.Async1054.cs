@@ -187,7 +187,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         EmitObjectToInt32(il);
         il.Emit(OpCodes.Ldloc, optionsLoc);
-        il.Emit(OpCodes.Call, runtime.CryptoGeneratePrimeSyncObj);
+        il.Emit(OpCodes.Call, runtime.RequireCrypto().GeneratePrimeSyncObj);
         il.Emit(OpCodes.Stloc, resultLoc);
         EmitCryptoResultCallback(il, runtime, callbackLoc, resultLoc);
         il.Emit(OpCodes.Leave, endLabel);
@@ -238,7 +238,7 @@ public partial class RuntimeEmitter
         il.BeginExceptionBlock();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, optionsLoc);
-        il.Emit(OpCodes.Call, runtime.CryptoCheckPrimeSyncObj);
+        il.Emit(OpCodes.Call, runtime.RequireCrypto().CheckPrimeSyncObj);
         il.Emit(OpCodes.Stloc, resultLoc);
         EmitCryptoResultCallback(il, runtime, callbackLoc, resultLoc);
         il.Emit(OpCodes.Leave, endLabel);

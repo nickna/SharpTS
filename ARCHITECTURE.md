@@ -244,6 +244,22 @@ operations after runtime and bound-method finalization. General iteration/destru
 collection iterators, generic element/length/key access, coercion, static-member dispatch, and
 call-argument expansion remain in their respective residual families under #1599.
 
+Node crypto uses `Crypto` / `RequireCrypto()` for its 105 hash/cipher constructors, module helpers,
+digest/encoding primitives, scrypt, signing, key exchange, KeyObject, and X509 declarations. `EmitAll`
+starts it only for `UsesCrypto`, before the primitives and value types, and completes it after the
+deferred Sign/Verify, DH/ECDH, and bound-method bodies and types are finalized. DH/ECDH type handles
+and their forward-declared `GetMember` methods have a single source in the component. Crypto-only
+helpers accept `EmittedCryptoRuntime` directly; Buffer, Promise, and generic property/invocation
+helpers remain separate dependencies. X509 constructor dispatch checks feature availability
+explicitly so a user class still resolves when crypto is absent.
+
+The shared built-in module registry still owns crypto named-import wrappers and aliases. WebCrypto
+remains a separate migration under #1599: `GetWebCryptoObject` is declared unconditionally in runtime
+phase 1, then receives either the singleton body or a null-returning stub. Its shared global-dispatch
+contract must survive a future migration. WebCrypto helper/type handles and Node crypto's nonduplicate
+type-local fields and construction state remain with their emitters; the residual-state audit must
+review that ownership before closing the umbrella.
+
 During emission, each handle becomes readable as soon as its declaration is assigned, so forward
 references do not require a method body to exist yet. An early read names the missing declaration.
 Completion is an orchestration boundary, not an IL verifier: body emission and type finalization

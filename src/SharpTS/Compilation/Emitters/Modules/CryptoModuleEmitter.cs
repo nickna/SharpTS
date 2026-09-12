@@ -85,7 +85,7 @@ public sealed class CryptoModuleEmitter : IBuiltInModuleEmitter
         switch (propertyName)
         {
             case "constants":  // crypto.constants (#1056)
-                il.Emit(OpCodes.Call, ctx.Runtime!.CryptoGetConstants);
+                il.Emit(OpCodes.Call, ctx.Runtime!.RequireCrypto().GetConstants);
                 return true;
             case "fips":
                 // crypto.fips — always false (non-FIPS build) (#1060)
@@ -99,7 +99,7 @@ public sealed class CryptoModuleEmitter : IBuiltInModuleEmitter
                 il.Emit(OpCodes.Dup);
                 il.Emit(OpCodes.Ldstr, "convertKey");
                 il.Emit(OpCodes.Ldnull);
-                ctx.Types.EmitLoadMethodInfoViaHandle(il, ctx.Runtime!.CryptoEcdhConvertKey);
+                ctx.Types.EmitLoadMethodInfoViaHandle(il, ctx.Runtime!.RequireCrypto().EcdhConvertKey);
                 il.Emit(OpCodes.Newobj, ctx.Runtime.TSFunctionCtor);
                 il.Emit(OpCodes.Callvirt,
                     ctx.Types.GetMethod(dictType, "Add", ctx.Types.String, ctx.Types.Object));
@@ -148,7 +148,7 @@ public sealed class CryptoModuleEmitter : IBuiltInModuleEmitter
         }
 
         // Call runtime helper to create hash
-        il.Emit(OpCodes.Call, ctx.Runtime!.CryptoCreateHash);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireCrypto().CreateHash);
         return true;
     }
 
@@ -204,7 +204,7 @@ public sealed class CryptoModuleEmitter : IBuiltInModuleEmitter
         il.MarkLabel(endLabel);
 
         // Call runtime helper to create HMAC
-        il.Emit(OpCodes.Call, ctx.Runtime!.CryptoCreateHmac);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireCrypto().CreateHmac);
         return true;
     }
 
@@ -238,7 +238,7 @@ public sealed class CryptoModuleEmitter : IBuiltInModuleEmitter
         EmitConvertToByteArray(emitter);
 
         // Call runtime helper to create cipher
-        il.Emit(OpCodes.Call, ctx.Runtime!.CryptoCreateCipheriv);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireCrypto().CreateCipheriv);
         return true;
     }
 
@@ -272,7 +272,7 @@ public sealed class CryptoModuleEmitter : IBuiltInModuleEmitter
         EmitConvertToByteArray(emitter);
 
         // Call runtime helper to create decipher
-        il.Emit(OpCodes.Call, ctx.Runtime!.CryptoCreateDecipheriv);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireCrypto().CreateDecipheriv);
         return true;
     }
 
@@ -342,7 +342,7 @@ public sealed class CryptoModuleEmitter : IBuiltInModuleEmitter
         }
 
         // Call runtime helper
-        il.Emit(OpCodes.Call, ctx.Runtime!.CryptoRandomBytes);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireCrypto().RandomBytes);
         return true;
     }
 
@@ -387,7 +387,7 @@ public sealed class CryptoModuleEmitter : IBuiltInModuleEmitter
         }
 
         // Call runtime helper
-        il.Emit(OpCodes.Call, ctx.Runtime!.CryptoRandomFillSync);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireCrypto().RandomFillSync);
         return true;
     }
 
@@ -484,7 +484,7 @@ public sealed class CryptoModuleEmitter : IBuiltInModuleEmitter
         il.Emit(OpCodes.Callvirt, ctx.Types.GetMethodNoParams(ctx.Types.Object, "ToString"));
 
         // Call runtime helper
-        il.Emit(OpCodes.Call, ctx.Runtime!.CryptoPbkdf2Sync);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireCrypto().Pbkdf2Sync);
         return true;
     }
 
@@ -527,7 +527,7 @@ public sealed class CryptoModuleEmitter : IBuiltInModuleEmitter
         }
 
         // Call runtime helper
-        il.Emit(OpCodes.Call, ctx.Runtime!.CryptoScryptSync);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireCrypto().ScryptSync);
         return true;
     }
 
@@ -555,7 +555,7 @@ public sealed class CryptoModuleEmitter : IBuiltInModuleEmitter
         EmitConvertToByteArray(emitter);
 
         // Call runtime helper
-        il.Emit(OpCodes.Call, ctx.Runtime!.CryptoTimingSafeEqual);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireCrypto().TimingSafeEqual);
         return true;
     }
 
@@ -577,7 +577,7 @@ public sealed class CryptoModuleEmitter : IBuiltInModuleEmitter
         }
 
         // Call runtime helper to create Sign
-        il.Emit(OpCodes.Call, ctx.Runtime!.CryptoCreateSign);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireCrypto().CreateSign);
         return true;
     }
 
@@ -599,7 +599,7 @@ public sealed class CryptoModuleEmitter : IBuiltInModuleEmitter
         }
 
         // Call runtime helper to create Verify
-        il.Emit(OpCodes.Call, ctx.Runtime!.CryptoCreateVerify);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireCrypto().CreateVerify);
         return true;
     }
 
@@ -609,7 +609,7 @@ public sealed class CryptoModuleEmitter : IBuiltInModuleEmitter
         var il = ctx.IL;
 
         // Call runtime helper to get hashes array
-        il.Emit(OpCodes.Call, ctx.Runtime!.CryptoGetHashes);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireCrypto().GetHashes);
         return true;
     }
 
@@ -619,7 +619,7 @@ public sealed class CryptoModuleEmitter : IBuiltInModuleEmitter
         var il = ctx.IL;
 
         // Call runtime helper to get ciphers array
-        il.Emit(OpCodes.Call, ctx.Runtime!.CryptoGetCiphers);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireCrypto().GetCiphers);
         return true;
     }
 
@@ -653,7 +653,7 @@ public sealed class CryptoModuleEmitter : IBuiltInModuleEmitter
         }
 
         // Call runtime helper
-        il.Emit(OpCodes.Call, ctx.Runtime!.CryptoGenerateKeyPairSync);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireCrypto().GenerateKeyPairSync);
         return true;
     }
 
@@ -686,7 +686,7 @@ public sealed class CryptoModuleEmitter : IBuiltInModuleEmitter
         }
 
         // Call runtime helper
-        il.Emit(OpCodes.Call, ctx.Runtime!.CryptoCreateDiffieHellman);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireCrypto().CreateDiffieHellman);
         return true;
     }
 
@@ -709,7 +709,7 @@ public sealed class CryptoModuleEmitter : IBuiltInModuleEmitter
         il.Emit(OpCodes.Callvirt, ctx.Types.GetMethodNoParams(ctx.Types.Object, "ToString"));
 
         // Call runtime helper
-        il.Emit(OpCodes.Call, ctx.Runtime!.CryptoGetDiffieHellman);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireCrypto().GetDiffieHellman);
         return true;
     }
 
@@ -732,7 +732,7 @@ public sealed class CryptoModuleEmitter : IBuiltInModuleEmitter
         il.Emit(OpCodes.Callvirt, ctx.Types.GetMethodNoParams(ctx.Types.Object, "ToString"));
 
         // Call runtime helper
-        il.Emit(OpCodes.Call, ctx.Runtime!.CryptoCreateECDH);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireCrypto().CreateECDH);
         return true;
     }
 
@@ -761,7 +761,7 @@ public sealed class CryptoModuleEmitter : IBuiltInModuleEmitter
         EmitConvertToByteArray(emitter);
 
         // Call runtime helper
-        il.Emit(OpCodes.Call, ctx.Runtime!.CryptoPublicEncrypt);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireCrypto().PublicEncrypt);
         return true;
     }
 
@@ -788,7 +788,7 @@ public sealed class CryptoModuleEmitter : IBuiltInModuleEmitter
         EmitConvertToByteArray(emitter);
 
         // Call runtime helper
-        il.Emit(OpCodes.Call, ctx.Runtime!.CryptoPrivateDecrypt);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireCrypto().PrivateDecrypt);
         return true;
     }
 
@@ -815,7 +815,7 @@ public sealed class CryptoModuleEmitter : IBuiltInModuleEmitter
         EmitConvertToByteArray(emitter);
 
         // Call runtime helper
-        il.Emit(OpCodes.Call, ctx.Runtime!.CryptoPrivateEncrypt);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireCrypto().PrivateEncrypt);
         return true;
     }
 
@@ -842,7 +842,7 @@ public sealed class CryptoModuleEmitter : IBuiltInModuleEmitter
         EmitConvertToByteArray(emitter);
 
         // Call runtime helper
-        il.Emit(OpCodes.Call, ctx.Runtime!.CryptoPublicDecrypt);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireCrypto().PublicDecrypt);
         return true;
     }
 
@@ -888,7 +888,7 @@ public sealed class CryptoModuleEmitter : IBuiltInModuleEmitter
         il.Emit(OpCodes.Conv_I4);
 
         // Call runtime helper
-        il.Emit(OpCodes.Call, ctx.Runtime!.CryptoHkdfSync);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireCrypto().HkdfSync);
         return true;
     }
 
@@ -925,7 +925,7 @@ public sealed class CryptoModuleEmitter : IBuiltInModuleEmitter
         }
 
         // Call runtime helper
-        il.Emit(OpCodes.Call, ctx.Runtime!.CryptoCreateSecretKey);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireCrypto().CreateSecretKey);
         return true;
     }
 
@@ -947,7 +947,7 @@ public sealed class CryptoModuleEmitter : IBuiltInModuleEmitter
         emitter.EmitBoxIfNeeded(arguments[0]);
 
         // Call runtime helper
-        il.Emit(OpCodes.Call, ctx.Runtime!.CryptoCreatePublicKey);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireCrypto().CreatePublicKey);
         return true;
     }
 
@@ -969,7 +969,7 @@ public sealed class CryptoModuleEmitter : IBuiltInModuleEmitter
         emitter.EmitBoxIfNeeded(arguments[0]);
 
         // Call runtime helper
-        il.Emit(OpCodes.Call, ctx.Runtime!.CryptoCreatePrivateKey);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireCrypto().CreatePrivateKey);
         return true;
     }
 

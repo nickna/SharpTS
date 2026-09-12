@@ -22,8 +22,9 @@ public partial class RuntimeEmitter
 
     private void EmitCryptoPrimeHelpers(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
-        EmitCryptoIsProbablyPrime(typeBuilder, runtime);
-        EmitCryptoGeneratePrimeCore(typeBuilder, runtime);
+        var crypto = runtime.RequireCrypto();
+        EmitCryptoIsProbablyPrime(typeBuilder, crypto);
+        EmitCryptoGeneratePrimeCore(typeBuilder, crypto);
         EmitCryptoGeneratePrimeSyncObj(typeBuilder, runtime);
         EmitCryptoCheckPrimeSyncObj(typeBuilder, runtime);
     }
@@ -34,12 +35,13 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitCryptoGeneratePrimeSyncObj(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
+        var crypto = runtime.RequireCrypto();
         var method = typeBuilder.DefineMethod(
             "CryptoGeneratePrimeSyncObj",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.Int32, _types.Object]);
-        runtime.CryptoGeneratePrimeSyncObj = method;
+        crypto.GeneratePrimeSyncObj = method;
 
         var il = method.GetILGenerator();
         var biType = _types.BigInteger;
@@ -54,7 +56,7 @@ public partial class RuntimeEmitter
         // prime = CryptoGeneratePrimeCore(bits, safe)
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, safeLoc);
-        il.Emit(OpCodes.Call, runtime.CryptoGeneratePrimeCore);
+        il.Emit(OpCodes.Call, crypto.GeneratePrimeCore);
         il.Emit(OpCodes.Stloc, primeLoc);
 
         // if (bigint) return (object)prime (boxed BigInteger)
@@ -81,12 +83,13 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitCryptoCheckPrimeSyncObj(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
+        var crypto = runtime.RequireCrypto();
         var method = typeBuilder.DefineMethod(
             "CryptoCheckPrimeSyncObj",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.Object, _types.Object]);
-        runtime.CryptoCheckPrimeSyncObj = method;
+        crypto.CheckPrimeSyncObj = method;
 
         var il = method.GetILGenerator();
         var biType = _types.BigInteger;
@@ -97,7 +100,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldstr, "checks");
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Call, runtime.GetOptionInt);
+        il.Emit(OpCodes.Call, crypto.GetOptionInt);
         il.Emit(OpCodes.Stloc, checksLoc);
 
         // if (candidate is BigInteger) cand = (BigInteger)candidate
@@ -136,7 +139,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(haveCandLabel);
         il.Emit(OpCodes.Ldloc, candLoc);
         il.Emit(OpCodes.Ldloc, checksLoc);
-        il.Emit(OpCodes.Call, runtime.CryptoIsProbablyPrime);
+        il.Emit(OpCodes.Call, crypto.IsProbablyPrime);
         il.Emit(OpCodes.Box, _types.Boolean);
         il.Emit(OpCodes.Ret);
     }
@@ -172,14 +175,14 @@ public partial class RuntimeEmitter
         typeof(BigInteger).GetMethod(op, BindingFlags.Public | BindingFlags.Static, args)!;
 
     /// <summary>Emits: public static bool CryptoIsProbablyPrime(BigInteger n, int checks)</summary>
-    private void EmitCryptoIsProbablyPrime(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitCryptoIsProbablyPrime(TypeBuilder typeBuilder, EmittedCryptoRuntime crypto)
     {
         var method = typeBuilder.DefineMethod(
             "CryptoIsProbablyPrime",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Boolean,
             [_types.BigInteger, _types.Int32]);
-        runtime.CryptoIsProbablyPrime = method;
+        crypto.IsProbablyPrime = method;
 
         var il = method.GetILGenerator();
         var biType = _types.BigInteger;
@@ -403,14 +406,14 @@ public partial class RuntimeEmitter
     }
 
     /// <summary>Emits: public static BigInteger CryptoGeneratePrimeCore(int bits, bool safe)</summary>
-    private void EmitCryptoGeneratePrimeCore(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitCryptoGeneratePrimeCore(TypeBuilder typeBuilder, EmittedCryptoRuntime crypto)
     {
         var method = typeBuilder.DefineMethod(
             "CryptoGeneratePrimeCore",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.BigInteger,
             [_types.Int32, _types.Boolean]);
-        runtime.CryptoGeneratePrimeCore = method;
+        crypto.GeneratePrimeCore = method;
 
         var il = method.GetILGenerator();
         var biType = _types.BigInteger;
@@ -529,7 +532,7 @@ public partial class RuntimeEmitter
         // if (!CryptoIsProbablyPrime(cand, 20)) goto loop
         il.Emit(OpCodes.Ldloc, candLoc);
         il.Emit(OpCodes.Ldc_I4, 20);
-        il.Emit(OpCodes.Call, runtime.CryptoIsProbablyPrime);
+        il.Emit(OpCodes.Call, crypto.IsProbablyPrime);
         il.Emit(OpCodes.Brfalse, loopLabel);
 
         // if (safe && !CryptoIsProbablyPrime((cand-1)/2, 20)) goto loop
@@ -544,7 +547,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, opImplicitInt);
         il.Emit(OpCodes.Call, opDiv);
         il.Emit(OpCodes.Ldc_I4, 20);
-        il.Emit(OpCodes.Call, runtime.CryptoIsProbablyPrime);
+        il.Emit(OpCodes.Call, crypto.IsProbablyPrime);
         il.Emit(OpCodes.Brfalse, loopLabel);
 
         il.MarkLabel(acceptLabel);

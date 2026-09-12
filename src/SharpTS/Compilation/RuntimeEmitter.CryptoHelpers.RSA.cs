@@ -18,7 +18,7 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             _types.String,
             [_types.Object]);
-        runtime.ExtractKeyPem = method;
+        runtime.RequireCrypto().ExtractKeyPem = method;
 
         var il = method.GetILGenerator();
         var keyLocal = il.DeclareLocal(_types.Object);
@@ -81,14 +81,14 @@ public partial class RuntimeEmitter
     /// Emits: public static byte[] RsaEncryptRaw(string pem, byte[] data, bool useOaep)
     /// Encrypts data using RSA. If useOaep is true, uses OAEP-SHA1; otherwise PKCS#1 v1.5.
     /// </summary>
-    private void EmitRsaEncryptRaw(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitRsaEncryptRaw(TypeBuilder typeBuilder, EmittedCryptoRuntime crypto)
     {
         var method = typeBuilder.DefineMethod(
             "RsaEncryptRaw",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.MakeArrayType(_types.Byte),
             [_types.String, _types.MakeArrayType(_types.Byte), _types.Boolean]);
-        runtime.RsaEncryptRaw = method;
+        crypto.RsaEncryptRaw = method;
 
         var il = method.GetILGenerator();
 
@@ -151,14 +151,14 @@ public partial class RuntimeEmitter
     /// Emits: public static byte[] RsaDecryptRaw(string pem, byte[] data, bool useOaep)
     /// Decrypts data using RSA. If useOaep is true, uses OAEP-SHA1; otherwise PKCS#1 v1.5.
     /// </summary>
-    private void EmitRsaDecryptRaw(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitRsaDecryptRaw(TypeBuilder typeBuilder, EmittedCryptoRuntime crypto)
     {
         var method = typeBuilder.DefineMethod(
             "RsaDecryptRaw",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.MakeArrayType(_types.Byte),
             [_types.String, _types.MakeArrayType(_types.Byte), _types.Boolean]);
-        runtime.RsaDecryptRaw = method;
+        crypto.RsaDecryptRaw = method;
 
         var il = method.GetILGenerator();
 
@@ -220,23 +220,24 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitCryptoPublicEncrypt(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
+        var crypto = runtime.RequireCrypto();
         var method = typeBuilder.DefineMethod(
             "CryptoPublicEncrypt",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.Object, _types.MakeArrayType(_types.Byte)]);
-        runtime.CryptoPublicEncrypt = method;
+        crypto.PublicEncrypt = method;
 
         var il = method.GetILGenerator();
 
         // var pem = ExtractKeyPem(key);
         il.Emit(OpCodes.Ldarg_0);  // key
-        il.Emit(OpCodes.Call, runtime.ExtractKeyPem);
+        il.Emit(OpCodes.Call, crypto.ExtractKeyPem);
 
         // var result = RsaEncryptRaw(pem, buffer, true);  // true = use OAEP
         il.Emit(OpCodes.Ldarg_1);  // buffer
         il.Emit(OpCodes.Ldc_I4_1);  // useOaep = true
-        il.Emit(OpCodes.Call, runtime.RsaEncryptRaw);
+        il.Emit(OpCodes.Call, crypto.RsaEncryptRaw);
 
         // Wrap result in $Buffer
         il.Emit(OpCodes.Newobj, runtime.TSBufferCtor);
@@ -250,23 +251,24 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitCryptoPrivateDecrypt(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
+        var crypto = runtime.RequireCrypto();
         var method = typeBuilder.DefineMethod(
             "CryptoPrivateDecrypt",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.Object, _types.MakeArrayType(_types.Byte)]);
-        runtime.CryptoPrivateDecrypt = method;
+        crypto.PrivateDecrypt = method;
 
         var il = method.GetILGenerator();
 
         // var pem = ExtractKeyPem(key);
         il.Emit(OpCodes.Ldarg_0);  // key
-        il.Emit(OpCodes.Call, runtime.ExtractKeyPem);
+        il.Emit(OpCodes.Call, crypto.ExtractKeyPem);
 
         // var result = RsaDecryptRaw(pem, buffer, true);  // true = use OAEP
         il.Emit(OpCodes.Ldarg_1);  // buffer
         il.Emit(OpCodes.Ldc_I4_1);  // useOaep = true
-        il.Emit(OpCodes.Call, runtime.RsaDecryptRaw);
+        il.Emit(OpCodes.Call, crypto.RsaDecryptRaw);
 
         // Wrap result in $Buffer
         il.Emit(OpCodes.Newobj, runtime.TSBufferCtor);
@@ -281,24 +283,25 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitCryptoPrivateEncrypt(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
+        var crypto = runtime.RequireCrypto();
         var method = typeBuilder.DefineMethod(
             "CryptoPrivateEncrypt",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.Object, _types.MakeArrayType(_types.Byte)]);
-        runtime.CryptoPrivateEncrypt = method;
+        crypto.PrivateEncrypt = method;
 
         var il = method.GetILGenerator();
 
         // var pem = ExtractKeyPem(key);
         il.Emit(OpCodes.Ldarg_0);  // key
-        il.Emit(OpCodes.Call, runtime.ExtractKeyPem);
+        il.Emit(OpCodes.Call, crypto.ExtractKeyPem);
 
         // var result = RsaDecryptRaw(pem, buffer, false);  // false = use PKCS#1
         // Note: privateEncrypt uses RSA Decrypt with PKCS#1 padding
         il.Emit(OpCodes.Ldarg_1);  // buffer
         il.Emit(OpCodes.Ldc_I4_0);  // useOaep = false (PKCS#1)
-        il.Emit(OpCodes.Call, runtime.RsaDecryptRaw);
+        il.Emit(OpCodes.Call, crypto.RsaDecryptRaw);
 
         // Wrap result in $Buffer
         il.Emit(OpCodes.Newobj, runtime.TSBufferCtor);
@@ -313,24 +316,25 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitCryptoPublicDecrypt(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
+        var crypto = runtime.RequireCrypto();
         var method = typeBuilder.DefineMethod(
             "CryptoPublicDecrypt",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.Object, _types.MakeArrayType(_types.Byte)]);
-        runtime.CryptoPublicDecrypt = method;
+        crypto.PublicDecrypt = method;
 
         var il = method.GetILGenerator();
 
         // var pem = ExtractKeyPem(key);
         il.Emit(OpCodes.Ldarg_0);  // key
-        il.Emit(OpCodes.Call, runtime.ExtractKeyPem);
+        il.Emit(OpCodes.Call, crypto.ExtractKeyPem);
 
         // var result = RsaEncryptRaw(pem, buffer, false);  // false = use PKCS#1
         // Note: publicDecrypt uses RSA Encrypt with PKCS#1 padding
         il.Emit(OpCodes.Ldarg_1);  // buffer
         il.Emit(OpCodes.Ldc_I4_0);  // useOaep = false (PKCS#1)
-        il.Emit(OpCodes.Call, runtime.RsaEncryptRaw);
+        il.Emit(OpCodes.Call, crypto.RsaEncryptRaw);
 
         // Wrap result in $Buffer
         il.Emit(OpCodes.Newobj, runtime.TSBufferCtor);
