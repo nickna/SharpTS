@@ -595,7 +595,7 @@ public abstract partial class ExpressionEmitterBase
             // --- http.Agent ---
             case "Agent":
                 EmitBoxedArgOrNull(arguments, 0);
-                IL.Emit(OpCodes.Call, Ctx.Runtime!.HttpAgentFactory);
+                IL.Emit(OpCodes.Call, Ctx.Runtime!.RequireHttp().AgentFactory);
                 SetStackUnknown();
                 return true;
 
@@ -738,7 +738,7 @@ public abstract partial class ExpressionEmitterBase
         {
             IL.Emit(OpCodes.Ldnull);
         }
-        IL.Emit(OpCodes.Call, Ctx.Runtime!.HttpAgentFactory);
+        IL.Emit(OpCodes.Call, Ctx.Runtime!.RequireHttp().AgentFactory);
         _helpers.SetStackUnknown();
         return true;
     }

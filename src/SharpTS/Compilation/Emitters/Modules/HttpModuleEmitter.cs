@@ -43,9 +43,9 @@ public sealed class HttpModuleEmitter : IBuiltInModuleEmitter
             "createServer" => EmitCreateServer(emitter, arguments),
             "request" => EmitRequest(emitter, arguments),
             "get" => EmitGet(emitter, arguments),
-            "validateHeaderName" => EmitUtilCall(emitter, arguments, emitter.Context.Runtime!.HttpValidateHeaderName, 1),
-            "validateHeaderValue" => EmitUtilCall(emitter, arguments, emitter.Context.Runtime!.HttpValidateHeaderValue, 2),
-            "setMaxIdleHTTPParsers" => EmitUtilCall(emitter, arguments, emitter.Context.Runtime!.HttpSetMaxIdleParsers, 1),
+            "validateHeaderName" => EmitUtilCall(emitter, arguments, emitter.Context.Runtime!.RequireHttp().ValidateHeaderName, 1),
+            "validateHeaderValue" => EmitUtilCall(emitter, arguments, emitter.Context.Runtime!.RequireHttp().ValidateHeaderValue, 2),
+            "setMaxIdleHTTPParsers" => EmitUtilCall(emitter, arguments, emitter.Context.Runtime!.RequireHttp().SetMaxIdleParsers, 1),
             _ => false
         };
     }
@@ -114,7 +114,7 @@ public sealed class HttpModuleEmitter : IBuiltInModuleEmitter
         }
 
         // Call $Runtime.HttpCreateServer(callback) - returns SharpTSHttpServer
-        il.Emit(OpCodes.Call, ctx.Runtime!.HttpCreateServer);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireHttp().CreateServer);
         emitter.SetStackUnknown();
         return true;
     }
@@ -147,7 +147,7 @@ public sealed class HttpModuleEmitter : IBuiltInModuleEmitter
         }
 
         // Call $Runtime.HttpRequest(urlOrOptions, options) - returns Promise
-        il.Emit(OpCodes.Call, ctx.Runtime!.HttpRequest);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireHttp().Request);
         emitter.SetStackUnknown();
         return true;
     }
@@ -180,7 +180,7 @@ public sealed class HttpModuleEmitter : IBuiltInModuleEmitter
         }
 
         // Call $Runtime.HttpGet(urlOrOptions, options) - returns Promise
-        il.Emit(OpCodes.Call, ctx.Runtime!.HttpGet);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireHttp().Get);
         emitter.SetStackUnknown();
         return true;
     }
@@ -191,7 +191,7 @@ public sealed class HttpModuleEmitter : IBuiltInModuleEmitter
         var il = ctx.IL;
 
         // Call $Runtime.HttpGetMethods() - returns SharpTSArray
-        il.Emit(OpCodes.Call, ctx.Runtime!.HttpGetMethods);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireHttp().GetMethods);
         emitter.SetStackUnknown();
         return true;
     }
@@ -202,7 +202,7 @@ public sealed class HttpModuleEmitter : IBuiltInModuleEmitter
         var il = ctx.IL;
 
         // Call $Runtime.HttpGetStatusCodes() - returns SharpTSObject
-        il.Emit(OpCodes.Call, ctx.Runtime!.HttpGetStatusCodes);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireHttp().GetStatusCodes);
         emitter.SetStackUnknown();
         return true;
     }
@@ -213,7 +213,7 @@ public sealed class HttpModuleEmitter : IBuiltInModuleEmitter
         var il = ctx.IL;
 
         // Call $Runtime.HttpGetGlobalAgent() - returns SharpTSObject
-        il.Emit(OpCodes.Call, ctx.Runtime!.HttpGetGlobalAgent);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireHttp().GetGlobalAgent);
         emitter.SetStackUnknown();
         return true;
     }
@@ -222,7 +222,7 @@ public sealed class HttpModuleEmitter : IBuiltInModuleEmitter
     {
         var ctx = emitter.Context;
         var il = ctx.IL;
-        il.Emit(OpCodes.Call, ctx.Runtime!.HttpGetAgentConstructor);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireHttp().GetAgentConstructor);
         emitter.SetStackUnknown();
         return true;
     }

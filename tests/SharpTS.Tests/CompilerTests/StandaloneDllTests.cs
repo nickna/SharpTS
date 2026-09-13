@@ -914,6 +914,61 @@ public class StandaloneDllTests
         }
     }
 
+    [Fact]
+    public void HttpAcceptRequestResponseAndCloseRunStandalone()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import { createServer } from 'http';
+                const factory = createServer;
+                const server = factory((req: any, res: any) => {
+                    console.log(req.method + ' ' + req.url);
+                    let bytes = 0;
+                    req.on('data', (chunk: any) => { bytes += chunk.length; });
+                    req.on('end', () => {
+                        console.log('complete=' + req.complete);
+                        console.log('bytes=' + bytes);
+                        res.setHeader('X-Test', 'value');
+                        res.writeHead(201);
+                        res.write('part-');
+                        res.end(Buffer.from('body'));
+                    });
+                });
+                server.listen(0, '127.0.0.1', async () => {
+                    try {
+                        const response = await fetch('http://127.0.0.1:' + server.address().port + '/probe', {
+                            method: 'POST', body: 'payload'
+                        });
+                        console.log('status=' + response.status);
+                        console.log('header=' + response.headers.get('x-test'));
+                        console.log('body=' + await response.text());
+                    } finally {
+                        server.close(() => console.log('closed'));
+                    }
+                });
+                """
+        };
+        var errors = TestHarness.CompileModulesAndVerifyOnly(files, "main.ts");
+        Assert.True(errors.Count == 0, string.Join(Environment.NewLine, errors));
+        var (tempDir, dllPath) = CompileStandaloneModule(files, "main.ts");
+        try
+        {
+            var output = ExecuteCompiledDllIsolated(dllPath, timeoutMs: 30000);
+            Assert.Contains("POST /probe\n", output);
+            Assert.Contains("complete=true\n", output);
+            Assert.Contains("bytes=7\n", output);
+            Assert.Contains("status=201\n", output);
+            Assert.Contains("header=value\n", output);
+            Assert.Contains("body=part-body\n", output);
+            Assert.EndsWith("closed\n", output);
+        }
+        finally
+        {
+            CleanupTempDir(tempDir);
+        }
+    }
+
     /// <summary>
     /// Phase 23 guardrail: Scans compiled DLL for forbidden SharpTS late-binding strings.
     /// These strings should NOT appear in standalone output as they indicate runtime dependency.
