@@ -40,6 +40,8 @@ public partial class RuntimeEmitter
         if (_emitHosted)
             _features.UsesPromise = true;
         var runtime = new EmittedRuntime();
+        if (features.HasAnyTypedArray)
+            runtime.BeginArrayBufferEmission();
         if (features.UsesBuffer)
             runtime.BeginBufferEmission(features.HasAnyTypedArray);
         if (features.UsesCrypto)
@@ -627,6 +629,7 @@ public partial class RuntimeEmitter
             EmitBoundDHMethodFinalize(runtime.RequireCrypto());
         }
 
+        runtime.ArrayBuffer?.CompleteEmission();
         runtime.Buffer?.CompleteEmission();
         runtime.ArrayStorage.CompleteEmission();
         runtime.ArrayOperations.CompleteEmission();

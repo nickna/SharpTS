@@ -426,17 +426,17 @@ public partial class RuntimeEmitter
 
         // Check if buffer is $ArrayBuffer
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, runtime.ArrayBufferType);
+        il.Emit(OpCodes.Isinst, runtime.RequireArrayBuffer().Type);
         il.Emit(OpCodes.Brfalse, isSharedArrayBufferLabel);
 
         // It's $ArrayBuffer
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Castclass, runtime.ArrayBufferType);
-        il.Emit(OpCodes.Callvirt, runtime.ArrayBufferGetBuffer);
+        il.Emit(OpCodes.Castclass, runtime.RequireArrayBuffer().Type);
+        il.Emit(OpCodes.Callvirt, runtime.RequireArrayBuffer().GetBuffer);
         il.Emit(OpCodes.Stloc, byteArrayLocal);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Castclass, runtime.ArrayBufferType);
-        il.Emit(OpCodes.Callvirt, runtime.ArrayBufferByteLengthGetter);
+        il.Emit(OpCodes.Castclass, runtime.RequireArrayBuffer().Type);
+        il.Emit(OpCodes.Callvirt, runtime.RequireArrayBuffer().ByteLengthGetter);
         il.Emit(OpCodes.Stloc, bufByteLengthLocal);
         il.Emit(OpCodes.Br, afterBufferLabel);
 

@@ -369,18 +369,18 @@ public partial class RuntimeEmitter
         }
 
         // $ArrayBuffer → clone of the backing array
-        if (runtime.ArrayBufferType != null)
+        if (runtime.ArrayBuffer is not null)
         {
             var notAb = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.ArrayBufferType);
+            il.Emit(OpCodes.Isinst, runtime.RequireArrayBuffer().Type);
             il.Emit(OpCodes.Brfalse, notAb);
 
             var srcLocal = il.DeclareLocal(_types.ByteArray);
             var cloneLocal = il.DeclareLocal(_types.ByteArray);
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Castclass, runtime.ArrayBufferType);
-            il.Emit(OpCodes.Callvirt, runtime.ArrayBufferGetBuffer);
+            il.Emit(OpCodes.Castclass, runtime.RequireArrayBuffer().Type);
+            il.Emit(OpCodes.Callvirt, runtime.RequireArrayBuffer().GetBuffer);
             il.Emit(OpCodes.Stloc, srcLocal);
 
             il.Emit(OpCodes.Ldloc, srcLocal);
@@ -422,15 +422,15 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldlen);
         il.Emit(OpCodes.Conv_I4);
-        il.Emit(OpCodes.Newobj, runtime.ArrayBufferCtor);
+        il.Emit(OpCodes.Newobj, runtime.RequireArrayBuffer().Ctor);
         il.Emit(OpCodes.Stloc, abLocal);
 
         // Array.Copy(bytes, 0, ab.GetBuffer(), 0, bytes.Length)
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldloc, abLocal);
-        il.Emit(OpCodes.Castclass, runtime.ArrayBufferType!);
-        il.Emit(OpCodes.Callvirt, runtime.ArrayBufferGetBuffer);
+        il.Emit(OpCodes.Castclass, runtime.RequireArrayBuffer().Type);
+        il.Emit(OpCodes.Callvirt, runtime.RequireArrayBuffer().GetBuffer);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldlen);

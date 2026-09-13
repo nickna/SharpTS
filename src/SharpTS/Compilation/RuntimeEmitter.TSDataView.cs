@@ -80,19 +80,19 @@ public partial class RuntimeEmitter
 
         // Check if buffer is $ArrayBuffer
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, runtime.ArrayBufferType);
+        il.Emit(OpCodes.Isinst, runtime.RequireArrayBuffer().Type);
         il.Emit(OpCodes.Brfalse, getBufferByteLengthLabel);
 
         // It's $ArrayBuffer - call get_ByteLength
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Castclass, runtime.ArrayBufferType);
-        il.Emit(OpCodes.Callvirt, runtime.ArrayBufferByteLengthGetter);
+        il.Emit(OpCodes.Castclass, runtime.RequireArrayBuffer().Type);
+        il.Emit(OpCodes.Callvirt, runtime.RequireArrayBuffer().ByteLengthGetter);
         il.Emit(OpCodes.Stloc, byteLenLocal);
 
         // Get the backing array via GetBuffer()
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Castclass, runtime.ArrayBufferType);
-        il.Emit(OpCodes.Callvirt, runtime.ArrayBufferGetBuffer);
+        il.Emit(OpCodes.Castclass, runtime.RequireArrayBuffer().Type);
+        il.Emit(OpCodes.Callvirt, runtime.RequireArrayBuffer().GetBuffer);
         il.Emit(OpCodes.Stloc, byteArrayLocal);
         il.Emit(OpCodes.Br, afterByteLengthLabel);
 

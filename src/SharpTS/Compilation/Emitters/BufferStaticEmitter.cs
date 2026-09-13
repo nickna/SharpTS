@@ -135,14 +135,14 @@ public sealed class BufferStaticEmitter : IStaticTypeEmitterStrategy
 
                 // Buffer.from(arrayBuffer) (#1063): wrap the $ArrayBuffer backing array
                 // (Node shares the memory; $Buffer wraps the same byte[]).
-                if (ctx.Runtime!.ArrayBufferType is not null)
+                if (ctx.Runtime!.ArrayBuffer is not null)
                 {
                     var notArrayBufferLabel = il.DefineLabel();
                     il.Emit(OpCodes.Dup);
-                    il.Emit(OpCodes.Isinst, ctx.Runtime!.ArrayBufferType);
+                    il.Emit(OpCodes.Isinst, ctx.Runtime!.RequireArrayBuffer().Type);
                     il.Emit(OpCodes.Brfalse, notArrayBufferLabel);
-                    il.Emit(OpCodes.Castclass, ctx.Runtime!.ArrayBufferType);
-                    il.Emit(OpCodes.Callvirt, ctx.Runtime!.ArrayBufferGetBuffer);
+                    il.Emit(OpCodes.Castclass, ctx.Runtime!.RequireArrayBuffer().Type);
+                    il.Emit(OpCodes.Callvirt, ctx.Runtime!.RequireArrayBuffer().GetBuffer);
                     il.Emit(OpCodes.Newobj, ctx.Runtime!.RequireBuffer().Ctor);
                     il.Emit(OpCodes.Br, endLabel);
                     il.MarkLabel(notArrayBufferLabel);

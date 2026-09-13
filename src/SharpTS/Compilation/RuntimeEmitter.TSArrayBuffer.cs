@@ -16,10 +16,11 @@ public partial class RuntimeEmitter
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.Class,
             _types.Object
         );
-        runtime.ArrayBufferType = typeBuilder;
+        var arrayBuffer = runtime.RequireArrayBuffer();
+        arrayBuffer.Type = typeBuilder;
 
         // Field: byte[] _buffer
-        var bufferField = typeBuilder.DefineField(
+        arrayBuffer.BufferField = typeBuilder.DefineField(
             "_buffer",
             typeof(byte[]),
             FieldAttributes.Private | FieldAttributes.InitOnly
@@ -27,7 +28,7 @@ public partial class RuntimeEmitter
 
         // Field: bool _detached — set when this buffer is transferred away via postMessage's
         // transfer list (#999). Not InitOnly: Detach() mutates it.
-        var detachedField = typeBuilder.DefineField(
+        arrayBuffer.DetachedField = typeBuilder.DefineField(
             "_detached",
             typeof(bool),
             FieldAttributes.Private
@@ -39,7 +40,7 @@ public partial class RuntimeEmitter
             CallingConventions.Standard,
             [_types.Int32]
         );
-        runtime.ArrayBufferCtor = ctor;
+        arrayBuffer.Ctor = ctor;
 
         var ctorIl = ctor.GetILGenerator();
 
@@ -58,21 +59,21 @@ public partial class RuntimeEmitter
         ctorIl.Emit(OpCodes.Ldarg_0);
         ctorIl.Emit(OpCodes.Ldarg_1);
         ctorIl.Emit(OpCodes.Newarr, typeof(byte));
-        ctorIl.Emit(OpCodes.Stfld, bufferField);
+        ctorIl.Emit(OpCodes.Stfld, arrayBuffer.BufferField);
 
         ctorIl.Emit(OpCodes.Ret);
 
         // Property: public int ByteLength => _detached ? 0 : _buffer.Length
-        EmitArrayBufferByteLength(typeBuilder, runtime, bufferField, detachedField);
+        EmitArrayBufferByteLength(typeBuilder, arrayBuffer);
 
         // Method: public byte[] GetBuffer() => _buffer (internal access)
-        EmitArrayBufferGetBuffer(typeBuilder, runtime, bufferField);
+        EmitArrayBufferGetBuffer(typeBuilder, arrayBuffer);
 
         // Method: public void Detach() => _detached = true (called by StructuredClone on transfer)
-        EmitArrayBufferDetach(typeBuilder, detachedField);
+        EmitArrayBufferDetach(typeBuilder, arrayBuffer);
 
         // Method: public $ArrayBuffer Slice(int begin, int end)
-        EmitArrayBufferSlice(typeBuilder, runtime, bufferField, ctor);
+        EmitArrayBufferSlice(typeBuilder, arrayBuffer);
         EmitArrayBufferSliceDynamic(typeBuilder, runtime);
 
         // Finalize the type
@@ -83,7 +84,7 @@ public partial class RuntimeEmitter
     /// Emits: public int ByteLength { get; } — returns 0 once detached (Node neuters a
     /// transferred ArrayBuffer; its byteLength becomes 0).
     /// </summary>
-    private void EmitArrayBufferByteLength(TypeBuilder typeBuilder, EmittedRuntime runtime, FieldBuilder bufferField, FieldBuilder detachedField)
+    private void EmitArrayBufferByteLength(TypeBuilder typeBuilder, EmittedArrayBufferRuntime arrayBuffer)
     {
         var property = typeBuilder.DefineProperty(
             "ByteLength",
@@ -98,20 +99,20 @@ public partial class RuntimeEmitter
             _types.Int32,
             Type.EmptyTypes
         );
-        runtime.ArrayBufferByteLengthGetter = getter;
+        arrayBuffer.ByteLengthGetter = getter;
 
         var il = getter.GetILGenerator();
         var notDetached = il.DefineLabel();
         // if (!_detached) goto notDetached
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, detachedField);
+        il.Emit(OpCodes.Ldfld, arrayBuffer.DetachedField);
         il.Emit(OpCodes.Brfalse, notDetached);
         // return 0
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notDetached);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, bufferField);
+        il.Emit(OpCodes.Ldfld, arrayBuffer.BufferField);
         il.Emit(OpCodes.Ldlen);
         il.Emit(OpCodes.Conv_I4);
         il.Emit(OpCodes.Ret);
@@ -122,7 +123,7 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits: public void Detach() => _detached = true.
     /// </summary>
-    private void EmitArrayBufferDetach(TypeBuilder typeBuilder, FieldBuilder detachedField)
+    private void EmitArrayBufferDetach(TypeBuilder typeBuilder, EmittedArrayBufferRuntime arrayBuffer)
     {
         var method = typeBuilder.DefineMethod(
             "Detach",
@@ -130,11 +131,12 @@ public partial class RuntimeEmitter
             _types.Void,
             Type.EmptyTypes
         );
+        arrayBuffer.Detach = method;
 
         var il = method.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Stfld, detachedField);
+        il.Emit(OpCodes.Stfld, arrayBuffer.DetachedField);
         il.Emit(OpCodes.Ret);
     }
 
@@ -142,7 +144,7 @@ public partial class RuntimeEmitter
     /// Emits: public byte[] GetBuffer()
     /// For internal access to the underlying buffer.
     /// </summary>
-    private void EmitArrayBufferGetBuffer(TypeBuilder typeBuilder, EmittedRuntime runtime, FieldBuilder bufferField)
+    private void EmitArrayBufferGetBuffer(TypeBuilder typeBuilder, EmittedArrayBufferRuntime arrayBuffer)
     {
         var method = typeBuilder.DefineMethod(
             "GetBuffer",
@@ -150,11 +152,11 @@ public partial class RuntimeEmitter
             typeof(byte[]),
             Type.EmptyTypes
         );
-        runtime.ArrayBufferGetBuffer = method;
+        arrayBuffer.GetBuffer = method;
 
         var il = method.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, bufferField);
+        il.Emit(OpCodes.Ldfld, arrayBuffer.BufferField);
         il.Emit(OpCodes.Ret);
     }
 
@@ -162,7 +164,7 @@ public partial class RuntimeEmitter
     /// Emits: public $ArrayBuffer Slice(int begin, int end)
     /// Handles negative indices (count from end) and clamps to buffer bounds.
     /// </summary>
-    private void EmitArrayBufferSlice(TypeBuilder typeBuilder, EmittedRuntime runtime, FieldBuilder bufferField, ConstructorBuilder ctor)
+    private void EmitArrayBufferSlice(TypeBuilder typeBuilder, EmittedArrayBufferRuntime arrayBuffer)
     {
         var method = typeBuilder.DefineMethod(
             "Slice",
@@ -170,7 +172,7 @@ public partial class RuntimeEmitter
             typeBuilder,
             [_types.Int32, _types.Int32]
         );
-        runtime.ArrayBufferSlice = method;
+        arrayBuffer.Slice = method;
 
         var il = method.GetILGenerator();
 
@@ -181,7 +183,7 @@ public partial class RuntimeEmitter
 
         // var bufLen = _buffer.Length
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, bufferField);
+        il.Emit(OpCodes.Ldfld, arrayBuffer.BufferField);
         il.Emit(OpCodes.Ldlen);
         il.Emit(OpCodes.Conv_I4);
         il.Emit(OpCodes.Stloc, bufLenLocal);
@@ -253,16 +255,16 @@ public partial class RuntimeEmitter
         // var result = new $ArrayBuffer(length)
         var resultLocal = il.DeclareLocal(typeBuilder);
         il.Emit(OpCodes.Ldloc, lengthLocal);
-        il.Emit(OpCodes.Newobj, ctor);
+        il.Emit(OpCodes.Newobj, arrayBuffer.Ctor);
         il.Emit(OpCodes.Stloc, resultLocal);
 
         // Array.Copy(this._buffer, actualBegin, result._buffer, 0, length)
         var arrayCopy = typeof(Array).GetMethod("Copy", [typeof(Array), typeof(int), typeof(Array), typeof(int), typeof(int)])!;
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, bufferField);
+        il.Emit(OpCodes.Ldfld, arrayBuffer.BufferField);
         il.Emit(OpCodes.Ldloc, beginLocal);
         il.Emit(OpCodes.Ldloc, resultLocal);
-        il.Emit(OpCodes.Ldfld, bufferField);
+        il.Emit(OpCodes.Ldfld, arrayBuffer.BufferField);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldloc, lengthLocal);
         il.Emit(OpCodes.Call, arrayCopy);
@@ -275,12 +277,13 @@ public partial class RuntimeEmitter
     private void EmitArrayBufferSliceDynamic(
         TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
+        var arrayBuffer = runtime.RequireArrayBuffer();
         var method = typeBuilder.DefineMethod(
             "SliceDynamic",
             MethodAttributes.Public,
             typeBuilder,
             [_types.Object, _types.Object]);
-        runtime.ArrayBufferSliceDynamic = method;
+        arrayBuffer.SliceDynamic = method;
         var il = method.GetILGenerator();
         var begin = il.DeclareLocal(_types.Int32);
         var end = il.DeclareLocal(_types.Int32);
@@ -311,7 +314,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, begin);
         il.Emit(OpCodes.Ldloc, end);
-        il.Emit(OpCodes.Callvirt, runtime.ArrayBufferSlice);
+        il.Emit(OpCodes.Callvirt, arrayBuffer.Slice);
         il.Emit(OpCodes.Ret);
     }
 

@@ -29,7 +29,7 @@ public sealed class ArrayBufferStaticEmitter : IStaticTypeEmitterStrategy
     {
         if (propertyName != "isView") return false;
         var ctx = emitter.Context;
-        ctx.Types.EmitLoadMethodInfo(ctx.IL, ctx.Runtime!.TSArrayBufferIsView);
+        ctx.Types.EmitLoadMethodInfo(ctx.IL, ctx.Runtime!.RequireArrayBuffer().IsView);
         ctx.IL.Emit(OpCodes.Ldstr, "isView");
         ctx.IL.Emit(OpCodes.Ldc_I4_1);
         ctx.IL.Emit(OpCodes.Call, ctx.Runtime.TSFunctionGetOrCreate);
@@ -48,7 +48,7 @@ public sealed class ArrayBufferStaticEmitter : IStaticTypeEmitterStrategy
         emitter.EmitBoxIfNeeded(arguments[0]);
 
         // Call the static ArrayBuffer.IsView method
-        il.Emit(OpCodes.Call, ctx.Runtime!.TSArrayBufferIsView);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireArrayBuffer().IsView);
         il.Emit(OpCodes.Box, ctx.Types.Boolean);
         return true;
     }

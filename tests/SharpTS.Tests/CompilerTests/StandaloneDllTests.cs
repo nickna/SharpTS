@@ -838,6 +838,49 @@ public class StandaloneDllTests
     }
 
     [Fact]
+    public void ArrayBufferSlicesViewsCloningAndBufferInteropRunStandalone()
+    {
+        const string source = """
+            const buffer = new ArrayBuffer(16);
+            const bytes = new Uint8Array(buffer);
+            bytes[0] = 42;
+            const view = new DataView(buffer, 4, 8);
+            view.setUint32(0, 0x12345678, false);
+            console.log(buffer.byteLength, view.byteOffset, view.getUint32(0, false));
+            const slice = buffer.slice(0, 8);
+            bytes[0] = 99;
+            console.log(new Uint8Array(slice)[0], slice.byteLength);
+            const dynamic: any = buffer;
+            const bound = dynamic.slice;
+            console.log(bound(4, 8).byteLength, dynamic.slice(-4).byteLength);
+            const isView = ArrayBuffer.isView;
+            console.log(isView(view), isView(bytes), isView(buffer), isView(null));
+            console.log(bytes.buffer === buffer, view.buffer === buffer, buffer instanceof ArrayBuffer);
+            const cloned = structuredClone(buffer);
+            bytes[0] = 7;
+            console.log(new Uint8Array(cloned)[0], new Uint8Array(buffer)[0]);
+            try { new ArrayBuffer(-1); } catch (error) { console.log('invalid length'); }
+            const nodeBuffer = Buffer.from(buffer);
+            bytes[0] = 11;
+            console.log(nodeBuffer[0]);
+            """;
+        var errors = TestHarness.CompileAndVerifyOnly(source);
+        Assert.True(errors.Count == 0, string.Join(Environment.NewLine, errors));
+        var (tempDir, dllPath) = CompileStandalone(source);
+        try
+        {
+            Assert.DoesNotContain("SharpTS", GetAssemblyReferences(dllPath));
+            Assert.False(File.Exists(Path.Combine(tempDir, "SharpTS.dll")));
+            Assert.Equal("16 4 305419896\n42 8\n4 4\ntrue true false false\ntrue true true\n99 7\ninvalid length\n11\n",
+                ExecuteCompiledDllIsolated(dllPath, timeoutMs: 15000));
+        }
+        finally
+        {
+            CleanupTempDir(tempDir);
+        }
+    }
+
+    [Fact]
     public void BufferNumericEncodingModuleAndTypedArrayOperationsRunStandalone()
     {
         const string source = """

@@ -54,7 +54,7 @@ public sealed class ArrayBufferEmitter : ITypeEmitterStrategy
                     il.Emit(OpCodes.Ldc_I4, int.MaxValue);
                 }
 
-                il.Emit(OpCodes.Call, ctx.Runtime!.TSArrayBufferSlice);
+                il.Emit(OpCodes.Call, ctx.Runtime!.RequireArrayBuffer().SliceObject);
                 return true;
         }
 
@@ -80,7 +80,7 @@ public sealed class ArrayBufferEmitter : ITypeEmitterStrategy
         switch (propertyName)
         {
             case "byteLength":
-                il.Emit(OpCodes.Call, ctx.Runtime!.TSArrayBufferByteLengthGetter);
+                il.Emit(OpCodes.Call, ctx.Runtime!.RequireArrayBuffer().GetByteLength);
                 il.Emit(OpCodes.Box, ctx.Types.Double);
                 return true;
         }

@@ -533,7 +533,7 @@ public abstract partial class ExpressionEmitterBase
                     IL.Emit(OpCodes.Ldc_R8, 0.0);
                 else
                     EmitExpressionAsDouble(arguments[0]);
-                IL.Emit(OpCodes.Call, Ctx.Runtime!.TSArrayBufferCtor);
+                IL.Emit(OpCodes.Call, Ctx.Runtime!.RequireArrayBuffer().Create);
                 SetStackUnknown();
                 return true;
 

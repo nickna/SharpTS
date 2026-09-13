@@ -82,10 +82,10 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
         il.Emit(OpCodes.Brtrue, inspectIteratorLabel);
-        if (runtime.ArrayBufferType != null)
+        if (runtime.ArrayBuffer is not null)
         {
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.ArrayBufferType);
+            il.Emit(OpCodes.Isinst, runtime.RequireArrayBuffer().Type);
             il.Emit(OpCodes.Brtrue, inspectIteratorLabel);
         }
         if (runtime.SharedArrayBufferType != null)
