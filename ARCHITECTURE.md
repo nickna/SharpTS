@@ -333,7 +333,23 @@ coercion, `isView` checks, DataView/TypedArray backing storage, structured cloni
 stream consumers retain their other dependencies. Optional probes check component availability.
 ArrayBuffer has no remaining flat aliases; method-local IL construction state and BCL lookups stay
 with the emitter. Backing-storage identity, slice copies, and detached-byte-length behavior are
-unchanged. SharedArrayBuffer, DataView, and TypedArray retain their existing owners until their phases.
+unchanged. DataView and TypedArray retain their existing owners until their phases.
+
+SharedArrayBuffer uses optional `EmittedSharedArrayBufferRuntime`, also enabled by
+`HasAnyTypedArray`. Its nine declarations replace eight flat properties and own the readonly
+backing-buffer field: type, constructor, byte-length and backing-storage accessors, slice, and
+three runtime wrappers. All seven SharedArrayBuffer-only helpers take the component directly.
+Early type emission and later wrapper emission retain their order; completion follows runtime
+finalization and validates every handle before rejecting further writes. Minimal and worker-only
+programs leave the component absent; the existing typed-array, view, Atomics, and crypto implications
+still enable it. Optional probes test component availability rather than reading undeclared types.
+
+DataView/TypedArray views, structured cloning, worker-realm sharing, and generic property access
+retain their other dependencies. The stable `$SharedArrayBuffer` shape and `GetBuffer` entry point
+still expose the same backing byte array to cross-realm consumers; slices allocate independent
+storage. Method-local construction handles and BCL lookups stay with the emitter. No flat
+SharedArrayBuffer aliases remain. DataView, TypedArray, worker/Atomics, and other residual families
+remain tracked by #1599.
 
 During emission, each handle becomes readable as soon as its declaration is assigned, so forward
 references do not require a method body to exist yet. An early read names the missing declaration.

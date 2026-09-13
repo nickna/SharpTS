@@ -1485,12 +1485,18 @@ public class EmittedRuntime
     public EmittedArrayBufferRuntime RequireArrayBuffer() => ArrayBuffer
         ?? throw new InvalidOperationException("ArrayBuffer runtime was not enabled for this compilation.");
 
-    // $SharedArrayBuffer type (pure-IL for standalone DLLs)
-    public TypeBuilder SharedArrayBufferType { get; set; } = null!;
-    public ConstructorBuilder SharedArrayBufferCtor { get; set; } = null!;
-    public MethodBuilder SharedArrayBufferByteLengthGetter { get; set; } = null!;
-    public MethodBuilder SharedArrayBufferGetBuffer { get; set; } = null!;
-    public MethodBuilder SharedArrayBufferSlice { get; set; } = null!;
+    /// <summary>SharedArrayBuffer metadata, or null when the typed-array family is tree-shaken.</summary>
+    public EmittedSharedArrayBufferRuntime? SharedArrayBuffer { get; private set; }
+
+    internal void BeginSharedArrayBufferEmission()
+    {
+        if (SharedArrayBuffer is not null)
+            throw new InvalidOperationException("SharedArrayBuffer metadata emission has already started.");
+        SharedArrayBuffer = new EmittedSharedArrayBufferRuntime();
+    }
+
+    public EmittedSharedArrayBufferRuntime RequireSharedArrayBuffer() => SharedArrayBuffer
+        ?? throw new InvalidOperationException("SharedArrayBuffer runtime was not enabled for this compilation.");
 
     // $DataView type (pure-IL for standalone DLLs)
     public TypeBuilder DataViewType { get; set; } = null!;
@@ -2112,12 +2118,6 @@ public class EmittedRuntime
     // ============================================================
     // Worker Threads Support
     // ============================================================
-
-    // $SharedArrayBuffer type - emitted for standalone worker support
-    // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSSharedArrayBuffer
-    public MethodBuilder TSSharedArrayBufferCtor { get; set; } = null!;
-    public MethodBuilder TSSharedArrayBufferByteLengthGetter { get; set; } = null!;
-    public MethodBuilder TSSharedArrayBufferSlice { get; set; } = null!;
 
     // $DataView type - emitted for standalone support
     // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSDataView

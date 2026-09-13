@@ -41,7 +41,10 @@ public partial class RuntimeEmitter
             _features.UsesPromise = true;
         var runtime = new EmittedRuntime();
         if (features.HasAnyTypedArray)
+        {
             runtime.BeginArrayBufferEmission();
+            runtime.BeginSharedArrayBufferEmission();
+        }
         if (features.UsesBuffer)
             runtime.BeginBufferEmission(features.HasAnyTypedArray);
         if (features.UsesCrypto)
@@ -318,7 +321,7 @@ public partial class RuntimeEmitter
         if (features.HasAnyTypedArray)
         {
             EmitArrayBufferType(moduleBuilder, runtime);
-            EmitSharedArrayBufferType(moduleBuilder, runtime);
+            EmitSharedArrayBufferType(moduleBuilder, runtime.RequireSharedArrayBuffer());
             EmitDataViewType(moduleBuilder, runtime);
             EmitTypedArrayTypes(moduleBuilder, runtime);
             // $BoundTypedArrayMethod Phase 1 (#940): callable wrapper for typed-array bulk methods.
@@ -630,6 +633,7 @@ public partial class RuntimeEmitter
         }
 
         runtime.ArrayBuffer?.CompleteEmission();
+        runtime.SharedArrayBuffer?.CompleteEmission();
         runtime.Buffer?.CompleteEmission();
         runtime.ArrayStorage.CompleteEmission();
         runtime.ArrayOperations.CompleteEmission();

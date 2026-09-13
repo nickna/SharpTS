@@ -443,17 +443,17 @@ public partial class RuntimeEmitter
         il.MarkLabel(isSharedArrayBufferLabel);
         // Check if buffer is $SharedArrayBuffer
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, runtime.SharedArrayBufferType);
+        il.Emit(OpCodes.Isinst, runtime.RequireSharedArrayBuffer().Type);
         il.Emit(OpCodes.Brfalse, invalidBufferLabel);
 
         // It's $SharedArrayBuffer
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Castclass, runtime.SharedArrayBufferType);
-        il.Emit(OpCodes.Callvirt, runtime.SharedArrayBufferGetBuffer);
+        il.Emit(OpCodes.Castclass, runtime.RequireSharedArrayBuffer().Type);
+        il.Emit(OpCodes.Callvirt, runtime.RequireSharedArrayBuffer().GetBuffer);
         il.Emit(OpCodes.Stloc, byteArrayLocal);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Castclass, runtime.SharedArrayBufferType);
-        il.Emit(OpCodes.Callvirt, runtime.SharedArrayBufferByteLengthGetter);
+        il.Emit(OpCodes.Castclass, runtime.RequireSharedArrayBuffer().Type);
+        il.Emit(OpCodes.Callvirt, runtime.RequireSharedArrayBuffer().ByteLengthGetter);
         il.Emit(OpCodes.Stloc, bufByteLengthLocal);
         il.Emit(OpCodes.Br, afterBufferLabel);
 

@@ -21,7 +21,7 @@ public partial class RuntimeEmitter
         // runtime field references would be valid.
         if (_features.HasAnyTypedArray)
         {
-            EmitSharedArrayBufferHelper(runtimeType, runtime);
+            EmitSharedArrayBufferHelper(runtimeType, runtime.RequireSharedArrayBuffer());
             EmitArrayBufferHelper(runtimeType, runtime);
             // DataView adapters are emitted before GetProperty in
             // EmitRuntimeClass because dynamic method values bind them.
@@ -49,7 +49,7 @@ public partial class RuntimeEmitter
     /// public static object CreateSharedArrayBuffer(double byteLength)
     /// Uses the emitted $SharedArrayBuffer type (pure-IL, no reflection).
     /// </summary>
-    private void EmitSharedArrayBufferHelper(TypeBuilder runtimeType, EmittedRuntime runtime)
+    private void EmitSharedArrayBufferHelper(TypeBuilder runtimeType, EmittedSharedArrayBufferRuntime buffer)
     {
         var method = runtimeType.DefineMethod(
             "CreateSharedArrayBuffer",
@@ -63,21 +63,21 @@ public partial class RuntimeEmitter
         // return new $SharedArrayBuffer((int)byteLength)
         il.Emit(OpCodes.Ldarg_0);  // byteLength (double)
         il.Emit(OpCodes.Conv_I4);  // convert to int
-        il.Emit(OpCodes.Newobj, runtime.SharedArrayBufferCtor);
+        il.Emit(OpCodes.Newobj, buffer.Ctor);
         il.Emit(OpCodes.Ret);
 
-        runtime.TSSharedArrayBufferCtor = method;
+        buffer.Create = method;
 
         // Also emit slice and byteLength helpers
-        EmitSharedArrayBufferSlice(runtimeType, runtime);
-        EmitSharedArrayBufferByteLength(runtimeType, runtime);
+        EmitSharedArrayBufferSlice(runtimeType, buffer);
+        EmitSharedArrayBufferByteLength(runtimeType, buffer);
     }
 
     /// <summary>
     /// Emits SharedArrayBuffer.slice(begin?, end?) helper.
     /// Requires emitted $SharedArrayBuffer type and calls directly.
     /// </summary>
-    private void EmitSharedArrayBufferSlice(TypeBuilder runtimeType, EmittedRuntime runtime)
+    private void EmitSharedArrayBufferSlice(TypeBuilder runtimeType, EmittedSharedArrayBufferRuntime buffer)
     {
         var method = runtimeType.DefineMethod(
             "SharedArrayBufferSlice",
@@ -91,7 +91,7 @@ public partial class RuntimeEmitter
         // Check if it's the emitted $SharedArrayBuffer type
         var emittedPathLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.SharedArrayBufferType);
+        il.Emit(OpCodes.Isinst, buffer.Type);
         il.Emit(OpCodes.Brtrue, emittedPathLabel);
 
         il.Emit(OpCodes.Ldstr, "SharedArrayBuffer.slice requires emitted SharedArrayBuffer.");
@@ -102,20 +102,20 @@ public partial class RuntimeEmitter
         // For emitted type, end == int.MaxValue means use buffer length (handled inside Slice)
         il.MarkLabel(emittedPathLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.SharedArrayBufferType);
+        il.Emit(OpCodes.Castclass, buffer.Type);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Callvirt, runtime.SharedArrayBufferSlice);
+        il.Emit(OpCodes.Callvirt, buffer.Slice);
         il.Emit(OpCodes.Ret);
 
-        runtime.TSSharedArrayBufferSlice = method;
+        buffer.SliceObject = method;
     }
 
     /// <summary>
     /// Emits SharedArrayBuffer.byteLength getter helper.
     /// Requires emitted $SharedArrayBuffer type.
     /// </summary>
-    private void EmitSharedArrayBufferByteLength(TypeBuilder runtimeType, EmittedRuntime runtime)
+    private void EmitSharedArrayBufferByteLength(TypeBuilder runtimeType, EmittedSharedArrayBufferRuntime buffer)
     {
         var method = runtimeType.DefineMethod(
             "SharedArrayBufferByteLength",
@@ -128,7 +128,7 @@ public partial class RuntimeEmitter
 
         var emittedPath = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.SharedArrayBufferType);
+        il.Emit(OpCodes.Isinst, buffer.Type);
         il.Emit(OpCodes.Brtrue, emittedPath);
         il.Emit(OpCodes.Ldstr, "SharedArrayBuffer.byteLength requires emitted SharedArrayBuffer.");
         il.Emit(OpCodes.Newobj, _types.InvalidOperationExceptionCtorString);
@@ -136,12 +136,12 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(emittedPath);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.SharedArrayBufferType);
-        il.Emit(OpCodes.Callvirt, runtime.SharedArrayBufferByteLengthGetter);
+        il.Emit(OpCodes.Castclass, buffer.Type);
+        il.Emit(OpCodes.Callvirt, buffer.ByteLengthGetter);
         il.Emit(OpCodes.Conv_R8);
         il.Emit(OpCodes.Ret);
 
-        runtime.TSSharedArrayBufferByteLengthGetter = method;
+        buffer.GetByteLength = method;
     }
 
     /// <summary>
@@ -356,7 +356,7 @@ public partial class RuntimeEmitter
 
         // Check if $SharedArrayBuffer
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.SharedArrayBufferType);
+        il.Emit(OpCodes.Isinst, runtime.RequireSharedArrayBuffer().Type);
         il.Emit(OpCodes.Brfalse, unsupportedTypeLabel);
 
         // It's $SharedArrayBuffer - create $DataView(buffer, byteOffset, byteLength)
@@ -990,7 +990,7 @@ public partial class RuntimeEmitter
 
         // Check if arg is $SharedArrayBuffer (emitted type)
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.SharedArrayBufferType);
+        il.Emit(OpCodes.Isinst, runtime.RequireSharedArrayBuffer().Type);
         il.Emit(OpCodes.Brtrue, constructSharedArrayBufferLabel);
         il.Emit(OpCodes.Br, isTSArrayLabel);
 
@@ -1249,7 +1249,7 @@ public partial class RuntimeEmitter
 
         // Check if sab is $SharedArrayBuffer (emitted type)
         ilSAB.Emit(OpCodes.Ldarg_0);
-        ilSAB.Emit(OpCodes.Isinst, runtime.SharedArrayBufferType);
+        ilSAB.Emit(OpCodes.Isinst, runtime.RequireSharedArrayBuffer().Type);
         ilSAB.Emit(OpCodes.Brfalse, unsupportedTypeLabel);
 
         // It's $SharedArrayBuffer - use emitted buffer constructor
@@ -1583,7 +1583,7 @@ public partial class RuntimeEmitter
         if (_features.HasAnyTypedArray)
         {
             coreIl.Emit(OpCodes.Ldarg_0);
-            coreIl.Emit(OpCodes.Isinst, runtime.SharedArrayBufferType);
+            coreIl.Emit(OpCodes.Isinst, runtime.RequireSharedArrayBuffer().Type);
             coreIl.Emit(OpCodes.Brfalse, checkArrayBuffer);
             coreIl.Emit(OpCodes.Ldarg_0);
             coreIl.Emit(OpCodes.Ret);
@@ -1627,7 +1627,7 @@ public partial class RuntimeEmitter
 
             coreIl.Emit(OpCodes.Ldloc, taLocal);
             coreIl.Emit(OpCodes.Callvirt, runtime.TypedArrayBufferGetter);
-            coreIl.Emit(OpCodes.Isinst, runtime.SharedArrayBufferType);
+            coreIl.Emit(OpCodes.Isinst, runtime.RequireSharedArrayBuffer().Type);
             coreIl.Emit(OpCodes.Brtrue, taSharedLabel);
 
             // return source.Slice(0, source.Length) — independent copy

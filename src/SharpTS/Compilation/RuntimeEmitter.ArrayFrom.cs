@@ -88,10 +88,10 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Isinst, runtime.RequireArrayBuffer().Type);
             il.Emit(OpCodes.Brtrue, inspectIteratorLabel);
         }
-        if (runtime.SharedArrayBufferType != null)
+        if (runtime.SharedArrayBuffer is { } sharedArrayBuffer)
         {
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.SharedArrayBufferType);
+            il.Emit(OpCodes.Isinst, sharedArrayBuffer.Type);
             il.Emit(OpCodes.Brtrue, inspectIteratorLabel);
         }
         il.Emit(OpCodes.Br, iterablePathLabel);
