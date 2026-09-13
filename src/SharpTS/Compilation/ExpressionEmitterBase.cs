@@ -2279,7 +2279,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
             // that reaches here flags HasAnyTypedArray, so the type is emitted.
             "ArrayBuffer" => Ctx.Runtime!.ArrayBuffer?.Type,
             "SharedArrayBuffer" => Ctx.Runtime!.RequireSharedArrayBuffer().Type,
-            "DataView" => Ctx.Runtime!.DataViewType,
+            "DataView" => Ctx.Runtime!.RequireDataView().Type,
             "Int8Array" => Ctx.Runtime!.Int8ArrayType,
             "Uint8Array" => Ctx.Runtime!.Uint8ArrayType,
             "Uint8ClampedArray" => Ctx.Runtime!.Uint8ClampedArrayType,

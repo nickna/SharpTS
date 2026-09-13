@@ -44,6 +44,7 @@ public partial class RuntimeEmitter
         {
             runtime.BeginArrayBufferEmission();
             runtime.BeginSharedArrayBufferEmission();
+            runtime.BeginDataViewEmission();
         }
         if (features.UsesBuffer)
             runtime.BeginBufferEmission(features.HasAnyTypedArray);
@@ -634,6 +635,7 @@ public partial class RuntimeEmitter
 
         runtime.ArrayBuffer?.CompleteEmission();
         runtime.SharedArrayBuffer?.CompleteEmission();
+        runtime.DataView?.CompleteEmission();
         runtime.Buffer?.CompleteEmission();
         runtime.ArrayStorage.CompleteEmission();
         runtime.ArrayOperations.CompleteEmission();

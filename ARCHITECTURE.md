@@ -333,7 +333,7 @@ coercion, `isView` checks, DataView/TypedArray backing storage, structured cloni
 stream consumers retain their other dependencies. Optional probes check component availability.
 ArrayBuffer has no remaining flat aliases; method-local IL construction state and BCL lookups stay
 with the emitter. Backing-storage identity, slice copies, and detached-byte-length behavior are
-unchanged. DataView and TypedArray retain their existing owners until their phases.
+unchanged. TypedArray retains its existing owner until its phase.
 
 SharedArrayBuffer uses optional `EmittedSharedArrayBufferRuntime`, also enabled by
 `HasAnyTypedArray`. Its nine declarations replace eight flat properties and own the readonly
@@ -348,8 +348,23 @@ DataView/TypedArray views, structured cloning, worker-realm sharing, and generic
 retain their other dependencies. The stable `$SharedArrayBuffer` shape and `GetBuffer` entry point
 still expose the same backing byte array to cross-realm consumers; slices allocate independent
 storage. Method-local construction handles and BCL lookups stay with the emitter. No flat
-SharedArrayBuffer aliases remain. DataView, TypedArray, worker/Atomics, and other residual families
+SharedArrayBuffer aliases remain. TypedArray, worker/Atomics, and other residual families
 remain tracked by #1599.
+
+DataView uses optional `EmittedDataViewRuntime` under the same `HasAnyTypedArray` gate. Its 53
+checked declarations replace 49 flat properties and own four readonly fields: backing bytes,
+original buffer identity, byte offset, and byte length. It includes the emitted type/constructor,
+properties, ten numeric/BigInt getter-setter pairs, and their runtime adapters. Instance methods
+are emitted first; adapters follow before generic property dispatch binds method values.
+`Reflect.construct` tests component availability and uses the checked constructor adapter.
+Completion validates all declarations and freezes the component after runtime finalization.
+
+Fourteen DataView-only reader/property/adapter and method-lookup helpers receive the component
+directly. Constructors retain ArrayBuffer/SharedArrayBuffer dependencies, while setters retain
+undefined and numeric/BigInt coercion dependencies. Bounds and byte-emission utilities keep
+explicit method-local IL inputs. Field and method shapes, endian behavior, feature implications,
+and buffer aliasing are unchanged. No flat DataView aliases remain; TypedArray and the remaining
+worker/Atomics and runtime families stay in #1599's residual scope.
 
 During emission, each handle becomes readable as soon as its declaration is assigned, so forward
 references do not require a method body to exist yet. An early read names the missing declaration.

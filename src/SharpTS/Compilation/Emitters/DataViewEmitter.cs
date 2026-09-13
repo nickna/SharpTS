@@ -32,7 +32,7 @@ public sealed class DataViewEmitter : ITypeEmitterStrategy
             case "getInt8":
             case "getUint8":
                 EmitByteOffsetArg(emitter, arguments, 0);
-                il.Emit(OpCodes.Call, GetDataViewMethod(ctx, methodName));
+                il.Emit(OpCodes.Call, GetDataViewMethod(ctx.Runtime!.RequireDataView(), methodName));
                 il.Emit(OpCodes.Box, ctx.Types.Double);
                 return true;
 
@@ -41,7 +41,7 @@ public sealed class DataViewEmitter : ITypeEmitterStrategy
             case "setUint8":
                 EmitByteOffsetArg(emitter, arguments, 0);
                 EmitValueArg(emitter, arguments, 1);
-                il.Emit(OpCodes.Call, GetDataViewMethod(ctx, methodName));
+                il.Emit(OpCodes.Call, GetDataViewMethod(ctx.Runtime!.RequireDataView(), methodName));
                 return true;
 
             // 16-bit, 32-bit, float getters (with endianness)
@@ -53,7 +53,7 @@ public sealed class DataViewEmitter : ITypeEmitterStrategy
             case "getFloat64":
                 EmitByteOffsetArg(emitter, arguments, 0);
                 EmitLittleEndianArg(emitter, arguments, 1);
-                il.Emit(OpCodes.Call, GetDataViewMethod(ctx, methodName));
+                il.Emit(OpCodes.Call, GetDataViewMethod(ctx.Runtime!.RequireDataView(), methodName));
                 il.Emit(OpCodes.Box, ctx.Types.Double);
                 return true;
 
@@ -62,7 +62,7 @@ public sealed class DataViewEmitter : ITypeEmitterStrategy
             case "getBigUint64":
                 EmitByteOffsetArg(emitter, arguments, 0);
                 EmitLittleEndianArg(emitter, arguments, 1);
-                il.Emit(OpCodes.Call, GetDataViewMethod(ctx, methodName));
+                il.Emit(OpCodes.Call, GetDataViewMethod(ctx.Runtime!.RequireDataView(), methodName));
                 return true;
 
             // 16-bit, 32-bit, float setters (with endianness)
@@ -77,7 +77,7 @@ public sealed class DataViewEmitter : ITypeEmitterStrategy
                 EmitByteOffsetArg(emitter, arguments, 0);
                 EmitValueArg(emitter, arguments, 1);
                 EmitLittleEndianArg(emitter, arguments, 2);
-                il.Emit(OpCodes.Call, GetDataViewMethod(ctx, methodName));
+                il.Emit(OpCodes.Call, GetDataViewMethod(ctx.Runtime!.RequireDataView(), methodName));
                 return true;
         }
 
@@ -103,16 +103,16 @@ public sealed class DataViewEmitter : ITypeEmitterStrategy
         switch (propertyName)
         {
             case "buffer":
-                il.Emit(OpCodes.Call, ctx.Runtime!.TSDataViewBufferGetter);
+                il.Emit(OpCodes.Call, ctx.Runtime!.RequireDataView().GetBuffer);
                 return true;
 
             case "byteOffset":
-                il.Emit(OpCodes.Call, ctx.Runtime!.TSDataViewByteOffsetGetter);
+                il.Emit(OpCodes.Call, ctx.Runtime!.RequireDataView().GetByteOffset);
                 il.Emit(OpCodes.Box, ctx.Types.Double);
                 return true;
 
             case "byteLength":
-                il.Emit(OpCodes.Call, ctx.Runtime!.TSDataViewByteLengthGetter);
+                il.Emit(OpCodes.Call, ctx.Runtime!.RequireDataView().GetByteLength);
                 il.Emit(OpCodes.Box, ctx.Types.Double);
                 return true;
         }
@@ -184,30 +184,30 @@ public sealed class DataViewEmitter : ITypeEmitterStrategy
         }
     }
 
-    private static MethodBuilder GetDataViewMethod(CompilationContext ctx, string methodName)
+    private static MethodBuilder GetDataViewMethod(EmittedDataViewRuntime view, string methodName)
     {
         return methodName switch
         {
-            "getInt8" => ctx.Runtime!.TSDataViewGetInt8,
-            "getUint8" => ctx.Runtime!.TSDataViewGetUint8,
-            "getInt16" => ctx.Runtime!.TSDataViewGetInt16,
-            "getUint16" => ctx.Runtime!.TSDataViewGetUint16,
-            "getInt32" => ctx.Runtime!.TSDataViewGetInt32,
-            "getUint32" => ctx.Runtime!.TSDataViewGetUint32,
-            "getFloat32" => ctx.Runtime!.TSDataViewGetFloat32,
-            "getFloat64" => ctx.Runtime!.TSDataViewGetFloat64,
-            "getBigInt64" => ctx.Runtime!.TSDataViewGetBigInt64,
-            "getBigUint64" => ctx.Runtime!.TSDataViewGetBigUint64,
-            "setInt8" => ctx.Runtime!.TSDataViewSetInt8,
-            "setUint8" => ctx.Runtime!.TSDataViewSetUint8,
-            "setInt16" => ctx.Runtime!.TSDataViewSetInt16,
-            "setUint16" => ctx.Runtime!.TSDataViewSetUint16,
-            "setInt32" => ctx.Runtime!.TSDataViewSetInt32,
-            "setUint32" => ctx.Runtime!.TSDataViewSetUint32,
-            "setFloat32" => ctx.Runtime!.TSDataViewSetFloat32,
-            "setFloat64" => ctx.Runtime!.TSDataViewSetFloat64,
-            "setBigInt64" => ctx.Runtime!.TSDataViewSetBigInt64,
-            "setBigUint64" => ctx.Runtime!.TSDataViewSetBigUint64,
+            "getInt8" => view.GetInt8Object,
+            "getUint8" => view.GetUint8Object,
+            "getInt16" => view.GetInt16Object,
+            "getUint16" => view.GetUint16Object,
+            "getInt32" => view.GetInt32Object,
+            "getUint32" => view.GetUint32Object,
+            "getFloat32" => view.GetFloat32Object,
+            "getFloat64" => view.GetFloat64Object,
+            "getBigInt64" => view.GetBigInt64Object,
+            "getBigUint64" => view.GetBigUint64Object,
+            "setInt8" => view.SetInt8Object,
+            "setUint8" => view.SetUint8Object,
+            "setInt16" => view.SetInt16Object,
+            "setUint16" => view.SetUint16Object,
+            "setInt32" => view.SetInt32Object,
+            "setUint32" => view.SetUint32Object,
+            "setFloat32" => view.SetFloat32Object,
+            "setFloat64" => view.SetFloat64Object,
+            "setBigInt64" => view.SetBigInt64Object,
+            "setBigUint64" => view.SetBigUint64Object,
             _ => throw new Exception($"Unknown DataView method: {methodName}")
         };
     }

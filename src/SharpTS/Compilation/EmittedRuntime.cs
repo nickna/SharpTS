@@ -1498,32 +1498,18 @@ public class EmittedRuntime
     public EmittedSharedArrayBufferRuntime RequireSharedArrayBuffer() => SharedArrayBuffer
         ?? throw new InvalidOperationException("SharedArrayBuffer runtime was not enabled for this compilation.");
 
-    // $DataView type (pure-IL for standalone DLLs)
-    public TypeBuilder DataViewType { get; set; } = null!;
-    public ConstructorBuilder DataViewCtor { get; set; } = null!;
-    public MethodBuilder DataViewByteLengthGetter { get; set; } = null!;
-    public MethodBuilder DataViewByteOffsetGetter { get; set; } = null!;
-    public MethodBuilder DataViewBufferGetter { get; set; } = null!;
-    public MethodBuilder DataViewGetInt8 { get; set; } = null!;
-    public MethodBuilder DataViewGetUint8 { get; set; } = null!;
-    public MethodBuilder DataViewGetInt16 { get; set; } = null!;
-    public MethodBuilder DataViewGetUint16 { get; set; } = null!;
-    public MethodBuilder DataViewGetInt32 { get; set; } = null!;
-    public MethodBuilder DataViewGetUint32 { get; set; } = null!;
-    public MethodBuilder DataViewGetFloat32 { get; set; } = null!;
-    public MethodBuilder DataViewGetFloat64 { get; set; } = null!;
-    public MethodBuilder DataViewSetInt8 { get; set; } = null!;
-    public MethodBuilder DataViewSetUint8 { get; set; } = null!;
-    public MethodBuilder DataViewSetInt16 { get; set; } = null!;
-    public MethodBuilder DataViewSetUint16 { get; set; } = null!;
-    public MethodBuilder DataViewSetInt32 { get; set; } = null!;
-    public MethodBuilder DataViewSetUint32 { get; set; } = null!;
-    public MethodBuilder DataViewSetFloat32 { get; set; } = null!;
-    public MethodBuilder DataViewSetFloat64 { get; set; } = null!;
-    public MethodBuilder DataViewGetBigInt64 { get; set; } = null!;
-    public MethodBuilder DataViewGetBigUint64 { get; set; } = null!;
-    public MethodBuilder DataViewSetBigInt64 { get; set; } = null!;
-    public MethodBuilder DataViewSetBigUint64 { get; set; } = null!;
+    /// <summary>DataView metadata, or null when the typed-array family is tree-shaken.</summary>
+    public EmittedDataViewRuntime? DataView { get; private set; }
+
+    internal void BeginDataViewEmission()
+    {
+        if (DataView is not null)
+            throw new InvalidOperationException("DataView metadata emission has already started.");
+        DataView = new EmittedDataViewRuntime();
+    }
+
+    public EmittedDataViewRuntime RequireDataView() => DataView
+        ?? throw new InvalidOperationException("DataView runtime was not enabled for this compilation.");
 
     // $TypedArray base type (pure-IL for standalone DLLs)
     public TypeBuilder TypedArrayBaseType { get; set; } = null!;
@@ -2118,35 +2104,6 @@ public class EmittedRuntime
     // ============================================================
     // Worker Threads Support
     // ============================================================
-
-    // $DataView type - emitted for standalone support
-    // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSDataView
-    public MethodBuilder TSDataViewCtor { get; set; } = null!;
-    public MethodBuilder TSDataViewByteLengthGetter { get; set; } = null!;
-    public MethodBuilder TSDataViewByteOffsetGetter { get; set; } = null!;
-    public MethodBuilder TSDataViewBufferGetter { get; set; } = null!;
-    // Getter methods
-    public MethodBuilder TSDataViewGetInt8 { get; set; } = null!;
-    public MethodBuilder TSDataViewGetUint8 { get; set; } = null!;
-    public MethodBuilder TSDataViewGetInt16 { get; set; } = null!;
-    public MethodBuilder TSDataViewGetUint16 { get; set; } = null!;
-    public MethodBuilder TSDataViewGetInt32 { get; set; } = null!;
-    public MethodBuilder TSDataViewGetUint32 { get; set; } = null!;
-    public MethodBuilder TSDataViewGetFloat32 { get; set; } = null!;
-    public MethodBuilder TSDataViewGetFloat64 { get; set; } = null!;
-    public MethodBuilder TSDataViewGetBigInt64 { get; set; } = null!;
-    public MethodBuilder TSDataViewGetBigUint64 { get; set; } = null!;
-    // Setter methods
-    public MethodBuilder TSDataViewSetInt8 { get; set; } = null!;
-    public MethodBuilder TSDataViewSetUint8 { get; set; } = null!;
-    public MethodBuilder TSDataViewSetInt16 { get; set; } = null!;
-    public MethodBuilder TSDataViewSetUint16 { get; set; } = null!;
-    public MethodBuilder TSDataViewSetInt32 { get; set; } = null!;
-    public MethodBuilder TSDataViewSetUint32 { get; set; } = null!;
-    public MethodBuilder TSDataViewSetFloat32 { get; set; } = null!;
-    public MethodBuilder TSDataViewSetFloat64 { get; set; } = null!;
-    public MethodBuilder TSDataViewSetBigInt64 { get; set; } = null!;
-    public MethodBuilder TSDataViewSetBigUint64 { get; set; } = null!;
 
     // TypedArray helper methods that avoid hard dependencies on SharpTS.dll
     // These use reflection to work with TypedArrays without requiring SharpTS.dll at runtime
