@@ -1619,6 +1619,60 @@ public class StandaloneDllTests
         return (cert.ExportCertificatePem().Replace("`", "\\`"), rsa.ExportPkcs8PrivateKeyPem().Replace("`", "\\`"));
     }
 
+    [Fact]
+    public void FetchWebApiCookiesRedirectsAndRejectionRunStandalone()
+    {
+        using var server = new MockHttpServer();
+        server.AddSetCookieRoute("/set", "session=value; Path=/");
+        server.AddCookieEchoRoute("/echo");
+        server.AddSetCookieRedirectRoute("/redirect", "/echo", "redirect=yes; Path=/", 302);
+        server.Start();
+        var source = $$"""
+            async function main() {
+                const headers = new Headers({ 'X-Test': 'one' });
+                headers.set('X-Test', 'two');
+                console.log('header=' + headers.get('x-test'));
+                const request = new Request('{{server.BaseUrl}}echo', { method: 'POST', body: 'payload' });
+                console.log('request=' + await request.clone().text());
+                console.log('original=' + await request.text());
+                const response = Response.json({ ok: true });
+                console.log('json=' + (await response.clone().json()).ok);
+                await response.text();
+                console.log('body-used=' + response.bodyUsed);
+                fetch.cookieJar.clear();
+                await fetch('{{server.BaseUrl}}set');
+                console.log('stored=' + fetch.cookieJar.getCookies('{{server.BaseUrl}}').includes('session=value'));
+                const omitted = await fetch('{{server.BaseUrl}}echo', { credentials: 'omit' });
+                console.log('omitted=' + (await omitted.text() === ''));
+                const manual = await fetch('{{server.BaseUrl}}redirect', { redirect: 'manual', credentials: 'omit' });
+                console.log('manual=' + manual.status);
+                const manualCookies = await fetch('{{server.BaseUrl}}redirect', { redirect: 'manual' });
+                console.log('manual-cookies=' + manualCookies.status);
+                const followed = await fetch('{{server.BaseUrl}}redirect');
+                const followedBody = await followed.text();
+                console.log('followed=' + followedBody.includes('redirect=yes'));
+                fetch.cookieJar.setCookie('manual=injected; Path=/', '{{server.BaseUrl}}');
+                console.log('injected=' + fetch.cookieJar.getCookies('{{server.BaseUrl}}').includes('manual=injected'));
+                fetch.cookieJar.clear();
+                console.log('cleared=' + (fetch.cookieJar.getCookies('{{server.BaseUrl}}') === ''));
+                try { await fetch('invalid-url'); } catch (error) { console.log('rejected'); }
+            }
+            main();
+            """;
+        var errors = TestHarness.CompileAndVerifyOnly(source);
+        Assert.True(errors.Count == 0, string.Join(Environment.NewLine, errors));
+        var (tempDir, dllPath) = CompileStandalone(source);
+        try
+        {
+            var output = ExecuteCompiledDllIsolated(dllPath, timeoutMs: 30000);
+            Assert.Equal("header=two\nrequest=payload\noriginal=payload\njson=true\nbody-used=true\nstored=true\nomitted=true\nmanual=302\nmanual-cookies=302\nfollowed=true\ninjected=true\ncleared=true\nrejected\n", output);
+        }
+        finally
+        {
+            CleanupTempDir(tempDir);
+        }
+    }
+
     private static (string tempDir, string dllPath) CompileStandalone(string source)
     {
         var tempDir = Path.Combine(Path.GetTempPath(), $"sharpts_standalone_guard_{Guid.NewGuid()}");

@@ -11,7 +11,7 @@ public partial class RuntimeEmitter
     private void EmitGlobalThisMethods(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         // Static field to cache the fetch TSFunction for reference equality
-        runtime.CachedFetchFunction = typeBuilder.DefineField(
+        runtime.Fetch.CachedFunction = typeBuilder.DefineField(
             "_cachedFetchFunction",
             _types.Object,
             FieldAttributes.Private | FieldAttributes.Static);
@@ -205,7 +205,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, infinityLabel);
 
         // Check for "fetch" — only when the program references fetch (or any fetch-family
-        // identifier). The `runtime.Fetch` MethodBuilder is null otherwise.
+        // identifier). HTTP-only programs also emit Web API helpers but do not expose this global.
         if (_features.UsesFetch)
         {
             il.Emit(OpCodes.Ldarg_0);
@@ -425,7 +425,7 @@ public partial class RuntimeEmitter
         if (_features.UsesFetch)
         {
             il.MarkLabel(fetchLabel);
-            EmitCachedTSFunction(il, runtime.CachedFetchFunction, runtime.Fetch, runtime);
+            EmitCachedTSFunction(il, runtime.Fetch.CachedFunction, runtime.Fetch.RequireImplementation().Invoke, runtime);
             il.Emit(OpCodes.Br, returnLabel);
         }
 

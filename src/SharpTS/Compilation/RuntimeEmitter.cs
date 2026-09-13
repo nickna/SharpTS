@@ -50,7 +50,10 @@ public partial class RuntimeEmitter
         if (features.UsesNet)
             runtime.BeginNetEmission();
         if (features.UsesHttp)
+        {
             runtime.BeginHttpEmission();
+            runtime.Fetch.BeginImplementationEmission();
+        }
         if (features.UsesTls)
             runtime.BeginTlsEmission();
         if (features.UsesZlib)
@@ -632,6 +635,7 @@ public partial class RuntimeEmitter
         runtime.Dgram?.CompleteEmission();
         runtime.Net?.CompleteEmission();
         runtime.Http?.CompleteEmission();
+        runtime.Fetch.CompleteEmission();
         runtime.Promise?.CompleteEmission();
         return runtime;
     }

@@ -13,25 +13,6 @@ namespace SharpTS.Compilation;
 /// </remarks>
 public partial class RuntimeEmitter
 {
-    // Fetch response class fields (set during emission)
-    private FieldBuilder _fetchResponseStatusField = null!;
-    private FieldBuilder _fetchResponseStatusTextField = null!;
-    private FieldBuilder _fetchResponseOkField = null!;
-    private FieldBuilder _fetchResponseUrlField = null!;
-    private FieldBuilder _fetchResponseHeadersField = null!;
-    private FieldBuilder _fetchResponseBodyBytesField = null!;
-    private FieldBuilder _fetchResponseBodyConsumedField = null!;
-
-    // Cached HttpClient helper (emitted during fetch emission)
-    private MethodBuilder? _getOrCreateHttpClientMethod;
-
-    // Fetch display class for async Task.Run dispatch
-    private TypeBuilder _fetchDisplayClass = null!;
-    private FieldBuilder _fetchDisplayUrl = null!;
-    private FieldBuilder _fetchDisplayOptions = null!;
-    private ConstructorBuilder _fetchDisplayCtor = null!;
-    private MethodBuilder _fetchDisplayInvoke = null!;
-
     // HTTP types from BCL
     private Type? _httpClientType;
     private Type? _httpRequestMessageType;
@@ -258,9 +239,6 @@ public partial class RuntimeEmitter
         runtime.RegisterBuiltInModuleMethod("http", "get", method);
     }
 
-    // $Headers class fields (set during emission)
-    private FieldBuilder _headersDataField = null!;
-
     /// <summary>
     /// Emits the $Headers class for compiled Headers support.
     /// Uses a Dictionary&lt;string, List&lt;string&gt;&gt; for case-insensitive multi-value storage.
@@ -268,6 +246,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitHeadersClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
+        var fetch = runtime.Fetch.RequireImplementation();
         var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$Headers",
             TypeAttributes.Public | TypeAttributes.Class | TypeAttributes.BeforeFieldInit,
@@ -277,7 +256,7 @@ public partial class RuntimeEmitter
         // Internal storage: Dictionary<string, List<string>> with case-insensitive comparer
         var listOfStringType = typeof(List<string>);
         var dictType = typeof(Dictionary<string, List<string>>);
-        _headersDataField = typeBuilder.DefineField("_data", dictType, FieldAttributes.Assembly);
+        fetch.HeadersDataField = typeBuilder.DefineField("_data", dictType, FieldAttributes.Assembly);
 
         // Constructor: $Headers(object? init)
         // If init is Dictionary<string, object?>, populate from it
@@ -297,7 +276,7 @@ public partial class RuntimeEmitter
         ctorIL.Emit(OpCodes.Call, ordinalIgnoreCase);
         var dictCtorWithComparer = dictType.GetConstructor([typeof(IEqualityComparer<string>)])!;
         ctorIL.Emit(OpCodes.Newobj, dictCtorWithComparer);
-        ctorIL.Emit(OpCodes.Stfld, _headersDataField);
+        ctorIL.Emit(OpCodes.Stfld, fetch.HeadersDataField);
 
         // if (init is Dictionary<string, object?>) populate
         var initLocal = ctorIL.DeclareLocal(_types.DictionaryStringObject);
@@ -366,7 +345,7 @@ public partial class RuntimeEmitter
 
         // List branch: copy
         ctorIL.Emit(OpCodes.Ldarg_0);
-        ctorIL.Emit(OpCodes.Ldfld, _headersDataField);
+        ctorIL.Emit(OpCodes.Ldfld, fetch.HeadersDataField);
         ctorIL.Emit(OpCodes.Ldloc, keyLocal);
         ctorIL.Emit(OpCodes.Ldloc, asListLocal);
         ctorIL.Emit(OpCodes.Newobj, listOfStringCtorFromEnum);
@@ -399,7 +378,7 @@ public partial class RuntimeEmitter
 
         // _data[key] = new List<string> { value }
         ctorIL.Emit(OpCodes.Ldarg_0);
-        ctorIL.Emit(OpCodes.Ldfld, _headersDataField);
+        ctorIL.Emit(OpCodes.Ldfld, fetch.HeadersDataField);
         ctorIL.Emit(OpCodes.Ldloc, keyLocal);
         ctorIL.Emit(OpCodes.Newobj, listOfStringDefaultCtor);
         ctorIL.Emit(OpCodes.Dup);
@@ -424,20 +403,19 @@ public partial class RuntimeEmitter
         ctorIL.Emit(OpCodes.Ret);
 
         // Emit instance methods
-        EmitHeadersGetMethod(typeBuilder, listOfStringType, dictType);
-        EmitHeadersSetMethod(typeBuilder, listOfStringType, dictType);
-        EmitHeadersHasMethod(typeBuilder, dictType);
-        EmitHeadersDeleteMethod(typeBuilder, dictType);
-        EmitHeadersAppendMethod(typeBuilder, listOfStringType, dictType);
+        EmitHeadersGetMethod(fetch, typeBuilder, listOfStringType, dictType);
+        EmitHeadersSetMethod(fetch, typeBuilder, listOfStringType, dictType);
+        EmitHeadersHasMethod(fetch, typeBuilder, dictType);
+        EmitHeadersDeleteMethod(fetch, typeBuilder, dictType);
+        EmitHeadersAppendMethod(fetch, typeBuilder, listOfStringType, dictType);
         EmitHeadersForEachMethod(typeBuilder, listOfStringType, dictType, runtime);
         EmitHeadersEntriesMethod(typeBuilder, listOfStringType, dictType, runtime);
         EmitHeadersKeysMethod(typeBuilder, listOfStringType, dictType, runtime);
         EmitHeadersValuesMethod(typeBuilder, listOfStringType, dictType, runtime);
-        EmitHeadersGetSetCookieMethod(typeBuilder, listOfStringType, dictType);
+        EmitHeadersGetSetCookieMethod(fetch, typeBuilder, listOfStringType, dictType);
 
-        runtime.TSHeadersType = typeBuilder;
-        runtime.TSHeadersCtor = ctor;
-        runtime.TSHeadersSetMethod = _headersSetMethodBuilder;
+        fetch.HeadersType = typeBuilder;
+        fetch.HeadersCtor = ctor;
 
         typeBuilder.CreateType();
     }
@@ -449,7 +427,7 @@ public partial class RuntimeEmitter
     /// Per WHATWG fetch, <c>Set-Cookie</c> returns the first value only — use
     /// <c>getSetCookie()</c> to get the full list.
     /// </remarks>
-    private void EmitHeadersGetMethod(TypeBuilder typeBuilder, Type listOfStringType, Type dictType)
+    private void EmitHeadersGetMethod(EmittedFetchImplementation fetch, TypeBuilder typeBuilder, Type listOfStringType, Type dictType)
     {
         var method = typeBuilder.DefineMethod("get", MethodAttributes.Public, _types.Object, [_types.Object]);
         var il = method.GetILGenerator();
@@ -461,7 +439,7 @@ public partial class RuntimeEmitter
         // if (_data.TryGetValue(name, out var values))
         var valuesLocal = il.DeclareLocal(listOfStringType);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _headersDataField);
+        il.Emit(OpCodes.Ldfld, fetch.HeadersDataField);
         il.Emit(OpCodes.Ldloc, nameLocal);
         il.Emit(OpCodes.Ldloca, valuesLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(dictType, "TryGetValue")!);
@@ -510,14 +488,14 @@ public partial class RuntimeEmitter
     /// The compiled-mode array dispatch path treats <c>string[]</c> the same as a JS
     /// array for length and indexed access.
     /// </remarks>
-    private void EmitHeadersGetSetCookieMethod(TypeBuilder typeBuilder, Type listOfStringType, Type dictType)
+    private void EmitHeadersGetSetCookieMethod(EmittedFetchImplementation fetch, TypeBuilder typeBuilder, Type listOfStringType, Type dictType)
     {
         var method = typeBuilder.DefineMethod("getSetCookie", MethodAttributes.Public, _types.Object, Type.EmptyTypes);
         var il = method.GetILGenerator();
 
         var valuesLocal = il.DeclareLocal(listOfStringType);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _headersDataField);
+        il.Emit(OpCodes.Ldfld, fetch.HeadersDataField);
         il.Emit(OpCodes.Ldstr, "Set-Cookie");
         il.Emit(OpCodes.Ldloca, valuesLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(dictType, "TryGetValue")!);
@@ -539,12 +517,11 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits: public object set(object name, object value) → undefined
     /// </summary>
-    private MethodBuilder _headersSetMethodBuilder = null!;
 
-    private void EmitHeadersSetMethod(TypeBuilder typeBuilder, Type listOfStringType, Type dictType)
+    private void EmitHeadersSetMethod(EmittedFetchImplementation fetch, TypeBuilder typeBuilder, Type listOfStringType, Type dictType)
     {
         var method = typeBuilder.DefineMethod("set", MethodAttributes.Public, _types.Object, [_types.Object, _types.Object]);
-        _headersSetMethodBuilder = method;
+        fetch.HeadersSetMethod = method;
         var il = method.GetILGenerator();
 
         // string name = arg0?.ToString() ?? ""
@@ -557,7 +534,7 @@ public partial class RuntimeEmitter
 
         // _data[name] = new List<string> { value }
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _headersDataField);
+        il.Emit(OpCodes.Ldfld, fetch.HeadersDataField);
         il.Emit(OpCodes.Ldloc, nameLocal);
         il.Emit(OpCodes.Newobj, _types.GetConstructor(listOfStringType, Type.EmptyTypes)!);
         il.Emit(OpCodes.Dup);
@@ -572,7 +549,7 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits: public object has(object name) → bool
     /// </summary>
-    private void EmitHeadersHasMethod(TypeBuilder typeBuilder, Type dictType)
+    private void EmitHeadersHasMethod(EmittedFetchImplementation fetch, TypeBuilder typeBuilder, Type dictType)
     {
         var method = typeBuilder.DefineMethod("has", MethodAttributes.Public, _types.Object, [_types.Object]);
         var il = method.GetILGenerator();
@@ -581,7 +558,7 @@ public partial class RuntimeEmitter
         EmitArgToString(il, 1, nameLocal);
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _headersDataField);
+        il.Emit(OpCodes.Ldfld, fetch.HeadersDataField);
         il.Emit(OpCodes.Ldloc, nameLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(dictType, "ContainsKey")!);
         il.Emit(OpCodes.Box, _types.Boolean);
@@ -591,7 +568,7 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits: public object delete(object name) → bool
     /// </summary>
-    private void EmitHeadersDeleteMethod(TypeBuilder typeBuilder, Type dictType)
+    private void EmitHeadersDeleteMethod(EmittedFetchImplementation fetch, TypeBuilder typeBuilder, Type dictType)
     {
         var method = typeBuilder.DefineMethod("delete", MethodAttributes.Public, _types.Object, [_types.Object]);
         var il = method.GetILGenerator();
@@ -600,7 +577,7 @@ public partial class RuntimeEmitter
         EmitArgToString(il, 1, nameLocal);
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _headersDataField);
+        il.Emit(OpCodes.Ldfld, fetch.HeadersDataField);
         il.Emit(OpCodes.Ldloc, nameLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(dictType, "Remove", [_types.String])!);
         il.Emit(OpCodes.Box, _types.Boolean);
@@ -610,7 +587,7 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits: public object append(object name, object value) → undefined
     /// </summary>
-    private void EmitHeadersAppendMethod(TypeBuilder typeBuilder, Type listOfStringType, Type dictType)
+    private void EmitHeadersAppendMethod(EmittedFetchImplementation fetch, TypeBuilder typeBuilder, Type listOfStringType, Type dictType)
     {
         var method = typeBuilder.DefineMethod("append", MethodAttributes.Public, _types.Object, [_types.Object, _types.Object]);
         var il = method.GetILGenerator();
@@ -624,7 +601,7 @@ public partial class RuntimeEmitter
         // if (_data.TryGetValue(name, out var list)) list.Add(value); else _data[name] = new List { value }
         var listLocal = il.DeclareLocal(listOfStringType);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _headersDataField);
+        il.Emit(OpCodes.Ldfld, fetch.HeadersDataField);
         il.Emit(OpCodes.Ldloc, nameLocal);
         il.Emit(OpCodes.Ldloca, listLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(dictType, "TryGetValue")!);
@@ -633,7 +610,7 @@ public partial class RuntimeEmitter
 
         // Not found - create new list
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _headersDataField);
+        il.Emit(OpCodes.Ldfld, fetch.HeadersDataField);
         il.Emit(OpCodes.Ldloc, nameLocal);
         il.Emit(OpCodes.Newobj, _types.GetConstructor(listOfStringType, Type.EmptyTypes)!);
         il.Emit(OpCodes.Dup);
@@ -658,6 +635,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitHeadersForEachMethod(TypeBuilder typeBuilder, Type listOfStringType, Type dictType, EmittedRuntime runtime)
     {
+        var fetch = runtime.Fetch.RequireImplementation();
         var method = typeBuilder.DefineMethod("forEach", MethodAttributes.Public, _types.Object, [_types.Object]);
         var il = method.GetILGenerator();
 
@@ -667,7 +645,7 @@ public partial class RuntimeEmitter
         var enumeratorLocal = il.DeclareLocal(enumeratorType);
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _headersDataField);
+        il.Emit(OpCodes.Ldfld, fetch.HeadersDataField);
         il.Emit(OpCodes.Callvirt, getEnumeratorMethod);
         il.Emit(OpCodes.Stloc, enumeratorLocal);
 
@@ -766,6 +744,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitHeadersCollectionMethod(ILGenerator il, Type dictType, Type listOfStringType, EmittedRuntime runtime, string collectMode)
     {
+        var fetch = runtime.Fetch.RequireImplementation();
         // var result = new List<object>()
         var listOfObjectType = typeof(List<object?>);
         var resultLocal = il.DeclareLocal(listOfObjectType);
@@ -778,7 +757,7 @@ public partial class RuntimeEmitter
         var enumeratorLocal = il.DeclareLocal(enumeratorType);
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _headersDataField);
+        il.Emit(OpCodes.Ldfld, fetch.HeadersDataField);
         il.Emit(OpCodes.Callvirt, getEnumeratorMethod);
         il.Emit(OpCodes.Stloc, enumeratorLocal);
 
@@ -888,6 +867,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitFetchResponseClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
+        var fetch = runtime.Fetch.RequireImplementation();
         // Define class: public class $FetchResponse
         var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$FetchResponse",
@@ -896,13 +876,13 @@ public partial class RuntimeEmitter
         );
 
         // Fields
-        _fetchResponseStatusField = typeBuilder.DefineField("_status", _types.Double, FieldAttributes.Private);
-        _fetchResponseStatusTextField = typeBuilder.DefineField("_statusText", _types.String, FieldAttributes.Private);
-        _fetchResponseOkField = typeBuilder.DefineField("_ok", _types.Boolean, FieldAttributes.Private);
-        _fetchResponseUrlField = typeBuilder.DefineField("_url", _types.String, FieldAttributes.Private);
-        _fetchResponseHeadersField = typeBuilder.DefineField("_headers", _types.Object, FieldAttributes.Private);
-        _fetchResponseBodyBytesField = typeBuilder.DefineField("_bodyBytes", _types.ByteArray, FieldAttributes.Private);
-        _fetchResponseBodyConsumedField = typeBuilder.DefineField("_bodyConsumed", _types.Boolean, FieldAttributes.Private);
+        fetch.FetchResponseStatusField = typeBuilder.DefineField("_status", _types.Double, FieldAttributes.Private);
+        fetch.FetchResponseStatusTextField = typeBuilder.DefineField("_statusText", _types.String, FieldAttributes.Private);
+        fetch.FetchResponseOkField = typeBuilder.DefineField("_ok", _types.Boolean, FieldAttributes.Private);
+        fetch.FetchResponseUrlField = typeBuilder.DefineField("_url", _types.String, FieldAttributes.Private);
+        fetch.FetchResponseHeadersField = typeBuilder.DefineField("_headers", _types.Object, FieldAttributes.Private);
+        fetch.FetchResponseBodyBytesField = typeBuilder.DefineField("_bodyBytes", _types.ByteArray, FieldAttributes.Private);
+        fetch.FetchResponseBodyConsumedField = typeBuilder.DefineField("_bodyConsumed", _types.Boolean, FieldAttributes.Private);
 
         // Constructor: (double status, string statusText, bool ok, string url, object headers, byte[] body)
         var ctor = typeBuilder.DefineConstructor(
@@ -918,37 +898,37 @@ public partial class RuntimeEmitter
         // Store all fields
         ctorIL.Emit(OpCodes.Ldarg_0);
         ctorIL.Emit(OpCodes.Ldarg_1);
-        ctorIL.Emit(OpCodes.Stfld, _fetchResponseStatusField);
+        ctorIL.Emit(OpCodes.Stfld, fetch.FetchResponseStatusField);
 
         ctorIL.Emit(OpCodes.Ldarg_0);
         ctorIL.Emit(OpCodes.Ldarg_2);
-        ctorIL.Emit(OpCodes.Stfld, _fetchResponseStatusTextField);
+        ctorIL.Emit(OpCodes.Stfld, fetch.FetchResponseStatusTextField);
 
         ctorIL.Emit(OpCodes.Ldarg_0);
         ctorIL.Emit(OpCodes.Ldarg_3);
-        ctorIL.Emit(OpCodes.Stfld, _fetchResponseOkField);
+        ctorIL.Emit(OpCodes.Stfld, fetch.FetchResponseOkField);
 
         ctorIL.Emit(OpCodes.Ldarg_0);
         ctorIL.Emit(OpCodes.Ldarg, 4);
-        ctorIL.Emit(OpCodes.Stfld, _fetchResponseUrlField);
+        ctorIL.Emit(OpCodes.Stfld, fetch.FetchResponseUrlField);
 
         ctorIL.Emit(OpCodes.Ldarg_0);
         ctorIL.Emit(OpCodes.Ldarg, 5);
-        ctorIL.Emit(OpCodes.Stfld, _fetchResponseHeadersField);
+        ctorIL.Emit(OpCodes.Stfld, fetch.FetchResponseHeadersField);
 
         ctorIL.Emit(OpCodes.Ldarg_0);
         ctorIL.Emit(OpCodes.Ldarg, 6);
-        ctorIL.Emit(OpCodes.Stfld, _fetchResponseBodyBytesField);
+        ctorIL.Emit(OpCodes.Stfld, fetch.FetchResponseBodyBytesField);
 
         ctorIL.Emit(OpCodes.Ret);
 
         // Property getters for status, statusText, ok, url, headers
-        EmitFetchResponsePropertyGetter(typeBuilder, "status", _types.Double, _fetchResponseStatusField);
-        EmitFetchResponsePropertyGetter(typeBuilder, "statusText", _types.String, _fetchResponseStatusTextField);
-        EmitFetchResponsePropertyGetter(typeBuilder, "ok", _types.Boolean, _fetchResponseOkField);
-        EmitFetchResponsePropertyGetter(typeBuilder, "url", _types.String, _fetchResponseUrlField);
-        EmitFetchResponsePropertyGetter(typeBuilder, "headers", _types.Object, _fetchResponseHeadersField);
-        EmitFetchResponsePropertyGetter(typeBuilder, "bodyUsed", _types.Boolean, _fetchResponseBodyConsumedField);
+        EmitFetchResponsePropertyGetter(typeBuilder, "status", _types.Double, fetch.FetchResponseStatusField);
+        EmitFetchResponsePropertyGetter(typeBuilder, "statusText", _types.String, fetch.FetchResponseStatusTextField);
+        EmitFetchResponsePropertyGetter(typeBuilder, "ok", _types.Boolean, fetch.FetchResponseOkField);
+        EmitFetchResponsePropertyGetter(typeBuilder, "url", _types.String, fetch.FetchResponseUrlField);
+        EmitFetchResponsePropertyGetter(typeBuilder, "headers", _types.Object, fetch.FetchResponseHeadersField);
+        EmitFetchResponsePropertyGetter(typeBuilder, "bodyUsed", _types.Boolean, fetch.FetchResponseBodyConsumedField);
 
         // Constant properties
         EmitResponseConstantProperty(typeBuilder, "type", _types.String, "basic");
@@ -964,14 +944,14 @@ public partial class RuntimeEmitter
         EmitFetchResponseArrayBufferMethod(typeBuilder, runtime);
 
         // Method: clone() - creates a copy sharing body bytes
-        EmitFetchResponseCloneMethod(typeBuilder, runtime, ctor);
+        EmitFetchResponseCloneMethod(typeBuilder, fetch, ctor);
 
         // Property: body - returns a Readable stream of the response body
         EmitFetchResponseBodyGetter(typeBuilder, runtime);
 
         // Store the type reference
         _ = typeBuilder;
-        runtime.TSFetchResponseCtor = ctor;
+        fetch.FetchResponseCtor = ctor;
 
         typeBuilder.CreateType();
     }
@@ -1006,6 +986,7 @@ public partial class RuntimeEmitter
 
     private void EmitFetchResponseJsonMethod(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
+        var fetch = runtime.Fetch.RequireImplementation();
         // public object json()
         // Returns a Promise that resolves to the parsed JSON
         var method = typeBuilder.DefineMethod(
@@ -1024,14 +1005,14 @@ public partial class RuntimeEmitter
         // string text = Encoding.UTF8.GetString(_bodyBytes)
         il.Emit(OpCodes.Call, _types.GetProperty(_types.Encoding, "UTF8")!.GetGetMethod()!);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _fetchResponseBodyBytesField);
+        il.Emit(OpCodes.Ldfld, fetch.FetchResponseBodyBytesField);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Encoding, "GetString", [_types.ByteArray])!);
         il.Emit(OpCodes.Stloc, textLocal);
 
         // Mark body as consumed
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Stfld, _fetchResponseBodyConsumedField);
+        il.Emit(OpCodes.Stfld, fetch.FetchResponseBodyConsumedField);
 
         // Parse JSON using the runtime's JsonParse method
         il.Emit(OpCodes.Ldloc, textLocal);
@@ -1045,6 +1026,7 @@ public partial class RuntimeEmitter
 
     private void EmitFetchResponseTextMethod(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
+        var fetch = runtime.Fetch.RequireImplementation();
         // public object text()
         // Returns a Promise that resolves to the body as string
         var method = typeBuilder.DefineMethod(
@@ -1059,13 +1041,13 @@ public partial class RuntimeEmitter
         // string text = Encoding.UTF8.GetString(_bodyBytes)
         il.Emit(OpCodes.Call, _types.GetProperty(_types.Encoding, "UTF8")!.GetGetMethod()!);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _fetchResponseBodyBytesField);
+        il.Emit(OpCodes.Ldfld, fetch.FetchResponseBodyBytesField);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Encoding, "GetString", [_types.ByteArray])!);
 
         // Mark body as consumed
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Stfld, _fetchResponseBodyConsumedField);
+        il.Emit(OpCodes.Stfld, fetch.FetchResponseBodyConsumedField);
 
         // Wrap in a resolved Promise
         il.Emit(OpCodes.Call, runtime.RequirePromise().TypeResolve);
@@ -1075,6 +1057,7 @@ public partial class RuntimeEmitter
 
     private void EmitFetchResponseArrayBufferMethod(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
+        var fetch = runtime.Fetch.RequireImplementation();
         // public object arrayBuffer()
         // Returns a Promise that resolves to a Buffer containing the body bytes
         var method = typeBuilder.DefineMethod(
@@ -1089,13 +1072,13 @@ public partial class RuntimeEmitter
         // Create a new $Buffer from the body bytes
         // new $Buffer(_bodyBytes)
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _fetchResponseBodyBytesField);
+        il.Emit(OpCodes.Ldfld, fetch.FetchResponseBodyBytesField);
         il.Emit(OpCodes.Newobj, runtime.TSBufferCtor);
 
         // Mark body as consumed
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Stfld, _fetchResponseBodyConsumedField);
+        il.Emit(OpCodes.Stfld, fetch.FetchResponseBodyConsumedField);
 
         // Wrap in a resolved Promise
         il.Emit(OpCodes.Call, runtime.RequirePromise().TypeResolve);
@@ -1107,7 +1090,7 @@ public partial class RuntimeEmitter
     /// Emits: public object clone()
     /// Creates a new $FetchResponse with the same fields (shared body bytes).
     /// </summary>
-    private void EmitFetchResponseCloneMethod(TypeBuilder typeBuilder, EmittedRuntime runtime, ConstructorBuilder ctor)
+    private void EmitFetchResponseCloneMethod(TypeBuilder typeBuilder, EmittedFetchImplementation fetch, ConstructorBuilder ctor)
     {
         var method = typeBuilder.DefineMethod(
             "clone",
@@ -1123,27 +1106,27 @@ public partial class RuntimeEmitter
 
         // status
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _fetchResponseStatusField);
+        il.Emit(OpCodes.Ldfld, fetch.FetchResponseStatusField);
 
         // statusText
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _fetchResponseStatusTextField);
+        il.Emit(OpCodes.Ldfld, fetch.FetchResponseStatusTextField);
 
         // ok
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _fetchResponseOkField);
+        il.Emit(OpCodes.Ldfld, fetch.FetchResponseOkField);
 
         // url
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _fetchResponseUrlField);
+        il.Emit(OpCodes.Ldfld, fetch.FetchResponseUrlField);
 
         // headers
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _fetchResponseHeadersField);
+        il.Emit(OpCodes.Ldfld, fetch.FetchResponseHeadersField);
 
         // bodyBytes
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _fetchResponseBodyBytesField);
+        il.Emit(OpCodes.Ldfld, fetch.FetchResponseBodyBytesField);
 
         il.Emit(OpCodes.Newobj, ctor);
         il.Emit(OpCodes.Ret);
@@ -1155,6 +1138,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitFetchResponseBodyGetter(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
+        var fetch = runtime.Fetch.RequireImplementation();
         // Define a cached field for the body readable
         var bodyStreamField = typeBuilder.DefineField("_bodyStream", _types.Object, FieldAttributes.Private);
 
@@ -1189,7 +1173,7 @@ public partial class RuntimeEmitter
         // readable.Push(new $Buffer(bodyBytes))
         var bodyBytesLocal = il.DeclareLocal(_types.ByteArray);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _fetchResponseBodyBytesField);
+        il.Emit(OpCodes.Ldfld, fetch.FetchResponseBodyBytesField);
         il.Emit(OpCodes.Stloc, bodyBytesLocal);
 
         // Check if bodyBytes is not null and has length > 0
@@ -1219,7 +1203,7 @@ public partial class RuntimeEmitter
         // Mark body as consumed: this._bodyConsumed = true
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Stfld, _fetchResponseBodyConsumedField);
+        il.Emit(OpCodes.Stfld, fetch.FetchResponseBodyConsumedField);
 
         // Cache: this._bodyStream = readable
         il.Emit(OpCodes.Ldarg_0);
@@ -1244,32 +1228,36 @@ public partial class RuntimeEmitter
         if (_httpClientType == null || _httpRequestMessageType == null)
             return; // No HttpClient available, Fetch will return rejected promise
 
-        _fetchDisplayClass = moduleBuilder.DefineType(
+        var fetch = runtime.Fetch.RequireImplementation();
+        fetch.BeginClientEmission();
+        var client = fetch.RequireClient();
+
+        client.DisplayClass = moduleBuilder.DefineType(
             "$FetchDisplayClass",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit);
 
-        _fetchDisplayUrl = _fetchDisplayClass.DefineField("_url", _types.Object, FieldAttributes.Public);
-        _fetchDisplayOptions = _fetchDisplayClass.DefineField("_options", _types.Object, FieldAttributes.Public);
+        client.DisplayUrl = client.DisplayClass.DefineField("_url", _types.Object, FieldAttributes.Public);
+        client.DisplayOptions = client.DisplayClass.DefineField("_options", _types.Object, FieldAttributes.Public);
         // FetchHelper MethodInfo stored at runtime via ldtoken
-        var methodField = _fetchDisplayClass.DefineField("_fetchHelper", typeof(MethodInfo), FieldAttributes.Public);
+        client.DisplayHelperField = client.DisplayClass.DefineField("_fetchHelper", typeof(MethodInfo), FieldAttributes.Public);
 
-        _fetchDisplayCtor = _fetchDisplayClass.DefineConstructor(
+        client.DisplayCtor = client.DisplayClass.DefineConstructor(
             MethodAttributes.Public, CallingConventions.Standard, Type.EmptyTypes);
         {
-            var il = _fetchDisplayCtor.GetILGenerator();
+            var il = client.DisplayCtor.GetILGenerator();
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Call, typeof(object).GetConstructor(Type.EmptyTypes)!);
             il.Emit(OpCodes.Ret);
         }
 
         // Invoke(): calls FetchHelper(_url, _options), constructs $FetchResponse or throws
-        _fetchDisplayInvoke = _fetchDisplayClass.DefineMethod(
+        client.DisplayInvoke = client.DisplayClass.DefineMethod(
             "Invoke",
             MethodAttributes.Public,
             _types.Object,
             Type.EmptyTypes);
         {
-            var il = _fetchDisplayInvoke.GetILGenerator();
+            var il = client.DisplayInvoke.GetILGenerator();
             var resultLocal = il.DeclareLocal(_types.ObjectArray);
             var retLocal = il.DeclareLocal(_types.Object);
             var endLabel = il.DefineLabel();
@@ -1282,19 +1270,19 @@ public partial class RuntimeEmitter
 
             // object[] result = (object[]) _fetchHelper.Invoke(null, new object[] { _url, _options })
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldfld, methodField);
+            il.Emit(OpCodes.Ldfld, client.DisplayHelperField);
             il.Emit(OpCodes.Ldnull); // target (static method)
             il.Emit(OpCodes.Ldc_I4_2);
             il.Emit(OpCodes.Newarr, _types.Object);
             il.Emit(OpCodes.Dup);
             il.Emit(OpCodes.Ldc_I4_0);
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldfld, _fetchDisplayUrl);
+            il.Emit(OpCodes.Ldfld, client.DisplayUrl);
             il.Emit(OpCodes.Stelem_Ref);
             il.Emit(OpCodes.Dup);
             il.Emit(OpCodes.Ldc_I4_1);
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldfld, _fetchDisplayOptions);
+            il.Emit(OpCodes.Ldfld, client.DisplayOptions);
             il.Emit(OpCodes.Stelem_Ref);
             il.Emit(OpCodes.Callvirt, typeof(MethodBase).GetMethod("Invoke", [typeof(object), typeof(object[])])!);
             il.Emit(OpCodes.Castclass, _types.ObjectArray);
@@ -1340,7 +1328,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldloc, resultLocal);
             il.Emit(OpCodes.Ldc_I4_5);
             il.Emit(OpCodes.Ldelem_Ref);
-            il.Emit(OpCodes.Newobj, runtime.TSHeadersCtor);
+            il.Emit(OpCodes.Newobj, fetch.HeadersCtor);
 
             // bodyBytes (byte[])
             il.Emit(OpCodes.Ldloc, resultLocal);
@@ -1348,7 +1336,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldelem_Ref);
             il.Emit(OpCodes.Castclass, _types.ByteArray);
 
-            il.Emit(OpCodes.Newobj, runtime.TSFetchResponseCtor);
+            il.Emit(OpCodes.Newobj, fetch.FetchResponseCtor);
             il.Emit(OpCodes.Stloc, retLocal);
             il.Emit(OpCodes.Leave, endLabel);
 
@@ -1372,15 +1360,16 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ret);
         }
 
-        _fetchDisplayClass.CreateType();
+        client.DisplayClass.CreateType();
     }
 
     /// <remarks>
     /// Emits a helper method to perform the HTTP request with try/catch,
     /// then dispatches it asynchronously via Task.Run and wraps in a Promise.
     /// </remarks>
-    private void EmitFetch(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    internal void EmitFetch(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
+        var fetch = runtime.Fetch.RequireImplementation();
         if (_httpClientType == null || _httpRequestMessageType == null)
         {
             // Emit a method that returns rejected promise
@@ -1390,7 +1379,7 @@ public partial class RuntimeEmitter
                 _types.Object,
                 [_types.Object, _types.Object]
             );
-            runtime.Fetch = method;
+            fetch.Invoke = method;
 
             var il = method.GetILGenerator();
             il.Emit(OpCodes.Ldstr, "HttpClient not available");
@@ -1399,8 +1388,10 @@ public partial class RuntimeEmitter
             return;
         }
 
+        var client = fetch.RequireClient();
+
         // Emit cached HttpClient infrastructure (four static fields + getter method)
-        EmitCachedHttpClients(typeBuilder);
+        EmitCachedHttpClients(client, typeBuilder);
 
         // Emit the fetch.cookieJar.{getCookies,setCookie,clear} helpers — they
         // operate on the same _cookieContainer static field as the with-cookies
@@ -1422,31 +1413,31 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object, _types.Object]
         );
-        runtime.Fetch = fetchMethod;
+        fetch.Invoke = fetchMethod;
 
         var fetchIL = fetchMethod.GetILGenerator();
 
         // var dc = new $FetchDisplayClass();
-        fetchIL.Emit(OpCodes.Newobj, _fetchDisplayCtor);
-        var dcLocal = fetchIL.DeclareLocal(_fetchDisplayClass);
+        fetchIL.Emit(OpCodes.Newobj, client.DisplayCtor);
+        var dcLocal = fetchIL.DeclareLocal(client.DisplayClass);
         fetchIL.Emit(OpCodes.Stloc, dcLocal);
 
         // dc._url = arg0;
         fetchIL.Emit(OpCodes.Ldloc, dcLocal);
         fetchIL.Emit(OpCodes.Ldarg_0);
-        fetchIL.Emit(OpCodes.Stfld, _fetchDisplayUrl);
+        fetchIL.Emit(OpCodes.Stfld, client.DisplayUrl);
 
         // dc._options = arg1;
         fetchIL.Emit(OpCodes.Ldloc, dcLocal);
         fetchIL.Emit(OpCodes.Ldarg_1);
-        fetchIL.Emit(OpCodes.Stfld, _fetchDisplayOptions);
+        fetchIL.Emit(OpCodes.Stfld, client.DisplayOptions);
 
         // dc._fetchHelper = FetchHelper method (via ldtoken)
         fetchIL.Emit(OpCodes.Ldloc, dcLocal);
         fetchIL.Emit(OpCodes.Ldtoken, fetchHelperMethod);
         fetchIL.Emit(OpCodes.Call, typeof(System.Reflection.MethodBase).GetMethod("GetMethodFromHandle", [typeof(RuntimeMethodHandle)])!);
         fetchIL.Emit(OpCodes.Castclass, typeof(System.Reflection.MethodInfo));
-        fetchIL.Emit(OpCodes.Stfld, _types.GetField(_fetchDisplayClass, "_fetchHelper")!);
+        fetchIL.Emit(OpCodes.Stfld, client.DisplayHelperField);
 
         // Ref the event loop BEFORE dispatching to the thread pool — an
         // in-flight fetch must keep the process alive (Node: an active request
@@ -1458,7 +1449,7 @@ public partial class RuntimeEmitter
 
         // Task.Run<object?>(new Func<object?>(dc.Invoke))
         fetchIL.Emit(OpCodes.Ldloc, dcLocal);
-        fetchIL.Emit(OpCodes.Ldftn, _fetchDisplayInvoke);
+        fetchIL.Emit(OpCodes.Ldftn, client.DisplayInvoke);
         fetchIL.Emit(OpCodes.Newobj, typeof(Func<object?>).GetConstructors()[0]);
         fetchIL.Emit(OpCodes.Call, EmitGenerics.MakeGenericMethod(typeof(Task).GetMethod("Run", 1, [_types.MakeGenericType(typeof(Func<>), Type.MakeGenericMethodParameter(0))])!, typeof(object)));
 
@@ -1484,22 +1475,21 @@ public partial class RuntimeEmitter
     /// lives in <c>System.Net.Primitives</c>, which is part of the BCL surface always
     /// present at runtime.
     /// </remarks>
-    private FieldBuilder _cookieContainerField = null!;
 
-    private void EmitCachedHttpClients(TypeBuilder typeBuilder)
+    private void EmitCachedHttpClients(EmittedFetchClientRuntime client, TypeBuilder typeBuilder)
     {
         // Static fields for the four cached clients
-        var followField = typeBuilder.DefineField(
+        client.FollowClientField = typeBuilder.DefineField(
             "_httpClientFollow", _httpClientType!, FieldAttributes.Private | FieldAttributes.Static);
-        var noRedirectField = typeBuilder.DefineField(
+        client.NoRedirectClientField = typeBuilder.DefineField(
             "_httpClientNoRedirect", _httpClientType!, FieldAttributes.Private | FieldAttributes.Static);
-        var followCookiesField = typeBuilder.DefineField(
+        client.FollowCookiesClientField = typeBuilder.DefineField(
             "_httpClientFollowCookies", _httpClientType!, FieldAttributes.Private | FieldAttributes.Static);
-        var noRedirectCookiesField = typeBuilder.DefineField(
+        client.NoRedirectCookiesClientField = typeBuilder.DefineField(
             "_httpClientNoRedirectCookies", _httpClientType!, FieldAttributes.Private | FieldAttributes.Static);
 
         // Static field holding the shared CookieContainer (process-wide, lazy-init)
-        _cookieContainerField = typeBuilder.DefineField(
+        client.CookieContainerField = typeBuilder.DefineField(
             "_cookieContainer", _cookieContainerType!, FieldAttributes.Assembly | FieldAttributes.Static);
 
         // GetOrCreateHttpClient(string redirectMode, bool useCookies) -> HttpClient
@@ -1509,7 +1499,7 @@ public partial class RuntimeEmitter
             _httpClientType!,
             [_types.String, _types.Boolean]
         );
-        _getOrCreateHttpClientMethod = method;
+        client.GetOrCreateHttpClient = method;
 
         var il = method.GetILGenerator();
         var handlerCtor = _types.GetConstructor(_httpClientHandlerType!, Type.EmptyTypes)!;
@@ -1550,15 +1540,15 @@ public partial class RuntimeEmitter
             {
                 // _cookieContainer ??= new CookieContainer();
                 var cookieReadyLabel = il.DefineLabel();
-                il.Emit(OpCodes.Ldsfld, _cookieContainerField);
+                il.Emit(OpCodes.Ldsfld, client.CookieContainerField);
                 il.Emit(OpCodes.Brtrue, cookieReadyLabel);
                 il.Emit(OpCodes.Newobj, cookieContainerCtor);
-                il.Emit(OpCodes.Stsfld, _cookieContainerField);
+                il.Emit(OpCodes.Stsfld, client.CookieContainerField);
                 il.MarkLabel(cookieReadyLabel);
 
                 // handler.CookieContainer = _cookieContainer;
                 il.Emit(OpCodes.Ldloc, handlerLocal);
-                il.Emit(OpCodes.Ldsfld, _cookieContainerField);
+                il.Emit(OpCodes.Ldsfld, client.CookieContainerField);
                 il.Emit(OpCodes.Callvirt, cookieContainerProp.GetSetMethod()!);
             }
 
@@ -1594,20 +1584,20 @@ public partial class RuntimeEmitter
         var followNoCookiesLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Brfalse, followNoCookiesLabel);
-        EmitCreateAndCacheClient(followCookiesField, followRedirects: true, useCookies: true);
+        EmitCreateAndCacheClient(client.FollowCookiesClientField, followRedirects: true, useCookies: true);
 
         il.MarkLabel(followNoCookiesLabel);
-        EmitCreateAndCacheClient(followField, followRedirects: true, useCookies: false);
+        EmitCreateAndCacheClient(client.FollowClientField, followRedirects: true, useCookies: false);
 
         // not-follow path: branch on useCookies
         il.MarkLabel(notFollowLabel);
         var noRedirectNoCookiesLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Brfalse, noRedirectNoCookiesLabel);
-        EmitCreateAndCacheClient(noRedirectCookiesField, followRedirects: false, useCookies: true);
+        EmitCreateAndCacheClient(client.NoRedirectCookiesClientField, followRedirects: false, useCookies: true);
 
         il.MarkLabel(noRedirectNoCookiesLabel);
-        EmitCreateAndCacheClient(noRedirectField, followRedirects: false, useCookies: false);
+        EmitCreateAndCacheClient(client.NoRedirectClientField, followRedirects: false, useCookies: false);
     }
 
     /// <summary>
@@ -1622,6 +1612,7 @@ public partial class RuntimeEmitter
     /// </remarks>
     private void EmitCookieJarHelpers(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
+        var client = runtime.Fetch.RequireImplementation().RequireClient();
         var cookieContainerCtor = _types.GetConstructor(_cookieContainerType!, Type.EmptyTypes)!;
         var getCookieHeaderMethod = _types.GetMethod(_cookieContainerType!, "GetCookieHeader", [typeof(Uri)]);
         var setCookiesMethod = _types.GetMethod(_cookieContainerType!, "SetCookies", [typeof(Uri), _types.String]);
@@ -1636,12 +1627,12 @@ public partial class RuntimeEmitter
         void EmitEnsureContainerOnStack(ILGenerator gen)
         {
             var readyLabel = gen.DefineLabel();
-            gen.Emit(OpCodes.Ldsfld, _cookieContainerField);
+            gen.Emit(OpCodes.Ldsfld, client.CookieContainerField);
             gen.Emit(OpCodes.Brtrue, readyLabel);
             gen.Emit(OpCodes.Newobj, cookieContainerCtor);
-            gen.Emit(OpCodes.Stsfld, _cookieContainerField);
+            gen.Emit(OpCodes.Stsfld, client.CookieContainerField);
             gen.MarkLabel(readyLabel);
-            gen.Emit(OpCodes.Ldsfld, _cookieContainerField);
+            gen.Emit(OpCodes.Ldsfld, client.CookieContainerField);
         }
 
         // Local helper: validate url arg via Uri.TryCreate, throw "TypeError: Invalid URL: ..."
@@ -1680,7 +1671,7 @@ public partial class RuntimeEmitter
                 _types.String,
                 [_types.String]
             );
-            runtime.CookieJarGetCookies = method;
+            client.CookieJarGetCookies = method;
             var il = method.GetILGenerator();
 
             // Reject null/empty url with the same TypeError as the validation path
@@ -1707,7 +1698,7 @@ public partial class RuntimeEmitter
                 _types.Void,
                 [_types.String, _types.String]
             );
-            runtime.CookieJarSetCookie = method;
+            client.CookieJarSetCookie = method;
             var il = method.GetILGenerator();
 
             // Reject null url
@@ -1741,12 +1732,12 @@ public partial class RuntimeEmitter
                 _types.Void,
                 Type.EmptyTypes
             );
-            runtime.CookieJarClear = method;
+            client.CookieJarClear = method;
             var il = method.GetILGenerator();
 
             // If the container is null there's nothing to clear.
             var doneLabel = il.DefineLabel();
-            il.Emit(OpCodes.Ldsfld, _cookieContainerField);
+            il.Emit(OpCodes.Ldsfld, client.CookieContainerField);
             il.Emit(OpCodes.Brfalse, doneLabel);
 
             if (getAllCookiesMethod != null)
@@ -1769,7 +1760,7 @@ public partial class RuntimeEmitter
 
                 // Phase 1: foreach (Cookie c in _cookieContainer.GetAllCookies())
                 //   c.Expired = true; domains.Add(c.Domain);
-                il.Emit(OpCodes.Ldsfld, _cookieContainerField);
+                il.Emit(OpCodes.Ldsfld, client.CookieContainerField);
                 il.Emit(OpCodes.Callvirt, getAllCookiesMethod);
                 il.Emit(OpCodes.Castclass, enumerableType);
                 il.Emit(OpCodes.Callvirt, enumeratorMethod);
@@ -1844,7 +1835,7 @@ public partial class RuntimeEmitter
 
                 // try { _cookieContainer.GetCookieHeader(new Uri("http://" + host + "/")); } catch { }
                 il.BeginExceptionBlock();
-                il.Emit(OpCodes.Ldsfld, _cookieContainerField);
+                il.Emit(OpCodes.Ldsfld, client.CookieContainerField);
                 il.Emit(OpCodes.Ldstr, "http://");
                 il.Emit(OpCodes.Ldloc, hostLocal);
                 il.Emit(OpCodes.Ldstr, "/");
@@ -1871,6 +1862,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private MethodBuilder EmitFetchHelper(TypeBuilder typeBuilder, EmittedRuntime runtime, MethodBuilder applyHeadersMethod)
     {
+        var client = runtime.Fetch.RequireImplementation().RequireClient();
         var method = typeBuilder.DefineMethod(
             "FetchHelper",
             MethodAttributes.Private | MethodAttributes.Static,
@@ -1976,7 +1968,7 @@ public partial class RuntimeEmitter
         // first use to avoid static constructor ordering issues.
         il.Emit(OpCodes.Ldloc, redirectLocal);
         il.Emit(OpCodes.Ldloc, useCookiesLocal);
-        il.Emit(OpCodes.Call, _getOrCreateHttpClientMethod!);
+        il.Emit(OpCodes.Call, client.GetOrCreateHttpClient!);
         il.Emit(OpCodes.Stloc, clientLocal);
 
         // Parse method from options (default: "GET")
@@ -2432,6 +2424,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private MethodBuilder EmitApplyRequestHeaders(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
+        var fetch = runtime.Fetch.RequireImplementation();
         var method = typeBuilder.DefineMethod(
             "ApplyRequestHeaders",
             MethodAttributes.Private | MethodAttributes.Static,
@@ -2468,7 +2461,7 @@ public partial class RuntimeEmitter
 
         // Not a dict - check if it's a $Headers instance
         il.Emit(OpCodes.Ldloc, headersObjLocal);
-        il.Emit(OpCodes.Isinst, runtime.TSHeadersType);
+        il.Emit(OpCodes.Isinst, fetch.HeadersType);
         il.Emit(OpCodes.Brfalse, endLabel);
 
         // It's a $Headers - get its _data field and iterate
@@ -2477,8 +2470,8 @@ public partial class RuntimeEmitter
         var dictOfListType = typeof(Dictionary<string, List<string>>);
         var headersDataLocal = il.DeclareLocal(dictOfListType);
         il.Emit(OpCodes.Ldloc, headersObjLocal);
-        il.Emit(OpCodes.Castclass, runtime.TSHeadersType);
-        il.Emit(OpCodes.Ldfld, _headersDataField);
+        il.Emit(OpCodes.Castclass, fetch.HeadersType);
+        il.Emit(OpCodes.Ldfld, fetch.HeadersDataField);
         il.Emit(OpCodes.Stloc, headersDataLocal);
 
         // Iterate _data entries
@@ -2670,6 +2663,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitHttpRequest(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
+        var fetch = runtime.Fetch.RequireImplementation();
         var http = runtime.RequireHttp();
         var method = typeBuilder.DefineMethod(
             "HttpRequest",
@@ -2684,7 +2678,7 @@ public partial class RuntimeEmitter
         // Delegate to Fetch
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.Fetch);
+        il.Emit(OpCodes.Call, fetch.Invoke);
         il.Emit(OpCodes.Ret);
     }
 
@@ -2694,6 +2688,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitHttpGet(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
+        var fetch = runtime.Fetch.RequireImplementation();
         var http = runtime.RequireHttp();
         var method = typeBuilder.DefineMethod(
             "HttpGet",
@@ -2708,7 +2703,7 @@ public partial class RuntimeEmitter
         // Delegate to Fetch
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.Fetch);
+        il.Emit(OpCodes.Call, fetch.Invoke);
         il.Emit(OpCodes.Ret);
     }
 
@@ -3347,19 +3342,13 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, runtime.CreateObject);
     }
 
-    // ===== $Request class fields =====
-    private FieldBuilder _requestMethodField = null!;
-    private FieldBuilder _requestUrlField = null!;
-    private FieldBuilder _requestHeadersField = null!;
-    private FieldBuilder _requestBodyField = null!;
-    private FieldBuilder _requestBodyConsumedField = null!;
-
     /// <summary>
     /// Emits the $Request class for standalone Request constructor support.
     /// Constructor: (object url, object? init) — parses init for method, headers, body.
     /// </summary>
     private void EmitRequestClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
+        var fetch = runtime.Fetch.RequireImplementation();
         var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$Request",
             TypeAttributes.Public | TypeAttributes.Class | TypeAttributes.BeforeFieldInit,
@@ -3367,12 +3356,12 @@ public partial class RuntimeEmitter
         );
 
         // Fields
-        _requestMethodField = typeBuilder.DefineField("_method", _types.String, FieldAttributes.Private);
-        _requestUrlField = typeBuilder.DefineField("_url", _types.String, FieldAttributes.Private);
-        _requestHeadersField = typeBuilder.DefineField("_headers", _types.Object, FieldAttributes.Private);
-        _requestBodyField = typeBuilder.DefineField("_body", _types.Object, FieldAttributes.Private);
+        fetch.RequestMethodField = typeBuilder.DefineField("_method", _types.String, FieldAttributes.Private);
+        fetch.RequestUrlField = typeBuilder.DefineField("_url", _types.String, FieldAttributes.Private);
+        fetch.RequestHeadersField = typeBuilder.DefineField("_headers", _types.Object, FieldAttributes.Private);
+        fetch.RequestBodyField = typeBuilder.DefineField("_body", _types.Object, FieldAttributes.Private);
         typeBuilder.DefineField("_bodyBytes", _types.ByteArray, FieldAttributes.Private);
-        _requestBodyConsumedField = typeBuilder.DefineField("_bodyConsumed", _types.Boolean, FieldAttributes.Private);
+        fetch.RequestBodyConsumedField = typeBuilder.DefineField("_bodyConsumed", _types.Boolean, FieldAttributes.Private);
 
         // Constructor: (object url, object? init)
         var ctor = typeBuilder.DefineConstructor(
@@ -3390,18 +3379,18 @@ public partial class RuntimeEmitter
         EmitArgToString(il, 1, urlLocal);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, urlLocal);
-        il.Emit(OpCodes.Stfld, _requestUrlField);
+        il.Emit(OpCodes.Stfld, fetch.RequestUrlField);
 
         // _method = "GET" (default)
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "GET");
-        il.Emit(OpCodes.Stfld, _requestMethodField);
+        il.Emit(OpCodes.Stfld, fetch.RequestMethodField);
 
         // _headers = new $Headers(null)
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Newobj, runtime.TSHeadersCtor);
-        il.Emit(OpCodes.Stfld, _requestHeadersField);
+        il.Emit(OpCodes.Newobj, fetch.HeadersCtor);
+        il.Emit(OpCodes.Stfld, fetch.RequestHeadersField);
 
         // if (init != null) parse init properties
         var endInit = il.DefineLabel();
@@ -3422,7 +3411,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, methodLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "ToString", Type.EmptyTypes)!);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "ToUpperInvariant")!);
-        il.Emit(OpCodes.Stfld, _requestMethodField);
+        il.Emit(OpCodes.Stfld, fetch.RequestMethodField);
         il.MarkLabel(skipMethod);
 
         // headers from init
@@ -3438,8 +3427,8 @@ public partial class RuntimeEmitter
         // _headers = new $Headers(headersObj)
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, headersLocal);
-        il.Emit(OpCodes.Newobj, runtime.TSHeadersCtor);
-        il.Emit(OpCodes.Stfld, _requestHeadersField);
+        il.Emit(OpCodes.Newobj, fetch.HeadersCtor);
+        il.Emit(OpCodes.Stfld, fetch.RequestHeadersField);
         il.MarkLabel(skipHeaders);
 
         // body from init
@@ -3454,40 +3443,41 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, skipBody);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, bodyLocal);
-        il.Emit(OpCodes.Stfld, _requestBodyField);
+        il.Emit(OpCodes.Stfld, fetch.RequestBodyField);
         il.MarkLabel(skipBody);
 
         il.MarkLabel(endInit);
         il.Emit(OpCodes.Ret);
 
         // Property getters
-        EmitFetchResponsePropertyGetter(typeBuilder, "method", _types.String, _requestMethodField);
-        EmitFetchResponsePropertyGetter(typeBuilder, "url", _types.String, _requestUrlField);
-        EmitFetchResponsePropertyGetter(typeBuilder, "headers", _types.Object, _requestHeadersField);
-        EmitFetchResponsePropertyGetter(typeBuilder, "body", _types.Object, _requestBodyField);
-        EmitFetchResponsePropertyGetter(typeBuilder, "bodyUsed", _types.Boolean, _requestBodyConsumedField);
+        EmitFetchResponsePropertyGetter(typeBuilder, "method", _types.String, fetch.RequestMethodField);
+        EmitFetchResponsePropertyGetter(typeBuilder, "url", _types.String, fetch.RequestUrlField);
+        EmitFetchResponsePropertyGetter(typeBuilder, "headers", _types.Object, fetch.RequestHeadersField);
+        EmitFetchResponsePropertyGetter(typeBuilder, "body", _types.Object, fetch.RequestBodyField);
+        EmitFetchResponsePropertyGetter(typeBuilder, "bodyUsed", _types.Boolean, fetch.RequestBodyConsumedField);
 
         // Body reading methods (text, json, arrayBuffer) and clone
         EmitRequestTextMethod(typeBuilder, runtime);
         EmitRequestJsonMethod(typeBuilder, runtime);
         EmitRequestArrayBufferMethod(typeBuilder, runtime);
-        EmitRequestCloneMethod(typeBuilder, runtime, ctor);
+        EmitRequestCloneMethod(typeBuilder, fetch, ctor);
 
         _ = typeBuilder;
-        runtime.TSRequestCtor = ctor;
+        fetch.RequestCtor = ctor;
 
         typeBuilder.CreateType();
     }
 
     private void EmitRequestTextMethod(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
+        var fetch = runtime.Fetch.RequireImplementation();
         var method = typeBuilder.DefineMethod("text", MethodAttributes.Public, _types.Object, Type.EmptyTypes);
         var il = method.GetILGenerator();
 
         // Get body as string: body?.ToString() ?? ""
         var bodyLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _requestBodyField);
+        il.Emit(OpCodes.Ldfld, fetch.RequestBodyField);
         il.Emit(OpCodes.Stloc, bodyLocal);
 
         var hasBody = il.DefineLabel();
@@ -3507,7 +3497,7 @@ public partial class RuntimeEmitter
         // Mark consumed
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Stfld, _requestBodyConsumedField);
+        il.Emit(OpCodes.Stfld, fetch.RequestBodyConsumedField);
         // Wrap in Promise
         il.Emit(OpCodes.Call, runtime.RequirePromise().TypeResolve);
         il.Emit(OpCodes.Ret);
@@ -3515,13 +3505,14 @@ public partial class RuntimeEmitter
 
     private void EmitRequestJsonMethod(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
+        var fetch = runtime.Fetch.RequireImplementation();
         var method = typeBuilder.DefineMethod("json", MethodAttributes.Public, _types.Object, Type.EmptyTypes);
         var il = method.GetILGenerator();
 
         // Get body as string then parse JSON
         var bodyLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _requestBodyField);
+        il.Emit(OpCodes.Ldfld, fetch.RequestBodyField);
         il.Emit(OpCodes.Stloc, bodyLocal);
 
         var hasBody = il.DefineLabel();
@@ -3542,20 +3533,21 @@ public partial class RuntimeEmitter
         // Mark consumed
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Stfld, _requestBodyConsumedField);
+        il.Emit(OpCodes.Stfld, fetch.RequestBodyConsumedField);
         il.Emit(OpCodes.Call, runtime.RequirePromise().TypeResolve);
         il.Emit(OpCodes.Ret);
     }
 
     private void EmitRequestArrayBufferMethod(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
+        var fetch = runtime.Fetch.RequireImplementation();
         var method = typeBuilder.DefineMethod("arrayBuffer", MethodAttributes.Public, _types.Object, Type.EmptyTypes);
         var il = method.GetILGenerator();
 
         // Convert body to bytes, create Buffer
         var bodyLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _requestBodyField);
+        il.Emit(OpCodes.Ldfld, fetch.RequestBodyField);
         il.Emit(OpCodes.Stloc, bodyLocal);
 
         var hasBody = il.DefineLabel();
@@ -3580,12 +3572,12 @@ public partial class RuntimeEmitter
         // Mark consumed
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Stfld, _requestBodyConsumedField);
+        il.Emit(OpCodes.Stfld, fetch.RequestBodyConsumedField);
         il.Emit(OpCodes.Call, runtime.RequirePromise().TypeResolve);
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitRequestCloneMethod(TypeBuilder typeBuilder, EmittedRuntime runtime, ConstructorBuilder ctor)
+    private void EmitRequestCloneMethod(TypeBuilder typeBuilder, EmittedFetchImplementation fetch, ConstructorBuilder ctor)
     {
         var method = typeBuilder.DefineMethod("clone", MethodAttributes.Public, _types.Object, Type.EmptyTypes);
         var il = method.GetILGenerator();
@@ -3593,39 +3585,30 @@ public partial class RuntimeEmitter
         // Build an init object with current properties, call constructor
         // For simplicity: new $Request(url, null) then copy fields
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _requestUrlField);
+        il.Emit(OpCodes.Ldfld, fetch.RequestUrlField);
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Newobj, ctor);
 
         // Copy _method
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _requestMethodField);
-        il.Emit(OpCodes.Stfld, _requestMethodField);
+        il.Emit(OpCodes.Ldfld, fetch.RequestMethodField);
+        il.Emit(OpCodes.Stfld, fetch.RequestMethodField);
 
         // Copy _headers
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _requestHeadersField);
-        il.Emit(OpCodes.Stfld, _requestHeadersField);
+        il.Emit(OpCodes.Ldfld, fetch.RequestHeadersField);
+        il.Emit(OpCodes.Stfld, fetch.RequestHeadersField);
 
         // Copy _body
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _requestBodyField);
-        il.Emit(OpCodes.Stfld, _requestBodyField);
+        il.Emit(OpCodes.Ldfld, fetch.RequestBodyField);
+        il.Emit(OpCodes.Stfld, fetch.RequestBodyField);
 
         il.Emit(OpCodes.Ret);
     }
-
-    // ===== $Response class fields =====
-    private FieldBuilder _responseStatusField = null!;
-    private FieldBuilder _responseStatusTextField = null!;
-    private FieldBuilder _responseOkField = null!;
-    private FieldBuilder _responseHeadersField = null!;
-    private FieldBuilder _responseBodyBytesField = null!;
-    private FieldBuilder _responseBodyConsumedField = null!;
-    private FieldBuilder _responseTypeField = null!;
 
     /// <summary>
     /// Emits the $Response class for standalone Response constructor support.
@@ -3633,6 +3616,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitResponseClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
+        var fetch = runtime.Fetch.RequireImplementation();
         var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$Response",
             TypeAttributes.Public | TypeAttributes.Class | TypeAttributes.BeforeFieldInit,
@@ -3640,13 +3624,13 @@ public partial class RuntimeEmitter
         );
 
         // Fields
-        _responseStatusField = typeBuilder.DefineField("_status", _types.Double, FieldAttributes.Assembly);
-        _responseStatusTextField = typeBuilder.DefineField("_statusText", _types.String, FieldAttributes.Assembly);
-        _responseOkField = typeBuilder.DefineField("_ok", _types.Boolean, FieldAttributes.Assembly);
-        _responseHeadersField = typeBuilder.DefineField("_headers", _types.Object, FieldAttributes.Assembly);
-        _responseBodyBytesField = typeBuilder.DefineField("_bodyBytes", _types.ByteArray, FieldAttributes.Assembly);
-        _responseBodyConsumedField = typeBuilder.DefineField("_bodyConsumed", _types.Boolean, FieldAttributes.Assembly);
-        _responseTypeField = typeBuilder.DefineField("_type", _types.String, FieldAttributes.Assembly);
+        fetch.ResponseStatusField = typeBuilder.DefineField("_status", _types.Double, FieldAttributes.Assembly);
+        fetch.ResponseStatusTextField = typeBuilder.DefineField("_statusText", _types.String, FieldAttributes.Assembly);
+        fetch.ResponseOkField = typeBuilder.DefineField("_ok", _types.Boolean, FieldAttributes.Assembly);
+        fetch.ResponseHeadersField = typeBuilder.DefineField("_headers", _types.Object, FieldAttributes.Assembly);
+        fetch.ResponseBodyBytesField = typeBuilder.DefineField("_bodyBytes", _types.ByteArray, FieldAttributes.Assembly);
+        fetch.ResponseBodyConsumedField = typeBuilder.DefineField("_bodyConsumed", _types.Boolean, FieldAttributes.Assembly);
+        fetch.ResponseTypeField = typeBuilder.DefineField("_type", _types.String, FieldAttributes.Assembly);
 
         // Constructor: (object? body, object? init)
         var ctor = typeBuilder.DefineConstructor(
@@ -3662,24 +3646,24 @@ public partial class RuntimeEmitter
         // Defaults
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_R8, 200.0);
-        il.Emit(OpCodes.Stfld, _responseStatusField);
+        il.Emit(OpCodes.Stfld, fetch.ResponseStatusField);
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "");
-        il.Emit(OpCodes.Stfld, _responseStatusTextField);
+        il.Emit(OpCodes.Stfld, fetch.ResponseStatusTextField);
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_1); // ok = true (200 is in range)
-        il.Emit(OpCodes.Stfld, _responseOkField);
+        il.Emit(OpCodes.Stfld, fetch.ResponseOkField);
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "default");
-        il.Emit(OpCodes.Stfld, _responseTypeField);
+        il.Emit(OpCodes.Stfld, fetch.ResponseTypeField);
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Newobj, runtime.TSHeadersCtor);
-        il.Emit(OpCodes.Stfld, _responseHeadersField);
+        il.Emit(OpCodes.Newobj, fetch.HeadersCtor);
+        il.Emit(OpCodes.Stfld, fetch.ResponseHeadersField);
 
         // Convert body to bytes
         // if (body == null) _bodyBytes = new byte[0]
@@ -3696,14 +3680,14 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "ToString", Type.EmptyTypes)!);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Encoding, "GetBytes", [_types.String])!);
-        il.Emit(OpCodes.Stfld, _responseBodyBytesField);
+        il.Emit(OpCodes.Stfld, fetch.ResponseBodyBytesField);
         il.Emit(OpCodes.Br, bodyDone);
 
         il.MarkLabel(bodyIsNull);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Newarr, _types.Byte);
-        il.Emit(OpCodes.Stfld, _responseBodyBytesField);
+        il.Emit(OpCodes.Stfld, fetch.ResponseBodyBytesField);
 
         il.MarkLabel(bodyDone);
 
@@ -3726,17 +3710,17 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, statusLocal);
         il.Emit(OpCodes.Call, runtime.ToNumber);
-        il.Emit(OpCodes.Stfld, _responseStatusField);
+        il.Emit(OpCodes.Stfld, fetch.ResponseStatusField);
         // _ok = status >= 200 && status <= 299
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _responseStatusField);
+        il.Emit(OpCodes.Ldfld, fetch.ResponseStatusField);
         il.Emit(OpCodes.Ldc_R8, 200.0);
         var notOk = il.DefineLabel();
         var setOk = il.DefineLabel();
         il.Emit(OpCodes.Blt, notOk);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _responseStatusField);
+        il.Emit(OpCodes.Ldfld, fetch.ResponseStatusField);
         il.Emit(OpCodes.Ldc_R8, 299.0);
         il.Emit(OpCodes.Bgt, notOk);
         il.Emit(OpCodes.Ldc_I4_1);
@@ -3744,7 +3728,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(notOk);
         il.Emit(OpCodes.Ldc_I4_0);
         il.MarkLabel(setOk);
-        il.Emit(OpCodes.Stfld, _responseOkField);
+        il.Emit(OpCodes.Stfld, fetch.ResponseOkField);
         il.MarkLabel(skipStatus);
 
         // statusText from init
@@ -3760,7 +3744,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, stLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "ToString", Type.EmptyTypes)!);
-        il.Emit(OpCodes.Stfld, _responseStatusTextField);
+        il.Emit(OpCodes.Stfld, fetch.ResponseStatusTextField);
         il.MarkLabel(skipST);
 
         // headers from init
@@ -3775,20 +3759,20 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, skipH);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, hLocal);
-        il.Emit(OpCodes.Newobj, runtime.TSHeadersCtor);
-        il.Emit(OpCodes.Stfld, _responseHeadersField);
+        il.Emit(OpCodes.Newobj, fetch.HeadersCtor);
+        il.Emit(OpCodes.Stfld, fetch.ResponseHeadersField);
         il.MarkLabel(skipH);
 
         il.MarkLabel(endInit);
         il.Emit(OpCodes.Ret);
 
         // Property getters
-        EmitFetchResponsePropertyGetter(typeBuilder, "status", _types.Double, _responseStatusField);
-        EmitFetchResponsePropertyGetter(typeBuilder, "statusText", _types.String, _responseStatusTextField);
-        EmitFetchResponsePropertyGetter(typeBuilder, "ok", _types.Boolean, _responseOkField);
-        EmitFetchResponsePropertyGetter(typeBuilder, "headers", _types.Object, _responseHeadersField);
-        EmitFetchResponsePropertyGetter(typeBuilder, "bodyUsed", _types.Boolean, _responseBodyConsumedField);
-        EmitFetchResponsePropertyGetter(typeBuilder, "type", _types.String, _responseTypeField);
+        EmitFetchResponsePropertyGetter(typeBuilder, "status", _types.Double, fetch.ResponseStatusField);
+        EmitFetchResponsePropertyGetter(typeBuilder, "statusText", _types.String, fetch.ResponseStatusTextField);
+        EmitFetchResponsePropertyGetter(typeBuilder, "ok", _types.Boolean, fetch.ResponseOkField);
+        EmitFetchResponsePropertyGetter(typeBuilder, "headers", _types.Object, fetch.ResponseHeadersField);
+        EmitFetchResponsePropertyGetter(typeBuilder, "bodyUsed", _types.Boolean, fetch.ResponseBodyConsumedField);
+        EmitFetchResponsePropertyGetter(typeBuilder, "type", _types.String, fetch.ResponseTypeField);
 
         // Computed properties (url = "", redirected = false)
         EmitResponseConstantProperty(typeBuilder, "url", _types.String, "");
@@ -3798,10 +3782,10 @@ public partial class RuntimeEmitter
         EmitResponseTextMethod(typeBuilder, runtime);
         EmitResponseJsonMethod(typeBuilder, runtime);
         EmitResponseArrayBufferMethod(typeBuilder, runtime);
-        EmitResponseCloneMethod(typeBuilder, runtime, ctor);
+        EmitResponseCloneMethod(typeBuilder, fetch, ctor);
 
-        runtime.TSResponseType = typeBuilder;
-        runtime.TSResponseCtor = ctor;
+        fetch.ResponseType = typeBuilder;
+        fetch.ResponseCtor = ctor;
 
         typeBuilder.CreateType();
     }
@@ -3842,17 +3826,18 @@ public partial class RuntimeEmitter
 
     private void EmitResponseTextMethod(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
+        var fetch = runtime.Fetch.RequireImplementation();
         var method = typeBuilder.DefineMethod("text", MethodAttributes.Public, _types.Object, Type.EmptyTypes);
         var il = method.GetILGenerator();
 
         il.Emit(OpCodes.Call, _types.GetProperty(_types.Encoding, "UTF8")!.GetGetMethod()!);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _responseBodyBytesField);
+        il.Emit(OpCodes.Ldfld, fetch.ResponseBodyBytesField);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Encoding, "GetString", [_types.ByteArray])!);
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Stfld, _responseBodyConsumedField);
+        il.Emit(OpCodes.Stfld, fetch.ResponseBodyConsumedField);
 
         il.Emit(OpCodes.Call, runtime.RequirePromise().TypeResolve);
         il.Emit(OpCodes.Ret);
@@ -3860,18 +3845,19 @@ public partial class RuntimeEmitter
 
     private void EmitResponseJsonMethod(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
+        var fetch = runtime.Fetch.RequireImplementation();
         var method = typeBuilder.DefineMethod("json", MethodAttributes.Public, _types.Object, Type.EmptyTypes);
         var il = method.GetILGenerator();
 
         il.Emit(OpCodes.Call, _types.GetProperty(_types.Encoding, "UTF8")!.GetGetMethod()!);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _responseBodyBytesField);
+        il.Emit(OpCodes.Ldfld, fetch.ResponseBodyBytesField);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Encoding, "GetString", [_types.ByteArray])!);
         il.Emit(OpCodes.Call, runtime.JsonParse);
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Stfld, _responseBodyConsumedField);
+        il.Emit(OpCodes.Stfld, fetch.ResponseBodyConsumedField);
 
         il.Emit(OpCodes.Call, runtime.RequirePromise().TypeResolve);
         il.Emit(OpCodes.Ret);
@@ -3879,22 +3865,23 @@ public partial class RuntimeEmitter
 
     private void EmitResponseArrayBufferMethod(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
+        var fetch = runtime.Fetch.RequireImplementation();
         var method = typeBuilder.DefineMethod("arrayBuffer", MethodAttributes.Public, _types.Object, Type.EmptyTypes);
         var il = method.GetILGenerator();
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _responseBodyBytesField);
+        il.Emit(OpCodes.Ldfld, fetch.ResponseBodyBytesField);
         il.Emit(OpCodes.Newobj, runtime.TSBufferCtor);
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Stfld, _responseBodyConsumedField);
+        il.Emit(OpCodes.Stfld, fetch.ResponseBodyConsumedField);
 
         il.Emit(OpCodes.Call, runtime.RequirePromise().TypeResolve);
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitResponseCloneMethod(TypeBuilder typeBuilder, EmittedRuntime runtime, ConstructorBuilder ctor)
+    private void EmitResponseCloneMethod(TypeBuilder typeBuilder, EmittedFetchImplementation fetch, ConstructorBuilder ctor)
     {
         var method = typeBuilder.DefineMethod("clone", MethodAttributes.Public, _types.Object, Type.EmptyTypes);
         var il = method.GetILGenerator();
@@ -3907,38 +3894,38 @@ public partial class RuntimeEmitter
         // Copy status
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _responseStatusField);
-        il.Emit(OpCodes.Stfld, _responseStatusField);
+        il.Emit(OpCodes.Ldfld, fetch.ResponseStatusField);
+        il.Emit(OpCodes.Stfld, fetch.ResponseStatusField);
 
         // Copy statusText
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _responseStatusTextField);
-        il.Emit(OpCodes.Stfld, _responseStatusTextField);
+        il.Emit(OpCodes.Ldfld, fetch.ResponseStatusTextField);
+        il.Emit(OpCodes.Stfld, fetch.ResponseStatusTextField);
 
         // Copy ok
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _responseOkField);
-        il.Emit(OpCodes.Stfld, _responseOkField);
+        il.Emit(OpCodes.Ldfld, fetch.ResponseOkField);
+        il.Emit(OpCodes.Stfld, fetch.ResponseOkField);
 
         // Copy type
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _responseTypeField);
-        il.Emit(OpCodes.Stfld, _responseTypeField);
+        il.Emit(OpCodes.Ldfld, fetch.ResponseTypeField);
+        il.Emit(OpCodes.Stfld, fetch.ResponseTypeField);
 
         // Copy headers
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _responseHeadersField);
-        il.Emit(OpCodes.Stfld, _responseHeadersField);
+        il.Emit(OpCodes.Ldfld, fetch.ResponseHeadersField);
+        il.Emit(OpCodes.Stfld, fetch.ResponseHeadersField);
 
         // Copy body bytes
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _responseBodyBytesField);
-        il.Emit(OpCodes.Stfld, _responseBodyBytesField);
+        il.Emit(OpCodes.Ldfld, fetch.ResponseBodyBytesField);
+        il.Emit(OpCodes.Stfld, fetch.ResponseBodyBytesField);
 
         il.Emit(OpCodes.Ret);
     }
@@ -3950,8 +3937,9 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitResponseStaticMethods(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
+        var fetch = runtime.Fetch.RequireImplementation();
         // Get the $Headers.set method for calling on headers objects
-        var headersSetMethod = runtime.TSHeadersSetMethod;
+        var headersSetMethod = fetch.HeadersSetMethod;
 
         // ResponseJson(object? data, object? init) → $Response
         var jsonMethod = typeBuilder.DefineMethod(
@@ -3960,7 +3948,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object, _types.Object]
         );
-        runtime.ResponseJsonStatic = jsonMethod;
+        fetch.ResponseJsonStatic = jsonMethod;
 
         var il = jsonMethod.GetILGenerator();
         // JSON.stringify the data → string body
@@ -3972,14 +3960,14 @@ public partial class RuntimeEmitter
         // new $Response(body, init)
         il.Emit(OpCodes.Ldloc, bodyLocal);
         il.Emit(OpCodes.Ldarg_1); // init
-        il.Emit(OpCodes.Newobj, runtime.TSResponseCtor);
-        var respLocal = il.DeclareLocal(runtime.TSResponseType);
+        il.Emit(OpCodes.Newobj, fetch.ResponseCtor);
+        var respLocal = il.DeclareLocal(fetch.ResponseType);
         il.Emit(OpCodes.Stloc, respLocal);
 
         // Set content-type on the response's headers via $Headers.set
         il.Emit(OpCodes.Ldloc, respLocal);
-        il.Emit(OpCodes.Ldfld, _responseHeadersField);
-        il.Emit(OpCodes.Castclass, runtime.TSHeadersType);
+        il.Emit(OpCodes.Ldfld, fetch.ResponseHeadersField);
+        il.Emit(OpCodes.Castclass, fetch.HeadersType);
         il.Emit(OpCodes.Ldstr, "content-type");
         il.Emit(OpCodes.Ldstr, "application/json");
         il.Emit(OpCodes.Callvirt, headersSetMethod);
@@ -3995,13 +3983,13 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object, _types.Object]
         );
-        runtime.ResponseRedirectStatic = redirectMethod;
+        fetch.ResponseRedirectStatic = redirectMethod;
 
         il = redirectMethod.GetILGenerator();
         il.Emit(OpCodes.Ldnull); // body
         il.Emit(OpCodes.Ldnull); // init
-        il.Emit(OpCodes.Newobj, runtime.TSResponseCtor);
-        var rLocal = il.DeclareLocal(runtime.TSResponseType);
+        il.Emit(OpCodes.Newobj, fetch.ResponseCtor);
+        var rLocal = il.DeclareLocal(fetch.ResponseType);
         il.Emit(OpCodes.Stloc, rLocal);
 
         // Set status: default 302, or from arg
@@ -4013,24 +4001,24 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, rLocal);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, runtime.ToNumber);
-        il.Emit(OpCodes.Stfld, _responseStatusField);
+        il.Emit(OpCodes.Stfld, fetch.ResponseStatusField);
         il.Emit(OpCodes.Br, statusDone);
 
         il.MarkLabel(useDefault);
         il.Emit(OpCodes.Ldloc, rLocal);
         il.Emit(OpCodes.Ldc_R8, 302.0);
-        il.Emit(OpCodes.Stfld, _responseStatusField);
+        il.Emit(OpCodes.Stfld, fetch.ResponseStatusField);
 
         il.MarkLabel(statusDone);
         // ok = false for all redirects
         il.Emit(OpCodes.Ldloc, rLocal);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Stfld, _responseOkField);
+        il.Emit(OpCodes.Stfld, fetch.ResponseOkField);
 
         // Set Location header via $Headers.set
         il.Emit(OpCodes.Ldloc, rLocal);
-        il.Emit(OpCodes.Ldfld, _responseHeadersField);
-        il.Emit(OpCodes.Castclass, runtime.TSHeadersType);
+        il.Emit(OpCodes.Ldfld, fetch.ResponseHeadersField);
+        il.Emit(OpCodes.Castclass, fetch.HeadersType);
         il.Emit(OpCodes.Ldstr, "location");
         il.Emit(OpCodes.Ldarg_0); // url
         il.Emit(OpCodes.Callvirt, headersSetMethod);
@@ -4046,29 +4034,29 @@ public partial class RuntimeEmitter
             _types.Object,
             Type.EmptyTypes
         );
-        runtime.ResponseErrorStatic = errorMethod;
+        fetch.ResponseErrorStatic = errorMethod;
 
         il = errorMethod.GetILGenerator();
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Newobj, runtime.TSResponseCtor);
-        var eLocal = il.DeclareLocal(runtime.TSResponseType);
+        il.Emit(OpCodes.Newobj, fetch.ResponseCtor);
+        var eLocal = il.DeclareLocal(fetch.ResponseType);
         il.Emit(OpCodes.Stloc, eLocal);
 
         // Set status to 0
         il.Emit(OpCodes.Ldloc, eLocal);
         il.Emit(OpCodes.Ldc_R8, 0.0);
-        il.Emit(OpCodes.Stfld, _responseStatusField);
+        il.Emit(OpCodes.Stfld, fetch.ResponseStatusField);
 
         // Set ok to false
         il.Emit(OpCodes.Ldloc, eLocal);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Stfld, _responseOkField);
+        il.Emit(OpCodes.Stfld, fetch.ResponseOkField);
 
         // Set type to "error"
         il.Emit(OpCodes.Ldloc, eLocal);
         il.Emit(OpCodes.Ldstr, "error");
-        il.Emit(OpCodes.Stfld, _responseTypeField);
+        il.Emit(OpCodes.Stfld, fetch.ResponseTypeField);
 
         il.Emit(OpCodes.Ldloc, eLocal);
         il.Emit(OpCodes.Ret);

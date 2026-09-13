@@ -2363,7 +2363,7 @@ public abstract partial class ExpressionEmitterBase
     {
         EmitBoxedArgOrNull(arguments, 0);
         EmitBoxedArgOrNull(arguments, 1);
-        IL.Emit(OpCodes.Call, Ctx.Runtime!.Fetch);
+        IL.Emit(OpCodes.Call, Ctx.Runtime!.Fetch.RequireImplementation().Invoke);
         SetStackUnknown();
     }
 

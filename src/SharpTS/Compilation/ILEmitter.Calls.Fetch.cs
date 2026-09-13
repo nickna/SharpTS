@@ -38,7 +38,7 @@ public partial class ILEmitter
         }
 
         // Call $Runtime.Fetch(url, options) - returns Promise
-        IL.Emit(OpCodes.Call, _ctx.Runtime!.Fetch);
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.Fetch.RequireImplementation().Invoke);
 
         // fetch returns a Promise, mark stack as reference type
         SetStackUnknown();
