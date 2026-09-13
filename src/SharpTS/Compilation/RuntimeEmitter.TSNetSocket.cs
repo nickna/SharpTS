@@ -88,7 +88,7 @@ public partial class RuntimeEmitter
         var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$NetSocket",
             TypeAttributes.Public | TypeAttributes.BeforeFieldInit,
-            runtime.TSEventEmitterType
+            runtime.EventEmitter.Type
         );
         runtime.RequireNet().SocketType = typeBuilder;
 
@@ -307,7 +307,7 @@ public partial class RuntimeEmitter
         var il = ctor.GetILGenerator();
         // base()
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.TSEventEmitterCtor);
+        il.Emit(OpCodes.Call, runtime.EventEmitter.Ctor);
         // _encoding = "utf8"
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "utf8");
@@ -328,7 +328,7 @@ public partial class RuntimeEmitter
         var il = ctor.GetILGenerator();
         // base()
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.TSEventEmitterCtor);
+        il.Emit(OpCodes.Call, runtime.EventEmitter.Ctor);
         // _client = client
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
@@ -358,7 +358,7 @@ public partial class RuntimeEmitter
         var il = ctor.GetILGenerator();
         // base()
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.TSEventEmitterCtor);
+        il.Emit(OpCodes.Call, runtime.EventEmitter.Ctor);
         // _stream = arg1
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
@@ -568,7 +568,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "connect");
         il.Emit(OpCodes.Ldloc, callbackLocal);
-        il.Emit(OpCodes.Callvirt, runtime.TSEventEmitterOn);
+        il.Emit(OpCodes.Callvirt, runtime.EventEmitter.On);
         il.Emit(OpCodes.Pop);
 
         il.MarkLabel(noCallback);
@@ -1448,7 +1448,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, "drain");
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Newarr, _types.Object);
-        il.Emit(OpCodes.Callvirt, runtime.TSEventEmitterEmit);
+        il.Emit(OpCodes.Callvirt, runtime.EventEmitter.Emit);
         il.Emit(OpCodes.Pop);
         il.MarkLabel(skip);
 
@@ -1561,7 +1561,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, msgLocal);
         il.Emit(OpCodes.Newobj, runtime.TSErrorCtorMessage);
         il.Emit(OpCodes.Stelem_Ref);
-        il.Emit(OpCodes.Callvirt, runtime.TSEventEmitterEmit);
+        il.Emit(OpCodes.Callvirt, runtime.EventEmitter.Emit);
         il.Emit(OpCodes.Pop);
 
         il.MarkLabel(done);
@@ -1902,7 +1902,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ceq); // arg1 != null
         il.Emit(OpCodes.Box, _types.Boolean);
         il.Emit(OpCodes.Stelem_Ref);
-        il.Emit(OpCodes.Callvirt, runtime.TSEventEmitterEmit);
+        il.Emit(OpCodes.Callvirt, runtime.EventEmitter.Emit);
         il.Emit(OpCodes.Pop);
         il.MarkLabel(closeAlreadyEmitted);
 

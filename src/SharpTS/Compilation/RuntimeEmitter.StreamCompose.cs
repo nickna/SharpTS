@@ -427,10 +427,10 @@ public partial class RuntimeEmitter
     private void EmitOnListener(ILGenerator il, EmittedRuntime runtime, Action loadEmitter, string eventName, LocalBuilder bridgeLocal, MethodBuilder bridgeMethod)
     {
         loadEmitter();
-        il.Emit(OpCodes.Castclass, runtime.TSEventEmitterType);
+        il.Emit(OpCodes.Castclass, runtime.EventEmitter.Type);
         il.Emit(OpCodes.Ldstr, eventName);
         EmitBridgeTSFunction(il, runtime, bridgeLocal, bridgeMethod);
-        il.Emit(OpCodes.Callvirt, runtime.TSEventEmitterOn);
+        il.Emit(OpCodes.Callvirt, runtime.EventEmitter.On);
         il.Emit(OpCodes.Pop);
     }
 }

@@ -367,7 +367,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, "finish");
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Newarr, _types.Object);
-        il.Emit(OpCodes.Call, runtime.TSEventEmitterEmit);
+        il.Emit(OpCodes.Call, runtime.EventEmitter.Emit);
         il.Emit(OpCodes.Pop);
 
         il.MarkLabel(alreadyEndedLabel);

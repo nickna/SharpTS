@@ -638,6 +638,7 @@ public partial class RuntimeEmitter
         runtime.SharedArrayBuffer?.CompleteEmission();
         runtime.DataView?.CompleteEmission();
         runtime.TypedArrays.CompleteEmission();
+        runtime.EventEmitter.CompleteEmission();
         runtime.Buffer?.CompleteEmission();
         runtime.ArrayStorage.CompleteEmission();
         runtime.ArrayOperations.CompleteEmission();

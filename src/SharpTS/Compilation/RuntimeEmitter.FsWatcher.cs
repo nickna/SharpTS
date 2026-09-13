@@ -36,7 +36,7 @@ public partial class RuntimeEmitter
         _fsWatcherType = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$FsWatcher",
             TypeAttributes.Public | TypeAttributes.BeforeFieldInit,
-            runtime.TSEventEmitterType);
+            runtime.EventEmitter.Type);
 
         _fsWatcherFswField = _fsWatcherType.DefineField("_watcher", typeof(FileSystemWatcher), FieldAttributes.Private);
         _fsWatcherClosedField = _fsWatcherType.DefineField("_closed", _types.Boolean, FieldAttributes.Private);
@@ -61,14 +61,14 @@ public partial class RuntimeEmitter
             "$FsWatchChangeClosure",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit);
 
-        _fsWatchClosureWatcherField = _fsWatchClosureType.DefineField("_watcher", runtime.TSEventEmitterType, FieldAttributes.Public);
+        _fsWatchClosureWatcherField = _fsWatchClosureType.DefineField("_watcher", runtime.EventEmitter.Type, FieldAttributes.Public);
         _fsWatchClosureEventTypeField = _fsWatchClosureType.DefineField("_eventType", _types.String, FieldAttributes.Public);
         _fsWatchClosureFilenameField = _fsWatchClosureType.DefineField("_filename", _types.String, FieldAttributes.Public);
 
         // Constructor(watcher, eventType, filename)
         _fsWatchClosureCtor = _fsWatchClosureType.DefineConstructor(
             MethodAttributes.Public, CallingConventions.Standard,
-            [runtime.TSEventEmitterType, _types.String, _types.String]);
+            [runtime.EventEmitter.Type, _types.String, _types.String]);
         {
             var il = _fsWatchClosureCtor.GetILGenerator();
             il.Emit(OpCodes.Ldarg_0);
@@ -100,7 +100,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldfld, _fsWatchClosureFilenameField);
             il.Emit(OpCodes.Stelem_Ref);
-            il.Emit(OpCodes.Call, runtime.TSEventEmitterEmit);
+            il.Emit(OpCodes.Call, runtime.EventEmitter.Emit);
             il.Emit(OpCodes.Pop); // Emit returns bool
             il.Emit(OpCodes.Ret);
         }
@@ -167,7 +167,7 @@ public partial class RuntimeEmitter
 
         // Call base $EventEmitter ctor
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.TSEventEmitterCtor);
+        il.Emit(OpCodes.Call, runtime.EventEmitter.Ctor);
 
         // _closed = false
         il.Emit(OpCodes.Ldarg_0);
@@ -357,7 +357,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, watcherLocal);
         il.Emit(OpCodes.Ldstr, "change");
         il.Emit(OpCodes.Ldloc, callbackLocal);
-        il.Emit(OpCodes.Callvirt, runtime.TSEventEmitterOn);
+        il.Emit(OpCodes.Callvirt, runtime.EventEmitter.On);
         il.Emit(OpCodes.Pop);
 
         il.MarkLabel(noCallbackLabel);
@@ -460,7 +460,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, watcherLocal);
         il.Emit(OpCodes.Ldstr, "change");
         il.Emit(OpCodes.Ldloc, callbackLocal);
-        il.Emit(OpCodes.Callvirt, runtime.TSEventEmitterOn);
+        il.Emit(OpCodes.Callvirt, runtime.EventEmitter.On);
         il.Emit(OpCodes.Pop);
 
         il.MarkLabel(noCallbackLabel);

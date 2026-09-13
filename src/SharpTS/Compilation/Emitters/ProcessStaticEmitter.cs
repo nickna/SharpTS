@@ -484,14 +484,14 @@ public sealed class ProcessStaticEmitter : IStaticTypeEmitterStrategy
                 il.Emit(OpCodes.Call, runtime.GetProcessEventEmitter);
                 EmitStringArg(emitter, arguments, 0);
                 EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 1);
-                il.Emit(OpCodes.Callvirt, runtime.TSEventEmitterOn);
+                il.Emit(OpCodes.Callvirt, runtime.EventEmitter.On);
                 break;
 
             case "once":
                 il.Emit(OpCodes.Call, runtime.GetProcessEventEmitter);
                 EmitStringArg(emitter, arguments, 0);
                 EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 1);
-                il.Emit(OpCodes.Callvirt, runtime.TSEventEmitterOnce);
+                il.Emit(OpCodes.Callvirt, runtime.EventEmitter.Once);
                 break;
 
             case "off":
@@ -499,7 +499,7 @@ public sealed class ProcessStaticEmitter : IStaticTypeEmitterStrategy
                 il.Emit(OpCodes.Call, runtime.GetProcessEventEmitter);
                 EmitStringArg(emitter, arguments, 0);
                 EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 1);
-                il.Emit(OpCodes.Callvirt, runtime.TSEventEmitterOff);
+                il.Emit(OpCodes.Callvirt, runtime.EventEmitter.Off);
                 break;
 
             case "emit":
@@ -510,7 +510,7 @@ public sealed class ProcessStaticEmitter : IStaticTypeEmitterStrategy
                 EmitStringArg(emitter, arguments, 0);
                 emitter.EmitArgsArrayWithSpread(
                     arguments.Count > 1 ? arguments.GetRange(1, arguments.Count - 1) : []);
-                il.Emit(OpCodes.Callvirt, runtime.TSEventEmitterEmit);
+                il.Emit(OpCodes.Callvirt, runtime.EventEmitter.Emit);
                 il.Emit(OpCodes.Box, ctx.Types.Boolean);
                 break;
 
@@ -518,14 +518,14 @@ public sealed class ProcessStaticEmitter : IStaticTypeEmitterStrategy
                 // RemoveAllListeners(string eventName) -> $EventEmitter
                 il.Emit(OpCodes.Call, runtime.GetProcessEventEmitter);
                 EmitStringArg(emitter, arguments, 0);
-                il.Emit(OpCodes.Callvirt, runtime.TSEventEmitterRemoveAllListeners);
+                il.Emit(OpCodes.Callvirt, runtime.EventEmitter.RemoveAllListeners);
                 break;
 
             case "listenerCount":
                 // ListenerCount(string eventName) -> double
                 il.Emit(OpCodes.Call, runtime.GetProcessEventEmitter);
                 EmitStringArg(emitter, arguments, 0);
-                il.Emit(OpCodes.Callvirt, runtime.TSEventEmitterListenerCount);
+                il.Emit(OpCodes.Callvirt, runtime.EventEmitter.ListenerCount);
                 il.Emit(OpCodes.Box, ctx.Types.Double);
                 break;
 
@@ -533,27 +533,27 @@ public sealed class ProcessStaticEmitter : IStaticTypeEmitterStrategy
                 // Listeners(string eventName) -> TSArray
                 il.Emit(OpCodes.Call, runtime.GetProcessEventEmitter);
                 EmitStringArg(emitter, arguments, 0);
-                il.Emit(OpCodes.Callvirt, runtime.TSEventEmitterListeners);
+                il.Emit(OpCodes.Callvirt, runtime.EventEmitter.Listeners);
                 break;
 
             case "eventNames":
                 // EventNames() -> TSArray
                 il.Emit(OpCodes.Call, runtime.GetProcessEventEmitter);
-                il.Emit(OpCodes.Callvirt, runtime.TSEventEmitterEventNames);
+                il.Emit(OpCodes.Callvirt, runtime.EventEmitter.EventNames);
                 break;
 
             case "prependListener":
                 il.Emit(OpCodes.Call, runtime.GetProcessEventEmitter);
                 EmitStringArg(emitter, arguments, 0);
                 EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 1);
-                il.Emit(OpCodes.Callvirt, runtime.TSEventEmitterPrependListener);
+                il.Emit(OpCodes.Callvirt, runtime.EventEmitter.PrependListener);
                 break;
 
             case "prependOnceListener":
                 il.Emit(OpCodes.Call, runtime.GetProcessEventEmitter);
                 EmitStringArg(emitter, arguments, 0);
                 EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 1);
-                il.Emit(OpCodes.Callvirt, runtime.TSEventEmitterPrependOnceListener);
+                il.Emit(OpCodes.Callvirt, runtime.EventEmitter.PrependOnceListener);
                 break;
 
             case "setMaxListeners":
@@ -562,12 +562,12 @@ public sealed class ProcessStaticEmitter : IStaticTypeEmitterStrategy
                     emitter.EmitExpressionAsDouble(arguments[0]);
                 else
                     il.Emit(OpCodes.Ldc_R8, 10.0);
-                il.Emit(OpCodes.Callvirt, runtime.TSEventEmitterSetMaxListeners);
+                il.Emit(OpCodes.Callvirt, runtime.EventEmitter.SetMaxListeners);
                 break;
 
             case "getMaxListeners":
                 il.Emit(OpCodes.Call, runtime.GetProcessEventEmitter);
-                il.Emit(OpCodes.Callvirt, runtime.TSEventEmitterGetMaxListeners);
+                il.Emit(OpCodes.Callvirt, runtime.EventEmitter.GetMaxListeners);
                 il.Emit(OpCodes.Box, ctx.Types.Double);
                 break;
 

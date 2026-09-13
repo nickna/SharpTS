@@ -1212,6 +1212,95 @@ public class StandaloneDllTests
     }
 
     [Fact]
+    public void Isolated_EventEmitterMetadata_ListenerOrderingOnceRemovalAndLimitsPassStandaloneAndILChecks()
+    {
+        const string source = """
+            import { EventEmitter } from 'events';
+            const ee = new EventEmitter();
+            let seen = '';
+            const regular = (value: string) => { seen += 'r' + value; };
+            const once = (value: string) => { seen += 'o' + value; };
+            ee.on('x', regular);
+            ee.prependOnceListener('x', once);
+            console.log(ee.emit('x', '1'), ee.emit('x', '2'));
+            console.log(seen, ee.listenerCount('x'), ee.listeners('x').length);
+            ee.off('x', regular);
+            console.log(ee.emit('x', '3'), ee.eventNames().length);
+            console.log(ee.setMaxListeners(17) === ee, ee.getMaxListeners());
+            ee.once('other', regular); ee.removeAllListeners();
+            console.log(ee.eventNames().length);
+            """;
+        var files = new Dictionary<string, string> { ["main.ts"] = source };
+        Assert.Empty(TestHarness.CompileModulesAndVerifyOnly(files, "main.ts"));
+        var (tempDir, dllPath) = CompileStandaloneModule(files, "main.ts");
+        try
+        {
+            Assert.DoesNotContain(GetAssemblyReferences(dllPath), name => name == "SharpTS");
+            Assert.Equal("true true\no1r1r2 1 1\nfalse 0\ntrue 17\n0\n", ExecuteCompiledDllIsolated(dllPath, timeoutMs: 15000));
+        }
+        finally
+        {
+            CleanupTempDir(tempDir);
+        }
+    }
+
+    [Fact]
+    public void Isolated_EventEmitterMetadata_ErrorMonitorAndRejectionRoutingPassStandaloneAndILChecks()
+    {
+        const string source = """
+            import { EventEmitter, errorMonitor } from 'events';
+            const ee = new EventEmitter({ captureRejections: true });
+            const marker: any = { message: 'rejected' };
+            ee.on(errorMonitor, (reason: any) => console.log('monitor', reason === marker));
+            ee.on('error', (reason: any) => console.log('error', reason === marker));
+            ee.on('go', () => Promise.reject(marker));
+            ee.emit('go');
+            const plain = new EventEmitter();
+            plain.on(errorMonitor, () => console.log('unhandled-monitor'));
+            try { plain.emit('error', new Error('boom')); }
+            catch (error: any) { console.log(error.message); }
+            """;
+        var files = new Dictionary<string, string> { ["main.ts"] = source };
+        Assert.Empty(TestHarness.CompileModulesAndVerifyOnly(files, "main.ts"));
+        var (tempDir, dllPath) = CompileStandaloneModule(files, "main.ts");
+        try
+        {
+            Assert.DoesNotContain(GetAssemblyReferences(dllPath), name => name == "SharpTS");
+            Assert.Equal("monitor true\nerror true\nunhandled-monitor\nboom\n", ExecuteCompiledDllIsolated(dllPath, timeoutMs: 15000));
+        }
+        finally
+        {
+            CleanupTempDir(tempDir);
+        }
+    }
+
+    [Fact]
+    public void Isolated_EventEmitterMetadata_ProcessAndStreamConsumersPassStandaloneAndILChecks()
+    {
+        const string source = """
+            import { PassThrough } from 'stream';
+            process.once('custom', (value: number) => console.log('process', value));
+            process.emit('custom', 7); process.emit('custom', 9);
+            const stream = new PassThrough();
+            stream.on('data', (chunk: any) => console.log('data', chunk.toString()));
+            stream.once('end', () => console.log('end'));
+            stream.write('payload'); stream.end();
+            """;
+        var files = new Dictionary<string, string> { ["main.ts"] = source };
+        Assert.Empty(TestHarness.CompileModulesAndVerifyOnly(files, "main.ts"));
+        var (tempDir, dllPath) = CompileStandaloneModule(files, "main.ts");
+        try
+        {
+            Assert.DoesNotContain(GetAssemblyReferences(dllPath), name => name == "SharpTS");
+            Assert.Equal("process 7\ndata payload\nend\n", ExecuteCompiledDllIsolated(dllPath, timeoutMs: 15000));
+        }
+        finally
+        {
+            CleanupTempDir(tempDir);
+        }
+    }
+
+    [Fact]
     public void Isolated_EventsModule_ShouldExecuteWithoutSharpTsDll()
     {
         var files = new Dictionary<string, string>

@@ -35,7 +35,7 @@ public partial class RuntimeEmitter
         var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$Readable",
             TypeAttributes.Public | TypeAttributes.BeforeFieldInit,
-            runtime.TSEventEmitterType  // Extends $EventEmitter
+            runtime.EventEmitter.Type  // Extends $EventEmitter
         );
         runtime.TSReadableType = typeBuilder;
 
@@ -136,7 +136,7 @@ public partial class RuntimeEmitter
 
         // Call base constructor ($EventEmitter)
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.TSEventEmitterCtor);
+        il.Emit(OpCodes.Call, runtime.EventEmitter.Ctor);
 
         // _readBuffer = new Queue<object?>()
         il.Emit(OpCodes.Ldarg_0);
@@ -460,7 +460,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, "end");
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Newarr, _types.Object);
-        il.Emit(OpCodes.Call, runtime.TSEventEmitterEmit);
+        il.Emit(OpCodes.Call, runtime.EventEmitter.Emit);
         il.Emit(OpCodes.Pop);
 
         // End all pipe destinations
@@ -552,7 +552,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Stelem_Ref);
-        il.Emit(OpCodes.Call, runtime.TSEventEmitterEmit);
+        il.Emit(OpCodes.Call, runtime.EventEmitter.Emit);
         il.Emit(OpCodes.Pop);
 
         // Flush to pipe destinations
@@ -907,7 +907,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Stelem_Ref);
-        il.Emit(OpCodes.Call, runtime.TSEventEmitterEmit);
+        il.Emit(OpCodes.Call, runtime.EventEmitter.Emit);
         il.Emit(OpCodes.Pop);
 
         il.MarkLabel(noErrorLabel);
@@ -916,7 +916,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, "close");
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Newarr, _types.Object);
-        il.Emit(OpCodes.Call, runtime.TSEventEmitterEmit);
+        il.Emit(OpCodes.Call, runtime.EventEmitter.Emit);
         il.Emit(OpCodes.Pop);
 
         il.MarkLabel(alreadyDestroyedLabel);
@@ -968,7 +968,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, "pause");
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Newarr, _types.Object);
-        il.Emit(OpCodes.Call, runtime.TSEventEmitterEmit);
+        il.Emit(OpCodes.Call, runtime.EventEmitter.Emit);
         il.Emit(OpCodes.Pop);
 
         il.Emit(OpCodes.Ldarg_0);
@@ -1001,7 +1001,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, "resume");
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Newarr, _types.Object);
-        il.Emit(OpCodes.Call, runtime.TSEventEmitterEmit);
+        il.Emit(OpCodes.Call, runtime.EventEmitter.Emit);
         il.Emit(OpCodes.Pop);
 
         // Drain buffer: while (_readBuffer.Count > 0) emit('data', _readBuffer.Dequeue())
@@ -1026,7 +1026,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldfld, _tsReadableBufferField);
         il.Emit(OpCodes.Callvirt, dequeueMethod);
         il.Emit(OpCodes.Stelem_Ref);
-        il.Emit(OpCodes.Call, runtime.TSEventEmitterEmit);
+        il.Emit(OpCodes.Call, runtime.EventEmitter.Emit);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Br, loopStart);
 
@@ -1041,7 +1041,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, "end");
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Newarr, _types.Object);
-        il.Emit(OpCodes.Call, runtime.TSEventEmitterEmit);
+        il.Emit(OpCodes.Call, runtime.EventEmitter.Emit);
         il.Emit(OpCodes.Pop);
 
         il.MarkLabel(notEndedLabel);
@@ -1127,7 +1127,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldfld, _tsReadableBufferField);
         il.Emit(OpCodes.Callvirt, dequeueMethod);
         il.Emit(OpCodes.Stelem_Ref);
-        il.Emit(OpCodes.Call, runtime.TSEventEmitterEmit);
+        il.Emit(OpCodes.Call, runtime.EventEmitter.Emit);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Br, loopStart);
 
@@ -1156,7 +1156,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, "end");
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Newarr, _types.Object);
-        il.Emit(OpCodes.Call, runtime.TSEventEmitterEmit);
+        il.Emit(OpCodes.Call, runtime.EventEmitter.Emit);
         il.Emit(OpCodes.Pop);
 
         il.MarkLabel(retLabel);

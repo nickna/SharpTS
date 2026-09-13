@@ -9,14 +9,6 @@ namespace SharpTS.Compilation;
 /// </summary>
 public partial class RuntimeEmitter
 {
-    private FieldBuilder _tsEventEmitterEventsField = null!;
-    private FieldBuilder _tsEventEmitterMaxListenersField = null!;
-    private FieldBuilder _tsEventEmitterCaptureRejectionsField = null!;
-    private MethodBuilder _tsEventEmitterRouteCaptureRejection = null!;
-    private TypeBuilder _tsEventEmitterListenerWrapperType = null!;
-    private FieldBuilder _tsEventEmitterListenerWrapperListener = null!;
-    private FieldBuilder _tsEventEmitterListenerWrapperOnce = null!;
-
     // The string key that the errorMonitor symbol stringifies to (see
     // SharpTSEventEmitter.ErrorMonitorKey). Kept byte-identical so interp and
     // compiled store/dispatch errorMonitor listeners under the same key.
@@ -38,8 +30,9 @@ public partial class RuntimeEmitter
 
     private void EmitTSEventEmitterClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
+        var events = runtime.EventEmitter;
         // First, emit the ListenerWrapper nested type
-        EmitListenerWrapperType(moduleBuilder, runtime);
+        EmitListenerWrapperType(moduleBuilder, events);
 
         // Define class: public class $EventEmitter (not sealed - stream types inherit from it)
         var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
@@ -47,21 +40,21 @@ public partial class RuntimeEmitter
             TypeAttributes.Public | TypeAttributes.BeforeFieldInit,
             _types.Object
         );
-        runtime.TSEventEmitterType = typeBuilder;
+        events.Type = typeBuilder;
 
         // Field: private Dictionary<string, List<ListenerWrapper>> _events
-        var listType = _types.MakeGenericType(_types.ListOpen, _tsEventEmitterListenerWrapperType);
+        var listType = _types.MakeGenericType(_types.ListOpen, events.ListenerWrapperType);
         var dictType = _types.MakeGenericType(_types.DictionaryOpen, _types.String, listType);
-        _tsEventEmitterEventsField = typeBuilder.DefineField("_events", dictType, FieldAttributes.Private);
+        events.EventsField = typeBuilder.DefineField("_events", dictType, FieldAttributes.Private);
 
         // Cache method infos from open generic types for later use with TypeBuilder.GetMethod
         CacheGenericMethodInfos(listType, dictType);
 
         // Field: private int _maxListeners = 0
-        _tsEventEmitterMaxListenersField = typeBuilder.DefineField("_maxListeners", _types.Int32, FieldAttributes.Private);
+        events.MaxListenersField = typeBuilder.DefineField("_maxListeners", _types.Int32, FieldAttributes.Private);
 
         // Field: private bool _captureRejections = false (#1099)
-        _tsEventEmitterCaptureRejectionsField = typeBuilder.DefineField("_captureRejections", _types.Boolean, FieldAttributes.Private);
+        events.CaptureRejectionsField = typeBuilder.DefineField("_captureRejections", _types.Boolean, FieldAttributes.Private);
 
         // Static field: public static int DefaultMaxListeners = 10
         var defaultMaxListenersField = typeBuilder.DefineField(
@@ -69,39 +62,39 @@ public partial class RuntimeEmitter
             _types.Int32,
             FieldAttributes.Public | FieldAttributes.Static
         );
-        runtime.TSEventEmitterDefaultMaxListeners = defaultMaxListenersField;
+        events.DefaultMaxListeners = defaultMaxListenersField;
 
         // Constructor: public $EventEmitter()
-        EmitTSEventEmitterCtor(typeBuilder, runtime, dictType, listType);
+        EmitTSEventEmitterCtor(typeBuilder, events, dictType, listType);
 
         // Virtual hook must be defined before AddListenerInternal (which calls it)
-        EmitTSEventEmitterOnListenerAdded(typeBuilder, runtime);
+        EmitTSEventEmitterOnListenerAdded(typeBuilder, events);
 
         // Instance methods - AddListenerInternal must be defined first as it's called by On/Once/Prepend methods
-        EmitTSEventEmitterAddListenerInternal(typeBuilder, runtime, listType, dictType);
+        EmitTSEventEmitterAddListenerInternal(typeBuilder, events, listType, dictType);
         // #1099 helpers. Emit and RouteCaptureRejection are mutually recursive
         // (Emit invokes RouteCaptureRejection; RouteCaptureRejection re-emits
         // 'error'), so define RouteCaptureRejection's handle before Emit's body
         // and fill its body afterwards.
-        EmitTSEventEmitterEnableCaptureRejections(typeBuilder, runtime);
-        DefineTSEventEmitterRouteCaptureRejection(typeBuilder);
-        EmitTSEventEmitterOn(typeBuilder, runtime, listType);
-        EmitTSEventEmitterOnce(typeBuilder, runtime, listType);
-        EmitTSEventEmitterOff(typeBuilder, runtime, listType, dictType);
+        EmitTSEventEmitterEnableCaptureRejections(typeBuilder, events);
+        DefineTSEventEmitterRouteCaptureRejection(typeBuilder, events);
+        EmitTSEventEmitterOn(typeBuilder, events, listType);
+        EmitTSEventEmitterOnce(typeBuilder, events, listType);
+        EmitTSEventEmitterOff(typeBuilder, events, listType, dictType);
         EmitTSEventEmitterEmit(typeBuilder, runtime, listType);
         FillTSEventEmitterRouteCaptureRejection(runtime);
-        EmitTSEventEmitterRemoveAllListeners(typeBuilder, runtime, dictType);
+        EmitTSEventEmitterRemoveAllListeners(typeBuilder, events, dictType);
         EmitTSEventEmitterListeners(typeBuilder, runtime, listType);
-        EmitTSEventEmitterListenerCount(typeBuilder, runtime, listType);
+        EmitTSEventEmitterListenerCount(typeBuilder, events, listType);
         EmitTSEventEmitterEventNames(typeBuilder, runtime, dictType);
-        EmitTSEventEmitterPrependListener(typeBuilder, runtime, listType);
-        EmitTSEventEmitterPrependOnceListener(typeBuilder, runtime, listType);
-        EmitTSEventEmitterSetMaxListeners(typeBuilder, runtime);
-        EmitTSEventEmitterGetMaxListeners(typeBuilder, runtime);
+        EmitTSEventEmitterPrependListener(typeBuilder, events, listType);
+        EmitTSEventEmitterPrependOnceListener(typeBuilder, events, listType);
+        EmitTSEventEmitterSetMaxListeners(typeBuilder, events);
+        EmitTSEventEmitterGetMaxListeners(typeBuilder, events);
 
         // Aliases for Node.js compatibility (used by runtime dispatch when type is not EventEmitter)
-        EmitTSEventEmitterAddListener(typeBuilder, runtime);
-        EmitTSEventEmitterRemoveListener(typeBuilder, runtime);
+        EmitTSEventEmitterAddListener(typeBuilder, events);
+        EmitTSEventEmitterRemoveListener(typeBuilder, events);
         EmitTSEventEmitterRawListeners(typeBuilder, runtime);
 
         // Set static constructor to initialize DefaultMaxListeners
@@ -149,43 +142,43 @@ public partial class RuntimeEmitter
     private static MethodInfo GetDictMethod(Type dictType, MethodInfo openMethod)
         => EmitterTypeHelpers.ResolveMethod(dictType, openMethod);
 
-    private void EmitListenerWrapperType(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private void EmitListenerWrapperType(ModuleBuilder moduleBuilder, EmittedEventEmitterRuntime events)
     {
         // Define nested class: public sealed class $ListenerWrapper
-        _tsEventEmitterListenerWrapperType = EmitTypeDefinitions.DefineType(moduleBuilder,
+        events.ListenerWrapperType = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$ListenerWrapper",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object
         );
 
         // Field: public object Listener
-        _tsEventEmitterListenerWrapperListener = _tsEventEmitterListenerWrapperType.DefineField(
+        events.ListenerWrapperListenerField = events.ListenerWrapperType.DefineField(
             "Listener", _types.Object, FieldAttributes.Public);
 
         // Field: public bool Once
-        _tsEventEmitterListenerWrapperOnce = _tsEventEmitterListenerWrapperType.DefineField(
+        events.ListenerWrapperOnceField = events.ListenerWrapperType.DefineField(
             "Once", _types.Boolean, FieldAttributes.Public);
 
         // Constructor: public $ListenerWrapper(object listener, bool once)
-        var ctor = _tsEventEmitterListenerWrapperType.DefineConstructor(
+        var ctor = events.ListenerWrapperType.DefineConstructor(
             MethodAttributes.Public,
             CallingConventions.Standard,
             [_types.Object, _types.Boolean]
         );
-        runtime.TSListenerWrapperCtor = ctor;
+        events.ListenerWrapperCtor = ctor;
 
         var il = ctor.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Call, _types.GetDefaultConstructor(_types.Object));
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Stfld, _tsEventEmitterListenerWrapperListener);
+        il.Emit(OpCodes.Stfld, events.ListenerWrapperListenerField);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Stfld, _tsEventEmitterListenerWrapperOnce);
+        il.Emit(OpCodes.Stfld, events.ListenerWrapperOnceField);
         il.Emit(OpCodes.Ret);
 
-        _tsEventEmitterListenerWrapperType.CreateType();
+        events.ListenerWrapperType.CreateType();
     }
 
     private void EmitTSEventEmitterStaticCtor(TypeBuilder typeBuilder, FieldBuilder defaultMaxListenersField)
@@ -202,14 +195,14 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitTSEventEmitterCtor(TypeBuilder typeBuilder, EmittedRuntime runtime, Type dictType, Type listType)
+    private void EmitTSEventEmitterCtor(TypeBuilder typeBuilder, EmittedEventEmitterRuntime events, Type dictType, Type listType)
     {
         var ctor = typeBuilder.DefineConstructor(
             MethodAttributes.Public,
             CallingConventions.Standard,
             Type.EmptyTypes
         );
-        runtime.TSEventEmitterCtor = ctor;
+        events.Ctor = ctor;
 
         var il = ctor.GetILGenerator();
 
@@ -223,17 +216,17 @@ public partial class RuntimeEmitter
         var openDictCtor = typeof(Dictionary<,>).GetConstructor(Type.EmptyTypes)!;
         var dictCtor = EmitterTypeHelpers.ResolveConstructor(dictType, openDictCtor);
         il.Emit(OpCodes.Newobj, dictCtor);
-        il.Emit(OpCodes.Stfld, _tsEventEmitterEventsField);
+        il.Emit(OpCodes.Stfld, events.EventsField);
 
         // _maxListeners = 0
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Stfld, _tsEventEmitterMaxListenersField);
+        il.Emit(OpCodes.Stfld, events.MaxListenersField);
 
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitTSEventEmitterOn(TypeBuilder typeBuilder, EmittedRuntime runtime, Type listType)
+    private void EmitTSEventEmitterOn(TypeBuilder typeBuilder, EmittedEventEmitterRuntime events, Type listType)
     {
         // public $EventEmitter On(string eventName, object listener)
         var method = typeBuilder.DefineMethod(
@@ -242,7 +235,7 @@ public partial class RuntimeEmitter
             typeBuilder,
             [_types.String, _types.Object]
         );
-        runtime.TSEventEmitterOn = method;
+        events.On = method;
 
         var il = method.GetILGenerator();
         // Call AddListenerInternal(eventName, listener, false, false)
@@ -251,11 +244,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Ldc_I4_0); // once = false
         il.Emit(OpCodes.Ldc_I4_0); // prepend = false
-        il.Emit(OpCodes.Call, runtime.TSEventEmitterAddListenerInternal);
+        il.Emit(OpCodes.Call, events.AddListenerInternal);
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitTSEventEmitterOnce(TypeBuilder typeBuilder, EmittedRuntime runtime, Type listType)
+    private void EmitTSEventEmitterOnce(TypeBuilder typeBuilder, EmittedEventEmitterRuntime events, Type listType)
     {
         var method = typeBuilder.DefineMethod(
             "Once",
@@ -263,7 +256,7 @@ public partial class RuntimeEmitter
             typeBuilder,
             [_types.String, _types.Object]
         );
-        runtime.TSEventEmitterOnce = method;
+        events.Once = method;
 
         var il = method.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
@@ -271,11 +264,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Ldc_I4_1); // once = true
         il.Emit(OpCodes.Ldc_I4_0); // prepend = false
-        il.Emit(OpCodes.Call, runtime.TSEventEmitterAddListenerInternal);
+        il.Emit(OpCodes.Call, events.AddListenerInternal);
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitTSEventEmitterOff(TypeBuilder typeBuilder, EmittedRuntime runtime, Type listType, Type dictType)
+    private void EmitTSEventEmitterOff(TypeBuilder typeBuilder, EmittedEventEmitterRuntime events, Type listType, Type dictType)
     {
         var method = typeBuilder.DefineMethod(
             "Off",
@@ -283,7 +276,7 @@ public partial class RuntimeEmitter
             typeBuilder,
             [_types.String, _types.Object]
         );
-        runtime.TSEventEmitterOff = method;
+        events.Off = method;
 
         var il = method.GetILGenerator();
         var endLabel = il.DefineLabel();
@@ -292,7 +285,7 @@ public partial class RuntimeEmitter
         // if (!_events.TryGetValue(eventName, out var listeners)) return this;
         var listenersLocal = il.DeclareLocal(listType);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsEventEmitterEventsField);
+        il.Emit(OpCodes.Ldfld, events.EventsField);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloca, listenersLocal);
         var tryGetValueMethod = GetDictMethod(dictType, _dictTryGetValue);
@@ -326,7 +319,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, indexLocal);
         var getItemMethod = GetListMethod(listType, _listGetItem);
         il.Emit(OpCodes.Callvirt, getItemMethod);
-        il.Emit(OpCodes.Ldfld, _tsEventEmitterListenerWrapperListener);
+        il.Emit(OpCodes.Ldfld, events.ListenerWrapperListenerField);
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Ceq);
         il.Emit(OpCodes.Brtrue, foundLabel);
@@ -350,7 +343,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, countGetter);
         il.Emit(OpCodes.Brtrue, loopEnd);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsEventEmitterEventsField);
+        il.Emit(OpCodes.Ldfld, events.EventsField);
         il.Emit(OpCodes.Ldarg_1);
         var removeMethod = GetDictMethod(dictType, _dictRemove);
         il.Emit(OpCodes.Callvirt, removeMethod);
@@ -366,19 +359,19 @@ public partial class RuntimeEmitter
     /// Emits <c>public void EnableCaptureRejections()</c>, called from the
     /// <c>new EventEmitter({ captureRejections: true })</c> emit site (#1099).
     /// </summary>
-    private void EmitTSEventEmitterEnableCaptureRejections(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSEventEmitterEnableCaptureRejections(TypeBuilder typeBuilder, EmittedEventEmitterRuntime events)
     {
         var method = typeBuilder.DefineMethod(
             "EnableCaptureRejections",
             MethodAttributes.Public,
             _types.Void,
             Type.EmptyTypes);
-        runtime.TSEventEmitterEnableCaptureRejections = method;
+        events.EnableCaptureRejections = method;
 
         var il = method.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Stfld, _tsEventEmitterCaptureRejectionsField);
+        il.Emit(OpCodes.Stfld, events.CaptureRejectionsField);
         il.Emit(OpCodes.Ret);
     }
 
@@ -387,9 +380,9 @@ public partial class RuntimeEmitter
     /// The body is filled by <see cref="FillTSEventEmitterRouteCaptureRejection"/>
     /// after Emit is defined, since the two are mutually recursive.
     /// </summary>
-    private void DefineTSEventEmitterRouteCaptureRejection(TypeBuilder typeBuilder)
+    private void DefineTSEventEmitterRouteCaptureRejection(TypeBuilder typeBuilder, EmittedEventEmitterRuntime events)
     {
-        _tsEventEmitterRouteCaptureRejection = typeBuilder.DefineMethod(
+        events.RouteCaptureRejection = typeBuilder.DefineMethod(
             "RouteCaptureRejection",
             MethodAttributes.Private,
             _types.Void,
@@ -404,7 +397,8 @@ public partial class RuntimeEmitter
     /// </summary>
     private void FillTSEventEmitterRouteCaptureRejection(EmittedRuntime runtime)
     {
-        var il = _tsEventEmitterRouteCaptureRejection.GetILGenerator();
+        var events = runtime.EventEmitter;
+        var il = events.RouteCaptureRejection.GetILGenerator();
         var ret = il.DefineLabel();
 
         var taskType = typeof(System.Threading.Tasks.Task);
@@ -506,7 +500,7 @@ public partial class RuntimeEmitter
         // Disable capture during the routed emit to avoid recursion, then restore.
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Stfld, _tsEventEmitterCaptureRejectionsField);
+        il.Emit(OpCodes.Stfld, events.CaptureRejectionsField);
 
         // this.Emit("error", new object[]{ reason });
         il.Emit(OpCodes.Ldarg_0);
@@ -517,13 +511,13 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldloc, reasonLocal);
         il.Emit(OpCodes.Stelem_Ref);
-        il.Emit(OpCodes.Callvirt, runtime.TSEventEmitterEmit);
+        il.Emit(OpCodes.Callvirt, events.Emit);
         il.Emit(OpCodes.Pop);
 
         // Restore capture.
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Stfld, _tsEventEmitterCaptureRejectionsField);
+        il.Emit(OpCodes.Stfld, events.CaptureRejectionsField);
 
         il.MarkLabel(ret);
         il.Emit(OpCodes.Ret);
@@ -531,6 +525,7 @@ public partial class RuntimeEmitter
 
     private void EmitTSEventEmitterEmit(TypeBuilder typeBuilder, EmittedRuntime runtime, Type listType)
     {
+        var events = runtime.EventEmitter;
         // public bool Emit(string eventName, params object[] args)
         var method = typeBuilder.DefineMethod(
             "Emit",
@@ -538,16 +533,16 @@ public partial class RuntimeEmitter
             _types.Boolean,
             [_types.String, _types.MakeArrayType(_types.Object)]
         );
-        runtime.TSEventEmitterEmit = method;
+        events.Emit = method;
 
         var il = method.GetILGenerator();
         var falseLabel = il.DefineLabel();
         var trueLabel = il.DefineLabel();
 
-        var wrapperArrayType = _types.MakeArrayType(_tsEventEmitterListenerWrapperType);
+        var wrapperArrayType = _types.MakeArrayType(events.ListenerWrapperType);
         var countGetter = GetListMethod(listType, _listCountGetter);
         var toArrayMethod = GetListMethod(listType, _listToArray);
-        var tryGetValueMethod = GetDictMethod(_tsEventEmitterEventsField.FieldType, _dictTryGetValue);
+        var tryGetValueMethod = GetDictMethod(events.EventsField.FieldType, _dictTryGetValue);
         var stringEquals = _types.GetMethod(_types.String, "op_Equality", [_types.String, _types.String])!;
 
         // Local: invoke the listener in `listenerLocal`, leaving its return value on the stack.
@@ -592,7 +587,7 @@ public partial class RuntimeEmitter
 
         var monListLocal = il.DeclareLocal(listType);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsEventEmitterEventsField);
+        il.Emit(OpCodes.Ldfld, events.EventsField);
         il.Emit(OpCodes.Ldstr, ErrorMonitorKey);
         il.Emit(OpCodes.Ldloca, monListLocal);
         il.Emit(OpCodes.Callvirt, tryGetValueMethod);
@@ -624,7 +619,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, monSnapLocal);
         il.Emit(OpCodes.Ldloc, monIndex);
         il.Emit(OpCodes.Ldelem_Ref);
-        il.Emit(OpCodes.Ldfld, _tsEventEmitterListenerWrapperListener);
+        il.Emit(OpCodes.Ldfld, events.ListenerWrapperListenerField);
         il.Emit(OpCodes.Stloc, monListener);
         EmitInvokeLeaveResult(monListener);
         il.Emit(OpCodes.Pop);
@@ -639,7 +634,7 @@ public partial class RuntimeEmitter
         // if (!_events.TryGetValue(eventName, out var listeners)) return false;
         var listenersLocal = il.DeclareLocal(listType);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsEventEmitterEventsField);
+        il.Emit(OpCodes.Ldfld, events.EventsField);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloca, listenersLocal);
         il.Emit(OpCodes.Callvirt, tryGetValueMethod);
@@ -676,7 +671,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Bge, loopEnd);
 
         // var wrapper = snapshot[index]
-        var wrapperLocal = il.DeclareLocal(_tsEventEmitterListenerWrapperType);
+        var wrapperLocal = il.DeclareLocal(events.ListenerWrapperType);
         il.Emit(OpCodes.Ldloc, snapshotLocal);
         il.Emit(OpCodes.Ldloc, indexLocal);
         il.Emit(OpCodes.Ldelem_Ref);
@@ -684,7 +679,7 @@ public partial class RuntimeEmitter
 
         // if (wrapper.Once) { ... remove from original list ... }
         il.Emit(OpCodes.Ldloc, wrapperLocal);
-        il.Emit(OpCodes.Ldfld, _tsEventEmitterListenerWrapperOnce);
+        il.Emit(OpCodes.Ldfld, events.ListenerWrapperOnceField);
         il.Emit(OpCodes.Brfalse, skipOnceRemoval);
 
         // Remove from original list
@@ -699,7 +694,7 @@ public partial class RuntimeEmitter
         // Call the listener, capturing the result.
         var listenerLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldloc, wrapperLocal);
-        il.Emit(OpCodes.Ldfld, _tsEventEmitterListenerWrapperListener);
+        il.Emit(OpCodes.Ldfld, events.ListenerWrapperListenerField);
         il.Emit(OpCodes.Stloc, listenerLocal);
 
         var resultLocal = il.DeclareLocal(_types.Object);
@@ -709,11 +704,11 @@ public partial class RuntimeEmitter
         // #1099: if captureRejections, route a rejecting async listener to 'error'.
         var skipRoute = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsEventEmitterCaptureRejectionsField);
+        il.Emit(OpCodes.Ldfld, events.CaptureRejectionsField);
         il.Emit(OpCodes.Brfalse, skipRoute);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, resultLocal);
-        il.Emit(OpCodes.Call, _tsEventEmitterRouteCaptureRejection);
+        il.Emit(OpCodes.Call, events.RouteCaptureRejection);
         il.MarkLabel(skipRoute);
 
         // index++
@@ -736,7 +731,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, skipThrow);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "GetType", Type.EmptyTypes)!);
-        il.Emit(OpCodes.Ldtoken, runtime.TSEventEmitterType);
+        il.Emit(OpCodes.Ldtoken, events.Type);
         il.Emit(OpCodes.Call, typeof(Type).GetMethod("GetTypeFromHandle", [typeof(RuntimeTypeHandle)])!);
         il.Emit(OpCodes.Bne_Un, skipThrow);
         // reason = args.Length > 0 ? args[0] : "Unhandled 'error' event";
@@ -765,7 +760,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitTSEventEmitterRemoveAllListeners(TypeBuilder typeBuilder, EmittedRuntime runtime, Type dictType)
+    private void EmitTSEventEmitterRemoveAllListeners(TypeBuilder typeBuilder, EmittedEventEmitterRuntime events, Type dictType)
     {
         var method = typeBuilder.DefineMethod(
             "RemoveAllListeners",
@@ -773,7 +768,7 @@ public partial class RuntimeEmitter
             typeBuilder,
             [_types.String]
         );
-        runtime.TSEventEmitterRemoveAllListeners = method;
+        events.RemoveAllListeners = method;
 
         var il = method.GetILGenerator();
         var clearAllLabel = il.DefineLabel();
@@ -785,7 +780,7 @@ public partial class RuntimeEmitter
 
         // _events.Remove(eventName)
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsEventEmitterEventsField);
+        il.Emit(OpCodes.Ldfld, events.EventsField);
         il.Emit(OpCodes.Ldarg_1);
         var removeMethod = GetDictMethod(dictType, _dictRemove);
         il.Emit(OpCodes.Callvirt, removeMethod);
@@ -794,7 +789,7 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(clearAllLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsEventEmitterEventsField);
+        il.Emit(OpCodes.Ldfld, events.EventsField);
         var clearMethod = GetDictMethod(dictType, _dictClear);
         il.Emit(OpCodes.Callvirt, clearMethod);
 
@@ -805,13 +800,14 @@ public partial class RuntimeEmitter
 
     private void EmitTSEventEmitterListeners(TypeBuilder typeBuilder, EmittedRuntime runtime, Type listType)
     {
+        var events = runtime.EventEmitter;
         var method = typeBuilder.DefineMethod(
             "Listeners",
             MethodAttributes.Public,
             runtime.ArrayStorage.Type,
             [_types.String]
         );
-        runtime.TSEventEmitterListeners = method;
+        events.Listeners = method;
 
         var il = method.GetILGenerator();
         var emptyLabel = il.DefineLabel();
@@ -819,10 +815,10 @@ public partial class RuntimeEmitter
         // if (!_events.TryGetValue(eventName, out var listeners)) return new $Array(new List<object?>())
         var listenersLocal = il.DeclareLocal(listType);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsEventEmitterEventsField);
+        il.Emit(OpCodes.Ldfld, events.EventsField);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloca, listenersLocal);
-        var tryGetValueMethod = GetDictMethod(_tsEventEmitterEventsField.FieldType, _dictTryGetValue);
+        var tryGetValueMethod = GetDictMethod(events.EventsField.FieldType, _dictTryGetValue);
         il.Emit(OpCodes.Callvirt, tryGetValueMethod);
         il.Emit(OpCodes.Brfalse, emptyLabel);
 
@@ -855,7 +851,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, indexLocal);
         var getItemMethod = GetListMethod(listType, _listGetItem);
         il.Emit(OpCodes.Callvirt, getItemMethod);
-        il.Emit(OpCodes.Ldfld, _tsEventEmitterListenerWrapperListener);
+        il.Emit(OpCodes.Ldfld, events.ListenerWrapperListenerField);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", [_types.Object])!);
 
         il.Emit(OpCodes.Ldloc, indexLocal);
@@ -877,7 +873,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitTSEventEmitterListenerCount(TypeBuilder typeBuilder, EmittedRuntime runtime, Type listType)
+    private void EmitTSEventEmitterListenerCount(TypeBuilder typeBuilder, EmittedEventEmitterRuntime events, Type listType)
     {
         var method = typeBuilder.DefineMethod(
             "ListenerCount",
@@ -885,17 +881,17 @@ public partial class RuntimeEmitter
             _types.Double,
             [_types.String]
         );
-        runtime.TSEventEmitterListenerCount = method;
+        events.ListenerCount = method;
 
         var il = method.GetILGenerator();
         var notFoundLabel = il.DefineLabel();
 
         var listenersLocal = il.DeclareLocal(listType);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsEventEmitterEventsField);
+        il.Emit(OpCodes.Ldfld, events.EventsField);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloca, listenersLocal);
-        var tryGetValueMethod = GetDictMethod(_tsEventEmitterEventsField.FieldType, _dictTryGetValue);
+        var tryGetValueMethod = GetDictMethod(events.EventsField.FieldType, _dictTryGetValue);
         il.Emit(OpCodes.Callvirt, tryGetValueMethod);
         il.Emit(OpCodes.Brfalse, notFoundLabel);
 
@@ -912,13 +908,14 @@ public partial class RuntimeEmitter
 
     private void EmitTSEventEmitterEventNames(TypeBuilder typeBuilder, EmittedRuntime runtime, Type dictType)
     {
+        var events = runtime.EventEmitter;
         var method = typeBuilder.DefineMethod(
             "EventNames",
             MethodAttributes.Public,
             runtime.ArrayStorage.Type,
             Type.EmptyTypes
         );
-        runtime.TSEventEmitterEventNames = method;
+        events.EventNames = method;
 
         var il = method.GetILGenerator();
 
@@ -932,13 +929,13 @@ public partial class RuntimeEmitter
         var keysProperty = GetDictMethod(dictType, _dictKeysGetter);
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsEventEmitterEventsField);
+        il.Emit(OpCodes.Ldfld, events.EventsField);
         il.Emit(OpCodes.Callvirt, keysProperty);
 
         // The keysType is Dictionary<,>.KeyCollection which is a concrete type once we have the closed generic
         // We can use the concrete KeyCollection type for string key
-        var keysCollectionType = _types.MakeGenericType(typeof(Dictionary<,>.KeyCollection), _types.String, _tsEventEmitterEventsField.FieldType.GetGenericArguments()[1]);
-        var keysEnumeratorType = _types.MakeGenericType(typeof(Dictionary<,>.KeyCollection.Enumerator), _types.String, _tsEventEmitterEventsField.FieldType.GetGenericArguments()[1]);
+        var keysCollectionType = _types.MakeGenericType(typeof(Dictionary<,>.KeyCollection), _types.String, events.EventsField.FieldType.GetGenericArguments()[1]);
+        var keysEnumeratorType = _types.MakeGenericType(typeof(Dictionary<,>.KeyCollection.Enumerator), _types.String, events.EventsField.FieldType.GetGenericArguments()[1]);
 
         // GetEnumerator on KeyCollection
         var getEnumeratorMethod = EmitterTypeHelpers.ResolveMethod(keysCollectionType, typeof(Dictionary<,>.KeyCollection).GetMethod("GetEnumerator")!);
@@ -971,7 +968,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitTSEventEmitterPrependListener(TypeBuilder typeBuilder, EmittedRuntime runtime, Type listType)
+    private void EmitTSEventEmitterPrependListener(TypeBuilder typeBuilder, EmittedEventEmitterRuntime events, Type listType)
     {
         var method = typeBuilder.DefineMethod(
             "PrependListener",
@@ -979,7 +976,7 @@ public partial class RuntimeEmitter
             typeBuilder,
             [_types.String, _types.Object]
         );
-        runtime.TSEventEmitterPrependListener = method;
+        events.PrependListener = method;
 
         var il = method.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
@@ -987,11 +984,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Ldc_I4_0); // once = false
         il.Emit(OpCodes.Ldc_I4_1); // prepend = true
-        il.Emit(OpCodes.Call, runtime.TSEventEmitterAddListenerInternal);
+        il.Emit(OpCodes.Call, events.AddListenerInternal);
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitTSEventEmitterPrependOnceListener(TypeBuilder typeBuilder, EmittedRuntime runtime, Type listType)
+    private void EmitTSEventEmitterPrependOnceListener(TypeBuilder typeBuilder, EmittedEventEmitterRuntime events, Type listType)
     {
         var method = typeBuilder.DefineMethod(
             "PrependOnceListener",
@@ -999,7 +996,7 @@ public partial class RuntimeEmitter
             typeBuilder,
             [_types.String, _types.Object]
         );
-        runtime.TSEventEmitterPrependOnceListener = method;
+        events.PrependOnceListener = method;
 
         var il = method.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
@@ -1007,11 +1004,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Ldc_I4_1); // once = true
         il.Emit(OpCodes.Ldc_I4_1); // prepend = true
-        il.Emit(OpCodes.Call, runtime.TSEventEmitterAddListenerInternal);
+        il.Emit(OpCodes.Call, events.AddListenerInternal);
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitTSEventEmitterSetMaxListeners(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSEventEmitterSetMaxListeners(TypeBuilder typeBuilder, EmittedEventEmitterRuntime events)
     {
         var method = typeBuilder.DefineMethod(
             "SetMaxListeners",
@@ -1019,18 +1016,18 @@ public partial class RuntimeEmitter
             typeBuilder,
             [_types.Double]
         );
-        runtime.TSEventEmitterSetMaxListeners = method;
+        events.SetMaxListeners = method;
 
         var il = method.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Conv_I4);
-        il.Emit(OpCodes.Stfld, _tsEventEmitterMaxListenersField);
+        il.Emit(OpCodes.Stfld, events.MaxListenersField);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitTSEventEmitterGetMaxListeners(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSEventEmitterGetMaxListeners(TypeBuilder typeBuilder, EmittedEventEmitterRuntime events)
     {
         var method = typeBuilder.DefineMethod(
             "GetMaxListeners",
@@ -1038,29 +1035,29 @@ public partial class RuntimeEmitter
             _types.Double,
             Type.EmptyTypes
         );
-        runtime.TSEventEmitterGetMaxListeners = method;
+        events.GetMaxListeners = method;
 
         var il = method.GetILGenerator();
         var useDefaultLabel = il.DefineLabel();
 
         // if (_maxListeners > 0) return _maxListeners
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsEventEmitterMaxListenersField);
+        il.Emit(OpCodes.Ldfld, events.MaxListenersField);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ble, useDefaultLabel);
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsEventEmitterMaxListenersField);
+        il.Emit(OpCodes.Ldfld, events.MaxListenersField);
         il.Emit(OpCodes.Conv_R8);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(useDefaultLabel);
-        il.Emit(OpCodes.Ldsfld, runtime.TSEventEmitterDefaultMaxListeners);
+        il.Emit(OpCodes.Ldsfld, events.DefaultMaxListeners);
         il.Emit(OpCodes.Conv_R8);
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitTSEventEmitterAddListenerInternal(TypeBuilder typeBuilder, EmittedRuntime runtime, Type listType, Type dictType)
+    private void EmitTSEventEmitterAddListenerInternal(TypeBuilder typeBuilder, EmittedEventEmitterRuntime events, Type listType, Type dictType)
     {
         var method = typeBuilder.DefineMethod(
             "AddListenerInternal",
@@ -1068,7 +1065,7 @@ public partial class RuntimeEmitter
             typeBuilder,
             [_types.String, _types.Object, _types.Boolean, _types.Boolean]
         );
-        runtime.TSEventEmitterAddListenerInternal = method;
+        events.AddListenerInternal = method;
 
         var il = method.GetILGenerator();
         var createListLabel = il.DefineLabel();
@@ -1078,7 +1075,7 @@ public partial class RuntimeEmitter
         // if (!_events.TryGetValue(eventName, out var listeners))
         var listenersLocal = il.DeclareLocal(listType);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsEventEmitterEventsField);
+        il.Emit(OpCodes.Ldfld, events.EventsField);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloca, listenersLocal);
         var tryGetValueMethod = GetDictMethod(dictType, _dictTryGetValue);
@@ -1093,7 +1090,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Newobj, listCtor);
         il.Emit(OpCodes.Stloc, listenersLocal);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsEventEmitterEventsField);
+        il.Emit(OpCodes.Ldfld, events.EventsField);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloc, listenersLocal);
         var addMethod = GetDictMethod(dictType, _dictAdd);
@@ -1101,10 +1098,10 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(prependLabel);
         // Create wrapper: new $ListenerWrapper(listener, once)
-        var wrapperLocal = il.DeclareLocal(_tsEventEmitterListenerWrapperType);
+        var wrapperLocal = il.DeclareLocal(events.ListenerWrapperType);
         il.Emit(OpCodes.Ldarg_2); // listener
         il.Emit(OpCodes.Ldarg_3); // once
-        il.Emit(OpCodes.Newobj, runtime.TSListenerWrapperCtor);
+        il.Emit(OpCodes.Newobj, events.ListenerWrapperCtor);
         il.Emit(OpCodes.Stloc, wrapperLocal);
 
         // if (prepend) listeners.Insert(0, wrapper) else listeners.Add(wrapper)
@@ -1131,7 +1128,7 @@ public partial class RuntimeEmitter
         // Call virtual OnListenerAdded(eventName) for subclass notification
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1); // eventName
-        il.Emit(OpCodes.Callvirt, runtime.TSEventEmitterOnListenerAdded);
+        il.Emit(OpCodes.Callvirt, events.OnListenerAdded);
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ret);
@@ -1141,7 +1138,7 @@ public partial class RuntimeEmitter
     /// Emits AddListener as an alias for On (Node.js compatibility).
     /// Used by runtime dispatch when the type is not recognized as EventEmitter by TypeEmitterRegistry.
     /// </summary>
-    private void EmitTSEventEmitterAddListener(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSEventEmitterAddListener(TypeBuilder typeBuilder, EmittedEventEmitterRuntime events)
     {
         var method = typeBuilder.DefineMethod(
             "AddListener",
@@ -1154,14 +1151,14 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Callvirt, runtime.TSEventEmitterOn);
+        il.Emit(OpCodes.Callvirt, events.On);
         il.Emit(OpCodes.Ret);
     }
 
     /// <summary>
     /// Emits RemoveListener as an alias for Off (Node.js compatibility).
     /// </summary>
-    private void EmitTSEventEmitterRemoveListener(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSEventEmitterRemoveListener(TypeBuilder typeBuilder, EmittedEventEmitterRuntime events)
     {
         var method = typeBuilder.DefineMethod(
             "RemoveListener",
@@ -1174,7 +1171,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Callvirt, runtime.TSEventEmitterOff);
+        il.Emit(OpCodes.Callvirt, events.Off);
         il.Emit(OpCodes.Ret);
     }
 
@@ -1182,7 +1179,7 @@ public partial class RuntimeEmitter
     /// Emits virtual OnListenerAdded(string eventName) - called at end of AddListenerInternal.
     /// Default implementation is empty; $Readable overrides to enter flowing mode on 'data'.
     /// </summary>
-    private void EmitTSEventEmitterOnListenerAdded(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSEventEmitterOnListenerAdded(TypeBuilder typeBuilder, EmittedEventEmitterRuntime events)
     {
         var method = typeBuilder.DefineMethod(
             "OnListenerAdded",
@@ -1190,7 +1187,7 @@ public partial class RuntimeEmitter
             _types.Void,
             [_types.String]
         );
-        runtime.TSEventEmitterOnListenerAdded = method;
+        events.OnListenerAdded = method;
 
         var il = method.GetILGenerator();
         il.Emit(OpCodes.Ret); // Default: no-op
@@ -1203,6 +1200,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitTSEventEmitterRawListeners(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
+        var events = runtime.EventEmitter;
         var method = typeBuilder.DefineMethod(
             "RawListeners",
             MethodAttributes.Public,
@@ -1213,7 +1211,7 @@ public partial class RuntimeEmitter
         var il = method.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, runtime.TSEventEmitterListeners);
+        il.Emit(OpCodes.Callvirt, events.Listeners);
         il.Emit(OpCodes.Ret);
     }
 }

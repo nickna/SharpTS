@@ -41,7 +41,7 @@ public partial class RuntimeEmitter
         _statWatcherType = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$StatWatcher",
             TypeAttributes.Public | TypeAttributes.BeforeFieldInit,
-            runtime.TSEventEmitterType);
+            runtime.EventEmitter.Type);
 
         _statWatcherTimerField = _statWatcherType.DefineField("_timer", typeof(Timer), FieldAttributes.Private);
         _statWatcherClosedField = _statWatcherType.DefineField("_closed", _types.Boolean, FieldAttributes.Private);
@@ -66,13 +66,13 @@ public partial class RuntimeEmitter
             "$StatWatchPollClosure",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit);
 
-        _statPollClosureWatcherField = _statWatchPollClosureType.DefineField("_watcher", runtime.TSEventEmitterType, FieldAttributes.Public);
+        _statPollClosureWatcherField = _statWatchPollClosureType.DefineField("_watcher", runtime.EventEmitter.Type, FieldAttributes.Public);
         _statPollClosureCurrField = _statWatchPollClosureType.DefineField("_curr", _types.Object, FieldAttributes.Public);
         _statPollClosurePrevField = _statWatchPollClosureType.DefineField("_prev", _types.Object, FieldAttributes.Public);
 
         _statWatchPollClosureCtor = _statWatchPollClosureType.DefineConstructor(
             MethodAttributes.Public, CallingConventions.Standard,
-            [runtime.TSEventEmitterType, _types.Object, _types.Object]);
+            [runtime.EventEmitter.Type, _types.Object, _types.Object]);
         {
             var il = _statWatchPollClosureCtor.GetILGenerator();
             il.Emit(OpCodes.Ldarg_0);
@@ -99,7 +99,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Dup); il.Emit(OpCodes.Ldc_I4_1);
             il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, _statPollClosurePrevField);
             il.Emit(OpCodes.Stelem_Ref);
-            il.Emit(OpCodes.Call, runtime.TSEventEmitterEmit);
+            il.Emit(OpCodes.Call, runtime.EventEmitter.Emit);
             il.Emit(OpCodes.Pop);
             il.Emit(OpCodes.Ret);
         }
@@ -262,7 +262,7 @@ public partial class RuntimeEmitter
 
         // Call base $EventEmitter ctor
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.TSEventEmitterCtor);
+        il.Emit(OpCodes.Call, runtime.EventEmitter.Ctor);
 
         // _closed = false
         il.Emit(OpCodes.Ldarg_0);

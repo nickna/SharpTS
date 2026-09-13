@@ -140,7 +140,7 @@ public partial class RuntimeEmitter
 
         // process.emit('unhandledRejection', reason, promise)
         il.Emit(OpCodes.Call, runtime.GetProcessObject);
-        il.Emit(OpCodes.Castclass, runtime.TSEventEmitterType);
+        il.Emit(OpCodes.Castclass, runtime.EventEmitter.Type);
         il.Emit(OpCodes.Ldstr, "unhandledRejection");
         il.Emit(OpCodes.Ldc_I4_2);
         il.Emit(OpCodes.Newarr, _types.Object);
@@ -153,7 +153,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, identityField);
         il.Emit(OpCodes.Stelem_Ref);
-        il.Emit(OpCodes.Callvirt, runtime.TSEventEmitterEmit);
+        il.Emit(OpCodes.Callvirt, runtime.EventEmitter.Emit);
         il.Emit(OpCodes.Pop);
 
         il.MarkLabel(unref);
@@ -169,7 +169,7 @@ public partial class RuntimeEmitter
     {
         // process.emit('rejectionHandled', promise)
         il.Emit(OpCodes.Call, runtime.GetProcessObject);
-        il.Emit(OpCodes.Castclass, runtime.TSEventEmitterType);
+        il.Emit(OpCodes.Castclass, runtime.EventEmitter.Type);
         il.Emit(OpCodes.Ldstr, "rejectionHandled");
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Newarr, _types.Object);
@@ -178,7 +178,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, identityField);
         il.Emit(OpCodes.Stelem_Ref);
-        il.Emit(OpCodes.Callvirt, runtime.TSEventEmitterEmit);
+        il.Emit(OpCodes.Callvirt, runtime.EventEmitter.Emit);
         il.Emit(OpCodes.Pop);
 
         il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);

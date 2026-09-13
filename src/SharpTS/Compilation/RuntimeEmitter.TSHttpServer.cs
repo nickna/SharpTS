@@ -34,7 +34,7 @@ public partial class RuntimeEmitter
         var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$HttpRequest",
             TypeAttributes.Public | TypeAttributes.Class | TypeAttributes.BeforeFieldInit,
-            runtime.TSEventEmitterType
+            runtime.EventEmitter.Type
         );
         http.RequestType = typeBuilder;
 
@@ -53,7 +53,7 @@ public partial class RuntimeEmitter
 
         var ctorIL = ctor.GetILGenerator();
         ctorIL.Emit(OpCodes.Ldarg_0);
-        ctorIL.Emit(OpCodes.Call, runtime.TSEventEmitterCtor);
+        ctorIL.Emit(OpCodes.Call, runtime.EventEmitter.Ctor);
         ctorIL.Emit(OpCodes.Ldarg_0);
         ctorIL.Emit(OpCodes.Ldarg_1);
         ctorIL.Emit(OpCodes.Stfld, http.RequestRequestField);
@@ -290,7 +290,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, "aborted");
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Newarr, _types.Object);
-        il.Emit(OpCodes.Callvirt, runtime.TSEventEmitterEmit);
+        il.Emit(OpCodes.Callvirt, runtime.EventEmitter.Emit);
         il.Emit(OpCodes.Pop);
 
         var noErrorLabel = il.DefineLabel();
@@ -304,7 +304,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Stelem_Ref);
-        il.Emit(OpCodes.Callvirt, runtime.TSEventEmitterEmit);
+        il.Emit(OpCodes.Callvirt, runtime.EventEmitter.Emit);
         il.Emit(OpCodes.Pop);
         il.MarkLabel(noErrorLabel);
 
@@ -312,7 +312,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, "close");
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Newarr, _types.Object);
-        il.Emit(OpCodes.Callvirt, runtime.TSEventEmitterEmit);
+        il.Emit(OpCodes.Callvirt, runtime.EventEmitter.Emit);
         il.Emit(OpCodes.Pop);
 
         il.Emit(OpCodes.Ldarg_0);
@@ -531,7 +531,7 @@ public partial class RuntimeEmitter
         var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$HttpResponse",
             TypeAttributes.Public | TypeAttributes.Class | TypeAttributes.BeforeFieldInit,
-            runtime.TSEventEmitterType
+            runtime.EventEmitter.Type
         );
         http.ResponseType = typeBuilder;
 
@@ -553,7 +553,7 @@ public partial class RuntimeEmitter
 
         var ctorIL = ctor.GetILGenerator();
         ctorIL.Emit(OpCodes.Ldarg_0);
-        ctorIL.Emit(OpCodes.Call, runtime.TSEventEmitterCtor);
+        ctorIL.Emit(OpCodes.Call, runtime.EventEmitter.Ctor);
         ctorIL.Emit(OpCodes.Ldarg_0);
         ctorIL.Emit(OpCodes.Ldarg_1);
         ctorIL.Emit(OpCodes.Stfld, http.ResponseResponseField);
@@ -1389,7 +1389,7 @@ public partial class RuntimeEmitter
         var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$HttpServer",
             TypeAttributes.Public | TypeAttributes.Class | TypeAttributes.BeforeFieldInit,
-            runtime.TSEventEmitterType
+            runtime.EventEmitter.Type
         );
         http.ServerType = typeBuilder;
 
@@ -1418,7 +1418,7 @@ public partial class RuntimeEmitter
 
         var ctorIL = ctor.GetILGenerator();
         ctorIL.Emit(OpCodes.Ldarg_0);
-        ctorIL.Emit(OpCodes.Call, runtime.TSEventEmitterCtor);
+        ctorIL.Emit(OpCodes.Call, runtime.EventEmitter.Ctor);
         ctorIL.Emit(OpCodes.Ldarg_0);
         ctorIL.Emit(OpCodes.Ldarg_1);
         ctorIL.Emit(OpCodes.Stfld, http.ServerCallbackField);
@@ -1543,7 +1543,7 @@ public partial class RuntimeEmitter
         stil.Emit(OpCodes.Ldarg_0);
         stil.Emit(OpCodes.Ldstr, "timeout");
         stil.Emit(OpCodes.Ldarg_2);
-        stil.Emit(OpCodes.Callvirt, runtime.TSEventEmitterOn);
+        stil.Emit(OpCodes.Callvirt, runtime.EventEmitter.On);
         stil.Emit(OpCodes.Pop);
         stil.MarkLabel(noCbLabel);
         stil.Emit(OpCodes.Ldarg_0);
@@ -1871,7 +1871,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, "listening");
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Newarr, _types.Object);
-        il.Emit(OpCodes.Callvirt, runtime.TSEventEmitterEmit);
+        il.Emit(OpCodes.Callvirt, runtime.EventEmitter.Emit);
         il.Emit(OpCodes.Pop);
 
         // Call listening callback if provided
@@ -1988,7 +1988,7 @@ public partial class RuntimeEmitter
         finishIl.Emit(OpCodes.Ldstr, "close");
         finishIl.Emit(OpCodes.Ldc_I4_0);
         finishIl.Emit(OpCodes.Newarr, _types.Object);
-        finishIl.Emit(OpCodes.Callvirt, runtime.TSEventEmitterEmit);
+        finishIl.Emit(OpCodes.Callvirt, runtime.EventEmitter.Emit);
         finishIl.Emit(OpCodes.Pop);
 
         // Invoke the pending close callback after the close event.

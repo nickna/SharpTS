@@ -901,14 +901,14 @@ public partial class RuntimeEmitter
         var getter = typeBuilder.DefineMethod(
             "GetProcessEventEmitter",
             MethodAttributes.Public | MethodAttributes.Static,
-            runtime.TSEventEmitterType,
+            runtime.EventEmitter.Type,
             Type.EmptyTypes
         );
         runtime.GetProcessEventEmitter = getter;
 
         var il = getter.GetILGenerator();
         il.Emit(OpCodes.Call, runtime.GetProcessObject);
-        il.Emit(OpCodes.Castclass, runtime.TSEventEmitterType);
+        il.Emit(OpCodes.Castclass, runtime.EventEmitter.Type);
         il.Emit(OpCodes.Ret);
     }
 }

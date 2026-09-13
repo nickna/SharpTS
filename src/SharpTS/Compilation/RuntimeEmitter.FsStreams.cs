@@ -160,7 +160,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_1); // reuse the matched name string
             loadArgs();
-            il.Emit(OpCodes.Call, runtime.TSEventEmitterEmit);
+            il.Emit(OpCodes.Call, runtime.EventEmitter.Emit);
             il.Emit(OpCodes.Pop);
         }
 
@@ -267,7 +267,7 @@ public partial class RuntimeEmitter
         _fsWriteStreamType = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$FsWriteStream",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
-            runtime.TSEventEmitterType
+            runtime.EventEmitter.Type
         );
 
         // Fields
@@ -288,7 +288,7 @@ public partial class RuntimeEmitter
         );
         var il = ctor.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.TSEventEmitterCtor);
+        il.Emit(OpCodes.Call, runtime.EventEmitter.Ctor);
         il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldarg_1); il.Emit(OpCodes.Stfld, _wsPathField);
         il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldarg_3); il.Emit(OpCodes.Stfld, _wsAutoCloseField);
         il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldarg, 4); il.Emit(OpCodes.Stfld, _wsEmitCloseField);
@@ -395,7 +395,7 @@ public partial class RuntimeEmitter
         var il = method.GetILGenerator();
         var strEq = typeof(string).GetMethod("op_Equality", [typeof(string), typeof(string)])!;
 
-        void EmitEvent(Action loadArgs) { il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldarg_1); loadArgs(); il.Emit(OpCodes.Call, runtime.TSEventEmitterEmit); il.Emit(OpCodes.Pop); }
+        void EmitEvent(Action loadArgs) { il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldarg_1); loadArgs(); il.Emit(OpCodes.Call, runtime.EventEmitter.Emit); il.Emit(OpCodes.Pop); }
         var ret = il.DefineLabel(); var notOpen = il.DefineLabel(); var notReady = il.DefineLabel();
 
         il.Emit(OpCodes.Ldarg_1); il.Emit(OpCodes.Ldstr, "open"); il.Emit(OpCodes.Call, strEq); il.Emit(OpCodes.Brfalse, notOpen);
@@ -520,7 +520,7 @@ public partial class RuntimeEmitter
         {
             il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldstr, name);
             il.Emit(OpCodes.Ldc_I4_0); il.Emit(OpCodes.Newarr, _types.Object);
-            il.Emit(OpCodes.Call, runtime.TSEventEmitterEmit); il.Emit(OpCodes.Pop);
+            il.Emit(OpCodes.Call, runtime.EventEmitter.Emit); il.Emit(OpCodes.Pop);
         }
         // emit 'finish'; if (_emitClose) emit 'close'
         Emit("finish");

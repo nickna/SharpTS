@@ -140,7 +140,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Ldloc, rinfoLocal);
         il.Emit(OpCodes.Stelem_Ref);
-        il.Emit(OpCodes.Callvirt, runtime.TSEventEmitterEmit);
+        il.Emit(OpCodes.Callvirt, runtime.EventEmitter.Emit);
         il.Emit(OpCodes.Pop);
 
         il.Emit(OpCodes.Ret);

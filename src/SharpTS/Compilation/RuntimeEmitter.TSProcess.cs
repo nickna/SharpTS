@@ -1341,7 +1341,7 @@ public partial class RuntimeEmitter
             var il = invoke.GetILGenerator();
             // ((EventEmitter)GetProcessObject()).Emit(_event, [_arg]) — discard result
             il.Emit(OpCodes.Call, runtime.GetProcessObject);
-            il.Emit(OpCodes.Castclass, runtime.TSEventEmitterType);
+            il.Emit(OpCodes.Castclass, runtime.EventEmitter.Type);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldfld, eventField);
             il.Emit(OpCodes.Ldc_I4_1);
@@ -1351,7 +1351,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldfld, argField);
             il.Emit(OpCodes.Stelem_Ref);
-            il.Emit(OpCodes.Callvirt, runtime.TSEventEmitterEmit);
+            il.Emit(OpCodes.Callvirt, runtime.EventEmitter.Emit);
             il.Emit(OpCodes.Pop);
             il.Emit(OpCodes.Ret);
         }
@@ -1368,7 +1368,7 @@ public partial class RuntimeEmitter
         var tb = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$Process",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
-            runtime.TSEventEmitterType);
+            runtime.EventEmitter.Type);
         EmitTypeDefinitions.AddInterfaceImplementation(tb, runtime.IHasFieldsInterface);
 
         _processFieldsField = tb.DefineField("_fields", _types.DictionaryStringObject, FieldAttributes.Private);
@@ -1379,7 +1379,7 @@ public partial class RuntimeEmitter
         {
             var il = ctor.GetILGenerator();
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Call, runtime.TSEventEmitterCtor);
+            il.Emit(OpCodes.Call, runtime.EventEmitter.Ctor);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.DictionaryStringObject));
             il.Emit(OpCodes.Stfld, _processFieldsField);
@@ -1929,7 +1929,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(done);
         il.Emit(OpCodes.Ret);
 
-        tb.DefineMethodOverride(method, runtime.TSEventEmitterOnListenerAdded);
+        tb.DefineMethodOverride(method, runtime.EventEmitter.OnListenerAdded);
     }
 
     // =====================================================================
@@ -2005,7 +2005,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Conv_R8);
         il.Emit(OpCodes.Box, _types.Double);
         il.Emit(OpCodes.Stelem_Ref);
-        il.Emit(OpCodes.Callvirt, runtime.TSEventEmitterEmit);
+        il.Emit(OpCodes.Callvirt, runtime.EventEmitter.Emit);
         il.Emit(OpCodes.Pop);
         il.BeginCatchBlock(_types.Exception);
         il.Emit(OpCodes.Pop);
@@ -2166,7 +2166,7 @@ public partial class RuntimeEmitter
         var noListeners = il.DefineLabel();
         il.Emit(OpCodes.Call, _processGetInstance);
         il.Emit(OpCodes.Ldloc, signalLocal);
-        il.Emit(OpCodes.Callvirt, runtime.TSEventEmitterListenerCount);
+        il.Emit(OpCodes.Callvirt, runtime.EventEmitter.ListenerCount);
         il.Emit(OpCodes.Ldc_R8, 0.0);
         il.Emit(OpCodes.Ble_Un, noListeners);
         il.Emit(OpCodes.Ldloc, signalLocal);
@@ -2414,7 +2414,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Conv_R8);
             il.Emit(OpCodes.Box, _types.Double);
             il.Emit(OpCodes.Stelem_Ref);
-            il.Emit(OpCodes.Callvirt, runtime.TSEventEmitterEmit);
+            il.Emit(OpCodes.Callvirt, runtime.EventEmitter.Emit);
         }
 
         var loopTop = il.DefineLabel();
@@ -2472,7 +2472,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Conv_R8);
         il.Emit(OpCodes.Box, _types.Double);
         il.Emit(OpCodes.Stelem_Ref);
-        il.Emit(OpCodes.Callvirt, runtime.TSEventEmitterEmit);
+        il.Emit(OpCodes.Callvirt, runtime.EventEmitter.Emit);
         il.Emit(OpCodes.Pop);
         il.BeginCatchBlock(_types.Exception);
         il.Emit(OpCodes.Pop);
