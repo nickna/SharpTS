@@ -2278,7 +2278,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
             // like the web-streams entries above — and the same bare identifier
             // that reaches here flags HasAnyTypedArray, so the type is emitted.
             "ArrayBuffer" => Ctx.Runtime!.ArrayBuffer?.Type,
-            "SharedArrayBuffer" => Ctx.Runtime!.SharedArrayBufferType,
+            "SharedArrayBuffer" => Ctx.Runtime!.RequireSharedArrayBuffer().Type,
             "DataView" => Ctx.Runtime!.DataViewType,
             "Int8Array" => Ctx.Runtime!.Int8ArrayType,
             "Uint8Array" => Ctx.Runtime!.Uint8ArrayType,

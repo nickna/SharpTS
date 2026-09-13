@@ -54,7 +54,7 @@ public sealed class SharedArrayBufferEmitter : ITypeEmitterStrategy
                     il.Emit(OpCodes.Ldc_I4, int.MaxValue);
                 }
 
-                il.Emit(OpCodes.Call, ctx.Runtime!.TSSharedArrayBufferSlice);
+                il.Emit(OpCodes.Call, ctx.Runtime!.RequireSharedArrayBuffer().SliceObject);
                 return true;
         }
 
@@ -80,7 +80,7 @@ public sealed class SharedArrayBufferEmitter : ITypeEmitterStrategy
         switch (propertyName)
         {
             case "byteLength":
-                il.Emit(OpCodes.Call, ctx.Runtime!.TSSharedArrayBufferByteLengthGetter);
+                il.Emit(OpCodes.Call, ctx.Runtime!.RequireSharedArrayBuffer().GetByteLength);
                 il.Emit(OpCodes.Box, ctx.Types.Double);
                 return true;
         }
