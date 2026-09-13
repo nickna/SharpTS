@@ -167,8 +167,8 @@ public partial class ILEmitter
 
         EmitExpression(g.Object);
         EmitBoxIfNeeded(g.Object);
-        IL.Emit(OpCodes.Castclass, _ctx.Runtime!.TSTimeoutType);
-        IL.Emit(OpCodes.Callvirt, _ctx.Runtime!.TSTimeoutHasRefGetter);
+        IL.Emit(OpCodes.Castclass, _ctx.Runtime!.Timers.TimeoutType);
+        IL.Emit(OpCodes.Callvirt, _ctx.Runtime!.Timers.TimeoutHasRefGetter);
         IL.Emit(OpCodes.Box, _ctx.Types.Boolean);
         SetStackUnknown();
         return true;

@@ -278,7 +278,7 @@ public partial class RuntimeEmitter
         var il = method.GetILGenerator();
         // Process any pending virtual timers before returning
         // This implements JavaScript-like single-threaded timer semantics
-        il.Emit(OpCodes.Call, runtime.ProcessPendingTimers);
+        il.Emit(OpCodes.Call, runtime.Timers.ProcessPendingTimers);
         il.Emit(OpCodes.Pop); // discard int return (next timer delay)
         // Call $TSDate.Now() static method
         il.Emit(OpCodes.Call, runtime.TSDateNowStatic);

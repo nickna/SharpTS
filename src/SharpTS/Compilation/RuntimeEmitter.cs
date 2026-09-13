@@ -55,7 +55,10 @@ public partial class RuntimeEmitter
             runtime.WebCrypto.BeginImplementationEmission();
         }
         if (features.UsesPromise)
+        {
             runtime.BeginPromiseEmission();
+            runtime.BeginTimerPromiseEmission();
+        }
         if (features.UsesNet)
             runtime.BeginNetEmission();
         if (features.UsesHttp)
@@ -262,7 +265,7 @@ public partial class RuntimeEmitter
         // Emit $VirtualTimer class for virtual timer support (single-threaded semantics)
         // Must come after TSFunction (uses TSFunctionType)
         // Must come BEFORE TSTimeoutClass (TSTimeout references VirtualTimer)
-        EmitVirtualTimerClass(moduleBuilder, runtime);
+        EmitVirtualTimerClass(moduleBuilder, runtime.Timers);
 
         // Emit $TSTimeout class for timer support
         // Must come after $EventLoop (Cancel/Ref/Unref call EventLoop.Ref/Unref)
@@ -639,6 +642,9 @@ public partial class RuntimeEmitter
         runtime.DataView?.CompleteEmission();
         runtime.TypedArrays.CompleteEmission();
         runtime.EventEmitter.CompleteEmission();
+        runtime.Timers.CompleteEmission();
+        runtime.Microtasks.CompleteEmission();
+        runtime.TimerPromises?.CompleteEmission();
         runtime.Buffer?.CompleteEmission();
         runtime.ArrayStorage.CompleteEmission();
         runtime.ArrayOperations.CompleteEmission();

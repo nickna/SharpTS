@@ -1535,7 +1535,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, skipLabel);
 
         // $Runtime.ProcessPendingTimers() → int ms-until-next-timer (discarded).
-        il.Emit(OpCodes.Call, runtime.ProcessPendingTimers);
+        il.Emit(OpCodes.Call, runtime.Timers.ProcessPendingTimers);
         il.Emit(OpCodes.Pop);
 
         il.MarkLabel(skipLabel);

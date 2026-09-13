@@ -75,15 +75,15 @@ public partial class ILCompiler
         EmitHostedVoidHook(
             "DrainGuestMicrotasks",
             baseType,
-            hookIl => hookIl.Emit(OpCodes.Call, _runtime.ProcessMicrotasks));
+            hookIl => hookIl.Emit(OpCodes.Call, _runtime.Microtasks.ProcessMicrotasks));
         EmitHostedBooleanProperty(
             "HasGuestMicrotasks",
             baseType,
-            hookIl => hookIl.Emit(OpCodes.Call, _runtime.HasMicrotasks));
+            hookIl => hookIl.Emit(OpCodes.Call, _runtime.Microtasks.HasMicrotasks));
         EmitHostedBooleanHook(
             "TryRunOneGuestTimer",
             baseType,
-            hookIl => hookIl.Emit(OpCodes.Call, _runtime.ProcessOnePendingTimer));
+            hookIl => hookIl.Emit(OpCodes.Call, _runtime.Timers.ProcessOnePendingTimer));
         EmitHostedTimerDelayOverride(baseType);
         EmitHostedVoidHook(
             "RejectGuestWork",
@@ -94,7 +94,7 @@ public partial class ILCompiler
             baseType,
             hookIl =>
             {
-                hookIl.Emit(OpCodes.Call, _runtime.CancelAllTimers);
+                hookIl.Emit(OpCodes.Call, _runtime.Timers.CancelAllTimers);
                 if (_runtime.ChildProcessTerminateOwned is not null)
                     hookIl.Emit(OpCodes.Call, _runtime.ChildProcessTerminateOwned);
                 hookIl.Emit(OpCodes.Call, _runtime.EventLoopGetInstance);
@@ -303,7 +303,7 @@ public partial class ILCompiler
         var il = method.GetILGenerator();
         var delay = il.DeclareLocal(_types.Int32);
         var none = il.DefineLabel();
-        il.Emit(OpCodes.Call, _runtime.GetNextTimerDelay);
+        il.Emit(OpCodes.Call, _runtime.Timers.GetNextTimerDelay);
         il.Emit(OpCodes.Stloc, delay);
         il.Emit(OpCodes.Ldloc, delay);
         il.Emit(OpCodes.Ldc_I4_0);

@@ -9,33 +9,16 @@ namespace SharpTS.Compilation;
 /// </summary>
 public partial class RuntimeEmitter
 {
-    private TypeBuilder _timerPromiseClosureType = null!;
-    private FieldBuilder _timerPromiseClosureValue = null!;
-    private FieldBuilder _timerPromiseClosureToken = null!;
-    private ConstructorBuilder _timerPromiseClosureCtor = null!;
-    private MethodBuilder _timerPromiseClosureOnComplete = null!;
-
-    // Async interval closure fields
-    private TypeBuilder _asyncIntervalClosureType = null!;
-    private FieldBuilder _asyncIntervalClosureDelayMs = null!;
-    private FieldBuilder _asyncIntervalClosureValue = null!;
-    private FieldBuilder _asyncIntervalClosureDone = null!;
-    private FieldBuilder _asyncIntervalClosureSelf = null!;
-    private FieldBuilder _asyncIntervalClosureToken = null!;
-    private ConstructorBuilder _asyncIntervalClosureCtor = null!;
-    private MethodBuilder _asyncIntervalClosureNext = null!;
-    private MethodBuilder _asyncIntervalClosureReturn = null!;
-    private MethodBuilder _asyncIntervalClosureGetSelf = null!;
-
     private void EmitTimerPromisesMethods(TypeBuilder runtimeType, EmittedRuntime runtime)
     {
+        var timerPromises = runtime.RequireTimerPromises();
         var moduleBuilder = runtimeType.Module as ModuleBuilder ?? throw new Exception("need ModuleBuilder");
         EmitTimerPromiseClosure(moduleBuilder, runtime);
-        EmitExtractTimerOptionsToken(runtimeType, runtime);
+        EmitExtractTimerOptionsToken(runtimeType, timerPromises);
         EmitSetTimeoutPromise(runtimeType, runtime);
         EmitSetTimeoutPromiseWithSignal(runtimeType, runtime);
-        EmitSetImmediatePromise(runtimeType, runtime);
-        EmitSetImmediatePromiseWithSignal(runtimeType, runtime);
+        EmitSetImmediatePromise(runtimeType, timerPromises);
+        EmitSetImmediatePromiseWithSignal(runtimeType, timerPromises);
         EmitAsyncIntervalClosure(moduleBuilder, runtime);
         EmitSetIntervalAsyncIterable(runtimeType, runtime);
         EmitSetIntervalAsyncIterableWithSignal(runtimeType, runtime);
@@ -47,14 +30,14 @@ public partial class RuntimeEmitter
     /// Returns CancellationToken.None if options is null, not a dict, has no signal,
     /// or signal is not a $AbortSignal dict.
     /// </summary>
-    private void EmitExtractTimerOptionsToken(TypeBuilder runtimeType, EmittedRuntime runtime)
+    private void EmitExtractTimerOptionsToken(TypeBuilder runtimeType, EmittedTimerPromiseRuntime timerPromises)
     {
         var method = runtimeType.DefineMethod(
             "ExtractTimerOptionsToken",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.CancellationToken,
             [_types.Object]);
-        runtime.ExtractTimerOptionsToken = method;
+        timerPromises.ExtractTimerOptionsToken = method;
 
         var il = method.GetILGenerator();
         var dictType = _types.DictionaryStringObject;
@@ -125,33 +108,34 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitTimerPromiseClosure(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
-        _timerPromiseClosureType = moduleBuilder.DefineType(
+        var timerPromises = runtime.RequireTimerPromises();
+        timerPromises.TimerPromiseClosureType = moduleBuilder.DefineType(
             "$TimerPromiseClosure",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit);
 
-        _timerPromiseClosureValue = _timerPromiseClosureType.DefineField(
+        timerPromises.TimerPromiseClosureValue = timerPromises.TimerPromiseClosureType.DefineField(
             "Value", _types.Object, FieldAttributes.Public);
 
-        _timerPromiseClosureToken = _timerPromiseClosureType.DefineField(
+        timerPromises.TimerPromiseClosureToken = timerPromises.TimerPromiseClosureType.DefineField(
             "Token", _types.CancellationToken, FieldAttributes.Public);
 
-        _timerPromiseClosureCtor = _timerPromiseClosureType.DefineConstructor(
+        timerPromises.TimerPromiseClosureCtor = timerPromises.TimerPromiseClosureType.DefineConstructor(
             MethodAttributes.Public, CallingConventions.Standard, Type.EmptyTypes);
         {
-            var il = _timerPromiseClosureCtor.GetILGenerator();
+            var il = timerPromises.TimerPromiseClosureCtor.GetILGenerator();
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Call, typeof(object).GetConstructor(Type.EmptyTypes)!);
             il.Emit(OpCodes.Ret);
         }
 
         // OnComplete(Task t) → EventLoop.Unref(); if Token cancelled throw AbortError; return Value;
-        _timerPromiseClosureOnComplete = _timerPromiseClosureType.DefineMethod(
+        timerPromises.TimerPromiseClosureOnComplete = timerPromises.TimerPromiseClosureType.DefineMethod(
             "OnComplete",
             MethodAttributes.Public,
             _types.Object,
             [_types.Task]);
         {
-            var il = _timerPromiseClosureOnComplete.GetILGenerator();
+            var il = timerPromises.TimerPromiseClosureOnComplete.GetILGenerator();
 
             // EventLoop.GetInstance().Unref();
             il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
@@ -160,7 +144,7 @@ public partial class RuntimeEmitter
             // if (this.Token.IsCancellationRequested) throw new Exception("AbortError: ...")
             var notCancelledLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldflda, _timerPromiseClosureToken);
+            il.Emit(OpCodes.Ldflda, timerPromises.TimerPromiseClosureToken);
             il.Emit(OpCodes.Call, _types.GetProperty(_types.CancellationToken, "IsCancellationRequested").GetGetMethod()!);
             il.Emit(OpCodes.Brfalse, notCancelledLabel);
             il.Emit(OpCodes.Ldstr, "AbortError: The operation was aborted");
@@ -171,11 +155,11 @@ public partial class RuntimeEmitter
 
             // return this.Value;
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldfld, _timerPromiseClosureValue);
+            il.Emit(OpCodes.Ldfld, timerPromises.TimerPromiseClosureValue);
             il.Emit(OpCodes.Ret);
         }
 
-        _timerPromiseClosureType.CreateType();
+        timerPromises.TimerPromiseClosureType.CreateType();
     }
 
     /// <summary>
@@ -184,12 +168,13 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitSetTimeoutPromise(TypeBuilder runtimeType, EmittedRuntime runtime)
     {
+        var timerPromises = runtime.RequireTimerPromises();
         var method = runtimeType.DefineMethod(
             "SetTimeoutPromise",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.Double, _types.Object]);
-        runtime.SetTimeoutPromise = method;
+        timerPromises.SetTimeoutPromise = method;
 
         var il = method.GetILGenerator();
 
@@ -206,14 +191,14 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, runtime.EventLoopRef);
 
         // var closure = new $TimerPromiseClosure();
-        var closureLocal = il.DeclareLocal(_timerPromiseClosureType);
-        il.Emit(OpCodes.Newobj, _timerPromiseClosureCtor);
+        var closureLocal = il.DeclareLocal(timerPromises.TimerPromiseClosureType);
+        il.Emit(OpCodes.Newobj, timerPromises.TimerPromiseClosureCtor);
         il.Emit(OpCodes.Stloc, closureLocal);
 
         // closure.Value = value;
         il.Emit(OpCodes.Ldloc, closureLocal);
         il.Emit(OpCodes.Ldarg_1); // value
-        il.Emit(OpCodes.Stfld, _timerPromiseClosureValue);
+        il.Emit(OpCodes.Stfld, timerPromises.TimerPromiseClosureValue);
 
         // Task.Delay(delayMs)
         il.Emit(OpCodes.Ldloc, delayMsLocal);
@@ -221,7 +206,7 @@ public partial class RuntimeEmitter
 
         // .ContinueWith<object?>(closure.OnComplete)
         il.Emit(OpCodes.Ldloc, closureLocal);
-        il.Emit(OpCodes.Ldftn, _timerPromiseClosureOnComplete);
+        il.Emit(OpCodes.Ldftn, timerPromises.TimerPromiseClosureOnComplete);
         il.Emit(OpCodes.Newobj, typeof(Func<Task, object?>).GetConstructors()[0]);
         il.Emit(OpCodes.Call,
             EmitGenerics.MakeGenericMethod(typeof(Task).GetMethod("ContinueWith", 1,
@@ -239,19 +224,20 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitSetTimeoutPromiseWithSignal(TypeBuilder runtimeType, EmittedRuntime runtime)
     {
+        var timerPromises = runtime.RequireTimerPromises();
         var method = runtimeType.DefineMethod(
             "SetTimeoutPromiseWithSignal",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.Double, _types.Object, _types.Object]);
-        runtime.SetTimeoutPromiseWithSignal = method;
+        timerPromises.SetTimeoutPromiseWithSignal = method;
 
         var il = method.GetILGenerator();
 
         // var token = ExtractTimerOptionsToken(options)
         var tokenLocal = il.DeclareLocal(_types.CancellationToken);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Call, runtime.ExtractTimerOptionsToken);
+        il.Emit(OpCodes.Call, timerPromises.ExtractTimerOptionsToken);
         il.Emit(OpCodes.Stloc, tokenLocal);
 
         // if (token.IsCancellationRequested) return $TSPromise.Reject("AbortError: ...")
@@ -282,19 +268,19 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, runtime.EventLoopRef);
 
         // var closure = new $TimerPromiseClosure();
-        var closureLocal = il.DeclareLocal(_timerPromiseClosureType);
-        il.Emit(OpCodes.Newobj, _timerPromiseClosureCtor);
+        var closureLocal = il.DeclareLocal(timerPromises.TimerPromiseClosureType);
+        il.Emit(OpCodes.Newobj, timerPromises.TimerPromiseClosureCtor);
         il.Emit(OpCodes.Stloc, closureLocal);
 
         // closure.Value = value;
         il.Emit(OpCodes.Ldloc, closureLocal);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Stfld, _timerPromiseClosureValue);
+        il.Emit(OpCodes.Stfld, timerPromises.TimerPromiseClosureValue);
 
         // closure.Token = token;
         il.Emit(OpCodes.Ldloc, closureLocal);
         il.Emit(OpCodes.Ldloc, tokenLocal);
-        il.Emit(OpCodes.Stfld, _timerPromiseClosureToken);
+        il.Emit(OpCodes.Stfld, timerPromises.TimerPromiseClosureToken);
 
         // Task.Delay(delayMs, token)
         il.Emit(OpCodes.Ldloc, delayMsLocal);
@@ -303,7 +289,7 @@ public partial class RuntimeEmitter
 
         // .ContinueWith<object?>(closure.OnComplete)
         il.Emit(OpCodes.Ldloc, closureLocal);
-        il.Emit(OpCodes.Ldftn, _timerPromiseClosureOnComplete);
+        il.Emit(OpCodes.Ldftn, timerPromises.TimerPromiseClosureOnComplete);
         il.Emit(OpCodes.Newobj, typeof(Func<Task, object?>).GetConstructors()[0]);
         il.Emit(OpCodes.Call,
             EmitGenerics.MakeGenericMethod(typeof(Task).GetMethod("ContinueWith", 1,
@@ -318,21 +304,21 @@ public partial class RuntimeEmitter
     /// Emits: public static object SetImmediatePromise(object? value)
     /// Creates a promise that resolves with value on the next tick.
     /// </summary>
-    private void EmitSetImmediatePromise(TypeBuilder runtimeType, EmittedRuntime runtime)
+    private void EmitSetImmediatePromise(TypeBuilder runtimeType, EmittedTimerPromiseRuntime timerPromises)
     {
         var method = runtimeType.DefineMethod(
             "SetImmediatePromise",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.Object]);
-        runtime.SetImmediatePromise = method;
+        timerPromises.SetImmediatePromise = method;
 
         var il = method.GetILGenerator();
 
         // SetTimeoutPromise(0.0, value)
         il.Emit(OpCodes.Ldc_R8, 0.0);
         il.Emit(OpCodes.Ldarg_0); // value
-        il.Emit(OpCodes.Call, runtime.SetTimeoutPromise);
+        il.Emit(OpCodes.Call, timerPromises.SetTimeoutPromise);
         il.Emit(OpCodes.Ret);
     }
 
@@ -340,14 +326,14 @@ public partial class RuntimeEmitter
     /// Emits: public static object SetImmediatePromiseWithSignal(object? value, object? options)
     /// Delegates to SetTimeoutPromiseWithSignal(0, value, options).
     /// </summary>
-    private void EmitSetImmediatePromiseWithSignal(TypeBuilder runtimeType, EmittedRuntime runtime)
+    private void EmitSetImmediatePromiseWithSignal(TypeBuilder runtimeType, EmittedTimerPromiseRuntime timerPromises)
     {
         var method = runtimeType.DefineMethod(
             "SetImmediatePromiseWithSignal",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.Object, _types.Object]);
-        runtime.SetImmediatePromiseWithSignal = method;
+        timerPromises.SetImmediatePromiseWithSignal = method;
 
         var il = method.GetILGenerator();
 
@@ -355,7 +341,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_R8, 0.0);
         il.Emit(OpCodes.Ldarg_0); // value
         il.Emit(OpCodes.Ldarg_1); // options
-        il.Emit(OpCodes.Call, runtime.SetTimeoutPromiseWithSignal);
+        il.Emit(OpCodes.Call, timerPromises.SetTimeoutPromiseWithSignal);
         il.Emit(OpCodes.Ret);
     }
 
@@ -365,34 +351,35 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitAsyncIntervalClosure(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
-        _asyncIntervalClosureType = moduleBuilder.DefineType(
+        var timerPromises = runtime.RequireTimerPromises();
+        timerPromises.AsyncIntervalClosureType = moduleBuilder.DefineType(
             "$AsyncIntervalClosure",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit);
 
-        _asyncIntervalClosureDelayMs = _asyncIntervalClosureType.DefineField(
+        timerPromises.AsyncIntervalClosureDelayMs = timerPromises.AsyncIntervalClosureType.DefineField(
             "DelayMs", _types.Int32, FieldAttributes.Public);
-        _asyncIntervalClosureValue = _asyncIntervalClosureType.DefineField(
+        timerPromises.AsyncIntervalClosureValue = timerPromises.AsyncIntervalClosureType.DefineField(
             "Value", _types.Object, FieldAttributes.Public);
-        _asyncIntervalClosureDone = _asyncIntervalClosureType.DefineField(
+        timerPromises.AsyncIntervalClosureDone = timerPromises.AsyncIntervalClosureType.DefineField(
             "Done", _types.Boolean, FieldAttributes.Public);
-        _asyncIntervalClosureSelf = _asyncIntervalClosureType.DefineField(
+        timerPromises.AsyncIntervalClosureSelf = timerPromises.AsyncIntervalClosureType.DefineField(
             "Self", _types.DictionaryStringObject, FieldAttributes.Public);
 
-        _asyncIntervalClosureToken = _asyncIntervalClosureType.DefineField(
+        timerPromises.AsyncIntervalClosureToken = timerPromises.AsyncIntervalClosureType.DefineField(
             "Token", _types.CancellationToken, FieldAttributes.Public);
 
         // Constructor
-        _asyncIntervalClosureCtor = _asyncIntervalClosureType.DefineConstructor(
+        timerPromises.AsyncIntervalClosureCtor = timerPromises.AsyncIntervalClosureType.DefineConstructor(
             MethodAttributes.Public, CallingConventions.Standard, Type.EmptyTypes);
         {
-            var il = _asyncIntervalClosureCtor.GetILGenerator();
+            var il = timerPromises.AsyncIntervalClosureCtor.GetILGenerator();
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Call, typeof(object).GetConstructor(Type.EmptyTypes)!);
             il.Emit(OpCodes.Ret);
         }
 
         // Next(object[] args) → object (returns Task<object> containing {value, done} dict)
-        _asyncIntervalClosureNext = _asyncIntervalClosureType.DefineMethod(
+        timerPromises.AsyncIntervalClosureNext = timerPromises.AsyncIntervalClosureType.DefineMethod(
             "Next",
             MethodAttributes.Public,
             _types.Object,
@@ -400,7 +387,7 @@ public partial class RuntimeEmitter
         EmitAsyncIntervalNext(runtime);
 
         // Return(object[] args) → object (returns Task<object> containing {value: arg, done: true})
-        _asyncIntervalClosureReturn = _asyncIntervalClosureType.DefineMethod(
+        timerPromises.AsyncIntervalClosureReturn = timerPromises.AsyncIntervalClosureType.DefineMethod(
             "Return",
             MethodAttributes.Public,
             _types.Object,
@@ -408,19 +395,19 @@ public partial class RuntimeEmitter
         EmitAsyncIntervalReturn(runtime);
 
         // GetSelf(object[] args) → object (returns the self dict)
-        _asyncIntervalClosureGetSelf = _asyncIntervalClosureType.DefineMethod(
+        timerPromises.AsyncIntervalClosureGetSelf = timerPromises.AsyncIntervalClosureType.DefineMethod(
             "GetSelf",
             MethodAttributes.Public,
             _types.Object,
             [_types.ObjectArray]);
         {
-            var il = _asyncIntervalClosureGetSelf.GetILGenerator();
+            var il = timerPromises.AsyncIntervalClosureGetSelf.GetILGenerator();
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldfld, _asyncIntervalClosureSelf);
+            il.Emit(OpCodes.Ldfld, timerPromises.AsyncIntervalClosureSelf);
             il.Emit(OpCodes.Ret);
         }
 
-        _asyncIntervalClosureType.CreateType();
+        timerPromises.AsyncIntervalClosureType.CreateType();
     }
 
     /// <summary>
@@ -431,19 +418,20 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitAsyncIntervalNext(EmittedRuntime runtime)
     {
-        var il = _asyncIntervalClosureNext.GetILGenerator();
+        var timerPromises = runtime.RequireTimerPromises();
+        var il = timerPromises.AsyncIntervalClosureNext.GetILGenerator();
 
         var notDoneLabel = il.DefineLabel();
         var doneLabel = il.DefineLabel();
 
         // if (this.Done) goto doneLabel
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _asyncIntervalClosureDone);
+        il.Emit(OpCodes.Ldfld, timerPromises.AsyncIntervalClosureDone);
         il.Emit(OpCodes.Brtrue, doneLabel);
 
         // if (this.Token.IsCancellationRequested) goto doneLabel
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldflda, _asyncIntervalClosureToken);
+        il.Emit(OpCodes.Ldflda, timerPromises.AsyncIntervalClosureToken);
         il.Emit(OpCodes.Call, _types.GetProperty(_types.CancellationToken, "IsCancellationRequested").GetGetMethod()!);
         il.Emit(OpCodes.Brtrue, doneLabel);
 
@@ -468,9 +456,9 @@ public partial class RuntimeEmitter
 
         // Task.Delay(this.DelayMs, this.Token)
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _asyncIntervalClosureDelayMs);
+        il.Emit(OpCodes.Ldfld, timerPromises.AsyncIntervalClosureDelayMs);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _asyncIntervalClosureToken);
+        il.Emit(OpCodes.Ldfld, timerPromises.AsyncIntervalClosureToken);
         il.Emit(OpCodes.Call, typeof(Task).GetMethod("Delay", [typeof(int), typeof(CancellationToken)])!);
 
         // .ContinueWith<object>(this.OnNextComplete)
@@ -493,7 +481,8 @@ public partial class RuntimeEmitter
     /// </summary>
     private MethodBuilder EmitOnNextComplete(EmittedRuntime runtime)
     {
-        var method = _asyncIntervalClosureType.DefineMethod(
+        var timerPromises = runtime.RequireTimerPromises();
+        var method = timerPromises.AsyncIntervalClosureType.DefineMethod(
             "OnNextComplete",
             MethodAttributes.Public,
             _types.Object,
@@ -509,12 +498,12 @@ public partial class RuntimeEmitter
 
         // if (this.Done) goto doneLabel
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _asyncIntervalClosureDone);
+        il.Emit(OpCodes.Ldfld, timerPromises.AsyncIntervalClosureDone);
         il.Emit(OpCodes.Brtrue, doneLabel);
 
         // if (this.Token.IsCancellationRequested) goto doneLabel
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldflda, _asyncIntervalClosureToken);
+        il.Emit(OpCodes.Ldflda, timerPromises.AsyncIntervalClosureToken);
         il.Emit(OpCodes.Call, _types.GetProperty(_types.CancellationToken, "IsCancellationRequested").GetGetMethod()!);
         il.Emit(OpCodes.Brtrue, doneLabel);
 
@@ -541,7 +530,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Ldstr, "value");
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _asyncIntervalClosureValue);
+        il.Emit(OpCodes.Ldfld, timerPromises.AsyncIntervalClosureValue);
         il.Emit(OpCodes.Callvirt, dictSetItem);
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Ldstr, "done");
@@ -559,12 +548,13 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitAsyncIntervalReturn(EmittedRuntime runtime)
     {
-        var il = _asyncIntervalClosureReturn.GetILGenerator();
+        var timerPromises = runtime.RequireTimerPromises();
+        var il = timerPromises.AsyncIntervalClosureReturn.GetILGenerator();
 
         // this.Done = true
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Stfld, _asyncIntervalClosureDone);
+        il.Emit(OpCodes.Stfld, timerPromises.AsyncIntervalClosureDone);
 
         // value = args.Length > 0 ? args[0] : null
         var hasValue = il.DefineLabel();
@@ -645,12 +635,13 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitSetIntervalAsyncIterable(TypeBuilder runtimeType, EmittedRuntime runtime)
     {
+        var timerPromises = runtime.RequireTimerPromises();
         var method = runtimeType.DefineMethod(
             "SetIntervalAsyncIterable",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.Double, _types.Object]);
-        runtime.SetIntervalAsyncIterable = method;
+        timerPromises.SetIntervalAsyncIterable = method;
 
         var il = method.GetILGenerator();
 
@@ -663,19 +654,19 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, delayMsLocal);
 
         // var closure = new $AsyncIntervalClosure();
-        var closureLocal = il.DeclareLocal(_asyncIntervalClosureType);
-        il.Emit(OpCodes.Newobj, _asyncIntervalClosureCtor);
+        var closureLocal = il.DeclareLocal(timerPromises.AsyncIntervalClosureType);
+        il.Emit(OpCodes.Newobj, timerPromises.AsyncIntervalClosureCtor);
         il.Emit(OpCodes.Stloc, closureLocal);
 
         // closure.DelayMs = delayMs;
         il.Emit(OpCodes.Ldloc, closureLocal);
         il.Emit(OpCodes.Ldloc, delayMsLocal);
-        il.Emit(OpCodes.Stfld, _asyncIntervalClosureDelayMs);
+        il.Emit(OpCodes.Stfld, timerPromises.AsyncIntervalClosureDelayMs);
 
         // closure.Value = value;
         il.Emit(OpCodes.Ldloc, closureLocal);
         il.Emit(OpCodes.Ldarg_1); // value
-        il.Emit(OpCodes.Stfld, _asyncIntervalClosureValue);
+        il.Emit(OpCodes.Stfld, timerPromises.AsyncIntervalClosureValue);
 
         // var dict = new Dictionary<string, object?>();
         var dictLocal = il.DeclareLocal(_types.DictionaryStringObject);
@@ -685,7 +676,7 @@ public partial class RuntimeEmitter
         // closure.Self = dict;
         il.Emit(OpCodes.Ldloc, closureLocal);
         il.Emit(OpCodes.Ldloc, dictLocal);
-        il.Emit(OpCodes.Stfld, _asyncIntervalClosureSelf);
+        il.Emit(OpCodes.Stfld, timerPromises.AsyncIntervalClosureSelf);
 
         var dictSetItem = _types.GetMethod(_types.DictionaryStringObject, "set_Item", _types.String, _types.Object);
 
@@ -693,7 +684,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, dictLocal);
         il.Emit(OpCodes.Ldstr, "next");
         il.Emit(OpCodes.Ldloc, closureLocal);         // target
-        _types.EmitLoadMethodInfoViaHandle(il, _asyncIntervalClosureNext);
+        _types.EmitLoadMethodInfoViaHandle(il, timerPromises.AsyncIntervalClosureNext);
         il.Emit(OpCodes.Ldstr, "next");
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Newobj, runtime.TSFunctionCtorWithCache);
@@ -703,7 +694,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, dictLocal);
         il.Emit(OpCodes.Ldstr, "return");
         il.Emit(OpCodes.Ldloc, closureLocal);         // target
-        _types.EmitLoadMethodInfoViaHandle(il, _asyncIntervalClosureReturn);
+        _types.EmitLoadMethodInfoViaHandle(il, timerPromises.AsyncIntervalClosureReturn);
         il.Emit(OpCodes.Ldstr, "return");
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Newobj, runtime.TSFunctionCtorWithCache);
@@ -715,7 +706,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, runtime.GetSymbolDictMethod);
         il.Emit(OpCodes.Ldsfld, runtime.SymbolAsyncIterator);
         il.Emit(OpCodes.Ldloc, closureLocal);         // target
-        _types.EmitLoadMethodInfoViaHandle(il, _asyncIntervalClosureGetSelf);
+        _types.EmitLoadMethodInfoViaHandle(il, timerPromises.AsyncIntervalClosureGetSelf);
         il.Emit(OpCodes.Ldstr, "[Symbol.asyncIterator]");
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Newobj, runtime.TSFunctionCtorWithCache);
@@ -735,19 +726,20 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitSetIntervalAsyncIterableWithSignal(TypeBuilder runtimeType, EmittedRuntime runtime)
     {
+        var timerPromises = runtime.RequireTimerPromises();
         var method = runtimeType.DefineMethod(
             "SetIntervalAsyncIterableWithSignal",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.Double, _types.Object, _types.Object]);
-        runtime.SetIntervalAsyncIterableWithSignal = method;
+        timerPromises.SetIntervalAsyncIterableWithSignal = method;
 
         var il = method.GetILGenerator();
 
         // var token = ExtractTimerOptionsToken(options)
         var tokenLocal = il.DeclareLocal(_types.CancellationToken);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Call, runtime.ExtractTimerOptionsToken);
+        il.Emit(OpCodes.Call, timerPromises.ExtractTimerOptionsToken);
         il.Emit(OpCodes.Stloc, tokenLocal);
 
         // if (token.IsCancellationRequested) throw AbortError
@@ -774,24 +766,24 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, delayMsLocal);
 
         // var closure = new $AsyncIntervalClosure();
-        var closureLocal = il.DeclareLocal(_asyncIntervalClosureType);
-        il.Emit(OpCodes.Newobj, _asyncIntervalClosureCtor);
+        var closureLocal = il.DeclareLocal(timerPromises.AsyncIntervalClosureType);
+        il.Emit(OpCodes.Newobj, timerPromises.AsyncIntervalClosureCtor);
         il.Emit(OpCodes.Stloc, closureLocal);
 
         // closure.DelayMs = delayMs;
         il.Emit(OpCodes.Ldloc, closureLocal);
         il.Emit(OpCodes.Ldloc, delayMsLocal);
-        il.Emit(OpCodes.Stfld, _asyncIntervalClosureDelayMs);
+        il.Emit(OpCodes.Stfld, timerPromises.AsyncIntervalClosureDelayMs);
 
         // closure.Value = value;
         il.Emit(OpCodes.Ldloc, closureLocal);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Stfld, _asyncIntervalClosureValue);
+        il.Emit(OpCodes.Stfld, timerPromises.AsyncIntervalClosureValue);
 
         // closure.Token = token;
         il.Emit(OpCodes.Ldloc, closureLocal);
         il.Emit(OpCodes.Ldloc, tokenLocal);
-        il.Emit(OpCodes.Stfld, _asyncIntervalClosureToken);
+        il.Emit(OpCodes.Stfld, timerPromises.AsyncIntervalClosureToken);
 
         // var dict = new Dictionary<string, object?>();
         var dictLocal = il.DeclareLocal(_types.DictionaryStringObject);
@@ -801,7 +793,7 @@ public partial class RuntimeEmitter
         // closure.Self = dict;
         il.Emit(OpCodes.Ldloc, closureLocal);
         il.Emit(OpCodes.Ldloc, dictLocal);
-        il.Emit(OpCodes.Stfld, _asyncIntervalClosureSelf);
+        il.Emit(OpCodes.Stfld, timerPromises.AsyncIntervalClosureSelf);
 
         var dictSetItem = _types.GetMethod(_types.DictionaryStringObject, "set_Item", _types.String, _types.Object);
 
@@ -809,7 +801,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, dictLocal);
         il.Emit(OpCodes.Ldstr, "next");
         il.Emit(OpCodes.Ldloc, closureLocal);
-        _types.EmitLoadMethodInfoViaHandle(il, _asyncIntervalClosureNext);
+        _types.EmitLoadMethodInfoViaHandle(il, timerPromises.AsyncIntervalClosureNext);
         il.Emit(OpCodes.Ldstr, "next");
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Newobj, runtime.TSFunctionCtorWithCache);
@@ -819,7 +811,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, dictLocal);
         il.Emit(OpCodes.Ldstr, "return");
         il.Emit(OpCodes.Ldloc, closureLocal);
-        _types.EmitLoadMethodInfoViaHandle(il, _asyncIntervalClosureReturn);
+        _types.EmitLoadMethodInfoViaHandle(il, timerPromises.AsyncIntervalClosureReturn);
         il.Emit(OpCodes.Ldstr, "return");
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Newobj, runtime.TSFunctionCtorWithCache);
@@ -830,7 +822,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, runtime.GetSymbolDictMethod);
         il.Emit(OpCodes.Ldsfld, runtime.SymbolAsyncIterator);
         il.Emit(OpCodes.Ldloc, closureLocal);
-        _types.EmitLoadMethodInfoViaHandle(il, _asyncIntervalClosureGetSelf);
+        _types.EmitLoadMethodInfoViaHandle(il, timerPromises.AsyncIntervalClosureGetSelf);
         il.Emit(OpCodes.Ldstr, "[Symbol.asyncIterator]");
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Newobj, runtime.TSFunctionCtorWithCache);
@@ -847,6 +839,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitTimerPromisesModuleWrappers(TypeBuilder runtimeType, EmittedRuntime runtime)
     {
+        var timerPromises = runtime.RequireTimerPromises();
         // setTimeout wrapper: object SetTimeoutPromiseWrapper(object[] args)
         {
             var method = runtimeType.DefineMethod(
@@ -916,7 +909,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldc_I4_2);
             il.Emit(OpCodes.Ldelem_Ref);
-            il.Emit(OpCodes.Call, runtime.SetTimeoutPromiseWithSignal);
+            il.Emit(OpCodes.Call, timerPromises.SetTimeoutPromiseWithSignal);
             il.Emit(OpCodes.Ret);
 
             il.MarkLabel(noOptionsLabel);
@@ -924,7 +917,7 @@ public partial class RuntimeEmitter
             // Call SetTimeoutPromise(delay, value)
             il.Emit(OpCodes.Ldloc, delayLocal);
             il.Emit(OpCodes.Ldloc, valueLocal);
-            il.Emit(OpCodes.Call, runtime.SetTimeoutPromise);
+            il.Emit(OpCodes.Call, timerPromises.SetTimeoutPromise);
             il.Emit(OpCodes.Ret);
 
             runtime.RegisterBuiltInModuleMethod("timers/promises", "setTimeout", method);
@@ -974,14 +967,14 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldc_I4_1);
             il.Emit(OpCodes.Ldelem_Ref);
-            il.Emit(OpCodes.Call, runtime.SetImmediatePromiseWithSignal);
+            il.Emit(OpCodes.Call, timerPromises.SetImmediatePromiseWithSignal);
             il.Emit(OpCodes.Ret);
 
             il.MarkLabel(noOptionsLabel);
 
             // Call SetImmediatePromise(value)
             il.Emit(OpCodes.Ldloc, valueLocal);
-            il.Emit(OpCodes.Call, runtime.SetImmediatePromise);
+            il.Emit(OpCodes.Call, timerPromises.SetImmediatePromise);
             il.Emit(OpCodes.Ret);
 
             runtime.RegisterBuiltInModuleMethod("timers/promises", "setImmediate", method);
@@ -1055,7 +1048,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldc_I4_2);
             il.Emit(OpCodes.Ldelem_Ref);
-            il.Emit(OpCodes.Call, runtime.SetIntervalAsyncIterableWithSignal);
+            il.Emit(OpCodes.Call, timerPromises.SetIntervalAsyncIterableWithSignal);
             il.Emit(OpCodes.Ret);
 
             il.MarkLabel(noOptionsLabel);
@@ -1063,7 +1056,7 @@ public partial class RuntimeEmitter
             // Call SetIntervalAsyncIterable(delay, value)
             il.Emit(OpCodes.Ldloc, delayLocal);
             il.Emit(OpCodes.Ldloc, valueLocal);
-            il.Emit(OpCodes.Call, runtime.SetIntervalAsyncIterable);
+            il.Emit(OpCodes.Call, timerPromises.SetIntervalAsyncIterable);
             il.Emit(OpCodes.Ret);
 
             runtime.RegisterBuiltInModuleMethod("timers/promises", "setInterval", method);

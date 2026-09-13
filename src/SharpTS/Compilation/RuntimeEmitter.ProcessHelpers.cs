@@ -862,7 +862,7 @@ public partial class RuntimeEmitter
         implIl.Emit(OpCodes.Ldloc, extraArgsLocal); // args
 
         // Call SetTimeout(callback, 0, extraArgs)
-        implIl.Emit(OpCodes.Call, runtime.SetTimeout);
+        implIl.Emit(OpCodes.Call, runtime.Timers.SetTimeout);
 
         // nextTick returns undefined
         implIl.Emit(OpCodes.Pop);

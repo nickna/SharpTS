@@ -13,14 +13,14 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits the $VirtualTimer class that holds timer callback information.
     /// </summary>
-    private void EmitVirtualTimerClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private void EmitVirtualTimerClass(ModuleBuilder moduleBuilder, EmittedTimerRuntime timers)
     {
         var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$VirtualTimer",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.Class,
             _types.Object
         );
-        runtime.VirtualTimerType = typeBuilder;
+        timers.VirtualTimerType = typeBuilder;
 
         // Fields
         var callbackField = typeBuilder.DefineField("Callback", _types.Object, FieldAttributes.Public);
@@ -31,13 +31,13 @@ public partial class RuntimeEmitter
         var intervalMsField = typeBuilder.DefineField("IntervalMs", _types.Int32, FieldAttributes.Public);
         var hasRefField = typeBuilder.DefineField("HasRef", _types.Boolean, FieldAttributes.Public);
 
-        runtime.VirtualTimerCallback = callbackField;
-        runtime.VirtualTimerArgs = argsField;
-        runtime.VirtualTimerScheduledTime = scheduledTimeField;
-        runtime.VirtualTimerIsCancelled = isCancelledField;
-        runtime.VirtualTimerIsInterval = isIntervalField;
-        runtime.VirtualTimerIntervalMs = intervalMsField;
-        runtime.VirtualTimerHasRef = hasRefField;
+        timers.VirtualTimerCallback = callbackField;
+        timers.VirtualTimerArgs = argsField;
+        timers.VirtualTimerScheduledTime = scheduledTimeField;
+        timers.VirtualTimerIsCancelled = isCancelledField;
+        timers.VirtualTimerIsInterval = isIntervalField;
+        timers.VirtualTimerIntervalMs = intervalMsField;
+        timers.VirtualTimerHasRef = hasRefField;
 
         // Default constructor
         var ctor = typeBuilder.DefineConstructor(
@@ -45,7 +45,7 @@ public partial class RuntimeEmitter
             CallingConventions.Standard,
             Type.EmptyTypes
         );
-        runtime.VirtualTimerCtor = ctor;
+        timers.VirtualTimerCtor = ctor;
 
         var ctorIL = ctor.GetILGenerator();
         ctorIL.Emit(OpCodes.Ldarg_0);
@@ -60,8 +60,9 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitTimerQueueInfrastructure(TypeBuilder runtimeType, EmittedRuntime runtime)
     {
+        var timers = runtime.Timers;
         // Static field: List<$VirtualTimer> _timerQueue
-        var listType = _types.MakeGenericType(_types.ListOpen, runtime.VirtualTimerType);
+        var listType = _types.MakeGenericType(_types.ListOpen, timers.VirtualTimerType);
         var timerQueueField = runtimeType.DefineField(
             "_timerQueue",
             listType,
@@ -95,8 +96,8 @@ public partial class RuntimeEmitter
         );
 
         // Emit helper methods
-        EmitEnsureTimerInitialized(runtimeType, runtime, timerQueueField, startTicksField, initializedField);
-        EmitGetCurrentTimeMs(runtimeType, runtime, startTicksField, initializedField);
+        EmitEnsureTimerInitialized(runtimeType, timers, timerQueueField, startTicksField, initializedField);
+        EmitGetCurrentTimeMs(runtimeType, timers, startTicksField, initializedField);
         EmitProcessPendingTimers(runtimeType, runtime, timerQueueField, processingTimersField);
         EmitHostedTimerMethods(runtimeType, runtime, timerQueueField);
         EmitAddVirtualTimer(runtimeType, runtime, timerQueueField);
@@ -107,7 +108,8 @@ public partial class RuntimeEmitter
         EmittedRuntime runtime,
         FieldBuilder timerQueueField)
     {
-        var listType = _types.MakeGenericType(_types.ListOpen, runtime.VirtualTimerType);
+        var timers = runtime.Timers;
+        var listType = _types.MakeGenericType(_types.ListOpen, timers.VirtualTimerType);
         var countGetter = EmitterTypeHelpers.ResolveMethod(
             listType, _types.GetProperty(_types.ListOpen, "Count")!.GetGetMethod()!);
         var getItem = EmitterTypeHelpers.ResolveMethod(
@@ -120,11 +122,11 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Int32,
             Type.EmptyTypes);
-        runtime.GetNextTimerDelay = getDelay;
+        timers.GetNextTimerDelay = getDelay;
         var il = getDelay.GetILGenerator();
         var index = il.DeclareLocal(_types.Int32);
         var count = il.DeclareLocal(_types.Int32);
-        var timer = il.DeclareLocal(runtime.VirtualTimerType);
+        var timer = il.DeclareLocal(timers.VirtualTimerType);
         var minimum = il.DeclareLocal(_types.Int64);
         var current = il.DeclareLocal(_types.Int64);
         var loop = il.DefineLabel();
@@ -132,10 +134,10 @@ public partial class RuntimeEmitter
         var done = il.DefineLabel();
         var found = il.DefineLabel();
 
-        il.Emit(OpCodes.Call, runtime.EnsureTimerInitialized);
+        il.Emit(OpCodes.Call, timers.EnsureTimerInitialized);
         il.Emit(OpCodes.Ldc_I8, long.MaxValue);
         il.Emit(OpCodes.Stloc, minimum);
-        il.Emit(OpCodes.Call, runtime.GetCurrentTimeMs);
+        il.Emit(OpCodes.Call, timers.GetCurrentTimeMs);
         il.Emit(OpCodes.Stloc, current);
         il.Emit(OpCodes.Ldsfld, timerQueueField);
         il.Emit(OpCodes.Callvirt, countGetter);
@@ -151,14 +153,14 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, getItem);
         il.Emit(OpCodes.Stloc, timer);
         il.Emit(OpCodes.Ldloc, timer);
-        il.Emit(OpCodes.Ldfld, runtime.VirtualTimerIsCancelled);
+        il.Emit(OpCodes.Ldfld, timers.VirtualTimerIsCancelled);
         il.Emit(OpCodes.Brtrue, next);
         il.Emit(OpCodes.Ldloc, timer);
-        il.Emit(OpCodes.Ldfld, runtime.VirtualTimerScheduledTime);
+        il.Emit(OpCodes.Ldfld, timers.VirtualTimerScheduledTime);
         il.Emit(OpCodes.Ldloc, minimum);
         il.Emit(OpCodes.Bge, next);
         il.Emit(OpCodes.Ldloc, timer);
-        il.Emit(OpCodes.Ldfld, runtime.VirtualTimerScheduledTime);
+        il.Emit(OpCodes.Ldfld, timers.VirtualTimerScheduledTime);
         il.Emit(OpCodes.Stloc, minimum);
         il.MarkLabel(next);
         il.Emit(OpCodes.Ldloc, index);
@@ -186,12 +188,12 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Boolean,
             Type.EmptyTypes);
-        runtime.ProcessOnePendingTimer = processOne;
+        timers.ProcessOnePendingTimer = processOne;
         il = processOne.GetILGenerator();
         var hostedIndex = il.DeclareLocal(_types.Int32);
         var hostedCount = il.DeclareLocal(_types.Int32);
         var selectedIndex = il.DeclareLocal(_types.Int32);
-        var hostedTimer = il.DeclareLocal(runtime.VirtualTimerType);
+        var hostedTimer = il.DeclareLocal(timers.VirtualTimerType);
         var selectedTime = il.DeclareLocal(_types.Int64);
         var hostedCurrent = il.DeclareLocal(_types.Int64);
         var scan = il.DefineLabel();
@@ -202,8 +204,8 @@ public partial class RuntimeEmitter
         var invoke = il.DefineLabel();
         var skipUnref = il.DefineLabel();
 
-        il.Emit(OpCodes.Call, runtime.EnsureTimerInitialized);
-        il.Emit(OpCodes.Call, runtime.GetCurrentTimeMs);
+        il.Emit(OpCodes.Call, timers.EnsureTimerInitialized);
+        il.Emit(OpCodes.Call, timers.GetCurrentTimeMs);
         il.Emit(OpCodes.Stloc, hostedCurrent);
         il.Emit(OpCodes.Ldc_I4_M1);
         il.Emit(OpCodes.Stloc, selectedIndex);
@@ -223,20 +225,20 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, getItem);
         il.Emit(OpCodes.Stloc, hostedTimer);
         il.Emit(OpCodes.Ldloc, hostedTimer);
-        il.Emit(OpCodes.Ldfld, runtime.VirtualTimerIsCancelled);
+        il.Emit(OpCodes.Ldfld, timers.VirtualTimerIsCancelled);
         il.Emit(OpCodes.Brtrue, scanNext);
         il.Emit(OpCodes.Ldloc, hostedTimer);
-        il.Emit(OpCodes.Ldfld, runtime.VirtualTimerScheduledTime);
+        il.Emit(OpCodes.Ldfld, timers.VirtualTimerScheduledTime);
         il.Emit(OpCodes.Ldloc, hostedCurrent);
         il.Emit(OpCodes.Bgt, scanNext);
         il.Emit(OpCodes.Ldloc, hostedTimer);
-        il.Emit(OpCodes.Ldfld, runtime.VirtualTimerScheduledTime);
+        il.Emit(OpCodes.Ldfld, timers.VirtualTimerScheduledTime);
         il.Emit(OpCodes.Ldloc, selectedTime);
         il.Emit(OpCodes.Bge, scanNext);
         il.Emit(OpCodes.Ldloc, hostedIndex);
         il.Emit(OpCodes.Stloc, selectedIndex);
         il.Emit(OpCodes.Ldloc, hostedTimer);
-        il.Emit(OpCodes.Ldfld, runtime.VirtualTimerScheduledTime);
+        il.Emit(OpCodes.Ldfld, timers.VirtualTimerScheduledTime);
         il.Emit(OpCodes.Stloc, selectedTime);
         il.MarkLabel(scanNext);
         il.Emit(OpCodes.Ldloc, hostedIndex);
@@ -258,19 +260,19 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, getItem);
         il.Emit(OpCodes.Stloc, hostedTimer);
         il.Emit(OpCodes.Ldloc, hostedTimer);
-        il.Emit(OpCodes.Ldfld, runtime.VirtualTimerIsInterval);
+        il.Emit(OpCodes.Ldfld, timers.VirtualTimerIsInterval);
         il.Emit(OpCodes.Brfalse, remove);
         il.Emit(OpCodes.Ldloc, hostedTimer);
-        il.Emit(OpCodes.Ldfld, runtime.VirtualTimerIsCancelled);
+        il.Emit(OpCodes.Ldfld, timers.VirtualTimerIsCancelled);
         il.Emit(OpCodes.Brtrue, remove);
         il.Emit(OpCodes.Ldloc, hostedTimer);
         il.Emit(OpCodes.Ldloc, hostedTimer);
-        il.Emit(OpCodes.Ldfld, runtime.VirtualTimerScheduledTime);
+        il.Emit(OpCodes.Ldfld, timers.VirtualTimerScheduledTime);
         il.Emit(OpCodes.Ldloc, hostedTimer);
-        il.Emit(OpCodes.Ldfld, runtime.VirtualTimerIntervalMs);
+        il.Emit(OpCodes.Ldfld, timers.VirtualTimerIntervalMs);
         il.Emit(OpCodes.Conv_I8);
         il.Emit(OpCodes.Add);
-        il.Emit(OpCodes.Stfld, runtime.VirtualTimerScheduledTime);
+        il.Emit(OpCodes.Stfld, timers.VirtualTimerScheduledTime);
         il.Emit(OpCodes.Br, invoke);
 
         il.MarkLabel(remove);
@@ -279,22 +281,22 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, removeAt);
         il.Emit(OpCodes.Ldloc, hostedTimer);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Stfld, runtime.VirtualTimerIsCancelled);
+        il.Emit(OpCodes.Stfld, timers.VirtualTimerIsCancelled);
         il.Emit(OpCodes.Ldloc, hostedTimer);
-        il.Emit(OpCodes.Ldfld, runtime.VirtualTimerHasRef);
+        il.Emit(OpCodes.Ldfld, timers.VirtualTimerHasRef);
         il.Emit(OpCodes.Brfalse, skipUnref);
         il.Emit(OpCodes.Ldloc, hostedTimer);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Stfld, runtime.VirtualTimerHasRef);
+        il.Emit(OpCodes.Stfld, timers.VirtualTimerHasRef);
         il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
         il.Emit(OpCodes.Callvirt, runtime.EventLoopUnref);
         il.MarkLabel(skipUnref);
 
         il.MarkLabel(invoke);
         il.Emit(OpCodes.Ldloc, hostedTimer);
-        il.Emit(OpCodes.Ldfld, runtime.VirtualTimerCallback);
+        il.Emit(OpCodes.Ldfld, timers.VirtualTimerCallback);
         il.Emit(OpCodes.Ldloc, hostedTimer);
-        il.Emit(OpCodes.Ldfld, runtime.VirtualTimerArgs);
+        il.Emit(OpCodes.Ldfld, timers.VirtualTimerArgs);
         il.Emit(OpCodes.Call, runtime.InvokeValue);
         if (_features.UsesPromise)
             il.Emit(OpCodes.Call, runtime.RequirePromise().ObserveDiscardedPromiseResult);
@@ -308,7 +310,7 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             typeof(void),
             Type.EmptyTypes);
-        runtime.CancelAllTimers = cancelAll;
+        timers.CancelAllTimers = cancelAll;
         il = cancelAll.GetILGenerator();
         var skip = il.DefineLabel();
         il.Emit(OpCodes.Ldsfld, timerQueueField);
@@ -326,7 +328,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitEnsureTimerInitialized(
         TypeBuilder runtimeType,
-        EmittedRuntime runtime,
+        EmittedTimerRuntime timers,
         FieldBuilder timerQueueField,
         FieldBuilder startTicksField,
         FieldBuilder initializedField)
@@ -337,7 +339,7 @@ public partial class RuntimeEmitter
             null,
             Type.EmptyTypes
         );
-        runtime.EnsureTimerInitialized = method;
+        timers.EnsureTimerInitialized = method;
 
         var il = method.GetILGenerator();
         var alreadyInitializedLabel = il.DefineLabel();
@@ -347,7 +349,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue_S, alreadyInitializedLabel);
 
         // _timerQueue = new List<$VirtualTimer>();
-        var listType = _types.MakeGenericType(_types.ListOpen, runtime.VirtualTimerType);
+        var listType = _types.MakeGenericType(_types.ListOpen, timers.VirtualTimerType);
         // Use TypeBuilder.GetConstructor for generic types containing TypeBuilder
         var listOpenCtor = _types.GetConstructor(_types.ListOpen, Type.EmptyTypes)!;
         var listCtor = EmitterTypeHelpers.ResolveConstructor(listType, listOpenCtor);
@@ -372,7 +374,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitGetCurrentTimeMs(
         TypeBuilder runtimeType,
-        EmittedRuntime runtime,
+        EmittedTimerRuntime timers,
         FieldBuilder startTicksField,
         FieldBuilder initializedField)
     {
@@ -382,12 +384,12 @@ public partial class RuntimeEmitter
             _types.Int64,
             Type.EmptyTypes
         );
-        runtime.GetCurrentTimeMs = method;
+        timers.GetCurrentTimeMs = method;
 
         var il = method.GetILGenerator();
 
         // EnsureTimerInitialized();
-        il.Emit(OpCodes.Call, runtime.EnsureTimerInitialized);
+        il.Emit(OpCodes.Call, timers.EnsureTimerInitialized);
 
         // return (Stopwatch.GetTimestamp() - _timerStartTicks) * 1000 / Stopwatch.Frequency;
         il.Emit(OpCodes.Call, _types.StopwatchGetTimestamp);
@@ -412,16 +414,18 @@ public partial class RuntimeEmitter
         FieldBuilder timerQueueField,
         FieldBuilder processingTimersField)
     {
+        var timers = runtime.Timers;
+        var microtasks = runtime.Microtasks;
         var method = runtimeType.DefineMethod(
             "ProcessPendingTimers",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Int32,
             Type.EmptyTypes
         );
-        runtime.ProcessPendingTimers = method;
+        timers.ProcessPendingTimers = method;
 
         var il = method.GetILGenerator();
-        var listType = _types.MakeGenericType(_types.ListOpen, runtime.VirtualTimerType);
+        var listType = _types.MakeGenericType(_types.ListOpen, timers.VirtualTimerType);
         var resultLocal = il.DeclareLocal(_types.Int32);
         var processTimersLabel = il.DefineLabel();
         var returnLabel = il.DefineLabel();
@@ -451,14 +455,14 @@ public partial class RuntimeEmitter
 
         // Process microtasks first - they always run before any macrotask (timers)
         // This ensures correct JavaScript event loop semantics
-        il.Emit(OpCodes.Call, runtime.ProcessMicrotasks);
+        il.Emit(OpCodes.Call, microtasks.ProcessMicrotasks);
 
         // EnsureTimerInitialized();
-        il.Emit(OpCodes.Call, runtime.EnsureTimerInitialized);
+        il.Emit(OpCodes.Call, timers.EnsureTimerInitialized);
 
         // long currentTime = GetCurrentTimeMs();
         var currentTimeLocal = il.DeclareLocal(_types.Int64);
-        il.Emit(OpCodes.Call, runtime.GetCurrentTimeMs);
+        il.Emit(OpCodes.Call, timers.GetCurrentTimeMs);
         il.Emit(OpCodes.Stloc, currentTimeLocal);
 
         // long minNextTime = long.MaxValue (track earliest future timer)
@@ -471,7 +475,7 @@ public partial class RuntimeEmitter
         var loopEndLabel = il.DefineLabel();
 
         var iLocal = il.DeclareLocal(_types.Int32);
-        var timerLocal = il.DeclareLocal(runtime.VirtualTimerType);
+        var timerLocal = il.DeclareLocal(timers.VirtualTimerType);
         var countLocal = il.DeclareLocal(_types.Int32);
 
         // i = 0;
@@ -499,7 +503,7 @@ public partial class RuntimeEmitter
         // if (timer.IsCancelled) { _timerQueue.RemoveAt(i); if (timer.HasRef) EventLoop.Unref(); continue; }
         var notCancelledLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, timerLocal);
-        il.Emit(OpCodes.Ldfld, runtime.VirtualTimerIsCancelled);
+        il.Emit(OpCodes.Ldfld, timers.VirtualTimerIsCancelled);
         il.Emit(OpCodes.Brfalse_S, notCancelledLabel);
 
         il.Emit(OpCodes.Ldsfld, timerQueueField);
@@ -509,11 +513,11 @@ public partial class RuntimeEmitter
         // if (timer.HasRef) { timer.HasRef = false; EventLoop.GetInstance().Unref(); }
         var skipCancelUnref = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, timerLocal);
-        il.Emit(OpCodes.Ldfld, runtime.VirtualTimerHasRef);
+        il.Emit(OpCodes.Ldfld, timers.VirtualTimerHasRef);
         il.Emit(OpCodes.Brfalse, skipCancelUnref);
         il.Emit(OpCodes.Ldloc, timerLocal);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Stfld, runtime.VirtualTimerHasRef);
+        il.Emit(OpCodes.Stfld, timers.VirtualTimerHasRef);
         il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
         il.Emit(OpCodes.Call, runtime.EventLoopUnref);
         il.MarkLabel(skipCancelUnref);
@@ -525,7 +529,7 @@ public partial class RuntimeEmitter
         // if (timer.ScheduledTime > currentTime) { track min, i++; continue; }
         var isDueLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, timerLocal);
-        il.Emit(OpCodes.Ldfld, runtime.VirtualTimerScheduledTime);
+        il.Emit(OpCodes.Ldfld, timers.VirtualTimerScheduledTime);
         il.Emit(OpCodes.Ldloc, currentTimeLocal);
         il.Emit(OpCodes.Ble, isDueLabel);
 
@@ -533,11 +537,11 @@ public partial class RuntimeEmitter
         // if (timer.ScheduledTime < minNextTime) minNextTime = timer.ScheduledTime;
         var skipMinUpdate = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, timerLocal);
-        il.Emit(OpCodes.Ldfld, runtime.VirtualTimerScheduledTime);
+        il.Emit(OpCodes.Ldfld, timers.VirtualTimerScheduledTime);
         il.Emit(OpCodes.Ldloc, minNextTimeLocal);
         il.Emit(OpCodes.Bge, skipMinUpdate);
         il.Emit(OpCodes.Ldloc, timerLocal);
-        il.Emit(OpCodes.Ldfld, runtime.VirtualTimerScheduledTime);
+        il.Emit(OpCodes.Ldfld, timers.VirtualTimerScheduledTime);
         il.Emit(OpCodes.Stloc, minNextTimeLocal);
         il.MarkLabel(skipMinUpdate);
 
@@ -554,9 +558,9 @@ public partial class RuntimeEmitter
         il.BeginExceptionBlock();
 
         il.Emit(OpCodes.Ldloc, timerLocal);
-        il.Emit(OpCodes.Ldfld, runtime.VirtualTimerCallback);
+        il.Emit(OpCodes.Ldfld, timers.VirtualTimerCallback);
         il.Emit(OpCodes.Ldloc, timerLocal);
-        il.Emit(OpCodes.Ldfld, runtime.VirtualTimerArgs);
+        il.Emit(OpCodes.Ldfld, timers.VirtualTimerArgs);
         il.Emit(OpCodes.Call, runtime.InvokeValue);
         if (_features.UsesPromise)
             il.Emit(OpCodes.Call, runtime.RequirePromise().ObserveDiscardedPromiseResult);
@@ -572,30 +576,30 @@ public partial class RuntimeEmitter
         var afterHandleLabel = il.DefineLabel();
 
         il.Emit(OpCodes.Ldloc, timerLocal);
-        il.Emit(OpCodes.Ldfld, runtime.VirtualTimerIsInterval);
+        il.Emit(OpCodes.Ldfld, timers.VirtualTimerIsInterval);
         il.Emit(OpCodes.Brfalse_S, removeTimerLabel);
 
         il.Emit(OpCodes.Ldloc, timerLocal);
-        il.Emit(OpCodes.Ldfld, runtime.VirtualTimerIsCancelled);
+        il.Emit(OpCodes.Ldfld, timers.VirtualTimerIsCancelled);
         il.Emit(OpCodes.Brtrue_S, removeTimerLabel);
 
         // Reschedule interval: timer.ScheduledTime = currentTime + timer.IntervalMs;
         il.Emit(OpCodes.Ldloc, timerLocal);
         il.Emit(OpCodes.Ldloc, currentTimeLocal);
         il.Emit(OpCodes.Ldloc, timerLocal);
-        il.Emit(OpCodes.Ldfld, runtime.VirtualTimerIntervalMs);
+        il.Emit(OpCodes.Ldfld, timers.VirtualTimerIntervalMs);
         il.Emit(OpCodes.Conv_I8);
         il.Emit(OpCodes.Add);
-        il.Emit(OpCodes.Stfld, runtime.VirtualTimerScheduledTime);
+        il.Emit(OpCodes.Stfld, timers.VirtualTimerScheduledTime);
 
         // Track rescheduled interval in minNextTime
         var skipIntervalMin = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, timerLocal);
-        il.Emit(OpCodes.Ldfld, runtime.VirtualTimerScheduledTime);
+        il.Emit(OpCodes.Ldfld, timers.VirtualTimerScheduledTime);
         il.Emit(OpCodes.Ldloc, minNextTimeLocal);
         il.Emit(OpCodes.Bge, skipIntervalMin);
         il.Emit(OpCodes.Ldloc, timerLocal);
-        il.Emit(OpCodes.Ldfld, runtime.VirtualTimerScheduledTime);
+        il.Emit(OpCodes.Ldfld, timers.VirtualTimerScheduledTime);
         il.Emit(OpCodes.Stloc, minNextTimeLocal);
         il.MarkLabel(skipIntervalMin);
 
@@ -614,17 +618,17 @@ public partial class RuntimeEmitter
         // timer that is no longer present in the queue.
         il.Emit(OpCodes.Ldloc, timerLocal);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Stfld, runtime.VirtualTimerIsCancelled);
+        il.Emit(OpCodes.Stfld, timers.VirtualTimerIsCancelled);
         // Don't increment i
 
         // if (timer.HasRef) { timer.HasRef = false; EventLoop.GetInstance().Unref(); }
         var skipFireUnref = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, timerLocal);
-        il.Emit(OpCodes.Ldfld, runtime.VirtualTimerHasRef);
+        il.Emit(OpCodes.Ldfld, timers.VirtualTimerHasRef);
         il.Emit(OpCodes.Brfalse, skipFireUnref);
         il.Emit(OpCodes.Ldloc, timerLocal);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Stfld, runtime.VirtualTimerHasRef);
+        il.Emit(OpCodes.Stfld, timers.VirtualTimerHasRef);
         il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
         il.Emit(OpCodes.Call, runtime.EventLoopUnref);
         il.MarkLabel(skipFireUnref);
@@ -646,7 +650,7 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(hasTimers);
         // Re-read current time for accurate delay (callbacks may have taken time)
-        il.Emit(OpCodes.Call, runtime.GetCurrentTimeMs);
+        il.Emit(OpCodes.Call, timers.GetCurrentTimeMs);
         il.Emit(OpCodes.Stloc, currentTimeLocal);
         // delay = (int)(minNextTime - currentTime)
         il.Emit(OpCodes.Ldloc, minNextTimeLocal);
@@ -681,23 +685,24 @@ public partial class RuntimeEmitter
         EmittedRuntime runtime,
         FieldBuilder timerQueueField)
     {
+        var timers = runtime.Timers;
         var method = runtimeType.DefineMethod(
             "AddVirtualTimer",
             MethodAttributes.Public | MethodAttributes.Static,
             null,
-            [runtime.VirtualTimerType]
+            [timers.VirtualTimerType]
         );
-        runtime.AddVirtualTimer = method;
+        timers.AddVirtualTimer = method;
 
         var il = method.GetILGenerator();
-        var listType = _types.MakeGenericType(_types.ListOpen, runtime.VirtualTimerType);
+        var listType = _types.MakeGenericType(_types.ListOpen, timers.VirtualTimerType);
 
         // Get generic Add method for List<$VirtualTimer> using TypeBuilder.GetMethod
         var listOpenAdd = _types.GetMethod(_types.ListOpen, "Add")!;
         var addMethod = EmitterTypeHelpers.ResolveMethod(listType, listOpenAdd);
 
         // EnsureTimerInitialized();
-        il.Emit(OpCodes.Call, runtime.EnsureTimerInitialized);
+        il.Emit(OpCodes.Call, timers.EnsureTimerInitialized);
 
         // _timerQueue.Add(timer);
         il.Emit(OpCodes.Ldsfld, timerQueueField);
@@ -711,7 +716,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldsfld, runtime.EventLoopTimerProcessorField);
         il.Emit(OpCodes.Brtrue, alreadyHooked);
         il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Ldftn, runtime.ProcessPendingTimers);
+        il.Emit(OpCodes.Ldftn, timers.ProcessPendingTimers);
         il.Emit(OpCodes.Newobj, typeof(Func<int>).GetConstructor([_types.Object, typeof(IntPtr)])!);
         il.Emit(OpCodes.Stsfld, runtime.EventLoopTimerProcessorField);
         il.MarkLabel(alreadyHooked);

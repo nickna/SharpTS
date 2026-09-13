@@ -28,10 +28,10 @@ public class TimerHandler : ICallHandler
 
         return v.Name.Lexeme switch
         {
-            "setTimeout" => EmitTimer(emitter, il, ctx, call, ctx.Runtime!.SetTimeout),
-            "clearTimeout" => EmitClearTimer(emitter, il, ctx, call, ctx.Runtime!.ClearTimeout),
-            "setInterval" => EmitTimer(emitter, il, ctx, call, ctx.Runtime!.SetInterval),
-            "clearInterval" => EmitClearTimer(emitter, il, ctx, call, ctx.Runtime!.ClearInterval),
+            "setTimeout" => EmitTimer(emitter, il, ctx, call, ctx.Runtime!.Timers.SetTimeout),
+            "clearTimeout" => EmitClearTimer(emitter, il, ctx, call, ctx.Runtime!.Timers.ClearTimeout),
+            "setInterval" => EmitTimer(emitter, il, ctx, call, ctx.Runtime!.Timers.SetInterval),
+            "clearInterval" => EmitClearTimer(emitter, il, ctx, call, ctx.Runtime!.Timers.ClearInterval),
             "queueMicrotask" => EmitQueueMicrotask(emitter, il, ctx, call),
             _ => false
         };
@@ -78,7 +78,7 @@ public class TimerHandler : ICallHandler
     private static bool EmitQueueMicrotask(IEmitterContext emitter, ILGenerator il, CompilationContext ctx, Expr.Call call)
     {
         if (call.Arguments.Count > 0) { emitter.EmitExpression(call.Arguments[0]); emitter.EmitBoxIfNeeded(call.Arguments[0]); } else { il.Emit(OpCodes.Ldnull); }
-        il.Emit(OpCodes.Call, ctx.Runtime!.QueueMicrotask);
+        il.Emit(OpCodes.Call, ctx.Runtime!.Microtasks.QueueMicrotask);
         il.Emit(OpCodes.Ldsfld, ctx.Runtime!.UndefinedInstance);
         return true;
     }

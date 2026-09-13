@@ -156,7 +156,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldftn, settlement.RunMethod);
         il.Emit(OpCodes.Newobj,
             typeof(Action).GetConstructor([typeof(object), typeof(IntPtr)])!);
-        il.Emit(OpCodes.Call, runtime.QueuePromiseJob);
+        il.Emit(OpCodes.Call, runtime.Microtasks.QueuePromiseJob);
 
         il.Emit(OpCodes.Ldloc, settlementLocal);
         il.Emit(OpCodes.Ldfld, settlement.CompletionField);

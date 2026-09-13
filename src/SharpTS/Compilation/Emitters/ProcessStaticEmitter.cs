@@ -443,7 +443,7 @@ public sealed class ProcessStaticEmitter : IStaticTypeEmitterStrategy
         EmitArgsArray(emitter, arguments, 1);
 
         // Call $Runtime.SetTimeout(callback, 0, args)
-        il.Emit(OpCodes.Call, ctx.Runtime!.SetTimeout);
+        il.Emit(OpCodes.Call, ctx.Runtime!.Timers.SetTimeout);
 
         // nextTick returns undefined, so pop the result and push null
         il.Emit(OpCodes.Pop);

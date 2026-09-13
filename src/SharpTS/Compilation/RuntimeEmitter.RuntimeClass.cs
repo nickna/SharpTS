@@ -836,7 +836,7 @@ public partial class RuntimeEmitter
         // Promise reaction state machines are emitted before the microtask
         // infrastructure. Reserve the shared FIFO job-enqueue token now; its
         // body is filled by EmitQueueMicrotaskMethod later in this method.
-        runtime.QueuePromiseJob ??= typeBuilder.DefineMethod(
+        runtime.Microtasks.QueuePromiseJob = typeBuilder.DefineMethod(
             "QueuePromiseJob",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Void,
@@ -1560,9 +1560,9 @@ public partial class RuntimeEmitter
             EmitFsWatchFactories(typeBuilder, runtime);
         // Timer methods (setTimeout, clearTimeout, setInterval, clearInterval)
         EmitSetTimeoutMethod(typeBuilder, runtime);
-        EmitClearTimeoutMethod(typeBuilder, runtime);
+        EmitClearTimeoutMethod(typeBuilder, runtime.Timers);
         EmitSetIntervalMethod(typeBuilder, runtime);
-        EmitClearIntervalMethod(typeBuilder, runtime);
+        EmitClearIntervalMethod(typeBuilder, runtime.Timers);
         // Timer promise methods (timers/promises module)
         if (_features.UsesPromise)
             EmitTimerPromisesMethods(typeBuilder, runtime);
