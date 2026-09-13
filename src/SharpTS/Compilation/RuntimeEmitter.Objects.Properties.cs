@@ -1529,7 +1529,7 @@ public partial class RuntimeEmitter
         {
             // $ArrayBuffer - check for "byteLength"
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.ArrayBufferType);
+            il.Emit(OpCodes.Isinst, runtime.RequireArrayBuffer().Type);
             il.Emit(OpCodes.Brtrue, arrayBufferLabel);
 
             // $SharedArrayBuffer - check for "byteLength"
@@ -2376,8 +2376,8 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Brfalse, notArrayBufferByteLengthLabel);
             // Return ByteLength as double
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Castclass, runtime.ArrayBufferType);
-            il.Emit(OpCodes.Callvirt, runtime.ArrayBufferByteLengthGetter);
+            il.Emit(OpCodes.Castclass, runtime.RequireArrayBuffer().Type);
+            il.Emit(OpCodes.Callvirt, runtime.RequireArrayBuffer().ByteLengthGetter);
             il.Emit(OpCodes.Conv_R8);
             il.Emit(OpCodes.Box, _types.Double);
             il.Emit(OpCodes.Ret);
@@ -2390,7 +2390,7 @@ public partial class RuntimeEmitter
             var notArrayBufferSliceLabel = il.DefineLabel();
             il.Emit(OpCodes.Brfalse, notArrayBufferSliceLabel);
             il.Emit(OpCodes.Ldarg_0);
-            _types.EmitLoadMethodInfo(il, runtime.ArrayBufferSliceDynamic);
+            _types.EmitLoadMethodInfo(il, runtime.RequireArrayBuffer().SliceDynamic);
             il.Emit(OpCodes.Ldstr, "slice");
             il.Emit(OpCodes.Ldc_I4_2);
             il.Emit(OpCodes.Newobj, runtime.TSFunctionCtorWithCache);

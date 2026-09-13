@@ -163,14 +163,14 @@ public partial class RuntimeEmitter
         // return new $ArrayBuffer((int)byteLength)
         il.Emit(OpCodes.Ldarg_0);  // byteLength (double)
         il.Emit(OpCodes.Conv_I4);  // convert to int
-        il.Emit(OpCodes.Newobj, runtime.ArrayBufferCtor);
+        il.Emit(OpCodes.Newobj, runtime.RequireArrayBuffer().Ctor);
         il.Emit(OpCodes.Ret);
 
-        runtime.TSArrayBufferCtor = method;
+        runtime.RequireArrayBuffer().Create = method;
 
         // Also emit slice, byteLength, and isView helpers
-        EmitArrayBufferSlice(runtimeType, runtime);
-        EmitArrayBufferByteLength(runtimeType, runtime);
+        EmitArrayBufferSliceHelper(runtimeType, runtime.RequireArrayBuffer());
+        EmitArrayBufferByteLengthHelper(runtimeType, runtime.RequireArrayBuffer());
         EmitArrayBufferIsView(runtimeType, runtime);
     }
 
@@ -178,7 +178,7 @@ public partial class RuntimeEmitter
     /// Emits ArrayBuffer.slice(begin, end) helper.
     /// Requires the emitted $ArrayBuffer type (pure-IL, no reflection).
     /// </summary>
-    private void EmitArrayBufferSlice(TypeBuilder runtimeType, EmittedRuntime runtime)
+    private void EmitArrayBufferSliceHelper(TypeBuilder runtimeType, EmittedArrayBufferRuntime arrayBuffer)
     {
         var method = runtimeType.DefineMethod(
             "ArrayBufferSlice",
@@ -192,7 +192,7 @@ public partial class RuntimeEmitter
         // Check if obj is $ArrayBuffer - if so, call Slice directly
         var emittedTypeLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.ArrayBufferType);
+        il.Emit(OpCodes.Isinst, arrayBuffer.Type);
         il.Emit(OpCodes.Brtrue, emittedTypeLabel);
 
         il.Emit(OpCodes.Ldstr, "ArrayBuffer.slice requires emitted ArrayBuffer.");
@@ -201,20 +201,20 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(emittedTypeLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.ArrayBufferType);
+        il.Emit(OpCodes.Castclass, arrayBuffer.Type);
         il.Emit(OpCodes.Ldarg_1);  // begin
         il.Emit(OpCodes.Ldarg_2);  // end
-        il.Emit(OpCodes.Callvirt, runtime.ArrayBufferSlice);
+        il.Emit(OpCodes.Callvirt, arrayBuffer.Slice);
         il.Emit(OpCodes.Ret);
 
-        runtime.TSArrayBufferSlice = method;
+        arrayBuffer.SliceObject = method;
     }
 
     /// <summary>
     /// Emits ArrayBuffer.byteLength getter helper.
     /// Uses the emitted $ArrayBuffer type when possible (pure-IL, no reflection).
     /// </summary>
-    private void EmitArrayBufferByteLength(TypeBuilder runtimeType, EmittedRuntime runtime)
+    private void EmitArrayBufferByteLengthHelper(TypeBuilder runtimeType, EmittedArrayBufferRuntime arrayBuffer)
     {
         var method = runtimeType.DefineMethod(
             "ArrayBufferByteLength",
@@ -229,13 +229,13 @@ public partial class RuntimeEmitter
         var notEmittedTypeLabel = il.DefineLabel();
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.ArrayBufferType);
+        il.Emit(OpCodes.Isinst, arrayBuffer.Type);
         il.Emit(OpCodes.Brfalse, notEmittedTypeLabel);
 
         // It's our emitted $ArrayBuffer - call ByteLength directly
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.ArrayBufferType);
-        il.Emit(OpCodes.Callvirt, runtime.ArrayBufferByteLengthGetter);
+        il.Emit(OpCodes.Castclass, arrayBuffer.Type);
+        il.Emit(OpCodes.Callvirt, arrayBuffer.ByteLengthGetter);
         il.Emit(OpCodes.Conv_R8);  // Convert int to double
         il.Emit(OpCodes.Ret);
 
@@ -247,7 +247,7 @@ public partial class RuntimeEmitter
 
         il.Emit(OpCodes.Ret);
 
-        runtime.TSArrayBufferByteLengthGetter = method;
+        arrayBuffer.GetByteLength = method;
     }
 
     /// <summary>
@@ -292,7 +292,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Ret);
 
-        runtime.TSArrayBufferIsView = method;
+        runtime.RequireArrayBuffer().IsView = method;
     }
 
     /// <summary>
@@ -340,7 +340,7 @@ public partial class RuntimeEmitter
         // Check if buffer is $ArrayBuffer or $SharedArrayBuffer (emitted types)
         // If so, create $DataView directly
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.ArrayBufferType);
+        il.Emit(OpCodes.Isinst, runtime.RequireArrayBuffer().Type);
         var notArrayBufferLabel = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, notArrayBufferLabel);
 
@@ -973,7 +973,7 @@ public partial class RuntimeEmitter
 
         // Check if arg is $ArrayBuffer (emitted type)
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.ArrayBufferType);
+        il.Emit(OpCodes.Isinst, runtime.RequireArrayBuffer().Type);
         il.Emit(OpCodes.Brfalse, isEmittedSharedArrayBufferLabel);
 
         // It's $ArrayBuffer - use emitted buffer constructor
@@ -1218,7 +1218,7 @@ public partial class RuntimeEmitter
 
         // Check if sab is $ArrayBuffer (emitted type)
         ilSAB.Emit(OpCodes.Ldarg_0);
-        ilSAB.Emit(OpCodes.Isinst, runtime.ArrayBufferType);
+        ilSAB.Emit(OpCodes.Isinst, runtime.RequireArrayBuffer().Type);
         ilSAB.Emit(OpCodes.Brfalse, isEmittedSharedArrayBufferLabel);
 
         // It's $ArrayBuffer - use emitted buffer constructor
@@ -1601,9 +1601,9 @@ public partial class RuntimeEmitter
         coreIl.MarkLabel(checkArrayBuffer);
         if (_features.HasAnyTypedArray)
         {
-            var abLocal = coreIl.DeclareLocal(runtime.ArrayBufferType);
+            var abLocal = coreIl.DeclareLocal(runtime.RequireArrayBuffer().Type);
             coreIl.Emit(OpCodes.Ldarg_0);
-            coreIl.Emit(OpCodes.Isinst, runtime.ArrayBufferType);
+            coreIl.Emit(OpCodes.Isinst, runtime.RequireArrayBuffer().Type);
             coreIl.Emit(OpCodes.Stloc, abLocal);
             coreIl.Emit(OpCodes.Ldloc, abLocal);
             coreIl.Emit(OpCodes.Brfalse, checkTypedArray);
@@ -1612,8 +1612,8 @@ public partial class RuntimeEmitter
             coreIl.Emit(OpCodes.Ldloc, abLocal);
             coreIl.Emit(OpCodes.Ldc_I4_0);
             coreIl.Emit(OpCodes.Ldloc, abLocal);
-            coreIl.Emit(OpCodes.Callvirt, runtime.ArrayBufferByteLengthGetter);
-            coreIl.Emit(OpCodes.Callvirt, runtime.ArrayBufferSlice);
+            coreIl.Emit(OpCodes.Callvirt, runtime.RequireArrayBuffer().ByteLengthGetter);
+            coreIl.Emit(OpCodes.Callvirt, runtime.RequireArrayBuffer().Slice);
             coreIl.Emit(OpCodes.Ret);
 
             coreIl.MarkLabel(checkTypedArray);

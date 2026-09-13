@@ -34,7 +34,7 @@ public sealed class StreamConsumersPrimitiveEmitter : IBuiltInModuleEmitter
         var il = context.IL;
         var runtime = context.Runtime!;
         var bytes = il.DeclareLocal(typeof(byte[]));
-        var result = il.DeclareLocal(runtime.ArrayBufferType);
+        var result = il.DeclareLocal(runtime.RequireArrayBuffer().Type);
 
         il.Emit(OpCodes.Castclass, runtime.RequireBuffer().Type);
         il.Emit(OpCodes.Callvirt, runtime.RequireBuffer().GetData);
@@ -42,13 +42,13 @@ public sealed class StreamConsumersPrimitiveEmitter : IBuiltInModuleEmitter
         il.Emit(OpCodes.Ldloc, bytes);
         il.Emit(OpCodes.Ldlen);
         il.Emit(OpCodes.Conv_I4);
-        il.Emit(OpCodes.Newobj, runtime.ArrayBufferCtor);
+        il.Emit(OpCodes.Newobj, runtime.RequireArrayBuffer().Ctor);
         il.Emit(OpCodes.Stloc, result);
 
         il.Emit(OpCodes.Ldloc, bytes);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldloc, result);
-        il.Emit(OpCodes.Callvirt, runtime.ArrayBufferGetBuffer);
+        il.Emit(OpCodes.Callvirt, runtime.RequireArrayBuffer().GetBuffer);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldloc, bytes);
         il.Emit(OpCodes.Ldlen);

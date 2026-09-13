@@ -316,10 +316,24 @@ The 84 Buffer-only helpers accept the component directly, including the numeric 
 encoding helpers that previously depended on the emitter's backing-data field. Cross-feature
 consumers retain their own dependencies on typed arrays, crypto, streams, HTTP, filesystem, generic
 property access, and iteration. Optional type probes explicitly check component availability.
-ArrayBuffer, SharedArrayBuffer, DataView, and TypedArray remain separate migration phases; the
+SharedArrayBuffer, DataView, and TypedArray remain separate migration phases; the
 typed-array bytes-per-element getter retains that family's ownership. No flat Buffer aliases or
 Buffer declaration fields remain in the emitter, and guest signatures and feature implications
 are unchanged.
+
+ArrayBuffer uses optional `EmittedArrayBufferRuntime`, enabled by the existing `HasAnyTypedArray`
+gate. It owns 13 checked declarations: the former ten flat type/constructor/accessor/slice/static
+helper properties, both backing-storage fields, and the `Detach` method. The shared gate still
+emits all typed-array families together; this component does not introduce per-kind tree shaking.
+Declarations become readable during the early `$ArrayBuffer` emission and later `$Runtime` helper
+emission; completion validates and freezes them after runtime finalization.
+
+Six ArrayBuffer-only helpers take the component directly. Constructor error handling, dynamic-slice
+coercion, `isView` checks, DataView/TypedArray backing storage, structured cloning, WebCrypto, and
+stream consumers retain their other dependencies. Optional probes check component availability.
+ArrayBuffer has no remaining flat aliases; method-local IL construction state and BCL lookups stay
+with the emitter. Backing-storage identity, slice copies, and detached-byte-length behavior are
+unchanged. SharedArrayBuffer, DataView, and TypedArray retain their existing owners until their phases.
 
 During emission, each handle becomes readable as soon as its declaration is assigned, so forward
 references do not require a method body to exist yet. An early read names the missing declaration.

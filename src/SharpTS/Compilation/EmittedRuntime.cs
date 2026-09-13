@@ -1472,13 +1472,18 @@ public class EmittedRuntime
     // $Dirent type (pure-IL for standalone DLLs)
     public ConstructorBuilder DirentCtor { get; set; } = null!;
 
-    // $ArrayBuffer type (pure-IL for standalone DLLs)
-    public TypeBuilder ArrayBufferType { get; set; } = null!;
-    public ConstructorBuilder ArrayBufferCtor { get; set; } = null!;
-    public MethodBuilder ArrayBufferByteLengthGetter { get; set; } = null!;
-    public MethodBuilder ArrayBufferGetBuffer { get; set; } = null!;
-    public MethodBuilder ArrayBufferSlice { get; set; } = null!;
-    public MethodBuilder ArrayBufferSliceDynamic { get; set; } = null!;
+    /// <summary>ArrayBuffer metadata, or null when the typed-array family is tree-shaken.</summary>
+    public EmittedArrayBufferRuntime? ArrayBuffer { get; private set; }
+
+    internal void BeginArrayBufferEmission()
+    {
+        if (ArrayBuffer is not null)
+            throw new InvalidOperationException("ArrayBuffer metadata emission has already started.");
+        ArrayBuffer = new EmittedArrayBufferRuntime();
+    }
+
+    public EmittedArrayBufferRuntime RequireArrayBuffer() => ArrayBuffer
+        ?? throw new InvalidOperationException("ArrayBuffer runtime was not enabled for this compilation.");
 
     // $SharedArrayBuffer type (pure-IL for standalone DLLs)
     public TypeBuilder SharedArrayBufferType { get; set; } = null!;
@@ -2113,13 +2118,6 @@ public class EmittedRuntime
     public MethodBuilder TSSharedArrayBufferCtor { get; set; } = null!;
     public MethodBuilder TSSharedArrayBufferByteLengthGetter { get; set; } = null!;
     public MethodBuilder TSSharedArrayBufferSlice { get; set; } = null!;
-
-    // $ArrayBuffer type - emitted for standalone support
-    // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSArrayBuffer
-    public MethodBuilder TSArrayBufferCtor { get; set; } = null!;
-    public MethodBuilder TSArrayBufferByteLengthGetter { get; set; } = null!;
-    public MethodBuilder TSArrayBufferSlice { get; set; } = null!;
-    public MethodBuilder TSArrayBufferIsView { get; set; } = null!;
 
     // $DataView type - emitted for standalone support
     // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSDataView
