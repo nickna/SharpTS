@@ -282,12 +282,28 @@ The 18 former flat properties and 29 emitter fields have no parallel aliases. HT
 accept `EmittedHttpRuntime` directly; net/TLS, EventEmitter, streams, Buffer, scheduling, and generic
 property/invocation helpers remain separate dependencies.
 
-Fetch, Headers, Request, Response, cookie-jar helpers, cached clients, and the global fetch function
-cache remain a separate migration under #1599. Their existing emission through the HTTP family and
-feature implications are unchanged. The built-in module registry still owns HTTP named-import
-wrappers, while the TypeScript standard library retains client/agent behavior. BCL type lookups and
-method-local construction state remain with the emitter; include those ownership boundaries in the
-final residual-state audit.
+The built-in module registry still owns HTTP named-import wrappers, while the TypeScript standard
+library retains client/agent behavior. BCL type lookups and method-local construction state remain
+with the emitter; include those ownership boundaries in the final residual-state audit.
+
+Fetch uses required `EmittedFetchRuntime` metadata for the global function-cache field, which is
+declared even in minimal programs. Its optional `Implementation` contains 31 fetch/Headers/Request/
+Response declarations. `EmitAll` enables it for `UsesHttp`, preserving Web API emission for HTTP-only
+imports as well as fetch-family references. The global getter still exposes fetch only for `UsesFetch`.
+The implementation's optional `Client` owns 15 declarations for async dispatch, four cached clients,
+the shared cookie container, and cookie-jar helpers. It is enabled only when the existing HttpClient
+and HttpRequestMessage lookups succeed; otherwise fetch retains its rejected-promise fallback and
+does not require client declarations.
+
+Completion validates each parent's handles before completing its child, then freezes the parent.
+Missing declarations name the handle and leave completion retryable; a completed parent cannot enable
+a child later. All 15 former flat properties and 28 emitter fields are removed, including the duplicate
+Headers setter alias. The dispatch helper field has one checked handle instead of a reflection lookup;
+the four cached-client fields also live in the client component. Fetch-only helpers take the relevant
+component directly. HTTP/net/TLS, Promise, streams, Buffer/ArrayBuffer, scheduling, and generic
+property/coercion helpers retain their owners. BCL lookups and method-local helpers remain with the
+emitter. Declaration order, feature implications, emitted signatures, and cache/cookie behavior are
+unchanged.
 
 During emission, each handle becomes readable as soon as its declaration is assigned, so forward
 references do not require a method body to exist yet. An early read names the missing declaration.

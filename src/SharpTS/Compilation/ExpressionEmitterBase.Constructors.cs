@@ -241,7 +241,7 @@ public abstract partial class ExpressionEmitterBase
 
             case "Headers":
                 EmitBoxedArgOrNull(arguments, 0);
-                IL.Emit(OpCodes.Newobj, Ctx.Runtime!.TSHeadersCtor);
+                IL.Emit(OpCodes.Newobj, Ctx.Runtime!.Fetch.RequireImplementation().HeadersCtor);
                 SetStackUnknown();
                 return true;
 
@@ -297,11 +297,11 @@ public abstract partial class ExpressionEmitterBase
                 return true;
 
             case "Request":
-                EmitTwoArgConstructor(arguments, Ctx.Runtime!.TSRequestCtor);
+                EmitTwoArgConstructor(arguments, Ctx.Runtime!.Fetch.RequireImplementation().RequestCtor);
                 return true;
 
             case "Response":
-                EmitTwoArgConstructor(arguments, Ctx.Runtime!.TSResponseCtor);
+                EmitTwoArgConstructor(arguments, Ctx.Runtime!.Fetch.RequireImplementation().ResponseCtor);
                 return true;
 
             // --- Date (multi-arg) ---

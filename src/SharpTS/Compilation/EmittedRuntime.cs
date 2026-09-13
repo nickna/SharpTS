@@ -1756,7 +1756,6 @@ public class EmittedRuntime
     public MethodBuilder SymbolRegistryKey { get; set; } = null!;
     public MethodBuilder SymbolClosedOwner { get; set; } = null!;
     public MethodBuilder CloseSymbolAccessor { get; set; } = null!;
-    public FieldBuilder CachedFetchFunction { get; set; } = null!;
     public FieldBuilder GlobalThisProperties { get; set; } = null!;
 
     /// <summary>Node crypto metadata, or null when crypto is tree-shaken from this compilation.</summary>
@@ -1772,14 +1771,8 @@ public class EmittedRuntime
     public EmittedCryptoRuntime RequireCrypto() => Crypto
         ?? throw new InvalidOperationException("Crypto runtime was not enabled for this compilation.");
 
-    // Fetch and Web API metadata (separate migration from HTTP module/server metadata).
-    public MethodBuilder Fetch { get; set; } = null!;
-
-    // fetch.cookieJar.{getCookies,setCookie,clear} introspection helpers — emitted
-    // by EmitCachedHttpClients alongside the cookie container static field.
-    public MethodBuilder CookieJarGetCookies { get; set; } = null!;
-    public MethodBuilder CookieJarSetCookie { get; set; } = null!;
-    public MethodBuilder CookieJarClear { get; set; } = null!;
+    // The global function-cache field is always declared; Web API metadata is optional.
+    public EmittedFetchRuntime Fetch { get; } = new();
 
     /// <summary>HTTP module/server metadata, or null when HTTP is tree-shaken.</summary>
     public EmittedHttpRuntime? Http { get; private set; }
@@ -1832,29 +1825,6 @@ public class EmittedRuntime
 
     public EmittedDgramRuntime RequireDgram() => Dgram
         ?? throw new InvalidOperationException("Dgram runtime was not enabled for this compilation.");
-
-    // $Headers type - emitted for standalone Headers support
-    public TypeBuilder TSHeadersType { get; set; } = null!;
-    public ConstructorBuilder TSHeadersCtor { get; set; } = null!;
-    public MethodBuilder TSHeadersSetMethod { get; set; } = null!;
-
-    // URL / URLSearchParams — migrated to stdlib/node/url.ts; the TS class is
-    // the canonical implementation. No compile-time runtime type is emitted.
-
-    // $FetchResponse type - emitted for standalone fetch support
-    public ConstructorBuilder TSFetchResponseCtor { get; set; } = null!;
-
-    // $Request type - emitted for standalone Request constructor support
-    public ConstructorBuilder TSRequestCtor { get; set; } = null!;
-
-    // $Response type - emitted for standalone Response constructor support
-    public TypeBuilder TSResponseType { get; set; } = null!;
-    public ConstructorBuilder TSResponseCtor { get; set; } = null!;
-
-    // Response static methods
-    public MethodBuilder ResponseJsonStatic { get; set; } = null!;
-    public MethodBuilder ResponseRedirectStatic { get; set; } = null!;
-    public MethodBuilder ResponseErrorStatic { get; set; } = null!;
 
     // $Buffer type - emitted for standalone buffer support
     // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSBuffer

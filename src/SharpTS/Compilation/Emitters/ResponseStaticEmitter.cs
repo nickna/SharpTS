@@ -35,7 +35,7 @@ public sealed class ResponseStaticEmitter : IStaticTypeEmitterStrategy
                 {
                     il.Emit(OpCodes.Ldnull);
                 }
-                il.Emit(OpCodes.Call, ctx.Runtime!.ResponseJsonStatic);
+                il.Emit(OpCodes.Call, ctx.Runtime!.Fetch.RequireImplementation().ResponseJsonStatic);
                 return true;
 
             case "redirect":
@@ -58,12 +58,12 @@ public sealed class ResponseStaticEmitter : IStaticTypeEmitterStrategy
                 {
                     il.Emit(OpCodes.Ldnull);
                 }
-                il.Emit(OpCodes.Call, ctx.Runtime!.ResponseRedirectStatic);
+                il.Emit(OpCodes.Call, ctx.Runtime!.Fetch.RequireImplementation().ResponseRedirectStatic);
                 return true;
 
             case "error":
                 // Response.error() → ResponseError()
-                il.Emit(OpCodes.Call, ctx.Runtime!.ResponseErrorStatic);
+                il.Emit(OpCodes.Call, ctx.Runtime!.Fetch.RequireImplementation().ResponseErrorStatic);
                 return true;
 
             default:

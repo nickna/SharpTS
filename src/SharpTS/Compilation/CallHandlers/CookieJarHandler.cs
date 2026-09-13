@@ -53,7 +53,7 @@ public class CookieJarHandler : ICallHandler
                 {
                     il.Emit(OpCodes.Ldstr, "");
                 }
-                il.Emit(OpCodes.Call, runtime.CookieJarGetCookies);
+                il.Emit(OpCodes.Call, runtime.Fetch.RequireImplementation().RequireClient().CookieJarGetCookies);
                 emitter.SetStackUnknown();
                 return true;
             }
@@ -78,7 +78,7 @@ public class CookieJarHandler : ICallHandler
                 {
                     il.Emit(OpCodes.Ldstr, "");
                 }
-                il.Emit(OpCodes.Call, runtime.CookieJarSetCookie);
+                il.Emit(OpCodes.Call, runtime.Fetch.RequireImplementation().RequireClient().CookieJarSetCookie);
                 // setCookie returns undefined in JS land — push the undefined sentinel.
                 il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
                 emitter.SetStackUnknown();
@@ -86,7 +86,7 @@ public class CookieJarHandler : ICallHandler
             }
             case "clear":
             {
-                il.Emit(OpCodes.Call, runtime.CookieJarClear);
+                il.Emit(OpCodes.Call, runtime.Fetch.RequireImplementation().RequireClient().CookieJarClear);
                 il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
                 emitter.SetStackUnknown();
                 return true;
