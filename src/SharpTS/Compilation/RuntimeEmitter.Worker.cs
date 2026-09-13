@@ -280,7 +280,7 @@ public partial class RuntimeEmitter
 
         // Check if arg is an emitted $DataView
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.DataViewType);
+        il.Emit(OpCodes.Isinst, runtime.RequireDataView().Type);
         il.Emit(OpCodes.Brtrue, returnTrueLabel);
 
         // Non-emitted types are not views in standalone mode.
@@ -349,7 +349,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Conv_I4);
         il.Emit(OpCodes.Ldloc, byteLengthIntLocal);
-        il.Emit(OpCodes.Newobj, runtime.DataViewCtor);
+        il.Emit(OpCodes.Newobj, runtime.RequireDataView().Ctor);
         il.Emit(OpCodes.Br, endLabel);
 
         il.MarkLabel(notArrayBufferLabel);
@@ -364,7 +364,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Conv_I4);
         il.Emit(OpCodes.Ldloc, byteLengthIntLocal);
-        il.Emit(OpCodes.Newobj, runtime.DataViewCtor);
+        il.Emit(OpCodes.Newobj, runtime.RequireDataView().Ctor);
         il.Emit(OpCodes.Br, endLabel);
 
         // Non-emitted buffer type in standalone mode.
@@ -376,24 +376,24 @@ public partial class RuntimeEmitter
         il.MarkLabel(endLabel);
         il.Emit(OpCodes.Ret);
 
-        runtime.TSDataViewCtor = method;
+        runtime.RequireDataView().Create = method;
 
         // Emit property getters
-        EmitDataViewByteLength(runtimeType, runtime);
-        EmitDataViewByteOffset(runtimeType, runtime);
-        EmitDataViewBuffer(runtimeType, runtime);
+        EmitDataViewByteLength(runtimeType, runtime.RequireDataView());
+        EmitDataViewByteOffset(runtimeType, runtime.RequireDataView());
+        EmitDataViewBuffer(runtimeType, runtime.RequireDataView());
 
         // Emit getter methods
-        EmitDataViewGetter(runtimeType, runtime, "GetInt8", "getInt8", false);
-        EmitDataViewGetter(runtimeType, runtime, "GetUint8", "getUint8", false);
-        EmitDataViewGetter(runtimeType, runtime, "GetInt16", "getInt16", true);
-        EmitDataViewGetter(runtimeType, runtime, "GetUint16", "getUint16", true);
-        EmitDataViewGetter(runtimeType, runtime, "GetInt32", "getInt32", true);
-        EmitDataViewGetter(runtimeType, runtime, "GetUint32", "getUint32", true);
-        EmitDataViewGetter(runtimeType, runtime, "GetFloat32", "getFloat32", true);
-        EmitDataViewGetter(runtimeType, runtime, "GetFloat64", "getFloat64", true);
-        EmitDataViewBigIntGetter(runtimeType, runtime, "GetBigInt64", "getBigInt64");
-        EmitDataViewBigIntGetter(runtimeType, runtime, "GetBigUint64", "getBigUint64");
+        EmitDataViewGetter(runtimeType, runtime.RequireDataView(), "GetInt8", "getInt8", false);
+        EmitDataViewGetter(runtimeType, runtime.RequireDataView(), "GetUint8", "getUint8", false);
+        EmitDataViewGetter(runtimeType, runtime.RequireDataView(), "GetInt16", "getInt16", true);
+        EmitDataViewGetter(runtimeType, runtime.RequireDataView(), "GetUint16", "getUint16", true);
+        EmitDataViewGetter(runtimeType, runtime.RequireDataView(), "GetInt32", "getInt32", true);
+        EmitDataViewGetter(runtimeType, runtime.RequireDataView(), "GetUint32", "getUint32", true);
+        EmitDataViewGetter(runtimeType, runtime.RequireDataView(), "GetFloat32", "getFloat32", true);
+        EmitDataViewGetter(runtimeType, runtime.RequireDataView(), "GetFloat64", "getFloat64", true);
+        EmitDataViewBigIntGetter(runtimeType, runtime.RequireDataView(), "GetBigInt64", "getBigInt64");
+        EmitDataViewBigIntGetter(runtimeType, runtime.RequireDataView(), "GetBigUint64", "getBigUint64");
 
         // Emit setter methods
         EmitDataViewSetter(runtimeType, runtime, "SetInt8", "setInt8", false);
@@ -408,7 +408,7 @@ public partial class RuntimeEmitter
         EmitDataViewSetter(runtimeType, runtime, "SetBigUint64", "setBigUint64", true);
     }
 
-    private void EmitDataViewByteLength(TypeBuilder runtimeType, EmittedRuntime runtime)
+    private void EmitDataViewByteLength(TypeBuilder runtimeType, EmittedDataViewRuntime view)
     {
         var method = runtimeType.DefineMethod(
             "DataViewByteLength",
@@ -420,15 +420,15 @@ public partial class RuntimeEmitter
         var il = method.GetILGenerator();
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.DataViewType);
-        il.Emit(OpCodes.Callvirt, runtime.DataViewByteLengthGetter);
+        il.Emit(OpCodes.Castclass, view.Type);
+        il.Emit(OpCodes.Callvirt, view.ByteLengthGetter);
         il.Emit(OpCodes.Conv_R8);
         il.Emit(OpCodes.Ret);
 
-        runtime.TSDataViewByteLengthGetter = method;
+        view.GetByteLength = method;
     }
 
-    private void EmitDataViewByteOffset(TypeBuilder runtimeType, EmittedRuntime runtime)
+    private void EmitDataViewByteOffset(TypeBuilder runtimeType, EmittedDataViewRuntime view)
     {
         var method = runtimeType.DefineMethod(
             "DataViewByteOffset",
@@ -440,15 +440,15 @@ public partial class RuntimeEmitter
         var il = method.GetILGenerator();
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.DataViewType);
-        il.Emit(OpCodes.Callvirt, runtime.DataViewByteOffsetGetter);
+        il.Emit(OpCodes.Castclass, view.Type);
+        il.Emit(OpCodes.Callvirt, view.ByteOffsetGetter);
         il.Emit(OpCodes.Conv_R8);
         il.Emit(OpCodes.Ret);
 
-        runtime.TSDataViewByteOffsetGetter = method;
+        view.GetByteOffset = method;
     }
 
-    private void EmitDataViewBuffer(TypeBuilder runtimeType, EmittedRuntime runtime)
+    private void EmitDataViewBuffer(TypeBuilder runtimeType, EmittedDataViewRuntime view)
     {
         var method = runtimeType.DefineMethod(
             "DataViewBuffer",
@@ -460,14 +460,14 @@ public partial class RuntimeEmitter
         var il = method.GetILGenerator();
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.DataViewType);
-        il.Emit(OpCodes.Callvirt, runtime.DataViewBufferGetter);
+        il.Emit(OpCodes.Castclass, view.Type);
+        il.Emit(OpCodes.Callvirt, view.BufferGetter);
         il.Emit(OpCodes.Ret);
 
-        runtime.TSDataViewBufferGetter = method;
+        view.GetBuffer = method;
     }
 
-    private void EmitDataViewGetter(TypeBuilder runtimeType, EmittedRuntime runtime, string runtimeMethodName, string jsMethodName, bool hasEndianness)
+    private void EmitDataViewGetter(TypeBuilder runtimeType, EmittedDataViewRuntime view, string runtimeMethodName, string jsMethodName, bool hasEndianness)
     {
         var paramTypes = hasEndianness
             ? new[] { _types.Object, _types.Int32, _types.Boolean }
@@ -482,20 +482,20 @@ public partial class RuntimeEmitter
 
         MethodBuilder target = runtimeMethodName switch
         {
-            "GetInt8" => runtime.DataViewGetInt8,
-            "GetUint8" => runtime.DataViewGetUint8,
-            "GetInt16" => runtime.DataViewGetInt16,
-            "GetUint16" => runtime.DataViewGetUint16,
-            "GetInt32" => runtime.DataViewGetInt32,
-            "GetUint32" => runtime.DataViewGetUint32,
-            "GetFloat32" => runtime.DataViewGetFloat32,
-            "GetFloat64" => runtime.DataViewGetFloat64,
+            "GetInt8" => view.GetInt8,
+            "GetUint8" => view.GetUint8,
+            "GetInt16" => view.GetInt16,
+            "GetUint16" => view.GetUint16,
+            "GetInt32" => view.GetInt32,
+            "GetUint32" => view.GetUint32,
+            "GetFloat32" => view.GetFloat32,
+            "GetFloat64" => view.GetFloat64,
             _ => throw new ArgumentException($"Unknown DataView getter: {runtimeMethodName}")
         };
 
         var il = method.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.DataViewType);
+        il.Emit(OpCodes.Castclass, view.Type);
         il.Emit(OpCodes.Ldarg_1);
         if (hasEndianness)
             il.Emit(OpCodes.Ldarg_2);
@@ -505,18 +505,18 @@ public partial class RuntimeEmitter
         // Store in runtime
         switch (jsMethodName)
         {
-            case "getInt8": runtime.TSDataViewGetInt8 = method; break;
-            case "getUint8": runtime.TSDataViewGetUint8 = method; break;
-            case "getInt16": runtime.TSDataViewGetInt16 = method; break;
-            case "getUint16": runtime.TSDataViewGetUint16 = method; break;
-            case "getInt32": runtime.TSDataViewGetInt32 = method; break;
-            case "getUint32": runtime.TSDataViewGetUint32 = method; break;
-            case "getFloat32": runtime.TSDataViewGetFloat32 = method; break;
-            case "getFloat64": runtime.TSDataViewGetFloat64 = method; break;
+            case "getInt8": view.GetInt8Object = method; break;
+            case "getUint8": view.GetUint8Object = method; break;
+            case "getInt16": view.GetInt16Object = method; break;
+            case "getUint16": view.GetUint16Object = method; break;
+            case "getInt32": view.GetInt32Object = method; break;
+            case "getUint32": view.GetUint32Object = method; break;
+            case "getFloat32": view.GetFloat32Object = method; break;
+            case "getFloat64": view.GetFloat64Object = method; break;
         }
     }
 
-    private void EmitDataViewBigIntGetter(TypeBuilder runtimeType, EmittedRuntime runtime, string runtimeMethodName, string jsMethodName)
+    private void EmitDataViewBigIntGetter(TypeBuilder runtimeType, EmittedDataViewRuntime view, string runtimeMethodName, string jsMethodName)
     {
         var method = runtimeType.DefineMethod(
             $"DataView{runtimeMethodName}",
@@ -527,14 +527,14 @@ public partial class RuntimeEmitter
 
         MethodBuilder target = runtimeMethodName switch
         {
-            "GetBigInt64" => runtime.DataViewGetBigInt64,
-            "GetBigUint64" => runtime.DataViewGetBigUint64,
+            "GetBigInt64" => view.GetBigInt64,
+            "GetBigUint64" => view.GetBigUint64,
             _ => throw new ArgumentException($"Unknown DataView BigInt getter: {runtimeMethodName}")
         };
 
         var il = method.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.DataViewType);
+        il.Emit(OpCodes.Castclass, view.Type);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Callvirt, target);
@@ -542,8 +542,8 @@ public partial class RuntimeEmitter
 
         switch (jsMethodName)
         {
-            case "getBigInt64": runtime.TSDataViewGetBigInt64 = method; break;
-            case "getBigUint64": runtime.TSDataViewGetBigUint64 = method; break;
+            case "getBigInt64": view.GetBigInt64Object = method; break;
+            case "getBigUint64": view.GetBigUint64Object = method; break;
         }
     }
 
@@ -562,22 +562,22 @@ public partial class RuntimeEmitter
 
         MethodBuilder target = runtimeMethodName switch
         {
-            "SetInt8" => runtime.DataViewSetInt8,
-            "SetUint8" => runtime.DataViewSetUint8,
-            "SetInt16" => runtime.DataViewSetInt16,
-            "SetUint16" => runtime.DataViewSetUint16,
-            "SetInt32" => runtime.DataViewSetInt32,
-            "SetUint32" => runtime.DataViewSetUint32,
-            "SetFloat32" => runtime.DataViewSetFloat32,
-            "SetFloat64" => runtime.DataViewSetFloat64,
-            "SetBigInt64" => runtime.DataViewSetBigInt64,
-            "SetBigUint64" => runtime.DataViewSetBigUint64,
+            "SetInt8" => runtime.RequireDataView().SetInt8,
+            "SetUint8" => runtime.RequireDataView().SetUint8,
+            "SetInt16" => runtime.RequireDataView().SetInt16,
+            "SetUint16" => runtime.RequireDataView().SetUint16,
+            "SetInt32" => runtime.RequireDataView().SetInt32,
+            "SetUint32" => runtime.RequireDataView().SetUint32,
+            "SetFloat32" => runtime.RequireDataView().SetFloat32,
+            "SetFloat64" => runtime.RequireDataView().SetFloat64,
+            "SetBigInt64" => runtime.RequireDataView().SetBigInt64,
+            "SetBigUint64" => runtime.RequireDataView().SetBigUint64,
             _ => throw new ArgumentException($"Unknown DataView setter: {runtimeMethodName}")
         };
 
         var il = method.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.DataViewType);
+        il.Emit(OpCodes.Castclass, runtime.RequireDataView().Type);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldarg_2);
         if (runtimeMethodName is "SetBigInt64" or "SetBigUint64")
@@ -604,16 +604,16 @@ public partial class RuntimeEmitter
         // Store in runtime
         switch (jsMethodName)
         {
-            case "setInt8": runtime.TSDataViewSetInt8 = method; break;
-            case "setUint8": runtime.TSDataViewSetUint8 = method; break;
-            case "setInt16": runtime.TSDataViewSetInt16 = method; break;
-            case "setUint16": runtime.TSDataViewSetUint16 = method; break;
-            case "setInt32": runtime.TSDataViewSetInt32 = method; break;
-            case "setUint32": runtime.TSDataViewSetUint32 = method; break;
-            case "setFloat32": runtime.TSDataViewSetFloat32 = method; break;
-            case "setFloat64": runtime.TSDataViewSetFloat64 = method; break;
-            case "setBigInt64": runtime.TSDataViewSetBigInt64 = method; break;
-            case "setBigUint64": runtime.TSDataViewSetBigUint64 = method; break;
+            case "setInt8": runtime.RequireDataView().SetInt8Object = method; break;
+            case "setUint8": runtime.RequireDataView().SetUint8Object = method; break;
+            case "setInt16": runtime.RequireDataView().SetInt16Object = method; break;
+            case "setUint16": runtime.RequireDataView().SetUint16Object = method; break;
+            case "setInt32": runtime.RequireDataView().SetInt32Object = method; break;
+            case "setUint32": runtime.RequireDataView().SetUint32Object = method; break;
+            case "setFloat32": runtime.RequireDataView().SetFloat32Object = method; break;
+            case "setFloat64": runtime.RequireDataView().SetFloat64Object = method; break;
+            case "setBigInt64": runtime.RequireDataView().SetBigInt64Object = method; break;
+            case "setBigUint64": runtime.RequireDataView().SetBigUint64Object = method; break;
         }
     }
 

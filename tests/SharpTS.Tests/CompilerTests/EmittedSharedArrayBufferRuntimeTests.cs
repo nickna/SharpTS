@@ -115,7 +115,7 @@ public class EmittedSharedArrayBufferRuntimeTests
         var buffer = runtime.RequireSharedArrayBuffer();
         AssertFrozen(buffer);
         Assert.True(runtime.RequireArrayBuffer().IsComplete);
-        Assert.NotNull(runtime.DataViewType);
+        Assert.NotNull(runtime.RequireDataView().Type);
         Assert.NotNull(runtime.TypedArrayBaseType);
         Assert.Equal("$SharedArrayBuffer", buffer.Type.Name);
         Assert.Same(buffer.Type, buffer.Ctor.DeclaringType);

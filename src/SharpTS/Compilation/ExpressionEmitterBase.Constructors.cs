@@ -567,7 +567,7 @@ public abstract partial class ExpressionEmitterBase
                 else
                     IL.Emit(OpCodes.Ldc_R8, 0.0);
                 EmitBoxedArgOrNull(arguments, 2);
-                IL.Emit(OpCodes.Call, Ctx.Runtime!.TSDataViewCtor);
+                IL.Emit(OpCodes.Call, Ctx.Runtime!.RequireDataView().Create);
                 SetStackUnknown();
                 return true;
 

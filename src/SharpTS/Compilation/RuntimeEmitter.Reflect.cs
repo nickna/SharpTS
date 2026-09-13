@@ -1295,12 +1295,12 @@ public partial class RuntimeEmitter
         // Dispatch through that adapter so ToNumber/default-argument handling and,
         // critically, the offset-vs-buffer validation happen before any eventual
         // GetPrototypeFromConstructor(newTarget) work (ECMA-262 DataView steps 3-10).
-        if (runtime.DataViewType is not null && runtime.TSDataViewCtor is not null)
+        if (runtime.DataView is { } dataView)
         {
             var notDataViewTypeLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Castclass, _types.Type);
-            il.Emit(OpCodes.Ldtoken, runtime.DataViewType);
+            il.Emit(OpCodes.Ldtoken, dataView.Type);
             il.Emit(OpCodes.Call, _types.GetMethod(
                 _types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
             il.Emit(OpCodes.Call, _types.GetMethod(
@@ -1356,7 +1356,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(dataViewNoLengthLabel);
         il.Emit(OpCodes.Ldnull);
         il.MarkLabel(dataViewHaveLengthLabel);
-            il.Emit(OpCodes.Call, runtime.TSDataViewCtor);
+            il.Emit(OpCodes.Call, dataView.Create);
             il.Emit(OpCodes.Ret);
 
             il.MarkLabel(notDataViewTypeLabel);

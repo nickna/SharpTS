@@ -1539,7 +1539,7 @@ public partial class RuntimeEmitter
 
             // $DataView - check for "byteLength", "byteOffset", "buffer"
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.DataViewType);
+            il.Emit(OpCodes.Isinst, runtime.RequireDataView().Type);
             il.Emit(OpCodes.Brtrue, dataViewLabel);
 
             // TypedArray - use emitted helper dispatch for standalone behavior
@@ -2446,8 +2446,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, notDataViewByteLengthLabel);
         // Return ByteLength as double
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.DataViewType);
-        il.Emit(OpCodes.Callvirt, runtime.DataViewByteLengthGetter);
+        il.Emit(OpCodes.Castclass, runtime.RequireDataView().Type);
+        il.Emit(OpCodes.Callvirt, runtime.RequireDataView().ByteLengthGetter);
         il.Emit(OpCodes.Conv_R8);
         il.Emit(OpCodes.Box, _types.Double);
         il.Emit(OpCodes.Ret);
@@ -2460,8 +2460,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, notDataViewByteOffsetLabel);
         // Return ByteOffset as double
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.DataViewType);
-        il.Emit(OpCodes.Callvirt, runtime.DataViewByteOffsetGetter);
+        il.Emit(OpCodes.Castclass, runtime.RequireDataView().Type);
+        il.Emit(OpCodes.Callvirt, runtime.RequireDataView().ByteOffsetGetter);
         il.Emit(OpCodes.Conv_R8);
         il.Emit(OpCodes.Box, _types.Double);
         il.Emit(OpCodes.Ret);
@@ -2474,8 +2474,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, notDataViewBufferLabel);
         // Return Buffer
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.DataViewType);
-        il.Emit(OpCodes.Callvirt, runtime.DataViewBufferGetter);
+        il.Emit(OpCodes.Castclass, runtime.RequireDataView().Type);
+        il.Emit(OpCodes.Callvirt, runtime.RequireDataView().BufferGetter);
         il.Emit(OpCodes.Ret);
             il.MarkLabel(notDataViewBufferLabel);
             // DataView's methods live on the emitted concrete type. Expose
@@ -2501,26 +2501,26 @@ public partial class RuntimeEmitter
             // argument coercions (ToNumber/ToBigInt) and normalize setter
             // results to the emitted undefined singleton.  $TSFunction
             // prepends its bound target when invoking a static helper.
-            EmitDataViewMethod("getInt8", runtime.TSDataViewGetInt8, 1);
-            EmitDataViewMethod("getUint8", runtime.TSDataViewGetUint8, 1);
-            EmitDataViewMethod("getInt16", runtime.TSDataViewGetInt16, 1);
-            EmitDataViewMethod("getUint16", runtime.TSDataViewGetUint16, 1);
-            EmitDataViewMethod("getInt32", runtime.TSDataViewGetInt32, 1);
-            EmitDataViewMethod("getUint32", runtime.TSDataViewGetUint32, 1);
-            EmitDataViewMethod("getFloat32", runtime.TSDataViewGetFloat32, 1);
-            EmitDataViewMethod("getFloat64", runtime.TSDataViewGetFloat64, 1);
-            EmitDataViewMethod("getBigInt64", runtime.TSDataViewGetBigInt64, 1);
-            EmitDataViewMethod("getBigUint64", runtime.TSDataViewGetBigUint64, 1);
-            EmitDataViewMethod("setInt8", runtime.TSDataViewSetInt8, 2);
-            EmitDataViewMethod("setUint8", runtime.TSDataViewSetUint8, 2);
-            EmitDataViewMethod("setInt16", runtime.TSDataViewSetInt16, 2);
-            EmitDataViewMethod("setUint16", runtime.TSDataViewSetUint16, 2);
-            EmitDataViewMethod("setInt32", runtime.TSDataViewSetInt32, 2);
-            EmitDataViewMethod("setUint32", runtime.TSDataViewSetUint32, 2);
-            EmitDataViewMethod("setFloat32", runtime.TSDataViewSetFloat32, 2);
-            EmitDataViewMethod("setFloat64", runtime.TSDataViewSetFloat64, 2);
-            EmitDataViewMethod("setBigInt64", runtime.TSDataViewSetBigInt64, 2);
-            EmitDataViewMethod("setBigUint64", runtime.TSDataViewSetBigUint64, 2);
+            EmitDataViewMethod("getInt8", runtime.RequireDataView().GetInt8Object, 1);
+            EmitDataViewMethod("getUint8", runtime.RequireDataView().GetUint8Object, 1);
+            EmitDataViewMethod("getInt16", runtime.RequireDataView().GetInt16Object, 1);
+            EmitDataViewMethod("getUint16", runtime.RequireDataView().GetUint16Object, 1);
+            EmitDataViewMethod("getInt32", runtime.RequireDataView().GetInt32Object, 1);
+            EmitDataViewMethod("getUint32", runtime.RequireDataView().GetUint32Object, 1);
+            EmitDataViewMethod("getFloat32", runtime.RequireDataView().GetFloat32Object, 1);
+            EmitDataViewMethod("getFloat64", runtime.RequireDataView().GetFloat64Object, 1);
+            EmitDataViewMethod("getBigInt64", runtime.RequireDataView().GetBigInt64Object, 1);
+            EmitDataViewMethod("getBigUint64", runtime.RequireDataView().GetBigUint64Object, 1);
+            EmitDataViewMethod("setInt8", runtime.RequireDataView().SetInt8Object, 2);
+            EmitDataViewMethod("setUint8", runtime.RequireDataView().SetUint8Object, 2);
+            EmitDataViewMethod("setInt16", runtime.RequireDataView().SetInt16Object, 2);
+            EmitDataViewMethod("setUint16", runtime.RequireDataView().SetUint16Object, 2);
+            EmitDataViewMethod("setInt32", runtime.RequireDataView().SetInt32Object, 2);
+            EmitDataViewMethod("setUint32", runtime.RequireDataView().SetUint32Object, 2);
+            EmitDataViewMethod("setFloat32", runtime.RequireDataView().SetFloat32Object, 2);
+            EmitDataViewMethod("setFloat64", runtime.RequireDataView().SetFloat64Object, 2);
+            EmitDataViewMethod("setBigInt64", runtime.RequireDataView().SetBigInt64Object, 2);
+            EmitDataViewMethod("setBigUint64", runtime.RequireDataView().SetBigUint64Object, 2);
 
             il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
             il.Emit(OpCodes.Ret);
