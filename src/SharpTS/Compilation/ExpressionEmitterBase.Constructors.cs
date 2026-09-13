@@ -166,14 +166,14 @@ public abstract partial class ExpressionEmitterBase
                 return true;
 
             case "EventEmitter":
-                IL.Emit(OpCodes.Newobj, Ctx.Runtime!.TSEventEmitterCtor);
+                IL.Emit(OpCodes.Newobj, Ctx.Runtime!.EventEmitter.Ctor);
                 // #1099: honor a literal { captureRejections: true } option. Only
                 // the object-literal form is recognized (the overwhelmingly common
                 // usage); a dynamic options object is a documented bound.
                 if (arguments.Count > 0 && HasCaptureRejectionsTrue(arguments[0]))
                 {
                     IL.Emit(OpCodes.Dup);
-                    IL.Emit(OpCodes.Callvirt, Ctx.Runtime!.TSEventEmitterEnableCaptureRejections);
+                    IL.Emit(OpCodes.Callvirt, Ctx.Runtime!.EventEmitter.EnableCaptureRejections);
                 }
                 SetStackUnknown();
                 return true;

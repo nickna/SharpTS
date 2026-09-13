@@ -57,14 +57,14 @@ public partial class RuntimeEmitter
             TypeAttributes.Public | TypeAttributes.BeforeFieldInit
         );
 
-        _cleanupStreamField = typeBuilder.DefineField("_stream", runtime.TSEventEmitterType, FieldAttributes.Public);
+        _cleanupStreamField = typeBuilder.DefineField("_stream", runtime.EventEmitter.Type, FieldAttributes.Public);
         _cleanupCallbackField = typeBuilder.DefineField("_callback", _types.Object, FieldAttributes.Public);
 
         // Constructor(stream, callback)
         _cleanupCtor = typeBuilder.DefineConstructor(
             MethodAttributes.Public,
             CallingConventions.Standard,
-            [runtime.TSEventEmitterType, _types.Object]);
+            [runtime.EventEmitter.Type, _types.Object]);
         {
             var il = _cleanupCtor.GetILGenerator();
             il.Emit(OpCodes.Ldarg_0);
@@ -106,7 +106,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldstr, eventName);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldfld, _cleanupCallbackField);
-            il.Emit(OpCodes.Callvirt, rt.TSEventEmitterOff);
+            il.Emit(OpCodes.Callvirt, rt.EventEmitter.Off);
             il.Emit(OpCodes.Pop); // Off returns the emitter
         }
     }
@@ -128,7 +128,7 @@ public partial class RuntimeEmitter
         var il = method.GetILGenerator();
 
         // Extract stream from args[0]
-        var streamLocal = il.DeclareLocal(runtime.TSEventEmitterType); // local 0: stream
+        var streamLocal = il.DeclareLocal(runtime.EventEmitter.Type); // local 0: stream
         var callbackLocal = il.DeclareLocal(_types.Object); // local 1: callback
         var optionsLocal = il.DeclareLocal(_types.Object); // local 2: options (null if 2-arg)
         var readableOptLocal = il.DeclareLocal(_types.Boolean); // local 3: readable option (default true)
@@ -144,7 +144,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldelem_Ref);
-        il.Emit(OpCodes.Castclass, runtime.TSEventEmitterType);
+        il.Emit(OpCodes.Castclass, runtime.EventEmitter.Type);
         il.Emit(OpCodes.Stloc, streamLocal);
 
         // Determine callback position
@@ -318,7 +318,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, stream);
         il.Emit(OpCodes.Ldstr, eventName);
         il.Emit(OpCodes.Ldloc, callback);
-        il.Emit(OpCodes.Callvirt, runtime.TSEventEmitterOnce);
+        il.Emit(OpCodes.Callvirt, runtime.EventEmitter.Once);
         il.Emit(OpCodes.Pop); // Once returns the emitter, discard it
     }
 
@@ -364,7 +364,7 @@ public partial class RuntimeEmitter
 
         // if (lastArg is $EventEmitter) → no callback, all args are streams
         il.Emit(OpCodes.Ldloc, lastArgLocal);
-        il.Emit(OpCodes.Isinst, runtime.TSEventEmitterType);
+        il.Emit(OpCodes.Isinst, runtime.EventEmitter.Type);
         il.Emit(OpCodes.Brtrue, noCallbackLabel);
 
         // Last arg is the callback: streamCount = args.Length - 1

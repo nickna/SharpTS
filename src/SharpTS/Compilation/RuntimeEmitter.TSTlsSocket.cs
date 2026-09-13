@@ -751,7 +751,7 @@ public partial class RuntimeEmitter
         var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$TlsServer",
             TypeAttributes.Public | TypeAttributes.Class | TypeAttributes.BeforeFieldInit,
-            runtime.TSEventEmitterType
+            runtime.EventEmitter.Type
         );
         _tlsServerTypeBuilder = typeBuilder;
         _ = typeBuilder;
@@ -784,7 +784,7 @@ public partial class RuntimeEmitter
 
         var ctorIL = ctor.GetILGenerator();
         ctorIL.Emit(OpCodes.Ldarg_0);
-        ctorIL.Emit(OpCodes.Call, runtime.TSEventEmitterCtor);
+        ctorIL.Emit(OpCodes.Call, runtime.EventEmitter.Ctor);
         ctorIL.Emit(OpCodes.Ldarg_0);
         ctorIL.Emit(OpCodes.Ldc_I4_0);
         ctorIL.Emit(OpCodes.Stfld, _tlsServerIsListeningField);
@@ -1065,7 +1065,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, "listening");
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Newarr, _types.Object);
-        il.Emit(OpCodes.Callvirt, runtime.TSEventEmitterEmit);
+        il.Emit(OpCodes.Callvirt, runtime.EventEmitter.Emit);
         il.Emit(OpCodes.Pop);
 
         // ThreadPool.QueueUserWorkItem(new WaitCallback(this._TlsAcceptWorker))
@@ -1156,7 +1156,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, "close");
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Newarr, _types.Object);
-        il.Emit(OpCodes.Callvirt, runtime.TSEventEmitterEmit);
+        il.Emit(OpCodes.Callvirt, runtime.EventEmitter.Emit);
         il.Emit(OpCodes.Pop);
 
         il.Emit(OpCodes.Ldarg_0);

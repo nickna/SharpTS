@@ -147,7 +147,7 @@ public partial class RuntimeEmitter
         invokeIL.Emit(OpCodes.Ldstr, "drain");
         invokeIL.Emit(OpCodes.Ldc_I4_0);
         invokeIL.Emit(OpCodes.Newarr, _types.Object);
-        invokeIL.Emit(OpCodes.Callvirt, runtime.TSEventEmitterEmit);
+        invokeIL.Emit(OpCodes.Callvirt, runtime.EventEmitter.Emit);
         invokeIL.Emit(OpCodes.Pop);
         invokeIL.MarkLabel(noDrainLabel1);
         invokeIL.Emit(OpCodes.Br, afterSubtractLabel);
@@ -191,7 +191,7 @@ public partial class RuntimeEmitter
         var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$Writable",
             TypeAttributes.Public | TypeAttributes.BeforeFieldInit,
-            runtime.TSEventEmitterType  // Extends $EventEmitter
+            runtime.EventEmitter.Type  // Extends $EventEmitter
         );
         runtime.TSWritableType = typeBuilder;
 
@@ -253,7 +253,7 @@ public partial class RuntimeEmitter
 
         // Call base constructor ($EventEmitter)
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.TSEventEmitterCtor);
+        il.Emit(OpCodes.Call, runtime.EventEmitter.Ctor);
 
         // _writable = true
         il.Emit(OpCodes.Ldarg_0);
@@ -580,7 +580,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, "prefinish");
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Newarr, _types.Object);
-        il.Emit(OpCodes.Call, runtime.TSEventEmitterEmit);
+        il.Emit(OpCodes.Call, runtime.EventEmitter.Emit);
         il.Emit(OpCodes.Pop);
 
         // emit 'finish' event
@@ -588,7 +588,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, "finish");
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Newarr, _types.Object);
-        il.Emit(OpCodes.Call, runtime.TSEventEmitterEmit);
+        il.Emit(OpCodes.Call, runtime.EventEmitter.Emit);
         il.Emit(OpCodes.Pop);
 
         // If autoDestroy, emit 'close' event after 'finish'
@@ -601,7 +601,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, "close");
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Newarr, _types.Object);
-        il.Emit(OpCodes.Call, runtime.TSEventEmitterEmit);
+        il.Emit(OpCodes.Call, runtime.EventEmitter.Emit);
         il.Emit(OpCodes.Pop);
 
         il.MarkLabel(skipCloseLabel);
@@ -762,7 +762,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Stelem_Ref);
-        il.Emit(OpCodes.Call, runtime.TSEventEmitterEmit);
+        il.Emit(OpCodes.Call, runtime.EventEmitter.Emit);
         il.Emit(OpCodes.Pop);
 
         il.MarkLabel(noErrorLabel);
@@ -771,7 +771,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, "close");
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Newarr, _types.Object);
-        il.Emit(OpCodes.Call, runtime.TSEventEmitterEmit);
+        il.Emit(OpCodes.Call, runtime.EventEmitter.Emit);
         il.Emit(OpCodes.Pop);
 
         il.MarkLabel(alreadyDestroyedLabel);

@@ -236,7 +236,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, socketLocal);
         il.Emit(OpCodes.Ldstr, "secureConnect");
         il.Emit(OpCodes.Ldloc, callbackLocal);
-        il.Emit(OpCodes.Callvirt, runtime.TSEventEmitterOn);
+        il.Emit(OpCodes.Callvirt, runtime.EventEmitter.On);
         il.Emit(OpCodes.Pop);
         il.MarkLabel(noConnectCb);
 

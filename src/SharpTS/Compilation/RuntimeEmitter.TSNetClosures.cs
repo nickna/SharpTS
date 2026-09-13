@@ -191,7 +191,7 @@ public partial class RuntimeEmitter
                 il.Emit(OpCodes.Ldfld, clientField);
                 il.Emit(OpCodes.Call, _tcpAcceptBuildDropDataMethod);
                 il.Emit(OpCodes.Stelem_Ref);
-                il.Emit(OpCodes.Callvirt, runtime.TSEventEmitterEmit);
+                il.Emit(OpCodes.Callvirt, runtime.EventEmitter.Emit);
                 il.Emit(OpCodes.Pop);
 
                 // try { _client.Close() } catch { } ; return
@@ -259,7 +259,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldc_I4_0);
             il.Emit(OpCodes.Ldloc, socketLocal);
             il.Emit(OpCodes.Stelem_Ref);
-            il.Emit(OpCodes.Callvirt, runtime.TSEventEmitterEmit);
+            il.Emit(OpCodes.Callvirt, runtime.EventEmitter.Emit);
             il.Emit(OpCodes.Pop);
 
             // socket.StartReading()
@@ -393,7 +393,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldc_I4_0);
             il.Emit(OpCodes.Ldloc, socketLocal);
             il.Emit(OpCodes.Stelem_Ref);
-            il.Emit(OpCodes.Callvirt, runtime.TSEventEmitterEmit);
+            il.Emit(OpCodes.Callvirt, runtime.EventEmitter.Emit);
             il.Emit(OpCodes.Pop);
 
             il.Emit(OpCodes.Ret);
@@ -565,7 +565,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldfld, chunkField);
             il.Emit(OpCodes.Stelem_Ref);
-            il.Emit(OpCodes.Callvirt, runtime.TSEventEmitterEmit);
+            il.Emit(OpCodes.Callvirt, runtime.EventEmitter.Emit);
             il.Emit(OpCodes.Pop);
 
             il.Emit(OpCodes.Ret);
@@ -644,7 +644,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldstr, "end");
             il.Emit(OpCodes.Ldc_I4_0);
             il.Emit(OpCodes.Newarr, _types.Object);
-            il.Emit(OpCodes.Callvirt, runtime.TSEventEmitterEmit);
+            il.Emit(OpCodes.Callvirt, runtime.EventEmitter.Emit);
             il.Emit(OpCodes.Pop);
 
             // if (_socket._ended) — both sides done, but queued writes may still be
@@ -831,7 +831,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldstr, "connect");
             il.Emit(OpCodes.Ldc_I4_0);
             il.Emit(OpCodes.Newarr, _types.Object);
-            il.Emit(OpCodes.Callvirt, runtime.TSEventEmitterEmit);
+            il.Emit(OpCodes.Callvirt, runtime.EventEmitter.Emit);
             il.Emit(OpCodes.Pop);
 
             il.Emit(OpCodes.Br, done);
@@ -845,7 +845,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldstr, "connect");
             il.Emit(OpCodes.Ldc_I4_0);
             il.Emit(OpCodes.Newarr, _types.Object);
-            il.Emit(OpCodes.Callvirt, runtime.TSEventEmitterEmit);
+            il.Emit(OpCodes.Callvirt, runtime.EventEmitter.Emit);
             il.Emit(OpCodes.Pop);
 
             // _socket.StartReading()
@@ -951,7 +951,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldc_I4_0);
             il.Emit(OpCodes.Ldloc, errorLocal);
             il.Emit(OpCodes.Stelem_Ref);
-            il.Emit(OpCodes.Callvirt, runtime.TSEventEmitterEmit);
+            il.Emit(OpCodes.Callvirt, runtime.EventEmitter.Emit);
             il.Emit(OpCodes.Pop);
 
             // Release the in-flight-connect Ref taken in $TSNetSocket.Connect, after
@@ -1048,7 +1048,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldc_I4_1);
             il.Emit(OpCodes.Ldloc, resLocal);
             il.Emit(OpCodes.Stelem_Ref);
-            il.Emit(OpCodes.Callvirt, runtime.TSEventEmitterEmit);
+            il.Emit(OpCodes.Callvirt, runtime.EventEmitter.Emit);
             il.Emit(OpCodes.Pop);
 
             // if (_server._callback != null) invoke with [req, res]
@@ -1147,7 +1147,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldloc, bodyChunkLocal);
             il.Emit(OpCodes.Newobj, runtime.RequireBuffer().Ctor);
             il.Emit(OpCodes.Stelem_Ref);
-            il.Emit(OpCodes.Callvirt, runtime.TSEventEmitterEmit);
+            il.Emit(OpCodes.Callvirt, runtime.EventEmitter.Emit);
             il.Emit(OpCodes.Pop);
             il.Emit(OpCodes.Br, bodyLoopLabel);
 
@@ -1172,7 +1172,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldstr, "aborted");
             il.Emit(OpCodes.Ldc_I4_0);
             il.Emit(OpCodes.Newarr, _types.Object);
-            il.Emit(OpCodes.Callvirt, runtime.TSEventEmitterEmit);
+            il.Emit(OpCodes.Callvirt, runtime.EventEmitter.Emit);
             il.Emit(OpCodes.Pop);
             il.MarkLabel(abortAlreadyMarkedLabel);
             il.Emit(OpCodes.Leave, bodyReadFinishedLabel);
@@ -1195,7 +1195,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldstr, "end");
             il.Emit(OpCodes.Ldc_I4_0);
             il.Emit(OpCodes.Newarr, _types.Object);
-            il.Emit(OpCodes.Callvirt, runtime.TSEventEmitterEmit);
+            il.Emit(OpCodes.Callvirt, runtime.EventEmitter.Emit);
             il.Emit(OpCodes.Pop);
             il.MarkLabel(skipEndLabel);
 

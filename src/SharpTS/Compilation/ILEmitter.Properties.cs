@@ -170,9 +170,9 @@ public partial class ILEmitter
         if (g.Object is Expr.Variable eeVar && g.Name.Lexeme == "defaultMaxListeners" &&
             _ctx.BuiltInModuleMethodBindings?.TryGetValue(eeVar.Name.Lexeme, out var eeBinding) == true &&
             eeBinding.ModuleName == "events" && eeBinding.MethodName == "EventEmitter" &&
-            _ctx.Runtime?.TSEventEmitterDefaultMaxListeners != null)
+            _ctx.Runtime is not null)
         {
-            IL.Emit(OpCodes.Ldsfld, _ctx.Runtime.TSEventEmitterDefaultMaxListeners);
+            IL.Emit(OpCodes.Ldsfld, _ctx.Runtime.EventEmitter.DefaultMaxListeners);
             IL.Emit(OpCodes.Conv_R8);
             IL.Emit(OpCodes.Box, _ctx.Types.Double);
             SetStackUnknown();

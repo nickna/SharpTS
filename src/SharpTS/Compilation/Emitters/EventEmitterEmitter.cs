@@ -33,7 +33,7 @@ public sealed class EventEmitterEmitter : ITypeEmitterStrategy
         emitter.EmitBoxIfNeeded(receiver);
 
         // Cast to $EventEmitter
-        il.Emit(OpCodes.Castclass, ctx.Runtime!.TSEventEmitterType);
+        il.Emit(OpCodes.Castclass, ctx.Runtime!.EventEmitter.Type);
 
         switch (methodName)
         {
@@ -42,20 +42,20 @@ public sealed class EventEmitterEmitter : ITypeEmitterStrategy
                 // eventName (required), listener (required)
                 EmitStringArgument(emitter, arguments, 0);
                 EmitListenerArgument(emitter, arguments, 1);
-                il.Emit(OpCodes.Callvirt, ctx.Runtime!.TSEventEmitterOn);
+                il.Emit(OpCodes.Callvirt, ctx.Runtime!.EventEmitter.On);
                 return true;
 
             case "once":
                 EmitStringArgument(emitter, arguments, 0);
                 EmitListenerArgument(emitter, arguments, 1);
-                il.Emit(OpCodes.Callvirt, ctx.Runtime!.TSEventEmitterOnce);
+                il.Emit(OpCodes.Callvirt, ctx.Runtime!.EventEmitter.Once);
                 return true;
 
             case "off":
             case "removeListener":
                 EmitStringArgument(emitter, arguments, 0);
                 EmitListenerArgument(emitter, arguments, 1);
-                il.Emit(OpCodes.Callvirt, ctx.Runtime!.TSEventEmitterOff);
+                il.Emit(OpCodes.Callvirt, ctx.Runtime!.EventEmitter.Off);
                 return true;
 
             case "emit":
@@ -63,7 +63,7 @@ public sealed class EventEmitterEmitter : ITypeEmitterStrategy
                 EmitStringArgument(emitter, arguments, 0);
                 // Create object[] for remaining arguments
                 EmitRemainingArgsAsArray(emitter, arguments, 1);
-                il.Emit(OpCodes.Callvirt, ctx.Runtime!.TSEventEmitterEmit);
+                il.Emit(OpCodes.Callvirt, ctx.Runtime!.EventEmitter.Emit);
                 il.Emit(OpCodes.Box, ctx.Types.Boolean);
                 return true;
 
@@ -77,38 +77,38 @@ public sealed class EventEmitterEmitter : ITypeEmitterStrategy
                 {
                     il.Emit(OpCodes.Ldnull);
                 }
-                il.Emit(OpCodes.Callvirt, ctx.Runtime!.TSEventEmitterRemoveAllListeners);
+                il.Emit(OpCodes.Callvirt, ctx.Runtime!.EventEmitter.RemoveAllListeners);
                 return true;
 
             case "listeners":
             case "rawListeners":
                 // eventName (required) - returns array of listeners
                 EmitStringArgument(emitter, arguments, 0);
-                il.Emit(OpCodes.Callvirt, ctx.Runtime!.TSEventEmitterListeners);
+                il.Emit(OpCodes.Callvirt, ctx.Runtime!.EventEmitter.Listeners);
                 return true;
 
             case "listenerCount":
                 // eventName (required) - returns number
                 EmitStringArgument(emitter, arguments, 0);
-                il.Emit(OpCodes.Callvirt, ctx.Runtime!.TSEventEmitterListenerCount);
+                il.Emit(OpCodes.Callvirt, ctx.Runtime!.EventEmitter.ListenerCount);
                 il.Emit(OpCodes.Box, ctx.Types.Double);
                 return true;
 
             case "eventNames":
                 // no arguments - returns array of event names
-                il.Emit(OpCodes.Callvirt, ctx.Runtime!.TSEventEmitterEventNames);
+                il.Emit(OpCodes.Callvirt, ctx.Runtime!.EventEmitter.EventNames);
                 return true;
 
             case "prependListener":
                 EmitStringArgument(emitter, arguments, 0);
                 EmitListenerArgument(emitter, arguments, 1);
-                il.Emit(OpCodes.Callvirt, ctx.Runtime!.TSEventEmitterPrependListener);
+                il.Emit(OpCodes.Callvirt, ctx.Runtime!.EventEmitter.PrependListener);
                 return true;
 
             case "prependOnceListener":
                 EmitStringArgument(emitter, arguments, 0);
                 EmitListenerArgument(emitter, arguments, 1);
-                il.Emit(OpCodes.Callvirt, ctx.Runtime!.TSEventEmitterPrependOnceListener);
+                il.Emit(OpCodes.Callvirt, ctx.Runtime!.EventEmitter.PrependOnceListener);
                 return true;
 
             case "setMaxListeners":
@@ -116,12 +116,12 @@ public sealed class EventEmitterEmitter : ITypeEmitterStrategy
                 emitter.EmitExpression(arguments[0]);
                 emitter.EmitBoxIfNeeded(arguments[0]);
                 il.Emit(OpCodes.Unbox_Any, ctx.Types.Double);
-                il.Emit(OpCodes.Callvirt, ctx.Runtime!.TSEventEmitterSetMaxListeners);
+                il.Emit(OpCodes.Callvirt, ctx.Runtime!.EventEmitter.SetMaxListeners);
                 return true;
 
             case "getMaxListeners":
                 // no arguments - returns number
-                il.Emit(OpCodes.Callvirt, ctx.Runtime!.TSEventEmitterGetMaxListeners);
+                il.Emit(OpCodes.Callvirt, ctx.Runtime!.EventEmitter.GetMaxListeners);
                 il.Emit(OpCodes.Box, ctx.Types.Double);
                 return true;
 

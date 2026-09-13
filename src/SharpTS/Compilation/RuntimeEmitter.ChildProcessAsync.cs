@@ -427,7 +427,7 @@ public partial class RuntimeEmitter
     /// <summary>$ChildPush { object _stream; object _chunk; void Run() =&gt; (($Readable)_stream).Push(_chunk); }</summary>
     private void DefineChildPushType(EmittedRuntime runtime)
     {
-        var mb = (ModuleBuilder)((TypeBuilder)runtime.TSEventEmitterType).Module;
+        var mb = (ModuleBuilder)((TypeBuilder)runtime.EventEmitter.Type).Module;
         var t = EmitTypeDefinitions.DefineType(mb, "$ChildPush",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit, _types.Object);
         _childPushType = t;
@@ -456,7 +456,7 @@ public partial class RuntimeEmitter
 
     private void DefineChildCtxType(EmittedRuntime runtime)
     {
-        var mb = (ModuleBuilder)((TypeBuilder)runtime.TSEventEmitterType).Module;
+        var mb = (ModuleBuilder)((TypeBuilder)runtime.EventEmitter.Type).Module;
         var t = EmitTypeDefinitions.DefineType(mb,
             "$ChildProcessCtx",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
@@ -594,7 +594,7 @@ public partial class RuntimeEmitter
     {
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, _childCtxEmitter);
-        il.Emit(OpCodes.Castclass, runtime.TSEventEmitterType);
+        il.Emit(OpCodes.Castclass, runtime.EventEmitter.Type);
         il.Emit(OpCodes.Ldstr, name);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Newarr, _types.Object);
@@ -602,7 +602,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_0);
         emitArg();
         il.Emit(OpCodes.Stelem_Ref);
-        il.Emit(OpCodes.Call, runtime.TSEventEmitterEmit);
+        il.Emit(OpCodes.Call, runtime.EventEmitter.Emit);
         il.Emit(OpCodes.Pop);
     }
 
@@ -1479,7 +1479,7 @@ public partial class RuntimeEmitter
     private void EmitBuildChildAndLaunch(ILGenerator il, EmittedRuntime runtime,
         LocalBuilder processLocal, LocalBuilder optionsLocal, LocalBuilder callbackLocal, bool streamed)
     {
-        var emitterLocal = il.DeclareLocal(runtime.TSEventEmitterType);
+        var emitterLocal = il.DeclareLocal(runtime.EventEmitter.Type);
         var ctxLocal = il.DeclareLocal(_childCtxType);
         var dictLocal = il.DeclareLocal(_types.DictionaryStringObject);
         var timeoutLocal = il.DeclareLocal(_types.Double);
@@ -1487,7 +1487,7 @@ public partial class RuntimeEmitter
         EmitParseTimeout(il, optionsLocal, timeoutLocal);
 
         // emitter = new $EventEmitter()
-        il.Emit(OpCodes.Newobj, runtime.TSEventEmitterCtor);
+        il.Emit(OpCodes.Newobj, runtime.EventEmitter.Ctor);
         il.Emit(OpCodes.Stloc, emitterLocal);
 
         // ctx = new $ChildProcessCtx()
@@ -1514,9 +1514,9 @@ public partial class RuntimeEmitter
         EmitDictSet(il, dictLocal, "signalCode", () => il.Emit(OpCodes.Ldnull));
 
         // on/once delegate to the emitter; kill/send/disconnect/ref/unref to ctx methods.
-        EmitDictSet(il, dictLocal, "on", () => EmitTSFunc(il, runtime, () => il.Emit(OpCodes.Ldloc, emitterLocal), runtime.TSEventEmitterOn));
-        EmitDictSet(il, dictLocal, "once", () => EmitTSFunc(il, runtime, () => il.Emit(OpCodes.Ldloc, emitterLocal), runtime.TSEventEmitterOnce));
-        EmitDictSet(il, dictLocal, "addListener", () => EmitTSFunc(il, runtime, () => il.Emit(OpCodes.Ldloc, emitterLocal), runtime.TSEventEmitterOn));
+        EmitDictSet(il, dictLocal, "on", () => EmitTSFunc(il, runtime, () => il.Emit(OpCodes.Ldloc, emitterLocal), runtime.EventEmitter.On));
+        EmitDictSet(il, dictLocal, "once", () => EmitTSFunc(il, runtime, () => il.Emit(OpCodes.Ldloc, emitterLocal), runtime.EventEmitter.Once));
+        EmitDictSet(il, dictLocal, "addListener", () => EmitTSFunc(il, runtime, () => il.Emit(OpCodes.Ldloc, emitterLocal), runtime.EventEmitter.On));
         EmitDictSet(il, dictLocal, "kill", () => EmitTSFunc(il, runtime, () => il.Emit(OpCodes.Ldloc, ctxLocal), _childCtxKill));
         EmitDictSet(il, dictLocal, "send", () => EmitTSFunc(il, runtime, () => il.Emit(OpCodes.Ldloc, ctxLocal), _childCtxSend));
         EmitDictSet(il, dictLocal, "disconnect", () => EmitTSFunc(il, runtime, () => il.Emit(OpCodes.Ldloc, ctxLocal), _childCtxDisconnect));

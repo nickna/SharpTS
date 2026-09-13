@@ -22,7 +22,7 @@ public partial class RuntimeEmitter
         var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$ReadlineInterface",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
-            runtime.TSEventEmitterType
+            runtime.EventEmitter.Type
         );
         _readlineInterfaceTypeBuilder = typeBuilder;
 
@@ -42,7 +42,7 @@ public partial class RuntimeEmitter
         var ctorIL = ctor.GetILGenerator();
         // Call base constructor ($EventEmitter)
         ctorIL.Emit(OpCodes.Ldarg_0);
-        ctorIL.Emit(OpCodes.Call, runtime.TSEventEmitterCtor);
+        ctorIL.Emit(OpCodes.Call, runtime.EventEmitter.Ctor);
         // _closed = false
         ctorIL.Emit(OpCodes.Ldarg_0);
         ctorIL.Emit(OpCodes.Ldc_I4_0);
@@ -180,7 +180,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, "close");
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Newarr, _types.Object);
-        il.Emit(OpCodes.Callvirt, runtime.TSEventEmitterEmit);
+        il.Emit(OpCodes.Callvirt, runtime.EventEmitter.Emit);
         il.Emit(OpCodes.Pop);               // discard bool return
 
         // return this
@@ -241,7 +241,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, "pause");
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Newarr, _types.Object);
-        il.Emit(OpCodes.Call, runtime.TSEventEmitterEmit);
+        il.Emit(OpCodes.Call, runtime.EventEmitter.Emit);
         il.Emit(OpCodes.Pop);
 
         il.Emit(OpCodes.Ldarg_0);
@@ -270,7 +270,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, "resume");
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Newarr, _types.Object);
-        il.Emit(OpCodes.Call, runtime.TSEventEmitterEmit);
+        il.Emit(OpCodes.Call, runtime.EventEmitter.Emit);
         il.Emit(OpCodes.Pop);
 
         il.Emit(OpCodes.Ldarg_0);

@@ -389,6 +389,24 @@ fallback selection are unchanged. BCL lookups and method-local construction hand
 the emitter; no flat TypedArray aliases or mutable registries remain. The remaining runtime
 families and final residual-state audit stay open in #1599.
 
+EventEmitter uses required `EmittedEventEmitterRuntime`, preserving its unconditional emission
+for process events and the stream/network/worker types that inherit from it. Its 26 checked
+declarations replace 19 flat handles and own seven previously emitter-held listener-storage,
+wrapper, and rejection-routing handles. All metadata is readable at declaration time, completion
+validates every handle after runtime finalization, and subsequent assignments are rejected.
+
+Seventeen EventEmitter-only declaration, listener, and limit helpers take the component directly.
+Listener-array results, callback invocation, errors, and Promise-aware rejection routing retain
+their other runtime dependencies. The listener wrapper is still emitted first; the virtual
+listener-added hook precedes registration, and the mutually recursive Emit/rejection-routing
+methods preserve their declaration/body order. Promise-specific rejection branches keep their
+existing feature gate even though EventEmitter itself is always present. Listener ordering,
+once/removal behavior, subclass hooks, error monitoring, and emitted signatures remain unchanged.
+No EventEmitter flat aliases or emitter-held guest declarations remain. The twelve open-generic
+BCL method caches, constant monitor key, and method-local construction state remain with the
+emitter. The process-specific singleton/access helpers, streams, networking, and worker scheduling
+retain their own owners and remain in #1599's residual scope where not already migrated.
+
 During emission, each handle becomes readable as soon as its declaration is assigned, so forward
 references do not require a method body to exist yet. An early read names the missing declaration.
 Completion is an orchestration boundary, not an IL verifier: body emission and type finalization

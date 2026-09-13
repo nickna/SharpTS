@@ -44,7 +44,7 @@ public partial class RuntimeEmitter
         var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$DatagramSocket",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
-            runtime.TSEventEmitterType
+            runtime.EventEmitter.Type
         );
         dgram.SocketType = typeBuilder;
 
@@ -71,7 +71,7 @@ public partial class RuntimeEmitter
         var ctorIL = ctor.GetILGenerator();
         // Call base constructor ($EventEmitter)
         ctorIL.Emit(OpCodes.Ldarg_0);
-        ctorIL.Emit(OpCodes.Call, runtime.TSEventEmitterCtor);
+        ctorIL.Emit(OpCodes.Call, runtime.EventEmitter.Ctor);
 
         // Default _family = 2 (InterNetwork)
         ctorIL.Emit(OpCodes.Ldarg_0);
@@ -251,7 +251,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, eventName);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Newarr, _types.Object);
-        il.Emit(OpCodes.Callvirt, runtime.TSEventEmitterEmit);
+        il.Emit(OpCodes.Callvirt, runtime.EventEmitter.Emit);
         il.Emit(OpCodes.Pop); // discard bool
         il.Emit(OpCodes.Ret);
     }
@@ -384,7 +384,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldloc, errLocal);
         il.Emit(OpCodes.Stelem_Ref);
-        il.Emit(OpCodes.Callvirt, runtime.TSEventEmitterEmit);
+        il.Emit(OpCodes.Callvirt, runtime.EventEmitter.Emit);
         il.Emit(OpCodes.Pop);
 
         il.MarkLabel(doneLabel);
@@ -611,7 +611,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "listening");
         il.Emit(OpCodes.Ldloc, callbackLocal);
-        il.Emit(OpCodes.Callvirt, runtime.TSEventEmitterOnce);
+        il.Emit(OpCodes.Callvirt, runtime.EventEmitter.Once);
         il.Emit(OpCodes.Pop); // discard returned this
         il.MarkLabel(noCallback);
 
@@ -911,7 +911,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "connect");
         il.Emit(OpCodes.Ldarg_3);
-        il.Emit(OpCodes.Callvirt, runtime.TSEventEmitterOnce);
+        il.Emit(OpCodes.Callvirt, runtime.EventEmitter.Once);
         il.Emit(OpCodes.Pop);
         il.MarkLabel(noCallback);
 
@@ -1504,7 +1504,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldloc, sendExLocal);
         il.Emit(OpCodes.Stelem_Ref);
-        il.Emit(OpCodes.Callvirt, runtime.TSEventEmitterEmit);
+        il.Emit(OpCodes.Callvirt, runtime.EventEmitter.Emit);
         il.Emit(OpCodes.Pop);
 
         il.EndExceptionBlock();

@@ -53,7 +53,7 @@ public partial class RuntimeEmitter
 
     /// <summary>
     /// Emits the $BroadcastChannel type. Must be called AFTER $EventEmitter is emitted
-    /// (uses TSEventEmitterType as base) and AFTER $EventLoop is emitted (Schedule/Ref/Unref).
+    /// (uses EventEmitter.Type as base) and AFTER $EventLoop is emitted (Schedule/Ref/Unref).
     /// </summary>
     private void EmitBroadcastChannelClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
@@ -65,7 +65,7 @@ public partial class RuntimeEmitter
         var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$BroadcastChannel",
             TypeAttributes.Public | TypeAttributes.Class | TypeAttributes.BeforeFieldInit,
-            runtime.TSEventEmitterType
+            runtime.EventEmitter.Type
         );
         _broadcastChannelType = typeBuilder;
 
@@ -151,7 +151,7 @@ public partial class RuntimeEmitter
 
         // base()  — $EventEmitter parameterless ctor
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.TSEventEmitterCtor);
+        il.Emit(OpCodes.Call, runtime.EventEmitter.Ctor);
 
         // _name = name
         il.Emit(OpCodes.Ldarg_0);
@@ -255,7 +255,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Newarr, _types.Object);
         il.Emit(OpCodes.Stloc, argsLocal);
         il.Emit(OpCodes.Ldloc, argsLocal);
-        il.Emit(OpCodes.Callvirt, runtime.TSEventEmitterEmit);
+        il.Emit(OpCodes.Callvirt, runtime.EventEmitter.Emit);
         il.Emit(OpCodes.Pop);
 
         // Also invoke the property-style onmessageerror handler if set.
@@ -310,7 +310,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "message");
         il.Emit(OpCodes.Ldloc, argsLocal);
-        il.Emit(OpCodes.Callvirt, runtime.TSEventEmitterEmit);
+        il.Emit(OpCodes.Callvirt, runtime.EventEmitter.Emit);
         il.Emit(OpCodes.Pop);
 
         // Also invoke the property-style onmessage handler if set (WHATWG spec):
@@ -544,7 +544,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, "close");
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Newarr, _types.Object);
-        il.Emit(OpCodes.Callvirt, runtime.TSEventEmitterEmit);
+        il.Emit(OpCodes.Callvirt, runtime.EventEmitter.Emit);
         il.Emit(OpCodes.Pop);
 
         il.MarkLabel(alreadyClosedLabel);
@@ -748,7 +748,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Callvirt, runtime.TSEventEmitterOn);
+        il.Emit(OpCodes.Callvirt, runtime.EventEmitter.On);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Ret);
     }
@@ -769,7 +769,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Callvirt, runtime.TSEventEmitterOff);
+        il.Emit(OpCodes.Callvirt, runtime.EventEmitter.Off);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Ret);
     }

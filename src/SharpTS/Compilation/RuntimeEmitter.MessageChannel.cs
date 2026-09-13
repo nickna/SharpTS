@@ -60,7 +60,7 @@ public partial class RuntimeEmitter
         var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$MessagePort",
             TypeAttributes.Public | TypeAttributes.Class | TypeAttributes.BeforeFieldInit,
-            runtime.TSEventEmitterType
+            runtime.EventEmitter.Type
         );
         _messagePortType = typeBuilder;
 
@@ -117,7 +117,7 @@ public partial class RuntimeEmitter
 
         // base() — $EventEmitter parameterless ctor
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.TSEventEmitterCtor);
+        il.Emit(OpCodes.Call, runtime.EventEmitter.Ctor);
 
         // _pending = new ConcurrentQueue<object>()
         il.Emit(OpCodes.Ldarg_0);
@@ -178,7 +178,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, "messageerror");
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Newarr, _types.Object);
-        il.Emit(OpCodes.Callvirt, runtime.TSEventEmitterEmit);
+        il.Emit(OpCodes.Callvirt, runtime.EventEmitter.Emit);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Br, loopTop);
         il.MarkLabel(notCloneErrorLabel);
@@ -195,7 +195,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "message");
         il.Emit(OpCodes.Ldloc, argsLocal);
-        il.Emit(OpCodes.Callvirt, runtime.TSEventEmitterEmit);
+        il.Emit(OpCodes.Callvirt, runtime.EventEmitter.Emit);
         il.Emit(OpCodes.Pop);
 
         il.Emit(OpCodes.Br, loopTop);
@@ -473,7 +473,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, "close");
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Newarr, _types.Object);
-        il.Emit(OpCodes.Callvirt, runtime.TSEventEmitterEmit);
+        il.Emit(OpCodes.Callvirt, runtime.EventEmitter.Emit);
         il.Emit(OpCodes.Pop);
 
         il.MarkLabel(alreadyClosedLabel);
@@ -494,7 +494,7 @@ public partial class RuntimeEmitter
             _types.Void,
             [_types.String]
         );
-        typeBuilder.DefineMethodOverride(method, runtime.TSEventEmitterOnListenerAdded);
+        typeBuilder.DefineMethodOverride(method, runtime.EventEmitter.OnListenerAdded);
 
         var il = method.GetILGenerator();
         var exitLabel = il.DefineLabel();

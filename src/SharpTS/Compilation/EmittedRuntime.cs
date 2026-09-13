@@ -1791,29 +1791,8 @@ public class EmittedRuntime
     public EmittedZlibRuntime RequireZlib() => Zlib
         ?? throw new InvalidOperationException("Zlib runtime was not enabled for this compilation.");
 
-    // $EventEmitter type - emitted for standalone event emitter support
-    // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSEventEmitter
-    public Type TSEventEmitterType { get; set; } = null!;
-    public ConstructorBuilder TSEventEmitterCtor { get; set; } = null!;
-    public ConstructorBuilder TSListenerWrapperCtor { get; set; } = null!;
-    public FieldBuilder TSEventEmitterDefaultMaxListeners { get; set; } = null!;
-    public MethodBuilder TSEventEmitterOn { get; set; } = null!;
-    public MethodBuilder TSEventEmitterOnce { get; set; } = null!;
-    public MethodBuilder TSEventEmitterOff { get; set; } = null!;
-    public MethodBuilder TSEventEmitterEmit { get; set; } = null!;
-    public MethodBuilder TSEventEmitterRemoveAllListeners { get; set; } = null!;
-    public MethodBuilder TSEventEmitterListeners { get; set; } = null!;
-    public MethodBuilder TSEventEmitterListenerCount { get; set; } = null!;
-    public MethodBuilder TSEventEmitterEventNames { get; set; } = null!;
-    public MethodBuilder TSEventEmitterPrependListener { get; set; } = null!;
-    public MethodBuilder TSEventEmitterPrependOnceListener { get; set; } = null!;
-    public MethodBuilder TSEventEmitterSetMaxListeners { get; set; } = null!;
-    public MethodBuilder TSEventEmitterGetMaxListeners { get; set; } = null!;
-    public MethodBuilder TSEventEmitterAddListenerInternal { get; set; } = null!;
-    public MethodBuilder TSEventEmitterOnListenerAdded { get; set; } = null!;
-    // #1099: per-instance captureRejections toggle, set from a
-    // { captureRejections: true } constructor option at the emit site.
-    public MethodBuilder TSEventEmitterEnableCaptureRejections { get; set; } = null!;
+    /// <summary>Required EventEmitter types, listener storage, and dispatch metadata.</summary>
+    public EmittedEventEmitterRuntime EventEmitter { get; } = new();
 
     // $AsyncLocalStorage support
     public ConstructorBuilder TSAsyncLocalStorageCtor { get; set; } = null!;
