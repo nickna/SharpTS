@@ -14,10 +14,6 @@ namespace SharpTS.Compilation;
 /// </summary>
 public partial class RuntimeEmitter
 {
-    // HTTP accept closure fields (socket/server closure fields declared in TSNetSocket.cs and TSNetServer.cs)
-    internal ConstructorBuilder _httpAcceptClosureCtor = null!;
-    internal MethodBuilder _httpAcceptClosureRun = null!;
-
     // 'drop' payload builder on $TcpAcceptClosure (#1070)
     private MethodBuilder _tcpAcceptBuildDropDataMethod = null!;
 
@@ -978,20 +974,21 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitHttpAcceptClosure(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
+        var http = runtime.RequireHttp();
         var typeBuilder = moduleBuilder.DefineType(
             "$HttpAcceptClosure",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             typeof(object)
         );
 
-        var serverField = typeBuilder.DefineField("_server", runtime.TSHttpServerType, FieldAttributes.Private);
+        var serverField = typeBuilder.DefineField("_server", http.ServerType, FieldAttributes.Private);
         var ctxField = typeBuilder.DefineField("_ctx", typeof(HttpListenerContext), FieldAttributes.Private);
 
         // Constructor: (server, ctx)
         var ctor = typeBuilder.DefineConstructor(
             MethodAttributes.Public,
             CallingConventions.Standard,
-            [runtime.TSHttpServerType, typeof(HttpListenerContext)]
+            [http.ServerType, typeof(HttpListenerContext)]
         );
         {
             var il = ctor.GetILGenerator();
@@ -1015,14 +1012,14 @@ public partial class RuntimeEmitter
         );
         {
             var il = run.GetILGenerator();
-            var reqLocal = il.DeclareLocal(runtime.TSHttpRequestType);
-            var resLocal = il.DeclareLocal(runtime.TSHttpResponseType);
+            var reqLocal = il.DeclareLocal(http.RequestType);
+            var resLocal = il.DeclareLocal(http.ResponseType);
 
             // var req = new $HttpRequest(ctx.Request)
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldfld, ctxField);
             il.Emit(OpCodes.Callvirt, typeof(HttpListenerContext).GetProperty("Request")!.GetGetMethod()!);
-            il.Emit(OpCodes.Newobj, runtime.TSHttpRequestCtor);
+            il.Emit(OpCodes.Newobj, http.RequestCtor);
             il.Emit(OpCodes.Stloc, reqLocal);
 
             // var res = new $HttpResponse(ctx.Response, _server.RequestCompleted)
@@ -1031,10 +1028,10 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Callvirt, typeof(HttpListenerContext).GetProperty("Response")!.GetGetMethod()!);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldfld, serverField);
-            il.Emit(OpCodes.Ldftn, _httpServerRequestCompletedMethod);
+            il.Emit(OpCodes.Ldftn, http.ServerRequestCompletedMethod);
             il.Emit(OpCodes.Newobj, typeof(Action<HttpListenerResponse>).GetConstructor(
                 [_types.Object, typeof(IntPtr)])!);
-            il.Emit(OpCodes.Newobj, runtime.TSHttpResponseCtor);
+            il.Emit(OpCodes.Newobj, http.ResponseCtor);
             il.Emit(OpCodes.Stloc, resLocal);
 
             // _server.Emit("request", new object[] { req, res })
@@ -1058,7 +1055,7 @@ public partial class RuntimeEmitter
             var noCb = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldfld, serverField);
-            il.Emit(OpCodes.Ldfld, _httpServerCallbackField);
+            il.Emit(OpCodes.Ldfld, http.ServerCallbackField);
             il.Emit(OpCodes.Brfalse, noCb);
 
             EmitDgramCallbackInvocation(il, runtime,
@@ -1066,7 +1063,7 @@ public partial class RuntimeEmitter
                 {
                     il.Emit(OpCodes.Ldarg_0);
                     il.Emit(OpCodes.Ldfld, serverField);
-                    il.Emit(OpCodes.Ldfld, _httpServerCallbackField);
+                    il.Emit(OpCodes.Ldfld, http.ServerCallbackField);
                 },
                 2,
                 (il2) =>
@@ -1113,7 +1110,7 @@ public partial class RuntimeEmitter
 
             // destroy() can be called from a data listener to stop consumption.
             il.Emit(OpCodes.Ldloc, reqLocal);
-            il.Emit(OpCodes.Ldfld, _httpRequestAbortedField);
+            il.Emit(OpCodes.Ldfld, http.RequestAbortedField);
             il.Emit(OpCodes.Brtrue, bodyLoopCompleteLabel);
 
             il.Emit(OpCodes.Ldloc, bodyStreamLocal);
@@ -1166,11 +1163,11 @@ public partial class RuntimeEmitter
             // emitted the event, so avoid emitting it twice in that path.
             var abortAlreadyMarkedLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldloc, reqLocal);
-            il.Emit(OpCodes.Ldfld, _httpRequestAbortedField);
+            il.Emit(OpCodes.Ldfld, http.RequestAbortedField);
             il.Emit(OpCodes.Brtrue, abortAlreadyMarkedLabel);
             il.Emit(OpCodes.Ldloc, reqLocal);
             il.Emit(OpCodes.Ldc_I4_1);
-            il.Emit(OpCodes.Stfld, _httpRequestAbortedField);
+            il.Emit(OpCodes.Stfld, http.RequestAbortedField);
             il.Emit(OpCodes.Ldloc, reqLocal);
             il.Emit(OpCodes.Ldstr, "aborted");
             il.Emit(OpCodes.Ldc_I4_0);
@@ -1189,11 +1186,11 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldloc, bodyReadSucceededLocal);
             il.Emit(OpCodes.Brfalse, skipEndLabel);
             il.Emit(OpCodes.Ldloc, reqLocal);
-            il.Emit(OpCodes.Ldfld, _httpRequestAbortedField);
+            il.Emit(OpCodes.Ldfld, http.RequestAbortedField);
             il.Emit(OpCodes.Brtrue, skipEndLabel);
             il.Emit(OpCodes.Ldloc, reqLocal);
             il.Emit(OpCodes.Ldc_I4_1);
-            il.Emit(OpCodes.Stfld, _httpRequestCompleteField);
+            il.Emit(OpCodes.Stfld, http.RequestCompleteField);
             il.Emit(OpCodes.Ldloc, reqLocal);
             il.Emit(OpCodes.Ldstr, "end");
             il.Emit(OpCodes.Ldc_I4_0);
@@ -1206,8 +1203,8 @@ public partial class RuntimeEmitter
         }
 
         typeBuilder.CreateType();
-        _httpAcceptClosureCtor = ctor;
-        _httpAcceptClosureRun = run;
+        http.AcceptClosureCtor = ctor;
+        http.AcceptClosureRun = run;
     }
 
 }

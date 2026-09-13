@@ -90,7 +90,7 @@ public partial class RuntimeEmitter
         EmitFetch(typeBuilder, runtime);
 
         // Emit http module methods
-        EmitHttpCreateServer(typeBuilder, runtime);
+        EmitHttpCreateServer(typeBuilder, runtime.RequireHttp());
         EmitHttpRequest(typeBuilder, runtime);
         EmitHttpGet(typeBuilder, runtime);
         EmitHttpGetMethods(typeBuilder, runtime);
@@ -117,6 +117,7 @@ public partial class RuntimeEmitter
 
     private void EmitHttpCreateServerWrapper(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
+        var http = runtime.RequireHttp();
         var method = typeBuilder.DefineMethod(
             "HttpCreateServerWrapper",
             MethodAttributes.Public | MethodAttributes.Static,
@@ -147,7 +148,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldelem_Ref);
 
         il.MarkLabel(callLabel);
-        il.Emit(OpCodes.Call, runtime.HttpCreateServer);
+        il.Emit(OpCodes.Call, http.CreateServer);
         il.Emit(OpCodes.Ret);
 
         runtime.RegisterBuiltInModuleMethod("http", "createServer", method);
@@ -155,6 +156,7 @@ public partial class RuntimeEmitter
 
     private void EmitHttpRequestWrapper(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
+        var http = runtime.RequireHttp();
         var method = typeBuilder.DefineMethod(
             "HttpRequestWrapper",
             MethodAttributes.Public | MethodAttributes.Static,
@@ -198,7 +200,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldelem_Ref);
         il.MarkLabel(arg1Done);
 
-        il.Emit(OpCodes.Call, runtime.HttpRequest);
+        il.Emit(OpCodes.Call, http.Request);
         il.Emit(OpCodes.Ret);
 
         runtime.RegisterBuiltInModuleMethod("http", "request", method);
@@ -206,6 +208,7 @@ public partial class RuntimeEmitter
 
     private void EmitHttpGetWrapper(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
+        var http = runtime.RequireHttp();
         var method = typeBuilder.DefineMethod(
             "HttpGetWrapper",
             MethodAttributes.Public | MethodAttributes.Static,
@@ -249,7 +252,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldelem_Ref);
         il.MarkLabel(arg1Done);
 
-        il.Emit(OpCodes.Call, runtime.HttpGet);
+        il.Emit(OpCodes.Call, http.Get);
         il.Emit(OpCodes.Ret);
 
         runtime.RegisterBuiltInModuleMethod("http", "get", method);
@@ -2641,7 +2644,7 @@ public partial class RuntimeEmitter
     /// Creates a new $HttpServer instance with EventEmitter support.
     /// Pure-IL implementation using emitted $HttpServer type - no SharpTS dependency.
     /// </summary>
-    private void EmitHttpCreateServer(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitHttpCreateServer(TypeBuilder typeBuilder, EmittedHttpRuntime http)
     {
         var method = typeBuilder.DefineMethod(
             "HttpCreateServer",
@@ -2649,14 +2652,14 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object]
         );
-        runtime.HttpCreateServer = method;
+        http.CreateServer = method;
 
         var il = method.GetILGenerator();
 
         // Create new $HttpServer(callback) directly
         // In compiled mode, callback is already a $TSFunction or $BoundTSFunction
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Newobj, runtime.TSHttpServerCtor);
+        il.Emit(OpCodes.Newobj, http.ServerCtor);
 
         il.Emit(OpCodes.Ret);
     }
@@ -2667,13 +2670,14 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitHttpRequest(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
+        var http = runtime.RequireHttp();
         var method = typeBuilder.DefineMethod(
             "HttpRequest",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.Object, _types.Object]
         );
-        runtime.HttpRequest = method;
+        http.Request = method;
 
         var il = method.GetILGenerator();
 
@@ -2690,13 +2694,14 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitHttpGet(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
+        var http = runtime.RequireHttp();
         var method = typeBuilder.DefineMethod(
             "HttpGet",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.Object, _types.Object]
         );
-        runtime.HttpGet = method;
+        http.Get = method;
 
         var il = method.GetILGenerator();
 
@@ -2713,13 +2718,14 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitHttpGetMethods(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
+        var http = runtime.RequireHttp();
         var method = typeBuilder.DefineMethod(
             "HttpGetMethods",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             Type.EmptyTypes
         );
-        runtime.HttpGetMethods = method;
+        http.GetMethods = method;
 
         var il = method.GetILGenerator();
 
@@ -2756,6 +2762,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitHttpHeaderUtilities(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
+        var http = runtime.RequireHttp();
         var regexType = typeof(System.Text.RegularExpressions.Regex);
         var isMatch = regexType.GetMethod("IsMatch", [_types.String, _types.String])!;
         var objToString = _types.GetMethod(_types.Object, "ToString", Type.EmptyTypes)!;
@@ -2774,7 +2781,7 @@ public partial class RuntimeEmitter
         // object HttpValidateHeaderName(object name)
         var vn = typeBuilder.DefineMethod("HttpValidateHeaderName",
             MethodAttributes.Public | MethodAttributes.Static, _types.Object, [_types.Object]);
-        runtime.HttpValidateHeaderName = vn;
+        http.ValidateHeaderName = vn;
         {
             var il = vn.GetILGenerator();
             var sLocal = il.DeclareLocal(_types.String);
@@ -2799,7 +2806,7 @@ public partial class RuntimeEmitter
         // object HttpValidateHeaderValue(object name, object value)
         var vv = typeBuilder.DefineMethod("HttpValidateHeaderValue",
             MethodAttributes.Public | MethodAttributes.Static, _types.Object, [_types.Object, _types.Object]);
-        runtime.HttpValidateHeaderValue = vv;
+        http.ValidateHeaderValue = vv;
         {
             var il = vv.GetILGenerator();
             var vstr = il.DeclareLocal(_types.String);
@@ -2835,7 +2842,7 @@ public partial class RuntimeEmitter
         // object HttpSetMaxIdleParsers(object max) — no-op
         var sp = typeBuilder.DefineMethod("HttpSetMaxIdleParsers",
             MethodAttributes.Public | MethodAttributes.Static, _types.Object, [_types.Object]);
-        runtime.HttpSetMaxIdleParsers = sp;
+        http.SetMaxIdleParsers = sp;
         {
             var il = sp.GetILGenerator();
             il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
@@ -2849,13 +2856,14 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitHttpGetStatusCodes(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
+        var http = runtime.RequireHttp();
         var method = typeBuilder.DefineMethod(
             "HttpGetStatusCodes",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             Type.EmptyTypes
         );
-        runtime.HttpGetStatusCodes = method;
+        http.GetStatusCodes = method;
 
         var il = method.GetILGenerator();
 
@@ -2893,36 +2901,33 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    // Agent helper method references
-    private MethodBuilder _agentDestroyMethod = null!;
-    private MethodBuilder _agentGetNameMethod = null!;
-
     /// <summary>
     /// Emits static helper methods for Agent instances: AgentDestroy and AgentGetName.
     /// These are wrapped as TSFunction and added to each Agent dictionary.
     /// </summary>
     private void EmitAgentHelperMethods(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
+        var http = runtime.RequireHttp();
         // AgentDestroy(object?[] args) → null (no-op)
-        _agentDestroyMethod = typeBuilder.DefineMethod(
+        http.AgentDestroyMethod = typeBuilder.DefineMethod(
             "AgentDestroy",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.ObjectArray]);
         {
-            var il = _agentDestroyMethod.GetILGenerator();
+            var il = http.AgentDestroyMethod.GetILGenerator();
             il.Emit(OpCodes.Ldnull);
             il.Emit(OpCodes.Ret);
         }
 
         // AgentGetName(object?[] args) → string "host:port:localAddress:family"
-        _agentGetNameMethod = typeBuilder.DefineMethod(
+        http.AgentGetNameMethod = typeBuilder.DefineMethod(
             "AgentGetName",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.ObjectArray]);
         {
-            var il = _agentGetNameMethod.GetILGenerator();
+            var il = http.AgentGetNameMethod.GetILGenerator();
 
             // Default values
             var hostLocal = il.DeclareLocal(_types.String);
@@ -3010,11 +3015,12 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitAgentMethods(ILGenerator il, EmittedRuntime runtime)
     {
+        var http = runtime.RequireHttp();
         // Add destroy method as TSFunction
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Ldstr, "destroy");
         il.Emit(OpCodes.Ldnull); // target (static)
-        il.Emit(OpCodes.Ldtoken, _agentDestroyMethod);
+        il.Emit(OpCodes.Ldtoken, http.AgentDestroyMethod);
         il.Emit(OpCodes.Call, _types.MethodBaseGetMethodFromHandle);
         il.Emit(OpCodes.Castclass, _types.MethodInfo);
         il.Emit(OpCodes.Newobj, runtime.TSFunctionCtor);
@@ -3024,7 +3030,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Ldstr, "getName");
         il.Emit(OpCodes.Ldnull); // target (static)
-        il.Emit(OpCodes.Ldtoken, _agentGetNameMethod);
+        il.Emit(OpCodes.Ldtoken, http.AgentGetNameMethod);
         il.Emit(OpCodes.Call, _types.MethodBaseGetMethodFromHandle);
         il.Emit(OpCodes.Castclass, _types.MethodInfo);
         il.Emit(OpCodes.Newobj, runtime.TSFunctionCtor);
@@ -3065,13 +3071,14 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitHttpGetGlobalAgent(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
+        var http = runtime.RequireHttp();
         var method = typeBuilder.DefineMethod(
             "HttpGetGlobalAgent",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             Type.EmptyTypes
         );
-        runtime.HttpGetGlobalAgent = method;
+        http.GetGlobalAgent = method;
 
         var il = method.GetILGenerator();
         EmitAgentObjectCreation(il, runtime, keepAlive: true, maxSockets: double.PositiveInfinity,
@@ -3085,6 +3092,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitHttpGetAgentConstructor(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
+        var http = runtime.RequireHttp();
         // Emit the Agent factory method: AgentFactory(object? options) -> object
         var factoryMethod = typeBuilder.DefineMethod(
             "AgentFactory",
@@ -3092,7 +3100,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object]
         );
-        runtime.HttpAgentFactory = factoryMethod;
+        http.AgentFactory = factoryMethod;
 
         {
             var il = factoryMethod.GetILGenerator();
@@ -3210,7 +3218,7 @@ public partial class RuntimeEmitter
             _types.Object,
             Type.EmptyTypes
         );
-        runtime.HttpGetAgentConstructor = getterMethod;
+        http.GetAgentConstructor = getterMethod;
 
         {
             var il = getterMethod.GetILGenerator();

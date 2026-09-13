@@ -272,6 +272,23 @@ state stay with the emitter. Buffer, ArrayBuffer, TypedArray, Promise, and gener
 helpers remain separate dependencies. Module and global-property consumers share the checked accessor;
 the built-in module registry still owns the `getRandomValues` wrapper.
 
+HTTP module/server metadata uses `Http` / `RequireHttp()` for 47 declarations: module factories,
+utilities and agent helpers; server/request/response types, constructors and fields; and the deferred
+accept worker and its closure. `EmitAll` starts the component only for `UsesHttp`, including HTTP
+implied by fetch or its Web API constructors. Declaration of the accept worker precedes the listen
+method's delegate reference; phase 2 fills that same handle after the accept closure is available.
+Completion validates and freezes all handles after runtime and dependent types are finalized.
+The 18 former flat properties and 29 emitter fields have no parallel aliases. HTTP-only helpers
+accept `EmittedHttpRuntime` directly; net/TLS, EventEmitter, streams, Buffer, scheduling, and generic
+property/invocation helpers remain separate dependencies.
+
+Fetch, Headers, Request, Response, cookie-jar helpers, cached clients, and the global fetch function
+cache remain a separate migration under #1599. Their existing emission through the HTTP family and
+feature implications are unchanged. The built-in module registry still owns HTTP named-import
+wrappers, while the TypeScript standard library retains client/agent behavior. BCL type lookups and
+method-local construction state remain with the emitter; include those ownership boundaries in the
+final residual-state audit.
+
 During emission, each handle becomes readable as soon as its declaration is assigned, so forward
 references do not require a method body to exist yet. An early read names the missing declaration.
 Completion is an orchestration boundary, not an IL verifier: body emission and type finalization

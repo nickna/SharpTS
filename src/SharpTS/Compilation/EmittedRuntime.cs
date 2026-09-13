@@ -1772,7 +1772,7 @@ public class EmittedRuntime
     public EmittedCryptoRuntime RequireCrypto() => Crypto
         ?? throw new InvalidOperationException("Crypto runtime was not enabled for this compilation.");
 
-    // HTTP module methods
+    // Fetch and Web API metadata (separate migration from HTTP module/server metadata).
     public MethodBuilder Fetch { get; set; } = null!;
 
     // fetch.cookieJar.{getCookies,setCookie,clear} introspection helpers — emitted
@@ -1781,31 +1781,18 @@ public class EmittedRuntime
     public MethodBuilder CookieJarSetCookie { get; set; } = null!;
     public MethodBuilder CookieJarClear { get; set; } = null!;
 
-    public MethodBuilder HttpCreateServer { get; set; } = null!;
-    public MethodBuilder HttpRequest { get; set; } = null!;
-    public MethodBuilder HttpGet { get; set; } = null!;
-    public MethodBuilder HttpGetMethods { get; set; } = null!;
-    // #1052 utilities
-    public MethodBuilder HttpValidateHeaderName { get; set; } = null!;
-    public MethodBuilder HttpValidateHeaderValue { get; set; } = null!;
-    public MethodBuilder HttpSetMaxIdleParsers { get; set; } = null!;
-    public MethodBuilder HttpGetStatusCodes { get; set; } = null!;
-    public MethodBuilder HttpGetGlobalAgent { get; set; } = null!;
-    public MethodBuilder HttpGetAgentConstructor { get; set; } = null!;
-    public MethodBuilder HttpAgentFactory { get; set; } = null!;
+    /// <summary>HTTP module/server metadata, or null when HTTP is tree-shaken.</summary>
+    public EmittedHttpRuntime? Http { get; private set; }
 
-    // $HttpServer type - emitted for standalone HTTP server support
-    public TypeBuilder TSHttpServerType { get; set; } = null!;
-    public ConstructorBuilder TSHttpServerCtor { get; set; } = null!;
-    public MethodBuilder TSHttpServerAddress { get; set; } = null!;
+    internal void BeginHttpEmission()
+    {
+        if (Http is not null)
+            throw new InvalidOperationException("HTTP metadata emission has already started.");
+        Http = new EmittedHttpRuntime();
+    }
 
-    // $HttpRequest type - emitted for standalone HTTP request support
-    public TypeBuilder TSHttpRequestType { get; set; } = null!;
-    public ConstructorBuilder TSHttpRequestCtor { get; set; } = null!;
-
-    // $HttpResponse type - emitted for standalone HTTP response support
-    public TypeBuilder TSHttpResponseType { get; set; } = null!;
-    public ConstructorBuilder TSHttpResponseCtor { get; set; } = null!;
+    public EmittedHttpRuntime RequireHttp() => Http
+        ?? throw new InvalidOperationException("HTTP runtime was not enabled for this compilation.");
 
     /// <summary>TCP/IPC metadata, or null when net is tree-shaken from this compilation.</summary>
     public EmittedNetRuntime? Net { get; private set; }
