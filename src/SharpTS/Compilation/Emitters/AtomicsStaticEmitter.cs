@@ -102,7 +102,7 @@ public sealed class AtomicsStaticEmitter : IStaticTypeEmitterStrategy
             { ElementType: "Int32" or "Uint32" } typedArray)
         {
             emitter.EmitExpression(arguments[0]);
-            il.Emit(OpCodes.Castclass, ctx.Runtime!.TypedArrayBaseType);
+            il.Emit(OpCodes.Castclass, ctx.Runtime!.TypedArrays.RequireImplementation().BaseType);
             emitter.EmitExpressionAsDouble(arguments[1]);
             il.Emit(OpCodes.Conv_I4);
             emitter.EmitExpressionAsDouble(arguments[2]);

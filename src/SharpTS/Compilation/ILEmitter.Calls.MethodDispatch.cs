@@ -56,7 +56,7 @@ public partial class ILEmitter
                 { ElementType: "Int32" or "Uint32" } atomicArray)
         {
             EmitExpression(atomicReceiver);
-            IL.Emit(OpCodes.Castclass, _ctx.Runtime!.TypedArrayBaseType);
+            IL.Emit(OpCodes.Castclass, _ctx.Runtime!.TypedArrays.RequireImplementation().BaseType);
             EmitExpressionAsDouble(atomicIndex);
             IL.Emit(OpCodes.Conv_I4);
             if (atomicValue is Expr.Literal { Value: 1.0 })

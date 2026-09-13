@@ -15,7 +15,7 @@ public partial class RuntimeEmitter
     // own fields/abstractions, so the emitted token never references SharpTS.dll — standalone
     // DLLs stay standalone. The element-converting paths go through the virtual Get/Set so each
     // concrete type's per-element coercion/clamping applies.
-    private void EmitTypedArrayBulkMethods(TypeBuilder t, EmittedRuntime runtime)
+    private void EmitTypedArrayBulkMethods(TypeBuilder t, EmittedTypedArrayImplementation arrays)
     {
         var minI = typeof(Math).GetMethod("Min", [_types.Int32, _types.Int32])!;
         var maxI = typeof(Math).GetMethod("Max", [_types.Int32, _types.Int32])!;
@@ -27,17 +27,17 @@ public partial class RuntimeEmitter
 
         var elementEquals = EmitTaElementEquals(t);
 
-        EmitTypedArrayFill(t, runtime, minI, maxI, blockCopy);
-        EmitTypedArrayCopyWithin(t, runtime, minI, arrayCopy);
-        EmitTypedArrayReverse(t, runtime);
-        EmitTypedArraySetFrom(t, runtime, blockCopy);
-        EmitTypedArrayIndexOf(t, runtime, maxI, elementEquals);
-        EmitTypedArrayLastIndexOf(t, runtime, minI, elementEquals);
-        EmitTypedArrayIncludes(t, runtime);
-        EmitTypedArrayJoin(t, runtime, objToString);
-        EmitTypedArrayToStringJoin(t, runtime);
-        EmitTypedArraySlice(t, runtime, minI, maxI, blockCopy);
-        EmitTypedArraySubarray(t, runtime, minI, maxI);
+        EmitTypedArrayFill(t, arrays, minI, maxI, blockCopy);
+        EmitTypedArrayCopyWithin(t, arrays, minI, arrayCopy);
+        EmitTypedArrayReverse(t, arrays);
+        EmitTypedArraySetFrom(t, arrays, blockCopy);
+        EmitTypedArrayIndexOf(t, arrays, maxI, elementEquals);
+        EmitTypedArrayLastIndexOf(t, arrays, minI, elementEquals);
+        EmitTypedArrayIncludes(t, arrays);
+        EmitTypedArrayJoin(t, arrays, objToString);
+        EmitTypedArrayToStringJoin(t, arrays);
+        EmitTypedArraySlice(t, arrays, minI, maxI, blockCopy);
+        EmitTypedArraySubarray(t, arrays, minI, maxI);
     }
 
     /// <summary>
@@ -45,7 +45,7 @@ public partial class RuntimeEmitter
     /// relative-index clamping against <c>_length</c> (`v &lt; 0 ? Max(_length+v,0) : Min(v,_length)`,
     /// matching slice/subarray in the interpreter), and stores into <paramref name="dest"/>.
     /// </summary>
-    private void EmitRelativeClampToLocal(ILGenerator il, int argIndex, LocalBuilder dest, MethodInfo minI, MethodInfo maxI)
+    private void EmitRelativeClampToLocal(EmittedTypedArrayImplementation arrays, ILGenerator il, int argIndex, LocalBuilder dest, MethodInfo minI, MethodInfo maxI)
     {
         var negLabel = il.DefineLabel();
         var doneLabel = il.DefineLabel();
@@ -54,12 +54,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Blt, negLabel);
         // v >= 0: Min(v, _length)
         il.Emit(OpCodes.Ldarg, argIndex);
-        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, _typedArrayLengthField!);
+        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, arrays.LengthField);
         il.Emit(OpCodes.Call, minI);
         il.Emit(OpCodes.Br, doneLabel);
         il.MarkLabel(negLabel);
         // v < 0: Max(_length + v, 0)
-        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, _typedArrayLengthField!);
+        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, arrays.LengthField);
         il.Emit(OpCodes.Ldarg, argIndex);
         il.Emit(OpCodes.Add);
         il.Emit(OpCodes.Ldc_I4_0);
@@ -71,11 +71,11 @@ public partial class RuntimeEmitter
     // object Fill(object value, int start, int end) — clamp start/end into [0,_length] (no
     // negative wraparound, matching the interpreter), coerce the value once via the virtual Set,
     // then byte-replicate it across the range with an exponential-doubling BlockCopy. Returns this.
-    private void EmitTypedArrayFill(TypeBuilder t, EmittedRuntime runtime, MethodInfo minI, MethodInfo maxI, MethodInfo blockCopy)
+    private void EmitTypedArrayFill(TypeBuilder t, EmittedTypedArrayImplementation arrays, MethodInfo minI, MethodInfo maxI, MethodInfo blockCopy)
     {
         var m = t.DefineMethod("Fill", MethodAttributes.Public | MethodAttributes.HideBySig,
-            runtime.TypedArrayBaseType, [_types.Object, _types.Int32, _types.Int32]);
-        runtime.TypedArrayFill = m;
+            arrays.BaseType, [_types.Object, _types.Int32, _types.Int32]);
+        arrays.Fill = m;
         var il = m.GetILGenerator();
         var startLoc = il.DeclareLocal(_types.Int32);
         var endLoc = il.DeclareLocal(_types.Int32);
@@ -88,14 +88,14 @@ public partial class RuntimeEmitter
         // start = Max(0, Min(start, _length))
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, _typedArrayLengthField!);
+        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, arrays.LengthField);
         il.Emit(OpCodes.Call, minI);
         il.Emit(OpCodes.Call, maxI);
         il.Emit(OpCodes.Stloc, startLoc);
         // end = Max(start, Min(end, _length))
         il.Emit(OpCodes.Ldloc, startLoc);
         il.Emit(OpCodes.Ldarg_3);
-        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, _typedArrayLengthField!);
+        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, arrays.LengthField);
         il.Emit(OpCodes.Call, minI);
         il.Emit(OpCodes.Call, maxI);
         il.Emit(OpCodes.Stloc, endLoc);
@@ -113,14 +113,14 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, startLoc);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, runtime.TypedArrayElementSet);
+        il.Emit(OpCodes.Callvirt, arrays.ElementSet);
 
         // bpe = BytesPerElement
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Callvirt, _typedArrayBytesPerElementGetter!);
+        il.Emit(OpCodes.Callvirt, arrays.BytesPerElementGetter);
         il.Emit(OpCodes.Stloc, bpeLoc);
         // baseOff = _byteOffset + start*bpe
-        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, _typedArrayByteOffsetField!);
+        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, arrays.ByteOffsetField);
         il.Emit(OpCodes.Ldloc, startLoc); il.Emit(OpCodes.Ldloc, bpeLoc); il.Emit(OpCodes.Mul);
         il.Emit(OpCodes.Add);
         il.Emit(OpCodes.Stloc, baseOffLoc);
@@ -142,9 +142,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, totalLoc); il.Emit(OpCodes.Ldloc, filledLoc); il.Emit(OpCodes.Sub);
         il.Emit(OpCodes.Call, minI);
         il.Emit(OpCodes.Stloc, chunkLoc);
-        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, _typedArrayBufferField!);
+        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, arrays.BufferField);
         il.Emit(OpCodes.Ldloc, baseOffLoc);
-        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, _typedArrayBufferField!);
+        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, arrays.BufferField);
         il.Emit(OpCodes.Ldloc, baseOffLoc); il.Emit(OpCodes.Ldloc, filledLoc); il.Emit(OpCodes.Add);
         il.Emit(OpCodes.Ldloc, chunkLoc);
         il.Emit(OpCodes.Call, blockCopy);
@@ -161,12 +161,12 @@ public partial class RuntimeEmitter
 
     // object CopyWithin(int target, int start, int end) — clamp, compute count, memmove on the
     // backing buffer with Array.Copy (overlap-safe, matching the interpreter's Span.CopyTo).
-    private void EmitTypedArrayCopyWithin(TypeBuilder t, EmittedRuntime runtime, MethodInfo minI, MethodInfo arrayCopy)
+    private void EmitTypedArrayCopyWithin(TypeBuilder t, EmittedTypedArrayImplementation arrays, MethodInfo minI, MethodInfo arrayCopy)
     {
         var maxI = typeof(Math).GetMethod("Max", [_types.Int32, _types.Int32])!;
         var m = t.DefineMethod("CopyWithin", MethodAttributes.Public | MethodAttributes.HideBySig,
-            runtime.TypedArrayBaseType, [_types.Int32, _types.Int32, _types.Int32]);
-        runtime.TypedArrayCopyWithin = m;
+            arrays.BaseType, [_types.Int32, _types.Int32, _types.Int32]);
+        arrays.CopyWithin = m;
         var il = m.GetILGenerator();
         var targetLoc = il.DeclareLocal(_types.Int32);
         var startLoc = il.DeclareLocal(_types.Int32);
@@ -176,22 +176,22 @@ public partial class RuntimeEmitter
 
         // target = Max(0, Min(target, _length))
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Ldarg_1); il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, _typedArrayLengthField!);
+        il.Emit(OpCodes.Ldarg_1); il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, arrays.LengthField);
         il.Emit(OpCodes.Call, minI); il.Emit(OpCodes.Call, maxI);
         il.Emit(OpCodes.Stloc, targetLoc);
         // start = Max(0, Min(start, _length))
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Ldarg_2); il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, _typedArrayLengthField!);
+        il.Emit(OpCodes.Ldarg_2); il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, arrays.LengthField);
         il.Emit(OpCodes.Call, minI); il.Emit(OpCodes.Call, maxI);
         il.Emit(OpCodes.Stloc, startLoc);
         // end = Max(start, Min(end, _length))
         il.Emit(OpCodes.Ldloc, startLoc);
-        il.Emit(OpCodes.Ldarg_3); il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, _typedArrayLengthField!);
+        il.Emit(OpCodes.Ldarg_3); il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, arrays.LengthField);
         il.Emit(OpCodes.Call, minI); il.Emit(OpCodes.Call, maxI);
         il.Emit(OpCodes.Stloc, endLoc);
         // count = Min(end - start, _length - target)
         il.Emit(OpCodes.Ldloc, endLoc); il.Emit(OpCodes.Ldloc, startLoc); il.Emit(OpCodes.Sub);
-        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, _typedArrayLengthField!); il.Emit(OpCodes.Ldloc, targetLoc); il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, arrays.LengthField); il.Emit(OpCodes.Ldloc, targetLoc); il.Emit(OpCodes.Sub);
         il.Emit(OpCodes.Call, minI);
         il.Emit(OpCodes.Stloc, countLoc);
 
@@ -205,14 +205,14 @@ public partial class RuntimeEmitter
         il.MarkLabel(doCopy);
 
         // bpe = BytesPerElement
-        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Callvirt, _typedArrayBytesPerElementGetter!);
+        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Callvirt, arrays.BytesPerElementGetter);
         il.Emit(OpCodes.Stloc, bpeLoc);
         // Array.Copy(_buffer, _byteOffset+start*bpe, _buffer, _byteOffset+target*bpe, count*bpe)
-        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, _typedArrayBufferField!);
-        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, _typedArrayByteOffsetField!);
+        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, arrays.BufferField);
+        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, arrays.ByteOffsetField);
         il.Emit(OpCodes.Ldloc, startLoc); il.Emit(OpCodes.Ldloc, bpeLoc); il.Emit(OpCodes.Mul); il.Emit(OpCodes.Add);
-        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, _typedArrayBufferField!);
-        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, _typedArrayByteOffsetField!);
+        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, arrays.BufferField);
+        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, arrays.ByteOffsetField);
         il.Emit(OpCodes.Ldloc, targetLoc); il.Emit(OpCodes.Ldloc, bpeLoc); il.Emit(OpCodes.Mul); il.Emit(OpCodes.Add);
         il.Emit(OpCodes.Ldloc, countLoc); il.Emit(OpCodes.Ldloc, bpeLoc); il.Emit(OpCodes.Mul);
         il.Emit(OpCodes.Call, arrayCopy);
@@ -222,18 +222,18 @@ public partial class RuntimeEmitter
     }
 
     // object Reverse() — two-pointer element-wise swap via the virtual Get/Set. Returns this.
-    private void EmitTypedArrayReverse(TypeBuilder t, EmittedRuntime runtime)
+    private void EmitTypedArrayReverse(TypeBuilder t, EmittedTypedArrayImplementation arrays)
     {
         var m = t.DefineMethod("Reverse", MethodAttributes.Public | MethodAttributes.HideBySig,
-            runtime.TypedArrayBaseType, Type.EmptyTypes);
-        runtime.TypedArrayReverse = m;
+            arrays.BaseType, Type.EmptyTypes);
+        arrays.Reverse = m;
         var il = m.GetILGenerator();
         var leftLoc = il.DeclareLocal(_types.Int32);
         var rightLoc = il.DeclareLocal(_types.Int32);
         var tmpLoc = il.DeclareLocal(_types.Object);
 
         il.Emit(OpCodes.Ldc_I4_0); il.Emit(OpCodes.Stloc, leftLoc);
-        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, _typedArrayLengthField!); il.Emit(OpCodes.Ldc_I4_1); il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, arrays.LengthField); il.Emit(OpCodes.Ldc_I4_1); il.Emit(OpCodes.Sub);
         il.Emit(OpCodes.Stloc, rightLoc);
 
         var loopCond = il.DefineLabel();
@@ -241,15 +241,15 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, loopCond);
         il.MarkLabel(loopBody);
         // tmp = Get(left)
-        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldloc, leftLoc); il.Emit(OpCodes.Callvirt, runtime.TypedArrayElementGet);
+        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldloc, leftLoc); il.Emit(OpCodes.Callvirt, arrays.ElementGet);
         il.Emit(OpCodes.Stloc, tmpLoc);
         // Set(left, Get(right))
         il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldloc, leftLoc);
-        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldloc, rightLoc); il.Emit(OpCodes.Callvirt, runtime.TypedArrayElementGet);
-        il.Emit(OpCodes.Callvirt, runtime.TypedArrayElementSet);
+        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldloc, rightLoc); il.Emit(OpCodes.Callvirt, arrays.ElementGet);
+        il.Emit(OpCodes.Callvirt, arrays.ElementSet);
         // Set(right, tmp)
         il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldloc, rightLoc); il.Emit(OpCodes.Ldloc, tmpLoc);
-        il.Emit(OpCodes.Callvirt, runtime.TypedArrayElementSet);
+        il.Emit(OpCodes.Callvirt, arrays.ElementSet);
         // left++; right--
         il.Emit(OpCodes.Ldloc, leftLoc); il.Emit(OpCodes.Ldc_I4_1); il.Emit(OpCodes.Add); il.Emit(OpCodes.Stloc, leftLoc);
         il.Emit(OpCodes.Ldloc, rightLoc); il.Emit(OpCodes.Ldc_I4_1); il.Emit(OpCodes.Sub); il.Emit(OpCodes.Stloc, rightLoc);
@@ -267,29 +267,29 @@ public partial class RuntimeEmitter
     // same-concrete-type → Buffer.BlockCopy fast path (offset >= 0), else element-wise via Get/Set
     // (the negative-offset case falls here and the element setter raises its own bounds error,
     // matching the interpreter). Returns null (interpreter's set returns null).
-    private void EmitTypedArraySetFrom(TypeBuilder t, EmittedRuntime runtime, MethodInfo blockCopy)
+    private void EmitTypedArraySetFrom(TypeBuilder t, EmittedTypedArrayImplementation arrays, MethodInfo blockCopy)
     {
         var getType = _types.GetMethodNoParams(_types.Object, "GetType");
         var m = t.DefineMethod("SetFrom", MethodAttributes.Public | MethodAttributes.HideBySig,
             _types.Object, [_types.Object, _types.Int32]);
-        runtime.TypedArraySetFrom = m;
+        arrays.SetFrom = m;
         var il = m.GetILGenerator();
-        var tsLoc = il.DeclareLocal(runtime.TypedArrayBaseType);
+        var tsLoc = il.DeclareLocal(arrays.BaseType);
         var srcLenLoc = il.DeclareLocal(_types.Int32);
         var bpeLoc = il.DeclareLocal(_types.Int32);
         var iLoc = il.DeclareLocal(_types.Int32);
 
         // ts = ($TypedArray)source
-        il.Emit(OpCodes.Ldarg_1); il.Emit(OpCodes.Castclass, runtime.TypedArrayBaseType);
+        il.Emit(OpCodes.Ldarg_1); il.Emit(OpCodes.Castclass, arrays.BaseType);
         il.Emit(OpCodes.Stloc, tsLoc);
         // srcLen = ts._length
-        il.Emit(OpCodes.Ldloc, tsLoc); il.Emit(OpCodes.Ldfld, _typedArrayLengthField!);
+        il.Emit(OpCodes.Ldloc, tsLoc); il.Emit(OpCodes.Ldfld, arrays.LengthField);
         il.Emit(OpCodes.Stloc, srcLenLoc);
 
         // if (offset + srcLen > _length) throw RangeError
         var okRange = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_2); il.Emit(OpCodes.Ldloc, srcLenLoc); il.Emit(OpCodes.Add);
-        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, _typedArrayLengthField!);
+        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, arrays.LengthField);
         il.Emit(OpCodes.Ble, okRange);
         il.Emit(OpCodes.Ldstr, "RangeError: Source too large for target");
         il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.Exception, _types.String));
@@ -303,13 +303,13 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Bne_Un, elementWise);
         il.Emit(OpCodes.Ldarg_2); il.Emit(OpCodes.Ldc_I4_0); il.Emit(OpCodes.Blt, elementWise);
         // bpe = BytesPerElement
-        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Callvirt, _typedArrayBytesPerElementGetter!);
+        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Callvirt, arrays.BytesPerElementGetter);
         il.Emit(OpCodes.Stloc, bpeLoc);
         // Buffer.BlockCopy(ts._buffer, ts._byteOffset, _buffer, _byteOffset + offset*bpe, srcLen*bpe)
-        il.Emit(OpCodes.Ldloc, tsLoc); il.Emit(OpCodes.Ldfld, _typedArrayBufferField!);
-        il.Emit(OpCodes.Ldloc, tsLoc); il.Emit(OpCodes.Ldfld, _typedArrayByteOffsetField!);
-        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, _typedArrayBufferField!);
-        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, _typedArrayByteOffsetField!);
+        il.Emit(OpCodes.Ldloc, tsLoc); il.Emit(OpCodes.Ldfld, arrays.BufferField);
+        il.Emit(OpCodes.Ldloc, tsLoc); il.Emit(OpCodes.Ldfld, arrays.ByteOffsetField);
+        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, arrays.BufferField);
+        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, arrays.ByteOffsetField);
         il.Emit(OpCodes.Ldarg_2); il.Emit(OpCodes.Ldloc, bpeLoc); il.Emit(OpCodes.Mul); il.Emit(OpCodes.Add);
         il.Emit(OpCodes.Ldloc, srcLenLoc); il.Emit(OpCodes.Ldloc, bpeLoc); il.Emit(OpCodes.Mul);
         il.Emit(OpCodes.Call, blockCopy);
@@ -325,8 +325,8 @@ public partial class RuntimeEmitter
         il.MarkLabel(loopBody);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_2); il.Emit(OpCodes.Ldloc, iLoc); il.Emit(OpCodes.Add);
-        il.Emit(OpCodes.Ldloc, tsLoc); il.Emit(OpCodes.Ldloc, iLoc); il.Emit(OpCodes.Callvirt, runtime.TypedArrayElementGet);
-        il.Emit(OpCodes.Callvirt, runtime.TypedArrayElementSet);
+        il.Emit(OpCodes.Ldloc, tsLoc); il.Emit(OpCodes.Ldloc, iLoc); il.Emit(OpCodes.Callvirt, arrays.ElementGet);
+        il.Emit(OpCodes.Callvirt, arrays.ElementSet);
         il.Emit(OpCodes.Ldloc, iLoc); il.Emit(OpCodes.Ldc_I4_1); il.Emit(OpCodes.Add); il.Emit(OpCodes.Stloc, iLoc);
         il.MarkLabel(loopCond);
         il.Emit(OpCodes.Ldloc, iLoc);
@@ -337,11 +337,11 @@ public partial class RuntimeEmitter
     }
 
     // double IndexOf(object value, int fromIndex) — forward linear scan; -1 if not found.
-    private void EmitTypedArrayIndexOf(TypeBuilder t, EmittedRuntime runtime, MethodInfo maxI, MethodInfo elementEquals)
+    private void EmitTypedArrayIndexOf(TypeBuilder t, EmittedTypedArrayImplementation arrays, MethodInfo maxI, MethodInfo elementEquals)
     {
         var m = t.DefineMethod("IndexOf", MethodAttributes.Public | MethodAttributes.HideBySig,
             _types.Double, [_types.Object, _types.Int32]);
-        runtime.TypedArrayIndexOf = m;
+        arrays.IndexOf = m;
         var il = m.GetILGenerator();
         var iLoc = il.DeclareLocal(_types.Int32);
 
@@ -354,7 +354,7 @@ public partial class RuntimeEmitter
         var next = il.DefineLabel();
         il.Emit(OpCodes.Br, loopCond);
         il.MarkLabel(loopBody);
-        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldloc, iLoc); il.Emit(OpCodes.Callvirt, runtime.TypedArrayElementGet);
+        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldloc, iLoc); il.Emit(OpCodes.Callvirt, arrays.ElementGet);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, elementEquals);
         il.Emit(OpCodes.Brfalse, next);
@@ -363,7 +363,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, iLoc); il.Emit(OpCodes.Ldc_I4_1); il.Emit(OpCodes.Add); il.Emit(OpCodes.Stloc, iLoc);
         il.MarkLabel(loopCond);
         il.Emit(OpCodes.Ldloc, iLoc);
-        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, _typedArrayLengthField!);
+        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, arrays.LengthField);
         il.Emit(OpCodes.Blt, loopBody);
 
         il.Emit(OpCodes.Ldc_R8, -1.0);
@@ -371,17 +371,17 @@ public partial class RuntimeEmitter
     }
 
     // double LastIndexOf(object value, int fromIndex) — backward scan from Min(fromIndex,_length-1).
-    private void EmitTypedArrayLastIndexOf(TypeBuilder t, EmittedRuntime runtime, MethodInfo minI, MethodInfo elementEquals)
+    private void EmitTypedArrayLastIndexOf(TypeBuilder t, EmittedTypedArrayImplementation arrays, MethodInfo minI, MethodInfo elementEquals)
     {
         var m = t.DefineMethod("LastIndexOf", MethodAttributes.Public | MethodAttributes.HideBySig,
             _types.Double, [_types.Object, _types.Int32]);
-        runtime.TypedArrayLastIndexOf = m;
+        arrays.LastIndexOf = m;
         var il = m.GetILGenerator();
         var iLoc = il.DeclareLocal(_types.Int32);
 
         // i = Min(fromIndex, _length - 1)
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, _typedArrayLengthField!); il.Emit(OpCodes.Ldc_I4_1); il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, arrays.LengthField); il.Emit(OpCodes.Ldc_I4_1); il.Emit(OpCodes.Sub);
         il.Emit(OpCodes.Call, minI);
         il.Emit(OpCodes.Stloc, iLoc);
 
@@ -390,7 +390,7 @@ public partial class RuntimeEmitter
         var next = il.DefineLabel();
         il.Emit(OpCodes.Br, loopCond);
         il.MarkLabel(loopBody);
-        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldloc, iLoc); il.Emit(OpCodes.Callvirt, runtime.TypedArrayElementGet);
+        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldloc, iLoc); il.Emit(OpCodes.Callvirt, arrays.ElementGet);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, elementEquals);
         il.Emit(OpCodes.Brfalse, next);
@@ -407,14 +407,14 @@ public partial class RuntimeEmitter
     }
 
     // bool Includes(object value, int fromIndex) — IndexOf(...) >= 0.
-    private void EmitTypedArrayIncludes(TypeBuilder t, EmittedRuntime runtime)
+    private void EmitTypedArrayIncludes(TypeBuilder t, EmittedTypedArrayImplementation arrays)
     {
         var m = t.DefineMethod("Includes", MethodAttributes.Public | MethodAttributes.HideBySig,
             _types.Boolean, [_types.Object, _types.Int32]);
-        runtime.TypedArrayIncludes = m;
+        arrays.Includes = m;
         var il = m.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldarg_1); il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Callvirt, runtime.TypedArrayIndexOf);
+        il.Emit(OpCodes.Callvirt, arrays.IndexOf);
         // result >= 0  ==  !(result < 0)
         il.Emit(OpCodes.Ldc_R8, 0.0);
         il.Emit(OpCodes.Clt);
@@ -424,19 +424,19 @@ public partial class RuntimeEmitter
     }
 
     // string Join(string sep) — boxed-element ToString() joined by sep (matches interpreter).
-    private void EmitTypedArrayJoin(TypeBuilder t, EmittedRuntime runtime, MethodInfo objToString)
+    private void EmitTypedArrayJoin(TypeBuilder t, EmittedTypedArrayImplementation arrays, MethodInfo objToString)
     {
         var stringJoin = typeof(string).GetMethod("Join", [_types.String, typeof(string[])])!;
         var m = t.DefineMethod("Join", MethodAttributes.Public | MethodAttributes.HideBySig,
             _types.String, [_types.String]);
-        runtime.TypedArrayJoin = m;
+        arrays.Join = m;
         var il = m.GetILGenerator();
         var nLoc = il.DeclareLocal(_types.Int32);
         var partsLoc = il.DeclareLocal(typeof(string[]));
         var iLoc = il.DeclareLocal(_types.Int32);
         var elLoc = il.DeclareLocal(_types.Object);
 
-        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, _typedArrayLengthField!); il.Emit(OpCodes.Stloc, nLoc);
+        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, arrays.LengthField); il.Emit(OpCodes.Stloc, nLoc);
         il.Emit(OpCodes.Ldloc, nLoc); il.Emit(OpCodes.Newarr, _types.String); il.Emit(OpCodes.Stloc, partsLoc);
         il.Emit(OpCodes.Ldc_I4_0); il.Emit(OpCodes.Stloc, iLoc);
 
@@ -446,7 +446,7 @@ public partial class RuntimeEmitter
         var store = il.DefineLabel();
         il.Emit(OpCodes.Br, loopCond);
         il.MarkLabel(loopBody);
-        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldloc, iLoc); il.Emit(OpCodes.Callvirt, runtime.TypedArrayElementGet);
+        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldloc, iLoc); il.Emit(OpCodes.Callvirt, arrays.ElementGet);
         il.Emit(OpCodes.Stloc, elLoc);
         il.Emit(OpCodes.Ldloc, partsLoc); il.Emit(OpCodes.Ldloc, iLoc);
         il.Emit(OpCodes.Ldloc, elLoc); il.Emit(OpCodes.Dup); il.Emit(OpCodes.Brtrue, notNull);
@@ -466,49 +466,49 @@ public partial class RuntimeEmitter
     }
 
     // string ToStringJoin() — toString() == Join(",").
-    private void EmitTypedArrayToStringJoin(TypeBuilder t, EmittedRuntime runtime)
+    private void EmitTypedArrayToStringJoin(TypeBuilder t, EmittedTypedArrayImplementation arrays)
     {
         var m = t.DefineMethod("ToStringJoin", MethodAttributes.Public | MethodAttributes.HideBySig,
             _types.String, Type.EmptyTypes);
-        runtime.TypedArrayToStringJoin = m;
+        arrays.ToStringJoin = m;
         var il = m.GetILGenerator();
-        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldstr, ","); il.Emit(OpCodes.Callvirt, runtime.TypedArrayJoin);
+        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldstr, ","); il.Emit(OpCodes.Callvirt, arrays.Join);
         il.Emit(OpCodes.Ret);
     }
 
     // $TypedArray Slice(int begin, int end) — fresh same-kind array containing the copied range.
-    private void EmitTypedArraySlice(TypeBuilder t, EmittedRuntime runtime, MethodInfo minI, MethodInfo maxI, MethodInfo blockCopy)
+    private void EmitTypedArraySlice(TypeBuilder t, EmittedTypedArrayImplementation arrays, MethodInfo minI, MethodInfo maxI, MethodInfo blockCopy)
     {
         var m = t.DefineMethod("Slice", MethodAttributes.Public | MethodAttributes.HideBySig,
-            runtime.TypedArrayBaseType, [_types.Int32, _types.Int32]);
-        runtime.TypedArraySlice = m;
+            arrays.BaseType, [_types.Int32, _types.Int32]);
+        arrays.Slice = m;
         var il = m.GetILGenerator();
         var beginLoc = il.DeclareLocal(_types.Int32);
         var endLoc = il.DeclareLocal(_types.Int32);
         var countLoc = il.DeclareLocal(_types.Int32);
-        var destLoc = il.DeclareLocal(runtime.TypedArrayBaseType);
+        var destLoc = il.DeclareLocal(arrays.BaseType);
         var bpeLoc = il.DeclareLocal(_types.Int32);
 
-        EmitRelativeClampToLocal(il, 1, beginLoc, minI, maxI);
-        EmitRelativeClampToLocal(il, 2, endLoc, minI, maxI);
+        EmitRelativeClampToLocal(arrays, il, 1, beginLoc, minI, maxI);
+        EmitRelativeClampToLocal(arrays, il, 2, endLoc, minI, maxI);
         // count = Max(0, end - begin)
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldloc, endLoc); il.Emit(OpCodes.Ldloc, beginLoc); il.Emit(OpCodes.Sub);
         il.Emit(OpCodes.Call, maxI);
         il.Emit(OpCodes.Stloc, countLoc);
         // dest = CreateOfLength(count)
-        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldloc, countLoc); il.Emit(OpCodes.Callvirt, _typedArrayCreateOfLength!);
+        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldloc, countLoc); il.Emit(OpCodes.Callvirt, arrays.CreateOfLength);
         il.Emit(OpCodes.Stloc, destLoc);
 
         // if (count > 0) BlockCopy(_buffer, _byteOffset+begin*bpe, dest._buffer, dest._byteOffset, count*bpe)
         var skip = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, countLoc); il.Emit(OpCodes.Ldc_I4_0); il.Emit(OpCodes.Ble, skip);
-        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Callvirt, _typedArrayBytesPerElementGetter!); il.Emit(OpCodes.Stloc, bpeLoc);
-        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, _typedArrayBufferField!);
-        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, _typedArrayByteOffsetField!);
+        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Callvirt, arrays.BytesPerElementGetter); il.Emit(OpCodes.Stloc, bpeLoc);
+        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, arrays.BufferField);
+        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, arrays.ByteOffsetField);
         il.Emit(OpCodes.Ldloc, beginLoc); il.Emit(OpCodes.Ldloc, bpeLoc); il.Emit(OpCodes.Mul); il.Emit(OpCodes.Add);
-        il.Emit(OpCodes.Ldloc, destLoc); il.Emit(OpCodes.Ldfld, _typedArrayBufferField!);
-        il.Emit(OpCodes.Ldloc, destLoc); il.Emit(OpCodes.Ldfld, _typedArrayByteOffsetField!);
+        il.Emit(OpCodes.Ldloc, destLoc); il.Emit(OpCodes.Ldfld, arrays.BufferField);
+        il.Emit(OpCodes.Ldloc, destLoc); il.Emit(OpCodes.Ldfld, arrays.ByteOffsetField);
         il.Emit(OpCodes.Ldloc, countLoc); il.Emit(OpCodes.Ldloc, bpeLoc); il.Emit(OpCodes.Mul);
         il.Emit(OpCodes.Call, blockCopy);
         il.MarkLabel(skip);
@@ -518,30 +518,30 @@ public partial class RuntimeEmitter
     }
 
     // $TypedArray Subarray(int begin, int end) — view sharing the backing buffer.
-    private void EmitTypedArraySubarray(TypeBuilder t, EmittedRuntime runtime, MethodInfo minI, MethodInfo maxI)
+    private void EmitTypedArraySubarray(TypeBuilder t, EmittedTypedArrayImplementation arrays, MethodInfo minI, MethodInfo maxI)
     {
         var m = t.DefineMethod("Subarray", MethodAttributes.Public | MethodAttributes.HideBySig,
-            runtime.TypedArrayBaseType, [_types.Int32, _types.Int32]);
-        runtime.TypedArraySubarray = m;
+            arrays.BaseType, [_types.Int32, _types.Int32]);
+        arrays.Subarray = m;
         var il = m.GetILGenerator();
         var beginLoc = il.DeclareLocal(_types.Int32);
         var endLoc = il.DeclareLocal(_types.Int32);
         var countLoc = il.DeclareLocal(_types.Int32);
         var bpeLoc = il.DeclareLocal(_types.Int32);
 
-        EmitRelativeClampToLocal(il, 1, beginLoc, minI, maxI);
-        EmitRelativeClampToLocal(il, 2, endLoc, minI, maxI);
+        EmitRelativeClampToLocal(arrays, il, 1, beginLoc, minI, maxI);
+        EmitRelativeClampToLocal(arrays, il, 2, endLoc, minI, maxI);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldloc, endLoc); il.Emit(OpCodes.Ldloc, beginLoc); il.Emit(OpCodes.Sub);
         il.Emit(OpCodes.Call, maxI);
         il.Emit(OpCodes.Stloc, countLoc);
-        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Callvirt, _typedArrayBytesPerElementGetter!); il.Emit(OpCodes.Stloc, bpeLoc);
+        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Callvirt, arrays.BytesPerElementGetter); il.Emit(OpCodes.Stloc, bpeLoc);
         // return CreateView(_byteOffset + begin*bpe, count)
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, _typedArrayByteOffsetField!);
+        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, arrays.ByteOffsetField);
         il.Emit(OpCodes.Ldloc, beginLoc); il.Emit(OpCodes.Ldloc, bpeLoc); il.Emit(OpCodes.Mul); il.Emit(OpCodes.Add);
         il.Emit(OpCodes.Ldloc, countLoc);
-        il.Emit(OpCodes.Callvirt, _typedArrayCreateView!);
+        il.Emit(OpCodes.Callvirt, arrays.CreateView);
         il.Emit(OpCodes.Ret);
     }
 
@@ -583,7 +583,7 @@ public partial class RuntimeEmitter
 
     // Per-concrete buffer-sharing ctor + CreateOfLength/CreateView overrides backing the base
     // Slice/Subarray (#940). Emitted inside EmitConcreteTypedArrayType, before CreateType.
-    private void EmitTypedArrayFactoryMembers(TypeBuilder t, EmittedRuntime runtime, ConstructorBuilder lengthCtor)
+    private void EmitTypedArrayFactoryMembers(TypeBuilder t, EmittedTypedArrayImplementation arrays, ConstructorBuilder lengthCtor)
     {
         // public $XArray(byte[] buffer, int byteOffset, int length, object arrayBuffer) : base(...)
         var viewCtor = t.DefineConstructor(
@@ -595,31 +595,31 @@ public partial class RuntimeEmitter
         cil.Emit(OpCodes.Ldarg_2);
         cil.Emit(OpCodes.Ldarg_3);
         cil.Emit(OpCodes.Ldarg, 4);
-        cil.Emit(OpCodes.Call, runtime.TypedArrayBaseCtor);
+        cil.Emit(OpCodes.Call, arrays.BaseCtor);
         cil.Emit(OpCodes.Ret);
 
         // protected override $TypedArray CreateOfLength(int length) => new $XArray(length)
         var col = t.DefineMethod("CreateOfLength",
             MethodAttributes.Family | MethodAttributes.Virtual | MethodAttributes.HideBySig,
-            runtime.TypedArrayBaseType, [_types.Int32]);
+            arrays.BaseType, [_types.Int32]);
         var colIl = col.GetILGenerator();
         colIl.Emit(OpCodes.Ldarg_1);
         colIl.Emit(OpCodes.Newobj, lengthCtor);
         colIl.Emit(OpCodes.Ret);
-        t.DefineMethodOverride(col, _typedArrayCreateOfLength!);
+        t.DefineMethodOverride(col, arrays.CreateOfLength);
 
         // protected override $TypedArray CreateView(int byteOffset, int length)
         //   => new $XArray(_buffer, byteOffset, length, _arrayBuffer)
         var cv = t.DefineMethod("CreateView",
             MethodAttributes.Family | MethodAttributes.Virtual | MethodAttributes.HideBySig,
-            runtime.TypedArrayBaseType, [_types.Int32, _types.Int32]);
+            arrays.BaseType, [_types.Int32, _types.Int32]);
         var cvIl = cv.GetILGenerator();
-        cvIl.Emit(OpCodes.Ldarg_0); cvIl.Emit(OpCodes.Ldfld, _typedArrayBufferField!);
+        cvIl.Emit(OpCodes.Ldarg_0); cvIl.Emit(OpCodes.Ldfld, arrays.BufferField);
         cvIl.Emit(OpCodes.Ldarg_1);
         cvIl.Emit(OpCodes.Ldarg_2);
-        cvIl.Emit(OpCodes.Ldarg_0); cvIl.Emit(OpCodes.Ldfld, _typedArrayArrayBufferField!);
+        cvIl.Emit(OpCodes.Ldarg_0); cvIl.Emit(OpCodes.Ldfld, arrays.ArrayBufferField);
         cvIl.Emit(OpCodes.Newobj, viewCtor);
         cvIl.Emit(OpCodes.Ret);
-        t.DefineMethodOverride(cv, _typedArrayCreateView!);
+        t.DefineMethodOverride(cv, arrays.CreateView);
     }
 }

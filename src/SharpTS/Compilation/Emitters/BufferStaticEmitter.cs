@@ -149,11 +149,11 @@ public sealed class BufferStaticEmitter : IStaticTypeEmitterStrategy
                 }
 
                 // Buffer.from(typedArray): copy the view window (Node copies here).
-                if (ctx.Runtime!.TypedArrayBaseType is not null && ctx.Runtime!.RequireBuffer().HasTypedArrayCopy)
+                if (ctx.Runtime!.TypedArrays.Implementation is not null && ctx.Runtime!.RequireBuffer().HasTypedArrayCopy)
                 {
                     var notTypedArrayLabel = il.DefineLabel();
                     il.Emit(OpCodes.Dup);
-                    il.Emit(OpCodes.Isinst, ctx.Runtime!.TypedArrayBaseType);
+                    il.Emit(OpCodes.Isinst, ctx.Runtime!.TypedArrays.RequireImplementation().BaseType);
                     il.Emit(OpCodes.Brfalse, notTypedArrayLabel);
                     il.Emit(OpCodes.Ldnull); // offset
                     il.Emit(OpCodes.Ldnull); // length

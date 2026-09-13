@@ -5,25 +5,14 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
-    // TypedArray type definitions
-    private TypeBuilder? _typedArrayBaseType;
-    private FieldBuilder? _typedArrayBufferField;
-    private FieldBuilder? _typedArrayByteOffsetField;
-    private FieldBuilder? _typedArrayLengthField;
-    private FieldBuilder? _typedArrayArrayBufferField;
-    private MethodBuilder? _typedArrayBytesPerElementGetter;
-    // Abstract per-concrete factories used by the base Slice/Subarray (#940): create a fresh
-    // same-kind array (slice copies) / a view sharing the backing buffer (subarray aliases).
-    private MethodBuilder? _typedArrayCreateOfLength;
-    private MethodBuilder? _typedArrayCreateView;
-
     /// <summary>
     /// Emits all TypedArray types for standalone DLLs.
     /// </summary>
     private void EmitTypedArrayTypes(ModuleBuilder module, EmittedRuntime runtime)
     {
+        var arrays = runtime.TypedArrays.RequireImplementation();
         // First emit the base class
-        EmitTypedArrayBaseType(module, runtime);
+        EmitTypedArrayBaseType(module, arrays);
 
         // Then emit concrete types
         EmitConcreteTypedArrayType(module, runtime, "Int8Array", 1, true, false);
@@ -39,37 +28,36 @@ public partial class RuntimeEmitter
         EmitConcreteTypedArrayType(module, runtime, "BigUint64Array", 8, false, false, isBigInt: true);
 
         // Finalize base type after all derived types are defined
-        _typedArrayBaseType!.CreateType();
+        arrays.BaseType.CreateType();
     }
 
     /// <summary>
     /// Emits the abstract $TypedArray base class.
     /// </summary>
-    private void EmitTypedArrayBaseType(ModuleBuilder module, EmittedRuntime runtime)
+    private void EmitTypedArrayBaseType(ModuleBuilder module, EmittedTypedArrayImplementation arrays)
     {
-        _typedArrayBaseType = EmitTypeDefinitions.DefineType(module,
+        arrays.BaseType = EmitTypeDefinitions.DefineType(module,
             "$TypedArray",
             TypeAttributes.Public | TypeAttributes.Abstract | TypeAttributes.Class,
             _types.Object
         );
-        runtime.TypedArrayBaseType = _typedArrayBaseType;
 
         // Fields
-        _typedArrayBufferField = _typedArrayBaseType.DefineField("_buffer", typeof(byte[]), FieldAttributes.Family);
-        _typedArrayByteOffsetField = _typedArrayBaseType.DefineField("_byteOffset", _types.Int32, FieldAttributes.Family);
-        _typedArrayLengthField = _typedArrayBaseType.DefineField("_length", _types.Int32, FieldAttributes.Family);
-        _typedArrayArrayBufferField = _typedArrayBaseType.DefineField("_arrayBuffer", _types.Object, FieldAttributes.Family);
+        arrays.BufferField = arrays.BaseType.DefineField("_buffer", typeof(byte[]), FieldAttributes.Family);
+        arrays.ByteOffsetField = arrays.BaseType.DefineField("_byteOffset", _types.Int32, FieldAttributes.Family);
+        arrays.LengthField = arrays.BaseType.DefineField("_length", _types.Int32, FieldAttributes.Family);
+        arrays.ArrayBufferField = arrays.BaseType.DefineField("_arrayBuffer", _types.Object, FieldAttributes.Family);
 
         // Abstract properties
-        _typedArrayBytesPerElementGetter = EmitTypedArrayAbstractProperty(_typedArrayBaseType, "BytesPerElement", _types.Int32);
-        EmitTypedArrayAbstractProperty(_typedArrayBaseType, "TypeName", _types.String);
-        runtime.TypedArrayElementGet = _typedArrayBaseType.DefineMethod(
+        arrays.BytesPerElementGetter = EmitTypedArrayAbstractProperty(arrays.BaseType, "BytesPerElement", _types.Int32);
+        EmitTypedArrayAbstractProperty(arrays.BaseType, "TypeName", _types.String);
+        arrays.ElementGet = arrays.BaseType.DefineMethod(
             "Get",
             MethodAttributes.Public | MethodAttributes.Abstract | MethodAttributes.Virtual | MethodAttributes.HideBySig,
             _types.Object,
             [_types.Int32]
         );
-        runtime.TypedArrayElementSet = _typedArrayBaseType.DefineMethod(
+        arrays.ElementSet = arrays.BaseType.DefineMethod(
             "Set",
             MethodAttributes.Public | MethodAttributes.Abstract | MethodAttributes.Virtual | MethodAttributes.HideBySig,
             _types.Void,
@@ -77,69 +65,69 @@ public partial class RuntimeEmitter
         );
 
         // Concrete properties: Length, ByteOffset, ByteLength, Buffer
-        EmitTypedArrayLengthProperty(_typedArrayBaseType, runtime);
-        EmitTypedArrayByteOffsetProperty(_typedArrayBaseType, runtime);
-        EmitTypedArrayByteLengthProperty(_typedArrayBaseType, runtime);
-        EmitTypedArrayBufferProperty(_typedArrayBaseType, runtime);
+        EmitTypedArrayLengthProperty(arrays.BaseType, arrays);
+        EmitTypedArrayByteOffsetProperty(arrays.BaseType, arrays);
+        EmitTypedArrayByteLengthProperty(arrays.BaseType, arrays);
+        EmitTypedArrayBufferProperty(arrays.BaseType, arrays);
 
         // Protected constructor
-        var baseCtor = _typedArrayBaseType.DefineConstructor(
+        var baseCtor = arrays.BaseType.DefineConstructor(
             MethodAttributes.Family,
             CallingConventions.Standard,
             [typeof(byte[]), _types.Int32, _types.Int32, _types.Object]
         );
-        runtime.TypedArrayBaseCtor = baseCtor;
+        arrays.BaseCtor = baseCtor;
 
         var il = baseCtor.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Call, _types.GetDefaultConstructor(_types.Object));
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Stfld, _typedArrayBufferField);
+        il.Emit(OpCodes.Stfld, arrays.BufferField);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Stfld, _typedArrayByteOffsetField);
+        il.Emit(OpCodes.Stfld, arrays.ByteOffsetField);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_3);
-        il.Emit(OpCodes.Stfld, _typedArrayLengthField);
+        il.Emit(OpCodes.Stfld, arrays.LengthField);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg, 4);
-        il.Emit(OpCodes.Stfld, _typedArrayArrayBufferField);
+        il.Emit(OpCodes.Stfld, arrays.ArrayBufferField);
         il.Emit(OpCodes.Ret);
 
         // GetBuffer method for internal access
-        var getBufferMethod = _typedArrayBaseType.DefineMethod(
+        var getBufferMethod = arrays.BaseType.DefineMethod(
             "GetBuffer",
             MethodAttributes.Public,
             typeof(byte[]),
             Type.EmptyTypes
         );
-        runtime.TypedArrayGetBuffer = getBufferMethod;
+        arrays.GetBuffer = getBufferMethod;
         var getBufferIl = getBufferMethod.GetILGenerator();
         getBufferIl.Emit(OpCodes.Ldarg_0);
-        getBufferIl.Emit(OpCodes.Ldfld, _typedArrayBufferField);
+        getBufferIl.Emit(OpCodes.Ldfld, arrays.BufferField);
         getBufferIl.Emit(OpCodes.Ret);
 
         // Abstract factories overridden by each concrete type — let the base-class Slice
         // (fresh same-kind copy) and Subarray (buffer-sharing view) build the right concrete
         // type without the base needing to know the concrete constructors (#940).
-        _typedArrayCreateOfLength = _typedArrayBaseType.DefineMethod(
+        arrays.CreateOfLength = arrays.BaseType.DefineMethod(
             "CreateOfLength",
             MethodAttributes.Family | MethodAttributes.Abstract | MethodAttributes.Virtual | MethodAttributes.HideBySig,
-            _typedArrayBaseType,
+            arrays.BaseType,
             [_types.Int32]
         );
-        _typedArrayCreateView = _typedArrayBaseType.DefineMethod(
+        arrays.CreateView = arrays.BaseType.DefineMethod(
             "CreateView",
             MethodAttributes.Family | MethodAttributes.Abstract | MethodAttributes.Virtual | MethodAttributes.HideBySig,
-            _typedArrayBaseType,
+            arrays.BaseType,
             [_types.Int32, _types.Int32]
         );
 
         // Bulk instance methods (fill/copyWithin/reverse/set/slice/subarray/indexOf/…) mirroring
         // the interpreter's GetMember surface. Emitted here, before CreateType, so they live on
         // the base type. BCL-only — standalone-safe.
-        EmitTypedArrayBulkMethods(_typedArrayBaseType, runtime);
+        EmitTypedArrayBulkMethods(arrays.BaseType, arrays);
     }
 
     private MethodBuilder EmitTypedArrayAbstractProperty(TypeBuilder typeBuilder, string name, Type returnType)
@@ -155,7 +143,7 @@ public partial class RuntimeEmitter
         return getter;
     }
 
-    private void EmitTypedArrayLengthProperty(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTypedArrayLengthProperty(TypeBuilder typeBuilder, EmittedTypedArrayImplementation arrays)
     {
         var prop = typeBuilder.DefineProperty("Length", PropertyAttributes.None, _types.Int32, Type.EmptyTypes);
         var getter = typeBuilder.DefineMethod(
@@ -164,15 +152,15 @@ public partial class RuntimeEmitter
             _types.Int32,
             Type.EmptyTypes
         );
-        runtime.TypedArrayLengthGetter = getter;
+        arrays.LengthGetter = getter;
         var il = getter.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _typedArrayLengthField!);
+        il.Emit(OpCodes.Ldfld, arrays.LengthField);
         il.Emit(OpCodes.Ret);
         prop.SetGetMethod(getter);
     }
 
-    private void EmitTypedArrayByteOffsetProperty(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTypedArrayByteOffsetProperty(TypeBuilder typeBuilder, EmittedTypedArrayImplementation arrays)
     {
         var prop = typeBuilder.DefineProperty("ByteOffset", PropertyAttributes.None, _types.Int32, Type.EmptyTypes);
         var getter = typeBuilder.DefineMethod(
@@ -181,15 +169,15 @@ public partial class RuntimeEmitter
             _types.Int32,
             Type.EmptyTypes
         );
-        runtime.TypedArrayByteOffsetGetter = getter;
+        arrays.ByteOffsetGetter = getter;
         var il = getter.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _typedArrayByteOffsetField!);
+        il.Emit(OpCodes.Ldfld, arrays.ByteOffsetField);
         il.Emit(OpCodes.Ret);
         prop.SetGetMethod(getter);
     }
 
-    private void EmitTypedArrayByteLengthProperty(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTypedArrayByteLengthProperty(TypeBuilder typeBuilder, EmittedTypedArrayImplementation arrays)
     {
         var prop = typeBuilder.DefineProperty("ByteLength", PropertyAttributes.None, _types.Int32, Type.EmptyTypes);
         var getter = typeBuilder.DefineMethod(
@@ -198,19 +186,19 @@ public partial class RuntimeEmitter
             _types.Int32,
             Type.EmptyTypes
         );
-        runtime.TypedArrayByteLengthGetter = getter;
+        arrays.ByteLengthGetter = getter;
         var il = getter.GetILGenerator();
         // return _length * BytesPerElement
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _typedArrayLengthField!);
+        il.Emit(OpCodes.Ldfld, arrays.LengthField);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Callvirt, _typedArrayBytesPerElementGetter!);
+        il.Emit(OpCodes.Callvirt, arrays.BytesPerElementGetter);
         il.Emit(OpCodes.Mul);
         il.Emit(OpCodes.Ret);
         prop.SetGetMethod(getter);
     }
 
-    private void EmitTypedArrayBufferProperty(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTypedArrayBufferProperty(TypeBuilder typeBuilder, EmittedTypedArrayImplementation arrays)
     {
         var prop = typeBuilder.DefineProperty("Buffer", PropertyAttributes.None, _types.Object, Type.EmptyTypes);
         var getter = typeBuilder.DefineMethod(
@@ -219,10 +207,10 @@ public partial class RuntimeEmitter
             _types.Object,
             Type.EmptyTypes
         );
-        runtime.TypedArrayBufferGetter = getter;
+        arrays.BufferGetter = getter;
         var il = getter.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _typedArrayArrayBufferField!);
+        il.Emit(OpCodes.Ldfld, arrays.ArrayBufferField);
         il.Emit(OpCodes.Ret);
         prop.SetGetMethod(getter);
     }
@@ -240,15 +228,16 @@ public partial class RuntimeEmitter
         bool isFloat = false,
         bool isBigInt = false)
     {
+        var arrays = runtime.TypedArrays.RequireImplementation();
         var typeBuilder = EmitTypeDefinitions.DefineType(
             module,
             $"${name}",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.Class,
-            _typedArrayBaseType
+            arrays.BaseType
         );
 
         // Store type reference in runtime
-        StoreTypedArrayType(runtime, name, typeBuilder);
+        StoreTypedArrayType(arrays, name, typeBuilder);
 
         // Override BytesPerElement
         EmitBytesPerElementProperty(typeBuilder, bytesPerElement);
@@ -257,15 +246,15 @@ public partial class RuntimeEmitter
         EmitTypeNameProperty(typeBuilder, name);
 
         // Constructor: public $Uint8Array(int length)
-        var lengthCtor = EmitTypedArrayLengthConstructor(typeBuilder, runtime, bytesPerElement);
-        StoreTypedArrayLengthCtor(runtime, name, lengthCtor);
+        var lengthCtor = EmitTypedArrayLengthConstructor(typeBuilder, arrays, bytesPerElement);
+        StoreTypedArrayLengthCtor(arrays, name, lengthCtor);
 
         // Constructor: public $Uint8Array(object buffer, int byteOffset, int? length)
         var bufferCtor = EmitTypedArrayBufferConstructor(typeBuilder, runtime, bytesPerElement);
-        StoreTypedArrayBufferCtor(runtime, name, bufferCtor);
+        StoreTypedArrayBufferCtor(arrays, name, bufferCtor);
 
         // Indexer: public object this[int index] { get; set; }
-        EmitTypedArrayIndexer(typeBuilder, runtime, bytesPerElement, signed, clamped, isFloat, isBigInt);
+        EmitTypedArrayIndexer(typeBuilder, arrays, bytesPerElement, signed, clamped, isFloat, isBigInt);
 
         // Unboxed numeric element accessors (#3): GetUnboxed/SetUnboxed return/accept a native
         // double, for the compiled fast path (ILEmitter binds them at statically-typed sites).
@@ -273,50 +262,50 @@ public partial class RuntimeEmitter
         if (!isBigInt && !clamped)
         {
             var elementType = name.EndsWith("Array") ? name[..^5] : name;
-            EmitUnboxedNumericAccessors(typeBuilder, runtime, elementType, bytesPerElement, signed, isFloat);
+            EmitUnboxedNumericAccessors(typeBuilder, arrays, elementType, bytesPerElement, signed, isFloat);
         }
 
         // Buffer-sharing ctor + CreateOfLength/CreateView overrides backing the base
         // Slice/Subarray (#940).
-        EmitTypedArrayFactoryMembers(typeBuilder, runtime, lengthCtor);
+        EmitTypedArrayFactoryMembers(typeBuilder, arrays, lengthCtor);
 
         // Finalize type
         typeBuilder.CreateType();
     }
 
-    private void StoreTypedArrayType(EmittedRuntime runtime, string name, TypeBuilder type)
+    private void StoreTypedArrayType(EmittedTypedArrayImplementation arrays, string name, TypeBuilder type)
     {
         switch (name)
         {
-            case "Int8Array": runtime.Int8ArrayType = type; break;
-            case "Uint8Array": runtime.Uint8ArrayType = type; break;
-            case "Uint8ClampedArray": runtime.Uint8ClampedArrayType = type; break;
-            case "Int16Array": runtime.Int16ArrayType = type; break;
-            case "Uint16Array": runtime.Uint16ArrayType = type; break;
-            case "Int32Array": runtime.Int32ArrayType = type; break;
-            case "Uint32Array": runtime.Uint32ArrayType = type; break;
-            case "Float32Array": runtime.Float32ArrayType = type; break;
-            case "Float64Array": runtime.Float64ArrayType = type; break;
-            case "BigInt64Array": runtime.BigInt64ArrayType = type; break;
-            case "BigUint64Array": runtime.BigUint64ArrayType = type; break;
+            case "Int8Array": arrays.Int8ArrayType = type; break;
+            case "Uint8Array": arrays.Uint8ArrayType = type; break;
+            case "Uint8ClampedArray": arrays.Uint8ClampedArrayType = type; break;
+            case "Int16Array": arrays.Int16ArrayType = type; break;
+            case "Uint16Array": arrays.Uint16ArrayType = type; break;
+            case "Int32Array": arrays.Int32ArrayType = type; break;
+            case "Uint32Array": arrays.Uint32ArrayType = type; break;
+            case "Float32Array": arrays.Float32ArrayType = type; break;
+            case "Float64Array": arrays.Float64ArrayType = type; break;
+            case "BigInt64Array": arrays.BigInt64ArrayType = type; break;
+            case "BigUint64Array": arrays.BigUint64ArrayType = type; break;
         }
     }
 
-    private void StoreTypedArrayBufferCtor(EmittedRuntime runtime, string name, ConstructorBuilder ctor)
+    private void StoreTypedArrayBufferCtor(EmittedTypedArrayImplementation arrays, string name, ConstructorBuilder ctor)
     {
         switch (name)
         {
-            case "Int8Array": runtime.Int8ArrayBufferCtor = ctor; break;
-            case "Uint8Array": runtime.Uint8ArrayBufferCtor = ctor; break;
-            case "Uint8ClampedArray": runtime.Uint8ClampedArrayBufferCtor = ctor; break;
-            case "Int16Array": runtime.Int16ArrayBufferCtor = ctor; break;
-            case "Uint16Array": runtime.Uint16ArrayBufferCtor = ctor; break;
-            case "Int32Array": runtime.Int32ArrayBufferCtor = ctor; break;
-            case "Uint32Array": runtime.Uint32ArrayBufferCtor = ctor; break;
-            case "Float32Array": runtime.Float32ArrayBufferCtor = ctor; break;
-            case "Float64Array": runtime.Float64ArrayBufferCtor = ctor; break;
-            case "BigInt64Array": runtime.BigInt64ArrayBufferCtor = ctor; break;
-            case "BigUint64Array": runtime.BigUint64ArrayBufferCtor = ctor; break;
+            case "Int8Array": arrays.Int8ArrayBufferCtor = ctor; break;
+            case "Uint8Array": arrays.Uint8ArrayBufferCtor = ctor; break;
+            case "Uint8ClampedArray": arrays.Uint8ClampedArrayBufferCtor = ctor; break;
+            case "Int16Array": arrays.Int16ArrayBufferCtor = ctor; break;
+            case "Uint16Array": arrays.Uint16ArrayBufferCtor = ctor; break;
+            case "Int32Array": arrays.Int32ArrayBufferCtor = ctor; break;
+            case "Uint32Array": arrays.Uint32ArrayBufferCtor = ctor; break;
+            case "Float32Array": arrays.Float32ArrayBufferCtor = ctor; break;
+            case "Float64Array": arrays.Float64ArrayBufferCtor = ctor; break;
+            case "BigInt64Array": arrays.BigInt64ArrayBufferCtor = ctor; break;
+            case "BigUint64Array": arrays.BigUint64ArrayBufferCtor = ctor; break;
         }
     }
 
@@ -350,7 +339,7 @@ public partial class RuntimeEmitter
         prop.SetGetMethod(getter);
     }
 
-    private ConstructorBuilder EmitTypedArrayLengthConstructor(TypeBuilder typeBuilder, EmittedRuntime runtime, int bytesPerElement)
+    private ConstructorBuilder EmitTypedArrayLengthConstructor(TypeBuilder typeBuilder, EmittedTypedArrayImplementation arrays, int bytesPerElement)
     {
         // Constructor: public $XArray(int length)
         var ctor = typeBuilder.DefineConstructor(
@@ -375,27 +364,27 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Call, runtime.TypedArrayBaseCtor);
+        il.Emit(OpCodes.Call, arrays.BaseCtor);
         il.Emit(OpCodes.Ret);
 
         return ctor;
     }
 
-    private void StoreTypedArrayLengthCtor(EmittedRuntime runtime, string name, ConstructorBuilder ctor)
+    private void StoreTypedArrayLengthCtor(EmittedTypedArrayImplementation arrays, string name, ConstructorBuilder ctor)
     {
         switch (name)
         {
-            case "Int8Array": runtime.Int8ArrayLengthCtor = ctor; break;
-            case "Uint8Array": runtime.Uint8ArrayLengthCtor = ctor; break;
-            case "Uint8ClampedArray": runtime.Uint8ClampedArrayLengthCtor = ctor; break;
-            case "Int16Array": runtime.Int16ArrayLengthCtor = ctor; break;
-            case "Uint16Array": runtime.Uint16ArrayLengthCtor = ctor; break;
-            case "Int32Array": runtime.Int32ArrayLengthCtor = ctor; break;
-            case "Uint32Array": runtime.Uint32ArrayLengthCtor = ctor; break;
-            case "Float32Array": runtime.Float32ArrayLengthCtor = ctor; break;
-            case "Float64Array": runtime.Float64ArrayLengthCtor = ctor; break;
-            case "BigInt64Array": runtime.BigInt64ArrayLengthCtor = ctor; break;
-            case "BigUint64Array": runtime.BigUint64ArrayLengthCtor = ctor; break;
+            case "Int8Array": arrays.Int8ArrayLengthCtor = ctor; break;
+            case "Uint8Array": arrays.Uint8ArrayLengthCtor = ctor; break;
+            case "Uint8ClampedArray": arrays.Uint8ClampedArrayLengthCtor = ctor; break;
+            case "Int16Array": arrays.Int16ArrayLengthCtor = ctor; break;
+            case "Uint16Array": arrays.Uint16ArrayLengthCtor = ctor; break;
+            case "Int32Array": arrays.Int32ArrayLengthCtor = ctor; break;
+            case "Uint32Array": arrays.Uint32ArrayLengthCtor = ctor; break;
+            case "Float32Array": arrays.Float32ArrayLengthCtor = ctor; break;
+            case "Float64Array": arrays.Float64ArrayLengthCtor = ctor; break;
+            case "BigInt64Array": arrays.BigInt64ArrayLengthCtor = ctor; break;
+            case "BigUint64Array": arrays.BigUint64ArrayLengthCtor = ctor; break;
         }
     }
 
@@ -405,6 +394,7 @@ public partial class RuntimeEmitter
         Justification = "The fixed Type.GetMethod(string, Type[]) BCL overload is used only as an IL token for CoreCLR-generated output; the native host never reflects over a trimmed application type.")]
     private ConstructorBuilder EmitTypedArrayBufferConstructor(TypeBuilder typeBuilder, EmittedRuntime runtime, int bytesPerElement)
     {
+        var arrays = runtime.TypedArrays.RequireImplementation();
         // Constructor: public $XArray(object buffer, int byteOffset, int? length)
         var ctor = typeBuilder.DefineConstructor(
             MethodAttributes.Public,
@@ -536,7 +526,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Ldloc, actualLengthLocal);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.TypedArrayBaseCtor);
+        il.Emit(OpCodes.Call, arrays.BaseCtor);
         il.Emit(OpCodes.Ret);
 
         return ctor;
@@ -544,7 +534,7 @@ public partial class RuntimeEmitter
 
     private void EmitTypedArrayIndexer(
         TypeBuilder typeBuilder,
-        EmittedRuntime runtime,
+        EmittedTypedArrayImplementation arrays,
         int bytesPerElement,
         bool signed,
         bool clamped,
@@ -564,7 +554,7 @@ public partial class RuntimeEmitter
 
         // Calculate byte index: _byteOffset + index * bytesPerElement
         getIl.Emit(OpCodes.Ldarg_0);
-        getIl.Emit(OpCodes.Ldfld, _typedArrayByteOffsetField!);
+        getIl.Emit(OpCodes.Ldfld, arrays.ByteOffsetField);
         getIl.Emit(OpCodes.Ldarg_1);
         getIl.Emit(OpCodes.Ldc_I4, bytesPerElement);
         getIl.Emit(OpCodes.Mul);
@@ -575,7 +565,7 @@ public partial class RuntimeEmitter
         if (bytesPerElement == 1)
         {
             getIl.Emit(OpCodes.Ldarg_0);
-            getIl.Emit(OpCodes.Ldfld, _typedArrayBufferField!);
+            getIl.Emit(OpCodes.Ldfld, arrays.BufferField);
             getIl.Emit(OpCodes.Ldloc, indexLocal);
             getIl.Emit(OpCodes.Ldelem_U1);
             if (signed)
@@ -587,7 +577,7 @@ public partial class RuntimeEmitter
         {
             // Use BitConverter.ToInt16/ToUInt16
             getIl.Emit(OpCodes.Ldarg_0);
-            getIl.Emit(OpCodes.Ldfld, _typedArrayBufferField!);
+            getIl.Emit(OpCodes.Ldfld, arrays.BufferField);
             getIl.Emit(OpCodes.Ldloc, indexLocal);
             if (signed)
                 getIl.Emit(OpCodes.Call, typeof(BitConverter).GetMethod("ToInt16", [typeof(byte[]), typeof(int)])!);
@@ -599,7 +589,7 @@ public partial class RuntimeEmitter
         else if (bytesPerElement == 4 && isFloat)
         {
             getIl.Emit(OpCodes.Ldarg_0);
-            getIl.Emit(OpCodes.Ldfld, _typedArrayBufferField!);
+            getIl.Emit(OpCodes.Ldfld, arrays.BufferField);
             getIl.Emit(OpCodes.Ldloc, indexLocal);
             getIl.Emit(OpCodes.Call, typeof(BitConverter).GetMethod("ToSingle", [typeof(byte[]), typeof(int)])!);
             getIl.Emit(OpCodes.Conv_R8);
@@ -608,7 +598,7 @@ public partial class RuntimeEmitter
         else if (bytesPerElement == 4)
         {
             getIl.Emit(OpCodes.Ldarg_0);
-            getIl.Emit(OpCodes.Ldfld, _typedArrayBufferField!);
+            getIl.Emit(OpCodes.Ldfld, arrays.BufferField);
             getIl.Emit(OpCodes.Ldloc, indexLocal);
             if (signed)
             {
@@ -627,7 +617,7 @@ public partial class RuntimeEmitter
         else if (bytesPerElement == 8 && isFloat)
         {
             getIl.Emit(OpCodes.Ldarg_0);
-            getIl.Emit(OpCodes.Ldfld, _typedArrayBufferField!);
+            getIl.Emit(OpCodes.Ldfld, arrays.BufferField);
             getIl.Emit(OpCodes.Ldloc, indexLocal);
             getIl.Emit(OpCodes.Call, typeof(BitConverter).GetMethod("ToDouble", [typeof(byte[]), typeof(int)])!);
             getIl.Emit(OpCodes.Box, _types.Double);
@@ -636,7 +626,7 @@ public partial class RuntimeEmitter
         {
             // For BigInt, return as BigInteger
             getIl.Emit(OpCodes.Ldarg_0);
-            getIl.Emit(OpCodes.Ldfld, _typedArrayBufferField!);
+            getIl.Emit(OpCodes.Ldfld, arrays.BufferField);
             getIl.Emit(OpCodes.Ldloc, indexLocal);
             if (signed)
                 getIl.Emit(OpCodes.Call, typeof(BitConverter).GetMethod("ToInt64", [typeof(byte[]), typeof(int)])!);
@@ -651,7 +641,7 @@ public partial class RuntimeEmitter
             getIl.Emit(OpCodes.Ldnull);
         }
         getIl.Emit(OpCodes.Ret);
-        typeBuilder.DefineMethodOverride(getter, runtime.TypedArrayElementGet);
+        typeBuilder.DefineMethodOverride(getter, arrays.ElementGet);
 
         // Setter: public void Set(int index, object value)
         var setter = typeBuilder.DefineMethod(
@@ -666,7 +656,7 @@ public partial class RuntimeEmitter
 
         // Calculate byte index
         setIl.Emit(OpCodes.Ldarg_0);
-        setIl.Emit(OpCodes.Ldfld, _typedArrayByteOffsetField!);
+        setIl.Emit(OpCodes.Ldfld, arrays.ByteOffsetField);
         setIl.Emit(OpCodes.Ldarg_1);
         setIl.Emit(OpCodes.Ldc_I4, bytesPerElement);
         setIl.Emit(OpCodes.Mul);
@@ -677,7 +667,7 @@ public partial class RuntimeEmitter
         if (bytesPerElement == 1)
         {
             setIl.Emit(OpCodes.Ldarg_0);
-            setIl.Emit(OpCodes.Ldfld, _typedArrayBufferField!);
+            setIl.Emit(OpCodes.Ldfld, arrays.BufferField);
             setIl.Emit(OpCodes.Ldloc, setIndexLocal);
             setIl.Emit(OpCodes.Ldarg_2);
             setIl.Emit(OpCodes.Call, typeof(Convert).GetMethod("ToDouble", [typeof(object)])!);
@@ -718,7 +708,7 @@ public partial class RuntimeEmitter
         {
             // Unsafe.WriteUnaligned(ref _buffer[byteIdx], (short|ushort)(int)Convert.ToDouble(value));
             setIl.Emit(OpCodes.Ldarg_0);
-            setIl.Emit(OpCodes.Ldfld, _typedArrayBufferField!);
+            setIl.Emit(OpCodes.Ldfld, arrays.BufferField);
             setIl.Emit(OpCodes.Ldloc, setIndexLocal);
             setIl.Emit(OpCodes.Ldelema, typeof(byte));
             setIl.Emit(OpCodes.Ldarg_2);
@@ -738,7 +728,7 @@ public partial class RuntimeEmitter
         else if (bytesPerElement == 4)
         {
             setIl.Emit(OpCodes.Ldarg_0);
-            setIl.Emit(OpCodes.Ldfld, _typedArrayBufferField!);
+            setIl.Emit(OpCodes.Ldfld, arrays.BufferField);
             setIl.Emit(OpCodes.Ldloc, setIndexLocal);
             setIl.Emit(OpCodes.Ldelema, typeof(byte));
             if (isFloat)
@@ -767,7 +757,7 @@ public partial class RuntimeEmitter
         else if (bytesPerElement == 8)
         {
             setIl.Emit(OpCodes.Ldarg_0);
-            setIl.Emit(OpCodes.Ldfld, _typedArrayBufferField!);
+            setIl.Emit(OpCodes.Ldfld, arrays.BufferField);
             setIl.Emit(OpCodes.Ldloc, setIndexLocal);
             setIl.Emit(OpCodes.Ldelema, typeof(byte));
             if (isFloat)
@@ -797,7 +787,7 @@ public partial class RuntimeEmitter
         }
 
         setIl.Emit(OpCodes.Ret);
-        typeBuilder.DefineMethodOverride(setter, runtime.TypedArrayElementSet);
+        typeBuilder.DefineMethodOverride(setter, arrays.ElementSet);
     }
 
     // double GetUnboxed(int index) / void SetUnboxed(int index, double value) on each concrete
@@ -810,7 +800,7 @@ public partial class RuntimeEmitter
     // the wider path's ldelema both preserve the current bounds fault. The double→element narrowing
     // matches the boxed Set's conv opcodes so the fast path and boxed fallback agree.
     private void EmitUnboxedNumericAccessors(
-        TypeBuilder typeBuilder, EmittedRuntime runtime, string elementType,
+        TypeBuilder typeBuilder, EmittedTypedArrayImplementation arrays, string elementType,
         int bytesPerElement, bool signed, bool isFloat)
     {
         var getU = typeBuilder.DefineMethod(
@@ -823,17 +813,17 @@ public partial class RuntimeEmitter
         var gil = getU.GetILGenerator();
         if (bytesPerElement == 1)
         {
-            EmitOneByteArrayAndIndex(gil);
+            EmitOneByteArrayAndIndex(arrays, gil);
             gil.Emit(signed ? OpCodes.Ldelem_I1 : OpCodes.Ldelem_U1);
             gil.Emit(OpCodes.Conv_R8);
         }
         else
         {
-            EmitElementRef(gil, bytesPerElement);
+            EmitElementRef(arrays, gil, bytesPerElement);
             EmitReadElementAsDouble(gil, bytesPerElement, signed, isFloat);
         }
         gil.Emit(OpCodes.Ret);
-        runtime.TypedArrayGetUnboxedByElement[elementType] = getU;
+        arrays.RegisterGetUnboxed(elementType, getU);
 
         var setU = typeBuilder.DefineMethod(
             "SetUnboxed",
@@ -845,7 +835,7 @@ public partial class RuntimeEmitter
         var sil = setU.GetILGenerator();
         if (bytesPerElement == 1)
         {
-            EmitOneByteArrayAndIndex(sil);
+            EmitOneByteArrayAndIndex(arrays, sil);
             sil.Emit(OpCodes.Ldarg_2);
             sil.Emit(OpCodes.Conv_I4);
             sil.Emit(signed ? OpCodes.Conv_I1 : OpCodes.Conv_U1);
@@ -853,41 +843,34 @@ public partial class RuntimeEmitter
         }
         else
         {
-            EmitElementRef(sil, bytesPerElement);   // ref byte destination
+            EmitElementRef(arrays, sil, bytesPerElement);   // ref byte destination
             sil.Emit(OpCodes.Ldarg_2);              // double value
             EmitNarrowDoubleAndWrite(sil, bytesPerElement, signed, isFloat);
         }
         sil.Emit(OpCodes.Ret);
-        runtime.TypedArraySetUnboxedByElement[elementType] = setU;
-
-        // Keep the Float64-specific handles populated for any direct references.
-        if (elementType == "Float64")
-        {
-            _ = getU;
-            _ = setU;
-        }
+        arrays.RegisterSetUnboxed(elementType, setU);
     }
 
     // Pushes the byte[] and absolute element index for a one-byte typed-array access.
     // Keeping the array reference (rather than taking a managed ref and calling Unsafe) lets
     // RyuJIT optimize the ordinary ldelem/stelem sequence in hot loops.
-    private void EmitOneByteArrayAndIndex(ILGenerator il)
+    private void EmitOneByteArrayAndIndex(EmittedTypedArrayImplementation arrays, ILGenerator il)
     {
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _typedArrayBufferField!);
+        il.Emit(OpCodes.Ldfld, arrays.BufferField);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _typedArrayByteOffsetField!);
+        il.Emit(OpCodes.Ldfld, arrays.ByteOffsetField);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Add);
     }
 
     // Pushes `ref byte` at _buffer[_byteOffset + index * bytesPerElement] (this=arg0, index=arg1).
-    private void EmitElementRef(ILGenerator il, int bytesPerElement)
+    private void EmitElementRef(EmittedTypedArrayImplementation arrays, ILGenerator il, int bytesPerElement)
     {
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _typedArrayBufferField!);
+        il.Emit(OpCodes.Ldfld, arrays.BufferField);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _typedArrayByteOffsetField!);
+        il.Emit(OpCodes.Ldfld, arrays.ByteOffsetField);
         il.Emit(OpCodes.Ldarg_1);
         if (bytesPerElement != 1)
         {

@@ -1337,8 +1337,8 @@ public partial class ILEmitter
         // exactly as the boxed path does today. Receiver is side-effect-free, so it is loaded once.
         if (!gi.Optional && gi.Object is Expr.Variable
             && _ctx.TypeMap?.Get(gi.Object) is TypeInfo.TypedArray gta
-            && _ctx.Runtime!.GetTypedArrayType(gta.ElementType) is { } gtaType
-            && _ctx.Runtime!.TypedArrayGetUnboxedByElement.TryGetValue(gta.ElementType, out var taGetU))
+            && _ctx.Runtime!.TypedArrays.Implementation?.GetNumericType(gta.ElementType) is { } gtaType
+            && _ctx.Runtime!.TypedArrays.RequireImplementation().GetUnboxedByElement.TryGetValue(gta.ElementType, out var taGetU))
         {
             if (TryGetDirectTypedArrayBacking(gi.Object, gta.ElementType, out var backing))
             {
@@ -1934,8 +1934,8 @@ public partial class ILEmitter
         // Evaluate index then value (the receiver var is side-effect-free).
         if (si.Object is Expr.Variable
             && _ctx.TypeMap?.Get(si.Object) is TypeInfo.TypedArray sta
-            && _ctx.Runtime!.GetTypedArrayType(sta.ElementType) is { } staType
-            && _ctx.Runtime!.TypedArraySetUnboxedByElement.TryGetValue(sta.ElementType, out var taSetU)
+            && _ctx.Runtime!.TypedArrays.Implementation?.GetNumericType(sta.ElementType) is { } staType
+            && _ctx.Runtime!.TypedArrays.RequireImplementation().SetUnboxedByElement.TryGetValue(sta.ElementType, out var taSetU)
             && _ctx.TypeMap?.Get(si.Value) is TypeInfo.Primitive { Type: TokenType.TYPE_NUMBER } or TypeInfo.NumberLiteral)
         {
             // Native-int fast path when the index is an integer loop counter (#928).

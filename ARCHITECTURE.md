@@ -333,7 +333,7 @@ coercion, `isView` checks, DataView/TypedArray backing storage, structured cloni
 stream consumers retain their other dependencies. Optional probes check component availability.
 ArrayBuffer has no remaining flat aliases; method-local IL construction state and BCL lookups stay
 with the emitter. Backing-storage identity, slice copies, and detached-byte-length behavior are
-unchanged. TypedArray retains its existing owner until its phase.
+unchanged. TypedArray storage has its own component, described below.
 
 SharedArrayBuffer uses optional `EmittedSharedArrayBufferRuntime`, also enabled by
 `HasAnyTypedArray`. Its nine declarations replace eight flat properties and own the readonly
@@ -348,7 +348,7 @@ DataView/TypedArray views, structured cloning, worker-realm sharing, and generic
 retain their other dependencies. The stable `$SharedArrayBuffer` shape and `GetBuffer` entry point
 still expose the same backing byte array to cross-realm consumers; slices allocate independent
 storage. Method-local construction handles and BCL lookups stay with the emitter. No flat
-SharedArrayBuffer aliases remain. TypedArray, worker/Atomics, and other residual families
+SharedArrayBuffer aliases remain. Worker/Atomics and other residual families
 remain tracked by #1599.
 
 DataView uses optional `EmittedDataViewRuntime` under the same `HasAnyTypedArray` gate. Its 53
@@ -363,8 +363,31 @@ Fourteen DataView-only reader/property/adapter and method-lookup helpers receive
 directly. Constructors retain ArrayBuffer/SharedArrayBuffer dependencies, while setters retain
 undefined and numeric/BigInt coercion dependencies. Bounds and byte-emission utilities keep
 explicit method-local IL inputs. Field and method shapes, endian behavior, feature implications,
-and buffer aliasing are unchanged. No flat DataView aliases remain; TypedArray and the remaining
-worker/Atomics and runtime families stay in #1599's residual scope.
+and buffer aliasing are unchanged. No flat DataView aliases remain; the remaining worker/Atomics
+and runtime families stay in #1599's residual scope.
+
+TypedArray uses required `EmittedTypedArrayRuntime` for its always-emitted detection helper and
+optional `EmittedTypedArrayImplementation`, enabled under the existing `HasAnyTypedArray` gate.
+Its 107 declarations replace 62 flat handles, own seven previously emitter-held storage/factory
+handles, and validate 38 entries in four registries. The duplicate emitter base-type field is
+removed. The implementation owns the base type and fields, all eleven concrete types and their
+constructors, bulk methods, the bound-method wrapper, and element/member adapters.
+
+The unboxed getter/setter registries require all eight numeric kinds; clamped and BigInt arrays
+keep their boxed paths. Constructor registries require all eleven kinds. Registries expose live
+read-only views during declaration, reject unsupported/duplicate/null registrations, and reject
+all writes after completion. Completion checks every required handle and entry before freezing
+the implementation and then the required detection component. Feature-absent programs still emit
+the false-returning detection helper, with no TypedArray implementation types or constructors.
+
+Thirty-four implementation/storage helpers and the required detection helper now take their
+owning component directly. Buffer constructors, bound-method finalization, structured cloning,
+Buffer, WebCrypto, Atomics, and generic dispatch retain their other dependencies and feature gates.
+Base/concrete type emission, early bound-method declarations, later constructor adapters, and
+bound-method finalization keep their order. Inlining, receiver/backing hoists, byte access, and
+fallback selection are unchanged. BCL lookups and method-local construction handles remain with
+the emitter; no flat TypedArray aliases or mutable registries remain. The remaining runtime
+families and final residual-state audit stay open in #1599.
 
 During emission, each handle becomes readable as soon as its declaration is assigned, so forward
 references do not require a method body to exist yet. An early read names the missing declaration.

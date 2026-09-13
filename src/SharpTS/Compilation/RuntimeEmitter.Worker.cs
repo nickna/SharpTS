@@ -257,6 +257,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitArrayBufferIsView(TypeBuilder runtimeType, EmittedRuntime runtime)
     {
+        var arrays = runtime.TypedArrays.RequireImplementation();
         var method = runtimeType.DefineMethod(
             "ArrayBufferIsView",
             MethodAttributes.Public | MethodAttributes.Static,
@@ -275,7 +276,7 @@ public partial class RuntimeEmitter
 
         // Check if arg is an emitted $TypedArray
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TypedArrayBaseType);
+        il.Emit(OpCodes.Isinst, arrays.BaseType);
         il.Emit(OpCodes.Brtrue, returnTrueLabel);
 
         // Check if arg is an emitted $DataView
@@ -623,6 +624,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitTypedArrayHelpers(TypeBuilder runtimeType, EmittedRuntime runtime)
     {
+        var arrays = runtime.TypedArrays.RequireImplementation();
         // Helper method for each TypedArray type - use type names instead of typeof()
         EmitTypedArrayHelper(runtimeType, runtime, "Int8Array");
         EmitTypedArrayHelper(runtimeType, runtime, "Uint8Array");
@@ -637,8 +639,8 @@ public partial class RuntimeEmitter
         EmitTypedArrayHelper(runtimeType, runtime, "BigUint64Array");
 
         // Get typed array element helper
-        EmitTypedArrayGetHelper(runtimeType, runtime);
-        EmitTypedArraySetHelper(runtimeType, runtime);
+        EmitTypedArrayGetHelper(runtimeType, arrays);
+        EmitTypedArraySetHelper(runtimeType, arrays);
 
         // General-purpose TypedArray creation from object
         EmitTypedArrayFromObjectHelpers(runtimeType, runtime);
@@ -655,12 +657,12 @@ public partial class RuntimeEmitter
         // call it, and tree-shaking the GetProperty arm itself was already done).
         // The body is gated on HasAnyTypedArray inside the helper — when no
         // typed-array type was emitted, IsTypedArray just returns false.
-        EmitIsTypedArrayHelper(runtimeType, runtime);
+        EmitIsTypedArrayHelper(runtimeType, runtime.TypedArrays);
         if (_features.HasAnyTypedArray)
         {
-            EmitGetTypedArrayElementHelper(runtimeType, runtime);
-            EmitSetTypedArrayElementHelper(runtimeType, runtime);
-            EmitGetTypedArrayMemberHelper(runtimeType, runtime);
+            EmitGetTypedArrayElementHelper(runtimeType, runtime.TypedArrays.RequireImplementation());
+            EmitSetTypedArrayElementHelper(runtimeType, runtime.TypedArrays.RequireImplementation());
+            EmitGetTypedArrayMemberHelper(runtimeType, runtime.TypedArrays.RequireImplementation());
         }
     }
 
@@ -668,7 +670,7 @@ public partial class RuntimeEmitter
     /// Emits a helper that checks if an object is a TypedArray.
     /// Handles both emitted pure-IL TypedArray types and interpreter TypedArrays.
     /// </summary>
-    private void EmitIsTypedArrayHelper(TypeBuilder runtimeType, EmittedRuntime runtime)
+    private void EmitIsTypedArrayHelper(TypeBuilder runtimeType, EmittedTypedArrayRuntime arrays)
     {
         var method = runtimeType.DefineMethod(
             "IsTypedArray",
@@ -676,7 +678,7 @@ public partial class RuntimeEmitter
             _types.Boolean,
             [_types.Object]
         );
-        runtime.IsTypedArrayMethod = method;
+        arrays.IsTypedArray = method;
 
         var il = method.GetILGenerator();
         var falseNullObjLabel = il.DefineLabel();
@@ -693,7 +695,7 @@ public partial class RuntimeEmitter
         if (_features.HasAnyTypedArray)
         {
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.TypedArrayBaseType);
+            il.Emit(OpCodes.Isinst, arrays.RequireImplementation().BaseType);
             il.Emit(OpCodes.Brtrue, trueLabel);
         }
 
@@ -714,7 +716,7 @@ public partial class RuntimeEmitter
     /// Emits a helper that gets an element from a TypedArray.
     /// Handles both emitted pure-IL TypedArray types and interpreter TypedArrays.
     /// </summary>
-    private void EmitGetTypedArrayElementHelper(TypeBuilder runtimeType, EmittedRuntime runtime)
+    private void EmitGetTypedArrayElementHelper(TypeBuilder runtimeType, EmittedTypedArrayImplementation arrays)
     {
         var method = runtimeType.DefineMethod(
             "GetTypedArrayElement",
@@ -722,13 +724,13 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object, _types.Int32]
         );
-        runtime.GetTypedArrayElementMethod = method;
+        arrays.GetElement = method;
 
         var il = method.GetILGenerator();
         var emittedPath = il.DefineLabel();
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TypedArrayBaseType);
+        il.Emit(OpCodes.Isinst, arrays.BaseType);
         il.Emit(OpCodes.Brtrue, emittedPath);
 
         il.Emit(OpCodes.Ldstr, "TypedArray element access requires emitted typed arrays.");
@@ -737,9 +739,9 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(emittedPath);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TypedArrayBaseType);
+        il.Emit(OpCodes.Castclass, arrays.BaseType);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, runtime.TypedArrayElementGet);
+        il.Emit(OpCodes.Callvirt, arrays.ElementGet);
         il.Emit(OpCodes.Ret);
     }
 
@@ -747,7 +749,7 @@ public partial class RuntimeEmitter
     /// Emits a helper that sets an element in a TypedArray.
     /// Handles both emitted pure-IL TypedArray types and interpreter TypedArrays.
     /// </summary>
-    private void EmitSetTypedArrayElementHelper(TypeBuilder runtimeType, EmittedRuntime runtime)
+    private void EmitSetTypedArrayElementHelper(TypeBuilder runtimeType, EmittedTypedArrayImplementation arrays)
     {
         var method = runtimeType.DefineMethod(
             "SetTypedArrayElement",
@@ -755,13 +757,13 @@ public partial class RuntimeEmitter
             _types.Void,
             [_types.Object, _types.Int32, _types.Object]
         );
-        runtime.SetTypedArrayElementMethod = method;
+        arrays.SetElement = method;
 
         var il = method.GetILGenerator();
         var emittedPath = il.DefineLabel();
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TypedArrayBaseType);
+        il.Emit(OpCodes.Isinst, arrays.BaseType);
         il.Emit(OpCodes.Brtrue, emittedPath);
 
         il.Emit(OpCodes.Ldstr, "TypedArray element assignment requires emitted typed arrays.");
@@ -770,10 +772,10 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(emittedPath);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TypedArrayBaseType);
+        il.Emit(OpCodes.Castclass, arrays.BaseType);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Callvirt, runtime.TypedArrayElementSet);
+        il.Emit(OpCodes.Callvirt, arrays.ElementSet);
         il.Emit(OpCodes.Ret);
     }
 
@@ -781,7 +783,7 @@ public partial class RuntimeEmitter
     /// Emits a helper that gets a member from a TypedArray.
     /// Handles both emitted pure-IL TypedArray types and interpreter TypedArrays.
     /// </summary>
-    private void EmitGetTypedArrayMemberHelper(TypeBuilder runtimeType, EmittedRuntime runtime)
+    private void EmitGetTypedArrayMemberHelper(TypeBuilder runtimeType, EmittedTypedArrayImplementation arrays)
     {
         var method = runtimeType.DefineMethod(
             "GetTypedArrayMember",
@@ -789,10 +791,9 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object, _types.String]
         );
-        runtime.GetTypedArrayMemberMethod = method;
+        arrays.GetMember = method;
 
         var il = method.GetILGenerator();
-        var typedArrayBytesPerElementGetter = _types.GetMethod(runtime.TypedArrayBaseType, "get_BytesPerElement");
 
         var endLabel = il.DefineLabel();
         var checkByteLengthLabel = il.DefineLabel();
@@ -805,7 +806,7 @@ public partial class RuntimeEmitter
 
         // Check if object is an emitted $TypedArray
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TypedArrayBaseType);
+        il.Emit(OpCodes.Isinst, arrays.BaseType);
         il.Emit(OpCodes.Brfalse, returnNullLabel);
 
         // It's an emitted TypedArray - check property name
@@ -817,8 +818,8 @@ public partial class RuntimeEmitter
 
         // Return length
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TypedArrayBaseType);
-        il.Emit(OpCodes.Callvirt, runtime.TypedArrayLengthGetter);
+        il.Emit(OpCodes.Castclass, arrays.BaseType);
+        il.Emit(OpCodes.Callvirt, arrays.LengthGetter);
         il.Emit(OpCodes.Conv_R8);
         il.Emit(OpCodes.Box, _types.Double);
         il.Emit(OpCodes.Br, endLabel);
@@ -832,8 +833,8 @@ public partial class RuntimeEmitter
 
         // Return byteLength
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TypedArrayBaseType);
-        il.Emit(OpCodes.Callvirt, runtime.TypedArrayByteLengthGetter);
+        il.Emit(OpCodes.Castclass, arrays.BaseType);
+        il.Emit(OpCodes.Callvirt, arrays.ByteLengthGetter);
         il.Emit(OpCodes.Conv_R8);
         il.Emit(OpCodes.Box, _types.Double);
         il.Emit(OpCodes.Br, endLabel);
@@ -847,8 +848,8 @@ public partial class RuntimeEmitter
 
         // Return byteOffset
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TypedArrayBaseType);
-        il.Emit(OpCodes.Callvirt, runtime.TypedArrayByteOffsetGetter);
+        il.Emit(OpCodes.Castclass, arrays.BaseType);
+        il.Emit(OpCodes.Callvirt, arrays.ByteOffsetGetter);
         il.Emit(OpCodes.Conv_R8);
         il.Emit(OpCodes.Box, _types.Double);
         il.Emit(OpCodes.Br, endLabel);
@@ -862,8 +863,8 @@ public partial class RuntimeEmitter
 
         // Return buffer
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TypedArrayBaseType);
-        il.Emit(OpCodes.Callvirt, runtime.TypedArrayBufferGetter);
+        il.Emit(OpCodes.Castclass, arrays.BaseType);
+        il.Emit(OpCodes.Callvirt, arrays.BufferGetter);
         il.Emit(OpCodes.Br, endLabel);
 
         il.MarkLabel(checkBytesPerElementLabel);
@@ -875,8 +876,8 @@ public partial class RuntimeEmitter
 
         // Return BYTES_PER_ELEMENT (call abstract BytesPerElement property)
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TypedArrayBaseType);
-        il.Emit(OpCodes.Callvirt, typedArrayBytesPerElementGetter);
+        il.Emit(OpCodes.Castclass, arrays.BaseType);
+        il.Emit(OpCodes.Callvirt, arrays.BytesPerElementGetter);
         il.Emit(OpCodes.Conv_R8);
         il.Emit(OpCodes.Box, _types.Double);
         il.Emit(OpCodes.Br, endLabel);
@@ -899,9 +900,9 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(buildWrapperLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TypedArrayBaseType);
+        il.Emit(OpCodes.Castclass, arrays.BaseType);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Newobj, runtime.BoundTypedArrayMethodCtor);
+        il.Emit(OpCodes.Newobj, arrays.BoundMethodCtor);
         il.Emit(OpCodes.Br, endLabel);
 
         il.MarkLabel(returnNullLabel);
@@ -938,8 +939,9 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitTypedArrayFromObjectHelper(TypeBuilder runtimeType, EmittedRuntime runtime, string name)
     {
+        var arrays = runtime.TypedArrays.RequireImplementation();
         // Get the emitted TypedArray constructors
-        var (lengthCtor, bufferCtor) = GetEmittedTypedArrayCtors(runtime, name);
+        var (lengthCtor, bufferCtor) = GetEmittedTypedArrayCtors(arrays, name);
 
         // Create{name}FromObject(object arg) - handles number, SharedArrayBuffer, or ArrayBuffer
         var method = runtimeType.DefineMethod(
@@ -1040,10 +1042,10 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Call, runtime.GetElement);
             il.Emit(OpCodes.Stloc, arrElemLocal);
             il.Emit(OpCodes.Ldloc, arrResultLocal);
-            il.Emit(OpCodes.Castclass, runtime.TypedArrayBaseType);
+            il.Emit(OpCodes.Castclass, arrays.BaseType);
             il.Emit(OpCodes.Ldloc, arrILocal);
             il.Emit(OpCodes.Ldloc, arrElemLocal);
-            il.Emit(OpCodes.Callvirt, runtime.TypedArrayElementSet);
+            il.Emit(OpCodes.Callvirt, arrays.ElementSet);
             il.Emit(OpCodes.Ldloc, arrILocal);
             il.Emit(OpCodes.Ldc_I4_1);
             il.Emit(OpCodes.Add);
@@ -1066,15 +1068,15 @@ public partial class RuntimeEmitter
             var taILocal = il.DeclareLocal(_types.Int32);
 
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.TypedArrayBaseType);
+            il.Emit(OpCodes.Isinst, arrays.BaseType);
             il.Emit(OpCodes.Brfalse, isNumberLabel);
 
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Castclass, runtime.TypedArrayBaseType);
+            il.Emit(OpCodes.Castclass, arrays.BaseType);
             il.Emit(OpCodes.Stloc, srcTALocal);
             il.Emit(OpCodes.Ldloc, srcTALocal);
-            il.Emit(OpCodes.Castclass, runtime.TypedArrayBaseType);
-            il.Emit(OpCodes.Callvirt, runtime.TypedArrayLengthGetter);
+            il.Emit(OpCodes.Castclass, arrays.BaseType);
+            il.Emit(OpCodes.Callvirt, arrays.LengthGetter);
             il.Emit(OpCodes.Stloc, taLengthLocal);
             il.Emit(OpCodes.Ldloc, taLengthLocal);
             il.Emit(OpCodes.Newobj, lengthCtor);
@@ -1086,15 +1088,15 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldloc, taLengthLocal);
             il.Emit(OpCodes.Bge, loopDoneLabel);
             il.Emit(OpCodes.Ldloc, srcTALocal);
-            il.Emit(OpCodes.Castclass, runtime.TypedArrayBaseType);
+            il.Emit(OpCodes.Castclass, arrays.BaseType);
             il.Emit(OpCodes.Ldloc, taILocal);
-            il.Emit(OpCodes.Callvirt, runtime.TypedArrayElementGet);
+            il.Emit(OpCodes.Callvirt, arrays.ElementGet);
             il.Emit(OpCodes.Stloc, taElemLocal);
             il.Emit(OpCodes.Ldloc, taResultLocal);
-            il.Emit(OpCodes.Castclass, runtime.TypedArrayBaseType);
+            il.Emit(OpCodes.Castclass, arrays.BaseType);
             il.Emit(OpCodes.Ldloc, taILocal);
             il.Emit(OpCodes.Ldloc, taElemLocal);
-            il.Emit(OpCodes.Callvirt, runtime.TypedArrayElementSet);
+            il.Emit(OpCodes.Callvirt, arrays.ElementSet);
             il.Emit(OpCodes.Ldloc, taILocal);
             il.Emit(OpCodes.Ldc_I4_1);
             il.Emit(OpCodes.Add);
@@ -1151,35 +1153,36 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
 
         // Store the helper for use by ILEmitter
-        runtime.TypedArrayFromObjectHelpers[name] = method;
+        arrays.RegisterFromObject(name, method);
     }
 
     /// <summary>
     /// Gets the emitted TypedArray constructors for the given type name.
     /// </summary>
-    private (ConstructorBuilder lengthCtor, ConstructorBuilder bufferCtor) GetEmittedTypedArrayCtors(EmittedRuntime runtime, string name)
+    private (ConstructorBuilder lengthCtor, ConstructorBuilder bufferCtor) GetEmittedTypedArrayCtors(EmittedTypedArrayImplementation arrays, string name)
     {
         return name switch
         {
-            "Int8Array" => (runtime.Int8ArrayLengthCtor, runtime.Int8ArrayBufferCtor),
-            "Uint8Array" => (runtime.Uint8ArrayLengthCtor, runtime.Uint8ArrayBufferCtor),
-            "Uint8ClampedArray" => (runtime.Uint8ClampedArrayLengthCtor, runtime.Uint8ClampedArrayBufferCtor),
-            "Int16Array" => (runtime.Int16ArrayLengthCtor, runtime.Int16ArrayBufferCtor),
-            "Uint16Array" => (runtime.Uint16ArrayLengthCtor, runtime.Uint16ArrayBufferCtor),
-            "Int32Array" => (runtime.Int32ArrayLengthCtor, runtime.Int32ArrayBufferCtor),
-            "Uint32Array" => (runtime.Uint32ArrayLengthCtor, runtime.Uint32ArrayBufferCtor),
-            "Float32Array" => (runtime.Float32ArrayLengthCtor, runtime.Float32ArrayBufferCtor),
-            "Float64Array" => (runtime.Float64ArrayLengthCtor, runtime.Float64ArrayBufferCtor),
-            "BigInt64Array" => (runtime.BigInt64ArrayLengthCtor, runtime.BigInt64ArrayBufferCtor),
-            "BigUint64Array" => (runtime.BigUint64ArrayLengthCtor, runtime.BigUint64ArrayBufferCtor),
+            "Int8Array" => (arrays.Int8ArrayLengthCtor, arrays.Int8ArrayBufferCtor),
+            "Uint8Array" => (arrays.Uint8ArrayLengthCtor, arrays.Uint8ArrayBufferCtor),
+            "Uint8ClampedArray" => (arrays.Uint8ClampedArrayLengthCtor, arrays.Uint8ClampedArrayBufferCtor),
+            "Int16Array" => (arrays.Int16ArrayLengthCtor, arrays.Int16ArrayBufferCtor),
+            "Uint16Array" => (arrays.Uint16ArrayLengthCtor, arrays.Uint16ArrayBufferCtor),
+            "Int32Array" => (arrays.Int32ArrayLengthCtor, arrays.Int32ArrayBufferCtor),
+            "Uint32Array" => (arrays.Uint32ArrayLengthCtor, arrays.Uint32ArrayBufferCtor),
+            "Float32Array" => (arrays.Float32ArrayLengthCtor, arrays.Float32ArrayBufferCtor),
+            "Float64Array" => (arrays.Float64ArrayLengthCtor, arrays.Float64ArrayBufferCtor),
+            "BigInt64Array" => (arrays.BigInt64ArrayLengthCtor, arrays.BigInt64ArrayBufferCtor),
+            "BigUint64Array" => (arrays.BigUint64ArrayLengthCtor, arrays.BigUint64ArrayBufferCtor),
             _ => throw new ArgumentException($"Unknown TypedArray type: {name}")
         };
     }
 
     private void EmitTypedArrayHelper(TypeBuilder runtimeType, EmittedRuntime runtime, string name)
     {
+        var arrays = runtime.TypedArrays.RequireImplementation();
         // Get the emitted TypedArray constructors
-        var (lengthCtor, bufferCtor) = GetEmittedTypedArrayCtors(runtime, name);
+        var (lengthCtor, bufferCtor) = GetEmittedTypedArrayCtors(arrays, name);
 
         // Create from length: CreateInt8Array(double length)
         // Uses emitted pure-IL types for standalone DLLs
@@ -1284,10 +1287,10 @@ public partial class RuntimeEmitter
         ilSAB.Emit(OpCodes.Ret);
 
         // Store the helper for use by ILEmitter
-        runtime.TypedArrayFromBufferHelpers[name] = methodFromSAB;
+        arrays.RegisterFromBuffer(name, methodFromSAB);
     }
 
-    private void EmitTypedArrayGetHelper(TypeBuilder runtimeType, EmittedRuntime runtime)
+    private void EmitTypedArrayGetHelper(TypeBuilder runtimeType, EmittedTypedArrayImplementation arrays)
     {
         // public static object TypedArrayGet(object typedArray, double index)
         var method = runtimeType.DefineMethod(
@@ -1300,7 +1303,7 @@ public partial class RuntimeEmitter
         var il = method.GetILGenerator();
         var emittedPath = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TypedArrayBaseType);
+        il.Emit(OpCodes.Isinst, arrays.BaseType);
         il.Emit(OpCodes.Brtrue, emittedPath);
         il.Emit(OpCodes.Ldstr, "TypedArray get requires emitted typed arrays.");
         il.Emit(OpCodes.Newobj, _types.InvalidOperationExceptionCtorString);
@@ -1308,16 +1311,16 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(emittedPath);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TypedArrayBaseType);
+        il.Emit(OpCodes.Castclass, arrays.BaseType);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Conv_I4);
-        il.Emit(OpCodes.Callvirt, runtime.TypedArrayElementGet);
+        il.Emit(OpCodes.Callvirt, arrays.ElementGet);
         il.Emit(OpCodes.Ret);
 
         _ = method;
     }
 
-    private void EmitTypedArraySetHelper(TypeBuilder runtimeType, EmittedRuntime runtime)
+    private void EmitTypedArraySetHelper(TypeBuilder runtimeType, EmittedTypedArrayImplementation arrays)
     {
         // public static void TypedArraySet(object typedArray, double index, object value)
         var method = runtimeType.DefineMethod(
@@ -1330,7 +1333,7 @@ public partial class RuntimeEmitter
         var il = method.GetILGenerator();
         var emittedPath = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TypedArrayBaseType);
+        il.Emit(OpCodes.Isinst, arrays.BaseType);
         il.Emit(OpCodes.Brtrue, emittedPath);
         il.Emit(OpCodes.Ldstr, "TypedArray set requires emitted typed arrays.");
         il.Emit(OpCodes.Newobj, _types.InvalidOperationExceptionCtorString);
@@ -1338,11 +1341,11 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(emittedPath);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TypedArrayBaseType);
+        il.Emit(OpCodes.Castclass, arrays.BaseType);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Conv_I4);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Callvirt, runtime.TypedArrayElementSet);
+        il.Emit(OpCodes.Callvirt, arrays.ElementSet);
         il.Emit(OpCodes.Ret);
 
         _ = method;
@@ -1617,16 +1620,16 @@ public partial class RuntimeEmitter
             coreIl.Emit(OpCodes.Ret);
 
             coreIl.MarkLabel(checkTypedArray);
-            var taLocal = coreIl.DeclareLocal(runtime.TypedArrayBaseType);
+            var taLocal = coreIl.DeclareLocal(runtime.TypedArrays.RequireImplementation().BaseType);
             var taSharedLabel = coreIl.DefineLabel();
             coreIl.Emit(OpCodes.Ldarg_0);
-            coreIl.Emit(OpCodes.Isinst, runtime.TypedArrayBaseType);
+            coreIl.Emit(OpCodes.Isinst, runtime.TypedArrays.RequireImplementation().BaseType);
             coreIl.Emit(OpCodes.Stloc, taLocal);
             coreIl.Emit(OpCodes.Ldloc, taLocal);
             coreIl.Emit(OpCodes.Brfalse, checkList);
 
             coreIl.Emit(OpCodes.Ldloc, taLocal);
-            coreIl.Emit(OpCodes.Callvirt, runtime.TypedArrayBufferGetter);
+            coreIl.Emit(OpCodes.Callvirt, runtime.TypedArrays.RequireImplementation().BufferGetter);
             coreIl.Emit(OpCodes.Isinst, runtime.RequireSharedArrayBuffer().Type);
             coreIl.Emit(OpCodes.Brtrue, taSharedLabel);
 
@@ -1634,8 +1637,8 @@ public partial class RuntimeEmitter
             coreIl.Emit(OpCodes.Ldloc, taLocal);
             coreIl.Emit(OpCodes.Ldc_I4_0);
             coreIl.Emit(OpCodes.Ldloc, taLocal);
-            coreIl.Emit(OpCodes.Callvirt, runtime.TypedArrayLengthGetter);
-            coreIl.Emit(OpCodes.Callvirt, runtime.TypedArraySlice);
+            coreIl.Emit(OpCodes.Callvirt, runtime.TypedArrays.RequireImplementation().LengthGetter);
+            coreIl.Emit(OpCodes.Callvirt, runtime.TypedArrays.RequireImplementation().Slice);
             coreIl.Emit(OpCodes.Ret);
 
             // return source.Subarray(0, source.Length) — shares the SharedArrayBuffer
@@ -1643,8 +1646,8 @@ public partial class RuntimeEmitter
             coreIl.Emit(OpCodes.Ldloc, taLocal);
             coreIl.Emit(OpCodes.Ldc_I4_0);
             coreIl.Emit(OpCodes.Ldloc, taLocal);
-            coreIl.Emit(OpCodes.Callvirt, runtime.TypedArrayLengthGetter);
-            coreIl.Emit(OpCodes.Callvirt, runtime.TypedArraySubarray);
+            coreIl.Emit(OpCodes.Callvirt, runtime.TypedArrays.RequireImplementation().LengthGetter);
+            coreIl.Emit(OpCodes.Callvirt, runtime.TypedArrays.RequireImplementation().Subarray);
             coreIl.Emit(OpCodes.Ret);
         }
         else

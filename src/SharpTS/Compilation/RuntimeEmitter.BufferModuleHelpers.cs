@@ -47,10 +47,10 @@ public partial class RuntimeEmitter
             [typeof(Array), _types.Int32, typeof(Array), _types.Int32, _types.Int32])!;
 
         // ta = view as $TypedArray; if null throw
-        var taLocal = il.DeclareLocal(runtime.TypedArrayBaseType);
+        var taLocal = il.DeclareLocal(runtime.TypedArrays.RequireImplementation().BaseType);
         var ok = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TypedArrayBaseType);
+        il.Emit(OpCodes.Isinst, runtime.TypedArrays.RequireImplementation().BaseType);
         il.Emit(OpCodes.Stloc, taLocal);
         il.Emit(OpCodes.Ldloc, taLocal);
         il.Emit(OpCodes.Brtrue, ok);
@@ -61,22 +61,22 @@ public partial class RuntimeEmitter
 
         var backing = il.DeclareLocal(byteArr);
         il.Emit(OpCodes.Ldloc, taLocal);
-        il.Emit(OpCodes.Callvirt, runtime.TypedArrayGetBuffer);
+        il.Emit(OpCodes.Callvirt, runtime.TypedArrays.RequireImplementation().GetBuffer);
         il.Emit(OpCodes.Stloc, backing);
 
         var byteOff = il.DeclareLocal(_types.Int32);
         il.Emit(OpCodes.Ldloc, taLocal);
-        il.Emit(OpCodes.Callvirt, runtime.TypedArrayByteOffsetGetter);
+        il.Emit(OpCodes.Callvirt, runtime.TypedArrays.RequireImplementation().ByteOffsetGetter);
         il.Emit(OpCodes.Stloc, byteOff);
 
         var elemCount = il.DeclareLocal(_types.Int32);
         il.Emit(OpCodes.Ldloc, taLocal);
-        il.Emit(OpCodes.Callvirt, runtime.TypedArrayLengthGetter);
+        il.Emit(OpCodes.Callvirt, runtime.TypedArrays.RequireImplementation().LengthGetter);
         il.Emit(OpCodes.Stloc, elemCount);
 
         var bpe = il.DeclareLocal(_types.Int32);
         il.Emit(OpCodes.Ldloc, taLocal);
-        il.Emit(OpCodes.Callvirt, _typedArrayBytesPerElementGetter!);
+        il.Emit(OpCodes.Callvirt, runtime.TypedArrays.RequireImplementation().BytesPerElementGetter);
         il.Emit(OpCodes.Stloc, bpe);
 
         // int offEl = (offset is double) ? (int)offset : 0; clamp >= 0

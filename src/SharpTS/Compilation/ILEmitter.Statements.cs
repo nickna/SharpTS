@@ -2074,8 +2074,8 @@ public partial class ILEmitter
             if (_ctx.TryGetHoistedTypedArray(varName) != null) continue;
             // Only numeric typed arrays with unboxed accessors take the fast path (BigInt /
             // Uint8Clamped fall through to boxed GetIndex, so a hoisted local would be dead).
-            if (_ctx.Runtime.GetTypedArrayType(elementType) is not { } xArrayType) continue;
-            if (!_ctx.Runtime.TypedArrayGetUnboxedByElement.ContainsKey(elementType)) continue;
+            if (_ctx.Runtime.TypedArrays.Implementation?.GetNumericType(elementType) is not { } xArrayType) continue;
+            if (!_ctx.Runtime.TypedArrays.RequireImplementation().GetUnboxedByElement.ContainsKey(elementType)) continue;
 
             var arrLocal = _ctx.Locals.GetLocal(varName);
             if (arrLocal == null) continue; // captured / not a plain local — leave to the per-access path
@@ -2096,17 +2096,17 @@ public partial class ILEmitter
                 // loop so the hot body need not reload fields through GetUnboxed/SetUnboxed.
                 var bufferLocal = IL.DeclareLocal(typeof(byte[]));
                 IL.Emit(OpCodes.Ldloc, typedLocal);
-                IL.Emit(OpCodes.Call, _ctx.Runtime.TypedArrayGetBuffer);
+                IL.Emit(OpCodes.Call, _ctx.Runtime.TypedArrays.RequireImplementation().GetBuffer);
                 IL.Emit(OpCodes.Stloc, bufferLocal);
 
                 var byteOffsetLocal = IL.DeclareLocal(_ctx.Types.Int32);
                 IL.Emit(OpCodes.Ldloc, typedLocal);
-                IL.Emit(OpCodes.Call, _ctx.Runtime.TypedArrayByteOffsetGetter);
+                IL.Emit(OpCodes.Call, _ctx.Runtime.TypedArrays.RequireImplementation().ByteOffsetGetter);
                 IL.Emit(OpCodes.Stloc, byteOffsetLocal);
 
                 var lengthLocal = IL.DeclareLocal(_ctx.Types.Int32);
                 IL.Emit(OpCodes.Ldloc, typedLocal);
-                IL.Emit(OpCodes.Call, _ctx.Runtime.TypedArrayLengthGetter);
+                IL.Emit(OpCodes.Call, _ctx.Runtime.TypedArrays.RequireImplementation().LengthGetter);
                 IL.Emit(OpCodes.Stloc, lengthLocal);
 
                 backing = new HoistedTypedArrayBacking(
