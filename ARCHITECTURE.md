@@ -253,12 +253,24 @@ helpers accept `EmittedCryptoRuntime` directly; Buffer, Promise, and generic pro
 helpers remain separate dependencies. X509 constructor dispatch checks feature availability
 explicitly so a user class still resolves when crypto is absent.
 
-The shared built-in module registry still owns crypto named-import wrappers and aliases. WebCrypto
-remains a separate migration under #1599: `GetWebCryptoObject` is declared unconditionally in runtime
-phase 1, then receives either the singleton body or a null-returning stub. Its shared global-dispatch
-contract must survive a future migration. WebCrypto helper/type handles and Node crypto's nonduplicate
-type-local fields and construction state remain with their emitters; the residual-state audit must
-review that ownership before closing the umbrella.
+The shared built-in module registry still owns crypto named-import wrappers and aliases. Node crypto's
+other type-local fields and construction state remain with their emitters; the residual-state audit
+must review that ownership before closing #1599.
+
+WebCrypto uses required `WebCrypto` metadata for the `GetObject` accessor, which is declared in runtime
+phase 1 even when crypto is disabled. Its optional `Implementation` owns 49 helper, type, constructor,
+and key-field declarations. `EmitAll` starts that implementation only for `UsesCrypto`;
+`RequireImplementation()` diagnoses accidental use while it is absent. The accessor later receives
+either the lazy singleton body or the existing null-returning stub. `EmitAll` completes the required
+component after runtime/type finalization; completion validates the accessor and every enabled
+implementation handle, then freezes both. Failed validation leaves them incomplete so missing
+declarations can be supplied before retrying. A completed stub cannot later enable an implementation.
+
+WebCrypto-only helpers accept `EmittedWebCryptoImplementation` directly. All 49 former mutable emitter
+fields are removed; the immutable hash-name table, BCL method lookups, and method-local construction
+state stay with the emitter. Buffer, ArrayBuffer, TypedArray, Promise, and generic property/coercion
+helpers remain separate dependencies. Module and global-property consumers share the checked accessor;
+the built-in module registry still owns the `getRandomValues` wrapper.
 
 During emission, each handle becomes readable as soon as its declaration is assigned, so forward
 references do not require a method body to exist yet. An early read names the missing declaration.

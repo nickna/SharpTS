@@ -866,6 +866,54 @@ public class StandaloneDllTests
         }
     }
 
+    [Fact]
+    public void WebCryptoKeyLifecycleAndPromiseRejectionRunStandalone()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as crypto from 'crypto';
+                console.log(crypto.webcrypto === crypto.webcrypto, crypto.subtle === crypto.webcrypto.subtle);
+                const bytes = Buffer.alloc(8);
+                console.log(crypto.getRandomValues(bytes) === bytes);
+                async function main() {
+                    const subtle = crypto.subtle;
+                    const key = await subtle.generateKey({ name: 'HMAC', hash: 'SHA-256', length: 128 }, true, ['sign', 'verify']);
+                    const raw = await subtle.exportKey('raw', key);
+                    console.log(Buffer.from(raw).length);
+                    const imported = await subtle.importKey('raw', raw, { name: 'HMAC', hash: 'SHA-256' }, true, ['sign', 'verify']);
+                    const signature = await subtle.sign('HMAC', imported, Buffer.from('data'));
+                    console.log(await subtle.verify('HMAC', imported, signature, Buffer.from('data')),
+                        await subtle.verify('HMAC', imported, signature, Buffer.from('other')));
+                    const base = await subtle.importKey('raw', Buffer.from('password'), 'PBKDF2', false, ['deriveBits', 'deriveKey']);
+                    const algorithm = { name: 'PBKDF2', salt: Buffer.from('salt'), iterations: 2, hash: 'SHA-256' };
+                    const bits = await subtle.deriveBits(algorithm, base, 128);
+                    console.log(Buffer.from(bits).toString('hex') === crypto.pbkdf2Sync('password', 'salt', 2, 16, 'sha256').toString('hex'));
+                    const aes = await subtle.deriveKey(algorithm, base, { name: 'AES-GCM', length: 128 }, true, ['encrypt', 'decrypt']);
+                    const options = { name: 'AES-GCM', iv: Buffer.alloc(12) };
+                    const encrypted = await subtle.encrypt(options, aes, Buffer.from('webcrypto'));
+                    console.log(Buffer.from(await subtle.decrypt(options, aes, encrypted)).toString('utf8'));
+                    try { await subtle.digest('unsupported', Buffer.from('data')); }
+                    catch (error) { console.log('rejected'); }
+                }
+                main();
+                """
+        };
+        var errors = TestHarness.CompileModulesAndVerifyOnly(files, "main.ts");
+        Assert.True(errors.Count == 0, string.Join(Environment.NewLine, errors));
+        var (tempDir, dllPath) = CompileStandaloneModule(files, "main.ts");
+        try
+        {
+            Assert.False(File.Exists(Path.Combine(tempDir, "SharpTS.dll")));
+            Assert.Equal("true true\ntrue\n16\ntrue false\ntrue\nwebcrypto\nrejected\n",
+                ExecuteCompiledDllIsolated(dllPath, timeoutMs: 15000));
+        }
+        finally
+        {
+            CleanupTempDir(tempDir);
+        }
+    }
+
     /// <summary>
     /// Phase 23 guardrail: Scans compiled DLL for forbidden SharpTS late-binding strings.
     /// These strings should NOT appear in standalone output as they indicate runtime dependency.

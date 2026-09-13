@@ -41,7 +41,10 @@ public partial class RuntimeEmitter
             _features.UsesPromise = true;
         var runtime = new EmittedRuntime();
         if (features.UsesCrypto)
+        {
             runtime.BeginCryptoEmission();
+            runtime.WebCrypto.BeginImplementationEmission();
+        }
         if (features.UsesPromise)
             runtime.BeginPromiseEmission();
         if (features.UsesNet)
@@ -620,6 +623,7 @@ public partial class RuntimeEmitter
         runtime.ArrayStorage.CompleteEmission();
         runtime.ArrayOperations.CompleteEmission();
         runtime.Crypto?.CompleteEmission();
+        runtime.WebCrypto.CompleteEmission();
         runtime.Dns?.CompleteEmission();
         runtime.Zlib?.CompleteEmission();
         runtime.Tls?.CompleteEmission();

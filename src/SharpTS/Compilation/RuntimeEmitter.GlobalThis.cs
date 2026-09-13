@@ -372,7 +372,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldstr, "crypto");
             il.Emit(OpCodes.Call, strEquals);
             il.Emit(OpCodes.Brfalse, notCrypto);
-            il.Emit(OpCodes.Call, runtime.GetWebCryptoObject);
+            il.Emit(OpCodes.Call, runtime.WebCrypto.GetObject);
             il.Emit(OpCodes.Br, returnLabel);
             il.MarkLabel(notCrypto);
         }
