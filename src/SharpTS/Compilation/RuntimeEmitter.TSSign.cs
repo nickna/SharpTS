@@ -130,7 +130,7 @@ public partial class RuntimeEmitter
         // buffer: new $Buffer(bytes)
         il.MarkLabel(bufferLabel);
         il.Emit(OpCodes.Ldloc, signatureBytesLocal);
-        il.Emit(OpCodes.Newobj, runtime.TSBufferCtor);
+        il.Emit(OpCodes.Newobj, runtime.RequireBuffer().Ctor);
 
         il.MarkLabel(endLabel);
         il.Emit(OpCodes.Ret);

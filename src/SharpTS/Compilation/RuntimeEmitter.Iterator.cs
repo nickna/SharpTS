@@ -1723,14 +1723,14 @@ public partial class RuntimeEmitter
         if (_features.UsesBuffer)
         {
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.TSBufferType);
+            il.Emit(OpCodes.Isinst, runtime.RequireBuffer().Type);
             il.Emit(OpCodes.Brfalse, throwLabel);
 
             // byte[] data = (($Buffer)obj).GetData()
             var bufDataLocal = il.DeclareLocal(_types.MakeArrayType(_types.Byte));
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Castclass, runtime.TSBufferType);
-            il.Emit(OpCodes.Callvirt, runtime.TSBufferGetData);
+            il.Emit(OpCodes.Castclass, runtime.RequireBuffer().Type);
+            il.Emit(OpCodes.Callvirt, runtime.RequireBuffer().GetData);
             il.Emit(OpCodes.Stloc, bufDataLocal);
 
             // for (int i = 0; i < data.Length; i++) result.Add((double)data[i])

@@ -37,11 +37,11 @@ public sealed class BufferModuleEmitter : IBuiltInModuleEmitter
 
         switch (methodName)
         {
-            case "atob": return EmitUnary(emitter, arguments, ctx.Runtime!.BufferAtob);
-            case "btoa": return EmitUnary(emitter, arguments, ctx.Runtime!.BufferBtoa);
-            case "isUtf8": return EmitUnary(emitter, arguments, ctx.Runtime!.BufferIsUtf8);
-            case "isAscii": return EmitUnary(emitter, arguments, ctx.Runtime!.BufferIsAscii);
-            case "SlowBuffer": return EmitUnary(emitter, arguments, ctx.Runtime!.BufferSlowBuffer);
+            case "atob": return EmitUnary(emitter, arguments, ctx.Runtime!.RequireBuffer().Atob);
+            case "btoa": return EmitUnary(emitter, arguments, ctx.Runtime!.RequireBuffer().Btoa);
+            case "isUtf8": return EmitUnary(emitter, arguments, ctx.Runtime!.RequireBuffer().IsUtf8);
+            case "isAscii": return EmitUnary(emitter, arguments, ctx.Runtime!.RequireBuffer().IsAscii);
+            case "SlowBuffer": return EmitUnary(emitter, arguments, ctx.Runtime!.RequireBuffer().SlowBuffer);
             case "transcode": return EmitTranscode(emitter, arguments);
             default: return false;
         }
@@ -60,7 +60,7 @@ public sealed class BufferModuleEmitter : IBuiltInModuleEmitter
                 il.Emit(OpCodes.Ldstr, "[Buffer]");
                 return true;
             case "constants":
-                il.Emit(OpCodes.Call, ctx.Runtime!.BufferModuleConstants);
+                il.Emit(OpCodes.Call, ctx.Runtime!.RequireBuffer().ModuleConstants);
                 return true;
             case "kMaxLength":
                 EmitDouble(il, ctx, 4294967296.0);
@@ -118,7 +118,7 @@ public sealed class BufferModuleEmitter : IBuiltInModuleEmitter
                 il.Emit(OpCodes.Ldnull);
             }
         }
-        il.Emit(OpCodes.Call, ctx.Runtime!.BufferTranscode);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireBuffer().Transcode);
         return true;
     }
 }

@@ -4,9 +4,6 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
-    private MethodBuilder? _bufferCoerceString;
-    private MethodBuilder? _bufferBytesOf;
-
     /// <summary>
     /// Emits the standalone <c>buffer</c> module helper functions (#1160): atob/btoa,
     /// isUtf8/isAscii, transcode, SlowBuffer, and the constants object. All pure-BCL —
@@ -15,12 +12,12 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitBufferModuleMethods(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
-        EmitBufferCoerceString(typeBuilder);
-        EmitBufferBytesOf(typeBuilder, runtime);
-        EmitBufferAtobBtoa(typeBuilder, runtime);
-        EmitBufferIsUtf8Ascii(typeBuilder, runtime);
-        EmitBufferTranscode(typeBuilder, runtime);
-        EmitBufferSlowBuffer(typeBuilder, runtime);
+        EmitBufferCoerceString(runtime.RequireBuffer(), typeBuilder);
+        EmitBufferBytesOf(typeBuilder, runtime.RequireBuffer());
+        EmitBufferAtobBtoa(typeBuilder, runtime.RequireBuffer());
+        EmitBufferIsUtf8Ascii(typeBuilder, runtime.RequireBuffer());
+        EmitBufferTranscode(typeBuilder, runtime.RequireBuffer());
+        EmitBufferSlowBuffer(typeBuilder, runtime.RequireBuffer());
         EmitBufferModuleConstants(typeBuilder, runtime);
 
         // Buffer.copyBytesFrom needs the $TypedArray runtime type, which is only emitted
@@ -37,11 +34,12 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitBufferCopyBytesFrom(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
+        var buffer = runtime.RequireBuffer();
         var method = typeBuilder.DefineMethod(
             "BufferCopyBytesFrom",
             System.Reflection.MethodAttributes.Public | System.Reflection.MethodAttributes.Static,
             _types.Object, [_types.Object, _types.Object, _types.Object]);
-        runtime.BufferCopyBytesFrom = method;
+        buffer.CopyBytesFrom = method;
 
         var il = method.GetILGenerator();
         var byteArr = _types.MakeArrayType(_types.Byte);
@@ -177,18 +175,18 @@ public partial class RuntimeEmitter
 
         // return new $Buffer(result)
         il.Emit(OpCodes.Ldloc, result);
-        il.Emit(OpCodes.Newobj, runtime.TSBufferCtor);
+        il.Emit(OpCodes.Newobj, buffer.Ctor);
         il.Emit(OpCodes.Ret);
     }
 
     /// <summary>Emits <c>string BufferCoerceString(object)</c> — null → "", string → itself, else ToString().</summary>
-    private void EmitBufferCoerceString(TypeBuilder typeBuilder)
+    private void EmitBufferCoerceString(EmittedBufferRuntime buffer, TypeBuilder typeBuilder)
     {
         var method = typeBuilder.DefineMethod(
             "BufferCoerceString",
             System.Reflection.MethodAttributes.Public | System.Reflection.MethodAttributes.Static,
             _types.String, [_types.Object]);
-        _bufferCoerceString = method;
+        buffer.CoerceString = method;
 
         var il = method.GetILGenerator();
         var retEmpty = il.DefineLabel();
@@ -212,13 +210,13 @@ public partial class RuntimeEmitter
     }
 
     /// <summary>Emits <c>byte[] BufferBytesOf(object)</c> — $Buffer → GetData, string → UTF8 bytes.</summary>
-    private void EmitBufferBytesOf(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitBufferBytesOf(TypeBuilder typeBuilder, EmittedBufferRuntime buffer)
     {
         var method = typeBuilder.DefineMethod(
             "BufferBytesOf",
             System.Reflection.MethodAttributes.Public | System.Reflection.MethodAttributes.Static,
             _types.MakeArrayType(_types.Byte), [_types.Object]);
-        _bufferBytesOf = method;
+        buffer.BytesOf = method;
 
         var il = method.GetILGenerator();
         var isStr = il.DefineLabel();
@@ -228,11 +226,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, throwLabel);
         // $Buffer?
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSBufferType);
+        il.Emit(OpCodes.Isinst, buffer.Type);
         il.Emit(OpCodes.Brfalse, isStr);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSBufferType);
-        il.Emit(OpCodes.Callvirt, runtime.TSBufferGetData);
+        il.Emit(OpCodes.Castclass, buffer.Type);
+        il.Emit(OpCodes.Callvirt, buffer.GetData);
         il.Emit(OpCodes.Ret);
         // string?
         il.MarkLabel(isStr);
@@ -251,21 +249,21 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Throw);
     }
 
-    private void EmitBufferAtobBtoa(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitBufferAtobBtoa(TypeBuilder typeBuilder, EmittedBufferRuntime buffer)
     {
         // atob(data) = Buffer.from(data, 'base64').toString('latin1')
         var atob = typeBuilder.DefineMethod(
             "BufferAtob",
             System.Reflection.MethodAttributes.Public | System.Reflection.MethodAttributes.Static,
             _types.String, [_types.Object]);
-        runtime.BufferAtob = atob;
+        buffer.Atob = atob;
         var ail = atob.GetILGenerator();
         ail.Emit(OpCodes.Ldarg_0);
-        ail.Emit(OpCodes.Call, _bufferCoerceString!);
+        ail.Emit(OpCodes.Call, buffer.CoerceString);
         ail.Emit(OpCodes.Ldstr, "base64");
-        ail.Emit(OpCodes.Call, runtime.TSBufferFromString);
+        ail.Emit(OpCodes.Call, buffer.FromString);
         ail.Emit(OpCodes.Ldstr, "latin1");
-        ail.Emit(OpCodes.Callvirt, runtime.TSBufferToString);
+        ail.Emit(OpCodes.Callvirt, buffer.ToStringMethod);
         ail.Emit(OpCodes.Ret);
 
         // btoa(data) = Buffer.from(data, 'latin1').toString('base64')
@@ -273,18 +271,18 @@ public partial class RuntimeEmitter
             "BufferBtoa",
             System.Reflection.MethodAttributes.Public | System.Reflection.MethodAttributes.Static,
             _types.String, [_types.Object]);
-        runtime.BufferBtoa = btoa;
+        buffer.Btoa = btoa;
         var bil = btoa.GetILGenerator();
         bil.Emit(OpCodes.Ldarg_0);
-        bil.Emit(OpCodes.Call, _bufferCoerceString!);
+        bil.Emit(OpCodes.Call, buffer.CoerceString);
         bil.Emit(OpCodes.Ldstr, "latin1");
-        bil.Emit(OpCodes.Call, runtime.TSBufferFromString);
+        bil.Emit(OpCodes.Call, buffer.FromString);
         bil.Emit(OpCodes.Ldstr, "base64");
-        bil.Emit(OpCodes.Callvirt, runtime.TSBufferToString);
+        bil.Emit(OpCodes.Callvirt, buffer.ToStringMethod);
         bil.Emit(OpCodes.Ret);
     }
 
-    private void EmitBufferIsUtf8Ascii(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitBufferIsUtf8Ascii(TypeBuilder typeBuilder, EmittedBufferRuntime buffer)
     {
         var byteArr = _types.MakeArrayType(_types.Byte);
         var roSpanByte = typeof(ReadOnlySpan<byte>);
@@ -301,64 +299,65 @@ public partial class RuntimeEmitter
             store(method);
             var il = method.GetILGenerator();
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Call, _bufferBytesOf!);
+            il.Emit(OpCodes.Call, buffer.BytesOf);
             il.Emit(OpCodes.Call, roSpanOp);
             il.Emit(OpCodes.Call, isValid);
             il.Emit(OpCodes.Box, _types.Boolean);
             il.Emit(OpCodes.Ret);
         }
 
-        Emit("BufferIsUtf8", utf8IsValid, m => runtime.BufferIsUtf8 = m);
-        Emit("BufferIsAscii", asciiIsValid, m => runtime.BufferIsAscii = m);
+        Emit("BufferIsUtf8", utf8IsValid, m => buffer.IsUtf8 = m);
+        Emit("BufferIsAscii", asciiIsValid, m => buffer.IsAscii = m);
     }
 
-    private void EmitBufferTranscode(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitBufferTranscode(TypeBuilder typeBuilder, EmittedBufferRuntime buffer)
     {
         // transcode(source, from, to) = Buffer.from(decode(sourceBytes, from), to)
         var method = typeBuilder.DefineMethod(
             "BufferTranscode",
             System.Reflection.MethodAttributes.Public | System.Reflection.MethodAttributes.Static,
             _types.Object, [_types.Object, _types.Object, _types.Object]);
-        runtime.BufferTranscode = method;
+        buffer.Transcode = method;
 
         var il = method.GetILGenerator();
         // str = new $Buffer(BufferBytesOf(source)).ToEncodedString(coerce(from))
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, _bufferBytesOf!);
-        il.Emit(OpCodes.Newobj, runtime.TSBufferCtor);
+        il.Emit(OpCodes.Call, buffer.BytesOf);
+        il.Emit(OpCodes.Newobj, buffer.Ctor);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, _bufferCoerceString!);
-        il.Emit(OpCodes.Callvirt, runtime.TSBufferToString);
+        il.Emit(OpCodes.Call, buffer.CoerceString);
+        il.Emit(OpCodes.Callvirt, buffer.ToStringMethod);
         // Buffer.from(str, coerce(to))
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Call, _bufferCoerceString!);
-        il.Emit(OpCodes.Call, runtime.TSBufferFromString);
+        il.Emit(OpCodes.Call, buffer.CoerceString);
+        il.Emit(OpCodes.Call, buffer.FromString);
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitBufferSlowBuffer(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitBufferSlowBuffer(TypeBuilder typeBuilder, EmittedBufferRuntime buffer)
     {
         var method = typeBuilder.DefineMethod(
             "BufferSlowBuffer",
             System.Reflection.MethodAttributes.Public | System.Reflection.MethodAttributes.Static,
             _types.Object, [_types.Object]);
-        runtime.BufferSlowBuffer = method;
+        buffer.SlowBuffer = method;
 
         var il = method.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Unbox_Any, _types.Double);
         il.Emit(OpCodes.Conv_I4);
-        il.Emit(OpCodes.Call, runtime.TSBufferAllocUnsafe);
+        il.Emit(OpCodes.Call, buffer.AllocUnsafe);
         il.Emit(OpCodes.Ret);
     }
 
     private void EmitBufferModuleConstants(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
+        var buffer = runtime.RequireBuffer();
         var method = typeBuilder.DefineMethod(
             "BufferModuleConstants",
             System.Reflection.MethodAttributes.Public | System.Reflection.MethodAttributes.Static,
             _types.Object, Type.EmptyTypes);
-        runtime.BufferModuleConstants = method;
+        buffer.ModuleConstants = method;
 
         var il = method.GetILGenerator();
         il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.DictionaryStringObject));

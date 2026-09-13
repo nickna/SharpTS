@@ -1865,15 +1865,15 @@ public partial class RuntimeEmitter
         coreIl.MarkLabel(checkBuffer);
         if (_features.UsesBuffer)
         {
-            var bufferLocal = coreIl.DeclareLocal(runtime.TSBufferType);
+            var bufferLocal = coreIl.DeclareLocal(runtime.RequireBuffer().Type);
             coreIl.Emit(OpCodes.Ldarg_0);
-            coreIl.Emit(OpCodes.Isinst, runtime.TSBufferType);
+            coreIl.Emit(OpCodes.Isinst, runtime.RequireBuffer().Type);
             coreIl.Emit(OpCodes.Stloc, bufferLocal);
             coreIl.Emit(OpCodes.Ldloc, bufferLocal);
             coreIl.Emit(OpCodes.Brfalse, checkError);
 
             coreIl.Emit(OpCodes.Ldloc, bufferLocal);
-            coreIl.Emit(OpCodes.Call, runtime.TSBufferFromBuffer);
+            coreIl.Emit(OpCodes.Call, runtime.RequireBuffer().FromBuffer);
             coreIl.Emit(OpCodes.Ret);
         }
         else

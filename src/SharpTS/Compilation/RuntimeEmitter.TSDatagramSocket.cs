@@ -1328,14 +1328,14 @@ public partial class RuntimeEmitter
 
         // Check if msg is $Buffer
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, runtime.TSBufferType);
+        il.Emit(OpCodes.Isinst, runtime.RequireBuffer().Type);
         var notBufferLabel = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, notBufferLabel);
 
         // Buffer path: bytes = ((TSBuffer)msg).GetData()
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Castclass, runtime.TSBufferType);
-        il.Emit(OpCodes.Callvirt, runtime.TSBufferGetData);
+        il.Emit(OpCodes.Castclass, runtime.RequireBuffer().Type);
+        il.Emit(OpCodes.Callvirt, runtime.RequireBuffer().GetData);
         il.Emit(OpCodes.Stloc, bytesLocal);
         il.Emit(OpCodes.Br, bytesReadyLabel);
 

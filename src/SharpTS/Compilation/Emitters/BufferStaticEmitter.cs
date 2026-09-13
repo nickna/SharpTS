@@ -33,7 +33,7 @@ public sealed class BufferStaticEmitter : IStaticTypeEmitterStrategy
                     il.Emit(OpCodes.Callvirt, ofAdd);
                 }
                 il.Emit(OpCodes.Ldloc, ofListLocal);
-                il.Emit(OpCodes.Call, ctx.Runtime!.TSBufferFromArray);
+                il.Emit(OpCodes.Call, ctx.Runtime!.RequireBuffer().FromArray);
                 return true;
 
             case "copyBytesFrom":
@@ -58,7 +58,7 @@ public sealed class BufferStaticEmitter : IStaticTypeEmitterStrategy
                 {
                     il.Emit(OpCodes.Ldnull);
                 }
-                il.Emit(OpCodes.Call, ctx.Runtime!.BufferCopyBytesFrom);
+                il.Emit(OpCodes.Call, ctx.Runtime!.RequireBuffer().CopyBytesFrom);
                 return true;
 
             case "isBuffer":
@@ -71,7 +71,7 @@ public sealed class BufferStaticEmitter : IStaticTypeEmitterStrategy
                 {
                     il.Emit(OpCodes.Ldnull);
                 }
-                il.Emit(OpCodes.Call, ctx.Runtime!.TSBufferIsBuffer);
+                il.Emit(OpCodes.Call, ctx.Runtime!.RequireBuffer().IsBuffer);
                 il.Emit(OpCodes.Box, ctx.Types.Boolean);
                 return true;
 
@@ -113,7 +113,7 @@ public sealed class BufferStaticEmitter : IStaticTypeEmitterStrategy
                     il.Emit(OpCodes.Ldstr, "utf8");
                 }
 
-                il.Emit(OpCodes.Call, ctx.Runtime!.TSBufferFromString);
+                il.Emit(OpCodes.Call, ctx.Runtime!.RequireBuffer().FromString);
                 il.Emit(OpCodes.Br, endLabel);
 
                 // Non-string path: check for buffer, then array-like values
@@ -123,12 +123,12 @@ public sealed class BufferStaticEmitter : IStaticTypeEmitterStrategy
                 var notBufferLabel2 = il.DefineLabel();
 
                 il.Emit(OpCodes.Dup);
-                il.Emit(OpCodes.Isinst, ctx.Runtime!.TSBufferType);
+                il.Emit(OpCodes.Isinst, ctx.Runtime!.RequireBuffer().Type);
                 il.Emit(OpCodes.Brfalse, notBufferLabel2);
 
                 // Buffer path: cast and call FromBuffer
-                il.Emit(OpCodes.Castclass, ctx.Runtime!.TSBufferType);
-                il.Emit(OpCodes.Call, ctx.Runtime!.TSBufferFromBuffer);
+                il.Emit(OpCodes.Castclass, ctx.Runtime!.RequireBuffer().Type);
+                il.Emit(OpCodes.Call, ctx.Runtime!.RequireBuffer().FromBuffer);
                 il.Emit(OpCodes.Br, endLabel);
 
                 il.MarkLabel(notBufferLabel2);
@@ -143,13 +143,13 @@ public sealed class BufferStaticEmitter : IStaticTypeEmitterStrategy
                     il.Emit(OpCodes.Brfalse, notArrayBufferLabel);
                     il.Emit(OpCodes.Castclass, ctx.Runtime!.ArrayBufferType);
                     il.Emit(OpCodes.Callvirt, ctx.Runtime!.ArrayBufferGetBuffer);
-                    il.Emit(OpCodes.Newobj, ctx.Runtime!.TSBufferCtor);
+                    il.Emit(OpCodes.Newobj, ctx.Runtime!.RequireBuffer().Ctor);
                     il.Emit(OpCodes.Br, endLabel);
                     il.MarkLabel(notArrayBufferLabel);
                 }
 
                 // Buffer.from(typedArray): copy the view window (Node copies here).
-                if (ctx.Runtime!.TypedArrayBaseType is not null && ctx.Runtime!.BufferCopyBytesFrom is not null)
+                if (ctx.Runtime!.TypedArrayBaseType is not null && ctx.Runtime!.RequireBuffer().HasTypedArrayCopy)
                 {
                     var notTypedArrayLabel = il.DefineLabel();
                     il.Emit(OpCodes.Dup);
@@ -157,7 +157,7 @@ public sealed class BufferStaticEmitter : IStaticTypeEmitterStrategy
                     il.Emit(OpCodes.Brfalse, notTypedArrayLabel);
                     il.Emit(OpCodes.Ldnull); // offset
                     il.Emit(OpCodes.Ldnull); // length
-                    il.Emit(OpCodes.Call, ctx.Runtime!.BufferCopyBytesFrom);
+                    il.Emit(OpCodes.Call, ctx.Runtime!.RequireBuffer().CopyBytesFrom);
                     il.Emit(OpCodes.Br, endLabel);
                     il.MarkLabel(notTypedArrayLabel);
                 }
@@ -179,7 +179,7 @@ public sealed class BufferStaticEmitter : IStaticTypeEmitterStrategy
                 il.Emit(OpCodes.Castclass, ctx.Types.ListOfObject);
 
                 il.MarkLabel(afterListCheckLabel);
-                il.Emit(OpCodes.Call, ctx.Runtime!.TSBufferFromArray);
+                il.Emit(OpCodes.Call, ctx.Runtime!.RequireBuffer().FromArray);
 
                 il.MarkLabel(endLabel);
                 return true;
@@ -197,7 +197,7 @@ public sealed class BufferStaticEmitter : IStaticTypeEmitterStrategy
                 {
                     il.Emit(OpCodes.Ldc_I4_0);
                 }
-                il.Emit(OpCodes.Call, ctx.Runtime!.TSBufferAlloc);
+                il.Emit(OpCodes.Call, ctx.Runtime!.RequireBuffer().Alloc);
                 return true;
 
             case "allocUnsafe":
@@ -214,7 +214,7 @@ public sealed class BufferStaticEmitter : IStaticTypeEmitterStrategy
                 {
                     il.Emit(OpCodes.Ldc_I4_0);
                 }
-                il.Emit(OpCodes.Call, ctx.Runtime!.TSBufferAllocUnsafe);
+                il.Emit(OpCodes.Call, ctx.Runtime!.RequireBuffer().AllocUnsafe);
                 return true;
 
             case "concat":
@@ -247,9 +247,9 @@ public sealed class BufferStaticEmitter : IStaticTypeEmitterStrategy
                 {
                     // Calculate total length from buffers using helper method
                     il.Emit(OpCodes.Ldloc, listLocal);
-                    il.Emit(OpCodes.Call, ctx.Runtime!.CalculateBuffersTotalLength);
+                    il.Emit(OpCodes.Call, ctx.Runtime!.RequireBuffer().CalculateTotalLength);
                 }
-                il.Emit(OpCodes.Call, ctx.Runtime!.TSBufferConcat);
+                il.Emit(OpCodes.Call, ctx.Runtime!.RequireBuffer().Concat);
                 return true;
 
             default:

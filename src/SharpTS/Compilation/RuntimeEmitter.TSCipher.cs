@@ -274,7 +274,7 @@ public partial class RuntimeEmitter
         // Return new $Buffer(_authTag)
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, _tsCipherAuthTagField);
-        il.Emit(OpCodes.Newobj, runtime.TSBufferCtor);
+        il.Emit(OpCodes.Newobj, runtime.RequireBuffer().Ctor);
         il.Emit(OpCodes.Ret);
     }
 

@@ -10,7 +10,7 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits: public double WriteInt8(double value, int offset)
     /// </summary>
-    private void EmitTSBufferWriteInt8(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSBufferWriteInt8(TypeBuilder typeBuilder, EmittedBufferRuntime buffer)
     {
         var method = typeBuilder.DefineMethod(
             "WriteInt8",
@@ -18,14 +18,14 @@ public partial class RuntimeEmitter
             _types.Double,
             [_types.Double, _types.Int32]
         );
-        runtime.TSBufferWriteInt8 = method;
+        buffer.WriteInt8 = method;
 
         var il = method.GetILGenerator();
-        EmitWriteBoundsCheck(il, 1);
+        EmitWriteBoundsCheck(buffer, il, 1);
 
         // _data[offset] = (byte)(sbyte)value
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsBufferDataField);
+        il.Emit(OpCodes.Ldfld, buffer.DataField);
         il.Emit(OpCodes.Ldarg_2);  // offset
         il.Emit(OpCodes.Ldarg_1);  // value
         il.Emit(OpCodes.Conv_I1);  // to sbyte
@@ -39,7 +39,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitWriteBoundsCheck(ILGenerator il, int byteCount)
+    private void EmitWriteBoundsCheck(EmittedBufferRuntime buffer, ILGenerator il, int byteCount)
     {
         var okLabel = il.DefineLabel();
         var throwLabel = il.DefineLabel();
@@ -52,7 +52,7 @@ public partial class RuntimeEmitter
         // if (offset > _data.Length - byteCount) throw
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsBufferDataField);
+        il.Emit(OpCodes.Ldfld, buffer.DataField);
         il.Emit(OpCodes.Ldlen);
         il.Emit(OpCodes.Conv_I4);
         il.Emit(OpCodes.Ldc_I4, byteCount);
@@ -70,7 +70,7 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits: public double WriteUInt16LE(double value, int offset)
     /// </summary>
-    private void EmitTSBufferWriteUInt16LE(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSBufferWriteUInt16LE(TypeBuilder typeBuilder, EmittedBufferRuntime buffer)
     {
         var method = typeBuilder.DefineMethod(
             "WriteUInt16LE",
@@ -78,13 +78,13 @@ public partial class RuntimeEmitter
             _types.Double,
             [_types.Double, _types.Int32]
         );
-        runtime.TSBufferWriteUInt16LE = method;
+        buffer.WriteUInt16LE = method;
 
         var il = method.GetILGenerator();
-        EmitMultiByteWrite(il, 2, false);  // 16-bit, little-endian
+        EmitMultiByteWrite(buffer, il, 2, false);  // 16-bit, little-endian
     }
 
-    private void EmitTSBufferWriteUInt16BE(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSBufferWriteUInt16BE(TypeBuilder typeBuilder, EmittedBufferRuntime buffer)
     {
         var method = typeBuilder.DefineMethod(
             "WriteUInt16BE",
@@ -92,13 +92,13 @@ public partial class RuntimeEmitter
             _types.Double,
             [_types.Double, _types.Int32]
         );
-        runtime.TSBufferWriteUInt16BE = method;
+        buffer.WriteUInt16BE = method;
 
         var il = method.GetILGenerator();
-        EmitMultiByteWrite(il, 2, true);  // 16-bit, big-endian
+        EmitMultiByteWrite(buffer, il, 2, true);  // 16-bit, big-endian
     }
 
-    private void EmitTSBufferWriteUInt32LE(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSBufferWriteUInt32LE(TypeBuilder typeBuilder, EmittedBufferRuntime buffer)
     {
         var method = typeBuilder.DefineMethod(
             "WriteUInt32LE",
@@ -106,13 +106,13 @@ public partial class RuntimeEmitter
             _types.Double,
             [_types.Double, _types.Int32]
         );
-        runtime.TSBufferWriteUInt32LE = method;
+        buffer.WriteUInt32LE = method;
 
         var il = method.GetILGenerator();
-        EmitMultiByteWrite(il, 4, false);  // 32-bit, little-endian
+        EmitMultiByteWrite(buffer, il, 4, false);  // 32-bit, little-endian
     }
 
-    private void EmitTSBufferWriteUInt32BE(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSBufferWriteUInt32BE(TypeBuilder typeBuilder, EmittedBufferRuntime buffer)
     {
         var method = typeBuilder.DefineMethod(
             "WriteUInt32BE",
@@ -120,13 +120,13 @@ public partial class RuntimeEmitter
             _types.Double,
             [_types.Double, _types.Int32]
         );
-        runtime.TSBufferWriteUInt32BE = method;
+        buffer.WriteUInt32BE = method;
 
         var il = method.GetILGenerator();
-        EmitMultiByteWrite(il, 4, true);  // 32-bit, big-endian
+        EmitMultiByteWrite(buffer, il, 4, true);  // 32-bit, big-endian
     }
 
-    private void EmitTSBufferWriteInt16LE(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSBufferWriteInt16LE(TypeBuilder typeBuilder, EmittedBufferRuntime buffer)
     {
         var method = typeBuilder.DefineMethod(
             "WriteInt16LE",
@@ -134,13 +134,13 @@ public partial class RuntimeEmitter
             _types.Double,
             [_types.Double, _types.Int32]
         );
-        runtime.TSBufferWriteInt16LE = method;
+        buffer.WriteInt16LE = method;
 
         var il = method.GetILGenerator();
-        EmitMultiByteWrite(il, 2, false);  // 16-bit, little-endian
+        EmitMultiByteWrite(buffer, il, 2, false);  // 16-bit, little-endian
     }
 
-    private void EmitTSBufferWriteInt16BE(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSBufferWriteInt16BE(TypeBuilder typeBuilder, EmittedBufferRuntime buffer)
     {
         var method = typeBuilder.DefineMethod(
             "WriteInt16BE",
@@ -148,13 +148,13 @@ public partial class RuntimeEmitter
             _types.Double,
             [_types.Double, _types.Int32]
         );
-        runtime.TSBufferWriteInt16BE = method;
+        buffer.WriteInt16BE = method;
 
         var il = method.GetILGenerator();
-        EmitMultiByteWrite(il, 2, true);  // 16-bit, big-endian
+        EmitMultiByteWrite(buffer, il, 2, true);  // 16-bit, big-endian
     }
 
-    private void EmitTSBufferWriteInt32LE(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSBufferWriteInt32LE(TypeBuilder typeBuilder, EmittedBufferRuntime buffer)
     {
         var method = typeBuilder.DefineMethod(
             "WriteInt32LE",
@@ -162,13 +162,13 @@ public partial class RuntimeEmitter
             _types.Double,
             [_types.Double, _types.Int32]
         );
-        runtime.TSBufferWriteInt32LE = method;
+        buffer.WriteInt32LE = method;
 
         var il = method.GetILGenerator();
-        EmitMultiByteWrite(il, 4, false);  // 32-bit, little-endian
+        EmitMultiByteWrite(buffer, il, 4, false);  // 32-bit, little-endian
     }
 
-    private void EmitTSBufferWriteInt32BE(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSBufferWriteInt32BE(TypeBuilder typeBuilder, EmittedBufferRuntime buffer)
     {
         var method = typeBuilder.DefineMethod(
             "WriteInt32BE",
@@ -176,13 +176,13 @@ public partial class RuntimeEmitter
             _types.Double,
             [_types.Double, _types.Int32]
         );
-        runtime.TSBufferWriteInt32BE = method;
+        buffer.WriteInt32BE = method;
 
         var il = method.GetILGenerator();
-        EmitMultiByteWrite(il, 4, true);  // 32-bit, big-endian
+        EmitMultiByteWrite(buffer, il, 4, true);  // 32-bit, big-endian
     }
 
-    private void EmitTSBufferWriteFloatLE(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSBufferWriteFloatLE(TypeBuilder typeBuilder, EmittedBufferRuntime buffer)
     {
         var method = typeBuilder.DefineMethod(
             "WriteFloatLE",
@@ -190,13 +190,13 @@ public partial class RuntimeEmitter
             _types.Double,
             [_types.Double, _types.Int32]
         );
-        runtime.TSBufferWriteFloatLE = method;
+        buffer.WriteFloatLE = method;
 
         var il = method.GetILGenerator();
-        EmitFloatWrite(il, false);  // little-endian
+        EmitFloatWrite(buffer, il, false);  // little-endian
     }
 
-    private void EmitTSBufferWriteFloatBE(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSBufferWriteFloatBE(TypeBuilder typeBuilder, EmittedBufferRuntime buffer)
     {
         var method = typeBuilder.DefineMethod(
             "WriteFloatBE",
@@ -204,13 +204,13 @@ public partial class RuntimeEmitter
             _types.Double,
             [_types.Double, _types.Int32]
         );
-        runtime.TSBufferWriteFloatBE = method;
+        buffer.WriteFloatBE = method;
 
         var il = method.GetILGenerator();
-        EmitFloatWrite(il, true);  // big-endian
+        EmitFloatWrite(buffer, il, true);  // big-endian
     }
 
-    private void EmitTSBufferWriteDoubleLE(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSBufferWriteDoubleLE(TypeBuilder typeBuilder, EmittedBufferRuntime buffer)
     {
         var method = typeBuilder.DefineMethod(
             "WriteDoubleLE",
@@ -218,13 +218,13 @@ public partial class RuntimeEmitter
             _types.Double,
             [_types.Double, _types.Int32]
         );
-        runtime.TSBufferWriteDoubleLE = method;
+        buffer.WriteDoubleLE = method;
 
         var il = method.GetILGenerator();
-        EmitDoubleWrite(il, false);  // little-endian
+        EmitDoubleWrite(buffer, il, false);  // little-endian
     }
 
-    private void EmitTSBufferWriteDoubleBE(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSBufferWriteDoubleBE(TypeBuilder typeBuilder, EmittedBufferRuntime buffer)
     {
         var method = typeBuilder.DefineMethod(
             "WriteDoubleBE",
@@ -232,13 +232,13 @@ public partial class RuntimeEmitter
             _types.Double,
             [_types.Double, _types.Int32]
         );
-        runtime.TSBufferWriteDoubleBE = method;
+        buffer.WriteDoubleBE = method;
 
         var il = method.GetILGenerator();
-        EmitDoubleWrite(il, true);  // big-endian
+        EmitDoubleWrite(buffer, il, true);  // big-endian
     }
 
-    private void EmitTSBufferWriteBigInt64LE(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSBufferWriteBigInt64LE(TypeBuilder typeBuilder, EmittedBufferRuntime buffer)
     {
         var method = typeBuilder.DefineMethod(
             "WriteBigInt64LE",
@@ -246,13 +246,13 @@ public partial class RuntimeEmitter
             _types.Double,
             [_types.Object, _types.Int32]
         );
-        runtime.TSBufferWriteBigInt64LE = method;
+        buffer.WriteBigInt64LE = method;
 
         var il = method.GetILGenerator();
-        EmitBigIntWrite(il, true, false);  // signed, little-endian
+        EmitBigIntWrite(buffer, il, true, false);  // signed, little-endian
     }
 
-    private void EmitTSBufferWriteBigInt64BE(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSBufferWriteBigInt64BE(TypeBuilder typeBuilder, EmittedBufferRuntime buffer)
     {
         var method = typeBuilder.DefineMethod(
             "WriteBigInt64BE",
@@ -260,13 +260,13 @@ public partial class RuntimeEmitter
             _types.Double,
             [_types.Object, _types.Int32]
         );
-        runtime.TSBufferWriteBigInt64BE = method;
+        buffer.WriteBigInt64BE = method;
 
         var il = method.GetILGenerator();
-        EmitBigIntWrite(il, true, true);  // signed, big-endian
+        EmitBigIntWrite(buffer, il, true, true);  // signed, big-endian
     }
 
-    private void EmitTSBufferWriteBigUInt64LE(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSBufferWriteBigUInt64LE(TypeBuilder typeBuilder, EmittedBufferRuntime buffer)
     {
         var method = typeBuilder.DefineMethod(
             "WriteBigUInt64LE",
@@ -274,13 +274,13 @@ public partial class RuntimeEmitter
             _types.Double,
             [_types.Object, _types.Int32]
         );
-        runtime.TSBufferWriteBigUInt64LE = method;
+        buffer.WriteBigUInt64LE = method;
 
         var il = method.GetILGenerator();
-        EmitBigIntWrite(il, false, false);  // unsigned, little-endian
+        EmitBigIntWrite(buffer, il, false, false);  // unsigned, little-endian
     }
 
-    private void EmitTSBufferWriteBigUInt64BE(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSBufferWriteBigUInt64BE(TypeBuilder typeBuilder, EmittedBufferRuntime buffer)
     {
         var method = typeBuilder.DefineMethod(
             "WriteBigUInt64BE",
@@ -288,15 +288,15 @@ public partial class RuntimeEmitter
             _types.Double,
             [_types.Object, _types.Int32]
         );
-        runtime.TSBufferWriteBigUInt64BE = method;
+        buffer.WriteBigUInt64BE = method;
 
         var il = method.GetILGenerator();
-        EmitBigIntWrite(il, false, true);  // unsigned, big-endian
+        EmitBigIntWrite(buffer, il, false, true);  // unsigned, big-endian
     }
 
-    private void EmitMultiByteWrite(ILGenerator il, int byteCount, bool bigEndian)
+    private void EmitMultiByteWrite(EmittedBufferRuntime buffer, ILGenerator il, int byteCount, bool bigEndian)
     {
-        EmitWriteBoundsCheck(il, byteCount);
+        EmitWriteBoundsCheck(buffer, il, byteCount);
 
         var valueLocal = il.DeclareLocal(_types.Int32);
 
@@ -311,7 +311,7 @@ public partial class RuntimeEmitter
             {
                 // _data[offset] = (byte)(value >> 8)
                 il.Emit(OpCodes.Ldarg_0);
-                il.Emit(OpCodes.Ldfld, _tsBufferDataField);
+                il.Emit(OpCodes.Ldfld, buffer.DataField);
                 il.Emit(OpCodes.Ldarg_2);
                 il.Emit(OpCodes.Ldloc, valueLocal);
                 il.Emit(OpCodes.Ldc_I4_8);
@@ -321,7 +321,7 @@ public partial class RuntimeEmitter
 
                 // _data[offset + 1] = (byte)value
                 il.Emit(OpCodes.Ldarg_0);
-                il.Emit(OpCodes.Ldfld, _tsBufferDataField);
+                il.Emit(OpCodes.Ldfld, buffer.DataField);
                 il.Emit(OpCodes.Ldarg_2);
                 il.Emit(OpCodes.Ldc_I4_1);
                 il.Emit(OpCodes.Add);
@@ -333,7 +333,7 @@ public partial class RuntimeEmitter
             {
                 // _data[offset] = (byte)value
                 il.Emit(OpCodes.Ldarg_0);
-                il.Emit(OpCodes.Ldfld, _tsBufferDataField);
+                il.Emit(OpCodes.Ldfld, buffer.DataField);
                 il.Emit(OpCodes.Ldarg_2);
                 il.Emit(OpCodes.Ldloc, valueLocal);
                 il.Emit(OpCodes.Conv_U1);
@@ -341,7 +341,7 @@ public partial class RuntimeEmitter
 
                 // _data[offset + 1] = (byte)(value >> 8)
                 il.Emit(OpCodes.Ldarg_0);
-                il.Emit(OpCodes.Ldfld, _tsBufferDataField);
+                il.Emit(OpCodes.Ldfld, buffer.DataField);
                 il.Emit(OpCodes.Ldarg_2);
                 il.Emit(OpCodes.Ldc_I4_1);
                 il.Emit(OpCodes.Add);
@@ -358,7 +358,7 @@ public partial class RuntimeEmitter
             for (int i = 0; i < 4; i++)
             {
                 il.Emit(OpCodes.Ldarg_0);
-                il.Emit(OpCodes.Ldfld, _tsBufferDataField);
+                il.Emit(OpCodes.Ldfld, buffer.DataField);
                 il.Emit(OpCodes.Ldarg_2);
                 if (i > 0)
                 {
@@ -384,9 +384,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitFloatWrite(ILGenerator il, bool bigEndian)
+    private void EmitFloatWrite(EmittedBufferRuntime buffer, ILGenerator il, bool bigEndian)
     {
-        EmitWriteBoundsCheck(il, 4);
+        EmitWriteBoundsCheck(buffer, il, 4);
 
         var valueLocal = il.DeclareLocal(_types.Int32);
 
@@ -400,7 +400,7 @@ public partial class RuntimeEmitter
         for (int i = 0; i < 4; i++)
         {
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldfld, _tsBufferDataField);
+            il.Emit(OpCodes.Ldfld, buffer.DataField);
             il.Emit(OpCodes.Ldarg_2);
             if (i > 0)
             {
@@ -425,9 +425,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitDoubleWrite(ILGenerator il, bool bigEndian)
+    private void EmitDoubleWrite(EmittedBufferRuntime buffer, ILGenerator il, bool bigEndian)
     {
-        EmitWriteBoundsCheck(il, 8);
+        EmitWriteBoundsCheck(buffer, il, 8);
 
         var valueLocal = il.DeclareLocal(_types.Int64);
 
@@ -440,7 +440,7 @@ public partial class RuntimeEmitter
         for (int i = 0; i < 8; i++)
         {
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldfld, _tsBufferDataField);
+            il.Emit(OpCodes.Ldfld, buffer.DataField);
             il.Emit(OpCodes.Ldarg_2);
             if (i > 0)
             {
@@ -465,9 +465,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitBigIntWrite(ILGenerator il, bool signed, bool bigEndian)
+    private void EmitBigIntWrite(EmittedBufferRuntime buffer, ILGenerator il, bool signed, bool bigEndian)
     {
-        EmitBigIntWriteBoundsCheck(il);
+        EmitBigIntWriteBoundsCheck(buffer, il);
 
         var valueLocal = il.DeclareLocal(_types.Int64);
 
@@ -504,7 +504,7 @@ public partial class RuntimeEmitter
         for (int i = 0; i < 8; i++)
         {
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldfld, _tsBufferDataField);
+            il.Emit(OpCodes.Ldfld, buffer.DataField);
             il.Emit(OpCodes.Ldarg_2);
             if (i > 0)
             {
@@ -529,7 +529,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitBigIntWriteBoundsCheck(ILGenerator il)
+    private void EmitBigIntWriteBoundsCheck(EmittedBufferRuntime buffer, ILGenerator il)
     {
         var okLabel = il.DefineLabel();
         var throwLabel = il.DefineLabel();
@@ -541,7 +541,7 @@ public partial class RuntimeEmitter
 
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsBufferDataField);
+        il.Emit(OpCodes.Ldfld, buffer.DataField);
         il.Emit(OpCodes.Ldlen);
         il.Emit(OpCodes.Conv_I4);
         il.Emit(OpCodes.Ldc_I4_8);

@@ -1826,94 +1826,18 @@ public class EmittedRuntime
     public EmittedDgramRuntime RequireDgram() => Dgram
         ?? throw new InvalidOperationException("Dgram runtime was not enabled for this compilation.");
 
-    // $Buffer type - emitted for standalone buffer support
-    // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSBuffer
-    public Type TSBufferType { get; set; } = null!;
-    public ConstructorBuilder TSBufferCtor { get; set; } = null!;
-    public ConstructorBuilder TSBufferCtorSize { get; set; } = null!;
-    public MethodBuilder TSBufferLengthGetter { get; set; } = null!;
-    public MethodBuilder TSBufferFromString { get; set; } = null!;
-    public MethodBuilder TSBufferFromArray { get; set; } = null!;
-    public MethodBuilder TSBufferFromBuffer { get; set; } = null!;
-    public MethodBuilder TSBufferAlloc { get; set; } = null!;
-    public MethodBuilder TSBufferAllocUnsafe { get; set; } = null!;
-    public MethodBuilder TSBufferConcat { get; set; } = null!;
-    public MethodBuilder CalculateBuffersTotalLength { get; set; } = null!;
-    public MethodBuilder TSBufferIsBuffer { get; set; } = null!;
-    public MethodBuilder TSBufferToString { get; set; } = null!;
-    public MethodBuilder TSBufferSlice { get; set; } = null!;
-    public MethodBuilder TSBufferGetData { get; set; } = null!;
+    /// <summary>Node Buffer metadata, or null when Buffer is tree-shaken.</summary>
+    public EmittedBufferRuntime? Buffer { get; private set; }
 
-    // buffer module helper functions (#1160) — pure-BCL, standalone.
-    public MethodBuilder BufferAtob { get; set; } = null!;
-    public MethodBuilder BufferBtoa { get; set; } = null!;
-    public MethodBuilder BufferIsUtf8 { get; set; } = null!;
-    public MethodBuilder BufferIsAscii { get; set; } = null!;
-    public MethodBuilder BufferTranscode { get; set; } = null!;
-    public MethodBuilder BufferSlowBuffer { get; set; } = null!;
-    public MethodBuilder BufferModuleConstants { get; set; } = null!;
-    public MethodBuilder BufferCopyBytesFrom { get; set; } = null!;
-    public MethodBuilder TSBufferCopy { get; set; } = null!;
-    public MethodBuilder TSBufferCompare { get; set; } = null!;
-    public MethodBuilder TSBufferEquals { get; set; } = null!;
-    public MethodBuilder TSBufferFill { get; set; } = null!;
-    public MethodBuilder TSBufferWrite { get; set; } = null!;
-    public MethodBuilder TSBufferReadUInt8 { get; set; } = null!;
-    public MethodBuilder TSBufferWriteUInt8 { get; set; } = null!;
-    public MethodBuilder TSBufferToJSON { get; set; } = null!;
+    internal void BeginBufferEmission(bool hasTypedArrayCopy)
+    {
+        if (Buffer is not null)
+            throw new InvalidOperationException("Buffer metadata emission has already started.");
+        Buffer = new EmittedBufferRuntime(hasTypedArrayCopy);
+    }
 
-    // Multi-byte read methods
-    public MethodBuilder TSBufferReadInt8 { get; set; } = null!;
-    public MethodBuilder TSBufferReadUInt16LE { get; set; } = null!;
-    public MethodBuilder TSBufferReadUIntLE { get; set; } = null!;
-    public MethodBuilder TSBufferReadUIntBE { get; set; } = null!;
-    public MethodBuilder TSBufferReadIntLE { get; set; } = null!;
-    public MethodBuilder TSBufferReadIntBE { get; set; } = null!;
-    public MethodBuilder TSBufferWriteUIntLE { get; set; } = null!;
-    public MethodBuilder TSBufferWriteUIntBE { get; set; } = null!;
-    public MethodBuilder TSBufferReadUInt16BE { get; set; } = null!;
-    public MethodBuilder TSBufferReadUInt32LE { get; set; } = null!;
-    public MethodBuilder TSBufferReadUInt32BE { get; set; } = null!;
-    public MethodBuilder TSBufferReadInt16LE { get; set; } = null!;
-    public MethodBuilder TSBufferReadInt16BE { get; set; } = null!;
-    public MethodBuilder TSBufferReadInt32LE { get; set; } = null!;
-    public MethodBuilder TSBufferReadInt32BE { get; set; } = null!;
-    public MethodBuilder TSBufferReadFloatLE { get; set; } = null!;
-    public MethodBuilder TSBufferReadFloatBE { get; set; } = null!;
-    public MethodBuilder TSBufferReadDoubleLE { get; set; } = null!;
-    public MethodBuilder TSBufferReadDoubleBE { get; set; } = null!;
-    public MethodBuilder TSBufferReadBigInt64LE { get; set; } = null!;
-    public MethodBuilder TSBufferReadBigInt64BE { get; set; } = null!;
-    public MethodBuilder TSBufferReadBigUInt64LE { get; set; } = null!;
-    public MethodBuilder TSBufferReadBigUInt64BE { get; set; } = null!;
-
-    // Multi-byte write methods
-    public MethodBuilder TSBufferWriteInt8 { get; set; } = null!;
-    public MethodBuilder TSBufferWriteUInt16LE { get; set; } = null!;
-    public MethodBuilder TSBufferWriteUInt16BE { get; set; } = null!;
-    public MethodBuilder TSBufferWriteUInt32LE { get; set; } = null!;
-    public MethodBuilder TSBufferWriteUInt32BE { get; set; } = null!;
-    public MethodBuilder TSBufferWriteInt16LE { get; set; } = null!;
-    public MethodBuilder TSBufferWriteInt16BE { get; set; } = null!;
-    public MethodBuilder TSBufferWriteInt32LE { get; set; } = null!;
-    public MethodBuilder TSBufferWriteInt32BE { get; set; } = null!;
-    public MethodBuilder TSBufferWriteFloatLE { get; set; } = null!;
-    public MethodBuilder TSBufferWriteFloatBE { get; set; } = null!;
-    public MethodBuilder TSBufferWriteDoubleLE { get; set; } = null!;
-    public MethodBuilder TSBufferWriteDoubleBE { get; set; } = null!;
-    public MethodBuilder TSBufferWriteBigInt64LE { get; set; } = null!;
-    public MethodBuilder TSBufferWriteBigInt64BE { get; set; } = null!;
-    public MethodBuilder TSBufferWriteBigUInt64LE { get; set; } = null!;
-    public MethodBuilder TSBufferWriteBigUInt64BE { get; set; } = null!;
-
-    // Search methods
-    public MethodBuilder TSBufferIndexOf { get; set; } = null!;
-    public MethodBuilder TSBufferIncludes { get; set; } = null!;
-
-    // Swap methods
-    public MethodBuilder TSBufferSwap16 { get; set; } = null!;
-    public MethodBuilder TSBufferSwap32 { get; set; } = null!;
-    public MethodBuilder TSBufferSwap64 { get; set; } = null!;
+    public EmittedBufferRuntime RequireBuffer() => Buffer
+        ?? throw new InvalidOperationException("Buffer runtime was not enabled for this compilation.");
 
     // $TextEncoder type - emitted for standalone util support
     public TypeBuilder TSTextEncoderType { get; set; } = null!;

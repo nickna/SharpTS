@@ -1606,17 +1606,17 @@ public partial class RuntimeEmitter
             }
 
             // $Buffer
-            if (runtime.TSBufferType != null)
+            if (runtime.Buffer is not null)
             {
                 var notBuffer = il.DefineLabel();
                 il.Emit(OpCodes.Ldarg_1);
-                il.Emit(OpCodes.Isinst, runtime.TSBufferType);
+                il.Emit(OpCodes.Isinst, runtime.RequireBuffer().Type);
                 il.Emit(OpCodes.Brfalse, notBuffer);
 
                 var dataLocal = il.DeclareLocal(_types.ByteArray);
                 il.Emit(OpCodes.Ldarg_1);
-                il.Emit(OpCodes.Castclass, runtime.TSBufferType);
-                il.Emit(OpCodes.Call, runtime.TSBufferGetData);
+                il.Emit(OpCodes.Castclass, runtime.RequireBuffer().Type);
+                il.Emit(OpCodes.Call, runtime.RequireBuffer().GetData);
                 il.Emit(OpCodes.Stloc, dataLocal);
 
                 var quotaOk = il.DefineLabel();

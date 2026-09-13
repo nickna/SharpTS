@@ -8,7 +8,7 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits: public static $Buffer FromString(string data, string encoding)
     /// </summary>
-    private void EmitTSBufferFromString(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSBufferFromString(TypeBuilder typeBuilder, EmittedBufferRuntime buffer)
     {
         var method = typeBuilder.DefineMethod(
             "FromString",
@@ -16,7 +16,7 @@ public partial class RuntimeEmitter
             typeBuilder,
             [_types.String, _types.String]
         );
-        runtime.TSBufferFromString = method;
+        buffer.FromString = method;
 
         var il = method.GetILGenerator();
 
@@ -52,48 +52,48 @@ public partial class RuntimeEmitter
 
         // UTF-8
         il.MarkLabel(utf8Label);
-        EmitEncodingGetBytes(il, "UTF8", runtime.TSBufferCtor);
+        EmitEncodingGetBytes(il, "UTF8", buffer.Ctor);
         il.Emit(OpCodes.Ret);
 
         // ASCII
         il.MarkLabel(asciiLabel);
-        EmitEncodingGetBytes(il, "ASCII", runtime.TSBufferCtor);
+        EmitEncodingGetBytes(il, "ASCII", buffer.Ctor);
         il.Emit(OpCodes.Ret);
 
         // Latin1 / binary
         il.MarkLabel(latin1Label);
-        EmitEncodingGetBytes(il, "Latin1", runtime.TSBufferCtor);
+        EmitEncodingGetBytes(il, "Latin1", buffer.Ctor);
         il.Emit(OpCodes.Ret);
 
         // UTF-16LE / ucs2
         il.MarkLabel(utf16leLabel);
-        EmitEncodingGetBytes(il, "Unicode", runtime.TSBufferCtor);
+        EmitEncodingGetBytes(il, "Unicode", buffer.Ctor);
         il.Emit(OpCodes.Ret);
 
         // Base64
         il.MarkLabel(base64Label);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Call, _types.ConvertFromBase64String);
-        il.Emit(OpCodes.Newobj, runtime.TSBufferCtor);
+        il.Emit(OpCodes.Newobj, buffer.Ctor);
         il.Emit(OpCodes.Ret);
 
         // Base64url: map -/_ → +/ and re-pad to a multiple of 4, then decode.
         il.MarkLabel(base64urlLabel);
         EmitBase64UrlNormalize(il);
         il.Emit(OpCodes.Call, _types.ConvertFromBase64String);
-        il.Emit(OpCodes.Newobj, runtime.TSBufferCtor);
+        il.Emit(OpCodes.Newobj, buffer.Ctor);
         il.Emit(OpCodes.Ret);
 
         // Hex
         il.MarkLabel(hexLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Call, _types.ConvertFromHexString);
-        il.Emit(OpCodes.Newobj, runtime.TSBufferCtor);
+        il.Emit(OpCodes.Newobj, buffer.Ctor);
         il.Emit(OpCodes.Ret);
 
         // Default to UTF-8
         il.MarkLabel(defaultLabel);
-        EmitEncodingGetBytes(il, "UTF8", runtime.TSBufferCtor);
+        EmitEncodingGetBytes(il, "UTF8", buffer.Ctor);
         il.Emit(OpCodes.Ret);
     }
 
@@ -165,7 +165,7 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits: public static $Buffer FromArray(List<object?> array)
     /// </summary>
-    private void EmitTSBufferFromArray(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSBufferFromArray(TypeBuilder typeBuilder, EmittedBufferRuntime buffer)
     {
         var method = typeBuilder.DefineMethod(
             "FromArray",
@@ -173,7 +173,7 @@ public partial class RuntimeEmitter
             typeBuilder,
             [_types.ListOfObject]
         );
-        runtime.TSBufferFromArray = method;
+        buffer.FromArray = method;
 
         var il = method.GetILGenerator();
 
@@ -223,7 +223,7 @@ public partial class RuntimeEmitter
 
         // return new $Buffer(bytes)
         il.Emit(OpCodes.Ldloc, bytesLocal);
-        il.Emit(OpCodes.Newobj, runtime.TSBufferCtor);
+        il.Emit(OpCodes.Newobj, buffer.Ctor);
         il.Emit(OpCodes.Ret);
     }
 
@@ -231,7 +231,7 @@ public partial class RuntimeEmitter
     /// Emits: public static $Buffer FromBuffer($Buffer source)
     /// Copies the source buffer's data into a new buffer.
     /// </summary>
-    private void EmitTSBufferFromBuffer(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSBufferFromBuffer(TypeBuilder typeBuilder, EmittedBufferRuntime buffer)
     {
         var method = typeBuilder.DefineMethod(
             "FromBuffer",
@@ -239,7 +239,7 @@ public partial class RuntimeEmitter
             typeBuilder,
             [typeBuilder]
         );
-        runtime.TSBufferFromBuffer = method;
+        buffer.FromBuffer = method;
 
         var il = method.GetILGenerator();
 
@@ -247,7 +247,7 @@ public partial class RuntimeEmitter
 
         // var bytes = new byte[source._data.Length]
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsBufferDataField);
+        il.Emit(OpCodes.Ldfld, buffer.DataField);
         il.Emit(OpCodes.Ldlen);
         il.Emit(OpCodes.Conv_I4);
         il.Emit(OpCodes.Newarr, _types.Byte);
@@ -255,26 +255,26 @@ public partial class RuntimeEmitter
 
         // Array.Copy(source._data, 0, bytes, 0, source._data.Length)
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsBufferDataField);
+        il.Emit(OpCodes.Ldfld, buffer.DataField);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldloc, bytesLocal);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsBufferDataField);
+        il.Emit(OpCodes.Ldfld, buffer.DataField);
         il.Emit(OpCodes.Ldlen);
         il.Emit(OpCodes.Conv_I4);
         il.Emit(OpCodes.Call, _types.ArrayCopy5);
 
         // return new $Buffer(bytes)
         il.Emit(OpCodes.Ldloc, bytesLocal);
-        il.Emit(OpCodes.Newobj, runtime.TSBufferCtor);
+        il.Emit(OpCodes.Newobj, buffer.Ctor);
         il.Emit(OpCodes.Ret);
     }
 
     /// <summary>
     /// Emits: public static $Buffer Alloc(int size)
     /// </summary>
-    private void EmitTSBufferAlloc(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSBufferAlloc(TypeBuilder typeBuilder, EmittedBufferRuntime buffer)
     {
         var method = typeBuilder.DefineMethod(
             "Alloc",
@@ -282,20 +282,20 @@ public partial class RuntimeEmitter
             typeBuilder,
             [_types.Int32]
         );
-        runtime.TSBufferAlloc = method;
+        buffer.Alloc = method;
 
         var il = method.GetILGenerator();
 
         // return new $Buffer(size) - constructor already creates zero-initialized array
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Newobj, runtime.TSBufferCtorSize);
+        il.Emit(OpCodes.Newobj, buffer.CtorSize);
         il.Emit(OpCodes.Ret);
     }
 
     /// <summary>
     /// Emits: public static $Buffer AllocUnsafe(int size)
     /// </summary>
-    private void EmitTSBufferAllocUnsafe(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSBufferAllocUnsafe(TypeBuilder typeBuilder, EmittedBufferRuntime buffer)
     {
         var method = typeBuilder.DefineMethod(
             "AllocUnsafe",
@@ -303,20 +303,20 @@ public partial class RuntimeEmitter
             typeBuilder,
             [_types.Int32]
         );
-        runtime.TSBufferAllocUnsafe = method;
+        buffer.AllocUnsafe = method;
 
         var il = method.GetILGenerator();
 
         // return new $Buffer(size) - same as Alloc in .NET (always initialized)
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Newobj, runtime.TSBufferCtorSize);
+        il.Emit(OpCodes.Newobj, buffer.CtorSize);
         il.Emit(OpCodes.Ret);
     }
 
     /// <summary>
     /// Emits: public static $Buffer Concat(List<object?> buffers, int totalLength)
     /// </summary>
-    private void EmitTSBufferConcat(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSBufferConcat(TypeBuilder typeBuilder, EmittedBufferRuntime buffer)
     {
         var method = typeBuilder.DefineMethod(
             "Concat",
@@ -324,7 +324,7 @@ public partial class RuntimeEmitter
             typeBuilder,
             [_types.ListOfObject, _types.Int32]
         );
-        runtime.TSBufferConcat = method;
+        buffer.Concat = method;
 
         var il = method.GetILGenerator();
 
@@ -374,13 +374,13 @@ public partial class RuntimeEmitter
         // Array.Copy(buf._data, 0, bytes, offset, buf._data.Length)
         il.Emit(OpCodes.Ldloc, itemLocal);
         il.Emit(OpCodes.Castclass, typeBuilder);
-        il.Emit(OpCodes.Ldfld, _tsBufferDataField);
+        il.Emit(OpCodes.Ldfld, buffer.DataField);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldloc, bytesLocal);
         il.Emit(OpCodes.Ldloc, offsetLocal);
         il.Emit(OpCodes.Ldloc, itemLocal);
         il.Emit(OpCodes.Castclass, typeBuilder);
-        il.Emit(OpCodes.Ldfld, _tsBufferDataField);
+        il.Emit(OpCodes.Ldfld, buffer.DataField);
         il.Emit(OpCodes.Ldlen);
         il.Emit(OpCodes.Conv_I4);
         il.Emit(OpCodes.Call, _types.ArrayCopy5);
@@ -389,7 +389,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, offsetLocal);
         il.Emit(OpCodes.Ldloc, itemLocal);
         il.Emit(OpCodes.Castclass, typeBuilder);
-        il.Emit(OpCodes.Ldfld, _tsBufferDataField);
+        il.Emit(OpCodes.Ldfld, buffer.DataField);
         il.Emit(OpCodes.Ldlen);
         il.Emit(OpCodes.Conv_I4);
         il.Emit(OpCodes.Add);
@@ -408,7 +408,7 @@ public partial class RuntimeEmitter
 
         // return new $Buffer(bytes)
         il.Emit(OpCodes.Ldloc, bytesLocal);
-        il.Emit(OpCodes.Newobj, runtime.TSBufferCtor);
+        il.Emit(OpCodes.Newobj, buffer.Ctor);
         il.Emit(OpCodes.Ret);
     }
 
@@ -416,7 +416,7 @@ public partial class RuntimeEmitter
     /// Emits: public static int CalculateBuffersTotalLength(List<object?> buffers)
     /// Helper method to calculate total length of buffers for Buffer.concat()
     /// </summary>
-    private void EmitCalculateBuffersTotalLength(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitCalculateBuffersTotalLength(TypeBuilder typeBuilder, EmittedBufferRuntime buffer)
     {
         var method = typeBuilder.DefineMethod(
             "CalculateBuffersTotalLength",
@@ -424,7 +424,7 @@ public partial class RuntimeEmitter
             _types.Int32,
             [_types.ListOfObject]
         );
-        runtime.CalculateBuffersTotalLength = method;
+        buffer.CalculateTotalLength = method;
 
         var il = method.GetILGenerator();
 
@@ -468,7 +468,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, totalLocal);
         il.Emit(OpCodes.Ldloc, itemLocal);
         il.Emit(OpCodes.Castclass, typeBuilder);
-        il.Emit(OpCodes.Ldfld, _tsBufferDataField);
+        il.Emit(OpCodes.Ldfld, buffer.DataField);
         il.Emit(OpCodes.Ldlen);
         il.Emit(OpCodes.Conv_I4);
         il.Emit(OpCodes.Add);
@@ -495,7 +495,7 @@ public partial class RuntimeEmitter
     /// Checks for both $Buffer (emitted type) and SharpTSBuffer (interpreter type)
     /// Uses reflection for SharpTSBuffer to avoid compile-time dependency on SharpTS.dll.
     /// </summary>
-    private void EmitTSBufferIsBuffer(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSBufferIsBuffer(TypeBuilder typeBuilder, EmittedBufferRuntime buffer)
     {
         var method = typeBuilder.DefineMethod(
             "IsBuffer",
@@ -503,7 +503,7 @@ public partial class RuntimeEmitter
             _types.Boolean,
             [_types.Object]
         );
-        runtime.TSBufferIsBuffer = method;
+        buffer.IsBuffer = method;
 
         var il = method.GetILGenerator();
 

@@ -180,8 +180,8 @@ public partial class ILEmitter
 
         EmitExpression(g.Object);
         EmitBoxIfNeeded(g.Object);
-        IL.Emit(OpCodes.Castclass, _ctx.Runtime!.TSBufferType);
-        IL.Emit(OpCodes.Call, _ctx.Runtime!.TSBufferLengthGetter);
+        IL.Emit(OpCodes.Castclass, _ctx.Runtime!.RequireBuffer().Type);
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.RequireBuffer().LengthGetter);
         IL.Emit(OpCodes.Conv_R8);  // Convert to double for TypeScript number
         IL.Emit(OpCodes.Box, _ctx.Types.Double);
         SetStackUnknown();

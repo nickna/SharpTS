@@ -60,7 +60,7 @@ public partial class RuntimeEmitter
         var encodeMethod = typeBuilder.DefineMethod(
             "Encode",
             MethodAttributes.Public | MethodAttributes.HideBySig,
-            runtime.TSBufferType,
+            runtime.RequireBuffer().Type,
             [_types.String]
         );
         _ = encodeMethod;
@@ -87,7 +87,7 @@ public partial class RuntimeEmitter
 
         // return new $Buffer(bytes)
         encodeIL.Emit(OpCodes.Ldloc, bytesLocal);
-        encodeIL.Emit(OpCodes.Newobj, runtime.TSBufferCtor);
+        encodeIL.Emit(OpCodes.Newobj, runtime.RequireBuffer().Ctor);
         encodeIL.Emit(OpCodes.Ret);
 
         // Override ToString
@@ -231,7 +231,7 @@ public partial class RuntimeEmitter
 
         // Check if input is $Buffer
         decodeIL.Emit(OpCodes.Ldarg_1);
-        decodeIL.Emit(OpCodes.Isinst, runtime.TSBufferType);
+        decodeIL.Emit(OpCodes.Isinst, runtime.RequireBuffer().Type);
         decodeIL.Emit(OpCodes.Brtrue, isBufferLabel);
 
         // Check if input is byte[]
@@ -245,8 +245,8 @@ public partial class RuntimeEmitter
         // isBuffer: bytes = (($Buffer)input).Data
         decodeIL.MarkLabel(isBufferLabel);
         decodeIL.Emit(OpCodes.Ldarg_1);
-        decodeIL.Emit(OpCodes.Castclass, runtime.TSBufferType);
-        decodeIL.Emit(OpCodes.Call, runtime.TSBufferGetData);
+        decodeIL.Emit(OpCodes.Castclass, runtime.RequireBuffer().Type);
+        decodeIL.Emit(OpCodes.Call, runtime.RequireBuffer().GetData);
         decodeIL.Emit(OpCodes.Stloc, bytesLocal);
         decodeIL.Emit(OpCodes.Br, decodeLabel);
 
@@ -357,7 +357,7 @@ public partial class RuntimeEmitter
         invokeIL.Emit(OpCodes.Ldarg_1);
         invokeIL.Emit(OpCodes.Ldc_I4_0);
         invokeIL.Emit(OpCodes.Ldelem_Ref);
-        invokeIL.Emit(OpCodes.Isinst, runtime.TSBufferType);
+        invokeIL.Emit(OpCodes.Isinst, runtime.RequireBuffer().Type);
         invokeIL.Emit(OpCodes.Brtrue, isBufferLabel);
 
         // Not a buffer - try to cast to byte[]
@@ -373,8 +373,8 @@ public partial class RuntimeEmitter
         invokeIL.Emit(OpCodes.Ldarg_1);
         invokeIL.Emit(OpCodes.Ldc_I4_0);
         invokeIL.Emit(OpCodes.Ldelem_Ref);
-        invokeIL.Emit(OpCodes.Castclass, runtime.TSBufferType);
-        invokeIL.Emit(OpCodes.Call, runtime.TSBufferGetData);
+        invokeIL.Emit(OpCodes.Castclass, runtime.RequireBuffer().Type);
+        invokeIL.Emit(OpCodes.Call, runtime.RequireBuffer().GetData);
         invokeIL.Emit(OpCodes.Stloc, bytesLocal);
 
         invokeIL.MarkLabel(callDecodeLabel);

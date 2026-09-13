@@ -1844,13 +1844,13 @@ public partial class RuntimeEmitter
             [typeof(byte[]), _types.Boolean, _types.String]);
         _childDecodeOutput = d;
         var dil = d.GetILGenerator();
-        var bLocal = dil.DeclareLocal(runtime.TSBufferType);
-        dil.Emit(OpCodes.Ldarg_0); dil.Emit(OpCodes.Newobj, runtime.TSBufferCtor); dil.Emit(OpCodes.Stloc, bLocal);
+        var bLocal = dil.DeclareLocal(runtime.RequireBuffer().Type);
+        dil.Emit(OpCodes.Ldarg_0); dil.Emit(OpCodes.Newobj, runtime.RequireBuffer().Ctor); dil.Emit(OpCodes.Stloc, bLocal);
         var decode = dil.DefineLabel();
         dil.Emit(OpCodes.Ldarg_1); dil.Emit(OpCodes.Brfalse, decode);
         dil.Emit(OpCodes.Ldloc, bLocal); dil.Emit(OpCodes.Ret);
         dil.MarkLabel(decode);
-        dil.Emit(OpCodes.Ldloc, bLocal); dil.Emit(OpCodes.Ldarg_2); dil.Emit(OpCodes.Callvirt, runtime.TSBufferToString);
+        dil.Emit(OpCodes.Ldloc, bLocal); dil.Emit(OpCodes.Ldarg_2); dil.Emit(OpCodes.Callvirt, runtime.RequireBuffer().ToStringMethod);
         dil.Emit(OpCodes.Ret);
     }
 

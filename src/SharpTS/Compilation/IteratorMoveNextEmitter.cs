@@ -122,7 +122,7 @@ public abstract partial class IteratorMoveNextEmitter : StateMachineExitRoutingE
     {
         var runtime = Ctx.Runtime!;
         var typedArrayType = runtime.TypedArrayBaseType;
-        var bufferType = runtime.TSBufferType;
+        var bufferType = runtime.Buffer?.Type;
         if (typedArrayType is null && bufferType is null)
             return;
 

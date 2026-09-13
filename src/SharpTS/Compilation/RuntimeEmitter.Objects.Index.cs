@@ -62,7 +62,7 @@ public partial class RuntimeEmitter
         if (_features.UsesBuffer)
         {
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.TSBufferType);
+            il.Emit(OpCodes.Isinst, runtime.RequireBuffer().Type);
             il.Emit(OpCodes.Brtrue, tsBufferLabel);
         }
 
@@ -445,8 +445,8 @@ public partial class RuntimeEmitter
             var bufOutOfRangeLabel = il.DefineLabel();
             // data = ((TSBuffer)obj).Data;
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Castclass, runtime.TSBufferType);
-            il.Emit(OpCodes.Call, runtime.TSBufferGetData);
+            il.Emit(OpCodes.Castclass, runtime.RequireBuffer().Type);
+            il.Emit(OpCodes.Call, runtime.RequireBuffer().GetData);
             il.Emit(OpCodes.Stloc, bufDataLocal);
             // idx = Convert.ToInt32(index);
             il.Emit(OpCodes.Ldarg_1);
@@ -1141,7 +1141,7 @@ public partial class RuntimeEmitter
         if (_features.UsesBuffer)
         {
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.TSBufferType);
+            il.Emit(OpCodes.Isinst, runtime.RequireBuffer().Type);
             il.Emit(OpCodes.Brtrue, tsBufferSetLabel);
         }
 
@@ -1445,8 +1445,8 @@ public partial class RuntimeEmitter
             var bufSetIndexLocal = il.DeclareLocal(_types.Int32);
             var bufSetDoneLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Castclass, runtime.TSBufferType);
-            il.Emit(OpCodes.Call, runtime.TSBufferGetData);
+            il.Emit(OpCodes.Castclass, runtime.RequireBuffer().Type);
+            il.Emit(OpCodes.Call, runtime.RequireBuffer().GetData);
             il.Emit(OpCodes.Stloc, bufSetDataLocal);
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Call, _types.GetMethod(_types.Convert, "ToInt32", _types.Object));

@@ -305,6 +305,22 @@ property/coercion helpers retain their owners. BCL lookups and method-local help
 emitter. Declaration order, feature implications, emitted signatures, and cache/cookie behavior are
 unchanged.
 
+Node Buffer uses optional `EmittedBufferRuntime`, started only for `UsesBuffer`. It owns 79 checked
+handles: the former 76 flat properties plus the backing-data field and two module coercion helpers.
+`HasTypedArrayCopy` captures the existing `HasAnyTypedArray` gate at creation; `CopyBytesFrom` rejects
+access when disabled and is required for completion only when enabled. The other 78 declarations
+are required whenever Buffer is emitted. Completion validates and freezes the component after
+runtime finalization, preserving the early `$Buffer` class emission and later module-helper emission.
+
+The 84 Buffer-only helpers accept the component directly, including the numeric read/write and
+encoding helpers that previously depended on the emitter's backing-data field. Cross-feature
+consumers retain their own dependencies on typed arrays, crypto, streams, HTTP, filesystem, generic
+property access, and iteration. Optional type probes explicitly check component availability.
+ArrayBuffer, SharedArrayBuffer, DataView, and TypedArray remain separate migration phases; the
+typed-array bytes-per-element getter retains that family's ownership. No flat Buffer aliases or
+Buffer declaration fields remain in the emitter, and guest signatures and feature implications
+are unchanged.
+
 During emission, each handle becomes readable as soon as its declaration is assigned, so forward
 references do not require a method body to exist yet. An early read names the missing declaration.
 Completion is an orchestration boundary, not an IL verifier: body emission and type finalization

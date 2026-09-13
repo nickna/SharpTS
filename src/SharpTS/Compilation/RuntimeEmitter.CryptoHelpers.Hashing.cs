@@ -116,7 +116,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, _types.RandomNumberGeneratorGetBytes);
 
         // Return new $Buffer(bytes)
-        il.Emit(OpCodes.Newobj, runtime.TSBufferCtor);
+        il.Emit(OpCodes.Newobj, runtime.RequireBuffer().Ctor);
         il.Emit(OpCodes.Ret);
     }
 
@@ -143,8 +143,8 @@ public partial class RuntimeEmitter
 
         // Get buffer.Data (assume arg0 is $Buffer with Data property)
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSBufferType);
-        il.Emit(OpCodes.Call, runtime.TSBufferGetData);
+        il.Emit(OpCodes.Castclass, runtime.RequireBuffer().Type);
+        il.Emit(OpCodes.Call, runtime.RequireBuffer().GetData);
         il.Emit(OpCodes.Stloc, dataLocal);
 
         // Calculate actual size: if size == -1, use data.Length - offset
