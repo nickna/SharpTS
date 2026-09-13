@@ -116,7 +116,7 @@ public class EmittedDataViewRuntimeTests
         AssertFrozen(buffer);
         Assert.True(runtime.RequireArrayBuffer().IsComplete);
         Assert.True(runtime.RequireSharedArrayBuffer().IsComplete);
-        Assert.NotNull(runtime.TypedArrayBaseType);
+        Assert.NotNull(runtime.TypedArrays.RequireImplementation().BaseType);
         Assert.Equal("$DataView", buffer.Type.Name);
         Assert.Same(buffer.Type, buffer.Ctor.DeclaringType);
         Assert.Same(buffer.Type, buffer.BufferField.DeclaringType);

@@ -72,7 +72,7 @@ public partial class RuntimeEmitter
         if (_features.HasAnyTypedArray)
         {
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Call, runtime.IsTypedArrayMethod);
+            il.Emit(OpCodes.Call, runtime.TypedArrays.IsTypedArray);
             il.Emit(OpCodes.Brtrue, typedArrayLabel);
         }
 
@@ -429,7 +429,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Call, _types.GetMethod(_types.Convert, "ToInt32", _types.Object));
-            il.Emit(OpCodes.Call, runtime.GetTypedArrayElementMethod);
+            il.Emit(OpCodes.Call, runtime.TypedArrays.RequireImplementation().GetElement);
             il.Emit(OpCodes.Ret);
         }
 
@@ -1150,7 +1150,7 @@ public partial class RuntimeEmitter
         if (_features.HasAnyTypedArray)
         {
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Call, runtime.IsTypedArrayMethod);
+            il.Emit(OpCodes.Call, runtime.TypedArrays.IsTypedArray);
             il.Emit(OpCodes.Brtrue, typedArraySetLabel);
         }
 
@@ -1431,7 +1431,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Call, _types.GetMethod(_types.Convert, "ToInt32", _types.Object));
             il.Emit(OpCodes.Ldarg_2);
-            il.Emit(OpCodes.Call, runtime.SetTypedArrayElementMethod);
+            il.Emit(OpCodes.Call, runtime.TypedArrays.RequireImplementation().SetElement);
             il.Emit(OpCodes.Ret);
         }
 

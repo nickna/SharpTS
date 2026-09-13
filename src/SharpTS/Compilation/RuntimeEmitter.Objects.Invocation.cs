@@ -208,7 +208,7 @@ public partial class RuntimeEmitter
         {
             boundTypedArrayMethodLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.BoundTypedArrayMethodType);
+            il.Emit(OpCodes.Isinst, runtime.TypedArrays.RequireImplementation().BoundMethodType);
             il.Emit(OpCodes.Brtrue, boundTypedArrayMethodLabel);
         }
 
@@ -530,9 +530,9 @@ public partial class RuntimeEmitter
         {
             il.MarkLabel(boundTypedArrayMethodLabel);
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Castclass, runtime.BoundTypedArrayMethodType);
+            il.Emit(OpCodes.Castclass, runtime.TypedArrays.RequireImplementation().BoundMethodType);
             il.Emit(OpCodes.Ldarg_1);  // args
-            il.Emit(OpCodes.Callvirt, runtime.BoundTypedArrayMethodInvoke);
+            il.Emit(OpCodes.Callvirt, runtime.TypedArrays.RequireImplementation().BoundMethodInvoke);
             il.Emit(OpCodes.Ret);
         }
 
@@ -838,12 +838,12 @@ public partial class RuntimeEmitter
         {
             var notBoundTypedArrayMethodLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Isinst, runtime.BoundTypedArrayMethodType);
+            il.Emit(OpCodes.Isinst, runtime.TypedArrays.RequireImplementation().BoundMethodType);
             il.Emit(OpCodes.Brfalse, notBoundTypedArrayMethodLabel);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Castclass, runtime.BoundTypedArrayMethodType);
+            il.Emit(OpCodes.Castclass, runtime.TypedArrays.RequireImplementation().BoundMethodType);
             il.Emit(OpCodes.Ldarg_2);  // args
-            il.Emit(OpCodes.Callvirt, runtime.BoundTypedArrayMethodInvoke);
+            il.Emit(OpCodes.Callvirt, runtime.TypedArrays.RequireImplementation().BoundMethodInvoke);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(notBoundTypedArrayMethodLabel);
         }

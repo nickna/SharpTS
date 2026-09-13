@@ -1544,7 +1544,7 @@ public partial class RuntimeEmitter
 
             // TypedArray - use emitted helper dispatch for standalone behavior
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Call, runtime.IsTypedArrayMethod);
+            il.Emit(OpCodes.Call, runtime.TypedArrays.IsTypedArray);
             il.Emit(OpCodes.Brtrue, typedArrayLabel);
         }
 
@@ -2364,7 +2364,7 @@ public partial class RuntimeEmitter
             il.MarkLabel(typedArrayLabel);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Call, runtime.GetTypedArrayMemberMethod);
+            il.Emit(OpCodes.Call, runtime.TypedArrays.RequireImplementation().GetMember);
             il.Emit(OpCodes.Ret);
 
             // $ArrayBuffer handler - check for "byteLength"

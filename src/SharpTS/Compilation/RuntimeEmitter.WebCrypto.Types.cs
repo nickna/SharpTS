@@ -1569,22 +1569,22 @@ public partial class RuntimeEmitter
             var spanCtor3 = typeof(Span<byte>).GetConstructor([typeof(byte[]), typeof(int), typeof(int)])!;
 
             // $TypedArray
-            if (runtime.TypedArrayBaseType != null)
+            if (runtime.TypedArrays.Implementation is not null)
             {
                 var notTyped = il.DefineLabel();
                 il.Emit(OpCodes.Ldarg_1);
-                il.Emit(OpCodes.Isinst, runtime.TypedArrayBaseType);
+                il.Emit(OpCodes.Isinst, runtime.TypedArrays.RequireImplementation().BaseType);
                 il.Emit(OpCodes.Brfalse, notTyped);
 
-                var typedLocal = il.DeclareLocal(runtime.TypedArrayBaseType);
+                var typedLocal = il.DeclareLocal(runtime.TypedArrays.RequireImplementation().BaseType);
                 il.Emit(OpCodes.Ldarg_1);
-                il.Emit(OpCodes.Castclass, runtime.TypedArrayBaseType);
+                il.Emit(OpCodes.Castclass, runtime.TypedArrays.RequireImplementation().BaseType);
                 il.Emit(OpCodes.Stloc, typedLocal);
 
                 // quota check
                 var quotaOk = il.DefineLabel();
                 il.Emit(OpCodes.Ldloc, typedLocal);
-                il.Emit(OpCodes.Callvirt, runtime.TypedArrayByteLengthGetter);
+                il.Emit(OpCodes.Callvirt, runtime.TypedArrays.RequireImplementation().ByteLengthGetter);
                 il.Emit(OpCodes.Ldc_I4, 65536);
                 il.Emit(OpCodes.Ble, quotaOk);
                 EmitThrowMessage(il, "QuotaExceededError: crypto.getRandomValues requested more than 65536 bytes");
@@ -1592,11 +1592,11 @@ public partial class RuntimeEmitter
 
                 // RandomNumberGenerator.Fill(new Span<byte>(buffer, offset, len))
                 il.Emit(OpCodes.Ldloc, typedLocal);
-                il.Emit(OpCodes.Callvirt, runtime.TypedArrayGetBuffer);
+                il.Emit(OpCodes.Callvirt, runtime.TypedArrays.RequireImplementation().GetBuffer);
                 il.Emit(OpCodes.Ldloc, typedLocal);
-                il.Emit(OpCodes.Callvirt, runtime.TypedArrayByteOffsetGetter);
+                il.Emit(OpCodes.Callvirt, runtime.TypedArrays.RequireImplementation().ByteOffsetGetter);
                 il.Emit(OpCodes.Ldloc, typedLocal);
-                il.Emit(OpCodes.Callvirt, runtime.TypedArrayByteLengthGetter);
+                il.Emit(OpCodes.Callvirt, runtime.TypedArrays.RequireImplementation().ByteLengthGetter);
                 il.Emit(OpCodes.Newobj, spanCtor3);
                 il.Emit(OpCodes.Call, fill);
 

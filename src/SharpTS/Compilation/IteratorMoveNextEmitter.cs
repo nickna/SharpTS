@@ -121,7 +121,7 @@ public abstract partial class IteratorMoveNextEmitter : StateMachineExitRoutingE
     protected void NormalizeYieldStarTypedArrayOrBuffer(LocalBuilder iterableLocal)
     {
         var runtime = Ctx.Runtime!;
-        var typedArrayType = runtime.TypedArrayBaseType;
+        var typedArrayType = runtime.TypedArrays.Implementation?.BaseType;
         var bufferType = runtime.Buffer?.Type;
         if (typedArrayType is null && bufferType is null)
             return;

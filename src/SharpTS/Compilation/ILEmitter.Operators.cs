@@ -3022,9 +3022,9 @@ public partial class ILEmitter
         // operators, RHS types (BigInt/Uint8Clamped have no accessor) fall through to the boxed path.
         if (csi.Object is Expr.Variable
             && _ctx.TypeMap?.Get(csi.Object) is TypeInfo.TypedArray cta
-            && _ctx.Runtime!.GetTypedArrayType(cta.ElementType) is { } ctaType
-            && _ctx.Runtime!.TypedArrayGetUnboxedByElement.TryGetValue(cta.ElementType, out var ctaGet)
-            && _ctx.Runtime!.TypedArraySetUnboxedByElement.TryGetValue(cta.ElementType, out var ctaSet)
+            && _ctx.Runtime!.TypedArrays.Implementation?.GetNumericType(cta.ElementType) is { } ctaType
+            && _ctx.Runtime!.TypedArrays.RequireImplementation().GetUnboxedByElement.TryGetValue(cta.ElementType, out var ctaGet)
+            && _ctx.Runtime!.TypedArrays.RequireImplementation().SetUnboxedByElement.TryGetValue(cta.ElementType, out var ctaSet)
             && _ctx.TypeMap?.Get(csi.Value) is TypeInfo.Primitive { Type: TokenType.TYPE_NUMBER } or TypeInfo.NumberLiteral
             && IsArithmeticOrBitwiseCompound(csi.Operator.Type))
         {

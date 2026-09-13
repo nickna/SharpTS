@@ -127,7 +127,7 @@ public class EmittedBufferRuntimeTests
         var runtime = EmitRuntime(source, hosted);
         var buffer = runtime.RequireBuffer();
         AssertFrozen(buffer);
-        Assert.Equal(runtime.TypedArrayBaseType is not null, buffer.HasTypedArrayCopy);
+        Assert.Equal(runtime.TypedArrays.Implementation is not null, buffer.HasTypedArrayCopy);
         Assert.Same(buffer.Type, buffer.Ctor.DeclaringType);
         Assert.Same(buffer.Type, buffer.DataField.DeclaringType);
         Assert.Same(buffer.Type, buffer.ReadUInt32LE.DeclaringType);

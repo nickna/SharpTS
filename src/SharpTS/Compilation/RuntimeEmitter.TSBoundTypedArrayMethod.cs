@@ -14,24 +14,24 @@ public partial class RuntimeEmitter
     // helpers and GetTypedArrayMember can reference it); the Invoke body is finalized afterward.
 
     /// <summary>Phase 1: define $BoundTypedArrayMethod, its fields, ctor, and Invoke signature.</summary>
-    internal void EmitBoundTypedArrayMethodTypeDefinition(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    internal void EmitBoundTypedArrayMethodTypeDefinition(ModuleBuilder moduleBuilder, EmittedTypedArrayImplementation arrays)
     {
         var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$BoundTypedArrayMethod",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object
         );
-        runtime.BoundTypedArrayMethodType = typeBuilder;
+        arrays.BoundMethodType = typeBuilder;
 
-        var arrayField = typeBuilder.DefineField("_array", runtime.TypedArrayBaseType, FieldAttributes.Assembly);
+        var arrayField = typeBuilder.DefineField("_array", arrays.BaseType, FieldAttributes.Assembly);
         var nameField = typeBuilder.DefineField("_methodName", _types.String, FieldAttributes.Assembly);
-        runtime.BoundTypedArrayMethodArrayField = arrayField;
-        runtime.BoundTypedArrayMethodNameField = nameField;
+        arrays.BoundMethodArrayField = arrayField;
+        arrays.BoundMethodNameField = nameField;
 
         var ctor = typeBuilder.DefineConstructor(
             MethodAttributes.Public, CallingConventions.Standard,
-            [runtime.TypedArrayBaseType, _types.String]);
-        runtime.BoundTypedArrayMethodCtor = ctor;
+            [arrays.BaseType, _types.String]);
+        arrays.BoundMethodCtor = ctor;
         var cil = ctor.GetILGenerator();
         cil.Emit(OpCodes.Ldarg_0);
         cil.Emit(OpCodes.Call, _types.GetDefaultConstructor(_types.Object));
@@ -42,17 +42,18 @@ public partial class RuntimeEmitter
         // Body emitted in Phase 2; signature now so InvokeValue/InvokeMethodValue can reference it.
         var invoke = typeBuilder.DefineMethod(
             "Invoke", MethodAttributes.Public, _types.Object, [_types.ObjectArray]);
-        runtime.BoundTypedArrayMethodInvoke = invoke;
+        arrays.BoundMethodInvoke = invoke;
     }
 
     /// <summary>Phase 2: emit Invoke body and create the type. Must run after EmitRuntimeClass
     /// (uses GetElement / TSArrayLengthGetter) and after the base bulk methods are defined.</summary>
     internal void EmitBoundTypedArrayMethodFinalize(EmittedRuntime runtime)
     {
-        var typeBuilder = runtime.BoundTypedArrayMethodType;
-        var arrayField = runtime.BoundTypedArrayMethodArrayField;
-        var nameField = runtime.BoundTypedArrayMethodNameField;
-        var il = runtime.BoundTypedArrayMethodInvoke.GetILGenerator();
+        var arrays = runtime.TypedArrays.RequireImplementation();
+        var typeBuilder = arrays.BoundMethodType;
+        var arrayField = arrays.BoundMethodArrayField;
+        var nameField = arrays.BoundMethodNameField;
+        var il = arrays.BoundMethodInvoke.GetILGenerator();
 
         var stringEquals = _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String);
         var objToString = _types.GetMethodNoParams(_types.Object, "ToString");
@@ -73,7 +74,7 @@ public partial class RuntimeEmitter
         void LoadLength()
         {
             LoadArray();
-            il.Emit(OpCodes.Callvirt, runtime.TypedArrayLengthGetter);
+            il.Emit(OpCodes.Callvirt, arrays.LengthGetter);
         }
         // args[index] coerced to int (truncate toward zero), or loadDefault() when absent/non-number.
         void EmitArgAsInt(int index, Action loadDefault)
@@ -143,7 +144,7 @@ public partial class RuntimeEmitter
         EmitArgZeroOrNull(0);
         EmitArgAsInt(1, () => il.Emit(OpCodes.Ldc_I4_0));
         EmitArgAsInt(2, LoadLength);
-        il.Emit(OpCodes.Callvirt, runtime.TypedArrayFill);
+        il.Emit(OpCodes.Callvirt, arrays.Fill);
         il.Emit(OpCodes.Ret);
 
         // copyWithin(target=0, start=0, end=length)
@@ -152,13 +153,13 @@ public partial class RuntimeEmitter
         EmitArgAsInt(0, () => il.Emit(OpCodes.Ldc_I4_0));
         EmitArgAsInt(1, () => il.Emit(OpCodes.Ldc_I4_0));
         EmitArgAsInt(2, LoadLength);
-        il.Emit(OpCodes.Callvirt, runtime.TypedArrayCopyWithin);
+        il.Emit(OpCodes.Callvirt, arrays.CopyWithin);
         il.Emit(OpCodes.Ret);
 
         // reverse()
         il.MarkLabel(lReverse);
         LoadArray();
-        il.Emit(OpCodes.Callvirt, runtime.TypedArrayReverse);
+        il.Emit(OpCodes.Callvirt, arrays.Reverse);
         il.Emit(OpCodes.Ret);
 
         // set(source, offset=0)
@@ -167,10 +168,10 @@ public partial class RuntimeEmitter
         EmitArgAsInt(1, () => il.Emit(OpCodes.Ldc_I4_0)); il.Emit(OpCodes.Stloc, offsetLoc);
         // if (source is $TypedArray) -> base SetFrom handles range-check + fast/element-wise copy
         var notTyped = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, sourceLoc); il.Emit(OpCodes.Isinst, runtime.TypedArrayBaseType); il.Emit(OpCodes.Brfalse, notTyped);
+        il.Emit(OpCodes.Ldloc, sourceLoc); il.Emit(OpCodes.Isinst, arrays.BaseType); il.Emit(OpCodes.Brfalse, notTyped);
         LoadArray();
         il.Emit(OpCodes.Ldloc, sourceLoc); il.Emit(OpCodes.Ldloc, offsetLoc);
-        il.Emit(OpCodes.Callvirt, runtime.TypedArraySetFrom);
+        il.Emit(OpCodes.Callvirt, arrays.SetFrom);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Ldnull); il.Emit(OpCodes.Ret);
         // else if (source is $Array) -> element-wise via GetElement (coerced by the element setter)
@@ -195,7 +196,7 @@ public partial class RuntimeEmitter
         LoadArray();
         il.Emit(OpCodes.Ldloc, offsetLoc); il.Emit(OpCodes.Ldloc, iLoc); il.Emit(OpCodes.Add);
         il.Emit(OpCodes.Ldloc, sourceLoc); il.Emit(OpCodes.Ldloc, iLoc); il.Emit(OpCodes.Call, runtime.GetElement);
-        il.Emit(OpCodes.Callvirt, runtime.TypedArrayElementSet);
+        il.Emit(OpCodes.Callvirt, arrays.ElementSet);
         il.Emit(OpCodes.Ldloc, iLoc); il.Emit(OpCodes.Ldc_I4_1); il.Emit(OpCodes.Add); il.Emit(OpCodes.Stloc, iLoc);
         il.MarkLabel(setLoopCond);
         il.Emit(OpCodes.Ldloc, iLoc); il.Emit(OpCodes.Ldloc, lenLoc); il.Emit(OpCodes.Blt, setLoopBody);
@@ -210,7 +211,7 @@ public partial class RuntimeEmitter
         LoadArray();
         EmitArgAsInt(0, () => il.Emit(OpCodes.Ldc_I4_0));
         EmitArgAsInt(1, LoadLength);
-        il.Emit(OpCodes.Callvirt, runtime.TypedArraySlice);
+        il.Emit(OpCodes.Callvirt, arrays.Slice);
         il.Emit(OpCodes.Ret);
 
         // subarray(begin=0, end=length)
@@ -218,7 +219,7 @@ public partial class RuntimeEmitter
         LoadArray();
         EmitArgAsInt(0, () => il.Emit(OpCodes.Ldc_I4_0));
         EmitArgAsInt(1, LoadLength);
-        il.Emit(OpCodes.Callvirt, runtime.TypedArraySubarray);
+        il.Emit(OpCodes.Callvirt, arrays.Subarray);
         il.Emit(OpCodes.Ret);
 
         // indexOf(value, fromIndex=0) -> double
@@ -226,7 +227,7 @@ public partial class RuntimeEmitter
         LoadArray();
         EmitArgZeroOrNull(0);
         EmitArgAsInt(1, () => il.Emit(OpCodes.Ldc_I4_0));
-        il.Emit(OpCodes.Callvirt, runtime.TypedArrayIndexOf);
+        il.Emit(OpCodes.Callvirt, arrays.IndexOf);
         il.Emit(OpCodes.Box, _types.Double);
         il.Emit(OpCodes.Ret);
 
@@ -235,7 +236,7 @@ public partial class RuntimeEmitter
         LoadArray();
         EmitArgZeroOrNull(0);
         EmitArgAsInt(1, () => { LoadLength(); il.Emit(OpCodes.Ldc_I4_1); il.Emit(OpCodes.Sub); });
-        il.Emit(OpCodes.Callvirt, runtime.TypedArrayLastIndexOf);
+        il.Emit(OpCodes.Callvirt, arrays.LastIndexOf);
         il.Emit(OpCodes.Box, _types.Double);
         il.Emit(OpCodes.Ret);
 
@@ -244,7 +245,7 @@ public partial class RuntimeEmitter
         LoadArray();
         EmitArgZeroOrNull(0);
         EmitArgAsInt(1, () => il.Emit(OpCodes.Ldc_I4_0));
-        il.Emit(OpCodes.Callvirt, runtime.TypedArrayIncludes);
+        il.Emit(OpCodes.Callvirt, arrays.Includes);
         il.Emit(OpCodes.Box, _types.Boolean);
         il.Emit(OpCodes.Ret);
 
@@ -263,13 +264,13 @@ public partial class RuntimeEmitter
             il.MarkLabel(useDefault); il.Emit(OpCodes.Ldstr, ",");
             il.MarkLabel(doneSep);
         }
-        il.Emit(OpCodes.Callvirt, runtime.TypedArrayJoin);
+        il.Emit(OpCodes.Callvirt, arrays.Join);
         il.Emit(OpCodes.Ret);
 
         // toString()
         il.MarkLabel(lToString);
         LoadArray();
-        il.Emit(OpCodes.Callvirt, runtime.TypedArrayToStringJoin);
+        il.Emit(OpCodes.Callvirt, arrays.ToStringJoin);
         il.Emit(OpCodes.Ret);
 
         typeBuilder.CreateType();

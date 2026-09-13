@@ -836,7 +836,7 @@ public abstract partial class ExpressionEmitterBase
     {
         if (arguments.Count == 0)
         {
-            if (Ctx.Runtime!.TypedArrayFromObjectHelpers.TryGetValue(typeName, out var helper))
+            if (Ctx.Runtime!.TypedArrays.RequireImplementation().FromObjectHelpers.TryGetValue(typeName, out var helper))
             {
                 IL.Emit(OpCodes.Ldnull);
                 IL.Emit(OpCodes.Call, helper);
@@ -848,14 +848,14 @@ public abstract partial class ExpressionEmitterBase
         {
             EmitExpression(arguments[0]);
             EnsureBoxed();
-            if (Ctx.Runtime!.TypedArrayFromObjectHelpers.TryGetValue(typeName, out var helper))
+            if (Ctx.Runtime!.TypedArrays.RequireImplementation().FromObjectHelpers.TryGetValue(typeName, out var helper))
                 IL.Emit(OpCodes.Call, helper);
             else
                 throw new CompileException($"Missing TypedArray helper for: {typeName}");
         }
         else
         {
-            if (Ctx.Runtime!.TypedArrayFromBufferHelpers.TryGetValue(typeName, out var bufferHelper))
+            if (Ctx.Runtime!.TypedArrays.RequireImplementation().FromBufferHelpers.TryGetValue(typeName, out var bufferHelper))
             {
                 EmitExpression(arguments[0]);
                 EnsureBoxed();

@@ -1511,109 +1511,8 @@ public class EmittedRuntime
     public EmittedDataViewRuntime RequireDataView() => DataView
         ?? throw new InvalidOperationException("DataView runtime was not enabled for this compilation.");
 
-    // $TypedArray base type (pure-IL for standalone DLLs)
-    public TypeBuilder TypedArrayBaseType { get; set; } = null!;
-    public ConstructorBuilder TypedArrayBaseCtor { get; set; } = null!;
-    public MethodBuilder TypedArrayLengthGetter { get; set; } = null!;
-    public MethodBuilder TypedArrayByteOffsetGetter { get; set; } = null!;
-    public MethodBuilder TypedArrayByteLengthGetter { get; set; } = null!;
-    public MethodBuilder TypedArrayBufferGetter { get; set; } = null!;
-    public MethodBuilder TypedArrayGetBuffer { get; set; } = null!;
-    public MethodBuilder TypedArrayElementGet { get; set; } = null!;
-    public MethodBuilder TypedArrayElementSet { get; set; } = null!;
-    // Unboxed Float64Array element accessors (#878) — direct double get/set on the
-    // concrete $Float64Array, bypassing the boxed Get/Set + GetIndex dispatch.
-
-    // Unboxed numeric typed-array element accessors (#3) — `double GetUnboxed(int)` /
-    // `void SetUnboxed(int, double)` on each concrete numeric $XArray, keyed by element-type
-    // prefix ("Int32", "Float64", …). Bypass the boxed Get/Set + GetIndex dispatch and the
-    // per-element double box on BOTH read and write. BigInt + Uint8Clamped are absent (they
-    // fall back to the boxed path).
-    public Dictionary<string, MethodBuilder> TypedArrayGetUnboxedByElement { get; } = new();
-    public Dictionary<string, MethodBuilder> TypedArraySetUnboxedByElement { get; } = new();
-
-    // Bulk instance methods on the $TypedArray base type (#940), mirroring the interpreter's
-    // GetMember surface. Stored so $BoundTypedArrayMethod.Invoke can callvirt them. All BCL-only
-    // (no SharpTS.dll reference) so standalone DLLs stay standalone.
-    public MethodBuilder TypedArrayFill { get; set; } = null!;
-    public MethodBuilder TypedArrayCopyWithin { get; set; } = null!;
-    public MethodBuilder TypedArrayReverse { get; set; } = null!;
-    public MethodBuilder TypedArraySetFrom { get; set; } = null!;
-    public MethodBuilder TypedArraySlice { get; set; } = null!;
-    public MethodBuilder TypedArraySubarray { get; set; } = null!;
-    public MethodBuilder TypedArrayIndexOf { get; set; } = null!;
-    public MethodBuilder TypedArrayLastIndexOf { get; set; } = null!;
-    public MethodBuilder TypedArrayIncludes { get; set; } = null!;
-    public MethodBuilder TypedArrayJoin { get; set; } = null!;
-    public MethodBuilder TypedArrayToStringJoin { get; set; } = null!;
-
-    // $BoundTypedArrayMethod (#940): pure-IL wrapper returned by GetTypedArrayMember for a
-    // bulk-method name, dispatched through InvokeMethodValue/InvokeValue (mirrors $BoundArrayMethod).
-    public TypeBuilder BoundTypedArrayMethodType { get; set; } = null!;
-    public FieldBuilder BoundTypedArrayMethodArrayField { get; set; } = null!;
-    public FieldBuilder BoundTypedArrayMethodNameField { get; set; } = null!;
-    public ConstructorBuilder BoundTypedArrayMethodCtor { get; set; } = null!;
-    public MethodBuilder BoundTypedArrayMethodInvoke { get; set; } = null!;
-
-    /// <summary>Concrete emitted $XArray type for a numeric element prefix, or null (BigInt/unknown).</summary>
-    public Type? GetTypedArrayType(string elementType) => elementType switch
-    {
-        "Int8" => Int8ArrayType,
-        "Uint8" => Uint8ArrayType,
-        "Uint8Clamped" => Uint8ClampedArrayType,
-        "Int16" => Int16ArrayType,
-        "Uint16" => Uint16ArrayType,
-        "Int32" => Int32ArrayType,
-        "Uint32" => Uint32ArrayType,
-        "Float32" => Float32ArrayType,
-        "Float64" => Float64ArrayType,
-        _ => null
-    };
-
-    // Concrete TypedArray types (pure-IL for standalone DLLs)
-    public TypeBuilder Int8ArrayType { get; set; } = null!;
-    public ConstructorBuilder Int8ArrayLengthCtor { get; set; } = null!;
-    public ConstructorBuilder Int8ArrayBufferCtor { get; set; } = null!;
-
-    public TypeBuilder Uint8ArrayType { get; set; } = null!;
-    public ConstructorBuilder Uint8ArrayLengthCtor { get; set; } = null!;
-    public ConstructorBuilder Uint8ArrayBufferCtor { get; set; } = null!;
-
-    public TypeBuilder Uint8ClampedArrayType { get; set; } = null!;
-    public ConstructorBuilder Uint8ClampedArrayLengthCtor { get; set; } = null!;
-    public ConstructorBuilder Uint8ClampedArrayBufferCtor { get; set; } = null!;
-
-    public TypeBuilder Int16ArrayType { get; set; } = null!;
-    public ConstructorBuilder Int16ArrayLengthCtor { get; set; } = null!;
-    public ConstructorBuilder Int16ArrayBufferCtor { get; set; } = null!;
-
-    public TypeBuilder Uint16ArrayType { get; set; } = null!;
-    public ConstructorBuilder Uint16ArrayLengthCtor { get; set; } = null!;
-    public ConstructorBuilder Uint16ArrayBufferCtor { get; set; } = null!;
-
-    public TypeBuilder Int32ArrayType { get; set; } = null!;
-    public ConstructorBuilder Int32ArrayLengthCtor { get; set; } = null!;
-    public ConstructorBuilder Int32ArrayBufferCtor { get; set; } = null!;
-
-    public TypeBuilder Uint32ArrayType { get; set; } = null!;
-    public ConstructorBuilder Uint32ArrayLengthCtor { get; set; } = null!;
-    public ConstructorBuilder Uint32ArrayBufferCtor { get; set; } = null!;
-
-    public TypeBuilder Float32ArrayType { get; set; } = null!;
-    public ConstructorBuilder Float32ArrayLengthCtor { get; set; } = null!;
-    public ConstructorBuilder Float32ArrayBufferCtor { get; set; } = null!;
-
-    public TypeBuilder Float64ArrayType { get; set; } = null!;
-    public ConstructorBuilder Float64ArrayLengthCtor { get; set; } = null!;
-    public ConstructorBuilder Float64ArrayBufferCtor { get; set; } = null!;
-
-    public TypeBuilder BigInt64ArrayType { get; set; } = null!;
-    public ConstructorBuilder BigInt64ArrayLengthCtor { get; set; } = null!;
-    public ConstructorBuilder BigInt64ArrayBufferCtor { get; set; } = null!;
-
-    public TypeBuilder BigUint64ArrayType { get; set; } = null!;
-    public ConstructorBuilder BigUint64ArrayLengthCtor { get; set; } = null!;
-    public ConstructorBuilder BigUint64ArrayBufferCtor { get; set; } = null!;
+    /// <summary>Required TypedArray detection metadata with optional implementation declarations.</summary>
+    public EmittedTypedArrayRuntime TypedArrays { get; } = new();
 
     // Directory utilities
     public MethodBuilder FsMkdtempSync { get; set; } = null!;
@@ -2104,19 +2003,6 @@ public class EmittedRuntime
     // ============================================================
     // Worker Threads Support
     // ============================================================
-
-    // TypedArray helper methods that avoid hard dependencies on SharpTS.dll
-    // These use reflection to work with TypedArrays without requiring SharpTS.dll at runtime
-    public MethodBuilder IsTypedArrayMethod { get; set; } = null!;
-    public MethodBuilder GetTypedArrayElementMethod { get; set; } = null!;
-    public MethodBuilder SetTypedArrayElementMethod { get; set; } = null!;
-    public MethodBuilder GetTypedArrayMemberMethod { get; set; } = null!;
-
-    // TypedArray FromObject helpers (handles both length and SharedArrayBuffer arguments)
-    public Dictionary<string, MethodBuilder> TypedArrayFromObjectHelpers { get; } = [];
-
-    // TypedArray FromBuffer helpers (handles buffer + byteOffset + length arguments)
-    public Dictionary<string, MethodBuilder> TypedArrayFromBufferHelpers { get; } = [];
 
     // Atomics static methods
     // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSAtomics

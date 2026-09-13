@@ -45,6 +45,7 @@ public partial class RuntimeEmitter
             runtime.BeginArrayBufferEmission();
             runtime.BeginSharedArrayBufferEmission();
             runtime.BeginDataViewEmission();
+            runtime.TypedArrays.BeginImplementationEmission();
         }
         if (features.UsesBuffer)
             runtime.BeginBufferEmission(features.HasAnyTypedArray);
@@ -328,7 +329,7 @@ public partial class RuntimeEmitter
             // $BoundTypedArrayMethod Phase 1 (#940): callable wrapper for typed-array bulk methods.
             // Needs $TypedArray defined (above); must precede EmitRuntimeClass, whose invocation
             // helpers and GetTypedArrayMember reference its type/ctor/Invoke.
-            EmitBoundTypedArrayMethodTypeDefinition(moduleBuilder, runtime);
+            EmitBoundTypedArrayMethodTypeDefinition(moduleBuilder, runtime.TypedArrays.RequireImplementation());
         }
 
         // Emit stream classes for standalone stream support
@@ -636,6 +637,7 @@ public partial class RuntimeEmitter
         runtime.ArrayBuffer?.CompleteEmission();
         runtime.SharedArrayBuffer?.CompleteEmission();
         runtime.DataView?.CompleteEmission();
+        runtime.TypedArrays.CompleteEmission();
         runtime.Buffer?.CompleteEmission();
         runtime.ArrayStorage.CompleteEmission();
         runtime.ArrayOperations.CompleteEmission();

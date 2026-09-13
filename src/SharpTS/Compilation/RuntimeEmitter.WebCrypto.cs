@@ -330,23 +330,23 @@ public partial class RuntimeEmitter
         }
 
         // $TypedArray → copy of the view window
-        if (runtime.TypedArrayBaseType != null)
+        if (runtime.TypedArrays.Implementation is not null)
         {
             var notTyped = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.TypedArrayBaseType);
+            il.Emit(OpCodes.Isinst, runtime.TypedArrays.RequireImplementation().BaseType);
             il.Emit(OpCodes.Brfalse, notTyped);
 
-            var typedLocal = il.DeclareLocal(runtime.TypedArrayBaseType);
+            var typedLocal = il.DeclareLocal(runtime.TypedArrays.RequireImplementation().BaseType);
             var lenLocal = il.DeclareLocal(_types.Int32);
             var resultLocal = il.DeclareLocal(_types.ByteArray);
 
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Castclass, runtime.TypedArrayBaseType);
+            il.Emit(OpCodes.Castclass, runtime.TypedArrays.RequireImplementation().BaseType);
             il.Emit(OpCodes.Stloc, typedLocal);
 
             il.Emit(OpCodes.Ldloc, typedLocal);
-            il.Emit(OpCodes.Callvirt, runtime.TypedArrayByteLengthGetter);
+            il.Emit(OpCodes.Callvirt, runtime.TypedArrays.RequireImplementation().ByteLengthGetter);
             il.Emit(OpCodes.Stloc, lenLocal);
 
             il.Emit(OpCodes.Ldloc, lenLocal);
@@ -355,9 +355,9 @@ public partial class RuntimeEmitter
 
             // Array.Copy(src, srcOffset, dst, 0, len)
             il.Emit(OpCodes.Ldloc, typedLocal);
-            il.Emit(OpCodes.Callvirt, runtime.TypedArrayGetBuffer);
+            il.Emit(OpCodes.Callvirt, runtime.TypedArrays.RequireImplementation().GetBuffer);
             il.Emit(OpCodes.Ldloc, typedLocal);
-            il.Emit(OpCodes.Callvirt, runtime.TypedArrayByteOffsetGetter);
+            il.Emit(OpCodes.Callvirt, runtime.TypedArrays.RequireImplementation().ByteOffsetGetter);
             il.Emit(OpCodes.Ldloc, resultLocal);
             il.Emit(OpCodes.Ldc_I4_0);
             il.Emit(OpCodes.Ldloc, lenLocal);
