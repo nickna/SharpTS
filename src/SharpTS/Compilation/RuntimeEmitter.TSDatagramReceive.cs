@@ -81,7 +81,7 @@ public partial class RuntimeEmitter
         var msgLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, dataField);
-        il.Emit(OpCodes.Newobj, runtime.TSBufferCtor); // new $Buffer(byte[] data)
+        il.Emit(OpCodes.Newobj, runtime.RequireBuffer().Ctor); // new $Buffer(byte[] data)
         il.Emit(OpCodes.Stloc, msgLocal);
 
         // Build rinfo dict: { address, family, port, size }

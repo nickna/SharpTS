@@ -543,7 +543,7 @@ public partial class RuntimeEmitter
     private void EmitBufferGetBranch(ILGenerator il, EmittedRuntime runtime, Label notMatch)
     {
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSBufferType);
+        il.Emit(OpCodes.Isinst, runtime.RequireBuffer().Type);
         il.Emit(OpCodes.Brfalse, notMatch);
 
         // Check for "length"
@@ -554,8 +554,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, notBufferLenLabel);
         // Get buf.Length
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSBufferType);
-        il.Emit(OpCodes.Call, runtime.TSBufferLengthGetter);
+        il.Emit(OpCodes.Castclass, runtime.RequireBuffer().Type);
+        il.Emit(OpCodes.Call, runtime.RequireBuffer().LengthGetter);
         il.Emit(OpCodes.Conv_R8);
         il.Emit(OpCodes.Box, _types.Double);
         il.Emit(OpCodes.Ret);
@@ -569,8 +569,8 @@ public partial class RuntimeEmitter
         // Create a TSFunction wrapper for ToEncodedString
         // For dynamically generated types, we need both method and type tokens
         il.Emit(OpCodes.Ldarg_0);  // target (the buffer)
-        il.Emit(OpCodes.Ldtoken, runtime.TSBufferToString);
-        il.Emit(OpCodes.Ldtoken, runtime.TSBufferType);
+        il.Emit(OpCodes.Ldtoken, runtime.RequireBuffer().ToStringMethod);
+        il.Emit(OpCodes.Ldtoken, runtime.RequireBuffer().Type);
         il.Emit(OpCodes.Call, _types.MethodBaseGetMethodFromHandleWithType);
         il.Emit(OpCodes.Castclass, _types.MethodInfo);
         il.Emit(OpCodes.Newobj, runtime.TSFunctionCtor);

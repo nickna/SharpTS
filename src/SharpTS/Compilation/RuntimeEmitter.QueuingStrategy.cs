@@ -125,11 +125,11 @@ public partial class RuntimeEmitter
         if (_features.UsesBuffer)
         {
             sizeIL.Emit(OpCodes.Ldarg_1);
-            sizeIL.Emit(OpCodes.Isinst, runtime.TSBufferType);
+            sizeIL.Emit(OpCodes.Isinst, runtime.RequireBuffer().Type);
             sizeIL.Emit(OpCodes.Brfalse, notBufferLabel);
             sizeIL.Emit(OpCodes.Ldarg_1);
-            sizeIL.Emit(OpCodes.Castclass, runtime.TSBufferType);
-            sizeIL.Emit(OpCodes.Callvirt, runtime.TSBufferGetData);
+            sizeIL.Emit(OpCodes.Castclass, runtime.RequireBuffer().Type);
+            sizeIL.Emit(OpCodes.Callvirt, runtime.RequireBuffer().GetData);
             sizeIL.Emit(OpCodes.Ldlen);
             sizeIL.Emit(OpCodes.Conv_R8);
             sizeIL.Emit(OpCodes.Ret);

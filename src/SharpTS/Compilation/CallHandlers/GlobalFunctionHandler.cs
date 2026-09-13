@@ -41,8 +41,8 @@ public class GlobalFunctionHandler : ICallHandler
             "Boolean" => EmitBooleanConversion(emitter, il, ctx, call),
             "encodeURIComponent" => EmitEncodeURIComponent(emitter, il, ctx, call),
             "decodeURIComponent" => EmitDecodeURIComponent(emitter, il, ctx, call),
-            "atob" => EmitBase64Global(emitter, il, ctx, call, ctx.Runtime!.BufferAtob),
-            "btoa" => EmitBase64Global(emitter, il, ctx, call, ctx.Runtime!.BufferBtoa),
+            "atob" => EmitBase64Global(emitter, il, ctx, call, ctx.Runtime!.RequireBuffer().Atob),
+            "btoa" => EmitBase64Global(emitter, il, ctx, call, ctx.Runtime!.RequireBuffer().Btoa),
             _ => false
         };
     }

@@ -73,7 +73,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Call, _types.GetMethod(biType, "ToByteArray", [typeof(bool), typeof(bool)])!);
-        il.Emit(OpCodes.Newobj, runtime.TSBufferCtor);
+        il.Emit(OpCodes.Newobj, runtime.RequireBuffer().Ctor);
         il.Emit(OpCodes.Ret);
     }
 
@@ -117,12 +117,12 @@ public partial class RuntimeEmitter
         // else if $Buffer: cand = new BigInteger(buffer.Data, isUnsigned:true, isBigEndian:true)
         il.MarkLabel(notBigLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSBufferType);
+        il.Emit(OpCodes.Isinst, runtime.RequireBuffer().Type);
         var throwLabel = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, throwLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSBufferType);
-        il.Emit(OpCodes.Call, runtime.TSBufferGetData);
+        il.Emit(OpCodes.Castclass, runtime.RequireBuffer().Type);
+        il.Emit(OpCodes.Call, runtime.RequireBuffer().GetData);
         // byte[] → ReadOnlySpan<byte> (implicit), then BigInteger(ROS<byte>, isUnsigned:true, isBigEndian:true)
         il.Emit(OpCodes.Call, _types.GetMethod(_types.ReadOnlySpanOfByte, "op_Implicit", [typeof(byte[])])!);
         il.Emit(OpCodes.Ldc_I4_1);

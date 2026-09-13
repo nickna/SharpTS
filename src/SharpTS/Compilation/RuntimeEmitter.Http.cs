@@ -1073,7 +1073,7 @@ public partial class RuntimeEmitter
         // new $Buffer(_bodyBytes)
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, fetch.FetchResponseBodyBytesField);
-        il.Emit(OpCodes.Newobj, runtime.TSBufferCtor);
+        il.Emit(OpCodes.Newobj, runtime.RequireBuffer().Ctor);
 
         // Mark body as consumed
         il.Emit(OpCodes.Ldarg_0);
@@ -1189,7 +1189,7 @@ public partial class RuntimeEmitter
         // Push body bytes: readable.Push(new $Buffer(bodyBytes))
         il.Emit(OpCodes.Ldloc, readableLocal);
         il.Emit(OpCodes.Ldloc, bodyBytesLocal);
-        il.Emit(OpCodes.Newobj, runtime.TSBufferCtor); // new $Buffer(byte[])
+        il.Emit(OpCodes.Newobj, runtime.RequireBuffer().Ctor); // new $Buffer(byte[])
         il.Emit(OpCodes.Callvirt, runtime.TSReadablePush);
         il.Emit(OpCodes.Pop); // discard bool return
 
@@ -3568,7 +3568,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Encoding, "GetBytes", [_types.String]));
 
         il.MarkLabel(done);
-        il.Emit(OpCodes.Newobj, runtime.TSBufferCtor);
+        il.Emit(OpCodes.Newobj, runtime.RequireBuffer().Ctor);
         // Mark consumed
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_1);
@@ -3871,7 +3871,7 @@ public partial class RuntimeEmitter
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, fetch.ResponseBodyBytesField);
-        il.Emit(OpCodes.Newobj, runtime.TSBufferCtor);
+        il.Emit(OpCodes.Newobj, runtime.RequireBuffer().Ctor);
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_1);

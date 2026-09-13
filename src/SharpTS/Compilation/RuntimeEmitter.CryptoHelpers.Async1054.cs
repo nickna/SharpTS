@@ -96,8 +96,8 @@ public partial class RuntimeEmitter
         EmitIntArgOrDefault(il, 1, 0, offsetLoc);
         // data = ((buffer as $Buffer).GetData())
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSBufferType);
-        il.Emit(OpCodes.Call, runtime.TSBufferGetData);
+        il.Emit(OpCodes.Castclass, runtime.RequireBuffer().Type);
+        il.Emit(OpCodes.Call, runtime.RequireBuffer().GetData);
         il.Emit(OpCodes.Stloc, dataLoc);
         // size = arg2 is double ? (int)arg2 : data.Length - offset
         var haveSizeLabel = il.DefineLabel();

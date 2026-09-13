@@ -564,7 +564,7 @@ public partial class RuntimeEmitter
 
         // Check if Buffer
         il.Emit(OpCodes.Ldloc, dataLocal);
-        il.Emit(OpCodes.Isinst, runtime.TSBufferType);
+        il.Emit(OpCodes.Isinst, runtime.RequireBuffer().Type);
         il.Emit(OpCodes.Brtrue, isBufferLabel);
 
         // Check if string
@@ -580,8 +580,8 @@ public partial class RuntimeEmitter
         // Buffer path
         il.MarkLabel(isBufferLabel);
         il.Emit(OpCodes.Ldloc, dataLocal);
-        il.Emit(OpCodes.Castclass, runtime.TSBufferType);
-        il.Emit(OpCodes.Call, runtime.TSBufferGetData);
+        il.Emit(OpCodes.Castclass, runtime.RequireBuffer().Type);
+        il.Emit(OpCodes.Call, runtime.RequireBuffer().GetData);
         il.Emit(OpCodes.Br, doneLabel);
 
         // String path - check encoding
@@ -734,7 +734,7 @@ public partial class RuntimeEmitter
         // Return Buffer
         il.MarkLabel(returnBufferLabel);
         il.Emit(OpCodes.Ldloc, bytesLocal);
-        il.Emit(OpCodes.Newobj, runtime.TSBufferCtor);
+        il.Emit(OpCodes.Newobj, runtime.RequireBuffer().Ctor);
     }
 
     /// <summary>
@@ -753,7 +753,7 @@ public partial class RuntimeEmitter
 
         // Check if $Buffer
         il.Emit(OpCodes.Ldloc, objLocal);
-        il.Emit(OpCodes.Isinst, runtime.TSBufferType);
+        il.Emit(OpCodes.Isinst, runtime.RequireBuffer().Type);
         il.Emit(OpCodes.Brtrue, isBufferLabel);
 
         // Check if byte[]
@@ -769,8 +769,8 @@ public partial class RuntimeEmitter
         // Buffer path: call GetData()
         il.MarkLabel(isBufferLabel);
         il.Emit(OpCodes.Ldloc, objLocal);
-        il.Emit(OpCodes.Castclass, runtime.TSBufferType);
-        il.Emit(OpCodes.Call, runtime.TSBufferGetData);
+        il.Emit(OpCodes.Castclass, runtime.RequireBuffer().Type);
+        il.Emit(OpCodes.Call, runtime.RequireBuffer().GetData);
         il.Emit(OpCodes.Br, doneLabel);
 
         // byte[] path: just cast

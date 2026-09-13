@@ -1076,7 +1076,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, publicEcdhLocal);
         il.Emit(OpCodes.Callvirt, typeof(IDisposable).GetMethod("Dispose")!);
         il.Emit(OpCodes.Ldloc, secretLocal);
-        il.Emit(OpCodes.Newobj, runtime.TSBufferCtor);
+        il.Emit(OpCodes.Newobj, runtime.RequireBuffer().Ctor);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(invalid);
@@ -1279,12 +1279,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, haveBytes);
         il.MarkLabel(notBytes);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSBufferType);
+        il.Emit(OpCodes.Isinst, runtime.RequireBuffer().Type);
         var invalid = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, invalid);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSBufferType);
-        il.Emit(OpCodes.Call, runtime.TSBufferGetData);
+        il.Emit(OpCodes.Castclass, runtime.RequireBuffer().Type);
+        il.Emit(OpCodes.Call, runtime.RequireBuffer().GetData);
         il.Emit(OpCodes.Stloc, bytes);
         il.Emit(OpCodes.Br, haveBytes);
         il.MarkLabel(invalid);
@@ -1434,7 +1434,7 @@ public partial class RuntimeEmitter
         // Return Buffer from symmetric key
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, symmetricKeyField);
-        il.Emit(OpCodes.Newobj, runtime.TSBufferCtor);
+        il.Emit(OpCodes.Newobj, runtime.RequireBuffer().Ctor);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(notSecretLabel);
@@ -1550,7 +1550,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, derBytes);
         il.MarkLabel(derDone);
         il.Emit(OpCodes.Ldloc, derBytes);
-        il.Emit(OpCodes.Newobj, runtime.TSBufferCtor);
+        il.Emit(OpCodes.Newobj, runtime.RequireBuffer().Ctor);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(pemExport);

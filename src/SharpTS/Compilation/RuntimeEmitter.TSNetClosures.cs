@@ -1145,7 +1145,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Dup);
             il.Emit(OpCodes.Ldc_I4_0);
             il.Emit(OpCodes.Ldloc, bodyChunkLocal);
-            il.Emit(OpCodes.Newobj, runtime.TSBufferCtor);
+            il.Emit(OpCodes.Newobj, runtime.RequireBuffer().Ctor);
             il.Emit(OpCodes.Stelem_Ref);
             il.Emit(OpCodes.Callvirt, runtime.TSEventEmitterEmit);
             il.Emit(OpCodes.Pop);

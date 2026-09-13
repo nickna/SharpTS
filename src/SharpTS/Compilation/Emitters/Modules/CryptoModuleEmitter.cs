@@ -299,7 +299,7 @@ public sealed class CryptoModuleEmitter : IBuiltInModuleEmitter
 
         // Check if it's a $Buffer
         il.Emit(OpCodes.Ldloc, keyLocal);
-        il.Emit(OpCodes.Isinst, ctx.Runtime!.TSBufferType);
+        il.Emit(OpCodes.Isinst, ctx.Runtime!.RequireBuffer().Type);
         il.Emit(OpCodes.Brtrue, isBufferLabel);
 
         // Not a string or buffer - convert via ToString() and then UTF-8
@@ -320,8 +320,8 @@ public sealed class CryptoModuleEmitter : IBuiltInModuleEmitter
         // Buffer - get data
         il.MarkLabel(isBufferLabel);
         il.Emit(OpCodes.Ldloc, keyLocal);
-        il.Emit(OpCodes.Castclass, ctx.Runtime.TSBufferType);
-        il.Emit(OpCodes.Call, ctx.Runtime.TSBufferGetData);
+        il.Emit(OpCodes.Castclass, ctx.Runtime.RequireBuffer().Type);
+        il.Emit(OpCodes.Call, ctx.Runtime.RequireBuffer().GetData);
 
         il.MarkLabel(endLabel);
     }

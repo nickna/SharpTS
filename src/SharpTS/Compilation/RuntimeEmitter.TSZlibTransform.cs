@@ -378,7 +378,7 @@ public partial class RuntimeEmitter
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, dataLocal);
-        il.Emit(OpCodes.Newobj, runtime.TSBufferCtor);
+        il.Emit(OpCodes.Newobj, runtime.RequireBuffer().Ctor);
         il.Emit(OpCodes.Callvirt, runtime.TSReadablePush);
         il.Emit(OpCodes.Pop);
 
@@ -600,7 +600,7 @@ public partial class RuntimeEmitter
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, resultLocal);
-        il.Emit(OpCodes.Newobj, runtime.TSBufferCtor);
+        il.Emit(OpCodes.Newobj, runtime.RequireBuffer().Ctor);
         il.Emit(OpCodes.Callvirt, runtime.TSReadablePush);
         il.Emit(OpCodes.Pop);
 
@@ -969,11 +969,11 @@ public partial class RuntimeEmitter
 
         // if (chunk is $Buffer buf) return buf.GetData()
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSBufferType);
+        il.Emit(OpCodes.Isinst, runtime.RequireBuffer().Type);
         il.Emit(OpCodes.Brfalse, isStringLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSBufferType);
-        il.Emit(OpCodes.Callvirt, runtime.TSBufferGetData);
+        il.Emit(OpCodes.Castclass, runtime.RequireBuffer().Type);
+        il.Emit(OpCodes.Callvirt, runtime.RequireBuffer().GetData);
         il.Emit(OpCodes.Ret);
 
         // if (chunk is string s) return UTF8.GetBytes(s)

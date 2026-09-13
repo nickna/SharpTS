@@ -444,11 +444,11 @@ public partial class RuntimeEmitter
         il.MarkLabel(notBytesLabel);
         var notBufferLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, runtime.TSBufferType);
+        il.Emit(OpCodes.Isinst, runtime.RequireBuffer().Type);
         il.Emit(OpCodes.Brfalse, notBufferLabel);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Castclass, runtime.TSBufferType);
-        il.Emit(OpCodes.Callvirt, runtime.TSBufferGetData);
+        il.Emit(OpCodes.Castclass, runtime.RequireBuffer().Type);
+        il.Emit(OpCodes.Callvirt, runtime.RequireBuffer().GetData);
         il.Emit(OpCodes.Stloc, bytesLocal);
         il.Emit(OpCodes.Br, afterConvertLabel);
 
@@ -676,7 +676,7 @@ public partial class RuntimeEmitter
         var wbin = il.DefineLabel(); var wdone = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, encodingLocal); il.Emit(OpCodes.Brfalse, wbin);
         il.Emit(OpCodes.Call, utf8Get); il.Emit(OpCodes.Ldloc, bytesLocal); il.Emit(OpCodes.Callvirt, utf8GetString); il.Emit(OpCodes.Br, wdone);
-        il.MarkLabel(wbin); il.Emit(OpCodes.Ldloc, bytesLocal); il.Emit(OpCodes.Newobj, runtime.TSBufferCtor);
+        il.MarkLabel(wbin); il.Emit(OpCodes.Ldloc, bytesLocal); il.Emit(OpCodes.Newobj, runtime.RequireBuffer().Ctor);
         il.MarkLabel(wdone); il.Emit(OpCodes.Stloc, wholeLocal);
 
         // stream = new $FsReadStream(path, whole, emitClose, fdNum, (double)total)
@@ -708,7 +708,7 @@ public partial class RuntimeEmitter
         var cbin = il.DefineLabel(); var cdone = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, encodingLocal); il.Emit(OpCodes.Brfalse, cbin);
         il.Emit(OpCodes.Call, utf8Get); il.Emit(OpCodes.Ldloc, sliceLocal); il.Emit(OpCodes.Callvirt, utf8GetString); il.Emit(OpCodes.Br, cdone);
-        il.MarkLabel(cbin); il.Emit(OpCodes.Ldloc, sliceLocal); il.Emit(OpCodes.Newobj, runtime.TSBufferCtor);
+        il.MarkLabel(cbin); il.Emit(OpCodes.Ldloc, sliceLocal); il.Emit(OpCodes.Newobj, runtime.RequireBuffer().Ctor);
         il.MarkLabel(cdone);
         il.Emit(OpCodes.Callvirt, runtime.TSReadablePush); il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Ldloc, offLocal); il.Emit(OpCodes.Ldloc, slLocal); il.Emit(OpCodes.Add); il.Emit(OpCodes.Stloc, offLocal);

@@ -66,7 +66,7 @@ public sealed class BufferEmitter : ITypeEmitterStrategy
         emitter.EmitBoxIfNeeded(receiver);
 
         // Cast to $Buffer
-        il.Emit(OpCodes.Castclass, ctx.Runtime!.TSBufferType);
+        il.Emit(OpCodes.Castclass, ctx.Runtime!.RequireBuffer().Type);
 
         switch (methodName)
         {
@@ -82,7 +82,7 @@ public sealed class BufferEmitter : ITypeEmitterStrategy
                 {
                     il.Emit(OpCodes.Ldstr, "utf8");
                 }
-                il.Emit(OpCodes.Call, ctx.Runtime!.TSBufferToString);
+                il.Emit(OpCodes.Call, ctx.Runtime!.RequireBuffer().ToStringMethod);
                 return true;
 
             case "slice":
@@ -117,7 +117,7 @@ public sealed class BufferEmitter : ITypeEmitterStrategy
                     // For simplicity, use Int32.MaxValue and let the Slice method handle it
                     il.Emit(OpCodes.Ldc_I4, int.MaxValue);
                 }
-                il.Emit(OpCodes.Call, ctx.Runtime!.TSBufferSlice);
+                il.Emit(OpCodes.Call, ctx.Runtime!.RequireBuffer().Slice);
                 return true;
 
             case "copy":
@@ -125,7 +125,7 @@ public sealed class BufferEmitter : ITypeEmitterStrategy
                 // Emit target buffer
                 emitter.EmitExpression(arguments[0]);
                 emitter.EmitBoxIfNeeded(arguments[0]);
-                il.Emit(OpCodes.Castclass, ctx.Runtime!.TSBufferType);
+                il.Emit(OpCodes.Castclass, ctx.Runtime!.RequireBuffer().Type);
 
                 // targetStart (default 0)
                 if (arguments.Count > 1)
@@ -166,7 +166,7 @@ public sealed class BufferEmitter : ITypeEmitterStrategy
                     il.Emit(OpCodes.Ldc_I4, int.MaxValue);
                 }
 
-                il.Emit(OpCodes.Call, ctx.Runtime!.TSBufferCopy);
+                il.Emit(OpCodes.Call, ctx.Runtime!.RequireBuffer().Copy);
                 il.Emit(OpCodes.Conv_R8);
                 il.Emit(OpCodes.Box, ctx.Types.Double);
                 return true;
@@ -175,8 +175,8 @@ public sealed class BufferEmitter : ITypeEmitterStrategy
                 // other (required)
                 emitter.EmitExpression(arguments[0]);
                 emitter.EmitBoxIfNeeded(arguments[0]);
-                il.Emit(OpCodes.Castclass, ctx.Runtime!.TSBufferType);
-                il.Emit(OpCodes.Call, ctx.Runtime!.TSBufferCompare);
+                il.Emit(OpCodes.Castclass, ctx.Runtime!.RequireBuffer().Type);
+                il.Emit(OpCodes.Call, ctx.Runtime!.RequireBuffer().Compare);
                 il.Emit(OpCodes.Conv_R8);
                 il.Emit(OpCodes.Box, ctx.Types.Double);
                 return true;
@@ -185,8 +185,8 @@ public sealed class BufferEmitter : ITypeEmitterStrategy
                 // other (required)
                 emitter.EmitExpression(arguments[0]);
                 emitter.EmitBoxIfNeeded(arguments[0]);
-                il.Emit(OpCodes.Castclass, ctx.Runtime!.TSBufferType);
-                il.Emit(OpCodes.Call, ctx.Runtime!.TSBufferEquals);
+                il.Emit(OpCodes.Castclass, ctx.Runtime!.RequireBuffer().Type);
+                il.Emit(OpCodes.Call, ctx.Runtime!.RequireBuffer().EqualsMethod);
                 il.Emit(OpCodes.Box, ctx.Types.Boolean);
                 return true;
 
@@ -234,7 +234,7 @@ public sealed class BufferEmitter : ITypeEmitterStrategy
                     il.Emit(OpCodes.Ldstr, "utf8");
                 }
 
-                il.Emit(OpCodes.Call, ctx.Runtime!.TSBufferFill);
+                il.Emit(OpCodes.Call, ctx.Runtime!.RequireBuffer().Fill);
                 return true;
 
             case "write":
@@ -282,7 +282,7 @@ public sealed class BufferEmitter : ITypeEmitterStrategy
                     il.Emit(OpCodes.Ldstr, "utf8");
                 }
 
-                il.Emit(OpCodes.Call, ctx.Runtime!.TSBufferWrite);
+                il.Emit(OpCodes.Call, ctx.Runtime!.RequireBuffer().Write);
                 il.Emit(OpCodes.Conv_R8);
                 il.Emit(OpCodes.Box, ctx.Types.Double);
                 return true;
@@ -300,7 +300,7 @@ public sealed class BufferEmitter : ITypeEmitterStrategy
                 {
                     il.Emit(OpCodes.Ldc_I4_0);
                 }
-                il.Emit(OpCodes.Call, ctx.Runtime!.TSBufferReadUInt8);
+                il.Emit(OpCodes.Call, ctx.Runtime!.RequireBuffer().ReadUInt8);
                 il.Emit(OpCodes.Box, ctx.Types.Double);
                 return true;
 
@@ -322,176 +322,176 @@ public sealed class BufferEmitter : ITypeEmitterStrategy
                 {
                     il.Emit(OpCodes.Ldc_I4_0);
                 }
-                il.Emit(OpCodes.Call, ctx.Runtime!.TSBufferWriteUInt8);
+                il.Emit(OpCodes.Call, ctx.Runtime!.RequireBuffer().WriteUInt8);
                 il.Emit(OpCodes.Conv_R8);
                 il.Emit(OpCodes.Box, ctx.Types.Double);
                 return true;
 
             case "toJSON":
-                il.Emit(OpCodes.Call, ctx.Runtime!.TSBufferToJSON);
+                il.Emit(OpCodes.Call, ctx.Runtime!.RequireBuffer().ToJSON);
                 return true;
 
             // Multi-byte read methods
             case "readInt8":
-                EmitReadMethod(emitter, arguments, ctx.Runtime!.TSBufferReadInt8);
+                EmitReadMethod(emitter, arguments, ctx.Runtime!.RequireBuffer().ReadInt8);
                 return true;
 
             case "readUInt16LE":
-                EmitReadMethod(emitter, arguments, ctx.Runtime!.TSBufferReadUInt16LE);
+                EmitReadMethod(emitter, arguments, ctx.Runtime!.RequireBuffer().ReadUInt16LE);
                 return true;
 
             case "readUInt16BE":
-                EmitReadMethod(emitter, arguments, ctx.Runtime!.TSBufferReadUInt16BE);
+                EmitReadMethod(emitter, arguments, ctx.Runtime!.RequireBuffer().ReadUInt16BE);
                 return true;
 
             case "readUInt32LE":
-                EmitReadMethod(emitter, arguments, ctx.Runtime!.TSBufferReadUInt32LE);
+                EmitReadMethod(emitter, arguments, ctx.Runtime!.RequireBuffer().ReadUInt32LE);
                 return true;
 
             case "readUInt32BE":
-                EmitReadMethod(emitter, arguments, ctx.Runtime!.TSBufferReadUInt32BE);
+                EmitReadMethod(emitter, arguments, ctx.Runtime!.RequireBuffer().ReadUInt32BE);
                 return true;
 
             case "readInt16LE":
-                EmitReadMethod(emitter, arguments, ctx.Runtime!.TSBufferReadInt16LE);
+                EmitReadMethod(emitter, arguments, ctx.Runtime!.RequireBuffer().ReadInt16LE);
                 return true;
 
             case "readInt16BE":
-                EmitReadMethod(emitter, arguments, ctx.Runtime!.TSBufferReadInt16BE);
+                EmitReadMethod(emitter, arguments, ctx.Runtime!.RequireBuffer().ReadInt16BE);
                 return true;
 
             case "readInt32LE":
-                EmitReadMethod(emitter, arguments, ctx.Runtime!.TSBufferReadInt32LE);
+                EmitReadMethod(emitter, arguments, ctx.Runtime!.RequireBuffer().ReadInt32LE);
                 return true;
 
             case "readInt32BE":
-                EmitReadMethod(emitter, arguments, ctx.Runtime!.TSBufferReadInt32BE);
+                EmitReadMethod(emitter, arguments, ctx.Runtime!.RequireBuffer().ReadInt32BE);
                 return true;
 
             case "readFloatLE":
-                EmitReadMethod(emitter, arguments, ctx.Runtime!.TSBufferReadFloatLE);
+                EmitReadMethod(emitter, arguments, ctx.Runtime!.RequireBuffer().ReadFloatLE);
                 return true;
 
             case "readFloatBE":
-                EmitReadMethod(emitter, arguments, ctx.Runtime!.TSBufferReadFloatBE);
+                EmitReadMethod(emitter, arguments, ctx.Runtime!.RequireBuffer().ReadFloatBE);
                 return true;
 
             case "readDoubleLE":
-                EmitReadMethod(emitter, arguments, ctx.Runtime!.TSBufferReadDoubleLE);
+                EmitReadMethod(emitter, arguments, ctx.Runtime!.RequireBuffer().ReadDoubleLE);
                 return true;
 
             case "readDoubleBE":
-                EmitReadMethod(emitter, arguments, ctx.Runtime!.TSBufferReadDoubleBE);
+                EmitReadMethod(emitter, arguments, ctx.Runtime!.RequireBuffer().ReadDoubleBE);
                 return true;
 
             case "readBigInt64LE":
-                EmitReadBigIntMethod(emitter, arguments, ctx.Runtime!.TSBufferReadBigInt64LE);
+                EmitReadBigIntMethod(emitter, arguments, ctx.Runtime!.RequireBuffer().ReadBigInt64LE);
                 return true;
 
             case "readBigInt64BE":
-                EmitReadBigIntMethod(emitter, arguments, ctx.Runtime!.TSBufferReadBigInt64BE);
+                EmitReadBigIntMethod(emitter, arguments, ctx.Runtime!.RequireBuffer().ReadBigInt64BE);
                 return true;
 
             case "readBigUInt64LE":
-                EmitReadBigIntMethod(emitter, arguments, ctx.Runtime!.TSBufferReadBigUInt64LE);
+                EmitReadBigIntMethod(emitter, arguments, ctx.Runtime!.RequireBuffer().ReadBigUInt64LE);
                 return true;
 
             case "readBigUInt64BE":
-                EmitReadBigIntMethod(emitter, arguments, ctx.Runtime!.TSBufferReadBigUInt64BE);
+                EmitReadBigIntMethod(emitter, arguments, ctx.Runtime!.RequireBuffer().ReadBigUInt64BE);
                 return true;
 
             // Variable-length integer reads (offset, byteLength)
             case "readUIntLE":
-                EmitVarReadMethod(emitter, arguments, ctx.Runtime!.TSBufferReadUIntLE);
+                EmitVarReadMethod(emitter, arguments, ctx.Runtime!.RequireBuffer().ReadUIntLE);
                 return true;
             case "readUIntBE":
-                EmitVarReadMethod(emitter, arguments, ctx.Runtime!.TSBufferReadUIntBE);
+                EmitVarReadMethod(emitter, arguments, ctx.Runtime!.RequireBuffer().ReadUIntBE);
                 return true;
             case "readIntLE":
-                EmitVarReadMethod(emitter, arguments, ctx.Runtime!.TSBufferReadIntLE);
+                EmitVarReadMethod(emitter, arguments, ctx.Runtime!.RequireBuffer().ReadIntLE);
                 return true;
             case "readIntBE":
-                EmitVarReadMethod(emitter, arguments, ctx.Runtime!.TSBufferReadIntBE);
+                EmitVarReadMethod(emitter, arguments, ctx.Runtime!.RequireBuffer().ReadIntBE);
                 return true;
 
             // Variable-length integer writes (value, offset, byteLength). Signed and
             // unsigned writes emit identical two's-complement bytes.
             case "writeUIntLE":
             case "writeIntLE":
-                EmitVarWriteMethod(emitter, arguments, ctx.Runtime!.TSBufferWriteUIntLE);
+                EmitVarWriteMethod(emitter, arguments, ctx.Runtime!.RequireBuffer().WriteUIntLE);
                 return true;
             case "writeUIntBE":
             case "writeIntBE":
-                EmitVarWriteMethod(emitter, arguments, ctx.Runtime!.TSBufferWriteUIntBE);
+                EmitVarWriteMethod(emitter, arguments, ctx.Runtime!.RequireBuffer().WriteUIntBE);
                 return true;
 
             // Multi-byte write methods
             case "writeInt8":
-                EmitWriteMethod(emitter, arguments, ctx.Runtime!.TSBufferWriteInt8);
+                EmitWriteMethod(emitter, arguments, ctx.Runtime!.RequireBuffer().WriteInt8);
                 return true;
 
             case "writeUInt16LE":
-                EmitWriteMethod(emitter, arguments, ctx.Runtime!.TSBufferWriteUInt16LE);
+                EmitWriteMethod(emitter, arguments, ctx.Runtime!.RequireBuffer().WriteUInt16LE);
                 return true;
 
             case "writeUInt16BE":
-                EmitWriteMethod(emitter, arguments, ctx.Runtime!.TSBufferWriteUInt16BE);
+                EmitWriteMethod(emitter, arguments, ctx.Runtime!.RequireBuffer().WriteUInt16BE);
                 return true;
 
             case "writeUInt32LE":
-                EmitWriteMethod(emitter, arguments, ctx.Runtime!.TSBufferWriteUInt32LE);
+                EmitWriteMethod(emitter, arguments, ctx.Runtime!.RequireBuffer().WriteUInt32LE);
                 return true;
 
             case "writeUInt32BE":
-                EmitWriteMethod(emitter, arguments, ctx.Runtime!.TSBufferWriteUInt32BE);
+                EmitWriteMethod(emitter, arguments, ctx.Runtime!.RequireBuffer().WriteUInt32BE);
                 return true;
 
             case "writeInt16LE":
-                EmitWriteMethod(emitter, arguments, ctx.Runtime!.TSBufferWriteInt16LE);
+                EmitWriteMethod(emitter, arguments, ctx.Runtime!.RequireBuffer().WriteInt16LE);
                 return true;
 
             case "writeInt16BE":
-                EmitWriteMethod(emitter, arguments, ctx.Runtime!.TSBufferWriteInt16BE);
+                EmitWriteMethod(emitter, arguments, ctx.Runtime!.RequireBuffer().WriteInt16BE);
                 return true;
 
             case "writeInt32LE":
-                EmitWriteMethod(emitter, arguments, ctx.Runtime!.TSBufferWriteInt32LE);
+                EmitWriteMethod(emitter, arguments, ctx.Runtime!.RequireBuffer().WriteInt32LE);
                 return true;
 
             case "writeInt32BE":
-                EmitWriteMethod(emitter, arguments, ctx.Runtime!.TSBufferWriteInt32BE);
+                EmitWriteMethod(emitter, arguments, ctx.Runtime!.RequireBuffer().WriteInt32BE);
                 return true;
 
             case "writeFloatLE":
-                EmitWriteMethod(emitter, arguments, ctx.Runtime!.TSBufferWriteFloatLE);
+                EmitWriteMethod(emitter, arguments, ctx.Runtime!.RequireBuffer().WriteFloatLE);
                 return true;
 
             case "writeFloatBE":
-                EmitWriteMethod(emitter, arguments, ctx.Runtime!.TSBufferWriteFloatBE);
+                EmitWriteMethod(emitter, arguments, ctx.Runtime!.RequireBuffer().WriteFloatBE);
                 return true;
 
             case "writeDoubleLE":
-                EmitWriteMethod(emitter, arguments, ctx.Runtime!.TSBufferWriteDoubleLE);
+                EmitWriteMethod(emitter, arguments, ctx.Runtime!.RequireBuffer().WriteDoubleLE);
                 return true;
 
             case "writeDoubleBE":
-                EmitWriteMethod(emitter, arguments, ctx.Runtime!.TSBufferWriteDoubleBE);
+                EmitWriteMethod(emitter, arguments, ctx.Runtime!.RequireBuffer().WriteDoubleBE);
                 return true;
 
             case "writeBigInt64LE":
-                EmitWriteBigIntMethod(emitter, arguments, ctx.Runtime!.TSBufferWriteBigInt64LE);
+                EmitWriteBigIntMethod(emitter, arguments, ctx.Runtime!.RequireBuffer().WriteBigInt64LE);
                 return true;
 
             case "writeBigInt64BE":
-                EmitWriteBigIntMethod(emitter, arguments, ctx.Runtime!.TSBufferWriteBigInt64BE);
+                EmitWriteBigIntMethod(emitter, arguments, ctx.Runtime!.RequireBuffer().WriteBigInt64BE);
                 return true;
 
             case "writeBigUInt64LE":
-                EmitWriteBigIntMethod(emitter, arguments, ctx.Runtime!.TSBufferWriteBigUInt64LE);
+                EmitWriteBigIntMethod(emitter, arguments, ctx.Runtime!.RequireBuffer().WriteBigUInt64LE);
                 return true;
 
             case "writeBigUInt64BE":
-                EmitWriteBigIntMethod(emitter, arguments, ctx.Runtime!.TSBufferWriteBigUInt64BE);
+                EmitWriteBigIntMethod(emitter, arguments, ctx.Runtime!.RequireBuffer().WriteBigUInt64BE);
                 return true;
 
             // Search methods
@@ -505,15 +505,15 @@ public sealed class BufferEmitter : ITypeEmitterStrategy
 
             // Swap methods
             case "swap16":
-                il.Emit(OpCodes.Call, ctx.Runtime!.TSBufferSwap16);
+                il.Emit(OpCodes.Call, ctx.Runtime!.RequireBuffer().Swap16);
                 return true;
 
             case "swap32":
-                il.Emit(OpCodes.Call, ctx.Runtime!.TSBufferSwap32);
+                il.Emit(OpCodes.Call, ctx.Runtime!.RequireBuffer().Swap32);
                 return true;
 
             case "swap64":
-                il.Emit(OpCodes.Call, ctx.Runtime!.TSBufferSwap64);
+                il.Emit(OpCodes.Call, ctx.Runtime!.RequireBuffer().Swap64);
                 return true;
 
             default:
@@ -539,8 +539,8 @@ public sealed class BufferEmitter : ITypeEmitterStrategy
                 emitter.EmitBoxIfNeeded(receiver);
 
                 // Cast to $Buffer and get Length
-                il.Emit(OpCodes.Castclass, ctx.Runtime!.TSBufferType);
-                il.Emit(OpCodes.Call, ctx.Runtime!.TSBufferLengthGetter);
+                il.Emit(OpCodes.Castclass, ctx.Runtime!.RequireBuffer().Type);
+                il.Emit(OpCodes.Call, ctx.Runtime!.RequireBuffer().LengthGetter);
                 il.Emit(OpCodes.Conv_R8);  // Convert to double for TypeScript number
                 il.Emit(OpCodes.Box, ctx.Types.Double);
                 return true;
@@ -764,7 +764,7 @@ public sealed class BufferEmitter : ITypeEmitterStrategy
             il.Emit(OpCodes.Ldstr, "utf8");
         }
 
-        il.Emit(OpCodes.Call, ctx.Runtime!.TSBufferIndexOf);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireBuffer().IndexOf);
         il.Emit(OpCodes.Box, ctx.Types.Double);
     }
 
@@ -806,7 +806,7 @@ public sealed class BufferEmitter : ITypeEmitterStrategy
             il.Emit(OpCodes.Ldstr, "utf8");
         }
 
-        il.Emit(OpCodes.Call, ctx.Runtime!.TSBufferIncludes);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireBuffer().Includes);
         il.Emit(OpCodes.Box, ctx.Types.Boolean);
     }
 

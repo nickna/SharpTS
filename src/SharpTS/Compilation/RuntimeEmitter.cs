@@ -40,6 +40,8 @@ public partial class RuntimeEmitter
         if (_emitHosted)
             _features.UsesPromise = true;
         var runtime = new EmittedRuntime();
+        if (features.UsesBuffer)
+            runtime.BeginBufferEmission(features.HasAnyTypedArray);
         if (features.UsesCrypto)
         {
             runtime.BeginCryptoEmission();
@@ -224,7 +226,7 @@ public partial class RuntimeEmitter
         // NOTE: Must come before $Hash and $Hmac since they return Buffer
         // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSBuffer
         if (features.UsesBuffer)
-            EmitTSBufferClass(moduleBuilder, runtime);
+            EmitTSBufferClass(moduleBuilder, runtime.RequireBuffer());
 
         // Crypto helper types — gated on UsesCrypto. All references are confined
         // to crypto's own emit files; no central-dispatch fallout.
@@ -625,6 +627,7 @@ public partial class RuntimeEmitter
             EmitBoundDHMethodFinalize(runtime.RequireCrypto());
         }
 
+        runtime.Buffer?.CompleteEmission();
         runtime.ArrayStorage.CompleteEmission();
         runtime.ArrayOperations.CompleteEmission();
         runtime.Crypto?.CompleteEmission();

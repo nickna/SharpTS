@@ -10,7 +10,7 @@ public partial class RuntimeEmitter
     /// integer read, little- or big-endian, optionally sign-extended. Mirrors
     /// SharpTSBuffer.ReadUIntLE/BE / ReadIntLE/BE so interpreter and compiled agree.
     /// </summary>
-    private void EmitTSBufferVarIntRead(TypeBuilder typeBuilder, EmittedRuntime runtime,
+    private void EmitTSBufferVarIntRead(TypeBuilder typeBuilder, EmittedBufferRuntime buffer,
         string name, bool bigEndian, bool signed, Action<MethodBuilder> store)
     {
         var method = typeBuilder.DefineMethod(
@@ -18,7 +18,7 @@ public partial class RuntimeEmitter
         store(method);
 
         var il = method.GetILGenerator();
-        EmitVarIntBoundsCheck(il);
+        EmitVarIntBoundsCheck(buffer, il);
 
         var valLocal = il.DeclareLocal(_types.Int64);
         var iLocal = il.DeclareLocal(_types.Int32);
@@ -40,7 +40,7 @@ public partial class RuntimeEmitter
 
         // byteVal = (long)(byte)_data[offset + i]  (zero-extended)
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsBufferDataField);
+        il.Emit(OpCodes.Ldfld, buffer.DataField);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloc, iLocal);
         il.Emit(OpCodes.Add);
@@ -119,7 +119,7 @@ public partial class RuntimeEmitter
     /// Emits <c>double Name(double value, int offset, int byteLength)</c> — a variable-length
     /// (1-6 byte) integer write, little- or big-endian. Returns offset + byteLength.
     /// </summary>
-    private void EmitTSBufferVarIntWrite(TypeBuilder typeBuilder, EmittedRuntime runtime,
+    private void EmitTSBufferVarIntWrite(TypeBuilder typeBuilder, EmittedBufferRuntime buffer,
         string name, bool bigEndian, Action<MethodBuilder> store)
     {
         var method = typeBuilder.DefineMethod(
@@ -127,7 +127,7 @@ public partial class RuntimeEmitter
         store(method);
 
         var il = method.GetILGenerator();
-        EmitVarIntBoundsCheck(il, valueArg: true);
+        EmitVarIntBoundsCheck(buffer, il, valueArg: true);
 
         // long v = (long)value
         var vLocal = il.DeclareLocal(_types.Int64);
@@ -169,7 +169,7 @@ public partial class RuntimeEmitter
 
         // _data[offset + i] = (byte)(v & 0xFF)
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsBufferDataField);
+        il.Emit(OpCodes.Ldfld, buffer.DataField);
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Ldloc, iLocal);
         il.Emit(OpCodes.Add);
@@ -204,7 +204,7 @@ public partial class RuntimeEmitter
     /// Validates byteLength ∈ [1,6] and offset ∈ [0, len - byteLength]. For writes the
     /// value is arg1, so offset/byteLength shift to args 2/3.
     /// </summary>
-    private void EmitVarIntBoundsCheck(ILGenerator il, bool valueArg = false)
+    private void EmitVarIntBoundsCheck(EmittedBufferRuntime buffer, ILGenerator il, bool valueArg = false)
     {
         int offsetArg = valueArg ? 2 : 1;
         int byteLengthArg = valueArg ? 3 : 2;
@@ -236,7 +236,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg, byteLengthArg);
         il.Emit(OpCodes.Add);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsBufferDataField);
+        il.Emit(OpCodes.Ldfld, buffer.DataField);
         il.Emit(OpCodes.Ldlen);
         il.Emit(OpCodes.Conv_I4);
         il.Emit(OpCodes.Ble, offOk);

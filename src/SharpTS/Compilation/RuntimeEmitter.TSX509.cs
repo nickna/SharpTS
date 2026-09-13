@@ -131,7 +131,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, strLabel);
 
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, runtime.TSBufferType);
+        il.Emit(OpCodes.Isinst, runtime.RequireBuffer().Type);
         il.Emit(OpCodes.Brtrue, bufLabel);
 
         il.Emit(OpCodes.Ldstr, "X509Certificate: argument must be a PEM string or Buffer");
@@ -151,8 +151,8 @@ public partial class RuntimeEmitter
         il.MarkLabel(bufLabel);
         var dataLocal = il.DeclareLocal(_types.ByteArray);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Castclass, runtime.TSBufferType);
-        il.Emit(OpCodes.Call, runtime.TSBufferGetData);
+        il.Emit(OpCodes.Castclass, runtime.RequireBuffer().Type);
+        il.Emit(OpCodes.Call, runtime.RequireBuffer().GetData);
         il.Emit(OpCodes.Stloc, dataLocal);
 
         var derLabel = il.DefineLabel();
@@ -1192,7 +1192,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, certField);
         il.Emit(OpCodes.Callvirt, typeof(X509Certificate2).GetProperty("RawData")!.GetGetMethod()!);
-        il.Emit(OpCodes.Newobj, runtime.TSBufferCtor);
+        il.Emit(OpCodes.Newobj, runtime.RequireBuffer().Ctor);
         il.Emit(OpCodes.Ret);
         prop.SetGetMethod(getter);
     }
@@ -1792,7 +1792,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldfld, certField);
             il.Emit(OpCodes.Callvirt, typeof(X509Certificate2).GetProperty("RawData")!.GetGetMethod()!);
-            il.Emit(OpCodes.Newobj, runtime.TSBufferCtor);
+            il.Emit(OpCodes.Newobj, runtime.RequireBuffer().Ctor);
         });
         EmitSet("ca", () =>
         {

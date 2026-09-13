@@ -240,7 +240,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, crypto.RsaEncryptRaw);
 
         // Wrap result in $Buffer
-        il.Emit(OpCodes.Newobj, runtime.TSBufferCtor);
+        il.Emit(OpCodes.Newobj, runtime.RequireBuffer().Ctor);
         il.Emit(OpCodes.Ret);
     }
 
@@ -271,7 +271,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, crypto.RsaDecryptRaw);
 
         // Wrap result in $Buffer
-        il.Emit(OpCodes.Newobj, runtime.TSBufferCtor);
+        il.Emit(OpCodes.Newobj, runtime.RequireBuffer().Ctor);
         il.Emit(OpCodes.Ret);
     }
 
@@ -304,7 +304,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, crypto.RsaDecryptRaw);
 
         // Wrap result in $Buffer
-        il.Emit(OpCodes.Newobj, runtime.TSBufferCtor);
+        il.Emit(OpCodes.Newobj, runtime.RequireBuffer().Ctor);
         il.Emit(OpCodes.Ret);
     }
 
@@ -337,7 +337,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, crypto.RsaEncryptRaw);
 
         // Wrap result in $Buffer
-        il.Emit(OpCodes.Newobj, runtime.TSBufferCtor);
+        il.Emit(OpCodes.Newobj, runtime.RequireBuffer().Ctor);
         il.Emit(OpCodes.Ret);
     }
 }

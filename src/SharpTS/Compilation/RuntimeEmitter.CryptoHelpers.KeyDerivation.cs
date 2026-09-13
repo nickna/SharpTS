@@ -117,7 +117,7 @@ public partial class RuntimeEmitter
             [typeof(byte[]), typeof(byte[]), typeof(int), typeof(HashAlgorithmName), typeof(int)])!);
 
         // Return new $Buffer(derivedKey)
-        il.Emit(OpCodes.Newobj, runtime.TSBufferCtor);
+        il.Emit(OpCodes.Newobj, runtime.RequireBuffer().Ctor);
         il.Emit(OpCodes.Ret);
     }
 
@@ -218,7 +218,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, crypto.ScryptDeriveBytes);
 
         // Return new $Buffer(derivedKey)
-        il.Emit(OpCodes.Newobj, runtime.TSBufferCtor);
+        il.Emit(OpCodes.Newobj, runtime.RequireBuffer().Ctor);
         il.Emit(OpCodes.Ret);
     }
 
@@ -341,7 +341,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(keylenZeroLabel);
         // Return new $Buffer(Array.Empty<byte>())
         il.Emit(OpCodes.Call, EmitGenerics.MakeGenericMethod(typeof(Array).GetMethod("Empty")!, _types.Byte));
-        il.Emit(OpCodes.Newobj, runtime.TSBufferCtor);
+        il.Emit(OpCodes.Newobj, runtime.RequireBuffer().Ctor);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(afterKeylenCheckLabel);
@@ -421,7 +421,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_3);               // info
         il.Emit(OpCodes.Call, _types.GetMethod(_types.HKDF, "DeriveKey",
             [_types.HashAlgorithmName, typeof(byte[]), typeof(int), typeof(byte[]), typeof(byte[])])!);
-        il.Emit(OpCodes.Newobj, runtime.TSBufferCtor);
+        il.Emit(OpCodes.Newobj, runtime.RequireBuffer().Ctor);
         il.Emit(OpCodes.Ret);
     }
 }

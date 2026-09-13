@@ -79,7 +79,7 @@ public partial class RuntimeEmitter
 
         // Check if $Buffer (using isinst with the buffer type)
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSBufferType);
+        il.Emit(OpCodes.Isinst, runtime.RequireBuffer().Type);
         il.Emit(OpCodes.Brtrue, isBufferLabel);
 
         // Unknown type - throw
@@ -96,8 +96,8 @@ public partial class RuntimeEmitter
         // Buffer path: call GetData() method
         il.MarkLabel(isBufferLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSBufferType);
-        il.Emit(OpCodes.Callvirt, runtime.TSBufferGetData);
+        il.Emit(OpCodes.Castclass, runtime.RequireBuffer().Type);
+        il.Emit(OpCodes.Callvirt, runtime.RequireBuffer().GetData);
         il.Emit(OpCodes.Br, endLabel);
 
         // Throw error
@@ -1032,7 +1032,7 @@ public partial class RuntimeEmitter
 
         // new $Buffer(result)
         il.Emit(OpCodes.Ldloc, resultLocal);
-        il.Emit(OpCodes.Newobj, runtime.TSBufferCtor);
+        il.Emit(OpCodes.Newobj, runtime.RequireBuffer().Ctor);
         il.Emit(OpCodes.Ret);
     }
 
@@ -1106,7 +1106,7 @@ public partial class RuntimeEmitter
 
         // new $Buffer(result)
         il.Emit(OpCodes.Ldloc, resultLocal);
-        il.Emit(OpCodes.Newobj, runtime.TSBufferCtor);
+        il.Emit(OpCodes.Newobj, runtime.RequireBuffer().Ctor);
         il.Emit(OpCodes.Ret);
     }
 
@@ -1167,7 +1167,7 @@ public partial class RuntimeEmitter
 
         // Create $Buffer from result
         il.Emit(OpCodes.Ldloc, resultLocal);
-        il.Emit(OpCodes.Newobj, runtime.TSBufferCtor);
+        il.Emit(OpCodes.Newobj, runtime.RequireBuffer().Ctor);
         il.Emit(OpCodes.Ret);
     }
 
@@ -1270,7 +1270,7 @@ public partial class RuntimeEmitter
 
         // Create $Buffer from result
         il.Emit(OpCodes.Ldloc, resultLocal);
-        il.Emit(OpCodes.Newobj, runtime.TSBufferCtor);
+        il.Emit(OpCodes.Newobj, runtime.RequireBuffer().Ctor);
         il.Emit(OpCodes.Ret);
     }
 
@@ -1334,7 +1334,7 @@ public partial class RuntimeEmitter
 
         // Create $Buffer from result
         il.Emit(OpCodes.Ldloc, resultLocal);
-        il.Emit(OpCodes.Newobj, runtime.TSBufferCtor);
+        il.Emit(OpCodes.Newobj, runtime.RequireBuffer().Ctor);
         il.Emit(OpCodes.Ret);
     }
 

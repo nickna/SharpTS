@@ -275,7 +275,7 @@ public partial class RuntimeEmitter
 
         // Return new $Buffer(hmacBytes)
         il.Emit(OpCodes.Ldloc, hmacBytesLocal);
-        il.Emit(OpCodes.Newobj, runtime.TSBufferCtor);
+        il.Emit(OpCodes.Newobj, runtime.RequireBuffer().Ctor);
         il.Emit(OpCodes.Ret);
     }
 }

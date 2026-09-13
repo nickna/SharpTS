@@ -179,8 +179,8 @@ public partial class RuntimeEmitter
 
             // Get buffer data - cast to compiled $Buffer type and call GetData()
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Castclass, runtime.TSBufferType);
-            il.Emit(OpCodes.Callvirt, runtime.TSBufferGetData);
+            il.Emit(OpCodes.Castclass, runtime.RequireBuffer().Type);
+            il.Emit(OpCodes.Callvirt, runtime.RequireBuffer().GetData);
             var dataLocal = il.DeclareLocal(typeof(byte[]));
             il.Emit(OpCodes.Stloc, dataLocal);
 
@@ -266,7 +266,7 @@ public partial class RuntimeEmitter
             var lengthLocal = il.DeclareLocal(_types.Int32);
 
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Isinst, runtime.TSBufferType);
+            il.Emit(OpCodes.Isinst, runtime.RequireBuffer().Type);
             il.Emit(OpCodes.Brtrue, isBufferLabel);
 
             // String case - convert to UTF8 bytes
@@ -287,8 +287,8 @@ public partial class RuntimeEmitter
             // Buffer case - use compiled $Buffer type
             il.MarkLabel(isBufferLabel);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Castclass, runtime.TSBufferType);
-            il.Emit(OpCodes.Callvirt, runtime.TSBufferGetData);
+            il.Emit(OpCodes.Castclass, runtime.RequireBuffer().Type);
+            il.Emit(OpCodes.Callvirt, runtime.RequireBuffer().GetData);
             il.Emit(OpCodes.Stloc, dataLocal);
 
             // Offset: use arg2 if provided, else 0

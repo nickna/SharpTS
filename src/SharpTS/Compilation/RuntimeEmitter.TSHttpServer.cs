@@ -933,10 +933,10 @@ public partial class RuntimeEmitter
         // emitted $Buffer instances; stringifying one produced the literal
         // "$Buffer" instead of its contents.
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, runtime.TSBufferType);
+        il.Emit(OpCodes.Isinst, runtime.RequireBuffer().Type);
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Brfalse, encodeStringLabel);
-        il.Emit(OpCodes.Callvirt, runtime.TSBufferGetData);
+        il.Emit(OpCodes.Callvirt, runtime.RequireBuffer().GetData);
         il.Emit(OpCodes.Stloc, bytesLocal);
         il.Emit(OpCodes.Br, bytesReadyLabel);
 

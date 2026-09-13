@@ -838,6 +838,47 @@ public class StandaloneDllTests
     }
 
     [Fact]
+    public void BufferNumericEncodingModuleAndTypedArrayOperationsRunStandalone()
+    {
+        const string source = """
+            import { Buffer, atob, btoa, isUtf8, isAscii, transcode } from 'buffer';
+            const bytes = Buffer.from('hello');
+            console.log(bytes.toString('base64'));
+            console.log(Buffer.concat([bytes, Buffer.from('!')]).toString());
+            const numbers = Buffer.alloc(32);
+            numbers.writeUInt32LE(0x12345678, 0);
+            numbers.writeIntBE(-42, 4, 3);
+            numbers.writeDoubleBE(1.5, 8);
+            numbers.writeBigInt64LE(-123n, 16);
+            console.log(numbers.readUInt32LE(0), numbers.readIntBE(4, 3), numbers.readDoubleBE(8), numbers.readBigInt64LE(16));
+            console.log(atob(btoa('abc')), isUtf8(bytes), isAscii(bytes));
+            console.log(transcode(bytes, 'utf8', 'utf16le').length);
+            console.log(Buffer.from([1, 2, 3, 4]).swap16().toString('hex'));
+            const view = new Uint16Array([0x1234, 0x5678]);
+            const copy = Buffer.copyBytesFrom(view, 1, 1);
+            view[1] = 0;
+            console.log(copy.length, copy.readUInt16LE(0));
+            console.log(Buffer.from(new Uint8Array([1, 2, 3])).toString('hex'));
+            function* items() { yield* Buffer.from([4, 5]); yield* new Uint8Array([6]); }
+            console.log([...items()].join(','));
+            """;
+        var files = new Dictionary<string, string> { ["main.ts"] = source };
+        var errors = TestHarness.CompileModulesAndVerifyOnly(files, "main.ts");
+        Assert.True(errors.Count == 0, string.Join(Environment.NewLine, errors));
+        var (tempDir, dllPath) = CompileStandaloneModule(files, "main.ts");
+        try
+        {
+            Assert.False(File.Exists(Path.Combine(tempDir, "SharpTS.dll")));
+            Assert.Equal("aGVsbG8=\nhello!\n305419896 -42 1.5 -123n\nabc true true\n10\n02010403\n2 22136\n010203\n4,5,6\n",
+                ExecuteCompiledDllIsolated(dllPath, timeoutMs: 15000));
+        }
+        finally
+        {
+            CleanupTempDir(tempDir);
+        }
+    }
+
+    [Fact]
     public void NodeCryptoAndWebCryptoIntegrationVerifyAndRunStandalone()
     {
         const string source = """

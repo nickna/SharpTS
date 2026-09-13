@@ -146,12 +146,12 @@ public partial class RuntimeEmitter
         // Try $Buffer.GetData()
         il.MarkLabel(bufferLabel);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Isinst, runtime.TSBufferType);
+        il.Emit(OpCodes.Isinst, runtime.RequireBuffer().Type);
         var notBufferLabel = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, notBufferLabel);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Castclass, runtime.TSBufferType);
-        il.Emit(OpCodes.Call, runtime.TSBufferGetData);
+        il.Emit(OpCodes.Castclass, runtime.RequireBuffer().Type);
+        il.Emit(OpCodes.Call, runtime.RequireBuffer().GetData);
         il.Emit(OpCodes.Stloc, signatureBytesLocal);
         il.Emit(OpCodes.Br, signatureReadyLabel);
 

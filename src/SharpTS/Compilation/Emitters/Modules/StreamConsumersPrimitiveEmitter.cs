@@ -36,8 +36,8 @@ public sealed class StreamConsumersPrimitiveEmitter : IBuiltInModuleEmitter
         var bytes = il.DeclareLocal(typeof(byte[]));
         var result = il.DeclareLocal(runtime.ArrayBufferType);
 
-        il.Emit(OpCodes.Castclass, runtime.TSBufferType);
-        il.Emit(OpCodes.Callvirt, runtime.TSBufferGetData);
+        il.Emit(OpCodes.Castclass, runtime.RequireBuffer().Type);
+        il.Emit(OpCodes.Callvirt, runtime.RequireBuffer().GetData);
         il.Emit(OpCodes.Stloc, bytes);
         il.Emit(OpCodes.Ldloc, bytes);
         il.Emit(OpCodes.Ldlen);
