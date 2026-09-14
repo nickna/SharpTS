@@ -6,8 +6,8 @@ using System.Threading.Tasks;
 namespace SharpTS.Compilation;
 
 /// <summary>
-/// Emits the standalone <c>$TransformStream</c> + <c>$TransformStreamDefaultController</c>
-/// classes for the WHATWG Web Streams API.
+/// Emits the standalone <c>$TransformStream</c> and its <c>$TransformSinkHolder</c>
+/// callback adapter for the WHATWG Web Streams API.
 /// </summary>
 /// <remarks>
 /// A TransformStream owns a paired <c>$ReadableStream</c> + <c>$WritableStream</c>:
@@ -26,20 +26,6 @@ namespace SharpTS.Compilation;
 /// </remarks>
 public partial class RuntimeEmitter
 {
-    private FieldBuilder _transformStreamReadableField = null!;
-    private FieldBuilder _transformStreamWritableField = null!;
-
-    // $TransformSinkHolder fields — instance fields holding the user transformer
-    // and the readable side. Its Write/Close/Abort methods translate
-    // writable-sink operations into transformer.transform/flush calls and
-    // readable.Enqueue/CloseStream/ErrorStream side effects.
-    private FieldBuilder _transformHolderTransformerField = null!;
-    private FieldBuilder _transformHolderReadableField = null!;
-    private ConstructorBuilder _transformHolderCtor = null!;
-    private MethodBuilder _transformHolderWriteMethod = null!;
-    private MethodBuilder _transformHolderCloseMethod = null!;
-    private MethodBuilder _transformHolderAbortMethod = null!;
-
     private void EmitTransformStreamClasses(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
         // First emit the sink holder class — used by $TransformStream's
@@ -52,18 +38,18 @@ public partial class RuntimeEmitter
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.Class | TypeAttributes.BeforeFieldInit,
             _types.Object);
 
-        runtime.TransformStreamType = streamBuilder;
+        runtime.RequireWebStreams().TransformType = streamBuilder;
 
-        _transformStreamReadableField = streamBuilder.DefineField(
-            "_readable", runtime.ReadableStreamType, FieldAttributes.Private);
-        _transformStreamWritableField = streamBuilder.DefineField(
-            "_writable", runtime.WritableStreamType, FieldAttributes.Private);
+        runtime.RequireWebStreams().TransformReadableField = streamBuilder.DefineField(
+            "_readable", runtime.RequireWebStreams().ReadableType, FieldAttributes.Private);
+        runtime.RequireWebStreams().TransformWritableField = streamBuilder.DefineField(
+            "_writable", runtime.RequireWebStreams().WritableType, FieldAttributes.Private);
 
         var ctor = EmitTransformStreamConstructor(streamBuilder, runtime);
-        runtime.TransformStreamCtor = ctor;
+        runtime.RequireWebStreams().TransformCtor = ctor;
 
-        EmitTransformStreamReadableProperty(streamBuilder);
-        EmitTransformStreamWritableProperty(streamBuilder);
+        EmitTransformStreamReadableProperty(runtime.RequireWebStreams(), streamBuilder);
+        EmitTransformStreamWritableProperty(runtime.RequireWebStreams(), streamBuilder);
 
         streamBuilder.CreateType();
     }
@@ -75,27 +61,27 @@ public partial class RuntimeEmitter
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.Class | TypeAttributes.BeforeFieldInit,
             _types.Object);
 
-        _transformHolderTransformerField = holder.DefineField(
+        runtime.RequireWebStreams().TransformHolderTransformerField = holder.DefineField(
             "_transformer", _types.Object, FieldAttributes.Private);
-        _transformHolderReadableField = holder.DefineField(
-            "_readable", runtime.ReadableStreamType, FieldAttributes.Private);
+        runtime.RequireWebStreams().TransformHolderReadableField = holder.DefineField(
+            "_readable", runtime.RequireWebStreams().ReadableType, FieldAttributes.Private);
 
         // Constructor: $TransformSinkHolder(object transformer, $ReadableStream readable)
         var ctor = holder.DefineConstructor(
             MethodAttributes.Public,
             CallingConventions.Standard,
-            [_types.Object, runtime.ReadableStreamType]);
-        _transformHolderCtor = ctor;
+            [_types.Object, runtime.RequireWebStreams().ReadableType]);
+        runtime.RequireWebStreams().TransformHolderCtor = ctor;
         {
             var il = ctor.GetILGenerator();
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Call, _types.GetDefaultConstructor(_types.Object));
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Stfld, _transformHolderTransformerField);
+            il.Emit(OpCodes.Stfld, runtime.RequireWebStreams().TransformHolderTransformerField);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_2);
-            il.Emit(OpCodes.Stfld, _transformHolderReadableField);
+            il.Emit(OpCodes.Stfld, runtime.RequireWebStreams().TransformHolderReadableField);
             il.Emit(OpCodes.Ret);
         }
 
@@ -104,23 +90,23 @@ public partial class RuntimeEmitter
         // we ignore the writableController and pass our readable as the
         // transform's controller (matching the JS-side spec where the
         // transform's controller is the one tied to the readable side).
-        _transformHolderWriteMethod = holder.DefineMethod(
+        runtime.RequireWebStreams().TransformHolderWriteMethod = holder.DefineMethod(
             "Write",
             MethodAttributes.Public,
             _types.Object,
             [_types.Object, _types.Object]);
         {
-            var il = _transformHolderWriteMethod.GetILGenerator();
+            var il = runtime.RequireWebStreams().TransformHolderWriteMethod.GetILGenerator();
             // If _transformer is null, just enqueue the chunk pass-through.
             var hasTransformerLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldfld, _transformHolderTransformerField);
+            il.Emit(OpCodes.Ldfld, runtime.RequireWebStreams().TransformHolderTransformerField);
             il.Emit(OpCodes.Brtrue, hasTransformerLabel);
             // Pass-through: _readable.Enqueue(chunk); return null
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldfld, _transformHolderReadableField);
+            il.Emit(OpCodes.Ldfld, runtime.RequireWebStreams().TransformHolderReadableField);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Callvirt, runtime.ReadableStreamEnqueue);
+            il.Emit(OpCodes.Callvirt, runtime.RequireWebStreams().ReadableEnqueue);
             il.Emit(OpCodes.Ldnull);
             il.Emit(OpCodes.Ret);
 
@@ -128,7 +114,7 @@ public partial class RuntimeEmitter
             // Look up _transformer.transform via GetFieldsProperty
             var transformFnLocal = il.DeclareLocal(_types.Object);
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldfld, _transformHolderTransformerField);
+            il.Emit(OpCodes.Ldfld, runtime.RequireWebStreams().TransformHolderTransformerField);
             il.Emit(OpCodes.Ldstr, "transform");
             il.Emit(OpCodes.Call, runtime.GetFieldsProperty);
             il.Emit(OpCodes.Stloc, transformFnLocal);
@@ -146,7 +132,7 @@ public partial class RuntimeEmitter
             // since _readable already has Enqueue/CloseStream/ErrorStream methods
             // that the user transform body can call as controller.enqueue/etc.
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldfld, _transformHolderTransformerField);
+            il.Emit(OpCodes.Ldfld, runtime.RequireWebStreams().TransformHolderTransformerField);
             il.Emit(OpCodes.Ldloc, transformFnLocal);
             il.Emit(OpCodes.Ldc_I4_2);
             il.Emit(OpCodes.Newarr, _types.Object);
@@ -157,7 +143,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Dup);
             il.Emit(OpCodes.Ldc_I4_1);
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldfld, _transformHolderReadableField);  // controller = _readable
+            il.Emit(OpCodes.Ldfld, runtime.RequireWebStreams().TransformHolderReadableField);  // controller = _readable
             il.Emit(OpCodes.Stelem_Ref);
             il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
             il.Emit(OpCodes.Ret);
@@ -165,31 +151,31 @@ public partial class RuntimeEmitter
             // Pass-through fallback
             il.MarkLabel(hasTransformLabel);
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldfld, _transformHolderReadableField);
+            il.Emit(OpCodes.Ldfld, runtime.RequireWebStreams().TransformHolderReadableField);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Callvirt, runtime.ReadableStreamEnqueue);
+            il.Emit(OpCodes.Callvirt, runtime.RequireWebStreams().ReadableEnqueue);
             il.Emit(OpCodes.Ldnull);
             il.Emit(OpCodes.Ret);
         }
 
         // public Close() — sink close callback. Runs flush(controller) if
         // present, then closes the readable.
-        _transformHolderCloseMethod = holder.DefineMethod(
+        runtime.RequireWebStreams().TransformHolderCloseMethod = holder.DefineMethod(
             "Close",
             MethodAttributes.Public,
             _types.Object,
             Type.EmptyTypes);
         {
-            var il = _transformHolderCloseMethod.GetILGenerator();
+            var il = runtime.RequireWebStreams().TransformHolderCloseMethod.GetILGenerator();
             // If transformer present, call transformer.flush(_readable) if defined
             var noTransformerLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldfld, _transformHolderTransformerField);
+            il.Emit(OpCodes.Ldfld, runtime.RequireWebStreams().TransformHolderTransformerField);
             il.Emit(OpCodes.Brfalse, noTransformerLabel);
 
             var flushLocal = il.DeclareLocal(_types.Object);
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldfld, _transformHolderTransformerField);
+            il.Emit(OpCodes.Ldfld, runtime.RequireWebStreams().TransformHolderTransformerField);
             il.Emit(OpCodes.Ldstr, "flush");
             il.Emit(OpCodes.Call, runtime.GetFieldsProperty);
             il.Emit(OpCodes.Stloc, flushLocal);
@@ -203,14 +189,14 @@ public partial class RuntimeEmitter
 
             // _transformer.flush(_readable) via InvokeMethodValue
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldfld, _transformHolderTransformerField);
+            il.Emit(OpCodes.Ldfld, runtime.RequireWebStreams().TransformHolderTransformerField);
             il.Emit(OpCodes.Ldloc, flushLocal);
             il.Emit(OpCodes.Ldc_I4_1);
             il.Emit(OpCodes.Newarr, _types.Object);
             il.Emit(OpCodes.Dup);
             il.Emit(OpCodes.Ldc_I4_0);
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldfld, _transformHolderReadableField);
+            il.Emit(OpCodes.Ldfld, runtime.RequireWebStreams().TransformHolderReadableField);
             il.Emit(OpCodes.Stelem_Ref);
             il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
             il.Emit(OpCodes.Pop);  // discard
@@ -220,25 +206,25 @@ public partial class RuntimeEmitter
 
             // _readable.CloseStream()
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldfld, _transformHolderReadableField);
-            il.Emit(OpCodes.Callvirt, runtime.ReadableStreamCloseStream);
+            il.Emit(OpCodes.Ldfld, runtime.RequireWebStreams().TransformHolderReadableField);
+            il.Emit(OpCodes.Callvirt, runtime.RequireWebStreams().ReadableCloseStream);
 
             il.Emit(OpCodes.Ldnull);
             il.Emit(OpCodes.Ret);
         }
 
         // public Abort(object reason)
-        _transformHolderAbortMethod = holder.DefineMethod(
+        runtime.RequireWebStreams().TransformHolderAbortMethod = holder.DefineMethod(
             "Abort",
             MethodAttributes.Public,
             _types.Object,
             [_types.Object]);
         {
-            var il = _transformHolderAbortMethod.GetILGenerator();
+            var il = runtime.RequireWebStreams().TransformHolderAbortMethod.GetILGenerator();
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldfld, _transformHolderReadableField);
+            il.Emit(OpCodes.Ldfld, runtime.RequireWebStreams().TransformHolderReadableField);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Callvirt, runtime.ReadableStreamErrorStream);
+            il.Emit(OpCodes.Callvirt, runtime.RequireWebStreams().ReadableErrorStream);
             il.Emit(OpCodes.Ldnull);
             il.Emit(OpCodes.Ret);
         }
@@ -251,15 +237,15 @@ public partial class RuntimeEmitter
             "Build",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
-            [_types.Object, runtime.ReadableStreamType]);
+            [_types.Object, runtime.RequireWebStreams().ReadableType]);
         {
             var il = buildSink.GetILGenerator();
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Newobj, _transformHolderCtor);
+            il.Emit(OpCodes.Newobj, runtime.RequireWebStreams().TransformHolderCtor);
             il.Emit(OpCodes.Ret);
         }
-        runtime.BuildTransformSink = buildSink;
+        runtime.RequireWebStreams().BuildTransformSink = buildSink;
 
         holder.CreateType();
     }
@@ -282,8 +268,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ldarg_3);
-        il.Emit(OpCodes.Newobj, runtime.ReadableStreamCtor);
-        il.Emit(OpCodes.Stfld, _transformStreamReadableField);
+        il.Emit(OpCodes.Newobj, runtime.RequireWebStreams().ReadableCtor);
+        il.Emit(OpCodes.Stfld, runtime.RequireWebStreams().TransformReadableField);
 
         // Build the writable's underlying sink: a Dictionary<string, object?>
         // with closures over (this, transformer) for write/close/abort.
@@ -323,7 +309,7 @@ public partial class RuntimeEmitter
         // The user's transformer has transform/flush methods, but the writable
         // expects write/close/abort. We need a TRANSLATION layer.
         //
-        // I'll emit a runtime helper $Runtime.BuildTransformSink(transformer,
+        // I'll emit a runtime helper $Runtime.RequireWebStreams().BuildTransformSink(transformer,
         // readable) that wraps the user transformer's methods into a
         // write/close/abort dictionary. This helper is emitted in pure IL too,
         // but it's static and can be called once per TransformStream
@@ -333,26 +319,26 @@ public partial class RuntimeEmitter
         // the writes will be no-ops. THE TESTS NEED THIS TO ACTUALLY WORK so
         // let me just emit the runtime helper.
 
-        // Build a TransformSink dict using $Runtime.BuildTransformSink helper.
+        // Build a TransformSink dict using $Runtime.RequireWebStreams().BuildTransformSink helper.
         var sinkLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldarg_1);                         // transformer
         il.Emit(OpCodes.Ldarg_0);                         // this (for accessing _readable)
-        il.Emit(OpCodes.Ldfld, _transformStreamReadableField);
-        il.Emit(OpCodes.Call, runtime.BuildTransformSink);
+        il.Emit(OpCodes.Ldfld, runtime.RequireWebStreams().TransformReadableField);
+        il.Emit(OpCodes.Call, runtime.RequireWebStreams().BuildTransformSink);
         il.Emit(OpCodes.Stloc, sinkLocal);
 
         // _writable = new $WritableStream(sink, writableStrategy)
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, sinkLocal);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Newobj, runtime.WritableStreamCtor);
-        il.Emit(OpCodes.Stfld, _transformStreamWritableField);
+        il.Emit(OpCodes.Newobj, runtime.RequireWebStreams().WritableCtor);
+        il.Emit(OpCodes.Stfld, runtime.RequireWebStreams().TransformWritableField);
 
         il.Emit(OpCodes.Ret);
         return ctor;
     }
 
-    private void EmitTransformStreamReadableProperty(TypeBuilder t)
+    private void EmitTransformStreamReadableProperty(EmittedWebStreamRuntime webStreams, TypeBuilder t)
     {
         var prop = t.DefineProperty("Readable", PropertyAttributes.None, _types.Object, Type.EmptyTypes);
         var getter = t.DefineMethod(
@@ -363,12 +349,12 @@ public partial class RuntimeEmitter
 
         var il = getter.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _transformStreamReadableField);
+        il.Emit(OpCodes.Ldfld, webStreams.TransformReadableField);
         il.Emit(OpCodes.Ret);
         prop.SetGetMethod(getter);
     }
 
-    private void EmitTransformStreamWritableProperty(TypeBuilder t)
+    private void EmitTransformStreamWritableProperty(EmittedWebStreamRuntime webStreams, TypeBuilder t)
     {
         var prop = t.DefineProperty("Writable", PropertyAttributes.None, _types.Object, Type.EmptyTypes);
         var getter = t.DefineMethod(
@@ -379,7 +365,7 @@ public partial class RuntimeEmitter
 
         var il = getter.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _transformStreamWritableField);
+        il.Emit(OpCodes.Ldfld, webStreams.TransformWritableField);
         il.Emit(OpCodes.Ret);
         prop.SetGetMethod(getter);
     }

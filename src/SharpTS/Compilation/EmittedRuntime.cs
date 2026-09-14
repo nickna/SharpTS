@@ -2032,30 +2032,18 @@ public class EmittedRuntime
     public MethodBuilder SourceExecutionRunJson { get; set; } = null!;
     public MethodBuilder SourceExecutionConfigureUntrustedProcess { get; set; } = null!;
 
-    // Pure-IL Web Streams emitted types. The original late-binding helpers
-    // (CreateReadableStream/CreateWritableStream/etc.) were removed when
-    // all five stream classes were migrated to pure IL.
-    public ConstructorBuilder CountQueuingStrategyCtor { get; set; } = null!;
-    public ConstructorBuilder ByteLengthQueuingStrategyCtor { get; set; } = null!;
+    /// <summary>Web stream metadata, or null when Web streams are tree-shaken.</summary>
+    public EmittedWebStreamRuntime? WebStreams { get; private set; }
 
-    public TypeBuilder WritableStreamType { get; set; } = null!;
-    public ConstructorBuilder WritableStreamCtor { get; set; } = null!;
+    internal void BeginWebStreamEmission()
+    {
+        if (WebStreams is not null)
+            throw new InvalidOperationException("Web stream metadata emission has already started.");
+        WebStreams = new EmittedWebStreamRuntime();
+    }
 
-    public TypeBuilder ReadableStreamType { get; set; } = null!;
-    public ConstructorBuilder ReadableStreamCtor { get; set; } = null!;
-    public MethodBuilder ReadableStreamEnqueue { get; set; } = null!;
-    public MethodBuilder ReadableStreamCloseStream { get; set; } = null!;
-    public MethodBuilder ReadableStreamErrorStream { get; set; } = null!;
-    public MethodBuilder ReadableStreamDrainQueuedChunks { get; set; } = null!;
-    /// <summary>
-    /// Static $ReadableStream.From(object iterable) → object (#269) — eagerly
-    /// drains a guest iterable into a closed readable stream.
-    /// </summary>
-    public MethodBuilder ReadableStreamFrom { get; set; } = null!;
-
-    public TypeBuilder TransformStreamType { get; set; } = null!;
-    public ConstructorBuilder TransformStreamCtor { get; set; } = null!;
-    public MethodBuilder BuildTransformSink { get; set; } = null!;
+    public EmittedWebStreamRuntime RequireWebStreams() => WebStreams
+        ?? throw new InvalidOperationException("Web streams were not enabled for this compilation.");
 
     // WebCrypto (#1063) — GetWebCryptoObject() → the $WebCrypto singleton
     // (globalThis.crypto / crypto.webcrypto). Reserved in DefineRuntimeClassPhase1;

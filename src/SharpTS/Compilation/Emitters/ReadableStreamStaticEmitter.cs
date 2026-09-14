@@ -29,7 +29,7 @@ public sealed class ReadableStreamStaticEmitter : IStaticTypeEmitterStrategy
                 {
                     il.Emit(OpCodes.Ldnull);
                 }
-                il.Emit(OpCodes.Call, ctx.Runtime!.ReadableStreamFrom);
+                il.Emit(OpCodes.Call, ctx.Runtime!.RequireWebStreams().ReadableFrom);
                 return true;
 
             default:

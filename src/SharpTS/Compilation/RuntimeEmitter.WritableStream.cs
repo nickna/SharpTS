@@ -11,39 +11,22 @@ namespace SharpTS.Compilation;
 /// <remarks>
 /// Pure-IL companion to <see cref="SharpTS.Runtime.Types.SharpTSWritableStream"/>.
 /// Compiled DLLs constructed with <c>new WritableStream(...)</c> instantiate
-/// these emitted classes directly via <c>Newobj</c> rather than going through
-/// the late-binding pattern in <c>RuntimeEmitter.StreamsWeb.cs</c>.
+/// these emitted classes directly via <c>Newobj</c>.
 ///
 /// Public method names use PascalCase so the JS-side reflection-based dispatch
 /// in <c>GetFieldsProperty</c> finds them via case-insensitive
 /// <see cref="Type.GetMethod(string, BindingFlags)"/> lookup.
 ///
-/// User callbacks (<c>start</c>, <c>write</c>, <c>close</c>, <c>abort</c>) are
+/// Sink callbacks (<c>write</c>, <c>close</c>, <c>abort</c>) are
 /// dispatched through <c>$Runtime.InvokeMethodValue</c> which already handles
 /// every callable shape SharpTS produces (TSFunction, BoundTSFunction, the
 /// various wrapper types). Async user callbacks that return a <c>$Promise</c>
 /// or <c>Task&lt;object&gt;</c> are unwrapped via the helper
-/// <c>EmitCallUserCallbackAsTask</c> which produces a <c>Task&lt;object&gt;</c>
+/// <c>EmitWrapResultAsTask</c> which produces a <c>Task&lt;object&gt;</c>
 /// suitable for the compiled <c>await</c> path.
 /// </remarks>
 public partial class RuntimeEmitter
 {
-    // --- $WritableStream fields ---
-    private FieldBuilder _writableStreamWriteCallbackField = null!;
-    private FieldBuilder _writableStreamCloseCallbackField = null!;
-    private FieldBuilder _writableStreamAbortCallbackField = null!;
-    private FieldBuilder _writableStreamHwmField = null!;
-    private FieldBuilder _writableStreamStateField = null!;
-    private FieldBuilder _writableStreamStoredErrorField = null!;
-    private FieldBuilder _writableStreamWriterField = null!;
-    private FieldBuilder _writableStreamControllerField = null!;
-
-    // --- $WritableStreamDefaultController fields ---
-    private FieldBuilder _writableControllerStreamField = null!;
-
-    // --- $WritableStreamDefaultWriter fields ---
-    private FieldBuilder _writableWriterStreamField = null!;
-
     private void EmitWritableStreamClasses(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
         // Emit controller and writer first as forward type declarations so the
@@ -64,44 +47,44 @@ public partial class RuntimeEmitter
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.Class | TypeAttributes.BeforeFieldInit,
             _types.Object);
 
-        runtime.WritableStreamType = streamBuilder;
+        runtime.RequireWebStreams().WritableType = streamBuilder;
         _ = controllerBuilder;
         _ = writerBuilder;
 
-        EmitWritableStreamFields(streamBuilder);
+        EmitWritableStreamFields(runtime.RequireWebStreams(), streamBuilder);
 
         // Define writer fields + ctor BEFORE the stream's GetWriter so the
         // forward reference resolves cleanly. The writer ctor is captured for
         // use by GetWriter via Newobj.
-        _writableWriterStreamField = writerBuilder.DefineField(
+        runtime.RequireWebStreams().WritableWriterStreamField = writerBuilder.DefineField(
             "_stream", streamBuilder, FieldAttributes.Private);
-        var writerCtor = EmitWritableStreamWriterCtor(writerBuilder, streamBuilder);
+        var writerCtor = EmitWritableStreamWriterCtor(runtime.RequireWebStreams(), writerBuilder, streamBuilder);
         _ = writerCtor;
 
         // Define controller fields + ctor BEFORE the stream uses it.
-        _writableControllerStreamField = controllerBuilder.DefineField(
+        runtime.RequireWebStreams().WritableControllerStreamField = controllerBuilder.DefineField(
             "_stream", streamBuilder, FieldAttributes.Private);
-        var controllerCtor = EmitWritableStreamControllerCtor(controllerBuilder, streamBuilder);
-        EmitWritableStreamControllerErrorMethod(controllerBuilder, streamBuilder, runtime);
+        var controllerCtor = EmitWritableStreamControllerCtor(runtime.RequireWebStreams(), controllerBuilder, streamBuilder);
+        EmitWritableStreamControllerErrorMethod(controllerBuilder, streamBuilder, runtime.RequireWebStreams());
 
         var streamCtor = EmitWritableStreamConstructor(streamBuilder, controllerBuilder, controllerCtor, runtime);
-        runtime.WritableStreamCtor = streamCtor;
+        runtime.RequireWebStreams().WritableCtor = streamCtor;
 
         var writeMethod = EmitWritableStreamWrite(streamBuilder, runtime);
         var closeMethod = EmitWritableStreamClose(streamBuilder, runtime);
         var abortMethod = EmitWritableStreamAbort(streamBuilder, runtime);
-        var lockedGetter = EmitWritableStreamLockedGetter(streamBuilder);
-        EmitWritableStreamGetWriter(streamBuilder, writerCtor);
+        var lockedGetter = EmitWritableStreamLockedGetter(runtime.RequireWebStreams(), streamBuilder);
+        EmitWritableStreamGetWriter(runtime.RequireWebStreams(), streamBuilder, writerCtor);
 
         _ = writeMethod;
         _ = closeMethod;
         _ = abortMethod;
 
-        EmitWritableStreamWriterDelegatingMethod(writerBuilder, streamBuilder, "Write", writeMethod, [_types.Object]);
-        EmitWritableStreamWriterDelegatingMethod(writerBuilder, streamBuilder, "Close", closeMethod, Type.EmptyTypes);
-        EmitWritableStreamWriterDelegatingMethod(writerBuilder, streamBuilder, "Abort", abortMethod, [_types.Object]);
-        EmitWritableStreamWriterReleaseLock(writerBuilder, streamBuilder);
-        EmitWritableStreamWriterDesiredSizeGetter(writerBuilder, streamBuilder);
+        EmitWritableStreamWriterDelegatingMethod(runtime.RequireWebStreams(), writerBuilder, streamBuilder, "Write", writeMethod, [_types.Object]);
+        EmitWritableStreamWriterDelegatingMethod(runtime.RequireWebStreams(), writerBuilder, streamBuilder, "Close", closeMethod, Type.EmptyTypes);
+        EmitWritableStreamWriterDelegatingMethod(runtime.RequireWebStreams(), writerBuilder, streamBuilder, "Abort", abortMethod, [_types.Object]);
+        EmitWritableStreamWriterReleaseLock(runtime.RequireWebStreams(), writerBuilder, streamBuilder);
+        EmitWritableStreamWriterDesiredSizeGetter(runtime.RequireWebStreams(), writerBuilder, streamBuilder);
         EmitWritableStreamWriterClosedReadyGetter(writerBuilder, streamBuilder, "Closed");
         EmitWritableStreamWriterClosedReadyGetter(writerBuilder, streamBuilder, "Ready");
 
@@ -113,17 +96,19 @@ public partial class RuntimeEmitter
         streamBuilder.CreateType();
     }
 
-    private void EmitWritableStreamFields(TypeBuilder t)
+    private void EmitWritableStreamFields(EmittedWebStreamRuntime webStreams, TypeBuilder t)
     {
-        _writableStreamWriteCallbackField = t.DefineField("_writeCallback", _types.Object, FieldAttributes.Private);
-        _writableStreamCloseCallbackField = t.DefineField("_closeCallback", _types.Object, FieldAttributes.Private);
-        _writableStreamAbortCallbackField = t.DefineField("_abortCallback", _types.Object, FieldAttributes.Private);
-        _writableStreamHwmField = t.DefineField("_highWaterMark", _types.Double, FieldAttributes.Private);
+        // Fields shared with the emitted reader/writer/controller must be visible
+        // to those peer types in the same guest assembly. Other storage stays private.
+        webStreams.WritableWriteCallbackField = t.DefineField("_writeCallback", _types.Object, FieldAttributes.Private);
+        webStreams.WritableCloseCallbackField = t.DefineField("_closeCallback", _types.Object, FieldAttributes.Private);
+        webStreams.WritableAbortCallbackField = t.DefineField("_abortCallback", _types.Object, FieldAttributes.Private);
+        webStreams.WritableHwmField = t.DefineField("_highWaterMark", _types.Double, FieldAttributes.Assembly);
         // _state: 0 = writable, 1 = closed, 2 = errored
-        _writableStreamStateField = t.DefineField("_state", _types.Int32, FieldAttributes.Private);
-        _writableStreamStoredErrorField = t.DefineField("_storedError", _types.Object, FieldAttributes.Private);
-        _writableStreamWriterField = t.DefineField("_writer", _types.Object, FieldAttributes.Private);
-        _writableStreamControllerField = t.DefineField("_controller", _types.Object, FieldAttributes.Private);
+        webStreams.WritableStateField = t.DefineField("_state", _types.Int32, FieldAttributes.Assembly);
+        webStreams.WritableStoredErrorField = t.DefineField("_storedError", _types.Object, FieldAttributes.Assembly);
+        webStreams.WritableWriterField = t.DefineField("_writer", _types.Object, FieldAttributes.Assembly);
+        webStreams.WritableControllerField = t.DefineField("_controller", _types.Object, FieldAttributes.Private);
     }
 
     private ConstructorBuilder EmitWritableStreamConstructor(TypeBuilder streamBuilder, TypeBuilder controllerBuilder, ConstructorBuilder controllerCtor, EmittedRuntime runtime)
@@ -143,21 +128,21 @@ public partial class RuntimeEmitter
         // _state = 0 (writable)
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Stfld, _writableStreamStateField);
+        il.Emit(OpCodes.Stfld, runtime.RequireWebStreams().WritableStateField);
 
         // _highWaterMark = ExtractHighWaterMark(strategy)
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_2);
         EmitExtractHighWaterMarkInline(il);
-        il.Emit(OpCodes.Stfld, _writableStreamHwmField);
+        il.Emit(OpCodes.Stfld, runtime.RequireWebStreams().WritableHwmField);
 
         // Extract user callbacks from underlyingSink (write/close/abort).
         // Uses GetFieldsProperty so the sink can be a Dictionary, $Object,
         // or any object exposing the methods (e.g., $TransformSinkHolder).
         // Each is left as object? — InvokeMethodValue handles dispatch later.
-        EmitExtractCallbackFromDict(il, _writableStreamWriteCallbackField, "write", runtime);
-        EmitExtractCallbackFromDict(il, _writableStreamCloseCallbackField, "close", runtime);
-        EmitExtractCallbackFromDict(il, _writableStreamAbortCallbackField, "abort", runtime);
+        EmitExtractCallbackFromDict(il, runtime.RequireWebStreams().WritableWriteCallbackField, "write", runtime);
+        EmitExtractCallbackFromDict(il, runtime.RequireWebStreams().WritableCloseCallbackField, "close", runtime);
+        EmitExtractCallbackFromDict(il, runtime.RequireWebStreams().WritableAbortCallbackField, "abort", runtime);
 
         // _controller = new $WritableStreamDefaultController(this). Previously
         // left null; now wired so `write(chunk, controller)` callbacks receive
@@ -165,7 +150,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Newobj, controllerCtor);
-        il.Emit(OpCodes.Stfld, _writableStreamControllerField);
+        il.Emit(OpCodes.Stfld, runtime.RequireWebStreams().WritableControllerField);
 
         il.Emit(OpCodes.Ret);
         return ctor;
@@ -284,7 +269,7 @@ public partial class RuntimeEmitter
 
         // if (_writeCallback == null) return Task.FromResult<object>(undefined)
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _writableStreamWriteCallbackField);
+        il.Emit(OpCodes.Ldfld, runtime.RequireWebStreams().WritableWriteCallbackField);
         il.Emit(OpCodes.Brfalse, noCallbackLabel);
 
         // Stack setup for InvokeMethodValue: [receiver=null, callback, args]
@@ -292,7 +277,7 @@ public partial class RuntimeEmitter
         // the $WritableStreamDefaultController as the second parameter.
         il.Emit(OpCodes.Ldnull);                                                // receiver
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _writableStreamWriteCallbackField);              // callback
+        il.Emit(OpCodes.Ldfld, runtime.RequireWebStreams().WritableWriteCallbackField);              // callback
         il.Emit(OpCodes.Ldc_I4_2);
         il.Emit(OpCodes.Newarr, _types.Object);                                  // args = new object[2]
         il.Emit(OpCodes.Dup);
@@ -302,7 +287,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _writableStreamControllerField);                 // controller
+        il.Emit(OpCodes.Ldfld, runtime.RequireWebStreams().WritableControllerField);                 // controller
         il.Emit(OpCodes.Stelem_Ref);
         EmitWrapResultAsTask(il, runtime);
         il.Emit(OpCodes.Ret);
@@ -328,17 +313,17 @@ public partial class RuntimeEmitter
         // _state = 1 (closed)
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Stfld, _writableStreamStateField);
+        il.Emit(OpCodes.Stfld, runtime.RequireWebStreams().WritableStateField);
 
         var noCallbackLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _writableStreamCloseCallbackField);
+        il.Emit(OpCodes.Ldfld, runtime.RequireWebStreams().WritableCloseCallbackField);
         il.Emit(OpCodes.Brfalse, noCallbackLabel);
 
         // Stack: [receiver=null, callback, empty args]
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _writableStreamCloseCallbackField);
+        il.Emit(OpCodes.Ldfld, runtime.RequireWebStreams().WritableCloseCallbackField);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Newarr, _types.Object);
         EmitWrapResultAsTask(il, runtime);
@@ -365,22 +350,22 @@ public partial class RuntimeEmitter
         // _state = 2 (errored)
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_2);
-        il.Emit(OpCodes.Stfld, _writableStreamStateField);
+        il.Emit(OpCodes.Stfld, runtime.RequireWebStreams().WritableStateField);
 
         // _storedError = reason
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Stfld, _writableStreamStoredErrorField);
+        il.Emit(OpCodes.Stfld, runtime.RequireWebStreams().WritableStoredErrorField);
 
         var noCallbackLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _writableStreamAbortCallbackField);
+        il.Emit(OpCodes.Ldfld, runtime.RequireWebStreams().WritableAbortCallbackField);
         il.Emit(OpCodes.Brfalse, noCallbackLabel);
 
         // Stack: [receiver=null, callback, args=[reason]]
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _writableStreamAbortCallbackField);
+        il.Emit(OpCodes.Ldfld, runtime.RequireWebStreams().WritableAbortCallbackField);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Newarr, _types.Object);
         il.Emit(OpCodes.Dup);
@@ -398,7 +383,7 @@ public partial class RuntimeEmitter
         return method;
     }
 
-    private MethodBuilder EmitWritableStreamLockedGetter(TypeBuilder t)
+    private MethodBuilder EmitWritableStreamLockedGetter(EmittedWebStreamRuntime webStreams, TypeBuilder t)
     {
         // bool get_Locked() — emitted as a property so JS-side
         // ws.locked dispatches via reflection to PascalCase Locked.
@@ -414,7 +399,7 @@ public partial class RuntimeEmitter
         var nullLabel = il.DefineLabel();
         var doneLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _writableStreamWriterField);
+        il.Emit(OpCodes.Ldfld, webStreams.WritableWriterField);
         il.Emit(OpCodes.Brfalse, nullLabel);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Br, doneLabel);
@@ -427,7 +412,7 @@ public partial class RuntimeEmitter
         return getter;
     }
 
-    private MethodBuilder EmitWritableStreamGetWriter(TypeBuilder streamBuilder, ConstructorBuilder writerCtor)
+    private MethodBuilder EmitWritableStreamGetWriter(EmittedWebStreamRuntime webStreams, TypeBuilder streamBuilder, ConstructorBuilder writerCtor)
     {
         var method = streamBuilder.DefineMethod(
             "GetWriter",
@@ -440,7 +425,7 @@ public partial class RuntimeEmitter
         // if (_writer != null) throw new Exception("TypeError: WritableStream already locked");
         var notLockedLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _writableStreamWriterField);
+        il.Emit(OpCodes.Ldfld, webStreams.WritableWriterField);
         il.Emit(OpCodes.Brfalse, notLockedLabel);
         il.Emit(OpCodes.Ldstr, "TypeError: WritableStream is already locked to a writer");
         il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.Exception, _types.String));
@@ -451,11 +436,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);  // for stfld receiver
         il.Emit(OpCodes.Ldarg_0);  // for newobj's stream argument
         il.Emit(OpCodes.Newobj, writerCtor);
-        il.Emit(OpCodes.Stfld, _writableStreamWriterField);
+        il.Emit(OpCodes.Stfld, webStreams.WritableWriterField);
 
         // Return _writer
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _writableStreamWriterField);
+        il.Emit(OpCodes.Ldfld, webStreams.WritableWriterField);
         il.Emit(OpCodes.Ret);
 
         return method;
@@ -463,7 +448,7 @@ public partial class RuntimeEmitter
 
     // --- Controller class ---
 
-    private ConstructorBuilder EmitWritableStreamControllerCtor(TypeBuilder controllerBuilder, TypeBuilder streamBuilder)
+    private ConstructorBuilder EmitWritableStreamControllerCtor(EmittedWebStreamRuntime webStreams, TypeBuilder controllerBuilder, TypeBuilder streamBuilder)
     {
         var ctor = controllerBuilder.DefineConstructor(
             MethodAttributes.Public,
@@ -475,12 +460,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, _types.GetDefaultConstructor(_types.Object));
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Stfld, _writableControllerStreamField);
+        il.Emit(OpCodes.Stfld, webStreams.WritableControllerStreamField);
         il.Emit(OpCodes.Ret);
         return ctor;
     }
 
-    private void EmitWritableStreamControllerErrorMethod(TypeBuilder controllerBuilder, TypeBuilder streamBuilder, EmittedRuntime runtime)
+    private void EmitWritableStreamControllerErrorMethod(TypeBuilder controllerBuilder, TypeBuilder streamBuilder, EmittedWebStreamRuntime webStreams)
     {
         var method = controllerBuilder.DefineMethod(
             "Error",
@@ -491,31 +476,23 @@ public partial class RuntimeEmitter
         var il = method.GetILGenerator();
         // _stream._state = 2; _stream._storedError = reason
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _writableControllerStreamField);
+        il.Emit(OpCodes.Ldfld, webStreams.WritableControllerStreamField);
         il.Emit(OpCodes.Ldc_I4_2);
-        il.Emit(OpCodes.Stfld, _writableStreamStateField);
+        il.Emit(OpCodes.Stfld, webStreams.WritableStateField);
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _writableControllerStreamField);
+        il.Emit(OpCodes.Ldfld, webStreams.WritableControllerStreamField);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Stfld, _writableStreamStoredErrorField);
+        il.Emit(OpCodes.Stfld, webStreams.WritableStoredErrorField);
 
         il.Emit(OpCodes.Ret);
     }
 
     // --- Writer class ---
 
-    private ConstructorBuilder EmitWritableStreamWriterCtor(TypeBuilder writerBuilder, TypeBuilder streamBuilder)
+    private ConstructorBuilder EmitWritableStreamWriterCtor(EmittedWebStreamRuntime webStreams, TypeBuilder writerBuilder, TypeBuilder streamBuilder)
     {
-        // Constructor was already defined inside EmitWritableStreamGetWriter
-        // (forward reference). We can't double-define. Find the existing one.
-        // Workaround: define the writer ctor here and have GetWriter look it up
-        // via the builder. Actually the cleanest fix is to define the writer
-        // ctor BEFORE GetWriter is emitted. Reorder:
-        // (See restructuring in EmitWritableStreamClasses.)
-
-        // For now, this method is a no-op because the ctor body has already
-        // been pre-defined. Define it here and hope for the best.
+        // Declare the writer constructor before GetWriter emits its forward Newobj.
         var ctor = writerBuilder.DefineConstructor(
             MethodAttributes.Public,
             CallingConventions.Standard,
@@ -526,7 +503,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, _types.GetDefaultConstructor(_types.Object));
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Stfld, _writableWriterStreamField);
+        il.Emit(OpCodes.Stfld, webStreams.WritableWriterStreamField);
         il.Emit(OpCodes.Ret);
         return ctor;
     }
@@ -535,7 +512,7 @@ public partial class RuntimeEmitter
     /// Emits a writer-side method that delegates to the corresponding stream
     /// method by simply loading <c>this._stream</c> and forwarding the args.
     /// </summary>
-    private void EmitWritableStreamWriterDelegatingMethod(
+    private void EmitWritableStreamWriterDelegatingMethod(EmittedWebStreamRuntime webStreams,
         TypeBuilder writerBuilder,
         TypeBuilder streamBuilder,
         string name,
@@ -551,7 +528,7 @@ public partial class RuntimeEmitter
         var il = method.GetILGenerator();
         // Load _stream as receiver
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _writableWriterStreamField);
+        il.Emit(OpCodes.Ldfld, webStreams.WritableWriterStreamField);
         // Forward args
         for (int i = 0; i < paramTypes.Length; i++)
         {
@@ -561,7 +538,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitWritableStreamWriterReleaseLock(TypeBuilder writerBuilder, TypeBuilder streamBuilder)
+    private void EmitWritableStreamWriterReleaseLock(EmittedWebStreamRuntime webStreams, TypeBuilder writerBuilder, TypeBuilder streamBuilder)
     {
         var method = writerBuilder.DefineMethod(
             "ReleaseLock",
@@ -572,13 +549,13 @@ public partial class RuntimeEmitter
         var il = method.GetILGenerator();
         // _stream._writer = null
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _writableWriterStreamField);
+        il.Emit(OpCodes.Ldfld, webStreams.WritableWriterStreamField);
         il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Stfld, _writableStreamWriterField);
+        il.Emit(OpCodes.Stfld, webStreams.WritableWriterField);
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitWritableStreamWriterDesiredSizeGetter(TypeBuilder writerBuilder, TypeBuilder streamBuilder)
+    private void EmitWritableStreamWriterDesiredSizeGetter(EmittedWebStreamRuntime webStreams, TypeBuilder writerBuilder, TypeBuilder streamBuilder)
     {
         var prop = writerBuilder.DefineProperty(
             "DesiredSize",
@@ -595,8 +572,8 @@ public partial class RuntimeEmitter
         var il = getter.GetILGenerator();
         // For v1: return _stream._highWaterMark (no queue tracking)
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _writableWriterStreamField);
-        il.Emit(OpCodes.Ldfld, _writableStreamHwmField);
+        il.Emit(OpCodes.Ldfld, webStreams.WritableWriterStreamField);
+        il.Emit(OpCodes.Ldfld, webStreams.WritableHwmField);
         il.Emit(OpCodes.Ret);
 
         prop.SetGetMethod(getter);

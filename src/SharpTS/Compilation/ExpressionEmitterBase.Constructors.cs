@@ -251,7 +251,7 @@ public abstract partial class ExpressionEmitterBase
             case "ReadableStream":
                 EmitBoxedArgOrNull(arguments, 0);
                 EmitBoxedArgOrNull(arguments, 1);
-                IL.Emit(OpCodes.Newobj, Ctx.Runtime!.ReadableStreamCtor);
+                IL.Emit(OpCodes.Newobj, Ctx.Runtime!.RequireWebStreams().ReadableCtor);
                 SetStackUnknown();
                 return true;
 
@@ -259,7 +259,7 @@ public abstract partial class ExpressionEmitterBase
             case "WritableStream":
                 EmitBoxedArgOrNull(arguments, 0);
                 EmitBoxedArgOrNull(arguments, 1);
-                IL.Emit(OpCodes.Newobj, Ctx.Runtime!.WritableStreamCtor);
+                IL.Emit(OpCodes.Newobj, Ctx.Runtime!.RequireWebStreams().WritableCtor);
                 SetStackUnknown();
                 return true;
 
@@ -268,7 +268,7 @@ public abstract partial class ExpressionEmitterBase
                 EmitBoxedArgOrNull(arguments, 0);
                 EmitBoxedArgOrNull(arguments, 1);
                 EmitBoxedArgOrNull(arguments, 2);
-                IL.Emit(OpCodes.Newobj, Ctx.Runtime!.TransformStreamCtor);
+                IL.Emit(OpCodes.Newobj, Ctx.Runtime!.RequireWebStreams().TransformCtor);
                 SetStackUnknown();
                 return true;
 
@@ -277,13 +277,13 @@ public abstract partial class ExpressionEmitterBase
             // inline and stores it in a typed field.
             case "ByteLengthQueuingStrategy":
                 EmitBoxedArgOrNull(arguments, 0);
-                IL.Emit(OpCodes.Newobj, Ctx.Runtime!.ByteLengthQueuingStrategyCtor);
+                IL.Emit(OpCodes.Newobj, Ctx.Runtime!.RequireWebStreams().ByteLengthQueuingStrategyCtor);
                 SetStackUnknown();
                 return true;
 
             case "CountQueuingStrategy":
                 EmitBoxedArgOrNull(arguments, 0);
-                IL.Emit(OpCodes.Newobj, Ctx.Runtime!.CountQueuingStrategyCtor);
+                IL.Emit(OpCodes.Newobj, Ctx.Runtime!.RequireWebStreams().CountQueuingStrategyCtor);
                 SetStackUnknown();
                 return true;
 
