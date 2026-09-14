@@ -58,7 +58,7 @@ public partial class RuntimeEmitter
         runtime.FsReadFileAsync = method;
 
         var il = method.GetILGenerator();
-        EmitFsAsyncDispatch(il, runtime.FsReadFileSync, 2);
+        EmitFsAsyncDispatch(il, runtime.RequireFileSystem().ReadFileSync, 2);
 
         runtime.RegisterBuiltInModuleMethod("fs/promises", "readFile", method);
     }
@@ -78,7 +78,7 @@ public partial class RuntimeEmitter
         runtime.FsWriteFileAsync = method;
 
         var il = method.GetILGenerator();
-        EmitFsAsyncDispatch(il, runtime.FsWriteFileSync, 3);
+        EmitFsAsyncDispatch(il, runtime.RequireFileSystem().WriteFileSync, 3);
 
         runtime.RegisterBuiltInModuleMethod("fs/promises", "writeFile", method);
     }
@@ -98,7 +98,7 @@ public partial class RuntimeEmitter
         runtime.FsAppendFileAsync = method;
 
         var il = method.GetILGenerator();
-        EmitFsAsyncDispatch(il, runtime.FsAppendFileSync, 3);
+        EmitFsAsyncDispatch(il, runtime.RequireFileSystem().AppendFileSync, 3);
 
         runtime.RegisterBuiltInModuleMethod("fs/promises", "appendFile", method);
     }
@@ -118,7 +118,7 @@ public partial class RuntimeEmitter
         runtime.FsStatAsync = method;
 
         var il = method.GetILGenerator();
-        EmitFsAsyncDispatch(il, runtime.FsStatRaw, 1);
+        EmitFsAsyncDispatch(il, runtime.RequireFileSystem().StatRaw, 1);
 
         runtime.RegisterBuiltInModuleMethod("fs/promises", "stat", method);
     }
@@ -138,7 +138,7 @@ public partial class RuntimeEmitter
         runtime.FsLstatAsync = method;
 
         var il = method.GetILGenerator();
-        EmitFsAsyncDispatch(il, runtime.FsLstatRaw, 1);
+        EmitFsAsyncDispatch(il, runtime.RequireFileSystem().LstatRaw, 1);
 
         runtime.RegisterBuiltInModuleMethod("fs/promises", "lstat", method);
     }
@@ -158,7 +158,7 @@ public partial class RuntimeEmitter
         runtime.FsUnlinkAsync = method;
 
         var il = method.GetILGenerator();
-        EmitFsAsyncDispatch(il, runtime.FsUnlinkSync, 1);
+        EmitFsAsyncDispatch(il, runtime.RequireFileSystem().UnlinkSync, 1);
 
         runtime.RegisterBuiltInModuleMethod("fs/promises", "unlink", method);
     }
@@ -178,7 +178,7 @@ public partial class RuntimeEmitter
         runtime.FsMkdirAsync = method;
 
         var il = method.GetILGenerator();
-        EmitFsAsyncDispatch(il, runtime.FsMkdirSync, 2);
+        EmitFsAsyncDispatch(il, runtime.RequireFileSystem().MkdirSync, 2);
 
         runtime.RegisterBuiltInModuleMethod("fs/promises", "mkdir", method);
     }
@@ -198,7 +198,7 @@ public partial class RuntimeEmitter
         runtime.FsRmdirAsync = method;
 
         var il = method.GetILGenerator();
-        EmitFsAsyncDispatch(il, runtime.FsRmdirSync, 2);
+        EmitFsAsyncDispatch(il, runtime.RequireFileSystem().RmdirSync, 2);
 
         runtime.RegisterBuiltInModuleMethod("fs/promises", "rmdir", method);
     }
@@ -323,7 +323,7 @@ public partial class RuntimeEmitter
         runtime.FsReaddirAsync = method;
 
         var il = method.GetILGenerator();
-        EmitFsAsyncDispatch(il, runtime.FsReaddirSync, 2);
+        EmitFsAsyncDispatch(il, runtime.RequireFileSystem().ReaddirSync, 2);
 
         runtime.RegisterBuiltInModuleMethod("fs/promises", "readdir", method);
     }
@@ -343,7 +343,7 @@ public partial class RuntimeEmitter
         runtime.FsRenameAsync = method;
 
         var il = method.GetILGenerator();
-        EmitFsAsyncDispatch(il, runtime.FsRenameSync, 2);
+        EmitFsAsyncDispatch(il, runtime.RequireFileSystem().RenameSync, 2);
 
         runtime.RegisterBuiltInModuleMethod("fs/promises", "rename", method);
     }
@@ -363,7 +363,7 @@ public partial class RuntimeEmitter
         runtime.FsCopyFileAsync = method;
 
         var il = method.GetILGenerator();
-        EmitFsAsyncDispatch(il, runtime.FsCopyFileSync, 2);
+        EmitFsAsyncDispatch(il, runtime.RequireFileSystem().CopyFileSync, 2);
 
         runtime.RegisterBuiltInModuleMethod("fs/promises", "copyFile", method);
     }
@@ -383,7 +383,7 @@ public partial class RuntimeEmitter
         runtime.FsAccessAsync = method;
 
         var il = method.GetILGenerator();
-        EmitFsAsyncDispatch(il, runtime.FsAccessSync, 2);
+        EmitFsAsyncDispatch(il, runtime.RequireFileSystem().AccessSync, 2);
 
         runtime.RegisterBuiltInModuleMethod("fs/promises", "access", method);
     }
@@ -403,7 +403,7 @@ public partial class RuntimeEmitter
         runtime.FsChmodAsync = method;
 
         var il = method.GetILGenerator();
-        EmitFsAsyncDispatch(il, runtime.FsChmodSync, 2);
+        EmitFsAsyncDispatch(il, runtime.RequireFileSystem().ChmodSync, 2);
 
         runtime.RegisterBuiltInModuleMethod("fs/promises", "chmod", method);
     }
@@ -423,7 +423,7 @@ public partial class RuntimeEmitter
         runtime.FsTruncateAsync = method;
 
         var il = method.GetILGenerator();
-        EmitFsAsyncDispatch(il, runtime.FsTruncateSync, 2);
+        EmitFsAsyncDispatch(il, runtime.RequireFileSystem().TruncateSync, 2);
 
         runtime.RegisterBuiltInModuleMethod("fs/promises", "truncate", method);
     }
@@ -443,7 +443,7 @@ public partial class RuntimeEmitter
         runtime.FsUtimesAsync = method;
 
         var il = method.GetILGenerator();
-        EmitFsAsyncDispatch(il, runtime.FsUtimesSync, 3);
+        EmitFsAsyncDispatch(il, runtime.RequireFileSystem().UtimesSync, 3);
 
         runtime.RegisterBuiltInModuleMethod("fs/promises", "utimes", method);
     }
@@ -463,7 +463,7 @@ public partial class RuntimeEmitter
         runtime.FsReadlinkAsync = method;
 
         var il = method.GetILGenerator();
-        EmitFsAsyncDispatch(il, runtime.FsReadlinkSync, 1);
+        EmitFsAsyncDispatch(il, runtime.RequireFileSystem().ReadlinkSync, 1);
 
         runtime.RegisterBuiltInModuleMethod("fs/promises", "readlink", method);
     }
@@ -483,7 +483,7 @@ public partial class RuntimeEmitter
         runtime.FsRealpathAsync = method;
 
         var il = method.GetILGenerator();
-        EmitFsAsyncDispatch(il, runtime.FsRealpathSync, 1);
+        EmitFsAsyncDispatch(il, runtime.RequireFileSystem().RealpathSync, 1);
 
         runtime.RegisterBuiltInModuleMethod("fs/promises", "realpath", method);
     }
@@ -503,7 +503,7 @@ public partial class RuntimeEmitter
         runtime.FsSymlinkAsync = method;
 
         var il = method.GetILGenerator();
-        EmitFsAsyncDispatch(il, runtime.FsSymlinkSync, 3);
+        EmitFsAsyncDispatch(il, runtime.RequireFileSystem().SymlinkSync, 3);
 
         runtime.RegisterBuiltInModuleMethod("fs/promises", "symlink", method);
     }
@@ -523,7 +523,7 @@ public partial class RuntimeEmitter
         runtime.FsLinkAsync = method;
 
         var il = method.GetILGenerator();
-        EmitFsAsyncDispatch(il, runtime.FsLinkSync, 2);
+        EmitFsAsyncDispatch(il, runtime.RequireFileSystem().LinkSync, 2);
 
         runtime.RegisterBuiltInModuleMethod("fs/promises", "link", method);
     }
@@ -543,7 +543,7 @@ public partial class RuntimeEmitter
         runtime.FsMkdtempAsync = method;
 
         var il = method.GetILGenerator();
-        EmitFsAsyncDispatch(il, runtime.FsMkdtempSync, 1);
+        EmitFsAsyncDispatch(il, runtime.RequireFileSystem().MkdtempSync, 1);
 
         runtime.RegisterBuiltInModuleMethod("fs/promises", "mkdtemp", method);
     }
@@ -596,7 +596,7 @@ public partial class RuntimeEmitter
         // Add constants
         il.Emit(OpCodes.Ldloc, dictLocal);
         il.Emit(OpCodes.Ldstr, "constants");
-        il.Emit(OpCodes.Call, runtime.FsGetConstants);
+        il.Emit(OpCodes.Call, runtime.RequireFileSystem().GetConstants);
         il.Emit(OpCodes.Call, addMethod);
 
         // Create a SharpTSObject from the dictionary

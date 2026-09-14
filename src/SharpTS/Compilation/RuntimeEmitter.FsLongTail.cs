@@ -25,7 +25,7 @@ public partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod("FsFsyncSync",
             System.Reflection.MethodAttributes.Public | System.Reflection.MethodAttributes.Static,
             _types.Void, [_types.Object]);
-        runtime.FsFsyncSync = method;
+        runtime.RequireFileSystem().FsyncSync = method;
 
         var il = method.GetILGenerator();
 
@@ -43,9 +43,9 @@ public partial class RuntimeEmitter
         {
             var flushMethod = typeof(FileStream).GetMethod("Flush", [typeof(bool)])!;
 
-            il.Emit(OpCodes.Ldsfld, runtime.FileDescriptorTableInstance);
+            il.Emit(OpCodes.Ldsfld, runtime.RequireFileSystem().FileDescriptorTableInstance);
             il.Emit(OpCodes.Ldloc, fdLocal);
-            il.Emit(OpCodes.Callvirt, runtime.FileDescriptorTableGet);
+            il.Emit(OpCodes.Callvirt, runtime.RequireFileSystem().FileDescriptorTableGet);
             il.Emit(OpCodes.Ldc_I4_1); // flushToDisk = true
             il.Emit(OpCodes.Callvirt, flushMethod);
             il.Emit(OpCodes.Leave, afterTry);
@@ -59,7 +59,7 @@ public partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod("FsFdPath",
             System.Reflection.MethodAttributes.Public | System.Reflection.MethodAttributes.Static,
             _types.Object, [_types.Object]);
-        runtime.FsFdPath = method;
+        runtime.RequireFileSystem().FdPath = method;
 
         var il = method.GetILGenerator();
         var resultLocal = il.DeclareLocal(_types.Object);
@@ -78,9 +78,9 @@ public partial class RuntimeEmitter
         {
             var nameGetter = typeof(FileStream).GetProperty("Name")!.GetMethod!;
 
-            il.Emit(OpCodes.Ldsfld, runtime.FileDescriptorTableInstance);
+            il.Emit(OpCodes.Ldsfld, runtime.RequireFileSystem().FileDescriptorTableInstance);
             il.Emit(OpCodes.Ldloc, fdLocal);
-            il.Emit(OpCodes.Callvirt, runtime.FileDescriptorTableGet);
+            il.Emit(OpCodes.Callvirt, runtime.RequireFileSystem().FileDescriptorTableGet);
             il.Emit(OpCodes.Callvirt, nameGetter); // string is already an object
             il.Emit(OpCodes.Stloc, resultLocal);
             il.Emit(OpCodes.Leave, afterTry);
@@ -100,7 +100,7 @@ public partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod("FsStatfsRaw",
             System.Reflection.MethodAttributes.Public | System.Reflection.MethodAttributes.Static,
             _types.Object, [_types.Object]);
-        runtime.FsStatfsRaw = method;
+        runtime.RequireFileSystem().StatfsRaw = method;
 
         var il = method.GetILGenerator();
 

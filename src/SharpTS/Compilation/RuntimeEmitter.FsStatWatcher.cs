@@ -232,7 +232,7 @@ public partial class RuntimeEmitter
         mtimeMsEmitter(); // mtimeMs (double)
         il.Emit(OpCodes.Ldc_R8, 0.0); // ctimeMs
         il.Emit(OpCodes.Ldc_R8, 0.0); // birthtimeMs
-        il.Emit(OpCodes.Newobj, runtime.StatsCtor);
+        il.Emit(OpCodes.Newobj, runtime.RequireFileSystem().StatsCtor);
     }
 
     /// <summary>

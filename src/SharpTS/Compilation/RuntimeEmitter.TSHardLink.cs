@@ -6,16 +6,14 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
-    private MethodBuilder? _kernel32CreateHardLink;
-    private MethodBuilder? _libcLink;
 
     /// <summary>
     /// Emits P/Invoke methods for hard link creation in standalone DLLs.
     /// </summary>
-    private void EmitHardLinkPInvokeMethods(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitHardLinkPInvokeMethods(TypeBuilder typeBuilder, EmittedFileSystemRuntime fileSystem)
     {
         // Define Windows kernel32.dll CreateHardLinkW P/Invoke
-        _kernel32CreateHardLink = EmitTypeDefinitions.DefinePInvokeMethod(
+        fileSystem.Kernel32CreateHardLink = EmitTypeDefinitions.DefinePInvokeMethod(
             typeBuilder,
             "CreateHardLinkW",
             "kernel32.dll",
@@ -26,10 +24,10 @@ public partial class RuntimeEmitter
             CallingConvention.Winapi,
             CharSet.Unicode
         );
-        _kernel32CreateHardLink.SetImplementationFlags(MethodImplAttributes.PreserveSig);
+        fileSystem.Kernel32CreateHardLink.SetImplementationFlags(MethodImplAttributes.PreserveSig);
 
         // Define Unix libc link P/Invoke
-        _libcLink = EmitTypeDefinitions.DefinePInvokeMethod(
+        fileSystem.LibcLink = EmitTypeDefinitions.DefinePInvokeMethod(
             typeBuilder,
             "link",
             "libc",
@@ -40,17 +38,17 @@ public partial class RuntimeEmitter
             CallingConvention.Cdecl,
             CharSet.Ansi
         );
-        _libcLink.SetImplementationFlags(MethodImplAttributes.PreserveSig);
+        fileSystem.LibcLink.SetImplementationFlags(MethodImplAttributes.PreserveSig);
 
         // Emit the cross-platform CreateHardLink helper
-        EmitCreateHardLinkPure(typeBuilder, runtime);
+        EmitCreateHardLinkPure(typeBuilder, fileSystem);
     }
 
     /// <summary>
     /// Emits: public static void CreateHardLinkPure(string existingPath, string newPath)
     /// Cross-platform hard link creation using emitted P/Invoke.
     /// </summary>
-    private void EmitCreateHardLinkPure(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitCreateHardLinkPure(TypeBuilder typeBuilder, EmittedFileSystemRuntime fileSystem)
     {
         var method = typeBuilder.DefineMethod(
             "CreateHardLinkPure",
@@ -58,7 +56,7 @@ public partial class RuntimeEmitter
             _types.Void,
             [_types.String, _types.String]
         );
-        runtime.CreateHardLinkPure = method;
+        fileSystem.CreateHardLinkPure = method;
 
         var il = method.GetILGenerator();
 
@@ -75,7 +73,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1); // newPath
         il.Emit(OpCodes.Ldarg_0); // existingPath
         il.Emit(OpCodes.Ldsfld, typeof(IntPtr).GetField("Zero")!);
-        il.Emit(OpCodes.Call, _kernel32CreateHardLink!);
+        il.Emit(OpCodes.Call, fileSystem.Kernel32CreateHardLink);
         il.Emit(OpCodes.Brtrue, windowsSuccessLabel);
 
         // Windows failure - throw IOException
@@ -97,7 +95,7 @@ public partial class RuntimeEmitter
         var unixSuccessLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0); // existingPath
         il.Emit(OpCodes.Ldarg_1); // newPath
-        il.Emit(OpCodes.Call, _libcLink!);
+        il.Emit(OpCodes.Call, fileSystem.LibcLink);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Beq, unixSuccessLabel);
 

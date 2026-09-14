@@ -18,7 +18,7 @@ public partial class RuntimeEmitter
             _types.Boolean,
             [_types.Object]
         );
-        runtime.FsExistsSync = method;
+        runtime.RequireFileSystem().ExistsSync = method;
 
         var il = method.GetILGenerator();
 
@@ -61,7 +61,7 @@ public partial class RuntimeEmitter
             _types.String,
             [_types.Object]
         );
-        runtime.FsEncodingName = nameMethod;
+        runtime.RequireFileSystem().EncodingName = nameMethod;
         {
             var il = nameMethod.GetILGenerator();
             var retNull = il.DefineLabel();
@@ -99,7 +99,7 @@ public partial class RuntimeEmitter
             byteArr,
             [_types.Object, _types.Object]
         );
-        runtime.FsToBytes = toBytesMethod;
+        runtime.RequireFileSystem().ToBytes = toBytesMethod;
         {
             var il = toBytesMethod.GetILGenerator();
             var isBuf = il.DefineLabel();
@@ -115,7 +115,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Call, runtime.Stringify);
             // string enc = FsEncodingName(encodingOpt) ?? "utf8"
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Call, runtime.FsEncodingName);
+            il.Emit(OpCodes.Call, runtime.RequireFileSystem().EncodingName);
             il.Emit(OpCodes.Dup);
             il.Emit(OpCodes.Brtrue, haveEnc);
             il.Emit(OpCodes.Pop);
@@ -145,7 +145,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object, _types.Object]
         );
-        runtime.FsReadFileSync = method;
+        runtime.RequireFileSystem().ReadFileSync = method;
 
         var il = method.GetILGenerator();
         var resultLocal = il.DeclareLocal(_types.Object);
@@ -167,7 +167,7 @@ public partial class RuntimeEmitter
 
             // enc = FsEncodingName(encoding)
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Call, runtime.FsEncodingName);
+            il.Emit(OpCodes.Call, runtime.RequireFileSystem().EncodingName);
             il.Emit(OpCodes.Stloc, encLocal);
 
             var asBufferLabel = il.DefineLabel();
@@ -208,7 +208,7 @@ public partial class RuntimeEmitter
             _types.Void,
             [_types.Object, _types.Object, _types.Object]
         );
-        runtime.FsWriteFileSync = method;
+        runtime.RequireFileSystem().WriteFileSync = method;
 
         var il = method.GetILGenerator();
 
@@ -221,7 +221,7 @@ public partial class RuntimeEmitter
         // bytes = FsToBytes(data, encoding)
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Call, runtime.FsToBytes);
+        il.Emit(OpCodes.Call, runtime.RequireFileSystem().ToBytes);
         var bytesLocal = il.DeclareLocal(_types.MakeArrayType(_types.Byte));
         il.Emit(OpCodes.Stloc, bytesLocal);
 
@@ -247,7 +247,7 @@ public partial class RuntimeEmitter
             _types.Void,
             [_types.Object, _types.Object, _types.Object]
         );
-        runtime.FsAppendFileSync = method;
+        runtime.RequireFileSystem().AppendFileSync = method;
 
         var il = method.GetILGenerator();
 
@@ -260,7 +260,7 @@ public partial class RuntimeEmitter
         // bytes = FsToBytes(data, encoding)
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Call, runtime.FsToBytes);
+        il.Emit(OpCodes.Call, runtime.RequireFileSystem().ToBytes);
         var bytesLocal = il.DeclareLocal(_types.MakeArrayType(_types.Byte));
         il.Emit(OpCodes.Stloc, bytesLocal);
 
@@ -286,7 +286,7 @@ public partial class RuntimeEmitter
             _types.Void,
             [_types.Object]
         );
-        runtime.FsUnlinkSync = method;
+        runtime.RequireFileSystem().UnlinkSync = method;
 
         var il = method.GetILGenerator();
 
@@ -330,7 +330,7 @@ public partial class RuntimeEmitter
             _types.Void,
             [_types.Object, _types.Object]
         );
-        runtime.FsMkdirSync = method;
+        runtime.RequireFileSystem().MkdirSync = method;
 
         var il = method.GetILGenerator();
 
@@ -362,7 +362,7 @@ public partial class RuntimeEmitter
             _types.Void,
             [_types.Object, _types.Object]
         );
-        runtime.FsRmdirSync = method;
+        runtime.RequireFileSystem().RmdirSync = method;
 
         var il = method.GetILGenerator();
 
@@ -413,7 +413,7 @@ public partial class RuntimeEmitter
             _types.ListOfObject,
             [_types.Object, _types.Object]
         );
-        runtime.FsReaddirSync = method;
+        runtime.RequireFileSystem().ReaddirSync = method;
 
         var il = method.GetILGenerator();
         var resultLocal = il.DeclareLocal(_types.ListOfObject);
@@ -537,7 +537,7 @@ public partial class RuntimeEmitter
             // withFileTypes = true: add Dirent object
             il.Emit(OpCodes.Ldloc, listLocal);
             il.Emit(OpCodes.Ldloc, entryPathLocal);
-            il.Emit(OpCodes.Call, runtime.FsCreateDirent);
+            il.Emit(OpCodes.Call, runtime.RequireFileSystem().CreateDirent);
             il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", _types.Object));
             il.Emit(OpCodes.Br, afterAddLabel);
 
@@ -596,7 +596,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object]
         );
-        runtime.FsStatSync = method;
+        runtime.RequireFileSystem().StatSync = method;
 
         var il = method.GetILGenerator();
         var resultLocal = il.DeclareLocal(_types.Object);
@@ -679,7 +679,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldc_R8, 0.0);             // arg7: mtimeMs (placeholder)
             il.Emit(OpCodes.Ldc_R8, 0.0);             // arg8: ctimeMs (placeholder)
             il.Emit(OpCodes.Ldc_R8, 0.0);             // arg9: birthtimeMs (placeholder)
-            il.Emit(OpCodes.Newobj, runtime.StatsCtor);
+            il.Emit(OpCodes.Newobj, runtime.RequireFileSystem().StatsCtor);
             il.Emit(OpCodes.Stloc, resultLocal);
             il.Emit(OpCodes.Leave, afterTry);
         });
@@ -698,7 +698,7 @@ public partial class RuntimeEmitter
             _types.Void,
             [_types.Object, _types.Object]
         );
-        runtime.FsRenameSync = method;
+        runtime.RequireFileSystem().RenameSync = method;
 
         var il = method.GetILGenerator();
 
@@ -748,7 +748,7 @@ public partial class RuntimeEmitter
             _types.Void,
             [_types.Object, _types.Object]
         );
-        runtime.FsCopyFileSync = method;
+        runtime.RequireFileSystem().CopyFileSync = method;
 
         var il = method.GetILGenerator();
 
@@ -787,7 +787,7 @@ public partial class RuntimeEmitter
             _types.Void,
             [_types.Object, _types.Object]
         );
-        runtime.FsAccessSync = method;
+        runtime.RequireFileSystem().AccessSync = method;
 
         var il = method.GetILGenerator();
 
@@ -878,7 +878,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object]
         );
-        runtime.FsLstatSync = method;
+        runtime.RequireFileSystem().LstatSync = method;
 
         var il = method.GetILGenerator();
         var resultLocal = il.DeclareLocal(_types.Object);
@@ -984,7 +984,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldc_R8, 0.0);             // arg7: mtimeMs (placeholder)
             il.Emit(OpCodes.Ldc_R8, 0.0);             // arg8: ctimeMs (placeholder)
             il.Emit(OpCodes.Ldc_R8, 0.0);             // arg9: birthtimeMs (placeholder)
-            il.Emit(OpCodes.Newobj, runtime.StatsCtor);
+            il.Emit(OpCodes.Newobj, runtime.RequireFileSystem().StatsCtor);
             il.Emit(OpCodes.Stloc, resultLocal);
             il.Emit(OpCodes.Leave, afterTry);
         });
@@ -1004,7 +1004,7 @@ public partial class RuntimeEmitter
             _types.Void,
             [_types.Object, _types.Object]
         );
-        runtime.FsChmodSync = method;
+        runtime.RequireFileSystem().ChmodSync = method;
 
         var il = method.GetILGenerator();
 
@@ -1087,7 +1087,7 @@ public partial class RuntimeEmitter
             _types.Void,
             [_types.Object, _types.Object, _types.Object]
         );
-        runtime.FsChownSync = method;
+        runtime.RequireFileSystem().ChownSync = method;
 
         var il = method.GetILGenerator();
 
@@ -1169,7 +1169,7 @@ public partial class RuntimeEmitter
             _types.Void,
             [_types.Object, _types.Object, _types.Object]
         );
-        runtime.FsLchownSync = method;
+        runtime.RequireFileSystem().LchownSync = method;
 
         var il = method.GetILGenerator();
 
@@ -1247,7 +1247,7 @@ public partial class RuntimeEmitter
             _types.Void,
             [_types.Object, _types.Object]
         );
-        runtime.FsTruncateSync = method;
+        runtime.RequireFileSystem().TruncateSync = method;
 
         var il = method.GetILGenerator();
 
@@ -1330,7 +1330,7 @@ public partial class RuntimeEmitter
             _types.Void,
             [_types.Object, _types.Object, _types.Object]
         );
-        runtime.FsSymlinkSync = method;
+        runtime.RequireFileSystem().SymlinkSync = method;
 
         var il = method.GetILGenerator();
 
@@ -1422,7 +1422,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object]
         );
-        runtime.FsReadlinkSync = method;
+        runtime.RequireFileSystem().ReadlinkSync = method;
 
         var il = method.GetILGenerator();
         var resultLocal = il.DeclareLocal(_types.Object);
@@ -1502,7 +1502,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object]
         );
-        runtime.FsRealpathSync = method;
+        runtime.RequireFileSystem().RealpathSync = method;
 
         var il = method.GetILGenerator();
         var resultLocal = il.DeclareLocal(_types.Object);
@@ -1603,7 +1603,7 @@ public partial class RuntimeEmitter
             _types.Void,
             [_types.Object, _types.Object, _types.Object]
         );
-        runtime.FsUtimesSync = method;
+        runtime.RequireFileSystem().UtimesSync = method;
 
         var il = method.GetILGenerator();
 
@@ -1697,7 +1697,7 @@ public partial class RuntimeEmitter
             _types.Object,
             Type.EmptyTypes
         );
-        runtime.FsGetConstants = method;
+        runtime.RequireFileSystem().GetConstants = method;
 
         var il = method.GetILGenerator();
 
@@ -1768,7 +1768,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.String]
         );
-        runtime.FsCreateDirent = method;
+        runtime.RequireFileSystem().CreateDirent = method;
 
         var il = method.GetILGenerator();
 

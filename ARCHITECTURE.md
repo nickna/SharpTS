@@ -494,6 +494,28 @@ This repairs the six existing field-access IL-verifier errors in controller `Err
 signatures and method bodies are unchanged; standalone and hosted tests verify these
 peer accesses as well as the component lifecycle.
 
+Filesystem data and synchronous I/O use optional `EmittedFileSystemRuntime` for 78 checked
+handles: 60 former flat properties plus eighteen emitter-held declarations. The component
+starts only for `UsesFs`; ordinary Node/Web streams, Buffer, HTTP, workers, and hosted output
+do not select it by themselves. Both `fs` and `fs/promises` keep their existing implications
+for Buffer, Node streams, Promise, and scheduling support.
+
+The component owns synchronous file operations, encoding and raw-stat helpers, file-descriptor
+access, directory/Dirent constructors and backing fields, Stats metadata/storage, and both
+platforms' native hard-link declarations. Twenty-seven helpers receive it directly. Cross-feature
+consumers retain their error, coercion, Buffer, function-wrapper, Promise, and event-loop
+metadata. Descriptor types and directory entries still precede their consumers; Stats keeps
+its post-`CreateType` type/constructor resolution, and low-level/encoding helpers still precede
+synchronous and asynchronous wrappers. Completion follows runtime finalization and rejects
+missing declarations or subsequent writes. No migrated flat aliases or emitter-held copies
+remain; feature selection, generated public signatures, native imports, and method bodies
+are preserved.
+
+Filesystem async dispatch and its Promise-wrapper registry, filesystem-owned stream subclasses,
+and watcher/poll-closure metadata remain separate subsequent phases under #1599. Local descriptor
+table fields and builders, BCL lookups, and the shared built-in module registry remain with their
+existing construction infrastructure for the final ownership audit.
+
 During emission, each handle becomes readable as soon as its declaration is assigned, so forward
 references do not require a method body to exist yet. An early read names the missing declaration.
 Completion is an orchestration boundary, not an IL verifier: body emission and type finalization

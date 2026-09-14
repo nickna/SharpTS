@@ -301,9 +301,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg, 5); il.Emit(OpCodes.Brfalse, fdLabel); // arg5 = fd (object); brfalse if null
         // fd path
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldsfld, runtime.FileDescriptorTableInstance);
+        il.Emit(OpCodes.Ldsfld, runtime.RequireFileSystem().FileDescriptorTableInstance);
         il.Emit(OpCodes.Ldarg, 5); il.Emit(OpCodes.Call, typeof(Convert).GetMethod("ToInt32", [typeof(object)])!);
-        il.Emit(OpCodes.Callvirt, runtime.FileDescriptorTableGet);
+        il.Emit(OpCodes.Callvirt, runtime.RequireFileSystem().FileDescriptorTableGet);
         il.Emit(OpCodes.Stfld, _wsStreamField);
         il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldarg, 5); il.Emit(OpCodes.Call, typeof(Convert).GetMethod("ToDouble", [typeof(object)])!); il.Emit(OpCodes.Stfld, _wsFdNumField);
         il.Emit(OpCodes.Br, afterOpen);
@@ -606,9 +606,9 @@ public partial class RuntimeEmitter
         var fdNumLocal = il.DeclareLocal(_types.Double);
         var pathOpen = il.DefineLabel(); var afterOpen = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, fdLocal); il.Emit(OpCodes.Brfalse, pathOpen);
-        il.Emit(OpCodes.Ldsfld, runtime.FileDescriptorTableInstance);
+        il.Emit(OpCodes.Ldsfld, runtime.RequireFileSystem().FileDescriptorTableInstance);
         il.Emit(OpCodes.Ldloc, fdLocal); il.Emit(OpCodes.Call, typeof(Convert).GetMethod("ToInt32", [typeof(object)])!);
-        il.Emit(OpCodes.Callvirt, runtime.FileDescriptorTableGet); il.Emit(OpCodes.Stloc, fsLocal);
+        il.Emit(OpCodes.Callvirt, runtime.RequireFileSystem().FileDescriptorTableGet); il.Emit(OpCodes.Stloc, fsLocal);
         il.Emit(OpCodes.Ldloc, fdLocal); il.Emit(OpCodes.Call, typeof(Convert).GetMethod("ToDouble", [typeof(object)])!); il.Emit(OpCodes.Stloc, fdNumLocal);
         il.Emit(OpCodes.Br, afterOpen);
         il.MarkLabel(pathOpen);

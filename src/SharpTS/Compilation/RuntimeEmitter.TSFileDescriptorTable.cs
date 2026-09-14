@@ -47,7 +47,7 @@ public partial class RuntimeEmitter
             typeBuilder,
             FieldAttributes.Public | FieldAttributes.Static | FieldAttributes.InitOnly
         );
-        runtime.FileDescriptorTableInstance = instanceField;
+        runtime.RequireFileSystem().FileDescriptorTableInstance = instanceField;
 
         // Constructor
         var ctor = typeBuilder.DefineConstructor(
@@ -86,7 +86,7 @@ public partial class RuntimeEmitter
         cctorIl.Emit(OpCodes.Ret);
 
         // Open method
-        EmitFileDescriptorTableOpen(typeBuilder, runtime, nextFdField, streamsField, streamsType);
+        EmitFileDescriptorTableOpen(typeBuilder, runtime.RequireFileSystem(), nextFdField, streamsField, streamsType);
 
         // Get method
         EmitFileDescriptorTableGet(typeBuilder, runtime, streamsField, streamsType);
@@ -106,7 +106,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitFileDescriptorTableOpen(
         TypeBuilder typeBuilder,
-        EmittedRuntime runtime,
+        EmittedFileSystemRuntime fileSystem,
         FieldBuilder nextFdField,
         FieldBuilder streamsField,
         Type streamsType)
@@ -117,7 +117,7 @@ public partial class RuntimeEmitter
             _types.Int32,
             [_types.String, typeof(FileMode), typeof(FileAccess), typeof(FileShare)]
         );
-        runtime.FileDescriptorTableOpen = method;
+        fileSystem.FileDescriptorTableOpen = method;
 
         var il = method.GetILGenerator();
         var fdLocal = il.DeclareLocal(_types.Int32);
@@ -173,7 +173,7 @@ public partial class RuntimeEmitter
             typeof(FileStream),
             [_types.Int32]
         );
-        runtime.FileDescriptorTableGet = method;
+        runtime.RequireFileSystem().FileDescriptorTableGet = method;
 
         var il = method.GetILGenerator();
         var streamLocal = il.DeclareLocal(typeof(FileStream));
@@ -224,7 +224,7 @@ public partial class RuntimeEmitter
             _types.Void,
             [_types.Int32]
         );
-        runtime.FileDescriptorTableClose = method;
+        runtime.RequireFileSystem().FileDescriptorTableClose = method;
 
         var il = method.GetILGenerator();
         var streamLocal = il.DeclareLocal(typeof(FileStream));

@@ -55,9 +55,9 @@ public sealed class FsModuleEmitter : IBuiltInModuleEmitter
             "readdirSync" => EmitReaddirSync(emitter, arguments),
             "statSync" => EmitStatSync(emitter, arguments),
             "lstatSync" => EmitLstatSync(emitter, arguments),
-            "statRaw" => EmitStatRawOp(emitter, arguments, emitter.Context.Runtime!.FsStatRaw),
-            "lstatRaw" => EmitStatRawOp(emitter, arguments, emitter.Context.Runtime!.FsLstatRaw),
-            "fstatRaw" => EmitStatRawOp(emitter, arguments, emitter.Context.Runtime!.FsFstatRaw),
+            "statRaw" => EmitStatRawOp(emitter, arguments, emitter.Context.Runtime!.RequireFileSystem().StatRaw),
+            "lstatRaw" => EmitStatRawOp(emitter, arguments, emitter.Context.Runtime!.RequireFileSystem().LstatRaw),
+            "fstatRaw" => EmitStatRawOp(emitter, arguments, emitter.Context.Runtime!.RequireFileSystem().FstatRaw),
             "renameSync" => EmitRenameSync(emitter, arguments),
             "copyFileSync" => EmitCopyFileSync(emitter, arguments),
             "accessSync" => EmitAccessSync(emitter, arguments),
@@ -103,7 +103,7 @@ public sealed class FsModuleEmitter : IBuiltInModuleEmitter
 
         if (propertyName == "constants")
         {
-            il.Emit(OpCodes.Call, ctx.Runtime!.FsGetConstants);
+            il.Emit(OpCodes.Call, ctx.Runtime!.RequireFileSystem().GetConstants);
             return true;
         }
 
@@ -133,7 +133,7 @@ public sealed class FsModuleEmitter : IBuiltInModuleEmitter
         emitter.EmitBoxIfNeeded(arguments[0]);
 
         // Call runtime helper: FsExistsSync(object path) -> bool
-        il.Emit(OpCodes.Call, ctx.Runtime!.FsExistsSync);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireFileSystem().ExistsSync);
         il.Emit(OpCodes.Box, ctx.Types.Boolean);
         return true;
     }
@@ -148,7 +148,7 @@ public sealed class FsModuleEmitter : IBuiltInModuleEmitter
             // No path - throw error at runtime
             il.Emit(OpCodes.Ldstr, "");
             il.Emit(OpCodes.Ldnull);
-            il.Emit(OpCodes.Call, ctx.Runtime!.FsReadFileSync);
+            il.Emit(OpCodes.Call, ctx.Runtime!.RequireFileSystem().ReadFileSync);
             return true;
         }
 
@@ -168,7 +168,7 @@ public sealed class FsModuleEmitter : IBuiltInModuleEmitter
         }
 
         // Call runtime helper: FsReadFileSync(object path, object? encoding) -> object
-        il.Emit(OpCodes.Call, ctx.Runtime!.FsReadFileSync);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireFileSystem().ReadFileSync);
         return true;
     }
 
@@ -203,7 +203,7 @@ public sealed class FsModuleEmitter : IBuiltInModuleEmitter
         }
 
         // Call runtime helper: FsWriteFileSync(object path, object data, object? encoding)
-        il.Emit(OpCodes.Call, ctx.Runtime!.FsWriteFileSync);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireFileSystem().WriteFileSync);
         il.Emit(OpCodes.Ldnull); // undefined return
         return true;
     }
@@ -239,7 +239,7 @@ public sealed class FsModuleEmitter : IBuiltInModuleEmitter
         }
 
         // Call runtime helper: FsAppendFileSync(object path, object data, object? encoding)
-        il.Emit(OpCodes.Call, ctx.Runtime!.FsAppendFileSync);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireFileSystem().AppendFileSync);
         il.Emit(OpCodes.Ldnull); // undefined return
         return true;
     }
@@ -260,7 +260,7 @@ public sealed class FsModuleEmitter : IBuiltInModuleEmitter
         emitter.EmitBoxIfNeeded(arguments[0]);
 
         // Call runtime helper: FsUnlinkSync(object path)
-        il.Emit(OpCodes.Call, ctx.Runtime!.FsUnlinkSync);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireFileSystem().UnlinkSync);
         il.Emit(OpCodes.Ldnull); // undefined return
         return true;
     }
@@ -292,7 +292,7 @@ public sealed class FsModuleEmitter : IBuiltInModuleEmitter
         }
 
         // Call runtime helper: FsMkdirSync(object path, object? options)
-        il.Emit(OpCodes.Call, ctx.Runtime!.FsMkdirSync);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireFileSystem().MkdirSync);
         il.Emit(OpCodes.Ldnull); // undefined return
         return true;
     }
@@ -324,7 +324,7 @@ public sealed class FsModuleEmitter : IBuiltInModuleEmitter
         }
 
         // Call runtime helper: FsRmdirSync(object path, object? options)
-        il.Emit(OpCodes.Call, ctx.Runtime!.FsRmdirSync);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireFileSystem().RmdirSync);
         il.Emit(OpCodes.Ldnull); // undefined return
         return true;
     }
@@ -357,7 +357,7 @@ public sealed class FsModuleEmitter : IBuiltInModuleEmitter
         }
 
         // Call runtime helper: FsReaddirSync(object path, object? options) -> List<object>
-        il.Emit(OpCodes.Call, ctx.Runtime!.FsReaddirSync);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireFileSystem().ReaddirSync);
         return true;
     }
 
@@ -377,7 +377,7 @@ public sealed class FsModuleEmitter : IBuiltInModuleEmitter
         emitter.EmitBoxIfNeeded(arguments[0]);
 
         // Call runtime helper: FsStatSync(object path) -> object (Stats-like object)
-        il.Emit(OpCodes.Call, ctx.Runtime!.FsStatSync);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireFileSystem().StatSync);
         return true;
     }
 
@@ -418,7 +418,7 @@ public sealed class FsModuleEmitter : IBuiltInModuleEmitter
         emitter.EmitBoxIfNeeded(arguments[1]);
 
         // Call runtime helper: FsRenameSync(object oldPath, object newPath)
-        il.Emit(OpCodes.Call, ctx.Runtime!.FsRenameSync);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireFileSystem().RenameSync);
         il.Emit(OpCodes.Ldnull); // undefined return
         return true;
     }
@@ -443,7 +443,7 @@ public sealed class FsModuleEmitter : IBuiltInModuleEmitter
         emitter.EmitBoxIfNeeded(arguments[1]);
 
         // Call runtime helper: FsCopyFileSync(object src, object dest)
-        il.Emit(OpCodes.Call, ctx.Runtime!.FsCopyFileSync);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireFileSystem().CopyFileSync);
         il.Emit(OpCodes.Ldnull); // undefined return
         return true;
     }
@@ -476,7 +476,7 @@ public sealed class FsModuleEmitter : IBuiltInModuleEmitter
         }
 
         // Call runtime helper: FsAccessSync(object path, object mode)
-        il.Emit(OpCodes.Call, ctx.Runtime!.FsAccessSync);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireFileSystem().AccessSync);
         il.Emit(OpCodes.Ldnull); // undefined return (throws if no access)
         return true;
     }
@@ -497,7 +497,7 @@ public sealed class FsModuleEmitter : IBuiltInModuleEmitter
         emitter.EmitBoxIfNeeded(arguments[0]);
 
         // Call runtime helper: FsLstatSync(object path) -> object (Stats-like object)
-        il.Emit(OpCodes.Call, ctx.Runtime!.FsLstatSync);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireFileSystem().LstatSync);
         return true;
     }
 
@@ -521,7 +521,7 @@ public sealed class FsModuleEmitter : IBuiltInModuleEmitter
         emitter.EmitBoxIfNeeded(arguments[1]);
 
         // Call runtime helper: FsChmodSync(object path, object mode)
-        il.Emit(OpCodes.Call, ctx.Runtime!.FsChmodSync);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireFileSystem().ChmodSync);
         il.Emit(OpCodes.Ldnull); // undefined return
         return true;
     }
@@ -550,7 +550,7 @@ public sealed class FsModuleEmitter : IBuiltInModuleEmitter
         emitter.EmitBoxIfNeeded(arguments[2]);
 
         // Call runtime helper: FsChownSync(object path, object uid, object gid)
-        il.Emit(OpCodes.Call, ctx.Runtime!.FsChownSync);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireFileSystem().ChownSync);
         il.Emit(OpCodes.Ldnull); // undefined return
         return true;
     }
@@ -579,7 +579,7 @@ public sealed class FsModuleEmitter : IBuiltInModuleEmitter
         emitter.EmitBoxIfNeeded(arguments[2]);
 
         // Call runtime helper: FsLchownSync(object path, object uid, object gid)
-        il.Emit(OpCodes.Call, ctx.Runtime!.FsLchownSync);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireFileSystem().LchownSync);
         il.Emit(OpCodes.Ldnull); // undefined return
         return true;
     }
@@ -612,7 +612,7 @@ public sealed class FsModuleEmitter : IBuiltInModuleEmitter
         }
 
         // Call runtime helper: FsTruncateSync(object path, object len)
-        il.Emit(OpCodes.Call, ctx.Runtime!.FsTruncateSync);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireFileSystem().TruncateSync);
         il.Emit(OpCodes.Ldnull); // undefined return
         return true;
     }
@@ -648,7 +648,7 @@ public sealed class FsModuleEmitter : IBuiltInModuleEmitter
         }
 
         // Call runtime helper: FsSymlinkSync(object target, object path, object? type)
-        il.Emit(OpCodes.Call, ctx.Runtime!.FsSymlinkSync);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireFileSystem().SymlinkSync);
         il.Emit(OpCodes.Ldnull); // undefined return
         return true;
     }
@@ -669,7 +669,7 @@ public sealed class FsModuleEmitter : IBuiltInModuleEmitter
         emitter.EmitBoxIfNeeded(arguments[0]);
 
         // Call runtime helper: FsReadlinkSync(object path) -> string
-        il.Emit(OpCodes.Call, ctx.Runtime!.FsReadlinkSync);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireFileSystem().ReadlinkSync);
         return true;
     }
 
@@ -689,7 +689,7 @@ public sealed class FsModuleEmitter : IBuiltInModuleEmitter
         emitter.EmitBoxIfNeeded(arguments[0]);
 
         // Call runtime helper: FsRealpathSync(object path) -> string
-        il.Emit(OpCodes.Call, ctx.Runtime!.FsRealpathSync);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireFileSystem().RealpathSync);
         return true;
     }
 
@@ -717,7 +717,7 @@ public sealed class FsModuleEmitter : IBuiltInModuleEmitter
         emitter.EmitBoxIfNeeded(arguments[2]);
 
         // Call runtime helper: FsUtimesSync(object path, object atime, object mtime)
-        il.Emit(OpCodes.Call, ctx.Runtime!.FsUtimesSync);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireFileSystem().UtimesSync);
         il.Emit(OpCodes.Ldnull); // undefined return
         return true;
     }
@@ -756,7 +756,7 @@ public sealed class FsModuleEmitter : IBuiltInModuleEmitter
         }
 
         // Call runtime helper: FsOpenSync(object path, object flags, object mode) -> double
-        il.Emit(OpCodes.Call, ctx.Runtime!.FsOpenSync);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireFileSystem().OpenSync);
         il.Emit(OpCodes.Box, ctx.Types.Double);
         return true;
     }
@@ -777,7 +777,7 @@ public sealed class FsModuleEmitter : IBuiltInModuleEmitter
         emitter.EmitBoxIfNeeded(arguments[0]);
 
         // Call runtime helper: FsCloseSync(object fd)
-        il.Emit(OpCodes.Call, ctx.Runtime!.FsCloseSync);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireFileSystem().CloseSync);
         il.Emit(OpCodes.Ldnull); // undefined return
         return true;
     }
@@ -814,7 +814,7 @@ public sealed class FsModuleEmitter : IBuiltInModuleEmitter
         emitter.EmitBoxIfNeeded(arguments[4]);
 
         // Call runtime helper: FsReadSync(object fd, object buffer, object offset, object length, object position) -> double
-        il.Emit(OpCodes.Call, ctx.Runtime!.FsReadSync);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireFileSystem().ReadSync);
         il.Emit(OpCodes.Box, ctx.Types.Double);
         return true;
     }
@@ -873,7 +873,7 @@ public sealed class FsModuleEmitter : IBuiltInModuleEmitter
 
         // We need separate methods for buffer and string as they have different signatures
         // Use a generic one that handles both at runtime
-        il.Emit(OpCodes.Call, ctx.Runtime!.FsWriteSyncBuffer);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireFileSystem().WriteSyncBuffer);
         il.Emit(OpCodes.Box, ctx.Types.Double);
         return true;
     }
@@ -894,7 +894,7 @@ public sealed class FsModuleEmitter : IBuiltInModuleEmitter
         emitter.EmitBoxIfNeeded(arguments[0]);
 
         // Call runtime helper: FsFstatSync(object fd) -> object
-        il.Emit(OpCodes.Call, ctx.Runtime!.FsFstatSync);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireFileSystem().FstatSync);
         return true;
     }
 
@@ -926,7 +926,7 @@ public sealed class FsModuleEmitter : IBuiltInModuleEmitter
         }
 
         // Call runtime helper: FsFtruncateSync(object fd, object len)
-        il.Emit(OpCodes.Call, ctx.Runtime!.FsFtruncateSync);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireFileSystem().FtruncateSync);
         il.Emit(OpCodes.Ldnull); // undefined return
         return true;
     }
@@ -941,7 +941,7 @@ public sealed class FsModuleEmitter : IBuiltInModuleEmitter
         if (arguments.Count == 0) { il.Emit(OpCodes.Ldnull); return true; }
         emitter.EmitExpression(arguments[0]);
         emitter.EmitBoxIfNeeded(arguments[0]);
-        il.Emit(OpCodes.Call, ctx.Runtime!.FsFsyncSync);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireFileSystem().FsyncSync);
         il.Emit(OpCodes.Ldnull); // undefined return
         return true;
     }
@@ -953,7 +953,7 @@ public sealed class FsModuleEmitter : IBuiltInModuleEmitter
         if (arguments.Count == 0) { il.Emit(OpCodes.Ldnull); return true; }
         emitter.EmitExpression(arguments[0]);
         emitter.EmitBoxIfNeeded(arguments[0]);
-        il.Emit(OpCodes.Call, ctx.Runtime!.FsFdPath);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireFileSystem().FdPath);
         return true;
     }
 
@@ -964,7 +964,7 @@ public sealed class FsModuleEmitter : IBuiltInModuleEmitter
         if (arguments.Count == 0) { il.Emit(OpCodes.Ldnull); return true; }
         emitter.EmitExpression(arguments[0]);
         emitter.EmitBoxIfNeeded(arguments[0]);
-        il.Emit(OpCodes.Call, ctx.Runtime!.FsStatfsRaw);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireFileSystem().StatfsRaw);
         return true;
     }
 
@@ -988,7 +988,7 @@ public sealed class FsModuleEmitter : IBuiltInModuleEmitter
         emitter.EmitBoxIfNeeded(arguments[0]);
 
         // Call runtime helper: FsMkdtempSync(object prefix) -> string
-        il.Emit(OpCodes.Call, ctx.Runtime!.FsMkdtempSync);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireFileSystem().MkdtempSync);
         return true;
     }
 
@@ -1008,7 +1008,7 @@ public sealed class FsModuleEmitter : IBuiltInModuleEmitter
         emitter.EmitBoxIfNeeded(arguments[0]);
 
         // Call runtime helper: FsOpendirSync(object path) -> object (Dir)
-        il.Emit(OpCodes.Call, ctx.Runtime!.FsOpendirSync);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireFileSystem().OpendirSync);
         return true;
     }
 
@@ -1036,7 +1036,7 @@ public sealed class FsModuleEmitter : IBuiltInModuleEmitter
         emitter.EmitBoxIfNeeded(arguments[1]);
 
         // Call runtime helper: FsLinkSync(object existingPath, object newPath)
-        il.Emit(OpCodes.Call, ctx.Runtime!.FsLinkSync);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireFileSystem().LinkSync);
         il.Emit(OpCodes.Ldnull); // undefined return
         return true;
     }
