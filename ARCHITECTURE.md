@@ -448,6 +448,26 @@ No event-loop flat aliases or emitter-held guest handles remain. Method-local si
 constructor, synchronization-context, and closure construction metadata stay local. General
 cancellation and module/host-execution infrastructure remain separate scope in #1599.
 
+Node streams use optional `EmittedNodeStreamRuntime` for 109 checked declarations: the former
+55 flat properties and 54 emitter-held fields, constructors, and methods. The component starts
+only for `UsesNodeStreams`, preserving direct stream imports and the filesystem, HTTP, zlib,
+child-process, and process-stream implications. Its immutable `HasAbortSignal` flag records
+the separate `UsesAbortController` gate for `AddAbortSignal`; the listener closure is still
+emitted for all Node stream programs. All other handles, including the previously nullable
+factory setters and stream Promise wrappers, are required whenever Node streams are selected.
+The optional iterator dispatch now checks component availability instead of probing individual
+handles. The existing addAbortSignal fallback remains in place when its wrapper is unavailable.
+
+Writable construction, Readable/Duplex declarations, Readable Push/Pipe bodies, Duplex
+finalization, Transform/callback emission, and Readable Map/Filter finalization keep their
+existing order. Stream utility and abort-wrapper declarations finish before component
+completion at runtime finalization. Forty-three stream-only helpers receive the component;
+cross-feature helpers retain their EventEmitter, Promise, function, Buffer, filesystem, and
+other runtime dependencies. All migrated flat aliases and emitter-held Node stream handles
+are removed. Method-local IL construction, BCL lookups, and the shared built-in module method
+registry remain in their existing locations. Web streams, filesystem-owned stream subclasses,
+and the final shared-registry/residual-state audit remain separate work under #1599.
+
 During emission, each handle becomes readable as soon as its declaration is assigned, so forward
 references do not require a method body to exist yet. An early read names the missing declaration.
 Completion is an orchestration boundary, not an IL verifier: body emission and type finalization

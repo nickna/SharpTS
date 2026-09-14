@@ -40,7 +40,7 @@ public partial class RuntimeEmitter
         var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$ZlibTransform",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
-            runtime.TSTransformType
+            runtime.RequireNodeStreams().TransformType
         );
         _ = typeBuilder;
 
@@ -85,7 +85,7 @@ public partial class RuntimeEmitter
 
         // Call base ($Transform) constructor
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.TSTransformCtor);
+        il.Emit(OpCodes.Call, runtime.RequireNodeStreams().TransformCtor);
 
         // this._kind = kind
         il.Emit(OpCodes.Ldarg_0);
@@ -261,10 +261,10 @@ public partial class RuntimeEmitter
 
         // if (_destroyed || _writeEnded) return false
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsReadableDestroyedField);
+        il.Emit(OpCodes.Ldfld, runtime.RequireNodeStreams().ReadableDestroyedField);
         il.Emit(OpCodes.Brtrue, returnFalseLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsDuplexWriteEndedField);
+        il.Emit(OpCodes.Ldfld, runtime.RequireNodeStreams().DuplexWriteEndedField);
         il.Emit(OpCodes.Brtrue, returnFalseLabel);
 
         // Convert chunk to byte[] via helper
@@ -379,7 +379,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, dataLocal);
         il.Emit(OpCodes.Newobj, runtime.RequireBuffer().Ctor);
-        il.Emit(OpCodes.Callvirt, runtime.TSReadablePush);
+        il.Emit(OpCodes.Callvirt, runtime.RequireNodeStreams().ReadablePush);
         il.Emit(OpCodes.Pop);
 
         il.MarkLabel(noDataLabel);
@@ -406,16 +406,16 @@ public partial class RuntimeEmitter
 
         // if (_writeEnded) return this
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsDuplexWriteEndedField);
+        il.Emit(OpCodes.Ldfld, runtime.RequireNodeStreams().DuplexWriteEndedField);
         il.Emit(OpCodes.Brtrue, alreadyEndedLabel);
 
         // _writeEnded = true; _writable = false
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Stfld, _tsDuplexWriteEndedField);
+        il.Emit(OpCodes.Stfld, runtime.RequireNodeStreams().DuplexWriteEndedField);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Stfld, _tsDuplexWritableField);
+        il.Emit(OpCodes.Stfld, runtime.RequireNodeStreams().DuplexWritableField);
 
         // Write final chunk if provided
         var noChunkLabel = il.DefineLabel();
@@ -498,13 +498,13 @@ public partial class RuntimeEmitter
         // Push null to signal end of readable side
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Callvirt, runtime.TSReadablePush);
+        il.Emit(OpCodes.Callvirt, runtime.RequireNodeStreams().ReadablePush);
         il.Emit(OpCodes.Pop);
 
         // _writeFinished = true
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Stfld, _tsDuplexWriteFinishedField);
+        il.Emit(OpCodes.Stfld, runtime.RequireNodeStreams().DuplexWriteFinishedField);
 
         // emit 'finish' event
         il.Emit(OpCodes.Ldarg_0);
@@ -601,7 +601,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Newobj, runtime.RequireBuffer().Ctor);
-        il.Emit(OpCodes.Callvirt, runtime.TSReadablePush);
+        il.Emit(OpCodes.Callvirt, runtime.RequireNodeStreams().ReadablePush);
         il.Emit(OpCodes.Pop);
 
         il.MarkLabel(skipDecompLabel);

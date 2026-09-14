@@ -174,11 +174,11 @@ public partial class RuntimeEmitter
         if (_features.UsesNodeStreams)
         {
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.TransformDoneCallbackType);
+            il.Emit(OpCodes.Isinst, runtime.RequireNodeStreams().TransformDoneCallbackType);
             il.Emit(OpCodes.Brtrue, transformCbLabel);
 
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.WriteCallbackWrapperType);
+            il.Emit(OpCodes.Isinst, runtime.RequireNodeStreams().WriteCallbackWrapperType);
             il.Emit(OpCodes.Brtrue, writeCallbackWrapperLabel);
         }
 
@@ -489,16 +489,16 @@ public partial class RuntimeEmitter
         {
             il.MarkLabel(transformCbLabel);
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Castclass, runtime.TransformDoneCallbackType);
+            il.Emit(OpCodes.Castclass, runtime.RequireNodeStreams().TransformDoneCallbackType);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Callvirt, runtime.TransformDoneCallbackInvoke);
+            il.Emit(OpCodes.Callvirt, runtime.RequireNodeStreams().TransformDoneCallbackInvoke);
             il.Emit(OpCodes.Ret);
 
             il.MarkLabel(writeCallbackWrapperLabel);
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Castclass, runtime.WriteCallbackWrapperType);
+            il.Emit(OpCodes.Castclass, runtime.RequireNodeStreams().WriteCallbackWrapperType);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Callvirt, runtime.WriteCallbackWrapperInvoke);
+            il.Emit(OpCodes.Callvirt, runtime.RequireNodeStreams().WriteCallbackWrapperInvoke);
             il.Emit(OpCodes.Ret);
         }
 
@@ -721,8 +721,8 @@ public partial class RuntimeEmitter
         // Stream callback wrappers — gated on UsesNodeStreams.
         if (_features.UsesNodeStreams)
         {
-            EmitWrapperCheck(runtime.TransformDoneCallbackType, runtime.TransformDoneCallbackInvoke);
-            EmitWrapperCheck(runtime.WriteCallbackWrapperType, runtime.WriteCallbackWrapperInvoke);
+            EmitWrapperCheck(runtime.RequireNodeStreams().TransformDoneCallbackType, runtime.RequireNodeStreams().TransformDoneCallbackInvoke);
+            EmitWrapperCheck(runtime.RequireNodeStreams().WriteCallbackWrapperType, runtime.RequireNodeStreams().WriteCallbackWrapperInvoke);
         }
         if (_features.UsesPromise)
         {

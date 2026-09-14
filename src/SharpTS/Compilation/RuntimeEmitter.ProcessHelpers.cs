@@ -696,15 +696,15 @@ public partial class RuntimeEmitter
 
         // --- GetStdout: create $Writable with Console.Write callback, cache in static field ---
         runtime.GetStdout = EmitStreamSingletonGetter(typeBuilder, runtime, "GetStdout",
-            runtime.StdoutInstance, runtime.TSWritableCtor, stdoutWriteImpl);
+            runtime.StdoutInstance, runtime.RequireNodeStreams().WritableCtor, stdoutWriteImpl);
 
         // --- GetStderr: create $Writable with Console.Error.Write callback ---
         runtime.GetStderr = EmitStreamSingletonGetter(typeBuilder, runtime, "GetStderr",
-            runtime.StderrInstance, runtime.TSWritableCtor, stderrWriteImpl);
+            runtime.StderrInstance, runtime.RequireNodeStreams().WritableCtor, stderrWriteImpl);
 
         // --- GetStdin: create $Readable (no write callback needed) ---
         runtime.GetStdin = EmitStreamSingletonGetter(typeBuilder, runtime, "GetStdin",
-            runtime.StdinInstance, runtime.TSReadableCtor, null);
+            runtime.StdinInstance, runtime.RequireNodeStreams().ReadableCtor, null);
     }
 
     private MethodBuilder EmitStreamSingletonGetter(
@@ -747,7 +747,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Newobj, runtime.TSFunctionCtor);
 
             // Call stream.SetWriteCallback(tsFunction)
-            il.Emit(OpCodes.Callvirt, runtime.TSWritableSetWriteCallback!);
+            il.Emit(OpCodes.Callvirt, runtime.RequireNodeStreams().WritableSetWriteCallback);
         }
 
         // Cache: _instance = stream

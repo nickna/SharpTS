@@ -14,24 +14,24 @@ public partial class RuntimeEmitter
     /// public static object DuplexFrom(object[] args) — like ReadableFrom but yields a $Duplex
     /// whose readable side carries the iterable's items.
     /// </summary>
-    private void EmitStreamDuplexFrom(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitStreamDuplexFrom(TypeBuilder typeBuilder, EmittedNodeStreamRuntime nodeStreams)
     {
         var method = typeBuilder.DefineMethod(
             "DuplexFrom",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.MakeArrayType(_types.Object)]);
-        runtime.StreamDuplexFrom = method;
+        nodeStreams.DuplexFrom = method;
 
         var il = method.GetILGenerator();
-        var streamLocal = il.DeclareLocal(runtime.TSDuplexType);
-        il.Emit(OpCodes.Newobj, runtime.TSDuplexCtor);
+        var streamLocal = il.DeclareLocal(nodeStreams.DuplexType);
+        il.Emit(OpCodes.Newobj, nodeStreams.DuplexCtor);
         il.Emit(OpCodes.Stloc, streamLocal);
 
         // SetObjectMode(true) — Duplex inherits TSReadableSetObjectMode.
         il.Emit(OpCodes.Ldloc, streamLocal);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Call, runtime.TSReadableSetObjectMode);
+        il.Emit(OpCodes.Call, nodeStreams.ReadableSetObjectMode);
 
         var iterableLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldarg_0);
@@ -69,7 +69,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, listLocal);
         il.Emit(OpCodes.Ldloc, idxLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "get_Item")!);
-        il.Emit(OpCodes.Callvirt, runtime.TSReadablePush);
+        il.Emit(OpCodes.Callvirt, nodeStreams.ReadablePush);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Ldloc, idxLocal);
         il.Emit(OpCodes.Ldc_I4_1);
@@ -85,7 +85,7 @@ public partial class RuntimeEmitter
         // Push null for EOF.
         il.Emit(OpCodes.Ldloc, streamLocal);
         il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Callvirt, runtime.TSReadablePush);
+        il.Emit(OpCodes.Callvirt, nodeStreams.ReadablePush);
         il.Emit(OpCodes.Pop);
 
         il.Emit(OpCodes.Ldloc, streamLocal);
@@ -103,14 +103,14 @@ public partial class RuntimeEmitter
             "$StreamComposeBridge",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object);
-        runtime.StreamComposeBridgeType = typeBuilder;
+        runtime.RequireNodeStreams().ComposeBridgeType = typeBuilder;
 
         var firstField = typeBuilder.DefineField("_first", _types.Object, FieldAttributes.Private);
         var duplexField = typeBuilder.DefineField("_duplex", _types.Object, FieldAttributes.Private);
 
         // ctor(object first, object duplex)
         var ctor = typeBuilder.DefineConstructor(MethodAttributes.Public, CallingConventions.Standard, [_types.Object, _types.Object]);
-        runtime.StreamComposeBridgeCtor = ctor;
+        runtime.RequireNodeStreams().ComposeBridgeCtor = ctor;
         var cil = ctor.GetILGenerator();
         cil.Emit(OpCodes.Ldarg_0);
         cil.Emit(OpCodes.Call, _types.GetConstructor(_types.Object, Type.EmptyTypes)!);
@@ -119,10 +119,10 @@ public partial class RuntimeEmitter
         cil.Emit(OpCodes.Ret);
 
         // object ForwardWrite(object[] args): chunk = args[0]; first.Write(chunk, null, null);
-        runtime.StreamComposeBridgeForwardWrite = typeBuilder.DefineMethod("ForwardWrite", MethodAttributes.Public, _types.Object, [_types.ObjectArray]);
+        runtime.RequireNodeStreams().ComposeBridgeForwardWrite = typeBuilder.DefineMethod("ForwardWrite", MethodAttributes.Public, _types.Object, [_types.ObjectArray]);
         {
-            var il = runtime.StreamComposeBridgeForwardWrite.GetILGenerator();
-            EmitWriteToStream(il, runtime,
+            var il = runtime.RequireNodeStreams().ComposeBridgeForwardWrite.GetILGenerator();
+            EmitWriteToStream(il, runtime.RequireNodeStreams(),
                 loadStream: g => { g.Emit(OpCodes.Ldarg_0); g.Emit(OpCodes.Ldfld, firstField); },
                 loadChunk: g => { g.Emit(OpCodes.Ldarg_1); g.Emit(OpCodes.Ldc_I4_0); g.Emit(OpCodes.Ldelem_Ref); });
             il.Emit(OpCodes.Ldnull);
@@ -130,40 +130,40 @@ public partial class RuntimeEmitter
         }
 
         // object PushData(object[] args): duplex.Push(args[0]);
-        runtime.StreamComposeBridgePushData = typeBuilder.DefineMethod("PushData", MethodAttributes.Public, _types.Object, [_types.ObjectArray]);
+        runtime.RequireNodeStreams().ComposeBridgePushData = typeBuilder.DefineMethod("PushData", MethodAttributes.Public, _types.Object, [_types.ObjectArray]);
         {
-            var il = runtime.StreamComposeBridgePushData.GetILGenerator();
+            var il = runtime.RequireNodeStreams().ComposeBridgePushData.GetILGenerator();
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldfld, duplexField);
-            il.Emit(OpCodes.Castclass, runtime.TSReadableType);
+            il.Emit(OpCodes.Castclass, runtime.RequireNodeStreams().ReadableType);
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Ldc_I4_0);
             il.Emit(OpCodes.Ldelem_Ref);
-            il.Emit(OpCodes.Callvirt, runtime.TSReadablePush);
+            il.Emit(OpCodes.Callvirt, runtime.RequireNodeStreams().ReadablePush);
             il.Emit(OpCodes.Pop);
             il.Emit(OpCodes.Ldnull);
             il.Emit(OpCodes.Ret);
         }
 
         // object PushEnd(object[] args): duplex.Push(null);
-        runtime.StreamComposeBridgePushEnd = typeBuilder.DefineMethod("PushEnd", MethodAttributes.Public, _types.Object, [_types.ObjectArray]);
+        runtime.RequireNodeStreams().ComposeBridgePushEnd = typeBuilder.DefineMethod("PushEnd", MethodAttributes.Public, _types.Object, [_types.ObjectArray]);
         {
-            var il = runtime.StreamComposeBridgePushEnd.GetILGenerator();
+            var il = runtime.RequireNodeStreams().ComposeBridgePushEnd.GetILGenerator();
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldfld, duplexField);
-            il.Emit(OpCodes.Castclass, runtime.TSReadableType);
+            il.Emit(OpCodes.Castclass, runtime.RequireNodeStreams().ReadableType);
             il.Emit(OpCodes.Ldnull);
-            il.Emit(OpCodes.Callvirt, runtime.TSReadablePush);
+            il.Emit(OpCodes.Callvirt, runtime.RequireNodeStreams().ReadablePush);
             il.Emit(OpCodes.Pop);
             il.Emit(OpCodes.Ldnull);
             il.Emit(OpCodes.Ret);
         }
 
         // object EndFirst(object[] args): first.End(null, null, null);
-        runtime.StreamComposeBridgeEndFirst = typeBuilder.DefineMethod("EndFirst", MethodAttributes.Public, _types.Object, [_types.ObjectArray]);
+        runtime.RequireNodeStreams().ComposeBridgeEndFirst = typeBuilder.DefineMethod("EndFirst", MethodAttributes.Public, _types.Object, [_types.ObjectArray]);
         {
-            var il = runtime.StreamComposeBridgeEndFirst.GetILGenerator();
-            EmitEndStream(il, runtime, g => { g.Emit(OpCodes.Ldarg_0); g.Emit(OpCodes.Ldfld, firstField); });
+            var il = runtime.RequireNodeStreams().ComposeBridgeEndFirst.GetILGenerator();
+            EmitEndStream(il, runtime.RequireNodeStreams(), g => { g.Emit(OpCodes.Ldarg_0); g.Emit(OpCodes.Ldfld, firstField); });
             il.Emit(OpCodes.Ldnull);
             il.Emit(OpCodes.Ret);
         }
@@ -172,7 +172,7 @@ public partial class RuntimeEmitter
     }
 
     /// <summary>Emits: if (s is $Duplex) ((Duplex)s).Write(chunk,null,null); else if (s is $Writable) ((Writable)s).Write(chunk,null,null);</summary>
-    private void EmitWriteToStream(ILGenerator il, EmittedRuntime runtime, Action<ILGenerator> loadStream, Action<ILGenerator> loadChunk)
+    private void EmitWriteToStream(ILGenerator il, EmittedNodeStreamRuntime nodeStreams, Action<ILGenerator> loadStream, Action<ILGenerator> loadChunk)
     {
         var sLocal = il.DeclareLocal(_types.Object);
         loadStream(il);
@@ -181,34 +181,34 @@ public partial class RuntimeEmitter
         var notDuplex = il.DefineLabel();
         var done = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, sLocal);
-        il.Emit(OpCodes.Isinst, runtime.TSDuplexType);
+        il.Emit(OpCodes.Isinst, nodeStreams.DuplexType);
         il.Emit(OpCodes.Brfalse, notDuplex);
         il.Emit(OpCodes.Ldloc, sLocal);
-        il.Emit(OpCodes.Castclass, runtime.TSDuplexType);
+        il.Emit(OpCodes.Castclass, nodeStreams.DuplexType);
         loadChunk(il);
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Callvirt, runtime.TSDuplexWrite);
+        il.Emit(OpCodes.Callvirt, nodeStreams.DuplexWrite);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Br, done);
 
         il.MarkLabel(notDuplex);
         il.Emit(OpCodes.Ldloc, sLocal);
-        il.Emit(OpCodes.Isinst, runtime.TSWritableType);
+        il.Emit(OpCodes.Isinst, nodeStreams.WritableType);
         il.Emit(OpCodes.Brfalse, done);
         il.Emit(OpCodes.Ldloc, sLocal);
-        il.Emit(OpCodes.Castclass, runtime.TSWritableType);
+        il.Emit(OpCodes.Castclass, nodeStreams.WritableType);
         loadChunk(il);
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Callvirt, runtime.TSWritableWrite);
+        il.Emit(OpCodes.Callvirt, nodeStreams.WritableWrite);
         il.Emit(OpCodes.Pop);
 
         il.MarkLabel(done);
     }
 
     /// <summary>Emits: if (s is $Duplex) ((Duplex)s).End(null,null,null); else if (s is $Writable) ((Writable)s).End(null,null,null);</summary>
-    private void EmitEndStream(ILGenerator il, EmittedRuntime runtime, Action<ILGenerator> loadStream)
+    private void EmitEndStream(ILGenerator il, EmittedNodeStreamRuntime nodeStreams, Action<ILGenerator> loadStream)
     {
         var sLocal = il.DeclareLocal(_types.Object);
         loadStream(il);
@@ -217,23 +217,23 @@ public partial class RuntimeEmitter
         var notDuplex = il.DefineLabel();
         var done = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, sLocal);
-        il.Emit(OpCodes.Isinst, runtime.TSDuplexType);
+        il.Emit(OpCodes.Isinst, nodeStreams.DuplexType);
         il.Emit(OpCodes.Brfalse, notDuplex);
         il.Emit(OpCodes.Ldloc, sLocal);
-        il.Emit(OpCodes.Castclass, runtime.TSDuplexType);
+        il.Emit(OpCodes.Castclass, nodeStreams.DuplexType);
         il.Emit(OpCodes.Ldnull); il.Emit(OpCodes.Ldnull); il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Callvirt, runtime.TSDuplexEnd);
+        il.Emit(OpCodes.Callvirt, nodeStreams.DuplexEnd);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Br, done);
 
         il.MarkLabel(notDuplex);
         il.Emit(OpCodes.Ldloc, sLocal);
-        il.Emit(OpCodes.Isinst, runtime.TSWritableType);
+        il.Emit(OpCodes.Isinst, nodeStreams.WritableType);
         il.Emit(OpCodes.Brfalse, done);
         il.Emit(OpCodes.Ldloc, sLocal);
-        il.Emit(OpCodes.Castclass, runtime.TSWritableType);
+        il.Emit(OpCodes.Castclass, nodeStreams.WritableType);
         il.Emit(OpCodes.Ldnull); il.Emit(OpCodes.Ldnull); il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Callvirt, runtime.TSWritableEnd);
+        il.Emit(OpCodes.Callvirt, nodeStreams.WritableEnd);
         il.Emit(OpCodes.Pop);
 
         il.MarkLabel(done);
@@ -250,13 +250,13 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.MakeArrayType(_types.Object)]);
-        runtime.StreamCompose = method;
+        runtime.RequireNodeStreams().Compose = method;
 
         var il = method.GetILGenerator();
         var nLocal = il.DeclareLocal(_types.Int32);
         var iLocal = il.DeclareLocal(_types.Int32);
-        var dLocal = il.DeclareLocal(runtime.TSDuplexType);
-        var bridgeLocal = il.DeclareLocal(runtime.StreamComposeBridgeType);
+        var dLocal = il.DeclareLocal(runtime.RequireNodeStreams().DuplexType);
+        var bridgeLocal = il.DeclareLocal(runtime.RequireNodeStreams().ComposeBridgeType);
         var lastLocal = il.DeclareLocal(_types.Object);
 
         var retNull = il.DefineLabel();
@@ -285,19 +285,19 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, iLocal);
         il.Emit(OpCodes.Ldelem_Ref);
-        il.Emit(OpCodes.Isinst, runtime.TSReadableType);
+        il.Emit(OpCodes.Isinst, runtime.RequireNodeStreams().ReadableType);
         il.Emit(OpCodes.Brfalse, notReadable);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, iLocal);
         il.Emit(OpCodes.Ldelem_Ref);
-        il.Emit(OpCodes.Castclass, runtime.TSReadableType);
+        il.Emit(OpCodes.Castclass, runtime.RequireNodeStreams().ReadableType);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, iLocal);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Add);
         il.Emit(OpCodes.Ldelem_Ref);
         il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Callvirt, runtime.TSReadablePipe);
+        il.Emit(OpCodes.Callvirt, runtime.RequireNodeStreams().ReadablePipe);
         il.Emit(OpCodes.Pop);
         il.MarkLabel(notReadable);
 
@@ -317,31 +317,31 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, lastLocal);
 
         // d = new $Duplex(); d.SetObjectMode(true);
-        il.Emit(OpCodes.Newobj, runtime.TSDuplexCtor);
+        il.Emit(OpCodes.Newobj, runtime.RequireNodeStreams().DuplexCtor);
         il.Emit(OpCodes.Stloc, dLocal);
         il.Emit(OpCodes.Ldloc, dLocal);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Call, runtime.TSReadableSetObjectMode);
+        il.Emit(OpCodes.Call, runtime.RequireNodeStreams().ReadableSetObjectMode);
 
         // bridge = new $StreamComposeBridge(streams[0], d);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldelem_Ref);
         il.Emit(OpCodes.Ldloc, dLocal);
-        il.Emit(OpCodes.Newobj, runtime.StreamComposeBridgeCtor);
+        il.Emit(OpCodes.Newobj, runtime.RequireNodeStreams().ComposeBridgeCtor);
         il.Emit(OpCodes.Stloc, bridgeLocal);
 
         // d.SetWriteCallback(new $TSFunction(bridge, ForwardWrite));
         il.Emit(OpCodes.Ldloc, dLocal);
-        EmitBridgeTSFunction(il, runtime, bridgeLocal, runtime.StreamComposeBridgeForwardWrite);
-        il.Emit(OpCodes.Callvirt, runtime.TSDuplexSetWriteCallback!);
+        EmitBridgeTSFunction(il, runtime, bridgeLocal, runtime.RequireNodeStreams().ComposeBridgeForwardWrite);
+        il.Emit(OpCodes.Callvirt, runtime.RequireNodeStreams().DuplexSetWriteCallback);
 
         // ((EventEmitter)last).On("data", new $TSFunction(bridge, PushData));
-        EmitOnListener(il, runtime, () => { il.Emit(OpCodes.Ldloc, lastLocal); }, "data", bridgeLocal, runtime.StreamComposeBridgePushData);
+        EmitOnListener(il, runtime, () => { il.Emit(OpCodes.Ldloc, lastLocal); }, "data", bridgeLocal, runtime.RequireNodeStreams().ComposeBridgePushData);
         // ((EventEmitter)last).On("end", new $TSFunction(bridge, PushEnd));
-        EmitOnListener(il, runtime, () => { il.Emit(OpCodes.Ldloc, lastLocal); }, "end", bridgeLocal, runtime.StreamComposeBridgePushEnd);
+        EmitOnListener(il, runtime, () => { il.Emit(OpCodes.Ldloc, lastLocal); }, "end", bridgeLocal, runtime.RequireNodeStreams().ComposeBridgePushEnd);
         // ((EventEmitter)d).On("finish", new $TSFunction(bridge, EndFirst));
-        EmitOnListener(il, runtime, () => { il.Emit(OpCodes.Ldloc, dLocal); }, "finish", bridgeLocal, runtime.StreamComposeBridgeEndFirst);
+        EmitOnListener(il, runtime, () => { il.Emit(OpCodes.Ldloc, dLocal); }, "finish", bridgeLocal, runtime.RequireNodeStreams().ComposeBridgeEndFirst);
 
         // return d;
         il.Emit(OpCodes.Ldloc, dLocal);
@@ -355,7 +355,7 @@ public partial class RuntimeEmitter
     private void EmitBridgeTSFunction(ILGenerator il, EmittedRuntime runtime, LocalBuilder bridgeLocal, MethodBuilder bridgeMethod)
     {
         il.Emit(OpCodes.Ldloc, bridgeLocal);
-        EmitInstanceMethodInfoLiteral(il, bridgeMethod, runtime.StreamComposeBridgeType);
+        EmitInstanceMethodInfoLiteral(il, bridgeMethod, runtime.RequireNodeStreams().ComposeBridgeType);
         il.Emit(OpCodes.Newobj, runtime.TSFunctionCtor);
     }
 
@@ -380,7 +380,7 @@ public partial class RuntimeEmitter
 
         // public static object GetDefaultHwm(object objectMode)
         var get = typeBuilder.DefineMethod("GetDefaultHwm", MethodAttributes.Public | MethodAttributes.Static, _types.Object, [_types.Object]);
-        runtime.StreamGetDefaultHighWaterMark = get;
+        runtime.RequireNodeStreams().GetDefaultHighWaterMark = get;
         {
             var il = get.GetILGenerator();
             var byteLabel = il.DefineLabel();
@@ -400,7 +400,7 @@ public partial class RuntimeEmitter
 
         // public static object SetDefaultHwm(object objectMode, object value)
         var set = typeBuilder.DefineMethod("SetDefaultHwm", MethodAttributes.Public | MethodAttributes.Static, _types.Object, [_types.Object, _types.Object]);
-        runtime.StreamSetDefaultHighWaterMark = set;
+        runtime.RequireNodeStreams().SetDefaultHighWaterMark = set;
         {
             var il = set.GetILGenerator();
             var byteLabel = il.DefineLabel();

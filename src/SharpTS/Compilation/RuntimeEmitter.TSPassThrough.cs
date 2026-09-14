@@ -15,12 +15,12 @@ public partial class RuntimeEmitter
         var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$PassThrough",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
-            runtime.TSTransformType  // Extends $Transform
+            runtime.RequireNodeStreams().TransformType  // Extends $Transform
         );
         _ = typeBuilder;
 
         // Constructor
-        EmitTSPassThroughCtor(typeBuilder, runtime);
+        EmitTSPassThroughCtor(typeBuilder, runtime.RequireNodeStreams());
 
         // PassThrough inherits Transform behavior and just passes data unchanged
         // Override Write to push directly to readable side
@@ -29,20 +29,20 @@ public partial class RuntimeEmitter
         typeBuilder.CreateType();
     }
 
-    private void EmitTSPassThroughCtor(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSPassThroughCtor(TypeBuilder typeBuilder, EmittedNodeStreamRuntime nodeStreams)
     {
         var ctor = typeBuilder.DefineConstructor(
             MethodAttributes.Public,
             CallingConventions.Standard,
             Type.EmptyTypes
         );
-        runtime.TSPassThroughCtor = ctor;
+        nodeStreams.PassThroughCtor = ctor;
 
         var il = ctor.GetILGenerator();
 
         // Call base constructor ($Transform)
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.TSTransformCtor);
+        il.Emit(OpCodes.Call, nodeStreams.TransformCtor);
 
         il.Emit(OpCodes.Ret);
     }
@@ -65,16 +65,16 @@ public partial class RuntimeEmitter
 
         // if (_destroyed || _writeEnded) return false
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsReadableDestroyedField);
+        il.Emit(OpCodes.Ldfld, runtime.RequireNodeStreams().ReadableDestroyedField);
         il.Emit(OpCodes.Brtrue, returnFalseLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsDuplexWriteEndedField);
+        il.Emit(OpCodes.Ldfld, runtime.RequireNodeStreams().DuplexWriteEndedField);
         il.Emit(OpCodes.Brtrue, returnFalseLabel);
 
         // Push chunk to readable side
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, runtime.TSReadablePush);
+        il.Emit(OpCodes.Callvirt, runtime.RequireNodeStreams().ReadablePush);
         il.Emit(OpCodes.Pop);
 
         // Call callback if provided

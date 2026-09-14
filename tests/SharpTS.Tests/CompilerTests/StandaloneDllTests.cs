@@ -1211,6 +1211,111 @@ public class StandaloneDllTests
         }
     }
 
+    public static IEnumerable<object[]> NodeStreamMetadataPrograms
+    {
+        get
+        {
+            yield return new object[]
+            {
+                """
+                import { Readable, Writable, Transform, PassThrough, pipeline, finished } from 'stream';
+                const chunks: string[] = [];
+                const source = new Readable({ objectMode: true });
+                const upper = new Transform({ objectMode: true, transform(c: any, e: any, cb: any) { cb(null, String(c).toUpperCase()); } });
+                const pass = new PassThrough({ objectMode: true });
+                const sink = new Writable({ objectMode: true, write(c: any, e: any, cb: any) { chunks.push(c); cb(); } });
+                const cleanup = finished(sink, () => console.log('removed'));
+                cleanup();
+                pipeline(source, upper, pass, sink, (err: any) => console.log('finished', err == null, chunks.join(',')));
+                source.push('a'); source.push('b'); source.push(null);
+                const buffered = new Writable({ write(c: any, e: any, cb: any) { console.log('write', c); cb(); } });
+                buffered.cork(); buffered.write('x'); buffered.write('y');
+                console.log('uncork'); buffered.uncork(); buffered.end();
+                """,
+                "finished true A,B\nuncork\nwrite x\nwrite y\n"
+            };
+            yield return new object[]
+            {
+                """
+                import { compose, Transform, Duplex, getDefaultHighWaterMark, setDefaultHighWaterMark } from 'stream';
+                async function main() {
+                  const up = new Transform({ objectMode: true, transform(c: any, e: any, cb: any) { cb(null, String(c).toUpperCase()); } });
+                  const bang = new Transform({ objectMode: true, transform(c: any, e: any, cb: any) { cb(null, c + '!'); } });
+                  const composed = compose(up, bang);
+                  composed.on('data', (c: any) => console.log(c));
+                  composed.write('a'); composed.write('b'); composed.end();
+                  for await (const n of Duplex.from([1, 2])) console.log(n);
+                  console.log(getDefaultHighWaterMark(true));
+                  setDefaultHighWaterMark(true, 23); console.log(getDefaultHighWaterMark(true));
+                }
+                main();
+                """,
+                "A!\nB!\n1\n2\n16\n23\n"
+            };
+            yield return new object[]
+            {
+                """
+                import { Readable } from 'stream';
+                async function main() {
+                  const source = new Readable({ objectMode: true });
+                  let n = 0;
+                  const timer = setInterval(() => {
+                    n++; if (n <= 2) source.push(n * 10);
+                    else { source.push(null); clearInterval(timer); }
+                  }, 5);
+                  for await (const value of source) console.log(value);
+                  const early = Readable.from(['a', 'b']);
+                  for await (const value of early) { console.log(value); break; }
+                  console.log(early.destroyed);
+                  console.log('done');
+                }
+                main();
+                """,
+                "10\n20\na\ntrue\ndone\n"
+            };
+            yield return new object[]
+            {
+                """
+                import { Readable, Writable, addAbortSignal, isErrored } from 'stream';
+                import { pipeline, finished } from 'stream/promises';
+                function main() {
+                  const controller = new AbortController();
+                  const source = new Readable({ objectMode: true });
+                  source.on('error', (e: any) => console.log(e.name));
+                  console.log(addAbortSignal(controller.signal, source) === source);
+                  controller.abort(); console.log(source.destroyed, isErrored(source));
+                  const input = new Readable();
+                  const output = new Writable({ write(c: any, e: any, cb: any) { console.log(c); cb(); } });
+                  input.push('promise'); input.push(null);
+                  console.log(typeof pipeline(input, output).then);
+                  console.log(typeof finished);
+                  console.log('done');
+                }
+                main();
+                """,
+                "true\nAbortError\ntrue true\npromise\nfunction\nfunction\ndone\n"
+            };
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(NodeStreamMetadataPrograms))]
+    public void Isolated_NodeStreamMetadata_PreservesPipelinesCompositionIterationAndCancellation(string source, string expected)
+    {
+        var files = new Dictionary<string, string> { ["main.ts"] = source };
+        Assert.Empty(TestHarness.CompileModulesAndVerifyOnly(files, "main.ts"));
+        var (tempDir, dllPath) = CompileStandaloneModule(files, "main.ts");
+        try
+        {
+            Assert.DoesNotContain(GetAssemblyReferences(dllPath), name => name == "SharpTS");
+            Assert.Equal(expected, ExecuteCompiledDllIsolated(dllPath, timeoutMs: 15000));
+        }
+        finally
+        {
+            CleanupTempDir(tempDir);
+        }
+    }
+
     public static IEnumerable<object[]> EventLoopMetadataPrograms
     {
         get

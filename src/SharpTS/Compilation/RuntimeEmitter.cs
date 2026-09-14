@@ -61,6 +61,8 @@ public partial class RuntimeEmitter
             runtime.BeginPromiseEmission();
             runtime.BeginTimerPromiseEmission();
         }
+        if (features.UsesNodeStreams)
+            runtime.BeginNodeStreamEmission(features.UsesAbortController);
         if (features.UsesNet)
             runtime.BeginNetEmission();
         if (features.UsesHttp)
@@ -355,7 +357,7 @@ public partial class RuntimeEmitter
             EmitTSReadableTypeDefinition(moduleBuilder, runtime);  // Phase 1: type, fields, most methods
             EmitTSDuplexTypeDefinition(moduleBuilder, runtime);    // Phase 1: type, fields, all methods
             EmitTSReadablePhaseTwoMethods(runtime);                  // Phase 2a: Push, Pipe (need Duplex)
-            EmitTSDuplexFinalize(runtime);                         // Phase 2: CreateType
+            EmitTSDuplexFinalize(runtime.RequireNodeStreams());                         // Phase 2: CreateType
             EmitTSTransformClass(moduleBuilder, runtime);
             EmitMapFilterTransformCallbackClasses(moduleBuilder, runtime); // Helper classes for map/filter
             EmitTSReadableMapFilterMethods(runtime);               // Phase 2b: Map, Filter (need Transform) + CreateType
@@ -644,6 +646,7 @@ public partial class RuntimeEmitter
         runtime.DataView?.CompleteEmission();
         runtime.TypedArrays.CompleteEmission();
         runtime.EventEmitter.CompleteEmission();
+        runtime.NodeStreams?.CompleteEmission();
         runtime.Timers.CompleteEmission();
         runtime.Microtasks.CompleteEmission();
         runtime.TimerPromises?.CompleteEmission();

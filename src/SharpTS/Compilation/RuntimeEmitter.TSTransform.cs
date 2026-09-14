@@ -9,16 +9,6 @@ namespace SharpTS.Compilation;
 /// </summary>
 public partial class RuntimeEmitter
 {
-    // $Transform fields
-    private FieldBuilder _tsTransformCallbackField = null!;
-    private FieldBuilder _tsTransformFlushCallbackField = null!;
-    private MethodBuilder _tsTransformWriteMethod = null!;
-
-    // $TransformDoneCallback fields
-    private ConstructorBuilder _tsTransformDoneCallbackCtor = null!;
-    private FieldBuilder _tsTransformDoneCallbackStreamField = null!;
-    private FieldBuilder _tsTransformDoneCallbackUserCallbackField = null!;
-
     /// <summary>
     /// Emits the $TransformDoneCallback helper class that wraps the done callback
     /// passed to transform functions. When called with (error, data), it pushes
@@ -33,12 +23,12 @@ public partial class RuntimeEmitter
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object  // Standalone class, not extending $TSFunction
         );
-        runtime.TransformDoneCallbackType = typeBuilder;
+        runtime.RequireNodeStreams().TransformDoneCallbackType = typeBuilder;
 
         // Fields
-        _tsTransformDoneCallbackStreamField = typeBuilder.DefineField(
+        runtime.RequireNodeStreams().TransformDoneCallbackStreamField = typeBuilder.DefineField(
             "_stream", _types.Object, FieldAttributes.Private);
-        _tsTransformDoneCallbackUserCallbackField = typeBuilder.DefineField(
+        runtime.RequireNodeStreams().TransformDoneCallbackUserCallbackField = typeBuilder.DefineField(
             "_userCallback", _types.Object, FieldAttributes.Private);
 
         // Constructor: public $TransformDoneCallback(object stream, object userCallback)
@@ -47,7 +37,7 @@ public partial class RuntimeEmitter
             CallingConventions.Standard,
             [_types.Object, _types.Object]
         );
-        _tsTransformDoneCallbackCtor = ctorBuilder;
+        runtime.RequireNodeStreams().TransformDoneCallbackCtor = ctorBuilder;
 
         var ctorIL = ctorBuilder.GetILGenerator();
         // Call base constructor (Object)
@@ -56,11 +46,11 @@ public partial class RuntimeEmitter
         // this._stream = stream
         ctorIL.Emit(OpCodes.Ldarg_0);
         ctorIL.Emit(OpCodes.Ldarg_1);
-        ctorIL.Emit(OpCodes.Stfld, _tsTransformDoneCallbackStreamField);
+        ctorIL.Emit(OpCodes.Stfld, runtime.RequireNodeStreams().TransformDoneCallbackStreamField);
         // this._userCallback = userCallback
         ctorIL.Emit(OpCodes.Ldarg_0);
         ctorIL.Emit(OpCodes.Ldarg_2);
-        ctorIL.Emit(OpCodes.Stfld, _tsTransformDoneCallbackUserCallbackField);
+        ctorIL.Emit(OpCodes.Stfld, runtime.RequireNodeStreams().TransformDoneCallbackUserCallbackField);
         ctorIL.Emit(OpCodes.Ret);
 
         // Invoke method: public object Invoke(object[] args)
@@ -71,7 +61,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.ObjectArray]
         );
-        runtime.TransformDoneCallbackInvoke = invokeBuilder;
+        runtime.RequireNodeStreams().TransformDoneCallbackInvoke = invokeBuilder;
 
         var invokeIL = invokeBuilder.GetILGenerator();
         var noDataLabel = invokeIL.DefineLabel();
@@ -95,12 +85,12 @@ public partial class RuntimeEmitter
         // data = args[1]; _stream.Push(data)
         // Cast _stream to $Readable (which has Push method)
         invokeIL.Emit(OpCodes.Ldarg_0);
-        invokeIL.Emit(OpCodes.Ldfld, _tsTransformDoneCallbackStreamField);
-        invokeIL.Emit(OpCodes.Castclass, runtime.TSReadableType);
+        invokeIL.Emit(OpCodes.Ldfld, runtime.RequireNodeStreams().TransformDoneCallbackStreamField);
+        invokeIL.Emit(OpCodes.Castclass, runtime.RequireNodeStreams().ReadableType);
         invokeIL.Emit(OpCodes.Ldarg_1);
         invokeIL.Emit(OpCodes.Ldc_I4_1);
         invokeIL.Emit(OpCodes.Ldelem_Ref);
-        invokeIL.Emit(OpCodes.Callvirt, runtime.TSReadablePush);
+        invokeIL.Emit(OpCodes.Callvirt, runtime.RequireNodeStreams().ReadablePush);
         invokeIL.Emit(OpCodes.Pop);
 
         invokeIL.MarkLabel(noDataLabel);
@@ -108,16 +98,16 @@ public partial class RuntimeEmitter
         // Call user callback if provided
         // if (_userCallback != null && _userCallback is $TSFunction)
         invokeIL.Emit(OpCodes.Ldarg_0);
-        invokeIL.Emit(OpCodes.Ldfld, _tsTransformDoneCallbackUserCallbackField);
+        invokeIL.Emit(OpCodes.Ldfld, runtime.RequireNodeStreams().TransformDoneCallbackUserCallbackField);
         invokeIL.Emit(OpCodes.Brfalse, noUserCallbackLabel);
         invokeIL.Emit(OpCodes.Ldarg_0);
-        invokeIL.Emit(OpCodes.Ldfld, _tsTransformDoneCallbackUserCallbackField);
+        invokeIL.Emit(OpCodes.Ldfld, runtime.RequireNodeStreams().TransformDoneCallbackUserCallbackField);
         invokeIL.Emit(OpCodes.Isinst, runtime.TSFunctionType);
         invokeIL.Emit(OpCodes.Brfalse, noUserCallbackLabel);
 
         // _userCallback.Invoke([])
         invokeIL.Emit(OpCodes.Ldarg_0);
-        invokeIL.Emit(OpCodes.Ldfld, _tsTransformDoneCallbackUserCallbackField);
+        invokeIL.Emit(OpCodes.Ldfld, runtime.RequireNodeStreams().TransformDoneCallbackUserCallbackField);
         invokeIL.Emit(OpCodes.Castclass, runtime.TSFunctionType);
         invokeIL.Emit(OpCodes.Ldc_I4_0);
         invokeIL.Emit(OpCodes.Newarr, _types.Object);
@@ -139,44 +129,44 @@ public partial class RuntimeEmitter
         var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$Transform",
             TypeAttributes.Public | TypeAttributes.BeforeFieldInit,
-            runtime.TSDuplexType  // Extends $Duplex
+            runtime.RequireNodeStreams().DuplexType  // Extends $Duplex
         );
-        runtime.TSTransformType = typeBuilder;
+        runtime.RequireNodeStreams().TransformType = typeBuilder;
 
         // Define transform-specific fields
-        _tsTransformCallbackField = typeBuilder.DefineField("_transformCallback", _types.Object, FieldAttributes.Family);
-        _tsTransformFlushCallbackField = typeBuilder.DefineField("_flushCallback", _types.Object, FieldAttributes.Family);
+        runtime.RequireNodeStreams().TransformCallbackField = typeBuilder.DefineField("_transformCallback", _types.Object, FieldAttributes.Family);
+        runtime.RequireNodeStreams().TransformFlushCallbackField = typeBuilder.DefineField("_flushCallback", _types.Object, FieldAttributes.Family);
 
         // Constructor
-        EmitTSTransformCtor(typeBuilder, runtime);
+        EmitTSTransformCtor(typeBuilder, runtime.RequireNodeStreams());
 
         // Override Write method to call transform callback
-        _tsTransformWriteMethod = EmitTSTransformWrite(typeBuilder, runtime);
+        runtime.RequireNodeStreams().TransformWriteMethod = EmitTSTransformWrite(typeBuilder, runtime);
 
         // Override End method to call flush callback
         EmitTSTransformEnd(typeBuilder, runtime);
 
         // Setter methods for callbacks
-        EmitTSTransformSetTransformCallback(typeBuilder, runtime);
-        EmitTSTransformSetFlushCallback(typeBuilder, runtime);
+        EmitTSTransformSetTransformCallback(typeBuilder, runtime.RequireNodeStreams());
+        EmitTSTransformSetFlushCallback(typeBuilder, runtime.RequireNodeStreams());
 
         typeBuilder.CreateType();
     }
 
-    private void EmitTSTransformCtor(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSTransformCtor(TypeBuilder typeBuilder, EmittedNodeStreamRuntime nodeStreams)
     {
         var ctor = typeBuilder.DefineConstructor(
             MethodAttributes.Public,
             CallingConventions.Standard,
             Type.EmptyTypes
         );
-        runtime.TSTransformCtor = ctor;
+        nodeStreams.TransformCtor = ctor;
 
         var il = ctor.GetILGenerator();
 
         // Call base constructor ($Duplex)
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.TSDuplexCtor);
+        il.Emit(OpCodes.Call, nodeStreams.DuplexCtor);
 
         il.Emit(OpCodes.Ret);
     }
@@ -198,19 +188,19 @@ public partial class RuntimeEmitter
 
         // if (_destroyed || _writeEnded) return false
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsReadableDestroyedField);
+        il.Emit(OpCodes.Ldfld, runtime.RequireNodeStreams().ReadableDestroyedField);
         il.Emit(OpCodes.Brtrue, returnFalseLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsDuplexWriteEndedField);
+        il.Emit(OpCodes.Ldfld, runtime.RequireNodeStreams().DuplexWriteEndedField);
         il.Emit(OpCodes.Brtrue, returnFalseLabel);
 
         // If _transformCallback is set, invoke it
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsTransformCallbackField);
+        il.Emit(OpCodes.Ldfld, runtime.RequireNodeStreams().TransformCallbackField);
         il.Emit(OpCodes.Brfalse, noTransformLabel);
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsTransformCallbackField);
+        il.Emit(OpCodes.Ldfld, runtime.RequireNodeStreams().TransformCallbackField);
         il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
         il.Emit(OpCodes.Brfalse, noTransformLabel);
 
@@ -223,7 +213,7 @@ public partial class RuntimeEmitter
 
         // Store callback
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsTransformCallbackField);
+        il.Emit(OpCodes.Ldfld, runtime.RequireNodeStreams().TransformCallbackField);
         il.Emit(OpCodes.Castclass, runtime.TSFunctionType);
         il.Emit(OpCodes.Stloc, callbackLocal);
 
@@ -252,7 +242,7 @@ public partial class RuntimeEmitter
         // This callback will push data to the readable side when called with (error, data)
         il.Emit(OpCodes.Ldarg_0); // this (the Transform stream)
         il.Emit(OpCodes.Ldarg_3); // user callback or null
-        il.Emit(OpCodes.Newobj, _tsTransformDoneCallbackCtor);
+        il.Emit(OpCodes.Newobj, runtime.RequireNodeStreams().TransformDoneCallbackCtor);
         il.Emit(OpCodes.Stelem_Ref);
         // Store args array
         il.Emit(OpCodes.Stloc, argsLocal);
@@ -272,7 +262,7 @@ public partial class RuntimeEmitter
         // Default: pass through (push to readable)
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, runtime.TSReadablePush);
+        il.Emit(OpCodes.Callvirt, runtime.RequireNodeStreams().ReadablePush);
         il.Emit(OpCodes.Pop);
 
         il.Emit(OpCodes.Ldc_I4_1);
@@ -292,7 +282,7 @@ public partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "End",
             MethodAttributes.Public | MethodAttributes.HideBySig | MethodAttributes.Virtual,
-            runtime.TSDuplexType,
+            runtime.RequireNodeStreams().DuplexType,
             [_types.Object, _types.Object, _types.Object]
         );
 
@@ -302,16 +292,16 @@ public partial class RuntimeEmitter
 
         // if (_writeEnded) return this
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsDuplexWriteEndedField);
+        il.Emit(OpCodes.Ldfld, runtime.RequireNodeStreams().DuplexWriteEndedField);
         il.Emit(OpCodes.Brtrue, alreadyEndedLabel);
 
         // _writeEnded = true; _writable = false
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Stfld, _tsDuplexWriteEndedField);
+        il.Emit(OpCodes.Stfld, runtime.RequireNodeStreams().DuplexWriteEndedField);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Stfld, _tsDuplexWritableField);
+        il.Emit(OpCodes.Stfld, runtime.RequireNodeStreams().DuplexWritableField);
 
         // Write final chunk if provided
         var noChunkLabel = il.DefineLabel();
@@ -322,23 +312,23 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Ldnull);
         // Call Write method
-        il.Emit(OpCodes.Callvirt, _tsTransformWriteMethod);
+        il.Emit(OpCodes.Callvirt, runtime.RequireNodeStreams().TransformWriteMethod);
         il.Emit(OpCodes.Pop);
 
         il.MarkLabel(noChunkLabel);
 
         // Call flush callback if set
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsTransformFlushCallbackField);
+        il.Emit(OpCodes.Ldfld, runtime.RequireNodeStreams().TransformFlushCallbackField);
         il.Emit(OpCodes.Brfalse, noFlushLabel);
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsTransformFlushCallbackField);
+        il.Emit(OpCodes.Ldfld, runtime.RequireNodeStreams().TransformFlushCallbackField);
         il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
         il.Emit(OpCodes.Brfalse, noFlushLabel);
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsTransformFlushCallbackField);
+        il.Emit(OpCodes.Ldfld, runtime.RequireNodeStreams().TransformFlushCallbackField);
         il.Emit(OpCodes.Castclass, runtime.TSFunctionType);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Newarr, _types.Object);
@@ -354,13 +344,13 @@ public partial class RuntimeEmitter
         // Push null to signal end of readable side
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Callvirt, runtime.TSReadablePush);
+        il.Emit(OpCodes.Callvirt, runtime.RequireNodeStreams().ReadablePush);
         il.Emit(OpCodes.Pop);
 
         // _writeFinished = true
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Stfld, _tsDuplexWriteFinishedField);
+        il.Emit(OpCodes.Stfld, runtime.RequireNodeStreams().DuplexWriteFinishedField);
 
         // emit 'finish' event
         il.Emit(OpCodes.Ldarg_0);
@@ -375,7 +365,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitTSTransformSetTransformCallback(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSTransformSetTransformCallback(TypeBuilder typeBuilder, EmittedNodeStreamRuntime nodeStreams)
     {
         var method = typeBuilder.DefineMethod(
             "SetTransformCallback",
@@ -383,16 +373,16 @@ public partial class RuntimeEmitter
             _types.Void,
             [_types.Object]
         );
-        runtime.TSTransformSetTransformCallback = method;
+        nodeStreams.TransformSetTransformCallback = method;
 
         var il = method.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Stfld, _tsTransformCallbackField);
+        il.Emit(OpCodes.Stfld, nodeStreams.TransformCallbackField);
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitTSTransformSetFlushCallback(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSTransformSetFlushCallback(TypeBuilder typeBuilder, EmittedNodeStreamRuntime nodeStreams)
     {
         var method = typeBuilder.DefineMethod(
             "SetFlushCallback",
@@ -400,12 +390,12 @@ public partial class RuntimeEmitter
             _types.Void,
             [_types.Object]
         );
-        runtime.TSTransformSetFlushCallback = method;
+        nodeStreams.TransformSetFlushCallback = method;
 
         var il = method.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Stfld, _tsTransformFlushCallbackField);
+        il.Emit(OpCodes.Stfld, nodeStreams.TransformFlushCallbackField);
         il.Emit(OpCodes.Ret);
     }
 }

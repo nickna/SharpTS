@@ -1821,92 +1821,18 @@ public class EmittedRuntime
     // stdlib/node/perf_hooks.ts. Backing fields initialize lazily on first call.
     public MethodBuilder PerfPrimitiveNow { get; set; } = null!;
 
-    // $Readable type - emitted for standalone stream support
-    // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSReadable
-    public Type TSReadableType { get; set; } = null!;
-    public ConstructorBuilder TSReadableCtor { get; set; } = null!;
-    public MethodBuilder TSReadablePush { get; set; } = null!;
-    public MethodBuilder TSReadablePipe { get; set; } = null!;
-    public MethodBuilder TSReadableDestroy { get; set; } = null!;
-    // #1024: [Symbol.asyncIterator] support — GetAsyncIterator() is registered via the
-    // GetIteratorFunction hook so `for await…of` over a $Readable works in compiled mode.
-    public MethodBuilder TSReadableGetAsyncIterator { get; set; } = null!;
-    // #1027: addAbortSignal(signal, stream) — destroy-on-abort wiring + its listener closure.
-    public MethodBuilder StreamAddAbortSignal { get; set; } = null!;
-    public Type StreamAbortCallbackType { get; set; } = null!;
-    public ConstructorBuilder StreamAbortCallbackCtor { get; set; } = null!;
-    public MethodBuilder StreamAbortCallbackOnAbort { get; set; } = null!;
-    // #1030: isErrored + get/setDefaultHighWaterMark.
-    public MethodBuilder TSReadableErroredGetter { get; set; } = null!;
-    public MethodBuilder TSWritableErroredGetter { get; set; } = null!;
-    public MethodBuilder StreamGetDefaultHighWaterMark { get; set; } = null!;
-    public MethodBuilder StreamSetDefaultHighWaterMark { get; set; } = null!;
-    // #1028: compose(...streams) + Duplex.from(source).
-    public MethodBuilder StreamDuplexFrom { get; set; } = null!;
-    public MethodBuilder StreamCompose { get; set; } = null!;
-    public Type StreamComposeBridgeType { get; set; } = null!;
-    public ConstructorBuilder StreamComposeBridgeCtor { get; set; } = null!;
-    public MethodBuilder StreamComposeBridgeForwardWrite { get; set; } = null!;
-    public MethodBuilder StreamComposeBridgePushData { get; set; } = null!;
-    public MethodBuilder StreamComposeBridgePushEnd { get; set; } = null!;
-    public MethodBuilder StreamComposeBridgeEndFirst { get; set; } = null!;
+    /// <summary>Node stream metadata, or null when Node streams are tree-shaken.</summary>
+    public EmittedNodeStreamRuntime? NodeStreams { get; private set; }
 
-    // $Writable type - emitted for standalone stream support
-    // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSWritable
-    public Type TSWritableType { get; set; } = null!;
-    public ConstructorBuilder TSWritableCtor { get; set; } = null!;
-    public MethodBuilder TSWritableWrite { get; set; } = null!;
-    public MethodBuilder TSWritableEnd { get; set; } = null!;
-    public MethodBuilder TSWritableUncork { get; set; } = null!;
-    public MethodBuilder TSWritableDestroy { get; set; } = null!;
+    internal void BeginNodeStreamEmission(bool hasAbortSignal)
+    {
+        if (NodeStreams is not null)
+            throw new InvalidOperationException("Node stream metadata emission has already started.");
+        NodeStreams = new EmittedNodeStreamRuntime(hasAbortSignal);
+    }
 
-    // $Duplex type - emitted for standalone stream support
-    // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSDuplex
-    public Type TSDuplexType { get; set; } = null!;
-    public ConstructorBuilder TSDuplexCtor { get; set; } = null!;
-    public MethodBuilder TSDuplexWrite { get; set; } = null!;
-    public MethodBuilder TSDuplexEnd { get; set; } = null!;
-
-    // $Transform type - emitted for standalone stream support
-    // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSTransform
-    public Type TSTransformType { get; set; } = null!;
-    public ConstructorBuilder TSTransformCtor { get; set; } = null!;
-    public Type TransformDoneCallbackType { get; set; } = null!;
-    public MethodBuilder TransformDoneCallbackInvoke { get; set; } = null!;
-    public Type WriteCallbackWrapperType { get; set; } = null!;
-    public MethodBuilder WriteCallbackWrapperInvoke { get; set; } = null!;
-
-    // $PassThrough type - emitted for standalone stream support
-    // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSPassThrough
-    public ConstructorBuilder TSPassThroughCtor { get; set; } = null!;
-
-    public MethodBuilder TSReadableSetObjectMode { get; set; } = null!;
-    public MethodBuilder? TSReadableSetHighWaterMark { get; set; }
-
-    // Writable setter methods (for factory functions)
-    public MethodBuilder? TSWritableSetObjectMode { get; set; }
-    public MethodBuilder? TSWritableSetWriteCallback { get; set; }
-    public MethodBuilder? TSWritableSetFinalCallback { get; set; }
-
-    // Duplex setter methods (for factory functions)
-    public MethodBuilder? TSDuplexSetObjectMode { get; set; }
-    public MethodBuilder? TSDuplexSetWriteCallback { get; set; }
-
-    // Transform setter methods (for factory functions)
-    // Note: Transform inherits SetObjectMode and SetWriteCallback from Duplex
-    public MethodBuilder? TSTransformSetTransformCallback { get; set; }
-    public MethodBuilder? TSTransformSetFlushCallback { get; set; }
-
-    // $MapTransformCallback / $FilterTransformCallback helper classes
-    public ConstructorBuilder MapTransformCallbackCtor { get; set; } = null!;
-    public ConstructorBuilder FilterTransformCallbackCtor { get; set; } = null!;
-
-    // Stream utility methods
-    public MethodBuilder StreamFinished { get; set; } = null!;
-    public MethodBuilder StreamPipeline { get; set; } = null!;
-    public MethodBuilder StreamReadableFrom { get; set; } = null!;
-    public MethodBuilder StreamPromisePipeline { get; set; } = null!;
-    public MethodBuilder StreamPromiseFinished { get; set; } = null!;
+    public EmittedNodeStreamRuntime RequireNodeStreams() => NodeStreams
+        ?? throw new InvalidOperationException("Node streams were not enabled for this compilation.");
 
     // fs.createReadStream / fs.createWriteStream factory methods
     public MethodBuilder FsCreateReadStream { get; set; } = null!;

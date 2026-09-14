@@ -64,7 +64,7 @@ public partial class RuntimeEmitter
         _fsReadStreamType = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$FsReadStream",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
-            runtime.TSReadableType  // Extends $Readable instead of object
+            runtime.RequireNodeStreams().ReadableType  // Extends $Readable instead of object
         );
 
         // Fields. _data holds the whole content (for the Pipe override); the factory
@@ -88,7 +88,7 @@ public partial class RuntimeEmitter
         var il = ctor.GetILGenerator();
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.TSReadableCtor);
+        il.Emit(OpCodes.Call, runtime.RequireNodeStreams().ReadableCtor);
         void Store(int arg, FieldBuilder f) { il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldarg, arg); il.Emit(OpCodes.Stfld, f); }
         Store(1, _rsPathField);
         Store(2, _rsDataField);
@@ -148,7 +148,7 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Virtual, _types.Void, [_types.String]);
         var il = method.GetILGenerator();
         var strEquals = _types.GetMethod(_types.String, "op_Equality", [_types.String, _types.String])!;
-        var baseOLA = _types.GetMethod(runtime.TSReadableType, "OnListenerAdded", [_types.String])!;
+        var baseOLA = _types.GetMethod(runtime.RequireNodeStreams().ReadableType, "OnListenerAdded", [_types.String])!;
 
         // base.OnListenerAdded(name)
         il.Emit(OpCodes.Ldarg_0);
@@ -202,14 +202,14 @@ public partial class RuntimeEmitter
     private void EmitFsReadStreamMethods(EmittedRuntime runtime)
     {
         // Override Pipe to handle $FsWriteStream (which doesn't extend $Writable)
-        EmitFsReadStreamPipeOverride(runtime);
+        EmitFsReadStreamPipeOverride(runtime.RequireNodeStreams());
     }
 
     /// <summary>
     /// Override Pipe on $FsReadStream: first tries the base $Readable.Pipe behavior (for $Writable/$Duplex),
     /// then falls back to calling Write/End directly on $FsWriteStream.
     /// </summary>
-    private void EmitFsReadStreamPipeOverride(EmittedRuntime runtime)
+    private void EmitFsReadStreamPipeOverride(EmittedNodeStreamRuntime nodeStreams)
     {
         var method = _fsReadStreamType.DefineMethod("Pipe",
             MethodAttributes.Public | MethodAttributes.HideBySig | MethodAttributes.NewSlot | MethodAttributes.Virtual,
@@ -245,7 +245,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Call, runtime.TSReadablePipe);
+        il.Emit(OpCodes.Call, nodeStreams.ReadablePipe);
         il.Emit(OpCodes.Ret);
     }
 
@@ -710,12 +710,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, utf8Get); il.Emit(OpCodes.Ldloc, sliceLocal); il.Emit(OpCodes.Callvirt, utf8GetString); il.Emit(OpCodes.Br, cdone);
         il.MarkLabel(cbin); il.Emit(OpCodes.Ldloc, sliceLocal); il.Emit(OpCodes.Newobj, runtime.RequireBuffer().Ctor);
         il.MarkLabel(cdone);
-        il.Emit(OpCodes.Callvirt, runtime.TSReadablePush); il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Callvirt, runtime.RequireNodeStreams().ReadablePush); il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Ldloc, offLocal); il.Emit(OpCodes.Ldloc, slLocal); il.Emit(OpCodes.Add); il.Emit(OpCodes.Stloc, offLocal);
         il.Emit(OpCodes.Br, pl);
         il.MarkLabel(pd);
         // stream.Push(null) -> end
-        il.Emit(OpCodes.Ldloc, streamLocal); il.Emit(OpCodes.Ldnull); il.Emit(OpCodes.Callvirt, runtime.TSReadablePush); il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Ldloc, streamLocal); il.Emit(OpCodes.Ldnull); il.Emit(OpCodes.Callvirt, runtime.RequireNodeStreams().ReadablePush); il.Emit(OpCodes.Pop);
 
         il.Emit(OpCodes.Ldloc, streamLocal);
         il.Emit(OpCodes.Ret);
