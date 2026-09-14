@@ -10,12 +10,6 @@ namespace SharpTS.Compilation;
 /// </summary>
 public partial class RuntimeEmitter
 {
-    // Cleanup class fields for finished() return value
-    private FieldBuilder _cleanupStreamField = null!;
-    private FieldBuilder _cleanupCallbackField = null!;
-    private ConstructorBuilder _cleanupCtor = null!;
-    private MethodBuilder _cleanupInvokeMethod = null!;
-
     private void EmitTSStreamUtilsClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
         // Emit cleanup closure class first
@@ -31,19 +25,19 @@ public partial class RuntimeEmitter
 
         EmitStreamFinished(typeBuilder, runtime);
         EmitStreamPipeline(typeBuilder, runtime);
-        EmitStreamReadableFrom(typeBuilder, runtime);
-        EmitStreamDuplexFrom(typeBuilder, runtime);     // #1028
+        EmitStreamReadableFrom(typeBuilder, runtime.RequireNodeStreams());
+        EmitStreamDuplexFrom(typeBuilder, runtime.RequireNodeStreams());     // #1028
         EmitStreamComposeMethod(typeBuilder, runtime);  // #1028
         EmitStreamDefaultHwm(typeBuilder, runtime);     // #1030
-        EmitStreamPromisePipeline(typeBuilder, runtime);
-        EmitStreamPromiseFinished(typeBuilder, runtime);
+        EmitStreamPromisePipeline(typeBuilder, runtime.RequireNodeStreams());
+        EmitStreamPromiseFinished(typeBuilder, runtime.RequireNodeStreams());
         EmitStreamConstructorFactories(typeBuilder, runtime);
 
         typeBuilder.CreateType();
 
         // Register utility functions as module methods for TSFunction wrapping
-        runtime.RegisterBuiltInModuleMethod("stream", "finished", runtime.StreamFinished);
-        runtime.RegisterBuiltInModuleMethod("stream", "pipeline", runtime.StreamPipeline);
+        runtime.RegisterBuiltInModuleMethod("stream", "finished", runtime.RequireNodeStreams().Finished);
+        runtime.RegisterBuiltInModuleMethod("stream", "pipeline", runtime.RequireNodeStreams().Pipeline);
     }
 
     /// <summary>
@@ -57,35 +51,35 @@ public partial class RuntimeEmitter
             TypeAttributes.Public | TypeAttributes.BeforeFieldInit
         );
 
-        _cleanupStreamField = typeBuilder.DefineField("_stream", runtime.EventEmitter.Type, FieldAttributes.Public);
-        _cleanupCallbackField = typeBuilder.DefineField("_callback", _types.Object, FieldAttributes.Public);
+        runtime.RequireNodeStreams().FinishedCleanupStreamField = typeBuilder.DefineField("_stream", runtime.EventEmitter.Type, FieldAttributes.Public);
+        runtime.RequireNodeStreams().FinishedCleanupCallbackField = typeBuilder.DefineField("_callback", _types.Object, FieldAttributes.Public);
 
         // Constructor(stream, callback)
-        _cleanupCtor = typeBuilder.DefineConstructor(
+        runtime.RequireNodeStreams().FinishedCleanupCtor = typeBuilder.DefineConstructor(
             MethodAttributes.Public,
             CallingConventions.Standard,
             [runtime.EventEmitter.Type, _types.Object]);
         {
-            var il = _cleanupCtor.GetILGenerator();
+            var il = runtime.RequireNodeStreams().FinishedCleanupCtor.GetILGenerator();
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Call, typeof(object).GetConstructor(Type.EmptyTypes)!);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Stfld, _cleanupStreamField);
+            il.Emit(OpCodes.Stfld, runtime.RequireNodeStreams().FinishedCleanupStreamField);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_2);
-            il.Emit(OpCodes.Stfld, _cleanupCallbackField);
+            il.Emit(OpCodes.Stfld, runtime.RequireNodeStreams().FinishedCleanupCallbackField);
             il.Emit(OpCodes.Ret);
         }
 
         // Invoke(object[] args) → null  (removes listeners)
-        _cleanupInvokeMethod = typeBuilder.DefineMethod(
+        runtime.RequireNodeStreams().FinishedCleanupInvokeMethod = typeBuilder.DefineMethod(
             "Invoke",
             MethodAttributes.Public,
             _types.Object,
             [_types.ObjectArray]);
         {
-            var il = _cleanupInvokeMethod.GetILGenerator();
+            var il = runtime.RequireNodeStreams().FinishedCleanupInvokeMethod.GetILGenerator();
 
             // stream.Off("end", callback)
             EmitOffCall(il, runtime, "end");
@@ -102,10 +96,10 @@ public partial class RuntimeEmitter
         void EmitOffCall(ILGenerator il, EmittedRuntime rt, string eventName)
         {
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldfld, _cleanupStreamField);
+            il.Emit(OpCodes.Ldfld, runtime.RequireNodeStreams().FinishedCleanupStreamField);
             il.Emit(OpCodes.Ldstr, eventName);
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldfld, _cleanupCallbackField);
+            il.Emit(OpCodes.Ldfld, runtime.RequireNodeStreams().FinishedCleanupCallbackField);
             il.Emit(OpCodes.Callvirt, rt.EventEmitter.Off);
             il.Emit(OpCodes.Pop); // Off returns the emitter
         }
@@ -123,7 +117,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.MakeArrayType(_types.Object)]
         );
-        runtime.StreamFinished = method;
+        runtime.RequireNodeStreams().Finished = method;
 
         var il = method.GetILGenerator();
 
@@ -203,13 +197,13 @@ public partial class RuntimeEmitter
         // Create cleanup closure: new $StreamFinishedCleanup(stream, callback)
         il.Emit(OpCodes.Ldloc, streamLocal);
         il.Emit(OpCodes.Ldloc, callbackLocal);
-        il.Emit(OpCodes.Newobj, _cleanupCtor);
+        il.Emit(OpCodes.Newobj, runtime.RequireNodeStreams().FinishedCleanupCtor);
         var cleanupInstanceLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Stloc, cleanupInstanceLocal);
 
         // Return new $TSFunction(cleanupInstance, cleanupInvokeMethod)
         il.Emit(OpCodes.Ldloc, cleanupInstanceLocal);
-        il.Emit(OpCodes.Ldtoken, _cleanupInvokeMethod);
+        il.Emit(OpCodes.Ldtoken, runtime.RequireNodeStreams().FinishedCleanupInvokeMethod);
         il.Emit(OpCodes.Call, _types.MethodBaseGetMethodFromHandle);
         il.Emit(OpCodes.Castclass, _types.MethodInfo);
         il.Emit(OpCodes.Newobj, runtime.TSFunctionCtor);
@@ -335,7 +329,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.MakeArrayType(_types.Object)]
         );
-        runtime.StreamPipeline = method;
+        runtime.RequireNodeStreams().Pipeline = method;
 
         var il = method.GetILGenerator();
 
@@ -407,14 +401,14 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, argsLocal);
         il.Emit(OpCodes.Ldloc, indexLocal);
         il.Emit(OpCodes.Ldelem_Ref);
-        il.Emit(OpCodes.Castclass, runtime.TSReadableType);
+        il.Emit(OpCodes.Castclass, runtime.RequireNodeStreams().ReadableType);
         il.Emit(OpCodes.Ldloc, argsLocal);
         il.Emit(OpCodes.Ldloc, indexLocal);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Add);
         il.Emit(OpCodes.Ldelem_Ref);
         il.Emit(OpCodes.Ldnull); // options = null
-        il.Emit(OpCodes.Callvirt, runtime.TSReadablePipe);
+        il.Emit(OpCodes.Callvirt, runtime.RequireNodeStreams().ReadablePipe);
         il.Emit(OpCodes.Pop); // Pipe returns destination
 
         il.Emit(OpCodes.Ldloc, indexLocal);
@@ -447,7 +441,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Ldloc, callbackLocal);
         il.Emit(OpCodes.Stelem_Ref);
-        il.Emit(OpCodes.Call, runtime.StreamFinished);
+        il.Emit(OpCodes.Call, runtime.RequireNodeStreams().Finished);
         il.Emit(OpCodes.Pop); // Finished returns cleanup function, discard
 
         il.MarkLabel(skipCallbackInvoke);
@@ -465,7 +459,7 @@ public partial class RuntimeEmitter
     /// Emits: public static object ReadableFrom(object[] args)
     /// Creates a Readable from args[0] (array/list), pushes items, pushes null.
     /// </summary>
-    private void EmitStreamReadableFrom(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitStreamReadableFrom(TypeBuilder typeBuilder, EmittedNodeStreamRuntime nodeStreams)
     {
         var method = typeBuilder.DefineMethod(
             "ReadableFrom",
@@ -473,19 +467,19 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.MakeArrayType(_types.Object)]
         );
-        runtime.StreamReadableFrom = method;
+        nodeStreams.ReadableFrom = method;
 
         var il = method.GetILGenerator();
 
         // Create new $Readable instance
-        var streamLocal = il.DeclareLocal(runtime.TSReadableType); // local 0
-        il.Emit(OpCodes.Newobj, runtime.TSReadableCtor);
+        var streamLocal = il.DeclareLocal(nodeStreams.ReadableType); // local 0
+        il.Emit(OpCodes.Newobj, nodeStreams.ReadableCtor);
         il.Emit(OpCodes.Stloc, streamLocal);
 
         // Set object mode
         il.Emit(OpCodes.Ldloc, streamLocal);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Call, runtime.TSReadableSetObjectMode);
+        il.Emit(OpCodes.Call, nodeStreams.ReadableSetObjectMode);
 
         // Get iterable from args[0]
         var iterableLocal = il.DeclareLocal(_types.Object); // local 1
@@ -530,7 +524,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, listLocal);
         il.Emit(OpCodes.Ldloc, idxLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "get_Item")!);
-        il.Emit(OpCodes.Callvirt, runtime.TSReadablePush);
+        il.Emit(OpCodes.Callvirt, nodeStreams.ReadablePush);
         il.Emit(OpCodes.Pop); // Push returns bool
 
         il.Emit(OpCodes.Ldloc, idxLocal);
@@ -550,7 +544,7 @@ public partial class RuntimeEmitter
         // Push null for EOF
         il.Emit(OpCodes.Ldloc, streamLocal);
         il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Callvirt, runtime.TSReadablePush);
+        il.Emit(OpCodes.Callvirt, nodeStreams.ReadablePush);
         il.Emit(OpCodes.Pop);
 
         // Return the stream
@@ -561,7 +555,7 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits: public static object PromisePipeline(object[] args)
     /// </summary>
-    private void EmitStreamPromisePipeline(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitStreamPromisePipeline(TypeBuilder typeBuilder, EmittedNodeStreamRuntime nodeStreams)
     {
         var method = typeBuilder.DefineMethod(
             "PromisePipeline",
@@ -569,13 +563,13 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.MakeArrayType(_types.Object)]
         );
-        runtime.StreamPromisePipeline = method;
+        nodeStreams.PromisePipeline = method;
 
         var il = method.GetILGenerator();
 
         // Call Pipeline and wrap result
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.StreamPipeline);
+        il.Emit(OpCodes.Call, nodeStreams.Pipeline);
         // Pipeline returns an object (the last stream), wrap in Task
         il.Emit(OpCodes.Call, EmitGenerics.MakeGenericMethod(typeof(Task).GetMethod("FromResult")!, _types.Object));
         il.Emit(OpCodes.Ret);
@@ -584,7 +578,7 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits: public static object PromiseFinished(object[] args)
     /// </summary>
-    private void EmitStreamPromiseFinished(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitStreamPromiseFinished(TypeBuilder typeBuilder, EmittedNodeStreamRuntime nodeStreams)
     {
         var method = typeBuilder.DefineMethod(
             "PromiseFinished",
@@ -592,13 +586,13 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.MakeArrayType(_types.Object)]
         );
-        runtime.StreamPromiseFinished = method;
+        nodeStreams.PromiseFinished = method;
 
         var il = method.GetILGenerator();
 
         // Call Finished to set up listeners
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.StreamFinished);
+        il.Emit(OpCodes.Call, nodeStreams.Finished);
         il.Emit(OpCodes.Pop); // Finished returns null, discard
 
         il.Emit(OpCodes.Ldnull);
@@ -618,15 +612,15 @@ public partial class RuntimeEmitter
         // (e.g., typeof Readable === "function").
         // Direct `new Readable(options)` calls still use the optimized constructor
         // emission in ExpressionEmitterBase.Constructors.cs which handles options inline.
-        EmitSimpleFactory(typeBuilder, runtime, "Readable", runtime.TSReadableCtor);
-        EmitSimpleFactory(typeBuilder, runtime, "Writable", runtime.TSWritableCtor);
-        EmitSimpleFactory(typeBuilder, runtime, "Duplex", runtime.TSDuplexCtor);
-        EmitSimpleFactory(typeBuilder, runtime, "Transform", runtime.TSTransformCtor);
-        EmitSimpleFactory(typeBuilder, runtime, "PassThrough", runtime.TSPassThroughCtor);
+        EmitSimpleFactory(typeBuilder, runtime, "Readable", runtime.RequireNodeStreams().ReadableCtor);
+        EmitSimpleFactory(typeBuilder, runtime, "Writable", runtime.RequireNodeStreams().WritableCtor);
+        EmitSimpleFactory(typeBuilder, runtime, "Duplex", runtime.RequireNodeStreams().DuplexCtor);
+        EmitSimpleFactory(typeBuilder, runtime, "Transform", runtime.RequireNodeStreams().TransformCtor);
+        EmitSimpleFactory(typeBuilder, runtime, "PassThrough", runtime.RequireNodeStreams().PassThroughCtor);
 
         // Also register utility functions for stream/promises
-        runtime.RegisterBuiltInModuleMethod("stream/promises", "pipeline", runtime.StreamPromisePipeline);
-        runtime.RegisterBuiltInModuleMethod("stream/promises", "finished", runtime.StreamPromiseFinished);
+        runtime.RegisterBuiltInModuleMethod("stream/promises", "pipeline", runtime.RequireNodeStreams().PromisePipeline);
+        runtime.RegisterBuiltInModuleMethod("stream/promises", "finished", runtime.RequireNodeStreams().PromiseFinished);
     }
 
     private void EmitSimpleFactory(TypeBuilder typeBuilder, EmittedRuntime runtime,

@@ -446,10 +446,10 @@ public partial class RuntimeEmitter
         var il = _childPushRun.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, _childPushStream);
-        il.Emit(OpCodes.Castclass, runtime.TSReadableType);
+        il.Emit(OpCodes.Castclass, runtime.RequireNodeStreams().ReadableType);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, _childPushChunk);
-        il.Emit(OpCodes.Callvirt, runtime.TSReadablePush);
+        il.Emit(OpCodes.Callvirt, runtime.RequireNodeStreams().ReadablePush);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Ret);
     }
@@ -1631,8 +1631,8 @@ public partial class RuntimeEmitter
             EmitDictSet(il, dictLocal, key, () => il.Emit(OpCodes.Ldnull));
             il.Emit(OpCodes.Br, done);
             il.MarkLabel(pipe);
-            var sLocal = il.DeclareLocal(runtime.TSReadableType);
-            il.Emit(OpCodes.Newobj, runtime.TSReadableCtor);
+            var sLocal = il.DeclareLocal(runtime.RequireNodeStreams().ReadableType);
+            il.Emit(OpCodes.Newobj, runtime.RequireNodeStreams().ReadableCtor);
             il.Emit(OpCodes.Stloc, sLocal);
             StoreCtxField(il, ctxLocal, ctxField, () => il.Emit(OpCodes.Ldloc, sLocal));
             EmitDictSet(il, dictLocal, key, () => il.Emit(OpCodes.Ldloc, sLocal));

@@ -57,7 +57,7 @@ public sealed class StreamPromisesModuleEmitter : IBuiltInModuleEmitter
             il.Emit(OpCodes.Stelem_Ref);
         }
 
-        il.Emit(OpCodes.Call, ctx.Runtime!.StreamPromisePipeline);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireNodeStreams().PromisePipeline);
     }
 
     private static void EmitPromiseFinishedCall(IEmitterContext emitter, List<Expr> arguments)
@@ -77,6 +77,6 @@ public sealed class StreamPromisesModuleEmitter : IBuiltInModuleEmitter
             il.Emit(OpCodes.Stelem_Ref);
         }
 
-        il.Emit(OpCodes.Call, ctx.Runtime!.StreamPromiseFinished);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireNodeStreams().PromiseFinished);
     }
 }

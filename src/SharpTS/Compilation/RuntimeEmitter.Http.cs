@@ -1165,8 +1165,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Pop); // pop the null
 
         // Create emitted $Readable directly (no reflection needed)
-        il.Emit(OpCodes.Newobj, runtime.TSReadableCtor);
-        var readableLocal = il.DeclareLocal(runtime.TSReadableType);
+        il.Emit(OpCodes.Newobj, runtime.RequireNodeStreams().ReadableCtor);
+        var readableLocal = il.DeclareLocal(runtime.RequireNodeStreams().ReadableType);
         il.Emit(OpCodes.Stloc, readableLocal);
 
         // Push body bytes as a single chunk, then push null for EOF
@@ -1190,14 +1190,14 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, readableLocal);
         il.Emit(OpCodes.Ldloc, bodyBytesLocal);
         il.Emit(OpCodes.Newobj, runtime.RequireBuffer().Ctor); // new $Buffer(byte[])
-        il.Emit(OpCodes.Callvirt, runtime.TSReadablePush);
+        il.Emit(OpCodes.Callvirt, runtime.RequireNodeStreams().ReadablePush);
         il.Emit(OpCodes.Pop); // discard bool return
 
         // Push null for EOF: readable.Push(null)
         il.MarkLabel(pushEofLabel);
         il.Emit(OpCodes.Ldloc, readableLocal);
         il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Callvirt, runtime.TSReadablePush);
+        il.Emit(OpCodes.Callvirt, runtime.RequireNodeStreams().ReadablePush);
         il.Emit(OpCodes.Pop); // discard bool return
 
         // Mark body as consumed: this._bodyConsumed = true

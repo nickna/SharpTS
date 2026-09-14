@@ -9,28 +9,6 @@ namespace SharpTS.Compilation;
 /// </summary>
 public partial class RuntimeEmitter
 {
-    // $WriteCallbackWrapper fields
-    private ConstructorBuilder _tsWriteCallbackWrapperCtor = null!;
-    private FieldBuilder _tsWriteCallbackWrapperUserCallbackField = null!;
-    private FieldBuilder _tsWriteCallbackWrapperStreamField = null!;
-    private FieldBuilder _tsWriteCallbackWrapperChunkSizeField = null!;
-
-    // $Writable fields
-    private FieldBuilder _tsWritableWritableField = null!;
-    private FieldBuilder _tsWritableEndedField = null!;
-    private FieldBuilder _tsWritableFinishedField = null!;
-    private FieldBuilder _tsWritableDestroyedField = null!;
-    private FieldBuilder _tsWritableCorkedField = null!;
-    private FieldBuilder _tsWritableCorkBufferField = null!;
-    private FieldBuilder _tsWritableWriteCallbackField = null!;
-    private FieldBuilder _tsWritableFinalCallbackField = null!;
-    private FieldBuilder _tsWritableHighWaterMarkField = null!;
-    private FieldBuilder _tsWritableObjectModeField = null!;
-    private FieldBuilder _tsWritableAutoDestroyField = null!;
-    private FieldBuilder _tsWritableLengthField = null!;
-    private FieldBuilder _tsWritableNeedDrainField = null!;
-    private FieldBuilder _tsWritableErroredField = null!;
-
     /// <summary>
     /// Emits the $WriteCallbackWrapper helper class.
     /// This wraps the user-provided callback (or null) so that stream write handlers
@@ -44,16 +22,16 @@ public partial class RuntimeEmitter
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object
         );
-        runtime.WriteCallbackWrapperType = typeBuilder;
+        runtime.RequireNodeStreams().WriteCallbackWrapperType = typeBuilder;
 
         // Field: _userCallback (object, may be null)
-        _tsWriteCallbackWrapperUserCallbackField = typeBuilder.DefineField(
+        runtime.RequireNodeStreams().WriteCallbackWrapperUserCallbackField = typeBuilder.DefineField(
             "_userCallback", _types.Object, FieldAttributes.Private);
         // Field: _stream (object, the parent $Writable or $Duplex)
-        _tsWriteCallbackWrapperStreamField = typeBuilder.DefineField(
+        runtime.RequireNodeStreams().WriteCallbackWrapperStreamField = typeBuilder.DefineField(
             "_stream", _types.Object, FieldAttributes.Private);
         // Field: _chunkSize (int)
-        _tsWriteCallbackWrapperChunkSizeField = typeBuilder.DefineField(
+        runtime.RequireNodeStreams().WriteCallbackWrapperChunkSizeField = typeBuilder.DefineField(
             "_chunkSize", _types.Int32, FieldAttributes.Private);
 
         // Constructor: public $WriteCallbackWrapper(object userCallback, object stream, int chunkSize)
@@ -62,7 +40,7 @@ public partial class RuntimeEmitter
             CallingConventions.Standard,
             [_types.Object, _types.Object, _types.Int32]
         );
-        _tsWriteCallbackWrapperCtor = ctorBuilder;
+        runtime.RequireNodeStreams().WriteCallbackWrapperCtor = ctorBuilder;
         _ = ctorBuilder;
 
         var ctorIL = ctorBuilder.GetILGenerator();
@@ -70,13 +48,13 @@ public partial class RuntimeEmitter
         ctorIL.Emit(OpCodes.Call, _types.GetDefaultConstructor(_types.Object));
         ctorIL.Emit(OpCodes.Ldarg_0);
         ctorIL.Emit(OpCodes.Ldarg_1);
-        ctorIL.Emit(OpCodes.Stfld, _tsWriteCallbackWrapperUserCallbackField);
+        ctorIL.Emit(OpCodes.Stfld, runtime.RequireNodeStreams().WriteCallbackWrapperUserCallbackField);
         ctorIL.Emit(OpCodes.Ldarg_0);
         ctorIL.Emit(OpCodes.Ldarg_2);
-        ctorIL.Emit(OpCodes.Stfld, _tsWriteCallbackWrapperStreamField);
+        ctorIL.Emit(OpCodes.Stfld, runtime.RequireNodeStreams().WriteCallbackWrapperStreamField);
         ctorIL.Emit(OpCodes.Ldarg_0);
         ctorIL.Emit(OpCodes.Ldarg_3);
-        ctorIL.Emit(OpCodes.Stfld, _tsWriteCallbackWrapperChunkSizeField);
+        ctorIL.Emit(OpCodes.Stfld, runtime.RequireNodeStreams().WriteCallbackWrapperChunkSizeField);
         ctorIL.Emit(OpCodes.Ret);
 
         // Invoke method: public object Invoke(object[] args)
@@ -88,7 +66,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.ObjectArray]
         );
-        runtime.WriteCallbackWrapperInvoke = invokeBuilder;
+        runtime.RequireNodeStreams().WriteCallbackWrapperInvoke = invokeBuilder;
 
         var invokeIL = invokeBuilder.GetILGenerator();
         var noCallbackLabel = invokeIL.DefineLabel();
@@ -98,52 +76,52 @@ public partial class RuntimeEmitter
         var notWritableLabel = invokeIL.DefineLabel();
         var afterSubtractLabel = invokeIL.DefineLabel();
         invokeIL.Emit(OpCodes.Ldarg_0);
-        invokeIL.Emit(OpCodes.Ldfld, _tsWriteCallbackWrapperStreamField);
+        invokeIL.Emit(OpCodes.Ldfld, runtime.RequireNodeStreams().WriteCallbackWrapperStreamField);
         invokeIL.Emit(OpCodes.Brfalse, afterSubtractLabel);
 
         // Try cast to $Writable first
         invokeIL.Emit(OpCodes.Ldarg_0);
-        invokeIL.Emit(OpCodes.Ldfld, _tsWriteCallbackWrapperStreamField);
-        invokeIL.Emit(OpCodes.Isinst, runtime.TSWritableType);
+        invokeIL.Emit(OpCodes.Ldfld, runtime.RequireNodeStreams().WriteCallbackWrapperStreamField);
+        invokeIL.Emit(OpCodes.Isinst, runtime.RequireNodeStreams().WritableType);
         invokeIL.Emit(OpCodes.Brfalse, notWritableLabel);
 
         // stream._writableLength -= _chunkSize
         invokeIL.Emit(OpCodes.Ldarg_0);
-        invokeIL.Emit(OpCodes.Ldfld, _tsWriteCallbackWrapperStreamField);
-        invokeIL.Emit(OpCodes.Castclass, runtime.TSWritableType);
+        invokeIL.Emit(OpCodes.Ldfld, runtime.RequireNodeStreams().WriteCallbackWrapperStreamField);
+        invokeIL.Emit(OpCodes.Castclass, runtime.RequireNodeStreams().WritableType);
         invokeIL.Emit(OpCodes.Dup);
-        invokeIL.Emit(OpCodes.Ldfld, _tsWritableLengthField);
+        invokeIL.Emit(OpCodes.Ldfld, runtime.RequireNodeStreams().WritableLengthField);
         invokeIL.Emit(OpCodes.Ldarg_0);
-        invokeIL.Emit(OpCodes.Ldfld, _tsWriteCallbackWrapperChunkSizeField);
+        invokeIL.Emit(OpCodes.Ldfld, runtime.RequireNodeStreams().WriteCallbackWrapperChunkSizeField);
         invokeIL.Emit(OpCodes.Sub);
-        invokeIL.Emit(OpCodes.Stfld, _tsWritableLengthField);
+        invokeIL.Emit(OpCodes.Stfld, runtime.RequireNodeStreams().WritableLengthField);
 
         // Check drain: if (_needDrain && _writableLength < _highWaterMark) emit drain
         var noDrainLabel1 = invokeIL.DefineLabel();
         invokeIL.Emit(OpCodes.Ldarg_0);
-        invokeIL.Emit(OpCodes.Ldfld, _tsWriteCallbackWrapperStreamField);
-        invokeIL.Emit(OpCodes.Castclass, runtime.TSWritableType);
-        invokeIL.Emit(OpCodes.Ldfld, _tsWritableNeedDrainField);
+        invokeIL.Emit(OpCodes.Ldfld, runtime.RequireNodeStreams().WriteCallbackWrapperStreamField);
+        invokeIL.Emit(OpCodes.Castclass, runtime.RequireNodeStreams().WritableType);
+        invokeIL.Emit(OpCodes.Ldfld, runtime.RequireNodeStreams().WritableNeedDrainField);
         invokeIL.Emit(OpCodes.Brfalse, noDrainLabel1);
         invokeIL.Emit(OpCodes.Ldarg_0);
-        invokeIL.Emit(OpCodes.Ldfld, _tsWriteCallbackWrapperStreamField);
-        invokeIL.Emit(OpCodes.Castclass, runtime.TSWritableType);
-        invokeIL.Emit(OpCodes.Ldfld, _tsWritableLengthField);
+        invokeIL.Emit(OpCodes.Ldfld, runtime.RequireNodeStreams().WriteCallbackWrapperStreamField);
+        invokeIL.Emit(OpCodes.Castclass, runtime.RequireNodeStreams().WritableType);
+        invokeIL.Emit(OpCodes.Ldfld, runtime.RequireNodeStreams().WritableLengthField);
         invokeIL.Emit(OpCodes.Ldarg_0);
-        invokeIL.Emit(OpCodes.Ldfld, _tsWriteCallbackWrapperStreamField);
-        invokeIL.Emit(OpCodes.Castclass, runtime.TSWritableType);
-        invokeIL.Emit(OpCodes.Ldfld, _tsWritableHighWaterMarkField);
+        invokeIL.Emit(OpCodes.Ldfld, runtime.RequireNodeStreams().WriteCallbackWrapperStreamField);
+        invokeIL.Emit(OpCodes.Castclass, runtime.RequireNodeStreams().WritableType);
+        invokeIL.Emit(OpCodes.Ldfld, runtime.RequireNodeStreams().WritableHighWaterMarkField);
         invokeIL.Emit(OpCodes.Bge, noDrainLabel1);
         // _needDrain = false
         invokeIL.Emit(OpCodes.Ldarg_0);
-        invokeIL.Emit(OpCodes.Ldfld, _tsWriteCallbackWrapperStreamField);
-        invokeIL.Emit(OpCodes.Castclass, runtime.TSWritableType);
+        invokeIL.Emit(OpCodes.Ldfld, runtime.RequireNodeStreams().WriteCallbackWrapperStreamField);
+        invokeIL.Emit(OpCodes.Castclass, runtime.RequireNodeStreams().WritableType);
         invokeIL.Emit(OpCodes.Ldc_I4_0);
-        invokeIL.Emit(OpCodes.Stfld, _tsWritableNeedDrainField);
+        invokeIL.Emit(OpCodes.Stfld, runtime.RequireNodeStreams().WritableNeedDrainField);
         // emit('drain', [])
         invokeIL.Emit(OpCodes.Ldarg_0);
-        invokeIL.Emit(OpCodes.Ldfld, _tsWriteCallbackWrapperStreamField);
-        invokeIL.Emit(OpCodes.Castclass, runtime.TSWritableType);
+        invokeIL.Emit(OpCodes.Ldfld, runtime.RequireNodeStreams().WriteCallbackWrapperStreamField);
+        invokeIL.Emit(OpCodes.Castclass, runtime.RequireNodeStreams().WritableType);
         invokeIL.Emit(OpCodes.Ldstr, "drain");
         invokeIL.Emit(OpCodes.Ldc_I4_0);
         invokeIL.Emit(OpCodes.Newarr, _types.Object);
@@ -162,16 +140,16 @@ public partial class RuntimeEmitter
 
         // if (_userCallback != null && _userCallback is $TSFunction)
         invokeIL.Emit(OpCodes.Ldarg_0);
-        invokeIL.Emit(OpCodes.Ldfld, _tsWriteCallbackWrapperUserCallbackField);
+        invokeIL.Emit(OpCodes.Ldfld, runtime.RequireNodeStreams().WriteCallbackWrapperUserCallbackField);
         invokeIL.Emit(OpCodes.Brfalse, noCallbackLabel);
         invokeIL.Emit(OpCodes.Ldarg_0);
-        invokeIL.Emit(OpCodes.Ldfld, _tsWriteCallbackWrapperUserCallbackField);
+        invokeIL.Emit(OpCodes.Ldfld, runtime.RequireNodeStreams().WriteCallbackWrapperUserCallbackField);
         invokeIL.Emit(OpCodes.Isinst, runtime.TSFunctionType);
         invokeIL.Emit(OpCodes.Brfalse, noCallbackLabel);
 
         // _userCallback.Invoke([])
         invokeIL.Emit(OpCodes.Ldarg_0);
-        invokeIL.Emit(OpCodes.Ldfld, _tsWriteCallbackWrapperUserCallbackField);
+        invokeIL.Emit(OpCodes.Ldfld, runtime.RequireNodeStreams().WriteCallbackWrapperUserCallbackField);
         invokeIL.Emit(OpCodes.Castclass, runtime.TSFunctionType);
         invokeIL.Emit(OpCodes.Ldc_I4_0);
         invokeIL.Emit(OpCodes.Newarr, _types.Object);
@@ -193,25 +171,25 @@ public partial class RuntimeEmitter
             TypeAttributes.Public | TypeAttributes.BeforeFieldInit,
             runtime.EventEmitter.Type  // Extends $EventEmitter
         );
-        runtime.TSWritableType = typeBuilder;
+        runtime.RequireNodeStreams().WritableType = typeBuilder;
 
         // Define fields
-        _tsWritableWritableField = typeBuilder.DefineField("_writable", _types.Boolean, FieldAttributes.Private);
-        _tsWritableEndedField = typeBuilder.DefineField("_ended", _types.Boolean, FieldAttributes.Private);
-        _tsWritableFinishedField = typeBuilder.DefineField("_finished", _types.Boolean, FieldAttributes.Private);
-        _tsWritableDestroyedField = typeBuilder.DefineField("_destroyed", _types.Boolean, FieldAttributes.Private);
-        _tsWritableCorkedField = typeBuilder.DefineField("_corked", _types.Boolean, FieldAttributes.Private);
+        runtime.RequireNodeStreams().WritableWritableField = typeBuilder.DefineField("_writable", _types.Boolean, FieldAttributes.Private);
+        runtime.RequireNodeStreams().WritableEndedField = typeBuilder.DefineField("_ended", _types.Boolean, FieldAttributes.Private);
+        runtime.RequireNodeStreams().WritableFinishedField = typeBuilder.DefineField("_finished", _types.Boolean, FieldAttributes.Private);
+        runtime.RequireNodeStreams().WritableDestroyedField = typeBuilder.DefineField("_destroyed", _types.Boolean, FieldAttributes.Private);
+        runtime.RequireNodeStreams().WritableCorkedField = typeBuilder.DefineField("_corked", _types.Boolean, FieldAttributes.Private);
 
         var listType = _types.ListOfObject;
-        _tsWritableCorkBufferField = typeBuilder.DefineField("_corkBuffer", listType, FieldAttributes.Private);
-        _tsWritableWriteCallbackField = typeBuilder.DefineField("_writeCallback", _types.Object, FieldAttributes.Private);
-        _tsWritableFinalCallbackField = typeBuilder.DefineField("_finalCallback", _types.Object, FieldAttributes.Private);
-        _tsWritableHighWaterMarkField = typeBuilder.DefineField("_highWaterMark", _types.Int32, FieldAttributes.Public);
-        _tsWritableObjectModeField = typeBuilder.DefineField("_objectMode", _types.Boolean, FieldAttributes.Private);
-        _tsWritableAutoDestroyField = typeBuilder.DefineField("_autoDestroy", _types.Boolean, FieldAttributes.Private);
-        _tsWritableLengthField = typeBuilder.DefineField("_writableLength", _types.Int32, FieldAttributes.Public);
-        _tsWritableNeedDrainField = typeBuilder.DefineField("_needDrain", _types.Boolean, FieldAttributes.Public);
-        _tsWritableErroredField = typeBuilder.DefineField("_errored", _types.Boolean, FieldAttributes.Private); // #1030
+        runtime.RequireNodeStreams().WritableCorkBufferField = typeBuilder.DefineField("_corkBuffer", listType, FieldAttributes.Private);
+        runtime.RequireNodeStreams().WritableWriteCallbackField = typeBuilder.DefineField("_writeCallback", _types.Object, FieldAttributes.Private);
+        runtime.RequireNodeStreams().WritableFinalCallbackField = typeBuilder.DefineField("_finalCallback", _types.Object, FieldAttributes.Private);
+        runtime.RequireNodeStreams().WritableHighWaterMarkField = typeBuilder.DefineField("_highWaterMark", _types.Int32, FieldAttributes.Public);
+        runtime.RequireNodeStreams().WritableObjectModeField = typeBuilder.DefineField("_objectMode", _types.Boolean, FieldAttributes.Private);
+        runtime.RequireNodeStreams().WritableAutoDestroyField = typeBuilder.DefineField("_autoDestroy", _types.Boolean, FieldAttributes.Private);
+        runtime.RequireNodeStreams().WritableLengthField = typeBuilder.DefineField("_writableLength", _types.Int32, FieldAttributes.Public);
+        runtime.RequireNodeStreams().WritableNeedDrainField = typeBuilder.DefineField("_needDrain", _types.Boolean, FieldAttributes.Public);
+        runtime.RequireNodeStreams().WritableErroredField = typeBuilder.DefineField("_errored", _types.Boolean, FieldAttributes.Private); // #1030
 
         // Emit the helper callback wrapper class (after fields so it can reference them)
         EmitTSWriteCallbackWrapperClass(moduleBuilder, runtime);
@@ -221,21 +199,21 @@ public partial class RuntimeEmitter
 
         // Methods (Cork/Uncork before End, since End calls Uncork)
         EmitTSWritableWrite(typeBuilder, runtime);
-        EmitTSWritableCork(typeBuilder, runtime);
-        EmitTSWritableUncork(typeBuilder, runtime);
+        EmitTSWritableCork(typeBuilder, runtime.RequireNodeStreams());
+        EmitTSWritableUncork(typeBuilder, runtime.RequireNodeStreams());
         EmitTSWritableEnd(typeBuilder, runtime);
         EmitTSWritableDestroy(typeBuilder, runtime);
         EmitTSWritableSetDefaultEncoding(typeBuilder, runtime);
 
         // Setter methods for callbacks
-        EmitTSWritableSetWriteCallback(typeBuilder, runtime);
-        EmitTSWritableSetFinalCallback(typeBuilder, runtime);
-        EmitTSWritableSetObjectMode(typeBuilder, runtime);
-        EmitTSWritableSetAutoDestroy(typeBuilder, runtime);
-        EmitTSWritableSetHighWaterMark(typeBuilder, runtime);
+        EmitTSWritableSetWriteCallback(typeBuilder, runtime.RequireNodeStreams());
+        EmitTSWritableSetFinalCallback(typeBuilder, runtime.RequireNodeStreams());
+        EmitTSWritableSetObjectMode(typeBuilder, runtime.RequireNodeStreams());
+        EmitTSWritableSetAutoDestroy(typeBuilder, runtime.RequireNodeStreams());
+        EmitTSWritableSetHighWaterMark(typeBuilder, runtime.RequireNodeStreams());
 
         // Property getters
-        EmitTSWritablePropertyGetters(typeBuilder, runtime);
+        EmitTSWritablePropertyGetters(typeBuilder, runtime.RequireNodeStreams());
 
         typeBuilder.CreateType();
     }
@@ -247,7 +225,7 @@ public partial class RuntimeEmitter
             CallingConventions.Standard,
             Type.EmptyTypes
         );
-        runtime.TSWritableCtor = ctor;
+        runtime.RequireNodeStreams().WritableCtor = ctor;
 
         var il = ctor.GetILGenerator();
 
@@ -258,47 +236,47 @@ public partial class RuntimeEmitter
         // _writable = true
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Stfld, _tsWritableWritableField);
+        il.Emit(OpCodes.Stfld, runtime.RequireNodeStreams().WritableWritableField);
 
         // _ended = false
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Stfld, _tsWritableEndedField);
+        il.Emit(OpCodes.Stfld, runtime.RequireNodeStreams().WritableEndedField);
 
         // _finished = false
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Stfld, _tsWritableFinishedField);
+        il.Emit(OpCodes.Stfld, runtime.RequireNodeStreams().WritableFinishedField);
 
         // _destroyed = false
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Stfld, _tsWritableDestroyedField);
+        il.Emit(OpCodes.Stfld, runtime.RequireNodeStreams().WritableDestroyedField);
 
         // _corked = false
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Stfld, _tsWritableCorkedField);
+        il.Emit(OpCodes.Stfld, runtime.RequireNodeStreams().WritableCorkedField);
 
         // _corkBuffer = new List<object?>()
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, Type.EmptyTypes)!);
-        il.Emit(OpCodes.Stfld, _tsWritableCorkBufferField);
+        il.Emit(OpCodes.Stfld, runtime.RequireNodeStreams().WritableCorkBufferField);
 
         // _highWaterMark = 16384
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4, 16384);
-        il.Emit(OpCodes.Stfld, _tsWritableHighWaterMarkField);
+        il.Emit(OpCodes.Stfld, runtime.RequireNodeStreams().WritableHighWaterMarkField);
 
         // _objectMode = false
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Stfld, _tsWritableObjectModeField);
+        il.Emit(OpCodes.Stfld, runtime.RequireNodeStreams().WritableObjectModeField);
 
         // _autoDestroy = false
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Stfld, _tsWritableAutoDestroyField);
+        il.Emit(OpCodes.Stfld, runtime.RequireNodeStreams().WritableAutoDestroyField);
 
         il.Emit(OpCodes.Ret);
     }
@@ -312,7 +290,7 @@ public partial class RuntimeEmitter
             _types.Boolean,
             [_types.Object, _types.Object, _types.Object]
         );
-        runtime.TSWritableWrite = method;
+        runtime.RequireNodeStreams().WritableWrite = method;
 
         var il = method.GetILGenerator();
         var returnFalseLabel = il.DefineLabel();
@@ -321,20 +299,20 @@ public partial class RuntimeEmitter
 
         // if (_destroyed || _ended) return false
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsWritableDestroyedField);
+        il.Emit(OpCodes.Ldfld, runtime.RequireNodeStreams().WritableDestroyedField);
         il.Emit(OpCodes.Brtrue, returnFalseLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsWritableEndedField);
+        il.Emit(OpCodes.Ldfld, runtime.RequireNodeStreams().WritableEndedField);
         il.Emit(OpCodes.Brtrue, returnFalseLabel);
 
         // if (_corked) { _corkBuffer.Add(new object[] { chunk, encoding, callback }); return false; }
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsWritableCorkedField);
+        il.Emit(OpCodes.Ldfld, runtime.RequireNodeStreams().WritableCorkedField);
         il.Emit(OpCodes.Brfalse, notCorkedLabel);
 
         // Buffer the write: _corkBuffer.Add(new object[] { chunk, encoding, callback })
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsWritableCorkBufferField);
+        il.Emit(OpCodes.Ldfld, runtime.RequireNodeStreams().WritableCorkBufferField);
         il.Emit(OpCodes.Ldc_I4_3);
         il.Emit(OpCodes.Newarr, _types.Object);
         il.Emit(OpCodes.Dup);
@@ -364,7 +342,7 @@ public partial class RuntimeEmitter
         // if (_objectMode) chunkSize = 1
         var notObjectModeLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsWritableObjectModeField);
+        il.Emit(OpCodes.Ldfld, runtime.RequireNodeStreams().WritableObjectModeField);
         il.Emit(OpCodes.Brfalse, notObjectModeLabel);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Stloc, chunkSizeLocal);
@@ -387,24 +365,24 @@ public partial class RuntimeEmitter
         // _writableLength += chunkSize
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsWritableLengthField);
+        il.Emit(OpCodes.Ldfld, runtime.RequireNodeStreams().WritableLengthField);
         il.Emit(OpCodes.Ldloc, chunkSizeLocal);
         il.Emit(OpCodes.Add);
-        il.Emit(OpCodes.Stfld, _tsWritableLengthField);
+        il.Emit(OpCodes.Stfld, runtime.RequireNodeStreams().WritableLengthField);
 
         // If _writeCallback is set, invoke it
         var noCallbackLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsWritableWriteCallbackField);
+        il.Emit(OpCodes.Ldfld, runtime.RequireNodeStreams().WritableWriteCallbackField);
         il.Emit(OpCodes.Brfalse, noCallbackLabel);
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsWritableWriteCallbackField);
+        il.Emit(OpCodes.Ldfld, runtime.RequireNodeStreams().WritableWriteCallbackField);
         il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
         il.Emit(OpCodes.Brfalse, noCallbackLabel);
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsWritableWriteCallbackField);
+        il.Emit(OpCodes.Ldfld, runtime.RequireNodeStreams().WritableWriteCallbackField);
         il.Emit(OpCodes.Castclass, runtime.TSFunctionType);
 
         // Load 'this' (the stream) for InvokeWithThis
@@ -436,7 +414,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_3); // callback (may be null)
         il.Emit(OpCodes.Ldarg_0); // this (stream)
         il.Emit(OpCodes.Ldloc, chunkSizeLocal);
-        il.Emit(OpCodes.Newobj, _tsWriteCallbackWrapperCtor);
+        il.Emit(OpCodes.Newobj, runtime.RequireNodeStreams().WriteCallbackWrapperCtor);
         il.Emit(OpCodes.Stelem_Ref);
 
         // Call InvokeWithThis(this, args)
@@ -445,9 +423,9 @@ public partial class RuntimeEmitter
 
         // return _writableLength < _highWaterMark
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsWritableLengthField);
+        il.Emit(OpCodes.Ldfld, runtime.RequireNodeStreams().WritableLengthField);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsWritableHighWaterMarkField);
+        il.Emit(OpCodes.Ldfld, runtime.RequireNodeStreams().WritableHighWaterMarkField);
         il.Emit(OpCodes.Bge, returnFalseLabel);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Ret);
@@ -456,10 +434,10 @@ public partial class RuntimeEmitter
         // Default: sync completion — subtract chunkSize immediately, call user callback
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsWritableLengthField);
+        il.Emit(OpCodes.Ldfld, runtime.RequireNodeStreams().WritableLengthField);
         il.Emit(OpCodes.Ldloc, chunkSizeLocal);
         il.Emit(OpCodes.Sub);
-        il.Emit(OpCodes.Stfld, _tsWritableLengthField);
+        il.Emit(OpCodes.Stfld, runtime.RequireNodeStreams().WritableLengthField);
 
         il.Emit(OpCodes.Ldarg_3);
         il.Emit(OpCodes.Brfalse, callCallbackLabel);
@@ -476,9 +454,9 @@ public partial class RuntimeEmitter
         il.MarkLabel(callCallbackLabel);
         // return _writableLength < _highWaterMark
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsWritableLengthField);
+        il.Emit(OpCodes.Ldfld, runtime.RequireNodeStreams().WritableLengthField);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsWritableHighWaterMarkField);
+        il.Emit(OpCodes.Ldfld, runtime.RequireNodeStreams().WritableHighWaterMarkField);
         il.Emit(OpCodes.Bge, returnFalseLabel);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Ret);
@@ -487,7 +465,7 @@ public partial class RuntimeEmitter
         // Set _needDrain = true before returning false
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Stfld, _tsWritableNeedDrainField);
+        il.Emit(OpCodes.Stfld, runtime.RequireNodeStreams().WritableNeedDrainField);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ret);
     }
@@ -501,7 +479,7 @@ public partial class RuntimeEmitter
             typeBuilder,
             [_types.Object, _types.Object, _types.Object]
         );
-        runtime.TSWritableEnd = method;
+        runtime.RequireNodeStreams().WritableEnd = method;
 
         var il = method.GetILGenerator();
         var alreadyEndedLabel = il.DefineLabel();
@@ -510,7 +488,7 @@ public partial class RuntimeEmitter
 
         // if (_ended) return this
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsWritableEndedField);
+        il.Emit(OpCodes.Ldfld, runtime.RequireNodeStreams().WritableEndedField);
         il.Emit(OpCodes.Brtrue, alreadyEndedLabel);
 
         // Write final chunk BEFORE setting _ended (Write() rejects when _ended is true)
@@ -520,7 +498,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Callvirt, runtime.TSWritableWrite);
+        il.Emit(OpCodes.Callvirt, runtime.RequireNodeStreams().WritableWrite);
         il.Emit(OpCodes.Pop);
 
         il.MarkLabel(noChunkLabel);
@@ -528,32 +506,32 @@ public partial class RuntimeEmitter
         // _ended = true; _writable = false
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Stfld, _tsWritableEndedField);
+        il.Emit(OpCodes.Stfld, runtime.RequireNodeStreams().WritableEndedField);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Stfld, _tsWritableWritableField);
+        il.Emit(OpCodes.Stfld, runtime.RequireNodeStreams().WritableWritableField);
 
         // Flush cork buffer if corked
         var notCorkedLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsWritableCorkedField);
+        il.Emit(OpCodes.Ldfld, runtime.RequireNodeStreams().WritableCorkedField);
         il.Emit(OpCodes.Brfalse, notCorkedLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Callvirt, runtime.TSWritableUncork);
+        il.Emit(OpCodes.Callvirt, runtime.RequireNodeStreams().WritableUncork);
         il.MarkLabel(notCorkedLabel);
 
         // Invoke _finalCallback if set
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsWritableFinalCallbackField);
+        il.Emit(OpCodes.Ldfld, runtime.RequireNodeStreams().WritableFinalCallbackField);
         il.Emit(OpCodes.Brfalse, noFinalCallbackLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsWritableFinalCallbackField);
+        il.Emit(OpCodes.Ldfld, runtime.RequireNodeStreams().WritableFinalCallbackField);
         il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
         il.Emit(OpCodes.Brfalse, noFinalCallbackLabel);
 
         // _finalCallback.InvokeWithThis(this, [new $WriteCallbackWrapper(null)])
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsWritableFinalCallbackField);
+        il.Emit(OpCodes.Ldfld, runtime.RequireNodeStreams().WritableFinalCallbackField);
         il.Emit(OpCodes.Castclass, runtime.TSFunctionType);
         il.Emit(OpCodes.Ldarg_0); // this
         il.Emit(OpCodes.Ldc_I4_1);
@@ -563,7 +541,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldnull); // no user callback
         il.Emit(OpCodes.Ldarg_0); // stream
         il.Emit(OpCodes.Ldc_I4_0); // chunkSize = 0
-        il.Emit(OpCodes.Newobj, _tsWriteCallbackWrapperCtor);
+        il.Emit(OpCodes.Newobj, runtime.RequireNodeStreams().WriteCallbackWrapperCtor);
         il.Emit(OpCodes.Stelem_Ref);
         il.Emit(OpCodes.Callvirt, runtime.TSFunctionInvokeWithThis);
         il.Emit(OpCodes.Pop);
@@ -573,7 +551,7 @@ public partial class RuntimeEmitter
         // _finished = true
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Stfld, _tsWritableFinishedField);
+        il.Emit(OpCodes.Stfld, runtime.RequireNodeStreams().WritableFinishedField);
 
         // emit 'prefinish' event
         il.Emit(OpCodes.Ldarg_0);
@@ -594,7 +572,7 @@ public partial class RuntimeEmitter
         // If autoDestroy, emit 'close' event after 'finish'
         var skipCloseLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsWritableAutoDestroyField);
+        il.Emit(OpCodes.Ldfld, runtime.RequireNodeStreams().WritableAutoDestroyField);
         il.Emit(OpCodes.Brfalse, skipCloseLabel);
 
         il.Emit(OpCodes.Ldarg_0);
@@ -611,7 +589,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitTSWritableCork(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSWritableCork(TypeBuilder typeBuilder, EmittedNodeStreamRuntime nodeStreams)
     {
         // public void Cork()
         var method = typeBuilder.DefineMethod(
@@ -625,11 +603,11 @@ public partial class RuntimeEmitter
         var il = method.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Stfld, _tsWritableCorkedField);
+        il.Emit(OpCodes.Stfld, nodeStreams.WritableCorkedField);
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitTSWritableUncork(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSWritableUncork(TypeBuilder typeBuilder, EmittedNodeStreamRuntime nodeStreams)
     {
         // public void Uncork()
         var method = typeBuilder.DefineMethod(
@@ -638,20 +616,20 @@ public partial class RuntimeEmitter
             _types.Void,
             Type.EmptyTypes
         );
-        runtime.TSWritableUncork = method;
+        nodeStreams.WritableUncork = method;
 
         var il = method.GetILGenerator();
         var notCorkedLabel = il.DefineLabel();
 
         // if (!_corked) return
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsWritableCorkedField);
+        il.Emit(OpCodes.Ldfld, nodeStreams.WritableCorkedField);
         il.Emit(OpCodes.Brfalse, notCorkedLabel);
 
         // _corked = false (must be set before flushing so Write() calls go through)
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Stfld, _tsWritableCorkedField);
+        il.Emit(OpCodes.Stfld, nodeStreams.WritableCorkedField);
 
         // Flush: for (int i = 0; i < _corkBuffer.Count; i++) {
         //   var entry = (object[])_corkBuffer[i];
@@ -672,7 +650,7 @@ public partial class RuntimeEmitter
 
         // entry = (object[])_corkBuffer[i]
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsWritableCorkBufferField);
+        il.Emit(OpCodes.Ldfld, nodeStreams.WritableCorkBufferField);
         il.Emit(OpCodes.Ldloc, indexLocal);
         il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Item")!.GetGetMethod()!);
         il.Emit(OpCodes.Castclass, typeof(object[]));
@@ -689,7 +667,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, entryLocal);
         il.Emit(OpCodes.Ldc_I4_2);
         il.Emit(OpCodes.Ldelem_Ref); // callback
-        il.Emit(OpCodes.Callvirt, runtime.TSWritableWrite);
+        il.Emit(OpCodes.Callvirt, nodeStreams.WritableWrite);
         il.Emit(OpCodes.Pop); // discard bool return
 
         // i++
@@ -702,13 +680,13 @@ public partial class RuntimeEmitter
         il.MarkLabel(loopCondLabel);
         il.Emit(OpCodes.Ldloc, indexLocal);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsWritableCorkBufferField);
+        il.Emit(OpCodes.Ldfld, nodeStreams.WritableCorkBufferField);
         il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count")!.GetGetMethod()!);
         il.Emit(OpCodes.Blt, loopStartLabel);
 
         // _corkBuffer.Clear()
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsWritableCorkBufferField);
+        il.Emit(OpCodes.Ldfld, nodeStreams.WritableCorkBufferField);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Clear")!);
 
         il.MarkLabel(notCorkedLabel);
@@ -724,7 +702,7 @@ public partial class RuntimeEmitter
             typeBuilder,
             [_types.Object]
         );
-        runtime.TSWritableDestroy = method;
+        runtime.RequireNodeStreams().WritableDestroy = method;
 
         var il = method.GetILGenerator();
         var alreadyDestroyedLabel = il.DefineLabel();
@@ -732,20 +710,20 @@ public partial class RuntimeEmitter
 
         // if (_destroyed) return this
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsWritableDestroyedField);
+        il.Emit(OpCodes.Ldfld, runtime.RequireNodeStreams().WritableDestroyedField);
         il.Emit(OpCodes.Brtrue, alreadyDestroyedLabel);
 
         // _destroyed = true; _writable = false
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Stfld, _tsWritableDestroyedField);
+        il.Emit(OpCodes.Stfld, runtime.RequireNodeStreams().WritableDestroyedField);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Stfld, _tsWritableWritableField);
+        il.Emit(OpCodes.Stfld, runtime.RequireNodeStreams().WritableWritableField);
 
         // _corkBuffer.Clear()
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsWritableCorkBufferField);
+        il.Emit(OpCodes.Ldfld, runtime.RequireNodeStreams().WritableCorkBufferField);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Clear")!);
 
         // if (error != null) { _errored = true; emit 'error'; }  (#1030)
@@ -753,7 +731,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, noErrorLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Stfld, _tsWritableErroredField);
+        il.Emit(OpCodes.Stfld, runtime.RequireNodeStreams().WritableErroredField);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "error");
         il.Emit(OpCodes.Ldc_I4_1);
@@ -796,7 +774,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitTSWritableSetWriteCallback(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSWritableSetWriteCallback(TypeBuilder typeBuilder, EmittedNodeStreamRuntime nodeStreams)
     {
         // public void SetWriteCallback(object callback)
         var method = typeBuilder.DefineMethod(
@@ -805,16 +783,16 @@ public partial class RuntimeEmitter
             _types.Void,
             [_types.Object]
         );
-        runtime.TSWritableSetWriteCallback = method;
+        nodeStreams.WritableSetWriteCallback = method;
 
         var il = method.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Stfld, _tsWritableWriteCallbackField);
+        il.Emit(OpCodes.Stfld, nodeStreams.WritableWriteCallbackField);
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitTSWritableSetFinalCallback(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSWritableSetFinalCallback(TypeBuilder typeBuilder, EmittedNodeStreamRuntime nodeStreams)
     {
         // public void SetFinalCallback(object callback)
         var method = typeBuilder.DefineMethod(
@@ -823,16 +801,16 @@ public partial class RuntimeEmitter
             _types.Void,
             [_types.Object]
         );
-        runtime.TSWritableSetFinalCallback = method;
+        nodeStreams.WritableSetFinalCallback = method;
 
         var il = method.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Stfld, _tsWritableFinalCallbackField);
+        il.Emit(OpCodes.Stfld, nodeStreams.WritableFinalCallbackField);
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitTSWritableSetObjectMode(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSWritableSetObjectMode(TypeBuilder typeBuilder, EmittedNodeStreamRuntime nodeStreams)
     {
         // public void SetObjectMode(bool value)
         var method = typeBuilder.DefineMethod(
@@ -841,16 +819,16 @@ public partial class RuntimeEmitter
             _types.Void,
             [_types.Boolean]
         );
-        runtime.TSWritableSetObjectMode = method;
+        nodeStreams.WritableSetObjectMode = method;
 
         var il = method.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Stfld, _tsWritableObjectModeField);
+        il.Emit(OpCodes.Stfld, nodeStreams.WritableObjectModeField);
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitTSWritableSetAutoDestroy(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSWritableSetAutoDestroy(TypeBuilder typeBuilder, EmittedNodeStreamRuntime nodeStreams)
     {
         // public void SetAutoDestroy(bool value)
         var method = typeBuilder.DefineMethod(
@@ -863,11 +841,11 @@ public partial class RuntimeEmitter
         var il = method.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Stfld, _tsWritableAutoDestroyField);
+        il.Emit(OpCodes.Stfld, nodeStreams.WritableAutoDestroyField);
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitTSWritableSetHighWaterMark(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSWritableSetHighWaterMark(TypeBuilder typeBuilder, EmittedNodeStreamRuntime nodeStreams)
     {
         // public void SetHighWaterMark(int value)
         var method = typeBuilder.DefineMethod(
@@ -880,11 +858,11 @@ public partial class RuntimeEmitter
         var il = method.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Stfld, _tsWritableHighWaterMarkField);
+        il.Emit(OpCodes.Stfld, nodeStreams.WritableHighWaterMarkField);
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitTSWritablePropertyGetters(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSWritablePropertyGetters(TypeBuilder typeBuilder, EmittedNodeStreamRuntime nodeStreams)
     {
         // errored property (#1030): backs stream.isErrored
         var erroredProp = typeBuilder.DefineProperty("Errored", PropertyAttributes.None, _types.Boolean, null);
@@ -894,10 +872,10 @@ public partial class RuntimeEmitter
             _types.Boolean,
             Type.EmptyTypes
         );
-        runtime.TSWritableErroredGetter = getErrored;
+        nodeStreams.WritableErroredGetter = getErrored;
         var eil = getErrored.GetILGenerator();
         eil.Emit(OpCodes.Ldarg_0);
-        eil.Emit(OpCodes.Ldfld, _tsWritableErroredField);
+        eil.Emit(OpCodes.Ldfld, nodeStreams.WritableErroredField);
         eil.Emit(OpCodes.Ret);
         erroredProp.SetGetMethod(getErrored);
 
@@ -913,13 +891,13 @@ public partial class RuntimeEmitter
         var il = getWritable.GetILGenerator();
         var falseLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsWritableWritableField);
+        il.Emit(OpCodes.Ldfld, nodeStreams.WritableWritableField);
         il.Emit(OpCodes.Brfalse, falseLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsWritableEndedField);
+        il.Emit(OpCodes.Ldfld, nodeStreams.WritableEndedField);
         il.Emit(OpCodes.Brtrue, falseLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsWritableDestroyedField);
+        il.Emit(OpCodes.Ldfld, nodeStreams.WritableDestroyedField);
         il.Emit(OpCodes.Brtrue, falseLabel);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Ret);
@@ -938,7 +916,7 @@ public partial class RuntimeEmitter
         );
         il = getWritableEnded.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsWritableEndedField);
+        il.Emit(OpCodes.Ldfld, nodeStreams.WritableEndedField);
         il.Emit(OpCodes.Ret);
         writableEndedProp.SetGetMethod(getWritableEnded);
 
@@ -952,7 +930,7 @@ public partial class RuntimeEmitter
         );
         il = getWritableFinished.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsWritableFinishedField);
+        il.Emit(OpCodes.Ldfld, nodeStreams.WritableFinishedField);
         il.Emit(OpCodes.Ret);
         writableFinishedProp.SetGetMethod(getWritableFinished);
 
@@ -966,7 +944,7 @@ public partial class RuntimeEmitter
         );
         il = getWritableLength.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsWritableLengthField);
+        il.Emit(OpCodes.Ldfld, nodeStreams.WritableLengthField);
         il.Emit(OpCodes.Conv_R8);
         il.Emit(OpCodes.Ret);
         writableLengthProp.SetGetMethod(getWritableLength);
@@ -981,7 +959,7 @@ public partial class RuntimeEmitter
         );
         il = getDestroyed.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsWritableDestroyedField);
+        il.Emit(OpCodes.Ldfld, nodeStreams.WritableDestroyedField);
         il.Emit(OpCodes.Ret);
         destroyedProp.SetGetMethod(getDestroyed);
 
@@ -995,7 +973,7 @@ public partial class RuntimeEmitter
         );
         il = getWritableObjectMode.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsWritableObjectModeField);
+        il.Emit(OpCodes.Ldfld, nodeStreams.WritableObjectModeField);
         il.Emit(OpCodes.Ret);
         writableObjectModeProp.SetGetMethod(getWritableObjectMode);
 
@@ -1009,7 +987,7 @@ public partial class RuntimeEmitter
         );
         il = getWritableHwm.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsWritableHighWaterMarkField);
+        il.Emit(OpCodes.Ldfld, nodeStreams.WritableHighWaterMarkField);
         il.Emit(OpCodes.Conv_R8);
         il.Emit(OpCodes.Ret);
         writableHwmProp.SetGetMethod(getWritableHwm);

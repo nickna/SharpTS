@@ -9,22 +9,6 @@ namespace SharpTS.Compilation;
 /// </summary>
 public partial class RuntimeEmitter
 {
-    // $Readable fields and methods
-    private MethodBuilder _tsReadableFlushChunkToPipes = null!;
-    private FieldBuilder _tsReadableBufferField = null!;
-    private FieldBuilder _tsReadablePipeDestinationsField = null!;
-    private FieldBuilder _tsReadableEndedField = null!;
-    private FieldBuilder _tsReadableDestroyedField = null!;
-    private FieldBuilder _tsReadableEncodingField = null!;
-    private FieldBuilder _tsReadableReadableField = null!;
-    private FieldBuilder _tsReadableFlowingField = null!; // int: -1=initial, 0=paused, 1=flowing
-    private FieldBuilder _tsReadableObjectModeField = null!;
-    private FieldBuilder _tsReadableHighWaterMarkField = null!;
-    // Async iteration support (#1024)
-    private FieldBuilder _tsReadableErroredField = null!;
-    private FieldBuilder _tsReadableErrorField = null!;
-    private FieldBuilder _tsReadableIterWaiterField = null!;
-
     /// <summary>
     /// Phase 1: Define the $Readable type, fields, and constructor.
     /// Must be called before Duplex is defined (since Duplex extends Readable).
@@ -37,45 +21,45 @@ public partial class RuntimeEmitter
             TypeAttributes.Public | TypeAttributes.BeforeFieldInit,
             runtime.EventEmitter.Type  // Extends $EventEmitter
         );
-        runtime.TSReadableType = typeBuilder;
+        runtime.RequireNodeStreams().ReadableType = typeBuilder;
 
         // Define fields - use List<object> and Queue<object> for simplicity
         // Use Family (protected) for fields that derived classes need to access
         var queueOfObject = typeof(Queue<object?>);
-        _tsReadableBufferField = typeBuilder.DefineField("_readBuffer", queueOfObject, FieldAttributes.Family);
+        runtime.RequireNodeStreams().ReadableBufferField = typeBuilder.DefineField("_readBuffer", queueOfObject, FieldAttributes.Family);
 
-        _tsReadablePipeDestinationsField = typeBuilder.DefineField("_pipeDestinations", _types.ListOfObject, FieldAttributes.Family);
+        runtime.RequireNodeStreams().ReadablePipeDestinationsField = typeBuilder.DefineField("_pipeDestinations", _types.ListOfObject, FieldAttributes.Family);
 
-        _tsReadableEndedField = typeBuilder.DefineField("_ended", _types.Boolean, FieldAttributes.Family);
-        _tsReadableDestroyedField = typeBuilder.DefineField("_destroyed", _types.Boolean, FieldAttributes.Family);
-        _tsReadableEncodingField = typeBuilder.DefineField("_encoding", _types.String, FieldAttributes.Family);
-        _tsReadableReadableField = typeBuilder.DefineField("_readable", _types.Boolean, FieldAttributes.Family);
-        _tsReadableFlowingField = typeBuilder.DefineField("_flowing", _types.Int32, FieldAttributes.Family);
-        _tsReadableObjectModeField = typeBuilder.DefineField("_objectMode", _types.Boolean, FieldAttributes.Family);
-        _tsReadableHighWaterMarkField = typeBuilder.DefineField("_highWaterMark", _types.Int32, FieldAttributes.Family);
+        runtime.RequireNodeStreams().ReadableEndedField = typeBuilder.DefineField("_ended", _types.Boolean, FieldAttributes.Family);
+        runtime.RequireNodeStreams().ReadableDestroyedField = typeBuilder.DefineField("_destroyed", _types.Boolean, FieldAttributes.Family);
+        runtime.RequireNodeStreams().ReadableEncodingField = typeBuilder.DefineField("_encoding", _types.String, FieldAttributes.Family);
+        runtime.RequireNodeStreams().ReadableReadableField = typeBuilder.DefineField("_readable", _types.Boolean, FieldAttributes.Family);
+        runtime.RequireNodeStreams().ReadableFlowingField = typeBuilder.DefineField("_flowing", _types.Int32, FieldAttributes.Family);
+        runtime.RequireNodeStreams().ReadableObjectModeField = typeBuilder.DefineField("_objectMode", _types.Boolean, FieldAttributes.Family);
+        runtime.RequireNodeStreams().ReadableHighWaterMarkField = typeBuilder.DefineField("_highWaterMark", _types.Int32, FieldAttributes.Family);
         typeBuilder.DefineField("_bufferSize", _types.Int32, FieldAttributes.Family);
         // Async iteration support (#1024): error state + parked async-iterator pull.
-        _tsReadableErroredField = typeBuilder.DefineField("_errored", _types.Boolean, FieldAttributes.Family);
-        _tsReadableErrorField = typeBuilder.DefineField("_error", _types.Object, FieldAttributes.Family);
-        _tsReadableIterWaiterField = typeBuilder.DefineField("_iterWaiter", _types.TaskCompletionSourceOfObject, FieldAttributes.Family);
+        runtime.RequireNodeStreams().ReadableErroredField = typeBuilder.DefineField("_errored", _types.Boolean, FieldAttributes.Family);
+        runtime.RequireNodeStreams().ReadableErrorField = typeBuilder.DefineField("_error", _types.Object, FieldAttributes.Family);
+        runtime.RequireNodeStreams().ReadableIterWaiterField = typeBuilder.DefineField("_iterWaiter", _types.TaskCompletionSourceOfObject, FieldAttributes.Family);
 
         // Constructor
         EmitTSReadableCtor(typeBuilder, runtime, queueOfObject);
 
         // Methods that don't depend on Duplex
-        EmitTSReadableRead(typeBuilder, runtime, queueOfObject);
+        EmitTSReadableRead(typeBuilder, runtime.RequireNodeStreams(), queueOfObject);
         // NOTE: Push and Pipe are emitted in Phase 2 since they need Duplex type
         EmitTSReadableUnpipe(typeBuilder, runtime);
-        EmitTSReadableSetEncoding(typeBuilder, runtime);
+        EmitTSReadableSetEncoding(typeBuilder, runtime.RequireNodeStreams());
         EmitTSReadableDestroy(typeBuilder, runtime, queueOfObject);
-        EmitTSReadableUnshift(typeBuilder, runtime, queueOfObject);
+        EmitTSReadableUnshift(typeBuilder, runtime.RequireNodeStreams(), queueOfObject);
         EmitTSReadablePause(typeBuilder, runtime);
         EmitTSReadableResume(typeBuilder, runtime);
-        EmitTSReadableIsPaused(typeBuilder, runtime);
-        EmitTSReadableToArray(typeBuilder, runtime, queueOfObject);
+        EmitTSReadableIsPaused(typeBuilder, runtime.RequireNodeStreams());
+        EmitTSReadableToArray(typeBuilder, runtime.RequireNodeStreams(), queueOfObject);
         EmitTSReadableForEach(typeBuilder, runtime, queueOfObject);
-        EmitTSReadableSetObjectMode(typeBuilder, runtime);
-        EmitTSReadableSetHighWaterMark(typeBuilder, runtime);
+        EmitTSReadableSetObjectMode(typeBuilder, runtime.RequireNodeStreams());
+        EmitTSReadableSetHighWaterMark(typeBuilder, runtime.RequireNodeStreams());
 
         // [Symbol.asyncIterator] surface (#1024). Emitted in Phase 1 so MakeIterResult is
         // available to Push (Phase 2a), which settles a parked pull. None of these depend
@@ -83,7 +67,7 @@ public partial class RuntimeEmitter
         EmitTSReadableAsyncIteratorMethods(typeBuilder, runtime, queueOfObject);
 
         // Property getters
-        EmitTSReadablePropertyGetters(typeBuilder, runtime, queueOfObject);
+        EmitTSReadablePropertyGetters(typeBuilder, runtime.RequireNodeStreams(), queueOfObject);
 
         // Override OnListenerAdded to enter flowing mode on 'data' event
         EmitTSReadableOnListenerAdded(typeBuilder, runtime);
@@ -95,13 +79,13 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitTSReadablePhaseTwoMethods(EmittedRuntime runtime)
     {
-        var typeBuilder = (TypeBuilder)runtime.TSReadableType;
+        var typeBuilder = (TypeBuilder)runtime.RequireNodeStreams().ReadableType;
         var queueOfObject = typeof(Queue<object?>);
 
         // These depend on TSDuplexType
-        EmitTSReadableFlushChunkToPipes(typeBuilder, runtime);
+        EmitTSReadableFlushChunkToPipes(typeBuilder, runtime.RequireNodeStreams());
         EmitTSReadablePush(typeBuilder, runtime, queueOfObject);
-        EmitTSReadablePipe(typeBuilder, runtime, queueOfObject);
+        EmitTSReadablePipe(typeBuilder, runtime.RequireNodeStreams(), queueOfObject);
     }
 
     /// <summary>
@@ -111,7 +95,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitTSReadableMapFilterMethods(EmittedRuntime runtime)
     {
-        var typeBuilder = (TypeBuilder)runtime.TSReadableType;
+        var typeBuilder = (TypeBuilder)runtime.RequireNodeStreams().ReadableType;
 
         EmitTSReadableMap(typeBuilder, runtime);
         EmitTSReadableFilter(typeBuilder, runtime);
@@ -130,7 +114,7 @@ public partial class RuntimeEmitter
             CallingConventions.Standard,
             Type.EmptyTypes
         );
-        runtime.TSReadableCtor = ctor;
+        runtime.RequireNodeStreams().ReadableCtor = ctor;
 
         var il = ctor.GetILGenerator();
 
@@ -141,52 +125,52 @@ public partial class RuntimeEmitter
         // _readBuffer = new Queue<object?>()
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Newobj, _types.GetConstructor(queueType, Type.EmptyTypes)!);
-        il.Emit(OpCodes.Stfld, _tsReadableBufferField);
+        il.Emit(OpCodes.Stfld, runtime.RequireNodeStreams().ReadableBufferField);
 
         // _pipeDestinations = new List<object>()
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, Type.EmptyTypes)!);
-        il.Emit(OpCodes.Stfld, _tsReadablePipeDestinationsField);
+        il.Emit(OpCodes.Stfld, runtime.RequireNodeStreams().ReadablePipeDestinationsField);
 
         // _ended = false
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Stfld, _tsReadableEndedField);
+        il.Emit(OpCodes.Stfld, runtime.RequireNodeStreams().ReadableEndedField);
 
         // _destroyed = false
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Stfld, _tsReadableDestroyedField);
+        il.Emit(OpCodes.Stfld, runtime.RequireNodeStreams().ReadableDestroyedField);
 
         // _encoding = "utf8"
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "utf8");
-        il.Emit(OpCodes.Stfld, _tsReadableEncodingField);
+        il.Emit(OpCodes.Stfld, runtime.RequireNodeStreams().ReadableEncodingField);
 
         // _readable = true
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Stfld, _tsReadableReadableField);
+        il.Emit(OpCodes.Stfld, runtime.RequireNodeStreams().ReadableReadableField);
 
         // _flowing = -1 (initial/null)
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_M1);
-        il.Emit(OpCodes.Stfld, _tsReadableFlowingField);
+        il.Emit(OpCodes.Stfld, runtime.RequireNodeStreams().ReadableFlowingField);
 
         // _objectMode = false
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Stfld, _tsReadableObjectModeField);
+        il.Emit(OpCodes.Stfld, runtime.RequireNodeStreams().ReadableObjectModeField);
 
         // Default highWaterMark: 16384 bytes (16 for object mode, but that's set later)
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4, 16384);
-        il.Emit(OpCodes.Stfld, _tsReadableHighWaterMarkField);
+        il.Emit(OpCodes.Stfld, runtime.RequireNodeStreams().ReadableHighWaterMarkField);
 
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitTSReadableRead(TypeBuilder typeBuilder, EmittedRuntime runtime, Type queueType)
+    private void EmitTSReadableRead(TypeBuilder typeBuilder, EmittedNodeStreamRuntime nodeStreams, Type queueType)
     {
         // public object? Read(object? size)
         var method = typeBuilder.DefineMethod(
@@ -203,12 +187,12 @@ public partial class RuntimeEmitter
 
         // if (_destroyed || _readBuffer.Count == 0) return null
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsReadableDestroyedField);
+        il.Emit(OpCodes.Ldfld, nodeStreams.ReadableDestroyedField);
         il.Emit(OpCodes.Brtrue, returnNullLabel);
 
         var countGetter = _types.GetProperty(queueType, "Count")!.GetGetMethod()!;
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsReadableBufferField);
+        il.Emit(OpCodes.Ldfld, nodeStreams.ReadableBufferField);
         il.Emit(OpCodes.Callvirt, countGetter);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Bgt, hasDataLabel);
@@ -222,13 +206,13 @@ public partial class RuntimeEmitter
         // In object mode, return one object at a time (don't concatenate)
         var notObjectModeLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsReadableObjectModeField);
+        il.Emit(OpCodes.Ldfld, nodeStreams.ReadableObjectModeField);
         il.Emit(OpCodes.Brfalse, notObjectModeLabel);
 
         // Object mode: return _readBuffer.Dequeue()
         var dequeueMethod = _types.GetMethod(queueType, "Dequeue")!;
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsReadableBufferField);
+        il.Emit(OpCodes.Ldfld, nodeStreams.ReadableBufferField);
         il.Emit(OpCodes.Callvirt, dequeueMethod);
         il.Emit(OpCodes.Ret);
 
@@ -246,7 +230,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(loopStart);
         // while (_readBuffer.Count > 0)
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsReadableBufferField);
+        il.Emit(OpCodes.Ldfld, nodeStreams.ReadableBufferField);
         il.Emit(OpCodes.Callvirt, countGetter);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ble, loopEnd);
@@ -254,7 +238,7 @@ public partial class RuntimeEmitter
         // result.Append(_readBuffer.Dequeue()?.ToString() ?? "")
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsReadableBufferField);
+        il.Emit(OpCodes.Ldfld, nodeStreams.ReadableBufferField);
         il.Emit(OpCodes.Callvirt, dequeueMethod);
 
         // Convert to string safely
@@ -282,7 +266,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitTSReadableSetObjectMode(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSReadableSetObjectMode(TypeBuilder typeBuilder, EmittedNodeStreamRuntime nodeStreams)
     {
         // public void SetObjectMode(bool value)
         var method = typeBuilder.DefineMethod(
@@ -291,28 +275,28 @@ public partial class RuntimeEmitter
             _types.Void,
             [_types.Boolean]
         );
-        runtime.TSReadableSetObjectMode = method;
+        nodeStreams.ReadableSetObjectMode = method;
 
         var il = method.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Stfld, _tsReadableObjectModeField);
+        il.Emit(OpCodes.Stfld, nodeStreams.ReadableObjectModeField);
 
         // If objectMode=true and highWaterMark is still default (16384), set to 16
         var skipHwm = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsReadableHighWaterMarkField);
+        il.Emit(OpCodes.Ldfld, nodeStreams.ReadableHighWaterMarkField);
         il.Emit(OpCodes.Ldc_I4, 16384);
         il.Emit(OpCodes.Bne_Un, skipHwm);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4, 16);
-        il.Emit(OpCodes.Stfld, _tsReadableHighWaterMarkField);
+        il.Emit(OpCodes.Stfld, nodeStreams.ReadableHighWaterMarkField);
         il.MarkLabel(skipHwm);
 
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitTSReadableSetHighWaterMark(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSReadableSetHighWaterMark(TypeBuilder typeBuilder, EmittedNodeStreamRuntime nodeStreams)
     {
         // public void SetHighWaterMark(int value)
         var method = typeBuilder.DefineMethod(
@@ -321,12 +305,12 @@ public partial class RuntimeEmitter
             _types.Void,
             [_types.Int32]
         );
-        runtime.TSReadableSetHighWaterMark = method;
+        nodeStreams.ReadableSetHighWaterMark = method;
 
         var il = method.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Stfld, _tsReadableHighWaterMarkField);
+        il.Emit(OpCodes.Stfld, nodeStreams.ReadableHighWaterMarkField);
         il.Emit(OpCodes.Ret);
     }
 
@@ -334,16 +318,16 @@ public partial class RuntimeEmitter
     /// Emits FlushChunkToPipes(object chunk): writes chunk to all pipe destinations.
     /// Shared by both flowing and non-flowing paths in Push().
     /// </summary>
-    private void EmitTSReadableFlushChunkToPipes(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSReadableFlushChunkToPipes(TypeBuilder typeBuilder, EmittedNodeStreamRuntime nodeStreams)
     {
-        _tsReadableFlushChunkToPipes = typeBuilder.DefineMethod(
+        nodeStreams.ReadableFlushChunkToPipes = typeBuilder.DefineMethod(
             "FlushChunkToPipes",
             MethodAttributes.Private,
             _types.Void,
             [_types.Object]  // chunk
         );
 
-        var il = _tsReadableFlushChunkToPipes.GetILGenerator();
+        var il = nodeStreams.ReadableFlushChunkToPipes.GetILGenerator();
 
         var idxLocal = il.DeclareLocal(_types.Int32);
         var countLocal = il.DeclareLocal(_types.Int32);
@@ -351,7 +335,7 @@ public partial class RuntimeEmitter
         var loopEnd = il.DefineLabel();
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsReadablePipeDestinationsField);
+        il.Emit(OpCodes.Ldfld, nodeStreams.ReadablePipeDestinationsField);
         il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count")!.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, countLocal);
         il.Emit(OpCodes.Ldc_I4_0);
@@ -364,7 +348,7 @@ public partial class RuntimeEmitter
 
         var destLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsReadablePipeDestinationsField);
+        il.Emit(OpCodes.Ldfld, nodeStreams.ReadablePipeDestinationsField);
         il.Emit(OpCodes.Ldloc, idxLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "get_Item")!);
         il.Emit(OpCodes.Stloc, destLocal);
@@ -375,29 +359,29 @@ public partial class RuntimeEmitter
         var writeResultLocal = il.DeclareLocal(_types.Boolean);
 
         il.Emit(OpCodes.Ldloc, destLocal);
-        il.Emit(OpCodes.Isinst, runtime.TSDuplexType);
+        il.Emit(OpCodes.Isinst, nodeStreams.DuplexType);
         il.Emit(OpCodes.Brfalse, tryWritable);
 
         il.Emit(OpCodes.Ldloc, destLocal);
-        il.Emit(OpCodes.Castclass, runtime.TSDuplexType);
+        il.Emit(OpCodes.Castclass, nodeStreams.DuplexType);
         il.Emit(OpCodes.Ldarg_1); // chunk
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Callvirt, runtime.TSDuplexWrite);
+        il.Emit(OpCodes.Callvirt, nodeStreams.DuplexWrite);
         il.Emit(OpCodes.Stloc, writeResultLocal);
         il.Emit(OpCodes.Br, afterWrite);
 
         il.MarkLabel(tryWritable);
         il.Emit(OpCodes.Ldloc, destLocal);
-        il.Emit(OpCodes.Isinst, runtime.TSWritableType);
+        il.Emit(OpCodes.Isinst, nodeStreams.WritableType);
         il.Emit(OpCodes.Brfalse, afterWrite);
 
         il.Emit(OpCodes.Ldloc, destLocal);
-        il.Emit(OpCodes.Castclass, runtime.TSWritableType);
+        il.Emit(OpCodes.Castclass, nodeStreams.WritableType);
         il.Emit(OpCodes.Ldarg_1); // chunk
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Callvirt, runtime.TSWritableWrite);
+        il.Emit(OpCodes.Callvirt, nodeStreams.WritableWrite);
         il.Emit(OpCodes.Stloc, writeResultLocal);
 
         // If write returned false (backpressure), set _flowing = 0 (paused)
@@ -406,7 +390,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, noBackpressureLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Stfld, _tsReadableFlowingField);
+        il.Emit(OpCodes.Stfld, nodeStreams.ReadableFlowingField);
         il.MarkLabel(noBackpressureLabel);
 
         il.MarkLabel(afterWrite);
@@ -429,7 +413,7 @@ public partial class RuntimeEmitter
             _types.Boolean,
             [_types.Object]
         );
-        runtime.TSReadablePush = method;
+        runtime.RequireNodeStreams().ReadablePush = method;
 
         var il = method.GetILGenerator();
         var returnFalseLabel = il.DefineLabel();
@@ -437,7 +421,7 @@ public partial class RuntimeEmitter
 
         // if (_destroyed) return false
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsReadableDestroyedField);
+        il.Emit(OpCodes.Ldfld, runtime.RequireNodeStreams().ReadableDestroyedField);
         il.Emit(OpCodes.Brtrue, returnFalseLabel);
 
         // if (chunk == null) - EOF signal
@@ -447,13 +431,13 @@ public partial class RuntimeEmitter
         // _ended = true; _readable = false; emit 'end'; return false
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Stfld, _tsReadableEndedField);
+        il.Emit(OpCodes.Stfld, runtime.RequireNodeStreams().ReadableEndedField);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Stfld, _tsReadableReadableField);
+        il.Emit(OpCodes.Stfld, runtime.RequireNodeStreams().ReadableReadableField);
 
         // Settle a parked `for await` pull as done (#1024).
-        EmitSettleIterWaiterDone(il, runtime);
+        EmitSettleIterWaiterDone(il, runtime.RequireNodeStreams());
 
         // Emit 'end' event: this.Emit("end", [])
         il.Emit(OpCodes.Ldarg_0);
@@ -471,7 +455,7 @@ public partial class RuntimeEmitter
             var eofLoopEnd = il.DefineLabel();
 
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldfld, _tsReadablePipeDestinationsField);
+            il.Emit(OpCodes.Ldfld, runtime.RequireNodeStreams().ReadablePipeDestinationsField);
             il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count")!.GetGetMethod()!);
             il.Emit(OpCodes.Stloc, eofCountLocal);
             il.Emit(OpCodes.Ldc_I4_0);
@@ -484,7 +468,7 @@ public partial class RuntimeEmitter
 
             var eofDestLocal = il.DeclareLocal(_types.Object);
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldfld, _tsReadablePipeDestinationsField);
+            il.Emit(OpCodes.Ldfld, runtime.RequireNodeStreams().ReadablePipeDestinationsField);
             il.Emit(OpCodes.Ldloc, eofIdxLocal);
             il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "get_Item")!);
             il.Emit(OpCodes.Stloc, eofDestLocal);
@@ -493,29 +477,29 @@ public partial class RuntimeEmitter
             var eofAfterEnd = il.DefineLabel();
 
             il.Emit(OpCodes.Ldloc, eofDestLocal);
-            il.Emit(OpCodes.Isinst, runtime.TSDuplexType);
+            il.Emit(OpCodes.Isinst, runtime.RequireNodeStreams().DuplexType);
             il.Emit(OpCodes.Brfalse, eofTryWritable);
 
             il.Emit(OpCodes.Ldloc, eofDestLocal);
-            il.Emit(OpCodes.Castclass, runtime.TSDuplexType);
+            il.Emit(OpCodes.Castclass, runtime.RequireNodeStreams().DuplexType);
             il.Emit(OpCodes.Ldnull);
             il.Emit(OpCodes.Ldnull);
             il.Emit(OpCodes.Ldnull);
-            il.Emit(OpCodes.Callvirt, runtime.TSDuplexEnd);
+            il.Emit(OpCodes.Callvirt, runtime.RequireNodeStreams().DuplexEnd);
             il.Emit(OpCodes.Pop);
             il.Emit(OpCodes.Br, eofAfterEnd);
 
             il.MarkLabel(eofTryWritable);
             il.Emit(OpCodes.Ldloc, eofDestLocal);
-            il.Emit(OpCodes.Isinst, runtime.TSWritableType);
+            il.Emit(OpCodes.Isinst, runtime.RequireNodeStreams().WritableType);
             il.Emit(OpCodes.Brfalse, eofAfterEnd);
 
             il.Emit(OpCodes.Ldloc, eofDestLocal);
-            il.Emit(OpCodes.Castclass, runtime.TSWritableType);
+            il.Emit(OpCodes.Castclass, runtime.RequireNodeStreams().WritableType);
             il.Emit(OpCodes.Ldnull);
             il.Emit(OpCodes.Ldnull);
             il.Emit(OpCodes.Ldnull);
-            il.Emit(OpCodes.Callvirt, runtime.TSWritableEnd);
+            il.Emit(OpCodes.Callvirt, runtime.RequireNodeStreams().WritableEnd);
             il.Emit(OpCodes.Pop);
 
             il.MarkLabel(eofAfterEnd);
@@ -534,12 +518,12 @@ public partial class RuntimeEmitter
 
         // Hand the chunk directly to a parked `for await` pull, if any (#1024).
         // On delivery this returns true from Push so the chunk is not also buffered/emitted.
-        EmitDeliverChunkToIterWaiterAndReturn(il, runtime);
+        EmitDeliverChunkToIterWaiterAndReturn(il, runtime.RequireNodeStreams());
 
         // Check if flowing mode: if (_flowing == 1) emit 'data' directly
         var notFlowingLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsReadableFlowingField);
+        il.Emit(OpCodes.Ldfld, runtime.RequireNodeStreams().ReadableFlowingField);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Bne_Un, notFlowingLabel);
 
@@ -558,7 +542,7 @@ public partial class RuntimeEmitter
         // Flush to pipe destinations
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, _tsReadableFlushChunkToPipes!);
+        il.Emit(OpCodes.Call, runtime.RequireNodeStreams().ReadableFlushChunkToPipes!);
 
         // return true
         il.Emit(OpCodes.Ldc_I4_1);
@@ -567,7 +551,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(notFlowingLabel);
         // Not flowing: _readBuffer.Enqueue(chunk), then flush to pipes
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsReadableBufferField);
+        il.Emit(OpCodes.Ldfld, runtime.RequireNodeStreams().ReadableBufferField);
         il.Emit(OpCodes.Ldarg_1);
         var enqueueMethod = _types.GetMethod(queueType, "Enqueue")!;
         il.Emit(OpCodes.Callvirt, enqueueMethod);
@@ -575,7 +559,7 @@ public partial class RuntimeEmitter
         // Also flush to pipe destinations in non-flowing mode (matches interpreter)
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, _tsReadableFlushChunkToPipes!);
+        il.Emit(OpCodes.Call, runtime.RequireNodeStreams().ReadableFlushChunkToPipes!);
 
         // Compute total buffer size and return whether it's under highWaterMark
         // Sum string lengths (byte mode) or count items (object mode)
@@ -593,7 +577,7 @@ public partial class RuntimeEmitter
 
             // object[] items = _readBuffer.ToArray()
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldfld, _tsReadableBufferField);
+            il.Emit(OpCodes.Ldfld, runtime.RequireNodeStreams().ReadableBufferField);
             il.Emit(OpCodes.Callvirt, _types.GetMethod(queueType, "ToArray")!);
             il.Emit(OpCodes.Stloc, arrLocal);
 
@@ -647,7 +631,7 @@ public partial class RuntimeEmitter
             // return total < _highWaterMark
             il.Emit(OpCodes.Ldloc, totalLocal);
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldfld, _tsReadableHighWaterMarkField);
+            il.Emit(OpCodes.Ldfld, runtime.RequireNodeStreams().ReadableHighWaterMarkField);
             il.Emit(OpCodes.Clt);
             il.Emit(OpCodes.Ret);
         }
@@ -657,7 +641,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitTSReadablePipe(TypeBuilder typeBuilder, EmittedRuntime runtime, Type queueType)
+    private void EmitTSReadablePipe(TypeBuilder typeBuilder, EmittedNodeStreamRuntime nodeStreams, Type queueType)
     {
         // public object Pipe(object destination, object? options)
         var method = typeBuilder.DefineMethod(
@@ -666,7 +650,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object, _types.Object]
         );
-        runtime.TSReadablePipe = method;
+        nodeStreams.ReadablePipe = method;
 
         var il = method.GetILGenerator();
         var loopStart = il.DefineLabel();
@@ -679,7 +663,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(loopStart);
         // while (_readBuffer.Count > 0)
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsReadableBufferField);
+        il.Emit(OpCodes.Ldfld, nodeStreams.ReadableBufferField);
         il.Emit(OpCodes.Callvirt, countGetter);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ble, loopEnd);
@@ -691,12 +675,12 @@ public partial class RuntimeEmitter
         var notWritableLabel = il.DefineLabel();
 
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, runtime.TSDuplexType);
+        il.Emit(OpCodes.Isinst, nodeStreams.DuplexType);
         il.Emit(OpCodes.Brtrue, handleDuplexLabel);
 
         // Check if destination is $Writable
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, runtime.TSWritableType);
+        il.Emit(OpCodes.Isinst, nodeStreams.WritableType);
         il.Emit(OpCodes.Brtrue, handleWritableLabel);
 
         // Neither - discard data
@@ -705,13 +689,13 @@ public partial class RuntimeEmitter
         // Handle $Duplex destination
         il.MarkLabel(handleDuplexLabel);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Castclass, runtime.TSDuplexType);
+        il.Emit(OpCodes.Castclass, nodeStreams.DuplexType);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsReadableBufferField);
+        il.Emit(OpCodes.Ldfld, nodeStreams.ReadableBufferField);
         il.Emit(OpCodes.Callvirt, dequeueMethod);
         il.Emit(OpCodes.Ldnull); // encoding
         il.Emit(OpCodes.Ldnull); // callback
-        il.Emit(OpCodes.Callvirt, runtime.TSDuplexWrite);
+        il.Emit(OpCodes.Callvirt, nodeStreams.DuplexWrite);
         // If write returned false, stop draining (backpressure)
         il.Emit(OpCodes.Brfalse, loopEnd);
         il.Emit(OpCodes.Br, loopStart);
@@ -719,13 +703,13 @@ public partial class RuntimeEmitter
         // Handle $Writable destination
         il.MarkLabel(handleWritableLabel);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Castclass, runtime.TSWritableType);
+        il.Emit(OpCodes.Castclass, nodeStreams.WritableType);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsReadableBufferField);
+        il.Emit(OpCodes.Ldfld, nodeStreams.ReadableBufferField);
         il.Emit(OpCodes.Callvirt, dequeueMethod);
         il.Emit(OpCodes.Ldnull); // encoding
         il.Emit(OpCodes.Ldnull); // callback
-        il.Emit(OpCodes.Callvirt, runtime.TSWritableWrite);
+        il.Emit(OpCodes.Callvirt, nodeStreams.WritableWrite);
         // If write returned false, stop draining (backpressure)
         il.Emit(OpCodes.Brfalse, loopEnd);
         il.Emit(OpCodes.Br, loopStart);
@@ -733,7 +717,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(notWritableLabel);
         // Unknown destination type — just dequeue and discard
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsReadableBufferField);
+        il.Emit(OpCodes.Ldfld, nodeStreams.ReadableBufferField);
         il.Emit(OpCodes.Callvirt, dequeueMethod);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Br, loopStart);
@@ -746,17 +730,17 @@ public partial class RuntimeEmitter
         var endWritableLabel = il.DefineLabel();
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsReadableEndedField);
+        il.Emit(OpCodes.Ldfld, nodeStreams.ReadableEndedField);
         il.Emit(OpCodes.Brfalse, notEndedLabel);
 
         // Check if destination is $Duplex
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, runtime.TSDuplexType);
+        il.Emit(OpCodes.Isinst, nodeStreams.DuplexType);
         il.Emit(OpCodes.Brtrue, endDuplexLabel);
 
         // Check if destination is $Writable
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, runtime.TSWritableType);
+        il.Emit(OpCodes.Isinst, nodeStreams.WritableType);
         il.Emit(OpCodes.Brtrue, endWritableLabel);
 
         il.Emit(OpCodes.Br, notEndedLabel);
@@ -764,36 +748,36 @@ public partial class RuntimeEmitter
         // End $Duplex destination
         il.MarkLabel(endDuplexLabel);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Castclass, runtime.TSDuplexType);
+        il.Emit(OpCodes.Castclass, nodeStreams.DuplexType);
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Callvirt, runtime.TSDuplexEnd);
+        il.Emit(OpCodes.Callvirt, nodeStreams.DuplexEnd);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Br, notEndedLabel);
 
         // End $Writable destination
         il.MarkLabel(endWritableLabel);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Castclass, runtime.TSWritableType);
+        il.Emit(OpCodes.Castclass, nodeStreams.WritableType);
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Callvirt, runtime.TSWritableEnd);
+        il.Emit(OpCodes.Callvirt, nodeStreams.WritableEnd);
         il.Emit(OpCodes.Pop);
 
         il.MarkLabel(notEndedLabel);
 
         // Add destination to _pipeDestinations
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsReadablePipeDestinationsField);
+        il.Emit(OpCodes.Ldfld, nodeStreams.ReadablePipeDestinationsField);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add")!);
 
         // Set _flowing = 1 (flowing mode) after pipe setup
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Stfld, _tsReadableFlowingField);
+        il.Emit(OpCodes.Stfld, nodeStreams.ReadableFlowingField);
 
         // return destination
         il.Emit(OpCodes.Ldarg_1);
@@ -817,7 +801,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitTSReadableSetEncoding(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSReadableSetEncoding(TypeBuilder typeBuilder, EmittedNodeStreamRuntime nodeStreams)
     {
         // public $Readable SetEncoding(string encoding)
         var method = typeBuilder.DefineMethod(
@@ -845,7 +829,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "ToLowerInvariant")!);
 
         il.MarkLabel(afterSetLabel);
-        il.Emit(OpCodes.Stfld, _tsReadableEncodingField);
+        il.Emit(OpCodes.Stfld, nodeStreams.ReadableEncodingField);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ret);
     }
@@ -859,7 +843,7 @@ public partial class RuntimeEmitter
             typeBuilder,
             [_types.Object]
         );
-        runtime.TSReadableDestroy = method;
+        runtime.RequireNodeStreams().ReadableDestroy = method;
 
         var il = method.GetILGenerator();
         var alreadyDestroyedLabel = il.DefineLabel();
@@ -867,20 +851,20 @@ public partial class RuntimeEmitter
 
         // if (_destroyed) return this
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsReadableDestroyedField);
+        il.Emit(OpCodes.Ldfld, runtime.RequireNodeStreams().ReadableDestroyedField);
         il.Emit(OpCodes.Brtrue, alreadyDestroyedLabel);
 
         // _destroyed = true; _readable = false
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Stfld, _tsReadableDestroyedField);
+        il.Emit(OpCodes.Stfld, runtime.RequireNodeStreams().ReadableDestroyedField);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Stfld, _tsReadableReadableField);
+        il.Emit(OpCodes.Stfld, runtime.RequireNodeStreams().ReadableReadableField);
 
         // _readBuffer.Clear()
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsReadableBufferField);
+        il.Emit(OpCodes.Ldfld, runtime.RequireNodeStreams().ReadableBufferField);
         var clearMethod = _types.GetMethod(queueType, "Clear")!;
         il.Emit(OpCodes.Callvirt, clearMethod);
 
@@ -891,10 +875,10 @@ public partial class RuntimeEmitter
         // _errored = true; _error = error;  (#1024)
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Stfld, _tsReadableErroredField);
+        il.Emit(OpCodes.Stfld, runtime.RequireNodeStreams().ReadableErroredField);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Stfld, _tsReadableErrorField);
+        il.Emit(OpCodes.Stfld, runtime.RequireNodeStreams().ReadableErrorField);
 
         // A pending `for await` pull rejects with the destroy error.
         EmitFaultIterWaiter(il, runtime);
@@ -924,7 +908,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitTSReadableUnshift(TypeBuilder typeBuilder, EmittedRuntime runtime, Type queueType)
+    private void EmitTSReadableUnshift(TypeBuilder typeBuilder, EmittedNodeStreamRuntime nodeStreams, Type queueType)
     {
         // public $Readable Unshift(object chunk)
         var method = typeBuilder.DefineMethod(
@@ -938,7 +922,7 @@ public partial class RuntimeEmitter
         var il = method.GetILGenerator();
         // Simplified: just enqueue (proper implementation would prepend)
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsReadableBufferField);
+        il.Emit(OpCodes.Ldfld, nodeStreams.ReadableBufferField);
         il.Emit(OpCodes.Ldarg_1);
         var enqueueMethod = _types.GetMethod(queueType, "Enqueue")!;
         il.Emit(OpCodes.Callvirt, enqueueMethod);
@@ -961,7 +945,7 @@ public partial class RuntimeEmitter
         // _flowing = 0 (paused)
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Stfld, _tsReadableFlowingField);
+        il.Emit(OpCodes.Stfld, runtime.RequireNodeStreams().ReadableFlowingField);
 
         // Emit 'pause' event
         il.Emit(OpCodes.Ldarg_0);
@@ -994,7 +978,7 @@ public partial class RuntimeEmitter
         // _flowing = 1 (flowing)
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Stfld, _tsReadableFlowingField);
+        il.Emit(OpCodes.Stfld, runtime.RequireNodeStreams().ReadableFlowingField);
 
         // Emit 'resume' event
         il.Emit(OpCodes.Ldarg_0);
@@ -1010,7 +994,7 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(loopStart);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsReadableBufferField);
+        il.Emit(OpCodes.Ldfld, runtime.RequireNodeStreams().ReadableBufferField);
         il.Emit(OpCodes.Callvirt, countGetter);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ble, loopEnd);
@@ -1023,7 +1007,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsReadableBufferField);
+        il.Emit(OpCodes.Ldfld, runtime.RequireNodeStreams().ReadableBufferField);
         il.Emit(OpCodes.Callvirt, dequeueMethod);
         il.Emit(OpCodes.Stelem_Ref);
         il.Emit(OpCodes.Call, runtime.EventEmitter.Emit);
@@ -1035,7 +1019,7 @@ public partial class RuntimeEmitter
         // If ended, emit 'end'
         var notEndedLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsReadableEndedField);
+        il.Emit(OpCodes.Ldfld, runtime.RequireNodeStreams().ReadableEndedField);
         il.Emit(OpCodes.Brfalse, notEndedLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "end");
@@ -1049,7 +1033,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitTSReadableIsPaused(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSReadableIsPaused(TypeBuilder typeBuilder, EmittedNodeStreamRuntime nodeStreams)
     {
         // public bool IsPaused()
         var method = typeBuilder.DefineMethod(
@@ -1063,7 +1047,7 @@ public partial class RuntimeEmitter
         var il = method.GetILGenerator();
         // return _flowing == 0
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsReadableFlowingField);
+        il.Emit(OpCodes.Ldfld, nodeStreams.ReadableFlowingField);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ceq);
         il.Emit(OpCodes.Ret);
@@ -1094,14 +1078,14 @@ public partial class RuntimeEmitter
 
         // if (_flowing == 1) return (already flowing)
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsReadableFlowingField);
+        il.Emit(OpCodes.Ldfld, runtime.RequireNodeStreams().ReadableFlowingField);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Beq, retLabel);
 
         // _flowing = 1
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Stfld, _tsReadableFlowingField);
+        il.Emit(OpCodes.Stfld, runtime.RequireNodeStreams().ReadableFlowingField);
 
         // Drain buffer: while (_readBuffer.Count > 0) emit('data', _readBuffer.Dequeue())
         var queueType = typeof(Queue<object?>);
@@ -1112,7 +1096,7 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(loopStart);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsReadableBufferField);
+        il.Emit(OpCodes.Ldfld, runtime.RequireNodeStreams().ReadableBufferField);
         il.Emit(OpCodes.Callvirt, countGetter);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ble, loopEnd);
@@ -1124,7 +1108,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsReadableBufferField);
+        il.Emit(OpCodes.Ldfld, runtime.RequireNodeStreams().ReadableBufferField);
         il.Emit(OpCodes.Callvirt, dequeueMethod);
         il.Emit(OpCodes.Stelem_Ref);
         il.Emit(OpCodes.Call, runtime.EventEmitter.Emit);
@@ -1143,11 +1127,11 @@ public partial class RuntimeEmitter
 
         // if (_ended && _readBuffer.Count == 0) emit 'end'
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsReadableEndedField);
+        il.Emit(OpCodes.Ldfld, runtime.RequireNodeStreams().ReadableEndedField);
         il.Emit(OpCodes.Brfalse, retLabel);
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsReadableBufferField);
+        il.Emit(OpCodes.Ldfld, runtime.RequireNodeStreams().ReadableBufferField);
         il.Emit(OpCodes.Callvirt, countGetter);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Bne_Un, retLabel);
@@ -1163,7 +1147,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitTSReadablePropertyGetters(TypeBuilder typeBuilder, EmittedRuntime runtime, Type queueType)
+    private void EmitTSReadablePropertyGetters(TypeBuilder typeBuilder, EmittedNodeStreamRuntime nodeStreams, Type queueType)
     {
         // readable property: _readable && !_ended && !_destroyed
         // Note: Use PascalCase getter names (get_Readable) for GetFieldsProperty lookup
@@ -1177,13 +1161,13 @@ public partial class RuntimeEmitter
         var il = getReadable.GetILGenerator();
         var falseLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsReadableReadableField);
+        il.Emit(OpCodes.Ldfld, nodeStreams.ReadableReadableField);
         il.Emit(OpCodes.Brfalse, falseLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsReadableEndedField);
+        il.Emit(OpCodes.Ldfld, nodeStreams.ReadableEndedField);
         il.Emit(OpCodes.Brtrue, falseLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsReadableDestroyedField);
+        il.Emit(OpCodes.Ldfld, nodeStreams.ReadableDestroyedField);
         il.Emit(OpCodes.Brtrue, falseLabel);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Ret);
@@ -1202,7 +1186,7 @@ public partial class RuntimeEmitter
         );
         il = getReadableEnded.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsReadableEndedField);
+        il.Emit(OpCodes.Ldfld, nodeStreams.ReadableEndedField);
         il.Emit(OpCodes.Ret);
         readableEndedProp.SetGetMethod(getReadableEnded);
 
@@ -1216,7 +1200,7 @@ public partial class RuntimeEmitter
         );
         il = getReadableLength.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsReadableBufferField);
+        il.Emit(OpCodes.Ldfld, nodeStreams.ReadableBufferField);
         var countGetter = _types.GetProperty(queueType, "Count")!.GetGetMethod()!;
         il.Emit(OpCodes.Callvirt, countGetter);
         il.Emit(OpCodes.Conv_R8);
@@ -1231,10 +1215,10 @@ public partial class RuntimeEmitter
             _types.Boolean,
             Type.EmptyTypes
         );
-        runtime.TSReadableErroredGetter = getErrored;
+        nodeStreams.ReadableErroredGetter = getErrored;
         il = getErrored.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsReadableErroredField);
+        il.Emit(OpCodes.Ldfld, nodeStreams.ReadableErroredField);
         il.Emit(OpCodes.Ret);
         erroredProp.SetGetMethod(getErrored);
 
@@ -1248,7 +1232,7 @@ public partial class RuntimeEmitter
         );
         il = getDestroyed.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsReadableDestroyedField);
+        il.Emit(OpCodes.Ldfld, nodeStreams.ReadableDestroyedField);
         il.Emit(OpCodes.Ret);
         destroyedProp.SetGetMethod(getDestroyed);
 
@@ -1262,7 +1246,7 @@ public partial class RuntimeEmitter
         );
         il = getReadableHwm.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsReadableHighWaterMarkField);
+        il.Emit(OpCodes.Ldfld, nodeStreams.ReadableHighWaterMarkField);
         il.Emit(OpCodes.Conv_R8);
         il.Emit(OpCodes.Ret);
         readableHwmProp.SetGetMethod(getReadableHwm);
@@ -1277,7 +1261,7 @@ public partial class RuntimeEmitter
         );
         il = getReadableObjectMode.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsReadableObjectModeField);
+        il.Emit(OpCodes.Ldfld, nodeStreams.ReadableObjectModeField);
         il.Emit(OpCodes.Ret);
         readableObjectModeProp.SetGetMethod(getReadableObjectMode);
 
@@ -1294,7 +1278,7 @@ public partial class RuntimeEmitter
         var flowingEndLabel = il.DefineLabel();
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsReadableFlowingField);
+        il.Emit(OpCodes.Ldfld, nodeStreams.ReadableFlowingField);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Beq, flowingTrueLabel);
 
@@ -1316,7 +1300,7 @@ public partial class RuntimeEmitter
     /// Emits: public object ToArray()
     /// Drains the read buffer into a List&lt;object?&gt; and returns it.
     /// </summary>
-    private void EmitTSReadableToArray(TypeBuilder typeBuilder, EmittedRuntime runtime, Type queueType)
+    private void EmitTSReadableToArray(TypeBuilder typeBuilder, EmittedNodeStreamRuntime nodeStreams, Type queueType)
     {
         var method = typeBuilder.DefineMethod(
             "ToArray",
@@ -1337,7 +1321,7 @@ public partial class RuntimeEmitter
         // while (_readBuffer.Count > 0)
         il.MarkLabel(loopLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsReadableBufferField);
+        il.Emit(OpCodes.Ldfld, nodeStreams.ReadableBufferField);
         il.Emit(OpCodes.Callvirt, _types.GetProperty(queueType, "Count")!.GetGetMethod()!);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ble, doneLabel);
@@ -1345,7 +1329,7 @@ public partial class RuntimeEmitter
         // list.Add(_readBuffer.Dequeue());
         il.Emit(OpCodes.Ldloc, listLocal);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsReadableBufferField);
+        il.Emit(OpCodes.Ldfld, nodeStreams.ReadableBufferField);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(queueType, "Dequeue")!);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", _types.Object));
         il.Emit(OpCodes.Br, loopLabel);
@@ -1382,7 +1366,7 @@ public partial class RuntimeEmitter
         // while (_readBuffer.Count > 0)
         il.MarkLabel(loopLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsReadableBufferField);
+        il.Emit(OpCodes.Ldfld, runtime.RequireNodeStreams().ReadableBufferField);
         il.Emit(OpCodes.Callvirt, _types.GetProperty(queueType, "Count")!.GetGetMethod()!);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ble, doneLabel);
@@ -1394,7 +1378,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsReadableBufferField);
+        il.Emit(OpCodes.Ldfld, runtime.RequireNodeStreams().ReadableBufferField);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(queueType, "Dequeue")!);
         il.Emit(OpCodes.Stelem_Ref);
         il.Emit(OpCodes.Callvirt, runtime.TSFunctionInvoke);
@@ -1422,23 +1406,23 @@ public partial class RuntimeEmitter
         );
 
         var il = method.GetILGenerator();
-        var transformLocal = il.DeclareLocal(runtime.TSTransformType);
+        var transformLocal = il.DeclareLocal(runtime.RequireNodeStreams().TransformType);
 
         // var transform = new $Transform();
-        il.Emit(OpCodes.Newobj, runtime.TSTransformCtor);
+        il.Emit(OpCodes.Newobj, runtime.RequireNodeStreams().TransformCtor);
         il.Emit(OpCodes.Stloc, transformLocal);
 
         // transform.SetObjectMode(this._objectMode);
         il.Emit(OpCodes.Ldloc, transformLocal);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsReadableObjectModeField);
-        il.Emit(OpCodes.Callvirt, runtime.TSReadableSetObjectMode);
+        il.Emit(OpCodes.Ldfld, runtime.RequireNodeStreams().ReadableObjectModeField);
+        il.Emit(OpCodes.Callvirt, runtime.RequireNodeStreams().ReadableSetObjectMode);
 
         // Create a $MapTransformCallback, then wrap it in a $TSFunction
         // so the Transform.Write method can invoke it via InvokeWithThis.
         var callbackLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldarg_1); // user callback
-        il.Emit(OpCodes.Newobj, runtime.MapTransformCallbackCtor);
+        il.Emit(OpCodes.Newobj, runtime.RequireNodeStreams().MapTransformCallbackCtor);
         il.Emit(OpCodes.Stloc, callbackLocal);
 
         // Wrap in $TSFunction: new $TSFunction(callbackInstance, callbackInstance.GetType().GetMethod("Invoke"))
@@ -1449,13 +1433,13 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, "Invoke");
         il.Emit(OpCodes.Callvirt, _types.GetMethod(typeof(Type), "GetMethod", _types.String)!);
         il.Emit(OpCodes.Newobj, runtime.TSFunctionCtor);
-        il.Emit(OpCodes.Callvirt, runtime.TSTransformSetTransformCallback!);
+        il.Emit(OpCodes.Callvirt, runtime.RequireNodeStreams().TransformSetTransformCallback);
 
         // this.Pipe(transform)
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, transformLocal);
         il.Emit(OpCodes.Ldnull); // options
-        il.Emit(OpCodes.Callvirt, runtime.TSReadablePipe);
+        il.Emit(OpCodes.Callvirt, runtime.RequireNodeStreams().ReadablePipe);
         il.Emit(OpCodes.Pop);
 
         // return transform
@@ -1478,22 +1462,22 @@ public partial class RuntimeEmitter
         );
 
         var il = method.GetILGenerator();
-        var transformLocal = il.DeclareLocal(runtime.TSTransformType);
+        var transformLocal = il.DeclareLocal(runtime.RequireNodeStreams().TransformType);
 
         // var transform = new $Transform();
-        il.Emit(OpCodes.Newobj, runtime.TSTransformCtor);
+        il.Emit(OpCodes.Newobj, runtime.RequireNodeStreams().TransformCtor);
         il.Emit(OpCodes.Stloc, transformLocal);
 
         // transform.SetObjectMode(this._objectMode);
         il.Emit(OpCodes.Ldloc, transformLocal);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsReadableObjectModeField);
-        il.Emit(OpCodes.Callvirt, runtime.TSReadableSetObjectMode);
+        il.Emit(OpCodes.Ldfld, runtime.RequireNodeStreams().ReadableObjectModeField);
+        il.Emit(OpCodes.Callvirt, runtime.RequireNodeStreams().ReadableSetObjectMode);
 
         // Create a $FilterTransformCallback, then wrap it in a $TSFunction
         var callbackLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldarg_1); // user callback
-        il.Emit(OpCodes.Newobj, runtime.FilterTransformCallbackCtor);
+        il.Emit(OpCodes.Newobj, runtime.RequireNodeStreams().FilterTransformCallbackCtor);
         il.Emit(OpCodes.Stloc, callbackLocal);
 
         il.Emit(OpCodes.Ldloc, transformLocal);
@@ -1503,13 +1487,13 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, "Invoke");
         il.Emit(OpCodes.Callvirt, _types.GetMethod(typeof(Type), "GetMethod", _types.String)!);
         il.Emit(OpCodes.Newobj, runtime.TSFunctionCtor);
-        il.Emit(OpCodes.Callvirt, runtime.TSTransformSetTransformCallback!);
+        il.Emit(OpCodes.Callvirt, runtime.RequireNodeStreams().TransformSetTransformCallback);
 
         // this.Pipe(transform)
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, transformLocal);
         il.Emit(OpCodes.Ldnull); // options
-        il.Emit(OpCodes.Callvirt, runtime.TSReadablePipe);
+        il.Emit(OpCodes.Callvirt, runtime.RequireNodeStreams().ReadablePipe);
         il.Emit(OpCodes.Pop);
 
         // return transform

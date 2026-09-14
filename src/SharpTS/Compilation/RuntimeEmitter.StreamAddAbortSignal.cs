@@ -23,13 +23,13 @@ public partial class RuntimeEmitter
             "$StreamAbortCallback",
             TypeAttributes.Public | TypeAttributes.BeforeFieldInit,
             _types.Object);
-        runtime.StreamAbortCallbackType = typeBuilder;
+        runtime.RequireNodeStreams().AbortCallbackType = typeBuilder;
 
         var streamField = typeBuilder.DefineField("_stream", _types.Object, FieldAttributes.Private);
 
         // ctor(object stream)
         var ctor = typeBuilder.DefineConstructor(MethodAttributes.Public, CallingConventions.Standard, [_types.Object]);
-        runtime.StreamAbortCallbackCtor = ctor;
+        runtime.RequireNodeStreams().AbortCallbackCtor = ctor;
         var cil = ctor.GetILGenerator();
         cil.Emit(OpCodes.Ldarg_0);
         cil.Emit(OpCodes.Call, _types.GetConstructor(_types.Object, Type.EmptyTypes)!);
@@ -40,7 +40,7 @@ public partial class RuntimeEmitter
 
         // object OnAbort() — destroys _stream with an AbortError, returns null.
         var onAbort = typeBuilder.DefineMethod("OnAbort", MethodAttributes.Public, _types.Object, Type.EmptyTypes);
-        runtime.StreamAbortCallbackOnAbort = onAbort;
+        runtime.RequireNodeStreams().AbortCallbackOnAbort = onAbort;
         var il = onAbort.GetILGenerator();
         EmitDestroyStreamWithAbortError(il, runtime, gen =>
         {
@@ -65,7 +65,7 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.Object, _types.Object]);
-        runtime.StreamAddAbortSignal = method;
+        runtime.RequireNodeStreams().AddAbortSignal = method;
 
         var il = method.GetILGenerator();
         var retStream = il.DefineLabel();
@@ -96,8 +96,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "abort");
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Newobj, runtime.StreamAbortCallbackCtor);
-        EmitInstanceMethodInfoLiteral(il, runtime.StreamAbortCallbackOnAbort, runtime.StreamAbortCallbackType);
+        il.Emit(OpCodes.Newobj, runtime.RequireNodeStreams().AbortCallbackCtor);
+        EmitInstanceMethodInfoLiteral(il, runtime.RequireNodeStreams().AbortCallbackOnAbort, runtime.RequireNodeStreams().AbortCallbackType);
         il.Emit(OpCodes.Newobj, runtime.TSFunctionCtor);
         il.Emit(OpCodes.Call, runtime.AbortSignalAddEventListener);
         il.Emit(OpCodes.Pop);
@@ -132,23 +132,23 @@ public partial class RuntimeEmitter
         var done = il.DefineLabel();
 
         il.Emit(OpCodes.Ldloc, sLocal);
-        il.Emit(OpCodes.Isinst, runtime.TSReadableType);
+        il.Emit(OpCodes.Isinst, runtime.RequireNodeStreams().ReadableType);
         il.Emit(OpCodes.Brfalse, notReadable);
         il.Emit(OpCodes.Ldloc, sLocal);
-        il.Emit(OpCodes.Castclass, runtime.TSReadableType);
+        il.Emit(OpCodes.Castclass, runtime.RequireNodeStreams().ReadableType);
         il.Emit(OpCodes.Ldloc, errLocal);
-        il.Emit(OpCodes.Callvirt, runtime.TSReadableDestroy);
+        il.Emit(OpCodes.Callvirt, runtime.RequireNodeStreams().ReadableDestroy);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Br, done);
 
         il.MarkLabel(notReadable);
         il.Emit(OpCodes.Ldloc, sLocal);
-        il.Emit(OpCodes.Isinst, runtime.TSWritableType);
+        il.Emit(OpCodes.Isinst, runtime.RequireNodeStreams().WritableType);
         il.Emit(OpCodes.Brfalse, done);
         il.Emit(OpCodes.Ldloc, sLocal);
-        il.Emit(OpCodes.Castclass, runtime.TSWritableType);
+        il.Emit(OpCodes.Castclass, runtime.RequireNodeStreams().WritableType);
         il.Emit(OpCodes.Ldloc, errLocal);
-        il.Emit(OpCodes.Callvirt, runtime.TSWritableDestroy);
+        il.Emit(OpCodes.Callvirt, runtime.RequireNodeStreams().WritableDestroy);
         il.Emit(OpCodes.Pop);
 
         il.MarkLabel(done);

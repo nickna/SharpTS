@@ -51,10 +51,10 @@ public sealed class StreamModuleEmitter : IBuiltInModuleEmitter
                 EmitIsErroredCall(emitter, arguments);
                 return true;
             case "getDefaultHighWaterMark":
-                EmitDefaultHwmCall(emitter, arguments, emitter.Context.Runtime!.StreamGetDefaultHighWaterMark, getter: true);
+                EmitDefaultHwmCall(emitter, arguments, emitter.Context.Runtime!.RequireNodeStreams().GetDefaultHighWaterMark, getter: true);
                 return true;
             case "setDefaultHighWaterMark":
-                EmitDefaultHwmCall(emitter, arguments, emitter.Context.Runtime!.StreamSetDefaultHighWaterMark, getter: false);
+                EmitDefaultHwmCall(emitter, arguments, emitter.Context.Runtime!.RequireNodeStreams().SetDefaultHighWaterMark, getter: false);
                 return true;
             case "Readable.from":
                 EmitReadableFromCall(emitter, arguments);
@@ -111,7 +111,7 @@ public sealed class StreamModuleEmitter : IBuiltInModuleEmitter
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Ldstr, "pipeline");
         il.Emit(OpCodes.Ldnull); // target
-        ctx.Types.EmitLoadMethodInfoViaHandle(il, ctx.Runtime!.StreamPromisePipeline);
+        ctx.Types.EmitLoadMethodInfoViaHandle(il, ctx.Runtime!.RequireNodeStreams().PromisePipeline);
         il.Emit(OpCodes.Newobj, ctx.Runtime!.TSFunctionCtor);
         il.Emit(OpCodes.Call, addMethod);
 
@@ -119,7 +119,7 @@ public sealed class StreamModuleEmitter : IBuiltInModuleEmitter
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Ldstr, "finished");
         il.Emit(OpCodes.Ldnull);
-        ctx.Types.EmitLoadMethodInfoViaHandle(il, ctx.Runtime!.StreamPromiseFinished);
+        ctx.Types.EmitLoadMethodInfoViaHandle(il, ctx.Runtime!.RequireNodeStreams().PromiseFinished);
         il.Emit(OpCodes.Newobj, ctx.Runtime!.TSFunctionCtor);
         il.Emit(OpCodes.Call, addMethod);
 
@@ -145,7 +145,7 @@ public sealed class StreamModuleEmitter : IBuiltInModuleEmitter
             il.Emit(OpCodes.Stelem_Ref);
         }
 
-        il.Emit(OpCodes.Call, ctx.Runtime!.StreamFinished);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireNodeStreams().Finished);
     }
 
     private static void EmitPipelineCall(IEmitterContext emitter, List<Expr> arguments)
@@ -165,7 +165,7 @@ public sealed class StreamModuleEmitter : IBuiltInModuleEmitter
             il.Emit(OpCodes.Stelem_Ref);
         }
 
-        il.Emit(OpCodes.Call, ctx.Runtime!.StreamPipeline);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireNodeStreams().Pipeline);
     }
 
     private static void EmitAddAbortSignalCall(IEmitterContext emitter, List<Expr> arguments)
@@ -176,13 +176,13 @@ public sealed class StreamModuleEmitter : IBuiltInModuleEmitter
         // Real wiring (#1027): $Runtime.StreamAddAbortSignal(signal, stream) destroys the stream
         // with an AbortError when the signal fires, and returns the stream. The helper is only
         // emitted when AbortController is in use; otherwise fall back to returning the stream.
-        if (arguments.Count >= 2 && ctx.Runtime!.StreamAddAbortSignal != null)
+        if (arguments.Count >= 2 && ctx.Runtime!.RequireNodeStreams().HasAbortSignal)
         {
             emitter.EmitExpression(arguments[0]);
             emitter.EmitBoxIfNeeded(arguments[0]);
             emitter.EmitExpression(arguments[1]);
             emitter.EmitBoxIfNeeded(arguments[1]);
-            il.Emit(OpCodes.Call, ctx.Runtime!.StreamAddAbortSignal);
+            il.Emit(OpCodes.Call, ctx.Runtime!.RequireNodeStreams().AddAbortSignal);
         }
         else if (arguments.Count >= 2)
         {
@@ -208,7 +208,7 @@ public sealed class StreamModuleEmitter : IBuiltInModuleEmitter
         else
             il.Emit(OpCodes.Ldnull);
 
-        il.Emit(OpCodes.Isinst, ctx.Runtime!.TSReadableType);
+        il.Emit(OpCodes.Isinst, ctx.Runtime!.RequireNodeStreams().ReadableType);
         var trueLabel = il.DefineLabel();
         var endLabel = il.DefineLabel();
         il.Emit(OpCodes.Brtrue, trueLabel);
@@ -243,11 +243,11 @@ public sealed class StreamModuleEmitter : IBuiltInModuleEmitter
         var endLabel = il.DefineLabel();
 
         il.Emit(OpCodes.Ldloc, objLocal);
-        il.Emit(OpCodes.Isinst, ctx.Runtime!.TSWritableType);
+        il.Emit(OpCodes.Isinst, ctx.Runtime!.RequireNodeStreams().WritableType);
         il.Emit(OpCodes.Brtrue, trueLabel);
 
         il.Emit(OpCodes.Ldloc, objLocal);
-        il.Emit(OpCodes.Isinst, ctx.Runtime!.TSDuplexType);
+        il.Emit(OpCodes.Isinst, ctx.Runtime!.RequireNodeStreams().DuplexType);
         il.Emit(OpCodes.Brtrue, trueLabel);
 
         il.Emit(OpCodes.Ldc_I4_0);
@@ -279,7 +279,7 @@ public sealed class StreamModuleEmitter : IBuiltInModuleEmitter
             il.Emit(OpCodes.Stelem_Ref);
         }
 
-        il.Emit(OpCodes.Call, ctx.Runtime!.StreamReadableFrom);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireNodeStreams().ReadableFrom);
     }
 
     /// <summary>
@@ -320,21 +320,21 @@ public sealed class StreamModuleEmitter : IBuiltInModuleEmitter
         var endLabel = il.DefineLabel();
 
         il.Emit(OpCodes.Ldloc, objLocal);
-        il.Emit(OpCodes.Isinst, ctx.Runtime!.TSReadableType);
+        il.Emit(OpCodes.Isinst, ctx.Runtime!.RequireNodeStreams().ReadableType);
         il.Emit(OpCodes.Brfalse, notReadable);
         il.Emit(OpCodes.Ldloc, objLocal);
-        il.Emit(OpCodes.Castclass, ctx.Runtime!.TSReadableType);
-        il.Emit(OpCodes.Callvirt, ctx.Runtime!.TSReadableErroredGetter);
+        il.Emit(OpCodes.Castclass, ctx.Runtime!.RequireNodeStreams().ReadableType);
+        il.Emit(OpCodes.Callvirt, ctx.Runtime!.RequireNodeStreams().ReadableErroredGetter);
         il.Emit(OpCodes.Box, typeof(bool));
         il.Emit(OpCodes.Br, endLabel);
 
         il.MarkLabel(notReadable);
         il.Emit(OpCodes.Ldloc, objLocal);
-        il.Emit(OpCodes.Isinst, ctx.Runtime!.TSWritableType);
+        il.Emit(OpCodes.Isinst, ctx.Runtime!.RequireNodeStreams().WritableType);
         il.Emit(OpCodes.Brfalse, falseLabel);
         il.Emit(OpCodes.Ldloc, objLocal);
-        il.Emit(OpCodes.Castclass, ctx.Runtime!.TSWritableType);
-        il.Emit(OpCodes.Callvirt, ctx.Runtime!.TSWritableErroredGetter);
+        il.Emit(OpCodes.Castclass, ctx.Runtime!.RequireNodeStreams().WritableType);
+        il.Emit(OpCodes.Callvirt, ctx.Runtime!.RequireNodeStreams().WritableErroredGetter);
         il.Emit(OpCodes.Box, typeof(bool));
         il.Emit(OpCodes.Br, endLabel);
 
@@ -381,12 +381,12 @@ public sealed class StreamModuleEmitter : IBuiltInModuleEmitter
 
     private static void EmitDuplexFromCall(IEmitterContext emitter, List<Expr> arguments)
     {
-        EmitPackedArgsCall(emitter, arguments, emitter.Context.Runtime!.StreamDuplexFrom);
+        EmitPackedArgsCall(emitter, arguments, emitter.Context.Runtime!.RequireNodeStreams().DuplexFrom);
     }
 
     private static void EmitComposeCall(IEmitterContext emitter, List<Expr> arguments)
     {
-        EmitPackedArgsCall(emitter, arguments, emitter.Context.Runtime!.StreamCompose);
+        EmitPackedArgsCall(emitter, arguments, emitter.Context.Runtime!.RequireNodeStreams().Compose);
     }
 
     /// <summary>Packs the arguments into an object[] and calls the given runtime helper.</summary>

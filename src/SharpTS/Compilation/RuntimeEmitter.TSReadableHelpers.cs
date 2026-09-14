@@ -16,11 +16,9 @@ namespace SharpTS.Compilation;
 /// </summary>
 public partial class RuntimeEmitter
 {
-    private MethodBuilder _tsReadableDrainToList = null!;
-
     private void EmitTSReadableIterHelpers(TypeBuilder typeBuilder, EmittedRuntime runtime, Type queueType)
     {
-        EmitTSReadableDrainToList(typeBuilder, runtime, queueType);
+        EmitTSReadableDrainToList(typeBuilder, runtime.RequireNodeStreams(), queueType);
         EmitTSReadableReduce(typeBuilder, runtime);
         EmitTSReadablePredicate(typeBuilder, runtime, "Some");
         EmitTSReadablePredicate(typeBuilder, runtime, "Every");
@@ -32,10 +30,10 @@ public partial class RuntimeEmitter
     }
 
     /// <summary>private List&lt;object&gt; DrainToList() — drains _readBuffer into a fresh list.</summary>
-    private void EmitTSReadableDrainToList(TypeBuilder typeBuilder, EmittedRuntime runtime, Type queueType)
+    private void EmitTSReadableDrainToList(TypeBuilder typeBuilder, EmittedNodeStreamRuntime nodeStreams, Type queueType)
     {
         var method = typeBuilder.DefineMethod("DrainToList", MethodAttributes.Private, _types.ListOfObject, Type.EmptyTypes);
-        _tsReadableDrainToList = method;
+        nodeStreams.ReadableDrainToList = method;
 
         var il = method.GetILGenerator();
         var countGetter = _types.GetProperty(queueType, "Count")!.GetGetMethod()!;
@@ -50,13 +48,13 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(loop);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsReadableBufferField);
+        il.Emit(OpCodes.Ldfld, nodeStreams.ReadableBufferField);
         il.Emit(OpCodes.Callvirt, countGetter);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ble, done);
         il.Emit(OpCodes.Ldloc, listLocal);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsReadableBufferField);
+        il.Emit(OpCodes.Ldfld, nodeStreams.ReadableBufferField);
         il.Emit(OpCodes.Callvirt, dequeue);
         il.Emit(OpCodes.Callvirt, listAdd);
         il.Emit(OpCodes.Br, loop);
@@ -94,7 +92,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Castclass, runtime.TSFunctionType);
         il.Emit(OpCodes.Stloc, fnLocal);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, _tsReadableDrainToList);
+        il.Emit(OpCodes.Call, runtime.RequireNodeStreams().ReadableDrainToList);
         il.Emit(OpCodes.Stloc, itemsLocal);
         il.Emit(OpCodes.Ldloc, itemsLocal);
         il.Emit(OpCodes.Callvirt, ListCountGetter);
@@ -184,7 +182,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Castclass, runtime.TSFunctionType);
         il.Emit(OpCodes.Stloc, fnLocal);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, _tsReadableDrainToList);
+        il.Emit(OpCodes.Call, runtime.RequireNodeStreams().ReadableDrainToList);
         il.Emit(OpCodes.Stloc, itemsLocal);
         il.Emit(OpCodes.Ldloc, itemsLocal);
         il.Emit(OpCodes.Callvirt, ListCountGetter);
@@ -279,7 +277,7 @@ public partial class RuntimeEmitter
 
         var nLocal = il.DeclareLocal(_types.Int32);
         var itemsLocal = il.DeclareLocal(_types.ListOfObject);
-        var rLocal = il.DeclareLocal(runtime.TSReadableType);
+        var rLocal = il.DeclareLocal(runtime.RequireNodeStreams().ReadableType);
         var iLocal = il.DeclareLocal(_types.Int32);
         var countLocal = il.DeclareLocal(_types.Int32);
 
@@ -290,13 +288,13 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, nLocal);
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, _tsReadableDrainToList);
+        il.Emit(OpCodes.Call, runtime.RequireNodeStreams().ReadableDrainToList);
         il.Emit(OpCodes.Stloc, itemsLocal);
         il.Emit(OpCodes.Ldloc, itemsLocal);
         il.Emit(OpCodes.Callvirt, ListCountGetter);
         il.Emit(OpCodes.Stloc, countLocal);
 
-        EmitNewHelperReadable(il, runtime, rLocal, objectModeFromThis: true);
+        EmitNewHelperReadable(il, runtime.RequireNodeStreams(), rLocal, objectModeFromThis: true);
 
         // start index: Drop -> n, Take -> 0;  end: Drop -> count, Take -> min(n,count)
         if (kind == "Drop")
@@ -329,7 +327,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, itemsLocal);
         il.Emit(OpCodes.Ldloc, iLocal);
         il.Emit(OpCodes.Callvirt, ListItemGetter);
-        il.Emit(OpCodes.Callvirt, runtime.TSReadablePush);
+        il.Emit(OpCodes.Callvirt, runtime.RequireNodeStreams().ReadablePush);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Ldloc, iLocal);
         il.Emit(OpCodes.Ldc_I4_1);
@@ -338,7 +336,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, loop);
         il.MarkLabel(endLoop);
 
-        EmitPushNullAndReturn(il, runtime, rLocal);
+        EmitPushNullAndReturn(il, runtime.RequireNodeStreams(), rLocal);
     }
 
     /// <summary>public object FlatMap(object fn) — maps each chunk; flattens $Array results.</summary>
@@ -349,7 +347,7 @@ public partial class RuntimeEmitter
 
         var fnLocal = il.DeclareLocal(runtime.TSFunctionType);
         var itemsLocal = il.DeclareLocal(_types.ListOfObject);
-        var rLocal = il.DeclareLocal(runtime.TSReadableType);
+        var rLocal = il.DeclareLocal(runtime.RequireNodeStreams().ReadableType);
         var iLocal = il.DeclareLocal(_types.Int32);
         var countLocal = il.DeclareLocal(_types.Int32);
         var mappedLocal = il.DeclareLocal(_types.Object);
@@ -358,13 +356,13 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Castclass, runtime.TSFunctionType);
         il.Emit(OpCodes.Stloc, fnLocal);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, _tsReadableDrainToList);
+        il.Emit(OpCodes.Call, runtime.RequireNodeStreams().ReadableDrainToList);
         il.Emit(OpCodes.Stloc, itemsLocal);
         il.Emit(OpCodes.Ldloc, itemsLocal);
         il.Emit(OpCodes.Callvirt, ListCountGetter);
         il.Emit(OpCodes.Stloc, countLocal);
 
-        EmitNewHelperReadable(il, runtime, rLocal, objectModeFromThis: false, forceObjectMode: true);
+        EmitNewHelperReadable(il, runtime.RequireNodeStreams(), rLocal, objectModeFromThis: false, forceObjectMode: true);
 
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Stloc, iLocal);
@@ -420,7 +418,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, elemsLocal);
         il.Emit(OpCodes.Ldloc, jLocal);
         il.Emit(OpCodes.Callvirt, ListItemGetter);
-        il.Emit(OpCodes.Callvirt, runtime.TSReadablePush);
+        il.Emit(OpCodes.Callvirt, runtime.RequireNodeStreams().ReadablePush);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Ldloc, jLocal);
         il.Emit(OpCodes.Ldc_I4_1);
@@ -433,7 +431,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(notArray);
         il.Emit(OpCodes.Ldloc, rLocal);
         il.Emit(OpCodes.Ldloc, mappedLocal);
-        il.Emit(OpCodes.Callvirt, runtime.TSReadablePush);
+        il.Emit(OpCodes.Callvirt, runtime.RequireNodeStreams().ReadablePush);
         il.Emit(OpCodes.Pop);
 
         il.MarkLabel(afterPush);
@@ -444,7 +442,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, loop);
         il.MarkLabel(endLoop);
 
-        EmitPushNullAndReturn(il, runtime, rLocal);
+        EmitPushNullAndReturn(il, runtime.RequireNodeStreams(), rLocal);
     }
 
     /// <summary>public object AsIndexedPairs() — emits [index, value] pairs into a new $Readable.</summary>
@@ -454,19 +452,19 @@ public partial class RuntimeEmitter
         var il = method.GetILGenerator();
 
         var itemsLocal = il.DeclareLocal(_types.ListOfObject);
-        var rLocal = il.DeclareLocal(runtime.TSReadableType);
+        var rLocal = il.DeclareLocal(runtime.RequireNodeStreams().ReadableType);
         var iLocal = il.DeclareLocal(_types.Int32);
         var countLocal = il.DeclareLocal(_types.Int32);
         var listAdd = _types.GetMethod(_types.ListOfObject, "Add", _types.Object);
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, _tsReadableDrainToList);
+        il.Emit(OpCodes.Call, runtime.RequireNodeStreams().ReadableDrainToList);
         il.Emit(OpCodes.Stloc, itemsLocal);
         il.Emit(OpCodes.Ldloc, itemsLocal);
         il.Emit(OpCodes.Callvirt, ListCountGetter);
         il.Emit(OpCodes.Stloc, countLocal);
 
-        EmitNewHelperReadable(il, runtime, rLocal, objectModeFromThis: false, forceObjectMode: true);
+        EmitNewHelperReadable(il, runtime.RequireNodeStreams(), rLocal, objectModeFromThis: false, forceObjectMode: true);
 
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Stloc, iLocal);
@@ -496,7 +494,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, rLocal);
         il.Emit(OpCodes.Ldloc, pairLocal);
         il.Emit(OpCodes.Newobj, runtime.ArrayStorage.Ctor);
-        il.Emit(OpCodes.Callvirt, runtime.TSReadablePush);
+        il.Emit(OpCodes.Callvirt, runtime.RequireNodeStreams().ReadablePush);
         il.Emit(OpCodes.Pop);
 
         il.Emit(OpCodes.Ldloc, iLocal);
@@ -506,13 +504,13 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, loop);
         il.MarkLabel(endLoop);
 
-        EmitPushNullAndReturn(il, runtime, rLocal);
+        EmitPushNullAndReturn(il, runtime.RequireNodeStreams(), rLocal);
     }
 
     /// <summary>Emits: rLocal = new $Readable(); rLocal.SetObjectMode(forceObjectMode ? true : this._objectMode);</summary>
-    private void EmitNewHelperReadable(ILGenerator il, EmittedRuntime runtime, LocalBuilder rLocal, bool objectModeFromThis, bool forceObjectMode = false)
+    private void EmitNewHelperReadable(ILGenerator il, EmittedNodeStreamRuntime nodeStreams, LocalBuilder rLocal, bool objectModeFromThis, bool forceObjectMode = false)
     {
-        il.Emit(OpCodes.Newobj, runtime.TSReadableCtor);
+        il.Emit(OpCodes.Newobj, nodeStreams.ReadableCtor);
         il.Emit(OpCodes.Stloc, rLocal);
         il.Emit(OpCodes.Ldloc, rLocal);
         if (forceObjectMode)
@@ -522,17 +520,17 @@ public partial class RuntimeEmitter
         else
         {
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldfld, _tsReadableObjectModeField);
+            il.Emit(OpCodes.Ldfld, nodeStreams.ReadableObjectModeField);
         }
-        il.Emit(OpCodes.Callvirt, runtime.TSReadableSetObjectMode);
+        il.Emit(OpCodes.Callvirt, nodeStreams.ReadableSetObjectMode);
     }
 
     /// <summary>Emits: rLocal.Push(null); return rLocal;</summary>
-    private void EmitPushNullAndReturn(ILGenerator il, EmittedRuntime runtime, LocalBuilder rLocal)
+    private void EmitPushNullAndReturn(ILGenerator il, EmittedNodeStreamRuntime nodeStreams, LocalBuilder rLocal)
     {
         il.Emit(OpCodes.Ldloc, rLocal);
         il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Callvirt, runtime.TSReadablePush);
+        il.Emit(OpCodes.Callvirt, nodeStreams.ReadablePush);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Ldloc, rLocal);
         il.Emit(OpCodes.Ret);

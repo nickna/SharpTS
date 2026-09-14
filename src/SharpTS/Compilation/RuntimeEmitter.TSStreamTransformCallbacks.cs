@@ -41,7 +41,7 @@ public partial class RuntimeEmitter
             CallingConventions.Standard,
             [_types.Object]
         );
-        runtime.MapTransformCallbackCtor = ctor;
+        runtime.RequireNodeStreams().MapTransformCallbackCtor = ctor;
 
         var ctorIL = ctor.GetILGenerator();
         ctorIL.Emit(OpCodes.Ldarg_0);
@@ -100,10 +100,10 @@ public partial class RuntimeEmitter
 
         // done.Invoke([null, result])
         il.Emit(OpCodes.Ldloc, doneLocal);
-        il.Emit(OpCodes.Isinst, runtime.TransformDoneCallbackType);
+        il.Emit(OpCodes.Isinst, runtime.RequireNodeStreams().TransformDoneCallbackType);
         il.Emit(OpCodes.Brfalse, noDoneLabel);
         il.Emit(OpCodes.Ldloc, doneLocal);
-        il.Emit(OpCodes.Castclass, runtime.TransformDoneCallbackType);
+        il.Emit(OpCodes.Castclass, runtime.RequireNodeStreams().TransformDoneCallbackType);
         il.Emit(OpCodes.Ldc_I4_2);
         il.Emit(OpCodes.Newarr, _types.Object);
         il.Emit(OpCodes.Dup);
@@ -114,7 +114,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Ldloc, resultLocal); // data = result
         il.Emit(OpCodes.Stelem_Ref);
-        il.Emit(OpCodes.Callvirt, runtime.TransformDoneCallbackInvoke);
+        il.Emit(OpCodes.Callvirt, runtime.RequireNodeStreams().TransformDoneCallbackInvoke);
         il.Emit(OpCodes.Pop);
 
         il.MarkLabel(noDoneLabel);
@@ -145,7 +145,7 @@ public partial class RuntimeEmitter
             CallingConventions.Standard,
             [_types.Object]
         );
-        runtime.FilterTransformCallbackCtor = ctor;
+        runtime.RequireNodeStreams().FilterTransformCallbackCtor = ctor;
 
         var ctorIL = ctor.GetILGenerator();
         ctorIL.Emit(OpCodes.Ldarg_0);
@@ -200,7 +200,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldelem_Ref);
         il.Emit(OpCodes.Stloc, doneLocal);
         il.Emit(OpCodes.Ldloc, doneLocal);
-        il.Emit(OpCodes.Isinst, runtime.TransformDoneCallbackType);
+        il.Emit(OpCodes.Isinst, runtime.RequireNodeStreams().TransformDoneCallbackType);
         il.Emit(OpCodes.Brfalse, noDoneLabel);
 
         // Check truthiness of result:
@@ -229,7 +229,7 @@ public partial class RuntimeEmitter
         // Truthy: done.Invoke([null, chunk])
         il.MarkLabel(afterPushLabel);
         il.Emit(OpCodes.Ldloc, doneLocal);
-        il.Emit(OpCodes.Castclass, runtime.TransformDoneCallbackType);
+        il.Emit(OpCodes.Castclass, runtime.RequireNodeStreams().TransformDoneCallbackType);
         il.Emit(OpCodes.Ldc_I4_2);
         il.Emit(OpCodes.Newarr, _types.Object);
         il.Emit(OpCodes.Dup);
@@ -240,21 +240,21 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Ldloc, chunkLocal);
         il.Emit(OpCodes.Stelem_Ref);
-        il.Emit(OpCodes.Callvirt, runtime.TransformDoneCallbackInvoke);
+        il.Emit(OpCodes.Callvirt, runtime.RequireNodeStreams().TransformDoneCallbackInvoke);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Br, noDoneLabel);
 
         // Not truthy: done.Invoke([null]) (no data — chunk is filtered out)
         il.MarkLabel(notTruthyLabel);
         il.Emit(OpCodes.Ldloc, doneLocal);
-        il.Emit(OpCodes.Castclass, runtime.TransformDoneCallbackType);
+        il.Emit(OpCodes.Castclass, runtime.RequireNodeStreams().TransformDoneCallbackType);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Newarr, _types.Object);
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Stelem_Ref);
-        il.Emit(OpCodes.Callvirt, runtime.TransformDoneCallbackInvoke);
+        il.Emit(OpCodes.Callvirt, runtime.RequireNodeStreams().TransformDoneCallbackInvoke);
         il.Emit(OpCodes.Pop);
 
         il.MarkLabel(noDoneLabel);

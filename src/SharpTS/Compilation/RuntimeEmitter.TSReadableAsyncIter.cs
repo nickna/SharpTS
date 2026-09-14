@@ -18,10 +18,6 @@ namespace SharpTS.Compilation;
 /// </summary>
 public partial class RuntimeEmitter
 {
-    private MethodBuilder _tsReadableMakeIterResult = null!;
-    private MethodBuilder _tsReadableIterNext = null!;
-    private MethodBuilder _tsReadableIterReturn = null!;
-
     /// <summary>
     /// Phase 2b: emit the async-iterator methods on <c>$Readable</c>. Must run before
     /// <c>CreateType()</c>. Depends only on BCL types plus the already-emitted
@@ -30,7 +26,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitTSReadableAsyncIteratorMethods(TypeBuilder typeBuilder, EmittedRuntime runtime, Type queueType)
     {
-        EmitTSReadableMakeIterResult(typeBuilder, runtime);
+        EmitTSReadableMakeIterResult(typeBuilder, runtime.RequireNodeStreams());
         EmitTSReadableIterNext(typeBuilder, runtime, queueType);
         EmitTSReadableIterReturn(typeBuilder, runtime, queueType);
         EmitTSReadableGetAsyncIterator(typeBuilder, runtime);
@@ -43,14 +39,14 @@ public partial class RuntimeEmitter
     /// private Dictionary&lt;string,object?&gt; MakeIterResult(object? value, bool done)
     /// — builds the <c>{ value, done }</c> iterator-result record.
     /// </summary>
-    private void EmitTSReadableMakeIterResult(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSReadableMakeIterResult(TypeBuilder typeBuilder, EmittedNodeStreamRuntime nodeStreams)
     {
         var method = typeBuilder.DefineMethod(
             "MakeIterResult",
             MethodAttributes.Private,
             _types.Object,
             [_types.Object, _types.Boolean]);
-        _tsReadableMakeIterResult = method;
+        nodeStreams.ReadableMakeIterResult = method;
 
         var il = method.GetILGenerator();
         var dictSetItem = _types.GetMethod(_types.DictionaryStringObject, "set_Item", _types.String, _types.Object);
@@ -86,7 +82,7 @@ public partial class RuntimeEmitter
             MethodAttributes.Public,
             _types.Object,
             Type.EmptyTypes);
-        _tsReadableIterNext = method;
+        runtime.RequireNodeStreams().ReadableIterNext = method;
 
         var il = method.GetILGenerator();
         var countGetter = _types.GetProperty(queueType, "Count")!.GetGetMethod()!;
@@ -103,24 +99,24 @@ public partial class RuntimeEmitter
 
         // if (_readBuffer.Count > 0) return Task.FromResult(MakeIterResult(_readBuffer.Dequeue(), false));
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsReadableBufferField);
+        il.Emit(OpCodes.Ldfld, runtime.RequireNodeStreams().ReadableBufferField);
         il.Emit(OpCodes.Callvirt, countGetter);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ble, notBuffered);
 
         il.Emit(OpCodes.Ldarg_0); // this (for MakeIterResult)
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsReadableBufferField);
+        il.Emit(OpCodes.Ldfld, runtime.RequireNodeStreams().ReadableBufferField);
         il.Emit(OpCodes.Callvirt, dequeue);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Call, _tsReadableMakeIterResult);
+        il.Emit(OpCodes.Call, runtime.RequireNodeStreams().ReadableMakeIterResult);
         il.Emit(OpCodes.Call, fromResult);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(notBuffered);
         // if (_errored) { var tcs = new TCS(); tcs.TrySetException(new $PromiseRejectedException(_error)); return tcs.Task; }
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsReadableErroredField);
+        il.Emit(OpCodes.Ldfld, runtime.RequireNodeStreams().ReadableErroredField);
         il.Emit(OpCodes.Brfalse, notErrored);
 
         var tcsErrLocal = il.DeclareLocal(_types.TaskCompletionSourceOfObject);
@@ -129,7 +125,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, tcsErrLocal);
         il.Emit(OpCodes.Ldloc, tcsErrLocal);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsReadableErrorField);
+        il.Emit(OpCodes.Ldfld, runtime.RequireNodeStreams().ReadableErrorField);
         il.Emit(OpCodes.Newobj, runtime.RequirePromise().RejectedExceptionCtor);
         il.Emit(OpCodes.Callvirt, trySetException);
         il.Emit(OpCodes.Pop);
@@ -140,17 +136,17 @@ public partial class RuntimeEmitter
         il.MarkLabel(notErrored);
         // if (_ended || _destroyed) return Task.FromResult(MakeIterResult(null, true));
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsReadableEndedField);
+        il.Emit(OpCodes.Ldfld, runtime.RequireNodeStreams().ReadableEndedField);
         il.Emit(OpCodes.Brtrue, endedReturnLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsReadableDestroyedField);
+        il.Emit(OpCodes.Ldfld, runtime.RequireNodeStreams().ReadableDestroyedField);
         il.Emit(OpCodes.Brfalse, notEnded);
 
         il.MarkLabel(endedReturnLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Call, _tsReadableMakeIterResult);
+        il.Emit(OpCodes.Call, runtime.RequireNodeStreams().ReadableMakeIterResult);
         il.Emit(OpCodes.Call, fromResult);
         il.Emit(OpCodes.Ret);
 
@@ -159,9 +155,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4, (int)TaskCreationOptions.RunContinuationsAsynchronously);
         il.Emit(OpCodes.Newobj, tcsCtor);
-        il.Emit(OpCodes.Stfld, _tsReadableIterWaiterField);
+        il.Emit(OpCodes.Stfld, runtime.RequireNodeStreams().ReadableIterWaiterField);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsReadableIterWaiterField);
+        il.Emit(OpCodes.Ldfld, runtime.RequireNodeStreams().ReadableIterWaiterField);
         il.Emit(OpCodes.Callvirt, tcsTaskGetter);
         il.Emit(OpCodes.Ret);
     }
@@ -177,7 +173,7 @@ public partial class RuntimeEmitter
             MethodAttributes.Public,
             _types.Object,
             Type.EmptyTypes);
-        _tsReadableIterReturn = method;
+        runtime.RequireNodeStreams().ReadableIterReturn = method;
 
         var il = method.GetILGenerator();
         var clear = _types.GetMethod(queueType, "Clear")!;
@@ -187,30 +183,30 @@ public partial class RuntimeEmitter
         // if (!_destroyed) { _destroyed = true; _readable = false; _readBuffer.Clear(); _pipeDestinations.Clear(); }
         var alreadyDestroyed = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsReadableDestroyedField);
+        il.Emit(OpCodes.Ldfld, runtime.RequireNodeStreams().ReadableDestroyedField);
         il.Emit(OpCodes.Brtrue, alreadyDestroyed);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Stfld, _tsReadableDestroyedField);
+        il.Emit(OpCodes.Stfld, runtime.RequireNodeStreams().ReadableDestroyedField);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Stfld, _tsReadableReadableField);
+        il.Emit(OpCodes.Stfld, runtime.RequireNodeStreams().ReadableReadableField);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsReadableBufferField);
+        il.Emit(OpCodes.Ldfld, runtime.RequireNodeStreams().ReadableBufferField);
         il.Emit(OpCodes.Callvirt, clear);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsReadablePipeDestinationsField);
+        il.Emit(OpCodes.Ldfld, runtime.RequireNodeStreams().ReadablePipeDestinationsField);
         il.Emit(OpCodes.Callvirt, listClear);
         il.MarkLabel(alreadyDestroyed);
 
         // Settle a parked pull as done (best-effort).
-        EmitSettleIterWaiterDone(il, runtime);
+        EmitSettleIterWaiterDone(il, runtime.RequireNodeStreams());
 
         // return Task.FromResult(MakeIterResult(null, true));
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Call, _tsReadableMakeIterResult);
+        il.Emit(OpCodes.Call, runtime.RequireNodeStreams().ReadableMakeIterResult);
         il.Emit(OpCodes.Call, fromResult);
         il.Emit(OpCodes.Ret);
     }
@@ -226,7 +222,7 @@ public partial class RuntimeEmitter
             MethodAttributes.Public,
             _types.Object,
             Type.EmptyTypes);
-        runtime.TSReadableGetAsyncIterator = method;
+        runtime.RequireNodeStreams().ReadableGetAsyncIterator = method;
 
         var il = method.GetILGenerator();
         var dictSetItem = _types.GetMethod(_types.DictionaryStringObject, "set_Item", _types.String, _types.Object);
@@ -239,7 +235,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, dictLocal);
         il.Emit(OpCodes.Ldstr, "next");
         il.Emit(OpCodes.Ldarg_0);
-        EmitInstanceMethodInfoLiteral(il, _tsReadableIterNext, typeBuilder);
+        EmitInstanceMethodInfoLiteral(il, runtime.RequireNodeStreams().ReadableIterNext, typeBuilder);
         il.Emit(OpCodes.Newobj, runtime.TSFunctionCtor);
         il.Emit(OpCodes.Callvirt, dictSetItem);
 
@@ -247,7 +243,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, dictLocal);
         il.Emit(OpCodes.Ldstr, "return");
         il.Emit(OpCodes.Ldarg_0);
-        EmitInstanceMethodInfoLiteral(il, _tsReadableIterReturn, typeBuilder);
+        EmitInstanceMethodInfoLiteral(il, runtime.RequireNodeStreams().ReadableIterReturn, typeBuilder);
         il.Emit(OpCodes.Newobj, runtime.TSFunctionCtor);
         il.Emit(OpCodes.Callvirt, dictSetItem);
 
@@ -271,27 +267,27 @@ public partial class RuntimeEmitter
     /// Emits: if (_iterWaiter != null) { var w = _iterWaiter; _iterWaiter = null; w.TrySetResult(MakeIterResult(null, true)); }
     /// Leaves the evaluation stack unchanged. Used by Push (EOF) / Destroy / IterReturn.
     /// </summary>
-    private void EmitSettleIterWaiterDone(ILGenerator il, EmittedRuntime runtime)
+    private void EmitSettleIterWaiterDone(ILGenerator il, EmittedNodeStreamRuntime nodeStreams)
     {
         var trySetResult = _types.GetMethod(_types.TaskCompletionSourceOfObject, "TrySetResult", [_types.Object])!;
         var noWaiter = il.DefineLabel();
         var wLocal = il.DeclareLocal(_types.TaskCompletionSourceOfObject);
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsReadableIterWaiterField);
+        il.Emit(OpCodes.Ldfld, nodeStreams.ReadableIterWaiterField);
         il.Emit(OpCodes.Stloc, wLocal);
         il.Emit(OpCodes.Ldloc, wLocal);
         il.Emit(OpCodes.Brfalse, noWaiter);
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Stfld, _tsReadableIterWaiterField);
+        il.Emit(OpCodes.Stfld, nodeStreams.ReadableIterWaiterField);
 
         il.Emit(OpCodes.Ldloc, wLocal);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Call, _tsReadableMakeIterResult);
+        il.Emit(OpCodes.Call, nodeStreams.ReadableMakeIterResult);
         il.Emit(OpCodes.Callvirt, trySetResult);
         il.Emit(OpCodes.Pop);
 
@@ -309,14 +305,14 @@ public partial class RuntimeEmitter
         var wLocal = il.DeclareLocal(_types.TaskCompletionSourceOfObject);
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsReadableIterWaiterField);
+        il.Emit(OpCodes.Ldfld, runtime.RequireNodeStreams().ReadableIterWaiterField);
         il.Emit(OpCodes.Stloc, wLocal);
         il.Emit(OpCodes.Ldloc, wLocal);
         il.Emit(OpCodes.Brfalse, noWaiter);
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Stfld, _tsReadableIterWaiterField);
+        il.Emit(OpCodes.Stfld, runtime.RequireNodeStreams().ReadableIterWaiterField);
 
         il.Emit(OpCodes.Ldloc, wLocal);
         il.Emit(OpCodes.Ldarg_1); // error
@@ -332,27 +328,27 @@ public partial class RuntimeEmitter
     /// The chunk is loaded from arg1 (Push's chunk parameter). Used by Push's data path; on
     /// delivery it returns <c>true</c> from Push so the chunk is not also buffered.
     /// </summary>
-    private void EmitDeliverChunkToIterWaiterAndReturn(ILGenerator il, EmittedRuntime runtime)
+    private void EmitDeliverChunkToIterWaiterAndReturn(ILGenerator il, EmittedNodeStreamRuntime nodeStreams)
     {
         var trySetResult = _types.GetMethod(_types.TaskCompletionSourceOfObject, "TrySetResult", [_types.Object])!;
         var noWaiter = il.DefineLabel();
         var wLocal = il.DeclareLocal(_types.TaskCompletionSourceOfObject);
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsReadableIterWaiterField);
+        il.Emit(OpCodes.Ldfld, nodeStreams.ReadableIterWaiterField);
         il.Emit(OpCodes.Stloc, wLocal);
         il.Emit(OpCodes.Ldloc, wLocal);
         il.Emit(OpCodes.Brfalse, noWaiter);
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Stfld, _tsReadableIterWaiterField);
+        il.Emit(OpCodes.Stfld, nodeStreams.ReadableIterWaiterField);
 
         il.Emit(OpCodes.Ldloc, wLocal);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1); // chunk
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Call, _tsReadableMakeIterResult);
+        il.Emit(OpCodes.Call, nodeStreams.ReadableMakeIterResult);
         il.Emit(OpCodes.Callvirt, trySetResult);
         il.Emit(OpCodes.Pop);
 

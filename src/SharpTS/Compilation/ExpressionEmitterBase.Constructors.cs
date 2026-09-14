@@ -204,7 +204,7 @@ public abstract partial class ExpressionEmitterBase
                 return true;
 
             case "PassThrough":
-                IL.Emit(OpCodes.Newobj, Ctx.Runtime!.TSPassThroughCtor);
+                IL.Emit(OpCodes.Newobj, Ctx.Runtime!.RequireNodeStreams().PassThroughCtor);
                 SetStackUnknown();
                 return true;
 
@@ -874,10 +874,10 @@ public abstract partial class ExpressionEmitterBase
 
     private void EmitNewReadableConstructor(List<Expr> arguments)
     {
-        IL.Emit(OpCodes.Newobj, Ctx.Runtime!.TSReadableCtor);
+        IL.Emit(OpCodes.Newobj, Ctx.Runtime!.RequireNodeStreams().ReadableCtor);
         if (arguments.Count > 0)
         {
-            var instanceLocal = IL.DeclareLocal(Ctx.Runtime!.TSReadableType);
+            var instanceLocal = IL.DeclareLocal(Ctx.Runtime!.RequireNodeStreams().ReadableType);
             IL.Emit(OpCodes.Stloc, instanceLocal);
             EmitExpression(arguments[0]);
             EnsureBoxed();
@@ -898,7 +898,7 @@ public abstract partial class ExpressionEmitterBase
             IL.Emit(OpCodes.Pop);
             IL.Emit(OpCodes.Ldloc, instanceLocal);
             IL.Emit(OpCodes.Ldc_I4_1);
-            IL.Emit(OpCodes.Call, Ctx.Runtime!.TSReadableSetObjectMode);
+            IL.Emit(OpCodes.Call, Ctx.Runtime!.RequireNodeStreams().ReadableSetObjectMode);
             IL.Emit(OpCodes.Br, afterObjectModeLabel);
             IL.MarkLabel(skipObjectModeLabel);
             IL.Emit(OpCodes.Pop);
@@ -923,7 +923,7 @@ public abstract partial class ExpressionEmitterBase
                 IL.Emit(OpCodes.Ldloc, instanceLocal);
                 IL.Emit(OpCodes.Ldloc, hwmValLocal);
                 IL.Emit(OpCodes.Call, typeof(Convert).GetMethod("ToInt32", [typeof(object)])!);
-                IL.Emit(OpCodes.Call, Ctx.Runtime!.TSReadableSetHighWaterMark!);
+                IL.Emit(OpCodes.Call, Ctx.Runtime!.RequireNodeStreams().ReadableSetHighWaterMark);
                 IL.MarkLabel(skipHwmLabel);
             }
 
@@ -935,12 +935,12 @@ public abstract partial class ExpressionEmitterBase
 
     private void EmitNewWritableConstructor(List<Expr> arguments)
     {
-        IL.Emit(OpCodes.Newobj, Ctx.Runtime!.TSWritableCtor);
+        IL.Emit(OpCodes.Newobj, Ctx.Runtime!.RequireNodeStreams().WritableCtor);
         if (arguments.Count > 0)
         {
             var optionsNullLabel = IL.DefineLabel();
             var endLabel = IL.DefineLabel();
-            var instanceLocal = IL.DeclareLocal(Ctx.Runtime!.TSWritableType);
+            var instanceLocal = IL.DeclareLocal(Ctx.Runtime!.RequireNodeStreams().WritableType);
             IL.Emit(OpCodes.Stloc, instanceLocal);
             EmitExpression(arguments[0]);
             EnsureBoxed();
@@ -960,7 +960,7 @@ public abstract partial class ExpressionEmitterBase
             IL.Emit(OpCodes.Brfalse, skipWriteLabel);
             IL.Emit(OpCodes.Ldloc, instanceLocal);
             IL.Emit(OpCodes.Ldloc, writeCallbackLocal);
-            IL.Emit(OpCodes.Callvirt, Ctx.Runtime!.TSWritableSetWriteCallback!);
+            IL.Emit(OpCodes.Callvirt, Ctx.Runtime!.RequireNodeStreams().WritableSetWriteCallback);
             IL.MarkLabel(skipWriteLabel);
 
             // Extract 'final' callback
@@ -974,7 +974,7 @@ public abstract partial class ExpressionEmitterBase
             IL.Emit(OpCodes.Brfalse, skipFinalLabel);
             IL.Emit(OpCodes.Ldloc, instanceLocal);
             IL.Emit(OpCodes.Ldloc, finalCallbackLocal);
-            IL.Emit(OpCodes.Callvirt, Ctx.Runtime!.TSWritableSetFinalCallback!);
+            IL.Emit(OpCodes.Callvirt, Ctx.Runtime!.RequireNodeStreams().WritableSetFinalCallback);
             IL.MarkLabel(skipFinalLabel);
 
             // Extract 'objectMode' — check if value is boxed true (not just non-null)
@@ -994,7 +994,7 @@ public abstract partial class ExpressionEmitterBase
                 IL.Emit(OpCodes.Brfalse, skipObjectModeLabel);
                 IL.Emit(OpCodes.Ldloc, instanceLocal);
                 IL.Emit(OpCodes.Ldc_I4_1);
-                IL.Emit(OpCodes.Callvirt, Ctx.Runtime!.TSWritableSetObjectMode!);
+                IL.Emit(OpCodes.Callvirt, Ctx.Runtime!.RequireNodeStreams().WritableSetObjectMode);
                 IL.MarkLabel(skipObjectModeLabel);
             }
 
@@ -1014,7 +1014,7 @@ public abstract partial class ExpressionEmitterBase
                 IL.Emit(OpCodes.Brfalse, skipAutoDestroyLabel);
                 IL.Emit(OpCodes.Ldloc, instanceLocal);
                 IL.Emit(OpCodes.Ldc_I4_1);
-                IL.Emit(OpCodes.Callvirt, Types.GetMethod(Ctx.Runtime!.TSWritableType, "SetAutoDestroy"));
+                IL.Emit(OpCodes.Callvirt, Types.GetMethod(Ctx.Runtime!.RequireNodeStreams().WritableType, "SetAutoDestroy"));
                 IL.MarkLabel(skipAutoDestroyLabel);
             }
 
@@ -1034,7 +1034,7 @@ public abstract partial class ExpressionEmitterBase
                 IL.Emit(OpCodes.Ldloc, instanceLocal);
                 IL.Emit(OpCodes.Ldloc, hwmValLocal);
                 IL.Emit(OpCodes.Call, typeof(Convert).GetMethod("ToInt32", [typeof(object)])!);
-                IL.Emit(OpCodes.Callvirt, Types.GetMethod(Ctx.Runtime!.TSWritableType, "SetHighWaterMark"));
+                IL.Emit(OpCodes.Callvirt, Types.GetMethod(Ctx.Runtime!.RequireNodeStreams().WritableType, "SetHighWaterMark"));
                 IL.MarkLabel(skipHwmLabel);
             }
 
@@ -1048,12 +1048,12 @@ public abstract partial class ExpressionEmitterBase
 
     private void EmitNewDuplexConstructor(List<Expr> arguments)
     {
-        IL.Emit(OpCodes.Newobj, Ctx.Runtime!.TSDuplexCtor);
+        IL.Emit(OpCodes.Newobj, Ctx.Runtime!.RequireNodeStreams().DuplexCtor);
         if (arguments.Count > 0)
         {
             var optionsLabel = IL.DefineLabel();
             var endLabel = IL.DefineLabel();
-            var instanceLocal = IL.DeclareLocal(Ctx.Runtime!.TSDuplexType);
+            var instanceLocal = IL.DeclareLocal(Ctx.Runtime!.RequireNodeStreams().DuplexType);
             IL.Emit(OpCodes.Stloc, instanceLocal);
             EmitExpression(arguments[0]);
             EnsureBoxed();
@@ -1073,7 +1073,7 @@ public abstract partial class ExpressionEmitterBase
             IL.Emit(OpCodes.Brfalse, skipWriteLabel);
             IL.Emit(OpCodes.Ldloc, instanceLocal);
             IL.Emit(OpCodes.Ldloc, writeCallbackLocal);
-            IL.Emit(OpCodes.Callvirt, Ctx.Runtime!.TSDuplexSetWriteCallback!);
+            IL.Emit(OpCodes.Callvirt, Ctx.Runtime!.RequireNodeStreams().DuplexSetWriteCallback);
             IL.MarkLabel(skipWriteLabel);
 
             // Extract 'objectMode'
@@ -1086,7 +1086,7 @@ public abstract partial class ExpressionEmitterBase
             IL.Emit(OpCodes.Pop);
             IL.Emit(OpCodes.Ldloc, instanceLocal);
             IL.Emit(OpCodes.Ldc_I4_1);
-            IL.Emit(OpCodes.Callvirt, Ctx.Runtime!.TSDuplexSetObjectMode!);
+            IL.Emit(OpCodes.Callvirt, Ctx.Runtime!.RequireNodeStreams().DuplexSetObjectMode);
             IL.Emit(OpCodes.Br, endLabel);
             IL.MarkLabel(skipObjectModeLabel);
             IL.Emit(OpCodes.Pop);
@@ -1100,12 +1100,12 @@ public abstract partial class ExpressionEmitterBase
 
     private void EmitNewTransformConstructor(List<Expr> arguments)
     {
-        IL.Emit(OpCodes.Newobj, Ctx.Runtime!.TSTransformCtor);
+        IL.Emit(OpCodes.Newobj, Ctx.Runtime!.RequireNodeStreams().TransformCtor);
         if (arguments.Count > 0)
         {
             var optionsLabel = IL.DefineLabel();
             var endLabel = IL.DefineLabel();
-            var instanceLocal = IL.DeclareLocal(Ctx.Runtime!.TSTransformType);
+            var instanceLocal = IL.DeclareLocal(Ctx.Runtime!.RequireNodeStreams().TransformType);
             IL.Emit(OpCodes.Stloc, instanceLocal);
             EmitExpression(arguments[0]);
             EnsureBoxed();
@@ -1125,7 +1125,7 @@ public abstract partial class ExpressionEmitterBase
             IL.Emit(OpCodes.Brfalse, afterTransformLabel);
             IL.Emit(OpCodes.Ldloc, instanceLocal);
             IL.Emit(OpCodes.Ldloc, transformCallbackLocal);
-            IL.Emit(OpCodes.Callvirt, Types.GetMethod(Ctx.Runtime!.TSTransformType, "SetTransformCallback"));
+            IL.Emit(OpCodes.Callvirt, Types.GetMethod(Ctx.Runtime!.RequireNodeStreams().TransformType, "SetTransformCallback"));
             IL.MarkLabel(afterTransformLabel);
 
             // Get 'flush' callback
@@ -1139,7 +1139,7 @@ public abstract partial class ExpressionEmitterBase
             IL.Emit(OpCodes.Brfalse, afterFlushLabel);
             IL.Emit(OpCodes.Ldloc, instanceLocal);
             IL.Emit(OpCodes.Ldloc, flushCallbackLocal);
-            IL.Emit(OpCodes.Callvirt, Ctx.Runtime!.TSTransformSetFlushCallback!);
+            IL.Emit(OpCodes.Callvirt, Ctx.Runtime!.RequireNodeStreams().TransformSetFlushCallback);
             IL.MarkLabel(afterFlushLabel);
 
             // Extract 'objectMode' (Transform extends Duplex)
@@ -1152,7 +1152,7 @@ public abstract partial class ExpressionEmitterBase
             IL.Emit(OpCodes.Pop);
             IL.Emit(OpCodes.Ldloc, instanceLocal);
             IL.Emit(OpCodes.Ldc_I4_1);
-            IL.Emit(OpCodes.Callvirt, Ctx.Runtime!.TSDuplexSetObjectMode!);
+            IL.Emit(OpCodes.Callvirt, Ctx.Runtime!.RequireNodeStreams().DuplexSetObjectMode);
             IL.Emit(OpCodes.Br, endLabel);
             IL.MarkLabel(skipObjectModeLabel);
             IL.Emit(OpCodes.Pop);
