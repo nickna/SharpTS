@@ -1211,6 +1211,117 @@ public class StandaloneDllTests
         }
     }
 
+    public static IEnumerable<object[]> WebStreamMetadataPrograms
+    {
+        get
+        {
+            yield return new object[]
+            {
+                """
+                import { CountQueuingStrategy, ByteLengthQueuingStrategy } from 'stream/web';
+                const count = new CountQueuingStrategy({ highWaterMark: 7 });
+                const bytes = new ByteLengthQueuingStrategy({ highWaterMark: 12 });
+                console.log(count.highWaterMark, count.size('abc'));
+                console.log(bytes.highWaterMark, bytes.size(Buffer.from('abc')));
+                """,
+                "7 1\n12 3\n"
+            };
+            yield return new object[]
+            {
+                """
+                async function main() {
+                  const stream = (ReadableStream as any).from(['x', 'y']);
+                  const reader = stream.getReader();
+                  console.log(stream.locked);
+                  const a = await reader.read(); console.log(a.value, a.done);
+                  const b = await reader.read(); console.log(b.value, b.done);
+                  const c = await reader.read(); console.log(c.value, c.done);
+                }
+                main();
+                """,
+                "true\nx false\ny false\nundefined true\n"
+            };
+            yield return new object[]
+            {
+                """
+                async function main() {
+                  const stream = new WritableStream({ write(c: any) { console.log(c); }, close() { console.log('closed'); } });
+                  const writer = stream.getWriter();
+                  console.log(stream.locked);
+                  await writer.write('written'); await writer.close();
+                  console.log('done');
+                }
+                main();
+                """,
+                "true\nwritten\nclosed\ndone\n"
+            };
+            yield return new object[]
+            {
+                """
+                async function main() {
+                  const stream = new TransformStream({ transform(c: any, ctrl: any) { ctrl.enqueue(c * 2); }, flush(ctrl: any) { ctrl.enqueue(9); } });
+                  const writer = stream.writable.getWriter();
+                  await writer.write(2); await writer.close();
+                  const reader = stream.readable.getReader();
+                  console.log((await reader.read()).value);
+                  console.log((await reader.read()).value);
+                  console.log((await reader.read()).done);
+                }
+                main();
+                """,
+                "4\n9\ntrue\n"
+            };
+            yield return new object[]
+            {
+                """
+                import * as consumers from 'stream/consumers';
+                import { ReadableStream } from 'stream/web';
+                async function main() {
+                  const stream = new ReadableStream({ start(c: any) { c.enqueue('ab'); c.enqueue('cd'); c.close(); } });
+                  console.log(await consumers.text(stream));
+                }
+                main();
+                """,
+                "abcd\n"
+            };
+            yield return new object[]
+            {
+                """
+                const source = new ReadableStream();
+                const reader = source.getReader();
+                console.log(source.locked);
+                reader.releaseLock(); console.log(source.locked);
+                console.log(source.getReader() !== reader);
+                const sink = new WritableStream({}, { highWaterMark: 5 });
+                const writer = sink.getWriter();
+                console.log(sink.locked, writer.desiredSize);
+                writer.releaseLock(); console.log(sink.locked);
+                const next = sink.getWriter(); console.log(next !== writer);
+                console.log('done');
+                """,
+                "true\nfalse\ntrue\ntrue 5\nfalse\ntrue\ndone\n"
+            };
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(WebStreamMetadataPrograms))]
+    public void Isolated_WebStreamMetadata_PreservesStrategiesStreamsConsumersAndPeerAccess(string source, string expected)
+    {
+        var files = new Dictionary<string, string> { ["main.ts"] = source };
+        Assert.Empty(TestHarness.CompileModulesAndVerifyOnly(files, "main.ts"));
+        var (tempDir, dllPath) = CompileStandaloneModule(files, "main.ts");
+        try
+        {
+            Assert.DoesNotContain(GetAssemblyReferences(dllPath), name => name == "SharpTS");
+            Assert.Equal(expected, ExecuteCompiledDllIsolated(dllPath, timeoutMs: 15000));
+        }
+        finally
+        {
+            CleanupTempDir(tempDir);
+        }
+    }
+
     public static IEnumerable<object[]> NodeStreamMetadataPrograms
     {
         get

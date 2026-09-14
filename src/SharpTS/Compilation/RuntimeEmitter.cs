@@ -61,6 +61,8 @@ public partial class RuntimeEmitter
             runtime.BeginPromiseEmission();
             runtime.BeginTimerPromiseEmission();
         }
+        if (features.UsesWebStreams)
+            runtime.BeginWebStreamEmission();
         if (features.UsesNodeStreams)
             runtime.BeginNodeStreamEmission(features.UsesAbortController);
         if (features.UsesNet)
@@ -647,6 +649,7 @@ public partial class RuntimeEmitter
         runtime.TypedArrays.CompleteEmission();
         runtime.EventEmitter.CompleteEmission();
         runtime.NodeStreams?.CompleteEmission();
+        runtime.WebStreams?.CompleteEmission();
         runtime.Timers.CompleteEmission();
         runtime.Microtasks.CompleteEmission();
         runtime.TimerPromises?.CompleteEmission();

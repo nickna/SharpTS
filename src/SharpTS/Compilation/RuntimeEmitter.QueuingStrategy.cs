@@ -22,11 +22,11 @@ public partial class RuntimeEmitter
 {
     private void EmitQueuingStrategyClasses(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
-        EmitCountQueuingStrategy(moduleBuilder, runtime);
+        EmitCountQueuingStrategy(moduleBuilder, runtime.RequireWebStreams());
         EmitByteLengthQueuingStrategy(moduleBuilder, runtime);
     }
 
-    private void EmitCountQueuingStrategy(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private void EmitCountQueuingStrategy(ModuleBuilder moduleBuilder, EmittedWebStreamRuntime webStreams)
     {
         var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$CountQueuingStrategy",
@@ -67,7 +67,7 @@ public partial class RuntimeEmitter
 
         var createdType = typeBuilder.CreateType()!;
         _ = createdType;
-        runtime.CountQueuingStrategyCtor = ctor;
+        webStreams.CountQueuingStrategyCtor = ctor;
     }
 
     private void EmitByteLengthQueuingStrategy(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
@@ -142,7 +142,7 @@ public partial class RuntimeEmitter
 
         var createdType = typeBuilder.CreateType()!;
         _ = createdType;
-        runtime.ByteLengthQueuingStrategyCtor = ctor;
+        runtime.RequireWebStreams().ByteLengthQueuingStrategyCtor = ctor;
     }
 
     /// <summary>

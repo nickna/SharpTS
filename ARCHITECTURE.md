@@ -465,8 +465,34 @@ completion at runtime finalization. Forty-three stream-only helpers receive the 
 cross-feature helpers retain their EventEmitter, Promise, function, Buffer, filesystem, and
 other runtime dependencies. All migrated flat aliases and emitter-held Node stream handles
 are removed. Method-local IL construction, BCL lookups, and the shared built-in module method
-registry remain in their existing locations. Web streams, filesystem-owned stream subclasses,
-and the final shared-registry/residual-state audit remain separate work under #1599.
+registry remain in their existing locations. Filesystem-owned stream subclasses and the final
+shared-registry/residual-state audit remain separate work under #1599.
+
+Web streams use optional `EmittedWebStreamRuntime` for 45 checked declarations: fourteen
+former flat properties and 31 emitter-held guest handles. `UsesWebStreams` starts the component;
+ordinary Node streams and hosted output do not enable it by themselves. Readable, writable,
+and transform streams, their peer reader/writer/controller storage, both queuing strategies,
+and the transform sink adapter share that existing group gate. Optional constructor lookup
+checks component availability and retains its missing-variable fallback. Bare queuing-strategy
+names still do not activate the group without a `stream/web` import or another Web stream
+reference; that existing detector gap is separate from metadata ownership.
+
+Late Web stream emission still follows the runtime method declarations. Writer and controller
+forward references, Readable stream and reader/controller calls, transform sink creation,
+and type finalization keep their order. Completion follows runtime finalization and freezes all
+selected handles. Thirty helpers receive the component directly; cross-feature helpers keep
+their Promise, invocation, iteration, Buffer, abort-signal, and scheduling dependencies. The
+three BCL construction types (`List<object>`, `TaskCompletionSource<object>`, and its queue),
+method-local declaration builders, and shared dispatch registries stay with their existing
+construction infrastructure for the final #1599 audit. No migrated flat aliases or emitter-held
+Web stream guest handles remain.
+
+Six backing fields are assembly-visible because peer emitted classes access them: writable
+`_state`, `_storedError`, `_writer`, `_highWaterMark`, and readable `_locked`, `_reader`.
+This repairs the six existing field-access IL-verifier errors in controller `Error`, writer
+`ReleaseLock`/`DesiredSize`, and reader `ReleaseLock`. Other storage remains private. Generated public
+signatures and method bodies are unchanged; standalone and hosted tests verify these
+peer accesses as well as the component lifecycle.
 
 During emission, each handle becomes readable as soon as its declaration is assigned, so forward
 references do not require a method body to exist yet. An early read names the missing declaration.

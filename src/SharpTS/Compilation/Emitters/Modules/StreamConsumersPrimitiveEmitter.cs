@@ -26,8 +26,8 @@ public sealed class StreamConsumersPrimitiveEmitter : IBuiltInModuleEmitter
         var context = emitter.Context;
         if (methodName == "drainQueuedWebStream")
         {
-            context.IL.Emit(OpCodes.Castclass, context.Runtime!.ReadableStreamType);
-            context.IL.Emit(OpCodes.Callvirt, context.Runtime.ReadableStreamDrainQueuedChunks);
+            context.IL.Emit(OpCodes.Castclass, context.Runtime!.RequireWebStreams().ReadableType);
+            context.IL.Emit(OpCodes.Callvirt, context.Runtime.RequireWebStreams().ReadableDrainQueuedChunks);
             return true;
         }
 

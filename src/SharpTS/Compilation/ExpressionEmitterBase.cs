@@ -2262,11 +2262,10 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
             // bare Symbol in its own pseudo-variable arm; this entry covers the
             // state-machine emitters that resolve through this base path.
             "Symbol" => Ctx.Runtime!.TSSymbolType,
-            // Pure-IL web-streams types (#224) — TypeBuilders are null when
-            // UsesWebStreams is off, which falls through to ThrowUndefinedVariable.
-            "ReadableStream" => Ctx.Runtime!.ReadableStreamType,
-            "WritableStream" => Ctx.Runtime!.WritableStreamType,
-            "TransformStream" => Ctx.Runtime!.TransformStreamType,
+            // Omitted Web stream constructors fall through to ThrowUndefinedVariable.
+            "ReadableStream" => Ctx.Runtime!.WebStreams?.ReadableType,
+            "WritableStream" => Ctx.Runtime!.WebStreams?.WritableType,
+            "TransformStream" => Ctx.Runtime!.WebStreams?.TransformType,
             // Real emitted types since #222 (always emitted).
             "MessageChannel" => Ctx.Runtime!.TSMessageChannelType,
             "MessagePort" => Ctx.Runtime!.TSMessagePortType,
