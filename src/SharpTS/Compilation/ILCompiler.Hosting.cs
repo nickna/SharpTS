@@ -61,16 +61,16 @@ public partial class ILCompiler
             baseType,
             hookIl =>
             {
-                hookIl.Emit(OpCodes.Call, _runtime.EventLoopGetInstance);
-                hookIl.Emit(OpCodes.Callvirt, _runtime.EventLoopTryRunOne);
+                hookIl.Emit(OpCodes.Call, _runtime.EventLoop.GetInstance);
+                hookIl.Emit(OpCodes.Callvirt, _runtime.EventLoop.RequireHosted().TryRunOne);
             });
         EmitHostedBooleanProperty(
             "HasGuestMacrotasks",
             baseType,
             hookIl =>
             {
-                hookIl.Emit(OpCodes.Call, _runtime.EventLoopGetInstance);
-                hookIl.Emit(OpCodes.Callvirt, _runtime.EventLoopHasQueuedCallbacks);
+                hookIl.Emit(OpCodes.Call, _runtime.EventLoop.GetInstance);
+                hookIl.Emit(OpCodes.Callvirt, _runtime.EventLoop.RequireHosted().HasQueuedCallbacks);
             });
         EmitHostedVoidHook(
             "DrainGuestMicrotasks",
@@ -88,7 +88,7 @@ public partial class ILCompiler
         EmitHostedVoidHook(
             "RejectGuestWork",
             baseType,
-            hookIl => hookIl.Emit(OpCodes.Call, _runtime.EventLoopRejectHosted));
+            hookIl => hookIl.Emit(OpCodes.Call, _runtime.EventLoop.RequireHosted().Reject));
         EmitHostedVoidHook(
             "CancelGuestResources",
             baseType,
@@ -97,8 +97,8 @@ public partial class ILCompiler
                 hookIl.Emit(OpCodes.Call, _runtime.Timers.CancelAllTimers);
                 if (_runtime.ChildProcessTerminateOwned is not null)
                     hookIl.Emit(OpCodes.Call, _runtime.ChildProcessTerminateOwned);
-                hookIl.Emit(OpCodes.Call, _runtime.EventLoopGetInstance);
-                hookIl.Emit(OpCodes.Callvirt, _runtime.EventLoopClearHosted);
+                hookIl.Emit(OpCodes.Call, _runtime.EventLoop.GetInstance);
+                hookIl.Emit(OpCodes.Callvirt, _runtime.EventLoop.RequireHosted().Clear);
             });
         EmitHostedLifecycleOverride("EmitGuestBeforeExit", baseType, _runtime.ProcessEmitHostedBeforeExit);
         EmitHostedLifecycleOverride("EmitGuestExit", baseType, _runtime.ProcessEmitHostedExit);
@@ -205,7 +205,7 @@ public partial class ILCompiler
             Type.EmptyTypes);
         var il = method.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, _runtime.EventLoopConfigureHosted);
+        il.Emit(OpCodes.Call, _runtime.EventLoop.RequireHosted().Configure);
         if (initializerAcceptsRuntime)
             il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Call, initializeCore);

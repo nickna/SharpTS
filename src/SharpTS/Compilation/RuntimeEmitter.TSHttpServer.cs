@@ -1858,8 +1858,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stfld, http.ServerCtsField);
 
         // EventLoop.Ref() to keep process alive
-        il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
-        il.Emit(OpCodes.Call, runtime.EventLoopRef);
+        il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
+        il.Emit(OpCodes.Call, runtime.EventLoop.Ref);
 
         // Start HTTP accept loop on ThreadPool BEFORE callback,
         // so the server can accept connections even if the callback
@@ -1970,8 +1970,8 @@ public partial class RuntimeEmitter
         finishIl.Emit(OpCodes.Ldarg_0);
         finishIl.Emit(OpCodes.Ldc_I4_0);
         finishIl.Emit(OpCodes.Stfld, http.ServerIsListeningField);
-        finishIl.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
-        finishIl.Emit(OpCodes.Call, runtime.EventLoopUnref);
+        finishIl.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
+        finishIl.Emit(OpCodes.Call, runtime.EventLoop.Unref);
 
         // Capture and clear the callback before emitting 'close'. A close
         // listener is allowed to call listen() again, which resets per-listen
@@ -2327,13 +2327,13 @@ public partial class RuntimeEmitter
         // Schedule the accept closure on the EventLoop for single-threaded dispatch.
         // This is safe because Fetch is now non-blocking (uses Task.Run + Promise).
         // EventLoop.Schedule(new Action(new $HttpAcceptClosure(this, ctx).Run))
-        wil.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
+        wil.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
         wil.Emit(OpCodes.Ldarg_0);
         wil.Emit(OpCodes.Ldloc, ctxLocal);
         wil.Emit(OpCodes.Newobj, http.AcceptClosureCtor);
         wil.Emit(OpCodes.Ldftn, http.AcceptClosureRun);
         wil.Emit(OpCodes.Newobj, typeof(Action).GetConstructor([_types.Object, typeof(IntPtr)])!);
-        wil.Emit(OpCodes.Call, runtime.EventLoopSchedule);
+        wil.Emit(OpCodes.Call, runtime.EventLoop.Schedule);
 
         wil.Emit(OpCodes.Br, loopTop);
 

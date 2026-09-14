@@ -2085,53 +2085,8 @@ public class EmittedRuntime
     public Type BroadcastChannelType { get; set; } = null!;
     public ConstructorBuilder BroadcastChannelCtor { get; set; } = null!;
 
-    // ============================================================
-    // $EventLoop — singleton event loop for compiled mode
-    // ============================================================
-    public TypeBuilder EventLoopType { get; set; } = null!;
-    public MethodBuilder EventLoopGetInstance { get; set; } = null!;
-    public MethodBuilder EventLoopRef { get; set; } = null!;
-    public MethodBuilder EventLoopUnref { get; set; } = null!;
-    public MethodBuilder EventLoopSchedule { get; set; } = null!;
-    public MethodBuilder EventLoopConfigureHosted { get; set; } = null!;
-    public MethodBuilder EventLoopGetHostedRuntime { get; set; } = null!;
-    public MethodBuilder EventLoopPrepareHostedAwait { get; set; } = null!;
-    public MethodBuilder EventLoopTryRunOne { get; set; } = null!;
-    public MethodBuilder EventLoopHasQueuedCallbacks { get; set; } = null!;
-    public MethodBuilder EventLoopRejectHosted { get; set; } = null!;
-    public MethodBuilder EventLoopClearHosted { get; set; } = null!;
-    public MethodBuilder EventLoopRun { get; set; } = null!;
-    public MethodBuilder EventLoopWake { get; set; } = null!;
-    public MethodBuilder EventLoopWaitForTask { get; set; } = null!;
-
-    /// <summary>
-    /// <c>$EventLoop.PumpOnce()</c> — drives one cooperative tick of the loop
-    /// (drain queued continuations, fire due timers, 1ms idle sleep) and returns
-    /// <c>1</c> if work is still pending (a timer is due later, an active handle
-    /// is open, or the queue is non-empty) or <c>0</c> when idle/quiescent. Used
-    /// by the synchronous <c>$ReadableStream.PipeTo</c> pump to wait for a
-    /// push-style (event-loop-driven) read/write without blocking the loop (#448).
-    /// Signal-agnostic by design: the abort check lives in the pump, which (unlike
-    /// the early-emitted <c>$EventLoop</c>) can reference <c>AbortSignalGetAborted</c>.
-    /// </summary>
-    public MethodBuilder EventLoopPumpOnce { get; set; } = null!;
-    public FieldBuilder EventLoopTimerProcessorField { get; set; } = null!;
-
-    /// <summary>
-    /// $EventLoop.HasPendingWork() — true while active handles remain or
-    /// callbacks are queued. Read by the process beforeExit lifecycle (#1080).
-    /// </summary>
-    public MethodBuilder EventLoopHasPendingWork { get; set; } = null!;
-
-    /// <summary>
-    /// Parameterless constructor of the emitted <c>$EventLoopSyncContext</c> (a
-    /// <see cref="System.Threading.SynchronizationContext"/> subclass whose
-    /// <c>Post</c> schedules continuations onto the event-loop queue). The entry
-    /// point installs an instance via <c>SetSynchronizationContext</c> so
-    /// async/await continuations resume on the event-loop thread instead of
-    /// escaping to the thread pool.
-    /// </summary>
-    public ConstructorBuilder EventLoopSyncContextCtor { get; set; } = null!;
+    /// <summary>Required scheduler and synchronization-context metadata, with optional hosted hooks.</summary>
+    public EmittedEventLoopRuntime EventLoop { get; } = new();
 
     // Vm module methods
     public MethodBuilder VmRunInNewContext { get; set; } = null!;

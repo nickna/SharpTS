@@ -880,7 +880,7 @@ public partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
         var done = il.DefineLabel();
-        var eventLoopLocal = il.DeclareLocal(runtime.EventLoopType);
+        var eventLoopLocal = il.DeclareLocal(runtime.EventLoop.Type);
         var awaiterLocal = il.DeclareLocal(typeof(TaskAwaiter<object?>));
 
         il.Emit(OpCodes.Ldarg_0);
@@ -888,17 +888,17 @@ public partial class RuntimeEmitter
             typeof(Task).GetProperty("IsCompleted")!.GetGetMethod()!);
         il.Emit(OpCodes.Brtrue, done);
 
-        il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
+        il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
         il.Emit(OpCodes.Stloc, eventLoopLocal);
         il.Emit(OpCodes.Ldloc, eventLoopLocal);
-        il.Emit(OpCodes.Callvirt, runtime.EventLoopRef);
+        il.Emit(OpCodes.Callvirt, runtime.EventLoop.Ref);
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Callvirt, _types.TaskOfObjectGetAwaiter);
         il.Emit(OpCodes.Stloc, awaiterLocal);
         il.Emit(OpCodes.Ldloca, awaiterLocal);
         il.Emit(OpCodes.Ldloc, eventLoopLocal);
-        il.Emit(OpCodes.Ldftn, runtime.EventLoopUnref);
+        il.Emit(OpCodes.Ldftn, runtime.EventLoop.Unref);
         il.Emit(OpCodes.Newobj,
             typeof(Action).GetConstructor([_types.Object, typeof(IntPtr)])!);
         il.Emit(OpCodes.Call,

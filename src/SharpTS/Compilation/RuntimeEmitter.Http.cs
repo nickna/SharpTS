@@ -1351,8 +1351,8 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Throw);
 
             il.BeginFinallyBlock();
-            il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
-            il.Emit(OpCodes.Callvirt, runtime.EventLoopUnref);
+            il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
+            il.Emit(OpCodes.Callvirt, runtime.EventLoop.Unref);
             il.EndExceptionBlock();
 
             il.MarkLabel(endLabel);
@@ -1444,8 +1444,8 @@ public partial class RuntimeEmitter
         // is a libuv handle). Without this, the entry point's WaitForTask sees
         // a quiescent loop while the request is on the wire and exits early.
         // The display class's Invoke Unrefs in its finally.
-        fetchIL.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
-        fetchIL.Emit(OpCodes.Callvirt, runtime.EventLoopRef);
+        fetchIL.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
+        fetchIL.Emit(OpCodes.Callvirt, runtime.EventLoop.Ref);
 
         // Task.Run<object?>(new Func<object?>(dc.Invoke))
         fetchIL.Emit(OpCodes.Ldloc, dcLocal);

@@ -1397,7 +1397,7 @@ public partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
         var typeLocal = il.DeclareLocal(_types.Type);
-        var loopLocal = il.DeclareLocal(runtime.EventLoopType);
+        var loopLocal = il.DeclareLocal(runtime.EventLoop.Type);
         var refLocal = il.DeclareLocal(typeof(Action));
         var unrefLocal = il.DeclareLocal(typeof(Action));
         var scheduleLocal = il.DeclareLocal(typeof(Action<Action>));
@@ -1423,19 +1423,19 @@ public partial class RuntimeEmitter
         il.MarkLabel(typeOk);
 
         // loop = $EventLoop.GetInstance();
-        il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
+        il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
         il.Emit(OpCodes.Stloc, loopLocal);
         // ref/unref/schedule delegates bound to the loop instance
         il.Emit(OpCodes.Ldloc, loopLocal);
-        il.Emit(OpCodes.Ldftn, runtime.EventLoopRef);
+        il.Emit(OpCodes.Ldftn, runtime.EventLoop.Ref);
         il.Emit(OpCodes.Newobj, actionCtor);
         il.Emit(OpCodes.Stloc, refLocal);
         il.Emit(OpCodes.Ldloc, loopLocal);
-        il.Emit(OpCodes.Ldftn, runtime.EventLoopUnref);
+        il.Emit(OpCodes.Ldftn, runtime.EventLoop.Unref);
         il.Emit(OpCodes.Newobj, actionCtor);
         il.Emit(OpCodes.Stloc, unrefLocal);
         il.Emit(OpCodes.Ldloc, loopLocal);
-        il.Emit(OpCodes.Ldftn, runtime.EventLoopSchedule);
+        il.Emit(OpCodes.Ldftn, runtime.EventLoop.Schedule);
         il.Emit(OpCodes.Newobj, actionOfActionCtor);
         il.Emit(OpCodes.Stloc, scheduleLocal);
         il.Emit(OpCodes.Ldnull);

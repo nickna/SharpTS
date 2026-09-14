@@ -266,13 +266,13 @@ public partial class RuntimeEmitter
         MethodBuilder instanceMethod)
     {
         // EventLoop.GetInstance()
-        il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
+        il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
         // new Action(this, instanceMethod)
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldftn, instanceMethod);
         il.Emit(OpCodes.Newobj, typeof(Action).GetConstructor([_types.Object, typeof(IntPtr)])!);
         // EventLoop.Schedule(action)
-        il.Emit(OpCodes.Call, runtime.EventLoopSchedule);
+        il.Emit(OpCodes.Call, runtime.EventLoop.Schedule);
     }
 
     /// <summary>
@@ -648,8 +648,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stfld, _dgramReceiveCtsField);
 
         // EventLoop.Ref() to keep process alive while socket is bound
-        il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
-        il.Emit(OpCodes.Call, runtime.EventLoopRef);
+        il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
+        il.Emit(OpCodes.Call, runtime.EventLoop.Ref);
 
         // Start receive loop on ThreadPool
         // ThreadPool.QueueUserWorkItem(new WaitCallback(this._DgramReceiveWorker))
@@ -746,8 +746,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, _dgramBoundField);
         il.Emit(OpCodes.Brfalse, skipUnref);
-        il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
-        il.Emit(OpCodes.Call, runtime.EventLoopUnref);
+        il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
+        il.Emit(OpCodes.Call, runtime.EventLoop.Unref);
         il.MarkLabel(skipUnref);
 
         // Schedule the user close callback (if any) on the event loop, before the

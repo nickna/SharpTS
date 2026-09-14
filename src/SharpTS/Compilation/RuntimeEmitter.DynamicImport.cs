@@ -211,7 +211,7 @@ public partial class RuntimeEmitter
         // host-owned runtime. Console output retains the synchronous namespace lookup.
         if (_emitHosted)
         {
-            il.Emit(OpCodes.Call, runtime.EventLoopGetHostedRuntime);
+            il.Emit(OpCodes.Call, runtime.EventLoop.RequireHosted().GetRuntime);
             il.Emit(OpCodes.Ldloc, lookupPathLocal);
             il.Emit(OpCodes.Ldloc, factoryLocal);
             il.Emit(OpCodes.Callvirt, typeof(SharpTSHostedRuntimeBase).GetMethod(

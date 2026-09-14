@@ -218,8 +218,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Stfld, _messagePortRefedField);
-        il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
-        il.Emit(OpCodes.Callvirt, runtime.EventLoopRef);
+        il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
+        il.Emit(OpCodes.Callvirt, runtime.EventLoop.Ref);
         il.MarkLabel(alreadyRefedLabel);
         il.Emit(OpCodes.Ret);
     }
@@ -238,8 +238,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Stfld, _messagePortRefedField);
-        il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
-        il.Emit(OpCodes.Callvirt, runtime.EventLoopUnref);
+        il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
+        il.Emit(OpCodes.Callvirt, runtime.EventLoop.Unref);
         il.MarkLabel(notRefedLabel);
         il.Emit(OpCodes.Ret);
     }
@@ -341,11 +341,11 @@ public partial class RuntimeEmitter
         il.MarkLabel(skipRefLabel);
 
         // $EventLoop.GetInstance().Schedule(new Action(this.Drain))
-        il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
+        il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldftn, _messagePortDrain);
         il.Emit(OpCodes.Newobj, typeof(Action).GetConstructor([_types.Object, typeof(IntPtr)])!);
-        il.Emit(OpCodes.Callvirt, runtime.EventLoopSchedule);
+        il.Emit(OpCodes.Callvirt, runtime.EventLoop.Schedule);
 
         il.MarkLabel(exitLabel);
         il.Emit(OpCodes.Ret);
@@ -437,11 +437,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, partnerLocal);
         il.Emit(OpCodes.Ldfld, _messagePortStartedField);
         il.Emit(OpCodes.Brfalse, exitLabel);
-        il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
+        il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
         il.Emit(OpCodes.Ldloc, partnerLocal);
         il.Emit(OpCodes.Ldftn, _messagePortDrain);
         il.Emit(OpCodes.Newobj, typeof(Action).GetConstructor([_types.Object, typeof(IntPtr)])!);
-        il.Emit(OpCodes.Callvirt, runtime.EventLoopSchedule);
+        il.Emit(OpCodes.Callvirt, runtime.EventLoop.Schedule);
 
         il.MarkLabel(exitLabel);
         il.Emit(OpCodes.Ret);

@@ -752,10 +752,20 @@ public sealed class HostedInterpreterRuntimeTests
         Assert.Equal(["outer-start", "outer-end"], order);
 
         Assert.True(dispatcher.RunNext());
-        Exception? exception = Task.Run(() => Record.Exception(() => runtime.Invoke(() => 42)))
-            .GetAwaiter().GetResult();
+        // Waiting on Task.Run can inline the queued task on this owner thread.
+        // Use a dedicated thread so this always exercises the off-thread guard.
+        Exception? exception = null;
+        int callerThread = 0;
+        var caller = new Thread(() =>
+        {
+            callerThread = Environment.CurrentManagedThreadId;
+            exception = Record.Exception(() => runtime.Invoke(() => 42));
+        }) { IsBackground = true };
+        caller.Start();
+        Assert.True(caller.Join(TimeSpan.FromSeconds(10)), "Off-thread callback did not complete.");
 
         Assert.Equal(["outer-start", "outer-end", "inner"], order);
+        Assert.NotEqual(dispatcher.OwnerThreadId, callerThread);
         Assert.Contains("return-valued", Assert.IsType<InvalidOperationException>(exception).Message);
     }
 

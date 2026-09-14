@@ -522,8 +522,8 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static, _types.Void, Type.EmptyTypes);
         {
             var il = now.GetILGenerator();
-            il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
-            il.Emit(OpCodes.Call, runtime.EventLoopUnref);
+            il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
+            il.Emit(OpCodes.Call, runtime.EventLoop.Unref);
             il.Emit(OpCodes.Ret);
         }
 
@@ -532,11 +532,11 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static, _types.Void, [typeof(Task)]);
         {
             var il = drop.GetILGenerator();
-            il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
+            il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
             il.Emit(OpCodes.Ldnull);
             il.Emit(OpCodes.Ldftn, now);
             il.Emit(OpCodes.Newobj, typeof(Action).GetConstructor([_types.Object, typeof(IntPtr)])!);
-            il.Emit(OpCodes.Callvirt, runtime.EventLoopSchedule);
+            il.Emit(OpCodes.Callvirt, runtime.EventLoop.Schedule);
             il.Emit(OpCodes.Ret);
         }
 
@@ -567,8 +567,8 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static, _types.Void, [typeof(Func<object>)]);
         {
             var il = run.GetILGenerator();
-            il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
-            il.Emit(OpCodes.Call, runtime.EventLoopRef);
+            il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
+            il.Emit(OpCodes.Call, runtime.EventLoop.Ref);
 
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Call, taskRun);
@@ -880,11 +880,11 @@ public partial class RuntimeEmitter
     /// <summary>Emit: EventLoop.GetInstance().Schedule(new Action(this, ldftn method)).</summary>
     private void EmitScheduleOnLoop(ILGenerator il, EmittedRuntime runtime, MethodBuilder method)
     {
-        il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
+        il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldftn, method);
         il.Emit(OpCodes.Newobj, typeof(Action).GetConstructor([_types.Object, typeof(IntPtr)])!);
-        il.Emit(OpCodes.Callvirt, runtime.EventLoopSchedule);
+        il.Emit(OpCodes.Callvirt, runtime.EventLoop.Schedule);
     }
 
     /// <summary>Builds new object[]{ a, b, c } on the stack.</summary>
@@ -1147,13 +1147,13 @@ public partial class RuntimeEmitter
     /// <summary>Emit: EventLoop.GetInstance().Schedule(new Action(new $ChildPush(stream, chunk), Run)).</summary>
     private void EmitScheduleChildPush(ILGenerator il, EmittedRuntime runtime, Action emitStream, Action emitChunk)
     {
-        il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
+        il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
         emitStream();
         emitChunk();
         il.Emit(OpCodes.Newobj, _childPushCtor);
         il.Emit(OpCodes.Ldftn, _childPushRun);
         il.Emit(OpCodes.Newobj, typeof(Action).GetConstructor([_types.Object, typeof(IntPtr)])!);
-        il.Emit(OpCodes.Callvirt, runtime.EventLoopSchedule);
+        il.Emit(OpCodes.Callvirt, runtime.EventLoop.Schedule);
     }
 
     /// <summary>Replays spawn close/exit (or error) on the loop thread, after all data/end pushes.</summary>

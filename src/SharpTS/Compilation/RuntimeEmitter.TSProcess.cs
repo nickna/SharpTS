@@ -866,8 +866,8 @@ public partial class RuntimeEmitter
         // count = $EventLoop.GetInstance().HasPendingWork() ? approximate handles : 0
         // The active-handle count itself is private; use HasPendingWork to decide
         // between 0 and 1 entries per pending state. Approximation documented.
-        il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
-        il.Emit(OpCodes.Callvirt, runtime.EventLoopHasPendingWork);
+        il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
+        il.Emit(OpCodes.Callvirt, runtime.EventLoop.HasPendingWork);
         var noneLabel = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, noneLabel);
         il.Emit(OpCodes.Ldc_I4_1);
@@ -1977,10 +1977,10 @@ public partial class RuntimeEmitter
         if (_emitHosted)
         {
             var ordinaryExit = il.DefineLabel();
-            il.Emit(OpCodes.Call, runtime.EventLoopGetHostedRuntime);
+            il.Emit(OpCodes.Call, runtime.EventLoop.RequireHosted().GetRuntime);
             il.Emit(OpCodes.Brfalse, ordinaryExit);
             EmitHostedProcessEvent(il, runtime, "exit", codeLocal);
-            il.Emit(OpCodes.Call, runtime.EventLoopGetHostedRuntime);
+            il.Emit(OpCodes.Call, runtime.EventLoop.RequireHosted().GetRuntime);
             il.Emit(OpCodes.Ldloc, codeLocal);
             il.Emit(OpCodes.Callvirt, typeof(SharpTSHostedRuntimeBase).GetMethod(
                 nameof(SharpTSHostedRuntimeBase.RequestProcessExit))!);
@@ -2381,13 +2381,13 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.TextWriter, "WriteLine", _types.String));
 
         // Emit 'warning' on the next loop turn
-        il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
+        il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
         il.Emit(OpCodes.Ldstr, "warning");
         il.Emit(OpCodes.Ldloc, dictLocal);
         il.Emit(OpCodes.Newobj, _processEmitClosureCtor);
         il.Emit(OpCodes.Ldftn, runtime.ProcessEmitClosureInvoke);
         il.Emit(OpCodes.Newobj, typeof(Action).GetConstructor([_types.Object, typeof(IntPtr)])!);
-        il.Emit(OpCodes.Callvirt, runtime.EventLoopSchedule);
+        il.Emit(OpCodes.Callvirt, runtime.EventLoop.Schedule);
 
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ret);
@@ -2425,11 +2425,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, done); // no listeners → exit phase
 
         // listeners ran; if they scheduled work → run the loop again and re-fire
-        il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
-        il.Emit(OpCodes.Callvirt, runtime.EventLoopHasPendingWork);
+        il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
+        il.Emit(OpCodes.Callvirt, runtime.EventLoop.HasPendingWork);
         il.Emit(OpCodes.Brfalse, done);
-        il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
-        il.Emit(OpCodes.Callvirt, runtime.EventLoopRun);
+        il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
+        il.Emit(OpCodes.Callvirt, runtime.EventLoop.Run);
         il.Emit(OpCodes.Br, loopTop);
 
         il.MarkLabel(done);
@@ -2535,13 +2535,13 @@ public partial class RuntimeEmitter
         // ---- ProcessDispatchSignal(string name): schedule emit on the loop ----
         {
             var il = ((MethodBuilder)runtime.ProcessDispatchSignal).GetILGenerator();
-            il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
+            il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_0); // arg to the listener is the signal name
             il.Emit(OpCodes.Newobj, _processEmitClosureCtor);
             il.Emit(OpCodes.Ldftn, runtime.ProcessEmitClosureInvoke);
             il.Emit(OpCodes.Newobj, typeof(Action).GetConstructor([_types.Object, typeof(IntPtr)])!);
-            il.Emit(OpCodes.Callvirt, runtime.EventLoopSchedule);
+            il.Emit(OpCodes.Callvirt, runtime.EventLoop.Schedule);
             il.Emit(OpCodes.Ret);
         }
 

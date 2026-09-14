@@ -58,7 +58,7 @@ public partial class RuntimeEmitter
         var il = method.GetILGenerator();
 
         var typeLocal = il.DeclareLocal(_types.Type);
-        var loopLocal = il.DeclareLocal(runtime.EventLoopType);
+        var loopLocal = il.DeclareLocal(runtime.EventLoop.Type);
         var argsLocal = il.DeclareLocal(_types.ObjectArray);
         var actionCtor = typeof(Action).GetConstructor([_types.Object, typeof(IntPtr)])!;
         var actionOfActionCtor = typeof(Action<Action>).GetConstructor([_types.Object, typeof(IntPtr)])!;
@@ -66,7 +66,7 @@ public partial class RuntimeEmitter
         EmitLoadBridgeTypeOrThrow(il, typeLocal);
 
         // var loop = $EventLoop.GetInstance();
-        il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
+        il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
         il.Emit(OpCodes.Stloc, loopLocal);
 
         // object[] args = { entryPath, env, loop.Ref, loop.Unref, loop.Schedule };
@@ -90,21 +90,21 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, argsLocal);
         il.Emit(OpCodes.Ldc_I4_2);
         il.Emit(OpCodes.Ldloc, loopLocal);
-        il.Emit(OpCodes.Ldftn, runtime.EventLoopRef);
+        il.Emit(OpCodes.Ldftn, runtime.EventLoop.Ref);
         il.Emit(OpCodes.Newobj, actionCtor);
         il.Emit(OpCodes.Stelem_Ref);
 
         il.Emit(OpCodes.Ldloc, argsLocal);
         il.Emit(OpCodes.Ldc_I4_3);
         il.Emit(OpCodes.Ldloc, loopLocal);
-        il.Emit(OpCodes.Ldftn, runtime.EventLoopUnref);
+        il.Emit(OpCodes.Ldftn, runtime.EventLoop.Unref);
         il.Emit(OpCodes.Newobj, actionCtor);
         il.Emit(OpCodes.Stelem_Ref);
 
         il.Emit(OpCodes.Ldloc, argsLocal);
         il.Emit(OpCodes.Ldc_I4_4);
         il.Emit(OpCodes.Ldloc, loopLocal);
-        il.Emit(OpCodes.Ldftn, runtime.EventLoopSchedule);
+        il.Emit(OpCodes.Ldftn, runtime.EventLoop.Schedule);
         il.Emit(OpCodes.Newobj, actionOfActionCtor);
         il.Emit(OpCodes.Stelem_Ref);
 

@@ -138,8 +138,8 @@ public partial class RuntimeEmitter
             var il = timerPromises.TimerPromiseClosureOnComplete.GetILGenerator();
 
             // EventLoop.GetInstance().Unref();
-            il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
-            il.Emit(OpCodes.Call, runtime.EventLoopUnref);
+            il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
+            il.Emit(OpCodes.Call, runtime.EventLoop.Unref);
 
             // if (this.Token.IsCancellationRequested) throw new Exception("AbortError: ...")
             var notCancelledLabel = il.DefineLabel();
@@ -187,8 +187,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, delayMsLocal);
 
         // EventLoop.Ref() — keep event loop alive during delay
-        il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
-        il.Emit(OpCodes.Call, runtime.EventLoopRef);
+        il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
+        il.Emit(OpCodes.Call, runtime.EventLoop.Ref);
 
         // var closure = new $TimerPromiseClosure();
         var closureLocal = il.DeclareLocal(timerPromises.TimerPromiseClosureType);
@@ -264,8 +264,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, delayMsLocal);
 
         // EventLoop.Ref()
-        il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
-        il.Emit(OpCodes.Call, runtime.EventLoopRef);
+        il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
+        il.Emit(OpCodes.Call, runtime.EventLoop.Ref);
 
         // var closure = new $TimerPromiseClosure();
         var closureLocal = il.DeclareLocal(timerPromises.TimerPromiseClosureType);
@@ -451,8 +451,8 @@ public partial class RuntimeEmitter
         il.MarkLabel(notDoneLabel);
 
         // EventLoop.Ref()
-        il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
-        il.Emit(OpCodes.Call, runtime.EventLoopRef);
+        il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
+        il.Emit(OpCodes.Call, runtime.EventLoop.Ref);
 
         // Task.Delay(this.DelayMs, this.Token)
         il.Emit(OpCodes.Ldarg_0);
@@ -493,8 +493,8 @@ public partial class RuntimeEmitter
         var doneLabel = il.DefineLabel();
 
         // EventLoop.Unref()
-        il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
-        il.Emit(OpCodes.Call, runtime.EventLoopUnref);
+        il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
+        il.Emit(OpCodes.Call, runtime.EventLoop.Unref);
 
         // if (this.Done) goto doneLabel
         il.Emit(OpCodes.Ldarg_0);

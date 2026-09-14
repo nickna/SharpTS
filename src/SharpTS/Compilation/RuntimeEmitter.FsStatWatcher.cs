@@ -195,14 +195,14 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, currStatsLocal);
 
         // Schedule: EventLoop.GetInstance().Schedule(new Action(new $StatWatchPollClosure(this, curr, prev).Run))
-        il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
+        il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
         il.Emit(OpCodes.Ldarg_0); // this ($StatWatcher, which IS $EventEmitter)
         il.Emit(OpCodes.Ldloc, currStatsLocal);
         il.Emit(OpCodes.Ldloc, prevStatsLocal);
         il.Emit(OpCodes.Newobj, _statWatchPollClosureCtor);
         il.Emit(OpCodes.Ldftn, _statPollClosureRun);
         il.Emit(OpCodes.Newobj, typeof(Action).GetConstructor([typeof(object), typeof(IntPtr)])!);
-        il.Emit(OpCodes.Call, runtime.EventLoopSchedule);
+        il.Emit(OpCodes.Call, runtime.EventLoop.Schedule);
 
         il.Emit(OpCodes.Leave, leaveLabel);
 
@@ -318,8 +318,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stfld, _statWatcherTimerField);
 
         // EventLoop.GetInstance().Ref()
-        il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
-        il.Emit(OpCodes.Call, runtime.EventLoopRef);
+        il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
+        il.Emit(OpCodes.Call, runtime.EventLoop.Ref);
 
         il.Emit(OpCodes.Ret);
     }
@@ -353,8 +353,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, typeof(Timer).GetMethod("Dispose", Type.EmptyTypes)!);
 
         // EventLoop.GetInstance().Unref()
-        il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
-        il.Emit(OpCodes.Call, runtime.EventLoopUnref);
+        il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
+        il.Emit(OpCodes.Call, runtime.EventLoop.Unref);
 
         il.Emit(OpCodes.Ret);
     }

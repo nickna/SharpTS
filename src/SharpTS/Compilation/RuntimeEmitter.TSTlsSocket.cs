@@ -1045,8 +1045,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stfld, _tlsServerIsListeningField);
 
         // EventLoop.Ref()
-        il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
-        il.Emit(OpCodes.Call, runtime.EventLoopRef);
+        il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
+        il.Emit(OpCodes.Call, runtime.EventLoop.Ref);
 
         // Call callback if provided
         var noCallback = il.DefineLabel();
@@ -1117,8 +1117,8 @@ public partial class RuntimeEmitter
         il.MarkLabel(noListener);
 
         // EventLoop.Unref()
-        il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
-        il.Emit(OpCodes.Call, runtime.EventLoopUnref);
+        il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
+        il.Emit(OpCodes.Call, runtime.EventLoop.Unref);
 
         // Call callback (arg1) if provided (TSFunction or BoundTSFunction)
         {

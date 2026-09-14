@@ -1211,6 +1211,101 @@ public class StandaloneDllTests
         }
     }
 
+    public static IEnumerable<object[]> EventLoopMetadataPrograms
+    {
+        get
+        {
+            yield return new object[]
+            {
+                """
+                import * as net from 'net';
+                const server = net.createServer((socket: any) => {
+                    let received = '';
+                    socket.on('data', (chunk: any) => {
+                        received += chunk.toString();
+                        if (received === 'ping') {
+                            console.log('server', received);
+                            socket.end('pong');
+                        }
+                    });
+                });
+                server.listen(0, '127.0.0.1', () => {
+                    let received = '';
+                    const client = net.createConnection({ port: server.address().port, host: '127.0.0.1' }, () => client.write('ping'));
+                    client.on('data', (chunk: any) => { received += chunk.toString(); });
+                    client.on('end', () => {
+                        console.log('client', received);
+                        client.destroy(); server.close(() => console.log('closed'));
+                    });
+                });
+                """,
+                "server ping\nclient pong\nclosed\n"
+            };
+            yield return new object[]
+            {
+                """
+                import { Readable } from 'stream';
+                async function main() {
+                    const stream = new Readable({ objectMode: true });
+                    let count = 0;
+                    const timer = setInterval(() => {
+                        count++;
+                        if (count <= 2) stream.push(count * 10);
+                        else { stream.push(null); clearInterval(timer); }
+                    }, 5);
+                    for await (const value of stream) console.log(value);
+                    console.log('done');
+                }
+                main();
+                """,
+                "10\n20\ndone\n"
+            };
+            yield return new object[]
+            {
+                """
+                let turns = 0;
+                process.on('beforeExit', () => {
+                    console.log('before', turns);
+                    if (turns === 0) { turns++; setTimeout(() => console.log('late'), 1); }
+                });
+                process.on('exit', (code: number) => console.log('exit', code));
+                console.log('start');
+                """,
+                "start\nbefore 0\nlate\nbefore 1\nexit 0\n"
+            };
+            yield return new object[]
+            {
+                """
+                async function main() {
+                    await new Promise<void>(() => {});
+                    console.log('unexpected');
+                }
+                main();
+                console.log('sync');
+                """,
+                "sync\n"
+            };
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(EventLoopMetadataPrograms))]
+    public void Isolated_EventLoopMetadata_PreservesIoResumeLifecycleAndQuiescence(string source, string expected)
+    {
+        var files = new Dictionary<string, string> { ["main.ts"] = source };
+        Assert.Empty(TestHarness.CompileModulesAndVerifyOnly(files, "main.ts"));
+        var (tempDir, dllPath) = CompileStandaloneModule(files, "main.ts");
+        try
+        {
+            Assert.DoesNotContain(GetAssemblyReferences(dllPath), name => name == "SharpTS");
+            Assert.Equal(expected, ExecuteCompiledDllIsolated(dllPath, timeoutMs: 15000));
+        }
+        finally
+        {
+            CleanupTempDir(tempDir);
+        }
+    }
+
     public static IEnumerable<object[]> TimerMetadataPrograms
     {
         get

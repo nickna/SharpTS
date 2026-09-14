@@ -428,6 +428,26 @@ flat aliases or emitter-held guest declarations remain. Method-local queue, call
 and timeout construction handles stay local. Event-loop/synchronization-context metadata,
 process nextTick accessors, and AbortSignal helpers remain separate families in #1599.
 
+The event loop uses required `EmittedEventLoopRuntime` for fifteen scheduler, queue, wake,
+reference-count, timer-callback, and synchronization-context declarations. Its optional
+`EmittedHostedEventLoopRuntime` owns seven hosted hooks and two hosted storage fields, enabled
+only by hosted output. These components replace nineteen flat handles and five emitter-held
+fields, and consolidate the duplicate timer-processor handle. The core component completes
+its hosted child, when present, after runtime finalization; incomplete declarations leave both
+retryable, while successful completion freezes handles and prevents enabling hosted hooks later.
+
+Ten event-loop helpers accept the component or hosted child directly. The class orchestrator,
+Run, and WaitForTask retain shared cancellation metadata. `$EventLoop` still precedes its
+synchronization context and the runtime's timer helpers: its public timer-processor field remains
+the bridge to the later timer delegate. Hosted await consumers test component availability
+instead of an undeclared method handle. Plain output, including full-feature emission, omits the
+hosted fields, methods, and hosting-contract reference; hosted output preserves its existing
+declarations and dependency rules. Callback ordering, continuation dispatch, ref/unref accounting,
+cooperative pumping, quiescence, beforeExit handling, and hosted shutdown behavior are unchanged.
+No event-loop flat aliases or emitter-held guest handles remain. Method-local singleton,
+constructor, synchronization-context, and closure construction metadata stay local. General
+cancellation and module/host-execution infrastructure remain separate scope in #1599.
+
 During emission, each handle becomes readable as soon as its declaration is assigned, so forward
 references do not require a method body to exist yet. An early read names the missing declaration.
 Completion is an orchestration boundary, not an IL verifier: body emission and type finalization
