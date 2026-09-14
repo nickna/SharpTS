@@ -1211,6 +1211,108 @@ public class StandaloneDllTests
         }
     }
 
+    public static IEnumerable<object[]> TimerMetadataPrograms
+    {
+        get
+        {
+            yield return new object[]
+            {
+                """
+                import * as timers from 'timers';
+                import { setImmediate, clearImmediate } from 'node:timers';
+                const cancelled = timers.setTimeout(() => console.log('cancelled'), 1000);
+                console.log(cancelled.hasRef);
+                cancelled.unref(); console.log(cancelled.hasRef);
+                cancelled.ref(); console.log(cancelled.hasRef);
+                timers.clearTimeout(cancelled);
+                const immediate = setImmediate(() => console.log('cancelled immediate'));
+                clearImmediate(immediate);
+                setImmediate((value: string) => console.log(value), 'immediate');
+                let ticks = 0;
+                const interval = timers.setInterval(() => {
+                    ticks++;
+                    if (ticks === 2) { timers.clearInterval(interval); console.log('ticks', ticks); }
+                }, 10);
+                timers.setTimeout((a: string, b: number) => console.log(a, b), 0, 'args', 7);
+                """,
+                "true\nfalse\ntrue\nimmediate\nargs 7\nticks 2\n"
+            };
+            yield return new object[]
+            {
+                """
+                console.log('sync');
+                queueMicrotask(() => console.log('microtask 1'));
+                Promise.resolve(1).then(() => console.log('promise'));
+                queueMicrotask(() => {
+                    console.log('microtask 2');
+                    queueMicrotask(() => console.log('nested'));
+                });
+                setTimeout(() => console.log('timer'), 0);
+                """,
+                "sync\nmicrotask 1\npromise\nmicrotask 2\nnested\ntimer\n"
+            };
+            yield return new object[]
+            {
+                """
+                import * as timers from 'node:timers/promises';
+                async function main() {
+                    console.log(await timers.setTimeout(1, 'timeout'));
+                    console.log(await timers.setImmediate('immediate'));
+                    const controller = new AbortController();
+                    controller.abort();
+                    try { await timers.setTimeout(1000, 'bad', { signal: controller.signal }); }
+                    catch (error: any) { console.log(error.message); }
+                    try { await timers.setImmediate('bad', { signal: controller.signal }); }
+                    catch (error: any) { console.log(error.message); }
+                    let count = 0;
+                    for await (const value of timers.setInterval(1, 'tick')) {
+                        console.log(value);
+                        count++;
+                        if (count === 2) break;
+                    }
+                    console.log('done', count);
+                }
+                main();
+                """,
+                "timeout\nimmediate\nAbortError: The operation was aborted\nAbortError: The operation was aborted\ntick\ntick\ndone 2\n"
+            };
+            yield return new object[]
+            {
+                """
+                let count = 0;
+                queueMicrotask(() => console.log('microtask'));
+                const interval = setInterval(() => {
+                    Date.now();
+                    count++;
+                    if (count === 2) clearInterval(interval);
+                }, 1);
+                const deadline = Date.now() + 5000;
+                while (count < 2 && Date.now() < deadline) { }
+                console.log('count', count);
+                """,
+                "microtask\ncount 2\n"
+            };
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(TimerMetadataPrograms))]
+    public void Isolated_TimerMetadata_PreservesSchedulingCancellationAndPromiseJobs(string source, string expected)
+    {
+        var files = new Dictionary<string, string> { ["main.ts"] = source };
+        Assert.Empty(TestHarness.CompileModulesAndVerifyOnly(files, "main.ts"));
+        var (tempDir, dllPath) = CompileStandaloneModule(files, "main.ts");
+        try
+        {
+            Assert.DoesNotContain(GetAssemblyReferences(dllPath), name => name == "SharpTS");
+            Assert.Equal(expected, ExecuteCompiledDllIsolated(dllPath, timeoutMs: 15000));
+        }
+        finally
+        {
+            CleanupTempDir(tempDir);
+        }
+    }
+
     [Fact]
     public void Isolated_EventEmitterMetadata_ListenerOrderingOnceRemovalAndLimitsPassStandaloneAndILChecks()
     {

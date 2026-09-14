@@ -74,7 +74,7 @@ public sealed class TimersPrimitiveEmitter : IBuiltInModuleEmitter
         EmitArgsArray(emitter, arguments, 2);
 
         // Call $Runtime.SetTimeout(callback, delay, args)
-        il.Emit(OpCodes.Call, ctx.Runtime!.SetTimeout);
+        il.Emit(OpCodes.Call, ctx.Runtime!.Timers.SetTimeout);
         emitter.SetStackUnknown();
         return true;
     }
@@ -96,7 +96,7 @@ public sealed class TimersPrimitiveEmitter : IBuiltInModuleEmitter
         }
 
         // Call $Runtime.ClearTimeout(handle)
-        il.Emit(OpCodes.Call, ctx.Runtime!.ClearTimeout);
+        il.Emit(OpCodes.Call, ctx.Runtime!.Timers.ClearTimeout);
 
         // clearTimeout returns void, push null for expression result
         il.Emit(OpCodes.Ldnull);
@@ -133,7 +133,7 @@ public sealed class TimersPrimitiveEmitter : IBuiltInModuleEmitter
         EmitArgsArray(emitter, arguments, 2);
 
         // Call $Runtime.SetInterval(callback, delay, args)
-        il.Emit(OpCodes.Call, ctx.Runtime!.SetInterval);
+        il.Emit(OpCodes.Call, ctx.Runtime!.Timers.SetInterval);
         emitter.SetStackUnknown();
         return true;
     }
@@ -155,7 +155,7 @@ public sealed class TimersPrimitiveEmitter : IBuiltInModuleEmitter
         }
 
         // Call $Runtime.ClearInterval(handle)
-        il.Emit(OpCodes.Call, ctx.Runtime!.ClearInterval);
+        il.Emit(OpCodes.Call, ctx.Runtime!.Timers.ClearInterval);
 
         // clearInterval returns void, push null for expression result
         il.Emit(OpCodes.Ldnull);
@@ -186,7 +186,7 @@ public sealed class TimersPrimitiveEmitter : IBuiltInModuleEmitter
         EmitArgsArray(emitter, arguments, 1);
 
         // Call $Runtime.SetTimeout(callback, 0, args)
-        il.Emit(OpCodes.Call, ctx.Runtime!.SetTimeout);
+        il.Emit(OpCodes.Call, ctx.Runtime!.Timers.SetTimeout);
         emitter.SetStackUnknown();
         return true;
     }

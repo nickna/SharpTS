@@ -886,56 +886,24 @@ public class EmittedRuntime
     public EmittedPromiseRuntime RequirePromise() => Promise
         ?? throw new InvalidOperationException("Promise runtime was not enabled for this compilation.");
 
-    // Timer support ($TSTimeout type and global functions)
-    public TypeBuilder TSTimeoutType { get; set; } = null!;
-    public ConstructorBuilder TSTimeoutCtor { get; set; } = null!;
-    public MethodBuilder TSTimeoutCancel { get; set; } = null!;
-    public MethodBuilder TSTimeoutRef { get; set; } = null!;
-    public MethodBuilder TSTimeoutUnref { get; set; } = null!;
-    public MethodBuilder TSTimeoutHasRefGetter { get; set; } = null!;
-    public MethodBuilder SetTimeout { get; set; } = null!;
-    public MethodBuilder ClearTimeout { get; set; } = null!;
+    /// <summary>Required timeout handles and virtual timer queue operations.</summary>
+    public EmittedTimerRuntime Timers { get; } = new();
 
-    // Timer promise methods (timers/promises module)
-    public MethodBuilder SetTimeoutPromise { get; set; } = null!;
-    public MethodBuilder SetTimeoutPromiseWithSignal { get; set; } = null!;
-    public MethodBuilder SetImmediatePromise { get; set; } = null!;
-    public MethodBuilder SetImmediatePromiseWithSignal { get; set; } = null!;
-    public MethodBuilder SetIntervalAsyncIterable { get; set; } = null!;
-    public MethodBuilder SetIntervalAsyncIterableWithSignal { get; set; } = null!;
-    public MethodBuilder ExtractTimerOptionsToken { get; set; } = null!;
+    /// <summary>Required shared FIFO queue for callbacks and Promise jobs.</summary>
+    public EmittedMicrotaskRuntime Microtasks { get; } = new();
 
-    // Timer closure for callback execution
+    /// <summary>Promise-based timers, available under the existing UsesPromise gate.</summary>
+    public EmittedTimerPromiseRuntime? TimerPromises { get; private set; }
 
-    // Interval closure for callback execution (includes delay for rescheduling)
+    internal void BeginTimerPromiseEmission()
+    {
+        if (TimerPromises is not null)
+            throw new InvalidOperationException("Timer promise metadata emission has already started.");
+        TimerPromises = new EmittedTimerPromiseRuntime();
+    }
 
-    // Interval methods
-    public MethodBuilder SetInterval { get; set; } = null!;
-    public MethodBuilder ClearInterval { get; set; } = null!;
-
-    // Microtask support
-    public MethodBuilder QueueMicrotask { get; set; } = null!;
-    public MethodBuilder QueuePromiseJob { get; set; } = null!;
-    public MethodBuilder ProcessMicrotasks { get; set; } = null!;
-    public MethodBuilder HasMicrotasks { get; set; } = null!;
-
-    // Virtual timer infrastructure (for single-threaded timer semantics)
-    public Type VirtualTimerType { get; set; } = null!;
-    public ConstructorBuilder VirtualTimerCtor { get; set; } = null!;
-    public FieldBuilder VirtualTimerCallback { get; set; } = null!;
-    public FieldBuilder VirtualTimerArgs { get; set; } = null!;
-    public FieldBuilder VirtualTimerScheduledTime { get; set; } = null!;
-    public FieldBuilder VirtualTimerIsCancelled { get; set; } = null!;
-    public FieldBuilder VirtualTimerIsInterval { get; set; } = null!;
-    public FieldBuilder VirtualTimerIntervalMs { get; set; } = null!;
-    public FieldBuilder VirtualTimerHasRef { get; set; } = null!;
-    public MethodBuilder EnsureTimerInitialized { get; set; } = null!;
-    public MethodBuilder GetCurrentTimeMs { get; set; } = null!;
-    public MethodBuilder ProcessPendingTimers { get; set; } = null!;
-    public MethodBuilder ProcessOnePendingTimer { get; set; } = null!;
-    public MethodBuilder GetNextTimerDelay { get; set; } = null!;
-    public MethodBuilder CancelAllTimers { get; set; } = null!;
-    public MethodBuilder AddVirtualTimer { get; set; } = null!;
+    public EmittedTimerPromiseRuntime RequireTimerPromises() => TimerPromises
+        ?? throw new InvalidOperationException("Timer promise runtime was not enabled for this compilation.");
 
     // Number methods
     public MethodBuilder NumberParseInt { get; set; } = null!;

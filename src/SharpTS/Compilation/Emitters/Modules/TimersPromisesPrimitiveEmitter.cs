@@ -74,11 +74,11 @@ public sealed class TimersPromisesPrimitiveEmitter : IBuiltInModuleEmitter
             // options
             emitter.EmitExpression(arguments[2]);
             emitter.EmitBoxIfNeeded(arguments[2]);
-            il.Emit(OpCodes.Call, ctx.Runtime!.SetTimeoutPromiseWithSignal);
+            il.Emit(OpCodes.Call, ctx.Runtime!.RequireTimerPromises().SetTimeoutPromiseWithSignal);
         }
         else
         {
-            il.Emit(OpCodes.Call, ctx.Runtime!.SetTimeoutPromise);
+            il.Emit(OpCodes.Call, ctx.Runtime!.RequireTimerPromises().SetTimeoutPromise);
         }
         return true;
     }
@@ -107,11 +107,11 @@ public sealed class TimersPromisesPrimitiveEmitter : IBuiltInModuleEmitter
         {
             emitter.EmitExpression(arguments[1]);
             emitter.EmitBoxIfNeeded(arguments[1]);
-            il.Emit(OpCodes.Call, ctx.Runtime!.SetImmediatePromiseWithSignal);
+            il.Emit(OpCodes.Call, ctx.Runtime!.RequireTimerPromises().SetImmediatePromiseWithSignal);
         }
         else
         {
-            il.Emit(OpCodes.Call, ctx.Runtime!.SetImmediatePromise);
+            il.Emit(OpCodes.Call, ctx.Runtime!.RequireTimerPromises().SetImmediatePromise);
         }
         return true;
     }
@@ -150,11 +150,11 @@ public sealed class TimersPromisesPrimitiveEmitter : IBuiltInModuleEmitter
         {
             emitter.EmitExpression(arguments[2]);
             emitter.EmitBoxIfNeeded(arguments[2]);
-            il.Emit(OpCodes.Call, ctx.Runtime!.SetIntervalAsyncIterableWithSignal);
+            il.Emit(OpCodes.Call, ctx.Runtime!.RequireTimerPromises().SetIntervalAsyncIterableWithSignal);
         }
         else
         {
-            il.Emit(OpCodes.Call, ctx.Runtime!.SetIntervalAsyncIterable);
+            il.Emit(OpCodes.Call, ctx.Runtime!.RequireTimerPromises().SetIntervalAsyncIterable);
         }
         return true;
     }

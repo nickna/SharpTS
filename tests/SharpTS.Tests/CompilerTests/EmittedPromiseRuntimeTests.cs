@@ -20,7 +20,7 @@ public class EmittedPromiseRuntimeTests
         Assert.Null(runtime.Promise);
         Assert.Contains("not enabled", Assert.Throws<InvalidOperationException>(runtime.RequirePromise).Message);
         // The shared FIFO job queue also serves non-Promise microtasks.
-        Assert.NotNull(runtime.QueuePromiseJob);
+        Assert.NotNull(runtime.Microtasks.QueuePromiseJob);
     }
 
     [Fact]

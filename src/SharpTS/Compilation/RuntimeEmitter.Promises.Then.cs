@@ -37,7 +37,7 @@ public partial class RuntimeEmitter
         {
             var il = onCompleted.GetILGenerator();
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Call, runtime.QueuePromiseJob);
+            il.Emit(OpCodes.Call, runtime.Microtasks.QueuePromiseJob);
             il.Emit(OpCodes.Ret);
         }
         awaiter.DefineMethodOverride(
@@ -53,7 +53,7 @@ public partial class RuntimeEmitter
         {
             var il = unsafeOnCompleted.GetILGenerator();
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Call, runtime.QueuePromiseJob);
+            il.Emit(OpCodes.Call, runtime.Microtasks.QueuePromiseJob);
             il.Emit(OpCodes.Ret);
         }
         awaiter.DefineMethodOverride(
@@ -1217,7 +1217,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Bne_Un, done);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldfld, runActionField);
-            il.Emit(OpCodes.Call, runtime.QueuePromiseJob);
+            il.Emit(OpCodes.Call, runtime.Microtasks.QueuePromiseJob);
             il.MarkLabel(done);
             il.Emit(OpCodes.Ret);
         }
@@ -1283,7 +1283,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Bge, complete);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldfld, runActionField);
-            il.Emit(OpCodes.Call, runtime.QueuePromiseJob);
+            il.Emit(OpCodes.Call, runtime.Microtasks.QueuePromiseJob);
             il.Emit(OpCodes.Ret);
 
             il.MarkLabel(complete);

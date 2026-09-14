@@ -407,6 +407,27 @@ BCL method caches, constant monitor key, and method-local construction state rem
 emitter. The process-specific singleton/access helpers, streams, networking, and worker scheduling
 retain their own owners and remain in #1599's residual scope where not already migrated.
 
+Timers use required `EmittedTimerRuntime` for 26 timeout and virtual-queue declarations, with
+required `EmittedMicrotaskRuntime` owning the four shared FIFO callback/Promise-job helpers.
+Optional `EmittedTimerPromiseRuntime` follows the existing `UsesPromise` gate, including hosted
+output's implied Promise support. Its 22 declarations replace seven flat helpers and take
+ownership of all fifteen emitter-held promise/async-interval closure handles. Together these
+components remove 37 flat properties without changing guest type or member signatures.
+
+Twelve timer-only, microtask-only, and promise-timer-only helpers accept their component directly.
+Helpers that invoke callbacks, wrap promises, inspect abort signals, or interact with the event
+loop retain their other runtime dependencies. `$VirtualTimer` still precedes `$TSTimeout`, and
+the shared `QueuePromiseJob` declaration still precedes Promise reaction emission. Its body is
+filled after `ProcessMicrotasks` is declared, preserving the forward call and common FIFO queue.
+Completion validates and freezes all enabled handles after runtime finalization. Plain timer and
+microtask programs still omit Promise timer types; hosted and full emission complete them.
+
+Timer cancellation, ref/unref accounting, interval rescheduling, Date.now cooperative pumping,
+module wrappers, AbortSignal cancellation, and Promise-job ordering remain unchanged. No timer
+flat aliases or emitter-held guest declarations remain. Method-local queue, callback-wrapper,
+and timeout construction handles stay local. Event-loop/synchronization-context metadata,
+process nextTick accessors, and AbortSignal helpers remain separate families in #1599.
+
 During emission, each handle becomes readable as soon as its declaration is assigned, so forward
 references do not require a method body to exist yet. An early read names the missing declaration.
 Completion is an orchestration boundary, not an IL verifier: body emission and type finalization

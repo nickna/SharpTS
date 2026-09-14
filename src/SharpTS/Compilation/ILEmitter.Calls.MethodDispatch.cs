@@ -468,8 +468,8 @@ public partial class ILEmitter
         {
             EmitExpression(methodGet.Object);
             EmitBoxIfNeeded(methodGet.Object);
-            IL.Emit(OpCodes.Castclass, _ctx.Runtime!.TSTimeoutType);
-            IL.Emit(OpCodes.Callvirt, methodName == "ref" ? _ctx.Runtime!.TSTimeoutRef : _ctx.Runtime!.TSTimeoutUnref);
+            IL.Emit(OpCodes.Castclass, _ctx.Runtime!.Timers.TimeoutType);
+            IL.Emit(OpCodes.Callvirt, methodName == "ref" ? _ctx.Runtime!.Timers.TimeoutRef : _ctx.Runtime!.Timers.TimeoutUnref);
             SetStackUnknown();
             return;
         }
