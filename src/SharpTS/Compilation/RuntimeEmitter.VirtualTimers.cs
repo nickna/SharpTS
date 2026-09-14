@@ -288,8 +288,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, hostedTimer);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Stfld, timers.VirtualTimerHasRef);
-        il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
-        il.Emit(OpCodes.Callvirt, runtime.EventLoopUnref);
+        il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
+        il.Emit(OpCodes.Callvirt, runtime.EventLoop.Unref);
         il.MarkLabel(skipUnref);
 
         il.MarkLabel(invoke);
@@ -518,8 +518,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, timerLocal);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Stfld, timers.VirtualTimerHasRef);
-        il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
-        il.Emit(OpCodes.Call, runtime.EventLoopUnref);
+        il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
+        il.Emit(OpCodes.Call, runtime.EventLoop.Unref);
         il.MarkLabel(skipCancelUnref);
 
         il.Emit(OpCodes.Br, loopStartLabel); // Don't increment i, continue from same index
@@ -629,8 +629,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, timerLocal);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Stfld, timers.VirtualTimerHasRef);
-        il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
-        il.Emit(OpCodes.Call, runtime.EventLoopUnref);
+        il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
+        il.Emit(OpCodes.Call, runtime.EventLoop.Unref);
         il.MarkLabel(skipFireUnref);
 
         il.MarkLabel(afterHandleLabel);
@@ -713,17 +713,17 @@ public partial class RuntimeEmitter
         // if ($EventLoop._timerProcessor == null)
         //     $EventLoop._timerProcessor = new Func<int>(ProcessPendingTimers);
         var alreadyHooked = il.DefineLabel();
-        il.Emit(OpCodes.Ldsfld, runtime.EventLoopTimerProcessorField);
+        il.Emit(OpCodes.Ldsfld, runtime.EventLoop.TimerProcessorField);
         il.Emit(OpCodes.Brtrue, alreadyHooked);
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ldftn, timers.ProcessPendingTimers);
         il.Emit(OpCodes.Newobj, typeof(Func<int>).GetConstructor([_types.Object, typeof(IntPtr)])!);
-        il.Emit(OpCodes.Stsfld, runtime.EventLoopTimerProcessorField);
+        il.Emit(OpCodes.Stsfld, runtime.EventLoop.TimerProcessorField);
         il.MarkLabel(alreadyHooked);
 
         // Wake the event loop so it recalculates its wait timeout for the new timer
-        il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
-        il.Emit(OpCodes.Call, runtime.EventLoopWake);
+        il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
+        il.Emit(OpCodes.Call, runtime.EventLoop.Wake);
 
         il.Emit(OpCodes.Ret);
     }

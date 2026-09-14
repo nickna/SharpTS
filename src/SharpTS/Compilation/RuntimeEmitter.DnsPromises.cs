@@ -338,8 +338,8 @@ public partial class RuntimeEmitter
             // The finally begins only after the facade task has been settled.
             il.MarkLabel(settled);
             il.BeginFinallyBlock();
-            il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
-            il.Emit(OpCodes.Callvirt, runtime.EventLoopUnref);
+            il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
+            il.Emit(OpCodes.Callvirt, runtime.EventLoop.Unref);
             il.EndExceptionBlock();
             il.Emit(OpCodes.Ret);
         }
@@ -353,11 +353,11 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Stfld, taskField);
-            il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
+            il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldftn, complete);
             il.Emit(OpCodes.Newobj, typeof(Action).GetConstructor([_types.Object, typeof(IntPtr)])!);
-            il.Emit(OpCodes.Callvirt, runtime.EventLoopSchedule);
+            il.Emit(OpCodes.Callvirt, runtime.EventLoop.Schedule);
             il.Emit(OpCodes.Ret);
         }
 
@@ -390,8 +390,8 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Newobj, _dnsAsyncCompletionCtor);
             il.Emit(OpCodes.Stloc, completionLocal);
 
-            il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
-            il.Emit(OpCodes.Callvirt, runtime.EventLoopRef);
+            il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
+            il.Emit(OpCodes.Callvirt, runtime.EventLoop.Ref);
 
             // Balance the ref if Task.Run or continuation registration throws
             // synchronously. Once registered, the completion closure owns it.
@@ -412,8 +412,8 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Pop);
             il.BeginCatchBlock(_types.Exception);
             il.Emit(OpCodes.Stloc, exceptionLocal);
-            il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
-            il.Emit(OpCodes.Callvirt, runtime.EventLoopUnref);
+            il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
+            il.Emit(OpCodes.Callvirt, runtime.EventLoop.Unref);
             il.Emit(OpCodes.Ldloc, exceptionLocal);
             il.Emit(OpCodes.Throw);
             il.EndExceptionBlock();

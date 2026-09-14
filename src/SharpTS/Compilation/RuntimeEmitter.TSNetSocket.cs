@@ -588,8 +588,8 @@ public partial class RuntimeEmitter
         // Released exactly once inside the scheduled OK/ERR closure so the handle
         // outlives delivery. One Ref here balances exactly one closure (TCP and IPC
         // workers each schedule exactly one of OK/ERR).
-        il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
-        il.Emit(OpCodes.Call, runtime.EventLoopRef);
+        il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
+        il.Emit(OpCodes.Call, runtime.EventLoop.Ref);
 
         // ── Branch: IPC vs TCP ──
         var ipcConnect = il.DefineLabel();
@@ -693,12 +693,12 @@ public partial class RuntimeEmitter
         // pending/readyState don't race the worker (Node semantics).
 
         // EventLoop.Schedule(new Action(new $SocketConnectOkClosure(this).Run))
-        wil.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
+        wil.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
         wil.Emit(OpCodes.Ldarg_0);
         wil.Emit(OpCodes.Newobj, _socketConnectOkClosureCtor);
         wil.Emit(OpCodes.Ldftn, _socketConnectOkClosureRun);
         wil.Emit(OpCodes.Newobj, typeof(Action).GetConstructor([_types.Object, typeof(IntPtr)])!);
-        wil.Emit(OpCodes.Call, runtime.EventLoopSchedule);
+        wil.Emit(OpCodes.Call, runtime.EventLoop.Schedule);
 
         var leaveOk = wil.DefineLabel();
         wil.Emit(OpCodes.Leave, leaveOk);
@@ -709,7 +709,7 @@ public partial class RuntimeEmitter
         wil.Emit(OpCodes.Stloc, exLocal);
 
         // EventLoop.Schedule(new Action(new $SocketConnectErrClosure(this, ex.Message, GetSocketErrorCode(ex)).Run))
-        wil.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
+        wil.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
         wil.Emit(OpCodes.Ldarg_0);
         wil.Emit(OpCodes.Ldloc, exLocal);
         wil.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Exception, "Message")!.GetGetMethod()!);
@@ -718,7 +718,7 @@ public partial class RuntimeEmitter
         wil.Emit(OpCodes.Newobj, _socketConnectErrClosureCtor);
         wil.Emit(OpCodes.Ldftn, _socketConnectErrClosureRun);
         wil.Emit(OpCodes.Newobj, typeof(Action).GetConstructor([_types.Object, typeof(IntPtr)])!);
-        wil.Emit(OpCodes.Call, runtime.EventLoopSchedule);
+        wil.Emit(OpCodes.Call, runtime.EventLoop.Schedule);
 
         wil.Emit(OpCodes.Leave, leaveOk);
 
@@ -846,12 +846,12 @@ public partial class RuntimeEmitter
         // _connecting clears in the scheduled OK/ERR closure (loop thread)
 
         // EventLoop.Schedule(new Action(new $SocketConnectOkClosure(this).Run))
-        wil.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
+        wil.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
         wil.Emit(OpCodes.Ldarg_0);
         wil.Emit(OpCodes.Newobj, _socketConnectOkClosureCtor);
         wil.Emit(OpCodes.Ldftn, _socketConnectOkClosureRun);
         wil.Emit(OpCodes.Newobj, typeof(Action).GetConstructor([_types.Object, typeof(IntPtr)])!);
-        wil.Emit(OpCodes.Call, runtime.EventLoopSchedule);
+        wil.Emit(OpCodes.Call, runtime.EventLoop.Schedule);
 
         var leaveOk = wil.DefineLabel();
         wil.Emit(OpCodes.Leave, leaveOk);
@@ -863,7 +863,7 @@ public partial class RuntimeEmitter
         // _connecting clears in the scheduled ERR closure (loop thread)
 
         // EventLoop.Schedule(new Action(new $SocketConnectErrClosure(this, ex.Message, GetSocketErrorCode(ex)).Run))
-        wil.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
+        wil.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
         wil.Emit(OpCodes.Ldarg_0);
         wil.Emit(OpCodes.Ldloc, exLocal);
         wil.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Exception, "Message")!.GetGetMethod()!);
@@ -872,7 +872,7 @@ public partial class RuntimeEmitter
         wil.Emit(OpCodes.Newobj, _socketConnectErrClosureCtor);
         wil.Emit(OpCodes.Ldftn, _socketConnectErrClosureRun);
         wil.Emit(OpCodes.Newobj, typeof(Action).GetConstructor([_types.Object, typeof(IntPtr)])!);
-        wil.Emit(OpCodes.Call, runtime.EventLoopSchedule);
+        wil.Emit(OpCodes.Call, runtime.EventLoop.Schedule);
 
         wil.Emit(OpCodes.Leave, leaveOk);
 
@@ -1220,8 +1220,8 @@ public partial class RuntimeEmitter
         var noStart = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, startWorkerLocal);
         il.Emit(OpCodes.Brfalse, noStart);
-        il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
-        il.Emit(OpCodes.Call, runtime.EventLoopRef);
+        il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
+        il.Emit(OpCodes.Call, runtime.EventLoop.Ref);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldftn, _netSocketWriteWorkerMethod);
         il.Emit(OpCodes.Newobj, typeof(WaitCallback).GetConstructor([_types.Object, typeof(IntPtr)])!);
@@ -1351,11 +1351,11 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldloc, exLocal);
             il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Exception, "Message")!.GetGetMethod()!);
             il.Emit(OpCodes.Stfld, _netSocketPendingWriteErrorField);
-            il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
+            il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldftn, _netSocketFireWriteErrorMethod);
             il.Emit(OpCodes.Newobj, typeof(Action).GetConstructor([_types.Object, typeof(IntPtr)])!);
-            il.Emit(OpCodes.Call, runtime.EventLoopSchedule);
+            il.Emit(OpCodes.Call, runtime.EventLoop.Schedule);
         }
         il.EndExceptionBlock();
 
@@ -1386,11 +1386,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, _netSocketPendingWriteCallbacksField);
         il.Emit(OpCodes.Call, typeof(Monitor).GetMethod("Exit", [_types.Object])!);
-        il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
+        il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldftn, _netSocketFireWriteCallbacksMethod);
         il.Emit(OpCodes.Newobj, typeof(Action).GetConstructor([_types.Object, typeof(IntPtr)])!);
-        il.Emit(OpCodes.Call, runtime.EventLoopSchedule);
+        il.Emit(OpCodes.Call, runtime.EventLoop.Schedule);
         il.MarkLabel(skipCb);
 
         il.Emit(OpCodes.Br, loopTop);
@@ -1404,21 +1404,21 @@ public partial class RuntimeEmitter
         var noShut = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, doShutdownLocal);
         il.Emit(OpCodes.Brfalse, noShut);
-        il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
+        il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldftn, _netSocketFireEndCallbackMethod);
         il.Emit(OpCodes.Newobj, typeof(Action).GetConstructor([_types.Object, typeof(IntPtr)])!);
-        il.Emit(OpCodes.Call, runtime.EventLoopSchedule);
+        il.Emit(OpCodes.Call, runtime.EventLoop.Schedule);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Call, _netSocketShutdownWritableMethod);
         il.MarkLabel(noShut);
 
         // schedule _FlushTick — drain check + the worker's balancing Unref
-        il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
+        il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldftn, _netSocketFlushTickMethod);
         il.Emit(OpCodes.Newobj, typeof(Action).GetConstructor([_types.Object, typeof(IntPtr)])!);
-        il.Emit(OpCodes.Call, runtime.EventLoopSchedule);
+        il.Emit(OpCodes.Call, runtime.EventLoop.Schedule);
         il.Emit(OpCodes.Ret);
     }
 
@@ -1452,8 +1452,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Pop);
         il.MarkLabel(skip);
 
-        il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
-        il.Emit(OpCodes.Call, runtime.EventLoopUnref);
+        il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
+        il.Emit(OpCodes.Call, runtime.EventLoop.Unref);
         il.Emit(OpCodes.Ret);
     }
 
@@ -1802,11 +1802,11 @@ public partial class RuntimeEmitter
             var noShutdownNow = il.DefineLabel();
             il.Emit(OpCodes.Ldloc, shutdownNowLocal);
             il.Emit(OpCodes.Brfalse, noShutdownNow);
-            il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
+            il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldftn, _netSocketFireEndCallbackMethod);
             il.Emit(OpCodes.Newobj, typeof(Action).GetConstructor([_types.Object, typeof(IntPtr)])!);
-            il.Emit(OpCodes.Call, runtime.EventLoopSchedule);
+            il.Emit(OpCodes.Call, runtime.EventLoop.Schedule);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Call, _netSocketShutdownWritableMethod);
             il.MarkLabel(noShutdownNow);
@@ -1914,8 +1914,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Stfld, _netSocketReadingStartedField);
-        il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
-        il.Emit(OpCodes.Call, runtime.EventLoopUnref);
+        il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
+        il.Emit(OpCodes.Call, runtime.EventLoop.Unref);
         il.MarkLabel(noUnref);
 
         // return this
@@ -1978,8 +1978,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Stfld, _netSocketReadingStartedField);
-        il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
-        il.Emit(OpCodes.Call, runtime.EventLoopRef);
+        il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
+        il.Emit(OpCodes.Call, runtime.EventLoop.Ref);
         il.MarkLabel(alreadyReading);
 
         // Emit the read worker as a private instance method
@@ -2069,12 +2069,12 @@ public partial class RuntimeEmitter
         wil.Emit(OpCodes.Brtrue, notZero);
 
         // EventLoop.Schedule(new Action(new $SocketReadEndClosure(this).Run))
-        wil.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
+        wil.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
         wil.Emit(OpCodes.Ldarg_0);
         wil.Emit(OpCodes.Newobj, _socketReadEndClosureCtor);
         wil.Emit(OpCodes.Ldftn, _socketReadEndClosureRun);
         wil.Emit(OpCodes.Newobj, typeof(Action).GetConstructor([_types.Object, typeof(IntPtr)])!);
-        wil.Emit(OpCodes.Call, runtime.EventLoopSchedule);
+        wil.Emit(OpCodes.Call, runtime.EventLoop.Schedule);
         wil.Emit(OpCodes.Br, loopExit);
 
         wil.MarkLabel(notZero);
@@ -2105,13 +2105,13 @@ public partial class RuntimeEmitter
         wil.Emit(OpCodes.Stloc, chunkLocal);
 
         // EventLoop.Schedule(new Action(new $SocketReadDataClosure(this, chunk).Run))
-        wil.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
+        wil.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
         wil.Emit(OpCodes.Ldarg_0);
         wil.Emit(OpCodes.Ldloc, chunkLocal);
         wil.Emit(OpCodes.Newobj, _socketReadDataClosureCtor);
         wil.Emit(OpCodes.Ldftn, _socketReadDataClosureRun);
         wil.Emit(OpCodes.Newobj, typeof(Action).GetConstructor([_types.Object, typeof(IntPtr)])!);
-        wil.Emit(OpCodes.Call, runtime.EventLoopSchedule);
+        wil.Emit(OpCodes.Call, runtime.EventLoop.Schedule);
 
         wil.Emit(OpCodes.Br, loopTop);
 

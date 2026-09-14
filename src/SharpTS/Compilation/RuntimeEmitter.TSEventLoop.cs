@@ -15,26 +15,19 @@ namespace SharpTS.Compilation;
 /// </summary>
 public partial class RuntimeEmitter
 {
-    // Field builders for $EventLoop
-    private FieldBuilder _eventLoopActiveHandlesField = null!;
-    private FieldBuilder _eventLoopQueueField = null!;
-    private FieldBuilder _eventLoopWakeField = null!;
-    private FieldBuilder _eventLoopTimerProcessorField = null!;
-    private FieldBuilder _eventLoopHostedRuntimeField = null!;
-    private FieldBuilder _eventLoopHostedAcceptingField = null!;
-
     /// <summary>
     /// Emits the $EventLoop singleton class.
     /// Must be called before $NetServer/$NetSocket/$HttpServer so they can call Ref/Unref/Schedule.
     /// </summary>
     private void EmitTSEventLoopClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
+        var eventLoop = runtime.EventLoop;
         var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$EventLoop",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object
         );
-        runtime.EventLoopType = typeBuilder;
+        eventLoop.Type = typeBuilder;
 
         // Static field: private static $EventLoop _instance
         var instanceField = typeBuilder.DefineField(
@@ -45,26 +38,25 @@ public partial class RuntimeEmitter
         _ = instanceField;
 
         // Instance fields
-        _eventLoopActiveHandlesField = typeBuilder.DefineField(
+        eventLoop.ActiveHandlesField = typeBuilder.DefineField(
             "_activeHandles", _types.Int32, FieldAttributes.Private);
-        _eventLoopQueueField = typeBuilder.DefineField(
+        eventLoop.QueueField = typeBuilder.DefineField(
             "_queue", typeof(ConcurrentQueue<Action>), FieldAttributes.Private);
-        _eventLoopWakeField = typeBuilder.DefineField(
+        eventLoop.WakeField = typeBuilder.DefineField(
             "_wake", typeof(ManualResetEventSlim), FieldAttributes.Private);
         if (_emitHosted)
         {
-            _eventLoopHostedRuntimeField = typeBuilder.DefineField(
+            eventLoop.RequireHosted().RuntimeField = typeBuilder.DefineField(
                 "_hostedRuntime", typeof(SharpTSHostedRuntimeBase), FieldAttributes.Private | FieldAttributes.Static);
-            _eventLoopHostedAcceptingField = typeBuilder.DefineField(
+            eventLoop.RequireHosted().AcceptingField = typeBuilder.DefineField(
                 "_hostedAccepting", _types.Boolean, FieldAttributes.Private | FieldAttributes.Static);
         }
 
         // Static field: Func<int> _timerProcessor — set by timer infrastructure to ProcessPendingTimers.
         // Returns ms until next timer is due, or -1 if no timers.
         // Decouples emission order ($EventLoop is emitted before $Runtime where timers live).
-        _eventLoopTimerProcessorField = typeBuilder.DefineField(
+        eventLoop.TimerProcessorField = typeBuilder.DefineField(
             "_timerProcessor", typeof(Func<int>), FieldAttributes.Public | FieldAttributes.Static);
-        runtime.EventLoopTimerProcessorField = _eventLoopTimerProcessorField;
 
         // Private constructor
         var ctor = typeBuilder.DefineConstructor(
@@ -80,35 +72,35 @@ public partial class RuntimeEmitter
             // _activeHandles = 0
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldc_I4_0);
-            il.Emit(OpCodes.Stfld, _eventLoopActiveHandlesField);
+            il.Emit(OpCodes.Stfld, eventLoop.ActiveHandlesField);
             // _queue = new ConcurrentQueue<Action>()
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Newobj, typeof(ConcurrentQueue<Action>).GetConstructor(Type.EmptyTypes)!);
-            il.Emit(OpCodes.Stfld, _eventLoopQueueField);
+            il.Emit(OpCodes.Stfld, eventLoop.QueueField);
             // _wake = new ManualResetEventSlim(false)
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldc_I4_0);
             il.Emit(OpCodes.Newobj, typeof(ManualResetEventSlim).GetConstructor([_types.Boolean])!);
-            il.Emit(OpCodes.Stfld, _eventLoopWakeField);
+            il.Emit(OpCodes.Stfld, eventLoop.WakeField);
             il.Emit(OpCodes.Ret);
         }
 
         // GetInstance() — lazy singleton
-        EmitEventLoopGetInstance(typeBuilder, runtime, instanceField, ctor);
+        EmitEventLoopGetInstance(typeBuilder, eventLoop, instanceField, ctor);
 
         // Ref()
-        EmitEventLoopRef(typeBuilder, runtime);
+        EmitEventLoopRef(typeBuilder, eventLoop);
 
         // Unref()
-        EmitEventLoopUnref(typeBuilder, runtime);
+        EmitEventLoopUnref(typeBuilder, eventLoop);
 
         // Versioned hosted scheduler hooks and Schedule(Action)
         if (_emitHosted)
-            EmitEventLoopHostedMethods(typeBuilder, runtime);
-        EmitEventLoopSchedule(typeBuilder, runtime);
+            EmitEventLoopHostedMethods(typeBuilder, eventLoop);
+        EmitEventLoopSchedule(typeBuilder, eventLoop);
 
         // Wake()
-        EmitEventLoopWake(typeBuilder, runtime);
+        EmitEventLoopWake(typeBuilder, eventLoop);
 
         // Run()
         EmitEventLoopRun(typeBuilder, runtime);
@@ -117,18 +109,18 @@ public partial class RuntimeEmitter
         EmitEventLoopWaitForTask(typeBuilder, runtime);
 
         // PumpOnce() — single cooperative tick for the PipeTo pump (#448)
-        EmitEventLoopPumpOnce(typeBuilder, runtime);
+        EmitEventLoopPumpOnce(typeBuilder, eventLoop);
 
         // HasPendingWork() — used by the beforeExit lifecycle (#1080) to decide
         // whether a listener scheduled new work at loop drain.
-        EmitEventLoopHasPendingWork(typeBuilder, runtime);
+        EmitEventLoopHasPendingWork(typeBuilder, eventLoop);
 
         typeBuilder.CreateType();
 
         // Emit the SynchronizationContext that routes await continuations back to
         // this loop. Done after $EventLoop is finalized so it can reference
         // GetInstance/Schedule.
-        EmitEventLoopSyncContext(moduleBuilder, runtime);
+        EmitEventLoopSyncContext(moduleBuilder, eventLoop);
     }
 
     /// <summary>
@@ -142,7 +134,7 @@ public partial class RuntimeEmitter
     /// quiescence window and the still-settling top-level promise is abandoned.
     /// Standalone-safe: references only BCL types and the emitted $EventLoop.
     /// </summary>
-    private void EmitEventLoopSyncContext(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private void EmitEventLoopSyncContext(ModuleBuilder moduleBuilder, EmittedEventLoopRuntime eventLoop)
     {
         // --- Closure: holds (SendOrPostCallback d, object state); Run() => d(state). ---
         var closure = EmitTypeDefinitions.DefineType(moduleBuilder,
@@ -189,7 +181,7 @@ public partial class RuntimeEmitter
             cil.Emit(OpCodes.Call, typeof(SynchronizationContext).GetConstructor(Type.EmptyTypes)!);
             cil.Emit(OpCodes.Ret);
         }
-        runtime.EventLoopSyncContextCtor = scCtor;
+        eventLoop.SyncContextCtor = scCtor;
 
         // public override void Post(SendOrPostCallback d, object state)
         //   => $EventLoop.GetInstance().Schedule(new Action(new $SyncContextClosure{ _d=d, _state=state }.Run));
@@ -208,11 +200,11 @@ public partial class RuntimeEmitter
             pil.Emit(OpCodes.Ldloc, c);
             pil.Emit(OpCodes.Ldarg_2);
             pil.Emit(OpCodes.Stfld, stateField);
-            pil.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
+            pil.Emit(OpCodes.Call, eventLoop.GetInstance);
             pil.Emit(OpCodes.Ldloc, c);
             pil.Emit(OpCodes.Ldftn, runMethod);
             pil.Emit(OpCodes.Newobj, typeof(Action).GetConstructor([_types.Object, typeof(IntPtr)])!);
-            pil.Emit(OpCodes.Callvirt, runtime.EventLoopSchedule);
+            pil.Emit(OpCodes.Callvirt, eventLoop.Schedule);
             pil.Emit(OpCodes.Ret);
         }
         sc.DefineMethodOverride(post, typeof(SynchronizationContext).GetMethod("Post")!);
@@ -247,7 +239,7 @@ public partial class RuntimeEmitter
         sc.CreateType();
     }
 
-    private void EmitEventLoopGetInstance(TypeBuilder typeBuilder, EmittedRuntime runtime,
+    private void EmitEventLoopGetInstance(TypeBuilder typeBuilder, EmittedEventLoopRuntime eventLoop,
         FieldBuilder instanceField, ConstructorBuilder ctor)
     {
         var method = typeBuilder.DefineMethod(
@@ -256,7 +248,7 @@ public partial class RuntimeEmitter
             typeBuilder,
             Type.EmptyTypes
         );
-        runtime.EventLoopGetInstance = method;
+        eventLoop.GetInstance = method;
 
         var il = method.GetILGenerator();
 
@@ -275,7 +267,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitEventLoopRef(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitEventLoopRef(TypeBuilder typeBuilder, EmittedEventLoopRuntime eventLoop)
     {
         var method = typeBuilder.DefineMethod(
             "Ref",
@@ -283,19 +275,19 @@ public partial class RuntimeEmitter
             typeof(void),
             Type.EmptyTypes
         );
-        runtime.EventLoopRef = method;
+        eventLoop.Ref = method;
 
         var il = method.GetILGenerator();
 
         // Interlocked.Increment(ref _activeHandles)
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldflda, _eventLoopActiveHandlesField);
+        il.Emit(OpCodes.Ldflda, eventLoop.ActiveHandlesField);
         il.Emit(OpCodes.Call, typeof(Interlocked).GetMethod("Increment", [typeof(int).MakeByRefType()])!);
         il.Emit(OpCodes.Pop); // discard return value
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitEventLoopUnref(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitEventLoopUnref(TypeBuilder typeBuilder, EmittedEventLoopRuntime eventLoop)
     {
         var method = typeBuilder.DefineMethod(
             "Unref",
@@ -303,13 +295,13 @@ public partial class RuntimeEmitter
             typeof(void),
             Type.EmptyTypes
         );
-        runtime.EventLoopUnref = method;
+        eventLoop.Unref = method;
 
         var il = method.GetILGenerator();
 
         // int val = Interlocked.Decrement(ref _activeHandles)
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldflda, _eventLoopActiveHandlesField);
+        il.Emit(OpCodes.Ldflda, eventLoop.ActiveHandlesField);
         il.Emit(OpCodes.Call, typeof(Interlocked).GetMethod("Decrement", [typeof(int).MakeByRefType()])!);
 
         // if (val <= 0) _wake.Set()
@@ -317,46 +309,46 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Bgt, skipWake);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _eventLoopWakeField);
+        il.Emit(OpCodes.Ldfld, eventLoop.WakeField);
         il.Emit(OpCodes.Callvirt, typeof(ManualResetEventSlim).GetMethod("Set")!);
 
         il.MarkLabel(skipWake);
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitEventLoopHostedMethods(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitEventLoopHostedMethods(TypeBuilder typeBuilder, EmittedEventLoopRuntime eventLoop)
     {
         var configure = typeBuilder.DefineMethod(
             "ConfigureHosted", MethodAttributes.Public | MethodAttributes.Static,
             typeof(void), [typeof(SharpTSHostedRuntimeBase)]);
-        runtime.EventLoopConfigureHosted = configure;
+        eventLoop.RequireHosted().Configure = configure;
         var il = configure.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Stsfld, _eventLoopHostedRuntimeField);
+        il.Emit(OpCodes.Stsfld, eventLoop.RequireHosted().RuntimeField);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Stsfld, _eventLoopHostedAcceptingField);
+        il.Emit(OpCodes.Stsfld, eventLoop.RequireHosted().AcceptingField);
         il.Emit(OpCodes.Ret);
 
         var get = typeBuilder.DefineMethod(
             "GetHostedRuntime", MethodAttributes.Public | MethodAttributes.Static,
             typeof(SharpTSHostedRuntimeBase), Type.EmptyTypes);
-        runtime.EventLoopGetHostedRuntime = get;
+        eventLoop.RequireHosted().GetRuntime = get;
         il = get.GetILGenerator();
-        il.Emit(OpCodes.Ldsfld, _eventLoopHostedRuntimeField);
+        il.Emit(OpCodes.Ldsfld, eventLoop.RequireHosted().RuntimeField);
         il.Emit(OpCodes.Ret);
 
         var prepare = typeBuilder.DefineMethod(
             "PrepareHostedAwait", MethodAttributes.Public | MethodAttributes.Static,
             typeof(Task<object>), [typeof(Task<object>)]);
-        runtime.EventLoopPrepareHostedAwait = prepare;
+        eventLoop.RequireHosted().PrepareAwait = prepare;
         il = prepare.GetILGenerator();
         var hosted = il.DefineLabel();
-        il.Emit(OpCodes.Ldsfld, _eventLoopHostedRuntimeField);
+        il.Emit(OpCodes.Ldsfld, eventLoop.RequireHosted().RuntimeField);
         il.Emit(OpCodes.Brtrue, hosted);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(hosted);
-        il.Emit(OpCodes.Ldsfld, _eventLoopHostedRuntimeField);
+        il.Emit(OpCodes.Ldsfld, eventLoop.RequireHosted().RuntimeField);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Callvirt, typeof(SharpTSHostedRuntimeBase).GetMethod(
             nameof(SharpTSHostedRuntimeBase.PrepareAwait))!);
@@ -365,10 +357,10 @@ public partial class RuntimeEmitter
         var hasQueued = typeBuilder.DefineMethod(
             "HasQueuedCallbacks", MethodAttributes.Public,
             _types.Boolean, Type.EmptyTypes);
-        runtime.EventLoopHasQueuedCallbacks = hasQueued;
+        eventLoop.RequireHosted().HasQueuedCallbacks = hasQueued;
         il = hasQueued.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _eventLoopQueueField);
+        il.Emit(OpCodes.Ldfld, eventLoop.QueueField);
         il.Emit(OpCodes.Callvirt, typeof(ConcurrentQueue<Action>).GetProperty("IsEmpty")!.GetGetMethod()!);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ceq);
@@ -377,12 +369,12 @@ public partial class RuntimeEmitter
         var runOne = typeBuilder.DefineMethod(
             "TryRunOne", MethodAttributes.Public,
             _types.Boolean, Type.EmptyTypes);
-        runtime.EventLoopTryRunOne = runOne;
+        eventLoop.RequireHosted().TryRunOne = runOne;
         il = runOne.GetILGenerator();
         var action = il.DeclareLocal(typeof(Action));
         var empty = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _eventLoopQueueField);
+        il.Emit(OpCodes.Ldfld, eventLoop.QueueField);
         il.Emit(OpCodes.Ldloca, action);
         il.Emit(OpCodes.Callvirt, typeof(ConcurrentQueue<Action>).GetMethod(
             "TryDequeue", [typeof(Action).MakeByRefType()])!);
@@ -398,23 +390,23 @@ public partial class RuntimeEmitter
         var reject = typeBuilder.DefineMethod(
             "RejectHosted", MethodAttributes.Public | MethodAttributes.Static,
             typeof(void), Type.EmptyTypes);
-        runtime.EventLoopRejectHosted = reject;
+        eventLoop.RequireHosted().Reject = reject;
         il = reject.GetILGenerator();
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Stsfld, _eventLoopHostedAcceptingField);
+        il.Emit(OpCodes.Stsfld, eventLoop.RequireHosted().AcceptingField);
         il.Emit(OpCodes.Ret);
 
         var clear = typeBuilder.DefineMethod(
             "ClearHosted", MethodAttributes.Public,
             typeof(void), Type.EmptyTypes);
-        runtime.EventLoopClearHosted = clear;
+        eventLoop.RequireHosted().Clear = clear;
         il = clear.GetILGenerator();
         var drain = il.DefineLabel();
         var drained = il.DefineLabel();
         var discarded = il.DeclareLocal(typeof(Action));
         il.MarkLabel(drain);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _eventLoopQueueField);
+        il.Emit(OpCodes.Ldfld, eventLoop.QueueField);
         il.Emit(OpCodes.Ldloca, discarded);
         il.Emit(OpCodes.Callvirt, typeof(ConcurrentQueue<Action>).GetMethod(
             "TryDequeue", [typeof(Action).MakeByRefType()])!);
@@ -423,17 +415,17 @@ public partial class RuntimeEmitter
         il.MarkLabel(drained);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Stfld, _eventLoopActiveHandlesField);
+        il.Emit(OpCodes.Stfld, eventLoop.ActiveHandlesField);
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitQueueHostedPromiseJob(ILGenerator il, EmittedRuntime runtime)
+    private static void EmitQueueHostedPromiseJob(ILGenerator il, EmittedHostedEventLoopRuntime hostedEventLoop)
     {
         // A native Task may settle between guest turns or on a worker. Use the
         // host's thread-safe queue and wake it instead of waiting for UI input.
         var ordinary = il.DefineLabel();
         var hosted = il.DeclareLocal(typeof(SharpTSHostedRuntimeBase));
-        il.Emit(OpCodes.Call, runtime.EventLoopGetHostedRuntime!);
+        il.Emit(OpCodes.Call, hostedEventLoop.GetRuntime);
         il.Emit(OpCodes.Stloc, hosted);
         il.Emit(OpCodes.Ldloc, hosted);
         il.Emit(OpCodes.Brfalse, ordinary);
@@ -445,7 +437,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(ordinary);
     }
 
-    private void EmitEventLoopSchedule(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitEventLoopSchedule(TypeBuilder typeBuilder, EmittedEventLoopRuntime eventLoop)
     {
         var method = typeBuilder.DefineMethod(
             "Schedule",
@@ -453,7 +445,7 @@ public partial class RuntimeEmitter
             typeof(void),
             [typeof(Action)]
         );
-        runtime.EventLoopSchedule = method;
+        eventLoop.Schedule = method;
 
         var il = method.GetILGenerator();
 
@@ -462,11 +454,11 @@ public partial class RuntimeEmitter
         {
             var ordinary = il.DefineLabel();
             done = il.DefineLabel();
-            il.Emit(OpCodes.Ldsfld, _eventLoopHostedRuntimeField);
+            il.Emit(OpCodes.Ldsfld, eventLoop.RequireHosted().RuntimeField);
             il.Emit(OpCodes.Brfalse, ordinary);
-            il.Emit(OpCodes.Ldsfld, _eventLoopHostedAcceptingField);
+            il.Emit(OpCodes.Ldsfld, eventLoop.RequireHosted().AcceptingField);
             il.Emit(OpCodes.Brfalse, done);
-            il.Emit(OpCodes.Ldsfld, _eventLoopHostedRuntimeField);
+            il.Emit(OpCodes.Ldsfld, eventLoop.RequireHosted().RuntimeField);
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Callvirt, typeof(SharpTSHostedRuntimeBase).GetMethod(
                 nameof(SharpTSHostedRuntimeBase.EnqueueMacrotask))!);
@@ -476,13 +468,13 @@ public partial class RuntimeEmitter
 
         // _queue.Enqueue(action)
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _eventLoopQueueField);
+        il.Emit(OpCodes.Ldfld, eventLoop.QueueField);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Callvirt, typeof(ConcurrentQueue<Action>).GetMethod("Enqueue", [typeof(Action)])!);
 
         // _wake.Set()
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _eventLoopWakeField);
+        il.Emit(OpCodes.Ldfld, eventLoop.WakeField);
         il.Emit(OpCodes.Callvirt, typeof(ManualResetEventSlim).GetMethod("Set")!);
 
         if (_emitHosted)
@@ -495,7 +487,7 @@ public partial class RuntimeEmitter
     /// or callbacks are queued. Read by the process 'beforeExit' lifecycle to
     /// re-enter Run() when a listener scheduled new work (#1080).
     /// </summary>
-    private void EmitEventLoopHasPendingWork(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitEventLoopHasPendingWork(TypeBuilder typeBuilder, EmittedEventLoopRuntime eventLoop)
     {
         var method = typeBuilder.DefineMethod(
             "HasPendingWork",
@@ -503,20 +495,20 @@ public partial class RuntimeEmitter
             _types.Boolean,
             Type.EmptyTypes
         );
-        runtime.EventLoopHasPendingWork = method;
+        eventLoop.HasPendingWork = method;
 
         var il = method.GetILGenerator();
         var trueLabel = il.DefineLabel();
 
         // _activeHandles > 0 → true
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _eventLoopActiveHandlesField);
+        il.Emit(OpCodes.Ldfld, eventLoop.ActiveHandlesField);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Bgt, trueLabel);
 
         // !_queue.IsEmpty → true
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _eventLoopQueueField);
+        il.Emit(OpCodes.Ldfld, eventLoop.QueueField);
         il.Emit(OpCodes.Callvirt, typeof(ConcurrentQueue<Action>).GetProperty("IsEmpty")!.GetGetMethod()!);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ceq);
@@ -527,7 +519,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitEventLoopWake(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitEventLoopWake(TypeBuilder typeBuilder, EmittedEventLoopRuntime eventLoop)
     {
         var method = typeBuilder.DefineMethod(
             "Wake",
@@ -535,16 +527,16 @@ public partial class RuntimeEmitter
             typeof(void),
             Type.EmptyTypes
         );
-        runtime.EventLoopWake = method;
+        eventLoop.Wake = method;
 
         var il = method.GetILGenerator();
 
         if (_emitHosted)
         {
             var ordinary = il.DefineLabel();
-            il.Emit(OpCodes.Ldsfld, _eventLoopHostedRuntimeField);
+            il.Emit(OpCodes.Ldsfld, eventLoop.RequireHosted().RuntimeField);
             il.Emit(OpCodes.Brfalse, ordinary);
-            il.Emit(OpCodes.Ldsfld, _eventLoopHostedRuntimeField);
+            il.Emit(OpCodes.Ldsfld, eventLoop.RequireHosted().RuntimeField);
             il.Emit(OpCodes.Callvirt, typeof(SharpTSHostedRuntimeBase).GetMethod(
                 nameof(SharpTSHostedRuntimeBase.Wake))!);
             il.Emit(OpCodes.Ret);
@@ -553,7 +545,7 @@ public partial class RuntimeEmitter
 
         // _wake.Set()
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _eventLoopWakeField);
+        il.Emit(OpCodes.Ldfld, eventLoop.WakeField);
         il.Emit(OpCodes.Callvirt, typeof(ManualResetEventSlim).GetMethod("Set")!);
         il.Emit(OpCodes.Ret);
     }
@@ -571,13 +563,14 @@ public partial class RuntimeEmitter
     /// </remarks>
     private void EmitEventLoopRun(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
+        var eventLoop = runtime.EventLoop;
         var method = typeBuilder.DefineMethod(
             "Run",
             MethodAttributes.Public,
             typeof(void),
             Type.EmptyTypes
         );
-        runtime.EventLoopRun = method;
+        eventLoop.Run = method;
 
         var il = method.GetILGenerator();
         var actionLocal = il.DeclareLocal(typeof(Action));
@@ -611,7 +604,7 @@ public partial class RuntimeEmitter
         if (runtime.CheckCancellationMethod != null)
             il.Emit(OpCodes.Call, runtime.CheckCancellationMethod);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _eventLoopQueueField);
+        il.Emit(OpCodes.Ldfld, eventLoop.QueueField);
         il.Emit(OpCodes.Ldloca, actionLocal);
         il.Emit(OpCodes.Callvirt, typeof(ConcurrentQueue<Action>).GetMethod("TryDequeue", [typeof(Action).MakeByRefType()])!);
         il.Emit(OpCodes.Brfalse, drainEnd);
@@ -630,22 +623,22 @@ public partial class RuntimeEmitter
         // Process pending timers and get delay until next timer:
         // if (_timerProcessor != null) waitMs = _timerProcessor.Invoke();
         var skipTimers = il.DefineLabel();
-        il.Emit(OpCodes.Ldsfld, _eventLoopTimerProcessorField);
+        il.Emit(OpCodes.Ldsfld, eventLoop.TimerProcessorField);
         il.Emit(OpCodes.Brfalse, skipTimers);
-        il.Emit(OpCodes.Ldsfld, _eventLoopTimerProcessorField);
+        il.Emit(OpCodes.Ldsfld, eventLoop.TimerProcessorField);
         il.Emit(OpCodes.Callvirt, typeof(Func<int>).GetMethod("Invoke")!);
         il.Emit(OpCodes.Stloc, waitMsLocal);
         il.MarkLabel(skipTimers);
 
         // if (_activeHandles <= 0 && queue.IsEmpty) break
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _eventLoopActiveHandlesField);
+        il.Emit(OpCodes.Ldfld, eventLoop.ActiveHandlesField);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Bgt, waitLabel); // still active, go wait
 
         // Check queue.IsEmpty
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _eventLoopQueueField);
+        il.Emit(OpCodes.Ldfld, eventLoop.QueueField);
         il.Emit(OpCodes.Callvirt, typeof(ConcurrentQueue<Action>).GetProperty("IsEmpty")!.GetGetMethod()!);
         il.Emit(OpCodes.Brtrue, exitLoop);
 
@@ -669,14 +662,14 @@ public partial class RuntimeEmitter
 
         // _wake.Wait(waitMs)
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _eventLoopWakeField);
+        il.Emit(OpCodes.Ldfld, eventLoop.WakeField);
         il.Emit(OpCodes.Ldloc, waitMsLocal);
         il.Emit(OpCodes.Callvirt, typeof(ManualResetEventSlim).GetMethod("Wait", [_types.Int32])!);
         il.Emit(OpCodes.Pop); // discard bool return
 
         // _wake.Reset()
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _eventLoopWakeField);
+        il.Emit(OpCodes.Ldfld, eventLoop.WakeField);
         il.Emit(OpCodes.Callvirt, typeof(ManualResetEventSlim).GetMethod("Reset", Type.EmptyTypes)!);
 
         il.Emit(OpCodes.Br, loopTop);
@@ -700,13 +693,14 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitEventLoopWaitForTask(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
+        var eventLoop = runtime.EventLoop;
         var method = typeBuilder.DefineMethod(
             "WaitForTask",
             MethodAttributes.Public,
             _types.Boolean,
             [typeof(Task)]
         );
-        runtime.EventLoopWaitForTask = method;
+        eventLoop.WaitForTask = method;
 
         // Continuous quiescent wall-clock time before concluding the task can
         // never settle. Time-based, not iteration-based: a loaded thread pool
@@ -762,7 +756,7 @@ public partial class RuntimeEmitter
         // looked empty. Re-checks task completion after each callback.
         il.MarkLabel(drainTop);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _eventLoopQueueField);
+        il.Emit(OpCodes.Ldfld, eventLoop.QueueField);
         il.Emit(OpCodes.Ldloca, actionLocal);
         il.Emit(OpCodes.Callvirt, typeof(ConcurrentQueue<Action>).GetMethod("TryDequeue", [typeof(Action).MakeByRefType()])!);
         il.Emit(OpCodes.Brfalse, drainEnd);
@@ -781,9 +775,9 @@ public partial class RuntimeEmitter
         // returns ms until the next timer, or -1 when none are scheduled.
         il.Emit(OpCodes.Ldc_I4_M1);
         il.Emit(OpCodes.Stloc, waitMsLocal);
-        il.Emit(OpCodes.Ldsfld, _eventLoopTimerProcessorField);
+        il.Emit(OpCodes.Ldsfld, eventLoop.TimerProcessorField);
         il.Emit(OpCodes.Brfalse, skipTimers);
-        il.Emit(OpCodes.Ldsfld, _eventLoopTimerProcessorField);
+        il.Emit(OpCodes.Ldsfld, eventLoop.TimerProcessorField);
         il.Emit(OpCodes.Callvirt, typeof(Func<int>).GetMethod("Invoke")!);
         il.Emit(OpCodes.Stloc, waitMsLocal);
         il.MarkLabel(skipTimers);
@@ -793,11 +787,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Bge, busyLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _eventLoopActiveHandlesField);
+        il.Emit(OpCodes.Ldfld, eventLoop.ActiveHandlesField);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Bgt, busyLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _eventLoopQueueField);
+        il.Emit(OpCodes.Ldfld, eventLoop.QueueField);
         il.Emit(OpCodes.Callvirt, typeof(ConcurrentQueue<Action>).GetProperty("IsEmpty")!.GetGetMethod()!);
         il.Emit(OpCodes.Brfalse, busyLabel);
 
@@ -853,7 +847,7 @@ public partial class RuntimeEmitter
     /// only this type's own fields plus the BCL, so the pure-IL stream stays
     /// standalone (no SharpTS.dll dependency).
     /// </remarks>
-    private void EmitEventLoopPumpOnce(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitEventLoopPumpOnce(TypeBuilder typeBuilder, EmittedEventLoopRuntime eventLoop)
     {
         var method = typeBuilder.DefineMethod(
             "PumpOnce",
@@ -861,7 +855,7 @@ public partial class RuntimeEmitter
             _types.Int32,
             Type.EmptyTypes
         );
-        runtime.EventLoopPumpOnce = method;
+        eventLoop.PumpOnce = method;
 
         var il = method.GetILGenerator();
         var waitMsLocal = il.DeclareLocal(_types.Int32);
@@ -878,7 +872,7 @@ public partial class RuntimeEmitter
         // running them may settle the read/write the pump is waiting on.
         il.MarkLabel(drainTop);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _eventLoopQueueField);
+        il.Emit(OpCodes.Ldfld, eventLoop.QueueField);
         il.Emit(OpCodes.Ldloca, actionLocal);
         il.Emit(OpCodes.Callvirt, typeof(ConcurrentQueue<Action>).GetMethod("TryDequeue", [typeof(Action).MakeByRefType()])!);
         il.Emit(OpCodes.Brfalse, drainEnd);
@@ -892,9 +886,9 @@ public partial class RuntimeEmitter
         // task) and returns ms until the next timer, or -1 when none are scheduled.
         il.Emit(OpCodes.Ldc_I4_M1);
         il.Emit(OpCodes.Stloc, waitMsLocal);
-        il.Emit(OpCodes.Ldsfld, _eventLoopTimerProcessorField);
+        il.Emit(OpCodes.Ldsfld, eventLoop.TimerProcessorField);
         il.Emit(OpCodes.Brfalse, skipTimers);
-        il.Emit(OpCodes.Ldsfld, _eventLoopTimerProcessorField);
+        il.Emit(OpCodes.Ldsfld, eventLoop.TimerProcessorField);
         il.Emit(OpCodes.Callvirt, typeof(Func<int>).GetMethod("Invoke")!);
         il.Emit(OpCodes.Stloc, waitMsLocal);
         il.MarkLabel(skipTimers);
@@ -910,11 +904,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Bge, busyLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _eventLoopActiveHandlesField);
+        il.Emit(OpCodes.Ldfld, eventLoop.ActiveHandlesField);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Bgt, busyLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _eventLoopQueueField);
+        il.Emit(OpCodes.Ldfld, eventLoop.QueueField);
         il.Emit(OpCodes.Callvirt, typeof(ConcurrentQueue<Action>).GetProperty("IsEmpty")!.GetGetMethod()!);
         il.Emit(OpCodes.Brfalse, busyLabel);
 

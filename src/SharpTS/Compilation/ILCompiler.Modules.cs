@@ -421,7 +421,7 @@ public partial class ILCompiler
     /// <summary>
     /// Emits a top-level expression statement plus "top-level await" handling: if the
     /// value is a <c>Task&lt;object&gt;</c> or <c>$Promise</c>, pump the event loop until
-    /// it settles via <see cref="EmittedRuntime.EventLoopWaitForTask"/>, then GetResult to
+    /// it settles via <see cref="EmittedRuntime.EventLoop.WaitForTask"/>, then GetResult to
     /// rethrow faults. Shared by the single-file entry point (<c>EmitDefaultEntryPoint</c>)
     /// and every module/script init body so both wait the same way.
     /// </summary>
@@ -540,9 +540,9 @@ public partial class ILCompiler
         var taskLocal = il.DeclareLocal(_types.TaskOfObject);
         il.Emit(OpCodes.Stloc, taskLocal);
 
-        il.Emit(OpCodes.Call, _runtime.EventLoopGetInstance);
+        il.Emit(OpCodes.Call, _runtime.EventLoop.GetInstance);
         il.Emit(OpCodes.Ldloc, taskLocal);
-        il.Emit(OpCodes.Callvirt, _runtime.EventLoopWaitForTask);
+        il.Emit(OpCodes.Callvirt, _runtime.EventLoop.WaitForTask);
         il.Emit(OpCodes.Brfalse, notTaskLabel);
 
         // An ordinary JavaScript expression statement discards an async
@@ -842,8 +842,8 @@ public partial class ILCompiler
         }
 
         // Run the event loop — no-op if no handles are active
-        il.Emit(OpCodes.Call, _runtime.EventLoopGetInstance);
-        il.Emit(OpCodes.Call, _runtime.EventLoopRun);
+        il.Emit(OpCodes.Call, _runtime.EventLoop.GetInstance);
+        il.Emit(OpCodes.Call, _runtime.EventLoop.Run);
         // Node process lifecycle at natural drain: 'beforeExit' (re-entering
         // the loop when a listener schedules work), then 'exit' (#1080).
         il.Emit(OpCodes.Call, _runtime.ProcessRunLifecycle);
@@ -1082,7 +1082,7 @@ public partial class ILCompiler
             typeof(Task<object?>),
             Type.EmptyTypes);
         ILGenerator il = method.GetILGenerator();
-        il.Emit(OpCodes.Call, _runtime.EventLoopGetHostedRuntime);
+        il.Emit(OpCodes.Call, _runtime.EventLoop.RequireHosted().GetRuntime);
         il.Emit(OpCodes.Ldstr, module.Path);
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ldftn, getNamespace);
@@ -1128,7 +1128,7 @@ public partial class ILCompiler
             il.Emit(OpCodes.Newobj, delegateCtor);
             il.Emit(OpCodes.Stelem_Ref);
         }
-        il.Emit(OpCodes.Call, _runtime.EventLoopGetHostedRuntime);
+        il.Emit(OpCodes.Call, _runtime.EventLoop.RequireHosted().GetRuntime);
         il.Emit(OpCodes.Ldloc, stepArray);
         il.Emit(OpCodes.Callvirt, typeof(SharpTSHostedRuntimeBase).GetMethod(
             nameof(SharpTSHostedRuntimeBase.RunInitializationSteps))!);
@@ -1363,7 +1363,7 @@ public partial class ILCompiler
             var task = il.DeclareLocal(_types.TaskOfObject);
             il.Emit(OpCodes.Castclass, _types.TaskOfObject);
             il.Emit(OpCodes.Stloc, task);
-            il.Emit(OpCodes.Call, _runtime.EventLoopGetHostedRuntime);
+            il.Emit(OpCodes.Call, _runtime.EventLoop.RequireHosted().GetRuntime);
             il.Emit(OpCodes.Ldloc, task);
             il.Emit(main.ReturnsExitCode ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
             il.Emit(OpCodes.Callvirt, typeof(SharpTSHostedRuntimeBase).GetMethod(
@@ -1377,7 +1377,7 @@ public partial class ILCompiler
             il.Emit(OpCodes.Conv_I4);
             var exitCode = il.DeclareLocal(_types.Int32);
             il.Emit(OpCodes.Stloc, exitCode);
-            il.Emit(OpCodes.Call, _runtime.EventLoopGetHostedRuntime);
+            il.Emit(OpCodes.Call, _runtime.EventLoop.RequireHosted().GetRuntime);
             il.Emit(OpCodes.Ldloc, exitCode);
             il.Emit(OpCodes.Callvirt, typeof(SharpTSHostedRuntimeBase).GetMethod(
                 nameof(SharpTSHostedRuntimeBase.CompleteProgram))!);

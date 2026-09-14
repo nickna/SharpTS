@@ -97,8 +97,8 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static, _types.Void, Type.EmptyTypes);
         {
             var il = now.GetILGenerator();
-            il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
-            il.Emit(OpCodes.Call, runtime.EventLoopUnref);
+            il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
+            il.Emit(OpCodes.Call, runtime.EventLoop.Unref);
             il.Emit(OpCodes.Ret);
         }
 
@@ -107,11 +107,11 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static, _types.Void, [typeof(Task)]);
         {
             var il = drop.GetILGenerator();
-            il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
+            il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
             il.Emit(OpCodes.Ldnull);
             il.Emit(OpCodes.Ldftn, now);
             il.Emit(OpCodes.Newobj, typeof(Action).GetConstructor([_types.Object, typeof(IntPtr)])!);
-            il.Emit(OpCodes.Callvirt, runtime.EventLoopSchedule);
+            il.Emit(OpCodes.Callvirt, runtime.EventLoop.Schedule);
             il.Emit(OpCodes.Ret);
         }
 
@@ -149,8 +149,8 @@ public partial class RuntimeEmitter
         var il = m.GetILGenerator();
 
         // EventLoop.Ref() — keep the loop alive while the op is on the pool.
-        il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
-        il.Emit(OpCodes.Call, runtime.EventLoopRef);
+        il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
+        il.Emit(OpCodes.Call, runtime.EventLoop.Ref);
 
         // var t = Task.Run<object>(new Func<object>(new $FsAsyncOp(m, args).Worker))
         il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldarg_1);

@@ -446,8 +446,8 @@ public partial class AsyncGeneratorMoveNextEmitter
 
         _il.MarkLabel(haveTaskLabel);
         _il.Emit(OpCodes.Ldloc, taskLocal);
-        if (_ctx.Runtime.EventLoopPrepareHostedAwait is not null)
-            _il.Emit(OpCodes.Call, _ctx.Runtime.EventLoopPrepareHostedAwait);
+        if (_ctx.Runtime.EventLoop.Hosted is { } hostedEventLoop)
+            _il.Emit(OpCodes.Call, hostedEventLoop.PrepareAwait);
         _il.Emit(OpCodes.Stloc, taskLocal);
 
         // 2b. Store the task in AwaitedTaskField (needed for continuation if not completed)

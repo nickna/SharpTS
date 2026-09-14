@@ -383,8 +383,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stfld, _netServerIsListeningField);
 
         // EventLoop.Ref()
-        il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
-        il.Emit(OpCodes.Call, runtime.EventLoopRef);
+        il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
+        il.Emit(OpCodes.Call, runtime.EventLoop.Ref);
 
         // Start Unix IPC accept worker on ThreadPool BEFORE callback
         // (callback may trigger client connect; accept worker must be ready)
@@ -417,8 +417,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stfld, _netServerIsListeningField);
 
         // EventLoop.Ref()
-        il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
-        il.Emit(OpCodes.Call, runtime.EventLoopRef);
+        il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
+        il.Emit(OpCodes.Call, runtime.EventLoop.Ref);
 
         // _pipeReady = new ManualResetEventSlim(false)
         il.Emit(OpCodes.Ldarg_0);
@@ -549,8 +549,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stfld, _netServerCtsField);
 
         // EventLoop.Ref()
-        il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
-        il.Emit(OpCodes.Call, runtime.EventLoopRef);
+        il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
+        il.Emit(OpCodes.Call, runtime.EventLoop.Ref);
 
         // Call callback if provided
         var noTcpCb = il.DefineLabel();
@@ -623,13 +623,13 @@ public partial class RuntimeEmitter
             wil.MarkLabel(afterAccept);
 
             // Schedule: EventLoop.Schedule(new $TcpAcceptClosure(this, client).Run)
-            wil.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
+            wil.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
             wil.Emit(OpCodes.Ldarg_0);
             wil.Emit(OpCodes.Ldloc, clientLocal);
             wil.Emit(OpCodes.Newobj, _tcpAcceptClosureCtor);
             wil.Emit(OpCodes.Ldftn, _tcpAcceptClosureRun);
             wil.Emit(OpCodes.Newobj, typeof(Action).GetConstructor([_types.Object, typeof(IntPtr)])!);
-            wil.Emit(OpCodes.Call, runtime.EventLoopSchedule);
+            wil.Emit(OpCodes.Call, runtime.EventLoop.Schedule);
 
             wil.Emit(OpCodes.Br, loopTop);
 
@@ -707,7 +707,7 @@ public partial class RuntimeEmitter
             wil.Emit(OpCodes.Stloc, streamLocal);
 
             // Schedule: EventLoop.Schedule(new $IpcAcceptClosure(this, stream, pipePath).Run)
-            wil.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
+            wil.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
             wil.Emit(OpCodes.Ldarg_0);
             wil.Emit(OpCodes.Ldloc, streamLocal);
             wil.Emit(OpCodes.Ldarg_0);
@@ -715,7 +715,7 @@ public partial class RuntimeEmitter
             wil.Emit(OpCodes.Newobj, _ipcAcceptClosureCtor);
             wil.Emit(OpCodes.Ldftn, _ipcAcceptClosureRun);
             wil.Emit(OpCodes.Newobj, typeof(Action).GetConstructor([_types.Object, typeof(IntPtr)])!);
-            wil.Emit(OpCodes.Call, runtime.EventLoopSchedule);
+            wil.Emit(OpCodes.Call, runtime.EventLoop.Schedule);
 
             wil.Emit(OpCodes.Br, loopTop);
 
@@ -859,7 +859,7 @@ public partial class RuntimeEmitter
             wil.MarkLabel(afterAccept);
 
             // Schedule: EventLoop.Schedule(new $IpcAcceptClosure(this, pipe, pipePath).Run)
-            wil.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
+            wil.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
             wil.Emit(OpCodes.Ldarg_0);
             wil.Emit(OpCodes.Ldloc, pipeLocal);
             wil.Emit(OpCodes.Ldarg_0);
@@ -867,7 +867,7 @@ public partial class RuntimeEmitter
             wil.Emit(OpCodes.Newobj, _ipcAcceptClosureCtor);
             wil.Emit(OpCodes.Ldftn, _ipcAcceptClosureRun);
             wil.Emit(OpCodes.Newobj, typeof(Action).GetConstructor([_types.Object, typeof(IntPtr)])!);
-            wil.Emit(OpCodes.Call, runtime.EventLoopSchedule);
+            wil.Emit(OpCodes.Call, runtime.EventLoop.Schedule);
 
             wil.Emit(OpCodes.Br, loopTop);
 
@@ -1062,8 +1062,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stfld, _netServerIsListeningField);
 
         // EventLoop.Unref()
-        il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
-        il.Emit(OpCodes.Call, runtime.EventLoopUnref);
+        il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
+        il.Emit(OpCodes.Call, runtime.EventLoop.Unref);
 
         // Call callback
         var noCb = il.DefineLabel();

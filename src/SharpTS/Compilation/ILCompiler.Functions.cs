@@ -1270,7 +1270,7 @@ public partial class ILCompiler
     /// </summary>
     private void EmitInstallEventLoopSyncContext(ILGenerator il)
     {
-        il.Emit(OpCodes.Newobj, _runtime.EventLoopSyncContextCtor);
+        il.Emit(OpCodes.Newobj, _runtime.EventLoop.SyncContextCtor);
         il.Emit(OpCodes.Call, typeof(System.Threading.SynchronizationContext).GetMethod(
             "SetSynchronizationContext",
             System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static)!);
@@ -1316,8 +1316,8 @@ public partial class ILCompiler
         }
 
         // Run the event loop — no-op if no handles are active
-        il.Emit(OpCodes.Call, _runtime.EventLoopGetInstance);
-        il.Emit(OpCodes.Call, _runtime.EventLoopRun);
+        il.Emit(OpCodes.Call, _runtime.EventLoop.GetInstance);
+        il.Emit(OpCodes.Call, _runtime.EventLoop.Run);
         // Node process lifecycle at natural drain: 'beforeExit' (re-entering
         // the loop when a listener schedules work), then 'exit' (#1080).
         il.Emit(OpCodes.Call, _runtime.ProcessRunLifecycle);
@@ -1560,9 +1560,9 @@ public partial class ILCompiler
                 var taskLocal2 = il.DeclareLocal(_types.TaskOfObject);
                 il.Emit(OpCodes.Stloc, taskLocal2);
 
-                il.Emit(OpCodes.Call, _runtime.EventLoopGetInstance);
+                il.Emit(OpCodes.Call, _runtime.EventLoop.GetInstance);
                 il.Emit(OpCodes.Ldloc, taskLocal2);
-                il.Emit(OpCodes.Callvirt, _runtime.EventLoopWaitForTask);
+                il.Emit(OpCodes.Callvirt, _runtime.EventLoop.WaitForTask);
                 il.Emit(OpCodes.Brfalse, notTaskLabel);
 
                 // Task is complete — GetResult() to rethrow if faulted
@@ -1607,9 +1607,9 @@ public partial class ILCompiler
             il.Emit(OpCodes.Stloc, asyncMainTask);
 
             var skipMainResult = il.DefineLabel();
-            il.Emit(OpCodes.Call, _runtime.EventLoopGetInstance);
+            il.Emit(OpCodes.Call, _runtime.EventLoop.GetInstance);
             il.Emit(OpCodes.Ldloc, asyncMainTask);
-            il.Emit(OpCodes.Callvirt, _runtime.EventLoopWaitForTask);
+            il.Emit(OpCodes.Callvirt, _runtime.EventLoop.WaitForTask);
             il.Emit(OpCodes.Brfalse, skipMainResult);
 
             il.Emit(OpCodes.Ldloc, asyncMainTask);
@@ -1635,8 +1635,8 @@ public partial class ILCompiler
             }
             il.MarkLabel(skipMainResult);
             // Run the event loop — no-op if no handles are active
-            il.Emit(OpCodes.Call, _runtime.EventLoopGetInstance);
-            il.Emit(OpCodes.Call, _runtime.EventLoopRun);
+            il.Emit(OpCodes.Call, _runtime.EventLoop.GetInstance);
+            il.Emit(OpCodes.Call, _runtime.EventLoop.Run);
             // Node process lifecycle at natural drain: 'beforeExit' (re-entering
             // the loop when a listener schedules work), then 'exit' (#1080).
             il.Emit(OpCodes.Call, _runtime.ProcessRunLifecycle);
@@ -1658,8 +1658,8 @@ public partial class ILCompiler
                 il.Emit(OpCodes.Pop);
             }
             // Run the event loop — no-op if no handles are active
-            il.Emit(OpCodes.Call, _runtime.EventLoopGetInstance);
-            il.Emit(OpCodes.Call, _runtime.EventLoopRun);
+            il.Emit(OpCodes.Call, _runtime.EventLoop.GetInstance);
+            il.Emit(OpCodes.Call, _runtime.EventLoop.Run);
             // Node process lifecycle at natural drain: 'beforeExit' (re-entering
             // the loop when a listener schedules work), then 'exit' (#1080).
             il.Emit(OpCodes.Call, _runtime.ProcessRunLifecycle);

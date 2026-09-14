@@ -1448,8 +1448,8 @@ public partial class RuntimeEmitter
         il.MarkLabel(notAbortedLabel);
 
         // busy = $EventLoop.GetInstance().PumpOnce()
-        il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
-        il.Emit(OpCodes.Callvirt, runtime.EventLoopPumpOnce);
+        il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
+        il.Emit(OpCodes.Callvirt, runtime.EventLoop.PumpOnce);
         // Stack: [busy]
 
         // if (task.IsCompleted) { pop busy; goto completed }

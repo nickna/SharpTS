@@ -739,8 +739,8 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldfld, socketField);
             il.Emit(OpCodes.Ldc_I4_0);
             il.Emit(OpCodes.Stfld, _netSocketReadingStartedField);
-            il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
-            il.Emit(OpCodes.Call, runtime.EventLoopUnref);
+            il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
+            il.Emit(OpCodes.Call, runtime.EventLoop.Unref);
             il.MarkLabel(done);
             il.Emit(OpCodes.Ret);
         }
@@ -858,8 +858,8 @@ public partial class RuntimeEmitter
             // Release the in-flight-connect Ref taken in $TSNetSocket.Connect, after
             // the 'connect' event has been delivered (and reading started), so the
             // handle outlives delivery. Mirrors SharpTSSocket's interpreter.Unref().
-            il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
-            il.Emit(OpCodes.Call, runtime.EventLoopUnref);
+            il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
+            il.Emit(OpCodes.Call, runtime.EventLoop.Unref);
 
             il.Emit(OpCodes.Ret);
         }
@@ -957,8 +957,8 @@ public partial class RuntimeEmitter
             // Release the in-flight-connect Ref taken in $TSNetSocket.Connect, after
             // the 'error' event has been delivered. Mirrors SharpTSSocket's
             // interpreter.Unref() on the failure path.
-            il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
-            il.Emit(OpCodes.Call, runtime.EventLoopUnref);
+            il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
+            il.Emit(OpCodes.Call, runtime.EventLoop.Unref);
 
             il.Emit(OpCodes.Ret);
         }

@@ -4239,8 +4239,8 @@ public partial class RuntimeEmitter
         var il = method.GetILGenerator();
 
         // EventLoop.Ref() — keep event loop alive during async DNS
-        il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
-        il.Emit(OpCodes.Call, runtime.EventLoopRef);
+        il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
+        il.Emit(OpCodes.Call, runtime.EventLoop.Ref);
 
         // ThreadPool.QueueUserWorkItem(new $DnsAsyncClosure_xxx(hostname, callback).Worker)
         il.Emit(OpCodes.Ldarg_0); // hostname
@@ -4347,8 +4347,8 @@ public partial class RuntimeEmitter
             il.MarkLabel(done);
 
             // EventLoop.Unref()
-            il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
-            il.Emit(OpCodes.Call, runtime.EventLoopUnref);
+            il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
+            il.Emit(OpCodes.Call, runtime.EventLoop.Unref);
 
             il.Emit(OpCodes.Ret);
         }
@@ -4386,11 +4386,11 @@ public partial class RuntimeEmitter
             il.MarkLabel(afterTry);
 
             // EventLoop.Schedule(new Action(this.Callback))
-            il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
+            il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldftn, callbackMethod);
             il.Emit(OpCodes.Newobj, typeof(Action).GetConstructor([_types.Object, typeof(IntPtr)])!);
-            il.Emit(OpCodes.Call, runtime.EventLoopSchedule);
+            il.Emit(OpCodes.Call, runtime.EventLoop.Schedule);
 
             il.Emit(OpCodes.Ret);
         }

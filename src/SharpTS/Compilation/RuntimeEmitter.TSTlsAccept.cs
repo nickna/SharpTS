@@ -232,8 +232,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, runtime.RequireNet().SocketStartReading);
 
         // EventLoop.Unref() — release the in-flight-connect ref taken in TlsConnect
-        il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
-        il.Emit(OpCodes.Call, runtime.EventLoopUnref);
+        il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
+        il.Emit(OpCodes.Call, runtime.EventLoop.Unref);
 
         il.Emit(OpCodes.Ret);
         typeBuilder.CreateType();
@@ -292,8 +292,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Pop);
 
         // EventLoop.Unref()
-        il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
-        il.Emit(OpCodes.Call, runtime.EventLoopUnref);
+        il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
+        il.Emit(OpCodes.Call, runtime.EventLoop.Unref);
 
         il.Emit(OpCodes.Ret);
         typeBuilder.CreateType();
@@ -462,13 +462,13 @@ public partial class RuntimeEmitter
         il.MarkLabel(authOk);
 
         // EventLoop.Schedule(new Action(new $TlsConnectOkClosure(_socket).Run))
-        il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
+        il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, socketField);
         il.Emit(OpCodes.Newobj, _tlsConnectOkClosureCtor);
         il.Emit(OpCodes.Ldftn, _tlsConnectOkClosureRun);
         il.Emit(OpCodes.Newobj, typeof(Action).GetConstructor([_types.Object, typeof(IntPtr)])!);
-        il.Emit(OpCodes.Call, runtime.EventLoopSchedule);
+        il.Emit(OpCodes.Call, runtime.EventLoop.Schedule);
 
         var afterConnect = il.DefineLabel();
         il.Emit(OpCodes.Leave, afterConnect);
@@ -477,7 +477,7 @@ public partial class RuntimeEmitter
         il.BeginCatchBlock(_types.Exception);
         var exLocal = il.DeclareLocal(_types.Exception);
         il.Emit(OpCodes.Stloc, exLocal);
-        il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
+        il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, socketField);
         il.Emit(OpCodes.Ldloc, exLocal);
@@ -485,7 +485,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Newobj, _tlsConnectErrClosureCtor);
         il.Emit(OpCodes.Ldftn, _tlsConnectErrClosureRun);
         il.Emit(OpCodes.Newobj, typeof(Action).GetConstructor([_types.Object, typeof(IntPtr)])!);
-        il.Emit(OpCodes.Call, runtime.EventLoopSchedule);
+        il.Emit(OpCodes.Call, runtime.EventLoop.Schedule);
         il.Emit(OpCodes.Leave, afterConnect);
         il.EndExceptionBlock();
 
@@ -623,13 +623,13 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stfld, _tlsSocketAuthorizedField);
 
         // EventLoop.Schedule(new Action(new $TlsAcceptClosure(this, socket).Run))
-        il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
+        il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, socketLocal);
         il.Emit(OpCodes.Newobj, _tlsAcceptClosureCtor);
         il.Emit(OpCodes.Ldftn, _tlsAcceptClosureRun);
         il.Emit(OpCodes.Newobj, typeof(Action).GetConstructor([_types.Object, typeof(IntPtr)])!);
-        il.Emit(OpCodes.Call, runtime.EventLoopSchedule);
+        il.Emit(OpCodes.Call, runtime.EventLoop.Schedule);
 
         var handshakeOk = il.DefineLabel();
         il.Emit(OpCodes.Leave, handshakeOk);
@@ -648,14 +648,14 @@ public partial class RuntimeEmitter
         il.EndExceptionBlock();
 
         // EventLoop.Schedule(new Action(new $TlsAcceptErrorClosure(this, ex.Message).Run))
-        il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
+        il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, handshakeExceptionLocal);
         il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Exception, "Message")!.GetGetMethod()!);
         il.Emit(OpCodes.Newobj, _tlsAcceptErrorClosureCtor);
         il.Emit(OpCodes.Ldftn, _tlsAcceptErrorClosureRun);
         il.Emit(OpCodes.Newobj, typeof(Action).GetConstructor([_types.Object, typeof(IntPtr)])!);
-        il.Emit(OpCodes.Call, runtime.EventLoopSchedule);
+        il.Emit(OpCodes.Call, runtime.EventLoop.Schedule);
         il.Emit(OpCodes.Leave, handshakeOk);
         il.EndExceptionBlock();
         il.MarkLabel(handshakeOk);

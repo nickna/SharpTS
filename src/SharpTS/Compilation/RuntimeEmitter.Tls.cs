@@ -241,8 +241,8 @@ public partial class RuntimeEmitter
         il.MarkLabel(noConnectCb);
 
         // EventLoop.Ref()
-        il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
-        il.Emit(OpCodes.Call, runtime.EventLoopRef);
+        il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
+        il.Emit(OpCodes.Call, runtime.EventLoop.Ref);
 
         // Create $TlsConnectClosure and queue on ThreadPool
         il.Emit(OpCodes.Ldloc, socketLocal);

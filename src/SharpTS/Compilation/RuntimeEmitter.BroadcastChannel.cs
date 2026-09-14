@@ -200,8 +200,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, setItem);
 
         // $EventLoop.GetInstance().Ref()
-        il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
-        il.Emit(OpCodes.Callvirt, runtime.EventLoopRef);
+        il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
+        il.Emit(OpCodes.Callvirt, runtime.EventLoop.Ref);
 
         il.Emit(OpCodes.Ret);
     }
@@ -456,12 +456,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, enqueue);
 
         // $EventLoop.GetInstance().Schedule(new Action(sub.Drain))
-        il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
+        il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
         il.Emit(OpCodes.Ldloc, subLocal);
         il.Emit(OpCodes.Ldftn, _broadcastChannelDrain);
         var actionCtor = typeof(Action).GetConstructor([_types.Object, typeof(IntPtr)])!;
         il.Emit(OpCodes.Newobj, actionCtor);
-        il.Emit(OpCodes.Callvirt, runtime.EventLoopSchedule);
+        il.Emit(OpCodes.Callvirt, runtime.EventLoop.Schedule);
 
         il.MarkLabel(skipSelfLabel);
         il.Emit(OpCodes.Ldloc, indexLocal);
@@ -532,8 +532,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, _broadcastChannelRefedField);
         il.Emit(OpCodes.Brfalse, notRefedLabel);
-        il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
-        il.Emit(OpCodes.Callvirt, runtime.EventLoopUnref);
+        il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
+        il.Emit(OpCodes.Callvirt, runtime.EventLoop.Unref);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Stfld, _broadcastChannelRefedField);
@@ -576,8 +576,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Stfld, _broadcastChannelRefedField);
-        il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
-        il.Emit(OpCodes.Callvirt, runtime.EventLoopRef);
+        il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
+        il.Emit(OpCodes.Callvirt, runtime.EventLoop.Ref);
 
         il.MarkLabel(alreadyRefedLabel);
         il.Emit(OpCodes.Ret);
@@ -608,8 +608,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Stfld, _broadcastChannelRefedField);
-        il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
-        il.Emit(OpCodes.Callvirt, runtime.EventLoopUnref);
+        il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
+        il.Emit(OpCodes.Callvirt, runtime.EventLoop.Unref);
 
         il.MarkLabel(notRefedLabel);
         il.Emit(OpCodes.Ret);

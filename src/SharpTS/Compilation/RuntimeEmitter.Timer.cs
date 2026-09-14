@@ -222,8 +222,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldfld, virtualTimerField);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Stfld, timers.VirtualTimerHasRef);
-        il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
-        il.Emit(OpCodes.Call, runtime.EventLoopUnref);
+        il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
+        il.Emit(OpCodes.Call, runtime.EventLoop.Unref);
         il.MarkLabel(skipUnref);
 
         il.MarkLabel(doneLabel);
@@ -263,8 +263,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldfld, virtualTimerField);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Stfld, timers.VirtualTimerHasRef);
-        il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
-        il.Emit(OpCodes.Call, runtime.EventLoopRef);
+        il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
+        il.Emit(OpCodes.Call, runtime.EventLoop.Ref);
 
         il.MarkLabel(alreadyRef);
         // return this
@@ -304,8 +304,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldfld, virtualTimerField);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Stfld, timers.VirtualTimerHasRef);
-        il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
-        il.Emit(OpCodes.Call, runtime.EventLoopUnref);
+        il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
+        il.Emit(OpCodes.Call, runtime.EventLoop.Unref);
 
         il.MarkLabel(alreadyUnref);
         // return this
@@ -422,8 +422,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stfld, timers.VirtualTimerHasRef);
 
         // EventLoop.GetInstance().Ref() — timer keeps event loop alive
-        il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
-        il.Emit(OpCodes.Call, runtime.EventLoopRef);
+        il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
+        il.Emit(OpCodes.Call, runtime.EventLoop.Ref);
 
         // var timeout = new $TSTimeout(virtualTimer);
         var timeoutLocal = il.DeclareLocal(timers.TimeoutType);
@@ -648,8 +648,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stfld, timers.VirtualTimerHasRef);
 
         // EventLoop.GetInstance().Ref() — interval keeps event loop alive
-        il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
-        il.Emit(OpCodes.Call, runtime.EventLoopRef);
+        il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
+        il.Emit(OpCodes.Call, runtime.EventLoop.Ref);
 
         // var interval = new $TSTimeout(virtualTimer);
         var intervalLocal = il.DeclareLocal(timers.TimeoutType);
@@ -764,7 +764,7 @@ public partial class RuntimeEmitter
         var enqueueMethod = EmitterTypeHelpers.ResolveMethod(
             queueType, _types.GetMethod(_types.QueueOpen, "Enqueue")!);
         var queueIl = microtasks.QueuePromiseJob.GetILGenerator();
-        if (_emitHosted) EmitQueueHostedPromiseJob(queueIl, runtime);
+        if (_emitHosted) EmitQueueHostedPromiseJob(queueIl, runtime.EventLoop.RequireHosted());
         var queueReady = queueIl.DefineLabel();
         queueIl.Emit(OpCodes.Ldsfld, microtaskQueueField);
         queueIl.Emit(OpCodes.Brtrue_S, queueReady);
@@ -792,9 +792,9 @@ public partial class RuntimeEmitter
                 typeof(Action).GetConstructor([_types.Object, typeof(IntPtr)])!);
             queueIl.Emit(OpCodes.Stsfld, microtaskDrainActionField);
             queueIl.MarkLabel(drainActionReady);
-            queueIl.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
+            queueIl.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
             queueIl.Emit(OpCodes.Ldsfld, microtaskDrainActionField);
-            queueIl.Emit(OpCodes.Callvirt, runtime.EventLoopSchedule);
+            queueIl.Emit(OpCodes.Callvirt, runtime.EventLoop.Schedule);
             queueIl.MarkLabel(drainAlreadyScheduled);
         }
         queueIl.Emit(OpCodes.Ret);

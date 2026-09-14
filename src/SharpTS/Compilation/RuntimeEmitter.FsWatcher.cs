@@ -144,14 +144,14 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, filenameLocal);
 
         // EventLoop.GetInstance().Schedule(new Action(new $FsWatchChangeClosure(this, "change", filename).Run))
-        il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
+        il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
         il.Emit(OpCodes.Ldarg_0); // this (the $FsWatcher, which IS a $EventEmitter)
         il.Emit(OpCodes.Ldstr, "change");
         il.Emit(OpCodes.Ldloc, filenameLocal);
         il.Emit(OpCodes.Newobj, _fsWatchClosureCtor);
         il.Emit(OpCodes.Ldftn, _fsWatchClosureRun);
         il.Emit(OpCodes.Newobj, typeof(Action).GetConstructor([typeof(object), typeof(IntPtr)])!);
-        il.Emit(OpCodes.Call, runtime.EventLoopSchedule);
+        il.Emit(OpCodes.Call, runtime.EventLoop.Schedule);
         il.Emit(OpCodes.Ret);
     }
 
@@ -232,8 +232,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, typeof(FileSystemWatcher).GetProperty("EnableRaisingEvents")!.GetSetMethod()!);
 
         // EventLoop.GetInstance().Ref()
-        il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
-        il.Emit(OpCodes.Call, runtime.EventLoopRef);
+        il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
+        il.Emit(OpCodes.Call, runtime.EventLoop.Ref);
 
         il.Emit(OpCodes.Ret);
     }
@@ -286,8 +286,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, typeof(IDisposable).GetMethod("Dispose")!);
 
         // EventLoop.GetInstance().Unref()
-        il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
-        il.Emit(OpCodes.Call, runtime.EventLoopUnref);
+        il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
+        il.Emit(OpCodes.Call, runtime.EventLoop.Unref);
 
         il.Emit(OpCodes.Ret);
     }

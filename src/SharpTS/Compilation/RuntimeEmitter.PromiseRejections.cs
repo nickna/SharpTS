@@ -157,8 +157,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Pop);
 
         il.MarkLabel(unref);
-        il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
-        il.Emit(OpCodes.Callvirt, runtime.EventLoopUnref);
+        il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
+        il.Emit(OpCodes.Callvirt, runtime.EventLoop.Unref);
         il.Emit(OpCodes.Ret);
     }
 
@@ -181,8 +181,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, runtime.EventEmitter.Emit);
         il.Emit(OpCodes.Pop);
 
-        il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
-        il.Emit(OpCodes.Callvirt, runtime.EventLoopUnref);
+        il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
+        il.Emit(OpCodes.Callvirt, runtime.EventLoop.Unref);
         il.Emit(OpCodes.Ret);
     }
 
@@ -193,12 +193,12 @@ public partial class RuntimeEmitter
     {
         // Task continuations never invoke guest code on their worker thread.
         // They only enqueue the report action on the JS event loop.
-        il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
+        il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldftn, report);
         il.Emit(OpCodes.Newobj,
             _types.GetConstructor(typeof(Action), [_types.Object, _types.IntPtr])!);
-        il.Emit(OpCodes.Callvirt, runtime.EventLoopSchedule);
+        il.Emit(OpCodes.Callvirt, runtime.EventLoop.Schedule);
         il.Emit(OpCodes.Ret);
     }
 
@@ -275,8 +275,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, cwtAdd);
 
         // Keep the loop alive until success/failure has been classified.
-        il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
-        il.Emit(OpCodes.Callvirt, runtime.EventLoopRef);
+        il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
+        il.Emit(OpCodes.Callvirt, runtime.EventLoop.Ref);
 
         il.Emit(OpCodes.Ldloc, task);
         il.Emit(OpCodes.Callvirt,
@@ -302,12 +302,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, ret);
 
         il.MarkLabel(schedule);
-        il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
+        il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
         il.Emit(OpCodes.Ldloc, tracker);
         il.Emit(OpCodes.Ldftn, report);
         il.Emit(OpCodes.Newobj,
             _types.GetConstructor(typeof(Action), [_types.Object, _types.IntPtr])!);
-        il.Emit(OpCodes.Callvirt, runtime.EventLoopSchedule);
+        il.Emit(OpCodes.Callvirt, runtime.EventLoop.Schedule);
 
         il.MarkLabel(ret);
         il.Emit(OpCodes.Ret);
@@ -377,14 +377,14 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, ret);
 
         // rejectionHandled is itself a later event-loop turn.
-        il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
-        il.Emit(OpCodes.Callvirt, runtime.EventLoopRef);
-        il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
+        il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
+        il.Emit(OpCodes.Callvirt, runtime.EventLoop.Ref);
+        il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
         il.Emit(OpCodes.Ldloc, tracker);
         il.Emit(OpCodes.Ldftn, emitHandled);
         il.Emit(OpCodes.Newobj,
             _types.GetConstructor(typeof(Action), [_types.Object, _types.IntPtr])!);
-        il.Emit(OpCodes.Callvirt, runtime.EventLoopSchedule);
+        il.Emit(OpCodes.Callvirt, runtime.EventLoop.Schedule);
 
         il.MarkLabel(ret);
         il.Emit(OpCodes.Ret);

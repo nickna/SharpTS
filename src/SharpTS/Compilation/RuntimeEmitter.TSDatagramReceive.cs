@@ -278,7 +278,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, sizeDblLocal);
 
         // Schedule on EventLoop: EventLoop.Schedule(new Action(new $DgramMessageClosure(...).Run))
-        il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
+        il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
         il.Emit(OpCodes.Ldarg_0); // socket (this)
         il.Emit(OpCodes.Ldloc, dataLocal);
         il.Emit(OpCodes.Ldloc, addrStrLocal);
@@ -288,7 +288,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Newobj, dgram.MessageClosureCtor);
         il.Emit(OpCodes.Ldftn, dgram.MessageClosureRun);
         il.Emit(OpCodes.Newobj, typeof(Action).GetConstructor([_types.Object, typeof(IntPtr)])!);
-        il.Emit(OpCodes.Call, runtime.EventLoopSchedule);
+        il.Emit(OpCodes.Call, runtime.EventLoop.Schedule);
 
         var afterReceive = il.DefineLabel();
         il.Emit(OpCodes.Leave, afterReceive);
