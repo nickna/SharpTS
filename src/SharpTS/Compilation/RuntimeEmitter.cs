@@ -41,7 +41,10 @@ public partial class RuntimeEmitter
             _features.UsesPromise = true;
         var runtime = new EmittedRuntime();
         if (_emitHosted)
+        {
             runtime.EventLoop.BeginHostedEmission();
+            runtime.Process.BeginHostedEmission();
+        }
         if (features.HasAnyTypedArray)
         {
             runtime.BeginArrayBufferEmission();
@@ -71,7 +74,10 @@ public partial class RuntimeEmitter
         if (features.UsesWebStreams)
             runtime.BeginWebStreamEmission();
         if (features.UsesNodeStreams)
+        {
             runtime.BeginNodeStreamEmission(features.UsesAbortController);
+            runtime.Process.BeginStreamsEmission();
+        }
         if (features.UsesNet)
             runtime.BeginNetEmission();
         if (features.UsesHttp)
@@ -664,6 +670,7 @@ public partial class RuntimeEmitter
         runtime.Timers.CompleteEmission();
         runtime.Microtasks.CompleteEmission();
         runtime.TimerPromises?.CompleteEmission();
+        runtime.Process.CompleteEmission();
         runtime.EventLoop.CompleteEmission();
         runtime.Buffer?.CompleteEmission();
         runtime.ArrayStorage.CompleteEmission();

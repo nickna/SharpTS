@@ -52,7 +52,7 @@ public sealed class ProcessModuleEmitter : IBuiltInModuleEmitter
             case "kill":
                 EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0);
                 EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 1);
-                il.Emit(OpCodes.Call, ctx.Runtime!.ProcessKill);
+                il.Emit(OpCodes.Call, ctx.Runtime!.Process.Kill);
                 return true;
 
             case "abort":
@@ -63,20 +63,20 @@ public sealed class ProcessModuleEmitter : IBuiltInModuleEmitter
 
             case "umask":
                 EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0);
-                il.Emit(OpCodes.Call, ctx.Runtime!.ProcessUmask);
+                il.Emit(OpCodes.Call, ctx.Runtime!.Process.Umask);
                 return true;
 
             case "cpuUsage":
                 EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0);
-                il.Emit(OpCodes.Call, ctx.Runtime!.ProcessCpuUsage);
+                il.Emit(OpCodes.Call, ctx.Runtime!.Process.CpuUsage);
                 return true;
 
             case "resourceUsage":
-                il.Emit(OpCodes.Call, ctx.Runtime!.ProcessResourceUsage);
+                il.Emit(OpCodes.Call, ctx.Runtime!.Process.ResourceUsage);
                 return true;
 
             case "availableMemory":
-                il.Emit(OpCodes.Call, ctx.Runtime!.ProcessAvailableMemory);
+                il.Emit(OpCodes.Call, ctx.Runtime!.Process.AvailableMemory);
                 return true;
 
             case "constrainedMemory":
@@ -85,7 +85,7 @@ public sealed class ProcessModuleEmitter : IBuiltInModuleEmitter
                 return true;
 
             case "getActiveResourcesInfo":
-                il.Emit(OpCodes.Call, ctx.Runtime!.ProcessGetActiveResourcesInfoM);
+                il.Emit(OpCodes.Call, ctx.Runtime!.Process.GetActiveResourcesInfo);
                 return true;
 
             case "emitWarning":
@@ -93,11 +93,11 @@ public sealed class ProcessModuleEmitter : IBuiltInModuleEmitter
                 EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 1);
                 EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 2);
                 EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 3);
-                il.Emit(OpCodes.Call, ctx.Runtime!.ProcessEmitWarning);
+                il.Emit(OpCodes.Call, ctx.Runtime!.Process.EmitWarning);
                 return true;
 
             case "setSourceMapsEnabled":
-                il.Emit(OpCodes.Call, ctx.Runtime!.GetProcessObject);
+                il.Emit(OpCodes.Call, ctx.Runtime!.Process.GetObject);
                 il.Emit(OpCodes.Ldstr, "sourceMapsEnabled");
                 EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0);
                 il.Emit(OpCodes.Call, ctx.Runtime!.SetProperty);
@@ -144,19 +144,19 @@ public sealed class ProcessModuleEmitter : IBuiltInModuleEmitter
 
             // The live process object — the module facade's default export.
             case "processObject":
-                il.Emit(OpCodes.Call, ctx.Runtime!.GetProcessObject);
+                il.Emit(OpCodes.Call, ctx.Runtime!.Process.GetObject);
                 return true;
 
             case "ppid":
-                il.Emit(OpCodes.Call, ctx.Runtime!.ProcessGetPpid);
+                il.Emit(OpCodes.Call, ctx.Runtime!.Process.GetPpid);
                 return true;
 
             case "title":
-                il.Emit(OpCodes.Call, ctx.Runtime!.ProcessGetTitle);
+                il.Emit(OpCodes.Call, ctx.Runtime!.Process.GetTitle);
                 return true;
 
             case "versions":
-                il.Emit(OpCodes.Call, ctx.Runtime!.ProcessGetVersions);
+                il.Emit(OpCodes.Call, ctx.Runtime!.Process.GetVersions);
                 return true;
 
             case "execPath":
@@ -174,7 +174,7 @@ public sealed class ProcessModuleEmitter : IBuiltInModuleEmitter
                 }
 
             case "execArgv":
-                il.Emit(OpCodes.Call, ctx.Runtime!.ProcessGetExecArgv);
+                il.Emit(OpCodes.Call, ctx.Runtime!.Process.GetExecArgv);
                 return true;
 
             case "argv0":
@@ -184,15 +184,15 @@ public sealed class ProcessModuleEmitter : IBuiltInModuleEmitter
                 return true;
 
             case "config":
-                il.Emit(OpCodes.Call, ctx.Runtime!.ProcessGetConfig);
+                il.Emit(OpCodes.Call, ctx.Runtime!.Process.GetConfig);
                 return true;
 
             case "release":
-                il.Emit(OpCodes.Call, ctx.Runtime!.ProcessGetRelease);
+                il.Emit(OpCodes.Call, ctx.Runtime!.Process.GetRelease);
                 return true;
 
             case "features":
-                il.Emit(OpCodes.Call, ctx.Runtime!.ProcessGetFeatures);
+                il.Emit(OpCodes.Call, ctx.Runtime!.Process.GetFeatures);
                 return true;
 
             case "debugPort":
@@ -201,26 +201,26 @@ public sealed class ProcessModuleEmitter : IBuiltInModuleEmitter
                 return true;
 
             case "allowedNodeEnvironmentFlags":
-                il.Emit(OpCodes.Call, ctx.Runtime!.ProcessGetAllowedFlags);
+                il.Emit(OpCodes.Call, ctx.Runtime!.Process.GetAllowedFlags);
                 return true;
 
             case "report":
-                il.Emit(OpCodes.Call, ctx.Runtime!.ProcessGetReport);
+                il.Emit(OpCodes.Call, ctx.Runtime!.Process.GetReport);
                 return true;
 
             // Function-with-members values (hrtime.bigint / memoryUsage.rss).
             case "hrtime":
-                il.Emit(OpCodes.Call, ctx.Runtime!.ProcessGetHrtimeFn);
+                il.Emit(OpCodes.Call, ctx.Runtime!.Process.GetHrtimeFn);
                 return true;
 
             case "memoryUsage":
-                il.Emit(OpCodes.Call, ctx.Runtime!.ProcessGetMemoryUsageFn);
+                il.Emit(OpCodes.Call, ctx.Runtime!.Process.GetMemoryUsageFn);
                 return true;
 
             // Flags + IPC state through the live object's dynamic path.
             case "throwDeprecation" or "traceDeprecation" or "noDeprecation"
                 or "sourceMapsEnabled" or "connected" or "channel" or "send" or "disconnect":
-                il.Emit(OpCodes.Call, ctx.Runtime!.GetProcessObject);
+                il.Emit(OpCodes.Call, ctx.Runtime!.Process.GetObject);
                 il.Emit(OpCodes.Castclass, ctx.Runtime!.IHasFieldsInterface);
                 il.Emit(OpCodes.Ldstr, propertyName);
                 il.Emit(OpCodes.Callvirt, ctx.Runtime!.IHasFieldsGetProperty);
@@ -231,7 +231,7 @@ public sealed class ProcessModuleEmitter : IBuiltInModuleEmitter
             // as Node does while POSIX gets a normal bound function value.
             case "getuid" or "geteuid" or "getgid" or "getegid"
                 or "getgroups" or "setuid" or "setgid":
-                il.Emit(OpCodes.Call, ctx.Runtime!.GetProcessObject);
+                il.Emit(OpCodes.Call, ctx.Runtime!.Process.GetObject);
                 il.Emit(OpCodes.Castclass, ctx.Runtime!.IHasFieldsInterface);
                 il.Emit(OpCodes.Ldstr, propertyName);
                 il.Emit(OpCodes.Callvirt, ctx.Runtime!.IHasFieldsGetProperty);
@@ -299,7 +299,7 @@ public sealed class ProcessModuleEmitter : IBuiltInModuleEmitter
         {
             il.Emit(OpCodes.Ldnull);
         }
-        il.Emit(OpCodes.Call, ctx.Runtime!.ProcessHrtime);
+        il.Emit(OpCodes.Call, ctx.Runtime!.Process.Hrtime);
         return true;
     }
 
@@ -307,7 +307,7 @@ public sealed class ProcessModuleEmitter : IBuiltInModuleEmitter
     {
         var ctx = emitter.Context;
         var il = ctx.IL;
-        il.Emit(OpCodes.Call, ctx.Runtime!.ProcessUptime);
+        il.Emit(OpCodes.Call, ctx.Runtime!.Process.Uptime);
         il.Emit(OpCodes.Box, ctx.Types.Double);
         return true;
     }
@@ -316,7 +316,7 @@ public sealed class ProcessModuleEmitter : IBuiltInModuleEmitter
     {
         var ctx = emitter.Context;
         var il = ctx.IL;
-        il.Emit(OpCodes.Call, ctx.Runtime!.ProcessMemoryUsage);
+        il.Emit(OpCodes.Call, ctx.Runtime!.Process.MemoryUsage);
         return true;
     }
 
@@ -454,7 +454,7 @@ public sealed class ProcessModuleEmitter : IBuiltInModuleEmitter
     {
         var ctx = emitter.Context;
         var il = ctx.IL;
-        il.Emit(OpCodes.Call, ctx.Runtime!.ProcessGetEnv);
+        il.Emit(OpCodes.Call, ctx.Runtime!.Process.GetEnv);
         return true;
     }
 
@@ -462,7 +462,7 @@ public sealed class ProcessModuleEmitter : IBuiltInModuleEmitter
     {
         var ctx = emitter.Context;
         var il = ctx.IL;
-        il.Emit(OpCodes.Call, ctx.Runtime!.ProcessGetArgv);
+        il.Emit(OpCodes.Call, ctx.Runtime!.Process.GetArgv);
         return true;
     }
 
@@ -477,9 +477,9 @@ public sealed class ProcessModuleEmitter : IBuiltInModuleEmitter
     }
 
     // process.stdio singletons depend on $Readable/$Writable, gated on
-    // UsesNodeStreams. When the gate is off, runtime.GetStdin/Stdout/Stderr
-    // are null MethodBuilders. Emit `null` (-> JS `undefined` on read) instead
-    // of crashing at IL-emit time.
+    // UsesNodeStreams. When the gate is off, the process Streams component is
+    // absent. Emit `null` (-> JS `undefined` on read) instead of requesting its
+    // declarations. An enabled component still requires declared getters.
     //
     // The stdlib `process` shim re-exports stdin/stdout/stderr eagerly even
     // when downstream user code only uses `nextTick`; without this null-emit
@@ -489,7 +489,7 @@ public sealed class ProcessModuleEmitter : IBuiltInModuleEmitter
     private static bool EmitStdin(IEmitterContext emitter)
     {
         var il = emitter.Context.IL;
-        var getStdin = emitter.Context.Runtime?.GetStdin;
+        var getStdin = emitter.Context.Runtime?.Process.Streams?.GetStdin;
         if (getStdin is null) il.Emit(OpCodes.Ldnull);
         else il.Emit(OpCodes.Call, getStdin);
         return true;
@@ -498,7 +498,7 @@ public sealed class ProcessModuleEmitter : IBuiltInModuleEmitter
     private static bool EmitStdout(IEmitterContext emitter)
     {
         var il = emitter.Context.IL;
-        var getStdout = emitter.Context.Runtime?.GetStdout;
+        var getStdout = emitter.Context.Runtime?.Process.Streams?.GetStdout;
         if (getStdout is null) il.Emit(OpCodes.Ldnull);
         else il.Emit(OpCodes.Call, getStdout);
         return true;
@@ -507,7 +507,7 @@ public sealed class ProcessModuleEmitter : IBuiltInModuleEmitter
     private static bool EmitStderr(IEmitterContext emitter)
     {
         var il = emitter.Context.IL;
-        var getStderr = emitter.Context.Runtime?.GetStderr;
+        var getStderr = emitter.Context.Runtime?.Process.Streams?.GetStderr;
         if (getStderr is null) il.Emit(OpCodes.Ldnull);
         else il.Emit(OpCodes.Call, getStderr);
         return true;
@@ -518,7 +518,7 @@ public sealed class ProcessModuleEmitter : IBuiltInModuleEmitter
         var ctx = emitter.Context;
         var il = ctx.IL;
         // Return a TSFunction wrapper for nextTick
-        il.Emit(OpCodes.Call, ctx.Runtime!.ProcessGetNextTick);
+        il.Emit(OpCodes.Call, ctx.Runtime!.Process.GetNextTick);
         return true;
     }
 

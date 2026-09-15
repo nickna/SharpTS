@@ -1211,6 +1211,124 @@ public class StandaloneDllTests
         }
     }
 
+    public static IEnumerable<object[]> ProcessMetadataPrograms
+    {
+        get
+        {
+            yield return new object[]
+            {
+                """
+                import p from 'node:process';
+                const value: any = process;
+                console.log(p === value, value === (globalThis as any).process, String(value));
+                (p as any).metadataFlag = 42;
+                const env: any = p.env;
+                env.SHARPTS_METADATA_PROBE = 'owned';
+                console.log((process as any).metadataFlag, (process.env as any).SHARPTS_METADATA_PROBE, p.env === process.env);
+                delete env.SHARPTS_METADATA_PROBE;
+                console.log(Array.isArray(process.argv), process.ppid > 0, process.version === 'v' + process.versions.node);
+                """,
+                "true true [object process]\n42 owned true\ntrue true true\n"
+            };
+            yield return new object[]
+            {
+                """
+                const time = process.uptime();
+                const cpu = process.cpuUsage(); const delta = process.cpuUsage(cpu);
+                console.log(cpu.user >= 0, cpu.system >= 0, delta.user >= 0, delta.system >= 0);
+                const resources: any = process.resourceUsage();
+                console.log(resources.maxRSS > 0, typeof resources.fsRead, typeof process.availableMemory());
+                const memory = process.memoryUsage();
+                console.log(memory.rss > 0, memory.heapUsed > 0, process.memoryUsage.rss() > 0);
+                console.log(process.uptime() >= time, process.hrtime().length, typeof process.hrtime.bigint());
+                console.log(Array.isArray(process.getActiveResourcesInfo()));
+                """,
+                "true true true true\ntrue number number\ntrue true true\ntrue 2 bigint\ntrue\n"
+            };
+            yield return new object[]
+            {
+                """
+                const original = process.umask();
+                console.log(process.umask(0o077) === original, process.umask() === 0o077);
+                process.umask(original); console.log(process.umask() === original);
+                const title = process.title; process.title = 'metadata-probe'; console.log(process.title); process.title = title;
+                process.noDeprecation = true; console.log(process.noDeprecation); process.noDeprecation = false;
+                const report: any = process.report.getReport();
+                console.log(report.header.processId === process.pid, report.header.nodejsVersion === process.version);
+                console.log(typeof report.resourceUsage, Array.isArray(report.nativeStack), process.report === process.report);
+                """,
+                "true true\ntrue\nmetadata-probe\ntrue\ntrue true\nobject true true\n"
+            };
+            yield return new object[]
+            {
+                """
+                import { cpuUsage, hrtime, memoryUsage, versions, kill, emitWarning } from 'process';
+                console.log(typeof cpuUsage, typeof hrtime, typeof memoryUsage, typeof kill, typeof emitWarning);
+                console.log(typeof cpuUsage().user, hrtime().length, memoryUsage().rss > 0);
+                const p: any = process;
+                console.log(p.hrtime === p.hrtime, p.memoryUsage === p.memoryUsage);
+                console.log(typeof p.hrtime.bigint(), p.memoryUsage.rss() > 0, versions.node === p.versions.node);
+                """,
+                "function function function function function\nnumber 2 true\ntrue true\nbigint true true\n"
+            };
+            yield return new object[]
+            {
+                """
+                let rounds = 0;
+                process.on('beforeExit', () => {
+                    rounds++;
+                    if (rounds === 1) setTimeout(() => console.log('extra work'), 1);
+                });
+                process.on('exit', (code: number) => console.log('exit after', rounds, code));
+                """,
+                "extra work\nexit after 2 0\n"
+            };
+            yield return new object[]
+            {
+                """
+                process.on('warning', (warning: any) => console.log(warning.name, warning.message, warning.code));
+                process.emitWarning('metadata', { type: 'CustomWarning', code: 'META' });
+                """,
+                "CustomWarning metadata META\n"
+            };
+            yield return new object[]
+            {
+                """
+                console.log(process.stdout === process.stdout, process.stderr === process.stderr, process.stdin === process.stdin);
+                const output: any = process.stdout;
+                console.log(output.writable, process.stdin.readable, typeof process.stderr.on);
+                output.write('stream:'); process.stdout.write('direct
+                ');
+                """,
+                "true true true\ntrue true function\nstream:direct\n"
+            };
+            yield return new object[]
+            {
+                """
+                import { nextTick } from 'node:process';
+                console.log('main');
+                nextTick((text: string, number: number, flag: boolean) => console.log(text, number, flag), 'tick', 7, true);
+                """,
+                "main\ntick 7 true\n"
+            };
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(ProcessMetadataPrograms))]
+    public void Isolated_ProcessMetadata_PreservesSingletonsHelpersLifecycleAndStreams(string source, string expected)
+    {
+        var files = new Dictionary<string, string> { ["main.ts"] = source };
+        Assert.Empty(TestHarness.CompileModulesAndVerifyOnly(files, "main.ts"));
+        var (tempDir, dllPath) = CompileStandaloneModule(files, "main.ts");
+        try
+        {
+            Assert.DoesNotContain(GetAssemblyReferences(dllPath), name => name == "SharpTS");
+            Assert.Equal(expected, ExecuteCompiledDllIsolated(dllPath, timeoutMs: 15000));
+        }
+        finally { CleanupTempDir(tempDir); }
+    }
+
     public static IEnumerable<object[]> FileSystemWatcherMetadataPrograms
     {
         get

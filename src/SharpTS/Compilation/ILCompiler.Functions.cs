@@ -1320,7 +1320,7 @@ public partial class ILCompiler
         il.Emit(OpCodes.Call, _runtime.EventLoop.Run);
         // Node process lifecycle at natural drain: 'beforeExit' (re-entering
         // the loop when a listener schedules work), then 'exit' (#1080).
-        il.Emit(OpCodes.Call, _runtime.ProcessRunLifecycle);
+        il.Emit(OpCodes.Call, _runtime.Process.RunLifecycle);
         il.Emit(OpCodes.Leave, returnLabel);
         il.BeginFinallyBlock();
         EmitTerminateOwnedChildProcesses(il);
@@ -1639,7 +1639,7 @@ public partial class ILCompiler
             il.Emit(OpCodes.Call, _runtime.EventLoop.Run);
             // Node process lifecycle at natural drain: 'beforeExit' (re-entering
             // the loop when a listener schedules work), then 'exit' (#1080).
-            il.Emit(OpCodes.Call, _runtime.ProcessRunLifecycle);
+            il.Emit(OpCodes.Call, _runtime.Process.RunLifecycle);
             il.Emit(OpCodes.Leave, returnLabel);
         }
         else
@@ -1662,7 +1662,7 @@ public partial class ILCompiler
             il.Emit(OpCodes.Call, _runtime.EventLoop.Run);
             // Node process lifecycle at natural drain: 'beforeExit' (re-entering
             // the loop when a listener schedules work), then 'exit' (#1080).
-            il.Emit(OpCodes.Call, _runtime.ProcessRunLifecycle);
+            il.Emit(OpCodes.Call, _runtime.Process.RunLifecycle);
             il.Emit(OpCodes.Leave, returnLabel);
         }
 

@@ -357,7 +357,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldstr, "process");
             il.Emit(OpCodes.Call, strEquals);
             il.Emit(OpCodes.Brfalse, notProcess);
-            il.Emit(OpCodes.Call, runtime.GetProcessObject);
+            il.Emit(OpCodes.Call, runtime.Process.GetObject);
             il.Emit(OpCodes.Br, returnLabel);
             il.MarkLabel(notProcess);
         }

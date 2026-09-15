@@ -97,7 +97,7 @@ public partial class RuntimeEmitter
         // (epic #1078). Body emitted by EmitProcessObjectInfrastructure; the
         // signature must exist earlier because GlobalThisGetProperty (emitted
         // before EmitProcessMethods) resolves `globalThis.process` through it.
-        runtime.GetProcessObject = typeBuilder.DefineMethod(
+        runtime.Process.GetObject = typeBuilder.DefineMethod(
             "GetProcessObject",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,

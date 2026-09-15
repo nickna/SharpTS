@@ -719,7 +719,7 @@ public partial class RuntimeEmitter
             "_uptimeStartTimestamp",
             _types.Int64,
             FieldAttributes.Private | FieldAttributes.Static);
-        runtime.ProcessUptimeBaselineField = uptimeBaselineField;
+        runtime.Process.UptimeBaselineField = uptimeBaselineField;
         cctorIL.Emit(OpCodes.Call, _types.StopwatchGetTimestamp);
         cctorIL.Emit(OpCodes.Stsfld, uptimeBaselineField);
 

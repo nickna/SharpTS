@@ -100,8 +100,8 @@ public partial class ILCompiler
                 hookIl.Emit(OpCodes.Call, _runtime.EventLoop.GetInstance);
                 hookIl.Emit(OpCodes.Callvirt, _runtime.EventLoop.RequireHosted().Clear);
             });
-        EmitHostedLifecycleOverride("EmitGuestBeforeExit", baseType, _runtime.ProcessEmitHostedBeforeExit);
-        EmitHostedLifecycleOverride("EmitGuestExit", baseType, _runtime.ProcessEmitHostedExit);
+        EmitHostedLifecycleOverride("EmitGuestBeforeExit", baseType, _runtime.Process.RequireHosted().EmitBeforeExit);
+        EmitHostedLifecycleOverride("EmitGuestExit", baseType, _runtime.Process.RequireHosted().EmitExit);
 
         _hostedFactoryType = EmitTypeDefinitions.DefineType(
             _moduleBuilder,

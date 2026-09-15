@@ -565,6 +565,31 @@ component owns the registry's field declaration; the generated dictionary retain
 lifecycle. Method-local builders and BCL reflection lookups remain local construction state for
 the final #1599 ownership audit. No migrated flat aliases or emitter-held copies remain.
 
+Process metadata uses required `EmittedProcessRuntime` for 70 declarations: process-object and
+value helpers, direct stdio operations, runtime state, the deferred event closure, and native
+process-identity imports. It also owns optional `EmittedProcessStreamRuntime` for six stream
+singleton getters/cache fields and `EmittedHostedProcessRuntime` for two hosted lifecycle
+methods. Together these replace 56 flat properties and 22 emitter-held declarations. Twenty-seven
+helpers accept explicit process, EventEmitter, or event-loop metadata; helpers with shared
+function, object, error, or child-process dependencies retain the broader runtime context.
+
+The process owner is present even in minimal output. `UsesNodeStreams` alone selects its stream
+group; hosted emission selects its hosted group. Availability checks replace the old null-handle
+sentinels in process instance getters and module exports, preserving their null-emission fallback
+when streams are absent. Enabled groups still reject reads of undeclared handles. This also keeps
+the eager stdlib process shim usable when downstream code only needs non-stream APIs.
+
+The early process-object declaration and monotonic uptime baseline retain their positions.
+Cyclic signatures still precede value helpers, the deferred closure, the process type, and late
+bodies. Completion validates required handles and both enabled optional groups before freezing
+either group, so a missing declaration leaves all unfinished groups writable for retry. Completed
+groups and the parent reject subsequent writes and replacement.
+
+Guest singleton/cache and signal-registration state, process/stdio behavior, hosted lifecycle,
+event-loop integration, native imports, signatures, and method bodies are preserved. Local
+process-info and closure builders, environment/report construction state, BCL reflection lookups,
+and signal-name tables retain their construction scope for the final #1599 ownership audit.
+
 During emission, each handle becomes readable as soon as its declaration is assigned, so forward
 references do not require a method body to exist yet. An early read names the missing declaration.
 Completion is an orchestration boundary, not an IL verifier: body emission and type finalization

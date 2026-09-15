@@ -148,7 +148,7 @@ public partial class ILEmitter
             // (epic #1078): `const p = process; p.on(...)` and the module
             // facade's default export share one object. The syntactic
             // `process.X` form still takes ProcessStaticEmitter's fast path.
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.GetProcessObject);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.Process.GetObject);
             SetStackUnknown();
             return;
         }

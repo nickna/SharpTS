@@ -28,21 +28,21 @@ public class ProcessStreamHandler : ICallHandler
         switch (streamName)
         {
             case "stdin" when methodName == "read":
-                il.Emit(OpCodes.Call, ctx.Runtime!.StdinRead);
+                il.Emit(OpCodes.Call, ctx.Runtime!.Process.StdinRead);
                 emitter.SetStackUnknown();
                 return true;
 
             case "stdout" when methodName == "write":
                 if (call.Arguments.Count > 0) { emitter.EmitExpression(call.Arguments[0]); emitter.EmitBoxIfNeeded(call.Arguments[0]); }
                 else { il.Emit(OpCodes.Ldstr, ""); }
-                il.Emit(OpCodes.Call, ctx.Runtime!.StdoutWrite);
+                il.Emit(OpCodes.Call, ctx.Runtime!.Process.StdoutWrite);
                 emitter.SetStackUnknown();
                 return true;
 
             case "stderr" when methodName == "write":
                 if (call.Arguments.Count > 0) { emitter.EmitExpression(call.Arguments[0]); emitter.EmitBoxIfNeeded(call.Arguments[0]); }
                 else { il.Emit(OpCodes.Ldstr, ""); }
-                il.Emit(OpCodes.Call, ctx.Runtime!.StderrWrite);
+                il.Emit(OpCodes.Call, ctx.Runtime!.Process.StderrWrite);
                 emitter.SetStackUnknown();
                 return true;
 
