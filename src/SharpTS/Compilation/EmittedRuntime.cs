@@ -1827,8 +1827,17 @@ public class EmittedRuntime
     // cluster module — late-bound bridge into SharpTS.dll (#1171). Workers run the
     // entry script interpreted in-process (the worker_threads pattern), so the whole
     // module surface routes through ClusterCompiledBridge for coherent state.
-    public MethodBuilder ClusterFork { get; set; } = null!;
-    public MethodBuilder ClusterInvoke { get; set; } = null!;
+    public EmittedClusterRuntime? Cluster { get; private set; }
+
+    internal void BeginClusterEmission()
+    {
+        if (Cluster is not null)
+            throw new InvalidOperationException("Cluster metadata emission has already started.");
+        Cluster = new EmittedClusterRuntime();
+    }
+
+    public EmittedClusterRuntime RequireCluster() => Cluster
+        ?? throw new InvalidOperationException("Cluster runtime was not enabled for this compilation.");
 
     // ============================================================
     // $BroadcastChannel — emitted WHATWG/Node BroadcastChannel

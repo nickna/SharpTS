@@ -114,7 +114,7 @@ public sealed class ClusterModuleEmitter : IBuiltInModuleEmitter
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldloc, valueLocal);
         il.Emit(OpCodes.Stelem_Ref);
-        il.Emit(OpCodes.Call, ctx.Runtime!.ClusterInvoke);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireCluster().Invoke);
         il.Emit(OpCodes.Pop); // discard the null result
 
         il.Emit(OpCodes.Ldloc, valueLocal); // assignment expression value
@@ -164,7 +164,7 @@ public sealed class ClusterModuleEmitter : IBuiltInModuleEmitter
         {
             il.Emit(OpCodes.Ldnull);
         }
-        il.Emit(OpCodes.Call, ctx.Runtime!.ClusterFork);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireCluster().Fork);
         return true;
     }
 
@@ -188,7 +188,7 @@ public sealed class ClusterModuleEmitter : IBuiltInModuleEmitter
             emitter.EmitBoxIfNeeded(arguments[i]);
             il.Emit(OpCodes.Stelem_Ref);
         }
-        il.Emit(OpCodes.Call, ctx.Runtime!.ClusterInvoke);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireCluster().Invoke);
         return true;
     }
 }

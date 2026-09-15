@@ -69,6 +69,8 @@ public partial class RuntimeEmitter
             runtime.BeginPromiseEmission();
             runtime.BeginTimerPromiseEmission();
         }
+        if (features.UsesCluster)
+            runtime.BeginClusterEmission();
         if (features.UsesTty)
             runtime.BeginTtyEmission();
         if (features.UsesPerf)
@@ -688,6 +690,7 @@ public partial class RuntimeEmitter
         runtime.DataView?.CompleteEmission();
         runtime.TypedArrays.CompleteEmission();
         runtime.Atomics?.CompleteEmission();
+        runtime.Cluster?.CompleteEmission();
         runtime.EventEmitter.CompleteEmission();
         runtime.NodeStreams?.CompleteEmission();
         runtime.WebStreams?.CompleteEmission();

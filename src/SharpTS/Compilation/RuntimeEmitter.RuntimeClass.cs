@@ -1608,7 +1608,7 @@ public partial class RuntimeEmitter
 
         // Cluster module support
         if (_features.UsesCluster)
-            EmitClusterHelpers(typeBuilder, runtime);
+            EmitClusterHelpers(typeBuilder, runtime.RequireCluster(), runtime.EventLoop, EntryModulePath);
 
         // Vm module support — gated on UsesVm (set by `import 'vm'`).
         // vm delegates to VmModuleInterpreter via late binding — needs SharpTS at runtime.
