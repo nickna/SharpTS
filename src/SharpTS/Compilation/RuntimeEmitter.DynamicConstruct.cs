@@ -113,7 +113,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldelem_Ref);
         il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.MarkLabel(stringValueReadyLabel);
-        il.Emit(OpCodes.Call, runtime.NewBoxedPrimitiveMethod);
+        il.Emit(OpCodes.Call, runtime.BoxedPrimitives.New);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notStringTypeLabel);
 

@@ -769,7 +769,7 @@ public partial class RuntimeEmitter
         // ECMA-262 §7.2.14 and §13.10.1). Its BODY is filled later
         // (EmitUnwrapIfBoxedBody, after EmitGetProperty) because the #574 own-
         // conversion dispatch calls GetProperty/InvokeMethodValue/HasOwnPropertyHelper.
-        DeclareUnwrapIfBoxed(typeBuilder, runtime);
+        DeclareUnwrapIfBoxed(typeBuilder, runtime.BoxedPrimitives);
 
         EmitFormatNumberMethod(typeBuilder, runtime);
         EmitConcatStringInt64Method(typeBuilder, runtime.StringCoercion);
@@ -899,7 +899,7 @@ public partial class RuntimeEmitter
         EmitGetFunctionMethod(typeBuilder, runtime);  // For bind/call/apply on functions
         // Pre-define IsBoxedPrimitiveOfType shell so InstanceOf can reference
         // it. Body emitted later (after the prototype singletons are defined).
-        DefineIsBoxedPrimitiveOfTypeShell(typeBuilder, runtime);
+        DefineIsBoxedPrimitiveOfTypeShell(typeBuilder, runtime.BoxedPrimitives);
         // Pre-define the AbortSignal/Intl namespace singleton fields so
         // InstanceOf can brand-check the AbortSignal singleton (#246).
         // Populate bodies are emitted later (EmitNamespaceSingletons).
@@ -1299,11 +1299,33 @@ public partial class RuntimeEmitter
         EmitObjectPrototypePopulate(typeBuilder, runtime);
         // Boxed primitive helpers — must come AFTER prototype populates so
         // BooleanPrototypePopulateMethod / Number / String / Object are non-null.
-        EmitNewBoxedPrimitive(typeBuilder, runtime);
-        EmitNormalizeForeignEvalValue(typeBuilder, runtime);
-        EmitToObject(typeBuilder, runtime);
-        EmitIsBoxedPrimitiveOfType(typeBuilder, runtime);
-        EmitUnwrapStringReceiver(typeBuilder, runtime);
+        EmitNewBoxedPrimitive(typeBuilder, runtime.BoxedPrimitives,
+            runtime.Strings, new BoxedPrimitiveInputs(
+                runtime.TSObjectType,
+                runtime.TSObjectCtor,
+                runtime.CompiledPropertyDescriptorType,
+                runtime.CompiledPropertyDescriptorCtor,
+                runtime.CompiledPropertyDescriptorValue.GetSetMethod()!,
+                runtime.CompiledPropertyDescriptorWritable.GetSetMethod()!,
+                runtime.CompiledPropertyDescriptorEnumerable.GetSetMethod()!,
+                runtime.CompiledPropertyDescriptorConfigurable.GetSetMethod()!,
+                runtime.PDSDefineProperty,
+                runtime.PDSSetPrototype,
+                runtime.BooleanPrototypeField,
+                runtime.BooleanPrototypePopulateMethod,
+                runtime.NumberPrototypeField,
+                runtime.NumberPrototypePopulateMethod,
+                runtime.SymbolPrototypeField,
+                runtime.SymbolPrototypePopulateMethod),
+            _features.UsesBigInt ? new BoxedBigIntPrototype(runtime.BigIntPrototypeField, runtime.BigIntPrototypePopulateMethod) : null);
+        EmitNormalizeForeignEvalValue(typeBuilder, runtime.BoxedPrimitives,
+            runtime.TSObjectType, runtime.UndefinedInstance, runtime.GetProperty);
+        EmitToObject(typeBuilder, runtime.BoxedPrimitives,
+            runtime.TSObjectCtor, runtime.UndefinedType, runtime.TSSymbolType);
+        EmitIsBoxedPrimitiveOfType(typeBuilder, runtime.BoxedPrimitives,
+            runtime.TSObjectType, runtime.TSObjectGetProperty);
+        EmitUnwrapStringReceiver(typeBuilder, runtime.BoxedPrimitives,
+            runtime.TSObjectType, runtime.GetProperty, runtime.StringCoercion);
         // EmitUnwrapIfBoxed moved earlier — see comment above EmitStringify.
         // String methods
         EmitStringCharAt(typeBuilder, runtime.Strings, runtime.ToNumber);
@@ -1436,7 +1458,20 @@ public partial class RuntimeEmitter
         EmitDatePrototypePopulate(typeBuilder, runtime);
         // Fill the default-hint ToPrimitive body after every dependency is
         // bound, including DateToString for Date's special default hint.
-        EmitUnwrapIfBoxedBody(runtime);
+        EmitUnwrapIfBoxedBody(runtime.BoxedPrimitives,
+            new UnwrapPrimitiveInputs(
+                runtime.TSObjectType,
+                runtime.SymbolToPrimitive,
+                runtime.GetIndex,
+                runtime.UndefinedType,
+                runtime.TypeOf,
+                runtime.InvokeMethodValue,
+                runtime.TSObjectGetProperty,
+                runtime.HasOwnPropertyHelperMethod,
+                runtime.GetProperty,
+                runtime.CreateException,
+                runtime.TSTypeErrorCtor),
+            _features.UsesDate ? new BoxedDateInputs(runtime.TSDateType, runtime.DateToString) : null);
         // Fill in LookupBuiltInStaticMember's body now that IsArray, NumberIs*,
         // StringFrom*, TSFunctionCtor (#63) and DateNow (value-form `Date.now`,
         // gated on UsesDate) are all in place. Only the body is late — the

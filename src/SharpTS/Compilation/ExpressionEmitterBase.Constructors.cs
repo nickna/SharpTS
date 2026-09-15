@@ -326,7 +326,7 @@ public abstract partial class ExpressionEmitterBase
                 }
                 EmitExpression(arguments[0]);
                 EnsureBoxed();
-                IL.Emit(OpCodes.Call, Ctx.Runtime!.ToObjectMethod);
+                IL.Emit(OpCodes.Call, Ctx.Runtime!.BoxedPrimitives.ToObject);
                 SetStackUnknown();
                 return true;
 
@@ -359,7 +359,7 @@ public abstract partial class ExpressionEmitterBase
                     EnsureBoxed();
                     IL.Emit(OpCodes.Call, Ctx.Runtime!.StringCoercion.ToJsString);
                 }
-                IL.Emit(OpCodes.Call, Ctx.Runtime!.NewBoxedPrimitiveMethod);
+                IL.Emit(OpCodes.Call, Ctx.Runtime!.BoxedPrimitives.New);
                 SetStackUnknown();
                 return true;
 
@@ -381,7 +381,7 @@ public abstract partial class ExpressionEmitterBase
                     IL.Emit(OpCodes.Call, Ctx.Runtime!.ConvertToNumber);
                     IL.Emit(OpCodes.Box, Ctx.Types.Double);
                 }
-                IL.Emit(OpCodes.Call, Ctx.Runtime!.NewBoxedPrimitiveMethod);
+                IL.Emit(OpCodes.Call, Ctx.Runtime!.BoxedPrimitives.New);
                 SetStackUnknown();
                 return true;
 
@@ -399,7 +399,7 @@ public abstract partial class ExpressionEmitterBase
                     IL.Emit(OpCodes.Call, Ctx.Runtime!.IsTruthy);
                     IL.Emit(OpCodes.Box, Ctx.Types.Boolean);
                 }
-                IL.Emit(OpCodes.Call, Ctx.Runtime!.NewBoxedPrimitiveMethod);
+                IL.Emit(OpCodes.Call, Ctx.Runtime!.BoxedPrimitives.New);
                 SetStackUnknown();
                 return true;
 

@@ -2379,6 +2379,171 @@ public class StandaloneDllTests
             verifyStandardError: error => Assert.Empty(error)));
     }
 
+    public static IEnumerable<object[]> BoxedPrimitiveMetadataPrograms =>
+    [
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "const n:any=new Number(7);const b:any=new Boolean(false);const s:any=new String('hi');console.log(typeof n,n instanceof Number,n instanceof Object,n.valueOf());console.log(typeof b,b instanceof Boolean,b.valueOf());console.log(typeof s,s instanceof String,s.valueOf());"
+            },
+            "object true true 7\nobject true false\nobject true hi\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "const values:any[]=[true,7,'hi'];for(const v of values){const box:any=Object(v);console.log(typeof box,box.valueOf()===v,Object(box)===box);}console.log(typeof Object(null),Object.keys(Object(undefined)).length);const a:any=[];const o:any={x:1};console.log(Object(a)===a,new Object(o)===o);"
+            },
+            "object true true\nobject true true\nobject true true\nobject 0\ntrue true\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "const box:any=Object(42n);console.log(typeof box,box instanceof BigInt,box.valueOf()===42n,box+1n,box==42n);"
+            },
+            "object true true 43n true\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "const symbol:any=Symbol('x');const box:any=Object(symbol);console.log(typeof box,box!==symbol,box instanceof Symbol,box.valueOf()===symbol,Object(box)===box);"
+            },
+            "object true true true true\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "const box:any=new String('hi');for(const key of ['length','0']){const d:any=Object.getOwnPropertyDescriptor(box,key);console.log(d.value,d.writable,d.enumerable,d.configurable);}console.log(box.length,box[0],box[1],Object.keys(box).join(','));console.log(Reflect.set(box,'0','x'),Reflect.deleteProperty(box,'0'),box[0]);"
+            },
+            "2 false false false\nh false true false\n2 h i 0,1\nfalse false h\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "console.log(Object.getPrototypeOf(new Number(1))===Number.prototype,Object.getPrototypeOf(new Boolean(false))===Boolean.prototype,Object.getPrototypeOf(new String('a'))===String.prototype);console.log(Object.getPrototypeOf(Object(1n))===BigInt.prototype,Object.getPrototypeOf(Object(Symbol('s')))===Symbol.prototype);"
+            },
+            "true true true\ntrue true\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "const box:any=new Number(1);box.valueOf=function(){return 9;};box.toString=function(){return 'own';};console.log(box+2,box==9,String(box));const s:any=new String('base');s.valueOf=function(){return 'value';};console.log(s+'!');"
+            },
+            "11 true own\nvalue!\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "let order='';const left:any={valueOf(){order+='L';return 2;}};const right:any={valueOf(){order+='R';return 3;}};console.log(left+right,order);order='';console.log(left==left,left==null,left==undefined,order);"
+            },
+            "5 LR\ntrue false false \n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "let hints='';const box:any=new Number(1);box[Symbol.toPrimitive]=function(hint:any){hints+=hint+';';return 4;};console.log(box+1,box==4,String(box),hints);"
+            },
+            "5 true 1 default;default;\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "let order='';const value:any={};Object.defineProperty(value,Symbol.toPrimitive,{get(){order+='G';return function(hint:any){order+=hint;return 5;};}});console.log(value+1,order);"
+            },
+            "6 Gdefault\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "const values:any[]=[{[Symbol.toPrimitive]:1},{[Symbol.toPrimitive](){return {}; }},{valueOf(){return {};},toString(){return {};}}];for(const value of values){try{console.log(value+1);}catch(e:any){console.log(e.name);}}const value:any={valueOf(){throw 'sentinel';}};try{console.log(value+1);}catch(e){console.log(e);}"
+            },
+            "TypeError\nTypeError\nTypeError\nsentinel\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "const value:any={valueOf(){return {};},toString(){return 7;}};console.log(value+2,value==7);const proto:any={valueOf(){return 8;}};console.log(Object.create(proto)+1);const noncallable:any={valueOf:0,toString(){return 'fallback';}};console.log(noncallable+1);"
+            },
+            "9 true\n9\nfallback1\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "const date:any=new Date(0);console.log(date+''===date.toString());date[Symbol.toPrimitive]=function(hint:any){return hint;};console.log(date+1);"
+            },
+            "true\ndefault1\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "const box:any=new String('abc');console.log(box.slice(1),String.prototype.slice.call(box,1),String.prototype.slice.call(123,1));try{String.prototype.slice.call(null,1);}catch(e:any){console.log(e.name);}"
+            },
+            "bc bc 23\nTypeError\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "for(const source of ['new Number(7)','new Boolean(false)',\"new String('hi')\"]){const value:any=eval(source);console.log(typeof value,value.valueOf());}const value:any=eval('var x=1;');console.log(typeof value,!!value,value===undefined);"
+            },
+            "object 7\nobject false\nobject hi\nundefined false true\n", "main.ts", false
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "const box:any=new Number(4);async function run(){await Promise.resolve(0);console.log(box+2);}run();"
+            },
+            "6\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "function* run():Generator<any,void,any>{yield new Number(3);yield new String('x');}for(const box of run())console.log(box+1);"
+            },
+            "4\nx1\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.cjs"] = "const box=new Number(8);console.log(box+1,box instanceof Number);console.log(new String('hi').slice(1));"
+            },
+            "9 true\ni\n", "main.cjs", true
+        }
+    ];
+
+    [Theory]
+    [MemberData(nameof(BoxedPrimitiveMetadataPrograms))]
+    public void Isolated_BoxedPrimitiveMetadata_PreservesWrappersAndDefaultHintConversions(Dictionary<string, string> files, string expected, string entryPoint, bool standalone)
+    {
+        using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        foreach (var (path, source) in files) tempDir.CreateFile(path, source);
+        var dllPath = tempDir.GetPath("boxed_primitive_metadata.dll");
+        var deployment = standalone ? " --standalone" : "";
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --noLib --compile \"{tempDir.GetPath(entryPoint)}\" -o \"{dllPath}\" --verify{deployment}", tempDir.Path);
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(dllPath));
+        Assert.Equal(!standalone, File.Exists(tempDir.GetPath("SharpTS.dll")));
+        Assert.Equal(expected, ExecuteCompiledDllIsolated(dllPath, timeoutMs: 30000,
+            verifyStandardError: error => Assert.Empty(error)));
+    }
+
     public static IEnumerable<object[]> BroadcastChannelMetadataPrograms =>
     [
         new object[]

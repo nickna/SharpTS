@@ -222,9 +222,9 @@ public partial class RuntimeEmitter
 
         // Reserve ToObject(object) → object. ECMA-262 §7.1.18 ToObject.
         // Forward-declared so Object.assign (emitted in EmitObjectMethods
-        // before EmitToObject) can coerce its target arg via runtime.ToObjectMethod.
+        // before EmitToObject) can coerce its target arg via runtime.BoxedPrimitives.ToObject.
         // Body filled later by EmitToObject.
-        runtime.ToObjectMethod = typeBuilder.DefineMethod(
+        runtime.BoxedPrimitives.ToObject = typeBuilder.DefineMethod(
             "ToObject",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,

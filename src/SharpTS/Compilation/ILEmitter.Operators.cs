@@ -221,10 +221,10 @@ public partial class ILEmitter
                     // swapped for >/>=.  Materialize both primitives in source
                     // order before calling the two-argument runtime helpers.
                     IL.Emit(OpCodes.Ldloc, left);
-                    IL.Emit(OpCodes.Call, _ctx.Runtime!.UnwrapIfBoxedMethod);
+                    IL.Emit(OpCodes.Call, _ctx.Runtime!.BoxedPrimitives.UnwrapIfBoxed);
                     IL.Emit(OpCodes.Stloc, left);
                     IL.Emit(OpCodes.Ldloc, right);
-                    IL.Emit(OpCodes.Call, _ctx.Runtime.UnwrapIfBoxedMethod);
+                    IL.Emit(OpCodes.Call, _ctx.Runtime.BoxedPrimitives.UnwrapIfBoxed);
                     IL.Emit(OpCodes.Stloc, right);
                     if (swapArgs)
                     {
@@ -3565,9 +3565,9 @@ public partial class ILEmitter
                 var left = SpillBoxed(b.Left);
                 var right = SpillBoxed(b.Right);
                 IL.Emit(OpCodes.Ldloc, left);
-                IL.Emit(OpCodes.Call, _ctx.Runtime!.UnwrapIfBoxedMethod);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.BoxedPrimitives.UnwrapIfBoxed);
                 IL.Emit(OpCodes.Ldloc, right);
-                IL.Emit(OpCodes.Call, _ctx.Runtime.UnwrapIfBoxedMethod);
+                IL.Emit(OpCodes.Call, _ctx.Runtime.BoxedPrimitives.UnwrapIfBoxed);
                 IL.Emit(OpCodes.Call, _ctx.Runtime!.BigIntLooseEquals);
                 if (op == TokenType.BANG_EQUAL)
                 {

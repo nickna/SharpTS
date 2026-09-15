@@ -140,7 +140,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(receiverDefined);
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.ToObjectMethod);
+        il.Emit(OpCodes.Call, runtime.BoxedPrimitives.ToObject);
         il.Emit(OpCodes.Stloc, receiver);
         il.Emit(OpCodes.Ldloc, receiver);
         il.Emit(OpCodes.Ldstr, "length");
@@ -2217,7 +2217,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(receiverReady);
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.ToObjectMethod);
+        il.Emit(OpCodes.Call, runtime.BoxedPrimitives.ToObject);
         il.Emit(OpCodes.Stloc, receiver);
         il.Emit(OpCodes.Ldsfld, runtime.ArrayOperations.CurrentReceiverField);
         il.Emit(OpCodes.Stloc, previousReceiver);
@@ -3216,7 +3216,7 @@ public partial class RuntimeEmitter
         {
             il.Emit(OpCodes.Ldloc, coercedLocal);
             il.Emit(OpCodes.Ldstr, primitiveTag);
-            il.Emit(OpCodes.Call, runtime.IsBoxedPrimitiveOfTypeMethod);
+            il.Emit(OpCodes.Call, runtime.BoxedPrimitives.IsOfType);
             il.Emit(OpCodes.Brtrue, notObjectLabel);
         }
 

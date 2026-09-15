@@ -159,6 +159,9 @@ public class EmittedRuntime
     /// <summary>Required display and language string-conversion declarations.</summary>
     public EmittedStringCoercionRuntime StringCoercion { get; } = new();
 
+    /// <summary>Required primitive-wrapper and default-hint conversion declarations.</summary>
+    public EmittedBoxedPrimitiveRuntime BoxedPrimitives { get; } = new();
+
     /// <summary>$Runtime.FormatNumber(double) -> string — ECMA-262 7.1.12.1 Number::toString(10).
     /// Byte-for-byte equivalent of SharpTS.Compilation.RuntimeTypes.FormatNumber so interpreted
     /// and compiled output match. Emitted in RuntimeEmitter.NumberFormat.cs.</summary>
@@ -415,19 +418,7 @@ public class EmittedRuntime
     public MethodBuilder PropertyIsEnumerableHelperMethod { get; set; } = null!;
     /// <summary>$Runtime.IsPrototypeOfHelper(receiver, target) — backs <c>receiver.isPrototypeOf(target)</c>; walks target's prototype chain via PDS.</summary>
     public MethodBuilder IsPrototypeOfHelperMethod { get; set; } = null!;
-    /// <summary>$Runtime.NewBoxedPrimitive(typeTag, value) — builds a $Object wrapper with __primitiveType + __primitiveValue marker fields, prototype-linked to Boolean/Number/String prototype.</summary>
-    public MethodBuilder NewBoxedPrimitiveMethod { get; set; } = null!;
-    /// <summary>$Runtime.ToObject(value) — ECMA-262 ToObject coercion. null/undefined → empty $Object; bool/double → boxed wrapper; else as-is. Used by `new Object(v)`.</summary>
-    public MethodBuilder ToObjectMethod { get; set; } = null!;
-    /// <summary>$Runtime.IsBoxedPrimitiveOfType(obj, typeTag) — true iff obj is a $Object with matching __primitiveType marker. Used by the instanceof emitter.</summary>
-    public MethodBuilder IsBoxedPrimitiveOfTypeMethod { get; set; } = null!;
-    /// <summary>$Runtime.NormalizeForeignEvalValue(value) — converts interpreter-side undefined and boxed primitive values returned across the eval boundary into their emitted-runtime representations.</summary>
-    public MethodBuilder NormalizeForeignEvalValueMethod { get; set; } = null!;
 
-    /// <summary>$Runtime.UnwrapIfBoxed(obj) — returns __primitiveValue when obj is a boxed-primitive wrapper, else obj. Used by abstract equality and string concat to ToPrimitive wrapper operands.</summary>
-    public MethodBuilder UnwrapIfBoxedMethod { get; set; } = null!;
-    /// <summary>$Runtime.UnwrapStringReceiver(object) -> string — coerces a String-method receiver to its underlying string. Fast-paths actual strings; unwraps Stage-4z19 boxed primitives ($Object with __primitiveType="String") to their __primitiveValue; otherwise falls back to ToJsString. Called by StringEmitter's direct dispatch prologue so `(new String("x")).charAt(...)` works once the new-String wrapper is enabled.</summary>
-    public MethodBuilder UnwrapStringReceiverMethod { get; set; } = null!;
     /// <summary>Object.prototype singleton dict, populated lazily with hasOwnProperty/isPrototypeOf/toString/valueOf wrappers.</summary>
     public FieldBuilder ObjectPrototypeField { get; set; } = null!;
     /// <summary>Idempotent populate for <see cref="ObjectPrototypeField"/>.</summary>

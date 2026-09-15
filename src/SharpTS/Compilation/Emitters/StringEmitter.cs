@@ -53,7 +53,7 @@ public sealed class StringEmitter : ITypeEmitterStrategy
         // ECMA-262 22.1.3.* "Let S = ? ToString(O)" coercion).
         emitter.EmitExpression(receiver);
         emitter.EmitBoxIfNeeded(receiver);
-        il.Emit(OpCodes.Call, ctx.Runtime!.UnwrapStringReceiverMethod);
+        il.Emit(OpCodes.Call, ctx.Runtime!.BoxedPrimitives.UnwrapStringReceiver);
 
         switch (methodName)
         {
@@ -203,7 +203,7 @@ public sealed class StringEmitter : ITypeEmitterStrategy
         // why Castclass is wrong once `new String` returns a wrapper).
         emitter.EmitExpression(receiver);
         emitter.EmitBoxIfNeeded(receiver);
-        il.Emit(OpCodes.Call, ctx.Runtime!.UnwrapStringReceiverMethod);
+        il.Emit(OpCodes.Call, ctx.Runtime!.BoxedPrimitives.UnwrapStringReceiver);
 
         // Get length and convert to double (TypeScript number)
         il.Emit(OpCodes.Call, ctx.Types.GetProperty(ctx.Types.String, "Length").GetGetMethod()!);
@@ -233,7 +233,7 @@ public sealed class StringEmitter : ITypeEmitterStrategy
 
         emitter.EmitExpression(get.Object);
         emitter.EnsureBoxed();
-        ctx.IL.Emit(OpCodes.Call, ctx.Runtime!.UnwrapStringReceiverMethod);
+        ctx.IL.Emit(OpCodes.Call, ctx.Runtime!.BoxedPrimitives.UnwrapStringReceiver);
         ctx.IL.Emit(OpCodes.Call,
             ctx.Types.GetProperty(ctx.Types.String, "Length").GetGetMethod()!);
         ctx.IL.Emit(OpCodes.Conv_R8);
