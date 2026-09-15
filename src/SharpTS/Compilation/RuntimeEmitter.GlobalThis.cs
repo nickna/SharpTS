@@ -292,8 +292,8 @@ public partial class RuntimeEmitter
         EmitTypeBranch("Function", runtime.TSFunctionType);
         if (_features.UsesTextEncoding)
         {
-            EmitTypeBranch("TextEncoder", runtime.TSTextEncoderType);
-            EmitTypeBranch("TextDecoder", runtime.TSTextDecoderType);
+            EmitTypeBranch("TextEncoder", runtime.RequireTextEncoding().EncoderType);
+            EmitTypeBranch("TextDecoder", runtime.RequireTextEncoding().DecoderType);
         }
         // `Object` — return System.Object's Type token so `globalThis.Object === Object`
         // holds (bare `Object` lowers to this same helper via ILEmitter.Expressions.cs,

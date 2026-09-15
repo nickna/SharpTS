@@ -199,7 +199,7 @@ public abstract partial class ExpressionEmitterBase
                 return true;
 
             case "TextEncoder":
-                IL.Emit(OpCodes.Newobj, Ctx.Runtime!.TSTextEncoderCtor);
+                IL.Emit(OpCodes.Newobj, Ctx.Runtime!.RequireTextEncoding().EncoderCtor);
                 SetStackUnknown();
                 return true;
 
@@ -507,7 +507,7 @@ public abstract partial class ExpressionEmitterBase
                 }
                 IL.Emit(OpCodes.Ldc_I4_0); // fatal: false
                 IL.Emit(OpCodes.Ldc_I4_0); // ignoreBOM: false
-                IL.Emit(OpCodes.Newobj, Ctx.Runtime!.TSTextDecoderCtor);
+                IL.Emit(OpCodes.Newobj, Ctx.Runtime!.RequireTextEncoding().DecoderCtor);
                 SetStackUnknown();
                 return true;
 

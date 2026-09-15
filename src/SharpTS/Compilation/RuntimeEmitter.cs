@@ -64,6 +64,8 @@ public partial class RuntimeEmitter
             runtime.BeginPromiseEmission();
             runtime.BeginTimerPromiseEmission();
         }
+        if (features.UsesTextEncoding)
+            runtime.BeginTextEncodingEmission();
         if (features.UsesOs)
             runtime.BeginOsEmission();
         if (features.UsesChildProcess)
@@ -397,9 +399,9 @@ public partial class RuntimeEmitter
         // is referenced from EmitInvokeValue's dispatch, gated on the same flag.
         if (features.UsesTextEncoding)
         {
-            EmitTSTextEncoderClass(moduleBuilder, runtime);
-            EmitTSTextDecoderClass(moduleBuilder, runtime);
-            EmitTSTextDecoderDecodeMethodClass(moduleBuilder, runtime);
+            EmitTSTextEncoderClass(moduleBuilder, runtime.RequireTextEncoding(), runtime.RequireBuffer());
+            EmitTSTextDecoderClass(moduleBuilder, runtime.RequireTextEncoding(), runtime.RequireBuffer());
+            EmitTSTextDecoderDecodeMethodClass(moduleBuilder, runtime.RequireTextEncoding(), runtime.RequireBuffer());
         }
 
         // $StringDecoder class removed — StringDecoder migrated to
@@ -674,6 +676,7 @@ public partial class RuntimeEmitter
         runtime.Timers.CompleteEmission();
         runtime.Microtasks.CompleteEmission();
         runtime.TimerPromises?.CompleteEmission();
+        runtime.TextEncoding?.CompleteEmission();
         runtime.Inspection.CompleteEmission();
         runtime.Console.CompleteEmission();
         runtime.Os?.CompleteEmission();

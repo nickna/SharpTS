@@ -15,14 +15,14 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits $TextEncoder type for standalone util support.
     /// </summary>
-    internal void EmitTSTextEncoderClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    internal void EmitTSTextEncoderClass(ModuleBuilder moduleBuilder, EmittedTextEncodingRuntime textEncoding, EmittedBufferRuntime buffer)
     {
         var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$TextEncoder",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object
         );
-        runtime.TSTextEncoderType = typeBuilder;
+        textEncoding.EncoderType = typeBuilder;
 
         // Constructor
         var ctor = typeBuilder.DefineConstructor(
@@ -34,7 +34,7 @@ public partial class RuntimeEmitter
         ctorIL.Emit(OpCodes.Ldarg_0);
         ctorIL.Emit(OpCodes.Call, _types.GetDefaultConstructor(_types.Object));
         ctorIL.Emit(OpCodes.Ret);
-        runtime.TSTextEncoderCtor = ctor;
+        textEncoding.EncoderCtor = ctor;
 
         // Property: encoding (always "utf-8")
         var encodingGetter = typeBuilder.DefineMethod(
@@ -60,7 +60,7 @@ public partial class RuntimeEmitter
         var encodeMethod = typeBuilder.DefineMethod(
             "Encode",
             MethodAttributes.Public | MethodAttributes.HideBySig,
-            runtime.RequireBuffer().Type,
+            buffer.Type,
             [_types.String]
         );
         _ = encodeMethod;
@@ -87,7 +87,7 @@ public partial class RuntimeEmitter
 
         // return new $Buffer(bytes)
         encodeIL.Emit(OpCodes.Ldloc, bytesLocal);
-        encodeIL.Emit(OpCodes.Newobj, runtime.RequireBuffer().Ctor);
+        encodeIL.Emit(OpCodes.Newobj, buffer.Ctor);
         encodeIL.Emit(OpCodes.Ret);
 
         // Override ToString
@@ -107,14 +107,14 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits $TextDecoder type for standalone util support.
     /// </summary>
-    internal void EmitTSTextDecoderClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    internal void EmitTSTextDecoderClass(ModuleBuilder moduleBuilder, EmittedTextEncodingRuntime textEncoding, EmittedBufferRuntime buffer)
     {
         var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$TextDecoder",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object
         );
-        runtime.TSTextDecoderType = typeBuilder;
+        textEncoding.DecoderType = typeBuilder;
 
         // Fields
         var encodingField = typeBuilder.DefineField("_encoding", typeof(Encoding), FieldAttributes.Private);
@@ -128,7 +128,7 @@ public partial class RuntimeEmitter
             CallingConventions.Standard,
             [_types.String, _types.Boolean, _types.Boolean]
         );
-        runtime.TSTextDecoderCtor = ctor;
+        textEncoding.DecoderCtor = ctor;
 
         var ctorIL = ctor.GetILGenerator();
         ctorIL.Emit(OpCodes.Ldarg_0);
@@ -216,7 +216,7 @@ public partial class RuntimeEmitter
             _types.String,
             [_types.Object]
         );
-        runtime.TSTextDecoderDecode = decodeMethod;
+        textEncoding.DecoderDecode = decodeMethod;
 
         var decodeIL = decodeMethod.GetILGenerator();
         var returnEmptyLabel = decodeIL.DefineLabel();
@@ -231,7 +231,7 @@ public partial class RuntimeEmitter
 
         // Check if input is $Buffer
         decodeIL.Emit(OpCodes.Ldarg_1);
-        decodeIL.Emit(OpCodes.Isinst, runtime.RequireBuffer().Type);
+        decodeIL.Emit(OpCodes.Isinst, buffer.Type);
         decodeIL.Emit(OpCodes.Brtrue, isBufferLabel);
 
         // Check if input is byte[]
@@ -245,8 +245,8 @@ public partial class RuntimeEmitter
         // isBuffer: bytes = (($Buffer)input).Data
         decodeIL.MarkLabel(isBufferLabel);
         decodeIL.Emit(OpCodes.Ldarg_1);
-        decodeIL.Emit(OpCodes.Castclass, runtime.RequireBuffer().Type);
-        decodeIL.Emit(OpCodes.Call, runtime.RequireBuffer().GetData);
+        decodeIL.Emit(OpCodes.Castclass, buffer.Type);
+        decodeIL.Emit(OpCodes.Call, buffer.GetData);
         decodeIL.Emit(OpCodes.Stloc, bytesLocal);
         decodeIL.Emit(OpCodes.Br, decodeLabel);
 
@@ -291,23 +291,23 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits $TextDecoderDecodeMethod wrapper for compiled mode decode calls.
     /// </summary>
-    internal void EmitTSTextDecoderDecodeMethodClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    internal void EmitTSTextDecoderDecodeMethodClass(ModuleBuilder moduleBuilder, EmittedTextEncodingRuntime textEncoding, EmittedBufferRuntime buffer)
     {
         var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$TextDecoderDecodeMethod",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object
         );
-        runtime.TSTextDecoderDecodeMethodType = typeBuilder;
+        textEncoding.DecodeMethodType = typeBuilder;
 
         // Field: _decoder
-        var decoderField = typeBuilder.DefineField("_decoder", runtime.TSTextDecoderType, FieldAttributes.Private);
+        var decoderField = typeBuilder.DefineField("_decoder", textEncoding.DecoderType, FieldAttributes.Private);
 
         // Constructor(decoder)
         var ctor = typeBuilder.DefineConstructor(
             MethodAttributes.Public,
             CallingConventions.Standard,
-            [runtime.TSTextDecoderType]
+            [textEncoding.DecoderType]
         );
         _ = ctor;
 
@@ -326,7 +326,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.ObjectArray]
         );
-        runtime.TSTextDecoderDecodeMethodInvoke = invokeMethod;
+        textEncoding.DecodeMethodInvoke = invokeMethod;
 
         var invokeIL = invokeMethod.GetILGenerator();
         var bytesLocal = invokeIL.DeclareLocal(typeof(byte[]));
@@ -357,7 +357,7 @@ public partial class RuntimeEmitter
         invokeIL.Emit(OpCodes.Ldarg_1);
         invokeIL.Emit(OpCodes.Ldc_I4_0);
         invokeIL.Emit(OpCodes.Ldelem_Ref);
-        invokeIL.Emit(OpCodes.Isinst, runtime.RequireBuffer().Type);
+        invokeIL.Emit(OpCodes.Isinst, buffer.Type);
         invokeIL.Emit(OpCodes.Brtrue, isBufferLabel);
 
         // Not a buffer - try to cast to byte[]
@@ -373,8 +373,8 @@ public partial class RuntimeEmitter
         invokeIL.Emit(OpCodes.Ldarg_1);
         invokeIL.Emit(OpCodes.Ldc_I4_0);
         invokeIL.Emit(OpCodes.Ldelem_Ref);
-        invokeIL.Emit(OpCodes.Castclass, runtime.RequireBuffer().Type);
-        invokeIL.Emit(OpCodes.Call, runtime.RequireBuffer().GetData);
+        invokeIL.Emit(OpCodes.Castclass, buffer.Type);
+        invokeIL.Emit(OpCodes.Call, buffer.GetData);
         invokeIL.Emit(OpCodes.Stloc, bytesLocal);
 
         invokeIL.MarkLabel(callDecodeLabel);
@@ -382,7 +382,7 @@ public partial class RuntimeEmitter
         invokeIL.Emit(OpCodes.Ldarg_0);
         invokeIL.Emit(OpCodes.Ldfld, decoderField);
         invokeIL.Emit(OpCodes.Ldloc, bytesLocal);
-        invokeIL.Emit(OpCodes.Callvirt, runtime.TSTextDecoderDecode);
+        invokeIL.Emit(OpCodes.Callvirt, textEncoding.DecoderDecode);
         invokeIL.Emit(OpCodes.Ret);
 
         // Override ToString
