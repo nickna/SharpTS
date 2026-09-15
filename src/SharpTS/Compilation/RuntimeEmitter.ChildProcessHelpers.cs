@@ -13,8 +13,8 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitChildProcessMethods(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
-        EmitOwnedChildProcessLifecycle(typeBuilder, runtime);
-        EmitChildProcessNoOp(typeBuilder);
+        EmitOwnedChildProcessLifecycle(typeBuilder, runtime.RequireChildProcess());
+        EmitChildProcessNoOp(runtime.RequireChildProcess(), typeBuilder);
         EmitChildProcessAsyncInfra(typeBuilder, runtime);
         EmitChildProcessExecSync(typeBuilder, runtime);
         EmitChildProcessSpawnSync(typeBuilder, runtime);
@@ -29,7 +29,7 @@ public partial class RuntimeEmitter
     /// Emits the generated runtime's private child-process ownership registry. The emitted
     /// assembly remains standalone: every operation is expressed using BCL types and IL.
     /// </summary>
-    private void EmitOwnedChildProcessLifecycle(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitOwnedChildProcessLifecycle(TypeBuilder typeBuilder, EmittedChildProcessRuntime child)
     {
         Type registryType = typeof(ConcurrentDictionary<int, Process>);
         MethodInfo volatileRead = typeof(Volatile).GetMethod(nameof(Volatile.Read), [typeof(int).MakeByRefType()])!;
@@ -38,8 +38,8 @@ public partial class RuntimeEmitter
         MethodInfo setItem = registryType.GetProperty("Item")!.GetSetMethod()!;
         MethodInfo tryRemove = registryType.GetMethod("TryRemove", [typeof(int), typeof(Process).MakeByRefType()])!;
 
-        runtime.ChildProcessUnregisterOwned = DefineChildProcessUnregisterOwned(
-            typeBuilder, runtime, processId, tryRemove);
+        child.UnregisterOwned = DefineChildProcessUnregisterOwned(
+            typeBuilder, child, processId, tryRemove);
 
         var terminateOne = typeBuilder.DefineMethod(
             "ChildProcessTerminateOne",
@@ -86,17 +86,17 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ret);
         }
 
-        runtime.ChildProcessRegisterOwned = typeBuilder.DefineMethod(
+        child.RegisterOwned = typeBuilder.DefineMethod(
             "ChildProcessRegisterOwned",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Void,
             [_types.Process]);
         {
-            var il = runtime.ChildProcessRegisterOwned.GetILGenerator();
+            var il = child.RegisterOwned.GetILGenerator();
             var register = il.DefineLabel();
             var done = il.DefineLabel();
 
-            il.Emit(OpCodes.Ldsflda, runtime.ChildProcessOwnershipStoppingField);
+            il.Emit(OpCodes.Ldsflda, child.OwnershipStoppingField);
             il.Emit(OpCodes.Call, volatileRead);
             il.Emit(OpCodes.Brfalse, register);
             il.Emit(OpCodes.Ldarg_0);
@@ -104,32 +104,32 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ret);
 
             il.MarkLabel(register);
-            il.Emit(OpCodes.Ldsfld, runtime.ChildProcessOwnedProcessesField);
+            il.Emit(OpCodes.Ldsfld, child.OwnedProcessesField);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Callvirt, processId);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Callvirt, setItem);
 
-            il.Emit(OpCodes.Ldsflda, runtime.ChildProcessOwnershipStoppingField);
+            il.Emit(OpCodes.Ldsflda, child.OwnershipStoppingField);
             il.Emit(OpCodes.Call, volatileRead);
             il.Emit(OpCodes.Brfalse, done);
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Call, runtime.ChildProcessUnregisterOwned);
+            il.Emit(OpCodes.Call, child.UnregisterOwned);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Call, terminateOne);
             il.MarkLabel(done);
             il.Emit(OpCodes.Ret);
         }
 
-        runtime.ChildProcessReleaseOwned = typeBuilder.DefineMethod(
+        child.ReleaseOwned = typeBuilder.DefineMethod(
             "ChildProcessReleaseOwned",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Void,
             [_types.Process]);
         {
-            var il = runtime.ChildProcessReleaseOwned.GetILGenerator();
+            var il = child.ReleaseOwned.GetILGenerator();
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Call, runtime.ChildProcessUnregisterOwned);
+            il.Emit(OpCodes.Call, child.UnregisterOwned);
             var done = il.DefineLabel();
             var dispose = il.DefineLabel();
             il.BeginExceptionBlock();
@@ -148,24 +148,24 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ret);
         }
 
-        runtime.ChildProcessTerminateOwned = typeBuilder.DefineMethod(
+        child.TerminateOwned = typeBuilder.DefineMethod(
             "ChildProcessTerminateOwned",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Void,
             Type.EmptyTypes);
         {
-            var il = runtime.ChildProcessTerminateOwned.GetILGenerator();
+            var il = child.TerminateOwned.GetILGenerator();
             Type collectionType = typeof(ICollection<Process>);
             var processes = il.DeclareLocal(typeof(Process[]));
             var values = il.DeclareLocal(collectionType);
             var index = il.DeclareLocal(_types.Int32);
 
-            il.Emit(OpCodes.Ldsflda, runtime.ChildProcessOwnershipStoppingField);
+            il.Emit(OpCodes.Ldsflda, child.OwnershipStoppingField);
             il.Emit(OpCodes.Ldc_I4_1);
             il.Emit(OpCodes.Call, exchange);
             il.Emit(OpCodes.Pop);
 
-            il.Emit(OpCodes.Ldsfld, runtime.ChildProcessOwnedProcessesField);
+            il.Emit(OpCodes.Ldsfld, child.OwnedProcessesField);
             il.Emit(OpCodes.Callvirt, registryType.GetProperty("Values")!.GetGetMethod()!);
             il.Emit(OpCodes.Stloc, values);
             il.Emit(OpCodes.Ldloc, values);
@@ -197,7 +197,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldlen);
             il.Emit(OpCodes.Conv_I4);
             il.Emit(OpCodes.Blt, loop);
-            il.Emit(OpCodes.Ldsfld, runtime.ChildProcessOwnedProcessesField);
+            il.Emit(OpCodes.Ldsfld, child.OwnedProcessesField);
             il.Emit(OpCodes.Callvirt, registryType.GetMethod("Clear", Type.EmptyTypes)!);
             il.Emit(OpCodes.Ret);
         }
@@ -205,7 +205,7 @@ public partial class RuntimeEmitter
 
     private MethodBuilder DefineChildProcessUnregisterOwned(
         TypeBuilder typeBuilder,
-        EmittedRuntime runtime,
+        EmittedChildProcessRuntime child,
         MethodInfo processId,
         MethodInfo tryRemove)
     {
@@ -218,7 +218,7 @@ public partial class RuntimeEmitter
         var removed = il.DeclareLocal(_types.Process);
         var done = il.DefineLabel();
         il.BeginExceptionBlock();
-        il.Emit(OpCodes.Ldsfld, runtime.ChildProcessOwnedProcessesField);
+        il.Emit(OpCodes.Ldsfld, child.OwnedProcessesField);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Callvirt, processId);
         il.Emit(OpCodes.Ldloca, removed);
@@ -284,7 +284,7 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             _types.String,
             [_types.String, _types.Object]);
-        runtime.ChildProcessExecSync = method;
+        runtime.RequireChildProcess().ExecSync = method;
         runtime.RegisterBuiltInModuleMethod("child_process", "execSync", method);
 
         var il = method.GetILGenerator();
@@ -496,7 +496,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Process, "Start", Type.EmptyTypes)!);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Ldloc, processLocal);
-        il.Emit(OpCodes.Call, runtime.ChildProcessRegisterOwned);
+        il.Emit(OpCodes.Call, runtime.RequireChildProcess().RegisterOwned);
         EmitSyncInputWrite(il, processLocal, __inputES);
 
         // stdout = process.StandardOutput.ReadToEnd()
@@ -525,7 +525,7 @@ public partial class RuntimeEmitter
         // finally { unregister + dispose the process owned by this generated runtime }
         il.BeginFinallyBlock();
         il.Emit(OpCodes.Ldloc, processLocal);
-        il.Emit(OpCodes.Call, runtime.ChildProcessReleaseOwned);
+        il.Emit(OpCodes.Call, runtime.RequireChildProcess().ReleaseOwned);
         il.Emit(OpCodes.Endfinally);
 
         il.EndExceptionBlock();
@@ -563,7 +563,7 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.String, _types.Object, _types.Object]);
-        runtime.ChildProcessSpawnSync = method;
+        runtime.RequireChildProcess().SpawnSync = method;
         runtime.RegisterBuiltInModuleMethod("child_process", "spawnSync", method);
 
         var il = method.GetILGenerator();
@@ -745,7 +745,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Process, "Start", Type.EmptyTypes)!);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Ldloc, processLocal);
-        il.Emit(OpCodes.Call, runtime.ChildProcessRegisterOwned);
+        il.Emit(OpCodes.Call, runtime.RequireChildProcess().RegisterOwned);
 
         // if (input != null) { process.StandardInput.Write(input); process.StandardInput.Close(); }  (#1021)
         var noInputWrite = il.DefineLabel();
@@ -780,7 +780,7 @@ public partial class RuntimeEmitter
 
         // Release ownership and dispose process
         il.Emit(OpCodes.Ldloc, processLocal);
-        il.Emit(OpCodes.Call, runtime.ChildProcessReleaseOwned);
+        il.Emit(OpCodes.Call, runtime.RequireChildProcess().ReleaseOwned);
 
         il.Emit(OpCodes.Leave, afterProcessLabel);
 
@@ -789,7 +789,7 @@ public partial class RuntimeEmitter
         var spawnSyncException = il.DeclareLocal(_types.Exception);
         il.Emit(OpCodes.Stloc, spawnSyncException);
         il.Emit(OpCodes.Ldloc, processLocal);
-        il.Emit(OpCodes.Call, runtime.ChildProcessReleaseOwned);
+        il.Emit(OpCodes.Call, runtime.RequireChildProcess().ReleaseOwned);
         il.Emit(OpCodes.Ldloc, spawnSyncException);
         il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Exception, "Message")!.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, errorMsgLocal);
@@ -847,20 +847,17 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    // Field for the no-op child process method
-    private MethodBuilder _childProcessNoOp = null!;
-
     /// <summary>
     /// Emits a static no-op method that returns null. Used for kill/send/disconnect stubs.
     /// </summary>
-    private void EmitChildProcessNoOp(TypeBuilder typeBuilder)
+    private void EmitChildProcessNoOp(EmittedChildProcessRuntime child, TypeBuilder typeBuilder)
     {
-        _childProcessNoOp = typeBuilder.DefineMethod(
+        child.NoOp = typeBuilder.DefineMethod(
             "ChildProcessNoOp",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.ObjectArray]);
-        var il = _childProcessNoOp.GetILGenerator();
+        var il = child.NoOp.GetILGenerator();
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ret);
     }
@@ -950,7 +947,7 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.String, _types.Object, _types.Object]);
-        runtime.ChildProcessExec = method;
+        runtime.RequireChildProcess().Exec = method;
         runtime.RegisterBuiltInModuleMethod("child_process", "exec", method);
 
         var il = method.GetILGenerator();
@@ -996,7 +993,7 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.String, _types.Object, _types.Object]);
-        runtime.ChildProcessSpawn = method;
+        runtime.RequireChildProcess().Spawn = method;
         runtime.RegisterBuiltInModuleMethod("child_process", "spawn", method);
 
         var il = method.GetILGenerator();
@@ -1036,7 +1033,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloc, optionsLocal);
-        il.Emit(OpCodes.Call, _childConfigureSpawn);
+        il.Emit(OpCodes.Call, runtime.RequireChildProcess().ConfigureSpawn);
 
         // new Process { StartInfo = startInfo }
         var processLocal = il.DeclareLocal(_types.Process);
@@ -1067,7 +1064,7 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             _types.String,
             [_types.String, _types.Object, _types.Object]);
-        runtime.ChildProcessExecFileSync = method;
+        runtime.RequireChildProcess().ExecFileSync = method;
         runtime.RegisterBuiltInModuleMethod("child_process", "execFileSync", method);
 
         var il = method.GetILGenerator();
@@ -1215,7 +1212,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Process, "Start", Type.EmptyTypes)!);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Ldloc, processLocal);
-        il.Emit(OpCodes.Call, runtime.ChildProcessRegisterOwned);
+        il.Emit(OpCodes.Call, runtime.RequireChildProcess().RegisterOwned);
         EmitSyncInputWrite(il, processLocal, __inputEFS);
 
         il.Emit(OpCodes.Ldloc, processLocal);
@@ -1240,7 +1237,7 @@ public partial class RuntimeEmitter
         // finally { unregister + dispose the process owned by this generated runtime }
         il.BeginFinallyBlock();
         il.Emit(OpCodes.Ldloc, processLocal);
-        il.Emit(OpCodes.Call, runtime.ChildProcessReleaseOwned);
+        il.Emit(OpCodes.Call, runtime.RequireChildProcess().ReleaseOwned);
         il.Emit(OpCodes.Endfinally);
 
         il.EndExceptionBlock();
@@ -1277,7 +1274,7 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.String, _types.Object, _types.Object, _types.Object]);
-        runtime.ChildProcessExecFile = method;
+        runtime.RequireChildProcess().ExecFile = method;
         runtime.RegisterBuiltInModuleMethod("child_process", "execFile", method);
 
         var il = method.GetILGenerator();
@@ -1392,7 +1389,7 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.String, _types.Object, _types.Object]);
-        runtime.ChildProcessFork = method;
+        runtime.RequireChildProcess().Fork = method;
         runtime.RegisterBuiltInModuleMethod("child_process", "fork", method);
 
         var il = method.GetILGenerator();
@@ -1439,11 +1436,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Newobj, actionOfActionCtor);
         il.Emit(OpCodes.Stloc, scheduleLocal);
         il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Ldftn, runtime.ChildProcessRegisterOwned);
+        il.Emit(OpCodes.Ldftn, runtime.RequireChildProcess().RegisterOwned);
         il.Emit(OpCodes.Newobj, actionOfProcessCtor);
         il.Emit(OpCodes.Stloc, registerLocal);
         il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Ldftn, runtime.ChildProcessUnregisterOwned);
+        il.Emit(OpCodes.Ldftn, runtime.RequireChildProcess().UnregisterOwned);
         il.Emit(OpCodes.Newobj, actionOfProcessCtor);
         il.Emit(OpCodes.Stloc, unregisterLocal);
 

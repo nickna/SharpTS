@@ -590,6 +590,27 @@ event-loop integration, native imports, signatures, and method bodies are preser
 process-info and closure builders, environment/report construction state, BCL reflection lookups,
 and signal-name tables retain their construction scope for the final #1599 ownership audit.
 
+Child-process metadata uses optional `EmittedChildProcessRuntime`, selected by `UsesChildProcess`.
+It owns 58 emitted declarations and 12 family-specific BCL method references, replacing 13 flat
+properties and 57 emitter fields. The context and push-closure types, captured worker results,
+dispatch methods, output helpers, and process-ownership registry all have checked access and one
+completion boundary. Twenty-eight helpers accept explicit child-process, EventEmitter, event-loop,
+Node-stream, or Buffer dependencies; shared invocation, object-factory, and module-registry helpers
+retain `EmittedRuntime`.
+
+The feature detector still implies streams, Buffer, and Promise for child-process support. Minimal
+and process-only output leave the component absent. Entry-point cleanup, hosted disposal, and
+process lifecycle emission check that availability before requesting the termination declaration.
+Registry fields and initialization keep their early positions; context signatures still precede
+worker bodies and dispatch wiring. Completion validates every handle, including cached BCL
+references, after runtime finalization and rejects later writes.
+
+The generated ownership registry, process-tree termination, stream pumping, callback ordering,
+event-loop references, output limits, encodings, and timeout behavior are preserved. The `fork`
+bridge retains its existing soft dependency and standalone error contract. Method-local builders
+and reflection lookups remain scoped construction locals; the guest registry retains its runtime
+lifecycle. No migrated flat aliases or emitter-held handle copies remain.
+
 During emission, each handle becomes readable as soon as its declaration is assigned, so forward
 references do not require a method body to exist yet. An early read names the missing declaration.
 Completion is an orchestration boundary, not an IL verifier: body emission and type finalization

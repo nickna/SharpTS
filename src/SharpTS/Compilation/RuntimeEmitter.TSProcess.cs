@@ -1941,8 +1941,8 @@ public partial class RuntimeEmitter
         il.MarkLabel(haveCode);
         il.Emit(OpCodes.Stloc, codeLocal);
 
-        if (runtime.ChildProcessTerminateOwned is not null)
-            il.Emit(OpCodes.Call, runtime.ChildProcessTerminateOwned);
+        if (runtime.ChildProcess is not null)
+            il.Emit(OpCodes.Call, runtime.RequireChildProcess().TerminateOwned);
 
         // Hosted output emits exit synchronously but transfers termination to
         // the host lifetime. It never mutates Environment.ExitCode or calls

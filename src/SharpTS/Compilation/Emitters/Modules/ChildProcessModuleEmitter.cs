@@ -67,7 +67,7 @@ public sealed class ChildProcessModuleEmitter : IBuiltInModuleEmitter
         }
 
         // Call runtime helper
-        il.Emit(OpCodes.Call, ctx.Runtime!.ChildProcessExecSync);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireChildProcess().ExecSync);
         return true;
     }
 
@@ -111,7 +111,7 @@ public sealed class ChildProcessModuleEmitter : IBuiltInModuleEmitter
         }
 
         // Call runtime helper
-        il.Emit(OpCodes.Call, ctx.Runtime!.ChildProcessSpawnSync);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireChildProcess().SpawnSync);
         return true;
     }
 
@@ -155,7 +155,7 @@ public sealed class ChildProcessModuleEmitter : IBuiltInModuleEmitter
         }
 
         // Call runtime helper
-        il.Emit(OpCodes.Call, ctx.Runtime!.ChildProcessExec);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireChildProcess().Exec);
         return true;
     }
 
@@ -199,7 +199,7 @@ public sealed class ChildProcessModuleEmitter : IBuiltInModuleEmitter
         }
 
         // Call runtime helper
-        il.Emit(OpCodes.Call, ctx.Runtime!.ChildProcessSpawn);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireChildProcess().Spawn);
         return true;
     }
 
@@ -243,7 +243,7 @@ public sealed class ChildProcessModuleEmitter : IBuiltInModuleEmitter
         }
 
         // Call runtime helper
-        il.Emit(OpCodes.Call, ctx.Runtime!.ChildProcessExecFileSync);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireChildProcess().ExecFileSync);
         return true;
     }
 
@@ -298,7 +298,7 @@ public sealed class ChildProcessModuleEmitter : IBuiltInModuleEmitter
         }
 
         // Call runtime helper
-        il.Emit(OpCodes.Call, ctx.Runtime!.ChildProcessExecFile);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireChildProcess().ExecFile);
         return true;
     }
 
@@ -349,7 +349,7 @@ public sealed class ChildProcessModuleEmitter : IBuiltInModuleEmitter
         }
 
         // Call runtime helper
-        il.Emit(OpCodes.Call, ctx.Runtime!.ChildProcessFork);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireChildProcess().Fork);
         return true;
     }
 }
