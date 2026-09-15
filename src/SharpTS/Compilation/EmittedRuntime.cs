@@ -977,12 +977,8 @@ public class EmittedRuntime
     public MethodBuilder ValidateWeakSetValue { get; set; } = null!;
     public MethodBuilder ValidateWeakRefTarget { get; set; } = null!;
 
-    // The emitted $CJSModule class — backs the `module` binding inside compiled CJS
-    // module bodies. Exports property write-through via FieldInfo references the
-    // module-specific static $exports field so require() always sees the latest value.
-    public Type CjsModuleType { get; set; } = null!;
-    public ConstructorInfo CjsModuleCtor { get; set; } = null!;
-    public MethodInfo CjsModuleExportsSetter { get; set; } = null!;
+    /// <summary>Required module registry metadata with optional CommonJS and dynamic-import declarations.</summary>
+    public EmittedModuleRuntime Modules { get; } = new();
 
     // The emitted TSDate class
     // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSDate
@@ -1221,9 +1217,6 @@ public class EmittedRuntime
     public ConstructorBuilder ThrownValueExceptionCtor { get; set; } = null!;
     public MethodBuilder ThrownValueExceptionValueGetter { get; set; } = null!;
 
-    // Dynamic import support
-    public MethodBuilder DynamicImportModule { get; set; } = null!;
-
     /// <summary>
     /// $CallArgsPool.Get(int arity) — returns a thread-static object[]
     /// of the given arity (cached for arities 1..4, fresh allocation
@@ -1260,12 +1253,6 @@ public class EmittedRuntime
     public MethodBuilder TSObjectHasSetter { get; set; } = null!;
     public MethodBuilder TSObjectGetGettersDict { get; set; } = null!;
     public MethodBuilder TSObjectGetSettersDict { get; set; } = null!;
-
-    // Module registry for dynamic imports
-    // Stores mapping from module path -> factory function that returns module namespace
-    public FieldBuilder ModuleRegistry { get; set; } = null!;
-    public MethodBuilder RegisterModule { get; set; } = null!;
-    public MethodBuilder InitializeModuleRegistry { get; set; } = null!;
 
     // Iterator wrapper type (implements IEnumerator<object?> for custom iterables)
     public TypeBuilder IteratorWrapperType { get; set; } = null!;

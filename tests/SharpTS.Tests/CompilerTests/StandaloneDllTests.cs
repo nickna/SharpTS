@@ -1319,6 +1319,112 @@ public class StandaloneDllTests
         finally { CleanupTempDir(tempDir); }
     }
 
+    public static IEnumerable<object[]> ModuleLoadingMetadataPrograms =>
+    [
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["lib.ts"] = """
+                    export let value = 3; export function bump(): void { value++; }
+                    """,
+                ["main.ts"] = """
+                    import { value, bump } from './lib'; console.log(value); bump(); console.log(value);
+                    """,
+            },
+            "main.ts",
+            "3\n3\n"
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.cjs"] = """
+                    console.log(typeof module, typeof module.id, typeof module.filename);
+                    console.log(module.loaded, Array.isArray(module.paths), Array.isArray(module.children));
+                    module.exports = {value: 1}; const alias = module; alias.exports = {value: 2};
+                    console.log(module.exports.value); const key = 'exports'; module[key] = {value: 3}; console.log(alias[key].value);
+                    """,
+            },
+            "main.cjs",
+            "object string string\nfalse true true\n2\n2\n"
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["lib.cjs"] = """
+                    const alias = module; alias.exports = {value: 7};
+                    """,
+                ["main.cjs"] = """
+                    const one = require('./lib.cjs'); const two = require('./lib.cjs'); console.log(one.value, one === two);
+                    """,
+            },
+            "main.cjs",
+            "7 true\n"
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["lib.ts"] = """
+                    export const value = 9;
+                    """,
+                ["nested/load.ts"] = """
+                    export async function load(): Promise<any> { return await import('../lib'); }
+                    """,
+                ["main.ts"] = """
+                    import { load } from './nested/load'; async function run(): Promise<void> { const one = await import('./lib'); const two = await load(); console.log(one.value, one === two); } run();
+                    """,
+            },
+            "main.ts",
+            "9 false\n"
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = """
+                    async function run(): Promise<void> { const path = './missing'; try { await import(path); } catch (error) { console.log('rejected'); } } run();
+                    """,
+            },
+            "main.ts",
+            "rejected\n"
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["lib.ts"] = """
+                    export const value = 5;
+                    """,
+                ["main.ts"] = """
+                    async function run(): Promise<void> { console.log((await import('./lib')).value); } run();
+                    function* items(): Generator<any, void, any> { yield import('./lib'); } const it = items(); it.next().value.then(module => console.log(module.value));
+                    """,
+            },
+            "main.ts",
+            "5\n5\n"
+        },
+    ];
+
+    [Theory]
+    [MemberData(nameof(ModuleLoadingMetadataPrograms))]
+    public void Isolated_ModuleLoadingMetadata_PreservesExportsRegistryAndImports(Dictionary<string, string> files, string entryPoint, string expected)
+    {
+        using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        foreach (var (path, source) in files) tempDir.CreateFile(path, source);
+        var dllPath = tempDir.GetPath("module_metadata.dll");
+        // The CLI discovers and type-checks dynamic-only dependencies before emitting the module graph.
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{tempDir.GetPath(entryPoint)}\" -o \"{dllPath}\" --standalone --verify", tempDir.Path);
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(dllPath));
+        Assert.False(File.Exists(tempDir.GetPath("SharpTS.dll")));
+        Assert.Equal(expected, ExecuteCompiledDllIsolated(dllPath, timeoutMs: 15000,
+            verifyStandardError: error => Assert.Empty(error)));
+    }
+
     public static IEnumerable<object[]> ReadlineMetadataPrograms =>
     [
         new object[]

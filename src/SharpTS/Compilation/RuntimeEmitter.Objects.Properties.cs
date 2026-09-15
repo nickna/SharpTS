@@ -1463,7 +1463,7 @@ public partial class RuntimeEmitter
         if (_features.UsesCjsRequire)
         {
             var notCjsModuleLabel = il.DefineLabel();
-            EmitCjsModuleGetBranch(il, runtime, notCjsModuleLabel);
+            EmitCjsModuleGetBranch(il, runtime.Modules.RequireCommonJs(), notCjsModuleLabel);
             il.MarkLabel(notCjsModuleLabel);
         }
 

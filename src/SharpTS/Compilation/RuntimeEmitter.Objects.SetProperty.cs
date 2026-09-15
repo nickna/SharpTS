@@ -812,7 +812,7 @@ public partial class RuntimeEmitter
         if (_features.UsesCjsRequire)
         {
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.CjsModuleType);
+            il.Emit(OpCodes.Isinst, runtime.Modules.RequireCommonJs().Type);
             il.Emit(OpCodes.Brtrue, cjsModuleSetLabel);
         }
 
@@ -1122,7 +1122,7 @@ public partial class RuntimeEmitter
         if (_features.UsesCjsRequire)
         {
             il.MarkLabel(cjsModuleSetLabel);
-            EmitCjsModuleExportsSetBranch(il, runtime);
+            EmitCjsModuleExportsSetBranch(il, runtime.Modules.RequireCommonJs());
         }
 
         // $Array handler — `arr.length = N` routes through SetLength. Any
@@ -1765,7 +1765,7 @@ public partial class RuntimeEmitter
         if (_features.UsesCjsRequire)
         {
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.CjsModuleType);
+            il.Emit(OpCodes.Isinst, runtime.Modules.RequireCommonJs().Type);
             il.Emit(OpCodes.Brtrue, cjsModuleSetStrictLabel);
         }
 
@@ -1908,7 +1908,7 @@ public partial class RuntimeEmitter
         if (_features.UsesCjsRequire)
         {
             il.MarkLabel(cjsModuleSetStrictLabel);
-            EmitCjsModuleExportsSetBranch(il, runtime);
+            EmitCjsModuleExportsSetBranch(il, runtime.Modules.RequireCommonJs());
         }
 
         // $TSFunction handler: ordinary [[Set]] over PDS-backed function

@@ -60,7 +60,7 @@ public partial class RuntimeEmitter
     /// (<c>module.exports = X</c>); writes to other module properties are
     /// silently ignored (spec behavior). Caller marks the branch label.
     /// </summary>
-    private void EmitCjsModuleExportsSetBranch(ILGenerator il, EmittedRuntime runtime)
+    private void EmitCjsModuleExportsSetBranch(ILGenerator il, EmittedCommonJsRuntime commonJs)
     {
         var notExportsLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_1);
@@ -69,9 +69,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, notExportsLabel);
         // module.exports = value
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.CjsModuleType);
+        il.Emit(OpCodes.Castclass, commonJs.Type);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Callvirt, runtime.CjsModuleExportsSetter);
+        il.Emit(OpCodes.Callvirt, commonJs.ExportsSetter);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notExportsLabel);
         // Silently ignore writes to other module properties
