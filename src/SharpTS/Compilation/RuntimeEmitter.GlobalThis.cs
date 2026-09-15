@@ -443,22 +443,22 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Call, runtime.TSFunctionGetOrCreate);
         }
         il.MarkLabel(parseIntLabel);
-        EmitGetOrCreateTSFn(runtime.NumberParseInt, "parseInt", 2);
+        EmitGetOrCreateTSFn(runtime.Numbers.ParseInt, "parseInt", 2);
         il.Emit(OpCodes.Br, returnLabel);
 
         // parseFloat — same pattern.
         il.MarkLabel(parseFloatLabel);
-        EmitGetOrCreateTSFn(runtime.NumberParseFloat, "parseFloat", 1);
+        EmitGetOrCreateTSFn(runtime.Numbers.ParseFloat, "parseFloat", 1);
         il.Emit(OpCodes.Br, returnLabel);
 
         // isNaN
         il.MarkLabel(isNaNLabel);
-        EmitGetOrCreateTSFn(runtime.NumberIsNaN, "isNaN", 1);
+        EmitGetOrCreateTSFn(runtime.Numbers.IsNaN, "isNaN", 1);
         il.Emit(OpCodes.Br, returnLabel);
 
         // isFinite
         il.MarkLabel(isFiniteLabel);
-        EmitGetOrCreateTSFn(runtime.NumberIsFinite, "isFinite", 1);
+        EmitGetOrCreateTSFn(runtime.Numbers.IsFinite, "isFinite", 1);
         il.Emit(OpCodes.Br, returnLabel);
 
         il.MarkLabel(encodeURIComponentLabel);

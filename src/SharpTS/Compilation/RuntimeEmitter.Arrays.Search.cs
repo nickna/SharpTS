@@ -470,7 +470,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, _types.Double);
         il.Emit(OpCodes.Brfalse, notNumber);
-        il.Emit(OpCodes.Ldsfld, runtime.NumberPrototypeField);
+        il.Emit(OpCodes.Ldsfld, runtime.Numbers.PrototypeField);
         EmitMaterializeFromPrototypeDict(il, runtime);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notNumber);
@@ -2685,7 +2685,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, currentLocal);
         il.Emit(OpCodes.Isinst, _types.Double);
         il.Emit(OpCodes.Brfalse, notNumberPrimitive);
-        il.Emit(OpCodes.Ldsfld, runtime.NumberPrototypeField);
+        il.Emit(OpCodes.Ldsfld, runtime.Numbers.PrototypeField);
         il.Emit(OpCodes.Stloc, currentLocal);
         il.Emit(OpCodes.Br, loopStart);
         il.MarkLabel(notNumberPrimitive);

@@ -455,7 +455,7 @@ public partial class RuntimeEmitter
         // Number/String/Boolean/Array prototype singletons
         var notNumberProtoLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldsfld, runtime.NumberPrototypeField);
+        il.Emit(OpCodes.Ldsfld, runtime.Numbers.PrototypeField);
         il.Emit(OpCodes.Bne_Un, notNumberProtoLabel);
         EmitTag("[object Number]");
         il.MarkLabel(notNumberProtoLabel);

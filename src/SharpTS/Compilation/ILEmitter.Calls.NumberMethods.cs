@@ -94,7 +94,7 @@ public partial class ILEmitter
                     IL.Emit(OpCodes.Ldc_I4_0);
                     IL.Emit(OpCodes.Box, _ctx.Types.Int32);
                 }
-                IL.Emit(OpCodes.Call, _ctx.Runtime!.NumberToFixed);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.Numbers.ToFixed);
                 break;
 
             case "toPrecision":
@@ -108,7 +108,7 @@ public partial class ILEmitter
                 {
                     IL.Emit(OpCodes.Ldnull);
                 }
-                IL.Emit(OpCodes.Call, _ctx.Runtime!.NumberToPrecision);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.Numbers.ToPrecision);
                 break;
 
             case "toExponential":
@@ -125,7 +125,7 @@ public partial class ILEmitter
                 {
                     IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.UndefinedInstance);
                 }
-                IL.Emit(OpCodes.Call, _ctx.Runtime!.NumberToExponential);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.Numbers.ToExponential);
                 break;
 
             case "valueOf":
@@ -144,7 +144,7 @@ public partial class ILEmitter
                     IL.Emit(OpCodes.Ldc_I4, 10);
                     IL.Emit(OpCodes.Box, _ctx.Types.Int32);
                 }
-                IL.Emit(OpCodes.Call, _ctx.Runtime!.NumberToStringRadix);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.Numbers.ToStringRadix);
                 break;
         }
     }
@@ -199,7 +199,7 @@ public partial class ILEmitter
                     IL.Emit(OpCodes.Ldc_I4_0);
                     IL.Emit(OpCodes.Box, _ctx.Types.Int32);
                 }
-                IL.Emit(OpCodes.Call, _ctx.Runtime!.NumberToFixed);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.Numbers.ToFixed);
                 break;
 
             case "toPrecision":
@@ -212,7 +212,7 @@ public partial class ILEmitter
                 {
                     IL.Emit(OpCodes.Ldnull);
                 }
-                IL.Emit(OpCodes.Call, _ctx.Runtime!.NumberToPrecision);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.Numbers.ToPrecision);
                 break;
 
             case "toExponential":
@@ -228,7 +228,7 @@ public partial class ILEmitter
                 {
                     IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.UndefinedInstance);
                 }
-                IL.Emit(OpCodes.Call, _ctx.Runtime!.NumberToExponential);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.Numbers.ToExponential);
                 break;
 
             case "valueOf":
@@ -246,7 +246,7 @@ public partial class ILEmitter
                     IL.Emit(OpCodes.Ldc_I4, 10);
                     IL.Emit(OpCodes.Box, _ctx.Types.Int32);
                 }
-                IL.Emit(OpCodes.Call, _ctx.Runtime!.NumberToStringRadix);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.Numbers.ToStringRadix);
                 break;
         }
         builder.Emit_Br(doneLabel);

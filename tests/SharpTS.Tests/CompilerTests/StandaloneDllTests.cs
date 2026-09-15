@@ -2544,6 +2544,195 @@ public class StandaloneDllTests
             verifyStandardError: error => Assert.Empty(error)));
     }
 
+    public static IEnumerable<object[]> NumberMetadataPrograms =>
+    [
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "function parse(value:string){return parseInt(value,10);}for(const s of ['42tail','-0','9007199254740995','18446744073709551616','  +17','x'])console.log(parse(s));console.log(Object.is(parse('-0'),-0));"
+            },
+            "42\n0\n9007199254740996\n18446744073709552000\n17\nNaN\ntrue\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "function parse(value:string,radix:number){return parseInt(value,radix);}console.log(parse('0xff',16),parse('10101',2),parse('zz',36),parse('-11',8),parse('10',1),parse('0X10',0));"
+            },
+            "0 21 1295 -9 NaN 16\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "let order='';const input:any={toString(){order+='S';return '42tail';}};const parse:any=parseInt;console.log(parse(input,10),order);"
+            },
+            "42 S\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "console.log(parseFloat('42.5tail'),Number.parseFloat(' -.25e2tail'),parseFloat('x'),parseFloat('1.2.3'));"
+            },
+            "42.5 -25 NaN 1.2\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "for(const value of [NaN,Infinity,1,1.5,'1',null])console.log(Number.isNaN(value),Number.isFinite(value),Number.isInteger(value),Number.isSafeInteger(value));console.log(Number.isSafeInteger(9007199254740991),Number.isSafeInteger(9007199254740992));"
+            },
+            "true false false false\nfalse false false false\nfalse true true true\nfalse true false false\nfalse false false false\nfalse false false false\ntrue false\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "const finite:any=isFinite;const nan:any=isNaN;console.log(finite('42'),finite('x'),finite(false),nan('42'),nan('x'),nan(false));"
+            },
+            "false false false false false false\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "console.log((2.5).toFixed(0),(1.005).toFixed(2),(-0).toFixed(2),(0.125).toFixed(2),(1e21).toFixed(2));console.log((-0.0001).toFixed(2));"
+            },
+            "3 1.00 0.00 0.13 1e+21\n-0.00\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "console.log((0.1).toFixed(20));console.log((123.456).toFixed(100).length);console.log((Number.MIN_VALUE).toFixed(100).length);"
+            },
+            "0.10000000000000000555\n104\n102\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "console.log((100).toPrecision(2),(0).toPrecision(3),(12.34).toPrecision(3),(0.0000001).toPrecision(2));"
+            },
+            "1.0e+2 0.00 12.3 1.0e-7\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "console.log((25).toExponential(0),(12345).toExponential(3),(-0).toExponential(2));console.log((123).toExponential(null),(123).toExponential(undefined));"
+            },
+            "3e+1 1.235e+4 0.00e+0\n1e+2 1.23e+2\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "for(const value of [1e20,1e21,1e-6,1e-7,0.1+0.2,-0,NaN,-Infinity])console.log(String(value),`${value}`);"
+            },
+            "100000000000000000000 100000000000000000000\n1e+21 1e+21\n0.000001 0.000001\n1e-7 1e-7\n0.30000000000000004 0.30000000000000004\n0 0\nNaN NaN\n-Infinity -Infinity\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "console.log((255).toString(16),(-10).toString(2),(35).toString(36),(1e20).toString(10));"
+            },
+            "ff -1010 z 100000000000000000000\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "const value:any=new Number(12.5);console.log(value.toFixed(1),value.toPrecision(3),value.toExponential(1),value.valueOf());console.log(Number.prototype.valueOf(),Number.prototype.toFixed(2));"
+            },
+            "12.5 12.5 1.3e+1 12.5\n0 0.00\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "console.log(Number.prototype.constructor===Number,Object.getPrototypeOf(Number.prototype)===Object.prototype);const d:any=Object.getOwnPropertyDescriptor(Number.prototype,'toFixed');console.log(d.writable,d.enumerable,d.configurable,d.value===Number.prototype.toFixed,d.value.name,d.value.length);"
+            },
+            "true true\ntrue false true true toFixed 1\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "const saved:any=Number.prototype.toFixed;(Number.prototype as any).toFixed=function(){return 'override';};const n:any=12.5;console.log(n.toFixed(2));Number.prototype.toFixed=saved;console.log(n.toFixed(2));"
+            },
+            "override\n12.50\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "try{Number.prototype.toFixed.call({},2);}catch(e:any){console.log(e.name);}try{(1).toFixed(101);}catch(e:any){console.log(e.name);}try{(1).toPrecision(0);}catch(e:any){console.log(e.name);}try{(1).toString(37);}catch(e:any){console.log(e.name);}console.log((Infinity).toPrecision(101));"
+            },
+            "TypeError\nRangeError\nRangeError\nRangeError\nInfinity\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "let calls=0;const digits:any={valueOf(){calls++;return 2;}};console.log((12.5).toFixed(digits),calls);try{(NaN).toExponential(Symbol('x') as any);}catch(e:any){console.log(e.name);}"
+            },
+            "12.50 1\nTypeError\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "const parse:any=Number.parseInt;const finite:any=Number.isFinite;const n:any=12.5;const fixed:any=n.toFixed;console.log(parse('42',10),finite(42),fixed.call(n,1));"
+            },
+            "42 true 12.5\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "async function run(){const value:any=await Promise.resolve(12.5);console.log(value.toFixed(1));}run();"
+            },
+            "12.5\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "function* run():Generator<string,void,any>{const value:any=12.5;yield value.toFixed(1);yield value.toString(10);}console.log(Array.from(run()).join(','));"
+            },
+            "12.5,12.5\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.cjs"] = "console.log(Number.parseInt('42',10),(12.5).toFixed(1),Number.isInteger(42));"
+            },
+            "42 12.5 true\n", "main.cjs", true
+        }
+    ];
+
+    [Theory]
+    [MemberData(nameof(NumberMetadataPrograms))]
+    public void Isolated_NumberMetadata_PreservesParsingFormattingAndPrototypeBehavior(Dictionary<string, string> files, string expected, string entryPoint, bool standalone)
+    {
+        using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        foreach (var (path, source) in files) tempDir.CreateFile(path, source);
+        var dllPath = tempDir.GetPath("number_metadata.dll");
+        var deployment = standalone ? " --standalone" : "";
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --noLib --compile \"{tempDir.GetPath(entryPoint)}\" -o \"{dllPath}\" --verify{deployment}", tempDir.Path);
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(dllPath));
+        Assert.Equal(!standalone, File.Exists(tempDir.GetPath("SharpTS.dll")));
+        Assert.Equal(expected, ExecuteCompiledDllIsolated(dllPath, timeoutMs: 30000,
+            verifyStandardError: error => Assert.Empty(error)));
+    }
+
     public static IEnumerable<object[]> BroadcastChannelMetadataPrograms =>
     [
         new object[]

@@ -120,7 +120,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(fallback);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.FormatNumber);
+        il.Emit(OpCodes.Call, runtime.Numbers.Format);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(
             _types.StringBuilder, "Append", [_types.String]));
         il.Emit(OpCodes.Pop);

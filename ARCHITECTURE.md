@@ -855,6 +855,17 @@ wrapper identity, coercion hooks and guest errors remain unchanged. No peer inpu
 retained as duplicate emitter state. The remaining peer families and these scoped boundaries stay
 in the final metadata-ownership audit.
 
+Number parsing, formatting and prototype metadata live in required `EmittedNumberRuntime`.
+Its 24 declarations include the early FormatNumber shell, prototype field/population shell,
+cached UInt64 formatting callback and field, typed/general parsers and formatters, predicates,
+and radix helpers. Completion validates and freezes these declarations. Number body emitters
+take the component and narrow dependencies; method and prototype orchestration use immutable
+scoped peer inputs and the shared descriptor-installation helpers. The exact fixed formatter's
+BigInteger fallback and prototype valueOf builder remain local to their callers. Cached delegate
+initialization, native signatures, optimization flags, parsing/rounding behavior and prototype
+identity remain unchanged. General numeric coercion, Math, BigInt and Boolean metadata retain
+their own later migration boundaries, and scoped BCL/descriptor inputs remain in the final audit.
+
 During emission, each handle becomes readable as soon as its declaration is assigned, so forward
 references do not require a method body to exist yet. An early read names the missing declaration.
 Completion is an orchestration boundary, not an IL verifier: body emission and type finalization

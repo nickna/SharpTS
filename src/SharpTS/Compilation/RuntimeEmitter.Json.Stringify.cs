@@ -1294,7 +1294,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, nullLabel);
 
         il.Emit(OpCodes.Ldloc, local);
-        il.Emit(OpCodes.Call, runtime.FormatNumber);
+        il.Emit(OpCodes.Call, runtime.Numbers.Format);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(nullLabel);

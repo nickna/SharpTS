@@ -11,16 +11,27 @@ namespace SharpTS.Compilation;
 /// </summary>
 public partial class RuntimeEmitter
 {
+    // Constructed only for Number method emission; peer declarations retain their own owners.
+    private readonly record struct NumberMethodInputs(
+        MethodInfo GetProperty,
+        Type UndefinedType,
+        MethodInfo ToIntegerOrInfinity,
+        Type ObjectType,
+        Type SymbolType,
+        MethodInfo CreateException,
+        ConstructorInfo TypeErrorCtor,
+        ConstructorInfo RangeErrorCtor);
+
     private void DefineNumberFixedFormattingInfrastructure(
         TypeBuilder typeBuilder,
-        EmittedRuntime runtime)
+        EmittedNumberRuntime numbers)
     {
         Type stateType = typeof(ValueTuple<ulong, int, bool>);
         Type spanType = typeof(Span<char>);
         Type formatterType = EmitGenerics.MakeGenericType(typeof(SpanAction<,>),
             typeof(char), stateType);
 
-        runtime.NumberFixedUInt64FormatterField = typeBuilder.DefineField(
+        numbers.FixedUInt64FormatterField = typeBuilder.DefineField(
             "_numberFixedUInt64Formatter",
             formatterType,
             FieldAttributes.Private | FieldAttributes.Static | FieldAttributes.InitOnly);
@@ -30,7 +41,7 @@ public partial class RuntimeEmitter
             MethodAttributes.Private | MethodAttributes.Static,
             _types.Void,
             [spanType, stateType]);
-        runtime.NumberFixedUInt64FormatterCallback = method;
+        numbers.FixedUInt64FormatterCallback = method;
 
         FieldInfo item1 = stateType.GetField("Item1")!;
         FieldInfo item2 = stateType.GetField("Item2")!;
@@ -146,29 +157,31 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitNumberMethods(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitNumberMethods(TypeBuilder typeBuilder, EmittedNumberRuntime numbers,
+        EmittedStringCoercionRuntime stringCoercion,
+        NumberMethodInputs peers)
     {
         // Emit helper methods first (they're used by other methods)
-        EmitGetDigitValue(typeBuilder, runtime);
-        EmitParseIntDecimalStringHelper(typeBuilder, runtime);
-        EmitParseIntStringHelper(typeBuilder, runtime);
-        EmitParseIntHelper(typeBuilder, runtime);
-        EmitConvertIntToRadix(typeBuilder, runtime);
-        EmitGetValidFloatPart(typeBuilder, runtime);
+        EmitGetDigitValue(typeBuilder, numbers);
+        EmitParseIntDecimalStringHelper(typeBuilder, numbers);
+        EmitParseIntStringHelper(typeBuilder, numbers);
+        EmitParseIntHelper(typeBuilder, numbers, stringCoercion);
+        EmitConvertIntToRadix(typeBuilder, numbers);
+        EmitGetValidFloatPart(typeBuilder, numbers);
 
-        EmitNumberParseInt(typeBuilder, runtime);
-        EmitNumberParseFloat(typeBuilder, runtime);
-        EmitNumberIsNaN(typeBuilder, runtime);
-        EmitNumberIsFinite(typeBuilder, runtime);
-        EmitNumberIsInteger(typeBuilder, runtime);
-        EmitNumberIsSafeInteger(typeBuilder, runtime);
-        EmitGlobalIsNaN(typeBuilder, runtime);
-        EmitGlobalIsFinite(typeBuilder, runtime);
-        EmitNumberToFixedDouble(typeBuilder, runtime);
-        EmitNumberToFixed(typeBuilder, runtime);
-        EmitNumberToPrecision(typeBuilder, runtime);
-        EmitNumberToExponential(typeBuilder, runtime);
-        EmitNumberToStringRadix(typeBuilder, runtime);
+        EmitNumberParseInt(typeBuilder, numbers);
+        EmitNumberParseFloat(typeBuilder, numbers);
+        EmitNumberIsNaN(typeBuilder, numbers);
+        EmitNumberIsFinite(typeBuilder, numbers);
+        EmitNumberIsInteger(typeBuilder, numbers);
+        EmitNumberIsSafeInteger(typeBuilder, numbers);
+        EmitGlobalIsNaN(typeBuilder, numbers);
+        EmitGlobalIsFinite(typeBuilder, numbers);
+        EmitNumberToFixedDouble(typeBuilder, numbers, peers.CreateException, peers.RangeErrorCtor);
+        EmitNumberToFixed(typeBuilder, numbers, peers.GetProperty, peers.UndefinedType, peers.ToIntegerOrInfinity, peers.CreateException, peers.TypeErrorCtor, peers.RangeErrorCtor);
+        EmitNumberToPrecision(typeBuilder, numbers, peers.GetProperty, peers.UndefinedType, peers.ToIntegerOrInfinity, peers.CreateException, peers.TypeErrorCtor, peers.RangeErrorCtor);
+        EmitNumberToExponential(typeBuilder, numbers, peers.GetProperty, peers.UndefinedType, peers.ToIntegerOrInfinity, peers.ObjectType, peers.SymbolType, peers.CreateException, peers.TypeErrorCtor, peers.RangeErrorCtor);
+        EmitNumberToStringRadix(typeBuilder, numbers, peers.GetProperty, peers.UndefinedType, peers.ToIntegerOrInfinity, peers.CreateException, peers.TypeErrorCtor, peers.RangeErrorCtor, stringCoercion);
     }
 
     /// <summary>
@@ -178,7 +191,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitParseIntDecimalStringHelper(
         TypeBuilder typeBuilder,
-        EmittedRuntime runtime)
+        EmittedNumberRuntime numbers)
     {
         const long maxBeforeMultiply = (long)(ulong.MaxValue / 10);
         const int maxLastDigit = (int)(ulong.MaxValue % 10);
@@ -189,7 +202,7 @@ public partial class RuntimeEmitter
             _types.Double,
             [_types.String]);
         method.SetImplementationFlags(MethodImplAttributes.AggressiveOptimization);
-        runtime.NumberParseIntDecimalString = method;
+        numbers.ParseIntDecimalString = method;
 
         var il = method.GetILGenerator();
         var length = il.DeclareLocal(_types.Int32);
@@ -423,7 +436,7 @@ public partial class RuntimeEmitter
     /// proved the input is a string and the radix is a native Int32. The general
     /// object/object helper remains responsible for observable JS coercion.
     /// </summary>
-    private void EmitParseIntStringHelper(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitParseIntStringHelper(TypeBuilder typeBuilder, EmittedNumberRuntime numbers)
     {
         var method = typeBuilder.DefineMethod(
             "NumberParseIntString",
@@ -431,7 +444,7 @@ public partial class RuntimeEmitter
             _types.Double,
             [_types.String, _types.Int32]);
         method.SetImplementationFlags(MethodImplAttributes.AggressiveOptimization);
-        runtime.NumberParseIntString = method;
+        numbers.ParseIntString = method;
 
         var il = method.GetILGenerator();
         var strLocal = il.DeclareLocal(_types.String);
@@ -566,7 +579,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_S, (sbyte)10);
         il.Emit(OpCodes.Bne_Un, nonDecimalRadix);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.NumberParseIntDecimalString);
+        il.Emit(OpCodes.Call, numbers.ParseIntDecimalString);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(nonDecimalRadix);
 
@@ -585,7 +598,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, strLocal);
         il.Emit(OpCodes.Ldloc, indexLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "get_Chars", [_types.Int32])!);
-        il.Emit(OpCodes.Call, runtime.GetDigitValue);
+        il.Emit(OpCodes.Call, numbers.GetDigitValue);
         il.Emit(OpCodes.Stloc, digitLocal);
         il.Emit(OpCodes.Ldloc, digitLocal);
         il.Emit(OpCodes.Ldc_I4_0);
@@ -624,7 +637,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitNumberParseInt(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitNumberParseInt(TypeBuilder typeBuilder, EmittedNumberRuntime numbers)
     {
         // parseInt implementation using emitted helper
         var method = typeBuilder.DefineMethod(
@@ -633,18 +646,19 @@ public partial class RuntimeEmitter
             _types.Double,
             [_types.Object, _types.Object]
         );
-        runtime.NumberParseInt = method;
+        numbers.ParseInt = method;
 
         var il = method.GetILGenerator();
 
         // Call the emitted ParseIntHelper method
         il.Emit(OpCodes.Ldarg_0); // str
         il.Emit(OpCodes.Ldarg_1); // radix
-        il.Emit(OpCodes.Call, runtime.ParseIntHelper);
+        il.Emit(OpCodes.Call, numbers.ParseIntHelper);
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitParseIntHelper(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitParseIntHelper(TypeBuilder typeBuilder, EmittedNumberRuntime numbers,
+        EmittedStringCoercionRuntime stringCoercion)
     {
         // Helper method that implements parseInt logic
         var method = typeBuilder.DefineMethod(
@@ -653,7 +667,7 @@ public partial class RuntimeEmitter
             _types.Double,
             [_types.Object, _types.Object]
         );
-        runtime.ParseIntHelper = method;
+        numbers.ParseIntHelper = method;
 
         var il = method.GetILGenerator();
         var rawStrLocal = il.DeclareLocal(_types.String);
@@ -680,7 +694,7 @@ public partial class RuntimeEmitter
         // stringifies negative zero as "0" (where Double.ToString() yields
         // "-0"), and object arguments must observe their coercion hooks.
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
+        il.Emit(OpCodes.Call, stringCoercion.ToJsString);
         il.Emit(OpCodes.Stloc, rawStrLocal);
         il.Emit(OpCodes.Ldloc, rawStrLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "Trim", Type.EmptyTypes)!);
@@ -834,7 +848,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_S, (sbyte)10);
         il.Emit(OpCodes.Bne_Un, nonDecimalRadixLabel);
         il.Emit(OpCodes.Ldloc, rawStrLocal);
-        il.Emit(OpCodes.Call, runtime.NumberParseIntDecimalString);
+        il.Emit(OpCodes.Call, numbers.ParseIntDecimalString);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(nonDecimalRadixLabel);
@@ -859,7 +873,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, strLocal);
         il.Emit(OpCodes.Ldloc, indexLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "get_Chars", [_types.Int32])!);
-        il.Emit(OpCodes.Call, runtime.GetDigitValue); // Helper to get digit value
+        il.Emit(OpCodes.Call, numbers.GetDigitValue); // Helper to get digit value
         il.Emit(OpCodes.Stloc, digitLocal);
 
         // Check if digit is valid for this radix
@@ -908,7 +922,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitGetDigitValue(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitGetDigitValue(TypeBuilder typeBuilder, EmittedNumberRuntime numbers)
     {
         // Returns digit value for character, or -1 if invalid
         var method = typeBuilder.DefineMethod(
@@ -917,7 +931,7 @@ public partial class RuntimeEmitter
             _types.Int32,
             [_types.Char]
         );
-        runtime.GetDigitValue = method;
+        numbers.GetDigitValue = method;
 
         var il = method.GetILGenerator();
         var checkLowerLabel = il.DefineLabel();
@@ -972,7 +986,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitNumberParseFloat(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitNumberParseFloat(TypeBuilder typeBuilder, EmittedNumberRuntime numbers)
     {
         // parseFloat: extracts valid float prefix and parses it
         var method = typeBuilder.DefineMethod(
@@ -981,7 +995,7 @@ public partial class RuntimeEmitter
             _types.Double,
             [_types.Object]
         );
-        runtime.NumberParseFloat = method;
+        numbers.ParseFloat = method;
 
         var il = method.GetILGenerator();
         var strLocal = il.DeclareLocal(_types.String);
@@ -1023,7 +1037,7 @@ public partial class RuntimeEmitter
 
         // Extract valid float part (JavaScript behavior: "42.5abc" -> "42.5")
         il.Emit(OpCodes.Ldloc, strLocal);
-        il.Emit(OpCodes.Call, runtime.GetValidFloatPart);
+        il.Emit(OpCodes.Call, numbers.GetValidFloatPart);
         il.Emit(OpCodes.Stloc, validPartLocal);
 
         // Check if valid part is empty
@@ -1053,7 +1067,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitGetValidFloatPart(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitGetValidFloatPart(TypeBuilder typeBuilder, EmittedNumberRuntime numbers)
     {
         // Helper: extracts valid float prefix from string (JavaScript parseFloat behavior)
         var method = typeBuilder.DefineMethod(
@@ -1062,7 +1076,7 @@ public partial class RuntimeEmitter
             _types.String,
             [_types.String]
         );
-        runtime.GetValidFloatPart = method;
+        numbers.GetValidFloatPart = method;
 
         var il = method.GetILGenerator();
         var resultLocal = il.DeclareLocal(typeof(StringBuilder));
@@ -1227,7 +1241,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitNumberIsNaN(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitNumberIsNaN(TypeBuilder typeBuilder, EmittedNumberRuntime numbers)
     {
         // Number.isNaN is stricter - only returns true for actual NaN double values
         var method = typeBuilder.DefineMethod(
@@ -1236,7 +1250,7 @@ public partial class RuntimeEmitter
             _types.Boolean,
             [_types.Object]
         );
-        runtime.NumberIsNaN = method;
+        numbers.IsNaN = method;
 
         var il = method.GetILGenerator();
         var notDoubleLabel = il.DefineLabel();
@@ -1257,7 +1271,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitNumberIsFinite(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitNumberIsFinite(TypeBuilder typeBuilder, EmittedNumberRuntime numbers)
     {
         // Number.isFinite is stricter - only returns true for finite double values
         var method = typeBuilder.DefineMethod(
@@ -1266,7 +1280,7 @@ public partial class RuntimeEmitter
             _types.Boolean,
             [_types.Object]
         );
-        runtime.NumberIsFinite = method;
+        numbers.IsFinite = method;
 
         var il = method.GetILGenerator();
         var notDoubleLabel = il.DefineLabel();
@@ -1287,7 +1301,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitNumberIsInteger(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitNumberIsInteger(TypeBuilder typeBuilder, EmittedNumberRuntime numbers)
     {
         // Number.isInteger: returns true if value is finite and truncate(value) == value
         var method = typeBuilder.DefineMethod(
@@ -1296,7 +1310,7 @@ public partial class RuntimeEmitter
             _types.Boolean,
             [_types.Object]
         );
-        runtime.NumberIsInteger = method;
+        numbers.IsInteger = method;
 
         var il = method.GetILGenerator();
         var falseLabel = il.DefineLabel();
@@ -1329,7 +1343,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitNumberIsSafeInteger(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitNumberIsSafeInteger(TypeBuilder typeBuilder, EmittedNumberRuntime numbers)
     {
         // Number.isSafeInteger: IsInteger && Math.Abs(d) <= MAX_SAFE_INTEGER
         const double MAX_SAFE_INTEGER = 9007199254740991;
@@ -1340,7 +1354,7 @@ public partial class RuntimeEmitter
             _types.Boolean,
             [_types.Object]
         );
-        runtime.NumberIsSafeInteger = method;
+        numbers.IsSafeInteger = method;
 
         var il = method.GetILGenerator();
         var falseLabel = il.DefineLabel();
@@ -1382,7 +1396,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitGlobalIsNaN(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitGlobalIsNaN(TypeBuilder typeBuilder, EmittedNumberRuntime numbers)
     {
         // Global isNaN coerces to number first
         var method = typeBuilder.DefineMethod(
@@ -1391,7 +1405,7 @@ public partial class RuntimeEmitter
             _types.Boolean,
             [_types.Object]
         );
-        runtime.GlobalIsNaN = method;
+        numbers.GlobalIsNaN = method;
 
         var il = method.GetILGenerator();
         var checkStringLabel = il.DefineLabel();
@@ -1447,7 +1461,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitGlobalIsFinite(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitGlobalIsFinite(TypeBuilder typeBuilder, EmittedNumberRuntime numbers)
     {
         // Global isFinite coerces to number first
         var method = typeBuilder.DefineMethod(
@@ -1456,7 +1470,7 @@ public partial class RuntimeEmitter
             _types.Boolean,
             [_types.Object]
         );
-        runtime.GlobalIsFinite = method;
+        numbers.GlobalIsFinite = method;
 
         var il = method.GetILGenerator();
         var checkStringLabel = il.DefineLabel();
@@ -1518,7 +1532,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitNumberToFixedDouble(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitNumberToFixedDouble(TypeBuilder typeBuilder, EmittedNumberRuntime numbers,
+        MethodInfo createException,
+        ConstructorInfo rangeErrorCtor)
     {
         MethodBuilder bigIntegerFallback = EmitNumberToFixedBigInteger(typeBuilder);
         var method = typeBuilder.DefineMethod(
@@ -1527,7 +1543,7 @@ public partial class RuntimeEmitter
             _types.String,
             [_types.Double, _types.Int32]);
         method.SetImplementationFlags(MethodImplAttributes.AggressiveOptimization);
-        runtime.NumberToFixedDouble = method;
+        numbers.ToFixedDouble = method;
 
         var il = method.GetILGenerator();
         var valueLocal = il.DeclareLocal(_types.Double);
@@ -1556,15 +1572,13 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_0);
         var notNegative = il.DefineLabel();
         il.Emit(OpCodes.Bge, notNegative);
-        GuestErrorEmitter.ThrowRangeError(
-            il, runtime, "toFixed() digits argument must be between 0 and 100");
+        GuestErrorEmitter.ThrowError(il, createException, rangeErrorCtor, "toFixed() digits argument must be between 0 and 100");
         il.MarkLabel(notNegative);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldc_I4, 100);
         var inRange = il.DefineLabel();
         il.Emit(OpCodes.Ble, inRange);
-        GuestErrorEmitter.ThrowRangeError(
-            il, runtime, "toFixed() digits argument must be between 0 and 100");
+        GuestErrorEmitter.ThrowError(il, createException, rangeErrorCtor, "toFixed() digits argument must be between 0 and 100");
         il.MarkLabel(inRange);
 
         // Non-finite values and magnitudes at or above 1e21 use ordinary
@@ -1575,7 +1589,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Double, "IsFinite", [_types.Double])!);
         il.Emit(OpCodes.Brtrue, finite);
         il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Call, runtime.FormatNumber);
+        il.Emit(OpCodes.Call, numbers.Format);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(finite);
 
@@ -1585,7 +1599,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_R8, 1e21);
         il.Emit(OpCodes.Blt, fixedNotation);
         il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Call, runtime.FormatNumber);
+        il.Emit(OpCodes.Call, numbers.Format);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(fixedNotation);
@@ -1823,7 +1837,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloc, negativeLocal);
         il.Emit(OpCodes.Newobj, stateConstructor);
-        il.Emit(OpCodes.Ldsfld, runtime.NumberFixedUInt64FormatterField);
+        il.Emit(OpCodes.Ldsfld, numbers.FixedUInt64FormatterField);
         il.Emit(OpCodes.Call, stringCreate);
         il.Emit(OpCodes.Ret);
 
@@ -1967,7 +1981,13 @@ public partial class RuntimeEmitter
         return method;
     }
 
-    private void EmitNumberToFixed(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitNumberToFixed(TypeBuilder typeBuilder, EmittedNumberRuntime numbers,
+        MethodInfo getProperty,
+        Type undefinedType,
+        MethodInfo toIntegerOrInfinity,
+        MethodInfo createException,
+        ConstructorInfo typeErrorCtor,
+        ConstructorInfo rangeErrorCtor)
     {
         var method = typeBuilder.DefineMethod(
             "NumberToFixed",
@@ -1975,7 +1995,7 @@ public partial class RuntimeEmitter
             _types.String,
             [_types.Object, _types.Object]
         );
-        runtime.NumberToFixed = method;
+        numbers.ToFixed = method;
 
         var il = method.GetILGenerator();
         var valueLocal = il.DeclareLocal(_types.Double);
@@ -1995,12 +2015,12 @@ public partial class RuntimeEmitter
         var primValLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "__primitiveValue");
-        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, getProperty);
         il.Emit(OpCodes.Stloc, primValLocal);
         il.Emit(OpCodes.Ldloc, primValLocal);
         il.Emit(OpCodes.Brfalse, notBoxedLabel);
         il.Emit(OpCodes.Ldloc, primValLocal);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, undefinedType);
         il.Emit(OpCodes.Brtrue, notBoxedLabel);
         il.Emit(OpCodes.Ldloc, primValLocal);
         il.Emit(OpCodes.Stloc, receiverLocal);
@@ -2008,7 +2028,7 @@ public partial class RuntimeEmitter
 
         // Number.prototype's [[NumberData]] is +0 per ECMA-262 §21.1.3.
         il.Emit(OpCodes.Ldloc, receiverLocal);
-        il.Emit(OpCodes.Ldsfld, runtime.NumberPrototypeField);
+        il.Emit(OpCodes.Ldsfld, numbers.PrototypeField);
         var notNumberPrototypeLabel = il.DefineLabel();
         il.Emit(OpCodes.Bne_Un, notNumberPrototypeLabel);
         il.Emit(OpCodes.Ldc_R8, 0.0);
@@ -2029,14 +2049,14 @@ public partial class RuntimeEmitter
         il.MarkLabel(notDoubleLabel);
         // Per ECMA-262 21.1.3.3 step 1, thisNumberValue throws TypeError when
         // receiver is neither a Number primitive nor a Number-marker $TSObject.
-        GuestErrorEmitter.ThrowTypeError(il, runtime, "Number.prototype.toFixed requires a Number this value");
+        GuestErrorEmitter.ThrowError(il, createException, typeErrorCtor, "Number.prototype.toFixed requires a Number this value");
 
         // ECMA-262 21.1.3.3: digits = ToIntegerOrInfinity(digits, 0). Coerces
         // bool/string via ToNumber.
         il.MarkLabel(getDigitsLabel);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Call, runtime.ToIntegerOrInfinity);
+        il.Emit(OpCodes.Call, toIntegerOrInfinity);
         il.Emit(OpCodes.Stloc, digitsLocal);
 
         // Validate digits 0-100
@@ -2047,25 +2067,31 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Bge, notNegativeLabel);
         // ECMA-262 21.1.3.3 step 3: range error for f < 0 or f > 100. Use $RangeError
         // (not bare Exception) so `assert.throws(RangeError, …)` succeeds.
-        GuestErrorEmitter.ThrowRangeError(il, runtime, "toFixed() digits argument must be between 0 and 100");
+        GuestErrorEmitter.ThrowError(il, createException, rangeErrorCtor, "toFixed() digits argument must be between 0 and 100");
 
         il.MarkLabel(notNegativeLabel);
         il.Emit(OpCodes.Ldloc, digitsLocal);
         il.Emit(OpCodes.Ldc_I4, 100);
         var notTooLargeLabel = il.DefineLabel();
         il.Emit(OpCodes.Ble, notTooLargeLabel);
-        GuestErrorEmitter.ThrowRangeError(il, runtime, "toFixed() digits argument must be between 0 and 100");
+        GuestErrorEmitter.ThrowError(il, createException, rangeErrorCtor, "toFixed() digits argument must be between 0 and 100");
 
         // The typed formatter shares the exact rounding implementation with
         // stable literal-digit calls after the observable coercion above.
         il.MarkLabel(notTooLargeLabel);
         il.Emit(OpCodes.Ldloc, valueLocal);
         il.Emit(OpCodes.Ldloc, digitsLocal);
-        il.Emit(OpCodes.Call, runtime.NumberToFixedDouble);
+        il.Emit(OpCodes.Call, numbers.ToFixedDouble);
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitNumberToPrecision(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitNumberToPrecision(TypeBuilder typeBuilder, EmittedNumberRuntime numbers,
+        MethodInfo getProperty,
+        Type undefinedType,
+        MethodInfo toIntegerOrInfinity,
+        MethodInfo createException,
+        ConstructorInfo typeErrorCtor,
+        ConstructorInfo rangeErrorCtor)
     {
         var method = typeBuilder.DefineMethod(
             "NumberToPrecision",
@@ -2073,7 +2099,7 @@ public partial class RuntimeEmitter
             _types.String,
             [_types.Object, _types.Object]
         );
-        runtime.NumberToPrecision = method;
+        numbers.ToPrecision = method;
 
         var il = method.GetILGenerator();
         var valueLocal = il.DeclareLocal(_types.Double);
@@ -2096,12 +2122,12 @@ public partial class RuntimeEmitter
         var primValLocalP = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "__primitiveValue");
-        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, getProperty);
         il.Emit(OpCodes.Stloc, primValLocalP);
         il.Emit(OpCodes.Ldloc, primValLocalP);
         il.Emit(OpCodes.Brfalse, notBoxedPLabel);
         il.Emit(OpCodes.Ldloc, primValLocalP);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, undefinedType);
         il.Emit(OpCodes.Brtrue, notBoxedPLabel);
         il.Emit(OpCodes.Ldloc, primValLocalP);
         il.Emit(OpCodes.Stloc, receiverLocal);
@@ -2109,7 +2135,7 @@ public partial class RuntimeEmitter
 
         // Number.prototype's [[NumberData]] is +0 per ECMA-262 §21.1.3.
         il.Emit(OpCodes.Ldloc, receiverLocal);
-        il.Emit(OpCodes.Ldsfld, runtime.NumberPrototypeField);
+        il.Emit(OpCodes.Ldsfld, numbers.PrototypeField);
         var notNumberPrototypePLabel = il.DefineLabel();
         il.Emit(OpCodes.Bne_Un, notNumberPrototypePLabel);
         il.Emit(OpCodes.Ldc_R8, 0.0);
@@ -2130,7 +2156,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(notDoubleLabel);
         // Per ECMA-262 21.1.3.5 step 1, thisNumberValue throws TypeError when
         // receiver is neither a Number primitive nor a Number-marker $TSObject.
-        GuestErrorEmitter.ThrowTypeError(il, runtime, "Number.prototype.toPrecision requires a Number this value");
+        GuestErrorEmitter.ThrowError(il, createException, typeErrorCtor, "Number.prototype.toPrecision requires a Number this value");
 
         // Check if precision is null OR $Undefined - if so, return value.ToString().
         // ECMA-262 21.1.3.5 step 2: "If precision is undefined, return ! ToString(x)".
@@ -2141,7 +2167,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Brfalse, defaultToStringLabel);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, undefinedType);
         il.Emit(OpCodes.Brtrue, defaultToStringLabel);
         il.Emit(OpCodes.Br, afterPrecisionLabel);
 
@@ -2158,7 +2184,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(afterPrecisionLabel);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Call, runtime.ToIntegerOrInfinity);
+        il.Emit(OpCodes.Call, toIntegerOrInfinity);
         il.Emit(OpCodes.Stloc, precisionLocal);
 
         // ECMA-262 21.1.3.5 step 5: handle NaN/Infinity BEFORE precision range check.
@@ -2194,14 +2220,14 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_1);
         var notTooSmallLabel = il.DefineLabel();
         il.Emit(OpCodes.Bge, notTooSmallLabel);
-        GuestErrorEmitter.ThrowRangeError(il, runtime, "toPrecision() argument must be between 1 and 100");
+        GuestErrorEmitter.ThrowError(il, createException, rangeErrorCtor, "toPrecision() argument must be between 1 and 100");
 
         il.MarkLabel(notTooSmallLabel);
         il.Emit(OpCodes.Ldloc, precisionLocal);
         il.Emit(OpCodes.Ldc_I4, 100);
         var notTooLargeLabel = il.DefineLabel();
         il.Emit(OpCodes.Ble, notTooLargeLabel);
-        GuestErrorEmitter.ThrowRangeError(il, runtime, "toPrecision() argument must be between 1 and 100");
+        GuestErrorEmitter.ThrowError(il, createException, rangeErrorCtor, "toPrecision() argument must be between 1 and 100");
 
         il.MarkLabel(notTooLargeLabel);
         il.Emit(OpCodes.Br, formatLabel);
@@ -2343,7 +2369,15 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitNumberToExponential(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitNumberToExponential(TypeBuilder typeBuilder, EmittedNumberRuntime numbers,
+        MethodInfo getProperty,
+        Type undefinedType,
+        MethodInfo toIntegerOrInfinity,
+        Type objectType,
+        Type symbolType,
+        MethodInfo createException,
+        ConstructorInfo typeErrorCtor,
+        ConstructorInfo rangeErrorCtor)
     {
         var method = typeBuilder.DefineMethod(
             "NumberToExponential",
@@ -2351,7 +2385,7 @@ public partial class RuntimeEmitter
             _types.String,
             [_types.Object, _types.Object]
         );
-        runtime.NumberToExponential = method;
+        numbers.ToExponential = method;
 
         var il = method.GetILGenerator();
         var valueLocal = il.DeclareLocal(_types.Double);
@@ -2373,12 +2407,12 @@ public partial class RuntimeEmitter
         var primValLocalE = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "__primitiveValue");
-        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, getProperty);
         il.Emit(OpCodes.Stloc, primValLocalE);
         il.Emit(OpCodes.Ldloc, primValLocalE);
         il.Emit(OpCodes.Brfalse, notBoxedELabel);
         il.Emit(OpCodes.Ldloc, primValLocalE);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, undefinedType);
         il.Emit(OpCodes.Brtrue, notBoxedELabel);
         il.Emit(OpCodes.Ldloc, primValLocalE);
         il.Emit(OpCodes.Stloc, receiverLocal);
@@ -2386,7 +2420,7 @@ public partial class RuntimeEmitter
 
         // Number.prototype's [[NumberData]] is +0 per ECMA-262 §21.1.3.
         il.Emit(OpCodes.Ldloc, receiverLocal);
-        il.Emit(OpCodes.Ldsfld, runtime.NumberPrototypeField);
+        il.Emit(OpCodes.Ldsfld, numbers.PrototypeField);
         var notNumberPrototypeELabel = il.DefineLabel();
         il.Emit(OpCodes.Bne_Un, notNumberPrototypeELabel);
         il.Emit(OpCodes.Ldc_R8, 0.0);
@@ -2407,7 +2441,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(notDoubleLabel);
         // Per ECMA-262 21.1.3.2 step 1, thisNumberValue throws TypeError when
         // receiver is neither a Number primitive nor a Number-marker $TSObject.
-        GuestErrorEmitter.ThrowTypeError(il, runtime, "Number.prototype.toExponential requires a Number this value");
+        GuestErrorEmitter.ThrowError(il, createException, typeErrorCtor, "Number.prototype.toExponential requires a Number this value");
 
         // Unused but keeps original valueLocal init for this branch (unreachable).
         il.Emit(OpCodes.Ldc_R8, double.NaN);
@@ -2428,9 +2462,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Brfalse, notSymbolDigitsLabel);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, runtime.TSSymbolType);
+        il.Emit(OpCodes.Isinst, symbolType);
         il.Emit(OpCodes.Brfalse, notSymbolDigitsLabel);
-        GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot convert a Symbol value to a number");
+        GuestErrorEmitter.ThrowError(il, createException, typeErrorCtor, "Cannot convert a Symbol value to a number");
         il.MarkLabel(notSymbolDigitsLabel);
 
         // Pre-coerce fractionDigits via ToIntegerOrInfinity unless it's
@@ -2446,12 +2480,12 @@ public partial class RuntimeEmitter
         var checkTSObjectLabel = il.DefineLabel();
         il.Emit(OpCodes.Brtrue, checkTSObjectLabel);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, runtime.TSObjectType);
+        il.Emit(OpCodes.Isinst, objectType);
         il.Emit(OpCodes.Brfalse, skipPreCoerceLabel);
         il.MarkLabel(checkTSObjectLabel);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Call, runtime.ToIntegerOrInfinity);
+        il.Emit(OpCodes.Call, toIntegerOrInfinity);
         il.Emit(OpCodes.Stloc, digitsLocal);
         il.MarkLabel(skipPreCoerceLabel);
 
@@ -2485,7 +2519,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(hasDigitsLabel);
         var fractionDigitsUndefinedLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, undefinedType);
         il.Emit(OpCodes.Brtrue, fractionDigitsUndefinedLabel);
 
         // Non-undefined (including null): apply ToIntegerOrInfinity. Per spec,
@@ -2494,7 +2528,7 @@ public partial class RuntimeEmitter
         // call site here always provides an arg).
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Call, runtime.ToIntegerOrInfinity);
+        il.Emit(OpCodes.Call, toIntegerOrInfinity);
         il.Emit(OpCodes.Stloc, digitsLocal);
         il.Emit(OpCodes.Br, validateDigitsLabel);
 
@@ -2562,7 +2596,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(digitsFromDoubleLabel);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldc_I4_6);
-        il.Emit(OpCodes.Call, runtime.ToIntegerOrInfinity);
+        il.Emit(OpCodes.Call, toIntegerOrInfinity);
         il.Emit(OpCodes.Stloc, digitsLocal);
 
         // Validate digits 0-100
@@ -2571,14 +2605,14 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_0);
         var notNegativeLabel = il.DefineLabel();
         il.Emit(OpCodes.Bge, notNegativeLabel);
-        GuestErrorEmitter.ThrowRangeError(il, runtime, "toExponential() argument must be between 0 and 100");
+        GuestErrorEmitter.ThrowError(il, createException, rangeErrorCtor, "toExponential() argument must be between 0 and 100");
 
         il.MarkLabel(notNegativeLabel);
         il.Emit(OpCodes.Ldloc, digitsLocal);
         il.Emit(OpCodes.Ldc_I4, 100);
         var notTooLargeLabel = il.DefineLabel();
         il.Emit(OpCodes.Ble, notTooLargeLabel);
-        GuestErrorEmitter.ThrowRangeError(il, runtime, "toExponential() argument must be between 0 and 100");
+        GuestErrorEmitter.ThrowError(il, createException, rangeErrorCtor, "toExponential() argument must be between 0 and 100");
 
         // return Regex.Replace(value.ToString($"e{digits}", InvariantCulture),
         //                      @"e([+-])0+(?=\d)", "e$1");
@@ -2761,7 +2795,14 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitNumberToStringRadix(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitNumberToStringRadix(TypeBuilder typeBuilder, EmittedNumberRuntime numbers,
+        MethodInfo getProperty,
+        Type undefinedType,
+        MethodInfo toIntegerOrInfinity,
+        MethodInfo createException,
+        ConstructorInfo typeErrorCtor,
+        ConstructorInfo rangeErrorCtor,
+        EmittedStringCoercionRuntime stringCoercion)
     {
         var method = typeBuilder.DefineMethod(
             "NumberToStringRadix",
@@ -2769,7 +2810,7 @@ public partial class RuntimeEmitter
             _types.String,
             [_types.Object, _types.Object]
         );
-        runtime.NumberToStringRadix = method;
+        numbers.ToStringRadix = method;
 
         var il = method.GetILGenerator();
         var valueLocal = il.DeclareLocal(_types.Double);
@@ -2794,12 +2835,12 @@ public partial class RuntimeEmitter
         var primValLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "__primitiveValue");
-        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, getProperty);
         il.Emit(OpCodes.Stloc, primValLocal);
         il.Emit(OpCodes.Ldloc, primValLocal);
         il.Emit(OpCodes.Brfalse, notBoxedNumLabel);
         il.Emit(OpCodes.Ldloc, primValLocal);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, undefinedType);
         il.Emit(OpCodes.Brtrue, notBoxedNumLabel);
         // Replace receiver with unwrapped primitive
         il.Emit(OpCodes.Ldloc, primValLocal);
@@ -2810,7 +2851,7 @@ public partial class RuntimeEmitter
         // whose [[NumberData]] is +0. `Number.prototype.toString()` returns "0".
         // Detect via reference-equality with the singleton dict field.
         il.Emit(OpCodes.Ldloc, receiverLocal);
-        il.Emit(OpCodes.Ldsfld, runtime.NumberPrototypeField);
+        il.Emit(OpCodes.Ldsfld, numbers.PrototypeField);
         var notNumberPrototypeLabel = il.DefineLabel();
         il.Emit(OpCodes.Bne_Un, notNumberPrototypeLabel);
         il.Emit(OpCodes.Ldc_R8, 0.0);
@@ -2832,7 +2873,7 @@ public partial class RuntimeEmitter
         // Receiver is neither a Number primitive nor a Number-marker $TSObject
         // nor the Number.prototype singleton. ECMA-262 21.1.3.6 step 1 calls
         // thisNumberValue which throws TypeError in this case.
-        GuestErrorEmitter.ThrowTypeError(il, runtime, "Number.prototype.toString requires a Number this value");
+        GuestErrorEmitter.ThrowError(il, createException, typeErrorCtor, "Number.prototype.toString requires a Number this value");
 
         // Check if radix is null
         il.MarkLabel(hasRadixLabel);
@@ -2844,7 +2885,7 @@ public partial class RuntimeEmitter
         // and uppercase "E", but JS spec wants plain decimal up to 1e21.)
         il.Emit(OpCodes.Ldloc, valueLocal);
         il.Emit(OpCodes.Box, _types.Double);
-        il.Emit(OpCodes.Call, runtime.StringCoercion.Stringify);
+        il.Emit(OpCodes.Call, stringCoercion.Stringify);
         il.Emit(OpCodes.Ret);
 
         // ECMA-262 21.1.3.6: radix coerced via ToIntegerOrInfinity (default 10).
@@ -2852,7 +2893,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(radixFromDoubleLabel);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldc_I4, 10);
-        il.Emit(OpCodes.Call, runtime.ToIntegerOrInfinity);
+        il.Emit(OpCodes.Call, toIntegerOrInfinity);
         il.Emit(OpCodes.Stloc, radixLocal);
 
         // Validate radix 2-36
@@ -2861,14 +2902,14 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_2);
         var radixValidLabel = il.DefineLabel();
         il.Emit(OpCodes.Bge, radixValidLabel);
-        GuestErrorEmitter.ThrowRangeError(il, runtime, "toString() radix must be between 2 and 36");
+        GuestErrorEmitter.ThrowError(il, createException, rangeErrorCtor, "toString() radix must be between 2 and 36");
 
         il.MarkLabel(radixValidLabel);
         il.Emit(OpCodes.Ldloc, radixLocal);
         il.Emit(OpCodes.Ldc_I4, 36);
         var radixNotTooLargeLabel = il.DefineLabel();
         il.Emit(OpCodes.Ble, radixNotTooLargeLabel);
-        GuestErrorEmitter.ThrowRangeError(il, runtime, "toString() radix must be between 2 and 36");
+        GuestErrorEmitter.ThrowError(il, createException, rangeErrorCtor, "toString() radix must be between 2 and 36");
 
         // Handle special values
         il.MarkLabel(radixNotTooLargeLabel);
@@ -2907,7 +2948,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Bne_Un, notRadix10Label);
         il.Emit(OpCodes.Ldloc, valueLocal);
         il.Emit(OpCodes.Box, _types.Double);
-        il.Emit(OpCodes.Call, runtime.StringCoercion.Stringify);
+        il.Emit(OpCodes.Call, stringCoercion.Stringify);
         il.Emit(OpCodes.Ret);
 
         // if (value == 0) return "0"
@@ -2941,7 +2982,7 @@ public partial class RuntimeEmitter
         // string intStr = ConvertIntToRadix(intPart, radix)
         il.Emit(OpCodes.Ldloc, intPartLocal);
         il.Emit(OpCodes.Ldloc, radixLocal);
-        il.Emit(OpCodes.Call, runtime.ConvertIntToRadix);
+        il.Emit(OpCodes.Call, numbers.ConvertIntToRadix);
         var intStrLocal = il.DeclareLocal(_types.String);
         il.Emit(OpCodes.Stloc, intStrLocal);
 
@@ -2960,7 +3001,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitConvertIntToRadix(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitConvertIntToRadix(TypeBuilder typeBuilder, EmittedNumberRuntime numbers)
     {
         // Helper: converts a long to string with given radix
         var method = typeBuilder.DefineMethod(
@@ -2969,7 +3010,7 @@ public partial class RuntimeEmitter
             _types.String,
             [_types.Int64, _types.Int32]
         );
-        runtime.ConvertIntToRadix = method;
+        numbers.ConvertIntToRadix = method;
 
         var il = method.GetILGenerator();
         var valueLocal = il.DeclareLocal(_types.Int64);

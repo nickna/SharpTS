@@ -202,7 +202,7 @@ public class GlobalFunctionHandler : ICallHandler
                 emitter.EmitExpression(call.Arguments[0]);
                 il.Emit(System.Reflection.Emit.OpCodes.Castclass, ctx.Types.String);
                 il.Emit(System.Reflection.Emit.OpCodes.Call,
-                    ctx.Runtime!.NumberParseIntDecimalString);
+                    ctx.Runtime!.Numbers.ParseIntDecimalString);
                 emitter.SetStackType(StackType.Double);
                 return true;
             }
@@ -220,14 +220,14 @@ public class GlobalFunctionHandler : ICallHandler
             emitter.EmitExpression(call.Arguments[0]);
             il.Emit(System.Reflection.Emit.OpCodes.Castclass, ctx.Types.String);
             il.Emit(System.Reflection.Emit.OpCodes.Ldc_I4, radix);
-            il.Emit(System.Reflection.Emit.OpCodes.Call, ctx.Runtime!.NumberParseIntString);
+            il.Emit(System.Reflection.Emit.OpCodes.Call, ctx.Runtime!.Numbers.ParseIntString);
             emitter.SetStackType(StackType.Double);
             return true;
         }
 
         if (call.Arguments.Count > 0) { emitter.EmitExpression(call.Arguments[0]); emitter.EmitBoxIfNeeded(call.Arguments[0]); } else { il.Emit(System.Reflection.Emit.OpCodes.Ldnull); }
         if (call.Arguments.Count > 1) { emitter.EmitExpression(call.Arguments[1]); emitter.EmitBoxIfNeeded(call.Arguments[1]); } else { il.Emit(System.Reflection.Emit.OpCodes.Ldc_I4, 10); il.Emit(System.Reflection.Emit.OpCodes.Box, ctx.Types.Int32); }
-        il.Emit(System.Reflection.Emit.OpCodes.Call, ctx.Runtime!.NumberParseInt);
+        il.Emit(System.Reflection.Emit.OpCodes.Call, ctx.Runtime!.Numbers.ParseInt);
         emitter.SetStackType(StackType.Double);
         return true;
     }
@@ -243,7 +243,7 @@ public class GlobalFunctionHandler : ICallHandler
     private static bool EmitParseFloat(IEmitterContext emitter, System.Reflection.Emit.ILGenerator il, CompilationContext ctx, Expr.Call call)
     {
         if (call.Arguments.Count > 0) { emitter.EmitExpression(call.Arguments[0]); emitter.EmitBoxIfNeeded(call.Arguments[0]); } else { il.Emit(System.Reflection.Emit.OpCodes.Ldnull); }
-        il.Emit(System.Reflection.Emit.OpCodes.Call, ctx.Runtime!.NumberParseFloat);
+        il.Emit(System.Reflection.Emit.OpCodes.Call, ctx.Runtime!.Numbers.ParseFloat);
         emitter.SetStackType(StackType.Double);
         return true;
     }
@@ -251,7 +251,7 @@ public class GlobalFunctionHandler : ICallHandler
     private static bool EmitIsNaN(IEmitterContext emitter, System.Reflection.Emit.ILGenerator il, CompilationContext ctx, Expr.Call call)
     {
         if (call.Arguments.Count > 0) { emitter.EmitExpression(call.Arguments[0]); emitter.EmitBoxIfNeeded(call.Arguments[0]); } else { il.Emit(System.Reflection.Emit.OpCodes.Ldnull); }
-        il.Emit(System.Reflection.Emit.OpCodes.Call, ctx.Runtime!.GlobalIsNaN);
+        il.Emit(System.Reflection.Emit.OpCodes.Call, ctx.Runtime!.Numbers.GlobalIsNaN);
         emitter.SetStackType(StackType.Boolean);
         return true;
     }
@@ -259,7 +259,7 @@ public class GlobalFunctionHandler : ICallHandler
     private static bool EmitIsFinite(IEmitterContext emitter, System.Reflection.Emit.ILGenerator il, CompilationContext ctx, Expr.Call call)
     {
         if (call.Arguments.Count > 0) { emitter.EmitExpression(call.Arguments[0]); emitter.EmitBoxIfNeeded(call.Arguments[0]); } else { il.Emit(System.Reflection.Emit.OpCodes.Ldnull); }
-        il.Emit(System.Reflection.Emit.OpCodes.Call, ctx.Runtime!.GlobalIsFinite);
+        il.Emit(System.Reflection.Emit.OpCodes.Call, ctx.Runtime!.Numbers.GlobalIsFinite);
         emitter.SetStackType(StackType.Boolean);
         return true;
     }

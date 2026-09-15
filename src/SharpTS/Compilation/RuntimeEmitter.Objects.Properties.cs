@@ -1622,8 +1622,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, _types.Double);
         il.Emit(OpCodes.Brfalse, notDoublePrimLabel);
-        il.Emit(OpCodes.Call, runtime.NumberPrototypePopulateMethod);
-        il.Emit(OpCodes.Ldsfld, runtime.NumberPrototypeField);
+        il.Emit(OpCodes.Call, runtime.Numbers.PrototypePopulateMethod);
+        il.Emit(OpCodes.Ldsfld, runtime.Numbers.PrototypeField);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, method);
         il.Emit(OpCodes.Ret);
@@ -1818,8 +1818,8 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
             il.Emit(OpCodes.Bne_Un, notDoubleLabel);
             // Lazy-populate Number.prototype with $TSFunction wrappers on first read.
-            il.Emit(OpCodes.Call, runtime.NumberPrototypePopulateMethod);
-            il.Emit(OpCodes.Ldsfld, runtime.NumberPrototypeField);
+            il.Emit(OpCodes.Call, runtime.Numbers.PrototypePopulateMethod);
+            il.Emit(OpCodes.Ldsfld, runtime.Numbers.PrototypeField);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(notDoubleLabel);
             var notBigIntLabel = il.DefineLabel();

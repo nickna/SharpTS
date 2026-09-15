@@ -771,7 +771,7 @@ public partial class RuntimeEmitter
         EmitNumberStaticCheck("EPSILON", false, 2.220446049250313e-16);
         // Methods — TODO: emit TSFunction.GetOrCreate inline once EmitNumberMethods
         // runs BEFORE EmitObjectGetOwnPropertyDescriptor (currently runs after,
-        // so runtime.NumberParseInt etc. are null at this emit site).
+        // so runtime.Numbers.ParseInt etc. are null at this emit site).
         EmitNumberStaticCheck("parseInt", true);
         EmitNumberStaticCheck("parseFloat", true);
         EmitNumberStaticCheck("isNaN", true);
