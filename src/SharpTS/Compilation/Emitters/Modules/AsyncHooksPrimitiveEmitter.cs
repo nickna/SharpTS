@@ -24,7 +24,7 @@ public sealed class AsyncHooksPrimitiveEmitter : IBuiltInModuleEmitter
 
         var ctx = emitter.Context;
         var il = ctx.IL;
-        il.Emit(OpCodes.Newobj, ctx.Runtime!.TSAsyncLocalStorageCtor);
+        il.Emit(OpCodes.Newobj, ctx.Runtime!.RequireAsyncLocalStorage().Ctor);
         return true;
     }
 

@@ -705,6 +705,15 @@ Signal dictionaries, cancellation sources, listener order, namespace identity, a
 are unchanged. BCL reflection and body locals remain scoped; NodeStreams still owns its abort
 callback metadata. No migrated flat aliases or Abort emitter-held copies remain.
 
+AsyncLocalStorage uses optional `EmittedAsyncLocalStorageRuntime`, selected by
+`UsesAsyncLocalStorage`, for its checked constructor declaration. The class is still emitted
+after TSFunction and created before family completion. Four emission helpers take explicit
+component/function dependencies; the primitive factory reads the constructor through its checked
+owner. The class builder, AsyncLocal field, enabled field, five method builders, and BCL reflection
+handles remain scoped construction locals. Run/Exit keep their existing try/finally restoration,
+callback casts, disabled behavior, and async context propagation. The TypeScript facade and
+standalone deployment are unchanged; no flat constructor alias or emitter-held copy remains.
+
 During emission, each handle becomes readable as soon as its declaration is assigned, so forward
 references do not require a method body to exist yet. An early read names the missing declaration.
 Completion is an orchestration boundary, not an IL verifier: body emission and type finalization
