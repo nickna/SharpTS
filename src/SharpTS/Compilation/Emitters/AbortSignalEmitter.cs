@@ -23,7 +23,7 @@ public sealed class AbortSignalEmitter : ITypeEmitterStrategy
         switch (methodName)
         {
             case "throwIfAborted":
-                il.Emit(OpCodes.Call, ctx.Runtime!.AbortSignalThrowIfAborted);
+                il.Emit(OpCodes.Call, ctx.Runtime!.RequireAbort().SignalThrowIfAborted);
                 // throwIfAborted returns void, push undefined
                 il.Emit(OpCodes.Ldnull);
                 return true;
@@ -31,13 +31,13 @@ public sealed class AbortSignalEmitter : ITypeEmitterStrategy
             case "addEventListener":
                 EmitStringArgument(emitter, arguments, 0);
                 EmitListenerArgument(emitter, arguments, 1);
-                il.Emit(OpCodes.Call, ctx.Runtime!.AbortSignalAddEventListener);
+                il.Emit(OpCodes.Call, ctx.Runtime!.RequireAbort().SignalAddEventListener);
                 return true;
 
             case "removeEventListener":
                 EmitStringArgument(emitter, arguments, 0);
                 EmitListenerArgument(emitter, arguments, 1);
-                il.Emit(OpCodes.Call, ctx.Runtime!.AbortSignalRemoveEventListener);
+                il.Emit(OpCodes.Call, ctx.Runtime!.RequireAbort().SignalRemoveEventListener);
                 return true;
 
             default:
@@ -60,16 +60,16 @@ public sealed class AbortSignalEmitter : ITypeEmitterStrategy
         switch (propertyName)
         {
             case "aborted":
-                il.Emit(OpCodes.Call, ctx.Runtime!.AbortSignalGetAborted);
+                il.Emit(OpCodes.Call, ctx.Runtime!.RequireAbort().SignalGetAborted);
                 il.Emit(OpCodes.Box, ctx.Types.Boolean);
                 return true;
 
             case "reason":
-                il.Emit(OpCodes.Call, ctx.Runtime!.AbortSignalGetReason);
+                il.Emit(OpCodes.Call, ctx.Runtime!.RequireAbort().SignalGetReason);
                 return true;
 
             case "onabort":
-                il.Emit(OpCodes.Call, ctx.Runtime!.AbortSignalGetOnAbort);
+                il.Emit(OpCodes.Call, ctx.Runtime!.RequireAbort().SignalGetOnAbort);
                 return true;
 
             default:
@@ -98,7 +98,7 @@ public sealed class AbortSignalEmitter : ITypeEmitterStrategy
         var resultTemp = il.DeclareLocal(ctx.Types.Object);
         il.Emit(OpCodes.Stloc, resultTemp);
 
-        il.Emit(OpCodes.Call, ctx.Runtime!.AbortSignalSetOnAbort);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireAbort().SignalSetOnAbort);
 
         // Restore value on stack
         il.Emit(OpCodes.Ldloc, resultTemp);

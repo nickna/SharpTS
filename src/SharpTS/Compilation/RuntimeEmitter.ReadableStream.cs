@@ -1092,7 +1092,7 @@ public partial class RuntimeEmitter
         // In compiled mode, AbortSignal is stored as a Dictionary<string,
         // object?> with `_token` / `_reason` / `_reasonSet` keys (see
         // RuntimeEmitter.AbortController.cs). Dispatch through the existing
-        // $Runtime.AbortSignalGetAborted / AbortSignalGetReason helpers
+        // $Runtime.RequireAbort().SignalGetAborted / AbortSignalGetReason helpers
         // which understand that layout. These helpers cast the signal to
         // Dictionary, so a non-dict signal would InvalidCastException —
         // guard with an isinst check first.
@@ -1105,12 +1105,12 @@ public partial class RuntimeEmitter
 
         // if (!AbortSignalGetAborted(signal)) goto signalOkLabel
         il.Emit(OpCodes.Ldloc, signalLocal);
-        il.Emit(OpCodes.Call, runtime.AbortSignalGetAborted);
+        il.Emit(OpCodes.Call, runtime.RequireAbort().SignalGetAborted);
         il.Emit(OpCodes.Brfalse, signalOkLabel);
 
         // Aborted. Extract reason via the helper.
         il.Emit(OpCodes.Ldloc, signalLocal);
-        il.Emit(OpCodes.Call, runtime.AbortSignalGetReason);
+        il.Emit(OpCodes.Call, runtime.RequireAbort().SignalGetReason);
         il.Emit(OpCodes.Stloc, reasonLocal);
 
         // writer.abort(reason) — fire-and-forget (wrap in try/catch so a
@@ -1421,7 +1421,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
         il.Emit(OpCodes.Brfalse, notAbortedLabel);
         il.Emit(OpCodes.Ldloc, signalLocal);
-        il.Emit(OpCodes.Call, runtime.AbortSignalGetAborted);
+        il.Emit(OpCodes.Call, runtime.RequireAbort().SignalGetAborted);
         il.Emit(OpCodes.Brtrue, abortLabel);
         il.MarkLabel(notAbortedLabel);
 

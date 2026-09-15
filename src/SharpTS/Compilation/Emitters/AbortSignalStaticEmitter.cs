@@ -26,7 +26,7 @@ public sealed class AbortSignalStaticEmitter : IStaticTypeEmitterStrategy
                 {
                     il.Emit(OpCodes.Ldnull);
                 }
-                il.Emit(OpCodes.Call, ctx.Runtime!.AbortSignalAbort);
+                il.Emit(OpCodes.Call, ctx.Runtime!.RequireAbort().SignalAbort);
                 return true;
 
             case "timeout":
@@ -41,7 +41,7 @@ public sealed class AbortSignalStaticEmitter : IStaticTypeEmitterStrategy
                 {
                     il.Emit(OpCodes.Ldc_R8, 0.0);
                 }
-                il.Emit(OpCodes.Call, ctx.Runtime!.AbortSignalTimeout);
+                il.Emit(OpCodes.Call, ctx.Runtime!.RequireAbort().SignalTimeout);
                 return true;
 
             case "any":
@@ -55,7 +55,7 @@ public sealed class AbortSignalStaticEmitter : IStaticTypeEmitterStrategy
                 {
                     il.Emit(OpCodes.Ldnull);
                 }
-                il.Emit(OpCodes.Call, ctx.Runtime!.AbortSignalAny);
+                il.Emit(OpCodes.Call, ctx.Runtime!.RequireAbort().SignalAny);
                 return true;
 
             default:

@@ -1588,32 +1588,21 @@ public class EmittedRuntime
 
     // Value-position namespace singletons (#224). Null when the matching
     // feature flag is off — EmitVariable guards on the populate method.
-    public FieldBuilder? AbortSignalNamespaceField { get; set; }
-    public MethodBuilder? AbortSignalNamespacePopulate { get; set; }
     public FieldBuilder? IntlNamespaceField { get; set; }
     public MethodBuilder? IntlNamespacePopulate { get; set; }
 
-    // $AbortController / $AbortSignal support
-    public MethodBuilder FireAbortEvent { get; set; } = null!;
-    public MethodBuilder CreateAbortController { get; set; } = null!;
-    public MethodBuilder AbortControllerAbort { get; set; } = null!;
-    public MethodBuilder AbortControllerGetSignal { get; set; } = null!;
-    public MethodBuilder AbortSignalGetAborted { get; set; } = null!;
-    public MethodBuilder AbortSignalGetReason { get; set; } = null!;
-    public MethodBuilder AbortSignalGetOnAbort { get; set; } = null!;
-    public MethodBuilder AbortSignalSetOnAbort { get; set; } = null!;
-    public MethodBuilder AbortSignalThrowIfAborted { get; set; } = null!;
-    public MethodBuilder AbortSignalAddEventListener { get; set; } = null!;
-    public MethodBuilder AbortSignalRemoveEventListener { get; set; } = null!;
-    // #985: `__this`-first wrappers so a dynamically-typed (`any`) signal receiver can
-    // resolve addEventListener/removeEventListener/throwIfAborted as callable methods
-    // via the GetProperty $TSFunction-wrapper path (mirrors hasOwnProperty/isPrototypeOf).
-    public MethodBuilder AbortSignalAddEventListenerThis { get; set; } = null!;
-    public MethodBuilder AbortSignalRemoveEventListenerThis { get; set; } = null!;
-    public MethodBuilder AbortSignalThrowIfAbortedThis { get; set; } = null!;
-    public MethodBuilder AbortSignalAbort { get; set; } = null!;
-    public MethodBuilder AbortSignalTimeout { get; set; } = null!;
-    public MethodBuilder AbortSignalAny { get; set; } = null!;
+    /// <summary>AbortController/AbortSignal metadata, or null when the feature is omitted.</summary>
+    public EmittedAbortRuntime? Abort { get; private set; }
+
+    internal void BeginAbortEmission()
+    {
+        if (Abort is not null)
+            throw new InvalidOperationException("Abort metadata emission has already started.");
+        Abort = new EmittedAbortRuntime();
+    }
+
+    public EmittedAbortRuntime RequireAbort() => Abort
+        ?? throw new InvalidOperationException("Abort runtime was not enabled for this compilation.");
 
     // Intl constructor factories (instance methods dispatch reflectively on the
     // returned SharpTSIntl* objects and need no emitted stubs)

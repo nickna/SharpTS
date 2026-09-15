@@ -2176,10 +2176,10 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
     /// </summary>
     protected bool TryEmitNamespaceSingleton(string name)
     {
-        if (name == "AbortSignal" && Ctx.Runtime!.AbortSignalNamespacePopulate != null)
+        if (name == "AbortSignal" && Ctx.Runtime!.Abort is not null)
         {
-            IL.Emit(OpCodes.Call, Ctx.Runtime!.AbortSignalNamespacePopulate);
-            IL.Emit(OpCodes.Ldsfld, Ctx.Runtime!.AbortSignalNamespaceField!);
+            IL.Emit(OpCodes.Call, Ctx.Runtime!.RequireAbort().NamespacePopulate);
+            IL.Emit(OpCodes.Ldsfld, Ctx.Runtime!.RequireAbort().NamespaceField);
             SetStackUnknown();
             return true;
         }

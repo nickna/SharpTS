@@ -117,7 +117,7 @@ public class EmittedWebStreamRuntimeTests
             var streams = runtime.RequireWebStreams();
             AssertFrozen(streams);
             Assert.NotNull(runtime.Promise);
-            Assert.NotNull(runtime.AbortSignalGetAborted);
+            Assert.NotNull(runtime.RequireAbort().SignalGetAborted);
             Assert.Equal("$ReadableStream", streams.ReadableType.Name);
             Assert.Equal("$WritableStream", streams.WritableType.Name);
             Assert.Equal("$TransformStream", streams.TransformType.Name);

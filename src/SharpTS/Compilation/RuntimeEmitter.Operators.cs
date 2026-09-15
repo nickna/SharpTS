@@ -588,11 +588,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
         il.Emit(OpCodes.Brfalse, notDictRhsLabel);
 
-        if (runtime.AbortSignalNamespaceField != null)
+        if (runtime.Abort is not null)
         {
             var lhsDictLocal = il.DeclareLocal(_types.DictionaryStringObject);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Ldsfld, runtime.AbortSignalNamespaceField);
+            il.Emit(OpCodes.Ldsfld, runtime.RequireAbort().NamespaceField);
             il.Emit(OpCodes.Bne_Un, falseLabel);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
