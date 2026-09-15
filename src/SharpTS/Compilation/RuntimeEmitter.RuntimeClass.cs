@@ -1548,7 +1548,7 @@ public partial class RuntimeEmitter
         // Readline module methods — gated on UsesReadline (flag was already
         // detected via `import 'readline'` but the call site used to ignore it).
         if (_features.UsesReadline)
-            EmitReadlineMethods(typeBuilder, runtime);
+            EmitReadlineMethods(typeBuilder, runtime.RequireReadline());
         // Child process module methods — gated on UsesChildProcess.
         if (_features.UsesChildProcess)
             EmitChildProcessMethods(typeBuilder, runtime);
