@@ -496,7 +496,7 @@ public partial class RuntimeEmitter
             _types.Int32,
             FieldAttributes.Private | FieldAttributes.Static
         );
-        runtime.ConsoleGroupLevelField = consoleGroupLevelField;
+        runtime.Console.GroupLevelField = consoleGroupLevelField;
 
         // A generated program owns only the child processes it starts. This registry is
         // private to the generated $Runtime type, so parallel worktrees/processes cannot
@@ -778,18 +778,18 @@ public partial class RuntimeEmitter
         // ToNumber/GetProperty are emitted) so the spec-form String.raw can
         // resolve template.raw properties + ToString-coerce substitutions.
         // Format specifier helpers (must be emitted before ConsoleLog/ConsoleLogMultiple which call them)
-        EmitHasFormatSpecifiers(typeBuilder, runtime);
-        EmitFormatSingleArg(typeBuilder, runtime);
+        EmitHasFormatSpecifiers(typeBuilder, runtime.Console);
+        EmitFormatSingleArg(typeBuilder, runtime.Console);
         EmitFormatAsInteger(typeBuilder, runtime);
         EmitFormatAsFloat(typeBuilder, runtime);
         EmitFormatAsJson(typeBuilder, runtime);
         EmitFormatConsoleArgs(typeBuilder, runtime);
         // GetConsoleIndent must be emitted before ConsoleLog/ConsoleLogMultiple which call it
-        EmitGetConsoleIndent(typeBuilder, runtime);
+        EmitGetConsoleIndent(typeBuilder, runtime.Console);
         EmitConsoleLog(typeBuilder, runtime);
         // JoinWithStringify must be emitted before ConsoleLogMultiple which uses it
         EmitJoinWithStringify(typeBuilder, runtime);
-        EmitConsoleLogMultiple(typeBuilder, runtime);
+        EmitConsoleLogMultiple(typeBuilder, runtime.Console);
         // Exception helpers must come before ToNumber, since ToNumber emits a
         // CreateException + TSTypeErrorCtor throw on Symbol receivers per
         // ECMA-262 7.1.4 step 2. Without this earlier emit, runtime.CreateException

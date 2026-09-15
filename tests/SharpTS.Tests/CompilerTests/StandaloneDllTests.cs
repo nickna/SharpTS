@@ -1319,6 +1319,140 @@ public class StandaloneDllTests
         finally { CleanupTempDir(tempDir); }
     }
 
+    public static IEnumerable<object[]> ConsoleMetadataPrograms =>
+    [
+        new object[]
+        {
+            """
+            console.log(); console.info('info', 1); console.debug('debug');
+            console.log(null, undefined, true, [1,2], {a:3});
+            console.clear(); console.log('after clear');
+            globalThis.console.log('global', 4);
+            """,
+            "\ninfo 1\ndebug\nnull undefined true [1, 2] { a: 3 }\nafter clear\nglobal 4\n",
+            ""
+        },
+        new object[]
+        {
+            """
+            console.log('Hello %s, %d %i %f', 'world', 42.7, -3.9, 3.5);
+            console.log('JSON %j; object %o', {a:1}, {b:2});
+            console.log('percent %% %s', 'ok'); console.log('missing %s %s', 'one');
+            console.log('extra %s', 'one', 'two');
+            """,
+            "Hello world, 42 -3 3.5\nJSON {\"a\":1}; object { b: 2 }\npercent % ok\nmissing one %s\nextra one two\n",
+            ""
+        },
+        new object[]
+        {
+            """
+            console.count(); console.count(); console.countReset(); console.count();
+            console.count('x'); console.count('x'); console.countReset('x'); console.count('x');
+            console.group('outer'); console.log('one'); console.groupCollapsed('inner', 2);
+            console.log('two'); console.groupEnd(); console.log('three'); console.groupEnd();
+            console.groupEnd(); console.log('done');
+            """,
+            "default: 1\ndefault: 2\ndefault: 1\nx: 1\nx: 2\nx: 1\nouter\n  one\ninner 2\n    two\n  three\ndone\n",
+            ""
+        },
+        new object[]
+        {
+            """
+            console.error(); console.error('error', 2); console.warn('warn');
+            console.assert(true, 'hidden'); console.assert(false); console.assert(false, 'failure', 3);
+            console.log('stdout');
+            """,
+            "stdout\n",
+            "\nerror 2\nwarn\nAssertion failed\nAssertion failed: failure 3\n"
+        },
+        new object[]
+        {
+            """
+            console.table([{a:1}, {a:2}]); console.dir({name:'test', value:42});
+            console.table([]); console.log('inspected');
+            """,
+            "+---------+----------------------+\n| (index) | Value                |\n+---------+----------------------+\n|       0 | { a: 1 }             |\n|       1 | { a: 2 }             |\n+---------+----------------------+\n{ name: 'test', value: 42 }\n(empty array)\ninspected\n",
+            ""
+        },
+        new object[]
+        {
+            """
+            async function run(): Promise<void> {
+              console.log('await', await Promise.resolve(7), 'done');
+              console.error('async', await Promise.resolve('err'));
+              console.group('group', await Promise.resolve(2)); console.log('inside'); console.groupEnd();
+            }
+            run();
+            """,
+            "await 7 done\ngroup 2\n  inside\n",
+            "async err\n"
+        },
+        new object[]
+        {
+            """
+            function* values(): Generator<number, void, string> {
+              console.log('yield', yield 3, 'done'); console.warn('warn', yield 4);
+            }
+            const it = values(); console.log(it.next().value); console.log(it.next('ok').value);
+            console.log(it.next('end').done);
+            """,
+            "3\nyield ok done\n4\ntrue\n",
+            "warn end\n"
+        },
+    ];
+
+    [Theory]
+    [MemberData(nameof(ConsoleMetadataPrograms))]
+    public void Isolated_ConsoleMetadata_PreservesOutputStreamsAndSuspendedArguments(
+        string source, string expectedOutput, string expectedError)
+    {
+        Assert.Empty(TestHarness.CompileAndVerifyOnly(source));
+        var (tempDir, dllPath) = CompileStandalone(source);
+        try
+        {
+            Assert.DoesNotContain("SharpTS", GetAssemblyReferences(dllPath));
+            Assert.False(File.Exists(Path.Combine(tempDir, "SharpTS.dll")));
+            Assert.Equal(expectedOutput, ExecuteCompiledDllIsolated(dllPath, timeoutMs: 15000,
+                verifyStandardError: error => Assert.Equal(expectedError, error)));
+        }
+        finally
+        {
+            CleanupTempDir(tempDir);
+        }
+    }
+
+    [Fact]
+    public void Isolated_ConsoleMetadata_PreservesTimerLifecycleAndTraceOutput()
+    {
+        const string source = """
+            console.time('timer'); console.timeLog('timer'); console.timeEnd('timer');
+            console.timeLog('timer'); console.timeEnd('timer');
+            console.trace('single'); console.trace('multiple', 2); console.log('done');
+            """;
+        Assert.Empty(TestHarness.CompileAndVerifyOnly(source));
+        var (tempDir, dllPath) = CompileStandalone(source);
+        try
+        {
+            Assert.DoesNotContain("SharpTS", GetAssemblyReferences(dllPath));
+            Assert.False(File.Exists(Path.Combine(tempDir, "SharpTS.dll")));
+            var output = ExecuteCompiledDllIsolated(dllPath, timeoutMs: 15000,
+                verifyStandardError: error => Assert.Empty(error));
+            var lines = output.Split('\n');
+            Assert.Matches(@"^timer: [0-9]+(?:[.,][0-9]+)?ms$", lines[0]);
+            Assert.Matches(@"^timer: [0-9]+(?:[.,][0-9]+)?ms$", lines[1]);
+            Assert.Equal(2, lines.Count(line => line.StartsWith("timer:", StringComparison.Ordinal)));
+            Assert.Contains("Trace: single\n", output);
+            Assert.Contains("Trace: multiple 2\n", output);
+            Assert.Contains("ConsoleTrace(", output);
+            Assert.Contains("ConsoleTraceMultiple(", output);
+            Assert.EndsWith("done\n", output);
+        }
+        finally
+        {
+            CleanupTempDir(tempDir);
+        }
+    }
+
     public static IEnumerable<object[]> OsMetadataPrograms
     {
         get
@@ -3045,7 +3179,8 @@ public class StandaloneDllTests
         string dllPath,
         int timeoutMs,
         string? timeoutStartsAfterOutput = null,
-        int readinessTimeoutMs = 15000)
+        int readinessTimeoutMs = 15000,
+        Action<string>? verifyStandardError = null)
     {
         var workingDir = Path.GetDirectoryName(dllPath)!;
         var psi = new ProcessStartInfo("dotnet", dllPath)
@@ -3123,6 +3258,7 @@ public class StandaloneDllTests
                 $"Compiled standalone probe exited with code {process.ExitCode}. Stderr: {error}");
         }
 
+        verifyStandardError?.Invoke(error.Replace("\r\n", "\n"));
         return output.Replace("\r\n", "\n");
     }
 

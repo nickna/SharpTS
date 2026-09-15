@@ -38,7 +38,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
         return _helpers.TryEmitConsoleMethod(
             call,
             arg => { EmitExpression(arg); EnsureBoxed(); },
-            Ctx.Runtime!);
+            Ctx.Runtime!.Console);
     }
 
     void IEmitterContext.EmitFetchCall(List<Expr> arguments) => EmitFetchCall(arguments);

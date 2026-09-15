@@ -619,6 +619,16 @@ remain scoped construction locals. Memory queries and the existing compiled load
 network-interface behavior, emitted signatures, feature selection, and standalone dependencies are
 unchanged. No flat OS aliases remain.
 
+Console uses required `EmittedConsoleRuntime` for logging, formatting, assertions, inspection,
+grouping, tracing, timers, and counters. Its 32 checked declarations include the early group-level
+field and the later timer/count dictionary fields. Those dictionaries remain lazy guest state;
+their declaration order and emitted initialization are unchanged. Ten console-only emission helpers
+and the six shared call helpers accept the component directly, including the call path used by async
+and generator expressions. Completion validates every declaration after runtime finalization and
+freezes writes. Shared coercion and util dependencies remain on the runtime until their own migration;
+method-local BCL lookups remain construction locals. No flat console aliases or emitter-held copies
+remain. Output streams, formatting, argument suspension, and standalone behavior are unchanged.
+
 During emission, each handle becomes readable as soon as its declaration is assigned, so forward
 references do not require a method body to exist yet. An early read names the missing declaration.
 Completion is an orchestration boundary, not an IL verifier: body emission and type finalization

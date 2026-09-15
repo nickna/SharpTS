@@ -1448,7 +1448,7 @@ public class StateMachineEmitHelpers
     public bool TryEmitConsoleMethod(
         SharpTS.Parsing.Expr.Call call,
         Action<SharpTS.Parsing.Expr> emitArgumentBoxed,
-        EmittedRuntime runtime)
+        EmittedConsoleRuntime console)
     {
         var methodName = GetConsoleMethodName(call);
         if (methodName == null)
@@ -1460,19 +1460,19 @@ public class StateMachineEmitHelpers
             case "info":
             case "debug":
                 // info and debug are aliases for log - emit inline since TryEmitConsoleLog only checks for "log"
-                EmitConsoleLogInline(call, emitArgumentBoxed, runtime.ConsoleLog, runtime.ConsoleLogMultiple);
+                EmitConsoleLogInline(call, emitArgumentBoxed, console.Log, console.LogMultiple);
                 return true;
 
             case "error":
-                EmitConsoleOutputMethod(call, emitArgumentBoxed, runtime.ConsoleError, runtime.ConsoleErrorMultiple);
+                EmitConsoleOutputMethod(call, emitArgumentBoxed, console.Error, console.ErrorMultiple);
                 return true;
 
             case "warn":
-                EmitConsoleOutputMethod(call, emitArgumentBoxed, runtime.ConsoleWarn, runtime.ConsoleWarnMultiple);
+                EmitConsoleOutputMethod(call, emitArgumentBoxed, console.Warn, console.WarnMultiple);
                 return true;
 
             case "clear":
-                _il.Emit(OpCodes.Call, runtime.ConsoleClear);
+                _il.Emit(OpCodes.Call, console.Clear);
                 _il.Emit(OpCodes.Ldnull);
                 SetStackUnknown();
                 return true;
@@ -1486,7 +1486,7 @@ public class StateMachineEmitHelpers
                 {
                     _il.Emit(OpCodes.Ldnull);
                 }
-                _il.Emit(OpCodes.Call, runtime.ConsoleTime);
+                _il.Emit(OpCodes.Call, console.Time);
                 _il.Emit(OpCodes.Ldnull);
                 SetStackUnknown();
                 return true;
@@ -1500,7 +1500,7 @@ public class StateMachineEmitHelpers
                 {
                     _il.Emit(OpCodes.Ldnull);
                 }
-                _il.Emit(OpCodes.Call, runtime.ConsoleTimeEnd);
+                _il.Emit(OpCodes.Call, console.TimeEnd);
                 _il.Emit(OpCodes.Ldnull);
                 SetStackUnknown();
                 return true;
@@ -1514,14 +1514,14 @@ public class StateMachineEmitHelpers
                 {
                     _il.Emit(OpCodes.Ldnull);
                 }
-                _il.Emit(OpCodes.Call, runtime.ConsoleTimeLog);
+                _il.Emit(OpCodes.Call, console.TimeLog);
                 _il.Emit(OpCodes.Ldnull);
                 SetStackUnknown();
                 return true;
 
             // Phase 2 methods
             case "assert":
-                EmitConsoleAssert(call, emitArgumentBoxed, runtime);
+                EmitConsoleAssert(call, emitArgumentBoxed, console);
                 return true;
 
             case "count":
@@ -1533,7 +1533,7 @@ public class StateMachineEmitHelpers
                 {
                     _il.Emit(OpCodes.Ldnull);
                 }
-                _il.Emit(OpCodes.Call, runtime.ConsoleCount);
+                _il.Emit(OpCodes.Call, console.Count);
                 _il.Emit(OpCodes.Ldnull);
                 SetStackUnknown();
                 return true;
@@ -1547,32 +1547,32 @@ public class StateMachineEmitHelpers
                 {
                     _il.Emit(OpCodes.Ldnull);
                 }
-                _il.Emit(OpCodes.Call, runtime.ConsoleCountReset);
+                _il.Emit(OpCodes.Call, console.CountReset);
                 _il.Emit(OpCodes.Ldnull);
                 SetStackUnknown();
                 return true;
 
             case "table":
-                EmitConsoleTable(call, emitArgumentBoxed, runtime);
+                EmitConsoleTable(call, emitArgumentBoxed, console);
                 return true;
 
             case "dir":
-                EmitConsoleDir(call, emitArgumentBoxed, runtime);
+                EmitConsoleDir(call, emitArgumentBoxed, console);
                 return true;
 
             case "group":
             case "groupCollapsed":
-                EmitConsoleGroup(call, emitArgumentBoxed, runtime);
+                EmitConsoleGroup(call, emitArgumentBoxed, console);
                 return true;
 
             case "groupEnd":
-                _il.Emit(OpCodes.Call, runtime.ConsoleGroupEnd);
+                _il.Emit(OpCodes.Call, console.GroupEnd);
                 _il.Emit(OpCodes.Ldnull);
                 SetStackUnknown();
                 return true;
 
             case "trace":
-                EmitConsoleTrace(call, emitArgumentBoxed, runtime);
+                EmitConsoleTrace(call, emitArgumentBoxed, console);
                 return true;
 
             default:
@@ -1586,21 +1586,21 @@ public class StateMachineEmitHelpers
     private void EmitConsoleAssert(
         SharpTS.Parsing.Expr.Call call,
         Action<SharpTS.Parsing.Expr> emitArgumentBoxed,
-        EmittedRuntime runtime)
+        EmittedConsoleRuntime console)
     {
         if (call.Arguments.Count == 0)
         {
             // No condition - assertion always fails with no message
             _il.Emit(OpCodes.Ldc_I4_0); // false condition
             _il.Emit(OpCodes.Ldnull);   // null message args
-            _il.Emit(OpCodes.Call, runtime.ConsoleAssert);
+            _il.Emit(OpCodes.Call, console.Assert);
         }
         else if (call.Arguments.Count == 1)
         {
             // Just condition
             emitArgumentBoxed(call.Arguments[0]);
             _il.Emit(OpCodes.Ldnull); // null message args
-            _il.Emit(OpCodes.Call, runtime.ConsoleAssert);
+            _il.Emit(OpCodes.Call, console.Assert);
         }
         else
         {
@@ -1608,7 +1608,7 @@ public class StateMachineEmitHelpers
             var temps = SpillArgumentsToLocals(call, emitArgumentBoxed);
             _il.Emit(OpCodes.Ldloc, temps[0]);
             EmitArgsArrayFromLocals(temps.GetRange(1, temps.Count - 1));
-            _il.Emit(OpCodes.Call, runtime.ConsoleAssertMultiple);
+            _il.Emit(OpCodes.Call, console.AssertMultiple);
         }
         _il.Emit(OpCodes.Ldnull);
         SetStackUnknown();
@@ -1620,7 +1620,7 @@ public class StateMachineEmitHelpers
     private void EmitConsoleTable(
         SharpTS.Parsing.Expr.Call call,
         Action<SharpTS.Parsing.Expr> emitArgumentBoxed,
-        EmittedRuntime runtime)
+        EmittedConsoleRuntime console)
     {
         // Both operands spilled for await-safety (data must not sit on the stack across
         // a suspension inside the columns argument).
@@ -1634,7 +1634,7 @@ public class StateMachineEmitHelpers
             _il.Emit(OpCodes.Ldloc, tableTemps[1]);
         else
             _il.Emit(OpCodes.Ldnull);
-        _il.Emit(OpCodes.Call, runtime.ConsoleTable);
+        _il.Emit(OpCodes.Call, console.Table);
         _il.Emit(OpCodes.Ldnull);
         SetStackUnknown();
     }
@@ -1645,7 +1645,7 @@ public class StateMachineEmitHelpers
     private void EmitConsoleDir(
         SharpTS.Parsing.Expr.Call call,
         Action<SharpTS.Parsing.Expr> emitArgumentBoxed,
-        EmittedRuntime runtime)
+        EmittedConsoleRuntime console)
     {
         if (call.Arguments.Count >= 1)
         {
@@ -1655,7 +1655,7 @@ public class StateMachineEmitHelpers
         {
             _il.Emit(OpCodes.Ldnull);
         }
-        _il.Emit(OpCodes.Call, runtime.ConsoleDir);
+        _il.Emit(OpCodes.Call, console.Dir);
         _il.Emit(OpCodes.Ldnull);
         SetStackUnknown();
     }
@@ -1666,23 +1666,23 @@ public class StateMachineEmitHelpers
     private void EmitConsoleGroup(
         SharpTS.Parsing.Expr.Call call,
         Action<SharpTS.Parsing.Expr> emitArgumentBoxed,
-        EmittedRuntime runtime)
+        EmittedConsoleRuntime console)
     {
         if (call.Arguments.Count == 0)
         {
             _il.Emit(OpCodes.Ldnull);
-            _il.Emit(OpCodes.Call, runtime.ConsoleGroup);
+            _il.Emit(OpCodes.Call, console.Group);
         }
         else if (call.Arguments.Count == 1)
         {
             emitArgumentBoxed(call.Arguments[0]);
-            _il.Emit(OpCodes.Call, runtime.ConsoleGroup);
+            _il.Emit(OpCodes.Call, console.Group);
         }
         else
         {
             // Multiple arguments (spilled for await-safety)
             EmitArgsArrayFromLocals(SpillArgumentsToLocals(call, emitArgumentBoxed));
-            _il.Emit(OpCodes.Call, runtime.ConsoleGroupMultiple);
+            _il.Emit(OpCodes.Call, console.GroupMultiple);
         }
         _il.Emit(OpCodes.Ldnull);
         SetStackUnknown();
@@ -1694,23 +1694,23 @@ public class StateMachineEmitHelpers
     private void EmitConsoleTrace(
         SharpTS.Parsing.Expr.Call call,
         Action<SharpTS.Parsing.Expr> emitArgumentBoxed,
-        EmittedRuntime runtime)
+        EmittedConsoleRuntime console)
     {
         if (call.Arguments.Count == 0)
         {
             _il.Emit(OpCodes.Ldnull);
-            _il.Emit(OpCodes.Call, runtime.ConsoleTrace);
+            _il.Emit(OpCodes.Call, console.Trace);
         }
         else if (call.Arguments.Count == 1)
         {
             emitArgumentBoxed(call.Arguments[0]);
-            _il.Emit(OpCodes.Call, runtime.ConsoleTrace);
+            _il.Emit(OpCodes.Call, console.Trace);
         }
         else
         {
             // Multiple arguments (spilled for await-safety)
             EmitArgsArrayFromLocals(SpillArgumentsToLocals(call, emitArgumentBoxed));
-            _il.Emit(OpCodes.Call, runtime.ConsoleTraceMultiple);
+            _il.Emit(OpCodes.Call, console.TraceMultiple);
         }
         _il.Emit(OpCodes.Ldnull);
         SetStackUnknown();
