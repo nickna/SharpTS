@@ -511,10 +511,9 @@ missing declarations or subsequent writes. No migrated flat aliases or emitter-h
 remain; feature selection, generated public signatures, native imports, and method bodies
 are preserved.
 
-Filesystem-owned stream subclasses and watcher/poll-closure metadata remain separate subsequent
-phases under #1599. Local descriptor table fields and builders, BCL lookups, and the shared
-built-in module registry remain with their existing construction infrastructure for the final
-ownership audit.
+Filesystem watcher/poll-closure metadata remains a subsequent phase under #1599. Local descriptor
+table fields and builders, BCL lookups, and the shared built-in module registry remain with their
+existing construction infrastructure for the final ownership audit.
 
 Filesystem async I/O uses optional `EmittedFileSystemAsyncRuntime` for 26 fixed declarations
 and 21 Promise-wrapper declarations. It replaces 22 flat method handles, the mutable wrapper
@@ -536,6 +535,21 @@ and namespace emission keep their order. Worker exception unwrapping, event-loop
 the existing callback grace period, generated signatures, and method bodies are preserved.
 Method-local closure fields, the removal implementation, intermediate unref methods, and BCL
 construction lookups remain local to their emission helpers for the final #1599 audit.
+
+Filesystem stream metadata uses optional `EmittedFileSystemStreamRuntime`, also enabled by
+`UsesFs`. It owns 22 declarations: the read/write stream types, their 14 private storage fields,
+two constructors, the cross-type Write/End declarations, and two runtime factories. This removes
+two flat properties and 18 emitter fields; factories use the checked constructors instead of
+rediscovering them through reflection. Node streams alone still leave this component absent.
+
+Nine helpers take this component directly with explicit Node stream, EventEmitter, filesystem,
+or Buffer dependencies as needed. The read type continues to inherit from `$Readable`; the
+write type inherits from `$EventEmitter`. Early type and field declaration, deferred Write/End
+bodies, and later `$Runtime` factories retain their order. Write/End bodies still precede the
+read Pipe body. Completion validates every declaration and freezes writes after finalization.
+Listener replay, ranges/chunking, descriptor ownership, close behavior, and both filesystem
+and ordinary Writable pipe paths keep their existing behavior. Method-local property/accessor
+builders and BCL lookups remain local construction state for the final ownership audit.
 
 During emission, each handle becomes readable as soon as its declaration is assigned, so forward
 references do not require a method body to exist yet. An early read names the missing declaration.

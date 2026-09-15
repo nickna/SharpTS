@@ -1069,7 +1069,7 @@ public sealed class FsModuleEmitter : IBuiltInModuleEmitter
             il.Emit(OpCodes.Ldnull);
         }
 
-        il.Emit(OpCodes.Call, ctx.Runtime!.FsCreateReadStream);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireFileSystemStreams().CreateReadStream);
         return true;
     }
 
@@ -1097,7 +1097,7 @@ public sealed class FsModuleEmitter : IBuiltInModuleEmitter
             il.Emit(OpCodes.Ldnull);
         }
 
-        il.Emit(OpCodes.Call, ctx.Runtime!.FsCreateWriteStream);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireFileSystemStreams().CreateWriteStream);
         return true;
     }
 

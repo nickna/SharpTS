@@ -1760,9 +1760,18 @@ public class EmittedRuntime
     public EmittedNodeStreamRuntime RequireNodeStreams() => NodeStreams
         ?? throw new InvalidOperationException("Node streams were not enabled for this compilation.");
 
-    // fs.createReadStream / fs.createWriteStream factory methods
-    public MethodBuilder FsCreateReadStream { get; set; } = null!;
-    public MethodBuilder FsCreateWriteStream { get; set; } = null!;
+    /// <summary>Filesystem stream metadata, or null when UsesFs is off.</summary>
+    public EmittedFileSystemStreamRuntime? FileSystemStreams { get; private set; }
+
+    internal void BeginFileSystemStreamEmission()
+    {
+        if (FileSystemStreams is not null)
+            throw new InvalidOperationException("Filesystem stream metadata emission has already started.");
+        FileSystemStreams = new EmittedFileSystemStreamRuntime();
+    }
+
+    public EmittedFileSystemStreamRuntime RequireFileSystemStreams() => FileSystemStreams
+        ?? throw new InvalidOperationException("Filesystem stream runtime was not enabled for this compilation.");
 
     // fs.watch / fs.watchFile / fs.unwatchFile
     public MethodBuilder FsWatch { get; set; } = null!;

@@ -1211,6 +1211,101 @@ public class StandaloneDllTests
         }
     }
 
+    public static IEnumerable<object[]> FileSystemStreamMetadataPrograms
+    {
+        get
+        {
+            yield return new object[]
+            {
+                """
+                import * as fs from 'fs';
+                fs.writeFileSync('range.txt', 'ABCDEFGH');
+                const events: string[] = []; const chunks: string[] = [];
+                const rs: any = fs.createReadStream('range.txt', { encoding: 'utf8', start: 1, end: 5, highWaterMark: 2 });
+                rs.on('open', () => events.push('open')); rs.on('ready', () => events.push('ready'));
+                rs.on('data', (c: any) => chunks.push(c)); rs.on('end', () => events.push('end'));
+                rs.on('close', () => { events.push('close'); console.log(events.join('>')); console.log(chunks.join('|')); console.log(rs.bytesRead, rs.pending); fs.unlinkSync('range.txt'); });
+                """,
+                "open>ready>end>close\nBC|DE|F\n5 false\n"
+            };
+            yield return new object[]
+            {
+                """
+                import { createWriteStream, readFileSync, unlinkSync } from 'node:fs';
+                const events: string[] = []; const ws: any = createWriteStream('write.txt');
+                ws.on('open', () => events.push('open')); ws.on('ready', () => events.push('ready'));
+                ws.on('finish', () => events.push('finish'));
+                ws.on('close', () => { events.push('close'); console.log(events.join('>')); console.log(ws.bytesWritten, ws.pending); console.log(readFileSync('write.txt', 'utf8')); });
+                ws.write(Buffer.from('AB')); ws.end('CD'); unlinkSync('write.txt');
+                """,
+                "open>ready>finish>close\n4 false\nABCD\n"
+            };
+            yield return new object[]
+            {
+                """
+                import * as fs from 'fs';
+                fs.writeFileSync('source.txt', 'piped payload');
+                const read = fs.createReadStream; const write = fs.createWriteStream;
+                const rs: any = read('source.txt', { highWaterMark: 3 }); const ws: any = write('copy.txt');
+                console.log(rs.pipe(ws) === ws); console.log(fs.readFileSync('copy.txt', 'utf8')); console.log(ws.bytesWritten);
+                fs.unlinkSync('source.txt'); fs.unlinkSync('copy.txt');
+                """,
+                "true\npiped payload\n13\n"
+            };
+            yield return new object[]
+            {
+                """
+                import * as fs from 'fs';
+                fs.writeFileSync('descriptor.txt', 'ABCD'); const fd = fs.openSync('descriptor.txt', 'r+');
+                const ws: any = fs.createWriteStream('descriptor.txt', { fd, start: 1, autoClose: false, emitClose: false });
+                let closes = 0; ws.on('close', () => { closes++; }); ws.end('xy');
+                console.log(fs.fstatSync(fd).size, closes); fs.closeSync(fd);
+                const append: any = fs.createWriteStream('descriptor.txt', { flags: 'a' }); append.end('!');
+                console.log(fs.readFileSync('descriptor.txt', 'utf8')); fs.unlinkSync('descriptor.txt');
+                """,
+                "4 0\nAxyD!\n"
+            };
+            yield return new object[]
+            {
+                """
+                import * as fs from 'fs';
+                fs.writeFileSync('read.txt', 'data'); const fd = fs.openSync('read.txt', 'r');
+                const rs: any = fs.createReadStream('read.txt', { fd, encoding: 'utf8', emitClose: false, autoClose: false });
+                let closed = false; let value = ''; rs.on('close', () => { closed = true; });
+                rs.on('data', (c: any) => { value += c; });
+                rs.on('end', () => { console.log(value, closed, fs.fstatSync(fd).size); fs.closeSync(fd); fs.unlinkSync('read.txt'); });
+                """,
+                "data false 4\n"
+            };
+            yield return new object[]
+            {
+                """
+                import * as fs from 'fs'; import { Writable } from 'stream';
+                fs.writeFileSync('node.txt', 'node stream'); let value = '';
+                const destination: any = new Writable({ write(chunk: any, encoding: any, callback: any) { value += chunk.toString(); callback(); } });
+                destination.on('finish', () => { console.log(value); fs.unlinkSync('node.txt'); });
+                fs.createReadStream('node.txt', { highWaterMark: 2 }).pipe(destination);
+                """,
+                "node stream\n"
+            };
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(FileSystemStreamMetadataPrograms))]
+    public void Isolated_FileSystemStreamMetadata_PreservesEventsRangesDescriptorsAndPipes(string source, string expected)
+    {
+        var files = new Dictionary<string, string> { ["main.ts"] = source };
+        Assert.Empty(TestHarness.CompileModulesAndVerifyOnly(files, "main.ts"));
+        var (tempDir, dllPath) = CompileStandaloneModule(files, "main.ts");
+        try
+        {
+            Assert.DoesNotContain(GetAssemblyReferences(dllPath), name => name == "SharpTS");
+            Assert.Equal(expected, ExecuteCompiledDllIsolated(dllPath, timeoutMs: 15000));
+        }
+        finally { CleanupTempDir(tempDir); }
+    }
+
     public static IEnumerable<object[]> FileSystemAsyncMetadataPrograms
     {
         get

@@ -10,41 +10,19 @@ namespace SharpTS.Compilation;
 /// </summary>
 public partial class RuntimeEmitter
 {
-    // Stream type builders (module-level emitted types)
-    private TypeBuilder _fsReadStreamType = null!;
-    private TypeBuilder _fsWriteStreamType = null!;
-
-    // $FsReadStream fields
-    private FieldBuilder _rsPathField = null!;
-    private FieldBuilder _rsDataField = null!;
-    private FieldBuilder _rsBytesReadField = null!;
-    // #980: replay state — open/ready/close are emitted at creation (before user
-    // listeners), so OnListenerAdded re-emits them to late listeners (no event loop).
-    private FieldBuilder _rsEmitCloseField = null!;
-    private FieldBuilder _rsFdNumField = null!;
-    private FieldBuilder _rsPendingField = null!;
-
-    // $FsWriteStream fields
-    private FieldBuilder _wsPathField = null!;
-    private FieldBuilder _wsStreamField = null!;
-    private FieldBuilder _wsBytesWrittenField = null!;
-
-    // Method builders for cross-type references
-    private MethodBuilder _wsWriteMethod = null!;
-    private MethodBuilder _wsEndMethod = null!;
-
     /// <summary>
     /// Phase 1: Define $FsReadStream/$FsWriteStream types, fields, methods, and create them.
     /// Must be called before EmitRuntimeClass and after TSFunction is defined.
     /// </summary>
     private void EmitFsStreamTypeDefinitions(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
-        DefineFsReadStreamType(moduleBuilder, runtime);
-        DefineFsWriteStreamType(moduleBuilder, runtime);
-        EmitFsWriteStreamMethods(runtime);  // Must come before ReadStream methods (Pipe needs _wsWriteMethod)
-        EmitFsReadStreamMethods(runtime);
-        _fsReadStreamType.CreateType();
-        _fsWriteStreamType.CreateType();
+        var fsStreams = runtime.RequireFileSystemStreams();
+        DefineFsReadStreamType(moduleBuilder, fsStreams, runtime.RequireNodeStreams(), runtime.EventEmitter);
+        DefineFsWriteStreamType(moduleBuilder, fsStreams, runtime.RequireFileSystem(), runtime.EventEmitter);
+        EmitFsWriteStreamMethods(fsStreams, runtime.RequireBuffer(), runtime.EventEmitter);  // Must come before ReadStream methods (Pipe needs fsStreams.Write)
+        EmitFsReadStreamMethods(fsStreams, runtime.RequireNodeStreams());
+        fsStreams.ReadType.CreateType();
+        fsStreams.WriteType.CreateType();
     }
 
     /// <summary>
@@ -59,79 +37,80 @@ public partial class RuntimeEmitter
 
     #region $FsReadStream
 
-    private void DefineFsReadStreamType(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private void DefineFsReadStreamType(ModuleBuilder moduleBuilder, EmittedFileSystemStreamRuntime fsStreams, EmittedNodeStreamRuntime nodeStreams, EmittedEventEmitterRuntime eventEmitter)
     {
-        _fsReadStreamType = EmitTypeDefinitions.DefineType(moduleBuilder,
+        fsStreams.ReadType = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$FsReadStream",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
-            runtime.RequireNodeStreams().ReadableType  // Extends $Readable instead of object
+            nodeStreams.ReadableType  // Extends $Readable instead of object
         );
 
         // Fields. _data holds the whole content (for the Pipe override); the factory
         // pushes highWaterMark chunks into $Readable's buffer for 'data' events.
-        _rsPathField = _fsReadStreamType.DefineField("_path", _types.String, FieldAttributes.Private);
-        _rsDataField = _fsReadStreamType.DefineField("_data", _types.Object, FieldAttributes.Private);
-        _rsBytesReadField = _fsReadStreamType.DefineField("_bytesRead", _types.Double, FieldAttributes.Private);
-        _rsEmitCloseField = _fsReadStreamType.DefineField("_emitClose", _types.Boolean, FieldAttributes.Private);
-        _rsFdNumField = _fsReadStreamType.DefineField("_fdNum", _types.Double, FieldAttributes.Private);
-        _rsPendingField = _fsReadStreamType.DefineField("_pending", _types.Boolean, FieldAttributes.Private);
+        fsStreams.ReadPathField = fsStreams.ReadType.DefineField("_path", _types.String, FieldAttributes.Private);
+        fsStreams.ReadDataField = fsStreams.ReadType.DefineField("_data", _types.Object, FieldAttributes.Private);
+        fsStreams.ReadBytesReadField = fsStreams.ReadType.DefineField("_bytesRead", _types.Double, FieldAttributes.Private);
+        fsStreams.ReadEmitCloseField = fsStreams.ReadType.DefineField("_emitClose", _types.Boolean, FieldAttributes.Private);
+        fsStreams.ReadFdField = fsStreams.ReadType.DefineField("_fdNum", _types.Double, FieldAttributes.Private);
+        fsStreams.ReadPendingField = fsStreams.ReadType.DefineField("_pending", _types.Boolean, FieldAttributes.Private);
 
         // Constructor: $FsReadStream(string path, object data, bool emitClose, double fdNum, double bytesRead).
         // Stores fields (no push — the factory pushes chunks then null). The read is
         // eager, so open/ready/close are "ready" immediately; OnListenerAdded replays
         // them to late listeners (#980).
-        var ctor = _fsReadStreamType.DefineConstructor(
+        var ctor = fsStreams.ReadType.DefineConstructor(
             MethodAttributes.Public,
             CallingConventions.Standard,
             [_types.String, _types.Object, _types.Boolean, _types.Double, _types.Double]
         );
+        fsStreams.ReadCtor = ctor;
         var il = ctor.GetILGenerator();
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.RequireNodeStreams().ReadableCtor);
+        il.Emit(OpCodes.Call, nodeStreams.ReadableCtor);
         void Store(int arg, FieldBuilder f) { il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldarg, arg); il.Emit(OpCodes.Stfld, f); }
-        Store(1, _rsPathField);
-        Store(2, _rsDataField);
-        Store(3, _rsEmitCloseField);
-        Store(4, _rsFdNumField);
-        Store(5, _rsBytesReadField);
+        Store(1, fsStreams.ReadPathField);
+        Store(2, fsStreams.ReadDataField);
+        Store(3, fsStreams.ReadEmitCloseField);
+        Store(4, fsStreams.ReadFdField);
+        Store(5, fsStreams.ReadBytesReadField);
         // _pending = false (eager read => already ready)
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Stfld, _rsPendingField);
+        il.Emit(OpCodes.Stfld, fsStreams.ReadPendingField);
         il.Emit(OpCodes.Ret);
 
         // OnListenerAdded override: base handles data/end replay; we replay open/ready/close.
-        EmitFsReadStreamOnListenerAdded(runtime);
+        EmitFsReadStreamOnListenerAdded(fsStreams, nodeStreams, eventEmitter);
 
         // Property: Path (string)
-        var pathProp = _fsReadStreamType.DefineProperty("Path", PropertyAttributes.None, _types.String, null);
-        var pathGetter = _fsReadStreamType.DefineMethod("get_Path",
+        var pathProp = fsStreams.ReadType.DefineProperty("Path", PropertyAttributes.None, _types.String, null);
+        var pathGetter = fsStreams.ReadType.DefineMethod("get_Path",
             MethodAttributes.Public | MethodAttributes.SpecialName, _types.String, Type.EmptyTypes);
         var pil = pathGetter.GetILGenerator();
         pil.Emit(OpCodes.Ldarg_0);
-        pil.Emit(OpCodes.Ldfld, _rsPathField);
+        pil.Emit(OpCodes.Ldfld, fsStreams.ReadPathField);
         pil.Emit(OpCodes.Ret);
         pathProp.SetGetMethod(pathGetter);
 
         // Property: BytesRead (object - returns boxed double)
-        var brProp = _fsReadStreamType.DefineProperty("BytesRead", PropertyAttributes.None, _types.Object, null);
-        var brGetter = _fsReadStreamType.DefineMethod("get_BytesRead",
+        var brProp = fsStreams.ReadType.DefineProperty("BytesRead", PropertyAttributes.None, _types.Object, null);
+        var brGetter = fsStreams.ReadType.DefineMethod("get_BytesRead",
             MethodAttributes.Public | MethodAttributes.SpecialName, _types.Object, Type.EmptyTypes);
         var bril = brGetter.GetILGenerator();
         bril.Emit(OpCodes.Ldarg_0);
-        bril.Emit(OpCodes.Ldfld, _rsBytesReadField);
+        bril.Emit(OpCodes.Ldfld, fsStreams.ReadBytesReadField);
         bril.Emit(OpCodes.Box, _types.Double);
         bril.Emit(OpCodes.Ret);
         brProp.SetGetMethod(brGetter);
 
         // Property: Pending (object - boxed bool)
-        var pendProp = _fsReadStreamType.DefineProperty("Pending", PropertyAttributes.None, _types.Object, null);
-        var pendGetter = _fsReadStreamType.DefineMethod("get_Pending",
+        var pendProp = fsStreams.ReadType.DefineProperty("Pending", PropertyAttributes.None, _types.Object, null);
+        var pendGetter = fsStreams.ReadType.DefineMethod("get_Pending",
             MethodAttributes.Public | MethodAttributes.SpecialName, _types.Object, Type.EmptyTypes);
         var pendil = pendGetter.GetILGenerator();
         pendil.Emit(OpCodes.Ldarg_0);
-        pendil.Emit(OpCodes.Ldfld, _rsPendingField);
+        pendil.Emit(OpCodes.Ldfld, fsStreams.ReadPendingField);
         pendil.Emit(OpCodes.Box, _types.Boolean);
         pendil.Emit(OpCodes.Ret);
         pendProp.SetGetMethod(pendGetter);
@@ -142,13 +121,13 @@ public partial class RuntimeEmitter
     /// re-emits open/ready/close to a late listener (the read is eager so these are
     /// always ready). 'close' honors emitClose. No event loop — pure replay (#980).
     /// </summary>
-    private void EmitFsReadStreamOnListenerAdded(EmittedRuntime runtime)
+    private void EmitFsReadStreamOnListenerAdded(EmittedFileSystemStreamRuntime fsStreams, EmittedNodeStreamRuntime nodeStreams, EmittedEventEmitterRuntime eventEmitter)
     {
-        var method = _fsReadStreamType.DefineMethod("OnListenerAdded",
+        var method = fsStreams.ReadType.DefineMethod("OnListenerAdded",
             MethodAttributes.Public | MethodAttributes.Virtual, _types.Void, [_types.String]);
         var il = method.GetILGenerator();
         var strEquals = _types.GetMethod(_types.String, "op_Equality", [_types.String, _types.String])!;
-        var baseOLA = _types.GetMethod(runtime.RequireNodeStreams().ReadableType, "OnListenerAdded", [_types.String])!;
+        var baseOLA = _types.GetMethod(nodeStreams.ReadableType, "OnListenerAdded", [_types.String])!;
 
         // base.OnListenerAdded(name)
         il.Emit(OpCodes.Ldarg_0);
@@ -160,7 +139,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_1); // reuse the matched name string
             loadArgs();
-            il.Emit(OpCodes.Call, runtime.EventEmitter.Emit);
+            il.Emit(OpCodes.Call, eventEmitter.Emit);
             il.Emit(OpCodes.Pop);
         }
 
@@ -175,7 +154,7 @@ public partial class RuntimeEmitter
         {
             il.Emit(OpCodes.Ldc_I4_1); il.Emit(OpCodes.Newarr, _types.Object);
             il.Emit(OpCodes.Dup); il.Emit(OpCodes.Ldc_I4_0);
-            il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, _rsFdNumField); il.Emit(OpCodes.Box, _types.Double);
+            il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, fsStreams.ReadFdField); il.Emit(OpCodes.Box, _types.Double);
             il.Emit(OpCodes.Stelem_Ref);
         });
         il.Emit(OpCodes.Br, ret);
@@ -191,7 +170,7 @@ public partial class RuntimeEmitter
         // if (name == "close" && _emitClose) emit("close", [])
         il.Emit(OpCodes.Ldarg_1); il.Emit(OpCodes.Ldstr, "close"); il.Emit(OpCodes.Call, strEquals);
         il.Emit(OpCodes.Brfalse, ret);
-        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, _rsEmitCloseField);
+        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, fsStreams.ReadEmitCloseField);
         il.Emit(OpCodes.Brfalse, ret);
         EmitEvent(() => { il.Emit(OpCodes.Ldc_I4_0); il.Emit(OpCodes.Newarr, _types.Object); });
 
@@ -199,19 +178,19 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitFsReadStreamMethods(EmittedRuntime runtime)
+    private void EmitFsReadStreamMethods(EmittedFileSystemStreamRuntime fsStreams, EmittedNodeStreamRuntime nodeStreams)
     {
         // Override Pipe to handle $FsWriteStream (which doesn't extend $Writable)
-        EmitFsReadStreamPipeOverride(runtime.RequireNodeStreams());
+        EmitFsReadStreamPipeOverride(fsStreams, nodeStreams);
     }
 
     /// <summary>
     /// Override Pipe on $FsReadStream: first tries the base $Readable.Pipe behavior (for $Writable/$Duplex),
     /// then falls back to calling Write/End directly on $FsWriteStream.
     /// </summary>
-    private void EmitFsReadStreamPipeOverride(EmittedNodeStreamRuntime nodeStreams)
+    private void EmitFsReadStreamPipeOverride(EmittedFileSystemStreamRuntime fsStreams, EmittedNodeStreamRuntime nodeStreams)
     {
-        var method = _fsReadStreamType.DefineMethod("Pipe",
+        var method = fsStreams.ReadType.DefineMethod("Pipe",
             MethodAttributes.Public | MethodAttributes.HideBySig | MethodAttributes.NewSlot | MethodAttributes.Virtual,
             _types.Object, [_types.Object, _types.Object]);
 
@@ -220,21 +199,21 @@ public partial class RuntimeEmitter
 
         // Check if dest is $FsWriteStream
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, _fsWriteStreamType);
+        il.Emit(OpCodes.Isinst, fsStreams.WriteType);
         il.Emit(OpCodes.Brfalse, basePathLabel);
 
         // $FsWriteStream path: write _data directly, then end
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Castclass, _fsWriteStreamType);
+        il.Emit(OpCodes.Castclass, fsStreams.WriteType);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _rsDataField);
-        il.Emit(OpCodes.Callvirt, _wsWriteMethod);
+        il.Emit(OpCodes.Ldfld, fsStreams.ReadDataField);
+        il.Emit(OpCodes.Callvirt, fsStreams.Write);
         il.Emit(OpCodes.Pop);
 
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Castclass, _fsWriteStreamType);
+        il.Emit(OpCodes.Castclass, fsStreams.WriteType);
         il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Callvirt, _wsEndMethod);
+        il.Emit(OpCodes.Callvirt, fsStreams.End);
         il.Emit(OpCodes.Pop);
 
         il.Emit(OpCodes.Ldarg_1);
@@ -253,59 +232,53 @@ public partial class RuntimeEmitter
 
     #region $FsWriteStream
 
-    // #980: $FsWriteStream fields (reparented onto $EventEmitter)
-    private FieldBuilder _wsAutoCloseField = null!;
-    private FieldBuilder _wsEmitCloseField = null!;
-    private FieldBuilder _wsFdNumField = null!;
-    private FieldBuilder _wsPendingField = null!;
-    private FieldBuilder _wsClosedField = null!;
-
-    private void DefineFsWriteStreamType(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private void DefineFsWriteStreamType(ModuleBuilder moduleBuilder, EmittedFileSystemStreamRuntime fsStreams, EmittedFileSystemRuntime fileSystem, EmittedEventEmitterRuntime eventEmitter)
     {
         // Reparent onto $EventEmitter so it's a real emitter (on/once/emit) with
         // open/ready/finish/close events (#980).
-        _fsWriteStreamType = EmitTypeDefinitions.DefineType(moduleBuilder,
+        fsStreams.WriteType = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$FsWriteStream",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
-            runtime.EventEmitter.Type
+            eventEmitter.Type
         );
 
         // Fields
-        _wsPathField = _fsWriteStreamType.DefineField("_path", _types.String, FieldAttributes.Private);
-        _wsStreamField = _fsWriteStreamType.DefineField("_stream", typeof(FileStream), FieldAttributes.Private);
-        _wsBytesWrittenField = _fsWriteStreamType.DefineField("_bytesWritten", _types.Double, FieldAttributes.Private);
-        _wsAutoCloseField = _fsWriteStreamType.DefineField("_autoClose", _types.Boolean, FieldAttributes.Private);
-        _wsEmitCloseField = _fsWriteStreamType.DefineField("_emitClose", _types.Boolean, FieldAttributes.Private);
-        _wsFdNumField = _fsWriteStreamType.DefineField("_fdNum", _types.Double, FieldAttributes.Private);
-        _wsPendingField = _fsWriteStreamType.DefineField("_pending", _types.Boolean, FieldAttributes.Private);
-        _wsClosedField = _fsWriteStreamType.DefineField("_closed", _types.Boolean, FieldAttributes.Private);
+        fsStreams.WritePathField = fsStreams.WriteType.DefineField("_path", _types.String, FieldAttributes.Private);
+        fsStreams.WriteStreamField = fsStreams.WriteType.DefineField("_stream", typeof(FileStream), FieldAttributes.Private);
+        fsStreams.WriteBytesWrittenField = fsStreams.WriteType.DefineField("_bytesWritten", _types.Double, FieldAttributes.Private);
+        fsStreams.WriteAutoCloseField = fsStreams.WriteType.DefineField("_autoClose", _types.Boolean, FieldAttributes.Private);
+        fsStreams.WriteEmitCloseField = fsStreams.WriteType.DefineField("_emitClose", _types.Boolean, FieldAttributes.Private);
+        fsStreams.WriteFdField = fsStreams.WriteType.DefineField("_fdNum", _types.Double, FieldAttributes.Private);
+        fsStreams.WritePendingField = fsStreams.WriteType.DefineField("_pending", _types.Boolean, FieldAttributes.Private);
+        fsStreams.WriteClosedField = fsStreams.WriteType.DefineField("_closed", _types.Boolean, FieldAttributes.Private);
 
         // Constructor: $FsWriteStream(path, flags, autoClose, emitClose, fd, start)
-        var ctor = _fsWriteStreamType.DefineConstructor(
+        var ctor = fsStreams.WriteType.DefineConstructor(
             MethodAttributes.Public,
             CallingConventions.Standard,
             [_types.String, _types.String, _types.Boolean, _types.Boolean, _types.Object, _types.Double]
         );
+        fsStreams.WriteCtor = ctor;
         var il = ctor.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.EventEmitter.Ctor);
-        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldarg_1); il.Emit(OpCodes.Stfld, _wsPathField);
-        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldarg_3); il.Emit(OpCodes.Stfld, _wsAutoCloseField);
-        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldarg, 4); il.Emit(OpCodes.Stfld, _wsEmitCloseField);
-        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldc_R8, 0.0); il.Emit(OpCodes.Stfld, _wsBytesWrittenField);
-        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldc_I4_0); il.Emit(OpCodes.Stfld, _wsPendingField);
-        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldc_I4_0); il.Emit(OpCodes.Stfld, _wsClosedField);
+        il.Emit(OpCodes.Call, eventEmitter.Ctor);
+        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldarg_1); il.Emit(OpCodes.Stfld, fsStreams.WritePathField);
+        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldarg_3); il.Emit(OpCodes.Stfld, fsStreams.WriteAutoCloseField);
+        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldarg, 4); il.Emit(OpCodes.Stfld, fsStreams.WriteEmitCloseField);
+        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldc_R8, 0.0); il.Emit(OpCodes.Stfld, fsStreams.WriteBytesWrittenField);
+        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldc_I4_0); il.Emit(OpCodes.Stfld, fsStreams.WritePendingField);
+        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldc_I4_0); il.Emit(OpCodes.Stfld, fsStreams.WriteClosedField);
 
         // Open: fd ? table.Get + fdNum : new FileStream(path, mode-from-flags, …); seek start
         var fdLabel = il.DefineLabel(); var afterOpen = il.DefineLabel();
         il.Emit(OpCodes.Ldarg, 5); il.Emit(OpCodes.Brfalse, fdLabel); // arg5 = fd (object); brfalse if null
         // fd path
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldsfld, runtime.RequireFileSystem().FileDescriptorTableInstance);
+        il.Emit(OpCodes.Ldsfld, fileSystem.FileDescriptorTableInstance);
         il.Emit(OpCodes.Ldarg, 5); il.Emit(OpCodes.Call, typeof(Convert).GetMethod("ToInt32", [typeof(object)])!);
-        il.Emit(OpCodes.Callvirt, runtime.RequireFileSystem().FileDescriptorTableGet);
-        il.Emit(OpCodes.Stfld, _wsStreamField);
-        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldarg, 5); il.Emit(OpCodes.Call, typeof(Convert).GetMethod("ToDouble", [typeof(object)])!); il.Emit(OpCodes.Stfld, _wsFdNumField);
+        il.Emit(OpCodes.Callvirt, fileSystem.FileDescriptorTableGet);
+        il.Emit(OpCodes.Stfld, fsStreams.WriteStreamField);
+        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldarg, 5); il.Emit(OpCodes.Call, typeof(Convert).GetMethod("ToDouble", [typeof(object)])!); il.Emit(OpCodes.Stfld, fsStreams.WriteFdField);
         il.Emit(OpCodes.Br, afterOpen);
         il.MarkLabel(fdLabel);
         // path path: mode = flags=="a"/"ax"/"a+" ? Append : flags=="wx" ? CreateNew : flags=="r+" ? Open : Create
@@ -315,59 +288,59 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4, (int)FileAccess.Write);
         il.Emit(OpCodes.Ldc_I4, (int)FileShare.ReadWrite);
         il.Emit(OpCodes.Newobj, typeof(FileStream).GetConstructor([typeof(string), typeof(FileMode), typeof(FileAccess), typeof(FileShare)])!);
-        il.Emit(OpCodes.Stfld, _wsStreamField);
+        il.Emit(OpCodes.Stfld, fsStreams.WriteStreamField);
         // fdNum placeholder for path-opened streams (the exact fd isn't observable here).
-        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldc_R8, 0.0); il.Emit(OpCodes.Stfld, _wsFdNumField);
+        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldc_R8, 0.0); il.Emit(OpCodes.Stfld, fsStreams.WriteFdField);
         il.MarkLabel(afterOpen);
         // seek start if > 0 (arg6)
         var noSeek = il.DefineLabel();
         il.Emit(OpCodes.Ldarg, 6); il.Emit(OpCodes.Ldc_R8, 0.0); il.Emit(OpCodes.Ble, noSeek);
-        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, _wsStreamField);
+        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, fsStreams.WriteStreamField);
         il.Emit(OpCodes.Ldarg, 6); il.Emit(OpCodes.Conv_I8); il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Callvirt, typeof(FileStream).GetMethod("Seek")!); il.Emit(OpCodes.Pop);
         il.MarkLabel(noSeek);
         il.Emit(OpCodes.Ret);
 
         // Property: Path (string)
-        var pathProp = _fsWriteStreamType.DefineProperty("Path", PropertyAttributes.None, _types.String, null);
-        var pathGetter = _fsWriteStreamType.DefineMethod("get_Path",
+        var pathProp = fsStreams.WriteType.DefineProperty("Path", PropertyAttributes.None, _types.String, null);
+        var pathGetter = fsStreams.WriteType.DefineMethod("get_Path",
             MethodAttributes.Public | MethodAttributes.SpecialName, _types.String, Type.EmptyTypes);
         var pil = pathGetter.GetILGenerator();
         pil.Emit(OpCodes.Ldarg_0);
-        pil.Emit(OpCodes.Ldfld, _wsPathField);
+        pil.Emit(OpCodes.Ldfld, fsStreams.WritePathField);
         pil.Emit(OpCodes.Ret);
         pathProp.SetGetMethod(pathGetter);
 
         // Property: BytesWritten (object - returns boxed double)
-        var bwProp = _fsWriteStreamType.DefineProperty("BytesWritten", PropertyAttributes.None, _types.Object, null);
-        var bwGetter = _fsWriteStreamType.DefineMethod("get_BytesWritten",
+        var bwProp = fsStreams.WriteType.DefineProperty("BytesWritten", PropertyAttributes.None, _types.Object, null);
+        var bwGetter = fsStreams.WriteType.DefineMethod("get_BytesWritten",
             MethodAttributes.Public | MethodAttributes.SpecialName, _types.Object, Type.EmptyTypes);
         var bwil = bwGetter.GetILGenerator();
         bwil.Emit(OpCodes.Ldarg_0);
-        bwil.Emit(OpCodes.Ldfld, _wsBytesWrittenField);
+        bwil.Emit(OpCodes.Ldfld, fsStreams.WriteBytesWrittenField);
         bwil.Emit(OpCodes.Box, _types.Double);
         bwil.Emit(OpCodes.Ret);
         bwProp.SetGetMethod(bwGetter);
 
         // Property: Pending (object - boxed bool)
-        var wpProp = _fsWriteStreamType.DefineProperty("Pending", PropertyAttributes.None, _types.Object, null);
-        var wpGetter = _fsWriteStreamType.DefineMethod("get_Pending",
+        var wpProp = fsStreams.WriteType.DefineProperty("Pending", PropertyAttributes.None, _types.Object, null);
+        var wpGetter = fsStreams.WriteType.DefineMethod("get_Pending",
             MethodAttributes.Public | MethodAttributes.SpecialName, _types.Object, Type.EmptyTypes);
         var wpil = wpGetter.GetILGenerator();
         wpil.Emit(OpCodes.Ldarg_0);
-        wpil.Emit(OpCodes.Ldfld, _wsPendingField);
+        wpil.Emit(OpCodes.Ldfld, fsStreams.WritePendingField);
         wpil.Emit(OpCodes.Box, _types.Boolean);
         wpil.Emit(OpCodes.Ret);
         wpProp.SetGetMethod(wpGetter);
 
         // OnListenerAdded override: replay open/ready (always ready since opened at ctor)
         // and close (once finished). finish/close fire synchronously in End.
-        EmitFsWriteStreamOnListenerAdded(runtime);
+        EmitFsWriteStreamOnListenerAdded(fsStreams, eventEmitter);
 
         // Define method stubs (bodies emitted later for cross-type references)
-        _wsWriteMethod = _fsWriteStreamType.DefineMethod("Write",
+        fsStreams.Write = fsStreams.WriteType.DefineMethod("Write",
             MethodAttributes.Public, _types.Object, [_types.Object]);
-        _wsEndMethod = _fsWriteStreamType.DefineMethod("End",
+        fsStreams.End = fsStreams.WriteType.DefineMethod("End",
             MethodAttributes.Public, _types.Object, [_types.Object]);
     }
 
@@ -388,18 +361,18 @@ public partial class RuntimeEmitter
 
     /// <summary>OnListenerAdded override for $FsWriteStream: replay open/ready always,
     /// close once finished (emitClose-gated). finish/close fire in End().</summary>
-    private void EmitFsWriteStreamOnListenerAdded(EmittedRuntime runtime)
+    private void EmitFsWriteStreamOnListenerAdded(EmittedFileSystemStreamRuntime fsStreams, EmittedEventEmitterRuntime eventEmitter)
     {
-        var method = _fsWriteStreamType.DefineMethod("OnListenerAdded",
+        var method = fsStreams.WriteType.DefineMethod("OnListenerAdded",
             MethodAttributes.Public | MethodAttributes.Virtual, _types.Void, [_types.String]);
         var il = method.GetILGenerator();
         var strEq = typeof(string).GetMethod("op_Equality", [typeof(string), typeof(string)])!;
 
-        void EmitEvent(Action loadArgs) { il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldarg_1); loadArgs(); il.Emit(OpCodes.Call, runtime.EventEmitter.Emit); il.Emit(OpCodes.Pop); }
+        void EmitEvent(Action loadArgs) { il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldarg_1); loadArgs(); il.Emit(OpCodes.Call, eventEmitter.Emit); il.Emit(OpCodes.Pop); }
         var ret = il.DefineLabel(); var notOpen = il.DefineLabel(); var notReady = il.DefineLabel();
 
         il.Emit(OpCodes.Ldarg_1); il.Emit(OpCodes.Ldstr, "open"); il.Emit(OpCodes.Call, strEq); il.Emit(OpCodes.Brfalse, notOpen);
-        EmitEvent(() => { il.Emit(OpCodes.Ldc_I4_1); il.Emit(OpCodes.Newarr, _types.Object); il.Emit(OpCodes.Dup); il.Emit(OpCodes.Ldc_I4_0); il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, _wsFdNumField); il.Emit(OpCodes.Box, _types.Double); il.Emit(OpCodes.Stelem_Ref); });
+        EmitEvent(() => { il.Emit(OpCodes.Ldc_I4_1); il.Emit(OpCodes.Newarr, _types.Object); il.Emit(OpCodes.Dup); il.Emit(OpCodes.Ldc_I4_0); il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, fsStreams.WriteFdField); il.Emit(OpCodes.Box, _types.Double); il.Emit(OpCodes.Stelem_Ref); });
         il.Emit(OpCodes.Br, ret);
         il.MarkLabel(notOpen);
         il.Emit(OpCodes.Ldarg_1); il.Emit(OpCodes.Ldstr, "ready"); il.Emit(OpCodes.Call, strEq); il.Emit(OpCodes.Brfalse, notReady);
@@ -408,24 +381,24 @@ public partial class RuntimeEmitter
         il.MarkLabel(notReady);
         // close: only if already closed && emitClose
         il.Emit(OpCodes.Ldarg_1); il.Emit(OpCodes.Ldstr, "close"); il.Emit(OpCodes.Call, strEq); il.Emit(OpCodes.Brfalse, ret);
-        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, _wsClosedField); il.Emit(OpCodes.Brfalse, ret);
-        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, _wsEmitCloseField); il.Emit(OpCodes.Brfalse, ret);
+        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, fsStreams.WriteClosedField); il.Emit(OpCodes.Brfalse, ret);
+        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, fsStreams.WriteEmitCloseField); il.Emit(OpCodes.Brfalse, ret);
         EmitEvent(() => { il.Emit(OpCodes.Ldc_I4_0); il.Emit(OpCodes.Newarr, _types.Object); });
         il.MarkLabel(ret);
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitFsWriteStreamMethods(EmittedRuntime runtime)
+    private void EmitFsWriteStreamMethods(EmittedFileSystemStreamRuntime fsStreams, EmittedBufferRuntime buffer, EmittedEventEmitterRuntime eventEmitter)
     {
-        EmitFsWriteStreamWriteBody(runtime);
-        EmitFsWriteStreamEndBody(runtime);
+        EmitFsWriteStreamWriteBody(fsStreams, buffer);
+        EmitFsWriteStreamEndBody(fsStreams, eventEmitter);
         // On/once/emit are inherited from $EventEmitter now (no stub).
     }
 
-    private void EmitFsWriteStreamWriteBody(EmittedRuntime runtime)
+    private void EmitFsWriteStreamWriteBody(EmittedFileSystemStreamRuntime fsStreams, EmittedBufferRuntime buffer)
     {
         // public object Write(object data) - writes byte[]/$Buffer/string to FileStream
-        var il = _wsWriteMethod.GetILGenerator();
+        var il = fsStreams.Write.GetILGenerator();
 
         var bytesLocal = il.DeclareLocal(typeof(byte[]));
         var afterConvertLabel = il.DefineLabel();
@@ -444,11 +417,11 @@ public partial class RuntimeEmitter
         il.MarkLabel(notBytesLabel);
         var notBufferLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, runtime.RequireBuffer().Type);
+        il.Emit(OpCodes.Isinst, buffer.Type);
         il.Emit(OpCodes.Brfalse, notBufferLabel);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Castclass, runtime.RequireBuffer().Type);
-        il.Emit(OpCodes.Callvirt, runtime.RequireBuffer().GetData);
+        il.Emit(OpCodes.Castclass, buffer.Type);
+        il.Emit(OpCodes.Callvirt, buffer.GetData);
         il.Emit(OpCodes.Stloc, bytesLocal);
         il.Emit(OpCodes.Br, afterConvertLabel);
 
@@ -464,7 +437,7 @@ public partial class RuntimeEmitter
 
         // _stream.Write(bytes, 0, bytes.Length)
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _wsStreamField);
+        il.Emit(OpCodes.Ldfld, fsStreams.WriteStreamField);
         il.Emit(OpCodes.Ldloc, bytesLocal);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldloc, bytesLocal);
@@ -475,12 +448,12 @@ public partial class RuntimeEmitter
         // _bytesWritten += bytes.Length
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _wsBytesWrittenField);
+        il.Emit(OpCodes.Ldfld, fsStreams.WriteBytesWrittenField);
         il.Emit(OpCodes.Ldloc, bytesLocal);
         il.Emit(OpCodes.Ldlen);
         il.Emit(OpCodes.Conv_R8);
         il.Emit(OpCodes.Add);
-        il.Emit(OpCodes.Stfld, _wsBytesWrittenField);
+        il.Emit(OpCodes.Stfld, fsStreams.WriteBytesWrittenField);
 
         // return true
         il.Emit(OpCodes.Ldc_I4_1);
@@ -488,10 +461,10 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitFsWriteStreamEndBody(EmittedRuntime runtime)
+    private void EmitFsWriteStreamEndBody(EmittedFileSystemStreamRuntime fsStreams, EmittedEventEmitterRuntime eventEmitter)
     {
         // public object End(object? data): write final data, flush/close, emit finish→close.
-        var il = _wsEndMethod.GetILGenerator();
+        var il = fsStreams.End.GetILGenerator();
         var skipWriteLabel = il.DefineLabel();
 
         // if (data != null) Write(data)
@@ -499,33 +472,33 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, skipWriteLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, _wsWriteMethod);
+        il.Emit(OpCodes.Callvirt, fsStreams.Write);
         il.Emit(OpCodes.Pop);
         il.MarkLabel(skipWriteLabel);
 
         // _stream.Flush(); if (_autoClose) _stream.Close();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _wsStreamField);
+        il.Emit(OpCodes.Ldfld, fsStreams.WriteStreamField);
         il.Emit(OpCodes.Callvirt, typeof(Stream).GetMethod("Flush", Type.EmptyTypes)!);
         var noCloseLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, _wsAutoCloseField); il.Emit(OpCodes.Brfalse, noCloseLabel);
-        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, _wsStreamField);
+        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, fsStreams.WriteAutoCloseField); il.Emit(OpCodes.Brfalse, noCloseLabel);
+        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, fsStreams.WriteStreamField);
         il.Emit(OpCodes.Callvirt, typeof(Stream).GetMethod("Close", Type.EmptyTypes)!);
         il.MarkLabel(noCloseLabel);
 
         // _closed = true
-        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldc_I4_1); il.Emit(OpCodes.Stfld, _wsClosedField);
+        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldc_I4_1); il.Emit(OpCodes.Stfld, fsStreams.WriteClosedField);
 
         void Emit(string name)
         {
             il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldstr, name);
             il.Emit(OpCodes.Ldc_I4_0); il.Emit(OpCodes.Newarr, _types.Object);
-            il.Emit(OpCodes.Call, runtime.EventEmitter.Emit); il.Emit(OpCodes.Pop);
+            il.Emit(OpCodes.Call, eventEmitter.Emit); il.Emit(OpCodes.Pop);
         }
         // emit 'finish'; if (_emitClose) emit 'close'
         Emit("finish");
         var noEmitClose = il.DefineLabel();
-        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, _wsEmitCloseField); il.Emit(OpCodes.Brfalse, noEmitClose);
+        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, fsStreams.WriteEmitCloseField); il.Emit(OpCodes.Brfalse, noEmitClose);
         Emit("close");
         il.MarkLabel(noEmitClose);
 
@@ -540,11 +513,12 @@ public partial class RuntimeEmitter
 
     private void EmitFsCreateReadStreamFactory(TypeBuilder runtimeType, EmittedRuntime runtime)
     {
+        var fsStreams = runtime.RequireFileSystemStreams();
         // public static object FsCreateReadStream(object path, object? options)
         var method = runtimeType.DefineMethod("FsCreateReadStream",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object, [_types.Object, _types.Object]);
-        runtime.FsCreateReadStream = method;
+        fsStreams.CreateReadStream = method;
 
         var il = method.GetILGenerator();
         var utf8Get = typeof(System.Text.Encoding).GetProperty("UTF8")!.GetGetMethod()!;
@@ -680,8 +654,8 @@ public partial class RuntimeEmitter
         il.MarkLabel(wdone); il.Emit(OpCodes.Stloc, wholeLocal);
 
         // stream = new $FsReadStream(path, whole, emitClose, fdNum, (double)total)
-        var streamLocal = il.DeclareLocal(_fsReadStreamType);
-        var rsCtor = _types.GetConstructors(_fsReadStreamType)[0];
+        var streamLocal = il.DeclareLocal(fsStreams.ReadType);
+        var rsCtor = fsStreams.ReadCtor;
         il.Emit(OpCodes.Ldloc, pathStrLocal); il.Emit(OpCodes.Ldloc, wholeLocal); il.Emit(OpCodes.Ldloc, emitCloseLocal); il.Emit(OpCodes.Ldloc, fdNumLocal); il.Emit(OpCodes.Ldloc, totalLocal); il.Emit(OpCodes.Conv_R8);
         il.Emit(OpCodes.Newobj, rsCtor); il.Emit(OpCodes.Stloc, streamLocal);
 
@@ -723,11 +697,12 @@ public partial class RuntimeEmitter
 
     private void EmitFsCreateWriteStreamFactory(TypeBuilder runtimeType, EmittedRuntime runtime)
     {
+        var fsStreams = runtime.RequireFileSystemStreams();
         // public static object FsCreateWriteStream(object path, object? options)
         var method = runtimeType.DefineMethod("FsCreateWriteStream",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object, [_types.Object, _types.Object]);
-        runtime.FsCreateWriteStream = method;
+        fsStreams.CreateWriteStream = method;
 
         var il = method.GetILGenerator();
 
@@ -785,7 +760,7 @@ public partial class RuntimeEmitter
         var startLocal = NumOpt(RawOpt("start"), 0.0);
 
         // return new $FsWriteStream(path, flags, autoClose, emitClose, fd, start)
-        var wsCtor = _types.GetConstructors(_fsWriteStreamType)[0];
+        var wsCtor = fsStreams.WriteCtor;
         il.Emit(OpCodes.Ldloc, pathStrLocal);
         il.Emit(OpCodes.Ldloc, flagsLocal);
         il.Emit(OpCodes.Ldloc, autoCloseLocal);
