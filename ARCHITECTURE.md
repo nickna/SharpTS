@@ -611,6 +611,14 @@ bridge retains its existing soft dependency and standalone error contract. Metho
 and reflection lookups remain scoped construction locals; the guest registry retains its runtime
 lifecycle. No migrated flat aliases or emitter-held handle copies remain.
 
+OS helpers use optional `EmittedOsRuntime`, selected by `UsesOs`, for `freemem`, `loadavg`, and
+`networkInterfaces`. Four emission helpers accept the component directly. Module calls use checked
+declarations; completion validates all three methods after runtime finalization and freezes writes.
+Other OS APIs continue to emit inline through `OsModuleEmitter`. Method-local BCL reflection handles
+remain scoped construction locals. Memory queries and the existing compiled load-average and
+network-interface behavior, emitted signatures, feature selection, and standalone dependencies are
+unchanged. No flat OS aliases remain.
+
 During emission, each handle becomes readable as soon as its declaration is assigned, so forward
 references do not require a method body to exist yet. An early read names the missing declaration.
 Completion is an orchestration boundary, not an IL verifier: body emission and type finalization

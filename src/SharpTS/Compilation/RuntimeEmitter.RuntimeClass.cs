@@ -1484,7 +1484,7 @@ public partial class RuntimeEmitter
             EmitFsModuleMethods(typeBuilder, runtime);
         // os module — gated on UsesOs (set by `import 'os'` or `os.X` access).
         if (_features.UsesOs)
-            EmitOsModuleMethods(typeBuilder, runtime);
+            EmitOsModuleMethods(typeBuilder, runtime.RequireOs());
         if (_features.UsesDns)
         {
             // Standalone posture (#1073, explicit decision): the module-level dns

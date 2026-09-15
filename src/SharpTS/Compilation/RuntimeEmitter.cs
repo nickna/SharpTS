@@ -64,6 +64,8 @@ public partial class RuntimeEmitter
             runtime.BeginPromiseEmission();
             runtime.BeginTimerPromiseEmission();
         }
+        if (features.UsesOs)
+            runtime.BeginOsEmission();
         if (features.UsesChildProcess)
             runtime.BeginChildProcessEmission();
         if (features.UsesFs)
@@ -672,6 +674,7 @@ public partial class RuntimeEmitter
         runtime.Timers.CompleteEmission();
         runtime.Microtasks.CompleteEmission();
         runtime.TimerPromises?.CompleteEmission();
+        runtime.Os?.CompleteEmission();
         runtime.ChildProcess?.CompleteEmission();
         runtime.Process.CompleteEmission();
         runtime.EventLoop.CompleteEmission();

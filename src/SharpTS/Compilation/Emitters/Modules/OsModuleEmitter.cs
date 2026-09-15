@@ -298,7 +298,7 @@ public sealed class OsModuleEmitter : IBuiltInModuleEmitter
         var il = ctx.IL;
 
         // Call emitted OsFreemem helper for standalone assemblies
-        il.Emit(OpCodes.Call, ctx.Runtime!.OsFreemem);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireOs().Freemem);
         il.Emit(OpCodes.Box, ctx.Types.Double);
         return true;
     }
@@ -366,7 +366,7 @@ public sealed class OsModuleEmitter : IBuiltInModuleEmitter
         var il = ctx.IL;
 
         // Call the emitted OsLoadavg runtime helper
-        il.Emit(OpCodes.Call, ctx.Runtime!.OsLoadavg);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireOs().Loadavg);
         return true;
     }
 
@@ -376,7 +376,7 @@ public sealed class OsModuleEmitter : IBuiltInModuleEmitter
         var il = ctx.IL;
 
         // Call the emitted OsNetworkInterfaces runtime helper and wrap in TSObject
-        il.Emit(OpCodes.Call, ctx.Runtime!.OsNetworkInterfaces);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireOs().NetworkInterfaces);
         il.Emit(OpCodes.Call, ctx.Runtime!.CreateObject);
         return true;
     }

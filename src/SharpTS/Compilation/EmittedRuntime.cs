@@ -1374,9 +1374,18 @@ public class EmittedRuntime
     public ConstructorBuilder FlatMapIteratorCtor { get; set; } = null!;
 
     // OS module methods
-    public MethodBuilder OsFreemem { get; set; } = null!;
-    public MethodBuilder OsLoadavg { get; set; } = null!;
-    public MethodBuilder OsNetworkInterfaces { get; set; } = null!;
+    /// <summary>OS metadata, or null when OS helpers are omitted.</summary>
+    public EmittedOsRuntime? Os { get; private set; }
+
+    internal void BeginOsEmission()
+    {
+        if (Os is not null)
+            throw new InvalidOperationException("OS metadata emission has already started.");
+        Os = new EmittedOsRuntime();
+    }
+
+    public EmittedOsRuntime RequireOs() => Os
+        ?? throw new InvalidOperationException("OS runtime was not enabled for this compilation.");
 
     /// <summary>Filesystem data and synchronous I/O metadata, absent when UsesFs is off.</summary>
     public EmittedFileSystemRuntime? FileSystem { get; private set; }
