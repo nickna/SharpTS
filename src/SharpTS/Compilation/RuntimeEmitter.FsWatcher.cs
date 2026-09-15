@@ -11,121 +11,105 @@ namespace SharpTS.Compilation;
 /// </summary>
 public partial class RuntimeEmitter
 {
-    // $FsWatcher type and members
-    private TypeBuilder _fsWatcherType = null!;
-    private ConstructorBuilder _fsWatcherCtor = null!;
-    private FieldBuilder _fsWatcherFswField = null!;
-    private FieldBuilder _fsWatcherClosedField = null!;
-    private MethodBuilder _fsWatcherCloseMethod = null!;
-    private MethodBuilder _fsWatcherOnFsEvent = null!;
-
-    // $FsWatchChangeClosure
-    private TypeBuilder _fsWatchClosureType = null!;
-    private ConstructorBuilder _fsWatchClosureCtor = null!;
-    private FieldBuilder _fsWatchClosureWatcherField = null!;
-    private FieldBuilder _fsWatchClosureEventTypeField = null!;
-    private FieldBuilder _fsWatchClosureFilenameField = null!;
-    private MethodBuilder _fsWatchClosureRun = null!;
-
-    private void EmitFsWatcherClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private void EmitFsWatcherClass(ModuleBuilder moduleBuilder, EmittedFileSystemWatcherRuntime watchers, EmittedEventEmitterRuntime events, EmittedEventLoopRuntime eventLoop)
     {
         // 1. Emit closure type first (needed by the event handler)
-        EmitFsWatchChangeClosure(moduleBuilder, runtime);
+        EmitFsWatchChangeClosure(moduleBuilder, watchers, events);
 
         // 2. Define $FsWatcher : $EventEmitter
-        _fsWatcherType = EmitTypeDefinitions.DefineType(moduleBuilder,
+        watchers.WatcherType = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$FsWatcher",
             TypeAttributes.Public | TypeAttributes.BeforeFieldInit,
-            runtime.EventEmitter.Type);
+            events.Type);
 
-        _fsWatcherFswField = _fsWatcherType.DefineField("_watcher", typeof(FileSystemWatcher), FieldAttributes.Private);
-        _fsWatcherClosedField = _fsWatcherType.DefineField("_closed", _types.Boolean, FieldAttributes.Private);
+        watchers.WatcherStorageField = watchers.WatcherType.DefineField("_watcher", typeof(FileSystemWatcher), FieldAttributes.Private);
+        watchers.WatcherClosedField = watchers.WatcherType.DefineField("_closed", _types.Boolean, FieldAttributes.Private);
 
-        EmitFsWatcherOnFsEvent(runtime);
-        EmitFsWatcherConstructor(runtime);
-        EmitFsWatcherClose(runtime);
+        EmitFsWatcherOnFsEvent(watchers, eventLoop);
+        EmitFsWatcherConstructor(watchers, events, eventLoop);
+        EmitFsWatcherClose(watchers, eventLoop);
 
-        _ = _fsWatcherType;
-        _ = _fsWatcherCtor;
-        _ = _fsWatcherCloseMethod;
+        _ = watchers.WatcherType;
+        _ = watchers.WatcherCtor;
+        _ = watchers.WatcherClose;
 
-        _fsWatcherType.CreateType();
+        watchers.WatcherType.CreateType();
     }
 
     /// <summary>
     /// Emits the closure type that marshals FileSystemWatcher events to the EventLoop.
     /// </summary>
-    private void EmitFsWatchChangeClosure(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private void EmitFsWatchChangeClosure(ModuleBuilder moduleBuilder, EmittedFileSystemWatcherRuntime watchers, EmittedEventEmitterRuntime events)
     {
-        _fsWatchClosureType = moduleBuilder.DefineType(
+        watchers.ChangeClosureType = moduleBuilder.DefineType(
             "$FsWatchChangeClosure",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit);
 
-        _fsWatchClosureWatcherField = _fsWatchClosureType.DefineField("_watcher", runtime.EventEmitter.Type, FieldAttributes.Public);
-        _fsWatchClosureEventTypeField = _fsWatchClosureType.DefineField("_eventType", _types.String, FieldAttributes.Public);
-        _fsWatchClosureFilenameField = _fsWatchClosureType.DefineField("_filename", _types.String, FieldAttributes.Public);
+        watchers.ChangeClosureWatcherField = watchers.ChangeClosureType.DefineField("_watcher", events.Type, FieldAttributes.Public);
+        watchers.ChangeClosureEventTypeField = watchers.ChangeClosureType.DefineField("_eventType", _types.String, FieldAttributes.Public);
+        watchers.ChangeClosureFilenameField = watchers.ChangeClosureType.DefineField("_filename", _types.String, FieldAttributes.Public);
 
         // Constructor(watcher, eventType, filename)
-        _fsWatchClosureCtor = _fsWatchClosureType.DefineConstructor(
+        watchers.ChangeClosureCtor = watchers.ChangeClosureType.DefineConstructor(
             MethodAttributes.Public, CallingConventions.Standard,
-            [runtime.EventEmitter.Type, _types.String, _types.String]);
+            [events.Type, _types.String, _types.String]);
         {
-            var il = _fsWatchClosureCtor.GetILGenerator();
+            var il = watchers.ChangeClosureCtor.GetILGenerator();
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Call, typeof(object).GetConstructor(Type.EmptyTypes)!);
-            il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldarg_1); il.Emit(OpCodes.Stfld, _fsWatchClosureWatcherField);
-            il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldarg_2); il.Emit(OpCodes.Stfld, _fsWatchClosureEventTypeField);
-            il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldarg_3); il.Emit(OpCodes.Stfld, _fsWatchClosureFilenameField);
+            il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldarg_1); il.Emit(OpCodes.Stfld, watchers.ChangeClosureWatcherField);
+            il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldarg_2); il.Emit(OpCodes.Stfld, watchers.ChangeClosureEventTypeField);
+            il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldarg_3); il.Emit(OpCodes.Stfld, watchers.ChangeClosureFilenameField);
             il.Emit(OpCodes.Ret);
         }
 
         // Run(): void — calls watcher.Emit("change", [eventType, filename])
-        _fsWatchClosureRun = _fsWatchClosureType.DefineMethod(
+        watchers.ChangeClosureRun = watchers.ChangeClosureType.DefineMethod(
             "Run", MethodAttributes.Public, _types.Void, Type.EmptyTypes);
         {
-            var il = _fsWatchClosureRun.GetILGenerator();
+            var il = watchers.ChangeClosureRun.GetILGenerator();
 
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldfld, _fsWatchClosureWatcherField);
+            il.Emit(OpCodes.Ldfld, watchers.ChangeClosureWatcherField);
             il.Emit(OpCodes.Ldstr, "change");
             il.Emit(OpCodes.Ldc_I4_2);
             il.Emit(OpCodes.Newarr, _types.Object);
             il.Emit(OpCodes.Dup);
             il.Emit(OpCodes.Ldc_I4_0);
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldfld, _fsWatchClosureEventTypeField);
+            il.Emit(OpCodes.Ldfld, watchers.ChangeClosureEventTypeField);
             il.Emit(OpCodes.Stelem_Ref);
             il.Emit(OpCodes.Dup);
             il.Emit(OpCodes.Ldc_I4_1);
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldfld, _fsWatchClosureFilenameField);
+            il.Emit(OpCodes.Ldfld, watchers.ChangeClosureFilenameField);
             il.Emit(OpCodes.Stelem_Ref);
-            il.Emit(OpCodes.Call, runtime.EventEmitter.Emit);
+            il.Emit(OpCodes.Call, events.Emit);
             il.Emit(OpCodes.Pop); // Emit returns bool
             il.Emit(OpCodes.Ret);
         }
 
-        _fsWatchClosureType.CreateType();
+        watchers.ChangeClosureType.CreateType();
     }
 
     /// <summary>
     /// Emits OnFsEvent(object sender, FileSystemEventArgs e): if not closed, schedule closure.
     /// </summary>
-    private void EmitFsWatcherOnFsEvent(EmittedRuntime runtime)
+    private void EmitFsWatcherOnFsEvent(EmittedFileSystemWatcherRuntime watchers, EmittedEventLoopRuntime eventLoop)
     {
-        _fsWatcherOnFsEvent = _fsWatcherType.DefineMethod(
+        watchers.WatcherOnFsEvent = watchers.WatcherType.DefineMethod(
             "OnFsEvent",
             MethodAttributes.Public,
             _types.Void,
             [_types.Object, typeof(FileSystemEventArgs)]);
 
-        var il = _fsWatcherOnFsEvent.GetILGenerator();
+        var il = watchers.WatcherOnFsEvent.GetILGenerator();
 
         // if (_closed) return
         var notClosedLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Volatile);
-        il.Emit(OpCodes.Ldfld, _fsWatcherClosedField);
+        il.Emit(OpCodes.Ldfld, watchers.WatcherClosedField);
         il.Emit(OpCodes.Brfalse, notClosedLabel);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notClosedLabel);
@@ -144,36 +128,36 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, filenameLocal);
 
         // EventLoop.GetInstance().Schedule(new Action(new $FsWatchChangeClosure(this, "change", filename).Run))
-        il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
+        il.Emit(OpCodes.Call, eventLoop.GetInstance);
         il.Emit(OpCodes.Ldarg_0); // this (the $FsWatcher, which IS a $EventEmitter)
         il.Emit(OpCodes.Ldstr, "change");
         il.Emit(OpCodes.Ldloc, filenameLocal);
-        il.Emit(OpCodes.Newobj, _fsWatchClosureCtor);
-        il.Emit(OpCodes.Ldftn, _fsWatchClosureRun);
+        il.Emit(OpCodes.Newobj, watchers.ChangeClosureCtor);
+        il.Emit(OpCodes.Ldftn, watchers.ChangeClosureRun);
         il.Emit(OpCodes.Newobj, typeof(Action).GetConstructor([typeof(object), typeof(IntPtr)])!);
-        il.Emit(OpCodes.Call, runtime.EventLoop.Schedule);
+        il.Emit(OpCodes.Call, eventLoop.Schedule);
         il.Emit(OpCodes.Ret);
     }
 
     /// <summary>
     /// Constructor(string path): creates FileSystemWatcher, hooks events, calls Ref().
     /// </summary>
-    private void EmitFsWatcherConstructor(EmittedRuntime runtime)
+    private void EmitFsWatcherConstructor(EmittedFileSystemWatcherRuntime watchers, EmittedEventEmitterRuntime events, EmittedEventLoopRuntime eventLoop)
     {
-        _fsWatcherCtor = _fsWatcherType.DefineConstructor(
+        watchers.WatcherCtor = watchers.WatcherType.DefineConstructor(
             MethodAttributes.Public, CallingConventions.Standard, [_types.String]);
 
-        var il = _fsWatcherCtor.GetILGenerator();
+        var il = watchers.WatcherCtor.GetILGenerator();
 
         // Call base $EventEmitter ctor
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.EventEmitter.Ctor);
+        il.Emit(OpCodes.Call, events.Ctor);
 
         // _closed = false
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Volatile);
-        il.Emit(OpCodes.Stfld, _fsWatcherClosedField);
+        il.Emit(OpCodes.Stfld, watchers.WatcherClosedField);
 
         // Determine dir and filter from path
         var dirLocal = il.DeclareLocal(_types.String);
@@ -211,40 +195,40 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, dirLocal);
         il.Emit(OpCodes.Ldloc, filterLocal);
         il.Emit(OpCodes.Newobj, typeof(FileSystemWatcher).GetConstructor([typeof(string), typeof(string)])!);
-        il.Emit(OpCodes.Stfld, _fsWatcherFswField);
+        il.Emit(OpCodes.Stfld, watchers.WatcherStorageField);
 
         // Set NotifyFilter
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _fsWatcherFswField);
+        il.Emit(OpCodes.Ldfld, watchers.WatcherStorageField);
         il.Emit(OpCodes.Ldc_I4, (int)(NotifyFilters.FileName | NotifyFilters.DirectoryName |
                                        NotifyFilters.LastWrite | NotifyFilters.Size | NotifyFilters.CreationTime));
         il.Emit(OpCodes.Callvirt, typeof(FileSystemWatcher).GetProperty("NotifyFilter")!.GetSetMethod()!);
 
         // Hook Changed event: _watcher.Changed += new FileSystemEventHandler(this.OnFsEvent)
-        EmitHookFswEvent(il, runtime, "Changed");
-        EmitHookFswEvent(il, runtime, "Created");
-        EmitHookFswEvent(il, runtime, "Deleted");
+        EmitHookFswEvent(il, watchers, "Changed");
+        EmitHookFswEvent(il, watchers, "Created");
+        EmitHookFswEvent(il, watchers, "Deleted");
 
         // EnableRaisingEvents = true
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _fsWatcherFswField);
+        il.Emit(OpCodes.Ldfld, watchers.WatcherStorageField);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Callvirt, typeof(FileSystemWatcher).GetProperty("EnableRaisingEvents")!.GetSetMethod()!);
 
         // EventLoop.GetInstance().Ref()
-        il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
-        il.Emit(OpCodes.Call, runtime.EventLoop.Ref);
+        il.Emit(OpCodes.Call, eventLoop.GetInstance);
+        il.Emit(OpCodes.Call, eventLoop.Ref);
 
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitHookFswEvent(ILGenerator il, EmittedRuntime runtime, string eventName)
+    private void EmitHookFswEvent(ILGenerator il, EmittedFileSystemWatcherRuntime watchers, string eventName)
     {
         // _watcher.add_{eventName}(new FileSystemEventHandler(this.OnFsEvent))
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _fsWatcherFswField);
+        il.Emit(OpCodes.Ldfld, watchers.WatcherStorageField);
         il.Emit(OpCodes.Ldarg_0); // this
-        il.Emit(OpCodes.Ldftn, _fsWatcherOnFsEvent);
+        il.Emit(OpCodes.Ldftn, watchers.WatcherOnFsEvent);
         il.Emit(OpCodes.Newobj, typeof(FileSystemEventHandler).GetConstructor([typeof(object), typeof(IntPtr)])!);
         il.Emit(OpCodes.Callvirt, typeof(FileSystemWatcher).GetEvent(eventName)!.GetAddMethod()!);
     }
@@ -252,18 +236,18 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Close(): disposes watcher, calls Unref().
     /// </summary>
-    private void EmitFsWatcherClose(EmittedRuntime runtime)
+    private void EmitFsWatcherClose(EmittedFileSystemWatcherRuntime watchers, EmittedEventLoopRuntime eventLoop)
     {
-        _fsWatcherCloseMethod = _fsWatcherType.DefineMethod(
+        watchers.WatcherClose = watchers.WatcherType.DefineMethod(
             "Close", MethodAttributes.Public, _types.Void, Type.EmptyTypes);
 
-        var il = _fsWatcherCloseMethod.GetILGenerator();
+        var il = watchers.WatcherClose.GetILGenerator();
 
         // if (_closed) return
         var notClosedLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Volatile);
-        il.Emit(OpCodes.Ldfld, _fsWatcherClosedField);
+        il.Emit(OpCodes.Ldfld, watchers.WatcherClosedField);
         il.Emit(OpCodes.Brfalse, notClosedLabel);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notClosedLabel);
@@ -272,22 +256,22 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Volatile);
-        il.Emit(OpCodes.Stfld, _fsWatcherClosedField);
+        il.Emit(OpCodes.Stfld, watchers.WatcherClosedField);
 
         // _watcher.EnableRaisingEvents = false
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _fsWatcherFswField);
+        il.Emit(OpCodes.Ldfld, watchers.WatcherStorageField);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Callvirt, typeof(FileSystemWatcher).GetProperty("EnableRaisingEvents")!.GetSetMethod()!);
 
         // _watcher.Dispose()
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _fsWatcherFswField);
+        il.Emit(OpCodes.Ldfld, watchers.WatcherStorageField);
         il.Emit(OpCodes.Callvirt, typeof(IDisposable).GetMethod("Dispose")!);
 
         // EventLoop.GetInstance().Unref()
-        il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
-        il.Emit(OpCodes.Call, runtime.EventLoop.Unref);
+        il.Emit(OpCodes.Call, eventLoop.GetInstance);
+        il.Emit(OpCodes.Call, eventLoop.Unref);
 
         il.Emit(OpCodes.Ret);
     }
@@ -297,15 +281,16 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitFsWatchFactories(TypeBuilder runtimeType, EmittedRuntime runtime)
     {
+        var watchers = runtime.RequireFileSystemWatchers();
         // Static registry for watchFile watchers
-        _statWatcherRegistryField = runtimeType.DefineField(
+        watchers.StatRegistryField = runtimeType.DefineField(
             "_statWatchers",
             typeof(Dictionary<string, object>),
             FieldAttributes.Private | FieldAttributes.Static);
 
         EmitFsWatchFactory(runtimeType, runtime);
         EmitFsWatchFileFactory(runtimeType, runtime);
-        EmitFsUnwatchFileFactory(runtimeType, runtime);
+        EmitFsUnwatchFileFactory(runtimeType, watchers);
     }
 
     /// <summary>
@@ -314,19 +299,20 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitFsWatchFactory(TypeBuilder runtimeType, EmittedRuntime runtime)
     {
+        var watchers = runtime.RequireFileSystemWatchers();
         var method = runtimeType.DefineMethod(
             "FsWatch",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.String, _types.Object, _types.Object]); // path, optionsOrCallback, callback
-        runtime.FsWatch = method;
+        watchers.Watch = method;
 
         var il = method.GetILGenerator();
 
         // Create $FsWatcher(path)
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Newobj, _fsWatcherCtor);
-        var watcherLocal = il.DeclareLocal(_fsWatcherType);
+        il.Emit(OpCodes.Newobj, watchers.WatcherCtor);
+        var watcherLocal = il.DeclareLocal(watchers.WatcherType);
         il.Emit(OpCodes.Stloc, watcherLocal);
 
         // Determine the callback: could be arg1 (if function) or arg2
@@ -371,12 +357,13 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitFsWatchFileFactory(TypeBuilder runtimeType, EmittedRuntime runtime)
     {
+        var watchers = runtime.RequireFileSystemWatchers();
         var method = runtimeType.DefineMethod(
             "FsWatchFile",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.String, _types.Object, _types.Object]); // path, options, callback
-        runtime.FsWatchFile = method;
+        watchers.WatchFile = method;
 
         var il = method.GetILGenerator();
 
@@ -432,8 +419,8 @@ public partial class RuntimeEmitter
         // Create $StatWatcher(path, interval)
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, intervalLocal);
-        il.Emit(OpCodes.Newobj, _statWatcherCtor);
-        var watcherLocal = il.DeclareLocal(_statWatcherType);
+        il.Emit(OpCodes.Newobj, watchers.StatCtor);
+        var watcherLocal = il.DeclareLocal(watchers.StatType);
         il.Emit(OpCodes.Stloc, watcherLocal);
 
         // Register callback on "change" event
@@ -467,13 +454,13 @@ public partial class RuntimeEmitter
 
         // Store in registry: _statWatchers[path] = watcher
         var registryOkLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldsfld, _statWatcherRegistryField);
+        il.Emit(OpCodes.Ldsfld, watchers.StatRegistryField);
         il.Emit(OpCodes.Brtrue, registryOkLabel);
         il.Emit(OpCodes.Newobj, typeof(Dictionary<string, object>).GetConstructor(Type.EmptyTypes)!);
-        il.Emit(OpCodes.Stsfld, _statWatcherRegistryField);
+        il.Emit(OpCodes.Stsfld, watchers.StatRegistryField);
         il.MarkLabel(registryOkLabel);
 
-        il.Emit(OpCodes.Ldsfld, _statWatcherRegistryField);
+        il.Emit(OpCodes.Ldsfld, watchers.StatRegistryField);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Call, typeof(Path).GetMethod("GetFullPath", [typeof(string)])!);
         il.Emit(OpCodes.Ldloc, watcherLocal);
@@ -488,20 +475,20 @@ public partial class RuntimeEmitter
     /// FsUnwatchFile(path) → undefined
     /// Finds watcher in registry, closes it, removes from registry.
     /// </summary>
-    private void EmitFsUnwatchFileFactory(TypeBuilder runtimeType, EmittedRuntime runtime)
+    private void EmitFsUnwatchFileFactory(TypeBuilder runtimeType, EmittedFileSystemWatcherRuntime watchers)
     {
         var method = runtimeType.DefineMethod(
             "FsUnwatchFile",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.String]);
-        runtime.FsUnwatchFile = method;
+        watchers.UnwatchFile = method;
 
         var il = method.GetILGenerator();
 
         // If registry is null, return
         var registryExistsLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldsfld, _statWatcherRegistryField);
+        il.Emit(OpCodes.Ldsfld, watchers.StatRegistryField);
         il.Emit(OpCodes.Brtrue, registryExistsLabel);
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ret);
@@ -516,7 +503,7 @@ public partial class RuntimeEmitter
         // if (!_statWatchers.TryGetValue(fullPath, out var watcher)) return
         var watcherObjLocal = il.DeclareLocal(typeof(object));
         var foundLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldsfld, _statWatcherRegistryField);
+        il.Emit(OpCodes.Ldsfld, watchers.StatRegistryField);
         il.Emit(OpCodes.Ldloc, fullPathLocal);
         il.Emit(OpCodes.Ldloca, watcherObjLocal);
         il.Emit(OpCodes.Callvirt, typeof(Dictionary<string, object>).GetMethod("TryGetValue")!);
@@ -527,11 +514,11 @@ public partial class RuntimeEmitter
 
         // watcher.Close() — call via reflection on the emitted type
         il.Emit(OpCodes.Ldloc, watcherObjLocal);
-        il.Emit(OpCodes.Castclass, _statWatcherType);
-        il.Emit(OpCodes.Callvirt, _statWatcherCloseMethod);
+        il.Emit(OpCodes.Castclass, watchers.StatType);
+        il.Emit(OpCodes.Callvirt, watchers.StatClose);
 
         // Remove from registry
-        il.Emit(OpCodes.Ldsfld, _statWatcherRegistryField);
+        il.Emit(OpCodes.Ldsfld, watchers.StatRegistryField);
         il.Emit(OpCodes.Ldloc, fullPathLocal);
         il.Emit(OpCodes.Callvirt, typeof(Dictionary<string, object>).GetMethod("Remove", [typeof(string)])!);
         il.Emit(OpCodes.Pop);
