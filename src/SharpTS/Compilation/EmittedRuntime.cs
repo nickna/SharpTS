@@ -617,10 +617,8 @@ public class EmittedRuntime
     public MethodBuilder MethodCallableInvoke { get; set; } = null!;
     public FieldBuilder MethodCallableField { get; set; } = null!;
 
-    // Template strings list for tagged template literals
-    public Type TemplateStringsListType { get; set; } = null!;
-    public ConstructorInfo TemplateStringsListCtor { get; set; } = null!;
-    public MethodInfo TemplateStringsListRawGetter { get; set; } = null!;
+    /// <summary>Required template strings, concatenation, raw conversion, and tag invocation metadata.</summary>
+    public EmittedTemplateRuntime Templates { get; } = new();
 
     // Exception methods
     public MethodBuilder CreateException { get; set; } = null!;
@@ -678,10 +676,6 @@ public class EmittedRuntime
     public MethodBuilder MathImulAdapter { get; set; } = null!;
     public MethodBuilder MathHypotAdapter { get; set; } = null!;
 
-    public MethodBuilder ConcatTemplate { get; set; } = null!;
-    public MethodBuilder InvokeTaggedTemplate { get; set; } = null!;
-    public MethodBuilder InvokeTaggedTemplateWithThis { get; set; } = null!;
-    public MethodBuilder StringRaw { get; set; } = null!;
     public MethodBuilder ObjectRest { get; set; } = null!;
     public MethodBuilder ArrayDestructureSource { get; set; } = null!;  // #685: normalize array binding-pattern source via the iterator protocol
 

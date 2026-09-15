@@ -961,7 +961,7 @@ public partial class ILEmitter
             }
         }
 
-        EmitCallString(_ctx.Runtime!.ConcatTemplate);
+        EmitCallString(_ctx.Runtime!.Templates.Concat);
     }
 
     protected override void EmitTaggedTemplateLiteral(Expr.TaggedTemplateLiteral ttl)
@@ -1044,12 +1044,12 @@ public partial class ILEmitter
         if (hasThisBinding)
         {
             // Stack: tag, thisArg, cooked, raw, exprs
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.InvokeTaggedTemplateWithThis);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.Templates.InvokeWithThis);
         }
         else
         {
             // Stack: tag, cooked, raw, exprs
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.InvokeTaggedTemplate);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.Templates.Invoke);
         }
         SetStackUnknown();
     }
@@ -1097,7 +1097,7 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Ldloc, listLocal);
 
         // 3. Call $Runtime.StringRaw(rawStrings, expressions)
-        IL.Emit(OpCodes.Call, _ctx.Runtime!.StringRaw);
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.Templates.Raw);
         SetStackType(StackType.String);
     }
 

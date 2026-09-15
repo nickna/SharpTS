@@ -344,7 +344,13 @@ public partial class RuntimeEmitter
     /// reads its <c>length</c>, iterates indexed members.</item>
     /// </list>
     /// </summary>
-    private void EmitStringRaw(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitStringRaw(TypeBuilder typeBuilder, EmittedTemplateRuntime templates,
+        Type undefinedType,
+        MethodInfo getProperty,
+        MethodInfo toNumber,
+        MethodInfo toJsString,
+        MethodInfo createException,
+        ConstructorInfo typeErrorCtor)
     {
         // Second param is `List<object> substitutions` (not object[]) so
         // $TSFunction.AdjustArgs's rest-param recognition kicks in for direct
@@ -356,7 +362,7 @@ public partial class RuntimeEmitter
             _types.String,
             [_types.Object, _types.ListOfObject]
         );
-        runtime.StringRaw = method;
+        templates.Raw = method;
 
         var il = method.GetILGenerator();
 
@@ -398,16 +404,16 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, notNullishLabel);
         var throwTypeErrorLabel = il.DefineLabel();
         il.MarkLabel(throwTypeErrorLabel);
-        GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot convert undefined or null to object");
+        GuestErrorEmitter.ThrowError(il, createException, typeErrorCtor, "Cannot convert undefined or null to object");
         il.MarkLabel(notNullishLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, undefinedType);
         il.Emit(OpCodes.Brtrue, throwTypeErrorLabel);
 
         // raw = template.raw  via $Runtime.GetProperty
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "raw");
-        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, getProperty);
         il.Emit(OpCodes.Stloc, rawListLocal);
 
         // ECMA-262 22.1.2.4 step 4: ? ToObject(raw). If raw is null/undefined,
@@ -416,15 +422,15 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, rawListLocal);
         il.Emit(OpCodes.Brfalse, throwTypeErrorLabel);
         il.Emit(OpCodes.Ldloc, rawListLocal);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, undefinedType);
         il.Emit(OpCodes.Brtrue, throwTypeErrorLabel);
 
         // ToLength(raw.length): use $Runtime.GetProperty(raw, "length") then
         // $Runtime.ToNumber → clamp to non-negative int.
         il.Emit(OpCodes.Ldloc, rawListLocal);
         il.Emit(OpCodes.Ldstr, "length");
-        il.Emit(OpCodes.Call, runtime.GetProperty);
-        il.Emit(OpCodes.Call, runtime.ToNumber);
+        il.Emit(OpCodes.Call, getProperty);
+        il.Emit(OpCodes.Call, toNumber);
         var lenDouble = il.DeclareLocal(_types.Double);
         il.Emit(OpCodes.Stloc, lenDouble);
         // NaN / negative / -Infinity → 0
@@ -495,8 +501,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, rawListLocal);
         il.Emit(OpCodes.Ldloca, iLocal);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Int32, "ToString", Type.EmptyTypes)!);
-        il.Emit(OpCodes.Call, runtime.GetProperty);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, getProperty);
+        il.Emit(OpCodes.Call, toJsString);
         il.Emit(OpCodes.Stloc, segmentLocal);
         il.MarkLabel(segmentDoneLabel);
 
@@ -522,7 +528,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloc, iLocal);
         il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Item").GetGetMethod()!);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, toJsString);
         il.Emit(OpCodes.Stloc, subStrLocal);
         il.Emit(OpCodes.Ldloc, sbLocal);
         il.Emit(OpCodes.Ldloc, subStrLocal);

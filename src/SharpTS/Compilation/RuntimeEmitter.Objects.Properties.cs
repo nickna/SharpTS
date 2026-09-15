@@ -896,11 +896,11 @@ public partial class RuntimeEmitter
         il.MarkLabel(rawLabel);
         // For tagged template arrays, call emitted TemplateStringsList.raw getter.
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TemplateStringsListType);
+        il.Emit(OpCodes.Isinst, runtime.Templates.StringsListType);
         il.Emit(OpCodes.Brfalse, returnNullLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TemplateStringsListType);
-        il.Emit(OpCodes.Callvirt, runtime.TemplateStringsListRawGetter);
+        il.Emit(OpCodes.Castclass, runtime.Templates.StringsListType);
+        il.Emit(OpCodes.Callvirt, runtime.Templates.RawGetter);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(skipRawLabel);

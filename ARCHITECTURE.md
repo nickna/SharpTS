@@ -823,6 +823,15 @@ search helpers preserve the existing optional RegExp brand check. These inputs r
 state and remain subject to the final peer-ownership audit. String coercion, templates/String.raw,
 boxed-primitive unwrapping, and RegExp-aware protocols remain separate later families.
 
+Template-literal metadata lives in required `EmittedTemplateRuntime`. Its seven declarations
+cover the created strings-list type, constructor and raw getter, concatenation, String.raw, and
+both tag invocation forms. The list class is created before runtime helper bodies; completion
+validates and freezes all handles. Five emitters take the component and explicit coercion,
+property, freezing, invocation, undefined and error declarations. The list's field and builders
+remain local construction values. Direct, value, async and generator consumers use checked
+handles while retaining the existing argument shapes, freezing and receiver behavior. General
+coercion and function/object metadata remain with their families for later migration and audit.
+
 During emission, each handle becomes readable as soon as its declaration is assigned, so forward
 references do not require a method body to exist yet. An early read names the missing declaration.
 Completion is an orchestration boundary, not an IL verifier: body emission and type finalization

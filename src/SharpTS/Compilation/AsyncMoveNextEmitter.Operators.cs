@@ -107,7 +107,7 @@ public partial class AsyncMoveNextEmitter
         }
 
         // 5. Call runtime helper: InvokeTaggedTemplate(tag, cooked, raw, exprs)
-        _il.Emit(OpCodes.Call, _ctx!.Runtime!.InvokeTaggedTemplate);
+        _il.Emit(OpCodes.Call, _ctx!.Runtime!.Templates.Invoke);
         SetStackUnknown();
     }
 

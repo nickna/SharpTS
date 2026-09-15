@@ -1350,7 +1350,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
             IL.Emit(OpCodes.Stelem_Ref);
         }
 
-        IL.Emit(OpCodes.Call, Ctx.Runtime!.InvokeTaggedTemplate);
+        IL.Emit(OpCodes.Call, Ctx.Runtime!.Templates.Invoke);
         SetStackUnknown();
     }
 

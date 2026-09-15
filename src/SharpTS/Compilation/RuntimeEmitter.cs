@@ -478,7 +478,7 @@ public partial class RuntimeEmitter
 
         // Emit $TemplateStringsList class for tagged template literals
         // Must come before EmitRuntimeClass so InvokeTaggedTemplate can use the constructor
-        EmitTemplateStringsListClass(moduleBuilder, runtime);
+        EmitTemplateStringsListClass(moduleBuilder, runtime.Templates);
 
         // $PropertyDescriptorStore is now emitted earlier (just before $RegExp)
         // so types that need CompiledPropertyDescriptorType during their own
@@ -700,6 +700,7 @@ public partial class RuntimeEmitter
         runtime.Workers.CompleteEmission();
         runtime.StructuredClone.CompleteEmission();
         runtime.Strings.CompleteEmission();
+        runtime.Templates.CompleteEmission();
         runtime.BroadcastChannel?.CompleteEmission();
         runtime.EventEmitter.CompleteEmission();
         runtime.NodeStreams?.CompleteEmission();

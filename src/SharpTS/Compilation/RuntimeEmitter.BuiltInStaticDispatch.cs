@@ -106,7 +106,7 @@ public partial class RuntimeEmitter
         // String.* — bare `String` identifier resolves to typeof(string).
         EmitLookup(_types.String, "fromCharCode",  runtime.Strings.FromCharCode, 1);
         EmitLookup(_types.String, "fromCodePoint", runtime.Strings.FromCodePoint, 1);
-        EmitLookup(_types.String, "raw",           runtime.StringRaw, 1);
+        EmitLookup(_types.String, "raw",           runtime.Templates.Raw, 1);
 
         // Object.* — bracket-form access (`Object["assign"]`) and value-form
         // access (`let f = Object; f.assign`) both land here. Routes through

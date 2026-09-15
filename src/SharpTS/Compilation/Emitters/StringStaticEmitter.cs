@@ -65,7 +65,7 @@ public sealed class StringStaticEmitter : IStaticTypeEmitterStrategy
                     {
                         il.Emit(OpCodes.Ldnull);
                         il.Emit(OpCodes.Newobj, ctx.Types.GetDefaultConstructor(ctx.Types.ListOfObject));
-                        il.Emit(OpCodes.Call, ctx.Runtime!.StringRaw);
+                        il.Emit(OpCodes.Call, ctx.Runtime!.Templates.Raw);
                         return true;
                     }
                     emitter.EmitExpression(arguments[0]);
@@ -81,7 +81,7 @@ public sealed class StringStaticEmitter : IStaticTypeEmitterStrategy
                         il.Emit(OpCodes.Callvirt, ctx.Types.GetMethod(ctx.Types.ListOfObject, "Add", [ctx.Types.Object])!);
                     }
                     il.Emit(OpCodes.Ldloc, subsLocal);
-                    il.Emit(OpCodes.Call, ctx.Runtime!.StringRaw);
+                    il.Emit(OpCodes.Call, ctx.Runtime!.Templates.Raw);
                     return true;
                 }
 
@@ -132,7 +132,7 @@ public sealed class StringStaticEmitter : IStaticTypeEmitterStrategy
         {
             "fromCharCode"  => runtime.Strings.FromCharCode,
             "fromCodePoint" => runtime.Strings.FromCodePoint,
-            "raw"           => runtime.StringRaw,
+            "raw"           => runtime.Templates.Raw,
             _ => null
         };
         if (method == null) return false;
