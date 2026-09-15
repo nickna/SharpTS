@@ -109,7 +109,7 @@ public sealed class FsModuleEmitter : IBuiltInModuleEmitter
 
         if (propertyName == "promises")
         {
-            il.Emit(OpCodes.Call, ctx.Runtime!.FsGetPromisesNamespace);
+            il.Emit(OpCodes.Call, ctx.Runtime!.RequireFileSystemAsync().GetPromisesNamespace);
             return true;
         }
 

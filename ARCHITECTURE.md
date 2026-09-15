@@ -511,10 +511,31 @@ missing declarations or subsequent writes. No migrated flat aliases or emitter-h
 remain; feature selection, generated public signatures, native imports, and method bodies
 are preserved.
 
-Filesystem async dispatch and its Promise-wrapper registry, filesystem-owned stream subclasses,
-and watcher/poll-closure metadata remain separate subsequent phases under #1599. Local descriptor
-table fields and builders, BCL lookups, and the shared built-in module registry remain with their
-existing construction infrastructure for the final ownership audit.
+Filesystem-owned stream subclasses and watcher/poll-closure metadata remain separate subsequent
+phases under #1599. Local descriptor table fields and builders, BCL lookups, and the shared
+built-in module registry remain with their existing construction infrastructure for the final
+ownership audit.
+
+Filesystem async I/O uses optional `EmittedFileSystemAsyncRuntime` for 26 fixed declarations
+and 21 Promise-wrapper declarations. It replaces 22 flat method handles, the mutable wrapper
+registry, and four emitter-held background-operation handles. The same `UsesFs` gate selects
+both filesystem components, including for synchronous-only `fs` imports; neither hosted output
+nor unrelated async/Promise use enables filesystem I/O by itself.
+
+The component owns async operations, the namespace accessor, background worker construction,
+dispatch and unref handles, and a stable read-only view of the Promise-wrapper registry. Internal
+registration rejects null methods, unknown names, and duplicates; checked lookup supports
+forward calls. Completion validates every fixed handle and required wrapper, stays retryable
+after missing declarations, and freezes assignments and registration. The namespace keeps its
+existing wrapper declaration order. Seven helpers take the async component directly, alongside
+explicit event-loop or Promise metadata where needed. Synchronous helpers and shared module
+registration retain their existing owners.
+
+Background closure creation, unref continuation emission, operation bodies, Promise wrappers,
+and namespace emission keep their order. Worker exception unwrapping, event-loop Ref/Unref,
+the existing callback grace period, generated signatures, and method bodies are preserved.
+Method-local closure fields, the removal implementation, intermediate unref methods, and BCL
+construction lookups remain local to their emission helpers for the final #1599 audit.
 
 During emission, each handle becomes readable as soon as its declaration is assigned, so forward
 references do not require a method body to exist yet. An early read names the missing declaration.
