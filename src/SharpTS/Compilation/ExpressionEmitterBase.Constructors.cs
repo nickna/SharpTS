@@ -588,7 +588,7 @@ public abstract partial class ExpressionEmitterBase
                 IL.Emit(OpCodes.Call, Ctx.Runtime!.Stringify);
                 EmitBoxedArgOrNull(arguments, 1);
                 IL.Emit(OpCodes.Ldnull); // parentInterpreter (null in compiled code)
-                IL.Emit(OpCodes.Call, Ctx.Runtime!.TSWorkerCtor);
+                IL.Emit(OpCodes.Call, Ctx.Runtime!.Workers.Create);
                 SetStackUnknown();
                 return true;
 

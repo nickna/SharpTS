@@ -1737,10 +1737,8 @@ public class EmittedRuntime
     /// <summary>Required MessagePort/MessageChannel declarations and peer-access metadata.</summary>
     public EmittedMessageChannelRuntime MessageChannels { get; } = new();
 
-    // $Worker type - emitted for standalone worker support
-    // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSWorker
-    public Type TSWorkerType { get; set; } = null!;
-    public MethodBuilder TSWorkerCtor { get; set; } = null!;
+    /// <summary>Required worker factory, context, environment, and receive-bridge declarations.</summary>
+    public EmittedWorkerRuntime Workers { get; } = new();
 
     // StructuredClone helper methods
     // NOTE: Must stay in sync with SharpTS.Runtime.Types.StructuredClone
@@ -1753,16 +1751,6 @@ public class EmittedRuntime
     // and convert it to a receiver-side 'messageerror' event without swallowing other bugs.
     public TypeBuilder TSDataCloneErrorType { get; set; } = null!;
     public ConstructorBuilder TSDataCloneErrorCtor { get; set; } = null!;
-
-    // worker_threads module methods
-    public MethodBuilder WorkerThreadsIsMainThread { get; set; } = null!;
-    public MethodBuilder WorkerThreadsThreadId { get; set; } = null!;
-    public MethodBuilder WorkerThreadsWorkerData { get; set; } = null!;
-    public MethodBuilder WorkerThreadsParentPort { get; set; } = null!;
-    public MethodBuilder WorkerThreadsReceiveMessageOnPort { get; set; } = null!;
-    public MethodBuilder WorkerThreadsGetEnvironmentData { get; set; } = null!;
-    public MethodBuilder WorkerThreadsSetEnvironmentData { get; set; } = null!;
-    public MethodBuilder WorkerThreadsMarkAsUntransferable { get; set; } = null!;
 
     /// <summary>DNS metadata, or null when DNS is tree-shaken from this compilation.</summary>
     public EmittedDnsRuntime? Dns { get; private set; }

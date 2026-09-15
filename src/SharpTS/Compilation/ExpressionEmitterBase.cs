@@ -2138,25 +2138,25 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
         switch (name)
         {
             case "isMainThread":
-                IL.Emit(OpCodes.Call, Ctx.Runtime!.WorkerThreadsIsMainThread);
+                IL.Emit(OpCodes.Call, Ctx.Runtime!.Workers.IsMainThread);
                 IL.Emit(OpCodes.Box, Types.Boolean);
                 SetStackUnknown();
                 return true;
             case "threadId":
-                IL.Emit(OpCodes.Call, Ctx.Runtime!.WorkerThreadsThreadId);
+                IL.Emit(OpCodes.Call, Ctx.Runtime!.Workers.ThreadId);
                 IL.Emit(OpCodes.Box, Types.Double);
                 SetStackUnknown();
                 return true;
             case "workerData":
-                IL.Emit(OpCodes.Call, Ctx.Runtime!.WorkerThreadsWorkerData);
+                IL.Emit(OpCodes.Call, Ctx.Runtime!.Workers.WorkerData);
                 SetStackUnknown();
                 return true;
             case "parentPort":
-                IL.Emit(OpCodes.Call, Ctx.Runtime!.WorkerThreadsParentPort);
+                IL.Emit(OpCodes.Call, Ctx.Runtime!.Workers.ParentPort);
                 SetStackUnknown();
                 return true;
             case "postMessage":
-                IL.Emit(OpCodes.Call, Ctx.Runtime!.WorkerThreadsParentPort);
+                IL.Emit(OpCodes.Call, Ctx.Runtime!.Workers.ParentPort);
                 IL.Emit(OpCodes.Ldstr, "postMessage");
                 IL.Emit(OpCodes.Call, Ctx.Runtime!.GetProperty);
                 SetStackUnknown();
