@@ -681,6 +681,16 @@ preserves its explicit missing-runtime error. Emission order, existing cross-run
 and Promise wrapping are unchanged. BCL reflection handles remain method-local construction
 values; no migrated flat aliases or emitter-held VM copies remain.
 
+The source-execution bridge uses optional `EmittedSourceExecutionRuntime`, selected by
+`UsesSourceExecution`, for `RunJson` and `ConfigureUntrustedProcess`. Its emission helper takes
+the component and a module-scoped registration callback, preserving both declarations' early
+registration in the shared dispatch index. Completion checks and freezes both handles. Consumers
+use checked metadata; the late-bound service name and generic reflection helper remain unchanged.
+The bridge still requires `FullDependencyClosure | ManagedCompilerHost` in addition to the runtime
+assembly, so normal CLI output deploys the managed compiler closure and standalone output retains
+its missing-runtime diagnostics. Process configuration behavior is unchanged and tested in isolated
+subprocesses. No migrated flat aliases or emitter-held bridge handles remain.
+
 During emission, each handle becomes readable as soon as its declaration is assigned, so forward
 references do not require a method body to exist yet. An early read names the missing declaration.
 Completion is an orchestration boundary, not an IL verifier: body emission and type finalization

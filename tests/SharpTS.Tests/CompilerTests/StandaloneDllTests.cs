@@ -1319,6 +1319,111 @@ public class StandaloneDllTests
         finally { CleanupTempDir(tempDir); }
     }
 
+    public static IEnumerable<object[]> SourceExecutionMetadataPrograms =>
+    [
+        new object[]
+        {
+            """
+            import {runSourceJson} from 'sharpts:execution';
+            const r=JSON.parse(runSourceJson("console.log('nested');",'interpret',1024));
+            console.log(r.Success,r.Output.trim(),r.Errors.length);
+            """,
+            "true nested 0\n", "main.ts", false
+        },
+        new object[]
+        {
+            """
+            import {runSourceJson} from 'sharpts:execution';
+            const r=JSON.parse(runSourceJson('console.log(40+2);','compile',1024));
+            console.log(r.Success,r.Output.trim(),r.Errors.length,r.CompileTimeMs!==null);
+            """,
+            "true 42 0 true\n", "main.ts", false
+        },
+        new object[]
+        {
+            """
+            import * as execution from 'sharpts:execution';
+            const run=execution.runSourceJson; const configure=execution.configureUntrustedProcess;
+            console.log(typeof run,typeof configure);
+            console.log(JSON.parse(run("console.log('alias');",'interpret',1024)).Output.trim());
+            """,
+            "function function\nalias\n", "main.ts", false
+        },
+        new object[]
+        {
+            """
+            const execution=require('sharpts:execution');
+            const r=JSON.parse(execution.runSourceJson("console.log('required');",'interpret',1024));
+            console.log(r.Success,r.Output.trim());
+            """,
+            "true required\n", "main.cjs", false
+        },
+        new object[]
+        {
+            """
+            import {runSourceJson,configureUntrustedProcess} from 'sharpts:execution';
+            const r=JSON.parse(runSourceJson("const x: number = 'wrong';",'interpret',1024)); console.log(r.Success,r.Errors.length>0);
+            try {runSourceJson('','interpret',1024);} catch(e:any) {console.log('empty');}
+            try {runSourceJson('1;','invalid',1024);} catch(e:any) {console.log('mode');}
+            try {runSourceJson('1;','interpret',0);} catch(e:any) {console.log('limit');}
+            try {configureUntrustedProcess('');} catch(e:any) {console.log('proxy');}
+            """,
+            "false true\nempty\nmode\nlimit\nproxy\n", "main.ts", false
+        },
+        new object[]
+        {
+            """
+            import {configureUntrustedProcess,runSourceJson} from 'sharpts:execution';
+            configureUntrustedProcess('http://127.0.0.1:9');
+            console.log('configured');
+            console.log(JSON.parse(runSourceJson("console.log('isolated');",'interpret',1024)).Output.trim());
+            """,
+            "configured\nisolated\n", "main.ts", false
+        },
+        new object[]
+        {
+            """
+            import {runSourceJson} from 'sharpts:execution';
+            async function run() {await Promise.resolve(0);console.log(JSON.parse(runSourceJson('console.log(14);','interpret',1024)).Output.trim());} run();
+            function* items():Generator<any,void,any> {yield JSON.parse(runSourceJson('console.log(28);','compile',1024)).Output.trim();}
+            console.log(items().next().value);
+            """,
+            "14\n28\n", "main.ts", false
+        },
+        new object[]
+        {
+            """
+            import {runSourceJson,configureUntrustedProcess} from 'sharpts:execution';
+            try {runSourceJson('1;','interpret',1024);} catch(e:any) {console.log(e.message);}
+            try {configureUntrustedProcess('http://127.0.0.1:9');} catch(e:any) {console.log(e.message);}
+            """,
+            "RunJson requires the SharpTS runtime (SharpTS.dll). Recompile without --standalone or deploy SharpTS.dll next to the output.\nConfigureUntrustedProcess requires the SharpTS runtime (SharpTS.dll). Recompile without --standalone or deploy SharpTS.dll next to the output.\n", "main.ts", true
+        }
+    ];
+
+    [Theory]
+    [MemberData(nameof(SourceExecutionMetadataPrograms))]
+    public void Isolated_SourceExecutionMetadata_PreservesInterpreterBridgeAndDeployment(string source, string expected, string entryPoint, bool standalone)
+    {
+        using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        tempDir.CreateFile(entryPoint, source);
+        var dllPath = tempDir.GetPath("source_execution_metadata.dll");
+        var deployment = standalone ? " --standalone" : "";
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{tempDir.GetPath(entryPoint)}\" -o \"{dllPath}\" --verify{deployment}", tempDir.Path);
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(dllPath));
+        // The bridge is late-bound; normal output needs the complete managed compiler closure.
+        Assert.Equal(!standalone, File.Exists(tempDir.GetPath("SharpTS.dll")));
+        if (!standalone)
+        {
+            foreach (var dependency in new[] { "SharpTS.deps.json", "SharpTS.runtimeconfig.json", "NuGet.Protocol.dll" })
+                Assert.True(File.Exists(tempDir.GetPath(dependency)), dependency);
+        }
+        Assert.Equal(expected, ExecuteCompiledDllIsolated(dllPath, timeoutMs: 15000,
+            verifyStandardError: error => Assert.Empty(error)));
+    }
+
     public static IEnumerable<object[]> VmMetadataPrograms =>
     [
         new object[]

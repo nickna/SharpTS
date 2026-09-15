@@ -1625,7 +1625,8 @@ public partial class RuntimeEmitter
                 "sharpts:execution module",
                 SharpTSRuntimeRequirements.FullDependencyClosure |
                 SharpTSRuntimeRequirements.ManagedCompilerHost);
-            EmitSourceExecutionMethods(typeBuilder, runtime);
+            EmitSourceExecutionMethods(typeBuilder, runtime.RequireSourceExecution(),
+                (name, method) => runtime.RegisterBuiltInModuleMethod("sharpts:execution", name, method));
         }
 
         // Web Streams API (stream/web) is now fully pure-IL emitted via

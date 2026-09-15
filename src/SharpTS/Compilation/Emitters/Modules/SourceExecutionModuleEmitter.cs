@@ -32,7 +32,7 @@ public sealed class SourceExecutionModuleEmitter : IBuiltInModuleEmitter
             }
             configureContext.IL.Emit(
                 OpCodes.Call,
-                configureContext.Runtime!.SourceExecutionConfigureUntrustedProcess);
+                configureContext.Runtime!.RequireSourceExecution().ConfigureUntrustedProcess);
             return true;
         }
 
@@ -53,7 +53,7 @@ public sealed class SourceExecutionModuleEmitter : IBuiltInModuleEmitter
             }
         }
 
-        context.IL.Emit(OpCodes.Call, context.Runtime!.SourceExecutionRunJson);
+        context.IL.Emit(OpCodes.Call, context.Runtime!.RequireSourceExecution().RunJson);
         emitter.SetStackUnknown();
         return true;
     }

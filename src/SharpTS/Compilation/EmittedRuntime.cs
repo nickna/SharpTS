@@ -1852,9 +1852,18 @@ public class EmittedRuntime
     public EmittedVmRuntime RequireVm() => Vm
         ?? throw new InvalidOperationException("VM runtime was not enabled for this compilation.");
 
-    // sharpts:execution trusted-host bridge
-    public MethodBuilder SourceExecutionRunJson { get; set; } = null!;
-    public MethodBuilder SourceExecutionConfigureUntrustedProcess { get; set; } = null!;
+    /// <summary>Source-execution metadata, or null when the feature is omitted.</summary>
+    public EmittedSourceExecutionRuntime? SourceExecution { get; private set; }
+
+    internal void BeginSourceExecutionEmission()
+    {
+        if (SourceExecution is not null)
+            throw new InvalidOperationException("Source-execution metadata emission has already started.");
+        SourceExecution = new EmittedSourceExecutionRuntime();
+    }
+
+    public EmittedSourceExecutionRuntime RequireSourceExecution() => SourceExecution
+        ?? throw new InvalidOperationException("Source-execution runtime was not enabled for this compilation.");
 
     /// <summary>Web stream metadata, or null when Web streams are tree-shaken.</summary>
     public EmittedWebStreamRuntime? WebStreams { get; private set; }
