@@ -220,7 +220,7 @@ public partial class RuntimeEmitter
         // Emit $DataCloneError exception type — thrown by StructuredCloneCore (#1255).
         // Unconditional: StructuredCloneCore itself is always emitted (EmitWorkerHelpers
         // runs unconditionally inside EmitRuntimeClass below).
-        EmitTSDataCloneErrorType(moduleBuilder, runtime);
+        EmitTSDataCloneErrorType(moduleBuilder, runtime.StructuredClone);
 
         // Emit $Promise class for standalone Promise support.
         // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSPromise
@@ -571,12 +571,12 @@ public partial class RuntimeEmitter
         // Emit $BroadcastChannel — extends $EventEmitter, dispatches via $EventLoop,
         // and clones messages via $Runtime.StructuredClone (populated during EmitRuntimeClass
         // → EmitWorkerHelpers → EmitStructuredCloneHelper).
-        // NOTE: Must come after EmitRuntimeClass so runtime.StructuredCloneClone is set.
+        // NOTE: Must come after EmitRuntimeClass so runtime.StructuredClone.Clone is set.
         // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSBroadcastChannel
         if (features.UsesBroadcastChannel)
             EmitBroadcastChannelClass(moduleBuilder, runtime.RequireBroadcastChannel(), runtime.EventEmitter,
                 runtime.EventLoop, runtime.TSFunctionType, runtime.TSFunctionInvoke,
-                runtime.StructuredCloneClone, runtime.TSDataCloneErrorType);
+                runtime.StructuredClone.Clone, runtime.StructuredClone.ErrorType);
 
         // Emit $MessagePort/$MessageChannel — same constraints as
         // $BroadcastChannel ($EventEmitter base, $EventLoop dispatch,
@@ -584,7 +584,7 @@ public partial class RuntimeEmitter
         // matching the previous CreateMessageChannel helper (#222).
         // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSMessagePort
         EmitMessageChannelTypes(moduleBuilder, runtime.MessageChannels, _runtimeTypeBuilder!,
-            runtime.EventEmitter, runtime.EventLoop, runtime.StructuredCloneClone, runtime.TSDataCloneErrorType);
+            runtime.EventEmitter, runtime.EventLoop, runtime.StructuredClone.Clone, runtime.StructuredClone.ErrorType);
 
         // receiveMessageOnPort's body reads $MessagePort's _pending/_closed/_cloneError, so it
         // must be filled now that EmitMessageChannelTypes has created the type (#1077). Still
@@ -698,6 +698,7 @@ public partial class RuntimeEmitter
         runtime.Cluster?.CompleteEmission();
         runtime.MessageChannels.CompleteEmission();
         runtime.Workers.CompleteEmission();
+        runtime.StructuredClone.CompleteEmission();
         runtime.BroadcastChannel?.CompleteEmission();
         runtime.EventEmitter.CompleteEmission();
         runtime.NodeStreams?.CompleteEmission();

@@ -13,14 +13,14 @@ namespace SharpTS.Compilation;
 /// </summary>
 public partial class RuntimeEmitter
 {
-    private void EmitTSDataCloneErrorType(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private void EmitTSDataCloneErrorType(ModuleBuilder moduleBuilder, EmittedStructuredCloneRuntime clone)
     {
         var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$DataCloneError",
             TypeAttributes.Public | TypeAttributes.Class | TypeAttributes.BeforeFieldInit,
             _types.Exception
         );
-        runtime.TSDataCloneErrorType = typeBuilder;
+        clone.ErrorType = typeBuilder;
 
         // public $DataCloneError(string message) : base("DataCloneError: " + message)
         var ctor = typeBuilder.DefineConstructor(
@@ -28,7 +28,7 @@ public partial class RuntimeEmitter
             CallingConventions.Standard,
             [_types.String]
         );
-        runtime.TSDataCloneErrorCtor = ctor;
+        clone.ErrorCtor = ctor;
 
         var il = ctor.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
