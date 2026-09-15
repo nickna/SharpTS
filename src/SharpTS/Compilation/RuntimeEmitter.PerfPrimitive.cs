@@ -13,7 +13,7 @@ namespace SharpTS.Compilation;
 /// </summary>
 public partial class RuntimeEmitter
 {
-    private void EmitPerfPrimitiveMethods(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitPerfPrimitiveMethods(TypeBuilder typeBuilder, EmittedPerformanceRuntime performance)
     {
         var startTicksField = typeBuilder.DefineField(
             "_perfPrimitiveStartTicks",
@@ -35,7 +35,7 @@ public partial class RuntimeEmitter
             FieldAttributes.Private | FieldAttributes.Static
         );
 
-        EmitPerfPrimitiveNow(typeBuilder, runtime, startTicksField, ticksPerMsField, initializedField);
+        EmitPerfPrimitiveNow(typeBuilder, performance, startTicksField, ticksPerMsField, initializedField);
     }
 
     /// <summary>
@@ -44,7 +44,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitPerfPrimitiveNow(
         TypeBuilder typeBuilder,
-        EmittedRuntime runtime,
+        EmittedPerformanceRuntime performance,
         FieldBuilder startTicksField,
         FieldBuilder ticksPerMsField,
         FieldBuilder initializedField)
@@ -55,7 +55,7 @@ public partial class RuntimeEmitter
             _types.Double,
             Type.EmptyTypes
         );
-        runtime.PerfPrimitiveNow = method;
+        performance.Now = method;
 
         var il = method.GetILGenerator();
 

@@ -723,6 +723,16 @@ Emitted `CreateIntl*` names retain the constructor-dispatch contract. The shared
 runtime requirement, wrapper identity/member order, and instance dispatch are unchanged; no flat
 Intl aliases or emitter-held copies remain. BCL reflection and body locals stay scoped.
 
+Performance timing and terminal checks have separate optional owners:
+`EmittedPerformanceRuntime.Now` is selected by `UsesPerf`, and `EmittedTtyRuntime.Isatty`
+by `UsesTty`. Each validates its declaration before freezing at runtime completion. The two
+performance helpers take the performance component, while the TTY helper takes its component
+and explicit number-coercion method. Primitive consumers use the checked owners. The three lazy
+stopwatch fields remain scoped construction values; TTY retains its declaration assignment after
+body emission. Clock initialization, descriptor coercion/redirection checks, emitted names,
+standalone deployment, and the TypeScript facades are unchanged. No flat aliases or emitter-held
+copies remain; BCL references and body locals retain their scope.
+
 During emission, each handle becomes readable as soon as its declaration is assigned, so forward
 references do not require a method body to exist yet. An early read names the missing declaration.
 Completion is an orchestration boundary, not an IL verifier: body emission and type finalization
