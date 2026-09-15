@@ -505,7 +505,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, _types.IListOfObject);
         il.Emit(OpCodes.Brfalse, notArrayLikeLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Call, method);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notArrayLikeLabel);

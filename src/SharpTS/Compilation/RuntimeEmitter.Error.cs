@@ -171,7 +171,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Stloc, hasMessageLocal);
         il.Emit(OpCodes.Ldloc, arg0Local);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Br, afterMessageLabel);
         il.MarkLabel(argUndefinedLabel);
         il.Emit(OpCodes.Ldc_I4_0);
@@ -342,7 +342,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Stloc, hasAggregateMessageLocal);
         il.Emit(OpCodes.Ldloc, aggregateMessageArgLocal);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Br, afterAggMessageLabel);
 
         il.MarkLabel(noAggMessageArgLabel);

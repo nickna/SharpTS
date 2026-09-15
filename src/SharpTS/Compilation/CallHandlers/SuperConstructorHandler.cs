@@ -164,7 +164,7 @@ public class SuperConstructorHandler : ICallHandler
             il.Emit(OpCodes.Ldc_I4_1);
             il.Emit(OpCodes.Stloc, hasMessageLocal);
             il.Emit(OpCodes.Ldloc, rawMessageLocal);
-            il.Emit(OpCodes.Call, ctx.Runtime.ToJsString);
+            il.Emit(OpCodes.Call, ctx.Runtime.StringCoercion.ToJsString);
             il.MarkLabel(haveMessageLabel);
             il.Emit(OpCodes.Stloc, messageLocal);
         }

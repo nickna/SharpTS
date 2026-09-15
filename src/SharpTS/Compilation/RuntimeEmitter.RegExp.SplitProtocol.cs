@@ -48,7 +48,7 @@ public partial class RuntimeEmitter
         // S = ToString(string). The public wrapper already performed the
         // RequireObject check for rx.
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Stloc, s);
 
         // C = SpeciesConstructor(rx, %RegExp%). Undefined constructor/species
@@ -98,7 +98,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "flags");
         il.Emit(OpCodes.Call, runtime.GetProperty);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Stloc, flags);
 
         il.Emit(OpCodes.Ldloc, flags);

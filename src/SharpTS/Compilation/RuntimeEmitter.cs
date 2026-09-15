@@ -701,6 +701,7 @@ public partial class RuntimeEmitter
         runtime.StructuredClone.CompleteEmission();
         runtime.Strings.CompleteEmission();
         runtime.Templates.CompleteEmission();
+        runtime.StringCoercion.CompleteEmission();
         runtime.BroadcastChannel?.CompleteEmission();
         runtime.EventEmitter.CompleteEmission();
         runtime.NodeStreams?.CompleteEmission();

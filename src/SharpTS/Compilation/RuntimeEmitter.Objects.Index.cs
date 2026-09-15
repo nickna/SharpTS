@@ -52,7 +52,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldsfld, runtime.GlobalThisSingletonField);
         il.Emit(OpCodes.Bne_Un, notGlobalThisIdxLabel);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Call, runtime.GlobalThisGetProperty);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notGlobalThisIdxLabel);
@@ -150,7 +150,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(typeIdxGetLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Call, runtime.GetProperty);
         il.Emit(OpCodes.Ret);
 
@@ -484,7 +484,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(classInstanceLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         // GetIndex is ordinary [[Get]] after ToPropertyKey.  Re-enter the
         // shared GetProperty pipeline so primitive receivers walk their
         // Boolean/Number prototypes and arbitrary host/class receivers still
@@ -502,7 +502,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(tsObjectIdxLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Call, runtime.GetProperty);
         il.Emit(OpCodes.Ret);
 
@@ -510,7 +510,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(tsFunctionIdxLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Call, runtime.GetProperty);
         il.Emit(OpCodes.Ret);
 
@@ -536,7 +536,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(tsArrayCoerceObjectKeyLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Call, runtime.GetProperty);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(tsArrayIndexIsPrimitiveLabel);
@@ -633,7 +633,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(routeAsNamedGetLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Call, runtime.GetProperty);
         il.Emit(OpCodes.Ret);
 
@@ -650,7 +650,7 @@ public partial class RuntimeEmitter
         // Key off the ORIGINAL index argument, via the same ToJsString the named-property
         // route above uses, so `arr[0]` and `arr["0"]` land on one PDS key.
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Ldloca, tsArrayIdxGetterLocal);
         il.Emit(OpCodes.Call, runtime.PDSTryGetGetter);
         il.Emit(OpCodes.Brfalse, tsArrayNoIdxGetterLabel);
@@ -667,14 +667,14 @@ public partial class RuntimeEmitter
         var tsArrayNoIdxDescriptorLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
         il.Emit(OpCodes.Stloc, tsArrayIdxDescriptorLocal);
         il.Emit(OpCodes.Ldloc, tsArrayIdxDescriptorLocal);
         il.Emit(OpCodes.Brfalse, tsArrayNoIdxDescriptorLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Call, runtime.GetProperty);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(tsArrayNoIdxDescriptorLabel);
@@ -687,7 +687,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, tsArrayOwnIndex);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Call, runtime.GetProperty);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(tsArrayOwnIndex);
@@ -766,7 +766,7 @@ public partial class RuntimeEmitter
             var listIndexGetterLocal = il.DeclareLocal(_types.Object);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Call, runtime.ToJsString);
+            il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
             il.Emit(OpCodes.Ldloca, listIndexGetterLocal);
             il.Emit(OpCodes.Call, runtime.PDSTryGetGetter);
             il.Emit(OpCodes.Brfalse, noListIndexGetterLabel);
@@ -782,14 +782,14 @@ public partial class RuntimeEmitter
             var noListIndexDescriptorLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Call, runtime.ToJsString);
+            il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
             il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
             il.Emit(OpCodes.Stloc, listIndexDescriptorLocal);
             il.Emit(OpCodes.Ldloc, listIndexDescriptorLocal);
             il.Emit(OpCodes.Brfalse, noListIndexDescriptorLabel);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Call, runtime.ToJsString);
+            il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
             il.Emit(OpCodes.Call, runtime.GetProperty);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(noListIndexDescriptorLabel);
@@ -808,7 +808,7 @@ public partial class RuntimeEmitter
             // Absent own indices still perform ordinary prototype lookup.
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Call, runtime.ToJsString);
+            il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
             il.Emit(OpCodes.Call, runtime.GetProperty);
             il.Emit(OpCodes.Ret);
 
@@ -833,7 +833,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Brfalse, notHoleLabel);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Call, runtime.ToJsString);
+            il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
             il.Emit(OpCodes.Call, runtime.GetProperty);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(notHoleLabel);
@@ -961,7 +961,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(strNamedPropertyLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Call, runtime.GetProperty);
         il.Emit(OpCodes.Ret);
 
@@ -1032,7 +1032,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(dictNumericKeyLabel);
         EmitDictLookup(
             () => { il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Castclass, _types.DictionaryStringObject); },
-            () => { il.Emit(OpCodes.Ldarg_1); il.Emit(OpCodes.Call, runtime.ToJsString); });
+            () => { il.Emit(OpCodes.Ldarg_1); il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString); });
 
         // Defunct labels — replaced by EmitDictLookup. Mark unreachable for IL
         // verification balance.
@@ -1113,7 +1113,7 @@ public partial class RuntimeEmitter
                 () =>
                 {
                     il.Emit(OpCodes.Ldarg_1);
-                    il.Emit(OpCodes.Call, runtime.ToJsString);
+                    il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
                 },
                 () => il.Emit(OpCodes.Ldarg_2),
                 () => il.Emit(OpCodes.Ldarg_0));
@@ -1131,7 +1131,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldsfld, runtime.GlobalThisSingletonField);
         il.Emit(OpCodes.Bne_Un, notGlobalThisIdxSetLabel);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Call, runtime.GlobalThisSetProperty);
         il.Emit(OpCodes.Ret);
@@ -1223,7 +1223,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(typeIdxSetLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Call, runtime.SetProperty);
         il.Emit(OpCodes.Ret);
@@ -1234,7 +1234,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(tsObjectIdxSetLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Call, runtime.SetProperty);
         il.Emit(OpCodes.Ret);
@@ -1243,7 +1243,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(tsFunctionIdxSetLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Call, runtime.SetProperty);
         il.Emit(OpCodes.Ret);
@@ -1481,7 +1481,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(classInstanceLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Call, runtime.SetFieldsProperty);
         il.Emit(OpCodes.Ret);
@@ -1513,7 +1513,7 @@ public partial class RuntimeEmitter
         var tsArraySetKeyLocal = il.DeclareLocal(_types.String);
         var idxLong = il.DeclareLocal(_types.Int64);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Stloc, tsArraySetKeyLocal);
 
         var routeAsNamedLabel = il.DefineLabel();
@@ -1612,7 +1612,7 @@ public partial class RuntimeEmitter
 
             var listSetKeyLocal = il.DeclareLocal(_types.String);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Call, runtime.ToJsString);
+            il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
             il.Emit(OpCodes.Stloc, listSetKeyLocal);
 
             // Lists (including $Arguments) can carry ordinary named
@@ -1777,7 +1777,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(dictNumericKeyLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Call, runtime.SetProperty);
         il.Emit(OpCodes.Ret);
@@ -1902,7 +1902,7 @@ public partial class RuntimeEmitter
         // without deleting made configurable descriptors remain observable.
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         if (strict)
         {
             il.Emit(OpCodes.Ldarg_2);
@@ -1918,7 +1918,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(typeDelIdxLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Call, runtime.DeleteProperty);
         il.Emit(OpCodes.Ret);
 
@@ -1990,7 +1990,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(tsArrayDeleteIdxLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         if (strict)
         {
             il.Emit(OpCodes.Ldarg_2);
@@ -2010,7 +2010,7 @@ public partial class RuntimeEmitter
             var listDeleteIndexLocal = il.DeclareLocal(_types.Int32);
             var listDeleteNotNumeric = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Call, runtime.ToJsString);
+            il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
             il.Emit(OpCodes.Stloc, listDeleteKeyLocal);
 
             // SetIntegrityLevel marks the List-backed receiver frozen/sealed

@@ -24,7 +24,7 @@ public partial class RuntimeEmitter
 
         // Convert path to string
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.Stringify);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.Stringify);
         var pathLocal = il.DeclareLocal(_types.String);
         il.Emit(OpCodes.Stloc, pathLocal);
 
@@ -273,7 +273,7 @@ public partial class RuntimeEmitter
             // Stack: [] -> [Encoding] -> [Encoding, string] -> [byte[]]
             il.Emit(OpCodes.Call, typeof(System.Text.Encoding).GetProperty("UTF8")!.GetMethod!);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Call, runtime.Stringify);
+            il.Emit(OpCodes.Call, runtime.StringCoercion.Stringify);
             il.Emit(OpCodes.Callvirt, _types.EncodingGetBytesFromString);
             il.Emit(OpCodes.Stloc, dataLocal);
             il.Emit(OpCodes.Ldc_I4_0);

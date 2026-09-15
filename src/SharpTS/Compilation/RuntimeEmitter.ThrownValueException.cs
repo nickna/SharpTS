@@ -76,7 +76,7 @@ public partial class RuntimeEmitter
         var messageIl = messageGetter.GetILGenerator();
         messageIl.Emit(OpCodes.Ldarg_0);
         messageIl.Emit(OpCodes.Ldfld, valueField);
-        messageIl.Emit(OpCodes.Call, runtime.Stringify);
+        messageIl.Emit(OpCodes.Call, runtime.StringCoercion.Stringify);
         messageIl.Emit(OpCodes.Ret);
         messageProperty.SetGetMethod(messageGetter);
         typeBuilder.DefineMethodOverride(

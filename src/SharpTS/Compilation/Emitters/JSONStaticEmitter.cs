@@ -44,7 +44,7 @@ public sealed class JSONStaticEmitter : IStaticTypeEmitterStrategy
                     // Stringify so user-defined toString/valueOf on Dictionary/$Object
                     // receivers fires. JSON.parse({toString: () => '"x"'}) must
                     // coerce via the protocol then parse the resulting string.
-                    il.Emit(OpCodes.Call, ctx.Runtime!.ToJsString);
+                    il.Emit(OpCodes.Call, ctx.Runtime!.StringCoercion.ToJsString);
                 }
                 else
                 {

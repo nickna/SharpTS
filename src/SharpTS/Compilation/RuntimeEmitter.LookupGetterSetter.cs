@@ -131,7 +131,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, throwThisLabel);
 
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Stloc, keyLocal);
 
         il.Emit(OpCodes.Ldarg_0);

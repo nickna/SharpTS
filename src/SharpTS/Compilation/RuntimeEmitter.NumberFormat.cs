@@ -15,7 +15,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitConcatStringInt64Method(
         TypeBuilder typeBuilder,
-        EmittedRuntime runtime)
+        EmittedStringCoercionRuntime coercion)
     {
         var method = typeBuilder.DefineMethod(
             "ConcatStringInt64",
@@ -23,7 +23,7 @@ public partial class RuntimeEmitter
             _types.String,
             [_types.String, _types.Int64, _types.Boolean]);
         method.SetImplementationFlags(MethodImplAttributes.AggressiveOptimization);
-        runtime.ConcatStringInt64 = method;
+        coercion.ConcatInt64 = method;
 
         var bufferField = typeBuilder.DefineField(
             "_concatInt64Buffer",

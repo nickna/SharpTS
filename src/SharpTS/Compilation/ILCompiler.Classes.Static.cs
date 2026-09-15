@@ -360,7 +360,7 @@ public partial class ILCompiler
         il.Emit(OpCodes.Isinst, _runtime.TSSymbolType);
         il.Emit(OpCodes.Brtrue, isSymbol);
         il.Emit(OpCodes.Ldloc, keyLocal);
-        il.Emit(OpCodes.Call, _runtime.ToJsString);
+        il.Emit(OpCodes.Call, _runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Stloc, keyLocal);
 
         il.MarkLabel(isSymbol);

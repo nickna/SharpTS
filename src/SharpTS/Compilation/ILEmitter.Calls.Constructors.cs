@@ -566,7 +566,7 @@ public partial class ILEmitter
         if (argTemps.Count > 0)
         {
             IL.Emit(OpCodes.Ldloc, argTemps[0]);
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.ToJsString);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.StringCoercion.ToJsString);
         }
         else
         {

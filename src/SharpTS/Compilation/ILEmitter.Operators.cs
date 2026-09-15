@@ -776,12 +776,12 @@ public partial class ILEmitter
             // did neither.
             EmitVariable(new Expr.Variable(ca.Name));
             EmitBoxIfNeeded(new Expr.Variable(ca.Name));
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.StringifyCoerce);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.StringCoercion.StringifyCoerce);
 
             // Load right side, StringifyCoerce'd
             EmitExpression(ca.Value);
             EmitBoxIfNeeded(ca.Value);
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.StringifyCoerce);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.StringCoercion.StringifyCoerce);
 
             // String concatenation
             IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(_ctx.Types.String, "Concat", _ctx.Types.String, _ctx.Types.String));
@@ -3320,7 +3320,7 @@ public partial class ILEmitter
             IL.Emit(OpCodes.Ldc_I4_1);
         }
 
-        IL.Emit(OpCodes.Call, _ctx.Runtime!.ConcatStringInt64);
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.StringCoercion.ConcatInt64);
         SetStackType(StackType.String);
         return true;
     }
@@ -3746,7 +3746,7 @@ public partial class ILEmitter
                 EmitBoxIfNeeded(part);
                 // StringifyCoerce: `+` concat is an implicit ToString coercion —
                 // Symbol operands throw TypeError (ECMA-262 §7.1.17).
-                IL.Emit(OpCodes.Call, _ctx.Runtime!.StringifyCoerce);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.StringCoercion.StringifyCoerce);
             }
         }
 
@@ -3778,7 +3778,7 @@ public partial class ILEmitter
                 EmitExpression(parts[i]);       // Value
                 EmitBoxIfNeeded(parts[i]);
                 // StringifyCoerce: throws TypeError for Symbol operands (§7.1.17).
-                IL.Emit(OpCodes.Call, _ctx.Runtime!.StringifyCoerce);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.StringCoercion.StringifyCoerce);
             }
 
             IL.Emit(OpCodes.Stelem_Ref);    // Store in array

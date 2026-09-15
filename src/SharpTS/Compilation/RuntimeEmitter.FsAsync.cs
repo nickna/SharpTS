@@ -227,7 +227,7 @@ public partial class RuntimeEmitter
 
             // Convert path to string
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Call, runtime.Stringify);
+            il.Emit(OpCodes.Call, runtime.StringCoercion.Stringify);
             var pathLocal = il.DeclareLocal(_types.String);
             il.Emit(OpCodes.Stloc, pathLocal);
 

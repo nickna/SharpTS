@@ -288,7 +288,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, lastIndexLocal);
         il.Emit(OpCodes.Ldloc, lastIndexLocal);
         il.Emit(OpCodes.Box, _types.Int32);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Call, runtime.GetProperty);
         il.Emit(OpCodes.Stloc, lastLocal);
 
@@ -406,7 +406,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, newLength);
         il.Emit(OpCodes.Ldloc, newLength);
         il.Emit(OpCodes.Box, _types.Double);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Stloc, key);
         il.Emit(OpCodes.Ldloc, receiver);
         il.Emit(OpCodes.Ldloc, key);
@@ -569,13 +569,13 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Bge, loopDone);
         il.Emit(OpCodes.Ldloc, k);
         il.Emit(OpCodes.Box, _types.Double);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Stloc, fromKey);
         il.Emit(OpCodes.Ldloc, k);
         il.Emit(OpCodes.Ldc_R8, 1.0);
         il.Emit(OpCodes.Sub);
         il.Emit(OpCodes.Box, _types.Double);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Stloc, toKey);
 
         var deleteTarget = il.DefineLabel();
@@ -616,7 +616,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, receiver);
         il.Emit(OpCodes.Ldloc, newLength);
         il.Emit(OpCodes.Box, _types.Double);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Call, runtime.DeletePropertyStrict);
         il.Emit(OpCodes.Pop);
@@ -963,7 +963,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Conv_R8);
         il.Emit(OpCodes.Add);
         il.Emit(OpCodes.Box, _types.Double);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloc, genericIdx);
         il.Emit(OpCodes.Ldelem_Ref);
@@ -1165,7 +1165,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_R8, 1.0);
         il.Emit(OpCodes.Sub);
         il.Emit(OpCodes.Box, _types.Double);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Stloc, fromKey);
         il.Emit(OpCodes.Ldloc, k);
         il.Emit(OpCodes.Ldloc, itemCount);
@@ -1173,7 +1173,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_R8, 1.0);
         il.Emit(OpCodes.Sub);
         il.Emit(OpCodes.Box, _types.Double);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Stloc, toKey);
 
         var deleteTarget = il.DefineLabel();
@@ -1219,7 +1219,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, receiver);
         il.Emit(OpCodes.Ldloc, itemIdx);
         il.Emit(OpCodes.Box, _types.Int32);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloc, itemIdx);
         il.Emit(OpCodes.Ldelem_Ref);
@@ -1351,7 +1351,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Bge, done);
         il.Emit(OpCodes.Ldloc, k);
         il.Emit(OpCodes.Box, _types.Double);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Stloc, key);
         il.Emit(OpCodes.Ldloc, receiver);
         il.Emit(OpCodes.Ldloc, key);
@@ -1453,11 +1453,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, upper);
         il.Emit(OpCodes.Ldloc, lower);
         il.Emit(OpCodes.Box, _types.Double);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Stloc, lowerKey);
         il.Emit(OpCodes.Ldloc, upper);
         il.Emit(OpCodes.Box, _types.Double);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Stloc, upperKey);
 
         il.Emit(OpCodes.Ldloc, receiver);
@@ -2713,12 +2713,12 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldloc, srcLocal);
             il.Emit(OpCodes.Ldloc, iLocal);
             il.Emit(OpCodes.Ldelem_Ref);
-            il.Emit(OpCodes.Call, runtime.ToJsString);
+            il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
             il.Emit(OpCodes.Stloc, str1Local);
             il.Emit(OpCodes.Ldloc, srcLocal);
             il.Emit(OpCodes.Ldloc, jLocal);
             il.Emit(OpCodes.Ldelem_Ref);
-            il.Emit(OpCodes.Call, runtime.ToJsString);
+            il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
             il.Emit(OpCodes.Stloc, str2Local);
             il.Emit(OpCodes.Ldloc, str1Local);
             il.Emit(OpCodes.Ldloc, str2Local);
@@ -3706,7 +3706,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, k);
         il.Emit(OpCodes.Add);
         il.Emit(OpCodes.Box, _types.Double);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Stloc, fromKey);
         il.Emit(OpCodes.Ldloc, receiver);
         il.Emit(OpCodes.Ldloc, fromKey);
@@ -3756,13 +3756,13 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, actualDeleteCount);
         il.Emit(OpCodes.Add);
         il.Emit(OpCodes.Box, _types.Double);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Stloc, fromKey);
         il.Emit(OpCodes.Ldloc, k);
         il.Emit(OpCodes.Ldloc, itemCount);
         il.Emit(OpCodes.Add);
         il.Emit(OpCodes.Box, _types.Double);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Stloc, toKey);
         il.Emit(OpCodes.Ldloc, receiver);
         il.Emit(OpCodes.Ldloc, fromKey);
@@ -3807,7 +3807,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Stloc, k);
         il.Emit(OpCodes.Box, _types.Double);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Stloc, toKey);
         il.Emit(OpCodes.Ldloc, receiver);
         il.Emit(OpCodes.Ldloc, toKey);
@@ -3837,7 +3837,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_R8, 1.0);
         il.Emit(OpCodes.Sub);
         il.Emit(OpCodes.Box, _types.Double);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Stloc, fromKey);
         il.Emit(OpCodes.Ldloc, k);
         il.Emit(OpCodes.Ldloc, itemCount);
@@ -3845,7 +3845,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_R8, 1.0);
         il.Emit(OpCodes.Sub);
         il.Emit(OpCodes.Box, _types.Double);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Stloc, toKey);
         il.Emit(OpCodes.Ldloc, receiver);
         il.Emit(OpCodes.Ldloc, fromKey);
@@ -3894,7 +3894,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Conv_R8);
         il.Emit(OpCodes.Add);
         il.Emit(OpCodes.Box, _types.Double);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloc, itemIndex);
         il.Emit(OpCodes.Ldc_I4_2);
@@ -4340,7 +4340,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Bge, prefixDone);
         il.Emit(OpCodes.Ldloc, sourceIndex);
         il.Emit(OpCodes.Box, _types.Double);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Stloc, key);
         il.Emit(OpCodes.Ldloc, result);
         il.Emit(OpCodes.Ldloc, receiver);
@@ -4391,7 +4391,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Bge, suffixDone);
         il.Emit(OpCodes.Ldloc, sourceIndex);
         il.Emit(OpCodes.Box, _types.Double);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Stloc, key);
         il.Emit(OpCodes.Ldloc, result);
         il.Emit(OpCodes.Ldloc, receiver);
@@ -4886,7 +4886,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, receiver);
         il.Emit(OpCodes.Ldloc, k);
         il.Emit(OpCodes.Box, _types.Double);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Ldloc, value);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Call, runtime.SetPropertyStrict);
@@ -5126,13 +5126,13 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, iLocal);
         il.Emit(OpCodes.Add);
         il.Emit(OpCodes.Box, _types.Int32);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Stloc, fromKeyLocal);
         il.Emit(OpCodes.Ldloc, toLocal);
         il.Emit(OpCodes.Ldloc, iLocal);
         il.Emit(OpCodes.Add);
         il.Emit(OpCodes.Box, _types.Int32);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Stloc, toKeyLocal);
 
         var backwardDeleteTarget = il.DefineLabel();
@@ -5192,13 +5192,13 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, iLocal);
         il.Emit(OpCodes.Add);
         il.Emit(OpCodes.Box, _types.Int32);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Stloc, fromKeyLocal);
         il.Emit(OpCodes.Ldloc, toLocal);
         il.Emit(OpCodes.Ldloc, iLocal);
         il.Emit(OpCodes.Add);
         il.Emit(OpCodes.Box, _types.Int32);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Stloc, toKeyLocal);
 
         var forwardDeleteTarget = il.DefineLabel();
@@ -5383,11 +5383,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ble, done);
         il.Emit(OpCodes.Ldloc, from);
         il.Emit(OpCodes.Box, _types.Double);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Stloc, fromKey);
         il.Emit(OpCodes.Ldloc, to);
         il.Emit(OpCodes.Box, _types.Double);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Stloc, toKey);
 
         var deleteTarget = il.DefineLabel();

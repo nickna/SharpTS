@@ -2858,7 +2858,7 @@ public partial class RuntimeEmitter
 
         // replacement = ToJsString(replValue)
         il.Emit(OpCodes.Ldloc, replValueLocal);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Stloc, replacementLocal);
 
         // sb.Append(input.Substring(lastEnd, position - lastEnd))
@@ -3263,7 +3263,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, rxObjLocal);
         il.Emit(OpCodes.Ldstr, "flags");
         il.Emit(OpCodes.Call, runtime.GetProperty);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Stloc, flagsLocal);
 
         // fullUnicode is true for either unicode mode. This is consumed only
@@ -3407,7 +3407,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, execResultLocal);
         il.Emit(OpCodes.Ldstr, "0");
         il.Emit(OpCodes.Call, runtime.GetProperty);
-        il.Emit(OpCodes.Call, runtime.Stringify);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.Stringify);
         il.Emit(OpCodes.Stloc, matchStrLocal);
 
         // arr.Add(matchStr)
@@ -3725,7 +3725,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, namedDone);
         il.Emit(OpCodes.Ldloc, sb);
         il.Emit(OpCodes.Ldloc, namedValue);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Callvirt, appendString);
         il.Emit(OpCodes.Pop);
         il.MarkLabel(namedDone);
@@ -3904,7 +3904,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "flags");
         il.Emit(OpCodes.Call, runtime.GetProperty);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Stloc, replaceFlagsLocal);
 
         // Guarded native replacement. All preceding coercions and the flags
@@ -4143,7 +4143,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, execResult);
         il.Emit(OpCodes.Ldstr, "0");
         il.Emit(OpCodes.Call, runtime.GetProperty);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Stloc, matched);
         il.Emit(OpCodes.Ldloc, matched);
         il.Emit(OpCodes.Callvirt, stringLength);
@@ -4207,7 +4207,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, execResult);
         il.Emit(OpCodes.Ldstr, "0");
         il.Emit(OpCodes.Call, runtime.GetProperty);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Stloc, matched);
 
         il.Emit(OpCodes.Ldloc, execResult);
@@ -4251,14 +4251,14 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, execResult);
         il.Emit(OpCodes.Ldloc, captureIndex);
         il.Emit(OpCodes.Box, _types.Int32);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Call, runtime.GetProperty);
         il.Emit(OpCodes.Stloc, captureValue);
         il.Emit(OpCodes.Ldloc, captureValue);
         il.Emit(OpCodes.Isinst, runtime.UndefinedType);
         il.Emit(OpCodes.Brtrue, captureUndefined);
         il.Emit(OpCodes.Ldloc, captureValue);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Stloc, captureValue);
         il.Emit(OpCodes.Br, captureStored);
         il.MarkLabel(captureUndefined);
@@ -4362,7 +4362,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
         il.Emit(OpCodes.Ldloc, callArgs);
         il.Emit(OpCodes.Callvirt, runtime.TSFunctionInvokeWithThis);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Stloc, replacement);
         il.Emit(OpCodes.Br, haveReplacement);
 
@@ -5164,7 +5164,7 @@ public partial class RuntimeEmitter
         // unwrapping boxed String/Number/Boolean values. Stringify alone would
         // turn those wrappers into "[object Object]", making exec return null.
         il.Emit(OpCodes.Ldarg, argIndex);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Stloc, local);
     }
 
@@ -5179,7 +5179,7 @@ public partial class RuntimeEmitter
     /// </summary>
     /// <remarks>
     /// $RegExp emits before $Runtime, so <c>runtime.CreateException</c> /
-    /// <c>runtime.Stringify</c> aren't yet bound when this helper runs —
+    /// <c>runtime.StringCoercion.Stringify</c> aren't yet bound when this helper runs —
     /// we inline the wrap (System.Exception + <c>Data["__tsValue"]</c>)
     /// here. Matches what <c>$Runtime.CreateException</c> does on the
     /// runtime side.

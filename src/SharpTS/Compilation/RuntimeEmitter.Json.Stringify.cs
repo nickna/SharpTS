@@ -1726,7 +1726,7 @@ public partial class RuntimeEmitter
         // String tag → ToString (string-hint ToPrimitive → toString first).
         il.MarkLabel(stringCase);
         il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Stloc, valueLocal);
         il.Emit(OpCodes.Br, done);
 

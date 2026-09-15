@@ -43,7 +43,7 @@ public partial class AsyncMoveNextEmitter
             // StringifyCoerce: interpolation is an implicit ToString coercion —
             // Symbol parts throw TypeError (ECMA-262 §7.1.17).
             _il.Emit(OpCodes.Ldloc, exprTemps[i]);
-            _il.Emit(OpCodes.Call, _ctx!.Runtime!.StringifyCoerce);
+            _il.Emit(OpCodes.Call, _ctx!.Runtime!.StringCoercion.StringifyCoerce);
             _il.Emit(OpCodes.Call, Types.StringConcat2);
 
             // Emit next string part

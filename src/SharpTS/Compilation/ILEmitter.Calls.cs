@@ -218,7 +218,7 @@ public partial class ILEmitter
                     // String() call form from ToString's Symbol TypeError.
                     EmitExpression(c.Arguments[0]);
                     EmitBoxIfNeeded(c.Arguments[0]);
-                    IL.Emit(OpCodes.Call, _ctx.Runtime!.StringFromValueMethod);
+                    IL.Emit(OpCodes.Call, _ctx.Runtime!.StringCoercion.FromValue);
                     SetStackUnknown();
                     return;
                 case "Number":

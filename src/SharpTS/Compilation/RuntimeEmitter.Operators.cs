@@ -910,7 +910,7 @@ public partial class RuntimeEmitter
         var continueSpecializedHasIn = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Call, runtime.ArrayOperations.HasArrayLikeProperty);
         il.Emit(OpCodes.Brfalse, continueSpecializedHasIn);
         il.Emit(OpCodes.Ldc_I4_1);
@@ -1240,9 +1240,9 @@ public partial class RuntimeEmitter
         // bool->"true"/"false") that throws TypeError for Symbol operands (§7.1.17).
         il.MarkLabel(stringConcatLabel);
         il.Emit(OpCodes.Ldloc, leftLocal);
-        il.Emit(OpCodes.Call, runtime.StringifyCoerce);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.StringifyCoerce);
         il.Emit(OpCodes.Ldloc, rightLocal);
-        il.Emit(OpCodes.Call, runtime.StringifyCoerce);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.StringifyCoerce);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", _types.String, _types.String));
         il.Emit(OpCodes.Ret);
     }
@@ -1250,7 +1250,7 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Declares the Equals MethodBuilder shell. Body fills in via
     /// <see cref="EmitEquals"/>, which must run AFTER EmitToJsString so the
-    /// Object-vs-String spec branch can reference <c>runtime.ToJsString</c>.
+    /// Object-vs-String spec branch can reference <c>runtime.StringCoercion.ToJsString</c>.
     /// </summary>
     internal void DeclareEquals(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
@@ -1446,7 +1446,7 @@ public partial class RuntimeEmitter
         // Object-vs-String: ToJsString(LEFT) and string-compare via op_Equality.
         il.MarkLabel(leftObjVsStringLabel);
         il.Emit(OpCodes.Ldloc, leftLocal);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Ldloc, rightLocal);
         il.Emit(OpCodes.Castclass, _types.String);
         il.Emit(OpCodes.Call, _types.StringOpEquality);
@@ -1488,7 +1488,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, leftLocal);
         il.Emit(OpCodes.Castclass, _types.String);
         il.Emit(OpCodes.Ldloc, rightLocal);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Call, _types.StringOpEquality);
         il.Emit(OpCodes.Br, endLabel);
         il.MarkLabel(notRightCoercibleLabel);

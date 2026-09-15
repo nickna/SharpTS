@@ -25,7 +25,7 @@ public partial class RuntimeEmitter
 
         // Convert prefix to string
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.Stringify);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.Stringify);
         var prefixLocal = il.DeclareLocal(_types.String);
         il.Emit(OpCodes.Stloc, prefixLocal);
 
@@ -90,7 +90,7 @@ public partial class RuntimeEmitter
 
         // Convert path to string
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.Stringify);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.Stringify);
         var pathLocal = il.DeclareLocal(_types.String);
         il.Emit(OpCodes.Stloc, pathLocal);
 
@@ -140,12 +140,12 @@ public partial class RuntimeEmitter
 
         // Convert paths to strings
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.Stringify);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.Stringify);
         var existingPathLocal = il.DeclareLocal(_types.String);
         il.Emit(OpCodes.Stloc, existingPathLocal);
 
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.Stringify);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.Stringify);
         var newPathLocal = il.DeclareLocal(_types.String);
         il.Emit(OpCodes.Stloc, newPathLocal);
 

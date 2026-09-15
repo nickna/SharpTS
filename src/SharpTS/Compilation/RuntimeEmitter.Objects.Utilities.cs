@@ -632,7 +632,7 @@ public partial class RuntimeEmitter
         // for object keys and canonical ECMAScript number formatting.
         var keyStrLocal = il.DeclareLocal(_types.String);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Stloc, keyStrLocal);
         // if (getter != null) obj.DefineGetter(keyStr, getter)
         var skipGetterLabel = il.DefineLabel();

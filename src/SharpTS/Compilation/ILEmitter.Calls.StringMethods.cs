@@ -258,7 +258,7 @@ public partial class ILEmitter
                 {
                     EmitExpression(arguments[0]);
                     EmitBoxIfNeeded(arguments[0]);
-                    IL.Emit(OpCodes.Call, _ctx.Runtime!.ToJsString);
+                    IL.Emit(OpCodes.Call, _ctx.Runtime!.StringCoercion.ToJsString);
                 }
                 else
                 {
@@ -298,7 +298,7 @@ public partial class ILEmitter
                 {
                     EmitExpression(arguments[0]);
                     EmitBoxIfNeeded(arguments[0]);
-                    IL.Emit(OpCodes.Call, _ctx.Runtime!.ToJsString);
+                    IL.Emit(OpCodes.Call, _ctx.Runtime!.StringCoercion.ToJsString);
                 }
                 else
                 {

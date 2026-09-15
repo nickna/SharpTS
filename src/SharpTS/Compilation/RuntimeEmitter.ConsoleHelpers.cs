@@ -69,7 +69,7 @@ public partial class RuntimeEmitter
         // Console.Error.WriteLine(Stringify(value))
         il.Emit(OpCodes.Call, _types.GetProperty(_types.Console, "Error").GetMethod!);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.Stringify);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.Stringify);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.TextWriter, "WriteLine", _types.String));
         il.Emit(OpCodes.Ret);
     }
@@ -116,7 +116,7 @@ public partial class RuntimeEmitter
         // Console.Error.WriteLine(Stringify(value))
         il.Emit(OpCodes.Call, _types.GetProperty(_types.Console, "Error").GetMethod!);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.Stringify);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.Stringify);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.TextWriter, "WriteLine", _types.String));
         il.Emit(OpCodes.Ret);
     }
@@ -202,7 +202,7 @@ public partial class RuntimeEmitter
         // arg is not null - stringify it
         il.MarkLabel(notNullLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.Stringify);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.Stringify);
         il.Emit(OpCodes.Stloc, labelLocal);
 
         il.MarkLabel(afterLabelInit);
@@ -254,7 +254,7 @@ public partial class RuntimeEmitter
         // arg is not null - stringify it
         il.MarkLabel(notNullLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.Stringify);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.Stringify);
         il.Emit(OpCodes.Stloc, labelLocal);
         il.MarkLabel(afterLabelInit);
 
@@ -343,7 +343,7 @@ public partial class RuntimeEmitter
         // arg is not null - stringify it
         il.MarkLabel(notNullLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.Stringify);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.Stringify);
         il.Emit(OpCodes.Stloc, labelLocal);
         il.MarkLabel(afterLabelInit);
 
@@ -488,7 +488,7 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(notNullLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.Stringify);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.Stringify);
         il.Emit(OpCodes.Stloc, labelLocal);
 
         il.MarkLabel(afterLabelInit);
@@ -582,7 +582,7 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(notNullLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.Stringify);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.Stringify);
         il.Emit(OpCodes.Stloc, labelLocal);
 
         il.MarkLabel(afterLabelInit);
@@ -666,7 +666,7 @@ public partial class RuntimeEmitter
         // defaultLabel: stringify and print
         il.MarkLabel(defaultLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.Stringify);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.Stringify);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Console, "WriteLine", _types.String));
 
         il.MarkLabel(endLabel);
@@ -755,7 +755,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, listLocal);
         il.Emit(OpCodes.Ldloc, indexLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "get_Item", _types.Int32));
-        il.Emit(OpCodes.Call, runtime.Stringify);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.Stringify);
         il.Emit(OpCodes.Ldc_I4, 20);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "PadRight", _types.Int32));
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StringBuilder, "Append", _types.String));
@@ -876,7 +876,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, sbLocal);
         il.Emit(OpCodes.Ldloca, kvpLocal);
         il.Emit(OpCodes.Call, kvpType.GetProperty("Value")!.GetGetMethod()!);
-        il.Emit(OpCodes.Call, runtime.Stringify);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.Stringify);
         il.Emit(OpCodes.Ldc_I4, 20);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "PadRight", _types.Int32));
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StringBuilder, "Append", _types.String));
@@ -955,7 +955,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Brfalse, skipLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.Stringify);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.Stringify);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Console, "WriteLine", _types.String));
 
         il.MarkLabel(skipLabel);
@@ -1056,7 +1056,7 @@ public partial class RuntimeEmitter
 
         // Has message
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.Stringify);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.Stringify);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", _types.String, _types.String));
         il.Emit(OpCodes.Br, afterMessageLabel);
 
@@ -1183,7 +1183,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(noFormatLabel);
         il.Emit(OpCodes.Call, runtime.Console.GetIndent);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.Stringify);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.Stringify);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", _types.String, _types.String));
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Console, "WriteLine", _types.String));
         il.Emit(OpCodes.Ret);
@@ -1396,7 +1396,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloc, indexLocal);
         il.Emit(OpCodes.Ldelem_Ref);
-        il.Emit(OpCodes.Call, runtime.Stringify);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.Stringify);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StringBuilder, "Append", _types.String));
         il.Emit(OpCodes.Pop);
 
@@ -1665,7 +1665,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, argIndexLocal);
         il.Emit(OpCodes.Ldelem_Ref);
-        il.Emit(OpCodes.Call, runtime.Stringify);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.Stringify);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StringBuilder, "Append", _types.String));
         il.Emit(OpCodes.Pop);
         var afterS = il.DefineLabel();
@@ -1699,7 +1699,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, argIndexLocal);
         il.Emit(OpCodes.Ldelem_Ref);
-        il.Emit(OpCodes.Call, runtime.Stringify);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.Stringify);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StringBuilder, "Append", _types.String));
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Br, afterS);
@@ -1763,7 +1763,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, argIndexLocal);
         il.Emit(OpCodes.Ldelem_Ref);
-        il.Emit(OpCodes.Call, runtime.Stringify);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.Stringify);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StringBuilder, "Append", _types.String));
         il.Emit(OpCodes.Pop);
 
@@ -2279,7 +2279,7 @@ public partial class RuntimeEmitter
 
         // Fallback: use Stringify (already emitted in $Runtime)
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.Stringify);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.Stringify);
         il.Emit(OpCodes.Ret);
     }
 }
