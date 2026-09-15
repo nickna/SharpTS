@@ -1686,6 +1686,157 @@ public class StandaloneDllTests
         }
     ];
 
+    public static IEnumerable<object[]> BroadcastChannelMetadataPrograms =>
+    [
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = """
+                import {BroadcastChannel} from 'worker_threads';const channel=new BroadcastChannel('name');console.log(channel.name);channel.close();
+                """,
+            },
+            "name\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = """
+                const a=new BroadcastChannel('fanout');const b=new BroadcastChannel('fanout');const c=new BroadcastChannel('fanout');const values:string[]=[];function receive(value:string){values.push(value);if(values.length===2)console.log(values.sort().join(','));}a.on('message',()=>console.log('echo'));b.on('message',(event:any)=>receive('b:'+event.data));c.on('message',(event:any)=>receive('c:'+event.data));a.postMessage('value');a.close();b.close();c.close();
+                """,
+            },
+            "b:value,c:value\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = """
+                const a=new BroadcastChannel('Topic');const b=new BroadcastChannel('topic');a.on('message',()=>console.log('echo'));b.on('message',()=>console.log('wrong'));a.postMessage('value');a.close();b.close();console.log('done');
+                """,
+            },
+            "done\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = """
+                const a=new BroadcastChannel('clone');const b=new BroadcastChannel('clone');const c=new BroadcastChannel('clone');const values:string[]=[];const value:any={id:1,nested:[2]};function receive(event:any){values.push(event.data.id+':'+event.data.nested[0]);event.data.id=8;event.data.nested[0]=9;if(values.length===2)console.log(values.sort().join(','));}b.on('message',receive);c.on('message',receive);a.postMessage(value);value.id=7;value.nested[0]=6;a.close();b.close();c.close();
+                """,
+            },
+            "1:2,1:2\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = """
+                const a=new BroadcastChannel('errors');const b=new BroadcastChannel('errors');b.on('messageerror',()=>console.log('listener-error'));b.onmessageerror=()=>console.log('property-error');b.on('message',(event:any)=>console.log(event.data));a.postMessage({nested:[()=>{}]});a.postMessage('after');a.close();b.close();
+                """,
+            },
+            "listener-error\nproperty-error\nafter\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = """
+                const a=new BroadcastChannel('handlers');const b=new BroadcastChannel('handlers');function removed(event:any){console.log('removed');}b.addEventListener('message',removed);b.removeEventListener('message',removed);b.on('message',(event:any)=>console.log('listener:'+event.data+':'+event.type+':'+(event.target===b)));b.onmessage=(event:any)=>console.log('property:'+event.data);a.postMessage('one');a.close();b.close();
+                """,
+            },
+            "listener:one:message:true\nproperty:one\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = """
+                const channel=new BroadcastChannel('refs');channel.unref();channel.unref();channel.ref();channel.ref();channel.close();channel.close();channel.unref();console.log('done');
+                """,
+            },
+            "done\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = """
+                const a=new BroadcastChannel('closed');const b=new BroadcastChannel('closed');b.on('close',()=>console.log('closed'));b.on('message',(event:any)=>console.log(event.data));a.postMessage('queued');b.close();a.postMessage('late');a.close();try{a.postMessage('invalid');}catch(error:any){console.log(error.message);}
+                """,
+            },
+            "closed\nInvalidStateError: BroadcastChannel is closed\nqueued\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = """
+                const a=new BroadcastChannel('binary');const b=new BroadcastChannel('binary');const value=new Uint8Array([1,2]);b.on('message',(event:any)=>console.log(event.data[0],event.data[1]));a.postMessage(value);value[0]=8;a.close();b.close();
+                """,
+            },
+            "1 2\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = """
+                async function run(){await new Promise<void>(resolve=>setTimeout(resolve,1));const a=new BroadcastChannel('async');const b=new BroadcastChannel('async');b.onmessage=(event:any)=>console.log(event.data);a.postMessage('async');a.close();b.close();}run();
+                """,
+            },
+            "async\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = """
+                function* values():Generator<any,void,any>{const channel=new BroadcastChannel('generator');yield channel;channel.postMessage('generator');channel.close();}const iterator=values();const a:any=iterator.next().value;const b=new BroadcastChannel(a.name);b.on('message',(event:any)=>console.log(event.data));iterator.next();b.close();
+                """,
+            },
+            "generator\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = """
+                import * as workers from 'node:worker_threads';console.log(typeof workers.BroadcastChannel);const channel=new BroadcastChannel('namespace');console.log(channel.name);channel.close();
+                """,
+            },
+            "function\nnamespace\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.cjs"] = """
+                const workers=require('node:worker_threads');console.log(typeof workers.BroadcastChannel);const channel=new BroadcastChannel('common');console.log(channel.name);channel.close();
+                """,
+            },
+            "function\ncommon\n", "main.cjs", true
+        }
+    ];
+
+    [Theory]
+    [MemberData(nameof(BroadcastChannelMetadataPrograms))]
+    public void Isolated_BroadcastChannelMetadata_PreservesRegistryDeliveryAndCloneBehavior(Dictionary<string, string> files, string expected, string entryPoint, bool standalone)
+    {
+        using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        foreach (var (path, source) in files) tempDir.CreateFile(path, source);
+        var dllPath = tempDir.GetPath("broadcast_channel_metadata.dll");
+        var deployment = standalone ? " --standalone" : "";
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{tempDir.GetPath(entryPoint)}\" -o \"{dllPath}\" --verify{deployment}", tempDir.Path);
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(dllPath));
+        Assert.Equal(!standalone, File.Exists(tempDir.GetPath("SharpTS.dll")));
+        Assert.Equal(expected, ExecuteCompiledDllIsolated(dllPath, timeoutMs: 30000,
+            verifyStandardError: error => Assert.Empty(error)));
+    }
+
     [Theory]
     [MemberData(nameof(WorkerMetadataPrograms))]
     public void Isolated_WorkerMetadata_PreservesContextEnvironmentAndBridgeDeployment(Dictionary<string, string> files, string expected, string entryPoint, bool standalone)

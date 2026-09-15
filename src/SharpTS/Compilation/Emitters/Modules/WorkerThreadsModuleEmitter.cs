@@ -62,7 +62,7 @@ public sealed class WorkerThreadsModuleEmitter : IBuiltInModuleEmitter
 
         // Load the $BroadcastChannel Type so callers can recognize the constructor reference.
         // Actual `new BroadcastChannel(...)` is wired through TryEmitBuiltInConstructor.
-        il.Emit(OpCodes.Ldtoken, ctx.Runtime!.BroadcastChannelType);
+        il.Emit(OpCodes.Ldtoken, ctx.Runtime!.RequireBroadcastChannel().Type);
         il.Emit(OpCodes.Call, ctx.Types.GetMethod(ctx.Types.Type, "GetTypeFromHandle", ctx.Types.RuntimeTypeHandle));
         return true;
     }

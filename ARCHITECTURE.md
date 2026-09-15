@@ -785,6 +785,16 @@ dependency deployment, and environment/undefined behavior retain their existing 
 The mixed worker helper orchestrator still coordinates buffer, typed-array, Atomics, and structured
 clone emission; remaining structured-clone metadata is part of the subsequent phase and final audit.
 
+BroadcastChannel has an optional `EmittedBroadcastChannelRuntime` owner under the existing
+`UsesBroadcastChannel` gate. Thirteen shared declarations replace two flat aliases and seventeen
+emitter-held builders: four method copies used only during their own construction become scoped
+locals, while type/constructor/drain and ten fields belong to the component. Two mutable BCL
+dictionary-type caches also become scoped values. Twelve helpers receive only their family,
+event-emitter, event-loop, function, and clone dependencies. Declarations retain their original
+construction order, and external consumers read checked handles after class emission. Ordinal
+registry lookup, per-subscriber cloning, receiver-side errors, queued delivery after close,
+property/listener callbacks, and event-loop reference behavior remain unchanged.
+
 During emission, each handle becomes readable as soon as its declaration is assigned, so forward
 references do not require a method body to exist yet. An early read names the missing declaration.
 Completion is an orchestration boundary, not an IL verifier: body emission and type finalization
