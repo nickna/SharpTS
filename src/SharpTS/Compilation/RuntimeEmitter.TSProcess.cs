@@ -324,7 +324,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, count);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Bge, success);
-        EmitProcessPosixError(il, runtime, "getgroups");
+        EmitProcessPosixError(il, runtime.NodeErrors, runtime.CreateException, "getgroups");
 
         il.MarkLabel(success);
         il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.ListOfObject));
@@ -378,7 +378,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Conv_U4);
         il.Emit(OpCodes.Call, native);
         il.Emit(OpCodes.Brfalse, success);
-        EmitProcessPosixError(il, runtime, syscall);
+        EmitProcessPosixError(il, runtime.NodeErrors, runtime.CreateException, syscall);
         il.MarkLabel(success);
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ret);
@@ -386,7 +386,8 @@ public partial class RuntimeEmitter
 
     private void EmitProcessPosixError(
         ILGenerator il,
-        EmittedRuntime runtime,
+        EmittedNodeErrorRuntime nodeErrors,
+        MethodBuilder createException,
         string syscall)
     {
         var nullableInt = _types.MakeNullable(_types.Int32);
@@ -398,8 +399,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloca, errno);
         il.Emit(OpCodes.Initobj, nullableInt);
         il.Emit(OpCodes.Ldloc, errno);
-        il.Emit(OpCodes.Newobj, runtime.NodeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
+        il.Emit(OpCodes.Newobj, nodeErrors.Ctor);
+        il.Emit(OpCodes.Call, createException);
         il.Emit(OpCodes.Throw);
     }
 

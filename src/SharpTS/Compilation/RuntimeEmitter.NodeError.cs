@@ -5,17 +5,11 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
-    // $NodeError fields
-    private FieldBuilder _nodeErrorCodeField = null!;
-    private FieldBuilder _nodeErrorSyscallField = null!;
-    private FieldBuilder _nodeErrorPathField = null!;
-    private FieldBuilder _nodeErrorErrnoField = null!;
-
     /// <summary>
     /// Emits the $NodeError class for standalone FS module support.
     /// NOTE: Must stay in sync with NodeError in Runtime/BuiltIns/Modules/NodeError.cs
     /// </summary>
-    private void EmitNodeErrorClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private void EmitNodeErrorClass(ModuleBuilder moduleBuilder, EmittedNodeErrorRuntime nodeErrors)
     {
         // Define class: public class $NodeError : Exception
         var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
@@ -26,24 +20,25 @@ public partial class RuntimeEmitter
 
         // Fields
         var nullableInt32 = _types.MakeNullable(_types.Int32);
-        _nodeErrorCodeField = typeBuilder.DefineField("_code", _types.String, FieldAttributes.Private);
-        _nodeErrorSyscallField = typeBuilder.DefineField("_syscall", _types.String, FieldAttributes.Private);
-        _nodeErrorPathField = typeBuilder.DefineField("_path", _types.String, FieldAttributes.Private);
-        _nodeErrorErrnoField = typeBuilder.DefineField("_errno", nullableInt32, FieldAttributes.Private);
+        var codeField = typeBuilder.DefineField("_code", _types.String, FieldAttributes.Private);
+        var syscallField = typeBuilder.DefineField("_syscall", _types.String, FieldAttributes.Private);
+        var pathField = typeBuilder.DefineField("_path", _types.String, FieldAttributes.Private);
+        var errnoField = typeBuilder.DefineField("_errno", nullableInt32, FieldAttributes.Private);
 
         // Constructor
-        EmitNodeErrorCtor(typeBuilder, runtime);
+        EmitNodeErrorCtor(typeBuilder, nodeErrors, codeField, syscallField, pathField, errnoField);
 
         // Property getters
-        EmitNodeErrorCodeGetter(typeBuilder, runtime);
-        EmitNodeErrorSyscallGetter(typeBuilder, runtime);
-        EmitNodeErrorPathGetter(typeBuilder, runtime);
-        EmitNodeErrorErrnoGetter(typeBuilder, runtime);
+        EmitNodeErrorCodeGetter(typeBuilder, nodeErrors, codeField);
+        EmitNodeErrorSyscallGetter(typeBuilder, nodeErrors, syscallField);
+        EmitNodeErrorPathGetter(typeBuilder, nodeErrors, pathField);
+        EmitNodeErrorErrnoGetter(typeBuilder, errnoField);
 
-        runtime.NodeErrorType = typeBuilder.CreateType()!;
+        nodeErrors.Type = typeBuilder.CreateType()!;
     }
 
-    private void EmitNodeErrorCtor(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitNodeErrorCtor(TypeBuilder typeBuilder, EmittedNodeErrorRuntime nodeErrors,
+        FieldBuilder codeField, FieldBuilder syscallField, FieldBuilder pathField, FieldBuilder errnoField)
     {
         // public $NodeError(string code, string message, string? syscall, string? path, int? errno)
         var nullableInt32 = _types.MakeNullable(_types.Int32);
@@ -52,7 +47,7 @@ public partial class RuntimeEmitter
             CallingConventions.Standard,
             [_types.String, _types.String, _types.String, _types.String, nullableInt32]
         );
-        runtime.NodeErrorCtor = ctor;
+        nodeErrors.Ctor = ctor;
 
         var il = ctor.GetILGenerator();
 
@@ -116,27 +111,27 @@ public partial class RuntimeEmitter
         // _code = code
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Stfld, _nodeErrorCodeField);
+        il.Emit(OpCodes.Stfld, codeField);
 
         // _syscall = syscall
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_3);
-        il.Emit(OpCodes.Stfld, _nodeErrorSyscallField);
+        il.Emit(OpCodes.Stfld, syscallField);
 
         // _path = path
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_S, (byte)4);
-        il.Emit(OpCodes.Stfld, _nodeErrorPathField);
+        il.Emit(OpCodes.Stfld, pathField);
 
         // _errno = errno
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_S, (byte)5);
-        il.Emit(OpCodes.Stfld, _nodeErrorErrnoField);
+        il.Emit(OpCodes.Stfld, errnoField);
 
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitNodeErrorCodeGetter(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitNodeErrorCodeGetter(TypeBuilder typeBuilder, EmittedNodeErrorRuntime nodeErrors, FieldBuilder codeField)
     {
         var method = typeBuilder.DefineMethod(
             "get_Code",
@@ -144,15 +139,15 @@ public partial class RuntimeEmitter
             _types.String,
             Type.EmptyTypes
         );
-        runtime.NodeErrorCodeGetter = method;
+        nodeErrors.CodeGetter = method;
 
         var il = method.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _nodeErrorCodeField);
+        il.Emit(OpCodes.Ldfld, codeField);
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitNodeErrorSyscallGetter(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitNodeErrorSyscallGetter(TypeBuilder typeBuilder, EmittedNodeErrorRuntime nodeErrors, FieldBuilder syscallField)
     {
         var method = typeBuilder.DefineMethod(
             "get_Syscall",
@@ -160,15 +155,15 @@ public partial class RuntimeEmitter
             _types.String,
             Type.EmptyTypes
         );
-        runtime.NodeErrorSyscallGetter = method;
+        nodeErrors.SyscallGetter = method;
 
         var il = method.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _nodeErrorSyscallField);
+        il.Emit(OpCodes.Ldfld, syscallField);
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitNodeErrorPathGetter(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitNodeErrorPathGetter(TypeBuilder typeBuilder, EmittedNodeErrorRuntime nodeErrors, FieldBuilder pathField)
     {
         var method = typeBuilder.DefineMethod(
             "get_Path",
@@ -176,15 +171,15 @@ public partial class RuntimeEmitter
             _types.String,
             Type.EmptyTypes
         );
-        runtime.NodeErrorPathGetter = method;
+        nodeErrors.PathGetter = method;
 
         var il = method.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _nodeErrorPathField);
+        il.Emit(OpCodes.Ldfld, pathField);
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitNodeErrorErrnoGetter(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitNodeErrorErrnoGetter(TypeBuilder typeBuilder, FieldBuilder errnoField)
     {
         var nullableInt32 = _types.MakeNullable(_types.Int32);
         var method = typeBuilder.DefineMethod(
@@ -197,7 +192,7 @@ public partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _nodeErrorErrnoField);
+        il.Emit(OpCodes.Ldfld, errnoField);
         il.Emit(OpCodes.Ret);
     }
 
@@ -205,9 +200,9 @@ public partial class RuntimeEmitter
     /// Emits helpers that surface .NET exceptions as Node.js-style errors with
     /// proper error codes (ENOENT, EACCES, etc.).
     /// </summary>
-    private void EmitNodeErrorHelpers(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitNodeErrorHelpers(TypeBuilder typeBuilder, EmittedNodeErrorRuntime nodeErrors)
     {
-        EmitThrowNodeError(typeBuilder, runtime);
+        EmitThrowNodeError(typeBuilder, nodeErrors);
     }
 
     /// <summary>
@@ -219,7 +214,7 @@ public partial class RuntimeEmitter
     /// at runtime for compiled assemblies. Instead, we store metadata in Exception.Data
     /// and WrapException extracts it to create the proper error object.
     /// </remarks>
-    private void EmitThrowNodeError(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitThrowNodeError(TypeBuilder typeBuilder, EmittedNodeErrorRuntime nodeErrors)
     {
         var method = typeBuilder.DefineMethod(
             "ThrowNodeError",
@@ -227,7 +222,7 @@ public partial class RuntimeEmitter
             _types.Void,
             [_types.Exception, _types.String, _types.String]
         );
-        runtime.ThrowNodeError = method;
+        nodeErrors.Throw = method;
 
         var il = method.GetILGenerator();
 
@@ -238,9 +233,9 @@ public partial class RuntimeEmitter
         // default. Mirrors the interpreter's WrapFsOperation, which rethrows a NodeError
         // as-is (keeping its own code/syscall/path and pre-formatted message). (#986)
         var notNodeError = il.DefineLabel();
-        var nodeErrLocal = il.DeclareLocal(runtime.NodeErrorType);
+        var nodeErrLocal = il.DeclareLocal(nodeErrors.Type);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.NodeErrorType);
+        il.Emit(OpCodes.Isinst, nodeErrors.Type);
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Stloc, nodeErrLocal);
         il.Emit(OpCodes.Brfalse, notNodeError);
@@ -266,7 +261,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Exception, "Data").GetGetMethod()!);
         il.Emit(OpCodes.Ldstr, "__code");
         il.Emit(OpCodes.Ldloc, nodeErrLocal);
-        il.Emit(OpCodes.Callvirt, runtime.NodeErrorCodeGetter);
+        il.Emit(OpCodes.Callvirt, nodeErrors.CodeGetter);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.IDictionary, "set_Item"));
 
         // preserved.Data["__syscall"] = ne.Syscall;
@@ -274,7 +269,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Exception, "Data").GetGetMethod()!);
         il.Emit(OpCodes.Ldstr, "__syscall");
         il.Emit(OpCodes.Ldloc, nodeErrLocal);
-        il.Emit(OpCodes.Callvirt, runtime.NodeErrorSyscallGetter);
+        il.Emit(OpCodes.Callvirt, nodeErrors.SyscallGetter);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.IDictionary, "set_Item"));
 
         // preserved.Data["__path"] = ne.Path;
@@ -282,7 +277,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Exception, "Data").GetGetMethod()!);
         il.Emit(OpCodes.Ldstr, "__path");
         il.Emit(OpCodes.Ldloc, nodeErrLocal);
-        il.Emit(OpCodes.Callvirt, runtime.NodeErrorPathGetter);
+        il.Emit(OpCodes.Callvirt, nodeErrors.PathGetter);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.IDictionary, "set_Item"));
 
         // throw preserved;

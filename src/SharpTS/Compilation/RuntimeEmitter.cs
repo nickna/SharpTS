@@ -272,7 +272,7 @@ public partial class RuntimeEmitter
         // AssertionError now lives in stdlib/node/assert.ts (embedded stdlib migration).
         // Emit $NodeError class for standalone fs module support
         // NOTE: Must stay in sync with NodeError in Runtime/BuiltIns/Modules/NodeError.cs
-        EmitNodeErrorClass(moduleBuilder, runtime);
+        EmitNodeErrorClass(moduleBuilder, runtime.NodeErrors);
 
         // Emit $Buffer class for standalone buffer support — gated on UsesBuffer.
         // Implied by crypto/fs/zlib/http/fetch/dgram/net (their methods return
@@ -356,7 +356,7 @@ public partial class RuntimeEmitter
         {
             // Emit $FileDescriptorTable for standalone fs fd-based operations (Phase 21)
             // NOTE: Must come after $NodeError (uses NodeErrorCtor for EBADF errors)
-            EmitFileDescriptorTableType(moduleBuilder, runtime);
+            EmitFileDescriptorTableType(moduleBuilder, runtime.RequireFileSystem(), runtime.NodeErrors);
 
             // Emit $Dirent and $Dir for standalone fs.opendirSync support (Phase 21)
             // NOTE: Must emit Dirent first since Dir's ReadSync creates Dirent instances
@@ -697,6 +697,7 @@ public partial class RuntimeEmitter
         runtime.Microtasks.CompleteEmission();
         runtime.TimerPromises?.CompleteEmission();
         runtime.Modules.CompleteEmission();
+        runtime.NodeErrors.CompleteEmission();
         runtime.Tty?.CompleteEmission();
         runtime.Performance?.CompleteEmission();
         runtime.Intl?.CompleteEmission();

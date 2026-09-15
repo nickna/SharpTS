@@ -1480,7 +1480,7 @@ public partial class RuntimeEmitter
         if (_features.UsesAsyncGenerator)
             EmitAsyncGeneratorAwaitContinueMethods(typeBuilder, moduleBuilder, runtime);
         // NodeError conversion helpers (must be before fs methods which use them)
-        EmitNodeErrorHelpers(typeBuilder, runtime);
+        EmitNodeErrorHelpers(typeBuilder, runtime.NodeErrors);
         // Built-in module methods (fs, os, dns) — path migrated to stdlib/node/path.ts.
         if (_features.UsesFs)
             EmitFsModuleMethods(typeBuilder, runtime);

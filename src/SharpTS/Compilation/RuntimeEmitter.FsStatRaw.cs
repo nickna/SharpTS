@@ -155,7 +155,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Call, runtime.Stringify);
         var pathLocal = il.DeclareLocal(_types.String); il.Emit(OpCodes.Stloc, pathLocal);
 
-        EmitWithFsErrorHandling(il, runtime, pathLocal, "stat", afterTry =>
+        EmitWithFsErrorHandling(il, runtime.NodeErrors, pathLocal, "stat", afterTry =>
         {
             var isDirL = il.DeclareLocal(_types.Boolean);
             il.Emit(OpCodes.Ldloc, pathLocal);
@@ -209,7 +209,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Call, runtime.Stringify);
         var pathLocal = il.DeclareLocal(_types.String); il.Emit(OpCodes.Stloc, pathLocal);
 
-        EmitWithFsErrorHandling(il, runtime, pathLocal, "lstat", afterTry =>
+        EmitWithFsErrorHandling(il, runtime.NodeErrors, pathLocal, "lstat", afterTry =>
         {
             var dirRawL = il.DeclareLocal(_types.Boolean);
             il.Emit(OpCodes.Ldloc, pathLocal);
@@ -281,7 +281,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldnull);
         var pathLocal = il.DeclareLocal(_types.String); il.Emit(OpCodes.Stloc, pathLocal);
 
-        EmitWithFsErrorHandling(il, runtime, pathLocal, "fstat", afterTry =>
+        EmitWithFsErrorHandling(il, runtime.NodeErrors, pathLocal, "fstat", afterTry =>
         {
             il.Emit(OpCodes.Ldsfld, runtime.RequireFileSystem().FileDescriptorTableInstance);
             il.Emit(OpCodes.Ldloc, fdLocal);

@@ -30,7 +30,7 @@ public partial class RuntimeEmitter
 
         var resultLocal = il.DeclareLocal(_types.Double);
 
-        EmitWithFsErrorHandling(il, runtime, pathLocal, "open", afterTry =>
+        EmitWithFsErrorHandling(il, runtime.NodeErrors, pathLocal, "open", afterTry =>
         {
             // Parse flags using pure-IL FsFlagsParsePure helper (no reflection, standalone-compatible)
             il.Emit(OpCodes.Ldarg_1); // flags
@@ -89,7 +89,7 @@ public partial class RuntimeEmitter
         var pathLocal = il.DeclareLocal(_types.String);
         il.Emit(OpCodes.Stloc, pathLocal);
 
-        EmitWithFsErrorHandling(il, runtime, pathLocal, "close", afterTry =>
+        EmitWithFsErrorHandling(il, runtime.NodeErrors, pathLocal, "close", afterTry =>
         {
             // Get $FileDescriptorTable.Instance (pure-IL, no reflection)
             il.Emit(OpCodes.Ldsfld, runtime.RequireFileSystem().FileDescriptorTableInstance);
@@ -145,7 +145,7 @@ public partial class RuntimeEmitter
         var pathLocal = il.DeclareLocal(_types.String);
         il.Emit(OpCodes.Stloc, pathLocal);
 
-        EmitWithFsErrorHandling(il, runtime, pathLocal, "read", afterTry =>
+        EmitWithFsErrorHandling(il, runtime.NodeErrors, pathLocal, "read", afterTry =>
         {
             var fileStreamReadMethod = typeof(FileStream).GetMethod("Read", [typeof(byte[]), typeof(int), typeof(int)])!;
             var fileStreamSeekMethod = typeof(FileStream).GetMethod("Seek")!;
@@ -227,7 +227,7 @@ public partial class RuntimeEmitter
         var pathLocal = il.DeclareLocal(_types.String);
         il.Emit(OpCodes.Stloc, pathLocal);
 
-        EmitWithFsErrorHandling(il, runtime, pathLocal, "write", afterTry =>
+        EmitWithFsErrorHandling(il, runtime.NodeErrors, pathLocal, "write", afterTry =>
         {
             var fileStreamWriteMethod = typeof(FileStream).GetMethod("Write", [typeof(byte[]), typeof(int), typeof(int)])!;
             var fileStreamSeekMethod = typeof(FileStream).GetMethod("Seek")!;
@@ -370,7 +370,7 @@ public partial class RuntimeEmitter
         var pathLocal = il.DeclareLocal(_types.String);
         il.Emit(OpCodes.Stloc, pathLocal);
 
-        EmitWithFsErrorHandling(il, runtime, pathLocal, "fstat", afterTry =>
+        EmitWithFsErrorHandling(il, runtime.NodeErrors, pathLocal, "fstat", afterTry =>
         {
             var lengthGetter = typeof(FileStream).GetProperty("Length")!.GetMethod!;
 
@@ -442,7 +442,7 @@ public partial class RuntimeEmitter
         var pathLocal = il.DeclareLocal(_types.String);
         il.Emit(OpCodes.Stloc, pathLocal);
 
-        EmitWithFsErrorHandling(il, runtime, pathLocal, "ftruncate", afterTry =>
+        EmitWithFsErrorHandling(il, runtime.NodeErrors, pathLocal, "ftruncate", afterTry =>
         {
             var setLengthMethod = typeof(FileStream).GetMethod("SetLength")!;
 
