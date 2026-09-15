@@ -95,8 +95,8 @@ public partial class ILCompiler
             hookIl =>
             {
                 hookIl.Emit(OpCodes.Call, _runtime.Timers.CancelAllTimers);
-                if (_runtime.ChildProcessTerminateOwned is not null)
-                    hookIl.Emit(OpCodes.Call, _runtime.ChildProcessTerminateOwned);
+                if (_runtime.ChildProcess is not null)
+                    hookIl.Emit(OpCodes.Call, _runtime.RequireChildProcess().TerminateOwned);
                 hookIl.Emit(OpCodes.Call, _runtime.EventLoop.GetInstance);
                 hookIl.Emit(OpCodes.Callvirt, _runtime.EventLoop.RequireHosted().Clear);
             });

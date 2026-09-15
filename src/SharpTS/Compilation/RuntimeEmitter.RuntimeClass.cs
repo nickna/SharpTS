@@ -503,11 +503,11 @@ public partial class RuntimeEmitter
         // observe or terminate one another's children.
         if (_features.UsesChildProcess)
         {
-            runtime.ChildProcessOwnedProcessesField = typeBuilder.DefineField(
+            runtime.RequireChildProcess().OwnedProcessesField = typeBuilder.DefineField(
                 "_ownedChildProcesses",
                 typeof(System.Collections.Concurrent.ConcurrentDictionary<int, System.Diagnostics.Process>),
                 FieldAttributes.Private | FieldAttributes.Static);
-            runtime.ChildProcessOwnershipStoppingField = typeBuilder.DefineField(
+            runtime.RequireChildProcess().OwnershipStoppingField = typeBuilder.DefineField(
                 "_childProcessOwnershipStopping",
                 _types.Int32,
                 FieldAttributes.Private | FieldAttributes.Static);
@@ -571,7 +571,7 @@ public partial class RuntimeEmitter
         {
             cctorIL.Emit(OpCodes.Newobj, typeof(System.Collections.Concurrent.ConcurrentDictionary<int, System.Diagnostics.Process>)
                 .GetConstructor(Type.EmptyTypes)!);
-            cctorIL.Emit(OpCodes.Stsfld, runtime.ChildProcessOwnedProcessesField);
+            cctorIL.Emit(OpCodes.Stsfld, runtime.RequireChildProcess().OwnedProcessesField);
         }
 
         // Initialize _mathSingleton = new Dictionary<string, object>()

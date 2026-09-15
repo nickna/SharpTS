@@ -1278,8 +1278,8 @@ public partial class ILCompiler
 
     private void EmitTerminateOwnedChildProcesses(ILGenerator il)
     {
-        if (_runtime.ChildProcessTerminateOwned is not null)
-            il.Emit(OpCodes.Call, _runtime.ChildProcessTerminateOwned);
+        if (_runtime.ChildProcess is not null)
+            il.Emit(OpCodes.Call, _runtime.RequireChildProcess().TerminateOwned);
     }
 
     /// <summary>

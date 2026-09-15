@@ -19,101 +19,35 @@ namespace SharpTS.Compilation;
 /// </summary>
 public partial class RuntimeEmitter
 {
-    // $ChildProcessCtx — shared mutable state for one spawned/exec'd child.
-    private TypeBuilder _childCtxType = null!;
-    private ConstructorBuilder _childCtxCtor = null!;
-    private FieldBuilder _childCtxProc = null!;        // Process (not yet started in dispatch)
-    private FieldBuilder _childCtxEmitter = null!;     // object ($EventEmitter)
-    private FieldBuilder _childCtxDict = null!;        // Dictionary<string,object?> (the ChildProcess)
-    private FieldBuilder _childCtxCallback = null!;    // object (callback or null)
-    private FieldBuilder _childCtxOptions = null!;     // object (options dict or null)
-    private FieldBuilder _childCtxStdout = null!;      // object ($Readable)
-    private FieldBuilder _childCtxStderr = null!;      // object ($Readable)
-    private FieldBuilder _childCtxTimeout = null!;     // double (ms; <=0 = none)
-    // Captured worker results, stored on the bg thread and replayed on the loop thread.
-    private FieldBuilder _childCtxResStdout = null!;   // object (string)
-    private FieldBuilder _childCtxResStderr = null!;   // object (string)
-    private FieldBuilder _childCtxResCode = null!;     // int
-    private FieldBuilder _childCtxResError = null!;    // object (error dict or null)
-    private FieldBuilder _childCtxResKind = null!;     // int: 0 normal, 1 timeout, 2 exception
-    private FieldBuilder _childCtxMaxBuffer = null!;   // int: exec maxBuffer cap (bytes); <0 unbounded
-    private FieldBuilder _childCtxAsBuffer = null!;    // bool: encoding:'buffer' → raw $Buffer output
-    private FieldBuilder _childCtxEncoding = null!;    // string: decode encoding (default "utf8")
-    private MethodBuilder _childReadCappedBytes = null!;
-    private MethodBuilder _childDecodeOutput = null!;
-    private FieldBuilder _childCtxStdoutRedir = null!; // bool: stdout redirected (mode != inherit)
-    private FieldBuilder _childCtxStderrRedir = null!; // bool: stderr redirected (mode != inherit)
-
-    private MethodBuilder _childCtxRunCaptured = null!;
-    private MethodBuilder _childCtxEmitCaptured = null!;
-    private MethodBuilder _childCtxRunStreamed = null!;
-    private MethodBuilder _childCtxEmitStreamClose = null!;
-    private MethodBuilder _childCtxPumpStdout = null!;
-    private MethodBuilder _childCtxPumpStderr = null!;
-    private MethodBuilder _childCtxKill = null!;
-    private MethodBuilder _childCtxSend = null!;
-    private MethodBuilder _childCtxDisconnect = null!;
-    private MethodBuilder _childCtxRef = null!;
-    private MethodBuilder _childCtxStdinWrite = null!;
-    private MethodBuilder _childCtxStdinEnd = null!;
-
-    private MethodBuilder _childRunAsync = null!;
-    private MethodBuilder _childConfigureSpawn = null!;
-    private MethodBuilder _childStdioMode = null!;
-    private MethodBuilder _childSpawnError = null!;
-    private MethodBuilder _childCtxRunSpawnError = null!;
-
-    // $ChildPush — a one-shot closure that pushes one chunk (or null = EOF) into a
-    // $Readable on the event-loop thread, so all stream-buffer access stays single-threaded.
-    private TypeBuilder _childPushType = null!;
-    private ConstructorBuilder _childPushCtor = null!;
-    private MethodBuilder _childPushRun = null!;
-    private FieldBuilder _childPushStream = null!;
-    private FieldBuilder _childPushChunk = null!;
-
-    // BCL handles, resolved once.
-    private MethodInfo _miProcStart = null!;
-    private MethodInfo _miProcIdGet = null!;
-    private MethodInfo _miProcStdoutGet = null!;
-    private MethodInfo _miProcStderrGet = null!;
-    private MethodInfo _miProcExitCodeGet = null!;
-    private MethodInfo _miProcHasExitedGet = null!;
-    private MethodInfo _miProcWaitForExit = null!;
-    private MethodInfo _miProcWaitForExitMs = null!;
-    private MethodInfo _miProcKillTree = null!;
-    private MethodInfo _miExceptionMessageGet = null!;
-    private MethodInfo _miDictSet = null!;
-    private MethodInfo _miGetMethodFromHandle = null!;
-
     /// <summary>
     /// Builds the $ChildProcessCtx type + the ChildRunAsync backgrounding helpers.
     /// Called from EmitChildProcessMethods before the dispatch methods are emitted.
     /// </summary>
     private void EmitChildProcessAsyncInfra(TypeBuilder runtimeType, EmittedRuntime runtime)
     {
-        _miProcStart = _types.GetMethod(_types.Process, "Start", Type.EmptyTypes)!;
-        _miProcIdGet = _types.GetProperty(_types.Process, "Id")!.GetGetMethod()!;
-        _miProcStdoutGet = _types.GetProperty(_types.Process, "StandardOutput")!.GetGetMethod()!;
-        _miProcStderrGet = _types.GetProperty(_types.Process, "StandardError")!.GetGetMethod()!;
-        _miProcExitCodeGet = _types.GetProperty(_types.Process, "ExitCode")!.GetGetMethod()!;
-        _miProcHasExitedGet = _types.GetProperty(_types.Process, "HasExited")!.GetGetMethod()!;
-        _miProcWaitForExit = _types.GetMethod(_types.Process, "WaitForExit", Type.EmptyTypes)!;
-        _miProcWaitForExitMs = _types.GetMethod(_types.Process, "WaitForExit", [_types.Int32])!;
-        _miProcKillTree = _types.GetMethod(_types.Process, "Kill", [_types.Boolean])!;
-        _miExceptionMessageGet = _types.GetProperty(_types.Exception, "Message")!.GetGetMethod()!;
-        _miDictSet = _types.GetMethod(_types.DictionaryStringObject, "set_Item", _types.String, _types.Object)!;
-        _miGetMethodFromHandle = typeof(MethodBase).GetMethod("GetMethodFromHandle", [typeof(RuntimeMethodHandle)])!;
+        runtime.RequireChildProcess().ProcessStart = _types.GetMethod(_types.Process, "Start", Type.EmptyTypes)!;
+        runtime.RequireChildProcess().ProcessIdGet = _types.GetProperty(_types.Process, "Id")!.GetGetMethod()!;
+        runtime.RequireChildProcess().ProcessStdoutGet = _types.GetProperty(_types.Process, "StandardOutput")!.GetGetMethod()!;
+        runtime.RequireChildProcess().ProcessStderrGet = _types.GetProperty(_types.Process, "StandardError")!.GetGetMethod()!;
+        runtime.RequireChildProcess().ProcessExitCodeGet = _types.GetProperty(_types.Process, "ExitCode")!.GetGetMethod()!;
+        runtime.RequireChildProcess().ProcessHasExitedGet = _types.GetProperty(_types.Process, "HasExited")!.GetGetMethod()!;
+        runtime.RequireChildProcess().ProcessWaitForExit = _types.GetMethod(_types.Process, "WaitForExit", Type.EmptyTypes)!;
+        runtime.RequireChildProcess().ProcessWaitForExitMs = _types.GetMethod(_types.Process, "WaitForExit", [_types.Int32])!;
+        runtime.RequireChildProcess().ProcessKillTree = _types.GetMethod(_types.Process, "Kill", [_types.Boolean])!;
+        runtime.RequireChildProcess().ExceptionMessageGet = _types.GetProperty(_types.Exception, "Message")!.GetGetMethod()!;
+        runtime.RequireChildProcess().SetDictionaryItem = _types.GetMethod(_types.DictionaryStringObject, "set_Item", _types.String, _types.Object)!;
+        runtime.RequireChildProcess().GetMethodFromHandle = typeof(MethodBase).GetMethod("GetMethodFromHandle", [typeof(RuntimeMethodHandle)])!;
 
-        DefineChildPushType(runtime);
-        DefineChildCtxType(runtime);
-        EmitChildRunAsyncHelpers(runtimeType, runtime);
-        EmitChildStdioMode(runtimeType, runtime);
-        EmitChildReadCapped(runtimeType, runtime);
-        EmitChildSpawnError(runtimeType, runtime);
-        EmitConfigureSpawnStartInfo(runtimeType, runtime);
+        DefineChildPushType(runtime.RequireChildProcess(), runtime.EventEmitter, runtime.RequireNodeStreams());
+        DefineChildCtxType(runtime.RequireChildProcess(), runtime.EventEmitter);
+        EmitChildRunAsyncHelpers(runtimeType, runtime.RequireChildProcess(), runtime.EventLoop);
+        EmitChildStdioMode(runtimeType, runtime.RequireChildProcess());
+        EmitChildReadCapped(runtimeType, runtime.RequireChildProcess(), runtime.RequireBuffer());
+        EmitChildSpawnError(runtimeType, runtime.RequireChildProcess());
+        EmitConfigureSpawnStartInfo(runtimeType, runtime.RequireChildProcess());
         EmitChildCtxMethods(runtime);
-        _childCtxType.CreateType();
-        _childPushType.CreateType();
+        runtime.RequireChildProcess().ContextType.CreateType();
+        runtime.RequireChildProcess().PushType.CreateType();
     }
 
     /// <summary>
@@ -121,11 +55,11 @@ public partial class RuntimeEmitter
     /// `stdio` option (string shorthand applied to all fds, or the array form). Mirrors the
     /// interpreter's ParseStdioModes; unknown values (fd/stream/'ipc') fall back to pipe.
     /// </summary>
-    private void EmitChildStdioMode(TypeBuilder runtimeType, EmittedRuntime runtime)
+    private void EmitChildStdioMode(TypeBuilder runtimeType, EmittedChildProcessRuntime child)
     {
         var m = runtimeType.DefineMethod("ChildStdioMode",
             MethodAttributes.Public | MethodAttributes.Static, _types.Int32, [_types.Object, _types.Int32]);
-        _childStdioMode = m;
+        child.StdioMode = m;
         var il = m.GetILGenerator();
         var dictLocal = il.DeclareLocal(_types.DictionaryStringObject);
         var tmpLocal = il.DeclareLocal(_types.Object);
@@ -203,12 +137,12 @@ public partial class RuntimeEmitter
     /// Sets FileName/Arguments(/ArgumentList) honoring the `shell` option (true → default
     /// platform shell; string → that shell), mirroring the interpreter's ApplyShellCommand.
     /// </summary>
-    private void EmitConfigureSpawnStartInfo(TypeBuilder runtimeType, EmittedRuntime runtime)
+    private void EmitConfigureSpawnStartInfo(TypeBuilder runtimeType, EmittedChildProcessRuntime child)
     {
         var m = runtimeType.DefineMethod("ConfigureSpawnStartInfo",
             MethodAttributes.Public | MethodAttributes.Static, _types.Void,
             [_types.ProcessStartInfo, _types.String, _types.Object, _types.Object]);
-        _childConfigureSpawn = m;
+        child.ConfigureSpawn = m;
         var il = m.GetILGenerator();
 
         var argsListLocal = il.DeclareLocal(_types.ListOfObject);
@@ -228,7 +162,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_3);
             il.Emit(OpCodes.Ldc_I4, fd);
-            il.Emit(OpCodes.Call, _childStdioMode);
+            il.Emit(OpCodes.Call, child.StdioMode);
             il.Emit(OpCodes.Ldc_I4_1);
             il.Emit(OpCodes.Ceq);           // mode == inherit
             il.Emit(OpCodes.Ldc_I4_0);
@@ -425,88 +359,88 @@ public partial class RuntimeEmitter
     }
 
     /// <summary>$ChildPush { object _stream; object _chunk; void Run() =&gt; (($Readable)_stream).Push(_chunk); }</summary>
-    private void DefineChildPushType(EmittedRuntime runtime)
+    private void DefineChildPushType(EmittedChildProcessRuntime child, EmittedEventEmitterRuntime events, EmittedNodeStreamRuntime streams)
     {
-        var mb = (ModuleBuilder)((TypeBuilder)runtime.EventEmitter.Type).Module;
+        var mb = (ModuleBuilder)((TypeBuilder)events.Type).Module;
         var t = EmitTypeDefinitions.DefineType(mb, "$ChildPush",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit, _types.Object);
-        _childPushType = t;
-        _childPushStream = t.DefineField("_stream", _types.Object, FieldAttributes.Public);
-        _childPushChunk = t.DefineField("_chunk", _types.Object, FieldAttributes.Public);
+        child.PushType = t;
+        child.PushStream = t.DefineField("_stream", _types.Object, FieldAttributes.Public);
+        child.PushChunk = t.DefineField("_chunk", _types.Object, FieldAttributes.Public);
 
         var ctor = t.DefineConstructor(MethodAttributes.Public, CallingConventions.Standard, [_types.Object, _types.Object]);
         var cil = ctor.GetILGenerator();
         cil.Emit(OpCodes.Ldarg_0); cil.Emit(OpCodes.Call, _types.GetConstructor(_types.Object, Type.EmptyTypes)!);
-        cil.Emit(OpCodes.Ldarg_0); cil.Emit(OpCodes.Ldarg_1); cil.Emit(OpCodes.Stfld, _childPushStream);
-        cil.Emit(OpCodes.Ldarg_0); cil.Emit(OpCodes.Ldarg_2); cil.Emit(OpCodes.Stfld, _childPushChunk);
+        cil.Emit(OpCodes.Ldarg_0); cil.Emit(OpCodes.Ldarg_1); cil.Emit(OpCodes.Stfld, child.PushStream);
+        cil.Emit(OpCodes.Ldarg_0); cil.Emit(OpCodes.Ldarg_2); cil.Emit(OpCodes.Stfld, child.PushChunk);
         cil.Emit(OpCodes.Ret);
-        _childPushCtor = ctor;
+        child.PushCtor = ctor;
 
-        _childPushRun = t.DefineMethod("Run", MethodAttributes.Public, _types.Void, Type.EmptyTypes);
-        var il = _childPushRun.GetILGenerator();
+        child.PushRun = t.DefineMethod("Run", MethodAttributes.Public, _types.Void, Type.EmptyTypes);
+        var il = child.PushRun.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _childPushStream);
-        il.Emit(OpCodes.Castclass, runtime.RequireNodeStreams().ReadableType);
+        il.Emit(OpCodes.Ldfld, child.PushStream);
+        il.Emit(OpCodes.Castclass, streams.ReadableType);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _childPushChunk);
-        il.Emit(OpCodes.Callvirt, runtime.RequireNodeStreams().ReadablePush);
+        il.Emit(OpCodes.Ldfld, child.PushChunk);
+        il.Emit(OpCodes.Callvirt, streams.ReadablePush);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Ret);
     }
 
-    private void DefineChildCtxType(EmittedRuntime runtime)
+    private void DefineChildCtxType(EmittedChildProcessRuntime child, EmittedEventEmitterRuntime events)
     {
-        var mb = (ModuleBuilder)((TypeBuilder)runtime.EventEmitter.Type).Module;
+        var mb = (ModuleBuilder)((TypeBuilder)events.Type).Module;
         var t = EmitTypeDefinitions.DefineType(mb,
             "$ChildProcessCtx",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object);
-        _childCtxType = t;
+        child.ContextType = t;
 
-        _childCtxProc = t.DefineField("_proc", _types.Process, FieldAttributes.Public);
-        _childCtxEmitter = t.DefineField("_emitter", _types.Object, FieldAttributes.Public);
-        _childCtxDict = t.DefineField("_dict", _types.DictionaryStringObject, FieldAttributes.Public);
-        _childCtxCallback = t.DefineField("_callback", _types.Object, FieldAttributes.Public);
-        _childCtxOptions = t.DefineField("_options", _types.Object, FieldAttributes.Public);
-        _childCtxStdout = t.DefineField("_stdout", _types.Object, FieldAttributes.Public);
-        _childCtxStderr = t.DefineField("_stderr", _types.Object, FieldAttributes.Public);
+        child.ContextProc = t.DefineField("_proc", _types.Process, FieldAttributes.Public);
+        child.ContextEmitter = t.DefineField("_emitter", _types.Object, FieldAttributes.Public);
+        child.ContextDict = t.DefineField("_dict", _types.DictionaryStringObject, FieldAttributes.Public);
+        child.ContextCallback = t.DefineField("_callback", _types.Object, FieldAttributes.Public);
+        child.ContextOptions = t.DefineField("_options", _types.Object, FieldAttributes.Public);
+        child.ContextStdout = t.DefineField("_stdout", _types.Object, FieldAttributes.Public);
+        child.ContextStderr = t.DefineField("_stderr", _types.Object, FieldAttributes.Public);
         t.DefineField("_stdin", _types.Object, FieldAttributes.Public);
-        _childCtxTimeout = t.DefineField("_timeout", _types.Double, FieldAttributes.Public);
+        child.ContextTimeout = t.DefineField("_timeout", _types.Double, FieldAttributes.Public);
         t.DefineField("_killSignal", _types.String, FieldAttributes.Public);
-        _childCtxResStdout = t.DefineField("_resStdout", _types.Object, FieldAttributes.Public);
-        _childCtxResStderr = t.DefineField("_resStderr", _types.Object, FieldAttributes.Public);
-        _childCtxResCode = t.DefineField("_resCode", _types.Int32, FieldAttributes.Public);
-        _childCtxResError = t.DefineField("_resError", _types.Object, FieldAttributes.Public);
-        _childCtxResKind = t.DefineField("_resKind", _types.Int32, FieldAttributes.Public);
-        _childCtxMaxBuffer = t.DefineField("_maxBuffer", _types.Int32, FieldAttributes.Public);
-        _childCtxAsBuffer = t.DefineField("_asBuffer", _types.Boolean, FieldAttributes.Public);
-        _childCtxEncoding = t.DefineField("_encoding", _types.String, FieldAttributes.Public);
-        _childCtxStdoutRedir = t.DefineField("_stdoutRedir", _types.Boolean, FieldAttributes.Public);
-        _childCtxStderrRedir = t.DefineField("_stderrRedir", _types.Boolean, FieldAttributes.Public);
+        child.ContextResStdout = t.DefineField("_resStdout", _types.Object, FieldAttributes.Public);
+        child.ContextResStderr = t.DefineField("_resStderr", _types.Object, FieldAttributes.Public);
+        child.ContextResCode = t.DefineField("_resCode", _types.Int32, FieldAttributes.Public);
+        child.ContextResError = t.DefineField("_resError", _types.Object, FieldAttributes.Public);
+        child.ContextResKind = t.DefineField("_resKind", _types.Int32, FieldAttributes.Public);
+        child.ContextMaxBuffer = t.DefineField("_maxBuffer", _types.Int32, FieldAttributes.Public);
+        child.ContextAsBuffer = t.DefineField("_asBuffer", _types.Boolean, FieldAttributes.Public);
+        child.ContextEncoding = t.DefineField("_encoding", _types.String, FieldAttributes.Public);
+        child.ContextStdoutRedir = t.DefineField("_stdoutRedir", _types.Boolean, FieldAttributes.Public);
+        child.ContextStderrRedir = t.DefineField("_stderrRedir", _types.Boolean, FieldAttributes.Public);
 
         var ctor = t.DefineConstructor(MethodAttributes.Public, CallingConventions.Standard, Type.EmptyTypes);
         var cil = ctor.GetILGenerator();
         cil.Emit(OpCodes.Ldarg_0);
         cil.Emit(OpCodes.Call, _types.GetConstructor(_types.Object, Type.EmptyTypes)!);
         cil.Emit(OpCodes.Ret);
-        _childCtxCtor = ctor;
+        child.ContextCtor = ctor;
 
         // Declare the method builders now (bodies filled by EmitChildCtxMethods) so
         // ldtoken references resolve while wiring the dict in dispatch.
-        _childCtxRunCaptured = t.DefineMethod("RunCaptured", MethodAttributes.Public, _types.Object, Type.EmptyTypes);
-        _childCtxEmitCaptured = t.DefineMethod("EmitCaptured", MethodAttributes.Public, _types.Void, Type.EmptyTypes);
-        _childCtxRunStreamed = t.DefineMethod("RunStreamed", MethodAttributes.Public, _types.Object, Type.EmptyTypes);
-        _childCtxRunSpawnError = t.DefineMethod("RunSpawnError", MethodAttributes.Public, _types.Object, Type.EmptyTypes);
-        _childCtxEmitStreamClose = t.DefineMethod("EmitStreamClose", MethodAttributes.Public, _types.Void, Type.EmptyTypes);
-        _childCtxPumpStdout = t.DefineMethod("PumpStdout", MethodAttributes.Public, _types.Void, Type.EmptyTypes);
-        _childCtxPumpStderr = t.DefineMethod("PumpStderr", MethodAttributes.Public, _types.Void, Type.EmptyTypes);
-        _childCtxKill = t.DefineMethod("Kill", MethodAttributes.Public, _types.Object, [_types.Object]);
-        _childCtxSend = t.DefineMethod("Send", MethodAttributes.Public, _types.Object, [_types.Object]);
-        _childCtxDisconnect = t.DefineMethod("Disconnect", MethodAttributes.Public, _types.Object, Type.EmptyTypes);
-        _childCtxRef = t.DefineMethod("RefSelf", MethodAttributes.Public, _types.Object, Type.EmptyTypes);
-        _childCtxStdinWrite = t.DefineMethod("StdinWrite", MethodAttributes.Public, _types.Object,
+        child.ContextRunCaptured = t.DefineMethod("RunCaptured", MethodAttributes.Public, _types.Object, Type.EmptyTypes);
+        child.ContextEmitCaptured = t.DefineMethod("EmitCaptured", MethodAttributes.Public, _types.Void, Type.EmptyTypes);
+        child.ContextRunStreamed = t.DefineMethod("RunStreamed", MethodAttributes.Public, _types.Object, Type.EmptyTypes);
+        child.ContextRunSpawnError = t.DefineMethod("RunSpawnError", MethodAttributes.Public, _types.Object, Type.EmptyTypes);
+        child.ContextEmitStreamClose = t.DefineMethod("EmitStreamClose", MethodAttributes.Public, _types.Void, Type.EmptyTypes);
+        child.ContextPumpStdout = t.DefineMethod("PumpStdout", MethodAttributes.Public, _types.Void, Type.EmptyTypes);
+        child.ContextPumpStderr = t.DefineMethod("PumpStderr", MethodAttributes.Public, _types.Void, Type.EmptyTypes);
+        child.ContextKill = t.DefineMethod("Kill", MethodAttributes.Public, _types.Object, [_types.Object]);
+        child.ContextSend = t.DefineMethod("Send", MethodAttributes.Public, _types.Object, [_types.Object]);
+        child.ContextDisconnect = t.DefineMethod("Disconnect", MethodAttributes.Public, _types.Object, Type.EmptyTypes);
+        child.ContextRef = t.DefineMethod("RefSelf", MethodAttributes.Public, _types.Object, Type.EmptyTypes);
+        child.ContextStdinWrite = t.DefineMethod("StdinWrite", MethodAttributes.Public, _types.Object,
             [_types.Object, _types.Object, _types.Object]);
-        _childCtxStdinEnd = t.DefineMethod("StdinEnd", MethodAttributes.Public, _types.Object,
+        child.ContextStdinEnd = t.DefineMethod("StdinEnd", MethodAttributes.Public, _types.Object,
             [_types.Object, _types.Object, _types.Object]);
     }
 
@@ -515,15 +449,15 @@ public partial class RuntimeEmitter
     /// then Unref (with Task.Delay grace). Mirrors FsRunAsync but self-contained so
     /// child_process never depends on UsesFs.
     /// </summary>
-    private void EmitChildRunAsyncHelpers(TypeBuilder runtimeType, EmittedRuntime runtime)
+    private void EmitChildRunAsyncHelpers(TypeBuilder runtimeType, EmittedChildProcessRuntime child, EmittedEventLoopRuntime eventLoop)
     {
         // static void ChildAsyncUnrefNow() => EventLoop.GetInstance().Unref();
         var now = runtimeType.DefineMethod("ChildAsyncUnrefNow",
             MethodAttributes.Public | MethodAttributes.Static, _types.Void, Type.EmptyTypes);
         {
             var il = now.GetILGenerator();
-            il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
-            il.Emit(OpCodes.Call, runtime.EventLoop.Unref);
+            il.Emit(OpCodes.Call, eventLoop.GetInstance);
+            il.Emit(OpCodes.Call, eventLoop.Unref);
             il.Emit(OpCodes.Ret);
         }
 
@@ -532,11 +466,11 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static, _types.Void, [typeof(Task)]);
         {
             var il = drop.GetILGenerator();
-            il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
+            il.Emit(OpCodes.Call, eventLoop.GetInstance);
             il.Emit(OpCodes.Ldnull);
             il.Emit(OpCodes.Ldftn, now);
             il.Emit(OpCodes.Newobj, typeof(Action).GetConstructor([_types.Object, typeof(IntPtr)])!);
-            il.Emit(OpCodes.Callvirt, runtime.EventLoop.Schedule);
+            il.Emit(OpCodes.Callvirt, eventLoop.Schedule);
             il.Emit(OpCodes.Ret);
         }
 
@@ -567,8 +501,8 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static, _types.Void, [typeof(Func<object>)]);
         {
             var il = run.GetILGenerator();
-            il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
-            il.Emit(OpCodes.Call, runtime.EventLoop.Ref);
+            il.Emit(OpCodes.Call, eventLoop.GetInstance);
+            il.Emit(OpCodes.Call, eventLoop.Ref);
 
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Call, taskRun);
@@ -584,17 +518,17 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Pop);
             il.Emit(OpCodes.Ret);
         }
-        _childRunAsync = run;
+        child.RunAsync = run;
     }
 
     // ---- Small IL helpers shared by the ctx method bodies ----
 
     /// <summary>Emit: ctx._emitter as $EventEmitter . Emit(name, new object[]{ arg }). Leaves nothing.</summary>
-    private void EmitCtxEmit(ILGenerator il, EmittedRuntime runtime, string name, Action emitArg)
+    private void EmitCtxEmit(ILGenerator il, EmittedChildProcessRuntime child, EmittedEventEmitterRuntime events, string name, Action emitArg)
     {
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _childCtxEmitter);
-        il.Emit(OpCodes.Castclass, runtime.EventEmitter.Type);
+        il.Emit(OpCodes.Ldfld, child.ContextEmitter);
+        il.Emit(OpCodes.Castclass, events.Type);
         il.Emit(OpCodes.Ldstr, name);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Newarr, _types.Object);
@@ -602,12 +536,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_0);
         emitArg();
         il.Emit(OpCodes.Stelem_Ref);
-        il.Emit(OpCodes.Call, runtime.EventEmitter.Emit);
+        il.Emit(OpCodes.Call, events.Emit);
         il.Emit(OpCodes.Pop);
     }
 
     /// <summary>Emit a fresh error object dict { message = msg, [code = code] } onto the stack.</summary>
-    private void EmitNewErrorObject(ILGenerator il, Action emitMessage, Action? emitCode)
+    private void EmitNewErrorObject(EmittedChildProcessRuntime child, ILGenerator il, Action emitMessage, Action? emitCode)
     {
         var dictLocal = il.DeclareLocal(_types.DictionaryStringObject);
         il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.DictionaryStringObject, Type.EmptyTypes)!);
@@ -615,13 +549,13 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, dictLocal);
         il.Emit(OpCodes.Ldstr, "message");
         emitMessage();
-        il.Emit(OpCodes.Callvirt, _miDictSet);
+        il.Emit(OpCodes.Callvirt, child.SetDictionaryItem);
         if (emitCode != null)
         {
             il.Emit(OpCodes.Ldloc, dictLocal);
             il.Emit(OpCodes.Ldstr, "code");
             emitCode();
-            il.Emit(OpCodes.Callvirt, _miDictSet);
+            il.Emit(OpCodes.Callvirt, child.SetDictionaryItem);
         }
         il.Emit(OpCodes.Ldloc, dictLocal);
     }
@@ -631,10 +565,10 @@ public partial class RuntimeEmitter
     {
         var skip = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _childCtxCallback);
+        il.Emit(OpCodes.Ldfld, runtime.RequireChildProcess().ContextCallback);
         il.Emit(OpCodes.Brfalse, skip);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _childCtxCallback);
+        il.Emit(OpCodes.Ldfld, runtime.RequireChildProcess().ContextCallback);
         emitArgsArray();
         il.Emit(OpCodes.Call, runtime.InvokeValue);
         il.Emit(OpCodes.Pop);
@@ -643,17 +577,17 @@ public partial class RuntimeEmitter
 
     private void EmitChildCtxMethods(EmittedRuntime runtime)
     {
-        EmitCtxRunCaptured(runtime);
+        EmitCtxRunCaptured(runtime.RequireChildProcess(), runtime.EventLoop);
         EmitCtxEmitCaptured(runtime);
-        EmitCtxRunStreamed(runtime);
-        EmitCtxRunSpawnError(runtime);
-        EmitCtxPumpStdout(runtime);
-        EmitCtxPumpStderr(runtime);
-        EmitCtxEmitStreamClose(runtime);
-        EmitCtxKill(runtime);
-        EmitCtxSend(runtime);
-        EmitCtxDisconnect(runtime);
-        EmitCtxRef(runtime);
+        EmitCtxRunStreamed(runtime.RequireChildProcess(), runtime.EventLoop);
+        EmitCtxRunSpawnError(runtime.RequireChildProcess(), runtime.EventLoop);
+        EmitCtxPumpStdout(runtime.RequireChildProcess(), runtime.EventLoop);
+        EmitCtxPumpStderr(runtime.RequireChildProcess(), runtime.EventLoop);
+        EmitCtxEmitStreamClose(runtime.RequireChildProcess(), runtime.EventEmitter);
+        EmitCtxKill(runtime.RequireChildProcess());
+        EmitCtxSend(runtime.RequireChildProcess());
+        EmitCtxDisconnect(runtime.RequireChildProcess());
+        EmitCtxRef(runtime.RequireChildProcess());
         EmitCtxStdinWrite(runtime);
         EmitCtxStdinEnd(runtime);
     }
@@ -664,33 +598,33 @@ public partial class RuntimeEmitter
     /// event loop so the callback / lifecycle events fire on the loop thread AFTER the
     /// synchronous script has registered its listeners — matching the interpreter.
     /// </summary>
-    private void EmitCtxRunCaptured(EmittedRuntime runtime)
+    private void EmitCtxRunCaptured(EmittedChildProcessRuntime child, EmittedEventLoopRuntime eventLoop)
     {
-        var il = _childCtxRunCaptured.GetILGenerator();
+        var il = child.ContextRunCaptured.GetILGenerator();
         var codeLocal = il.DeclareLocal(_types.Int32);
         var afterTry = il.DefineLabel();
 
         // _resStdout = ""; _resStderr = ""; _resKind = 0;
-        StoreCtxField(il, _childCtxResStdout, () => il.Emit(OpCodes.Ldstr, ""));
-        StoreCtxField(il, _childCtxResStderr, () => il.Emit(OpCodes.Ldstr, ""));
-        StoreCtxField(il, _childCtxResKind, () => il.Emit(OpCodes.Ldc_I4_0));
+        StoreCtxField(il, child.ContextResStdout, () => il.Emit(OpCodes.Ldstr, ""));
+        StoreCtxField(il, child.ContextResStderr, () => il.Emit(OpCodes.Ldstr, ""));
+        StoreCtxField(il, child.ContextResKind, () => il.Emit(OpCodes.Ldc_I4_0));
 
         il.BeginExceptionBlock();
 
         // _proc.Start(); _dict["pid"] = (double)_proc.Id;
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _childCtxProc);
-        il.Emit(OpCodes.Callvirt, _miProcStart);
+        il.Emit(OpCodes.Ldfld, child.ContextProc);
+        il.Emit(OpCodes.Callvirt, child.ProcessStart);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _childCtxProc);
-        il.Emit(OpCodes.Call, runtime.ChildProcessRegisterOwned);
+        il.Emit(OpCodes.Ldfld, child.ContextProc);
+        il.Emit(OpCodes.Call, child.RegisterOwned);
 
-        EmitDictSetFromCtx(il, "pid", () =>
+        EmitDictSetFromCtx(child, il, "pid", () =>
         {
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldfld, _childCtxProc);
-            il.Emit(OpCodes.Callvirt, _miProcIdGet);
+            il.Emit(OpCodes.Ldfld, child.ContextProc);
+            il.Emit(OpCodes.Callvirt, child.ProcessIdGet);
             il.Emit(OpCodes.Conv_R8);
             il.Emit(OpCodes.Box, _types.Double);
         });
@@ -706,18 +640,18 @@ public partial class RuntimeEmitter
         {
             StoreCtxField(il, resField, () =>
             {
-                il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, _childCtxProc); il.Emit(OpCodes.Callvirt, pipeGet);
+                il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, child.ContextProc); il.Emit(OpCodes.Callvirt, pipeGet);
                 il.Emit(OpCodes.Callvirt, baseStreamGet);
-                il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, _childCtxMaxBuffer);
+                il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, child.ContextMaxBuffer);
                 il.Emit(OpCodes.Ldloc, overflowLocal);
-                il.Emit(OpCodes.Call, _childReadCappedBytes);
-                il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, _childCtxAsBuffer);
-                il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, _childCtxEncoding);
-                il.Emit(OpCodes.Call, _childDecodeOutput);
+                il.Emit(OpCodes.Call, child.ReadCappedBytes);
+                il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, child.ContextAsBuffer);
+                il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, child.ContextEncoding);
+                il.Emit(OpCodes.Call, child.DecodeOutput);
             });
         }
-        ReadDecoded(_childCtxResStdout, _miProcStdoutGet);
-        ReadDecoded(_childCtxResStderr, _miProcStderrGet);
+        ReadDecoded(child.ContextResStdout, child.ProcessStdoutGet);
+        ReadDecoded(child.ContextResStderr, child.ProcessStderrGet);
 
         // if (overflow[0]) { try { _proc.Kill(true); } catch {}  _resError = maxBuffer error; }
         var noOverflow = il.DefineLabel();
@@ -725,15 +659,15 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, overflowLocal); il.Emit(OpCodes.Ldc_I4_0); il.Emit(OpCodes.Ldelem_I1);
         il.Emit(OpCodes.Brfalse, noOverflow);
         il.BeginExceptionBlock();
-        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, _childCtxProc);
-        il.Emit(OpCodes.Ldc_I4_1); il.Emit(OpCodes.Callvirt, _miProcKillTree);
+        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, child.ContextProc);
+        il.Emit(OpCodes.Ldc_I4_1); il.Emit(OpCodes.Callvirt, child.ProcessKillTree);
         il.Emit(OpCodes.Leave, afterKill);
         il.BeginCatchBlock(_types.Exception); il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Leave, afterKill);
         il.EndExceptionBlock();
         il.MarkLabel(afterKill);
-        StoreCtxField(il, _childCtxResError, () =>
-            EmitNewErrorObject(il,
+        StoreCtxField(il, child.ContextResError, () =>
+            EmitNewErrorObject(child, il,
                 () => il.Emit(OpCodes.Ldstr, "stdout maxBuffer length exceeded"),
                 () => il.Emit(OpCodes.Ldstr, "ERR_CHILD_PROCESS_STDIO_MAXBUFFER")));
         il.MarkLabel(noOverflow);
@@ -742,48 +676,48 @@ public partial class RuntimeEmitter
         var noTimeoutWait = il.DefineLabel();
         var afterWait = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _childCtxTimeout);
+        il.Emit(OpCodes.Ldfld, child.ContextTimeout);
         il.Emit(OpCodes.Ldc_R8, 0.0);
         il.Emit(OpCodes.Ble_Un, noTimeoutWait);
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _childCtxProc);
+        il.Emit(OpCodes.Ldfld, child.ContextProc);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _childCtxTimeout);
+        il.Emit(OpCodes.Ldfld, child.ContextTimeout);
         il.Emit(OpCodes.Conv_I4);
-        il.Emit(OpCodes.Callvirt, _miProcWaitForExitMs);
+        il.Emit(OpCodes.Callvirt, child.ProcessWaitForExitMs);
         il.Emit(OpCodes.Brtrue, afterWait);
 
         // Timed out: kill tree, killed=true, _resKind=1, leave.
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _childCtxProc);
+        il.Emit(OpCodes.Ldfld, child.ContextProc);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Callvirt, _miProcKillTree);
-        EmitDictSetFromCtx(il, "killed", () => { il.Emit(OpCodes.Ldc_I4_1); il.Emit(OpCodes.Box, _types.Boolean); });
-        StoreCtxField(il, _childCtxResKind, () => il.Emit(OpCodes.Ldc_I4_1));
+        il.Emit(OpCodes.Callvirt, child.ProcessKillTree);
+        EmitDictSetFromCtx(child, il, "killed", () => { il.Emit(OpCodes.Ldc_I4_1); il.Emit(OpCodes.Box, _types.Boolean); });
+        StoreCtxField(il, child.ContextResKind, () => il.Emit(OpCodes.Ldc_I4_1));
         il.Emit(OpCodes.Leave, afterTry);
 
         il.MarkLabel(noTimeoutWait);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _childCtxProc);
-        il.Emit(OpCodes.Callvirt, _miProcWaitForExit);
+        il.Emit(OpCodes.Ldfld, child.ContextProc);
+        il.Emit(OpCodes.Callvirt, child.ProcessWaitForExit);
         il.MarkLabel(afterWait);
 
         // code = _proc.ExitCode; _resCode = code;
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _childCtxProc);
-        il.Emit(OpCodes.Callvirt, _miProcExitCodeGet);
+        il.Emit(OpCodes.Ldfld, child.ContextProc);
+        il.Emit(OpCodes.Callvirt, child.ProcessExitCodeGet);
         il.Emit(OpCodes.Stloc, codeLocal);
-        StoreCtxField(il, _childCtxResCode, () => il.Emit(OpCodes.Ldloc, codeLocal));
+        StoreCtxField(il, child.ContextResCode, () => il.Emit(OpCodes.Ldloc, codeLocal));
 
         // if (code != 0 && _resError == null) _resError = { message: "Command failed with exit code N", code: N }
         var zeroCode = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, codeLocal);
         il.Emit(OpCodes.Brfalse, zeroCode);
-        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, _childCtxResError);
+        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, child.ContextResError);
         il.Emit(OpCodes.Brtrue, zeroCode); // a maxBuffer (or other) error already set — keep it
-        StoreCtxField(il, _childCtxResError, () =>
-            EmitNewErrorObject(il,
+        StoreCtxField(il, child.ContextResError, () =>
+            EmitNewErrorObject(child, il,
                 () =>
                 {
                     il.Emit(OpCodes.Ldstr, "Command failed with exit code ");
@@ -799,20 +733,20 @@ public partial class RuntimeEmitter
         il.BeginCatchBlock(_types.Exception);
         var exLocal = il.DeclareLocal(_types.Exception);
         il.Emit(OpCodes.Stloc, exLocal);
-        StoreCtxField(il, _childCtxResKind, () => il.Emit(OpCodes.Ldc_I4_2));
-        StoreCtxField(il, _childCtxResError, () =>
-            EmitNewErrorObject(il,
-                () => { il.Emit(OpCodes.Ldloc, exLocal); il.Emit(OpCodes.Callvirt, _miExceptionMessageGet); },
+        StoreCtxField(il, child.ContextResKind, () => il.Emit(OpCodes.Ldc_I4_2));
+        StoreCtxField(il, child.ContextResError, () =>
+            EmitNewErrorObject(child, il,
+                () => { il.Emit(OpCodes.Ldloc, exLocal); il.Emit(OpCodes.Callvirt, child.ExceptionMessageGet); },
                 null));
         il.Emit(OpCodes.Leave, afterTry);
         il.EndExceptionBlock();
 
         il.MarkLabel(afterTry);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _childCtxProc);
-        il.Emit(OpCodes.Call, runtime.ChildProcessReleaseOwned);
+        il.Emit(OpCodes.Ldfld, child.ContextProc);
+        il.Emit(OpCodes.Call, child.ReleaseOwned);
         // EventLoop.GetInstance().Schedule(new Action(this.EmitCaptured));
-        EmitScheduleOnLoop(il, runtime, _childCtxEmitCaptured);
+        EmitScheduleOnLoop(il, eventLoop, child.ContextEmitCaptured);
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ret);
     }
@@ -823,53 +757,53 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitCtxEmitCaptured(EmittedRuntime runtime)
     {
-        var il = _childCtxEmitCaptured.GetILGenerator();
+        var il = runtime.RequireChildProcess().ContextEmitCaptured.GetILGenerator();
         var codeLocal = il.DeclareLocal(_types.Int32);
         var ret = il.DefineLabel();
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _childCtxResCode);
+        il.Emit(OpCodes.Ldfld, runtime.RequireChildProcess().ContextResCode);
         il.Emit(OpCodes.Stloc, codeLocal);
 
         // switch (_resKind)
         var kindExc = il.DefineLabel();
         var kindTimeout = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _childCtxResKind);
+        il.Emit(OpCodes.Ldfld, runtime.RequireChildProcess().ContextResKind);
         il.Emit(OpCodes.Ldc_I4_2);
         il.Emit(OpCodes.Beq, kindExc);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _childCtxResKind);
+        il.Emit(OpCodes.Ldfld, runtime.RequireChildProcess().ContextResKind);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Beq, kindTimeout);
 
         // kind 0 (normal): _dict["exitCode"] = code; cb(_resError, out, err); emit close/exit
-        EmitDictSetFromCtx(il, "exitCode", () => { il.Emit(OpCodes.Ldloc, codeLocal); il.Emit(OpCodes.Conv_R8); il.Emit(OpCodes.Box, _types.Double); });
+        EmitDictSetFromCtx(runtime.RequireChildProcess(), il, "exitCode", () => { il.Emit(OpCodes.Ldloc, codeLocal); il.Emit(OpCodes.Conv_R8); il.Emit(OpCodes.Box, _types.Double); });
         EmitInvokeCallback(il, runtime, () => EmitArgs3(il,
-            () => { il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, _childCtxResError); },
-            () => { il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, _childCtxResStdout); },
-            () => { il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, _childCtxResStderr); }));
-        EmitCtxEmit(il, runtime, "close", () => { il.Emit(OpCodes.Ldloc, codeLocal); il.Emit(OpCodes.Conv_R8); il.Emit(OpCodes.Box, _types.Double); });
-        EmitCtxEmit(il, runtime, "exit", () => { il.Emit(OpCodes.Ldloc, codeLocal); il.Emit(OpCodes.Conv_R8); il.Emit(OpCodes.Box, _types.Double); });
+            () => { il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, runtime.RequireChildProcess().ContextResError); },
+            () => { il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, runtime.RequireChildProcess().ContextResStdout); },
+            () => { il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, runtime.RequireChildProcess().ContextResStderr); }));
+        EmitCtxEmit(il, runtime.RequireChildProcess(), runtime.EventEmitter, "close", () => { il.Emit(OpCodes.Ldloc, codeLocal); il.Emit(OpCodes.Conv_R8); il.Emit(OpCodes.Box, _types.Double); });
+        EmitCtxEmit(il, runtime.RequireChildProcess(), runtime.EventEmitter, "exit", () => { il.Emit(OpCodes.Ldloc, codeLocal); il.Emit(OpCodes.Conv_R8); il.Emit(OpCodes.Box, _types.Double); });
         il.Emit(OpCodes.Br, ret);
 
         // kind 1 (timeout): _dict["exitCode"] = -1; emit error; cb(_resError', out, err)
         il.MarkLabel(kindTimeout);
         // build the timeout error here (matches interp message)
-        StoreCtxField(il, _childCtxResError, () => EmitNewErrorObject(il, () => il.Emit(OpCodes.Ldstr, "Command timed out"), null));
-        EmitDictSetFromCtx(il, "exitCode", () => { il.Emit(OpCodes.Ldc_R8, -1.0); il.Emit(OpCodes.Box, _types.Double); });
-        EmitCtxEmit(il, runtime, "error", () => { il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, _childCtxResError); });
+        StoreCtxField(il, runtime.RequireChildProcess().ContextResError, () => EmitNewErrorObject(runtime.RequireChildProcess(), il, () => il.Emit(OpCodes.Ldstr, "Command timed out"), null));
+        EmitDictSetFromCtx(runtime.RequireChildProcess(), il, "exitCode", () => { il.Emit(OpCodes.Ldc_R8, -1.0); il.Emit(OpCodes.Box, _types.Double); });
+        EmitCtxEmit(il, runtime.RequireChildProcess(), runtime.EventEmitter, "error", () => { il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, runtime.RequireChildProcess().ContextResError); });
         EmitInvokeCallback(il, runtime, () => EmitArgs3(il,
-            () => { il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, _childCtxResError); },
-            () => { il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, _childCtxResStdout); },
-            () => { il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, _childCtxResStderr); }));
+            () => { il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, runtime.RequireChildProcess().ContextResError); },
+            () => { il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, runtime.RequireChildProcess().ContextResStdout); },
+            () => { il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, runtime.RequireChildProcess().ContextResStderr); }));
         il.Emit(OpCodes.Br, ret);
 
         // kind 2 (exception): emit error; cb(_resError, "", "")
         il.MarkLabel(kindExc);
-        EmitCtxEmit(il, runtime, "error", () => { il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, _childCtxResError); });
+        EmitCtxEmit(il, runtime.RequireChildProcess(), runtime.EventEmitter, "error", () => { il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, runtime.RequireChildProcess().ContextResError); });
         EmitInvokeCallback(il, runtime, () => EmitArgs3(il,
-            () => { il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, _childCtxResError); },
+            () => { il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, runtime.RequireChildProcess().ContextResError); },
             () => il.Emit(OpCodes.Ldstr, ""),
             () => il.Emit(OpCodes.Ldstr, "")));
 
@@ -878,13 +812,13 @@ public partial class RuntimeEmitter
     }
 
     /// <summary>Emit: EventLoop.GetInstance().Schedule(new Action(this, ldftn method)).</summary>
-    private void EmitScheduleOnLoop(ILGenerator il, EmittedRuntime runtime, MethodBuilder method)
+    private void EmitScheduleOnLoop(ILGenerator il, EmittedEventLoopRuntime eventLoop, MethodBuilder method)
     {
-        il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
+        il.Emit(OpCodes.Call, eventLoop.GetInstance);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldftn, method);
         il.Emit(OpCodes.Newobj, typeof(Action).GetConstructor([_types.Object, typeof(IntPtr)])!);
-        il.Emit(OpCodes.Callvirt, runtime.EventLoop.Schedule);
+        il.Emit(OpCodes.Callvirt, eventLoop.Schedule);
     }
 
     /// <summary>Builds new object[]{ a, b, c } on the stack.</summary>
@@ -898,24 +832,24 @@ public partial class RuntimeEmitter
     }
 
     /// <summary>Emit: _dict[key] = &lt;value&gt; (value produced by emitValue).</summary>
-    private void EmitDictSetFromCtx(ILGenerator il, string key, Action emitValue)
+    private void EmitDictSetFromCtx(EmittedChildProcessRuntime child, ILGenerator il, string key, Action emitValue)
     {
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _childCtxDict);
+        il.Emit(OpCodes.Ldfld, child.ContextDict);
         il.Emit(OpCodes.Ldstr, key);
         emitValue();
-        il.Emit(OpCodes.Callvirt, _miDictSet);
+        il.Emit(OpCodes.Callvirt, child.SetDictionaryItem);
     }
 
-    private void EmitCtxKill(EmittedRuntime runtime)
+    private void EmitCtxKill(EmittedChildProcessRuntime child)
     {
         // object Kill(object signal):
         //   _dict["killed"] = true; _dict["signalCode"] = signal ?? "SIGTERM";
         //   try { if (!_proc.HasExited) _proc.Kill(true); } catch {}  return true;
-        var il = _childCtxKill.GetILGenerator();
-        EmitDictSetFromCtx(il, "killed", () => { il.Emit(OpCodes.Ldc_I4_1); il.Emit(OpCodes.Box, _types.Boolean); });
+        var il = child.ContextKill.GetILGenerator();
+        EmitDictSetFromCtx(child, il, "killed", () => { il.Emit(OpCodes.Ldc_I4_1); il.Emit(OpCodes.Box, _types.Boolean); });
         // signalCode = (signal is string) ? signal : "SIGTERM"
-        EmitDictSetFromCtx(il, "signalCode", () =>
+        EmitDictSetFromCtx(child, il, "signalCode", () =>
         {
             var have = il.DefineLabel();
             var done = il.DefineLabel();
@@ -934,16 +868,16 @@ public partial class RuntimeEmitter
         il.BeginExceptionBlock();
         var skipKill = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _childCtxProc);
+        il.Emit(OpCodes.Ldfld, child.ContextProc);
         il.Emit(OpCodes.Brfalse, skipKill);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _childCtxProc);
-        il.Emit(OpCodes.Callvirt, _miProcHasExitedGet);
+        il.Emit(OpCodes.Ldfld, child.ContextProc);
+        il.Emit(OpCodes.Callvirt, child.ProcessHasExitedGet);
         il.Emit(OpCodes.Brtrue, skipKill);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _childCtxProc);
+        il.Emit(OpCodes.Ldfld, child.ContextProc);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Callvirt, _miProcKillTree);
+        il.Emit(OpCodes.Callvirt, child.ProcessKillTree);
         il.MarkLabel(skipKill);
         il.Emit(OpCodes.Leave, afterKill);
         il.BeginCatchBlock(_types.Exception);
@@ -957,30 +891,30 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitCtxSend(EmittedRuntime runtime)
+    private void EmitCtxSend(EmittedChildProcessRuntime child)
     {
         // object Send(object message): no IPC channel for non-fork children -> return false.
         // Real IPC send is wired by the fork child (#1017).
-        var il = _childCtxSend.GetILGenerator();
+        var il = child.ContextSend.GetILGenerator();
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Box, _types.Boolean);
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitCtxDisconnect(EmittedRuntime runtime)
+    private void EmitCtxDisconnect(EmittedChildProcessRuntime child)
     {
         // object Disconnect(): no-op for non-fork children -> return null.
-        var il = _childCtxDisconnect.GetILGenerator();
+        var il = child.ContextDisconnect.GetILGenerator();
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitCtxRef(EmittedRuntime runtime)
+    private void EmitCtxRef(EmittedChildProcessRuntime child)
     {
         // object RefSelf(): ref()/unref() both return the ChildProcess (the dict).
-        var il = _childCtxRef.GetILGenerator();
+        var il = child.ContextRef.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _childCtxDict);
+        il.Emit(OpCodes.Ldfld, child.ContextDict);
         il.Emit(OpCodes.Ret);
     }
 
@@ -988,16 +922,16 @@ public partial class RuntimeEmitter
     /// spawn worker (bg thread): start, pump stdout/stderr on background tasks (each pushing
     /// chunks into its $Readable on the loop thread), wait, then Schedule EmitStreamClose.
     /// </summary>
-    private void EmitCtxRunStreamed(EmittedRuntime runtime)
+    private void EmitCtxRunStreamed(EmittedChildProcessRuntime child, EmittedEventLoopRuntime eventLoop)
     {
-        var il = _childCtxRunStreamed.GetILGenerator();
+        var il = child.ContextRunStreamed.GetILGenerator();
         var t1 = il.DeclareLocal(typeof(Task));
         var t2 = il.DeclareLocal(typeof(Task));
         var afterTry = il.DefineLabel();
         var actionCtor = typeof(Action).GetConstructor([_types.Object, typeof(IntPtr)])!;
         var taskRunAction = typeof(Task).GetMethod("Run", [typeof(Action)])!;
 
-        StoreCtxField(il, _childCtxResKind, () => il.Emit(OpCodes.Ldc_I4_0));
+        StoreCtxField(il, child.ContextResKind, () => il.Emit(OpCodes.Ldc_I4_0));
 
         // Process was started synchronously in the dispatch (so stdin is usable immediately).
         il.BeginExceptionBlock();
@@ -1017,13 +951,13 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Stloc, tLocal);
             il.MarkLabel(skip);
         }
-        StartPump(_childCtxStdoutRedir, _childCtxPumpStdout, t1);
-        StartPump(_childCtxStderrRedir, _childCtxPumpStderr, t2);
+        StartPump(child.ContextStdoutRedir, child.ContextPumpStdout, t1);
+        StartPump(child.ContextStderrRedir, child.ContextPumpStderr, t2);
 
         // _proc.WaitForExit(); t1?.Wait(); t2?.Wait();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _childCtxProc);
-        il.Emit(OpCodes.Callvirt, _miProcWaitForExit);
+        il.Emit(OpCodes.Ldfld, child.ContextProc);
+        il.Emit(OpCodes.Callvirt, child.ProcessWaitForExit);
         void AwaitTask(LocalBuilder tLocal)
         {
             var skip = il.DefineLabel();
@@ -1037,51 +971,51 @@ public partial class RuntimeEmitter
         AwaitTask(t2);
 
         // _resCode = _proc.ExitCode;
-        StoreCtxField(il, _childCtxResCode, () =>
+        StoreCtxField(il, child.ContextResCode, () =>
         {
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldfld, _childCtxProc);
-            il.Emit(OpCodes.Callvirt, _miProcExitCodeGet);
+            il.Emit(OpCodes.Ldfld, child.ContextProc);
+            il.Emit(OpCodes.Callvirt, child.ProcessExitCodeGet);
         });
         il.Emit(OpCodes.Leave, afterTry);
 
         il.BeginCatchBlock(_types.Exception);
         var exLocal = il.DeclareLocal(_types.Exception);
         il.Emit(OpCodes.Stloc, exLocal);
-        StoreCtxField(il, _childCtxResKind, () => il.Emit(OpCodes.Ldc_I4_2));
-        StoreCtxField(il, _childCtxResError, () =>
-            EmitNewErrorObject(il,
-                () => { il.Emit(OpCodes.Ldloc, exLocal); il.Emit(OpCodes.Callvirt, _miExceptionMessageGet); },
+        StoreCtxField(il, child.ContextResKind, () => il.Emit(OpCodes.Ldc_I4_2));
+        StoreCtxField(il, child.ContextResError, () =>
+            EmitNewErrorObject(child, il,
+                () => { il.Emit(OpCodes.Ldloc, exLocal); il.Emit(OpCodes.Callvirt, child.ExceptionMessageGet); },
                 null));
         il.Emit(OpCodes.Leave, afterTry);
         il.EndExceptionBlock();
 
         il.MarkLabel(afterTry);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _childCtxProc);
-        il.Emit(OpCodes.Call, runtime.ChildProcessReleaseOwned);
-        EmitScheduleOnLoop(il, runtime, _childCtxEmitStreamClose);
+        il.Emit(OpCodes.Ldfld, child.ContextProc);
+        il.Emit(OpCodes.Call, child.ReleaseOwned);
+        EmitScheduleOnLoop(il, eventLoop, child.ContextEmitStreamClose);
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ret);
     }
 
     /// <summary>Spawn-failure worker: schedule EmitStreamClose (which, with _resKind==2, emits 'error').</summary>
-    private void EmitCtxRunSpawnError(EmittedRuntime runtime)
+    private void EmitCtxRunSpawnError(EmittedChildProcessRuntime child, EmittedEventLoopRuntime eventLoop)
     {
-        var il = _childCtxRunSpawnError.GetILGenerator();
-        EmitScheduleOnLoop(il, runtime, _childCtxEmitStreamClose);
+        var il = child.ContextRunSpawnError.GetILGenerator();
+        EmitScheduleOnLoop(il, eventLoop, child.ContextEmitStreamClose);
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitCtxPumpStdout(EmittedRuntime runtime) => EmitPumpBody(_childCtxPumpStdout, runtime, _miProcStdoutGet, _childCtxStdout);
-    private void EmitCtxPumpStderr(EmittedRuntime runtime) => EmitPumpBody(_childCtxPumpStderr, runtime, _miProcStderrGet, _childCtxStderr);
+    private void EmitCtxPumpStdout(EmittedChildProcessRuntime child, EmittedEventLoopRuntime eventLoop) => EmitPumpBody(child.ContextPumpStdout, child, eventLoop, child.ProcessStdoutGet, child.ContextStdout);
+    private void EmitCtxPumpStderr(EmittedChildProcessRuntime child, EmittedEventLoopRuntime eventLoop) => EmitPumpBody(child.ContextPumpStderr, child, eventLoop, child.ProcessStderrGet, child.ContextStderr);
 
     /// <summary>
     /// Read the redirected pipe in char chunks; for each chunk Schedule a $ChildPush onto
     /// the loop (data), and on EOF Schedule a $ChildPush(null) (end).
     /// </summary>
-    private void EmitPumpBody(MethodBuilder method, EmittedRuntime runtime, MethodInfo readerGetter, FieldBuilder streamField)
+    private void EmitPumpBody(MethodBuilder method, EmittedChildProcessRuntime child, EmittedEventLoopRuntime eventLoop, MethodInfo readerGetter, FieldBuilder streamField)
     {
         var il = method.GetILGenerator();
         var readerLocal = il.DeclareLocal(_types.TextReader);
@@ -1093,7 +1027,7 @@ public partial class RuntimeEmitter
 
         // reader = _proc.<getter>(); buf = new char[4096];
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _childCtxProc);
+        il.Emit(OpCodes.Ldfld, child.ContextProc);
         il.Emit(OpCodes.Callvirt, readerGetter);
         il.Emit(OpCodes.Stloc, readerLocal);
         il.Emit(OpCodes.Ldc_I4, 4096);
@@ -1120,7 +1054,7 @@ public partial class RuntimeEmitter
         var skipData = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, streamField);
         il.Emit(OpCodes.Brfalse, skipData);
-        EmitScheduleChildPush(il, runtime,
+        EmitScheduleChildPush(il, child, eventLoop,
             () => { il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, streamField); },
             () => { il.Emit(OpCodes.Ldloc, bufLocal); il.Emit(OpCodes.Ldc_I4_0); il.Emit(OpCodes.Ldloc, nLocal); il.Emit(OpCodes.Newobj, newStr); });
         il.MarkLabel(skipData);
@@ -1137,7 +1071,7 @@ public partial class RuntimeEmitter
         var skipEnd = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, streamField);
         il.Emit(OpCodes.Brfalse, skipEnd);
-        EmitScheduleChildPush(il, runtime,
+        EmitScheduleChildPush(il, child, eventLoop,
             () => { il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, streamField); },
             () => il.Emit(OpCodes.Ldnull));
         il.MarkLabel(skipEnd);
@@ -1145,40 +1079,40 @@ public partial class RuntimeEmitter
     }
 
     /// <summary>Emit: EventLoop.GetInstance().Schedule(new Action(new $ChildPush(stream, chunk), Run)).</summary>
-    private void EmitScheduleChildPush(ILGenerator il, EmittedRuntime runtime, Action emitStream, Action emitChunk)
+    private void EmitScheduleChildPush(ILGenerator il, EmittedChildProcessRuntime child, EmittedEventLoopRuntime eventLoop, Action emitStream, Action emitChunk)
     {
-        il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
+        il.Emit(OpCodes.Call, eventLoop.GetInstance);
         emitStream();
         emitChunk();
-        il.Emit(OpCodes.Newobj, _childPushCtor);
-        il.Emit(OpCodes.Ldftn, _childPushRun);
+        il.Emit(OpCodes.Newobj, child.PushCtor);
+        il.Emit(OpCodes.Ldftn, child.PushRun);
         il.Emit(OpCodes.Newobj, typeof(Action).GetConstructor([_types.Object, typeof(IntPtr)])!);
-        il.Emit(OpCodes.Callvirt, runtime.EventLoop.Schedule);
+        il.Emit(OpCodes.Callvirt, eventLoop.Schedule);
     }
 
     /// <summary>Replays spawn close/exit (or error) on the loop thread, after all data/end pushes.</summary>
-    private void EmitCtxEmitStreamClose(EmittedRuntime runtime)
+    private void EmitCtxEmitStreamClose(EmittedChildProcessRuntime child, EmittedEventEmitterRuntime events)
     {
-        var il = _childCtxEmitStreamClose.GetILGenerator();
+        var il = child.ContextEmitStreamClose.GetILGenerator();
         var codeLocal = il.DeclareLocal(_types.Int32);
         var ret = il.DefineLabel();
 
         // if (_resKind == 2) emit error; return
         var notExc = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _childCtxResKind);
+        il.Emit(OpCodes.Ldfld, child.ContextResKind);
         il.Emit(OpCodes.Ldc_I4_2);
         il.Emit(OpCodes.Bne_Un, notExc);
-        EmitCtxEmit(il, runtime, "error", () => { il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, _childCtxResError); });
+        EmitCtxEmit(il, child, events, "error", () => { il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, child.ContextResError); });
         il.Emit(OpCodes.Br, ret);
         il.MarkLabel(notExc);
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _childCtxResCode);
+        il.Emit(OpCodes.Ldfld, child.ContextResCode);
         il.Emit(OpCodes.Stloc, codeLocal);
-        EmitDictSetFromCtx(il, "exitCode", () => { il.Emit(OpCodes.Ldloc, codeLocal); il.Emit(OpCodes.Conv_R8); il.Emit(OpCodes.Box, _types.Double); });
-        EmitCtxEmit(il, runtime, "close", () => { il.Emit(OpCodes.Ldloc, codeLocal); il.Emit(OpCodes.Conv_R8); il.Emit(OpCodes.Box, _types.Double); });
-        EmitCtxEmit(il, runtime, "exit", () => { il.Emit(OpCodes.Ldloc, codeLocal); il.Emit(OpCodes.Conv_R8); il.Emit(OpCodes.Box, _types.Double); });
+        EmitDictSetFromCtx(child, il, "exitCode", () => { il.Emit(OpCodes.Ldloc, codeLocal); il.Emit(OpCodes.Conv_R8); il.Emit(OpCodes.Box, _types.Double); });
+        EmitCtxEmit(il, child, events, "close", () => { il.Emit(OpCodes.Ldloc, codeLocal); il.Emit(OpCodes.Conv_R8); il.Emit(OpCodes.Box, _types.Double); });
+        EmitCtxEmit(il, child, events, "exit", () => { il.Emit(OpCodes.Ldloc, codeLocal); il.Emit(OpCodes.Conv_R8); il.Emit(OpCodes.Box, _types.Double); });
 
         il.MarkLabel(ret);
         il.Emit(OpCodes.Ret);
@@ -1187,7 +1121,7 @@ public partial class RuntimeEmitter
     /// <summary>stdin.write(chunk, enc?, cb?) — forward chunk to the child's StandardInput.</summary>
     private void EmitCtxStdinWrite(EmittedRuntime runtime)
     {
-        var il = _childCtxStdinWrite.GetILGenerator();
+        var il = runtime.RequireChildProcess().ContextStdinWrite.GetILGenerator();
         var afterWrite = il.DefineLabel();
         var swGet = _types.GetProperty(_types.Process, "StandardInput")!.GetGetMethod()!;
         var swWrite = typeof(System.IO.TextWriter).GetMethod("Write", [_types.String])!;
@@ -1200,7 +1134,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, skip);
         var wLocal = il.DeclareLocal(typeof(System.IO.TextWriter));
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _childCtxProc);
+        il.Emit(OpCodes.Ldfld, runtime.RequireChildProcess().ContextProc);
         il.Emit(OpCodes.Callvirt, swGet);
         il.Emit(OpCodes.Stloc, wLocal);
         il.Emit(OpCodes.Ldloc, wLocal);
@@ -1228,7 +1162,7 @@ public partial class RuntimeEmitter
     /// <summary>stdin.end(chunk?, enc?, cb?) — optionally write, then close the child's StandardInput.</summary>
     private void EmitCtxStdinEnd(EmittedRuntime runtime)
     {
-        var il = _childCtxStdinEnd.GetILGenerator();
+        var il = runtime.RequireChildProcess().ContextStdinEnd.GetILGenerator();
         var afterEnd = il.DefineLabel();
         var swGet = _types.GetProperty(_types.Process, "StandardInput")!.GetGetMethod()!;
         var swWrite = typeof(System.IO.TextWriter).GetMethod("Write", [_types.String])!;
@@ -1237,7 +1171,7 @@ public partial class RuntimeEmitter
         il.BeginExceptionBlock();
         var wLocal = il.DeclareLocal(typeof(System.IO.TextWriter));
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _childCtxProc);
+        il.Emit(OpCodes.Ldfld, runtime.RequireChildProcess().ContextProc);
         il.Emit(OpCodes.Callvirt, swGet);
         il.Emit(OpCodes.Stloc, wLocal);
         var skip = il.DefineLabel();
@@ -1480,7 +1414,7 @@ public partial class RuntimeEmitter
         LocalBuilder processLocal, LocalBuilder optionsLocal, LocalBuilder callbackLocal, bool streamed)
     {
         var emitterLocal = il.DeclareLocal(runtime.EventEmitter.Type);
-        var ctxLocal = il.DeclareLocal(_childCtxType);
+        var ctxLocal = il.DeclareLocal(runtime.RequireChildProcess().ContextType);
         var dictLocal = il.DeclareLocal(_types.DictionaryStringObject);
         var timeoutLocal = il.DeclareLocal(_types.Double);
 
@@ -1491,43 +1425,43 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, emitterLocal);
 
         // ctx = new $ChildProcessCtx()
-        il.Emit(OpCodes.Newobj, _childCtxCtor);
+        il.Emit(OpCodes.Newobj, runtime.RequireChildProcess().ContextCtor);
         il.Emit(OpCodes.Stloc, ctxLocal);
-        StoreCtxField(il, ctxLocal, _childCtxProc, () => il.Emit(OpCodes.Ldloc, processLocal));
-        StoreCtxField(il, ctxLocal, _childCtxEmitter, () => il.Emit(OpCodes.Ldloc, emitterLocal));
-        StoreCtxField(il, ctxLocal, _childCtxCallback, () => il.Emit(OpCodes.Ldloc, callbackLocal));
-        StoreCtxField(il, ctxLocal, _childCtxOptions, () => il.Emit(OpCodes.Ldloc, optionsLocal));
-        StoreCtxField(il, ctxLocal, _childCtxTimeout, () => il.Emit(OpCodes.Ldloc, timeoutLocal));
+        StoreCtxField(il, ctxLocal, runtime.RequireChildProcess().ContextProc, () => il.Emit(OpCodes.Ldloc, processLocal));
+        StoreCtxField(il, ctxLocal, runtime.RequireChildProcess().ContextEmitter, () => il.Emit(OpCodes.Ldloc, emitterLocal));
+        StoreCtxField(il, ctxLocal, runtime.RequireChildProcess().ContextCallback, () => il.Emit(OpCodes.Ldloc, callbackLocal));
+        StoreCtxField(il, ctxLocal, runtime.RequireChildProcess().ContextOptions, () => il.Emit(OpCodes.Ldloc, optionsLocal));
+        StoreCtxField(il, ctxLocal, runtime.RequireChildProcess().ContextTimeout, () => il.Emit(OpCodes.Ldloc, timeoutLocal));
         // maxBuffer (chars), default 1 MB.
-        StoreCtxField(il, ctxLocal, _childCtxMaxBuffer, () => EmitParseMaxBuffer(il, optionsLocal));
-        EmitStoreEncodingFields(il, ctxLocal, optionsLocal);
+        StoreCtxField(il, ctxLocal, runtime.RequireChildProcess().ContextMaxBuffer, () => EmitParseMaxBuffer(il, optionsLocal));
+        EmitStoreEncodingFields(runtime.RequireChildProcess(), il, ctxLocal, optionsLocal);
 
         // dict = new Dictionary<string,object?>()
         il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.DictionaryStringObject, Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, dictLocal);
 
         // pid = 0.0, killed = false, connected = false, exitCode = null, signalCode = null
-        EmitDictSet(il, dictLocal, "pid", () => { il.Emit(OpCodes.Ldc_R8, 0.0); il.Emit(OpCodes.Box, _types.Double); });
-        EmitDictSet(il, dictLocal, "killed", () => { il.Emit(OpCodes.Ldc_I4_0); il.Emit(OpCodes.Box, _types.Boolean); });
-        EmitDictSet(il, dictLocal, "connected", () => { il.Emit(OpCodes.Ldc_I4_0); il.Emit(OpCodes.Box, _types.Boolean); });
-        EmitDictSet(il, dictLocal, "exitCode", () => il.Emit(OpCodes.Ldnull));
-        EmitDictSet(il, dictLocal, "signalCode", () => il.Emit(OpCodes.Ldnull));
+        EmitDictSet(runtime.RequireChildProcess(), il, dictLocal, "pid", () => { il.Emit(OpCodes.Ldc_R8, 0.0); il.Emit(OpCodes.Box, _types.Double); });
+        EmitDictSet(runtime.RequireChildProcess(), il, dictLocal, "killed", () => { il.Emit(OpCodes.Ldc_I4_0); il.Emit(OpCodes.Box, _types.Boolean); });
+        EmitDictSet(runtime.RequireChildProcess(), il, dictLocal, "connected", () => { il.Emit(OpCodes.Ldc_I4_0); il.Emit(OpCodes.Box, _types.Boolean); });
+        EmitDictSet(runtime.RequireChildProcess(), il, dictLocal, "exitCode", () => il.Emit(OpCodes.Ldnull));
+        EmitDictSet(runtime.RequireChildProcess(), il, dictLocal, "signalCode", () => il.Emit(OpCodes.Ldnull));
 
         // on/once delegate to the emitter; kill/send/disconnect/ref/unref to ctx methods.
-        EmitDictSet(il, dictLocal, "on", () => EmitTSFunc(il, runtime, () => il.Emit(OpCodes.Ldloc, emitterLocal), runtime.EventEmitter.On));
-        EmitDictSet(il, dictLocal, "once", () => EmitTSFunc(il, runtime, () => il.Emit(OpCodes.Ldloc, emitterLocal), runtime.EventEmitter.Once));
-        EmitDictSet(il, dictLocal, "addListener", () => EmitTSFunc(il, runtime, () => il.Emit(OpCodes.Ldloc, emitterLocal), runtime.EventEmitter.On));
-        EmitDictSet(il, dictLocal, "kill", () => EmitTSFunc(il, runtime, () => il.Emit(OpCodes.Ldloc, ctxLocal), _childCtxKill));
-        EmitDictSet(il, dictLocal, "send", () => EmitTSFunc(il, runtime, () => il.Emit(OpCodes.Ldloc, ctxLocal), _childCtxSend));
-        EmitDictSet(il, dictLocal, "disconnect", () => EmitTSFunc(il, runtime, () => il.Emit(OpCodes.Ldloc, ctxLocal), _childCtxDisconnect));
-        EmitDictSet(il, dictLocal, "ref", () => EmitTSFunc(il, runtime, () => il.Emit(OpCodes.Ldloc, ctxLocal), _childCtxRef));
-        EmitDictSet(il, dictLocal, "unref", () => EmitTSFunc(il, runtime, () => il.Emit(OpCodes.Ldloc, ctxLocal), _childCtxRef));
+        EmitDictSet(runtime.RequireChildProcess(), il, dictLocal, "on", () => EmitTSFunc(il, runtime, () => il.Emit(OpCodes.Ldloc, emitterLocal), runtime.EventEmitter.On));
+        EmitDictSet(runtime.RequireChildProcess(), il, dictLocal, "once", () => EmitTSFunc(il, runtime, () => il.Emit(OpCodes.Ldloc, emitterLocal), runtime.EventEmitter.Once));
+        EmitDictSet(runtime.RequireChildProcess(), il, dictLocal, "addListener", () => EmitTSFunc(il, runtime, () => il.Emit(OpCodes.Ldloc, emitterLocal), runtime.EventEmitter.On));
+        EmitDictSet(runtime.RequireChildProcess(), il, dictLocal, "kill", () => EmitTSFunc(il, runtime, () => il.Emit(OpCodes.Ldloc, ctxLocal), runtime.RequireChildProcess().ContextKill));
+        EmitDictSet(runtime.RequireChildProcess(), il, dictLocal, "send", () => EmitTSFunc(il, runtime, () => il.Emit(OpCodes.Ldloc, ctxLocal), runtime.RequireChildProcess().ContextSend));
+        EmitDictSet(runtime.RequireChildProcess(), il, dictLocal, "disconnect", () => EmitTSFunc(il, runtime, () => il.Emit(OpCodes.Ldloc, ctxLocal), runtime.RequireChildProcess().ContextDisconnect));
+        EmitDictSet(runtime.RequireChildProcess(), il, dictLocal, "ref", () => EmitTSFunc(il, runtime, () => il.Emit(OpCodes.Ldloc, ctxLocal), runtime.RequireChildProcess().ContextRef));
+        EmitDictSet(runtime.RequireChildProcess(), il, dictLocal, "unref", () => EmitTSFunc(il, runtime, () => il.Emit(OpCodes.Ldloc, ctxLocal), runtime.RequireChildProcess().ContextRef));
 
         if (streamed)
             EmitBuildChildStreams(il, runtime, ctxLocal, dictLocal, optionsLocal);
 
         // ctx._dict = dict
-        StoreCtxField(il, ctxLocal, _childCtxDict, () => il.Emit(OpCodes.Ldloc, dictLocal));
+        StoreCtxField(il, ctxLocal, runtime.RequireChildProcess().ContextDict, () => il.Emit(OpCodes.Ldloc, dictLocal));
 
         var funcCtor = typeof(Func<object>).GetConstructor([_types.Object, typeof(IntPtr)])!;
         void Launch(MethodBuilder worker)
@@ -1535,7 +1469,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldloc, ctxLocal);
             il.Emit(OpCodes.Ldftn, worker);
             il.Emit(OpCodes.Newobj, funcCtor);
-            il.Emit(OpCodes.Call, _childRunAsync);
+            il.Emit(OpCodes.Call, runtime.RequireChildProcess().RunAsync);
         }
 
         if (streamed)
@@ -1545,42 +1479,42 @@ public partial class RuntimeEmitter
             var afterLaunch = il.DefineLabel();
             il.BeginExceptionBlock();
             il.Emit(OpCodes.Ldloc, processLocal);
-            il.Emit(OpCodes.Callvirt, _miProcStart);
+            il.Emit(OpCodes.Callvirt, runtime.RequireChildProcess().ProcessStart);
             il.Emit(OpCodes.Pop);
             il.Emit(OpCodes.Ldloc, processLocal);
-            il.Emit(OpCodes.Call, runtime.ChildProcessRegisterOwned);
-            EmitDictSet(il, dictLocal, "pid", () =>
+            il.Emit(OpCodes.Call, runtime.RequireChildProcess().RegisterOwned);
+            EmitDictSet(runtime.RequireChildProcess(), il, dictLocal, "pid", () =>
             {
                 il.Emit(OpCodes.Ldloc, processLocal);
-                il.Emit(OpCodes.Callvirt, _miProcIdGet);
+                il.Emit(OpCodes.Callvirt, runtime.RequireChildProcess().ProcessIdGet);
                 il.Emit(OpCodes.Conv_R8);
                 il.Emit(OpCodes.Box, _types.Double);
             });
-            Launch(_childCtxRunStreamed);
+            Launch(runtime.RequireChildProcess().ContextRunStreamed);
             il.Emit(OpCodes.Leave, afterLaunch);
             il.BeginCatchBlock(_types.Exception);
             var exLocal = il.DeclareLocal(_types.Exception);
             il.Emit(OpCodes.Stloc, exLocal);
             il.Emit(OpCodes.Ldloc, processLocal);
-            il.Emit(OpCodes.Call, runtime.ChildProcessReleaseOwned);
-            StoreCtxField(il, ctxLocal, _childCtxResKind, () => il.Emit(OpCodes.Ldc_I4_2));
-            StoreCtxField(il, ctxLocal, _childCtxResError, () =>
+            il.Emit(OpCodes.Call, runtime.RequireChildProcess().ReleaseOwned);
+            StoreCtxField(il, ctxLocal, runtime.RequireChildProcess().ContextResKind, () => il.Emit(OpCodes.Ldc_I4_2));
+            StoreCtxField(il, ctxLocal, runtime.RequireChildProcess().ContextResError, () =>
             {
                 il.Emit(OpCodes.Ldloc, exLocal);
                 il.Emit(OpCodes.Ldloc, processLocal);
                 il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Process, "StartInfo")!.GetGetMethod()!);
                 il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ProcessStartInfo, "FileName")!.GetGetMethod()!);
                 il.Emit(OpCodes.Ldstr, "spawn");
-                il.Emit(OpCodes.Call, _childSpawnError);
+                il.Emit(OpCodes.Call, runtime.RequireChildProcess().SpawnError);
             });
-            Launch(_childCtxRunSpawnError);
+            Launch(runtime.RequireChildProcess().ContextRunSpawnError);
             il.Emit(OpCodes.Leave, afterLaunch);
             il.EndExceptionBlock();
             il.MarkLabel(afterLaunch);
         }
         else
         {
-            Launch(_childCtxRunCaptured);
+            Launch(runtime.RequireChildProcess().ContextRunCaptured);
         }
 
         // return CreateObject(dict)
@@ -1601,7 +1535,7 @@ public partial class RuntimeEmitter
         {
             il.Emit(OpCodes.Ldloc, optionsLocal);
             il.Emit(OpCodes.Ldc_I4, fd);
-            il.Emit(OpCodes.Call, _childStdioMode);
+            il.Emit(OpCodes.Call, runtime.RequireChildProcess().StdioMode);
             il.Emit(OpCodes.Stloc, outLocal);
         }
         var outMode = il.DeclareLocal(_types.Int32);
@@ -1618,8 +1552,8 @@ public partial class RuntimeEmitter
                 il.Emit(OpCodes.Ldc_I4_0); il.Emit(OpCodes.Ceq);
             });
         }
-        StoreRedir(_childCtxStdoutRedir, outMode);
-        StoreRedir(_childCtxStderrRedir, errMode);
+        StoreRedir(runtime.RequireChildProcess().ContextStdoutRedir, outMode);
+        StoreRedir(runtime.RequireChildProcess().ContextStderrRedir, errMode);
 
         // A readable fd: if pipe, build $Readable + wire ctx + dict; else dict[key]=null.
         void BuildReadable(LocalBuilder mode, FieldBuilder ctxField, string key)
@@ -1628,43 +1562,43 @@ public partial class RuntimeEmitter
             var done = il.DefineLabel();
             il.Emit(OpCodes.Ldloc, mode);
             il.Emit(OpCodes.Brfalse, pipe); // 0 == pipe
-            EmitDictSet(il, dictLocal, key, () => il.Emit(OpCodes.Ldnull));
+            EmitDictSet(runtime.RequireChildProcess(), il, dictLocal, key, () => il.Emit(OpCodes.Ldnull));
             il.Emit(OpCodes.Br, done);
             il.MarkLabel(pipe);
             var sLocal = il.DeclareLocal(runtime.RequireNodeStreams().ReadableType);
             il.Emit(OpCodes.Newobj, runtime.RequireNodeStreams().ReadableCtor);
             il.Emit(OpCodes.Stloc, sLocal);
             StoreCtxField(il, ctxLocal, ctxField, () => il.Emit(OpCodes.Ldloc, sLocal));
-            EmitDictSet(il, dictLocal, key, () => il.Emit(OpCodes.Ldloc, sLocal));
+            EmitDictSet(runtime.RequireChildProcess(), il, dictLocal, key, () => il.Emit(OpCodes.Ldloc, sLocal));
             il.MarkLabel(done);
         }
-        BuildReadable(outMode, _childCtxStdout, "stdout");
-        BuildReadable(errMode, _childCtxStderr, "stderr");
+        BuildReadable(outMode, runtime.RequireChildProcess().ContextStdout, "stdout");
+        BuildReadable(errMode, runtime.RequireChildProcess().ContextStderr, "stderr");
 
         // stdin: if pipe, a forwarding { writable, write, end }; else null.
         var stdinPipe = il.DefineLabel();
         var stdinDone = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, inMode);
         il.Emit(OpCodes.Brfalse, stdinPipe);
-        EmitDictSet(il, dictLocal, "stdin", () => il.Emit(OpCodes.Ldnull));
+        EmitDictSet(runtime.RequireChildProcess(), il, dictLocal, "stdin", () => il.Emit(OpCodes.Ldnull));
         il.Emit(OpCodes.Br, stdinDone);
         il.MarkLabel(stdinPipe);
         var stdinLocal = il.DeclareLocal(_types.DictionaryStringObject);
         il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.DictionaryStringObject, Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, stdinLocal);
-        EmitDictSet(il, stdinLocal, "writable", () => { il.Emit(OpCodes.Ldc_I4_1); il.Emit(OpCodes.Box, _types.Boolean); });
-        EmitDictSet(il, stdinLocal, "write", () => EmitTSFunc(il, runtime, () => il.Emit(OpCodes.Ldloc, ctxLocal), _childCtxStdinWrite));
-        EmitDictSet(il, stdinLocal, "end", () => EmitTSFunc(il, runtime, () => il.Emit(OpCodes.Ldloc, ctxLocal), _childCtxStdinEnd));
-        EmitDictSet(il, dictLocal, "stdin", () => { il.Emit(OpCodes.Ldloc, stdinLocal); il.Emit(OpCodes.Call, runtime.CreateObject); });
+        EmitDictSet(runtime.RequireChildProcess(), il, stdinLocal, "writable", () => { il.Emit(OpCodes.Ldc_I4_1); il.Emit(OpCodes.Box, _types.Boolean); });
+        EmitDictSet(runtime.RequireChildProcess(), il, stdinLocal, "write", () => EmitTSFunc(il, runtime, () => il.Emit(OpCodes.Ldloc, ctxLocal), runtime.RequireChildProcess().ContextStdinWrite));
+        EmitDictSet(runtime.RequireChildProcess(), il, stdinLocal, "end", () => EmitTSFunc(il, runtime, () => il.Emit(OpCodes.Ldloc, ctxLocal), runtime.RequireChildProcess().ContextStdinEnd));
+        EmitDictSet(runtime.RequireChildProcess(), il, dictLocal, "stdin", () => { il.Emit(OpCodes.Ldloc, stdinLocal); il.Emit(OpCodes.Call, runtime.CreateObject); });
         il.MarkLabel(stdinDone);
     }
 
-    private void EmitDictSet(ILGenerator il, LocalBuilder dictLocal, string key, Action emitValue)
+    private void EmitDictSet(EmittedChildProcessRuntime child, ILGenerator il, LocalBuilder dictLocal, string key, Action emitValue)
     {
         il.Emit(OpCodes.Ldloc, dictLocal);
         il.Emit(OpCodes.Ldstr, key);
         emitValue();
-        il.Emit(OpCodes.Callvirt, _miDictSet);
+        il.Emit(OpCodes.Callvirt, child.SetDictionaryItem);
     }
 
     private void StoreCtxField(ILGenerator il, LocalBuilder ctxLocal, FieldBuilder field, Action emitValue)
@@ -1686,7 +1620,7 @@ public partial class RuntimeEmitter
     /// Sets ctx._asBuffer + ctx._encoding from options["encoding"]: 'buffer' → asBuffer=true;
     /// any other name → that encoding; absent → 'utf8' (Node's exec default).
     /// </summary>
-    private void EmitStoreEncodingFields(ILGenerator il, LocalBuilder ctxLocal, LocalBuilder optionsObjLocal)
+    private void EmitStoreEncodingFields(EmittedChildProcessRuntime child, ILGenerator il, LocalBuilder ctxLocal, LocalBuilder optionsObjLocal)
     {
         var encStr = il.DeclareLocal(_types.String);
         var dictLocal = il.DeclareLocal(_types.DictionaryStringObject);
@@ -1711,12 +1645,12 @@ public partial class RuntimeEmitter
         il.MarkLabel(done);
 
         // _asBuffer = encStr == "buffer"
-        StoreCtxField(il, ctxLocal, _childCtxAsBuffer, () =>
+        StoreCtxField(il, ctxLocal, child.ContextAsBuffer, () =>
         {
             il.Emit(OpCodes.Ldloc, encStr); il.Emit(OpCodes.Ldstr, "buffer"); il.Emit(OpCodes.Call, strEq);
         });
         // _encoding = (encStr == null || encStr == "buffer") ? "utf8" : encStr
-        StoreCtxField(il, ctxLocal, _childCtxEncoding, () =>
+        StoreCtxField(il, ctxLocal, child.ContextEncoding, () =>
         {
             var useDefault = il.DefineLabel();
             var got = il.DefineLabel();
@@ -1785,14 +1719,14 @@ public partial class RuntimeEmitter
     /// static byte[] ChildReadCappedBytes(Stream stream, int maxBuffer, bool[] flag): reads up
     /// to maxBuffer bytes; on overflow sets flag[0]=true and stops. maxBuffer&lt;0 = unbounded.
     /// </summary>
-    private void EmitChildReadCapped(TypeBuilder runtimeType, EmittedRuntime runtime)
+    private void EmitChildReadCapped(TypeBuilder runtimeType, EmittedChildProcessRuntime child, EmittedBufferRuntime buffer)
     {
         var streamT = typeof(System.IO.Stream);
         var memT = typeof(System.IO.MemoryStream);
         var m = runtimeType.DefineMethod("ChildReadCappedBytes",
             MethodAttributes.Public | MethodAttributes.Static, typeof(byte[]),
             [streamT, _types.Int32, typeof(bool[])]);
-        _childReadCappedBytes = m;
+        child.ReadCappedBytes = m;
         var il = m.GetILGenerator();
         var msLocal = il.DeclareLocal(memT);
         var bufLocal = il.DeclareLocal(typeof(byte[]));
@@ -1842,15 +1776,15 @@ public partial class RuntimeEmitter
         var d = runtimeType.DefineMethod("ChildDecodeOutput",
             MethodAttributes.Public | MethodAttributes.Static, _types.Object,
             [typeof(byte[]), _types.Boolean, _types.String]);
-        _childDecodeOutput = d;
+        child.DecodeOutput = d;
         var dil = d.GetILGenerator();
-        var bLocal = dil.DeclareLocal(runtime.RequireBuffer().Type);
-        dil.Emit(OpCodes.Ldarg_0); dil.Emit(OpCodes.Newobj, runtime.RequireBuffer().Ctor); dil.Emit(OpCodes.Stloc, bLocal);
+        var bLocal = dil.DeclareLocal(buffer.Type);
+        dil.Emit(OpCodes.Ldarg_0); dil.Emit(OpCodes.Newobj, buffer.Ctor); dil.Emit(OpCodes.Stloc, bLocal);
         var decode = dil.DefineLabel();
         dil.Emit(OpCodes.Ldarg_1); dil.Emit(OpCodes.Brfalse, decode);
         dil.Emit(OpCodes.Ldloc, bLocal); dil.Emit(OpCodes.Ret);
         dil.MarkLabel(decode);
-        dil.Emit(OpCodes.Ldloc, bLocal); dil.Emit(OpCodes.Ldarg_2); dil.Emit(OpCodes.Callvirt, runtime.RequireBuffer().ToStringMethod);
+        dil.Emit(OpCodes.Ldloc, bLocal); dil.Emit(OpCodes.Ldarg_2); dil.Emit(OpCodes.Callvirt, buffer.ToStringMethod);
         dil.Emit(OpCodes.Ret);
     }
 
@@ -1858,12 +1792,12 @@ public partial class RuntimeEmitter
     /// static object ChildSpawnError(object exObj, string command, string syscall): a Node-style
     /// error dict. A missing executable (Win32 error 2) → ENOENT with code/errno/syscall/path.
     /// </summary>
-    private void EmitChildSpawnError(TypeBuilder runtimeType, EmittedRuntime runtime)
+    private void EmitChildSpawnError(TypeBuilder runtimeType, EmittedChildProcessRuntime child)
     {
         var m = runtimeType.DefineMethod("ChildSpawnError",
             MethodAttributes.Public | MethodAttributes.Static, _types.Object,
             [_types.Object, _types.String, _types.String]);
-        _childSpawnError = m;
+        child.SpawnError = m;
         var il = m.GetILGenerator();
         var w32 = typeof(System.ComponentModel.Win32Exception);
         var concat3 = _types.GetMethod(_types.String, "Concat", [_types.String, _types.String, _types.String])!;
@@ -1891,7 +1825,7 @@ public partial class RuntimeEmitter
 
         il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.DictionaryStringObject, Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, dictLocal);
-        void Set(string key, Action v) { il.Emit(OpCodes.Ldloc, dictLocal); il.Emit(OpCodes.Ldstr, key); v(); il.Emit(OpCodes.Callvirt, _miDictSet); }
+        void Set(string key, Action v) { il.Emit(OpCodes.Ldloc, dictLocal); il.Emit(OpCodes.Ldstr, key); v(); il.Emit(OpCodes.Callvirt, child.SetDictionaryItem); }
         Set("message", () => { il.Emit(OpCodes.Ldloc, prefixLocal); il.Emit(OpCodes.Ldstr, " ENOENT"); il.Emit(OpCodes.Call, concat2); });
         Set("code", () => il.Emit(OpCodes.Ldstr, "ENOENT"));
         Set("errno", () =>
@@ -1915,8 +1849,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.DictionaryStringObject, Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, dictLocal);
         il.Emit(OpCodes.Ldloc, dictLocal); il.Emit(OpCodes.Ldstr, "message");
-        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Castclass, _types.Exception); il.Emit(OpCodes.Callvirt, _miExceptionMessageGet);
-        il.Emit(OpCodes.Callvirt, _miDictSet);
+        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Castclass, _types.Exception); il.Emit(OpCodes.Callvirt, child.ExceptionMessageGet);
+        il.Emit(OpCodes.Callvirt, child.SetDictionaryItem);
         il.Emit(OpCodes.Ldloc, dictLocal);
         il.Emit(OpCodes.Ret);
     }
@@ -1926,7 +1860,7 @@ public partial class RuntimeEmitter
     {
         emitTarget();
         il.Emit(OpCodes.Ldtoken, method);
-        il.Emit(OpCodes.Call, _miGetMethodFromHandle);
+        il.Emit(OpCodes.Call, runtime.RequireChildProcess().GetMethodFromHandle);
         il.Emit(OpCodes.Castclass, typeof(MethodInfo));
         il.Emit(OpCodes.Newobj, runtime.TSFunctionCtor);
     }

@@ -1211,6 +1211,114 @@ public class StandaloneDllTests
         }
     }
 
+    public static IEnumerable<object[]> ChildProcessMetadataPrograms
+    {
+        get
+        {
+            yield return new object[]
+            {
+                """
+                import { execSync, spawnSync, execFileSync } from 'child_process';
+                console.log(execSync('echo sync').trim());
+                const sorted = spawnSync('sort', [], { input: 'banana\napple\n' });
+                console.log(sorted.status, sorted.stdout.trim().replace(/\r?\n/g, ','));
+                const file = process.platform === 'win32' ? 'cmd.exe' : '/bin/echo';
+                const args = process.platform === 'win32' ? ['/c', 'echo', 'direct'] : ['direct'];
+                console.log(execFileSync(file, args).trim());
+                """,
+                "sync\n0 apple,banana\ndirect\n"
+            };
+            yield return new object[]
+            {
+                """
+                import { exec, execFile } from 'child_process';
+                exec('echo callback', (error: any, output: any, stderr: any) => {
+                    console.log(error === null, output.trim(), stderr.length);
+                    const file = process.platform === 'win32' ? 'cmd.exe' : '/bin/echo';
+                    const args = process.platform === 'win32' ? ['/c', 'echo', 'file'] : ['file'];
+                    execFile(file, args, (failure: any, text: any) => console.log(failure === null, text.trim()));
+                });
+                """,
+                "true callback 0\ntrue file\n"
+            };
+            yield return new object[]
+            {
+                """
+                import { spawn } from 'child_process';
+                const child = spawn('sort', []);
+                let text = '';
+                child.stdout.on('data', (chunk: any) => { text += chunk.toString(); });
+                child.on('close', (code: any) => console.log(code, text.trim().replace(/\r?\n/g, ',')));
+                child.stdin.write('pear\n'); child.stdin.end('apple\n');
+                """,
+                "0 apple,pear\n"
+            };
+            yield return new object[]
+            {
+                """
+                import { spawn } from 'child_process';
+                const child = spawn('echo ignored', [], { shell: true, stdio: 'ignore' });
+                console.log(child.stdin === null, child.stdout === null, child.stderr === null);
+                child.on('close', (code: any) => console.log('close', code));
+                """,
+                "true true true\nclose 0\n"
+            };
+            yield return new object[]
+            {
+                """
+                import { spawn } from 'child_process';
+                const child = spawn('sharpts_metadata_missing_executable_1599', []);
+                child.on('error', (error: any) => console.log(error.code, error.path));
+                """,
+                "ENOENT sharpts_metadata_missing_executable_1599\n"
+            };
+            yield return new object[]
+            {
+                """
+                import { exec } from 'child_process';
+                exec('echo bytes', { encoding: 'buffer' }, (error: any, output: any) => {
+                    console.log(error === null, Buffer.isBuffer(output), output.toString().trim());
+                });
+                """,
+                "true true bytes\n"
+            };
+            yield return new object[]
+            {
+                """
+                import { exec } from 'child_process';
+                exec('echo aaaaaaaaaaaaaaaa', { maxBuffer: 3 }, (error: any, output: any) => {
+                    console.log(error.code, output.length <= 3);
+                });
+                """,
+                "ERR_CHILD_PROCESS_STDIO_MAXBUFFER true\n"
+            };
+            yield return new object[]
+            {
+                """
+                import { fork } from 'child_process';
+                try { fork('./metadata-child.ts'); }
+                catch (error: any) { console.log(error.message.includes('child_process.fork requires the SharpTS runtime')); }
+                """,
+                "true\n"
+            };
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(ChildProcessMetadataPrograms))]
+    public void Isolated_ChildProcessMetadata_PreservesExecutionStreamsErrorsAndDependencyContract(string source, string expected)
+    {
+        var files = new Dictionary<string, string> { ["main.ts"] = source };
+        Assert.Empty(TestHarness.CompileModulesAndVerifyOnly(files, "main.ts"));
+        var (tempDir, dllPath) = CompileStandaloneModule(files, "main.ts");
+        try
+        {
+            Assert.DoesNotContain(GetAssemblyReferences(dllPath), name => name == "SharpTS");
+            Assert.Equal(expected, ExecuteCompiledDllIsolated(dllPath, timeoutMs: 15000));
+        }
+        finally { CleanupTempDir(tempDir); }
+    }
+
     public static IEnumerable<object[]> ProcessMetadataPrograms
     {
         get

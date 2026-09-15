@@ -1586,20 +1586,18 @@ public class EmittedRuntime
     // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSReadlineInterface
     public ConstructorBuilder ReadlineInterfaceCtor { get; set; } = null!;
 
-    // Child process module methods
-    public MethodBuilder ChildProcessExecSync { get; set; } = null!;
-    public MethodBuilder ChildProcessSpawnSync { get; set; } = null!;
-    public MethodBuilder ChildProcessExec { get; set; } = null!;
-    public MethodBuilder ChildProcessSpawn { get; set; } = null!;
-    public MethodBuilder ChildProcessExecFileSync { get; set; } = null!;
-    public MethodBuilder ChildProcessExecFile { get; set; } = null!;
-    public MethodBuilder ChildProcessFork { get; set; } = null!;
-    public FieldBuilder ChildProcessOwnedProcessesField { get; set; } = null!;
-    public FieldBuilder ChildProcessOwnershipStoppingField { get; set; } = null!;
-    public MethodBuilder ChildProcessRegisterOwned { get; set; } = null!;
-    public MethodBuilder ChildProcessUnregisterOwned { get; set; } = null!;
-    public MethodBuilder ChildProcessReleaseOwned { get; set; } = null!;
-    public MethodBuilder ChildProcessTerminateOwned { get; set; } = null!;
+    /// <summary>Child-process metadata, or null when child_process is omitted.</summary>
+    public EmittedChildProcessRuntime? ChildProcess { get; private set; }
+
+    internal void BeginChildProcessEmission()
+    {
+        if (ChildProcess is not null)
+            throw new InvalidOperationException("Child-process metadata emission has already started.");
+        ChildProcess = new EmittedChildProcessRuntime();
+    }
+
+    public EmittedChildProcessRuntime RequireChildProcess() => ChildProcess
+        ?? throw new InvalidOperationException("Child-process runtime was not enabled for this compilation.");
 
     // Querystring module methods
 
