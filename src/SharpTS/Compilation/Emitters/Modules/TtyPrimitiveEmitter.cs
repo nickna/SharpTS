@@ -33,7 +33,7 @@ public sealed class TtyPrimitiveEmitter : IBuiltInModuleEmitter
             il.Emit(OpCodes.Ldnull);
         }
 
-        il.Emit(OpCodes.Call, ctx.Runtime!.TtyIsatty);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireTty().Isatty);
         return true;
     }
 

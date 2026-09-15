@@ -1319,6 +1319,98 @@ public class StandaloneDllTests
         finally { CleanupTempDir(tempDir); }
     }
 
+    public static IEnumerable<object[]> HostPrimitiveMetadataPrograms =>
+    [
+        new object[]
+        {
+            """
+            import {performance as clock} from 'node:perf_hooks';
+            const first=clock.now();const second=clock.now();
+            console.log(Number.isFinite(first),first>=0,second>=first,Number.isFinite(clock.timeOrigin));
+            """,
+            "true true true true\n", "main.ts"
+        },
+        new object[]
+        {
+            """
+            import {performance} from 'perf_hooks';
+            performance.clearMarks();performance.clearMeasures();
+            performance.mark('start',{startTime:5});performance.mark('end',{startTime:10});
+            const result=performance.measure('elapsed','start','end');
+            console.log(result.name,result.entryType,result.startTime,result.duration);
+            console.log(performance.getEntriesByType('mark').length,performance.getEntriesByName('elapsed').length);
+            performance.clearMarks();performance.clearMeasures();console.log(performance.getEntries().length);
+            """,
+            "elapsed measure 5 5\n2 1\n0\n", "main.ts"
+        },
+        new object[]
+        {
+            """
+            import {performance,PerformanceObserver} from 'perf_hooks';console.log(typeof PerformanceObserver,typeof performance.now,performance.now()>=0);
+            """,
+            "function function true\n", "main.ts"
+        },
+        new object[]
+        {
+            """
+            import {isatty as check} from 'node:tty';
+            console.log(check(0),check(1),check(2),check(999));
+            console.log(check(-1),check(NaN),check(Infinity),check(-Infinity));
+            console.log(check('1' as any),check(null as any),check(undefined as any));
+            """,
+            "false false false false\nfalse false false false\nfalse false false\n", "main.ts"
+        },
+        new object[]
+        {
+            """
+            import * as tty from 'tty';const check:any=tty.isatty;
+            console.log(typeof check,check(999));console.log(check.call(null,NaN));
+            """,
+            "function false\nfalse\n", "main.ts"
+        },
+        new object[]
+        {
+            """
+            const perf=require('perf_hooks');const tty=require('tty');
+            const value=perf.performance.now();const terminal=tty.isatty(999);console.log(value>=0,terminal);
+            """,
+            "true false\n", "main.cjs"
+        },
+        new object[]
+        {
+            """
+            import {performance} from 'perf_hooks';import {isatty} from 'tty';
+            async function run(){const start=performance.now();await new Promise<void>(resolve=>setTimeout(resolve,1));const end=performance.now();console.log(end>=start,isatty(999));}run();
+            """,
+            "true false\n", "main.ts"
+        },
+        new object[]
+        {
+            """
+            import {performance} from 'perf_hooks';import {isatty} from 'tty';
+            function* values():Generator<boolean,void,any>{yield performance.now()>=0;yield isatty(999);}
+            const it=values();console.log(it.next().value,it.next().value);
+            """,
+            "true false\n", "main.ts"
+        }
+    ];
+
+    [Theory]
+    [MemberData(nameof(HostPrimitiveMetadataPrograms))]
+    public void Isolated_HostPrimitiveMetadata_PreservesClockStateAndTerminalChecks(string source, string expected, string entryPoint)
+    {
+        using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        tempDir.CreateFile(entryPoint, source);
+        var dllPath = tempDir.GetPath("host_primitive_metadata.dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{tempDir.GetPath(entryPoint)}\" -o \"{dllPath}\" --verify --standalone", tempDir.Path);
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(dllPath));
+        Assert.False(File.Exists(tempDir.GetPath("SharpTS.dll")));
+        Assert.Equal(expected, ExecuteCompiledDllIsolated(dllPath, timeoutMs: 15000,
+            verifyStandardError: error => Assert.Empty(error), standardInput: ""));
+    }
+
     public static IEnumerable<object[]> IntlMetadataPrograms =>
     [
         new object[]

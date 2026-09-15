@@ -13,7 +13,7 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits the <c>Tty_isatty</c> runtime method backing <c>primitive:tty.isatty</c>.
     /// </summary>
-    internal void EmitTtyPrimitiveMethods(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    internal void EmitTtyPrimitiveMethods(TypeBuilder typeBuilder, EmittedTtyRuntime tty, MethodBuilder toNumber)
     {
         // Emit: public static object Tty_isatty(object? fd)
         var method = typeBuilder.DefineMethod(
@@ -31,7 +31,7 @@ public partial class RuntimeEmitter
         // when the host has no real FDs).
         var fdInt = il.DeclareLocal(typeof(int));
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.ToNumber);
+        il.Emit(OpCodes.Call, toNumber);
         var dblLocal = il.DeclareLocal(typeof(double));
         il.Emit(OpCodes.Stloc, dblLocal);
         il.BeginExceptionBlock();
@@ -91,7 +91,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(done);
         il.Emit(OpCodes.Ret);
 
-        runtime.TtyIsatty = method;
+        tty.Isatty = method;
         // No RegisterBuiltInModuleMethod — the `tty` module is now a TS stdlib
         // file (stdlib/node/tty.ts) that calls primitive:tty. CJS require('tty')
         // flows through the standard ESM→CJS namespace-object path.

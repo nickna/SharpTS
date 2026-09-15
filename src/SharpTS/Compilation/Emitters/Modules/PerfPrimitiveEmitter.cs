@@ -29,7 +29,7 @@ public sealed class PerfPrimitiveEmitter : IBuiltInModuleEmitter
         {
             var ctx = emitter.Context;
             var il = ctx.IL;
-            il.Emit(OpCodes.Call, ctx.Runtime!.PerfPrimitiveNow);
+            il.Emit(OpCodes.Call, ctx.Runtime!.RequirePerformance().Now);
             il.Emit(OpCodes.Box, ctx.Types.Double);
             return true;
         }
