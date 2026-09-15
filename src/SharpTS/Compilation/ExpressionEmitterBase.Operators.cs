@@ -733,7 +733,7 @@ public abstract partial class ExpressionEmitterBase
         EnsureBoxed();
         IL.Emit(OpCodes.Call, Types.ConvertToStringFromObject);
         IL.Emit(OpCodes.Ldstr, Ctx.CurrentModulePath ?? "");
-        IL.Emit(OpCodes.Call, Ctx.Runtime!.DynamicImportModule);
+        IL.Emit(OpCodes.Call, Ctx.Runtime!.Modules.RequireDynamicImport().ImportModule);
         IL.Emit(OpCodes.Call, Ctx.Runtime!.RequirePromise().WrapTaskAsPromise);
         IL.Emit(OpCodes.Dup);
         IL.Emit(OpCodes.Call, Ctx.Runtime!.RequirePromise().MarkNonAutoAwaitPromiseMethod);

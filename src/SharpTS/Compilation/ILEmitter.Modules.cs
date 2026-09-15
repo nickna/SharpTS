@@ -737,7 +737,7 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Ldstr, _ctx.CurrentModulePath ?? "");
 
         // Call DynamicImportModule(path, currentModulePath) -> Task<object?>
-        IL.Emit(OpCodes.Call, _ctx.Runtime!.DynamicImportModule);
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.Modules.RequireDynamicImport().ImportModule);
 
         // Wrap Task<object?> in SharpTSPromise
         EmitCallUnknown(_ctx.Runtime!.RequirePromise().WrapTaskAsPromise);

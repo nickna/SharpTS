@@ -873,7 +873,7 @@ public partial class ILCompiler
             il.Emit(OpCodes.Stsfld, _closures.EntryPointDisplayClassStaticField);
         }
 
-        il.Emit(OpCodes.Call, _runtime.InitializeModuleRegistry);
+        il.Emit(OpCodes.Call, _runtime.Modules.Initialize);
         foreach (ParsedModule module in modules)
         {
             if (module.IsScript)
@@ -1429,7 +1429,7 @@ public partial class ILCompiler
         }
 
         // Initialize module registry
-        il.Emit(OpCodes.Call, _runtime.InitializeModuleRegistry);
+        il.Emit(OpCodes.Call, _runtime.Modules.Initialize);
 
         // Register each module in the registry for dynamic import support
         // Skip script files - they don't have exports and can't be dynamically imported
@@ -1492,12 +1492,12 @@ public partial class ILCompiler
     /// </summary>
     private void EmitRegisterModule(ILGenerator il, string path, MethodBuilder getNamespaceMethod)
     {
-        // TSRuntime.RegisterModule(path, () => $Module_xxx.$GetNamespace())
+        // TSRuntime.Modules.Register(path, () => $Module_xxx.$GetNamespace())
         il.Emit(OpCodes.Ldstr, path);
         il.Emit(OpCodes.Ldnull); // target for static method delegate
         il.Emit(OpCodes.Ldftn, getNamespaceMethod);
         il.Emit(OpCodes.Newobj, typeof(Func<object?>).GetConstructor([typeof(object), typeof(IntPtr)])!);
-        il.Emit(OpCodes.Call, _runtime.RegisterModule);
+        il.Emit(OpCodes.Call, _runtime.Modules.Register);
     }
 
     /// <summary>

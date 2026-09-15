@@ -656,6 +656,18 @@ and standalone dependencies are unchanged. The TS readline facade remains in the
 method-local builders and BCL reflection remain scoped construction locals. No migrated aliases or
 emitter-held copies remain.
 
+Module loading uses required `EmittedModuleRuntime` for the registry field and its initialization
+and registration methods, plus optional CommonJS (`UsesCjsRequire`) and dynamic-import
+(`UsesDynamicImport`) components. They own fourteen checked declarations, including seven former
+CommonJS emitter fields. Completion validates every enabled group before freezing any of them.
+Four CommonJS helpers, four module helpers, and two property-dispatch helpers accept their owning
+components; the dynamic-import wrapper retains orchestration across module, Promise, and event-loop
+families. The registry remains unconditional for static multi-module bundles. CommonJS type creation,
+exports write-through, lazy registry state, relative resolution, hosted import dispatch, emitted
+order, and output dependencies are unchanged. Promise wrapping retains its existing owner;
+method-local BCL references and property/constructor builders remain scoped construction locals.
+No migrated flat aliases or CommonJS emitter-held copies remain.
+
 During emission, each handle becomes readable as soon as its declaration is assigned, so forward
 references do not require a method body to exist yet. An early read names the missing declaration.
 Completion is an orchestration boundary, not an IL verifier: body emission and type finalization

@@ -19,14 +19,14 @@ public partial class RuntimeEmitter
         // The module registry stays unconditional: ILCompiler.Modules calls
         // InitializeModuleRegistry/RegisterModule for multi-module bundling
         // even without `import()`.
-        EmitModuleRegistry(typeBuilder, runtime);
+        EmitModuleRegistry(typeBuilder, runtime.Modules);
         if (_features.UsesPromise)
             EmitWrapTaskAsPromise(typeBuilder, runtime.RequirePromise());
         // The two `import(specifier)`-specific helpers are gated separately:
         // only emit when UsesDynamicImport is set.
         if (_features.UsesDynamicImport)
         {
-            EmitDynamicImportModule(typeBuilder, runtime);
+            EmitDynamicImportModule(typeBuilder, runtime.Modules, runtime.EventLoop);
         }
     }
 
@@ -34,7 +34,7 @@ public partial class RuntimeEmitter
     /// Emits the module registry field and registration methods.
     /// The registry maps module paths to factory functions that return module namespace objects.
     /// </summary>
-    private void EmitModuleRegistry(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitModuleRegistry(TypeBuilder typeBuilder, EmittedModuleRuntime modules)
     {
         // Field: private static Dictionary<string, Func<object?>>? _moduleRegistry;
         var dictType = typeof(Dictionary<string, Func<object?>>);
@@ -43,13 +43,13 @@ public partial class RuntimeEmitter
             dictType,
             FieldAttributes.Private | FieldAttributes.Static
         );
-        runtime.ModuleRegistry = registryField;
+        modules.Registry = registryField;
 
         // Method: static void InitializeModuleRegistry()
-        EmitInitializeModuleRegistry(typeBuilder, runtime, dictType, registryField);
+        EmitInitializeModuleRegistry(typeBuilder, modules, dictType);
 
         // Method: static void RegisterModule(string path, Func<object?> factory)
-        EmitRegisterModule(typeBuilder, runtime, dictType, registryField);
+        EmitRegisterModule(typeBuilder, modules, dictType);
     }
 
     /// <summary>
@@ -58,9 +58,8 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitInitializeModuleRegistry(
         TypeBuilder typeBuilder,
-        EmittedRuntime runtime,
-        Type dictType,
-        FieldBuilder registryField)
+        EmittedModuleRuntime modules,
+        Type dictType)
     {
         var method = typeBuilder.DefineMethod(
             "InitializeModuleRegistry",
@@ -68,18 +67,18 @@ public partial class RuntimeEmitter
             typeof(void),
             Type.EmptyTypes
         );
-        runtime.InitializeModuleRegistry = method;
+        modules.Initialize = method;
 
         var il = method.GetILGenerator();
         var alreadyInitialized = il.DefineLabel();
 
         // if (_moduleRegistry != null) return;
-        il.Emit(OpCodes.Ldsfld, registryField);
+        il.Emit(OpCodes.Ldsfld, modules.Registry);
         il.Emit(OpCodes.Brtrue, alreadyInitialized);
 
         // _moduleRegistry = new Dictionary<string, Func<object?>>();
         il.Emit(OpCodes.Newobj, _types.GetConstructor(dictType, Type.EmptyTypes)!);
-        il.Emit(OpCodes.Stsfld, registryField);
+        il.Emit(OpCodes.Stsfld, modules.Registry);
 
         il.MarkLabel(alreadyInitialized);
         il.Emit(OpCodes.Ret);
@@ -91,9 +90,8 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitRegisterModule(
         TypeBuilder typeBuilder,
-        EmittedRuntime runtime,
-        Type dictType,
-        FieldBuilder registryField)
+        EmittedModuleRuntime modules,
+        Type dictType)
     {
         var method = typeBuilder.DefineMethod(
             "RegisterModule",
@@ -101,12 +99,12 @@ public partial class RuntimeEmitter
             typeof(void),
             [typeof(string), typeof(Func<object?>)]
         );
-        runtime.RegisterModule = method;
+        modules.Register = method;
 
         var il = method.GetILGenerator();
 
         // _moduleRegistry[path] = factory;
-        il.Emit(OpCodes.Ldsfld, registryField);
+        il.Emit(OpCodes.Ldsfld, modules.Registry);
         il.Emit(OpCodes.Ldarg_0); // path
         il.Emit(OpCodes.Ldarg_1); // factory
         il.Emit(OpCodes.Callvirt, _types.GetMethod(dictType, "set_Item")!);
@@ -136,7 +134,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitDynamicImportModule(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitDynamicImportModule(TypeBuilder typeBuilder, EmittedModuleRuntime modules, EmittedEventLoopRuntime eventLoop)
     {
         var method = typeBuilder.DefineMethod(
             "DynamicImportModule",
@@ -144,7 +142,7 @@ public partial class RuntimeEmitter
             _types.TaskOfObject,
             [_types.String, _types.String]
         );
-        runtime.DynamicImportModule = method;
+        modules.RequireDynamicImport().ImportModule = method;
 
         var il = method.GetILGenerator();
 
@@ -196,12 +194,12 @@ public partial class RuntimeEmitter
         il.MarkLabel(lookupReadyLabel);
 
         // If registry is null, go to not found
-        il.Emit(OpCodes.Ldsfld, runtime.ModuleRegistry);
+        il.Emit(OpCodes.Ldsfld, modules.Registry);
         il.Emit(OpCodes.Brfalse, notFoundLabel);
 
         // Func<object?> factory;
         // if (_moduleRegistry.TryGetValue(specifier, out factory))
-        il.Emit(OpCodes.Ldsfld, runtime.ModuleRegistry);
+        il.Emit(OpCodes.Ldsfld, modules.Registry);
         il.Emit(OpCodes.Ldloc, lookupPathLocal);
         il.Emit(OpCodes.Ldloca, factoryLocal);
         il.Emit(OpCodes.Callvirt, dictType.GetMethod("TryGetValue")!);
@@ -211,7 +209,7 @@ public partial class RuntimeEmitter
         // host-owned runtime. Console output retains the synchronous namespace lookup.
         if (_emitHosted)
         {
-            il.Emit(OpCodes.Call, runtime.EventLoop.RequireHosted().GetRuntime);
+            il.Emit(OpCodes.Call, eventLoop.RequireHosted().GetRuntime);
             il.Emit(OpCodes.Ldloc, lookupPathLocal);
             il.Emit(OpCodes.Ldloc, factoryLocal);
             il.Emit(OpCodes.Callvirt, typeof(SharpTSHostedRuntimeBase).GetMethod(

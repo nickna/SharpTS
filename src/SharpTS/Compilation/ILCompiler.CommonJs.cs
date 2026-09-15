@@ -203,7 +203,7 @@ public partial class ILCompiler
         il.Emit(OpCodes.Ldstr, module.Path);
         il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, Type.EmptyTypes)!);
         il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Newobj, _runtime.CjsModuleCtor);
+        il.Emit(OpCodes.Newobj, _runtime.Modules.RequireCommonJs().Ctor);
         il.Emit(OpCodes.Stsfld, moduleObjField);
 
         // The per-module ctx was built BEFORE we registered `module` in _moduleTopLevelStaticVars

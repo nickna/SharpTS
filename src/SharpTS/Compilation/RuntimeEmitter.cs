@@ -40,6 +40,10 @@ public partial class RuntimeEmitter
         if (_emitHosted)
             _features.UsesPromise = true;
         var runtime = new EmittedRuntime();
+        if (features.UsesCjsRequire)
+            runtime.Modules.BeginCommonJsEmission();
+        if (features.UsesDynamicImport)
+            runtime.Modules.BeginDynamicImportEmission();
         if (_emitHosted)
         {
             runtime.EventLoop.BeginHostedEmission();
@@ -420,7 +424,7 @@ public partial class RuntimeEmitter
         // Gated on UsesCjsRequire (the detector flips this whenever the program
         // mentions `require`, `module`, `exports`, or has a require('...') call).
         if (features.UsesCjsRequire)
-            EmitCjsModuleClass(moduleBuilder, runtime);
+            EmitCjsModuleClass(moduleBuilder, runtime.Modules.RequireCommonJs());
 
         // Emit $Arguments : List<object> marker subclass. Must come before
         // any IL that constructs `arguments` (ILCompiler.Functions.cs uses
@@ -678,6 +682,7 @@ public partial class RuntimeEmitter
         runtime.Timers.CompleteEmission();
         runtime.Microtasks.CompleteEmission();
         runtime.TimerPromises?.CompleteEmission();
+        runtime.Modules.CompleteEmission();
         runtime.Readline?.CompleteEmission();
         runtime.TextEncoding?.CompleteEmission();
         runtime.Inspection.CompleteEmission();

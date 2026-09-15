@@ -66,17 +66,17 @@ public partial class RuntimeEmitter
     /// Only reached when the program uses CommonJS require/module/exports (the caller
     /// gates both this arm and its dispatch on _features.UsesCjsRequire).
     /// </summary>
-    private void EmitCjsModuleGetBranch(ILGenerator il, EmittedRuntime runtime, Label notMatch)
+    private void EmitCjsModuleGetBranch(ILGenerator il, EmittedCommonJsRuntime commonJs, Label notMatch)
     {
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.CjsModuleType);
+        il.Emit(OpCodes.Isinst, commonJs.Type);
         il.Emit(OpCodes.Brfalse, notMatch);
 
         // $CJSModule handler - call module.GetMember(name)
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.CjsModuleType);
+        il.Emit(OpCodes.Castclass, commonJs.Type);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(runtime.CjsModuleType, "GetMember", [_types.String])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(commonJs.Type, "GetMember", [_types.String])!);
         il.Emit(OpCodes.Ret);
     }
 

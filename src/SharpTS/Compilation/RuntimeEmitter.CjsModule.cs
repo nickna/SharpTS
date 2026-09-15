@@ -21,15 +21,7 @@ namespace SharpTS.Compilation;
 /// </remarks>
 public partial class RuntimeEmitter
 {
-    private FieldBuilder _cjsModuleExportsFieldInfoField = null!;
-    private FieldBuilder _cjsModuleIdField = null!;
-    private FieldBuilder _cjsModuleFilenameField = null!;
-    private FieldBuilder _cjsModuleLoadedField = null!;
-    private FieldBuilder _cjsModulePathsField = null!;
-    private FieldBuilder _cjsModuleChildrenField = null!;
-    private FieldBuilder _cjsModuleParentField = null!;
-
-    private void EmitCjsModuleClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private void EmitCjsModuleClass(ModuleBuilder moduleBuilder, EmittedCommonJsRuntime commonJs)
     {
         var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$CJSModule",
@@ -38,37 +30,37 @@ public partial class RuntimeEmitter
         );
 
         // Backing fields
-        _cjsModuleExportsFieldInfoField = typeBuilder.DefineField(
+        commonJs.ExportsFieldInfoField = typeBuilder.DefineField(
             "_exportsField", typeof(FieldInfo), FieldAttributes.Private);
-        _cjsModuleIdField = typeBuilder.DefineField(
+        commonJs.IdField = typeBuilder.DefineField(
             "_id", _types.String, FieldAttributes.Private);
-        _cjsModuleFilenameField = typeBuilder.DefineField(
+        commonJs.FilenameField = typeBuilder.DefineField(
             "_filename", _types.String, FieldAttributes.Private);
-        _cjsModuleLoadedField = typeBuilder.DefineField(
+        commonJs.LoadedField = typeBuilder.DefineField(
             "_loaded", _types.Boolean, FieldAttributes.Private);
-        _cjsModulePathsField = typeBuilder.DefineField(
+        commonJs.PathsField = typeBuilder.DefineField(
             "_paths", _types.Object, FieldAttributes.Private);
-        _cjsModuleChildrenField = typeBuilder.DefineField(
+        commonJs.ChildrenField = typeBuilder.DefineField(
             "_children", _types.Object, FieldAttributes.Private);
-        _cjsModuleParentField = typeBuilder.DefineField(
+        commonJs.ParentField = typeBuilder.DefineField(
             "_parent", _types.Object, FieldAttributes.Private);
 
-        EmitCjsModuleCtor(typeBuilder);
-        EmitCjsModuleExportsProperty(typeBuilder);
-        EmitCjsModuleSimpleProperty(typeBuilder, "id", _types.String, _cjsModuleIdField);
-        EmitCjsModuleSimpleProperty(typeBuilder, "filename", _types.String, _cjsModuleFilenameField);
-        EmitCjsModuleSimpleProperty(typeBuilder, "loaded", _types.Boolean, _cjsModuleLoadedField);
-        EmitCjsModuleSimpleProperty(typeBuilder, "paths", _types.Object, _cjsModulePathsField);
-        EmitCjsModuleSimpleProperty(typeBuilder, "children", _types.Object, _cjsModuleChildrenField);
-        EmitCjsModuleSimpleProperty(typeBuilder, "parent", _types.Object, _cjsModuleParentField);
-        EmitCjsModuleGetMember(typeBuilder);
+        EmitCjsModuleCtor(typeBuilder, commonJs);
+        EmitCjsModuleExportsProperty(typeBuilder, commonJs);
+        EmitCjsModuleSimpleProperty(typeBuilder, "id", _types.String, commonJs.IdField);
+        EmitCjsModuleSimpleProperty(typeBuilder, "filename", _types.String, commonJs.FilenameField);
+        EmitCjsModuleSimpleProperty(typeBuilder, "loaded", _types.Boolean, commonJs.LoadedField);
+        EmitCjsModuleSimpleProperty(typeBuilder, "paths", _types.Object, commonJs.PathsField);
+        EmitCjsModuleSimpleProperty(typeBuilder, "children", _types.Object, commonJs.ChildrenField);
+        EmitCjsModuleSimpleProperty(typeBuilder, "parent", _types.Object, commonJs.ParentField);
+        EmitCjsModuleGetMember(typeBuilder, commonJs);
 
         var builtType = typeBuilder.CreateType()!;
-        runtime.CjsModuleType = builtType;
-        runtime.CjsModuleCtor = builtType.GetConstructor(
+        commonJs.Type = builtType;
+        commonJs.Ctor = builtType.GetConstructor(
             [typeof(FieldInfo), _types.String, _types.String, _types.Object, _types.Object])!;
         _ = builtType.GetProperty("exports")!.GetGetMethod()!;
-        runtime.CjsModuleExportsSetter = builtType.GetProperty("exports")!.GetSetMethod()!;
+        commonJs.ExportsSetter = builtType.GetProperty("exports")!.GetSetMethod()!;
     }
 
     /// <summary>
@@ -77,7 +69,7 @@ public partial class RuntimeEmitter
     /// write-through on <c>module.exports = X</c>); loaded starts false; children starts
     /// as an empty array.
     /// </summary>
-    private void EmitCjsModuleCtor(TypeBuilder typeBuilder)
+    private void EmitCjsModuleCtor(TypeBuilder typeBuilder, EmittedCommonJsRuntime commonJs)
     {
         var ctor = typeBuilder.DefineConstructor(
             MethodAttributes.Public,
@@ -91,32 +83,32 @@ public partial class RuntimeEmitter
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Stfld, _cjsModuleExportsFieldInfoField);
+        il.Emit(OpCodes.Stfld, commonJs.ExportsFieldInfoField);
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Stfld, _cjsModuleIdField);
+        il.Emit(OpCodes.Stfld, commonJs.IdField);
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_3);
-        il.Emit(OpCodes.Stfld, _cjsModuleFilenameField);
+        il.Emit(OpCodes.Stfld, commonJs.FilenameField);
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Stfld, _cjsModuleLoadedField);
+        il.Emit(OpCodes.Stfld, commonJs.LoadedField);
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_S, (byte)4);
-        il.Emit(OpCodes.Stfld, _cjsModulePathsField);
+        il.Emit(OpCodes.Stfld, commonJs.PathsField);
 
         // children = new List<object>()
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, Type.EmptyTypes)!);
-        il.Emit(OpCodes.Stfld, _cjsModuleChildrenField);
+        il.Emit(OpCodes.Stfld, commonJs.ChildrenField);
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_S, (byte)5);
-        il.Emit(OpCodes.Stfld, _cjsModuleParentField);
+        il.Emit(OpCodes.Stfld, commonJs.ParentField);
 
         il.Emit(OpCodes.Ret);
     }
@@ -127,7 +119,7 @@ public partial class RuntimeEmitter
     /// through the module's own static field so <c>require()</c> always sees the latest
     /// value regardless of how it was assigned.
     /// </summary>
-    private void EmitCjsModuleExportsProperty(TypeBuilder typeBuilder)
+    private void EmitCjsModuleExportsProperty(TypeBuilder typeBuilder, EmittedCommonJsRuntime commonJs)
     {
         var prop = typeBuilder.DefineProperty("exports", PropertyAttributes.None, _types.Object, null);
 
@@ -139,7 +131,7 @@ public partial class RuntimeEmitter
         );
         var gil = getter.GetILGenerator();
         gil.Emit(OpCodes.Ldarg_0);
-        gil.Emit(OpCodes.Ldfld, _cjsModuleExportsFieldInfoField);
+        gil.Emit(OpCodes.Ldfld, commonJs.ExportsFieldInfoField);
         gil.Emit(OpCodes.Ldnull);
         gil.Emit(OpCodes.Callvirt, typeof(FieldInfo).GetMethod("GetValue", [_types.Object])!);
         gil.Emit(OpCodes.Ret);
@@ -153,7 +145,7 @@ public partial class RuntimeEmitter
         );
         var sil = setter.GetILGenerator();
         sil.Emit(OpCodes.Ldarg_0);
-        sil.Emit(OpCodes.Ldfld, _cjsModuleExportsFieldInfoField);
+        sil.Emit(OpCodes.Ldfld, commonJs.ExportsFieldInfoField);
         sil.Emit(OpCodes.Ldnull);
         sil.Emit(OpCodes.Ldarg_1);
         sil.Emit(OpCodes.Callvirt, typeof(FieldInfo).GetMethod("SetValue", [_types.Object, _types.Object])!);
@@ -198,7 +190,7 @@ public partial class RuntimeEmitter
     /// access to the right field when <c>foo</c> isn't a compile-time-known property.
     /// Matches the pattern other emitted wrapper types use (e.g. <c>$Stats</c>).
     /// </summary>
-    private void EmitCjsModuleGetMember(TypeBuilder typeBuilder)
+    private void EmitCjsModuleGetMember(TypeBuilder typeBuilder, EmittedCommonJsRuntime commonJs)
     {
         var method = typeBuilder.DefineMethod(
             "GetMember",
@@ -226,40 +218,40 @@ public partial class RuntimeEmitter
         Branch("exports", () =>
         {
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldfld, _cjsModuleExportsFieldInfoField);
+            il.Emit(OpCodes.Ldfld, commonJs.ExportsFieldInfoField);
             il.Emit(OpCodes.Ldnull);
             il.Emit(OpCodes.Callvirt, typeof(FieldInfo).GetMethod("GetValue", [_types.Object])!);
         });
         Branch("id", () =>
         {
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldfld, _cjsModuleIdField);
+            il.Emit(OpCodes.Ldfld, commonJs.IdField);
         });
         Branch("filename", () =>
         {
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldfld, _cjsModuleFilenameField);
+            il.Emit(OpCodes.Ldfld, commonJs.FilenameField);
         });
         Branch("loaded", () =>
         {
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldfld, _cjsModuleLoadedField);
+            il.Emit(OpCodes.Ldfld, commonJs.LoadedField);
             il.Emit(OpCodes.Box, _types.Boolean);
         });
         Branch("paths", () =>
         {
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldfld, _cjsModulePathsField);
+            il.Emit(OpCodes.Ldfld, commonJs.PathsField);
         });
         Branch("children", () =>
         {
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldfld, _cjsModuleChildrenField);
+            il.Emit(OpCodes.Ldfld, commonJs.ChildrenField);
         });
         Branch("parent", () =>
         {
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldfld, _cjsModuleParentField);
+            il.Emit(OpCodes.Ldfld, commonJs.ParentField);
         });
 
         il.MarkLabel(notFoundLabel);
