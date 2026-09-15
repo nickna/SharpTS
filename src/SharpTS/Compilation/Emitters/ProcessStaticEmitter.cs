@@ -39,7 +39,7 @@ public sealed class ProcessStaticEmitter : IStaticTypeEmitterStrategy
                 return true;
 
             case "exit":
-                // $Runtime.ProcessExit(code): emits 'exit' on the process
+                // $Runtime.Process.Exit(code): emits 'exit' on the process
                 // singleton before Environment.Exit (matches the interpreter).
                 if (arguments.Count > 0)
                 {
@@ -50,7 +50,7 @@ public sealed class ProcessStaticEmitter : IStaticTypeEmitterStrategy
                 {
                     il.Emit(OpCodes.Ldnull); // → process.exitCode
                 }
-                il.Emit(OpCodes.Call, ctx.Runtime!.ProcessExit);
+                il.Emit(OpCodes.Call, ctx.Runtime!.Process.Exit);
                 return true;
 
             case "abort":
@@ -76,23 +76,23 @@ public sealed class ProcessStaticEmitter : IStaticTypeEmitterStrategy
                 return true;
 
             case "kill":
-                EmitTwoArgHelperCall(emitter, arguments, ctx.Runtime!.ProcessKill);
+                EmitTwoArgHelperCall(emitter, arguments, ctx.Runtime!.Process.Kill);
                 return true;
 
             case "umask":
-                EmitOneArgHelperCall(emitter, arguments, ctx.Runtime!.ProcessUmask);
+                EmitOneArgHelperCall(emitter, arguments, ctx.Runtime!.Process.Umask);
                 return true;
 
             case "cpuUsage":
-                EmitOneArgHelperCall(emitter, arguments, ctx.Runtime!.ProcessCpuUsage);
+                EmitOneArgHelperCall(emitter, arguments, ctx.Runtime!.Process.CpuUsage);
                 return true;
 
             case "resourceUsage":
-                il.Emit(OpCodes.Call, ctx.Runtime!.ProcessResourceUsage);
+                il.Emit(OpCodes.Call, ctx.Runtime!.Process.ResourceUsage);
                 return true;
 
             case "availableMemory":
-                il.Emit(OpCodes.Call, ctx.Runtime!.ProcessAvailableMemory);
+                il.Emit(OpCodes.Call, ctx.Runtime!.Process.AvailableMemory);
                 return true;
 
             case "constrainedMemory":
@@ -101,17 +101,17 @@ public sealed class ProcessStaticEmitter : IStaticTypeEmitterStrategy
                 return true;
 
             case "getActiveResourcesInfo":
-                il.Emit(OpCodes.Call, ctx.Runtime!.ProcessGetActiveResourcesInfoM);
+                il.Emit(OpCodes.Call, ctx.Runtime!.Process.GetActiveResourcesInfo);
                 return true;
 
             case "emitWarning":
-                EmitFourArgHelperCall(emitter, arguments, ctx.Runtime!.ProcessEmitWarning);
+                EmitFourArgHelperCall(emitter, arguments, ctx.Runtime!.Process.EmitWarning);
                 return true;
 
             case "setSourceMapsEnabled":
                 // Route through the $Process property setter semantics via the
                 // live object (SetProperty handles the bool coercion).
-                il.Emit(OpCodes.Call, ctx.Runtime!.GetProcessObject);
+                il.Emit(OpCodes.Call, ctx.Runtime!.Process.GetObject);
                 il.Emit(OpCodes.Ldstr, "sourceMapsEnabled");
                 EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0);
                 il.Emit(OpCodes.Call, ctx.Runtime!.SetProperty);
@@ -175,12 +175,12 @@ public sealed class ProcessStaticEmitter : IStaticTypeEmitterStrategy
 
             case "env":
                 // Call runtime helper to create env object
-                il.Emit(OpCodes.Call, ctx.Runtime!.ProcessGetEnv);
+                il.Emit(OpCodes.Call, ctx.Runtime!.Process.GetEnv);
                 return true;
 
             case "argv":
                 // Call runtime helper to create argv array
-                il.Emit(OpCodes.Call, ctx.Runtime!.ProcessGetArgv);
+                il.Emit(OpCodes.Call, ctx.Runtime!.Process.GetArgv);
                 return true;
 
             case "exitCode":
@@ -198,21 +198,21 @@ public sealed class ProcessStaticEmitter : IStaticTypeEmitterStrategy
             // if the helper somehow wasn't generated.
             case "stdin":
                 {
-                    var m = ctx.Runtime?.GetStdin;
+                    var m = ctx.Runtime?.Process.RequireStreams().GetStdin;
                     if (m is null) il.Emit(OpCodes.Ldnull); else il.Emit(OpCodes.Call, m);
                     return true;
                 }
 
             case "stdout":
                 {
-                    var m = ctx.Runtime?.GetStdout;
+                    var m = ctx.Runtime?.Process.RequireStreams().GetStdout;
                     if (m is null) il.Emit(OpCodes.Ldnull); else il.Emit(OpCodes.Call, m);
                     return true;
                 }
 
             case "stderr":
                 {
-                    var m = ctx.Runtime?.GetStderr;
+                    var m = ctx.Runtime?.Process.RequireStreams().GetStderr;
                     if (m is null) il.Emit(OpCodes.Ldnull); else il.Emit(OpCodes.Call, m);
                     return true;
                 }
@@ -220,30 +220,30 @@ public sealed class ProcessStaticEmitter : IStaticTypeEmitterStrategy
             // Methods accessible as properties (for typeof checks)
             case "nextTick":
                 // Return a TSFunction wrapper for nextTick
-                il.Emit(OpCodes.Call, ctx.Runtime!.ProcessGetNextTick);
+                il.Emit(OpCodes.Call, ctx.Runtime!.Process.GetNextTick);
                 return true;
 
             // Function-with-members properties: process.hrtime.bigint(),
             // process.memoryUsage.rss() work through these cached functions.
             case "hrtime":
-                il.Emit(OpCodes.Call, ctx.Runtime!.ProcessGetHrtimeFn);
+                il.Emit(OpCodes.Call, ctx.Runtime!.Process.GetHrtimeFn);
                 return true;
 
             case "memoryUsage":
-                il.Emit(OpCodes.Call, ctx.Runtime!.ProcessGetMemoryUsageFn);
+                il.Emit(OpCodes.Call, ctx.Runtime!.Process.GetMemoryUsageFn);
                 return true;
 
             // Identity / info properties (#1085)
             case "ppid":
-                il.Emit(OpCodes.Call, ctx.Runtime!.ProcessGetPpid);
+                il.Emit(OpCodes.Call, ctx.Runtime!.Process.GetPpid);
                 return true;
 
             case "title":
-                il.Emit(OpCodes.Call, ctx.Runtime!.ProcessGetTitle);
+                il.Emit(OpCodes.Call, ctx.Runtime!.Process.GetTitle);
                 return true;
 
             case "versions":
-                il.Emit(OpCodes.Call, ctx.Runtime!.ProcessGetVersions);
+                il.Emit(OpCodes.Call, ctx.Runtime!.Process.GetVersions);
                 return true;
 
             case "execPath":
@@ -261,7 +261,7 @@ public sealed class ProcessStaticEmitter : IStaticTypeEmitterStrategy
                 }
 
             case "execArgv":
-                il.Emit(OpCodes.Call, ctx.Runtime!.ProcessGetExecArgv);
+                il.Emit(OpCodes.Call, ctx.Runtime!.Process.GetExecArgv);
                 return true;
 
             case "argv0":
@@ -271,15 +271,15 @@ public sealed class ProcessStaticEmitter : IStaticTypeEmitterStrategy
                 return true;
 
             case "config":
-                il.Emit(OpCodes.Call, ctx.Runtime!.ProcessGetConfig);
+                il.Emit(OpCodes.Call, ctx.Runtime!.Process.GetConfig);
                 return true;
 
             case "release":
-                il.Emit(OpCodes.Call, ctx.Runtime!.ProcessGetRelease);
+                il.Emit(OpCodes.Call, ctx.Runtime!.Process.GetRelease);
                 return true;
 
             case "features":
-                il.Emit(OpCodes.Call, ctx.Runtime!.ProcessGetFeatures);
+                il.Emit(OpCodes.Call, ctx.Runtime!.Process.GetFeatures);
                 return true;
 
             case "debugPort":
@@ -288,11 +288,11 @@ public sealed class ProcessStaticEmitter : IStaticTypeEmitterStrategy
                 return true;
 
             case "allowedNodeEnvironmentFlags":
-                il.Emit(OpCodes.Call, ctx.Runtime!.ProcessGetAllowedFlags);
+                il.Emit(OpCodes.Call, ctx.Runtime!.Process.GetAllowedFlags);
                 return true;
 
             case "report":
-                il.Emit(OpCodes.Call, ctx.Runtime!.ProcessGetReport);
+                il.Emit(OpCodes.Call, ctx.Runtime!.Process.GetReport);
                 return true;
 
             // Deprecation / source-map flags and IPC state: read through the
@@ -300,7 +300,7 @@ public sealed class ProcessStaticEmitter : IStaticTypeEmitterStrategy
             // truth for coercion + expando semantics).
             case "throwDeprecation" or "traceDeprecation" or "noDeprecation"
                 or "sourceMapsEnabled" or "connected" or "channel" or "send" or "disconnect":
-                il.Emit(OpCodes.Call, ctx.Runtime!.GetProcessObject);
+                il.Emit(OpCodes.Call, ctx.Runtime!.Process.GetObject);
                 il.Emit(OpCodes.Castclass, ctx.Runtime!.IHasFieldsInterface);
                 il.Emit(OpCodes.Ldstr, propertyName);
                 il.Emit(OpCodes.Callvirt, ctx.Runtime!.IHasFieldsGetProperty);
@@ -386,7 +386,7 @@ public sealed class ProcessStaticEmitter : IStaticTypeEmitterStrategy
         {
             il.Emit(OpCodes.Ldnull);
         }
-        il.Emit(OpCodes.Call, ctx.Runtime!.ProcessHrtime);
+        il.Emit(OpCodes.Call, ctx.Runtime!.Process.Hrtime);
     }
 
     /// <summary>
@@ -399,7 +399,7 @@ public sealed class ProcessStaticEmitter : IStaticTypeEmitterStrategy
         var il = ctx.IL;
 
         // Call runtime helper
-        il.Emit(OpCodes.Call, ctx.Runtime!.ProcessUptime);
+        il.Emit(OpCodes.Call, ctx.Runtime!.Process.Uptime);
         il.Emit(OpCodes.Box, ctx.Types.Double);
     }
 
@@ -413,7 +413,7 @@ public sealed class ProcessStaticEmitter : IStaticTypeEmitterStrategy
         var il = ctx.IL;
 
         // Call runtime helper
-        il.Emit(OpCodes.Call, ctx.Runtime!.ProcessMemoryUsage);
+        il.Emit(OpCodes.Call, ctx.Runtime!.Process.MemoryUsage);
     }
 
     /// <summary>
@@ -481,14 +481,14 @@ public sealed class ProcessStaticEmitter : IStaticTypeEmitterStrategy
             case "on":
             case "addListener":
                 // On(string eventName, object listener) -> $EventEmitter
-                il.Emit(OpCodes.Call, runtime.GetProcessEventEmitter);
+                il.Emit(OpCodes.Call, runtime.Process.GetEventEmitter);
                 EmitStringArg(emitter, arguments, 0);
                 EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 1);
                 il.Emit(OpCodes.Callvirt, runtime.EventEmitter.On);
                 break;
 
             case "once":
-                il.Emit(OpCodes.Call, runtime.GetProcessEventEmitter);
+                il.Emit(OpCodes.Call, runtime.Process.GetEventEmitter);
                 EmitStringArg(emitter, arguments, 0);
                 EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 1);
                 il.Emit(OpCodes.Callvirt, runtime.EventEmitter.Once);
@@ -496,7 +496,7 @@ public sealed class ProcessStaticEmitter : IStaticTypeEmitterStrategy
 
             case "off":
             case "removeListener":
-                il.Emit(OpCodes.Call, runtime.GetProcessEventEmitter);
+                il.Emit(OpCodes.Call, runtime.Process.GetEventEmitter);
                 EmitStringArg(emitter, arguments, 0);
                 EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 1);
                 il.Emit(OpCodes.Callvirt, runtime.EventEmitter.Off);
@@ -506,7 +506,7 @@ public sealed class ProcessStaticEmitter : IStaticTypeEmitterStrategy
                 // Emit(string eventName, object[] args) -> bool. The payload
                 // array is built with the spread-aware builder so the facade's
                 // `emit(event, ...args)` forwarding works (#1149 pattern).
-                il.Emit(OpCodes.Call, runtime.GetProcessEventEmitter);
+                il.Emit(OpCodes.Call, runtime.Process.GetEventEmitter);
                 EmitStringArg(emitter, arguments, 0);
                 emitter.EmitArgsArrayWithSpread(
                     arguments.Count > 1 ? arguments.GetRange(1, arguments.Count - 1) : []);
@@ -516,14 +516,14 @@ public sealed class ProcessStaticEmitter : IStaticTypeEmitterStrategy
 
             case "removeAllListeners":
                 // RemoveAllListeners(string eventName) -> $EventEmitter
-                il.Emit(OpCodes.Call, runtime.GetProcessEventEmitter);
+                il.Emit(OpCodes.Call, runtime.Process.GetEventEmitter);
                 EmitStringArg(emitter, arguments, 0);
                 il.Emit(OpCodes.Callvirt, runtime.EventEmitter.RemoveAllListeners);
                 break;
 
             case "listenerCount":
                 // ListenerCount(string eventName) -> double
-                il.Emit(OpCodes.Call, runtime.GetProcessEventEmitter);
+                il.Emit(OpCodes.Call, runtime.Process.GetEventEmitter);
                 EmitStringArg(emitter, arguments, 0);
                 il.Emit(OpCodes.Callvirt, runtime.EventEmitter.ListenerCount);
                 il.Emit(OpCodes.Box, ctx.Types.Double);
@@ -531,33 +531,33 @@ public sealed class ProcessStaticEmitter : IStaticTypeEmitterStrategy
 
             case "listeners":
                 // Listeners(string eventName) -> TSArray
-                il.Emit(OpCodes.Call, runtime.GetProcessEventEmitter);
+                il.Emit(OpCodes.Call, runtime.Process.GetEventEmitter);
                 EmitStringArg(emitter, arguments, 0);
                 il.Emit(OpCodes.Callvirt, runtime.EventEmitter.Listeners);
                 break;
 
             case "eventNames":
                 // EventNames() -> TSArray
-                il.Emit(OpCodes.Call, runtime.GetProcessEventEmitter);
+                il.Emit(OpCodes.Call, runtime.Process.GetEventEmitter);
                 il.Emit(OpCodes.Callvirt, runtime.EventEmitter.EventNames);
                 break;
 
             case "prependListener":
-                il.Emit(OpCodes.Call, runtime.GetProcessEventEmitter);
+                il.Emit(OpCodes.Call, runtime.Process.GetEventEmitter);
                 EmitStringArg(emitter, arguments, 0);
                 EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 1);
                 il.Emit(OpCodes.Callvirt, runtime.EventEmitter.PrependListener);
                 break;
 
             case "prependOnceListener":
-                il.Emit(OpCodes.Call, runtime.GetProcessEventEmitter);
+                il.Emit(OpCodes.Call, runtime.Process.GetEventEmitter);
                 EmitStringArg(emitter, arguments, 0);
                 EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 1);
                 il.Emit(OpCodes.Callvirt, runtime.EventEmitter.PrependOnceListener);
                 break;
 
             case "setMaxListeners":
-                il.Emit(OpCodes.Call, runtime.GetProcessEventEmitter);
+                il.Emit(OpCodes.Call, runtime.Process.GetEventEmitter);
                 if (arguments.Count > 0)
                     emitter.EmitExpressionAsDouble(arguments[0]);
                 else
@@ -566,7 +566,7 @@ public sealed class ProcessStaticEmitter : IStaticTypeEmitterStrategy
                 break;
 
             case "getMaxListeners":
-                il.Emit(OpCodes.Call, runtime.GetProcessEventEmitter);
+                il.Emit(OpCodes.Call, runtime.Process.GetEventEmitter);
                 il.Emit(OpCodes.Callvirt, runtime.EventEmitter.GetMaxListeners);
                 il.Emit(OpCodes.Box, ctx.Types.Double);
                 break;

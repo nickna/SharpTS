@@ -1010,7 +1010,7 @@ public partial class ILEmitter
             EmitBoxIfNeeded(s.Value);
             var processValueTemp = IL.DeclareLocal(_ctx.Types.Object);
             IL.Emit(OpCodes.Stloc, processValueTemp);
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.GetProcessObject);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.Process.GetObject);
             IL.Emit(OpCodes.Castclass, _ctx.Runtime!.IHasFieldsInterface);
             IL.Emit(OpCodes.Ldstr, s.Name.Lexeme);
             IL.Emit(OpCodes.Ldloc, processValueTemp);
@@ -2783,15 +2783,15 @@ public partial class ILEmitter
             switch (streamName)
             {
                 case "stdin":
-                    IL.Emit(OpCodes.Call, _ctx.Runtime!.StdinIsTTY);
+                    IL.Emit(OpCodes.Call, _ctx.Runtime!.Process.StdinIsTTY);
                     SetStackUnknown();
                     return true;
                 case "stdout":
-                    IL.Emit(OpCodes.Call, _ctx.Runtime!.StdoutIsTTY);
+                    IL.Emit(OpCodes.Call, _ctx.Runtime!.Process.StdoutIsTTY);
                     SetStackUnknown();
                     return true;
                 case "stderr":
-                    IL.Emit(OpCodes.Call, _ctx.Runtime!.StderrIsTTY);
+                    IL.Emit(OpCodes.Call, _ctx.Runtime!.Process.StderrIsTTY);
                     SetStackUnknown();
                     return true;
             }

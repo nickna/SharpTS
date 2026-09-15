@@ -27,36 +27,6 @@ namespace SharpTS.Compilation;
 /// </summary>
 public partial class RuntimeEmitter
 {
-    // $Process type + members needed across emission steps
-    private MethodBuilder _processGetInstance = null!;
-    private FieldBuilder _processFieldsField = null!;
-
-    // $Runtime-hosted process state
-    private FieldBuilder _processThrowDeprecationField = null!;
-    private FieldBuilder _processTraceDeprecationField = null!;
-    private FieldBuilder _processNoDeprecationField = null!;
-    private FieldBuilder _processSourceMapsEnabledField = null!;
-    private FieldBuilder _processUmaskField = null!;
-    private FieldBuilder _processTitleField = null!;
-    private FieldBuilder _processHrtimeFnField = null!;
-    private FieldBuilder _processMemoryUsageFnField = null!;
-    private FieldBuilder _processReportField = null!;
-    private FieldBuilder _processSignalRegistrationsField = null!;
-
-    // Closure type for deferred (event-loop-scheduled) process event emission
-    private ConstructorBuilder _processEmitClosureCtor = null!;
-
-    // Standalone process-identity P/Invokes.
-    private MethodBuilder _processNtQueryInformationProcess = null!;
-    private MethodBuilder _processPosixGetPpid = null!;
-    private MethodBuilder _processPosixGetUid = null!;
-    private MethodBuilder _processPosixGetEuid = null!;
-    private MethodBuilder _processPosixGetGid = null!;
-    private MethodBuilder _processPosixGetEgid = null!;
-    private MethodBuilder _processPosixGetGroups = null!;
-    private MethodBuilder _processPosixSetUid = null!;
-    private MethodBuilder _processPosixSetGid = null!;
-
     private static readonly string[] _processTrappableSignals =
         ["SIGINT", "SIGTERM", "SIGHUP", "SIGQUIT", "SIGBREAK", "SIGWINCH"];
 
@@ -83,75 +53,75 @@ public partial class RuntimeEmitter
         // ---- Reserve signatures with cycles ($Process ⇄ late helpers) ----
         // (GetProcessObject is reserved in DefineRuntimeClassPhase1 — the
         // globalThis value-form path needs its signature before this runs.)
-        runtime.ProcessExit = runtimeTb.DefineMethod(
+        runtime.Process.Exit = runtimeTb.DefineMethod(
             "ProcessExit", MethodAttributes.Public | MethodAttributes.Static,
             _types.Object, [_types.Object]);
-        runtime.ProcessKill = runtimeTb.DefineMethod(
+        runtime.Process.Kill = runtimeTb.DefineMethod(
             "ProcessKill", MethodAttributes.Public | MethodAttributes.Static,
             _types.Object, [_types.Object, _types.Object]);
-        runtime.ProcessEmitWarning = runtimeTb.DefineMethod(
+        runtime.Process.EmitWarning = runtimeTb.DefineMethod(
             "ProcessEmitWarning", MethodAttributes.Public | MethodAttributes.Static,
             _types.Object, [_types.Object, _types.Object, _types.Object, _types.Object]);
-        runtime.ProcessRunLifecycle = runtimeTb.DefineMethod(
+        runtime.Process.RunLifecycle = runtimeTb.DefineMethod(
             "ProcessRunLifecycle", MethodAttributes.Public | MethodAttributes.Static,
             typeof(void), Type.EmptyTypes);
         if (_emitHosted)
         {
-            runtime.ProcessEmitHostedBeforeExit = runtimeTb.DefineMethod(
+            runtime.Process.RequireHosted().EmitBeforeExit = runtimeTb.DefineMethod(
                 "ProcessEmitHostedBeforeExit", MethodAttributes.Public | MethodAttributes.Static,
                 typeof(void), [_types.Int32]);
-            runtime.ProcessEmitHostedExit = runtimeTb.DefineMethod(
+            runtime.Process.RequireHosted().EmitExit = runtimeTb.DefineMethod(
                 "ProcessEmitHostedExit", MethodAttributes.Public | MethodAttributes.Static,
                 typeof(void), [_types.Int32]);
         }
-        runtime.ProcessRegisterSignal = runtimeTb.DefineMethod(
+        runtime.Process.RegisterSignal = runtimeTb.DefineMethod(
             "ProcessRegisterSignal", MethodAttributes.Public | MethodAttributes.Static,
             typeof(void), [_types.String]);
-        runtime.ProcessDispatchSignal = runtimeTb.DefineMethod(
+        runtime.Process.DispatchSignal = runtimeTb.DefineMethod(
             "ProcessDispatchSignal", MethodAttributes.Public | MethodAttributes.Static,
             typeof(void), [_types.String]);
 
         // ---- State fields on $Runtime ----
-        _processThrowDeprecationField = runtimeTb.DefineField("_processThrowDeprecation", _types.Boolean, FieldAttributes.Public | FieldAttributes.Static);
-        _processTraceDeprecationField = runtimeTb.DefineField("_processTraceDeprecation", _types.Boolean, FieldAttributes.Public | FieldAttributes.Static);
-        _processNoDeprecationField = runtimeTb.DefineField("_processNoDeprecation", _types.Boolean, FieldAttributes.Public | FieldAttributes.Static);
-        _processSourceMapsEnabledField = runtimeTb.DefineField("_processSourceMapsEnabled", _types.Boolean, FieldAttributes.Public | FieldAttributes.Static);
-        _processUmaskField = runtimeTb.DefineField("_processUmask", _types.Int32, FieldAttributes.Private | FieldAttributes.Static);
-        _processTitleField = runtimeTb.DefineField("_processTitle", _types.String, FieldAttributes.Private | FieldAttributes.Static);
-        _processHrtimeFnField = runtimeTb.DefineField("_processHrtimeFn", _types.Object, FieldAttributes.Private | FieldAttributes.Static);
-        _processMemoryUsageFnField = runtimeTb.DefineField("_processMemoryUsageFn", _types.Object, FieldAttributes.Private | FieldAttributes.Static);
-        _processReportField = runtimeTb.DefineField("_processReport", _types.Object, FieldAttributes.Private | FieldAttributes.Static);
-        _processSignalRegistrationsField = runtimeTb.DefineField("_processSignalRegistrations",
+        runtime.Process.ThrowDeprecationField = runtimeTb.DefineField("_processThrowDeprecation", _types.Boolean, FieldAttributes.Public | FieldAttributes.Static);
+        runtime.Process.TraceDeprecationField = runtimeTb.DefineField("_processTraceDeprecation", _types.Boolean, FieldAttributes.Public | FieldAttributes.Static);
+        runtime.Process.NoDeprecationField = runtimeTb.DefineField("_processNoDeprecation", _types.Boolean, FieldAttributes.Public | FieldAttributes.Static);
+        runtime.Process.SourceMapsEnabledField = runtimeTb.DefineField("_processSourceMapsEnabled", _types.Boolean, FieldAttributes.Public | FieldAttributes.Static);
+        runtime.Process.UmaskField = runtimeTb.DefineField("_processUmask", _types.Int32, FieldAttributes.Private | FieldAttributes.Static);
+        runtime.Process.TitleField = runtimeTb.DefineField("_processTitle", _types.String, FieldAttributes.Private | FieldAttributes.Static);
+        runtime.Process.HrtimeFnField = runtimeTb.DefineField("_processHrtimeFn", _types.Object, FieldAttributes.Private | FieldAttributes.Static);
+        runtime.Process.MemoryUsageFnField = runtimeTb.DefineField("_processMemoryUsageFn", _types.Object, FieldAttributes.Private | FieldAttributes.Static);
+        runtime.Process.ReportField = runtimeTb.DefineField("_processReport", _types.Object, FieldAttributes.Private | FieldAttributes.Static);
+        runtime.Process.SignalRegistrationsField = runtimeTb.DefineField("_processSignalRegistrations",
             _types.DictionaryStringObject, FieldAttributes.Private | FieldAttributes.Static);
 
         // ---- Value helpers (no $Process dependency) ----
         EmitProcessIdentityHelpers(moduleBuilder, runtimeTb, runtime);
-        EmitProcessTitleHelpers(runtimeTb, runtime);
-        EmitProcessJsonInfoHelpers(runtimeTb, runtime);
-        EmitProcessGetAllowedFlags(runtimeTb, runtime);
-        EmitProcessCpuUsage(runtimeTb, runtime);
-        EmitProcessResourceUsage(runtimeTb, runtime);
-        EmitProcessAvailableMemory(runtimeTb, runtime);
-        EmitProcessGetActiveResourcesInfo(runtimeTb, runtime);
-        EmitProcessHrtimeBigint(runtimeTb, runtime);
-        EmitProcessMemoryRss(runtimeTb, runtime);
+        EmitProcessTitleHelpers(runtimeTb, runtime.Process);
+        EmitProcessJsonInfoHelpers(runtimeTb, runtime.Process);
+        EmitProcessGetAllowedFlags(runtimeTb, runtime.Process);
+        EmitProcessCpuUsage(runtimeTb, runtime.Process);
+        EmitProcessResourceUsage(runtimeTb, runtime.Process);
+        EmitProcessAvailableMemory(runtimeTb, runtime.Process);
+        EmitProcessGetActiveResourcesInfo(runtimeTb, runtime.Process, runtime.EventLoop);
+        EmitProcessHrtimeBigint(runtimeTb, runtime.Process);
+        EmitProcessMemoryRss(runtimeTb, runtime.Process);
         EmitProcessFunctionWithMemberGetters(runtimeTb, runtime);
-        EmitProcessUmask(runtimeTb, runtime);
+        EmitProcessUmask(runtimeTb, runtime.Process);
         EmitProcessReportHelpers(runtimeTb, runtime);
 
         // ---- Deferred-emit closure + the $Process type itself ----
-        EmitProcessEmitClosureType(moduleBuilder, runtime);
+        EmitProcessEmitClosureType(moduleBuilder, runtime.Process, runtime.EventEmitter);
         EmitProcessType(moduleBuilder, runtime);
 
         // ---- Late helper bodies (reference $Process) ----
-        EmitGetProcessObjectBody(runtime);
+        EmitGetProcessObjectBody(runtime.Process);
         EmitProcessExitBody(runtime);
         EmitProcessKillBody(runtime);
         EmitProcessEmitWarningBody(runtime);
-        EmitProcessRunLifecycleBody(runtime);
+        EmitProcessRunLifecycleBody(runtime.Process, runtime.EventEmitter, runtime.EventLoop);
         if (_emitHosted)
-            EmitHostedProcessLifecycleBodies(runtime);
-        EmitProcessSignalMachinery(runtimeTb, runtime);
+            EmitHostedProcessLifecycleBodies(runtime.Process, runtime.EventEmitter);
+        EmitProcessSignalMachinery(runtimeTb, runtime.Process, runtime.EventLoop);
     }
 
     // =====================================================================
@@ -181,7 +151,7 @@ public partial class RuntimeEmitter
         var parentPidField = processInfoType.DefineField(
             "InheritedFromUniqueProcessId", _types.IntPtr, FieldAttributes.Public);
 
-        _processNtQueryInformationProcess = EmitTypeDefinitions.DefinePInvokeMethod(
+        runtime.Process.NtQueryInformationProcess = EmitTypeDefinitions.DefinePInvokeMethod(
             tb, "NtQueryInformationProcess", "ntdll.dll",
             MethodAttributes.Private | MethodAttributes.Static | MethodAttributes.PinvokeImpl,
             CallingConventions.Standard,
@@ -190,7 +160,7 @@ public partial class RuntimeEmitter
                 _types.Int32, _types.Int32.MakeByRefType()],
             CallingConvention.Winapi,
             CharSet.Unicode);
-        _processNtQueryInformationProcess.SetImplementationFlags(MethodImplAttributes.PreserveSig);
+        runtime.Process.NtQueryInformationProcess.SetImplementationFlags(MethodImplAttributes.PreserveSig);
 
         MethodBuilder DefinePosix(
             string entryPoint,
@@ -209,46 +179,46 @@ public partial class RuntimeEmitter
             return native;
         }
 
-        _processPosixGetPpid = DefinePosix("getppid", _types.Int32, Type.EmptyTypes);
-        _processPosixGetUid = DefinePosix("getuid", _types.UInt32, Type.EmptyTypes);
-        _processPosixGetEuid = DefinePosix("geteuid", _types.UInt32, Type.EmptyTypes);
-        _processPosixGetGid = DefinePosix("getgid", _types.UInt32, Type.EmptyTypes);
-        _processPosixGetEgid = DefinePosix("getegid", _types.UInt32, Type.EmptyTypes);
-        _processPosixGetGroups = DefinePosix(
+        runtime.Process.PosixGetPpid = DefinePosix("getppid", _types.Int32, Type.EmptyTypes);
+        runtime.Process.PosixGetUid = DefinePosix("getuid", _types.UInt32, Type.EmptyTypes);
+        runtime.Process.PosixGetEuid = DefinePosix("geteuid", _types.UInt32, Type.EmptyTypes);
+        runtime.Process.PosixGetGid = DefinePosix("getgid", _types.UInt32, Type.EmptyTypes);
+        runtime.Process.PosixGetEgid = DefinePosix("getegid", _types.UInt32, Type.EmptyTypes);
+        runtime.Process.PosixGetGroups = DefinePosix(
             "getgroups", _types.Int32,
             [_types.Int32, _types.MakeArrayType(_types.UInt32)]);
-        _processPosixSetUid = DefinePosix(
+        runtime.Process.PosixSetUid = DefinePosix(
             "setuid", _types.Int32, [_types.UInt32]);
-        _processPosixSetGid = DefinePosix(
+        runtime.Process.PosixSetGid = DefinePosix(
             "setgid", _types.Int32, [_types.UInt32]);
 
-        EmitProcessGetPpid(tb, runtime, processInfoType, parentPidField);
-        EmitProcessPosixNumberGetter(tb, "ProcessGetUid", _processPosixGetUid,
-            m => runtime.ProcessGetUid = m);
-        EmitProcessPosixNumberGetter(tb, "ProcessGetEuid", _processPosixGetEuid,
-            m => runtime.ProcessGetEuid = m);
-        EmitProcessPosixNumberGetter(tb, "ProcessGetGid", _processPosixGetGid,
-            m => runtime.ProcessGetGid = m);
-        EmitProcessPosixNumberGetter(tb, "ProcessGetEgid", _processPosixGetEgid,
-            m => runtime.ProcessGetEgid = m);
+        EmitProcessGetPpid(tb, runtime.Process, processInfoType, parentPidField);
+        EmitProcessPosixNumberGetter(tb, "ProcessGetUid", runtime.Process.PosixGetUid,
+            m => runtime.Process.GetUid = m);
+        EmitProcessPosixNumberGetter(tb, "ProcessGetEuid", runtime.Process.PosixGetEuid,
+            m => runtime.Process.GetEuid = m);
+        EmitProcessPosixNumberGetter(tb, "ProcessGetGid", runtime.Process.PosixGetGid,
+            m => runtime.Process.GetGid = m);
+        EmitProcessPosixNumberGetter(tb, "ProcessGetEgid", runtime.Process.PosixGetEgid,
+            m => runtime.Process.GetEgid = m);
         EmitProcessGetGroups(tb, runtime);
         EmitProcessSetIdentity(tb, runtime, "ProcessSetUid", "setuid",
-            _processPosixSetUid, m => runtime.ProcessSetUid = m);
+            runtime.Process.PosixSetUid, m => runtime.Process.SetUid = m);
         EmitProcessSetIdentity(tb, runtime, "ProcessSetGid", "setgid",
-            _processPosixSetGid, m => runtime.ProcessSetGid = m);
+            runtime.Process.PosixSetGid, m => runtime.Process.SetGid = m);
 
         processInfoType.CreateType();
     }
 
     private void EmitProcessGetPpid(
         TypeBuilder tb,
-        EmittedRuntime runtime,
+        EmittedProcessRuntime process,
         Type processInfoType,
         FieldBuilder parentPidField)
     {
         var method = tb.DefineMethod("ProcessGetPpid",
             MethodAttributes.Public | MethodAttributes.Static, _types.Object, Type.EmptyTypes);
-        runtime.ProcessGetPpid = method;
+        process.GetPpid = method;
 
         var il = method.GetILGenerator();
         var result = il.DeclareLocal(_types.Object);
@@ -273,7 +243,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_6);
         il.Emit(OpCodes.Mul);
         il.Emit(OpCodes.Ldloca, returnLength);
-        il.Emit(OpCodes.Call, _processNtQueryInformationProcess);
+        il.Emit(OpCodes.Call, process.NtQueryInformationProcess);
         il.Emit(OpCodes.Brfalse, windowsSuccess);
         il.Emit(OpCodes.Leave, fallback);
         il.MarkLabel(windowsSuccess);
@@ -291,7 +261,7 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(posix);
         il.BeginExceptionBlock();
-        il.Emit(OpCodes.Call, _processPosixGetPpid);
+        il.Emit(OpCodes.Call, process.PosixGetPpid);
         il.Emit(OpCodes.Conv_R8);
         il.Emit(OpCodes.Box, _types.Double);
         il.Emit(OpCodes.Stloc, result);
@@ -334,7 +304,7 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             Type.EmptyTypes);
-        runtime.ProcessGetGroups = method;
+        runtime.Process.GetGroups = method;
         var il = method.GetILGenerator();
         var buffer = il.DeclareLocal(_types.MakeArrayType(_types.UInt32));
         var count = il.DeclareLocal(_types.Int32);
@@ -349,7 +319,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, buffer);
         il.Emit(OpCodes.Ldc_I4, 128);
         il.Emit(OpCodes.Ldloc, buffer);
-        il.Emit(OpCodes.Call, _processPosixGetGroups);
+        il.Emit(OpCodes.Call, runtime.Process.PosixGetGroups);
         il.Emit(OpCodes.Stloc, count);
         il.Emit(OpCodes.Ldloc, count);
         il.Emit(OpCodes.Ldc_I4_0);
@@ -438,17 +408,17 @@ public partial class RuntimeEmitter
     /// An assigned title wins; otherwise the process name. Setting best-effort
     /// syncs Console.Title on Windows.
     /// </summary>
-    private void EmitProcessTitleHelpers(TypeBuilder tb, EmittedRuntime runtime)
+    private void EmitProcessTitleHelpers(TypeBuilder tb, EmittedProcessRuntime process)
     {
         var getter = tb.DefineMethod("ProcessGetTitle",
             MethodAttributes.Public | MethodAttributes.Static, _types.Object, Type.EmptyTypes);
-        runtime.ProcessGetTitle = getter;
+        process.GetTitle = getter;
         {
             var il = getter.GetILGenerator();
             var useProcessName = il.DefineLabel();
-            il.Emit(OpCodes.Ldsfld, _processTitleField);
+            il.Emit(OpCodes.Ldsfld, process.TitleField);
             il.Emit(OpCodes.Brfalse, useProcessName);
-            il.Emit(OpCodes.Ldsfld, _processTitleField);
+            il.Emit(OpCodes.Ldsfld, process.TitleField);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(useProcessName);
             il.Emit(OpCodes.Call, _types.GetMethodNoParams(_types.Process, "GetCurrentProcess"));
@@ -458,7 +428,7 @@ public partial class RuntimeEmitter
 
         var setter = tb.DefineMethod("ProcessSetTitle",
             MethodAttributes.Public | MethodAttributes.Static, typeof(void), [_types.Object]);
-        runtime.ProcessSetTitle = setter;
+        process.SetTitle = setter;
         {
             var il = setter.GetILGenerator();
             var titleLocal = il.DeclareLocal(_types.String);
@@ -471,7 +441,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Object, "ToString"));
             il.Emit(OpCodes.Stloc, titleLocal);
             il.Emit(OpCodes.Ldloc, titleLocal);
-            il.Emit(OpCodes.Stsfld, _processTitleField);
+            il.Emit(OpCodes.Stsfld, process.TitleField);
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             {
                 // try { Console.Title = title } catch { } — no console attached
@@ -494,7 +464,7 @@ public partial class RuntimeEmitter
     /// runtime platform is an established emitter assumption
     /// (EmitPlatformString does the same).
     /// </summary>
-    private void EmitProcessJsonInfoHelpers(TypeBuilder tb, EmittedRuntime runtime)
+    private void EmitProcessJsonInfoHelpers(TypeBuilder tb, EmittedProcessRuntime process)
     {
         string arch = RuntimeInformation.ProcessArchitecture switch
         {
@@ -506,23 +476,23 @@ public partial class RuntimeEmitter
         };
         string sharptsVersion = typeof(RuntimeEmitter).Assembly.GetName().Version?.ToString(3) ?? "0.0.0";
 
-        runtime.ProcessGetVersions = EmitDictConstantGetter(tb, "ProcessGetVersions",
+        process.GetVersions = EmitDictConstantGetter(tb, "ProcessGetVersions",
         [
             ("node", Runtime.BuiltIns.ProcessBuiltIns.NodeVersion),
             ("sharpts", sharptsVersion),
             ("dotnet", Environment.Version.ToString()),
         ]);
-        runtime.ProcessGetRelease = EmitDictConstantGetter(tb, "ProcessGetRelease",
+        process.GetRelease = EmitDictConstantGetter(tb, "ProcessGetRelease",
         [
             ("name", "node"), ("sourceUrl", ""), ("headersUrl", ""),
         ]);
-        runtime.ProcessGetFeatures = EmitDictConstantGetter(tb, "ProcessGetFeatures",
+        process.GetFeatures = EmitDictConstantGetter(tb, "ProcessGetFeatures",
         [
             ("inspector", false), ("debug", false), ("uv", true), ("ipv6", true),
             ("tls", true), ("tls_alpn", true), ("tls_sni", true), ("tls_ocsp", false),
             ("cached_builtins", true), ("typescript", "strip"),
         ]);
-        runtime.ProcessGetConfig = EmitDictConstantGetter(tb, "ProcessGetConfig",
+        process.GetConfig = EmitDictConstantGetter(tb, "ProcessGetConfig",
         [
             ("target_defaults", (object)Array.Empty<(string, object)>()),
             ("variables", (object)new (string, object)[]
@@ -535,7 +505,7 @@ public partial class RuntimeEmitter
         var execArgvCache = tb.DefineField("_cacheProcessExecArgv", _types.Object, FieldAttributes.Private | FieldAttributes.Static);
         var execArgv = tb.DefineMethod("ProcessGetExecArgv",
             MethodAttributes.Public | MethodAttributes.Static, _types.Object, Type.EmptyTypes);
-        runtime.ProcessGetExecArgv = execArgv;
+        process.GetExecArgv = execArgv;
         {
             var il = execArgv.GetILGenerator();
             var create = il.DefineLabel();
@@ -620,12 +590,12 @@ public partial class RuntimeEmitter
     /// (the compiled Set shape) — SharpTS honors no NODE_OPTIONS flags, so
     /// allowedNodeEnvironmentFlags.has(x) is correctly false for everything.
     /// </summary>
-    private void EmitProcessGetAllowedFlags(TypeBuilder tb, EmittedRuntime runtime)
+    private void EmitProcessGetAllowedFlags(TypeBuilder tb, EmittedProcessRuntime process)
     {
         var cache = tb.DefineField("_cacheAllowedFlags", _types.Object, FieldAttributes.Private | FieldAttributes.Static);
         var method = tb.DefineMethod("ProcessGetAllowedFlags",
             MethodAttributes.Public | MethodAttributes.Static, _types.Object, Type.EmptyTypes);
-        runtime.ProcessGetAllowedFlags = method;
+        process.GetAllowedFlags = method;
 
         var il = method.GetILGenerator();
         var create = il.DefineLabel();
@@ -643,11 +613,11 @@ public partial class RuntimeEmitter
     /// <summary>
     /// ProcessCpuUsage(object prev) → Dictionary { user, system } µs.
     /// </summary>
-    private void EmitProcessCpuUsage(TypeBuilder tb, EmittedRuntime runtime)
+    private void EmitProcessCpuUsage(TypeBuilder tb, EmittedProcessRuntime process)
     {
         var method = tb.DefineMethod("ProcessCpuUsage",
             MethodAttributes.Public | MethodAttributes.Static, _types.Object, [_types.Object]);
-        runtime.ProcessCpuUsage = method;
+        process.CpuUsage = method;
 
         var il = method.GetILGenerator();
         var procLocal = il.DeclareLocal(_types.Process);
@@ -753,11 +723,11 @@ public partial class RuntimeEmitter
     /// ProcessResourceUsage() → Dictionary in the Node shape; .NET-derivable
     /// values populated, libuv counters 0.
     /// </summary>
-    private void EmitProcessResourceUsage(TypeBuilder tb, EmittedRuntime runtime)
+    private void EmitProcessResourceUsage(TypeBuilder tb, EmittedProcessRuntime process)
     {
         var method = tb.DefineMethod("ProcessResourceUsage",
             MethodAttributes.Public | MethodAttributes.Static, _types.Object, Type.EmptyTypes);
-        runtime.ProcessResourceUsage = method;
+        process.ResourceUsage = method;
 
         var il = method.GetILGenerator();
         var procLocal = il.DeclareLocal(_types.Process);
@@ -822,11 +792,11 @@ public partial class RuntimeEmitter
     /// <summary>
     /// ProcessAvailableMemory() → object(double): GC's total available minus load.
     /// </summary>
-    private void EmitProcessAvailableMemory(TypeBuilder tb, EmittedRuntime runtime)
+    private void EmitProcessAvailableMemory(TypeBuilder tb, EmittedProcessRuntime process)
     {
         var method = tb.DefineMethod("ProcessAvailableMemory",
             MethodAttributes.Public | MethodAttributes.Static, _types.Object, Type.EmptyTypes);
-        runtime.ProcessAvailableMemory = method;
+        process.AvailableMemory = method;
 
         var il = method.GetILGenerator();
         var infoLocal = il.DeclareLocal(typeof(GCMemoryInfo));
@@ -849,11 +819,11 @@ public partial class RuntimeEmitter
     /// ProcessGetActiveResourcesInfo() → List with one "Timeout" entry per
     /// active event-loop handle (approximation — same as the interpreter).
     /// </summary>
-    private void EmitProcessGetActiveResourcesInfo(TypeBuilder tb, EmittedRuntime runtime)
+    private void EmitProcessGetActiveResourcesInfo(TypeBuilder tb, EmittedProcessRuntime process, EmittedEventLoopRuntime eventLoop)
     {
         var method = tb.DefineMethod("ProcessGetActiveResourcesInfo",
             MethodAttributes.Public | MethodAttributes.Static, _types.Object, Type.EmptyTypes);
-        runtime.ProcessGetActiveResourcesInfoM = method;
+        process.GetActiveResourcesInfo = method;
 
         var il = method.GetILGenerator();
         var listLocal = il.DeclareLocal(_types.ListOfObject);
@@ -866,8 +836,8 @@ public partial class RuntimeEmitter
         // count = $EventLoop.GetInstance().HasPendingWork() ? approximate handles : 0
         // The active-handle count itself is private; use HasPendingWork to decide
         // between 0 and 1 entries per pending state. Approximation documented.
-        il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
-        il.Emit(OpCodes.Callvirt, runtime.EventLoop.HasPendingWork);
+        il.Emit(OpCodes.Call, eventLoop.GetInstance);
+        il.Emit(OpCodes.Callvirt, eventLoop.HasPendingWork);
         var noneLabel = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, noneLabel);
         il.Emit(OpCodes.Ldc_I4_1);
@@ -905,16 +875,16 @@ public partial class RuntimeEmitter
     /// ProcessHrtimeBigint() → object(BigInteger): monotonic nanoseconds since
     /// process start (same baseline as uptime/hrtime).
     /// </summary>
-    private void EmitProcessHrtimeBigint(TypeBuilder tb, EmittedRuntime runtime)
+    private void EmitProcessHrtimeBigint(TypeBuilder tb, EmittedProcessRuntime process)
     {
         var method = tb.DefineMethod("ProcessHrtimeBigint",
             MethodAttributes.Public | MethodAttributes.Static, _types.Object, Type.EmptyTypes);
-        runtime.ProcessHrtimeBigint = method;
+        process.HrtimeBigint = method;
 
         var il = method.GetILGenerator();
         // nanos = (GetTimestamp() - baseline) * (1e9 / Frequency) as double → long
         il.Emit(OpCodes.Call, _types.GetMethodNoParams(_types.Stopwatch, "GetTimestamp"));
-        il.Emit(OpCodes.Ldsfld, runtime.ProcessUptimeBaselineField);
+        il.Emit(OpCodes.Ldsfld, process.UptimeBaselineField);
         il.Emit(OpCodes.Sub);
         il.Emit(OpCodes.Conv_R8);
         il.Emit(OpCodes.Ldc_R8, 1_000_000_000.0);
@@ -929,11 +899,11 @@ public partial class RuntimeEmitter
     }
 
     /// <summary>ProcessMemoryRss() → object(double): the working set.</summary>
-    private void EmitProcessMemoryRss(TypeBuilder tb, EmittedRuntime runtime)
+    private void EmitProcessMemoryRss(TypeBuilder tb, EmittedProcessRuntime process)
     {
         var method = tb.DefineMethod("ProcessMemoryRss",
             MethodAttributes.Public | MethodAttributes.Static, _types.Object, Type.EmptyTypes);
-        runtime.ProcessMemoryRss = method;
+        process.MemoryRss = method;
 
         var il = method.GetILGenerator();
         il.Emit(OpCodes.Call, _types.GetMethodNoParams(_types.Process, "GetCurrentProcess"));
@@ -951,12 +921,12 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitProcessFunctionWithMemberGetters(TypeBuilder tb, EmittedRuntime runtime)
     {
-        runtime.ProcessGetHrtimeFn = EmitFunctionWithMemberGetter(tb, runtime,
-            "ProcessGetHrtimeFn", _processHrtimeFnField,
-            runtime.ProcessHrtime, "bigint", runtime.ProcessHrtimeBigint);
-        runtime.ProcessGetMemoryUsageFn = EmitFunctionWithMemberGetter(tb, runtime,
-            "ProcessGetMemoryUsageFn", _processMemoryUsageFnField,
-            runtime.ProcessMemoryUsage, "rss", runtime.ProcessMemoryRss);
+        runtime.Process.GetHrtimeFn = EmitFunctionWithMemberGetter(tb, runtime,
+            "ProcessGetHrtimeFn", runtime.Process.HrtimeFnField,
+            runtime.Process.Hrtime, "bigint", runtime.Process.HrtimeBigint);
+        runtime.Process.GetMemoryUsageFn = EmitFunctionWithMemberGetter(tb, runtime,
+            "ProcessGetMemoryUsageFn", runtime.Process.MemoryUsageFnField,
+            runtime.Process.MemoryUsage, "rss", runtime.Process.MemoryRss);
     }
 
     private MethodBuilder EmitFunctionWithMemberGetter(
@@ -1005,11 +975,11 @@ public partial class RuntimeEmitter
     /// ProcessUmask(object mask) → object(double): stored-value semantics
     /// (default 0o22). Get with no/undefined arg; set returns the previous.
     /// </summary>
-    private void EmitProcessUmask(TypeBuilder tb, EmittedRuntime runtime)
+    private void EmitProcessUmask(TypeBuilder tb, EmittedProcessRuntime process)
     {
         var method = tb.DefineMethod("ProcessUmask",
             MethodAttributes.Public | MethodAttributes.Static, _types.Object, [_types.Object]);
-        runtime.ProcessUmask = method;
+        process.Umask = method;
 
         var il = method.GetILGenerator();
         var prevLocal = il.DeclareLocal(_types.Int32);
@@ -1023,12 +993,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldsfld, initField);
         il.Emit(OpCodes.Brtrue, initDone);
         il.Emit(OpCodes.Ldc_I4, 0x12); // 0o22
-        il.Emit(OpCodes.Stsfld, _processUmaskField);
+        il.Emit(OpCodes.Stsfld, process.UmaskField);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Stsfld, initField);
         il.MarkLabel(initDone);
 
-        il.Emit(OpCodes.Ldsfld, _processUmaskField);
+        il.Emit(OpCodes.Ldsfld, process.UmaskField);
         il.Emit(OpCodes.Stloc, prevLocal);
 
         // set path: number arg
@@ -1039,7 +1009,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Unbox_Any, _types.Double);
         il.Emit(OpCodes.Conv_I4);
-        il.Emit(OpCodes.Stsfld, _processUmaskField);
+        il.Emit(OpCodes.Stsfld, process.UmaskField);
         il.MarkLabel(getOnly);
 
         il.Emit(OpCodes.Ldloc, prevLocal);
@@ -1163,12 +1133,12 @@ public partial class RuntimeEmitter
             // resourceUsage + environmentVariables from live helpers
             il.Emit(OpCodes.Ldloc, rootLocal);
             il.Emit(OpCodes.Ldstr, "resourceUsage");
-            il.Emit(OpCodes.Call, runtime.ProcessResourceUsage);
+            il.Emit(OpCodes.Call, runtime.Process.ResourceUsage);
             il.Emit(OpCodes.Callvirt, setItem);
 
             il.Emit(OpCodes.Ldloc, rootLocal);
             il.Emit(OpCodes.Ldstr, "environmentVariables");
-            il.Emit(OpCodes.Call, runtime.ProcessGetEnv);
+            il.Emit(OpCodes.Call, runtime.Process.GetEnv);
             il.Emit(OpCodes.Callvirt, setItem);
 
             // javascriptHeap live values
@@ -1251,13 +1221,13 @@ public partial class RuntimeEmitter
     // ---- ProcessGetReport() → cached Dictionary (config + fns) ----
         var get = tb.DefineMethod("ProcessGetReport",
             MethodAttributes.Public | MethodAttributes.Static, _types.Object, Type.EmptyTypes);
-        runtime.ProcessGetReport = get;
+        runtime.Process.GetReport = get;
         {
             var il = get.GetILGenerator();
             var create = il.DefineLabel();
-            il.Emit(OpCodes.Ldsfld, _processReportField);
+            il.Emit(OpCodes.Ldsfld, runtime.Process.ReportField);
             il.Emit(OpCodes.Brfalse, create);
-            il.Emit(OpCodes.Ldsfld, _processReportField);
+            il.Emit(OpCodes.Ldsfld, runtime.Process.ReportField);
             il.Emit(OpCodes.Ret);
 
             il.MarkLabel(create);
@@ -1299,8 +1269,8 @@ public partial class RuntimeEmitter
             AddFn("writeReport", write);
 
             il.Emit(OpCodes.Ldloc, dictLocal);
-            il.Emit(OpCodes.Stsfld, _processReportField);
-            il.Emit(OpCodes.Ldsfld, _processReportField);
+            il.Emit(OpCodes.Stsfld, runtime.Process.ReportField);
+            il.Emit(OpCodes.Ldsfld, runtime.Process.ReportField);
             il.Emit(OpCodes.Ret);
         }
     }
@@ -1309,7 +1279,7 @@ public partial class RuntimeEmitter
     // $ProcessEmitClosure — deferred process-event emission on the event loop
     // =====================================================================
 
-    private void EmitProcessEmitClosureType(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private void EmitProcessEmitClosureType(ModuleBuilder moduleBuilder, EmittedProcessRuntime process, EmittedEventEmitterRuntime events)
     {
         var tb = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$ProcessEmitClosure",
@@ -1321,7 +1291,7 @@ public partial class RuntimeEmitter
 
         var ctor = tb.DefineConstructor(MethodAttributes.Public, CallingConventions.Standard,
             [_types.String, _types.Object]);
-        _processEmitClosureCtor = ctor;
+        process.EmitClosureCtor = ctor;
         {
             var il = ctor.GetILGenerator();
             il.Emit(OpCodes.Ldarg_0);
@@ -1336,12 +1306,12 @@ public partial class RuntimeEmitter
         }
 
         var invoke = tb.DefineMethod("Invoke", MethodAttributes.Public, typeof(void), Type.EmptyTypes);
-        runtime.ProcessEmitClosureInvoke = invoke;
+        process.EmitClosureInvoke = invoke;
         {
             var il = invoke.GetILGenerator();
             // ((EventEmitter)GetProcessObject()).Emit(_event, [_arg]) — discard result
-            il.Emit(OpCodes.Call, runtime.GetProcessObject);
-            il.Emit(OpCodes.Castclass, runtime.EventEmitter.Type);
+            il.Emit(OpCodes.Call, process.GetObject);
+            il.Emit(OpCodes.Castclass, events.Type);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldfld, eventField);
             il.Emit(OpCodes.Ldc_I4_1);
@@ -1351,7 +1321,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldfld, argField);
             il.Emit(OpCodes.Stelem_Ref);
-            il.Emit(OpCodes.Callvirt, runtime.EventEmitter.Emit);
+            il.Emit(OpCodes.Callvirt, events.Emit);
             il.Emit(OpCodes.Pop);
             il.Emit(OpCodes.Ret);
         }
@@ -1371,7 +1341,7 @@ public partial class RuntimeEmitter
             runtime.EventEmitter.Type);
         EmitTypeDefinitions.AddInterfaceImplementation(tb, runtime.IHasFieldsInterface);
 
-        _processFieldsField = tb.DefineField("_fields", _types.DictionaryStringObject, FieldAttributes.Private);
+        runtime.Process.FieldsField = tb.DefineField("_fields", _types.DictionaryStringObject, FieldAttributes.Private);
         var instanceField = tb.DefineField("_instance", tb, FieldAttributes.Private | FieldAttributes.Static);
 
         // ctor: base(); _fields = new()
@@ -1382,14 +1352,14 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Call, runtime.EventEmitter.Ctor);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.DictionaryStringObject));
-            il.Emit(OpCodes.Stfld, _processFieldsField);
+            il.Emit(OpCodes.Stfld, runtime.Process.FieldsField);
             il.Emit(OpCodes.Ret);
         }
 
         // static GetInstance()
         var getInstance = tb.DefineMethod("GetInstance",
             MethodAttributes.Public | MethodAttributes.Static, tb, Type.EmptyTypes);
-        _processGetInstance = getInstance;
+        runtime.Process.GetInstance = getInstance;
         {
             var il = getInstance.GetILGenerator();
             var create = il.DefineLabel();
@@ -1405,9 +1375,9 @@ public partial class RuntimeEmitter
         }
 
         EmitProcessHasFieldsImplementation(tb, runtime);
-        EmitProcessInstanceProperties(tb, runtime);
-        EmitProcessInstanceMethods(tb, runtime);
-        EmitProcessOnListenerAdded(tb, runtime);
+        EmitProcessInstanceProperties(tb, runtime.Process);
+        EmitProcessInstanceMethods(tb, runtime.Process);
+        EmitProcessOnListenerAdded(tb, runtime.Process, runtime.EventEmitter);
 
         // ToString parity with the interpreter's SharpTSProcess.
         var toString = tb.DefineMethod("ToString",
@@ -1439,7 +1409,7 @@ public partial class RuntimeEmitter
         {
             var il = fieldsGetter.GetILGenerator();
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldfld, _processFieldsField);
+            il.Emit(OpCodes.Ldfld, runtime.Process.FieldsField);
             il.Emit(OpCodes.Ret);
         }
         var fieldsProp = tb.DefineProperty("Fields", PropertyAttributes.None, _types.DictionaryStringObject, null);
@@ -1461,7 +1431,7 @@ public partial class RuntimeEmitter
             // expando
             var notExpando = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldfld, _processFieldsField);
+            il.Emit(OpCodes.Ldfld, runtime.Process.FieldsField);
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Ldloca, valueLocal);
             il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "TryGetValue"));
@@ -1542,7 +1512,7 @@ public partial class RuntimeEmitter
 
             il.MarkLabel(expando);
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldfld, _processFieldsField);
+            il.Emit(OpCodes.Ldfld, runtime.Process.FieldsField);
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Ldarg_2);
             il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item"));
@@ -1561,7 +1531,7 @@ public partial class RuntimeEmitter
             var pascalLocal = il.DeclareLocal(_types.String);
 
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldfld, _processFieldsField);
+            il.Emit(OpCodes.Ldfld, runtime.Process.FieldsField);
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "ContainsKey", _types.String));
             il.Emit(OpCodes.Brtrue, trueLabel);
@@ -1598,7 +1568,7 @@ public partial class RuntimeEmitter
     /// object; getters delegate to $Runtime helpers). Dynamic reads resolve
     /// them through GetProperty's reflection path.
     /// </summary>
-    private void EmitProcessInstanceProperties(TypeBuilder tb, EmittedRuntime runtime)
+    private void EmitProcessInstanceProperties(TypeBuilder tb, EmittedProcessRuntime process)
     {
         void Define(string name, Action<ILGenerator> emitGet, Action<ILGenerator>? emitSet = null)
         {
@@ -1644,11 +1614,11 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Conv_R8);
             il.Emit(OpCodes.Box, _types.Double);
         });
-        Define("Ppid", il => il.Emit(OpCodes.Call, runtime.ProcessGetPpid));
+        Define("Ppid", il => il.Emit(OpCodes.Call, process.GetPpid));
         Define("Version", il => il.Emit(OpCodes.Ldstr, "v" + Runtime.BuiltIns.ProcessBuiltIns.NodeVersion));
-        Define("Versions", il => il.Emit(OpCodes.Call, runtime.ProcessGetVersions));
-        Define("Env", il => il.Emit(OpCodes.Call, runtime.ProcessGetEnv));
-        Define("Argv", il => il.Emit(OpCodes.Call, runtime.ProcessGetArgv));
+        Define("Versions", il => il.Emit(OpCodes.Call, process.GetVersions));
+        Define("Env", il => il.Emit(OpCodes.Call, process.GetEnv));
+        Define("Argv", il => il.Emit(OpCodes.Call, process.GetArgv));
         Define("Argv0", il =>
         {
             il.Emit(OpCodes.Call, _types.GetMethodNoParams(_types.Environment, "GetCommandLineArgs"));
@@ -1667,7 +1637,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldelem_Ref);
             il.MarkLabel(haveIt);
         });
-        Define("ExecArgv", il => il.Emit(OpCodes.Call, runtime.ProcessGetExecArgv));
+        Define("ExecArgv", il => il.Emit(OpCodes.Call, process.GetExecArgv));
         Define("ExitCode",
             il =>
             {
@@ -1693,37 +1663,40 @@ public partial class RuntimeEmitter
                 il.Emit(OpCodes.Call, _types.GetProperty(_types.Environment, "ExitCode").SetMethod!);
             });
         Define("Title",
-            il => il.Emit(OpCodes.Call, runtime.ProcessGetTitle),
+            il => il.Emit(OpCodes.Call, process.GetTitle),
             il =>
             {
                 il.Emit(OpCodes.Ldarg_1);
-                il.Emit(OpCodes.Call, runtime.ProcessSetTitle);
+                il.Emit(OpCodes.Call, process.SetTitle);
             });
-        Define("Config", il => il.Emit(OpCodes.Call, runtime.ProcessGetConfig));
-        Define("Release", il => il.Emit(OpCodes.Call, runtime.ProcessGetRelease));
-        Define("Features", il => il.Emit(OpCodes.Call, runtime.ProcessGetFeatures));
+        Define("Config", il => il.Emit(OpCodes.Call, process.GetConfig));
+        Define("Release", il => il.Emit(OpCodes.Call, process.GetRelease));
+        Define("Features", il => il.Emit(OpCodes.Call, process.GetFeatures));
         Define("DebugPort", il =>
         {
             il.Emit(OpCodes.Ldc_R8, 9229.0);
             il.Emit(OpCodes.Box, _types.Double);
         });
-        Define("AllowedNodeEnvironmentFlags", il => il.Emit(OpCodes.Call, runtime.ProcessGetAllowedFlags));
+        Define("AllowedNodeEnvironmentFlags", il => il.Emit(OpCodes.Call, process.GetAllowedFlags));
         Define("Stdin", il =>
         {
-            if (runtime.GetStdin is null) il.Emit(OpCodes.Ldnull);
-            else il.Emit(OpCodes.Call, runtime.GetStdin);
+            var getStdin = process.Streams?.GetStdin;
+            if (getStdin is null) il.Emit(OpCodes.Ldnull);
+            else il.Emit(OpCodes.Call, getStdin);
         });
         Define("Stdout", il =>
         {
-            if (runtime.GetStdout is null) il.Emit(OpCodes.Ldnull);
-            else il.Emit(OpCodes.Call, runtime.GetStdout);
+            var getStdout = process.Streams?.GetStdout;
+            if (getStdout is null) il.Emit(OpCodes.Ldnull);
+            else il.Emit(OpCodes.Call, getStdout);
         });
         Define("Stderr", il =>
         {
-            if (runtime.GetStderr is null) il.Emit(OpCodes.Ldnull);
-            else il.Emit(OpCodes.Call, runtime.GetStderr);
+            var getStderr = process.Streams?.GetStderr;
+            if (getStderr is null) il.Emit(OpCodes.Ldnull);
+            else il.Emit(OpCodes.Call, getStderr);
         });
-        Define("Report", il => il.Emit(OpCodes.Call, runtime.ProcessGetReport));
+        Define("Report", il => il.Emit(OpCodes.Call, process.GetReport));
         Define("Connected", il =>
         {
             // Compiled fork children run interpreted (see child_process #1017) —
@@ -1731,9 +1704,9 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldc_I4_0);
             il.Emit(OpCodes.Box, _types.Boolean);
         });
-        Define("Hrtime", il => il.Emit(OpCodes.Call, runtime.ProcessGetHrtimeFn));
-        Define("MemoryUsage", il => il.Emit(OpCodes.Call, runtime.ProcessGetMemoryUsageFn));
-        Define("NextTick", il => il.Emit(OpCodes.Call, runtime.ProcessGetNextTick));
+        Define("Hrtime", il => il.Emit(OpCodes.Call, process.GetHrtimeFn));
+        Define("MemoryUsage", il => il.Emit(OpCodes.Call, process.GetMemoryUsageFn));
+        Define("NextTick", il => il.Emit(OpCodes.Call, process.GetNextTick));
 
         void DefineFlag(string name, FieldBuilder field)
         {
@@ -1759,10 +1732,10 @@ public partial class RuntimeEmitter
                     il.Emit(OpCodes.Stsfld, field);
                 });
         }
-        DefineFlag("ThrowDeprecation", _processThrowDeprecationField);
-        DefineFlag("TraceDeprecation", _processTraceDeprecationField);
-        DefineFlag("NoDeprecation", _processNoDeprecationField);
-        DefineFlag("SourceMapsEnabled", _processSourceMapsEnabledField);
+        DefineFlag("ThrowDeprecation", process.ThrowDeprecationField);
+        DefineFlag("TraceDeprecation", process.TraceDeprecationField);
+        DefineFlag("NoDeprecation", process.NoDeprecationField);
+        DefineFlag("SourceMapsEnabled", process.SourceMapsEnabledField);
     }
 
     /// <summary>
@@ -1770,7 +1743,7 @@ public partial class RuntimeEmitter
     /// $Runtime statics). Dynamic invocation resolves them via GetProperty's
     /// method-wrapper path or the generic reflection dispatch.
     /// </summary>
-    private void EmitProcessInstanceMethods(TypeBuilder tb, EmittedRuntime runtime)
+    private void EmitProcessInstanceMethods(TypeBuilder tb, EmittedProcessRuntime process)
     {
         MethodBuilder Define(string name, Type[] parameters, Action<ILGenerator> body)
         {
@@ -1795,12 +1768,12 @@ public partial class RuntimeEmitter
         Define("Exit", [_types.Object], il =>
         {
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Call, runtime.ProcessExit);
+            il.Emit(OpCodes.Call, process.Exit);
         });
 
         Define("Uptime", Type.EmptyTypes, il =>
         {
-            il.Emit(OpCodes.Call, runtime.ProcessUptime);
+            il.Emit(OpCodes.Call, process.Uptime);
             il.Emit(OpCodes.Box, _types.Double);
         });
 
@@ -1808,7 +1781,7 @@ public partial class RuntimeEmitter
         {
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Ldarg_2);
-            il.Emit(OpCodes.Call, runtime.ProcessKill);
+            il.Emit(OpCodes.Call, process.Kill);
         });
 
         Define("Abort", Type.EmptyTypes, il =>
@@ -1821,20 +1794,20 @@ public partial class RuntimeEmitter
         Define("Umask", [_types.Object], il =>
         {
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Call, runtime.ProcessUmask);
+            il.Emit(OpCodes.Call, process.Umask);
         });
 
         Define("CpuUsage", [_types.Object], il =>
         {
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Call, runtime.ProcessCpuUsage);
+            il.Emit(OpCodes.Call, process.CpuUsage);
         });
 
         Define("ResourceUsage", Type.EmptyTypes, il =>
-            il.Emit(OpCodes.Call, runtime.ProcessResourceUsage));
+            il.Emit(OpCodes.Call, process.ResourceUsage));
 
         Define("AvailableMemory", Type.EmptyTypes, il =>
-            il.Emit(OpCodes.Call, runtime.ProcessAvailableMemory));
+            il.Emit(OpCodes.Call, process.AvailableMemory));
 
         Define("ConstrainedMemory", Type.EmptyTypes, il =>
         {
@@ -1843,7 +1816,7 @@ public partial class RuntimeEmitter
         });
 
         Define("GetActiveResourcesInfo", Type.EmptyTypes, il =>
-            il.Emit(OpCodes.Call, runtime.ProcessGetActiveResourcesInfoM));
+            il.Emit(OpCodes.Call, process.GetActiveResourcesInfo));
 
         Define("EmitWarning", [_types.Object, _types.Object, _types.Object, _types.Object], il =>
         {
@@ -1851,7 +1824,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_2);
             il.Emit(OpCodes.Ldarg_3);
             il.Emit(OpCodes.Ldarg_S, (byte)4);
-            il.Emit(OpCodes.Call, runtime.ProcessEmitWarning);
+            il.Emit(OpCodes.Call, process.EmitWarning);
         });
 
         Define("SetSourceMapsEnabled", [_types.Object], il =>
@@ -1867,7 +1840,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Unbox_Any, _types.Boolean);
             il.MarkLabel(store);
-            il.Emit(OpCodes.Stsfld, _processSourceMapsEnabledField);
+            il.Emit(OpCodes.Stsfld, process.SourceMapsEnabledField);
             il.Emit(OpCodes.Ldnull);
         });
 
@@ -1877,24 +1850,24 @@ public partial class RuntimeEmitter
         if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
         {
             Define("Getuid", Type.EmptyTypes,
-                il => il.Emit(OpCodes.Call, runtime.ProcessGetUid));
+                il => il.Emit(OpCodes.Call, process.GetUid));
             Define("Geteuid", Type.EmptyTypes,
-                il => il.Emit(OpCodes.Call, runtime.ProcessGetEuid));
+                il => il.Emit(OpCodes.Call, process.GetEuid));
             Define("Getgid", Type.EmptyTypes,
-                il => il.Emit(OpCodes.Call, runtime.ProcessGetGid));
+                il => il.Emit(OpCodes.Call, process.GetGid));
             Define("Getegid", Type.EmptyTypes,
-                il => il.Emit(OpCodes.Call, runtime.ProcessGetEgid));
+                il => il.Emit(OpCodes.Call, process.GetEgid));
             Define("Getgroups", Type.EmptyTypes,
-                il => il.Emit(OpCodes.Call, runtime.ProcessGetGroups));
+                il => il.Emit(OpCodes.Call, process.GetGroups));
             Define("Setuid", [_types.Object], il =>
             {
                 il.Emit(OpCodes.Ldarg_1);
-                il.Emit(OpCodes.Call, runtime.ProcessSetUid);
+                il.Emit(OpCodes.Call, process.SetUid);
             });
             Define("Setgid", [_types.Object], il =>
             {
                 il.Emit(OpCodes.Ldarg_1);
-                il.Emit(OpCodes.Call, runtime.ProcessSetGid);
+                il.Emit(OpCodes.Call, process.SetGid);
             });
         }
     }
@@ -1903,7 +1876,7 @@ public partial class RuntimeEmitter
     /// Overrides $EventEmitter.OnListenerAdded: process.on('SIGINT', …) lazily
     /// installs the OS signal handler (#1081).
     /// </summary>
-    private void EmitProcessOnListenerAdded(TypeBuilder tb, EmittedRuntime runtime)
+    private void EmitProcessOnListenerAdded(TypeBuilder tb, EmittedProcessRuntime process, EmittedEventEmitterRuntime events)
     {
         var method = tb.DefineMethod("OnListenerAdded",
             MethodAttributes.Public | MethodAttributes.Virtual | MethodAttributes.HideBySig,
@@ -1924,22 +1897,22 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(register);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.ProcessRegisterSignal);
+        il.Emit(OpCodes.Call, process.RegisterSignal);
 
         il.MarkLabel(done);
         il.Emit(OpCodes.Ret);
 
-        tb.DefineMethodOverride(method, runtime.EventEmitter.OnListenerAdded);
+        tb.DefineMethodOverride(method, events.OnListenerAdded);
     }
 
     // =====================================================================
     // Late helper bodies (reference $Process)
     // =====================================================================
 
-    private void EmitGetProcessObjectBody(EmittedRuntime runtime)
+    private void EmitGetProcessObjectBody(EmittedProcessRuntime process)
     {
-        var il = ((MethodBuilder)runtime.GetProcessObject).GetILGenerator();
-        il.Emit(OpCodes.Call, _processGetInstance);
+        var il = ((MethodBuilder)process.GetObject).GetILGenerator();
+        il.Emit(OpCodes.Call, process.GetInstance);
         il.Emit(OpCodes.Ret);
     }
 
@@ -1950,7 +1923,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitProcessExitBody(EmittedRuntime runtime)
     {
-        var il = ((MethodBuilder)runtime.ProcessExit).GetILGenerator();
+        var il = ((MethodBuilder)runtime.Process.Exit).GetILGenerator();
         var codeLocal = il.DeclareLocal(_types.Int32);
 
         // code = arg is double ? (int)arg : Environment.ExitCode
@@ -1979,7 +1952,7 @@ public partial class RuntimeEmitter
             var ordinaryExit = il.DefineLabel();
             il.Emit(OpCodes.Call, runtime.EventLoop.RequireHosted().GetRuntime);
             il.Emit(OpCodes.Brfalse, ordinaryExit);
-            EmitHostedProcessEvent(il, runtime, "exit", codeLocal);
+            EmitHostedProcessEvent(il, runtime.Process, runtime.EventEmitter, "exit", codeLocal);
             il.Emit(OpCodes.Call, runtime.EventLoop.RequireHosted().GetRuntime);
             il.Emit(OpCodes.Ldloc, codeLocal);
             il.Emit(OpCodes.Callvirt, typeof(SharpTSHostedRuntimeBase).GetMethod(
@@ -1995,7 +1968,7 @@ public partial class RuntimeEmitter
 
         // GetInstance().Emit("exit", [code]) — swallow listener errors like Node
         il.BeginExceptionBlock();
-        il.Emit(OpCodes.Call, _processGetInstance);
+        il.Emit(OpCodes.Call, runtime.Process.GetInstance);
         il.Emit(OpCodes.Ldstr, "exit");
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Newarr, _types.Object);
@@ -2024,7 +1997,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitProcessKillBody(EmittedRuntime runtime)
     {
-        var il = ((MethodBuilder)runtime.ProcessKill).GetILGenerator();
+        var il = ((MethodBuilder)runtime.Process.Kill).GetILGenerator();
         var pidLocal = il.DeclareLocal(_types.Int32);
         var signalLocal = il.DeclareLocal(_types.String);
         var signalNumLocal = il.DeclareLocal(_types.Int32);
@@ -2164,13 +2137,13 @@ public partial class RuntimeEmitter
 
         // listeners? → dispatch in-process
         var noListeners = il.DefineLabel();
-        il.Emit(OpCodes.Call, _processGetInstance);
+        il.Emit(OpCodes.Call, runtime.Process.GetInstance);
         il.Emit(OpCodes.Ldloc, signalLocal);
         il.Emit(OpCodes.Callvirt, runtime.EventEmitter.ListenerCount);
         il.Emit(OpCodes.Ldc_R8, 0.0);
         il.Emit(OpCodes.Ble_Un, noListeners);
         il.Emit(OpCodes.Ldloc, signalLocal);
-        il.Emit(OpCodes.Call, runtime.ProcessDispatchSignal);
+        il.Emit(OpCodes.Call, runtime.Process.DispatchSignal);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Box, _types.Boolean);
         il.Emit(OpCodes.Ret);
@@ -2217,7 +2190,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitProcessEmitWarningBody(EmittedRuntime runtime)
     {
-        var il = ((MethodBuilder)runtime.ProcessEmitWarning).GetILGenerator();
+        var il = ((MethodBuilder)runtime.Process.EmitWarning).GetILGenerator();
         var setItem = _types.GetMethod(_types.DictionaryStringObject, "set_Item");
 
         var typeLocal = il.DeclareLocal(_types.String);    // warning name
@@ -2310,13 +2283,13 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
         il.Emit(OpCodes.Brfalse, notDeprecation);
         var notSuppressed = il.DefineLabel();
-        il.Emit(OpCodes.Ldsfld, _processNoDeprecationField);
+        il.Emit(OpCodes.Ldsfld, runtime.Process.NoDeprecationField);
         il.Emit(OpCodes.Brfalse, notSuppressed);
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notSuppressed);
         var notThrow = il.DefineLabel();
-        il.Emit(OpCodes.Ldsfld, _processThrowDeprecationField);
+        il.Emit(OpCodes.Ldsfld, runtime.Process.ThrowDeprecationField);
         il.Emit(OpCodes.Brfalse, notThrow);
         il.Emit(OpCodes.Ldloc, messageLocal);
         il.Emit(OpCodes.Newobj, runtime.TSErrorCtorMessage);
@@ -2384,8 +2357,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
         il.Emit(OpCodes.Ldstr, "warning");
         il.Emit(OpCodes.Ldloc, dictLocal);
-        il.Emit(OpCodes.Newobj, _processEmitClosureCtor);
-        il.Emit(OpCodes.Ldftn, runtime.ProcessEmitClosureInvoke);
+        il.Emit(OpCodes.Newobj, runtime.Process.EmitClosureCtor);
+        il.Emit(OpCodes.Ldftn, runtime.Process.EmitClosureInvoke);
         il.Emit(OpCodes.Newobj, typeof(Action).GetConstructor([_types.Object, typeof(IntPtr)])!);
         il.Emit(OpCodes.Callvirt, runtime.EventLoop.Schedule);
 
@@ -2398,13 +2371,13 @@ public partial class RuntimeEmitter
     /// loop while listeners schedule new work), then 'exit'. Called by the
     /// entry point right after the first $EventLoop.Run() returns.
     /// </summary>
-    private void EmitProcessRunLifecycleBody(EmittedRuntime runtime)
+    private void EmitProcessRunLifecycleBody(EmittedProcessRuntime process, EmittedEventEmitterRuntime events, EmittedEventLoopRuntime eventLoop)
     {
-        var il = ((MethodBuilder)runtime.ProcessRunLifecycle).GetILGenerator();
+        var il = ((MethodBuilder)process.RunLifecycle).GetILGenerator();
 
         void EmitProcessEvent(string eventName)
         {
-            il.Emit(OpCodes.Call, _processGetInstance);
+            il.Emit(OpCodes.Call, process.GetInstance);
             il.Emit(OpCodes.Ldstr, eventName);
             il.Emit(OpCodes.Ldc_I4_1);
             il.Emit(OpCodes.Newarr, _types.Object);
@@ -2414,7 +2387,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Conv_R8);
             il.Emit(OpCodes.Box, _types.Double);
             il.Emit(OpCodes.Stelem_Ref);
-            il.Emit(OpCodes.Callvirt, runtime.EventEmitter.Emit);
+            il.Emit(OpCodes.Callvirt, events.Emit);
         }
 
         var loopTop = il.DefineLabel();
@@ -2425,11 +2398,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, done); // no listeners → exit phase
 
         // listeners ran; if they scheduled work → run the loop again and re-fire
-        il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
-        il.Emit(OpCodes.Callvirt, runtime.EventLoop.HasPendingWork);
+        il.Emit(OpCodes.Call, eventLoop.GetInstance);
+        il.Emit(OpCodes.Callvirt, eventLoop.HasPendingWork);
         il.Emit(OpCodes.Brfalse, done);
-        il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
-        il.Emit(OpCodes.Callvirt, runtime.EventLoop.Run);
+        il.Emit(OpCodes.Call, eventLoop.GetInstance);
+        il.Emit(OpCodes.Callvirt, eventLoop.Run);
         il.Emit(OpCodes.Br, loopTop);
 
         il.MarkLabel(done);
@@ -2438,31 +2411,31 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitHostedProcessLifecycleBodies(EmittedRuntime runtime)
+    private void EmitHostedProcessLifecycleBodies(EmittedProcessRuntime process, EmittedEventEmitterRuntime events)
     {
-        var before = ((MethodBuilder)runtime.ProcessEmitHostedBeforeExit).GetILGenerator();
+        var before = ((MethodBuilder)process.RequireHosted().EmitBeforeExit).GetILGenerator();
         var beforeCode = before.DeclareLocal(_types.Int32);
         before.Emit(OpCodes.Ldarg_0);
         before.Emit(OpCodes.Stloc, beforeCode);
-        EmitHostedProcessEvent(before, runtime, "beforeExit", beforeCode);
+        EmitHostedProcessEvent(before, process, events, "beforeExit", beforeCode);
         before.Emit(OpCodes.Ret);
 
-        var exit = ((MethodBuilder)runtime.ProcessEmitHostedExit).GetILGenerator();
+        var exit = ((MethodBuilder)process.RequireHosted().EmitExit).GetILGenerator();
         var exitCode = exit.DeclareLocal(_types.Int32);
         exit.Emit(OpCodes.Ldarg_0);
         exit.Emit(OpCodes.Stloc, exitCode);
-        EmitHostedProcessEvent(exit, runtime, "exit", exitCode);
+        EmitHostedProcessEvent(exit, process, events, "exit", exitCode);
         exit.Emit(OpCodes.Ret);
     }
 
     private void EmitHostedProcessEvent(
         ILGenerator il,
-        EmittedRuntime runtime,
+        EmittedProcessRuntime process, EmittedEventEmitterRuntime events,
         string eventName,
         LocalBuilder exitCode)
     {
         il.BeginExceptionBlock();
-        il.Emit(OpCodes.Call, _processGetInstance);
+        il.Emit(OpCodes.Call, process.GetInstance);
         il.Emit(OpCodes.Ldstr, eventName);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Newarr, _types.Object);
@@ -2472,7 +2445,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Conv_R8);
         il.Emit(OpCodes.Box, _types.Double);
         il.Emit(OpCodes.Stelem_Ref);
-        il.Emit(OpCodes.Callvirt, runtime.EventEmitter.Emit);
+        il.Emit(OpCodes.Callvirt, events.Emit);
         il.Emit(OpCodes.Pop);
         il.BeginCatchBlock(_types.Exception);
         il.Emit(OpCodes.Pop);
@@ -2484,7 +2457,7 @@ public partial class RuntimeEmitter
     /// alive in a static dictionary) and dispatch (event-loop-scheduled emit).
     /// SIGBREAK maps to the CTRL_BREAK-backed PosixSignal on Windows.
     /// </summary>
-    private void EmitProcessSignalMachinery(TypeBuilder tb, EmittedRuntime runtime)
+    private void EmitProcessSignalMachinery(TypeBuilder tb, EmittedProcessRuntime process, EmittedEventLoopRuntime eventLoop)
     {
         // ---- static handler: void ProcessSignalHandler(PosixSignalContext) ----
         var handler = tb.DefineMethod("ProcessSignalHandler",
@@ -2524,7 +2497,7 @@ public partial class RuntimeEmitter
                 il.Emit(OpCodes.Ldc_I4, (int)signal);
                 il.Emit(OpCodes.Bne_Un, next);
                 il.Emit(OpCodes.Ldstr, name);
-                il.Emit(OpCodes.Call, runtime.ProcessDispatchSignal);
+                il.Emit(OpCodes.Call, process.DispatchSignal);
                 il.Emit(OpCodes.Br, end);
                 il.MarkLabel(next);
             }
@@ -2534,30 +2507,30 @@ public partial class RuntimeEmitter
 
         // ---- ProcessDispatchSignal(string name): schedule emit on the loop ----
         {
-            var il = ((MethodBuilder)runtime.ProcessDispatchSignal).GetILGenerator();
-            il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
+            var il = ((MethodBuilder)process.DispatchSignal).GetILGenerator();
+            il.Emit(OpCodes.Call, eventLoop.GetInstance);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_0); // arg to the listener is the signal name
-            il.Emit(OpCodes.Newobj, _processEmitClosureCtor);
-            il.Emit(OpCodes.Ldftn, runtime.ProcessEmitClosureInvoke);
+            il.Emit(OpCodes.Newobj, process.EmitClosureCtor);
+            il.Emit(OpCodes.Ldftn, process.EmitClosureInvoke);
             il.Emit(OpCodes.Newobj, typeof(Action).GetConstructor([_types.Object, typeof(IntPtr)])!);
-            il.Emit(OpCodes.Callvirt, runtime.EventLoop.Schedule);
+            il.Emit(OpCodes.Callvirt, eventLoop.Schedule);
             il.Emit(OpCodes.Ret);
         }
 
         // ---- ProcessRegisterSignal(string name) ----
         {
-            var il = ((MethodBuilder)runtime.ProcessRegisterSignal).GetILGenerator();
+            var il = ((MethodBuilder)process.RegisterSignal).GetILGenerator();
             var regsLocal = il.DeclareLocal(_types.DictionaryStringObject);
 
             // lazy dictionary
             var haveDict = il.DefineLabel();
-            il.Emit(OpCodes.Ldsfld, _processSignalRegistrationsField);
+            il.Emit(OpCodes.Ldsfld, process.SignalRegistrationsField);
             il.Emit(OpCodes.Brtrue, haveDict);
             il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.DictionaryStringObject));
-            il.Emit(OpCodes.Stsfld, _processSignalRegistrationsField);
+            il.Emit(OpCodes.Stsfld, process.SignalRegistrationsField);
             il.MarkLabel(haveDict);
-            il.Emit(OpCodes.Ldsfld, _processSignalRegistrationsField);
+            il.Emit(OpCodes.Ldsfld, process.SignalRegistrationsField);
             il.Emit(OpCodes.Stloc, regsLocal);
 
             // dedupe

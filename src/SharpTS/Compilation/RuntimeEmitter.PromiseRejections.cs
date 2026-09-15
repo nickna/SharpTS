@@ -139,7 +139,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, reason);
 
         // process.emit('unhandledRejection', reason, promise)
-        il.Emit(OpCodes.Call, runtime.GetProcessObject);
+        il.Emit(OpCodes.Call, runtime.Process.GetObject);
         il.Emit(OpCodes.Castclass, runtime.EventEmitter.Type);
         il.Emit(OpCodes.Ldstr, "unhandledRejection");
         il.Emit(OpCodes.Ldc_I4_2);
@@ -168,7 +168,7 @@ public partial class RuntimeEmitter
         FieldBuilder identityField)
     {
         // process.emit('rejectionHandled', promise)
-        il.Emit(OpCodes.Call, runtime.GetProcessObject);
+        il.Emit(OpCodes.Call, runtime.Process.GetObject);
         il.Emit(OpCodes.Castclass, runtime.EventEmitter.Type);
         il.Emit(OpCodes.Ldstr, "rejectionHandled");
         il.Emit(OpCodes.Ldc_I4_1);

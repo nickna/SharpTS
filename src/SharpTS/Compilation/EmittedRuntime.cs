@@ -1449,77 +1449,8 @@ public class EmittedRuntime
     // NodeError conversion helpers
     public MethodBuilder ThrowNodeError { get; set; } = null!;
 
-    // Process module methods
-    public MethodBuilder ProcessGetEnv { get; set; } = null!;
-    public MethodBuilder ProcessGetArgv { get; set; } = null!;
-    public MethodBuilder ProcessHrtime { get; set; } = null!;
-    public MethodBuilder ProcessUptime { get; set; } = null!;
-
-    // Monotonic process-start baseline (a Stopwatch timestamp) captured in the
-    // $Runtime .cctor, so ProcessUptime() reports a non-decreasing "seconds since
-    // process start" instead of a wall-clock delta that an NTP slew can reverse.
-    public FieldBuilder ProcessUptimeBaselineField { get; set; } = null!;
-
-    public MethodBuilder ProcessMemoryUsage { get; set; } = null!;
-    public MethodBuilder ProcessGetNextTick { get; set; } = null!;
-    public MethodBuilder GetProcessEventEmitter { get; set; } = null!;
-
-    // $Process — the live compiled process object (epic #1078). GetProcessObject
-    // returns the singleton; the value helpers back both the $Process instance
-    // members and the static-receiver emitters (ProcessStaticEmitter /
-    // ProcessModuleEmitter).
-    public MethodBuilder GetProcessObject { get; set; } = null!;
-    public MethodBuilder ProcessExit { get; set; } = null!;
-    public MethodBuilder ProcessKill { get; set; } = null!;
-    public MethodBuilder ProcessEmitWarning { get; set; } = null!;
-    public MethodBuilder ProcessRunLifecycle { get; set; } = null!;
-    public MethodBuilder ProcessEmitHostedBeforeExit { get; set; } = null!;
-    public MethodBuilder ProcessEmitHostedExit { get; set; } = null!;
-    public MethodBuilder ProcessRegisterSignal { get; set; } = null!;
-    public MethodBuilder ProcessDispatchSignal { get; set; } = null!;
-    public MethodBuilder ProcessEmitClosureInvoke { get; set; } = null!;
-    public MethodBuilder ProcessGetPpid { get; set; } = null!;
-    public MethodBuilder ProcessGetUid { get; set; } = null!;
-    public MethodBuilder ProcessGetEuid { get; set; } = null!;
-    public MethodBuilder ProcessGetGid { get; set; } = null!;
-    public MethodBuilder ProcessGetEgid { get; set; } = null!;
-    public MethodBuilder ProcessGetGroups { get; set; } = null!;
-    public MethodBuilder ProcessSetUid { get; set; } = null!;
-    public MethodBuilder ProcessSetGid { get; set; } = null!;
-    public MethodBuilder ProcessGetTitle { get; set; } = null!;
-    public MethodBuilder ProcessSetTitle { get; set; } = null!;
-    public MethodBuilder ProcessGetVersions { get; set; } = null!;
-    public MethodBuilder ProcessGetRelease { get; set; } = null!;
-    public MethodBuilder ProcessGetFeatures { get; set; } = null!;
-    public MethodBuilder ProcessGetConfig { get; set; } = null!;
-    public MethodBuilder ProcessGetExecArgv { get; set; } = null!;
-    public MethodBuilder ProcessGetAllowedFlags { get; set; } = null!;
-    public MethodBuilder ProcessCpuUsage { get; set; } = null!;
-    public MethodBuilder ProcessResourceUsage { get; set; } = null!;
-    public MethodBuilder ProcessAvailableMemory { get; set; } = null!;
-    public MethodBuilder ProcessGetActiveResourcesInfoM { get; set; } = null!;
-    public MethodBuilder ProcessHrtimeBigint { get; set; } = null!;
-    public MethodBuilder ProcessMemoryRss { get; set; } = null!;
-    public MethodBuilder ProcessGetHrtimeFn { get; set; } = null!;
-    public MethodBuilder ProcessGetMemoryUsageFn { get; set; } = null!;
-    public MethodBuilder ProcessUmask { get; set; } = null!;
-    public MethodBuilder ProcessGetReport { get; set; } = null!;
-
-    // Process stdin/stdout/stderr stream methods
-    public MethodBuilder StdinRead { get; set; } = null!;
-    public MethodBuilder StdinIsTTY { get; set; } = null!;
-    public MethodBuilder StdoutWrite { get; set; } = null!;
-    public MethodBuilder StdoutIsTTY { get; set; } = null!;
-    public MethodBuilder StderrWrite { get; set; } = null!;
-    public MethodBuilder StderrIsTTY { get; set; } = null!;
-
-    // Process stream singleton getters (return cached $Writable/$Readable instances)
-    public MethodBuilder GetStdout { get; set; } = null!;
-    public MethodBuilder GetStderr { get; set; } = null!;
-    public MethodBuilder GetStdin { get; set; } = null!;
-    public FieldBuilder StdoutInstance { get; set; } = null!;
-    public FieldBuilder StderrInstance { get; set; } = null!;
-    public FieldBuilder StdinInstance { get; set; } = null!;
+    /// <summary>Required process metadata, with explicit optional stream and hosted declarations.</summary>
+    public EmittedProcessRuntime Process { get; } = new();
 
     // globalThis methods (ES2020)
     public MethodBuilder GlobalThisGetProperty { get; set; } = null!;

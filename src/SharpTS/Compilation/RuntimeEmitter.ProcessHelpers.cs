@@ -11,14 +11,14 @@ public partial class RuntimeEmitter
     private void EmitProcessMethods(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         EmitProcessGetEnv(typeBuilder, runtime);
-        EmitProcessGetArgv(typeBuilder, runtime);
-        EmitProcessHrtime(typeBuilder, runtime);
-        EmitProcessUptime(typeBuilder, runtime);
+        EmitProcessGetArgv(typeBuilder, runtime.Process);
+        EmitProcessHrtime(typeBuilder, runtime.Process);
+        EmitProcessUptime(typeBuilder, runtime.Process);
         EmitProcessMemoryUsage(typeBuilder, runtime);
         EmitProcessGetNextTick(typeBuilder, runtime);
-        EmitStdinMethods(typeBuilder, runtime);
-        EmitStdoutMethods(typeBuilder, runtime);
-        EmitStderrMethods(typeBuilder, runtime);
+        EmitStdinMethods(typeBuilder, runtime.Process);
+        EmitStdoutMethods(typeBuilder, runtime.Process);
+        EmitStderrMethods(typeBuilder, runtime.Process);
         // process.stdout / stderr / stdin singletons are $Writable / $Readable
         // instances. Without UsesNodeStreams the stream types don't exist.
         if (_features.UsesNodeStreams)
@@ -29,7 +29,7 @@ public partial class RuntimeEmitter
         // before EmitGetProcessEventEmitter (whose body now returns the
         // $Process singleton so events share one emitter across surfaces).
         EmitProcessObjectInfrastructure(typeBuilder, runtime);
-        EmitGetProcessEventEmitter(typeBuilder, runtime);
+        EmitGetProcessEventEmitter(typeBuilder, runtime.Process, runtime.EventEmitter);
     }
 
     /// <summary>
@@ -50,7 +50,7 @@ public partial class RuntimeEmitter
             _types.Object,
             Type.EmptyTypes
         );
-        runtime.ProcessGetEnv = method;
+        runtime.Process.GetEnv = method;
 
         var il = method.GetILGenerator();
 
@@ -140,7 +140,7 @@ public partial class RuntimeEmitter
     /// We prepend the executable path to maintain compatibility with code
     /// that does process.argv.slice(2) to get actual arguments.
     /// </summary>
-    private void EmitProcessGetArgv(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitProcessGetArgv(TypeBuilder typeBuilder, EmittedProcessRuntime process)
     {
         var method = typeBuilder.DefineMethod(
             "ProcessGetArgv",
@@ -148,7 +148,7 @@ public partial class RuntimeEmitter
             _types.Object,
             Type.EmptyTypes
         );
-        runtime.ProcessGetArgv = method;
+        process.GetArgv = method;
 
         var il = method.GetILGenerator();
 
@@ -218,7 +218,7 @@ public partial class RuntimeEmitter
     /// Emits: public static object ProcessHrtime(object? prev)
     /// Returns a [seconds, nanoseconds] tuple as a SharpTSArray.
     /// </summary>
-    private void EmitProcessHrtime(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitProcessHrtime(TypeBuilder typeBuilder, EmittedProcessRuntime process)
     {
         var method = typeBuilder.DefineMethod(
             "ProcessHrtime",
@@ -226,7 +226,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object]
         );
-        runtime.ProcessHrtime = method;
+        process.Hrtime = method;
 
         var il = method.GetILGenerator();
 
@@ -353,7 +353,7 @@ public partial class RuntimeEmitter
     /// Emits: public static double ProcessUptime()
     /// Returns the number of seconds the process has been running.
     /// </summary>
-    private void EmitProcessUptime(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitProcessUptime(TypeBuilder typeBuilder, EmittedProcessRuntime process)
     {
         var method = typeBuilder.DefineMethod(
             "ProcessUptime",
@@ -361,7 +361,7 @@ public partial class RuntimeEmitter
             _types.Double,
             Type.EmptyTypes
         );
-        runtime.ProcessUptime = method;
+        process.Uptime = method;
 
         var il = method.GetILGenerator();
 
@@ -379,7 +379,7 @@ public partial class RuntimeEmitter
         var stopwatchType = _types.Stopwatch;
 
         var baselineLocal = il.DeclareLocal(_types.Int64);
-        il.Emit(OpCodes.Ldsfld, runtime.ProcessUptimeBaselineField);
+        il.Emit(OpCodes.Ldsfld, process.UptimeBaselineField);
         il.Emit(OpCodes.Stloc, baselineLocal);
 
         // (now - baseline) as ticks, widened to double
@@ -408,7 +408,7 @@ public partial class RuntimeEmitter
             _types.Object,
             Type.EmptyTypes
         );
-        runtime.ProcessMemoryUsage = method;
+        runtime.Process.MemoryUsage = method;
 
         var il = method.GetILGenerator();
 
@@ -481,7 +481,7 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits stdin methods (Read, IsTTY).
     /// </summary>
-    private void EmitStdinMethods(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitStdinMethods(TypeBuilder typeBuilder, EmittedProcessRuntime process)
     {
         // StdinRead: public static object StdinRead()
         var readMethod = typeBuilder.DefineMethod(
@@ -490,7 +490,7 @@ public partial class RuntimeEmitter
             _types.Object,
             Type.EmptyTypes
         );
-        runtime.StdinRead = readMethod;
+        process.StdinRead = readMethod;
 
         var readIl = readMethod.GetILGenerator();
         // Call Console.ReadLine() - returns string or null
@@ -504,7 +504,7 @@ public partial class RuntimeEmitter
             _types.Object,
             Type.EmptyTypes
         );
-        runtime.StdinIsTTY = isTtyMethod;
+        process.StdinIsTTY = isTtyMethod;
 
         var isTtyIl = isTtyMethod.GetILGenerator();
         // Return !Console.IsInputRedirected
@@ -518,7 +518,7 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits stdout methods (Write, IsTTY).
     /// </summary>
-    private void EmitStdoutMethods(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitStdoutMethods(TypeBuilder typeBuilder, EmittedProcessRuntime process)
     {
         // StdoutWrite: public static object StdoutWrite(object data)
         var writeMethod = typeBuilder.DefineMethod(
@@ -527,7 +527,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object]
         );
-        runtime.StdoutWrite = writeMethod;
+        process.StdoutWrite = writeMethod;
 
         var writeIl = writeMethod.GetILGenerator();
         // Convert to string if needed and write
@@ -546,7 +546,7 @@ public partial class RuntimeEmitter
             _types.Object,
             Type.EmptyTypes
         );
-        runtime.StdoutIsTTY = isTtyMethod;
+        process.StdoutIsTTY = isTtyMethod;
 
         var isTtyIl = isTtyMethod.GetILGenerator();
         // Return !Console.IsOutputRedirected
@@ -560,7 +560,7 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits stderr methods (Write, IsTTY).
     /// </summary>
-    private void EmitStderrMethods(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitStderrMethods(TypeBuilder typeBuilder, EmittedProcessRuntime process)
     {
         // StderrWrite: public static object StderrWrite(object data)
         var writeMethod = typeBuilder.DefineMethod(
@@ -569,7 +569,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object]
         );
-        runtime.StderrWrite = writeMethod;
+        process.StderrWrite = writeMethod;
 
         var writeIl = writeMethod.GetILGenerator();
         // Get Console.Error (TextWriter) and write to it
@@ -589,7 +589,7 @@ public partial class RuntimeEmitter
             _types.Object,
             Type.EmptyTypes
         );
-        runtime.StderrIsTTY = isTtyMethod;
+        process.StderrIsTTY = isTtyMethod;
 
         var isTtyIl = isTtyMethod.GetILGenerator();
         // Return !Console.IsErrorRedirected
@@ -690,21 +690,21 @@ public partial class RuntimeEmitter
         }
 
         // --- Static cache fields ---
-        runtime.StdoutInstance = typeBuilder.DefineField("_stdoutInstance", _types.Object, FieldAttributes.Private | FieldAttributes.Static);
-        runtime.StderrInstance = typeBuilder.DefineField("_stderrInstance", _types.Object, FieldAttributes.Private | FieldAttributes.Static);
-        runtime.StdinInstance = typeBuilder.DefineField("_stdinInstance", _types.Object, FieldAttributes.Private | FieldAttributes.Static);
+        runtime.Process.RequireStreams().StdoutInstance = typeBuilder.DefineField("_stdoutInstance", _types.Object, FieldAttributes.Private | FieldAttributes.Static);
+        runtime.Process.RequireStreams().StderrInstance = typeBuilder.DefineField("_stderrInstance", _types.Object, FieldAttributes.Private | FieldAttributes.Static);
+        runtime.Process.RequireStreams().StdinInstance = typeBuilder.DefineField("_stdinInstance", _types.Object, FieldAttributes.Private | FieldAttributes.Static);
 
         // --- GetStdout: create $Writable with Console.Write callback, cache in static field ---
-        runtime.GetStdout = EmitStreamSingletonGetter(typeBuilder, runtime, "GetStdout",
-            runtime.StdoutInstance, runtime.RequireNodeStreams().WritableCtor, stdoutWriteImpl);
+        runtime.Process.RequireStreams().GetStdout = EmitStreamSingletonGetter(typeBuilder, runtime, "GetStdout",
+            runtime.Process.RequireStreams().StdoutInstance, runtime.RequireNodeStreams().WritableCtor, stdoutWriteImpl);
 
         // --- GetStderr: create $Writable with Console.Error.Write callback ---
-        runtime.GetStderr = EmitStreamSingletonGetter(typeBuilder, runtime, "GetStderr",
-            runtime.StderrInstance, runtime.RequireNodeStreams().WritableCtor, stderrWriteImpl);
+        runtime.Process.RequireStreams().GetStderr = EmitStreamSingletonGetter(typeBuilder, runtime, "GetStderr",
+            runtime.Process.RequireStreams().StderrInstance, runtime.RequireNodeStreams().WritableCtor, stderrWriteImpl);
 
         // --- GetStdin: create $Readable (no write callback needed) ---
-        runtime.GetStdin = EmitStreamSingletonGetter(typeBuilder, runtime, "GetStdin",
-            runtime.StdinInstance, runtime.RequireNodeStreams().ReadableCtor, null);
+        runtime.Process.RequireStreams().GetStdin = EmitStreamSingletonGetter(typeBuilder, runtime, "GetStdin",
+            runtime.Process.RequireStreams().StdinInstance, runtime.RequireNodeStreams().ReadableCtor, null);
     }
 
     private MethodBuilder EmitStreamSingletonGetter(
@@ -876,7 +876,7 @@ public partial class RuntimeEmitter
             _types.Object,
             Type.EmptyTypes
         );
-        runtime.ProcessGetNextTick = getterMethod;
+        runtime.Process.GetNextTick = getterMethod;
 
         var il = getterMethod.GetILGenerator();
 
@@ -896,19 +896,19 @@ public partial class RuntimeEmitter
     /// `process` value, and the module facade's default export all share one
     /// emitter.
     /// </summary>
-    private void EmitGetProcessEventEmitter(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitGetProcessEventEmitter(TypeBuilder typeBuilder, EmittedProcessRuntime process, EmittedEventEmitterRuntime events)
     {
         var getter = typeBuilder.DefineMethod(
             "GetProcessEventEmitter",
             MethodAttributes.Public | MethodAttributes.Static,
-            runtime.EventEmitter.Type,
+            events.Type,
             Type.EmptyTypes
         );
-        runtime.GetProcessEventEmitter = getter;
+        process.GetEventEmitter = getter;
 
         var il = getter.GetILGenerator();
-        il.Emit(OpCodes.Call, runtime.GetProcessObject);
-        il.Emit(OpCodes.Castclass, runtime.EventEmitter.Type);
+        il.Emit(OpCodes.Call, process.GetObject);
+        il.Emit(OpCodes.Castclass, events.Type);
         il.Emit(OpCodes.Ret);
     }
 }
