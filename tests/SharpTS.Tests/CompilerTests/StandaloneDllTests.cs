@@ -1319,6 +1319,55 @@ public class StandaloneDllTests
         finally { CleanupTempDir(tempDir); }
     }
 
+    public static IEnumerable<object[]> OsMetadataPrograms
+    {
+        get
+        {
+            yield return new object[]
+            {
+                """
+                import { freemem, loadavg, networkInterfaces } from 'os';
+                console.log(typeof freemem(), freemem() > 0);
+                const load = loadavg(); console.log(Array.isArray(load), load.length, load.join(','));
+                console.log(Object.keys(networkInterfaces()).length);
+                """,
+                "number true\ntrue 3 0,0,0\n0\n"
+            };
+            yield return new object[]
+            {
+                """
+                import * as os from 'node:os';
+                console.log(os.freemem() > 0, os.loadavg().length, typeof os.networkInterfaces());
+                console.log(typeof os.platform(), typeof os.arch(), os.hostname().length > 0);
+                """,
+                "true 3 object\nstring string true\n"
+            };
+            yield return new object[]
+            {
+                """
+                import os from 'os';
+                console.log(os.freemem() > 0, os.loadavg().join(','), Object.keys(os.networkInterfaces()).length);
+                """,
+                "true 0,0,0 0\n"
+            };
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(OsMetadataPrograms))]
+    public void Isolated_OsMetadata_PreservesHelpersAndModuleBindings(string source, string expected)
+    {
+        var files = new Dictionary<string, string> { ["main.ts"] = source };
+        Assert.Empty(TestHarness.CompileModulesAndVerifyOnly(files, "main.ts"));
+        var (tempDir, dllPath) = CompileStandaloneModule(files, "main.ts");
+        try
+        {
+            Assert.DoesNotContain(GetAssemblyReferences(dllPath), name => name == "SharpTS");
+            Assert.Equal(expected, ExecuteCompiledDllIsolated(dllPath, timeoutMs: 15000));
+        }
+        finally { CleanupTempDir(tempDir); }
+    }
+
     public static IEnumerable<object[]> ProcessMetadataPrograms
     {
         get

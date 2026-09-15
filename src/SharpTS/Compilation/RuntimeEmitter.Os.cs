@@ -9,11 +9,11 @@ namespace SharpTS.Compilation;
 /// </summary>
 public partial class RuntimeEmitter
 {
-    private void EmitOsModuleMethods(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitOsModuleMethods(TypeBuilder typeBuilder, EmittedOsRuntime os)
     {
-        EmitOsFreemem(typeBuilder, runtime);
-        EmitOsLoadavg(typeBuilder, runtime);
-        EmitOsNetworkInterfaces(typeBuilder, runtime);
+        EmitOsFreemem(typeBuilder, os);
+        EmitOsLoadavg(typeBuilder, os);
+        EmitOsNetworkInterfaces(typeBuilder, os);
     }
 
     /// <summary>
@@ -21,7 +21,7 @@ public partial class RuntimeEmitter
     /// Forces a GC first to ensure memory info is populated with valid values.
     /// Signature: double OsFreemem()
     /// </summary>
-    private void EmitOsFreemem(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitOsFreemem(TypeBuilder typeBuilder, EmittedOsRuntime os)
     {
         var method = typeBuilder.DefineMethod(
             "OsFreemem",
@@ -29,7 +29,7 @@ public partial class RuntimeEmitter
             _types.Double,
             Type.EmptyTypes
         );
-        runtime.OsFreemem = method;
+        os.Freemem = method;
 
         var il = method.GetILGenerator();
 
@@ -64,7 +64,7 @@ public partial class RuntimeEmitter
     /// For compiled standalone DLLs, returns zeros on all platforms for simplicity.
     /// Signature: List&lt;object?&gt; OsLoadavg()
     /// </summary>
-    private void EmitOsLoadavg(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitOsLoadavg(TypeBuilder typeBuilder, EmittedOsRuntime os)
     {
         var method = typeBuilder.DefineMethod(
             "OsLoadavg",
@@ -72,7 +72,7 @@ public partial class RuntimeEmitter
             _types.ListOfObject,
             Type.EmptyTypes
         );
-        runtime.OsLoadavg = method;
+        os.Loadavg = method;
 
         var il = method.GetILGenerator();
 
@@ -103,7 +103,7 @@ public partial class RuntimeEmitter
     /// For compiled standalone DLLs, returns an empty dictionary (use interpreter for full functionality).
     /// Signature: Dictionary&lt;string, object?&gt; OsNetworkInterfaces()
     /// </summary>
-    private void EmitOsNetworkInterfaces(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitOsNetworkInterfaces(TypeBuilder typeBuilder, EmittedOsRuntime os)
     {
         var method = typeBuilder.DefineMethod(
             "OsNetworkInterfaces",
@@ -111,7 +111,7 @@ public partial class RuntimeEmitter
             _types.DictionaryStringObject,
             Type.EmptyTypes
         );
-        runtime.OsNetworkInterfaces = method;
+        os.NetworkInterfaces = method;
 
         var il = method.GetILGenerator();
 
