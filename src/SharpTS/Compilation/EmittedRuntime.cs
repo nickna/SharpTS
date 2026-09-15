@@ -1734,14 +1734,8 @@ public class EmittedRuntime
     public EmittedAtomicsRuntime RequireAtomics() => Atomics
         ?? throw new InvalidOperationException("Atomics runtime was not enabled for this compilation.");
 
-    // $MessagePort type - emitted for standalone worker support
-    // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSMessagePort
-    public Type TSMessagePortType { get; set; } = null!;
-
-    // $MessageChannel type - emitted for standalone worker support
-    // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSMessageChannel
-    public Type TSMessageChannelType { get; set; } = null!;
-    public MethodBuilder TSMessageChannelCtor { get; set; } = null!;
+    /// <summary>Required MessagePort/MessageChannel declarations and peer-access metadata.</summary>
+    public EmittedMessageChannelRuntime MessageChannels { get; } = new();
 
     // $Worker type - emitted for standalone worker support
     // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSWorker

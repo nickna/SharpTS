@@ -129,7 +129,7 @@ public sealed class WorkerThreadsModuleEmitter : IBuiltInModuleEmitter
         var il = ctx.IL;
 
         // Load the MessageChannel constructor type
-        il.Emit(OpCodes.Ldtoken, ctx.Runtime!.TSMessageChannelType);
+        il.Emit(OpCodes.Ldtoken, ctx.Runtime!.MessageChannels.Type);
         il.Emit(OpCodes.Call, ctx.Types.GetMethod(ctx.Types.Type, "GetTypeFromHandle", ctx.Types.RuntimeTypeHandle));
         return true;
     }

@@ -25,104 +25,92 @@ namespace SharpTS.Compilation;
 /// </remarks>
 public partial class RuntimeEmitter
 {
-    private TypeBuilder _messagePortType = null!;
-    private FieldBuilder _messagePortPartnerField = null!;
-    private FieldBuilder _messagePortPendingField = null!;
-    private FieldBuilder _messagePortStartedField = null!;
-    private FieldBuilder _messagePortClosedField = null!;
-    private FieldBuilder _messagePortRefedField = null!;
-    // Set (recursively, onto the partner too) when this port or its partner has been
-    // transferred to a worker (#1254). Only a started CROSS-THREAD port Refs the owner
-    // loop — mirrors SharpTSMessagePort._crossThread — so a plain in-process port with a
-    // drained queue doesn't keep a compiled program running forever.
-    private FieldBuilder _messagePortCrossThreadField = null!;
-    private FieldBuilder _messagePortOnEnqueueField = null!;
-    // Shared sentinel enqueued (in place of a clone) when postMessage receives an
-    // uncloneable value. Drain turns it into a 'messageerror' event, mirroring the
-    // interpreter's ClonedMessage(IsError: true) path (#1077). One instance per
-    // emitted assembly, created by $MessagePort's static ctor.
-    private FieldBuilder _messagePortCloneErrorField = null!;
-    private ConstructorBuilder _messagePortCtor = null!;
-    private MethodBuilder _messagePortDrain = null!;
-    private MethodBuilder _messagePortStart = null!;
-    private MethodBuilder _messagePortRef = null!;
-    private MethodBuilder _messagePortUnref = null!;
-
-    private void EmitMessageChannelTypes(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private void EmitMessageChannelTypes(
+        ModuleBuilder moduleBuilder,
+        EmittedMessageChannelRuntime channels,
+        TypeBuilder runtimeType,
+        EmittedEventEmitterRuntime eventEmitter,
+        EmittedEventLoopRuntime eventLoop,
+        MethodInfo structuredClone,
+        Type dataCloneError)
     {
-        EmitMessagePortClass(moduleBuilder, runtime);
-        EmitMessageChannelClass(moduleBuilder, runtime);
-        EmitCreateMessageChannelHelper(runtime);
+        EmitMessagePortClass(moduleBuilder, channels.Port, eventEmitter, eventLoop, structuredClone, dataCloneError);
+        EmitMessageChannelClass(moduleBuilder, channels);
+        EmitCreateMessageChannelHelper(runtimeType, channels);
     }
 
-    private void EmitMessagePortClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private void EmitMessagePortClass(
+        ModuleBuilder moduleBuilder,
+        EmittedMessagePortRuntime port,
+        EmittedEventEmitterRuntime eventEmitter,
+        EmittedEventLoopRuntime eventLoop,
+        MethodInfo structuredClone,
+        Type dataCloneError)
     {
         var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$MessagePort",
             TypeAttributes.Public | TypeAttributes.Class | TypeAttributes.BeforeFieldInit,
-            runtime.EventEmitter.Type
+            eventEmitter.Type
         );
-        _messagePortType = typeBuilder;
+        port.Type = typeBuilder;
 
         // Assembly-visible so $MessageChannel's ctor can pair the ports.
-        _messagePortPartnerField = typeBuilder.DefineField("_partner", _types.Object, FieldAttributes.Assembly);
-        _messagePortPendingField = typeBuilder.DefineField("_pending", _types.ConcurrentQueueOfObject, FieldAttributes.Assembly);
-        _messagePortStartedField = typeBuilder.DefineField("_started", _types.Boolean, FieldAttributes.Assembly);
-        _messagePortClosedField = typeBuilder.DefineField("_closed", _types.Boolean, FieldAttributes.Assembly);
-        _messagePortRefedField = typeBuilder.DefineField("_refed", _types.Boolean, FieldAttributes.Assembly);
-        _messagePortCrossThreadField = typeBuilder.DefineField("_crossThread", _types.Boolean, FieldAttributes.Assembly);
+        port.Partner = typeBuilder.DefineField("_partner", _types.Object, FieldAttributes.Assembly);
+        port.Pending = typeBuilder.DefineField("_pending", _types.ConcurrentQueueOfObject, FieldAttributes.Assembly);
+        port.Started = typeBuilder.DefineField("_started", _types.Boolean, FieldAttributes.Assembly);
+        port.Closed = typeBuilder.DefineField("_closed", _types.Boolean, FieldAttributes.Assembly);
+        port.Refed = typeBuilder.DefineField("_refed", _types.Boolean, FieldAttributes.Assembly);
+        port.CrossThread = typeBuilder.DefineField("_crossThread", _types.Boolean, FieldAttributes.Assembly);
         // Optional on-enqueue notification. Null for ordinary in-process ports; set
         // (reflectively) by CompiledMessagePortBridge when this port has been
         // transferred to an interpreter worker, so a parent post wakes the worker loop
         // to drain _pending event-driven instead of the worker polling (#465).
-        _messagePortOnEnqueueField = typeBuilder.DefineField("_onEnqueue", typeof(Action), FieldAttributes.Assembly);
+        port.OnEnqueue = typeBuilder.DefineField("_onEnqueue", typeof(Action), FieldAttributes.Assembly);
 
         // Static clone-failure sentinel (#1077). A single shared instance is enqueued in
         // place of a message whose value cannot be structured-cloned; Drain compares by
         // reference and emits 'messageerror' instead of 'message'.
-        _messagePortCloneErrorField = typeBuilder.DefineField(
+        port.CloneError = typeBuilder.DefineField(
             "_cloneError",
             _types.Object,
             FieldAttributes.Assembly | FieldAttributes.Static | FieldAttributes.InitOnly);
         var cctorIl = typeBuilder.DefineTypeInitializer().GetILGenerator();
         cctorIl.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.Object));
-        cctorIl.Emit(OpCodes.Stsfld, _messagePortCloneErrorField);
+        cctorIl.Emit(OpCodes.Stsfld, port.CloneError);
         cctorIl.Emit(OpCodes.Ret);
 
-        EmitMessagePortConstructorIl(typeBuilder, runtime);
-        EmitMessagePortDrain(typeBuilder, runtime);
-        EmitMessagePortRef(typeBuilder, runtime);
-        EmitMessagePortUnref(typeBuilder, runtime);
-        EmitMessagePortMarkTransferredAcrossThreads(typeBuilder, runtime);
-        EmitMessagePortStart(typeBuilder, runtime);
-        EmitMessagePortPostMessage(typeBuilder, runtime);
-        EmitMessagePortClose(typeBuilder, runtime);
-        EmitMessagePortOnListenerAdded(typeBuilder, runtime);
+        EmitMessagePortConstructorIl(typeBuilder, port, eventEmitter);
+        EmitMessagePortDrain(typeBuilder, port, eventEmitter);
+        EmitMessagePortRef(typeBuilder, port, eventLoop);
+        EmitMessagePortUnref(typeBuilder, port, eventLoop);
+        EmitMessagePortMarkTransferredAcrossThreads(typeBuilder, port);
+        EmitMessagePortStart(typeBuilder, port, eventLoop);
+        EmitMessagePortPostMessage(typeBuilder, port, eventLoop, structuredClone, dataCloneError);
+        EmitMessagePortClose(typeBuilder, port, eventEmitter);
+        EmitMessagePortOnListenerAdded(typeBuilder, port, eventEmitter);
 
         typeBuilder.CreateType();
-
-        runtime.TSMessagePortType = typeBuilder;
     }
 
-    private void EmitMessagePortConstructorIl(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitMessagePortConstructorIl(TypeBuilder typeBuilder, EmittedMessagePortRuntime port, EmittedEventEmitterRuntime eventEmitter)
     {
         var ctor = typeBuilder.DefineConstructor(
             MethodAttributes.Public,
             CallingConventions.Standard,
             Type.EmptyTypes
         );
-        _messagePortCtor = ctor;
+        port.Ctor = ctor;
 
         var il = ctor.GetILGenerator();
 
         // base() — $EventEmitter parameterless ctor
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.EventEmitter.Ctor);
+        il.Emit(OpCodes.Call, eventEmitter.Ctor);
 
         // _pending = new ConcurrentQueue<object>()
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ConcurrentQueueOfObject, Type.EmptyTypes)!);
-        il.Emit(OpCodes.Stfld, _messagePortPendingField);
+        il.Emit(OpCodes.Stfld, port.Pending);
 
         // Not refed at construction — an unstarted port must not keep the
         // process alive (Node: only a started port with pending work does).
@@ -134,7 +122,7 @@ public partial class RuntimeEmitter
     /// event with the cloned value directly (Node worker_threads semantics,
     /// not a DOM-style {data} wrapper).
     /// </summary>
-    private void EmitMessagePortDrain(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitMessagePortDrain(TypeBuilder typeBuilder, EmittedMessagePortRuntime port, EmittedEventEmitterRuntime eventEmitter)
     {
         var method = typeBuilder.DefineMethod(
             "Drain",
@@ -142,7 +130,7 @@ public partial class RuntimeEmitter
             _types.Void,
             Type.EmptyTypes
         );
-        _messagePortDrain = method;
+        port.Drain = method;
 
         var il = method.GetILGenerator();
         var loopTop = il.DefineLabel();
@@ -152,17 +140,17 @@ public partial class RuntimeEmitter
 
         // if (!_started || _closed) return — messages stay queued until Start().
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _messagePortStartedField);
+        il.Emit(OpCodes.Ldfld, port.Started);
         il.Emit(OpCodes.Brfalse, exitLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _messagePortClosedField);
+        il.Emit(OpCodes.Ldfld, port.Closed);
         il.Emit(OpCodes.Brtrue, exitLabel);
 
         il.MarkLabel(loopTop);
 
         // if (!_pending.TryDequeue(out msg)) return
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _messagePortPendingField);
+        il.Emit(OpCodes.Ldfld, port.Pending);
         il.Emit(OpCodes.Ldloca, msgLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ConcurrentQueueOfObject, "TryDequeue", [_types.Object.MakeByRefType()])!);
         il.Emit(OpCodes.Brfalse, exitLabel);
@@ -172,13 +160,13 @@ public partial class RuntimeEmitter
         // model (#1077). ReferenceEquals(msg, _cloneError).
         var notCloneErrorLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, msgLocal);
-        il.Emit(OpCodes.Ldsfld, _messagePortCloneErrorField);
+        il.Emit(OpCodes.Ldsfld, port.CloneError);
         il.Emit(OpCodes.Bne_Un, notCloneErrorLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "messageerror");
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Newarr, _types.Object);
-        il.Emit(OpCodes.Callvirt, runtime.EventEmitter.Emit);
+        il.Emit(OpCodes.Callvirt, eventEmitter.Emit);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Br, loopTop);
         il.MarkLabel(notCloneErrorLabel);
@@ -195,7 +183,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "message");
         il.Emit(OpCodes.Ldloc, argsLocal);
-        il.Emit(OpCodes.Callvirt, runtime.EventEmitter.Emit);
+        il.Emit(OpCodes.Callvirt, eventEmitter.Emit);
         il.Emit(OpCodes.Pop);
 
         il.Emit(OpCodes.Br, loopTop);
@@ -204,42 +192,42 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitMessagePortRef(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitMessagePortRef(TypeBuilder typeBuilder, EmittedMessagePortRuntime port, EmittedEventLoopRuntime eventLoop)
     {
         var method = typeBuilder.DefineMethod("Ref", MethodAttributes.Public, _types.Void, Type.EmptyTypes);
-        _messagePortRef = method;
+        port.Ref = method;
 
         var il = method.GetILGenerator();
         var alreadyRefedLabel = il.DefineLabel();
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _messagePortRefedField);
+        il.Emit(OpCodes.Ldfld, port.Refed);
         il.Emit(OpCodes.Brtrue, alreadyRefedLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Stfld, _messagePortRefedField);
-        il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
-        il.Emit(OpCodes.Callvirt, runtime.EventLoop.Ref);
+        il.Emit(OpCodes.Stfld, port.Refed);
+        il.Emit(OpCodes.Call, eventLoop.GetInstance);
+        il.Emit(OpCodes.Callvirt, eventLoop.Ref);
         il.MarkLabel(alreadyRefedLabel);
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitMessagePortUnref(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitMessagePortUnref(TypeBuilder typeBuilder, EmittedMessagePortRuntime port, EmittedEventLoopRuntime eventLoop)
     {
         var method = typeBuilder.DefineMethod("Unref", MethodAttributes.Public, _types.Void, Type.EmptyTypes);
-        _messagePortUnref = method;
+        port.Unref = method;
 
         var il = method.GetILGenerator();
         var notRefedLabel = il.DefineLabel();
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _messagePortRefedField);
+        il.Emit(OpCodes.Ldfld, port.Refed);
         il.Emit(OpCodes.Brfalse, notRefedLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Stfld, _messagePortRefedField);
-        il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
-        il.Emit(OpCodes.Callvirt, runtime.EventLoop.Unref);
+        il.Emit(OpCodes.Stfld, port.Refed);
+        il.Emit(OpCodes.Call, eventLoop.GetInstance);
+        il.Emit(OpCodes.Callvirt, eventLoop.Unref);
         il.MarkLabel(notRefedLabel);
         il.Emit(OpCodes.Ret);
     }
@@ -255,7 +243,7 @@ public partial class RuntimeEmitter
     /// If this port is already started when the transfer is recorded, Ref it now
     /// since <c>Start()</c> won't run again.
     /// </summary>
-    private void EmitMessagePortMarkTransferredAcrossThreads(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitMessagePortMarkTransferredAcrossThreads(TypeBuilder typeBuilder, EmittedMessagePortRuntime port)
     {
         var method = typeBuilder.DefineMethod("MarkTransferredAcrossThreads", MethodAttributes.Public, _types.Void, Type.EmptyTypes);
 
@@ -266,31 +254,31 @@ public partial class RuntimeEmitter
 
         // if (_crossThread) return;
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _messagePortCrossThreadField);
+        il.Emit(OpCodes.Ldfld, port.CrossThread);
         il.Emit(OpCodes.Brtrue, exitLabel);
 
         // _crossThread = true;
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Stfld, _messagePortCrossThreadField);
+        il.Emit(OpCodes.Stfld, port.CrossThread);
 
         // if (_started && !_closed && !_refed) this.Ref();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _messagePortStartedField);
+        il.Emit(OpCodes.Ldfld, port.Started);
         il.Emit(OpCodes.Brfalse, skipRefLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _messagePortClosedField);
+        il.Emit(OpCodes.Ldfld, port.Closed);
         il.Emit(OpCodes.Brtrue, skipRefLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _messagePortRefedField);
+        il.Emit(OpCodes.Ldfld, port.Refed);
         il.Emit(OpCodes.Brtrue, skipRefLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, _messagePortRef);
+        il.Emit(OpCodes.Call, port.Ref);
         il.MarkLabel(skipRefLabel);
 
         // var partner = _partner as $MessagePort; partner?.MarkTransferredAcrossThreads();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _messagePortPartnerField);
+        il.Emit(OpCodes.Ldfld, port.Partner);
         il.Emit(OpCodes.Isinst, typeBuilder);
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Brfalse, noPartnerLabel);
@@ -310,10 +298,10 @@ public partial class RuntimeEmitter
     /// plain in-process port (never transferred, #1254) does not Ref — its queue
     /// drains synchronously and shouldn't keep the process running forever.
     /// </summary>
-    private void EmitMessagePortStart(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitMessagePortStart(TypeBuilder typeBuilder, EmittedMessagePortRuntime port, EmittedEventLoopRuntime eventLoop)
     {
         var method = typeBuilder.DefineMethod("Start", MethodAttributes.Public, _types.Void, Type.EmptyTypes);
-        _messagePortStart = method;
+        port.Start = method;
 
         var il = method.GetILGenerator();
         var exitLabel = il.DefineLabel();
@@ -321,31 +309,31 @@ public partial class RuntimeEmitter
 
         // if (_started || _closed) return
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _messagePortStartedField);
+        il.Emit(OpCodes.Ldfld, port.Started);
         il.Emit(OpCodes.Brtrue, exitLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _messagePortClosedField);
+        il.Emit(OpCodes.Ldfld, port.Closed);
         il.Emit(OpCodes.Brtrue, exitLabel);
 
         // _started = true
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Stfld, _messagePortStartedField);
+        il.Emit(OpCodes.Stfld, port.Started);
 
         // if (_crossThread) this.Ref();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _messagePortCrossThreadField);
+        il.Emit(OpCodes.Ldfld, port.CrossThread);
         il.Emit(OpCodes.Brfalse, skipRefLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, _messagePortRef);
+        il.Emit(OpCodes.Call, port.Ref);
         il.MarkLabel(skipRefLabel);
 
         // $EventLoop.GetInstance().Schedule(new Action(this.Drain))
-        il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
+        il.Emit(OpCodes.Call, eventLoop.GetInstance);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldftn, _messagePortDrain);
+        il.Emit(OpCodes.Ldftn, port.Drain);
         il.Emit(OpCodes.Newobj, typeof(Action).GetConstructor([_types.Object, typeof(IntPtr)])!);
-        il.Emit(OpCodes.Callvirt, runtime.EventLoop.Schedule);
+        il.Emit(OpCodes.Callvirt, eventLoop.Schedule);
 
         il.MarkLabel(exitLabel);
         il.Emit(OpCodes.Ret);
@@ -356,7 +344,12 @@ public partial class RuntimeEmitter
     /// to the partner port; delivery is scheduled (async) once the partner
     /// has started.
     /// </summary>
-    private void EmitMessagePortPostMessage(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitMessagePortPostMessage(
+        TypeBuilder typeBuilder,
+        EmittedMessagePortRuntime port,
+        EmittedEventLoopRuntime eventLoop,
+        MethodInfo structuredClone,
+        Type dataCloneError)
     {
         var method = typeBuilder.DefineMethod(
             "PostMessage",
@@ -372,18 +365,18 @@ public partial class RuntimeEmitter
 
         // if (_closed) return
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _messagePortClosedField);
+        il.Emit(OpCodes.Ldfld, port.Closed);
         il.Emit(OpCodes.Brtrue, exitLabel);
 
         // partner = _partner as $MessagePort; if (partner == null || partner._closed) return
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _messagePortPartnerField);
+        il.Emit(OpCodes.Ldfld, port.Partner);
         il.Emit(OpCodes.Isinst, typeBuilder);
         il.Emit(OpCodes.Stloc, partnerLocal);
         il.Emit(OpCodes.Ldloc, partnerLocal);
         il.Emit(OpCodes.Brfalse, exitLabel);
         il.Emit(OpCodes.Ldloc, partnerLocal);
-        il.Emit(OpCodes.Ldfld, _messagePortClosedField);
+        il.Emit(OpCodes.Ldfld, port.Closed);
         il.Emit(OpCodes.Brtrue, exitLabel);
 
         // Node model: an uncloneable value is NOT thrown back on the sender — the receiver
@@ -397,13 +390,13 @@ public partial class RuntimeEmitter
         il.BeginExceptionBlock();
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Call, runtime.StructuredCloneClone);
+        il.Emit(OpCodes.Call, structuredClone);
         il.Emit(OpCodes.Stloc, clonedLocal);
         il.Emit(OpCodes.Leave, haveValueLabel);
 
-        il.BeginCatchBlock(runtime.TSDataCloneErrorType);
+        il.BeginCatchBlock(dataCloneError);
         il.Emit(OpCodes.Pop);
-        il.Emit(OpCodes.Ldsfld, _messagePortCloneErrorField);
+        il.Emit(OpCodes.Ldsfld, port.CloneError);
         il.Emit(OpCodes.Stloc, clonedLocal);
         il.EndExceptionBlock();
 
@@ -411,7 +404,7 @@ public partial class RuntimeEmitter
 
         // partner._pending.Enqueue(cloned)
         il.Emit(OpCodes.Ldloc, partnerLocal);
-        il.Emit(OpCodes.Ldfld, _messagePortPendingField);
+        il.Emit(OpCodes.Ldfld, port.Pending);
         il.Emit(OpCodes.Ldloc, clonedLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ConcurrentQueueOfObject, "Enqueue", [_types.Object])!);
 
@@ -425,7 +418,7 @@ public partial class RuntimeEmitter
         var afterOnEnqueue = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, partnerLocal);
         il.Emit(OpCodes.Volatile);
-        il.Emit(OpCodes.Ldfld, _messagePortOnEnqueueField);
+        il.Emit(OpCodes.Ldfld, port.OnEnqueue);
         il.Emit(OpCodes.Stloc, onEnqueueLocal);
         il.Emit(OpCodes.Ldloc, onEnqueueLocal);
         il.Emit(OpCodes.Brfalse, afterOnEnqueue);
@@ -435,19 +428,19 @@ public partial class RuntimeEmitter
 
         // if (partner._started) $EventLoop.GetInstance().Schedule(new Action(partner.Drain))
         il.Emit(OpCodes.Ldloc, partnerLocal);
-        il.Emit(OpCodes.Ldfld, _messagePortStartedField);
+        il.Emit(OpCodes.Ldfld, port.Started);
         il.Emit(OpCodes.Brfalse, exitLabel);
-        il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
+        il.Emit(OpCodes.Call, eventLoop.GetInstance);
         il.Emit(OpCodes.Ldloc, partnerLocal);
-        il.Emit(OpCodes.Ldftn, _messagePortDrain);
+        il.Emit(OpCodes.Ldftn, port.Drain);
         il.Emit(OpCodes.Newobj, typeof(Action).GetConstructor([_types.Object, typeof(IntPtr)])!);
-        il.Emit(OpCodes.Callvirt, runtime.EventLoop.Schedule);
+        il.Emit(OpCodes.Callvirt, eventLoop.Schedule);
 
         il.MarkLabel(exitLabel);
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitMessagePortClose(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitMessagePortClose(TypeBuilder typeBuilder, EmittedMessagePortRuntime port, EmittedEventEmitterRuntime eventEmitter)
     {
         var method = typeBuilder.DefineMethod("Close", MethodAttributes.Public, _types.Void, Type.EmptyTypes);
 
@@ -456,24 +449,24 @@ public partial class RuntimeEmitter
 
         // if (_closed) return
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _messagePortClosedField);
+        il.Emit(OpCodes.Ldfld, port.Closed);
         il.Emit(OpCodes.Brtrue, alreadyClosedLabel);
 
         // _closed = true
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Stfld, _messagePortClosedField);
+        il.Emit(OpCodes.Stfld, port.Closed);
 
         // this.Unref()
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, _messagePortUnref);
+        il.Emit(OpCodes.Call, port.Unref);
 
         // this.Emit("close", new object[0])
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "close");
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Newarr, _types.Object);
-        il.Emit(OpCodes.Callvirt, runtime.EventEmitter.Emit);
+        il.Emit(OpCodes.Callvirt, eventEmitter.Emit);
         il.Emit(OpCodes.Pop);
 
         il.MarkLabel(alreadyClosedLabel);
@@ -486,7 +479,10 @@ public partial class RuntimeEmitter
     /// Covers on/once/addListener/prepend* — they all funnel through
     /// AddListenerInternal, which Callvirts this hook.
     /// </summary>
-    private void EmitMessagePortOnListenerAdded(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitMessagePortOnListenerAdded(
+        TypeBuilder typeBuilder,
+        EmittedMessagePortRuntime port,
+        EmittedEventEmitterRuntime eventEmitter)
     {
         var method = typeBuilder.DefineMethod(
             "OnListenerAdded",
@@ -494,7 +490,7 @@ public partial class RuntimeEmitter
             _types.Void,
             [_types.String]
         );
-        typeBuilder.DefineMethodOverride(method, runtime.EventEmitter.OnListenerAdded);
+        typeBuilder.DefineMethodOverride(method, eventEmitter.OnListenerAdded);
 
         var il = method.GetILGenerator();
         var exitLabel = il.DefineLabel();
@@ -505,13 +501,13 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, exitLabel);
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, _messagePortStart);
+        il.Emit(OpCodes.Call, port.Start);
 
         il.MarkLabel(exitLabel);
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitMessageChannelClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private void EmitMessageChannelClass(ModuleBuilder moduleBuilder, EmittedMessageChannelRuntime channels)
     {
         var typeBuilder = moduleBuilder.DefineType(
             "$MessageChannel",
@@ -528,25 +524,25 @@ public partial class RuntimeEmitter
         );
         {
             var il = ctor.GetILGenerator();
-            var p1Local = il.DeclareLocal(_messagePortType);
-            var p2Local = il.DeclareLocal(_messagePortType);
+            var p1Local = il.DeclareLocal(channels.Port.Type);
+            var p2Local = il.DeclareLocal(channels.Port.Type);
 
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Call, _types.GetDefaultConstructor(_types.Object));
 
             // p1 = new $MessagePort(); p2 = new $MessagePort()
-            il.Emit(OpCodes.Newobj, _messagePortCtor);
+            il.Emit(OpCodes.Newobj, channels.Port.Ctor);
             il.Emit(OpCodes.Stloc, p1Local);
-            il.Emit(OpCodes.Newobj, _messagePortCtor);
+            il.Emit(OpCodes.Newobj, channels.Port.Ctor);
             il.Emit(OpCodes.Stloc, p2Local);
 
             // p1._partner = p2; p2._partner = p1
             il.Emit(OpCodes.Ldloc, p1Local);
             il.Emit(OpCodes.Ldloc, p2Local);
-            il.Emit(OpCodes.Stfld, _messagePortPartnerField);
+            il.Emit(OpCodes.Stfld, channels.Port.Partner);
             il.Emit(OpCodes.Ldloc, p2Local);
             il.Emit(OpCodes.Ldloc, p1Local);
-            il.Emit(OpCodes.Stfld, _messagePortPartnerField);
+            il.Emit(OpCodes.Stfld, channels.Port.Partner);
 
             // _port1 = p1; _port2 = p2
             il.Emit(OpCodes.Ldarg_0);
@@ -567,11 +563,10 @@ public partial class RuntimeEmitter
 
         typeBuilder.CreateType();
 
-        runtime.TSMessageChannelType = typeBuilder;
-        _messageChannelCtorBuilder = ctor;
+        channels.Type = typeBuilder;
+        channels.Ctor = ctor;
     }
 
-    private ConstructorBuilder _messageChannelCtorBuilder = null!;
 
     private void EmitReadOnlyObjectProperty(TypeBuilder typeBuilder, string propertyName, FieldBuilder backingField)
     {
@@ -594,9 +589,9 @@ public partial class RuntimeEmitter
     /// $Runtime.CreateMessageChannel() — kept as the public construction entry
     /// (TryEmitBuiltInConstructor calls it for `new MessageChannel()`).
     /// </summary>
-    private void EmitCreateMessageChannelHelper(EmittedRuntime runtime)
+    private void EmitCreateMessageChannelHelper(TypeBuilder runtimeType, EmittedMessageChannelRuntime channels)
     {
-        var method = _runtimeTypeBuilder!.DefineMethod(
+        var method = runtimeType.DefineMethod(
             "CreateMessageChannel",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
@@ -604,9 +599,9 @@ public partial class RuntimeEmitter
         );
 
         var il = method.GetILGenerator();
-        il.Emit(OpCodes.Newobj, _messageChannelCtorBuilder);
+        il.Emit(OpCodes.Newobj, channels.Ctor);
         il.Emit(OpCodes.Ret);
 
-        runtime.TSMessageChannelCtor = method;
+        channels.Create = method;
     }
 }

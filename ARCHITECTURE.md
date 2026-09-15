@@ -763,6 +763,17 @@ validated at completion. Late-bound bridge dispatch, worker event-loop delegates
 policy, namespace method values, emitted IL, and runtime deployment are unchanged. BCL reflection
 references and body locals remain scoped; no flat cluster aliases remain.
 
+Message channels have required `EmittedMessageChannelRuntime` and `EmittedMessagePortRuntime`
+owners for seventeen distinct declarations, replacing three flat properties and fifteen emitter
+fields. Thirteen emission helpers receive explicit family, event-emitter, event-loop, clone, and
+runtime-type dependencies as needed. The deferred worker receive body takes the port owner and
+undefined instance explicitly; its own declaration and reflection-cache state remain in the worker
+phase. Port declarations are readable before body/type completion, while channel declarations keep
+their existing later publication. Completion validates both owners before freezing either. Peer-field
+visibility, clone-error sentinel, reflected worker bridge ABI, queue ordering, volatile notification,
+cross-thread keep-alive behavior, and standalone deployment remain unchanged. Channel property
+backing fields/getters and BCL reflection references remain scoped construction values.
+
 During emission, each handle becomes readable as soon as its declaration is assigned, so forward
 references do not require a method body to exist yet. An early read names the missing declaration.
 Completion is an orchestration boundary, not an IL verifier: body emission and type finalization

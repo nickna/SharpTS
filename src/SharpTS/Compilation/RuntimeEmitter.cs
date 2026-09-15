@@ -579,12 +579,13 @@ public partial class RuntimeEmitter
         // $Runtime.StructuredClone for per-message cloning). Unconditional,
         // matching the previous CreateMessageChannel helper (#222).
         // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSMessagePort
-        EmitMessageChannelTypes(moduleBuilder, runtime);
+        EmitMessageChannelTypes(moduleBuilder, runtime.MessageChannels, _runtimeTypeBuilder!,
+            runtime.EventEmitter, runtime.EventLoop, runtime.StructuredCloneClone, runtime.TSDataCloneErrorType);
 
         // receiveMessageOnPort's body reads $MessagePort's _pending/_closed/_cloneError, so it
         // must be filled now that EmitMessageChannelTypes has created the type (#1077). Still
         // before EmitRuntimeClassFinalize, which closes the $Runtime type this method lives on.
-        EmitWorkerThreadsReceiveMessageOnPortBody(runtime);
+        EmitWorkerThreadsReceiveMessageOnPortBody(runtime.MessageChannels.Port, runtime.UndefinedInstance);
 
         // Web Streams — gated on UsesWebStreams. The only external references are
         // user-code `new ReadableStream(...)`/`new WritableStream(...)`/`new TransformStream(...)`
@@ -691,6 +692,7 @@ public partial class RuntimeEmitter
         runtime.TypedArrays.CompleteEmission();
         runtime.Atomics?.CompleteEmission();
         runtime.Cluster?.CompleteEmission();
+        runtime.MessageChannels.CompleteEmission();
         runtime.EventEmitter.CompleteEmission();
         runtime.NodeStreams?.CompleteEmission();
         runtime.WebStreams?.CompleteEmission();

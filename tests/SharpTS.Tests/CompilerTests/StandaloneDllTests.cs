@@ -1411,6 +1411,156 @@ public class StandaloneDllTests
             verifyStandardError: error => Assert.Empty(error), standardInput: ""));
     }
 
+    public static IEnumerable<object[]> MessageChannelMetadataPrograms =>
+    [
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = """
+                const channel:any=new MessageChannel();console.log(channel.port1!==null,channel.port2!==null,channel.port1!==channel.port2);
+                """,
+            },
+            "true true true\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = """
+                const channel:any=new MessageChannel();channel.port1.postMessage('first');channel.port1.postMessage('second');channel.port2.on('message',(value:any)=>console.log(value));
+                """,
+            },
+            "first\nsecond\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = """
+                const channel:any=new MessageChannel();const value:any={id:1,nested:[2]};channel.port1.postMessage(value);value.id=9;value.nested[0]=8;channel.port2.on('message',(copy:any)=>{console.log(copy.id,copy.nested[0],copy===value);channel.port1.close();channel.port2.close();});
+                """,
+            },
+            "1 2 false\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = """
+                import {MessageChannel} from 'worker_threads';const channel:any=new MessageChannel();channel.port2.on('messageerror',()=>console.log('error'));channel.port2.on('message',(value:any)=>console.log(value));channel.port1.postMessage({nested:[()=>{}]});channel.port1.postMessage('after');
+                """,
+            },
+            "error\nafter\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = """
+                import {MessageChannel,receiveMessageOnPort} from 'worker_threads';const channel:any=new MessageChannel();
+                console.log(receiveMessageOnPort(channel.port2)===undefined,receiveMessageOnPort(null)===undefined,receiveMessageOnPort({})===undefined);
+                channel.port1.postMessage({value:7});const item:any=receiveMessageOnPort(channel.port2);console.log(item.message.value,receiveMessageOnPort(channel.port2)===undefined);
+                channel.port1.postMessage(()=>{});const error:any=receiveMessageOnPort(channel.port2);console.log(error.message===undefined);
+                channel.port1.postMessage(8);channel.port2.close();console.log(receiveMessageOnPort(channel.port2)===undefined);channel.port1.close();
+                """,
+            },
+            "true true true\n7 true\ntrue\ntrue\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = """
+                const channel:any=new MessageChannel();channel.port2.on('close',()=>console.log('closed'));channel.port2.on('message',(value:any)=>console.log('unexpected'));channel.port1.postMessage('queued');channel.port2.close();channel.port2.close();channel.port1.postMessage('late');channel.port1.close();console.log('done');
+                """,
+            },
+            "closed\ndone\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = """
+                const channel:any=new MessageChannel();channel.port1.ref();channel.port1.ref();channel.port1.unref();channel.port1.unref();channel.port2.start();channel.port2.start();channel.port1.close();channel.port2.close();console.log('done');
+                """,
+            },
+            "done\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = """
+                import {receiveMessageOnPort} from 'worker_threads';const channel:any=new MessageChannel();const value=new Uint8Array([1,2]);channel.port1.postMessage(value);value[0]=9;const result:any=receiveMessageOnPort(channel.port2);console.log(result.message[0],result.message[1]);channel.port1.close();channel.port2.close();
+                """,
+            },
+            "1 2\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = """
+                async function run(){const channel:any=new MessageChannel();await new Promise<void>(resolve=>setTimeout(resolve,1));channel.port2.on('message',(value:any)=>{console.log(value);channel.port1.close();channel.port2.close();});channel.port1.postMessage('async');}run();
+                """,
+            },
+            "async\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = """
+                function* values():Generator<any,void,any>{const channel:any=new MessageChannel();yield channel;channel.port1.postMessage('generator');}const iterator=values();const channel:any=iterator.next().value;channel.port2.on('message',(value:any)=>{console.log(value);channel.port1.close();channel.port2.close();});iterator.next();
+                """,
+            },
+            "generator\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.cjs"] = """
+                const workers=require('node:worker_threads');console.log(workers.isMainThread);const channel=new MessageChannel();channel.port2.on('message',value=>{console.log(value);channel.port1.close();channel.port2.close();});channel.port1.postMessage('common');
+                """,
+            },
+            "true\ncommon\n", "main.cjs", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = """
+                import {Worker,MessageChannel} from 'worker_threads';const {port1,port2}=new MessageChannel();
+                const worker=new Worker(__dirname+'/worker.ts',{workerData:{port:port1},transferList:[port1]});
+                port2.on('message',(value:any)=>{console.log(value);port2.close();});port2.postMessage('ping');
+                """,
+                ["worker.ts"] = """
+                import {workerData,receiveMessageOnPort} from 'worker_threads';const port:any=workerData.port;const timer=setInterval(()=>{const item:any=receiveMessageOnPort(port);if(item){port.postMessage('reply:'+item.message);clearInterval(timer);port.close();}},10);
+                """,
+            },
+            "reply:ping\n", "main.ts", false
+        }
+    ];
+
+    [Theory]
+    [MemberData(nameof(MessageChannelMetadataPrograms))]
+    public void Isolated_MessageChannelMetadata_PreservesCloningQueueDeliveryAndWorkerTransfers(Dictionary<string, string> files, string expected, string entryPoint, bool standalone)
+    {
+        using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        foreach (var (path, source) in files) tempDir.CreateFile(path, source);
+        var dllPath = tempDir.GetPath("message_channel_metadata.dll");
+        var deployment = standalone ? " --standalone" : "";
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{tempDir.GetPath(entryPoint)}\" -o \"{dllPath}\" --verify{deployment}", tempDir.Path);
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(dllPath));
+        Assert.Equal(!standalone, File.Exists(tempDir.GetPath("SharpTS.dll")));
+        Assert.Equal(expected, ExecuteCompiledDllIsolated(dllPath, timeoutMs: 30000,
+            verifyStandardError: error => Assert.Empty(error)));
+    }
+
     public static IEnumerable<object[]> ClusterMetadataPrograms =>
     [
         new object[]

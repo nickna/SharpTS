@@ -2217,10 +2217,10 @@ public partial class RuntimeEmitter
     /// queued, or <c>undefined</c> when the argument is not a port, the port is closed, or the
     /// queue is empty. A clone-failure sentinel dequeues as <c>{ message: undefined }</c>.
     /// </summary>
-    private void EmitWorkerThreadsReceiveMessageOnPortBody(EmittedRuntime runtime)
+    private void EmitWorkerThreadsReceiveMessageOnPortBody(EmittedMessagePortRuntime port, FieldInfo undefinedInstance)
     {
         var il = _receiveMessageOnPortMethod.GetILGenerator();
-        var portLocal = il.DeclareLocal(_messagePortType);
+        var portLocal = il.DeclareLocal(port.Type);
         var msgLocal = il.DeclareLocal(_types.Object);
         var valueLocal = il.DeclareLocal(_types.Object);
         var dictLocal = il.DeclareLocal(_types.DictionaryStringObject);
@@ -2235,7 +2235,7 @@ public partial class RuntimeEmitter
 
         // port = arg0 as $MessagePort; realm-local ports use the direct queue path.
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, _messagePortType);
+        il.Emit(OpCodes.Isinst, port.Type);
         il.Emit(OpCodes.Stloc, portLocal);
         il.Emit(OpCodes.Ldloc, portLocal);
         il.Emit(OpCodes.Brtrue, emittedPortLabel);
@@ -2287,12 +2287,12 @@ public partial class RuntimeEmitter
 
         // if (port._closed) return undefined
         il.Emit(OpCodes.Ldloc, portLocal);
-        il.Emit(OpCodes.Ldfld, _messagePortClosedField);
+        il.Emit(OpCodes.Ldfld, port.Closed);
         il.Emit(OpCodes.Brtrue, undefinedLabel);
 
         // if (!port._pending.TryDequeue(out msg)) return undefined
         il.Emit(OpCodes.Ldloc, portLocal);
-        il.Emit(OpCodes.Ldfld, _messagePortPendingField);
+        il.Emit(OpCodes.Ldfld, port.Pending);
         il.Emit(OpCodes.Ldloca, msgLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ConcurrentQueueOfObject, "TryDequeue", [_types.Object.MakeByRefType()])!);
         il.Emit(OpCodes.Brfalse, undefinedLabel);
@@ -2302,9 +2302,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, msgLocal);
         il.Emit(OpCodes.Stloc, valueLocal);
         il.Emit(OpCodes.Ldloc, msgLocal);
-        il.Emit(OpCodes.Ldsfld, _messagePortCloneErrorField);
+        il.Emit(OpCodes.Ldsfld, port.CloneError);
         il.Emit(OpCodes.Bne_Un, afterMarkerLabel);
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, undefinedInstance);
         il.Emit(OpCodes.Stloc, valueLocal);
         il.MarkLabel(afterMarkerLabel);
 
@@ -2319,7 +2319,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(undefinedLabel);
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, undefinedInstance);
         il.Emit(OpCodes.Ret);
     }
 
