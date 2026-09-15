@@ -68,6 +68,8 @@ public partial class RuntimeEmitter
             runtime.BeginPromiseEmission();
             runtime.BeginTimerPromiseEmission();
         }
+        if (features.UsesVm)
+            runtime.BeginVmEmission();
         if (features.UsesReadline)
             runtime.BeginReadlineEmission();
         if (features.UsesTextEncoding)
@@ -683,6 +685,7 @@ public partial class RuntimeEmitter
         runtime.Microtasks.CompleteEmission();
         runtime.TimerPromises?.CompleteEmission();
         runtime.Modules.CompleteEmission();
+        runtime.Vm?.CompleteEmission();
         runtime.Readline?.CompleteEmission();
         runtime.TextEncoding?.CompleteEmission();
         runtime.Inspection.CompleteEmission();

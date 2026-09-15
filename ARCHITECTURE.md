@@ -668,6 +668,19 @@ order, and output dependencies are unchanged. Promise wrapping retains its exist
 method-local BCL references and property/constructor builders remain scoped construction locals.
 No migrated flat aliases or CommonJS emitter-held copies remain.
 
+VM uses optional `EmittedVmRuntime`, selected by `UsesVm`, for twelve checked method declarations.
+Thirteen VM emission helpers take this component; memory measurement also takes the Promise
+component. A module-scoped registration callback keeps the eight exported callable registrations
+at their original declaration points, before their bodies are emitted. The shared built-in-module
+registry remains an orchestration-owned dispatch index for generic import/require consumers;
+it does not replace the family's declaration ownership or freeze boundary. Script, constants,
+context, compiled-function, and source-text/synthetic-module consumers use checked VM metadata.
+VM still records its SharpTS runtime requirement and loads the interpreter by reflection, without
+adding a guest assembly reference. Normal CLI output co-locates that runtime; standalone output
+preserves its explicit missing-runtime error. Emission order, existing cross-runtime behavior,
+and Promise wrapping are unchanged. BCL reflection handles remain method-local construction
+values; no migrated flat aliases or emitter-held VM copies remain.
+
 During emission, each handle becomes readable as soon as its declaration is assigned, so forward
 references do not require a method body to exist yet. An early read names the missing declaration.
 Completion is an orchestration boundary, not an IL verifier: body emission and type finalization

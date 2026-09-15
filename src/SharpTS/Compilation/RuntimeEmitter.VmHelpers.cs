@@ -10,20 +10,20 @@ public partial class RuntimeEmitter
     /// The vm module inherently requires the interpreter at runtime since it compiles
     /// and executes arbitrary strings of code.
     /// </summary>
-    private void EmitVmMethods(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitVmMethods(TypeBuilder typeBuilder, EmittedVmRuntime vm, EmittedPromiseRuntime promise, Action<string, MethodBuilder> registerModuleMethod)
     {
-        EmitVmRunInNewContext(typeBuilder, runtime);
-        EmitVmRunInThisContext(typeBuilder, runtime);
-        EmitVmRunInContext(typeBuilder, runtime);
-        EmitVmCreateContext(typeBuilder, runtime);
-        EmitVmIsContext(typeBuilder, runtime);
-        EmitVmCompileFunction(typeBuilder, runtime);
-        EmitVmMeasureMemory(typeBuilder, runtime);
-        EmitVmGetConstants(typeBuilder, runtime);
-        EmitVmGetScriptConstructor(typeBuilder, runtime);
-        EmitVmNewScript(typeBuilder, runtime);
-        EmitVmNewSourceTextModule(typeBuilder, runtime);
-        EmitVmNewSyntheticModule(typeBuilder, runtime);
+        EmitVmRunInNewContext(typeBuilder, vm, registerModuleMethod);
+        EmitVmRunInThisContext(typeBuilder, vm, registerModuleMethod);
+        EmitVmRunInContext(typeBuilder, vm, registerModuleMethod);
+        EmitVmCreateContext(typeBuilder, vm, registerModuleMethod);
+        EmitVmIsContext(typeBuilder, vm, registerModuleMethod);
+        EmitVmCompileFunction(typeBuilder, vm, registerModuleMethod);
+        EmitVmMeasureMemory(typeBuilder, vm, promise, registerModuleMethod);
+        EmitVmGetConstants(typeBuilder, vm);
+        EmitVmGetScriptConstructor(typeBuilder, vm, registerModuleMethod);
+        EmitVmNewScript(typeBuilder, vm);
+        EmitVmNewSourceTextModule(typeBuilder, vm);
+        EmitVmNewSyntheticModule(typeBuilder, vm);
     }
 
     /// <summary>
@@ -32,15 +32,15 @@ public partial class RuntimeEmitter
     /// reflection and wraps it in a native $Promise (a cross-boundary SharpTSPromise is
     /// not unwrapped by compiled await, so we can't return the interpreter's promise).
     /// </summary>
-    private void EmitVmMeasureMemory(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitVmMeasureMemory(TypeBuilder typeBuilder, EmittedVmRuntime vm, EmittedPromiseRuntime promise, Action<string, MethodBuilder> registerModuleMethod)
     {
         var method = typeBuilder.DefineMethod(
             "VmMeasureMemory",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.Object]);
-        runtime.VmMeasureMemory = method;
-        runtime.RegisterBuiltInModuleMethod("vm", "measureMemory", method);
+        vm.MeasureMemory = method;
+        registerModuleMethod("measureMemory", method);
 
         var il = method.GetILGenerator();
 
@@ -67,7 +67,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.MethodInfo, "Invoke", _types.Object, _types.ObjectArray));
 
         // return $Runtime.Resolve(dict)  →  native $Promise
-        il.Emit(OpCodes.Call, runtime.RequirePromise().TypeResolve);
+        il.Emit(OpCodes.Call, promise.TypeResolve);
         il.Emit(OpCodes.Ret);
     }
 
@@ -75,15 +75,15 @@ public partial class RuntimeEmitter
     /// Emits: public static object VmRunInContext(object code, object contextifiedObject, object options)
     /// Delegates to VmModuleInterpreter.GetExports()["runInContext"] via reflection.
     /// </summary>
-    private void EmitVmRunInContext(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitVmRunInContext(TypeBuilder typeBuilder, EmittedVmRuntime vm, Action<string, MethodBuilder> registerModuleMethod)
     {
         var method = typeBuilder.DefineMethod(
             "VmRunInContext",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.Object, _types.Object, _types.Object]);
-        runtime.VmRunInContext = method;
-        runtime.RegisterBuiltInModuleMethod("vm", "runInContext", method);
+        vm.RunInContext = method;
+        registerModuleMethod("runInContext", method);
 
         var il = method.GetILGenerator();
         EmitVmReflectionCall(il, "runInContext", 3);
@@ -93,14 +93,14 @@ public partial class RuntimeEmitter
     /// Emits: public static object VmGetConstants()
     /// Returns VmModuleInterpreter.GetExports()["constants"] via reflection.
     /// </summary>
-    private void EmitVmGetConstants(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitVmGetConstants(TypeBuilder typeBuilder, EmittedVmRuntime vm)
     {
         var method = typeBuilder.DefineMethod(
             "VmGetConstants",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             Type.EmptyTypes);
-        runtime.VmGetConstants = method;
+        vm.GetConstants = method;
 
         var il = method.GetILGenerator();
         EmitVmGetExportValue(il, "constants");
@@ -110,15 +110,15 @@ public partial class RuntimeEmitter
     /// Emits: public static object VmRunInNewContext(object code, object contextObject, object options)
     /// Delegates to VmModuleInterpreter.GetExports()["runInNewContext"] via reflection.
     /// </summary>
-    private void EmitVmRunInNewContext(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitVmRunInNewContext(TypeBuilder typeBuilder, EmittedVmRuntime vm, Action<string, MethodBuilder> registerModuleMethod)
     {
         var method = typeBuilder.DefineMethod(
             "VmRunInNewContext",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.Object, _types.Object, _types.Object]);
-        runtime.VmRunInNewContext = method;
-        runtime.RegisterBuiltInModuleMethod("vm", "runInNewContext", method);
+        vm.RunInNewContext = method;
+        registerModuleMethod("runInNewContext", method);
 
         var il = method.GetILGenerator();
         EmitVmReflectionCall(il, "runInNewContext", 3);
@@ -128,15 +128,15 @@ public partial class RuntimeEmitter
     /// Emits: public static object VmRunInThisContext(object code, object options)
     /// Delegates to VmModuleInterpreter.GetExports()["runInThisContext"] via reflection.
     /// </summary>
-    private void EmitVmRunInThisContext(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitVmRunInThisContext(TypeBuilder typeBuilder, EmittedVmRuntime vm, Action<string, MethodBuilder> registerModuleMethod)
     {
         var method = typeBuilder.DefineMethod(
             "VmRunInThisContext",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.Object, _types.Object]);
-        runtime.VmRunInThisContext = method;
-        runtime.RegisterBuiltInModuleMethod("vm", "runInThisContext", method);
+        vm.RunInThisContext = method;
+        registerModuleMethod("runInThisContext", method);
 
         var il = method.GetILGenerator();
         EmitVmReflectionCall(il, "runInThisContext", 2);
@@ -146,15 +146,15 @@ public partial class RuntimeEmitter
     /// Emits: public static object VmCreateContext(object contextObject)
     /// Delegates to VmModuleInterpreter.GetExports()["createContext"] via reflection.
     /// </summary>
-    private void EmitVmCreateContext(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitVmCreateContext(TypeBuilder typeBuilder, EmittedVmRuntime vm, Action<string, MethodBuilder> registerModuleMethod)
     {
         var method = typeBuilder.DefineMethod(
             "VmCreateContext",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.Object, _types.Object]);
-        runtime.VmCreateContext = method;
-        runtime.RegisterBuiltInModuleMethod("vm", "createContext", method);
+        vm.CreateContext = method;
+        registerModuleMethod("createContext", method);
 
         var il = method.GetILGenerator();
         EmitVmReflectionCall(il, "createContext", 2);
@@ -164,15 +164,15 @@ public partial class RuntimeEmitter
     /// Emits: public static object VmIsContext(object obj)
     /// Delegates to VmModuleInterpreter.GetExports()["isContext"] via reflection.
     /// </summary>
-    private void EmitVmIsContext(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitVmIsContext(TypeBuilder typeBuilder, EmittedVmRuntime vm, Action<string, MethodBuilder> registerModuleMethod)
     {
         var method = typeBuilder.DefineMethod(
             "VmIsContext",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.Object]);
-        runtime.VmIsContext = method;
-        runtime.RegisterBuiltInModuleMethod("vm", "isContext", method);
+        vm.IsContext = method;
+        registerModuleMethod("isContext", method);
 
         var il = method.GetILGenerator();
         EmitVmReflectionCall(il, "isContext", 1);
@@ -183,15 +183,15 @@ public partial class RuntimeEmitter
     /// Delegates to VmModuleInterpreter.GetExports()["compileFunction"] via reflection.
     /// Returns a BuiltInMethod that InvokeMethodValue dispatches via reflection fallback.
     /// </summary>
-    private void EmitVmCompileFunction(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitVmCompileFunction(TypeBuilder typeBuilder, EmittedVmRuntime vm, Action<string, MethodBuilder> registerModuleMethod)
     {
         var method = typeBuilder.DefineMethod(
             "VmCompileFunction",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.Object, _types.Object, _types.Object]);
-        runtime.VmCompileFunction = method;
-        runtime.RegisterBuiltInModuleMethod("vm", "compileFunction", method);
+        vm.CompileFunction = method;
+        registerModuleMethod("compileFunction", method);
 
         var il = method.GetILGenerator();
         EmitVmReflectionCall(il, "compileFunction", 3);
@@ -201,15 +201,15 @@ public partial class RuntimeEmitter
     /// Emits: public static object VmGetScriptConstructor()
     /// Delegates to VmModuleInterpreter.GetExports()["Script"] via reflection.
     /// </summary>
-    private void EmitVmGetScriptConstructor(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitVmGetScriptConstructor(TypeBuilder typeBuilder, EmittedVmRuntime vm, Action<string, MethodBuilder> registerModuleMethod)
     {
         var method = typeBuilder.DefineMethod(
             "VmGetScriptConstructor",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             Type.EmptyTypes);
-        runtime.VmGetScriptConstructor = method;
-        runtime.RegisterBuiltInModuleMethod("vm", "Script", method);
+        vm.GetScriptConstructor = method;
+        registerModuleMethod("Script", method);
 
         var il = method.GetILGenerator();
         EmitVmGetExportValue(il, "Script");
@@ -268,14 +268,14 @@ public partial class RuntimeEmitter
     /// Emits: public static object VmNewScript(object code, object options)
     /// Creates a vm.Script object via reflection to VmScriptConstructor.
     /// </summary>
-    private void EmitVmNewScript(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitVmNewScript(TypeBuilder typeBuilder, EmittedVmRuntime vm)
     {
         var method = typeBuilder.DefineMethod(
             "VmNewScript",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.Object, _types.Object]);
-        runtime.VmNewScript = method;
+        vm.NewScript = method;
 
         EmitVmConstructorCall(method.GetILGenerator(), "Script", 2);
     }
@@ -284,14 +284,14 @@ public partial class RuntimeEmitter
     /// Emits: public static object VmNewSourceTextModule(object code, object options)
     /// Creates a vm.SourceTextModule facade via reflection to VmSourceTextModuleConstructor.
     /// </summary>
-    private void EmitVmNewSourceTextModule(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitVmNewSourceTextModule(TypeBuilder typeBuilder, EmittedVmRuntime vm)
     {
         var method = typeBuilder.DefineMethod(
             "VmNewSourceTextModule",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.Object, _types.Object]);
-        runtime.VmNewSourceTextModule = method;
+        vm.NewSourceTextModule = method;
 
         EmitVmConstructorCall(method.GetILGenerator(), "SourceTextModule", 2);
     }
@@ -300,14 +300,14 @@ public partial class RuntimeEmitter
     /// Emits: public static object VmNewSyntheticModule(object exportNames, object evaluateCallback, object options)
     /// Creates a vm.SyntheticModule facade via reflection to VmSyntheticModuleConstructor.
     /// </summary>
-    private void EmitVmNewSyntheticModule(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitVmNewSyntheticModule(TypeBuilder typeBuilder, EmittedVmRuntime vm)
     {
         var method = typeBuilder.DefineMethod(
             "VmNewSyntheticModule",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.Object, _types.Object, _types.Object]);
-        runtime.VmNewSyntheticModule = method;
+        vm.NewSyntheticModule = method;
 
         EmitVmConstructorCall(method.GetILGenerator(), "SyntheticModule", 3);
     }

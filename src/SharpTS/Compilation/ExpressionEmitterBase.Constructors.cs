@@ -603,7 +603,7 @@ public abstract partial class ExpressionEmitterBase
             case "Script":
                 EmitBoxedArgOrNull(arguments, 0);
                 EmitBoxedArgOrNull(arguments, 1);
-                IL.Emit(OpCodes.Call, Ctx.Runtime!.VmNewScript);
+                IL.Emit(OpCodes.Call, Ctx.Runtime!.RequireVm().NewScript);
                 SetStackUnknown();
                 return true;
 
@@ -611,7 +611,7 @@ public abstract partial class ExpressionEmitterBase
             case "SourceTextModule":
                 EmitBoxedArgOrNull(arguments, 0);
                 EmitBoxedArgOrNull(arguments, 1);
-                IL.Emit(OpCodes.Call, Ctx.Runtime!.VmNewSourceTextModule);
+                IL.Emit(OpCodes.Call, Ctx.Runtime!.RequireVm().NewSourceTextModule);
                 SetStackUnknown();
                 return true;
 
@@ -620,7 +620,7 @@ public abstract partial class ExpressionEmitterBase
                 EmitBoxedArgOrNull(arguments, 0);
                 EmitBoxedArgOrNull(arguments, 1);
                 EmitBoxedArgOrNull(arguments, 2);
-                IL.Emit(OpCodes.Call, Ctx.Runtime!.VmNewSyntheticModule);
+                IL.Emit(OpCodes.Call, Ctx.Runtime!.RequireVm().NewSyntheticModule);
                 SetStackUnknown();
                 return true;
 
