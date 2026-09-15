@@ -1319,6 +1319,57 @@ public class StandaloneDllTests
         finally { CleanupTempDir(tempDir); }
     }
 
+    public static IEnumerable<object[]> InspectionMetadataPrograms =>
+    [
+        new object[]
+        {
+            """
+            console.dir(null); console.dir(undefined); console.dir('text'); console.dir(42.5);
+            console.dir(true); console.dir(false); console.dir([]); console.dir({});
+            globalThis.console.dir({global:'yes'});
+            """,
+            "null\nundefined\n'text'\n42.5\ntrue\nfalse\n[  ]\n{  }\n{ global: 'yes' }\n"
+        },
+        new object[]
+        {
+            """
+            console.dir({name:'x', list:[1,{a:2}]});
+            const obj: any = {}; obj.self = obj; console.dir(obj);
+            const arr: any[] = []; arr.push(arr); console.dir(arr);
+            """,
+            "{ name: 'x', list: [ 1, [Object] ] }\n{ self: { self: [Object] } }\n[ [ [Array] ] ]\n"
+        },
+        new object[]
+        {
+            """
+            async function run(): Promise<void> { console.dir(await Promise.resolve({label:'async', values:[1,2]})); }
+            run();
+            function* items(): Generator<number, void, any> { console.dir(yield 1); }
+            const it = items(); console.log(it.next().value); it.next({label:'generator'});
+            """,
+            "{ label: 'async', values: [ 1, 2 ] }\n1\n{ label: 'generator' }\n"
+        },
+    ];
+
+    [Theory]
+    [MemberData(nameof(InspectionMetadataPrograms))]
+    public void Isolated_InspectionMetadata_PreservesFormattingRecursionAndSuspension(string source, string expected)
+    {
+        Assert.Empty(TestHarness.CompileAndVerifyOnly(source));
+        var (tempDir, dllPath) = CompileStandalone(source);
+        try
+        {
+            Assert.DoesNotContain("SharpTS", GetAssemblyReferences(dllPath));
+            Assert.False(File.Exists(Path.Combine(tempDir, "SharpTS.dll")));
+            Assert.Equal(expected, ExecuteCompiledDllIsolated(dllPath, timeoutMs: 15000,
+                verifyStandardError: error => Assert.Empty(error)));
+        }
+        finally
+        {
+            CleanupTempDir(tempDir);
+        }
+    }
+
     public static IEnumerable<object[]> ConsoleMetadataPrograms =>
     [
         new object[]

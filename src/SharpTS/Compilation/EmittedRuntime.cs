@@ -1549,10 +1549,8 @@ public class EmittedRuntime
     public TypeBuilder TSTextDecoderDecodeMethodType { get; set; } = null!;
     public MethodBuilder TSTextDecoderDecodeMethodInvoke { get; set; } = null!;
 
-    // Util format helper methods (emitted for standalone)
-    public MethodBuilder UtilInspectValue { get; set; } = null!;
-    public MethodBuilder UtilInspectArray { get; set; } = null!;
-    public MethodBuilder UtilInspectObject { get; set; } = null!;
+    /// <summary>Required inspection metadata used by console.dir in every compilation.</summary>
+    public EmittedInspectionRuntime Inspection { get; } = new();
 
     // Readline module methods
     public MethodBuilder ReadlineQuestionSync { get; set; } = null!;

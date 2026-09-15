@@ -43,7 +43,7 @@ public partial class RuntimeEmitter
         EmitConsoleCount(typeBuilder, runtime);
         EmitConsoleCountReset(typeBuilder, runtime);
         EmitConsoleTable(typeBuilder, runtime);
-        EmitConsoleDir(typeBuilder, runtime);
+        EmitConsoleDir(typeBuilder, runtime.Console, runtime.Inspection);
         EmitConsoleGroup(typeBuilder, runtime);
         EmitConsoleGroupMultiple(typeBuilder, runtime.Console);
         EmitConsoleGroupEnd(typeBuilder, runtime.Console);
@@ -912,7 +912,7 @@ public partial class RuntimeEmitter
     /// Emits: public static void ConsoleDir(object obj)
     /// Prints object in an inspected format using UtilInspectValue.
     /// </summary>
-    private void EmitConsoleDir(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitConsoleDir(TypeBuilder typeBuilder, EmittedConsoleRuntime console, EmittedInspectionRuntime inspection)
     {
         var method = typeBuilder.DefineMethod(
             "ConsoleDir",
@@ -920,7 +920,7 @@ public partial class RuntimeEmitter
             _types.Void,
             [_types.Object]
         );
-        runtime.Console.Dir = method;
+        console.Dir = method;
 
         var il = method.GetILGenerator();
 
@@ -929,7 +929,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);       // obj
         il.Emit(OpCodes.Ldc_I4_2);      // depth = 2 (maxDepth)
         il.Emit(OpCodes.Ldc_I4_0);      // currentDepth = 0
-        il.Emit(OpCodes.Call, runtime.UtilInspectValue);
+        il.Emit(OpCodes.Call, inspection.InspectValue);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Console, "WriteLine", _types.String));
         il.Emit(OpCodes.Ret);
     }

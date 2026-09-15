@@ -12,9 +12,9 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits InspectValue: dispatches to appropriate handler based on type.
     /// </summary>
-    private void EmitUtilInspectValueBody(EmittedRuntime runtime)
+    private void EmitUtilInspectValueBody(EmittedInspectionRuntime inspection)
     {
-        var il = runtime.UtilInspectValue.GetILGenerator();
+        var il = inspection.InspectValue.GetILGenerator();
 
         var returnNullLabel = il.DefineLabel();
         var checkDepthLabel = il.DefineLabel();
@@ -118,7 +118,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Call, runtime.UtilInspectArray);
+        il.Emit(OpCodes.Call, inspection.InspectArray);
         il.Emit(OpCodes.Ret);
 
         // Dict case: call InspectObject
@@ -126,7 +126,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Call, runtime.UtilInspectObject);
+        il.Emit(OpCodes.Call, inspection.InspectObject);
         il.Emit(OpCodes.Ret);
 
         // Delegate case: return "[Function]"
@@ -150,9 +150,9 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits InspectArray: formats array as "[ elem1, elem2, ... ]"
     /// </summary>
-    private void EmitUtilInspectArrayBody(EmittedRuntime runtime)
+    private void EmitUtilInspectArrayBody(EmittedInspectionRuntime inspection)
     {
-        var il = runtime.UtilInspectArray.GetILGenerator();
+        var il = inspection.InspectArray.GetILGenerator();
 
         var depthExceededLabel = il.DefineLabel();
         var loopStartLabel = il.DefineLabel();
@@ -210,7 +210,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_2); // currentDepth
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Add);
-        il.Emit(OpCodes.Call, runtime.UtilInspectValue);
+        il.Emit(OpCodes.Call, inspection.InspectValue);
         il.Emit(OpCodes.Callvirt, _types.StringBuilderAppendString);
         il.Emit(OpCodes.Pop);
 
@@ -243,9 +243,9 @@ public partial class RuntimeEmitter
     /// Emits InspectObject: formats object as "{ key1: val1, key2: val2, ... }"
     /// Uses Keys collection to avoid complex enumerator handling.
     /// </summary>
-    private void EmitUtilInspectObjectBody(EmittedRuntime runtime)
+    private void EmitUtilInspectObjectBody(EmittedInspectionRuntime inspection)
     {
-        var il = runtime.UtilInspectObject.GetILGenerator();
+        var il = inspection.InspectObject.GetILGenerator();
 
         var depthExceededLabel = il.DefineLabel();
 
@@ -331,7 +331,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_2); // currentDepth
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Add);
-        il.Emit(OpCodes.Call, runtime.UtilInspectValue);
+        il.Emit(OpCodes.Call, inspection.InspectValue);
         il.Emit(OpCodes.Callvirt, _types.StringBuilderAppendString);
         il.Emit(OpCodes.Pop);
 

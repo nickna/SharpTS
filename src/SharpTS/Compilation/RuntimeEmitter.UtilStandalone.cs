@@ -1,5 +1,3 @@
-using System.Reflection.Emit;
-
 namespace SharpTS.Compilation;
 
 /// <summary>
@@ -18,10 +16,10 @@ namespace SharpTS.Compilation;
 /// </remarks>
 public partial class RuntimeEmitter
 {
-    private void EmitUtilStandaloneMethods(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitUtilStandaloneMethods(EmittedInspectionRuntime inspection)
     {
-        EmitUtilInspectValueBody(runtime);
-        EmitUtilInspectArrayBody(runtime);
-        EmitUtilInspectObjectBody(runtime);
+        EmitUtilInspectValueBody(inspection);
+        EmitUtilInspectArrayBody(inspection);
+        EmitUtilInspectObjectBody(inspection);
     }
 }
