@@ -231,7 +231,7 @@ public partial class RuntimeEmitter
             {
                 il.Emit(OpCodes.Ldarg_0);
                 il.Emit(OpCodes.Ldarg_1);
-                il.Emit(OpCodes.Call, runtime.FsCreateReadStream);
+                il.Emit(OpCodes.Call, runtime.RequireFileSystemStreams().CreateReadStream);
             });
 
         // createWriteStream(path, options?) -> $FsWriteStream
@@ -240,7 +240,7 @@ public partial class RuntimeEmitter
             {
                 il.Emit(OpCodes.Ldarg_0);
                 il.Emit(OpCodes.Ldarg_1);
-                il.Emit(OpCodes.Call, runtime.FsCreateWriteStream);
+                il.Emit(OpCodes.Call, runtime.RequireFileSystemStreams().CreateWriteStream);
             });
     }
 
