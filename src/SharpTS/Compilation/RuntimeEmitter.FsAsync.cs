@@ -15,7 +15,7 @@ public partial class RuntimeEmitter
     private void EmitFsAsyncMethods(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         // #971: real-async infra (Ref + Task.Run + Unref). Must precede the ops.
-        EmitFsRunAsyncInfra(typeBuilder, runtime);
+        EmitFsRunAsyncInfra(typeBuilder, runtime.RequireFileSystemAsync(), runtime.EventLoop);
 
         // Emit all async fs methods with inline IL
         EmitFsReadFileAsync(typeBuilder, runtime);
@@ -55,17 +55,17 @@ public partial class RuntimeEmitter
             _types.TaskOfObject,
             [_types.Object, _types.Object]
         );
-        runtime.FsReadFileAsync = method;
+        runtime.RequireFileSystemAsync().ReadFile = method;
 
         var il = method.GetILGenerator();
-        EmitFsAsyncDispatch(il, runtime.RequireFileSystem().ReadFileSync, 2);
+        EmitFsAsyncDispatch(runtime.RequireFileSystemAsync(), il, runtime.RequireFileSystem().ReadFileSync, 2);
 
         runtime.RegisterBuiltInModuleMethod("fs/promises", "readFile", method);
     }
 
     /// <summary>
     /// Emits: Task&lt;object?&gt; FsWriteFileAsync(object path, object data, object? options)
-    /// Calls FsWriteFileSync and returns Task.FromResult(null).
+    /// Dispatches FsWriteFileSync on the thread pool and returns its Task.
     /// </summary>
     private void EmitFsWriteFileAsync(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
@@ -75,10 +75,10 @@ public partial class RuntimeEmitter
             _types.TaskOfObject,
             [_types.Object, _types.Object, _types.Object]
         );
-        runtime.FsWriteFileAsync = method;
+        runtime.RequireFileSystemAsync().WriteFile = method;
 
         var il = method.GetILGenerator();
-        EmitFsAsyncDispatch(il, runtime.RequireFileSystem().WriteFileSync, 3);
+        EmitFsAsyncDispatch(runtime.RequireFileSystemAsync(), il, runtime.RequireFileSystem().WriteFileSync, 3);
 
         runtime.RegisterBuiltInModuleMethod("fs/promises", "writeFile", method);
     }
@@ -95,10 +95,10 @@ public partial class RuntimeEmitter
             _types.TaskOfObject,
             [_types.Object, _types.Object, _types.Object]
         );
-        runtime.FsAppendFileAsync = method;
+        runtime.RequireFileSystemAsync().AppendFile = method;
 
         var il = method.GetILGenerator();
-        EmitFsAsyncDispatch(il, runtime.RequireFileSystem().AppendFileSync, 3);
+        EmitFsAsyncDispatch(runtime.RequireFileSystemAsync(), il, runtime.RequireFileSystem().AppendFileSync, 3);
 
         runtime.RegisterBuiltInModuleMethod("fs/promises", "appendFile", method);
     }
@@ -115,10 +115,10 @@ public partial class RuntimeEmitter
             _types.TaskOfObject,
             [_types.Object]
         );
-        runtime.FsStatAsync = method;
+        runtime.RequireFileSystemAsync().Stat = method;
 
         var il = method.GetILGenerator();
-        EmitFsAsyncDispatch(il, runtime.RequireFileSystem().StatRaw, 1);
+        EmitFsAsyncDispatch(runtime.RequireFileSystemAsync(), il, runtime.RequireFileSystem().StatRaw, 1);
 
         runtime.RegisterBuiltInModuleMethod("fs/promises", "stat", method);
     }
@@ -135,10 +135,10 @@ public partial class RuntimeEmitter
             _types.TaskOfObject,
             [_types.Object]
         );
-        runtime.FsLstatAsync = method;
+        runtime.RequireFileSystemAsync().Lstat = method;
 
         var il = method.GetILGenerator();
-        EmitFsAsyncDispatch(il, runtime.RequireFileSystem().LstatRaw, 1);
+        EmitFsAsyncDispatch(runtime.RequireFileSystemAsync(), il, runtime.RequireFileSystem().LstatRaw, 1);
 
         runtime.RegisterBuiltInModuleMethod("fs/promises", "lstat", method);
     }
@@ -155,10 +155,10 @@ public partial class RuntimeEmitter
             _types.TaskOfObject,
             [_types.Object]
         );
-        runtime.FsUnlinkAsync = method;
+        runtime.RequireFileSystemAsync().Unlink = method;
 
         var il = method.GetILGenerator();
-        EmitFsAsyncDispatch(il, runtime.RequireFileSystem().UnlinkSync, 1);
+        EmitFsAsyncDispatch(runtime.RequireFileSystemAsync(), il, runtime.RequireFileSystem().UnlinkSync, 1);
 
         runtime.RegisterBuiltInModuleMethod("fs/promises", "unlink", method);
     }
@@ -175,10 +175,10 @@ public partial class RuntimeEmitter
             _types.TaskOfObject,
             [_types.Object, _types.Object]
         );
-        runtime.FsMkdirAsync = method;
+        runtime.RequireFileSystemAsync().Mkdir = method;
 
         var il = method.GetILGenerator();
-        EmitFsAsyncDispatch(il, runtime.RequireFileSystem().MkdirSync, 2);
+        EmitFsAsyncDispatch(runtime.RequireFileSystemAsync(), il, runtime.RequireFileSystem().MkdirSync, 2);
 
         runtime.RegisterBuiltInModuleMethod("fs/promises", "mkdir", method);
     }
@@ -195,10 +195,10 @@ public partial class RuntimeEmitter
             _types.TaskOfObject,
             [_types.Object, _types.Object]
         );
-        runtime.FsRmdirAsync = method;
+        runtime.RequireFileSystemAsync().Rmdir = method;
 
         var il = method.GetILGenerator();
-        EmitFsAsyncDispatch(il, runtime.RequireFileSystem().RmdirSync, 2);
+        EmitFsAsyncDispatch(runtime.RequireFileSystemAsync(), il, runtime.RequireFileSystem().RmdirSync, 2);
 
         runtime.RegisterBuiltInModuleMethod("fs/promises", "rmdir", method);
     }
@@ -215,7 +215,7 @@ public partial class RuntimeEmitter
             _types.TaskOfObject,
             [_types.Object, _types.Object]
         );
-        runtime.FsRmAsync = method;
+        runtime.RequireFileSystemAsync().Rm = method;
 
         // rm has inline logic (recursive/force), so its sync body lives in
         // FsRmAsyncImpl and is run on the thread pool via FsRunAsync like the
@@ -303,7 +303,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ret);
         }
 
-        EmitFsAsyncDispatch(method.GetILGenerator(), impl, 2);
+        EmitFsAsyncDispatch(runtime.RequireFileSystemAsync(), method.GetILGenerator(), impl, 2);
 
         runtime.RegisterBuiltInModuleMethod("fs/promises", "rm", method);
     }
@@ -320,10 +320,10 @@ public partial class RuntimeEmitter
             _types.TaskOfObject,
             [_types.Object, _types.Object]
         );
-        runtime.FsReaddirAsync = method;
+        runtime.RequireFileSystemAsync().Readdir = method;
 
         var il = method.GetILGenerator();
-        EmitFsAsyncDispatch(il, runtime.RequireFileSystem().ReaddirSync, 2);
+        EmitFsAsyncDispatch(runtime.RequireFileSystemAsync(), il, runtime.RequireFileSystem().ReaddirSync, 2);
 
         runtime.RegisterBuiltInModuleMethod("fs/promises", "readdir", method);
     }
@@ -340,10 +340,10 @@ public partial class RuntimeEmitter
             _types.TaskOfObject,
             [_types.Object, _types.Object]
         );
-        runtime.FsRenameAsync = method;
+        runtime.RequireFileSystemAsync().Rename = method;
 
         var il = method.GetILGenerator();
-        EmitFsAsyncDispatch(il, runtime.RequireFileSystem().RenameSync, 2);
+        EmitFsAsyncDispatch(runtime.RequireFileSystemAsync(), il, runtime.RequireFileSystem().RenameSync, 2);
 
         runtime.RegisterBuiltInModuleMethod("fs/promises", "rename", method);
     }
@@ -360,10 +360,10 @@ public partial class RuntimeEmitter
             _types.TaskOfObject,
             [_types.Object, _types.Object, _types.Object]
         );
-        runtime.FsCopyFileAsync = method;
+        runtime.RequireFileSystemAsync().CopyFile = method;
 
         var il = method.GetILGenerator();
-        EmitFsAsyncDispatch(il, runtime.RequireFileSystem().CopyFileSync, 2);
+        EmitFsAsyncDispatch(runtime.RequireFileSystemAsync(), il, runtime.RequireFileSystem().CopyFileSync, 2);
 
         runtime.RegisterBuiltInModuleMethod("fs/promises", "copyFile", method);
     }
@@ -380,10 +380,10 @@ public partial class RuntimeEmitter
             _types.TaskOfObject,
             [_types.Object, _types.Object]
         );
-        runtime.FsAccessAsync = method;
+        runtime.RequireFileSystemAsync().Access = method;
 
         var il = method.GetILGenerator();
-        EmitFsAsyncDispatch(il, runtime.RequireFileSystem().AccessSync, 2);
+        EmitFsAsyncDispatch(runtime.RequireFileSystemAsync(), il, runtime.RequireFileSystem().AccessSync, 2);
 
         runtime.RegisterBuiltInModuleMethod("fs/promises", "access", method);
     }
@@ -400,10 +400,10 @@ public partial class RuntimeEmitter
             _types.TaskOfObject,
             [_types.Object, _types.Object]
         );
-        runtime.FsChmodAsync = method;
+        runtime.RequireFileSystemAsync().Chmod = method;
 
         var il = method.GetILGenerator();
-        EmitFsAsyncDispatch(il, runtime.RequireFileSystem().ChmodSync, 2);
+        EmitFsAsyncDispatch(runtime.RequireFileSystemAsync(), il, runtime.RequireFileSystem().ChmodSync, 2);
 
         runtime.RegisterBuiltInModuleMethod("fs/promises", "chmod", method);
     }
@@ -420,10 +420,10 @@ public partial class RuntimeEmitter
             _types.TaskOfObject,
             [_types.Object, _types.Object]
         );
-        runtime.FsTruncateAsync = method;
+        runtime.RequireFileSystemAsync().Truncate = method;
 
         var il = method.GetILGenerator();
-        EmitFsAsyncDispatch(il, runtime.RequireFileSystem().TruncateSync, 2);
+        EmitFsAsyncDispatch(runtime.RequireFileSystemAsync(), il, runtime.RequireFileSystem().TruncateSync, 2);
 
         runtime.RegisterBuiltInModuleMethod("fs/promises", "truncate", method);
     }
@@ -440,10 +440,10 @@ public partial class RuntimeEmitter
             _types.TaskOfObject,
             [_types.Object, _types.Object, _types.Object]
         );
-        runtime.FsUtimesAsync = method;
+        runtime.RequireFileSystemAsync().Utimes = method;
 
         var il = method.GetILGenerator();
-        EmitFsAsyncDispatch(il, runtime.RequireFileSystem().UtimesSync, 3);
+        EmitFsAsyncDispatch(runtime.RequireFileSystemAsync(), il, runtime.RequireFileSystem().UtimesSync, 3);
 
         runtime.RegisterBuiltInModuleMethod("fs/promises", "utimes", method);
     }
@@ -460,10 +460,10 @@ public partial class RuntimeEmitter
             _types.TaskOfObject,
             [_types.Object]
         );
-        runtime.FsReadlinkAsync = method;
+        runtime.RequireFileSystemAsync().Readlink = method;
 
         var il = method.GetILGenerator();
-        EmitFsAsyncDispatch(il, runtime.RequireFileSystem().ReadlinkSync, 1);
+        EmitFsAsyncDispatch(runtime.RequireFileSystemAsync(), il, runtime.RequireFileSystem().ReadlinkSync, 1);
 
         runtime.RegisterBuiltInModuleMethod("fs/promises", "readlink", method);
     }
@@ -480,10 +480,10 @@ public partial class RuntimeEmitter
             _types.TaskOfObject,
             [_types.Object]
         );
-        runtime.FsRealpathAsync = method;
+        runtime.RequireFileSystemAsync().Realpath = method;
 
         var il = method.GetILGenerator();
-        EmitFsAsyncDispatch(il, runtime.RequireFileSystem().RealpathSync, 1);
+        EmitFsAsyncDispatch(runtime.RequireFileSystemAsync(), il, runtime.RequireFileSystem().RealpathSync, 1);
 
         runtime.RegisterBuiltInModuleMethod("fs/promises", "realpath", method);
     }
@@ -500,10 +500,10 @@ public partial class RuntimeEmitter
             _types.TaskOfObject,
             [_types.Object, _types.Object, _types.Object]
         );
-        runtime.FsSymlinkAsync = method;
+        runtime.RequireFileSystemAsync().Symlink = method;
 
         var il = method.GetILGenerator();
-        EmitFsAsyncDispatch(il, runtime.RequireFileSystem().SymlinkSync, 3);
+        EmitFsAsyncDispatch(runtime.RequireFileSystemAsync(), il, runtime.RequireFileSystem().SymlinkSync, 3);
 
         runtime.RegisterBuiltInModuleMethod("fs/promises", "symlink", method);
     }
@@ -520,10 +520,10 @@ public partial class RuntimeEmitter
             _types.TaskOfObject,
             [_types.Object, _types.Object]
         );
-        runtime.FsLinkAsync = method;
+        runtime.RequireFileSystemAsync().Link = method;
 
         var il = method.GetILGenerator();
-        EmitFsAsyncDispatch(il, runtime.RequireFileSystem().LinkSync, 2);
+        EmitFsAsyncDispatch(runtime.RequireFileSystemAsync(), il, runtime.RequireFileSystem().LinkSync, 2);
 
         runtime.RegisterBuiltInModuleMethod("fs/promises", "link", method);
     }
@@ -540,10 +540,10 @@ public partial class RuntimeEmitter
             _types.TaskOfObject,
             [_types.Object]
         );
-        runtime.FsMkdtempAsync = method;
+        runtime.RequireFileSystemAsync().Mkdtemp = method;
 
         var il = method.GetILGenerator();
-        EmitFsAsyncDispatch(il, runtime.RequireFileSystem().MkdtempSync, 1);
+        EmitFsAsyncDispatch(runtime.RequireFileSystemAsync(), il, runtime.RequireFileSystem().MkdtempSync, 1);
 
         runtime.RegisterBuiltInModuleMethod("fs/promises", "mkdtemp", method);
     }
@@ -556,7 +556,7 @@ public partial class RuntimeEmitter
     private void EmitFsGetPromisesNamespace(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         // First, emit wrapper methods that call async helpers and wrap results in Promises
-        EmitFsPromisesWrapperMethods(typeBuilder, runtime);
+        EmitFsPromisesWrapperMethods(typeBuilder, runtime.RequireFileSystemAsync(), runtime.RequirePromise());
 
         var method = typeBuilder.DefineMethod(
             "FsGetPromisesNamespace",
@@ -564,7 +564,7 @@ public partial class RuntimeEmitter
             _types.Object,
             Type.EmptyTypes
         );
-        runtime.FsGetPromisesNamespace = method;
+        runtime.RequireFileSystemAsync().GetPromisesNamespace = method;
 
         var il = method.GetILGenerator();
 
@@ -577,7 +577,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, dictLocal);
 
         // Add each wrapper method as a TSFunction
-        var fsPromisesWrappers = runtime.FsPromisesWrapperMethods;
+        var fsPromisesWrappers = runtime.RequireFileSystemAsync().PromisesWrapperMethods;
         foreach (var (name, wrapper) in fsPromisesWrappers)
         {
             il.Emit(OpCodes.Ldloc, dictLocal);
@@ -608,33 +608,31 @@ public partial class RuntimeEmitter
 
     /// <summary>
     /// Emits wrapper methods for fs.promises that call the async helpers and wrap results in Promises.
-    /// Each wrapper method takes List&lt;object?&gt; args (for TSFunction compatibility).
+    /// Each wrapper takes individual object parameters for TSFunction compatibility.
     /// </summary>
-    private void EmitFsPromisesWrapperMethods(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitFsPromisesWrapperMethods(TypeBuilder typeBuilder, EmittedFileSystemAsyncRuntime fsAsync, EmittedPromiseRuntime promise)
     {
-        runtime.FsPromisesWrapperMethods = new Dictionary<string, MethodBuilder>();
-
-        EmitPromisesWrapper(typeBuilder, runtime, "readFile", runtime.FsReadFileAsync, 2);
-        EmitPromisesWrapper(typeBuilder, runtime, "writeFile", runtime.FsWriteFileAsync, 3);
-        EmitPromisesWrapper(typeBuilder, runtime, "appendFile", runtime.FsAppendFileAsync, 3);
-        EmitPromisesWrapper(typeBuilder, runtime, "stat", runtime.FsStatAsync, 1);
-        EmitPromisesWrapper(typeBuilder, runtime, "lstat", runtime.FsLstatAsync, 1);
-        EmitPromisesWrapper(typeBuilder, runtime, "unlink", runtime.FsUnlinkAsync, 1);
-        EmitPromisesWrapper(typeBuilder, runtime, "mkdir", runtime.FsMkdirAsync, 2);
-        EmitPromisesWrapper(typeBuilder, runtime, "rmdir", runtime.FsRmdirAsync, 2);
-        EmitPromisesWrapper(typeBuilder, runtime, "rm", runtime.FsRmAsync, 2);
-        EmitPromisesWrapper(typeBuilder, runtime, "readdir", runtime.FsReaddirAsync, 2);
-        EmitPromisesWrapper(typeBuilder, runtime, "rename", runtime.FsRenameAsync, 2);
-        EmitPromisesWrapper(typeBuilder, runtime, "copyFile", runtime.FsCopyFileAsync, 3);
-        EmitPromisesWrapper(typeBuilder, runtime, "access", runtime.FsAccessAsync, 2);
-        EmitPromisesWrapper(typeBuilder, runtime, "chmod", runtime.FsChmodAsync, 2);
-        EmitPromisesWrapper(typeBuilder, runtime, "truncate", runtime.FsTruncateAsync, 2);
-        EmitPromisesWrapper(typeBuilder, runtime, "utimes", runtime.FsUtimesAsync, 3);
-        EmitPromisesWrapper(typeBuilder, runtime, "readlink", runtime.FsReadlinkAsync, 1);
-        EmitPromisesWrapper(typeBuilder, runtime, "realpath", runtime.FsRealpathAsync, 1);
-        EmitPromisesWrapper(typeBuilder, runtime, "symlink", runtime.FsSymlinkAsync, 3);
-        EmitPromisesWrapper(typeBuilder, runtime, "link", runtime.FsLinkAsync, 2);
-        EmitPromisesWrapper(typeBuilder, runtime, "mkdtemp", runtime.FsMkdtempAsync, 1);
+        EmitPromisesWrapper(typeBuilder, fsAsync, promise, "readFile", fsAsync.ReadFile, 2);
+        EmitPromisesWrapper(typeBuilder, fsAsync, promise, "writeFile", fsAsync.WriteFile, 3);
+        EmitPromisesWrapper(typeBuilder, fsAsync, promise, "appendFile", fsAsync.AppendFile, 3);
+        EmitPromisesWrapper(typeBuilder, fsAsync, promise, "stat", fsAsync.Stat, 1);
+        EmitPromisesWrapper(typeBuilder, fsAsync, promise, "lstat", fsAsync.Lstat, 1);
+        EmitPromisesWrapper(typeBuilder, fsAsync, promise, "unlink", fsAsync.Unlink, 1);
+        EmitPromisesWrapper(typeBuilder, fsAsync, promise, "mkdir", fsAsync.Mkdir, 2);
+        EmitPromisesWrapper(typeBuilder, fsAsync, promise, "rmdir", fsAsync.Rmdir, 2);
+        EmitPromisesWrapper(typeBuilder, fsAsync, promise, "rm", fsAsync.Rm, 2);
+        EmitPromisesWrapper(typeBuilder, fsAsync, promise, "readdir", fsAsync.Readdir, 2);
+        EmitPromisesWrapper(typeBuilder, fsAsync, promise, "rename", fsAsync.Rename, 2);
+        EmitPromisesWrapper(typeBuilder, fsAsync, promise, "copyFile", fsAsync.CopyFile, 3);
+        EmitPromisesWrapper(typeBuilder, fsAsync, promise, "access", fsAsync.Access, 2);
+        EmitPromisesWrapper(typeBuilder, fsAsync, promise, "chmod", fsAsync.Chmod, 2);
+        EmitPromisesWrapper(typeBuilder, fsAsync, promise, "truncate", fsAsync.Truncate, 2);
+        EmitPromisesWrapper(typeBuilder, fsAsync, promise, "utimes", fsAsync.Utimes, 3);
+        EmitPromisesWrapper(typeBuilder, fsAsync, promise, "readlink", fsAsync.Readlink, 1);
+        EmitPromisesWrapper(typeBuilder, fsAsync, promise, "realpath", fsAsync.Realpath, 1);
+        EmitPromisesWrapper(typeBuilder, fsAsync, promise, "symlink", fsAsync.Symlink, 3);
+        EmitPromisesWrapper(typeBuilder, fsAsync, promise, "link", fsAsync.Link, 2);
+        EmitPromisesWrapper(typeBuilder, fsAsync, promise, "mkdtemp", fsAsync.Mkdtemp, 1);
     }
 
     /// <summary>
@@ -645,7 +643,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitPromisesWrapper(
         TypeBuilder typeBuilder,
-        EmittedRuntime runtime,
+        EmittedFileSystemAsyncRuntime fsAsync, EmittedPromiseRuntime promise,
         string name,
         MethodBuilder asyncMethod,
         int argCount)
@@ -674,10 +672,10 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, asyncMethod);
 
         // Wrap the Task in a Promise
-        il.Emit(OpCodes.Call, runtime.RequirePromise().WrapTaskAsPromise);
+        il.Emit(OpCodes.Call, promise.WrapTaskAsPromise);
 
         il.Emit(OpCodes.Ret);
 
-        runtime.FsPromisesWrapperMethods[name] = wrapper;
+        fsAsync.RegisterPromiseWrapper(name, wrapper);
     }
 }

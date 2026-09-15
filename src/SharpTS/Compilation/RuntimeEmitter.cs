@@ -62,7 +62,10 @@ public partial class RuntimeEmitter
             runtime.BeginTimerPromiseEmission();
         }
         if (features.UsesFs)
+        {
             runtime.BeginFileSystemEmission();
+            runtime.BeginFileSystemAsyncEmission();
+        }
         if (features.UsesWebStreams)
             runtime.BeginWebStreamEmission();
         if (features.UsesNodeStreams)
@@ -653,6 +656,7 @@ public partial class RuntimeEmitter
         runtime.NodeStreams?.CompleteEmission();
         runtime.WebStreams?.CompleteEmission();
         runtime.FileSystem?.CompleteEmission();
+        runtime.FileSystemAsync?.CompleteEmission();
         runtime.Timers.CompleteEmission();
         runtime.Microtasks.CompleteEmission();
         runtime.TimerPromises?.CompleteEmission();

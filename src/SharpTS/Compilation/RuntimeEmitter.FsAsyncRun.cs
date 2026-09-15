@@ -11,20 +11,16 @@ public partial class RuntimeEmitter
     // loop, runs the sync op on the thread pool via $FsAsyncOp.Worker (reflection),
     // and Unrefs on completion — so the loop stays alive until the op drains
     // (mirrors fetch/DNS/timers and the interpreter's refsEventLoopWhileInFlight).
-    private ConstructorBuilder _fsAsyncOpCtor = null!;
-    private MethodBuilder _fsAsyncOpWorker = null!;
-    private MethodBuilder _fsRunAsync = null!;
-    private MethodBuilder _fsAsyncUnref = null!;
 
-    private void EmitFsRunAsyncInfra(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitFsRunAsyncInfra(TypeBuilder typeBuilder, EmittedFileSystemAsyncRuntime fsAsync, EmittedEventLoopRuntime eventLoop)
     {
-        EmitFsAsyncOpClosure(typeBuilder);
-        EmitFsAsyncUnref(typeBuilder, runtime);
-        EmitFsRunAsyncHelper(typeBuilder, runtime);
+        EmitFsAsyncOpClosure(typeBuilder, fsAsync);
+        EmitFsAsyncUnref(typeBuilder, fsAsync, eventLoop);
+        EmitFsRunAsyncHelper(typeBuilder, fsAsync, eventLoop);
     }
 
     /// <summary>$FsAsyncOp { MethodInfo _m; object[] _args; object Worker() }</summary>
-    private void EmitFsAsyncOpClosure(TypeBuilder typeBuilder)
+    private void EmitFsAsyncOpClosure(TypeBuilder typeBuilder, EmittedFileSystemAsyncRuntime fsAsync)
     {
         var t = EmitTypeDefinitions.DefineType(
             (ModuleBuilder)typeBuilder.Module,
@@ -75,8 +71,8 @@ public partial class RuntimeEmitter
         }
 
         t.CreateType();
-        _fsAsyncOpCtor = ctor;
-        _fsAsyncOpWorker = worker;
+        fsAsync.OpCtor = ctor;
+        fsAsync.OpWorker = worker;
     }
 
     /// <summary>
@@ -90,15 +86,15 @@ public partial class RuntimeEmitter
     /// only delays program exit for callback-only programs (awaited ops are unaffected
     /// — their pending top-level task keeps the loop alive regardless).
     /// </summary>
-    private void EmitFsAsyncUnref(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitFsAsyncUnref(TypeBuilder typeBuilder, EmittedFileSystemAsyncRuntime fsAsync, EmittedEventLoopRuntime eventLoop)
     {
         // static void FsAsyncUnrefNow() => EventLoop.GetInstance().Unref();
         var now = typeBuilder.DefineMethod("FsAsyncUnrefNow",
             MethodAttributes.Public | MethodAttributes.Static, _types.Void, Type.EmptyTypes);
         {
             var il = now.GetILGenerator();
-            il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
-            il.Emit(OpCodes.Call, runtime.EventLoop.Unref);
+            il.Emit(OpCodes.Call, eventLoop.GetInstance);
+            il.Emit(OpCodes.Call, eventLoop.Unref);
             il.Emit(OpCodes.Ret);
         }
 
@@ -107,11 +103,11 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static, _types.Void, [typeof(Task)]);
         {
             var il = drop.GetILGenerator();
-            il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
+            il.Emit(OpCodes.Call, eventLoop.GetInstance);
             il.Emit(OpCodes.Ldnull);
             il.Emit(OpCodes.Ldftn, now);
             il.Emit(OpCodes.Newobj, typeof(Action).GetConstructor([_types.Object, typeof(IntPtr)])!);
-            il.Emit(OpCodes.Callvirt, runtime.EventLoop.Schedule);
+            il.Emit(OpCodes.Callvirt, eventLoop.Schedule);
             il.Emit(OpCodes.Ret);
         }
 
@@ -129,11 +125,11 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Pop);
             il.Emit(OpCodes.Ret);
         }
-        _fsAsyncUnref = m;
+        fsAsync.Unref = m;
     }
 
     /// <summary>static Task&lt;object&gt; FsRunAsync(MethodInfo m, object[] args)</summary>
-    private void EmitFsRunAsyncHelper(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitFsRunAsyncHelper(TypeBuilder typeBuilder, EmittedFileSystemAsyncRuntime fsAsync, EmittedEventLoopRuntime eventLoop)
     {
         var taskRunOpen = typeof(Task).GetMethods(BindingFlags.Public | BindingFlags.Static)
             .First(x => x.Name == "Run" && x.IsGenericMethodDefinition
@@ -145,17 +141,17 @@ public partial class RuntimeEmitter
         var m = typeBuilder.DefineMethod("FsRunAsync",
             MethodAttributes.Public | MethodAttributes.Static, _types.TaskOfObject,
             [typeof(MethodInfo), typeof(object[])]);
-        _fsRunAsync = m;
+        fsAsync.RunAsync = m;
         var il = m.GetILGenerator();
 
         // EventLoop.Ref() — keep the loop alive while the op is on the pool.
-        il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
-        il.Emit(OpCodes.Call, runtime.EventLoop.Ref);
+        il.Emit(OpCodes.Call, eventLoop.GetInstance);
+        il.Emit(OpCodes.Call, eventLoop.Ref);
 
         // var t = Task.Run<object>(new Func<object>(new $FsAsyncOp(m, args).Worker))
         il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Newobj, _fsAsyncOpCtor);
-        il.Emit(OpCodes.Ldftn, _fsAsyncOpWorker);
+        il.Emit(OpCodes.Newobj, fsAsync.OpCtor);
+        il.Emit(OpCodes.Ldftn, fsAsync.OpWorker);
         il.Emit(OpCodes.Newobj, typeof(Func<object>).GetConstructor([_types.Object, typeof(IntPtr)])!);
         il.Emit(OpCodes.Call, taskRun);
         var tLocal = il.DeclareLocal(_types.TaskOfObject);
@@ -164,7 +160,7 @@ public partial class RuntimeEmitter
         // t.ContinueWith((Action<Task>)FsAsyncUnref, ExecuteSynchronously)
         il.Emit(OpCodes.Ldloc, tLocal);
         il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Ldftn, _fsAsyncUnref);
+        il.Emit(OpCodes.Ldftn, fsAsync.Unref);
         il.Emit(OpCodes.Newobj, typeof(Action<Task>).GetConstructor([_types.Object, typeof(IntPtr)])!);
         il.Emit(OpCodes.Ldc_I4, (int)TaskContinuationOptions.ExecuteSynchronously);
         il.Emit(OpCodes.Callvirt, typeof(Task).GetMethod("ContinueWith", [typeof(Action<Task>), typeof(TaskContinuationOptions)])!);
@@ -179,7 +175,7 @@ public partial class RuntimeEmitter
     /// return FsRunAsync(syncMethod, args). The sync op runs on the thread pool.
     /// Void sync methods reflect to null (a resolved promise); throws fault the Task.
     /// </summary>
-    private void EmitFsAsyncDispatch(ILGenerator il, MethodInfo syncMethod, int argCount)
+    private void EmitFsAsyncDispatch(EmittedFileSystemAsyncRuntime fsAsync, ILGenerator il, MethodInfo syncMethod, int argCount)
     {
         il.Emit(OpCodes.Ldc_I4, argCount);
         il.Emit(OpCodes.Newarr, _types.Object);
@@ -196,7 +192,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, typeof(MethodBase).GetMethod("GetMethodFromHandle", [typeof(RuntimeMethodHandle)])!);
         il.Emit(OpCodes.Castclass, typeof(MethodInfo));
         il.Emit(OpCodes.Ldloc, argsLocal);
-        il.Emit(OpCodes.Call, _fsRunAsync);
+        il.Emit(OpCodes.Call, fsAsync.RunAsync);
         il.Emit(OpCodes.Ret);
     }
 }

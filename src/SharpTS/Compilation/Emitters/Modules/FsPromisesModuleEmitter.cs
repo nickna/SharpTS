@@ -95,7 +95,7 @@ public sealed class FsPromisesModuleEmitter : IBuiltInModuleEmitter
         }
 
         // Call runtime helper: FsReadFileAsync(object path, object? options) -> Task<object>
-        il.Emit(OpCodes.Call, ctx.Runtime!.FsReadFileAsync);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireFileSystemAsync().ReadFile);
 
         // Wrap Task in Promise
         il.Emit(OpCodes.Call, ctx.Runtime!.RequirePromise().WrapTaskAsPromise);
@@ -136,7 +136,7 @@ public sealed class FsPromisesModuleEmitter : IBuiltInModuleEmitter
         }
 
         // Call runtime helper
-        il.Emit(OpCodes.Call, ctx.Runtime!.FsWriteFileAsync);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireFileSystemAsync().WriteFile);
         il.Emit(OpCodes.Call, ctx.Runtime!.RequirePromise().WrapTaskAsPromise);
 
         return true;
@@ -170,7 +170,7 @@ public sealed class FsPromisesModuleEmitter : IBuiltInModuleEmitter
             il.Emit(OpCodes.Ldnull);
         }
 
-        il.Emit(OpCodes.Call, ctx.Runtime!.FsAppendFileAsync);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireFileSystemAsync().AppendFile);
         il.Emit(OpCodes.Call, ctx.Runtime!.RequirePromise().WrapTaskAsPromise);
 
         return true;
@@ -191,7 +191,7 @@ public sealed class FsPromisesModuleEmitter : IBuiltInModuleEmitter
         emitter.EmitExpression(arguments[0]);
         emitter.EmitBoxIfNeeded(arguments[0]);
 
-        il.Emit(OpCodes.Call, ctx.Runtime!.FsStatAsync);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireFileSystemAsync().Stat);
         il.Emit(OpCodes.Call, ctx.Runtime!.RequirePromise().WrapTaskAsPromise);
 
         return true;
@@ -212,7 +212,7 @@ public sealed class FsPromisesModuleEmitter : IBuiltInModuleEmitter
         emitter.EmitExpression(arguments[0]);
         emitter.EmitBoxIfNeeded(arguments[0]);
 
-        il.Emit(OpCodes.Call, ctx.Runtime!.FsLstatAsync);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireFileSystemAsync().Lstat);
         il.Emit(OpCodes.Call, ctx.Runtime!.RequirePromise().WrapTaskAsPromise);
 
         return true;
@@ -233,7 +233,7 @@ public sealed class FsPromisesModuleEmitter : IBuiltInModuleEmitter
         emitter.EmitExpression(arguments[0]);
         emitter.EmitBoxIfNeeded(arguments[0]);
 
-        il.Emit(OpCodes.Call, ctx.Runtime!.FsUnlinkAsync);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireFileSystemAsync().Unlink);
         il.Emit(OpCodes.Call, ctx.Runtime!.RequirePromise().WrapTaskAsPromise);
 
         return true;
@@ -264,7 +264,7 @@ public sealed class FsPromisesModuleEmitter : IBuiltInModuleEmitter
             il.Emit(OpCodes.Ldnull);
         }
 
-        il.Emit(OpCodes.Call, ctx.Runtime!.FsMkdirAsync);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireFileSystemAsync().Mkdir);
         il.Emit(OpCodes.Call, ctx.Runtime!.RequirePromise().WrapTaskAsPromise);
 
         return true;
@@ -295,7 +295,7 @@ public sealed class FsPromisesModuleEmitter : IBuiltInModuleEmitter
             il.Emit(OpCodes.Ldnull);
         }
 
-        il.Emit(OpCodes.Call, ctx.Runtime!.FsRmdirAsync);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireFileSystemAsync().Rmdir);
         il.Emit(OpCodes.Call, ctx.Runtime!.RequirePromise().WrapTaskAsPromise);
 
         return true;
@@ -326,7 +326,7 @@ public sealed class FsPromisesModuleEmitter : IBuiltInModuleEmitter
             il.Emit(OpCodes.Ldnull);
         }
 
-        il.Emit(OpCodes.Call, ctx.Runtime!.FsRmAsync);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireFileSystemAsync().Rm);
         il.Emit(OpCodes.Call, ctx.Runtime!.RequirePromise().WrapTaskAsPromise);
 
         return true;
@@ -357,7 +357,7 @@ public sealed class FsPromisesModuleEmitter : IBuiltInModuleEmitter
             il.Emit(OpCodes.Ldnull);
         }
 
-        il.Emit(OpCodes.Call, ctx.Runtime!.FsReaddirAsync);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireFileSystemAsync().Readdir);
         il.Emit(OpCodes.Call, ctx.Runtime!.RequirePromise().WrapTaskAsPromise);
 
         return true;
@@ -381,7 +381,7 @@ public sealed class FsPromisesModuleEmitter : IBuiltInModuleEmitter
         emitter.EmitExpression(arguments[1]);
         emitter.EmitBoxIfNeeded(arguments[1]);
 
-        il.Emit(OpCodes.Call, ctx.Runtime!.FsRenameAsync);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireFileSystemAsync().Rename);
         il.Emit(OpCodes.Call, ctx.Runtime!.RequirePromise().WrapTaskAsPromise);
 
         return true;
@@ -415,7 +415,7 @@ public sealed class FsPromisesModuleEmitter : IBuiltInModuleEmitter
             il.Emit(OpCodes.Ldnull);
         }
 
-        il.Emit(OpCodes.Call, ctx.Runtime!.FsCopyFileAsync);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireFileSystemAsync().CopyFile);
         il.Emit(OpCodes.Call, ctx.Runtime!.RequirePromise().WrapTaskAsPromise);
 
         return true;
@@ -446,7 +446,7 @@ public sealed class FsPromisesModuleEmitter : IBuiltInModuleEmitter
             il.Emit(OpCodes.Ldnull);
         }
 
-        il.Emit(OpCodes.Call, ctx.Runtime!.FsAccessAsync);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireFileSystemAsync().Access);
         il.Emit(OpCodes.Call, ctx.Runtime!.RequirePromise().WrapTaskAsPromise);
 
         return true;
@@ -470,7 +470,7 @@ public sealed class FsPromisesModuleEmitter : IBuiltInModuleEmitter
         emitter.EmitExpression(arguments[1]);
         emitter.EmitBoxIfNeeded(arguments[1]);
 
-        il.Emit(OpCodes.Call, ctx.Runtime!.FsChmodAsync);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireFileSystemAsync().Chmod);
         il.Emit(OpCodes.Call, ctx.Runtime!.RequirePromise().WrapTaskAsPromise);
 
         return true;
@@ -501,7 +501,7 @@ public sealed class FsPromisesModuleEmitter : IBuiltInModuleEmitter
             il.Emit(OpCodes.Ldnull);
         }
 
-        il.Emit(OpCodes.Call, ctx.Runtime!.FsTruncateAsync);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireFileSystemAsync().Truncate);
         il.Emit(OpCodes.Call, ctx.Runtime!.RequirePromise().WrapTaskAsPromise);
 
         return true;
@@ -528,7 +528,7 @@ public sealed class FsPromisesModuleEmitter : IBuiltInModuleEmitter
         emitter.EmitExpression(arguments[2]);
         emitter.EmitBoxIfNeeded(arguments[2]);
 
-        il.Emit(OpCodes.Call, ctx.Runtime!.FsUtimesAsync);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireFileSystemAsync().Utimes);
         il.Emit(OpCodes.Call, ctx.Runtime!.RequirePromise().WrapTaskAsPromise);
 
         return true;
@@ -549,7 +549,7 @@ public sealed class FsPromisesModuleEmitter : IBuiltInModuleEmitter
         emitter.EmitExpression(arguments[0]);
         emitter.EmitBoxIfNeeded(arguments[0]);
 
-        il.Emit(OpCodes.Call, ctx.Runtime!.FsReadlinkAsync);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireFileSystemAsync().Readlink);
         il.Emit(OpCodes.Call, ctx.Runtime!.RequirePromise().WrapTaskAsPromise);
 
         return true;
@@ -570,7 +570,7 @@ public sealed class FsPromisesModuleEmitter : IBuiltInModuleEmitter
         emitter.EmitExpression(arguments[0]);
         emitter.EmitBoxIfNeeded(arguments[0]);
 
-        il.Emit(OpCodes.Call, ctx.Runtime!.FsRealpathAsync);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireFileSystemAsync().Realpath);
         il.Emit(OpCodes.Call, ctx.Runtime!.RequirePromise().WrapTaskAsPromise);
 
         return true;
@@ -604,7 +604,7 @@ public sealed class FsPromisesModuleEmitter : IBuiltInModuleEmitter
             il.Emit(OpCodes.Ldnull);
         }
 
-        il.Emit(OpCodes.Call, ctx.Runtime!.FsSymlinkAsync);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireFileSystemAsync().Symlink);
         il.Emit(OpCodes.Call, ctx.Runtime!.RequirePromise().WrapTaskAsPromise);
 
         return true;
@@ -628,7 +628,7 @@ public sealed class FsPromisesModuleEmitter : IBuiltInModuleEmitter
         emitter.EmitExpression(arguments[1]);
         emitter.EmitBoxIfNeeded(arguments[1]);
 
-        il.Emit(OpCodes.Call, ctx.Runtime!.FsLinkAsync);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireFileSystemAsync().Link);
         il.Emit(OpCodes.Call, ctx.Runtime!.RequirePromise().WrapTaskAsPromise);
 
         return true;
@@ -649,7 +649,7 @@ public sealed class FsPromisesModuleEmitter : IBuiltInModuleEmitter
         emitter.EmitExpression(arguments[0]);
         emitter.EmitBoxIfNeeded(arguments[0]);
 
-        il.Emit(OpCodes.Call, ctx.Runtime!.FsMkdtempAsync);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireFileSystemAsync().Mkdtemp);
         il.Emit(OpCodes.Call, ctx.Runtime!.RequirePromise().WrapTaskAsPromise);
 
         return true;

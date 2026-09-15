@@ -1211,6 +1211,110 @@ public class StandaloneDllTests
         }
     }
 
+    public static IEnumerable<object[]> FileSystemAsyncMetadataPrograms
+    {
+        get
+        {
+            yield return new object[]
+            {
+                """
+                import { writeFile, appendFile, readFile, stat, rename, unlink } from 'node:fs/promises';
+                async function main() {
+                  await writeFile('named.txt', 'ab'); await appendFile('named.txt', 'c');
+                  await rename('named.txt', 'renamed.txt');
+                  console.log(await readFile('renamed.txt', 'utf8'));
+                  console.log((await stat('renamed.txt')).size);
+                  await unlink('renamed.txt'); console.log('done');
+                }
+                main();
+                """,
+                "abc\n3\ndone\n"
+            };
+            yield return new object[]
+            {
+                """
+                import * as fs from 'fs';
+                async function main() {
+                  const write = fs.promises.writeFile;
+                  const read = fs.promises.readFile;
+                  await write('namespace.txt', '6869', 'hex');
+                  console.log((await read('namespace.txt')).toString());
+                  console.log(typeof fs.promises.constants.F_OK);
+                  await fs.promises.unlink('namespace.txt'); console.log('done');
+                }
+                main();
+                """,
+                "hi\nnumber\ndone\n"
+            };
+            yield return new object[]
+            {
+                """
+                import * as fs from 'fs/promises';
+                async function main() {
+                  await Promise.all([fs.writeFile('left.txt', 'left'), fs.writeFile('right.txt', 'right')]);
+                  const values = await Promise.all([fs.readFile('left.txt', 'utf8'), fs.readFile('right.txt', 'utf8')]);
+                  console.log(values[0], values[1]);
+                  await Promise.all([fs.unlink('left.txt'), fs.unlink('right.txt')]); console.log('done');
+                }
+                main();
+                """,
+                "left right\ndone\n"
+            };
+            yield return new object[]
+            {
+                """
+                import * as fs from 'fs';
+                import * as fsp from 'fs/promises';
+                async function main() {
+                  try { await fsp.readFile('missing.txt'); } catch (e: any) { console.log(e.code); }
+                  await fsp.rm('missing.txt', { force: true });
+                  await fsp.mkdir('tree'); await fsp.writeFile('tree/entry.txt', 'entry');
+                  await fsp.rm('tree', { recursive: true, force: true });
+                  console.log(fs.existsSync('tree')); console.log('done');
+                }
+                main();
+                """,
+                "ENOENT\nfalse\ndone\n"
+            };
+            yield return new object[]
+            {
+                """
+                import * as fs from 'fs';
+                fs.writeFileSync('callback.txt', 'callback');
+                fs.readFile('callback.txt', 'utf8', (error: any, data: any) => {
+                  console.log(data); fs.unlinkSync('callback.txt'); console.log('done');
+                });
+                """,
+                "callback\ndone\n"
+            };
+            yield return new object[]
+            {
+                """
+                import * as fs from 'fs';
+                fs.readFile('missing-callback.txt', 'utf8', (error: any, data: any) => {
+                  console.log(error.code); console.log('done');
+                });
+                """,
+                "ENOENT\ndone\n"
+            };
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(FileSystemAsyncMetadataPrograms))]
+    public void Isolated_FileSystemAsyncMetadata_PreservesPromisesErrorsConcurrencyAndCallbackDrain(string source, string expected)
+    {
+        var files = new Dictionary<string, string> { ["main.ts"] = source };
+        Assert.Empty(TestHarness.CompileModulesAndVerifyOnly(files, "main.ts"));
+        var (tempDir, dllPath) = CompileStandaloneModule(files, "main.ts");
+        try
+        {
+            Assert.DoesNotContain(GetAssemblyReferences(dllPath), name => name == "SharpTS");
+            Assert.Equal(expected, ExecuteCompiledDllIsolated(dllPath, timeoutMs: 15000));
+        }
+        finally { CleanupTempDir(tempDir); }
+    }
+
     public static IEnumerable<object[]> FileSystemMetadataPrograms
     {
         get

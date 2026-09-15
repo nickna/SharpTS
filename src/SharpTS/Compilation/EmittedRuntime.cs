@@ -1433,36 +1433,18 @@ public class EmittedRuntime
     /// <summary>Required TypedArray detection metadata with optional implementation declarations.</summary>
     public EmittedTypedArrayRuntime TypedArrays { get; } = new();
 
-    // Async fs methods (fs.promises and fs/promises)
-    public MethodBuilder FsReadFileAsync { get; set; } = null!;
-    public MethodBuilder FsWriteFileAsync { get; set; } = null!;
-    public MethodBuilder FsAppendFileAsync { get; set; } = null!;
-    public MethodBuilder FsStatAsync { get; set; } = null!;
-    public MethodBuilder FsLstatAsync { get; set; } = null!;
-    public MethodBuilder FsUnlinkAsync { get; set; } = null!;
-    public MethodBuilder FsMkdirAsync { get; set; } = null!;
-    public MethodBuilder FsRmdirAsync { get; set; } = null!;
-    public MethodBuilder FsRmAsync { get; set; } = null!;
-    public MethodBuilder FsReaddirAsync { get; set; } = null!;
-    public MethodBuilder FsRenameAsync { get; set; } = null!;
-    public MethodBuilder FsCopyFileAsync { get; set; } = null!;
-    public MethodBuilder FsAccessAsync { get; set; } = null!;
-    public MethodBuilder FsChmodAsync { get; set; } = null!;
-    public MethodBuilder FsTruncateAsync { get; set; } = null!;
-    public MethodBuilder FsUtimesAsync { get; set; } = null!;
-    public MethodBuilder FsReadlinkAsync { get; set; } = null!;
-    public MethodBuilder FsRealpathAsync { get; set; } = null!;
-    public MethodBuilder FsSymlinkAsync { get; set; } = null!;
-    public MethodBuilder FsLinkAsync { get; set; } = null!;
-    public MethodBuilder FsMkdtempAsync { get; set; } = null!;
+    /// <summary>Filesystem async metadata, or null when UsesFs is off.</summary>
+    public EmittedFileSystemAsyncRuntime? FileSystemAsync { get; private set; }
 
-    // fs.promises namespace accessor
-    public MethodBuilder FsGetPromisesNamespace { get; set; } = null!;
+    internal void BeginFileSystemAsyncEmission()
+    {
+        if (FileSystemAsync is not null)
+            throw new InvalidOperationException("Filesystem async metadata emission has already started.");
+        FileSystemAsync = new EmittedFileSystemAsyncRuntime();
+    }
 
-    // fs.promises wrapper methods for standalone compilation
-    public Dictionary<string, MethodBuilder> FsPromisesWrapperMethods { get; set; } = new();
-
-    // Helper to convert Task to Task<object?> (for void-returning async methods)
+    public EmittedFileSystemAsyncRuntime RequireFileSystemAsync() => FileSystemAsync
+        ?? throw new InvalidOperationException("Filesystem async runtime was not enabled for this compilation.");
 
     // NodeError conversion helpers
     public MethodBuilder ThrowNodeError { get; set; } = null!;
