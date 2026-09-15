@@ -68,6 +68,8 @@ public partial class RuntimeEmitter
             runtime.BeginPromiseEmission();
             runtime.BeginTimerPromiseEmission();
         }
+        if (features.UsesAsyncLocalStorage)
+            runtime.BeginAsyncLocalStorageEmission();
         if (features.UsesAbortController)
             runtime.BeginAbortEmission();
         if (features.UsesSourceExecution)
@@ -324,7 +326,7 @@ public partial class RuntimeEmitter
         // Emit $AsyncLocalStorage class for async context propagation
         // Must come after TSFunction (Run/Exit invoke callbacks via TSFunctionInvoke)
         if (features.UsesAsyncLocalStorage)
-            EmitAsyncLocalStorageClass(moduleBuilder, runtime);
+            EmitAsyncLocalStorageClass(moduleBuilder, runtime.RequireAsyncLocalStorage(), runtime.TSFunctionType, runtime.TSFunctionInvoke);
 
         // Emit $EventEmitter class for standalone event emitter support
         // NOTE: Must come after BoundTSFunction (uses TSFunctionType, BoundTSFunctionType)
@@ -689,6 +691,7 @@ public partial class RuntimeEmitter
         runtime.Microtasks.CompleteEmission();
         runtime.TimerPromises?.CompleteEmission();
         runtime.Modules.CompleteEmission();
+        runtime.AsyncLocalStorage?.CompleteEmission();
         runtime.Abort?.CompleteEmission();
         runtime.SourceExecution?.CompleteEmission();
         runtime.Vm?.CompleteEmission();

@@ -1319,6 +1319,100 @@ public class StandaloneDllTests
         finally { CleanupTempDir(tempDir); }
     }
 
+    public static IEnumerable<object[]> AsyncLocalStorageMetadataPrograms =>
+    [
+        new object[]
+        {
+            """
+            import {AsyncLocalStorage as Storage} from 'node:async_hooks';
+            const als=new Storage();console.log(als.getStore()==undefined);als.enterWith('base');
+            const result=als.run('outer',()=>{console.log(als.getStore());console.log(als.run('inner',()=>als.getStore()));
+            console.log(als.getStore());return als.exit(()=>{console.log(als.getStore()==undefined);return 7;});});
+            console.log(result,als.getStore());
+            """,
+            "true\nouter\ninner\nouter\ntrue\n7 base\n", "main.ts"
+        },
+        new object[]
+        {
+            """
+            import {AsyncLocalStorage} from 'async_hooks';const als=new AsyncLocalStorage();als.enterWith('base');
+            try{als.run('throwing',()=>{console.log(als.getStore());throw new Error('run');});}catch(e:any){console.log('caught-run');}
+            console.log(als.getStore());
+            try{als.exit(()=>{console.log(als.getStore()==undefined);throw new Error('exit');});}catch(e:any){console.log('caught-exit');}
+            console.log(als.getStore());
+            """,
+            "throwing\ncaught-run\nbase\ntrue\ncaught-exit\nbase\n", "main.ts"
+        },
+        new object[]
+        {
+            """
+            import {AsyncLocalStorage} from 'async_hooks';const als=new AsyncLocalStorage();als.enterWith('before');
+            als.disable();console.log(als.getStore()==undefined);als.enterWith('after');console.log(als.getStore()==undefined);
+            console.log(als.run('ignored',()=>als.getStore()==undefined));console.log(als.getStore()==undefined);
+            """,
+            "true\ntrue\ntrue\ntrue\n", "main.ts"
+        },
+        new object[]
+        {
+            """
+            import * as hooks from 'async_hooks';const a=new hooks.AsyncLocalStorage();const b=new hooks.AsyncLocalStorage();
+            a.run({id:1},()=>{b.run({id:2},()=>{console.log(a.getStore().id,b.getStore().id);});console.log(b.getStore()==undefined);});
+            console.log(a.getStore()==undefined,b.getStore()==undefined);
+            """,
+            "1 2\ntrue\ntrue true\n", "main.ts"
+        },
+        new object[]
+        {
+            """
+            import {AsyncLocalStorage} from 'async_hooks';const als=new AsyncLocalStorage();
+            async function read(){await new Promise<void>(resolve=>setTimeout(resolve,10));return als.getStore();}
+            const left=als.run('left',read);const right=als.run('right',read);
+            Promise.all([left,right]).then(values=>console.log(values[0],values[1],als.getStore()==undefined));
+            """,
+            "left right true\n", "main.ts"
+        },
+        new object[]
+        {
+            """
+            import {AsyncLocalStorage} from 'async_hooks';const als=new AsyncLocalStorage();
+            als.run('chain',()=>Promise.resolve(1).then(()=>{console.log(als.getStore());return Promise.resolve(2);}).then(()=>console.log(als.getStore())));
+            """,
+            "chain\nchain\n", "main.ts"
+        },
+        new object[]
+        {
+            """
+            import {AsyncLocalStorage} from 'async_hooks';const als=new AsyncLocalStorage();als.enterWith('base');
+            function* items():Generator<any,void,any>{yield als.getStore();yield als.getStore();}
+            const it=als.run('creation',()=>items());console.log(als.run('iteration',()=>it.next().value));console.log(it.next().value,als.getStore());
+            """,
+            "iteration\nbase base\n", "main.ts"
+        },
+        new object[]
+        {
+            """
+            const hooks=require('node:async_hooks');const als=new hooks.AsyncLocalStorage();als.enterWith('required');const value=als.getStore();console.log(value);als.disable();const empty=als.getStore();console.log(empty==undefined);
+            """,
+            "required\ntrue\n", "main.cjs"
+        }
+    ];
+
+    [Theory]
+    [MemberData(nameof(AsyncLocalStorageMetadataPrograms))]
+    public void Isolated_AsyncLocalStorageMetadata_PreservesContextRestorationAndAsyncFlow(string source, string expected, string entryPoint)
+    {
+        using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        tempDir.CreateFile(entryPoint, source);
+        var dllPath = tempDir.GetPath("async_local_storage_metadata.dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{tempDir.GetPath(entryPoint)}\" -o \"{dllPath}\" --verify --standalone", tempDir.Path);
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(dllPath));
+        Assert.False(File.Exists(tempDir.GetPath("SharpTS.dll")));
+        Assert.Equal(expected, ExecuteCompiledDllIsolated(dllPath, timeoutMs: 15000,
+            verifyStandardError: error => Assert.Empty(error)));
+    }
+
     public static IEnumerable<object[]> AbortMetadataPrograms =>
     [
         new object[]

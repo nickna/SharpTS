@@ -10,7 +10,9 @@ namespace SharpTS.Compilation;
 /// </summary>
 public partial class RuntimeEmitter
 {
-    private void EmitAsyncLocalStorageClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    internal void EmitAsyncLocalStorageClass(
+        ModuleBuilder moduleBuilder, EmittedAsyncLocalStorageRuntime asyncLocalStorage,
+        TypeBuilder functionType, MethodBuilder functionInvoke)
     {
         var asyncLocalType = typeof(AsyncLocal<object>);
         var asyncLocalCtor = asyncLocalType.GetConstructor([])!;
@@ -37,7 +39,7 @@ public partial class RuntimeEmitter
             CallingConventions.Standard,
             Type.EmptyTypes
         );
-        runtime.TSAsyncLocalStorageCtor = ctor;
+        asyncLocalStorage.Ctor = ctor;
 
         var ctorIL = ctor.GetILGenerator();
         // base()
@@ -63,10 +65,10 @@ public partial class RuntimeEmitter
         EmitDisableMethod(typeBuilder, storeField, enabledField, asyncLocalSetValue);
 
         // Method: public object Run(object store, object callback)
-        EmitRunMethod(typeBuilder, runtime, storeField, asyncLocalGetValue, asyncLocalSetValue);
+        EmitRunMethod(typeBuilder, functionType, functionInvoke, storeField, asyncLocalGetValue, asyncLocalSetValue);
 
         // Method: public object Exit(object callback)
-        EmitExitMethod(typeBuilder, runtime, storeField, asyncLocalGetValue, asyncLocalSetValue);
+        EmitExitMethod(typeBuilder, functionType, functionInvoke, storeField, asyncLocalGetValue, asyncLocalSetValue);
 
         typeBuilder.CreateType();
     }
@@ -159,7 +161,7 @@ public partial class RuntimeEmitter
     /// Saves old value, sets store, invokes callback via reflection, restores in finally.
     /// </summary>
     private void EmitRunMethod(
-        TypeBuilder typeBuilder, EmittedRuntime runtime, FieldBuilder storeField,
+        TypeBuilder typeBuilder, TypeBuilder functionType, MethodBuilder functionInvoke, FieldBuilder storeField,
         MethodInfo asyncLocalGetValue, MethodInfo asyncLocalSetValue)
     {
         var method = typeBuilder.DefineMethod(
@@ -189,7 +191,7 @@ public partial class RuntimeEmitter
         il.BeginExceptionBlock();
 
         // result = InvokeCallback(callback)
-        EmitCallbackInvocation(il, runtime);
+        EmitCallbackInvocation(il, functionType, functionInvoke);
         il.Emit(OpCodes.Stloc, resultLocal);
 
         // } finally {
@@ -213,7 +215,7 @@ public partial class RuntimeEmitter
     /// Saves current value, clears store, invokes callback, restores in finally.
     /// </summary>
     private void EmitExitMethod(
-        TypeBuilder typeBuilder, EmittedRuntime runtime, FieldBuilder storeField,
+        TypeBuilder typeBuilder, TypeBuilder functionType, MethodBuilder functionInvoke, FieldBuilder storeField,
         MethodInfo asyncLocalGetValue, MethodInfo asyncLocalSetValue)
     {
         var method = typeBuilder.DefineMethod(
@@ -245,10 +247,10 @@ public partial class RuntimeEmitter
         // result = InvokeCallback(callback) — arg1 for Exit
         // For Exit, the callback is arg1 (not arg2 like Run)
         il.Emit(OpCodes.Ldarg_1); // callback
-        il.Emit(OpCodes.Castclass, runtime.TSFunctionType);
+        il.Emit(OpCodes.Castclass, functionType);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Newarr, _types.Object); // empty args
-        il.Emit(OpCodes.Callvirt, runtime.TSFunctionInvoke);
+        il.Emit(OpCodes.Callvirt, functionInvoke);
         il.Emit(OpCodes.Stloc, resultLocal);
 
         // } finally {
@@ -272,13 +274,13 @@ public partial class RuntimeEmitter
     /// Assumes callback is on arg2 (for Run method pattern).
     /// Pushes the result onto the evaluation stack.
     /// </summary>
-    private void EmitCallbackInvocation(ILGenerator il, EmittedRuntime runtime)
+    private void EmitCallbackInvocation(ILGenerator il, TypeBuilder functionType, MethodBuilder functionInvoke)
     {
         // (($TSFunction)callback).Invoke(new object[0])
         il.Emit(OpCodes.Ldarg_2); // callback (arg2 in Run: this=0, store=1, callback=2)
-        il.Emit(OpCodes.Castclass, runtime.TSFunctionType);
+        il.Emit(OpCodes.Castclass, functionType);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Newarr, _types.Object); // empty args array
-        il.Emit(OpCodes.Callvirt, runtime.TSFunctionInvoke);
+        il.Emit(OpCodes.Callvirt, functionInvoke);
     }
 }

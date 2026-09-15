@@ -1583,8 +1583,18 @@ public class EmittedRuntime
     /// <summary>Required EventEmitter types, listener storage, and dispatch metadata.</summary>
     public EmittedEventEmitterRuntime EventEmitter { get; } = new();
 
-    // $AsyncLocalStorage support
-    public ConstructorBuilder TSAsyncLocalStorageCtor { get; set; } = null!;
+    /// <summary>AsyncLocalStorage metadata, or null when the feature is omitted.</summary>
+    public EmittedAsyncLocalStorageRuntime? AsyncLocalStorage { get; private set; }
+
+    internal void BeginAsyncLocalStorageEmission()
+    {
+        if (AsyncLocalStorage is not null)
+            throw new InvalidOperationException("AsyncLocalStorage metadata emission has already started.");
+        AsyncLocalStorage = new EmittedAsyncLocalStorageRuntime();
+    }
+
+    public EmittedAsyncLocalStorageRuntime RequireAsyncLocalStorage() => AsyncLocalStorage
+        ?? throw new InvalidOperationException("AsyncLocalStorage runtime was not enabled for this compilation.");
 
     // Value-position namespace singletons (#224). Null when the matching
     // feature flag is off — EmitVariable guards on the populate method.
