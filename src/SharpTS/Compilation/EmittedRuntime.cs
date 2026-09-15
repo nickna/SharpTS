@@ -1596,11 +1596,6 @@ public class EmittedRuntime
     public EmittedAsyncLocalStorageRuntime RequireAsyncLocalStorage() => AsyncLocalStorage
         ?? throw new InvalidOperationException("AsyncLocalStorage runtime was not enabled for this compilation.");
 
-    // Value-position namespace singletons (#224). Null when the matching
-    // feature flag is off — EmitVariable guards on the populate method.
-    public FieldBuilder? IntlNamespaceField { get; set; }
-    public MethodBuilder? IntlNamespacePopulate { get; set; }
-
     /// <summary>AbortController/AbortSignal metadata, or null when the feature is omitted.</summary>
     public EmittedAbortRuntime? Abort { get; private set; }
 
@@ -1614,16 +1609,18 @@ public class EmittedRuntime
     public EmittedAbortRuntime RequireAbort() => Abort
         ?? throw new InvalidOperationException("Abort runtime was not enabled for this compilation.");
 
-    // Intl constructor factories (instance methods dispatch reflectively on the
-    // returned SharpTSIntl* objects and need no emitted stubs)
-    public MethodBuilder CreateIntlNumberFormat { get; set; } = null!;
-    public MethodBuilder CreateIntlDateTimeFormat { get; set; } = null!;
-    public MethodBuilder CreateIntlCollator { get; set; } = null!;
-    public MethodBuilder CreateIntlPluralRules { get; set; } = null!;
-    public MethodBuilder CreateIntlRelativeTimeFormat { get; set; } = null!;
-    public MethodBuilder CreateIntlListFormat { get; set; } = null!;
-    public MethodBuilder CreateIntlDisplayNames { get; set; } = null!;
-    public MethodBuilder CreateIntlSegmenter { get; set; } = null!;
+    /// <summary>Intl factory and namespace metadata, or null when the feature is omitted.</summary>
+    public EmittedIntlRuntime? Intl { get; private set; }
+
+    internal void BeginIntlEmission()
+    {
+        if (Intl is not null)
+            throw new InvalidOperationException("Intl metadata emission has already started.");
+        Intl = new EmittedIntlRuntime();
+    }
+
+    public EmittedIntlRuntime RequireIntl() => Intl
+        ?? throw new InvalidOperationException("Intl runtime was not enabled for this compilation.");
 
     // FS module - emitted $NodeError type for standalone assemblies
     // NOTE: Must stay in sync with NodeError in Runtime/BuiltIns/Modules/NodeError.cs

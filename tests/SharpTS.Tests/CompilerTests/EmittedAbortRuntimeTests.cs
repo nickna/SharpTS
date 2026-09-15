@@ -74,7 +74,7 @@ public class EmittedAbortRuntimeTests
             typeof(object), [typeof(MethodInfo), typeof(string), typeof(int)]);
         getOrCreate.GetILGenerator().Emit(OpCodes.Ldnull);
         getOrCreate.GetILGenerator().Emit(OpCodes.Ret);
-        var runtime = new EmittedRuntime { TSFunctionGetOrCreate = getOrCreate };
+        var runtime = new EmittedRuntime();
         runtime.BeginAbortEmission();
         var abort = runtime.RequireAbort();
         var emitter = new RuntimeEmitter(TypeProvider.Runtime);
@@ -84,7 +84,7 @@ public class EmittedAbortRuntimeTests
         void Emit(string name, params object[] args) => typeof(RuntimeEmitter)
             .GetMethod(name, BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(emitter, args);
 
-        Emit("DefineNamespaceSingletonFields", type, runtime);
+        Emit("DefineNamespaceSingletonFields", type, abort, null!);
         Assert.Equal("_AbortSignalNamespace", abort.NamespaceField.Name);
         Assert.Throws<InvalidOperationException>(() => abort.FireEvent);
         Assert.Throws<InvalidOperationException>(() => abort.NamespacePopulate);
@@ -107,7 +107,7 @@ public class EmittedAbortRuntimeTests
         Assert.Throws<InvalidOperationException>(abort.CompleteEmission);
         Assert.Throws<InvalidOperationException>(() => abort.NamespacePopulate);
         Assert.False(abort.IsComplete);
-        Emit("EmitNamespaceSingletons", type, runtime);
+        Emit("EmitNamespaceSingletons", type, abort, null!, getOrCreate);
         Assert.True(abort.NamespacePopulate.GetILGenerator().ILOffset > 0);
         Assert.False(type.IsCreated());
         type.CreateType();

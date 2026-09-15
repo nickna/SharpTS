@@ -2184,10 +2184,10 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
             return true;
         }
 
-        if (name == "Intl" && Ctx.Runtime!.IntlNamespacePopulate != null)
+        if (name == "Intl" && Ctx.Runtime!.Intl is not null)
         {
-            IL.Emit(OpCodes.Call, Ctx.Runtime!.IntlNamespacePopulate);
-            IL.Emit(OpCodes.Ldsfld, Ctx.Runtime!.IntlNamespaceField!);
+            IL.Emit(OpCodes.Call, Ctx.Runtime!.RequireIntl().NamespacePopulate);
+            IL.Emit(OpCodes.Ldsfld, Ctx.Runtime!.RequireIntl().NamespaceField);
             SetStackUnknown();
             return true;
         }
