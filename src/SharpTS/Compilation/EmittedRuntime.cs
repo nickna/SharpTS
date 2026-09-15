@@ -1552,13 +1552,18 @@ public class EmittedRuntime
     /// <summary>Required inspection metadata used by console.dir in every compilation.</summary>
     public EmittedInspectionRuntime Inspection { get; } = new();
 
-    // Readline module methods
-    public MethodBuilder ReadlineQuestionSync { get; set; } = null!;
-    public MethodBuilder ReadlineCreateInterface { get; set; } = null!;
+    /// <summary>Readline metadata, or null when the feature is omitted.</summary>
+    public EmittedReadlineRuntime? Readline { get; private set; }
 
-    // $ReadlineInterface type - emitted for standalone readline support
-    // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSReadlineInterface
-    public ConstructorBuilder ReadlineInterfaceCtor { get; set; } = null!;
+    internal void BeginReadlineEmission()
+    {
+        if (Readline is not null)
+            throw new InvalidOperationException("Readline metadata emission has already started.");
+        Readline = new EmittedReadlineRuntime();
+    }
+
+    public EmittedReadlineRuntime RequireReadline() => Readline
+        ?? throw new InvalidOperationException("Readline runtime was not enabled for this compilation.");
 
     /// <summary>Child-process metadata, or null when child_process is omitted.</summary>
     public EmittedChildProcessRuntime? ChildProcess { get; private set; }

@@ -1319,6 +1319,98 @@ public class StandaloneDllTests
         finally { CleanupTempDir(tempDir); }
     }
 
+    public static IEnumerable<object[]> ReadlineMetadataPrograms =>
+    [
+        new object[]
+        {
+            """
+            import { createInterface } from 'readline';
+            const rl = createInterface({prompt:'start> '}); console.log(rl.getPrompt());
+            rl.setPrompt('next> '); rl.prompt(); rl.write('text'); console.log('line');
+            rl.close(); rl.prompt(); rl.write('hidden'); console.log(rl.getPrompt());
+            """,
+            "start> \nnext> textline\nnext> \n",
+            ""
+        },
+        new object[]
+        {
+            """
+            import { createInterface } from 'readline';
+            const rl = createInterface();
+            rl.on('pause', () => console.log('pause')); rl.on('resume', () => console.log('resume'));
+            rl.once('close', () => console.log('close'));
+            console.log(rl.pause() === rl); console.log(rl.resume() === rl); rl.close(); rl.close();
+            console.log('done');
+            """,
+            "pause\ntrue\nresume\ntrue\nclose\ndone\n",
+            ""
+        },
+        new object[]
+        {
+            """
+            import { questionSync, createInterface } from 'readline';
+            console.log(questionSync('first> ')); const rl = createInterface();
+            rl.question('next> ', answer => console.log('callback', answer)); rl.close();
+            rl.question('hidden> ', answer => console.log('hidden', answer)); console.log('done');
+            """,
+            "first> one\nnext> callback two\ndone\n",
+            "one\ntwo\n"
+        },
+        new object[]
+        {
+            """
+            import { questionSync, createInterface } from 'readline';
+            console.log(questionSync('eof> ') === ''); const rl = createInterface();
+            rl.question('next> ', answer => console.log(answer === '')); rl.close();
+            """,
+            "eof> true\nnext> true\n",
+            ""
+        },
+        new object[]
+        {
+            """
+            import * as readline from 'node:readline';
+            const rl = new readline.Interface({prompt:'named> '});
+            console.log(rl.getPrompt()); console.log(typeof readline.questionSync); rl.close();
+            """,
+            "named> \nfunction\n",
+            ""
+        },
+        new object[]
+        {
+            """
+            import { createInterface } from 'readline';
+            const rl = createInterface(); let pauses = 0; let resumes = 0; let closes = 0;
+            rl.on('pause', () => { pauses++; }); rl.on('resume', () => { resumes++; });
+            rl.on('close', () => { closes++; });
+            rl.pause(); rl.pause(); rl.resume(); rl.resume(); rl.close(); rl.close();
+            console.log(pauses, resumes, closes);
+            """,
+            "2 2 2\n",
+            ""
+        },
+    ];
+
+    [Theory]
+    [MemberData(nameof(ReadlineMetadataPrograms))]
+    public void Isolated_ReadlineMetadata_PreservesStateEventsAndInput(string source, string expected, string input)
+    {
+        var files = new Dictionary<string, string> { ["main.ts"] = source };
+        Assert.Empty(TestHarness.CompileModulesAndVerifyOnly(files, "main.ts"));
+        var (tempDir, dllPath) = CompileStandaloneModule(files, "main.ts");
+        try
+        {
+            Assert.DoesNotContain("SharpTS", GetAssemblyReferences(dllPath));
+            Assert.False(File.Exists(Path.Combine(tempDir, "SharpTS.dll")));
+            Assert.Equal(expected, ExecuteCompiledDllIsolated(dllPath, timeoutMs: 15000,
+                verifyStandardError: error => Assert.Empty(error), standardInput: input));
+        }
+        finally
+        {
+            CleanupTempDir(tempDir);
+        }
+    }
+
     public static IEnumerable<object[]> TextEncodingMetadataPrograms =>
     [
         new object[]
@@ -3134,8 +3226,10 @@ public class StandaloneDllTests
         }
     }
 
-    [Fact]
-    public void Isolated_ProbeTimeout_ShouldTerminateChildAndReportCapturedOutput()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Isolated_ProbeTimeout_ShouldTerminateChildAndReportCapturedOutput(bool supplyInput)
     {
         var source = """
             console.log('probe-started');
@@ -3151,7 +3245,8 @@ public class StandaloneDllTests
                 () => ExecuteCompiledDllIsolated(
                     dllPath,
                     timeoutMs: 500,
-                    timeoutStartsAfterOutput: "probe-started"));
+                    timeoutStartsAfterOutput: "probe-started",
+                    standardInput: supplyInput ? new string('x', 1024 * 1024) : null));
             Assert.Contains("timed out after 500 ms", ex.Message);
             Assert.Contains("probe-started", ex.Message);
         }
@@ -3318,11 +3413,13 @@ public class StandaloneDllTests
         int timeoutMs,
         string? timeoutStartsAfterOutput = null,
         int readinessTimeoutMs = 15000,
-        Action<string>? verifyStandardError = null)
+        Action<string>? verifyStandardError = null,
+        string? standardInput = null)
     {
         var workingDir = Path.GetDirectoryName(dllPath)!;
         var psi = new ProcessStartInfo("dotnet", dllPath)
         {
+            RedirectStandardInput = standardInput is not null,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,
@@ -3347,57 +3444,82 @@ public class StandaloneDllTests
 
         var errorTask = process.StandardError.ReadToEndAsync();
 
-        if (readiness is not null &&
-            (!readiness.Task.Wait(readinessTimeoutMs) || !readiness.Task.GetAwaiter().GetResult()))
+        using var inputCancellation = new CancellationTokenSource();
+        var inputTask = standardInput is null ? Task.CompletedTask
+            : WriteInputAndCloseAsync(process.StandardInput, standardInput, inputCancellation.Token);
+        // Timeout cleanup must preserve its diagnostic even if killing the child breaks a pending write.
+        _ = inputTask.ContinueWith(task => { _ = task.Exception; }, CancellationToken.None,
+            TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+        try
         {
-            TryTerminateProcessTree(process);
-            process.WaitForExit(5000);
-            Task.WaitAll([outputTask, errorTask], 5000);
-
-            var readinessOutput = outputTask.IsCompletedSuccessfully ? outputTask.Result : string.Empty;
-            var readinessError = errorTask.IsCompletedSuccessfully ? errorTask.Result : string.Empty;
-            throw new TimeoutException(
-                $"Compiled standalone probe did not emit '{timeoutStartsAfterOutput}' within " +
-                $"{readinessTimeoutMs} ms. Stdout: {readinessOutput} Stderr: {readinessError}");
-        }
-
-        if (!process.WaitForExit(timeoutMs))
-        {
-            TryTerminateProcessTree(process);
-
-            if (!process.WaitForExit(5000))
+            if (readiness is not null &&
+                (!readiness.Task.Wait(readinessTimeoutMs) || !readiness.Task.GetAwaiter().GetResult()))
             {
+                TryTerminateProcessTree(process);
+                process.WaitForExit(5000);
+                Task.WaitAll([outputTask, errorTask], 5000);
+
+                var readinessOutput = outputTask.IsCompletedSuccessfully ? outputTask.Result : string.Empty;
+                var readinessError = errorTask.IsCompletedSuccessfully ? errorTask.Result : string.Empty;
                 throw new TimeoutException(
-                    $"Compiled standalone probe timed out after {timeoutMs} ms and its process tree did not terminate.");
+                    $"Compiled standalone probe did not emit '{timeoutStartsAfterOutput}' within " +
+                    $"{readinessTimeoutMs} ms. Stdout: {readinessOutput} Stderr: {readinessError}");
+            }
+
+            if (!process.WaitForExit(timeoutMs))
+            {
+                TryTerminateProcessTree(process);
+
+                if (!process.WaitForExit(5000))
+                {
+                    throw new TimeoutException(
+                        $"Compiled standalone probe timed out after {timeoutMs} ms and its process tree did not terminate.");
+                }
+
+                if (!Task.WaitAll([outputTask, errorTask], 5000))
+                {
+                    throw new TimeoutException(
+                        $"Compiled standalone probe timed out after {timeoutMs} ms and its output pipes did not close.");
+                }
+
+                var timedOutOutput = outputTask.GetAwaiter().GetResult();
+                var timedOutError = errorTask.GetAwaiter().GetResult();
+                throw new TimeoutException(
+                    $"Compiled standalone probe timed out after {timeoutMs} ms. " +
+                    $"Stdout: {timedOutOutput} Stderr: {timedOutError}");
             }
 
             if (!Task.WaitAll([outputTask, errorTask], 5000))
+                throw new TimeoutException("Compiled standalone probe exited, but its output pipes did not close.");
+
+            var output = outputTask.GetAwaiter().GetResult();
+            var error = errorTask.GetAwaiter().GetResult();
+
+            if (process.ExitCode != 0)
             {
-                throw new TimeoutException(
-                    $"Compiled standalone probe timed out after {timeoutMs} ms and its output pipes did not close.");
+                throw new Exception(
+                    $"Compiled standalone probe exited with code {process.ExitCode}. Stderr: {error}");
             }
 
-            var timedOutOutput = outputTask.GetAwaiter().GetResult();
-            var timedOutError = errorTask.GetAwaiter().GetResult();
-            throw new TimeoutException(
-                $"Compiled standalone probe timed out after {timeoutMs} ms. " +
-                $"Stdout: {timedOutOutput} Stderr: {timedOutError}");
+            if (!inputTask.Wait(5000))
+                throw new TimeoutException("Compiled standalone probe exited, but its input pipe did not close.");
+            inputTask.GetAwaiter().GetResult();
+
+            verifyStandardError?.Invoke(error.Replace("\r\n", "\n"));
+            return output.Replace("\r\n", "\n");
         }
-
-        if (!Task.WaitAll([outputTask, errorTask], 5000))
-            throw new TimeoutException("Compiled standalone probe exited, but its output pipes did not close.");
-
-        var output = outputTask.GetAwaiter().GetResult();
-        var error = errorTask.GetAwaiter().GetResult();
-
-        if (process.ExitCode != 0)
+        finally
         {
-            throw new Exception(
-                $"Compiled standalone probe exited with code {process.ExitCode}. Stderr: {error}");
+            inputCancellation.Cancel();
         }
 
-        verifyStandardError?.Invoke(error.Replace("\r\n", "\n"));
-        return output.Replace("\r\n", "\n");
+    }
+
+    private static async Task WriteInputAndCloseAsync(StreamWriter writer, string input, CancellationToken cancellationToken)
+    {
+        await writer.WriteAsync(input.AsMemory(), cancellationToken).ConfigureAwait(false);
+        await writer.FlushAsync(cancellationToken).ConfigureAwait(false);
+        writer.Close();
     }
 
     private static async Task<string> ReadToEndAndSignalAsync(

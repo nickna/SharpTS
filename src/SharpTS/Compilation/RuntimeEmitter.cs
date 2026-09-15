@@ -64,6 +64,8 @@ public partial class RuntimeEmitter
             runtime.BeginPromiseEmission();
             runtime.BeginTimerPromiseEmission();
         }
+        if (features.UsesReadline)
+            runtime.BeginReadlineEmission();
         if (features.UsesTextEncoding)
             runtime.BeginTextEncodingEmission();
         if (features.UsesOs)
@@ -480,7 +482,7 @@ public partial class RuntimeEmitter
         // Emit $ReadlineInterface type definition (Phase 1)
         // Must come before EmitRuntimeClass so ReadlineCreateInterface can use the constructor
         if (features.UsesReadline)
-            EmitReadlineInterfaceTypeDefinition(moduleBuilder, runtime);
+            EmitReadlineInterfaceTypeDefinition(moduleBuilder, runtime.RequireReadline(), runtime.EventEmitter);
 
         // Emit $FinRegEntry type (finalizer helper for FinalizationRegistry)
         // Must come before EmitRuntimeClass so Register can use the constructor
@@ -648,7 +650,7 @@ public partial class RuntimeEmitter
         // Finalize $ReadlineInterface class (Phase 2)
         // Must come after EmitRuntimeClass (Question uses InvokeValue)
         if (features.UsesReadline)
-            EmitReadlineInterfaceFinalize(runtime);
+            EmitReadlineInterfaceFinalize(runtime.RequireReadline(), runtime.InvokeValue);
 
         // Crypto Phase-2 finalize calls — gated on UsesCrypto with the type
         // emission above.
@@ -676,6 +678,7 @@ public partial class RuntimeEmitter
         runtime.Timers.CompleteEmission();
         runtime.Microtasks.CompleteEmission();
         runtime.TimerPromises?.CompleteEmission();
+        runtime.Readline?.CompleteEmission();
         runtime.TextEncoding?.CompleteEmission();
         runtime.Inspection.CompleteEmission();
         runtime.Console.CompleteEmission();

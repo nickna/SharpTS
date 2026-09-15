@@ -52,7 +52,7 @@ public sealed class ReadlinePrimitiveEmitter : IBuiltInModuleEmitter
             il.Emit(OpCodes.Ldstr, "");
         }
 
-        il.Emit(OpCodes.Call, ctx.Runtime!.ReadlineQuestionSync);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireReadline().QuestionSync);
         return true;
     }
 
@@ -71,7 +71,7 @@ public sealed class ReadlinePrimitiveEmitter : IBuiltInModuleEmitter
             il.Emit(OpCodes.Ldnull);
         }
 
-        il.Emit(OpCodes.Call, ctx.Runtime!.ReadlineCreateInterface);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireReadline().CreateInterface);
         return true;
     }
 }

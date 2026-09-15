@@ -646,6 +646,16 @@ encoding and wrapper behavior, argument evaluation, and standalone dependencies 
 Method-local wrapper fields, constructors, getters, and BCL lookups remain scoped construction locals.
 No flat text-encoding aliases or emitter-held copies remain.
 
+Readline uses optional `EmittedReadlineRuntime`, selected by `UsesReadline`, for seven declarations
+previously split between the flat holder and emitter fields. Thirteen helpers accept the component
+with explicit EventEmitter or invocation dependencies where needed. The interface and constructor
+remain available before runtime helper emission; Question and type finalization still follow
+InvokeValue emission. Completion validates all declarations after finalization and freezes writes.
+Prompt/closed/paused state, repeated event behavior, synchronous input and callbacks, emitted order,
+and standalone dependencies are unchanged. The TS readline facade remains in the standard library;
+method-local builders and BCL reflection remain scoped construction locals. No migrated aliases or
+emitter-held copies remain.
+
 During emission, each handle becomes readable as soon as its declaration is assigned, so forward
 references do not require a method body to exist yet. An early read names the missing declaration.
 Completion is an orchestration boundary, not an IL verifier: body emission and type finalization
