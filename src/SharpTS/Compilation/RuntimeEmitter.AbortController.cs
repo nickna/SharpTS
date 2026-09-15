@@ -21,29 +21,29 @@ public partial class RuntimeEmitter
     ///   "_cts" → CancellationTokenSource
     ///   "_signal" → object (the $AbortSignal dict)
     /// </summary>
-    private void EmitAbortControllerMethods(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitAbortControllerMethods(TypeBuilder typeBuilder, EmittedAbortRuntime abort, Action<string> requireRuntime)
     {
-        EmitCreateAbortController(typeBuilder, runtime);
-        EmitAbortControllerAbort(typeBuilder, runtime);
-        EmitAbortControllerGetSignal(typeBuilder, runtime);
-        EmitAbortSignalGetAborted(typeBuilder, runtime);
-        EmitAbortSignalGetReason(typeBuilder, runtime);
-        EmitAbortSignalGetOnAbort(typeBuilder, runtime);
-        EmitAbortSignalSetOnAbort(typeBuilder, runtime);
-        EmitAbortSignalThrowIfAborted(typeBuilder, runtime);
-        EmitAbortSignalAddEventListener(typeBuilder, runtime);
-        EmitAbortSignalRemoveEventListener(typeBuilder, runtime);
-        EmitAbortSignalThisWrappers(typeBuilder, runtime);
-        EmitAbortSignalStaticAbort(typeBuilder, runtime);
-        EmitAbortSignalStaticTimeout(typeBuilder, runtime);
-        EmitAbortSignalStaticAny(typeBuilder, runtime);
+        EmitCreateAbortController(typeBuilder, abort);
+        EmitAbortControllerAbort(typeBuilder, abort);
+        EmitAbortControllerGetSignal(typeBuilder, abort);
+        EmitAbortSignalGetAborted(typeBuilder, abort);
+        EmitAbortSignalGetReason(typeBuilder, abort);
+        EmitAbortSignalGetOnAbort(typeBuilder, abort);
+        EmitAbortSignalSetOnAbort(typeBuilder, abort);
+        EmitAbortSignalThrowIfAborted(typeBuilder, abort);
+        EmitAbortSignalAddEventListener(typeBuilder, abort);
+        EmitAbortSignalRemoveEventListener(typeBuilder, abort);
+        EmitAbortSignalThisWrappers(typeBuilder, abort);
+        EmitAbortSignalStaticAbort(typeBuilder, abort);
+        EmitAbortSignalStaticTimeout(typeBuilder, abort);
+        EmitAbortSignalStaticAny(typeBuilder, abort, requireRuntime);
     }
 
     /// <summary>
     /// CreateAbortController() → object
     /// Creates a new abort controller (dict with _cts and _signal).
     /// </summary>
-    private void EmitCreateAbortController(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitCreateAbortController(TypeBuilder typeBuilder, EmittedAbortRuntime abort)
     {
         var method = typeBuilder.DefineMethod(
             "CreateAbortController",
@@ -51,7 +51,7 @@ public partial class RuntimeEmitter
             _types.Object,
             Type.EmptyTypes
         );
-        runtime.CreateAbortController = method;
+        abort.CreateController = method;
 
         var il = method.GetILGenerator();
         var ctsType = _types.CancellationTokenSource;
@@ -133,7 +133,7 @@ public partial class RuntimeEmitter
     /// <summary>
     /// AbortControllerAbort(object controller, object? reason) → object? (null/undefined)
     /// </summary>
-    private void EmitAbortControllerAbort(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitAbortControllerAbort(TypeBuilder typeBuilder, EmittedAbortRuntime abort)
     {
         var method = typeBuilder.DefineMethod(
             "AbortControllerAbort",
@@ -141,7 +141,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object, _types.Object]
         );
-        runtime.AbortControllerAbort = method;
+        abort.ControllerAbort = method;
 
         var il = method.GetILGenerator();
         var dictType = _types.DictionaryStringObject;
@@ -219,7 +219,7 @@ public partial class RuntimeEmitter
 
         // Fire abort event on signal
         il.Emit(OpCodes.Ldloc, signalLocal);
-        il.Emit(OpCodes.Call, runtime.FireAbortEvent);
+        il.Emit(OpCodes.Call, abort.FireEvent);
 
         // done:
         il.MarkLabel(doneLabel);
@@ -230,7 +230,7 @@ public partial class RuntimeEmitter
     /// <summary>
     /// AbortControllerGetSignal(object controller) → object
     /// </summary>
-    private void EmitAbortControllerGetSignal(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitAbortControllerGetSignal(TypeBuilder typeBuilder, EmittedAbortRuntime abort)
     {
         var method = typeBuilder.DefineMethod(
             "AbortControllerGetSignal",
@@ -238,7 +238,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object]
         );
-        runtime.AbortControllerGetSignal = method;
+        abort.ControllerGetSignal = method;
 
         var il = method.GetILGenerator();
         var dictType = _types.DictionaryStringObject;
@@ -254,7 +254,7 @@ public partial class RuntimeEmitter
     /// <summary>
     /// AbortSignalGetAborted(object signal) → bool
     /// </summary>
-    private void EmitAbortSignalGetAborted(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitAbortSignalGetAborted(TypeBuilder typeBuilder, EmittedAbortRuntime abort)
     {
         var method = typeBuilder.DefineMethod(
             "AbortSignalGetAborted",
@@ -262,7 +262,7 @@ public partial class RuntimeEmitter
             _types.Boolean,
             [_types.Object]
         );
-        runtime.AbortSignalGetAborted = method;
+        abort.SignalGetAborted = method;
 
         var il = method.GetILGenerator();
         var dictType = _types.DictionaryStringObject;
@@ -285,7 +285,7 @@ public partial class RuntimeEmitter
     /// <summary>
     /// AbortSignalGetReason(object signal) → object?
     /// </summary>
-    private void EmitAbortSignalGetReason(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitAbortSignalGetReason(TypeBuilder typeBuilder, EmittedAbortRuntime abort)
     {
         var method = typeBuilder.DefineMethod(
             "AbortSignalGetReason",
@@ -293,7 +293,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object]
         );
-        runtime.AbortSignalGetReason = method;
+        abort.SignalGetReason = method;
 
         var il = method.GetILGenerator();
         var dictType = _types.DictionaryStringObject;
@@ -341,7 +341,7 @@ public partial class RuntimeEmitter
     /// <summary>
     /// AbortSignalGetOnAbort(object signal) → object?
     /// </summary>
-    private void EmitAbortSignalGetOnAbort(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitAbortSignalGetOnAbort(TypeBuilder typeBuilder, EmittedAbortRuntime abort)
     {
         var method = typeBuilder.DefineMethod(
             "AbortSignalGetOnAbort",
@@ -349,7 +349,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object]
         );
-        runtime.AbortSignalGetOnAbort = method;
+        abort.SignalGetOnAbort = method;
 
         var il = method.GetILGenerator();
         var dictType = _types.DictionaryStringObject;
@@ -364,7 +364,7 @@ public partial class RuntimeEmitter
     /// <summary>
     /// AbortSignalSetOnAbort(object signal, object? handler) → void
     /// </summary>
-    private void EmitAbortSignalSetOnAbort(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitAbortSignalSetOnAbort(TypeBuilder typeBuilder, EmittedAbortRuntime abort)
     {
         var method = typeBuilder.DefineMethod(
             "AbortSignalSetOnAbort",
@@ -372,7 +372,7 @@ public partial class RuntimeEmitter
             _types.Void,
             [_types.Object, _types.Object]
         );
-        runtime.AbortSignalSetOnAbort = method;
+        abort.SignalSetOnAbort = method;
 
         var il = method.GetILGenerator();
         var dictType = _types.DictionaryStringObject;
@@ -388,7 +388,7 @@ public partial class RuntimeEmitter
     /// <summary>
     /// AbortSignalThrowIfAborted(object signal) → void
     /// </summary>
-    private void EmitAbortSignalThrowIfAborted(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitAbortSignalThrowIfAborted(TypeBuilder typeBuilder, EmittedAbortRuntime abort)
     {
         var method = typeBuilder.DefineMethod(
             "AbortSignalThrowIfAborted",
@@ -396,7 +396,7 @@ public partial class RuntimeEmitter
             _types.Void,
             [_types.Object]
         );
-        runtime.AbortSignalThrowIfAborted = method;
+        abort.SignalThrowIfAborted = method;
 
         var il = method.GetILGenerator();
         var dictType = _types.DictionaryStringObject;
@@ -422,7 +422,7 @@ public partial class RuntimeEmitter
 
         // Get reason and throw
         il.Emit(OpCodes.Ldloc, dictLocal);
-        il.Emit(OpCodes.Call, runtime.AbortSignalGetReason);
+        il.Emit(OpCodes.Call, abort.SignalGetReason);
         var reasonLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Stloc, reasonLocal);
 
@@ -448,7 +448,7 @@ public partial class RuntimeEmitter
     /// <summary>
     /// AbortSignalAddEventListener(object signal, string type, object listener) → object? (null)
     /// </summary>
-    private void EmitAbortSignalAddEventListener(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitAbortSignalAddEventListener(TypeBuilder typeBuilder, EmittedAbortRuntime abort)
     {
         var method = typeBuilder.DefineMethod(
             "AbortSignalAddEventListener",
@@ -456,7 +456,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object, _types.String, _types.Object]
         );
-        runtime.AbortSignalAddEventListener = method;
+        abort.SignalAddEventListener = method;
 
         var il = method.GetILGenerator();
         var dictType = _types.DictionaryStringObject;
@@ -487,7 +487,7 @@ public partial class RuntimeEmitter
     /// <summary>
     /// AbortSignalRemoveEventListener(object signal, string type, object listener) → object? (null)
     /// </summary>
-    private void EmitAbortSignalRemoveEventListener(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitAbortSignalRemoveEventListener(TypeBuilder typeBuilder, EmittedAbortRuntime abort)
     {
         var method = typeBuilder.DefineMethod(
             "AbortSignalRemoveEventListener",
@@ -495,7 +495,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object, _types.String, _types.Object]
         );
-        runtime.AbortSignalRemoveEventListener = method;
+        abort.SignalRemoveEventListener = method;
 
         var il = method.GetILGenerator();
         var dictType = _types.DictionaryStringObject;
@@ -532,12 +532,12 @@ public partial class RuntimeEmitter
     /// injects the receiver. Each returns object (undefined) — addEventListener and
     /// throwIfAborted have no JS return value. (#985)
     /// </summary>
-    private void EmitAbortSignalThisWrappers(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitAbortSignalThisWrappers(TypeBuilder typeBuilder, EmittedAbortRuntime abort)
     {
-        runtime.AbortSignalAddEventListenerThis =
-            EmitAbortSignalAddRemoveThis(typeBuilder, "AbortSignalAddEventListenerThis", runtime.AbortSignalAddEventListener);
-        runtime.AbortSignalRemoveEventListenerThis =
-            EmitAbortSignalAddRemoveThis(typeBuilder, "AbortSignalRemoveEventListenerThis", runtime.AbortSignalRemoveEventListener);
+        abort.SignalAddEventListenerThis =
+            EmitAbortSignalAddRemoveThis(typeBuilder, "AbortSignalAddEventListenerThis", abort.SignalAddEventListener);
+        abort.SignalRemoveEventListenerThis =
+            EmitAbortSignalAddRemoveThis(typeBuilder, "AbortSignalRemoveEventListenerThis", abort.SignalRemoveEventListener);
 
         // throwIfAborted(): no args beyond the receiver.
         var throwMethod = typeBuilder.DefineMethod(
@@ -546,10 +546,10 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object]);
         throwMethod.DefineParameter(1, ParameterAttributes.None, "__this");
-        runtime.AbortSignalThrowIfAbortedThis = throwMethod;
+        abort.SignalThrowIfAbortedThis = throwMethod;
         var tIl = throwMethod.GetILGenerator();
         tIl.Emit(OpCodes.Ldarg_0);
-        tIl.Emit(OpCodes.Call, runtime.AbortSignalThrowIfAborted); // void
+        tIl.Emit(OpCodes.Call, abort.SignalThrowIfAborted); // void
         tIl.Emit(OpCodes.Ldnull);
         tIl.Emit(OpCodes.Ret);
     }
@@ -600,7 +600,7 @@ public partial class RuntimeEmitter
     /// <summary>
     /// AbortSignalAbort(object? reason) → object (signal dict, already aborted)
     /// </summary>
-    private void EmitAbortSignalStaticAbort(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitAbortSignalStaticAbort(TypeBuilder typeBuilder, EmittedAbortRuntime abort)
     {
         var method = typeBuilder.DefineMethod(
             "AbortSignalAbort",
@@ -608,7 +608,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object]
         );
-        runtime.AbortSignalAbort = method;
+        abort.SignalAbort = method;
 
         var il = method.GetILGenerator();
         var ctsType = _types.CancellationTokenSource;
@@ -683,7 +683,7 @@ public partial class RuntimeEmitter
     /// <summary>
     /// AbortSignalTimeout(double ms) → object (signal dict)
     /// </summary>
-    private void EmitAbortSignalStaticTimeout(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitAbortSignalStaticTimeout(TypeBuilder typeBuilder, EmittedAbortRuntime abort)
     {
         var method = typeBuilder.DefineMethod(
             "AbortSignalTimeout",
@@ -691,7 +691,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Double]
         );
-        runtime.AbortSignalTimeout = method;
+        abort.SignalTimeout = method;
 
         var il = method.GetILGenerator();
         var ctsType = _types.CancellationTokenSource;
@@ -765,7 +765,7 @@ public partial class RuntimeEmitter
     /// Delegates to RuntimeTypes.AbortSignalAnyCompiled via reflection for proper
     /// CancellationToken linking between input signals and composite signal.
     /// </summary>
-    private void EmitAbortSignalStaticAny(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitAbortSignalStaticAny(TypeBuilder typeBuilder, EmittedAbortRuntime abort, Action<string> requireRuntime)
     {
         // The body below late-binds to RuntimeTypes.AbortSignalAnyCompiled via
         // Type.GetType("…, SharpTS"); its normal execution needs SharpTS.dll present.
@@ -774,7 +774,7 @@ public partial class RuntimeEmitter
         // AbortController / fetch-with-signal usage that is pure IL) would otherwise
         // force an unnecessary SharpTS.dll copy for the common case (#116).
         if (_features.UsesAbortSignalAny)
-            runtime.RequireSharpTSRuntime("AbortSignal.any");
+            requireRuntime("AbortSignal.any");
 
         var method = typeBuilder.DefineMethod(
             "AbortSignalAny",
@@ -782,7 +782,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object]
         );
-        runtime.AbortSignalAny = method;
+        abort.SignalAny = method;
 
         var il = method.GetILGenerator();
         EmitReflectionCall(il, RuntimeTypesLateBoundName, "AbortSignalAnyCompiled", 1);
@@ -794,7 +794,7 @@ public partial class RuntimeEmitter
     /// Iterates listeners list and invokes each TSFunction/BoundTSFunction.
     /// Must be emitted before EmitAbortControllerMethods (which references it).
     /// </summary>
-    private void EmitFireAbortEvent(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitFireAbortEvent(TypeBuilder typeBuilder, EmittedAbortRuntime abort, TypeBuilder functionType, MethodBuilder functionInvoke, TypeBuilder boundFunctionType, MethodBuilder boundFunctionInvoke)
     {
         var method = typeBuilder.DefineMethod(
             "FireAbortEvent",
@@ -804,7 +804,7 @@ public partial class RuntimeEmitter
         );
 
         // Store so AbortControllerAbort can reference it
-        runtime.FireAbortEvent = method;
+        abort.FireEvent = method;
 
         var il = method.GetILGenerator();
         var dictType = _types.DictionaryStringObject;
@@ -839,14 +839,14 @@ public partial class RuntimeEmitter
         var notTsFuncLabel = il.DefineLabel();
         var invokeEndLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, listenerLocal);
-        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Isinst, functionType);
         il.Emit(OpCodes.Brfalse, notTsFuncLabel);
 
         il.Emit(OpCodes.Ldloc, listenerLocal);
-        il.Emit(OpCodes.Castclass, runtime.TSFunctionType);
+        il.Emit(OpCodes.Castclass, functionType);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Newarr, _types.Object);
-        il.Emit(OpCodes.Callvirt, runtime.TSFunctionInvoke);
+        il.Emit(OpCodes.Callvirt, functionInvoke);
         il.Emit(OpCodes.Pop); // discard return
         il.Emit(OpCodes.Br, invokeEndLabel);
 
@@ -854,14 +854,14 @@ public partial class RuntimeEmitter
         il.MarkLabel(notTsFuncLabel);
         var notBoundLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, listenerLocal);
-        il.Emit(OpCodes.Isinst, runtime.BoundTSFunctionType);
+        il.Emit(OpCodes.Isinst, boundFunctionType);
         il.Emit(OpCodes.Brfalse, notBoundLabel);
 
         il.Emit(OpCodes.Ldloc, listenerLocal);
-        il.Emit(OpCodes.Castclass, runtime.BoundTSFunctionType);
+        il.Emit(OpCodes.Castclass, boundFunctionType);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Newarr, _types.Object);
-        il.Emit(OpCodes.Callvirt, runtime.BoundTSFunctionInvoke);
+        il.Emit(OpCodes.Callvirt, boundFunctionInvoke);
         il.Emit(OpCodes.Pop);
 
         il.MarkLabel(notBoundLabel);
@@ -894,28 +894,28 @@ public partial class RuntimeEmitter
         var onAbortNotTsFunc = il.DefineLabel();
         var onAbortEnd = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, onabortLocal);
-        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Isinst, functionType);
         il.Emit(OpCodes.Brfalse, onAbortNotTsFunc);
 
         il.Emit(OpCodes.Ldloc, onabortLocal);
-        il.Emit(OpCodes.Castclass, runtime.TSFunctionType);
+        il.Emit(OpCodes.Castclass, functionType);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Newarr, _types.Object);
-        il.Emit(OpCodes.Callvirt, runtime.TSFunctionInvoke);
+        il.Emit(OpCodes.Callvirt, functionInvoke);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Br, onAbortEnd);
 
         // Check BoundTSFunction
         il.MarkLabel(onAbortNotTsFunc);
         il.Emit(OpCodes.Ldloc, onabortLocal);
-        il.Emit(OpCodes.Isinst, runtime.BoundTSFunctionType);
+        il.Emit(OpCodes.Isinst, boundFunctionType);
         il.Emit(OpCodes.Brfalse, onAbortEnd);
 
         il.Emit(OpCodes.Ldloc, onabortLocal);
-        il.Emit(OpCodes.Castclass, runtime.BoundTSFunctionType);
+        il.Emit(OpCodes.Castclass, boundFunctionType);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Newarr, _types.Object);
-        il.Emit(OpCodes.Callvirt, runtime.BoundTSFunctionInvoke);
+        il.Emit(OpCodes.Callvirt, boundFunctionInvoke);
         il.Emit(OpCodes.Pop);
 
         il.MarkLabel(onAbortEnd);

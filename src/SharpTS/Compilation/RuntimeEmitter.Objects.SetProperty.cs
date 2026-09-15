@@ -1424,7 +1424,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Brfalse, notSignalOnAbortSet);
             il.Emit(OpCodes.Ldarg_0);  // signal
             il.Emit(OpCodes.Ldarg_2);  // handler
-            il.Emit(OpCodes.Call, runtime.AbortSignalSetOnAbort);
+            il.Emit(OpCodes.Call, runtime.RequireAbort().SignalSetOnAbort);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(notSignalOnAbortSet);
         }

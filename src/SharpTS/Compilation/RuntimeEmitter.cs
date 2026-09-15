@@ -68,6 +68,8 @@ public partial class RuntimeEmitter
             runtime.BeginPromiseEmission();
             runtime.BeginTimerPromiseEmission();
         }
+        if (features.UsesAbortController)
+            runtime.BeginAbortEmission();
         if (features.UsesSourceExecution)
             runtime.BeginSourceExecutionEmission();
         if (features.UsesVm)
@@ -687,6 +689,7 @@ public partial class RuntimeEmitter
         runtime.Microtasks.CompleteEmission();
         runtime.TimerPromises?.CompleteEmission();
         runtime.Modules.CompleteEmission();
+        runtime.Abort?.CompleteEmission();
         runtime.SourceExecution?.CompleteEmission();
         runtime.Vm?.CompleteEmission();
         runtime.Readline?.CompleteEmission();

@@ -1323,7 +1323,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Call, strEq);
             il.Emit(OpCodes.Brfalse, notSignalAbortedLabel);
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Call, runtime.AbortSignalGetAborted);
+            il.Emit(OpCodes.Call, runtime.RequireAbort().SignalGetAborted);
             il.Emit(OpCodes.Box, _types.Boolean);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(notSignalAbortedLabel);
@@ -1334,7 +1334,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Call, strEq);
             il.Emit(OpCodes.Brfalse, notSignalReasonLabel);
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Call, runtime.AbortSignalGetReason);
+            il.Emit(OpCodes.Call, runtime.RequireAbort().SignalGetReason);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(notSignalReasonLabel);
 
@@ -1344,7 +1344,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Call, strEq);
             il.Emit(OpCodes.Brfalse, notSignalOnAbortLabel);
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Call, runtime.AbortSignalGetOnAbort);
+            il.Emit(OpCodes.Call, runtime.RequireAbort().SignalGetOnAbort);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(notSignalOnAbortLabel);
 
@@ -1353,7 +1353,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldstr, "addEventListener");
             il.Emit(OpCodes.Call, strEq);
             il.Emit(OpCodes.Brfalse, notSignalAelLabel);
-            EmitSignalMethodWrapper(runtime.AbortSignalAddEventListenerThis, "addEventListener", 2);
+            EmitSignalMethodWrapper(runtime.RequireAbort().SignalAddEventListenerThis, "addEventListener", 2);
             il.MarkLabel(notSignalAelLabel);
 
             var notSignalRelLabel = il.DefineLabel();
@@ -1361,11 +1361,11 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldstr, "removeEventListener");
             il.Emit(OpCodes.Call, strEq);
             il.Emit(OpCodes.Brfalse, notSignalRelLabel);
-            EmitSignalMethodWrapper(runtime.AbortSignalRemoveEventListenerThis, "removeEventListener", 2);
+            EmitSignalMethodWrapper(runtime.RequireAbort().SignalRemoveEventListenerThis, "removeEventListener", 2);
             il.MarkLabel(notSignalRelLabel);
 
             // Only "throwIfAborted" remains among the screened names.
-            EmitSignalMethodWrapper(runtime.AbortSignalThrowIfAbortedThis, "throwIfAborted", 0);
+            EmitSignalMethodWrapper(runtime.RequireAbort().SignalThrowIfAbortedThis, "throwIfAborted", 0);
 
             il.MarkLabel(notSignalPropLabel);
         }

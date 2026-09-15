@@ -974,8 +974,10 @@ public partial class RuntimeEmitter
         // UsesAbortController, also implied by UsesWebStreams/fetch/http.
         if (_features.UsesAbortController)
         {
-            EmitFireAbortEvent(typeBuilder, runtime);
-            EmitAbortControllerMethods(typeBuilder, runtime);
+            EmitFireAbortEvent(typeBuilder, runtime.RequireAbort(), runtime.TSFunctionType,
+                runtime.TSFunctionInvoke, runtime.BoundTSFunctionType, runtime.BoundTSFunctionInvoke);
+            EmitAbortControllerMethods(typeBuilder, runtime.RequireAbort(),
+                reason => runtime.RequireSharpTSRuntime(reason));
             // stream.addAbortSignal destroy-on-abort wiring (#1027) — needs the AbortSignal
             // helpers above + the $StreamAbortCallback closure emitted in the stream block.
             if (_features.UsesNodeStreams)

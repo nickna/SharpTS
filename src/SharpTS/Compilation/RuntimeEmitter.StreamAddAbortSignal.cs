@@ -84,7 +84,7 @@ public partial class RuntimeEmitter
         // if (AbortSignalGetAborted(signal)) { destroy now; } else { register listener; }
         var registerLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.AbortSignalGetAborted);
+        il.Emit(OpCodes.Call, runtime.RequireAbort().SignalGetAborted);
         il.Emit(OpCodes.Brfalse, registerLabel);
 
         // already aborted → destroy the stream now
@@ -99,7 +99,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Newobj, runtime.RequireNodeStreams().AbortCallbackCtor);
         EmitInstanceMethodInfoLiteral(il, runtime.RequireNodeStreams().AbortCallbackOnAbort, runtime.RequireNodeStreams().AbortCallbackType);
         il.Emit(OpCodes.Newobj, runtime.TSFunctionCtor);
-        il.Emit(OpCodes.Call, runtime.AbortSignalAddEventListener);
+        il.Emit(OpCodes.Call, runtime.RequireAbort().SignalAddEventListener);
         il.Emit(OpCodes.Pop);
 
         il.MarkLabel(retStream);

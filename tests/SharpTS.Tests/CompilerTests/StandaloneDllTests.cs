@@ -1319,6 +1319,131 @@ public class StandaloneDllTests
         finally { CleanupTempDir(tempDir); }
     }
 
+    public static IEnumerable<object[]> AbortMetadataPrograms =>
+    [
+        new object[]
+        {
+            """
+            const c=new AbortController();
+            console.log(c.signal===c.signal,c.signal.aborted,c.signal.reason===undefined);
+            c.abort('stop'); c.abort('ignored'); console.log(c.signal.aborted,c.signal.reason);
+            const d=new AbortController();d.abort(); console.log(String(d.signal.reason).includes('AbortError'));
+            """,
+            "true false false\ntrue stop\ntrue\n", "main.ts", true
+        },
+        new object[]
+        {
+            """
+            const c=new AbortController(); const s:any=c.signal;
+            const log:string[]=[];const removed=()=>log.push('removed');const onabort=()=>log.push('onabort');
+            s.addEventListener('abort',removed);s.removeEventListener('abort',removed);
+            s.addEventListener('abort',()=>log.push('listener'));s.onabort=onabort; console.log(s.onabort===onabort);
+            try{s.throwIfAborted();console.log('ready');}catch(e){console.log('unexpected');}
+            c.abort('stop');c.abort('ignored');console.log(log.join(','));
+            try{s.throwIfAborted();}catch(e){console.log('threw');}
+            console.log(s.aborted,s.reason);
+            """,
+            "true\nready\nlistener,onabort\nthrew\ntrue stop\n", "main.ts", true
+        },
+        new object[]
+        {
+            """
+            const c=new AbortController();const s:any=c.signal;let count=0;
+            const add=s.addEventListener;const remove=s.removeEventListener;const check=s.throwIfAborted;
+            const callback=()=>count++; add.call(s,'abort',callback); remove.call(s,'abort',callback);
+            add.call(s,'abort',callback);c.abort(); console.log(count);
+            try{check.call(s);}catch(e){console.log('threw');}
+            """,
+            "1\nthrew\n", "main.ts", true
+        },
+        new object[]
+        {
+            """
+            const A=AbortSignal; console.log(typeof A,A===AbortSignal);
+            const s:any=A.abort('now');console.log(s.aborted,s.reason);
+            console.log(s instanceof (AbortSignal as any),({} as any) instanceof (A as any));
+            console.log(new AbortController().signal instanceof (A as any));
+            """,
+            "object true\ntrue now\ntrue false\ntrue\n", "main.ts", true
+        },
+        new object[]
+        {
+            """
+            async function run(){const s=AbortSignal.timeout(1);await new Promise<void>(resolve=>setTimeout(resolve,100));
+            console.log(s.aborted); console.log(String(s.reason).includes('TimeoutError'));}run();
+            """,
+            "true\ntrue\n", "main.ts", true
+        },
+        new object[]
+        {
+            """
+            const one=new AbortController();const two=new AbortController();
+            const s=AbortSignal.any([one.signal,two.signal]);console.log(s.aborted);one.abort('first');console.log(s.aborted,s.reason);
+            console.log(AbortSignal.any([AbortSignal.abort('already')]).reason);
+            """,
+            "false\ntrue first\nalready\n", "main.ts", false
+        },
+        new object[]
+        {
+            """
+            try{AbortSignal.any([]);}catch(e:any){console.log(e.message);}
+            """,
+            "AbortSignalAnyCompiled requires the SharpTS runtime (SharpTS.dll). Recompile without --standalone or deploy SharpTS.dll next to the output.\n", "main.ts", true
+        },
+        new object[]
+        {
+            """
+            import {Readable,addAbortSignal} from 'stream';
+            const r=new Readable({read(){}});const c=new AbortController();const log:string[]=[];
+            r.on('error',(e:any)=>log.push('error:'+e.name));r.on('close',()=>log.push('close'));
+            console.log(addAbortSignal(c.signal,r)===r);c.abort();console.log(log.join(','),r.destroyed);
+            """,
+            "true\nerror:AbortError,close true\n", "main.ts", true
+        },
+        new object[]
+        {
+            """
+            const c=new AbortController();c.abort('stop');
+            const source=new ReadableStream({start(controller){controller.close();}});const sink=new WritableStream({});
+            source.pipeTo(sink,{signal:c.signal}).then(()=>console.log('done'),()=>console.log('rejected'));
+            """,
+            "rejected\n", "main.ts", true
+        },
+        new object[]
+        {
+            """
+            async function run(){await Promise.resolve(0);const c=new AbortController();c.abort('async');console.log(c.signal.reason);}run();
+            function* items():Generator<any,void,any>{yield AbortSignal.abort('generator').reason;}console.log(items().next().value);
+            """,
+            "async\ngenerator\n", "main.ts", true
+        },
+        new object[]
+        {
+            """
+            import * as http from 'http'; console.log(typeof http.createServer);
+            """,
+            "function\n", "main.ts", true
+        }
+    ];
+
+    [Theory]
+    [MemberData(nameof(AbortMetadataPrograms))]
+    public void Isolated_AbortMetadata_PreservesSignalStateEventsAndDependencies(string source, string expected, string entryPoint, bool standalone)
+    {
+        using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        tempDir.CreateFile(entryPoint, source);
+        var dllPath = tempDir.GetPath("abort_metadata.dll");
+        var deployment = standalone ? " --standalone" : "";
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{tempDir.GetPath(entryPoint)}\" -o \"{dllPath}\" --verify{deployment}", tempDir.Path);
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(dllPath));
+        // Only AbortSignal.any needs the late-bound SharpTS runtime; ordinary controllers remain standalone.
+        Assert.Equal(!standalone, File.Exists(tempDir.GetPath("SharpTS.dll")));
+        Assert.Equal(expected, ExecuteCompiledDllIsolated(dllPath, timeoutMs: 15000,
+            verifyStandardError: error => Assert.Empty(error)));
+    }
+
     public static IEnumerable<object[]> SourceExecutionMetadataPrograms =>
     [
         new object[]

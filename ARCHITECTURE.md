@@ -691,6 +691,20 @@ assembly, so normal CLI output deploys the managed compiler closure and standalo
 its missing-runtime diagnostics. Process configuration behavior is unchanged and tested in isolated
 subprocesses. No migrated flat aliases or emitter-held bridge handles remain.
 
+AbortController/AbortSignal uses optional `EmittedAbortRuntime`, selected by `UsesAbortController`,
+for nineteen checked declarations: seventeen methods and the namespace field/populate method.
+The namespace field is declared early for instance checks; event dispatch precedes controller and
+signal helpers, which precede dynamic property and stream wiring; namespace population is emitted
+later. Completion validates and freezes the whole family after these phases. Sixteen Abort helpers
+take explicit metadata dependencies; event dispatch receives the four invocation handles it needs.
+The generic namespace wrapper takes its function-cache method explicitly, while its callers retain
+orchestration across AbortSignal and Intl. All other consumers use checked Abort handles.
+`AbortSignal.any` retains its precise runtime-requirement flag and late-bound reflection call;
+ordinary controllers and their implied stream/fetch support keep existing standalone behavior.
+Signal dictionaries, cancellation sources, listener order, namespace identity, and wrapper behavior
+are unchanged. BCL reflection and body locals remain scoped; NodeStreams still owns its abort
+callback metadata. No migrated flat aliases or Abort emitter-held copies remain.
+
 During emission, each handle becomes readable as soon as its declaration is assigned, so forward
 references do not require a method body to exist yet. An early read names the missing declaration.
 Completion is an orchestration boundary, not an IL verifier: body emission and type finalization

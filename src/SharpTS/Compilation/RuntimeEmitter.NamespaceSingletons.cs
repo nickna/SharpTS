@@ -31,7 +31,7 @@ public partial class RuntimeEmitter
     private void DefineNamespaceSingletonFields(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         if (_features.UsesAbortController)
-            runtime.AbortSignalNamespaceField = DefineNamespaceSingletonField(typeBuilder, "AbortSignal");
+            runtime.RequireAbort().NamespaceField = DefineNamespaceSingletonField(typeBuilder, "AbortSignal");
         if (_features.UsesIntl)
             runtime.IntlNamespaceField = DefineNamespaceSingletonField(typeBuilder, "Intl");
     }
@@ -46,19 +46,19 @@ public partial class RuntimeEmitter
     {
         if (_features.UsesAbortController)
         {
-            runtime.AbortSignalNamespacePopulate =
-                EmitNamespaceSingleton(typeBuilder, runtime, "AbortSignal", runtime.AbortSignalNamespaceField!,
+            runtime.RequireAbort().NamespacePopulate =
+                EmitNamespaceSingleton(typeBuilder, runtime.TSFunctionGetOrCreate, "AbortSignal", runtime.RequireAbort().NamespaceField,
                 [
-                    ("abort", runtime.AbortSignalAbort, 1),
-                    ("timeout", runtime.AbortSignalTimeout, 1),
-                    ("any", runtime.AbortSignalAny, 1),
+                    ("abort", runtime.RequireAbort().SignalAbort, 1),
+                    ("timeout", runtime.RequireAbort().SignalTimeout, 1),
+                    ("any", runtime.RequireAbort().SignalAny, 1),
                 ]);
         }
 
         if (_features.UsesIntl)
         {
             runtime.IntlNamespacePopulate =
-                EmitNamespaceSingleton(typeBuilder, runtime, "Intl", runtime.IntlNamespaceField!,
+                EmitNamespaceSingleton(typeBuilder, runtime.TSFunctionGetOrCreate, "Intl", runtime.IntlNamespaceField!,
                 [
                     ("NumberFormat", runtime.CreateIntlNumberFormat, 2),
                     ("DateTimeFormat", runtime.CreateIntlDateTimeFormat, 2),
@@ -74,7 +74,7 @@ public partial class RuntimeEmitter
 
     private MethodBuilder EmitNamespaceSingleton(
         TypeBuilder typeBuilder,
-        EmittedRuntime runtime,
+        MethodBuilder functionGetOrCreate,
         string namespaceName,
         FieldBuilder field,
         (string JsName, MethodBuilder Helper, int JsLength)[] members)
@@ -112,7 +112,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Castclass, _types.MethodInfo);
             il.Emit(OpCodes.Ldstr, jsName);
             il.Emit(OpCodes.Ldc_I4, jsLength);
-            il.Emit(OpCodes.Call, runtime.TSFunctionGetOrCreate);
+            il.Emit(OpCodes.Call, functionGetOrCreate);
             il.Emit(OpCodes.Callvirt, setItem);
         }
 

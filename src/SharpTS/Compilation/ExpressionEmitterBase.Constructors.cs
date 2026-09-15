@@ -194,7 +194,7 @@ public abstract partial class ExpressionEmitterBase
                 return true;
 
             case "AbortController":
-                IL.Emit(OpCodes.Call, Ctx.Runtime!.CreateAbortController);
+                IL.Emit(OpCodes.Call, Ctx.Runtime!.RequireAbort().CreateController);
                 SetStackUnknown();
                 return true;
 

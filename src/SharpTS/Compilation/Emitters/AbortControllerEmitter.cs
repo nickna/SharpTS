@@ -32,7 +32,7 @@ public sealed class AbortControllerEmitter : ITypeEmitterStrategy
         }
 
         // Call AbortControllerAbort(controller, reason)
-        il.Emit(OpCodes.Call, ctx.Runtime!.AbortControllerAbort);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireAbort().ControllerAbort);
         return true;
     }
 
@@ -49,7 +49,7 @@ public sealed class AbortControllerEmitter : ITypeEmitterStrategy
         emitter.EmitBoxIfNeeded(receiver);
 
         // Call AbortControllerGetSignal(controller)
-        il.Emit(OpCodes.Call, ctx.Runtime!.AbortControllerGetSignal);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireAbort().ControllerGetSignal);
         return true;
     }
 

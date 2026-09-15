@@ -2083,12 +2083,12 @@ public partial class RuntimeEmitter
 
         // Check if signal is aborted: AbortSignalGetAborted(signal)
         il.Emit(OpCodes.Ldloc, signalLocal);
-        il.Emit(OpCodes.Call, runtime.AbortSignalGetAborted);
+        il.Emit(OpCodes.Call, runtime.RequireAbort().SignalGetAborted);
         il.Emit(OpCodes.Brfalse, signalCheckDoneLabel);
 
         // Signal is aborted - throw AbortError
         il.Emit(OpCodes.Ldloc, signalLocal);
-        il.Emit(OpCodes.Call, runtime.AbortSignalGetReason);
+        il.Emit(OpCodes.Call, runtime.RequireAbort().SignalGetReason);
         var abortReasonLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Stloc, abortReasonLocal);
         il.Emit(OpCodes.Ldloc, abortReasonLocal);
