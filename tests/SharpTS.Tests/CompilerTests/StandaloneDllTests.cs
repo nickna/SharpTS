@@ -1408,7 +1408,7 @@ public class StandaloneDllTests
         Assert.DoesNotContain("SharpTS", GetAssemblyReferences(dllPath));
         Assert.False(File.Exists(tempDir.GetPath("SharpTS.dll")));
         Assert.Equal(expected, ExecuteCompiledDllIsolated(dllPath, timeoutMs: 15000,
-            verifyStandardError: error => Assert.Empty(error)));
+            verifyStandardError: error => Assert.Empty(error), standardInput: ""));
     }
 
     public static IEnumerable<object[]> IntlMetadataPrograms =>
