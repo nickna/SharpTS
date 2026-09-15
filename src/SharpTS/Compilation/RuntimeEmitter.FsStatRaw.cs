@@ -13,7 +13,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitFsStatRawHelpers(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
-        EmitFsStatTimeMs(typeBuilder, runtime);
+        EmitFsStatTimeMs(typeBuilder, runtime.RequireFileSystem());
         EmitFsBuildStatRecord(typeBuilder, runtime);
         EmitFsStatRaw(typeBuilder, runtime);
         EmitFsLstatRaw(typeBuilder, runtime);
@@ -21,12 +21,12 @@ public partial class RuntimeEmitter
     }
 
     /// <summary>double FsStatTimeMs(DateTime local) = unix-ms of local.ToUniversalTime().</summary>
-    private void EmitFsStatTimeMs(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitFsStatTimeMs(TypeBuilder typeBuilder, EmittedFileSystemRuntime fileSystem)
     {
         var method = typeBuilder.DefineMethod("FsStatTimeMs",
             System.Reflection.MethodAttributes.Public | System.Reflection.MethodAttributes.Static,
             _types.Double, [typeof(DateTime)]);
-        runtime.FsStatTimeMs = method;
+        fileSystem.StatTimeMs = method;
 
         var il = method.GetILGenerator();
         var utc = il.DeclareLocal(typeof(DateTime));
@@ -53,7 +53,7 @@ public partial class RuntimeEmitter
             System.Reflection.MethodAttributes.Public | System.Reflection.MethodAttributes.Static,
             _types.Object,
             [_types.Boolean, _types.Boolean, _types.Boolean, _types.Double, _types.Double, _types.Double, _types.Double, _types.Double]);
-        runtime.FsBuildStatRecord = method;
+        runtime.RequireFileSystem().BuildStatRecord = method;
 
         var il = method.GetILGenerator();
 
@@ -128,18 +128,18 @@ public partial class RuntimeEmitter
 
     // Loads the four File.Get*Time timestamps (as unix-ms doubles) into the given
     // locals, from the path local. Times work for files and directories alike.
-    private void EmitLoadStatTimes(ILGenerator il, EmittedRuntime runtime, LocalBuilder pathLocal,
+    private void EmitLoadStatTimes(ILGenerator il, EmittedFileSystemRuntime fileSystem, LocalBuilder pathLocal,
         LocalBuilder at, LocalBuilder mt, LocalBuilder ct)
     {
         il.Emit(OpCodes.Ldloc, pathLocal);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.File, "GetLastAccessTime", _types.String));
-        il.Emit(OpCodes.Call, runtime.FsStatTimeMs); il.Emit(OpCodes.Stloc, at);
+        il.Emit(OpCodes.Call, fileSystem.StatTimeMs); il.Emit(OpCodes.Stloc, at);
         il.Emit(OpCodes.Ldloc, pathLocal);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.File, "GetLastWriteTime", _types.String));
-        il.Emit(OpCodes.Call, runtime.FsStatTimeMs); il.Emit(OpCodes.Stloc, mt);
+        il.Emit(OpCodes.Call, fileSystem.StatTimeMs); il.Emit(OpCodes.Stloc, mt);
         il.Emit(OpCodes.Ldloc, pathLocal);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.File, "GetCreationTime", _types.String));
-        il.Emit(OpCodes.Call, runtime.FsStatTimeMs); il.Emit(OpCodes.Stloc, ct);
+        il.Emit(OpCodes.Call, fileSystem.StatTimeMs); il.Emit(OpCodes.Stloc, ct);
     }
 
     /// <summary>object FsStatRaw(object path) — follows symlinks.</summary>
@@ -148,7 +148,7 @@ public partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod("FsStatRaw",
             System.Reflection.MethodAttributes.Public | System.Reflection.MethodAttributes.Static,
             _types.Object, [_types.Object]);
-        runtime.FsStatRaw = method;
+        runtime.RequireFileSystem().StatRaw = method;
 
         var il = method.GetILGenerator();
         var resultLocal = il.DeclareLocal(_types.Object);
@@ -180,7 +180,7 @@ public partial class RuntimeEmitter
             var at = il.DeclareLocal(_types.Double);
             var mt = il.DeclareLocal(_types.Double);
             var ct = il.DeclareLocal(_types.Double);
-            EmitLoadStatTimes(il, runtime, pathLocal, at, mt, ct);
+            EmitLoadStatTimes(il, runtime.RequireFileSystem(), pathLocal, at, mt, ct);
 
             il.Emit(OpCodes.Ldloc, isDirL);
             il.Emit(OpCodes.Ldc_I4_0);          // isSymlink = false (stat follows links)
@@ -188,7 +188,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldloc, sizeL);
             il.Emit(OpCodes.Ldloc, at); il.Emit(OpCodes.Ldloc, mt);
             il.Emit(OpCodes.Ldloc, ct); il.Emit(OpCodes.Ldloc, ct);
-            il.Emit(OpCodes.Call, runtime.FsBuildStatRecord);
+            il.Emit(OpCodes.Call, runtime.RequireFileSystem().BuildStatRecord);
             il.Emit(OpCodes.Stloc, resultLocal);
             il.Emit(OpCodes.Leave, afterTry);
         });
@@ -202,7 +202,7 @@ public partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod("FsLstatRaw",
             System.Reflection.MethodAttributes.Public | System.Reflection.MethodAttributes.Static,
             _types.Object, [_types.Object]);
-        runtime.FsLstatRaw = method;
+        runtime.RequireFileSystem().LstatRaw = method;
 
         var il = method.GetILGenerator();
         var resultLocal = il.DeclareLocal(_types.Object);
@@ -248,7 +248,7 @@ public partial class RuntimeEmitter
             var at = il.DeclareLocal(_types.Double);
             var mt = il.DeclareLocal(_types.Double);
             var ct = il.DeclareLocal(_types.Double);
-            EmitLoadStatTimes(il, runtime, pathLocal, at, mt, ct);
+            EmitLoadStatTimes(il, runtime.RequireFileSystem(), pathLocal, at, mt, ct);
 
             il.Emit(OpCodes.Ldloc, isDirL);
             il.Emit(OpCodes.Ldloc, symL);
@@ -256,7 +256,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldloc, sizeL);
             il.Emit(OpCodes.Ldloc, at); il.Emit(OpCodes.Ldloc, mt);
             il.Emit(OpCodes.Ldloc, ct); il.Emit(OpCodes.Ldloc, ct);
-            il.Emit(OpCodes.Call, runtime.FsBuildStatRecord);
+            il.Emit(OpCodes.Call, runtime.RequireFileSystem().BuildStatRecord);
             il.Emit(OpCodes.Stloc, resultLocal);
             il.Emit(OpCodes.Leave, afterTry);
         });
@@ -270,7 +270,7 @@ public partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod("FsFstatRaw",
             System.Reflection.MethodAttributes.Public | System.Reflection.MethodAttributes.Static,
             _types.Object, [_types.Object]);
-        runtime.FsFstatRaw = method;
+        runtime.RequireFileSystem().FstatRaw = method;
 
         var il = method.GetILGenerator();
         var resultLocal = il.DeclareLocal(_types.Object);
@@ -283,9 +283,9 @@ public partial class RuntimeEmitter
 
         EmitWithFsErrorHandling(il, runtime, pathLocal, "fstat", afterTry =>
         {
-            il.Emit(OpCodes.Ldsfld, runtime.FileDescriptorTableInstance);
+            il.Emit(OpCodes.Ldsfld, runtime.RequireFileSystem().FileDescriptorTableInstance);
             il.Emit(OpCodes.Ldloc, fdLocal);
-            il.Emit(OpCodes.Callvirt, runtime.FileDescriptorTableGet);
+            il.Emit(OpCodes.Callvirt, runtime.RequireFileSystem().FileDescriptorTableGet);
             var streamLocal = il.DeclareLocal(typeof(FileStream));
             il.Emit(OpCodes.Stloc, streamLocal);
 
@@ -302,7 +302,7 @@ public partial class RuntimeEmitter
             var at = il.DeclareLocal(_types.Double);
             var mt = il.DeclareLocal(_types.Double);
             var ct = il.DeclareLocal(_types.Double);
-            EmitLoadStatTimes(il, runtime, pathLocal, at, mt, ct);
+            EmitLoadStatTimes(il, runtime.RequireFileSystem(), pathLocal, at, mt, ct);
 
             il.Emit(OpCodes.Ldc_I4_0);    // isDir = false
             il.Emit(OpCodes.Ldc_I4_0);    // isSymlink = false
@@ -310,7 +310,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldloc, sizeL);
             il.Emit(OpCodes.Ldloc, at); il.Emit(OpCodes.Ldloc, mt);
             il.Emit(OpCodes.Ldloc, ct); il.Emit(OpCodes.Ldloc, ct);
-            il.Emit(OpCodes.Call, runtime.FsBuildStatRecord);
+            il.Emit(OpCodes.Call, runtime.RequireFileSystem().BuildStatRecord);
             il.Emit(OpCodes.Stloc, resultLocal);
             il.Emit(OpCodes.Leave, afterTry);
         });

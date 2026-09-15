@@ -18,7 +18,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object]
         );
-        runtime.FsMkdtempSync = method;
+        runtime.RequireFileSystem().MkdtempSync = method;
 
         var il = method.GetILGenerator();
         var resultLocal = il.DeclareLocal(_types.String);
@@ -83,7 +83,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object]
         );
-        runtime.FsOpendirSync = method;
+        runtime.RequireFileSystem().OpendirSync = method;
 
         var il = method.GetILGenerator();
         var resultLocal = il.DeclareLocal(_types.Object);
@@ -114,7 +114,7 @@ public partial class RuntimeEmitter
 
             // Create new $Dir(path) using emitted type
             il.Emit(OpCodes.Ldloc, pathLocal);
-            il.Emit(OpCodes.Newobj, runtime.DirCtor);
+            il.Emit(OpCodes.Newobj, runtime.RequireFileSystem().DirCtor);
             il.Emit(OpCodes.Stloc, resultLocal);
             il.Emit(OpCodes.Leave, afterTry);
         });
@@ -134,7 +134,7 @@ public partial class RuntimeEmitter
             _types.Void,
             [_types.Object, _types.Object]
         );
-        runtime.FsLinkSync = method;
+        runtime.RequireFileSystem().LinkSync = method;
 
         var il = method.GetILGenerator();
 
@@ -204,7 +204,7 @@ public partial class RuntimeEmitter
             // CreateHardLinkPure(existingPath, newPath) via P/Invoke (Phase 21)
             il.Emit(OpCodes.Ldloc, existingPathLocal);
             il.Emit(OpCodes.Ldloc, newPathLocal);
-            il.Emit(OpCodes.Call, runtime.CreateHardLinkPure);
+            il.Emit(OpCodes.Call, runtime.RequireFileSystem().CreateHardLinkPure);
             il.Emit(OpCodes.Leave, afterTry);
         });
         il.Emit(OpCodes.Ret);

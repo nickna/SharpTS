@@ -18,7 +18,7 @@ public partial class RuntimeEmitter
             _types.Double,
             [_types.Object, _types.Object, _types.Object]
         );
-        runtime.FsOpenSync = method;
+        runtime.RequireFileSystem().OpenSync = method;
 
         var il = method.GetILGenerator();
 
@@ -34,7 +34,7 @@ public partial class RuntimeEmitter
         {
             // Parse flags using pure-IL FsFlagsParsePure helper (no reflection, standalone-compatible)
             il.Emit(OpCodes.Ldarg_1); // flags
-            il.Emit(OpCodes.Call, runtime.FsFlagsParsePure);
+            il.Emit(OpCodes.Call, runtime.RequireFileSystem().FlagsParsePure);
 
             // The result is a ValueTuple<FileMode, FileAccess, FileShare> (not boxed)
             var tupleType = typeof(ValueTuple<FileMode, FileAccess, FileShare>);
@@ -42,7 +42,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Stloc, tupleLocal);
 
             // Get $FileDescriptorTable.Instance (pure-IL, no reflection)
-            il.Emit(OpCodes.Ldsfld, runtime.FileDescriptorTableInstance);
+            il.Emit(OpCodes.Ldsfld, runtime.RequireFileSystem().FileDescriptorTableInstance);
 
             // Call instance.Open(path, mode, access, share)
             il.Emit(OpCodes.Ldloc, pathLocal);
@@ -52,7 +52,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldfld, tupleType.GetField("Item2")!);
             il.Emit(OpCodes.Ldloca, tupleLocal);
             il.Emit(OpCodes.Ldfld, tupleType.GetField("Item3")!);
-            il.Emit(OpCodes.Callvirt, runtime.FileDescriptorTableOpen);
+            il.Emit(OpCodes.Callvirt, runtime.RequireFileSystem().FileDescriptorTableOpen);
             il.Emit(OpCodes.Conv_R8);
             il.Emit(OpCodes.Stloc, resultLocal);
             il.Emit(OpCodes.Leave, afterTry);
@@ -73,7 +73,7 @@ public partial class RuntimeEmitter
             _types.Void,
             [_types.Object]
         );
-        runtime.FsCloseSync = method;
+        runtime.RequireFileSystem().CloseSync = method;
 
         var il = method.GetILGenerator();
 
@@ -92,11 +92,11 @@ public partial class RuntimeEmitter
         EmitWithFsErrorHandling(il, runtime, pathLocal, "close", afterTry =>
         {
             // Get $FileDescriptorTable.Instance (pure-IL, no reflection)
-            il.Emit(OpCodes.Ldsfld, runtime.FileDescriptorTableInstance);
+            il.Emit(OpCodes.Ldsfld, runtime.RequireFileSystem().FileDescriptorTableInstance);
 
             // Call instance.Close(fd)
             il.Emit(OpCodes.Ldloc, fdLocal);
-            il.Emit(OpCodes.Callvirt, runtime.FileDescriptorTableClose);
+            il.Emit(OpCodes.Callvirt, runtime.RequireFileSystem().FileDescriptorTableClose);
             il.Emit(OpCodes.Leave, afterTry);
         });
         il.Emit(OpCodes.Ret);
@@ -114,7 +114,7 @@ public partial class RuntimeEmitter
             _types.Double,
             [_types.Object, _types.Object, _types.Object, _types.Object, _types.Object]
         );
-        runtime.FsReadSync = method;
+        runtime.RequireFileSystem().ReadSync = method;
 
         var il = method.GetILGenerator();
         var resultLocal = il.DeclareLocal(_types.Double);
@@ -151,9 +151,9 @@ public partial class RuntimeEmitter
             var fileStreamSeekMethod = typeof(FileStream).GetMethod("Seek")!;
 
             // Get FileStream from $FileDescriptorTable (pure-IL, no reflection)
-            il.Emit(OpCodes.Ldsfld, runtime.FileDescriptorTableInstance);
+            il.Emit(OpCodes.Ldsfld, runtime.RequireFileSystem().FileDescriptorTableInstance);
             il.Emit(OpCodes.Ldloc, fdLocal);
-            il.Emit(OpCodes.Callvirt, runtime.FileDescriptorTableGet);
+            il.Emit(OpCodes.Callvirt, runtime.RequireFileSystem().FileDescriptorTableGet);
             var streamLocal = il.DeclareLocal(typeof(FileStream));
             il.Emit(OpCodes.Stloc, streamLocal);
 
@@ -210,7 +210,7 @@ public partial class RuntimeEmitter
             _types.Double,
             [_types.Object, _types.Object, _types.Object, _types.Object, _types.Object]
         );
-        runtime.FsWriteSyncBuffer = method;
+        runtime.RequireFileSystem().WriteSyncBuffer = method;
 
         var il = method.GetILGenerator();
         var resultLocal = il.DeclareLocal(_types.Double);
@@ -233,9 +233,9 @@ public partial class RuntimeEmitter
             var fileStreamSeekMethod = typeof(FileStream).GetMethod("Seek")!;
 
             // Get FileStream from $FileDescriptorTable (pure-IL, no reflection)
-            il.Emit(OpCodes.Ldsfld, runtime.FileDescriptorTableInstance);
+            il.Emit(OpCodes.Ldsfld, runtime.RequireFileSystem().FileDescriptorTableInstance);
             il.Emit(OpCodes.Ldloc, fdLocal);
-            il.Emit(OpCodes.Callvirt, runtime.FileDescriptorTableGet);
+            il.Emit(OpCodes.Callvirt, runtime.RequireFileSystem().FileDescriptorTableGet);
             var streamLocal = il.DeclareLocal(typeof(FileStream));
             il.Emit(OpCodes.Stloc, streamLocal);
 
@@ -353,7 +353,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object]
         );
-        runtime.FsFstatSync = method;
+        runtime.RequireFileSystem().FstatSync = method;
 
         var il = method.GetILGenerator();
         var resultLocal = il.DeclareLocal(_types.Object);
@@ -375,9 +375,9 @@ public partial class RuntimeEmitter
             var lengthGetter = typeof(FileStream).GetProperty("Length")!.GetMethod!;
 
             // Get FileStream from $FileDescriptorTable (pure-IL, no reflection)
-            il.Emit(OpCodes.Ldsfld, runtime.FileDescriptorTableInstance);
+            il.Emit(OpCodes.Ldsfld, runtime.RequireFileSystem().FileDescriptorTableInstance);
             il.Emit(OpCodes.Ldloc, fdLocal);
-            il.Emit(OpCodes.Callvirt, runtime.FileDescriptorTableGet);
+            il.Emit(OpCodes.Callvirt, runtime.RequireFileSystem().FileDescriptorTableGet);
             var streamLocal = il.DeclareLocal(typeof(FileStream));
             il.Emit(OpCodes.Stloc, streamLocal);
 
@@ -399,7 +399,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldc_R8, 0.0);     // arg7: mtimeMs (placeholder)
             il.Emit(OpCodes.Ldc_R8, 0.0);     // arg8: ctimeMs (placeholder)
             il.Emit(OpCodes.Ldc_R8, 0.0);     // arg9: birthtimeMs (placeholder)
-            il.Emit(OpCodes.Newobj, runtime.StatsCtor);
+            il.Emit(OpCodes.Newobj, runtime.RequireFileSystem().StatsCtor);
             il.Emit(OpCodes.Stloc, resultLocal);
             il.Emit(OpCodes.Leave, afterTry);
         });
@@ -419,7 +419,7 @@ public partial class RuntimeEmitter
             _types.Void,
             [_types.Object, _types.Object]
         );
-        runtime.FsFtruncateSync = method;
+        runtime.RequireFileSystem().FtruncateSync = method;
 
         var il = method.GetILGenerator();
 
@@ -447,9 +447,9 @@ public partial class RuntimeEmitter
             var setLengthMethod = typeof(FileStream).GetMethod("SetLength")!;
 
             // Get FileStream from $FileDescriptorTable (pure-IL, no reflection)
-            il.Emit(OpCodes.Ldsfld, runtime.FileDescriptorTableInstance);
+            il.Emit(OpCodes.Ldsfld, runtime.RequireFileSystem().FileDescriptorTableInstance);
             il.Emit(OpCodes.Ldloc, fdLocal);
-            il.Emit(OpCodes.Callvirt, runtime.FileDescriptorTableGet);
+            il.Emit(OpCodes.Callvirt, runtime.RequireFileSystem().FileDescriptorTableGet);
             var streamLocal = il.DeclareLocal(typeof(FileStream));
             il.Emit(OpCodes.Stloc, streamLocal);
 

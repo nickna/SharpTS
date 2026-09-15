@@ -61,7 +61,7 @@ public sealed class FsPromisesModuleEmitter : IBuiltInModuleEmitter
         {
             var ctx = emitter.Context;
             var il = ctx.IL;
-            il.Emit(OpCodes.Call, ctx.Runtime!.FsGetConstants);
+            il.Emit(OpCodes.Call, ctx.Runtime!.RequireFileSystem().GetConstants);
             return true;
         }
         return false;

@@ -17,7 +17,7 @@ public partial class RuntimeEmitter
             il =>
             {
                 il.Emit(OpCodes.Ldarg_0);
-                il.Emit(OpCodes.Call, runtime.FsExistsSync);
+                il.Emit(OpCodes.Call, runtime.RequireFileSystem().ExistsSync);
                 il.Emit(OpCodes.Box, _types.Boolean);
             });
 
@@ -27,7 +27,7 @@ public partial class RuntimeEmitter
             {
                 il.Emit(OpCodes.Ldarg_0);
                 il.Emit(OpCodes.Ldarg_1);
-                il.Emit(OpCodes.Call, runtime.FsReadFileSync);
+                il.Emit(OpCodes.Call, runtime.RequireFileSystem().ReadFileSync);
             });
 
         // writeFileSync(path, data) -> undefined (value-import fallback; encoding via
@@ -38,7 +38,7 @@ public partial class RuntimeEmitter
                 il.Emit(OpCodes.Ldarg_0);
                 il.Emit(OpCodes.Ldarg_1);
                 il.Emit(OpCodes.Ldnull);
-                il.Emit(OpCodes.Call, runtime.FsWriteFileSync);
+                il.Emit(OpCodes.Call, runtime.RequireFileSystem().WriteFileSync);
                 il.Emit(OpCodes.Ldnull);
             });
 
@@ -49,7 +49,7 @@ public partial class RuntimeEmitter
                 il.Emit(OpCodes.Ldarg_0);
                 il.Emit(OpCodes.Ldarg_1);
                 il.Emit(OpCodes.Ldnull);
-                il.Emit(OpCodes.Call, runtime.FsAppendFileSync);
+                il.Emit(OpCodes.Call, runtime.RequireFileSystem().AppendFileSync);
                 il.Emit(OpCodes.Ldnull);
             });
 
@@ -58,7 +58,7 @@ public partial class RuntimeEmitter
             il =>
             {
                 il.Emit(OpCodes.Ldarg_0);
-                il.Emit(OpCodes.Call, runtime.FsUnlinkSync);
+                il.Emit(OpCodes.Call, runtime.RequireFileSystem().UnlinkSync);
                 il.Emit(OpCodes.Ldnull);
             });
 
@@ -68,7 +68,7 @@ public partial class RuntimeEmitter
             {
                 il.Emit(OpCodes.Ldarg_0);
                 il.Emit(OpCodes.Ldarg_1);
-                il.Emit(OpCodes.Call, runtime.FsMkdirSync);
+                il.Emit(OpCodes.Call, runtime.RequireFileSystem().MkdirSync);
                 il.Emit(OpCodes.Ldnull);
             });
 
@@ -78,7 +78,7 @@ public partial class RuntimeEmitter
             {
                 il.Emit(OpCodes.Ldarg_0);
                 il.Emit(OpCodes.Ldarg_1);
-                il.Emit(OpCodes.Call, runtime.FsRmdirSync);
+                il.Emit(OpCodes.Call, runtime.RequireFileSystem().RmdirSync);
                 il.Emit(OpCodes.Ldnull);
             });
 
@@ -88,7 +88,7 @@ public partial class RuntimeEmitter
             {
                 il.Emit(OpCodes.Ldarg_0);
                 il.Emit(OpCodes.Ldarg_1);
-                il.Emit(OpCodes.Call, runtime.FsReaddirSync);
+                il.Emit(OpCodes.Call, runtime.RequireFileSystem().ReaddirSync);
             });
 
         // statSync(path) -> object
@@ -96,7 +96,7 @@ public partial class RuntimeEmitter
             il =>
             {
                 il.Emit(OpCodes.Ldarg_0);
-                il.Emit(OpCodes.Call, runtime.FsStatSync);
+                il.Emit(OpCodes.Call, runtime.RequireFileSystem().StatSync);
             });
 
         // lstatSync(path) -> object
@@ -104,7 +104,7 @@ public partial class RuntimeEmitter
             il =>
             {
                 il.Emit(OpCodes.Ldarg_0);
-                il.Emit(OpCodes.Call, runtime.FsLstatSync);
+                il.Emit(OpCodes.Call, runtime.RequireFileSystem().LstatSync);
             });
 
         // renameSync(oldPath, newPath) -> undefined
@@ -113,7 +113,7 @@ public partial class RuntimeEmitter
             {
                 il.Emit(OpCodes.Ldarg_0);
                 il.Emit(OpCodes.Ldarg_1);
-                il.Emit(OpCodes.Call, runtime.FsRenameSync);
+                il.Emit(OpCodes.Call, runtime.RequireFileSystem().RenameSync);
                 il.Emit(OpCodes.Ldnull);
             });
 
@@ -123,7 +123,7 @@ public partial class RuntimeEmitter
             {
                 il.Emit(OpCodes.Ldarg_0);
                 il.Emit(OpCodes.Ldarg_1);
-                il.Emit(OpCodes.Call, runtime.FsCopyFileSync);
+                il.Emit(OpCodes.Call, runtime.RequireFileSystem().CopyFileSync);
                 il.Emit(OpCodes.Ldnull);
             });
 
@@ -133,7 +133,7 @@ public partial class RuntimeEmitter
             {
                 il.Emit(OpCodes.Ldarg_0);
                 il.Emit(OpCodes.Ldarg_1);
-                il.Emit(OpCodes.Call, runtime.FsAccessSync);
+                il.Emit(OpCodes.Call, runtime.RequireFileSystem().AccessSync);
                 il.Emit(OpCodes.Ldnull);
             });
 
@@ -142,7 +142,7 @@ public partial class RuntimeEmitter
             il =>
             {
                 il.Emit(OpCodes.Ldarg_0);
-                il.Emit(OpCodes.Call, runtime.FsLstatSync);
+                il.Emit(OpCodes.Call, runtime.RequireFileSystem().LstatSync);
             });
 
         // chmodSync(path, mode) -> undefined
@@ -151,7 +151,7 @@ public partial class RuntimeEmitter
             {
                 il.Emit(OpCodes.Ldarg_0);
                 il.Emit(OpCodes.Ldarg_1);
-                il.Emit(OpCodes.Call, runtime.FsChmodSync);
+                il.Emit(OpCodes.Call, runtime.RequireFileSystem().ChmodSync);
                 il.Emit(OpCodes.Ldnull);
             });
 
@@ -162,7 +162,7 @@ public partial class RuntimeEmitter
                 il.Emit(OpCodes.Ldarg_0);
                 il.Emit(OpCodes.Ldarg_1);
                 il.Emit(OpCodes.Ldarg_2);
-                il.Emit(OpCodes.Call, runtime.FsChownSync);
+                il.Emit(OpCodes.Call, runtime.RequireFileSystem().ChownSync);
                 il.Emit(OpCodes.Ldnull);
             });
 
@@ -173,7 +173,7 @@ public partial class RuntimeEmitter
                 il.Emit(OpCodes.Ldarg_0);
                 il.Emit(OpCodes.Ldarg_1);
                 il.Emit(OpCodes.Ldarg_2);
-                il.Emit(OpCodes.Call, runtime.FsLchownSync);
+                il.Emit(OpCodes.Call, runtime.RequireFileSystem().LchownSync);
                 il.Emit(OpCodes.Ldnull);
             });
 
@@ -183,7 +183,7 @@ public partial class RuntimeEmitter
             {
                 il.Emit(OpCodes.Ldarg_0);
                 il.Emit(OpCodes.Ldarg_1);
-                il.Emit(OpCodes.Call, runtime.FsTruncateSync);
+                il.Emit(OpCodes.Call, runtime.RequireFileSystem().TruncateSync);
                 il.Emit(OpCodes.Ldnull);
             });
 
@@ -194,7 +194,7 @@ public partial class RuntimeEmitter
                 il.Emit(OpCodes.Ldarg_0);
                 il.Emit(OpCodes.Ldarg_1);
                 il.Emit(OpCodes.Ldarg_2);
-                il.Emit(OpCodes.Call, runtime.FsSymlinkSync);
+                il.Emit(OpCodes.Call, runtime.RequireFileSystem().SymlinkSync);
                 il.Emit(OpCodes.Ldnull);
             });
 
@@ -203,7 +203,7 @@ public partial class RuntimeEmitter
             il =>
             {
                 il.Emit(OpCodes.Ldarg_0);
-                il.Emit(OpCodes.Call, runtime.FsReadlinkSync);
+                il.Emit(OpCodes.Call, runtime.RequireFileSystem().ReadlinkSync);
             });
 
         // realpathSync(path) -> string
@@ -211,7 +211,7 @@ public partial class RuntimeEmitter
             il =>
             {
                 il.Emit(OpCodes.Ldarg_0);
-                il.Emit(OpCodes.Call, runtime.FsRealpathSync);
+                il.Emit(OpCodes.Call, runtime.RequireFileSystem().RealpathSync);
             });
 
         // utimesSync(path, atime, mtime) -> undefined
@@ -221,7 +221,7 @@ public partial class RuntimeEmitter
                 il.Emit(OpCodes.Ldarg_0);
                 il.Emit(OpCodes.Ldarg_1);
                 il.Emit(OpCodes.Ldarg_2);
-                il.Emit(OpCodes.Call, runtime.FsUtimesSync);
+                il.Emit(OpCodes.Call, runtime.RequireFileSystem().UtimesSync);
                 il.Emit(OpCodes.Ldnull);
             });
 

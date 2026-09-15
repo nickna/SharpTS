@@ -1378,67 +1378,18 @@ public class EmittedRuntime
     public MethodBuilder OsLoadavg { get; set; } = null!;
     public MethodBuilder OsNetworkInterfaces { get; set; } = null!;
 
-    // Fs module methods
-    public MethodBuilder FsExistsSync { get; set; } = null!;
-    // Encoding helpers shared by fs read/write/append (BCL-only, standalone).
-    public MethodBuilder FsEncodingName { get; set; } = null!;
-    public MethodBuilder FsToBytes { get; set; } = null!;
-    public MethodBuilder FsReadFileSync { get; set; } = null!;
-    public MethodBuilder FsWriteFileSync { get; set; } = null!;
-    public MethodBuilder FsAppendFileSync { get; set; } = null!;
-    public MethodBuilder FsUnlinkSync { get; set; } = null!;
-    public MethodBuilder FsMkdirSync { get; set; } = null!;
-    public MethodBuilder FsRmdirSync { get; set; } = null!;
-    public MethodBuilder FsReaddirSync { get; set; } = null!;
-    public MethodBuilder FsStatSync { get; set; } = null!;
-    public MethodBuilder FsLstatSync { get; set; } = null!;
-    // Raw stat records (#977) — the TS Stats class shapes these.
-    public MethodBuilder FsStatRaw { get; set; } = null!;
-    public MethodBuilder FsLstatRaw { get; set; } = null!;
-    public MethodBuilder FsFstatRaw { get; set; } = null!;
-    public MethodBuilder FsBuildStatRecord { get; set; } = null!;
-    public MethodBuilder FsStatTimeMs { get; set; } = null!;
-    public MethodBuilder FsRenameSync { get; set; } = null!;
-    public MethodBuilder FsCopyFileSync { get; set; } = null!;
-    public MethodBuilder FsAccessSync { get; set; } = null!;
-    public MethodBuilder FsChmodSync { get; set; } = null!;
-    public MethodBuilder FsChownSync { get; set; } = null!;
-    public MethodBuilder FsLchownSync { get; set; } = null!;
-    public MethodBuilder FsTruncateSync { get; set; } = null!;
-    public MethodBuilder FsSymlinkSync { get; set; } = null!;
-    public MethodBuilder FsReadlinkSync { get; set; } = null!;
-    public MethodBuilder FsRealpathSync { get; set; } = null!;
-    public MethodBuilder FsUtimesSync { get; set; } = null!;
-    public MethodBuilder FsGetConstants { get; set; } = null!;
-    public MethodBuilder FsCreateDirent { get; set; } = null!;
+    /// <summary>Filesystem data and synchronous I/O metadata, absent when UsesFs is off.</summary>
+    public EmittedFileSystemRuntime? FileSystem { get; private set; }
 
-    // File descriptor APIs
-    public MethodBuilder FsOpenSync { get; set; } = null!;
-    public MethodBuilder FsCloseSync { get; set; } = null!;
-    public MethodBuilder FsReadSync { get; set; } = null!;
-    public MethodBuilder FsWriteSyncBuffer { get; set; } = null!;
-    public MethodBuilder FsFstatSync { get; set; } = null!;
-    public MethodBuilder FsFtruncateSync { get; set; } = null!;
-    // Long-tail fd primitives (#976): fsync, fd→path, and statfs.
-    public MethodBuilder FsFsyncSync { get; set; } = null!;
-    public MethodBuilder FsFdPath { get; set; } = null!;
-    public MethodBuilder FsStatfsRaw { get; set; } = null!;
+    internal void BeginFileSystemEmission()
+    {
+        if (FileSystem is not null)
+            throw new InvalidOperationException("Filesystem metadata emission has already started.");
+        FileSystem = new EmittedFileSystemRuntime();
+    }
 
-    // File descriptor low-level helpers (reflection-based for standalone DLLs)
-    public MethodBuilder FsFlagsParsePure { get; set; } = null!;
-    public MethodBuilder CreateHardLinkPure { get; set; } = null!;
-
-    // $FileDescriptorTable type (pure-IL for standalone DLLs)
-    public FieldBuilder FileDescriptorTableInstance { get; set; } = null!;
-    public MethodBuilder FileDescriptorTableOpen { get; set; } = null!;
-    public MethodBuilder FileDescriptorTableGet { get; set; } = null!;
-    public MethodBuilder FileDescriptorTableClose { get; set; } = null!;
-
-    // $Dir type (pure-IL for standalone DLLs)
-    public ConstructorBuilder DirCtor { get; set; } = null!;
-
-    // $Dirent type (pure-IL for standalone DLLs)
-    public ConstructorBuilder DirentCtor { get; set; } = null!;
+    public EmittedFileSystemRuntime RequireFileSystem() => FileSystem
+        ?? throw new InvalidOperationException("Filesystem runtime was not enabled for this compilation.");
 
     /// <summary>ArrayBuffer metadata, or null when the typed-array family is tree-shaken.</summary>
     public EmittedArrayBufferRuntime? ArrayBuffer { get; private set; }
@@ -1481,13 +1432,6 @@ public class EmittedRuntime
 
     /// <summary>Required TypedArray detection metadata with optional implementation declarations.</summary>
     public EmittedTypedArrayRuntime TypedArrays { get; } = new();
-
-    // Directory utilities
-    public MethodBuilder FsMkdtempSync { get; set; } = null!;
-    public MethodBuilder FsOpendirSync { get; set; } = null!;
-
-    // Hard links
-    public MethodBuilder FsLinkSync { get; set; } = null!;
 
     // Async fs methods (fs.promises and fs/promises)
     public MethodBuilder FsReadFileAsync { get; set; } = null!;
@@ -1943,19 +1887,6 @@ public class EmittedRuntime
 
     public EmittedDnsRuntime RequireDns() => Dns
         ?? throw new InvalidOperationException("DNS runtime was not enabled for this compilation.");
-
-    // $Stats type - emitted for fs.stat() and related methods
-    // Provides Node.js-compatible Stats object with methods like isFile(), isDirectory(), etc.
-    public Type StatsType { get; set; } = null!;
-    public ConstructorInfo StatsCtor { get; set; } = null!;
-    public MethodBuilder StatsIsFile { get; set; } = null!;
-    public MethodBuilder StatsIsDirectory { get; set; } = null!;
-    public MethodBuilder StatsIsSymbolicLink { get; set; } = null!;
-    public MethodBuilder StatsIsBlockDevice { get; set; } = null!;
-    public MethodBuilder StatsIsCharacterDevice { get; set; } = null!;
-    public MethodBuilder StatsIsFIFO { get; set; } = null!;
-    public MethodBuilder StatsIsSocket { get; set; } = null!;
-    public MethodBuilder StatsSizeGetter { get; set; } = null!;
 
     // $FrozenSealedState - tracks frozen/sealed/extensible state for objects
     public Type FrozenSealedStateType { get; set; } = null!;

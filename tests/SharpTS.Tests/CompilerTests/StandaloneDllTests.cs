@@ -1211,6 +1211,122 @@ public class StandaloneDllTests
         }
     }
 
+    public static IEnumerable<object[]> FileSystemMetadataPrograms
+    {
+        get
+        {
+            yield return new object[]
+            {
+                """
+                import * as fs from 'fs';
+                fs.writeFileSync('encoding.txt', '6869', 'hex');
+                fs.appendFileSync('encoding.txt', '!');
+                console.log(fs.readFileSync('encoding.txt', 'utf8'));
+                console.log(fs.readFileSync('encoding.txt').toString('hex'));
+                const stat = fs.statSync('encoding.txt');
+                console.log(stat.isFile(), stat.size);
+                fs.unlinkSync('encoding.txt');
+                """,
+                "hi!\n686921\ntrue 3\n"
+            };
+            yield return new object[]
+            {
+                """
+                import * as fs from 'fs';
+                const fd = fs.openSync('descriptor.txt', 'w+');
+                console.log(fs.writeSync(fd, Buffer.from('abcdef'), 0, 6, 0));
+                const buffer = Buffer.alloc(3);
+                console.log(fs.readSync(fd, buffer, 0, 3, 2), buffer.toString());
+                fs.ftruncateSync(fd, 4); fs.fsyncSync(fd);
+                console.log(fs.fstatSync(fd).size);
+                fs.closeSync(fd);
+                try { fs.readSync(fd, buffer, 0, 1, 0); } catch (e: any) { console.log(e.code); }
+                fs.unlinkSync('descriptor.txt');
+                """,
+                "6\n3 cde\n4\nEBADF\n"
+            };
+            yield return new object[]
+            {
+                """
+                import * as fs from 'fs';
+                fs.mkdirSync('entries');
+                fs.writeFileSync('entries/item.txt', 'abc');
+                console.log(fs.statSync('entries').isDirectory());
+                const entries = fs.readdirSync('entries', { withFileTypes: true });
+                console.log(entries[0].name, entries[0].isFile());
+                const dir = fs.opendirSync('entries');
+                const entry = dir.readSync();
+                console.log(entry.name, entry.isFile(), dir.readSync() === null);
+                dir.closeSync();
+                fs.unlinkSync('entries/item.txt'); fs.rmdirSync('entries');
+                """,
+                "true\nitem.txt true\nitem.txt true true\n"
+            };
+            yield return new object[]
+            {
+                """
+                import * as fs from 'fs';
+                fs.writeFileSync('original.txt', 'abcd');
+                fs.linkSync('original.txt', 'linked.txt');
+                fs.copyFileSync('linked.txt', 'copy.txt'); fs.renameSync('copy.txt', 'moved.txt');
+                fs.truncateSync('moved.txt', 2);
+                console.log(fs.readFileSync('linked.txt', 'utf8'), fs.readFileSync('moved.txt', 'utf8'));
+                console.log(fs.lstatSync('moved.txt').isSymbolicLink());
+                try { fs.readFileSync('missing.txt'); } catch (e: any) { console.log(e.code); }
+                fs.unlinkSync('original.txt'); fs.unlinkSync('linked.txt'); fs.unlinkSync('moved.txt');
+                """,
+                "abcd ab\nfalse\nENOENT\n"
+            };
+            yield return new object[]
+            {
+                """
+                import * as fs from 'fs';
+                import * as fsp from 'fs/promises';
+                async function main() {
+                  await fsp.writeFile('async.txt', 'ab');
+                  await fs.promises.appendFile('async.txt', 'c');
+                  console.log(await fsp.readFile('async.txt', 'utf8'));
+                  const stat = await fsp.stat('async.txt');
+                  console.log(stat.isFile(), stat.size);
+                  await fsp.unlink('async.txt');
+                  console.log('done');
+                }
+                main();
+                """,
+                "abc\ntrue 3\ndone\n"
+            };
+            yield return new object[]
+            {
+                """
+                import * as fs from 'fs';
+                fs.writeFileSync('source.txt', 'stream');
+                const source = fs.createReadStream('source.txt', { encoding: 'utf8' });
+                console.log(source.read(), source.bytesRead);
+                const destination = fs.createWriteStream('destination.txt');
+                destination.write('out'); destination.end();
+                console.log(fs.readFileSync('destination.txt', 'utf8'));
+                fs.unlinkSync('source.txt'); fs.unlinkSync('destination.txt');
+                """,
+                "stream 6\nout\n"
+            };
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(FileSystemMetadataPrograms))]
+    public void Isolated_FileSystemMetadata_PreservesDataDescriptorsDirectoriesAndConsumers(string source, string expected)
+    {
+        var files = new Dictionary<string, string> { ["main.ts"] = source };
+        Assert.Empty(TestHarness.CompileModulesAndVerifyOnly(files, "main.ts"));
+        var (tempDir, dllPath) = CompileStandaloneModule(files, "main.ts");
+        try
+        {
+            Assert.DoesNotContain(GetAssemblyReferences(dllPath), name => name == "SharpTS");
+            Assert.Equal(expected, ExecuteCompiledDllIsolated(dllPath, timeoutMs: 15000));
+        }
+        finally { CleanupTempDir(tempDir); }
+    }
+
     public static IEnumerable<object[]> WebStreamMetadataPrograms
     {
         get

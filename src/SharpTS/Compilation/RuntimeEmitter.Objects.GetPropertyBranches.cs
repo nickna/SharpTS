@@ -588,7 +588,7 @@ public partial class RuntimeEmitter
     private void EmitStatsGetBranch(ILGenerator il, EmittedRuntime runtime, Label notMatch)
     {
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.StatsType);
+        il.Emit(OpCodes.Isinst, runtime.RequireFileSystem().StatsType);
         il.Emit(OpCodes.Brfalse, notMatch);
 
         // Check for "size" property
@@ -599,8 +599,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, notStatsSizeLabel);
         // Return stats.size
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.StatsType);
-        il.Emit(OpCodes.Call, runtime.StatsSizeGetter);
+        il.Emit(OpCodes.Castclass, runtime.RequireFileSystem().StatsType);
+        il.Emit(OpCodes.Call, runtime.RequireFileSystem().StatsSizeGetter);
         il.Emit(OpCodes.Box, _types.Double);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notStatsSizeLabel);
@@ -615,20 +615,20 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Brfalse, skip);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldtoken, helper);
-            il.Emit(OpCodes.Ldtoken, runtime.StatsType);
+            il.Emit(OpCodes.Ldtoken, runtime.RequireFileSystem().StatsType);
             il.Emit(OpCodes.Call, _types.MethodBaseGetMethodFromHandleWithType);
             il.Emit(OpCodes.Castclass, _types.MethodInfo);
             il.Emit(OpCodes.Newobj, runtime.TSFunctionCtor);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(skip);
         }
-        EmitStatsMethodWrapper("isFile", runtime.StatsIsFile);
-        EmitStatsMethodWrapper("isDirectory", runtime.StatsIsDirectory);
-        EmitStatsMethodWrapper("isSymbolicLink", runtime.StatsIsSymbolicLink);
-        EmitStatsMethodWrapper("isBlockDevice", runtime.StatsIsBlockDevice);
-        EmitStatsMethodWrapper("isCharacterDevice", runtime.StatsIsCharacterDevice);
-        EmitStatsMethodWrapper("isFIFO", runtime.StatsIsFIFO);
-        EmitStatsMethodWrapper("isSocket", runtime.StatsIsSocket);
+        EmitStatsMethodWrapper("isFile", runtime.RequireFileSystem().StatsIsFile);
+        EmitStatsMethodWrapper("isDirectory", runtime.RequireFileSystem().StatsIsDirectory);
+        EmitStatsMethodWrapper("isSymbolicLink", runtime.RequireFileSystem().StatsIsSymbolicLink);
+        EmitStatsMethodWrapper("isBlockDevice", runtime.RequireFileSystem().StatsIsBlockDevice);
+        EmitStatsMethodWrapper("isCharacterDevice", runtime.RequireFileSystem().StatsIsCharacterDevice);
+        EmitStatsMethodWrapper("isFIFO", runtime.RequireFileSystem().StatsIsFIFO);
+        EmitStatsMethodWrapper("isSocket", runtime.RequireFileSystem().StatsIsSocket);
 
         // Unknown stats property - return null
         il.Emit(OpCodes.Ldnull);

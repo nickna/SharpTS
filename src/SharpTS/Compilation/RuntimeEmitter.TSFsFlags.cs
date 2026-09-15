@@ -10,7 +10,7 @@ public partial class RuntimeEmitter
     /// Pure-IL implementation that doesn't require SharpTS.dll reflection.
     /// Parses Node.js file flags (string or numeric) to .NET enums.
     /// </summary>
-    private void EmitFsFlagsParsePureHelper(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitFsFlagsParsePureHelper(TypeBuilder typeBuilder, EmittedFileSystemRuntime fileSystem)
     {
         // Return type is ValueTuple<FileMode, FileAccess, FileShare>
         var tupleType = typeof(ValueTuple<FileMode, FileAccess, FileShare>);
@@ -21,7 +21,7 @@ public partial class RuntimeEmitter
             tupleType,
             [_types.Object]
         );
-        runtime.FsFlagsParsePure = method;
+        fileSystem.FlagsParsePure = method;
 
         var il = method.GetILGenerator();
 

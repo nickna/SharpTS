@@ -61,6 +61,8 @@ public partial class RuntimeEmitter
             runtime.BeginPromiseEmission();
             runtime.BeginTimerPromiseEmission();
         }
+        if (features.UsesFs)
+            runtime.BeginFileSystemEmission();
         if (features.UsesWebStreams)
             runtime.BeginWebStreamEmission();
         if (features.UsesNodeStreams)
@@ -393,7 +395,7 @@ public partial class RuntimeEmitter
         // in GetFieldsProperty's central dispatch (Properties.cs) is gated on
         // the same flag.
         if (features.UsesFs)
-            EmitStatsClass(moduleBuilder, runtime);
+            EmitStatsClass(moduleBuilder, runtime.RequireFileSystem());
 
         // Emit $CJSModule — backs the `module` local bound in every CJS module init.
         // Gated on UsesCjsRequire (the detector flips this whenever the program
@@ -650,6 +652,7 @@ public partial class RuntimeEmitter
         runtime.EventEmitter.CompleteEmission();
         runtime.NodeStreams?.CompleteEmission();
         runtime.WebStreams?.CompleteEmission();
+        runtime.FileSystem?.CompleteEmission();
         runtime.Timers.CompleteEmission();
         runtime.Microtasks.CompleteEmission();
         runtime.TimerPromises?.CompleteEmission();

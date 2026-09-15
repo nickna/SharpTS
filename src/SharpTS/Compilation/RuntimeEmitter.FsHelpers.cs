@@ -105,10 +105,10 @@ public partial class RuntimeEmitter
     private void EmitFsLowLevelHelpers(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         // Pure-IL helpers for standalone DLLs (no reflection)
-        EmitFsFlagsParsePureHelper(typeBuilder, runtime);
+        EmitFsFlagsParsePureHelper(typeBuilder, runtime.RequireFileSystem());
 
         // Pure P/Invoke hard link implementation (Phase 21)
-        EmitHardLinkPInvokeMethods(typeBuilder, runtime);
+        EmitHardLinkPInvokeMethods(typeBuilder, runtime.RequireFileSystem());
     }
 
     /// <summary>
