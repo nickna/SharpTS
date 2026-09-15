@@ -164,7 +164,7 @@ public partial class RuntimeEmitter
         if (_features.UsesTextEncoding)
         {
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.TSTextDecoderDecodeMethodType);
+            il.Emit(OpCodes.Isinst, runtime.RequireTextEncoding().DecodeMethodType);
             il.Emit(OpCodes.Brtrue, textDecoderDecodeLabel);
         }
 
@@ -479,9 +479,9 @@ public partial class RuntimeEmitter
         {
             il.MarkLabel(textDecoderDecodeLabel);
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Castclass, runtime.TSTextDecoderDecodeMethodType);
+            il.Emit(OpCodes.Castclass, runtime.RequireTextEncoding().DecodeMethodType);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Callvirt, runtime.TSTextDecoderDecodeMethodInvoke);
+            il.Emit(OpCodes.Callvirt, runtime.RequireTextEncoding().DecodeMethodInvoke);
             il.Emit(OpCodes.Ret);
         }
 
@@ -717,7 +717,7 @@ public partial class RuntimeEmitter
         }
 
         if (_features.UsesTextEncoding)
-            EmitWrapperCheck(runtime.TSTextDecoderDecodeMethodType, runtime.TSTextDecoderDecodeMethodInvoke);
+            EmitWrapperCheck(runtime.RequireTextEncoding().DecodeMethodType, runtime.RequireTextEncoding().DecodeMethodInvoke);
         // Stream callback wrappers — gated on UsesNodeStreams.
         if (_features.UsesNodeStreams)
         {

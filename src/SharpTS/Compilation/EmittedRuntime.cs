@@ -1536,18 +1536,18 @@ public class EmittedRuntime
     public EmittedBufferRuntime RequireBuffer() => Buffer
         ?? throw new InvalidOperationException("Buffer runtime was not enabled for this compilation.");
 
-    // $TextEncoder type - emitted for standalone util support
-    public TypeBuilder TSTextEncoderType { get; set; } = null!;
-    public ConstructorBuilder TSTextEncoderCtor { get; set; } = null!;
+    /// <summary>Text-encoding metadata, or null when the feature is omitted.</summary>
+    public EmittedTextEncodingRuntime? TextEncoding { get; private set; }
 
-    // $TextDecoder type - emitted for standalone util support
-    public TypeBuilder TSTextDecoderType { get; set; } = null!;
-    public ConstructorBuilder TSTextDecoderCtor { get; set; } = null!;
-    public MethodBuilder TSTextDecoderDecode { get; set; } = null!;
+    internal void BeginTextEncodingEmission()
+    {
+        if (TextEncoding is not null)
+            throw new InvalidOperationException("Text-encoding metadata emission has already started.");
+        TextEncoding = new EmittedTextEncodingRuntime();
+    }
 
-    // $TextDecoderDecodeMethod wrapper - callable by compiled code
-    public TypeBuilder TSTextDecoderDecodeMethodType { get; set; } = null!;
-    public MethodBuilder TSTextDecoderDecodeMethodInvoke { get; set; } = null!;
+    public EmittedTextEncodingRuntime RequireTextEncoding() => TextEncoding
+        ?? throw new InvalidOperationException("Text-encoding runtime was not enabled for this compilation.");
 
     /// <summary>Required inspection metadata used by console.dir in every compilation.</summary>
     public EmittedInspectionRuntime Inspection { get; } = new();

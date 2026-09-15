@@ -175,8 +175,8 @@ public sealed class GlobalThisStaticEmitter : IStaticTypeEmitterStrategy
             "Promise" => ctx.Types.TaskOfObject,
             "Buffer" => ctx.Runtime!.Buffer?.Type,
             "Function" => ctx.Runtime!.TSFunctionType,
-            "TextEncoder" => ctx.Runtime!.TSTextEncoderType,
-            "TextDecoder" => ctx.Runtime!.TSTextDecoderType,
+            "TextEncoder" => ctx.Runtime!.RequireTextEncoding().EncoderType,
+            "TextDecoder" => ctx.Runtime!.RequireTextEncoding().DecoderType,
             _ => null
         };
         if (t == null) return false;

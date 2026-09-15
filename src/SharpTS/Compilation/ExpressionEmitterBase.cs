@@ -2242,8 +2242,8 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
         {
             "Date" => Ctx.Runtime!.TSDateType,
             "RegExp" => Ctx.Runtime!.TSRegExpType,
-            "TextEncoder" => Ctx.Runtime!.TSTextEncoderType,
-            "TextDecoder" => Ctx.Runtime!.TSTextDecoderType,
+            "TextEncoder" => Ctx.Runtime!.RequireTextEncoding().EncoderType,
+            "TextDecoder" => Ctx.Runtime!.RequireTextEncoding().DecoderType,
             "Buffer" => Ctx.Runtime!.Buffer?.Type,
             "Array" => Types.IListOfObject, // covers both List<object> and $Array
             "Map" => Types.DictionaryObjectObject,

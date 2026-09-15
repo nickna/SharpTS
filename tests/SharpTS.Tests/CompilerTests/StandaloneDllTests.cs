@@ -1319,6 +1319,93 @@ public class StandaloneDllTests
         finally { CleanupTempDir(tempDir); }
     }
 
+    public static IEnumerable<object[]> TextEncodingMetadataPrograms =>
+    [
+        new object[]
+        {
+            """
+            const encoder = new TextEncoder(); const decoder = new TextDecoder();
+            const text = 'h\u00e9\u{1F600}'; const bytes = encoder.encode(text);
+            console.log(encoder.encoding, bytes.length, decoder.decode(bytes) === text);
+            console.log(encoder.encode('').length, decoder.decode().length, decoder.encoding);
+            """,
+            "utf-8 7 true\n0 0 utf-8\n"
+        },
+        new object[]
+        {
+            """
+            const decoder = new TextDecoder('latin1');
+            console.log(decoder.encoding, decoder.decode(Buffer.from([233])) === '\uFFFD');
+            const unknown = new TextDecoder('not-a-real-label');
+            console.log(unknown.encoding, unknown.decode(Buffer.from('ok')));
+            """,
+            "latin1 true\nnot-a-real-label ok\n"
+        },
+        new object[]
+        {
+            """
+            const decoder = new TextDecoder(); const decode = decoder.decode;
+            console.log(decode(Buffer.from('direct')));
+            console.log(decode.call(decoder, Buffer.from('call')));
+            console.log(decode.apply(decoder, [Buffer.from('apply')]));
+            """,
+            "direct\ncall\napply\n"
+        },
+        new object[]
+        {
+            """
+            const encoder = new globalThis.TextEncoder(); const decoder = new globalThis.TextDecoder();
+            console.log(decoder.decode(encoder.encode('global')));
+            console.log(globalThis.TextEncoder === TextEncoder, globalThis.TextDecoder === TextDecoder);
+            """,
+            "global\ntrue true\n"
+        },
+        new object[]
+        {
+            """
+            import { TextEncoder, TextDecoder } from 'util';
+            const encoder = new TextEncoder(); const decoder = new TextDecoder();
+            console.log(decoder.decode(encoder.encode('module')), encoder.encoding, decoder.encoding);
+            """,
+            "module utf-8 utf-8\n"
+        },
+        new object[]
+        {
+            """
+            async function run(): Promise<void> {
+             const encoder = new TextEncoder(); const decoder = new TextDecoder();
+             console.log(decoder.decode(encoder.encode(await Promise.resolve('async'))));
+            }
+            run();
+            function* items(): Generator<number, void, string> {
+             const decoder = new TextDecoder(); console.log(decoder.decode(Buffer.from(yield 1)));
+            }
+            const it = items(); console.log(it.next().value); it.next('generator');
+            """,
+            "async\n1\ngenerator\n"
+        },
+    ];
+
+    [Theory]
+    [MemberData(nameof(TextEncodingMetadataPrograms))]
+    public void Isolated_TextEncodingMetadata_PreservesConstructorsWrappersAndSuspension(string source, string expected)
+    {
+        var files = new Dictionary<string, string> { ["main.ts"] = source };
+        Assert.Empty(TestHarness.CompileModulesAndVerifyOnly(files, "main.ts"));
+        var (tempDir, dllPath) = CompileStandaloneModule(files, "main.ts");
+        try
+        {
+            Assert.DoesNotContain("SharpTS", GetAssemblyReferences(dllPath));
+            Assert.False(File.Exists(Path.Combine(tempDir, "SharpTS.dll")));
+            Assert.Equal(expected, ExecuteCompiledDllIsolated(dllPath, timeoutMs: 15000,
+                verifyStandardError: error => Assert.Empty(error)));
+        }
+        finally
+        {
+            CleanupTempDir(tempDir);
+        }
+    }
+
     public static IEnumerable<object[]> InspectionMetadataPrograms =>
     [
         new object[]

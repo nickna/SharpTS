@@ -637,6 +637,15 @@ freezes writes. Formatting, recursion/depth boundaries, emitted signatures, and 
 are unchanged. The `util` module remains in `stdlib/node/util.ts`; method-local BCL reflection stays
 scoped construction state. No flat inspection aliases or emitter-held copies remain.
 
+Text encoding uses optional `EmittedTextEncodingRuntime`, selected by `UsesTextEncoding`, for seven
+encoder, decoder, and detached decode-wrapper declarations. Three emission helpers accept the
+component and `EmittedBufferRuntime` directly. Constructors, type access, and invocation dispatch use
+checked access under their existing feature gates; text encoding still implies Buffer. Completion
+validates declarations after runtime finalization and freezes writes. Emitted type/field/method order,
+encoding and wrapper behavior, argument evaluation, and standalone dependencies are unchanged.
+Method-local wrapper fields, constructors, getters, and BCL lookups remain scoped construction locals.
+No flat text-encoding aliases or emitter-held copies remain.
+
 During emission, each handle becomes readable as soon as its declaration is assigned, so forward
 references do not require a method body to exist yet. An early read names the missing declaration.
 Completion is an orchestration boundary, not an IL verifier: body emission and type finalization
