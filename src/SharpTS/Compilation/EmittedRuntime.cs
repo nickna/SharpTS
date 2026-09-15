@@ -148,32 +148,8 @@ public class EmittedRuntime
     // The emitted runtime helper class
     public TypeBuilder RuntimeType { get; set; } = null!;
 
-    // Console methods
-    public MethodBuilder ConsoleLog { get; set; } = null!;
-    public MethodBuilder ConsoleLogMultiple { get; set; } = null!;
-    public MethodBuilder JoinWithStringify { get; set; } = null!;  // Helper for JS-compatible console output
-    public MethodBuilder ConsoleError { get; set; } = null!;
-    public MethodBuilder ConsoleErrorMultiple { get; set; } = null!;
-    public MethodBuilder ConsoleWarn { get; set; } = null!;
-    public MethodBuilder ConsoleWarnMultiple { get; set; } = null!;
-    public MethodBuilder ConsoleClear { get; set; } = null!;
-    public MethodBuilder ConsoleTime { get; set; } = null!;
-    public MethodBuilder ConsoleTimeEnd { get; set; } = null!;
-    public MethodBuilder ConsoleTimeLog { get; set; } = null!;
-
-    // Phase 2 console methods
-    public MethodBuilder ConsoleAssert { get; set; } = null!;
-    public MethodBuilder ConsoleAssertMultiple { get; set; } = null!;
-    public MethodBuilder ConsoleCount { get; set; } = null!;
-    public MethodBuilder ConsoleCountReset { get; set; } = null!;
-    public MethodBuilder ConsoleTable { get; set; } = null!;
-    public MethodBuilder ConsoleDir { get; set; } = null!;
-    public MethodBuilder ConsoleGroup { get; set; } = null!;
-    public MethodBuilder ConsoleGroupMultiple { get; set; } = null!;
-    public MethodBuilder ConsoleGroupEnd { get; set; } = null!;
-    public MethodBuilder ConsoleTrace { get; set; } = null!;
-    public MethodBuilder ConsoleTraceMultiple { get; set; } = null!;
-    public FieldBuilder ConsoleGroupLevelField { get; set; } = null!;
+    /// <summary>Required console metadata, emitted for every compilation.</summary>
+    public EmittedConsoleRuntime Console { get; } = new();
 
     // Union type marker interface (for fast union type detection)
     public Type IUnionTypeInterface { get; set; } = null!;
@@ -215,15 +191,6 @@ public class EmittedRuntime
     public MethodBuilder ReflectHasMetadata { get; set; } = null!;
     public MethodBuilder ReflectGetMetadataKeys { get; set; } = null!;
     public MethodBuilder ReflectDeleteMetadata { get; set; } = null!;
-
-    // Console format specifier methods
-    public MethodBuilder HasFormatSpecifiers { get; set; } = null!;
-    public MethodBuilder FormatConsoleArgs { get; set; } = null!;
-    public MethodBuilder GetConsoleIndent { get; set; } = null!;
-    public MethodBuilder FormatSingleArg { get; set; } = null!;
-    public MethodBuilder FormatAsInteger { get; set; } = null!;
-    public MethodBuilder FormatAsFloat { get; set; } = null!;
-    public MethodBuilder FormatAsJson { get; set; } = null!;
 
     // Operator methods
     public MethodBuilder Add { get; set; } = null!;

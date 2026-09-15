@@ -674,6 +674,7 @@ public partial class RuntimeEmitter
         runtime.Timers.CompleteEmission();
         runtime.Microtasks.CompleteEmission();
         runtime.TimerPromises?.CompleteEmission();
+        runtime.Console.CompleteEmission();
         runtime.Os?.CompleteEmission();
         runtime.ChildProcess?.CompleteEmission();
         runtime.Process.CompleteEmission();

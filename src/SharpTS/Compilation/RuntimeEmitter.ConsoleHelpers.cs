@@ -12,46 +12,43 @@ public partial class RuntimeEmitter
     private void EmitConsoleExtensions(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         // Emit static field for timers dictionary: Dictionary<string, Stopwatch>
-        var timersField = typeBuilder.DefineField(
+        runtime.Console.TimersField = typeBuilder.DefineField(
             "_consoleTimers",
             _types.DictionaryStringObject,
             FieldAttributes.Private | FieldAttributes.Static
         );
-        _ = timersField;
 
         // Emit static field for counts dictionary: Dictionary<string, int>
-        var countsField = typeBuilder.DefineField(
+        runtime.Console.CountsField = typeBuilder.DefineField(
             "_consoleCounts",
             _types.DictionaryStringObject,
             FieldAttributes.Private | FieldAttributes.Static
         );
-        _ = countsField;
 
         // NOTE: _consoleGroupLevel field is defined early in EmitRuntimeType to allow ConsoleLog to use it
-        var groupLevelField = runtime.ConsoleGroupLevelField;
 
         // Phase 1 methods
         EmitConsoleError(typeBuilder, runtime);
-        EmitConsoleErrorMultiple(typeBuilder, runtime);
+        EmitConsoleErrorMultiple(typeBuilder, runtime.Console);
         EmitConsoleWarn(typeBuilder, runtime);
-        EmitConsoleWarnMultiple(typeBuilder, runtime);
-        EmitConsoleClear(typeBuilder, runtime);
-        EmitConsoleTime(typeBuilder, runtime, timersField);
-        EmitConsoleTimeEnd(typeBuilder, runtime, timersField);
-        EmitConsoleTimeLog(typeBuilder, runtime, timersField);
+        EmitConsoleWarnMultiple(typeBuilder, runtime.Console);
+        EmitConsoleClear(typeBuilder, runtime.Console);
+        EmitConsoleTime(typeBuilder, runtime);
+        EmitConsoleTimeEnd(typeBuilder, runtime);
+        EmitConsoleTimeLog(typeBuilder, runtime);
 
         // Phase 2 methods
         EmitConsoleAssert(typeBuilder, runtime);
         EmitConsoleAssertMultiple(typeBuilder, runtime);
-        EmitConsoleCount(typeBuilder, runtime, countsField);
-        EmitConsoleCountReset(typeBuilder, runtime, countsField);
-        EmitConsoleTable(typeBuilder, runtime, groupLevelField);
-        EmitConsoleDir(typeBuilder, runtime, groupLevelField);
-        EmitConsoleGroup(typeBuilder, runtime, groupLevelField);
-        EmitConsoleGroupMultiple(typeBuilder, runtime, groupLevelField);
-        EmitConsoleGroupEnd(typeBuilder, runtime, groupLevelField);
-        EmitConsoleTrace(typeBuilder, runtime, groupLevelField);
-        EmitConsoleTraceMultiple(typeBuilder, runtime, groupLevelField);
+        EmitConsoleCount(typeBuilder, runtime);
+        EmitConsoleCountReset(typeBuilder, runtime);
+        EmitConsoleTable(typeBuilder, runtime);
+        EmitConsoleDir(typeBuilder, runtime);
+        EmitConsoleGroup(typeBuilder, runtime);
+        EmitConsoleGroupMultiple(typeBuilder, runtime.Console);
+        EmitConsoleGroupEnd(typeBuilder, runtime.Console);
+        EmitConsoleTrace(typeBuilder, runtime);
+        EmitConsoleTraceMultiple(typeBuilder, runtime.Console);
     }
 
     /// <summary>
@@ -66,7 +63,7 @@ public partial class RuntimeEmitter
             _types.Void,
             [_types.Object]
         );
-        runtime.ConsoleError = method;
+        runtime.Console.Error = method;
 
         var il = method.GetILGenerator();
         // Console.Error.WriteLine(Stringify(value))
@@ -81,7 +78,7 @@ public partial class RuntimeEmitter
     /// Emits: public static void ConsoleErrorMultiple(object[] values)
     /// Writes multiple values to stderr.
     /// </summary>
-    private void EmitConsoleErrorMultiple(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitConsoleErrorMultiple(TypeBuilder typeBuilder, EmittedConsoleRuntime console)
     {
         var method = typeBuilder.DefineMethod(
             "ConsoleErrorMultiple",
@@ -89,7 +86,7 @@ public partial class RuntimeEmitter
             _types.Void,
             [_types.ObjectArray]
         );
-        runtime.ConsoleErrorMultiple = method;
+        console.ErrorMultiple = method;
 
         var il = method.GetILGenerator();
         // Console.Error.WriteLine(string.Join(" ", values))
@@ -113,7 +110,7 @@ public partial class RuntimeEmitter
             _types.Void,
             [_types.Object]
         );
-        runtime.ConsoleWarn = method;
+        runtime.Console.Warn = method;
 
         var il = method.GetILGenerator();
         // Console.Error.WriteLine(Stringify(value))
@@ -128,7 +125,7 @@ public partial class RuntimeEmitter
     /// Emits: public static void ConsoleWarnMultiple(object[] values)
     /// Writes multiple values to stderr.
     /// </summary>
-    private void EmitConsoleWarnMultiple(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitConsoleWarnMultiple(TypeBuilder typeBuilder, EmittedConsoleRuntime console)
     {
         var method = typeBuilder.DefineMethod(
             "ConsoleWarnMultiple",
@@ -136,7 +133,7 @@ public partial class RuntimeEmitter
             _types.Void,
             [_types.ObjectArray]
         );
-        runtime.ConsoleWarnMultiple = method;
+        console.WarnMultiple = method;
 
         var il = method.GetILGenerator();
         // Console.Error.WriteLine(string.Join(" ", values))
@@ -152,7 +149,7 @@ public partial class RuntimeEmitter
     /// Emits: public static void ConsoleClear()
     /// Clears the console.
     /// </summary>
-    private void EmitConsoleClear(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitConsoleClear(TypeBuilder typeBuilder, EmittedConsoleRuntime console)
     {
         var method = typeBuilder.DefineMethod(
             "ConsoleClear",
@@ -160,7 +157,7 @@ public partial class RuntimeEmitter
             _types.Void,
             Type.EmptyTypes
         );
-        runtime.ConsoleClear = method;
+        console.Clear = method;
 
         var il = method.GetILGenerator();
 
@@ -178,7 +175,7 @@ public partial class RuntimeEmitter
     /// Emits: public static void ConsoleTime(object label)
     /// Starts a timer with the given label.
     /// </summary>
-    private void EmitConsoleTime(TypeBuilder typeBuilder, EmittedRuntime runtime, FieldBuilder timersField)
+    private void EmitConsoleTime(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "ConsoleTime",
@@ -186,7 +183,7 @@ public partial class RuntimeEmitter
             _types.Void,
             [_types.Object]
         );
-        runtime.ConsoleTime = method;
+        runtime.Console.Time = method;
 
         var il = method.GetILGenerator();
 
@@ -212,14 +209,14 @@ public partial class RuntimeEmitter
 
         // Initialize timers dictionary if null
         var dictInitialized = il.DefineLabel();
-        il.Emit(OpCodes.Ldsfld, timersField);
+        il.Emit(OpCodes.Ldsfld, runtime.Console.TimersField);
         il.Emit(OpCodes.Brtrue, dictInitialized);
         il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.DictionaryStringObject));
-        il.Emit(OpCodes.Stsfld, timersField);
+        il.Emit(OpCodes.Stsfld, runtime.Console.TimersField);
         il.MarkLabel(dictInitialized);
 
         // _consoleTimers[labelStr] = Stopwatch.StartNew()
-        il.Emit(OpCodes.Ldsfld, timersField);
+        il.Emit(OpCodes.Ldsfld, runtime.Console.TimersField);
         il.Emit(OpCodes.Ldloc, labelLocal);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Stopwatch, "StartNew"));
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item"));
@@ -230,7 +227,7 @@ public partial class RuntimeEmitter
     /// Emits: public static void ConsoleTimeEnd(object label)
     /// Stops timer and prints elapsed time.
     /// </summary>
-    private void EmitConsoleTimeEnd(TypeBuilder typeBuilder, EmittedRuntime runtime, FieldBuilder timersField)
+    private void EmitConsoleTimeEnd(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "ConsoleTimeEnd",
@@ -238,7 +235,7 @@ public partial class RuntimeEmitter
             _types.Void,
             [_types.Object]
         );
-        runtime.ConsoleTimeEnd = method;
+        runtime.Console.TimeEnd = method;
 
         var il = method.GetILGenerator();
 
@@ -266,10 +263,10 @@ public partial class RuntimeEmitter
         var hasTimerLabel = il.DefineLabel();
         var swLocal = il.DeclareLocal(_types.Object);
 
-        il.Emit(OpCodes.Ldsfld, timersField);
+        il.Emit(OpCodes.Ldsfld, runtime.Console.TimersField);
         il.Emit(OpCodes.Brfalse, doneLabel);
 
-        il.Emit(OpCodes.Ldsfld, timersField);
+        il.Emit(OpCodes.Ldsfld, runtime.Console.TimersField);
         il.Emit(OpCodes.Ldloc, labelLocal);
         il.Emit(OpCodes.Ldloca, swLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "TryGetValue"));
@@ -306,7 +303,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Console, "WriteLine", _types.String));
 
         // Remove from dictionary
-        il.Emit(OpCodes.Ldsfld, timersField);
+        il.Emit(OpCodes.Ldsfld, runtime.Console.TimersField);
         il.Emit(OpCodes.Ldloc, labelLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "Remove", _types.String));
         il.Emit(OpCodes.Pop);
@@ -319,7 +316,7 @@ public partial class RuntimeEmitter
     /// Emits: public static void ConsoleTimeLog(object label)
     /// Prints elapsed time without stopping the timer.
     /// </summary>
-    private void EmitConsoleTimeLog(TypeBuilder typeBuilder, EmittedRuntime runtime, FieldBuilder timersField)
+    private void EmitConsoleTimeLog(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "ConsoleTimeLog",
@@ -327,7 +324,7 @@ public partial class RuntimeEmitter
             _types.Void,
             [_types.Object]
         );
-        runtime.ConsoleTimeLog = method;
+        runtime.Console.TimeLog = method;
 
         var il = method.GetILGenerator();
 
@@ -355,10 +352,10 @@ public partial class RuntimeEmitter
         var hasTimerLabel = il.DefineLabel();
         var swLocal = il.DeclareLocal(_types.Object);
 
-        il.Emit(OpCodes.Ldsfld, timersField);
+        il.Emit(OpCodes.Ldsfld, runtime.Console.TimersField);
         il.Emit(OpCodes.Brfalse, doneLabel);
 
-        il.Emit(OpCodes.Ldsfld, timersField);
+        il.Emit(OpCodes.Ldsfld, runtime.Console.TimersField);
         il.Emit(OpCodes.Ldloc, labelLocal);
         il.Emit(OpCodes.Ldloca, swLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "TryGetValue"));
@@ -408,7 +405,7 @@ public partial class RuntimeEmitter
             _types.Void,
             [_types.Object, _types.ObjectArray]
         );
-        runtime.ConsoleAssert = method;
+        runtime.Console.Assert = method;
 
         var il = method.GetILGenerator();
         var isTruthyLabel = il.DefineLabel();
@@ -439,7 +436,7 @@ public partial class RuntimeEmitter
             _types.Void,
             [_types.Object, _types.ObjectArray]
         );
-        runtime.ConsoleAssertMultiple = method;
+        runtime.Console.AssertMultiple = method;
 
         var il = method.GetILGenerator();
         var isTruthyLabel = il.DefineLabel();
@@ -466,7 +463,7 @@ public partial class RuntimeEmitter
     /// Emits: public static void ConsoleCount(object label)
     /// Increments and prints counter for the label.
     /// </summary>
-    private void EmitConsoleCount(TypeBuilder typeBuilder, EmittedRuntime runtime, FieldBuilder countsField)
+    private void EmitConsoleCount(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "ConsoleCount",
@@ -474,7 +471,7 @@ public partial class RuntimeEmitter
             _types.Void,
             [_types.Object]
         );
-        runtime.ConsoleCount = method;
+        runtime.Console.Count = method;
 
         var il = method.GetILGenerator();
 
@@ -498,10 +495,10 @@ public partial class RuntimeEmitter
 
         // Initialize counts dictionary if null
         var dictInitialized = il.DefineLabel();
-        il.Emit(OpCodes.Ldsfld, countsField);
+        il.Emit(OpCodes.Ldsfld, runtime.Console.CountsField);
         il.Emit(OpCodes.Brtrue, dictInitialized);
         il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.DictionaryStringObject));
-        il.Emit(OpCodes.Stsfld, countsField);
+        il.Emit(OpCodes.Stsfld, runtime.Console.CountsField);
         il.MarkLabel(dictInitialized);
 
         // Get current count (default 0), increment, store
@@ -511,7 +508,7 @@ public partial class RuntimeEmitter
         var afterGet = il.DefineLabel();
 
         // if (dict.TryGetValue(label, out var val)) count = (int)(double)val else count = 0
-        il.Emit(OpCodes.Ldsfld, countsField);
+        il.Emit(OpCodes.Ldsfld, runtime.Console.CountsField);
         il.Emit(OpCodes.Ldloc, labelLocal);
         il.Emit(OpCodes.Ldloca, valueLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "TryGetValue"));
@@ -538,7 +535,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, countLocal);
 
         // Store back as double (for Dictionary<string, object>)
-        il.Emit(OpCodes.Ldsfld, countsField);
+        il.Emit(OpCodes.Ldsfld, runtime.Console.CountsField);
         il.Emit(OpCodes.Ldloc, labelLocal);
         il.Emit(OpCodes.Ldloc, countLocal);
         il.Emit(OpCodes.Conv_R8);
@@ -560,7 +557,7 @@ public partial class RuntimeEmitter
     /// Emits: public static void ConsoleCountReset(object label)
     /// Resets counter for the label to 0.
     /// </summary>
-    private void EmitConsoleCountReset(TypeBuilder typeBuilder, EmittedRuntime runtime, FieldBuilder countsField)
+    private void EmitConsoleCountReset(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "ConsoleCountReset",
@@ -568,7 +565,7 @@ public partial class RuntimeEmitter
             _types.Void,
             [_types.Object]
         );
-        runtime.ConsoleCountReset = method;
+        runtime.Console.CountReset = method;
 
         var il = method.GetILGenerator();
 
@@ -592,14 +589,14 @@ public partial class RuntimeEmitter
 
         // Initialize counts dictionary if null
         var dictInitialized = il.DefineLabel();
-        il.Emit(OpCodes.Ldsfld, countsField);
+        il.Emit(OpCodes.Ldsfld, runtime.Console.CountsField);
         il.Emit(OpCodes.Brtrue, dictInitialized);
         il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.DictionaryStringObject));
-        il.Emit(OpCodes.Stsfld, countsField);
+        il.Emit(OpCodes.Stsfld, runtime.Console.CountsField);
         il.MarkLabel(dictInitialized);
 
         // Set count to 0
-        il.Emit(OpCodes.Ldsfld, countsField);
+        il.Emit(OpCodes.Ldsfld, runtime.Console.CountsField);
         il.Emit(OpCodes.Ldloc, labelLocal);
         il.Emit(OpCodes.Ldc_R8, 0.0);
         il.Emit(OpCodes.Box, _types.Double);
@@ -612,7 +609,7 @@ public partial class RuntimeEmitter
     /// Emits: public static void ConsoleTable(object data, object columns)
     /// Prints data in a simplified table format for standalone DLLs.
     /// </summary>
-    private void EmitConsoleTable(TypeBuilder typeBuilder, EmittedRuntime runtime, FieldBuilder groupLevelField)
+    private void EmitConsoleTable(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "ConsoleTable",
@@ -620,7 +617,7 @@ public partial class RuntimeEmitter
             _types.Void,
             [_types.Object, _types.Object]
         );
-        runtime.ConsoleTable = method;
+        runtime.Console.Table = method;
 
         var il = method.GetILGenerator();
 
@@ -915,7 +912,7 @@ public partial class RuntimeEmitter
     /// Emits: public static void ConsoleDir(object obj)
     /// Prints object in an inspected format using UtilInspectValue.
     /// </summary>
-    private void EmitConsoleDir(TypeBuilder typeBuilder, EmittedRuntime runtime, FieldBuilder groupLevelField)
+    private void EmitConsoleDir(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "ConsoleDir",
@@ -923,7 +920,7 @@ public partial class RuntimeEmitter
             _types.Void,
             [_types.Object]
         );
-        runtime.ConsoleDir = method;
+        runtime.Console.Dir = method;
 
         var il = method.GetILGenerator();
 
@@ -941,7 +938,7 @@ public partial class RuntimeEmitter
     /// Emits: public static void ConsoleGroup(object label)
     /// Prints label and increases indent level.
     /// </summary>
-    private void EmitConsoleGroup(TypeBuilder typeBuilder, EmittedRuntime runtime, FieldBuilder groupLevelField)
+    private void EmitConsoleGroup(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "ConsoleGroup",
@@ -949,7 +946,7 @@ public partial class RuntimeEmitter
             _types.Void,
             [_types.Object]
         );
-        runtime.ConsoleGroup = method;
+        runtime.Console.Group = method;
 
         var il = method.GetILGenerator();
         var skipLabel = il.DefineLabel();
@@ -964,10 +961,10 @@ public partial class RuntimeEmitter
         il.MarkLabel(skipLabel);
 
         // _consoleGroupLevel++
-        il.Emit(OpCodes.Ldsfld, groupLevelField);
+        il.Emit(OpCodes.Ldsfld, runtime.Console.GroupLevelField);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Add);
-        il.Emit(OpCodes.Stsfld, groupLevelField);
+        il.Emit(OpCodes.Stsfld, runtime.Console.GroupLevelField);
 
         il.Emit(OpCodes.Ret);
     }
@@ -976,7 +973,7 @@ public partial class RuntimeEmitter
     /// Emits: public static void ConsoleGroupMultiple(object[] labels)
     /// Prints labels joined by space and increases indent level.
     /// </summary>
-    private void EmitConsoleGroupMultiple(TypeBuilder typeBuilder, EmittedRuntime runtime, FieldBuilder groupLevelField)
+    private void EmitConsoleGroupMultiple(TypeBuilder typeBuilder, EmittedConsoleRuntime console)
     {
         var method = typeBuilder.DefineMethod(
             "ConsoleGroupMultiple",
@@ -984,7 +981,7 @@ public partial class RuntimeEmitter
             _types.Void,
             [_types.ObjectArray]
         );
-        runtime.ConsoleGroupMultiple = method;
+        console.GroupMultiple = method;
 
         var il = method.GetILGenerator();
 
@@ -995,10 +992,10 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Console, "WriteLine", _types.String));
 
         // _consoleGroupLevel++
-        il.Emit(OpCodes.Ldsfld, groupLevelField);
+        il.Emit(OpCodes.Ldsfld, console.GroupLevelField);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Add);
-        il.Emit(OpCodes.Stsfld, groupLevelField);
+        il.Emit(OpCodes.Stsfld, console.GroupLevelField);
 
         il.Emit(OpCodes.Ret);
     }
@@ -1007,7 +1004,7 @@ public partial class RuntimeEmitter
     /// Emits: public static void ConsoleGroupEnd()
     /// Decreases indent level.
     /// </summary>
-    private void EmitConsoleGroupEnd(TypeBuilder typeBuilder, EmittedRuntime runtime, FieldBuilder groupLevelField)
+    private void EmitConsoleGroupEnd(TypeBuilder typeBuilder, EmittedConsoleRuntime console)
     {
         var method = typeBuilder.DefineMethod(
             "ConsoleGroupEnd",
@@ -1015,20 +1012,20 @@ public partial class RuntimeEmitter
             _types.Void,
             Type.EmptyTypes
         );
-        runtime.ConsoleGroupEnd = method;
+        console.GroupEnd = method;
 
         var il = method.GetILGenerator();
         var skipLabel = il.DefineLabel();
 
         // if (_consoleGroupLevel > 0) _consoleGroupLevel--
-        il.Emit(OpCodes.Ldsfld, groupLevelField);
+        il.Emit(OpCodes.Ldsfld, console.GroupLevelField);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ble, skipLabel);
 
-        il.Emit(OpCodes.Ldsfld, groupLevelField);
+        il.Emit(OpCodes.Ldsfld, console.GroupLevelField);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Sub);
-        il.Emit(OpCodes.Stsfld, groupLevelField);
+        il.Emit(OpCodes.Stsfld, console.GroupLevelField);
 
         il.MarkLabel(skipLabel);
         il.Emit(OpCodes.Ret);
@@ -1038,7 +1035,7 @@ public partial class RuntimeEmitter
     /// Emits: public static void ConsoleTrace(object message)
     /// Prints "Trace: {message}" and a stack trace.
     /// </summary>
-    private void EmitConsoleTrace(TypeBuilder typeBuilder, EmittedRuntime runtime, FieldBuilder groupLevelField)
+    private void EmitConsoleTrace(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "ConsoleTrace",
@@ -1046,7 +1043,7 @@ public partial class RuntimeEmitter
             _types.Void,
             [_types.Object]
         );
-        runtime.ConsoleTrace = method;
+        runtime.Console.Trace = method;
 
         var il = method.GetILGenerator();
         var skipMessageLabel = il.DefineLabel();
@@ -1082,7 +1079,7 @@ public partial class RuntimeEmitter
     /// Emits: public static void ConsoleTraceMultiple(object[] args)
     /// Prints "Trace: {message}" and a stack trace with multiple args.
     /// </summary>
-    private void EmitConsoleTraceMultiple(TypeBuilder typeBuilder, EmittedRuntime runtime, FieldBuilder groupLevelField)
+    private void EmitConsoleTraceMultiple(TypeBuilder typeBuilder, EmittedConsoleRuntime console)
     {
         var method = typeBuilder.DefineMethod(
             "ConsoleTraceMultiple",
@@ -1090,7 +1087,7 @@ public partial class RuntimeEmitter
             _types.Void,
             [_types.ObjectArray]
         );
-        runtime.ConsoleTraceMultiple = method;
+        console.TraceMultiple = method;
 
         var il = method.GetILGenerator();
 
@@ -1114,7 +1111,7 @@ public partial class RuntimeEmitter
     /// Emits: public static string GetConsoleIndent()
     /// Returns a string of spaces based on _consoleGroupLevel (2 spaces per level).
     /// </summary>
-    private void EmitGetConsoleIndent(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitGetConsoleIndent(TypeBuilder typeBuilder, EmittedConsoleRuntime console)
     {
         var method = typeBuilder.DefineMethod(
             "GetConsoleIndent",
@@ -1122,13 +1119,13 @@ public partial class RuntimeEmitter
             _types.String,
             Type.EmptyTypes
         );
-        runtime.GetConsoleIndent = method;
+        console.GetIndent = method;
 
         var il = method.GetILGenerator();
 
         // if (_consoleGroupLevel <= 0) return ""
         var hasIndentLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldsfld, runtime.ConsoleGroupLevelField);
+        il.Emit(OpCodes.Ldsfld, console.GroupLevelField);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Bgt, hasIndentLabel);
         il.Emit(OpCodes.Ldstr, "");
@@ -1137,7 +1134,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(hasIndentLabel);
         // return new string(' ', _consoleGroupLevel * 2)
         il.Emit(OpCodes.Ldc_I4_S, (sbyte)' ');
-        il.Emit(OpCodes.Ldsfld, runtime.ConsoleGroupLevelField);
+        il.Emit(OpCodes.Ldsfld, console.GroupLevelField);
         il.Emit(OpCodes.Ldc_I4_2);
         il.Emit(OpCodes.Mul);
         il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.String, [_types.Char, _types.Int32]));
@@ -1152,7 +1149,7 @@ public partial class RuntimeEmitter
             _types.Void,
             [_types.Object]
         );
-        runtime.ConsoleLog = method;
+        runtime.Console.Log = method;
 
         var il = method.GetILGenerator();
         var noFormatLabel = il.DefineLabel();
@@ -1168,15 +1165,15 @@ public partial class RuntimeEmitter
         // Check HasFormatSpecifiers
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, _types.String);
-        il.Emit(OpCodes.Call, runtime.HasFormatSpecifiers);
+        il.Emit(OpCodes.Call, runtime.Console.HasFormatSpecifiers);
         il.Emit(OpCodes.Brfalse, noFormatLabel);
 
         // Has format specifiers - process with FormatSingleArg, then prepend indent
         // Console.WriteLine(GetConsoleIndent() + FormatSingleArg(value))
-        il.Emit(OpCodes.Call, runtime.GetConsoleIndent);
+        il.Emit(OpCodes.Call, runtime.Console.GetIndent);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, _types.String);
-        il.Emit(OpCodes.Call, runtime.FormatSingleArg);
+        il.Emit(OpCodes.Call, runtime.Console.FormatSingleArg);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", _types.String, _types.String));
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Console, "WriteLine", _types.String));
         il.Emit(OpCodes.Ret);
@@ -1184,7 +1181,7 @@ public partial class RuntimeEmitter
         // No format specifiers - call Stringify then prepend indent
         // Console.WriteLine(GetConsoleIndent() + Stringify(value))
         il.MarkLabel(noFormatLabel);
-        il.Emit(OpCodes.Call, runtime.GetConsoleIndent);
+        il.Emit(OpCodes.Call, runtime.Console.GetIndent);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Call, runtime.Stringify);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", _types.String, _types.String));
@@ -1192,7 +1189,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitFormatSingleArg(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitFormatSingleArg(TypeBuilder typeBuilder, EmittedConsoleRuntime console)
     {
         // Process format specifiers in a single string (handles %% -> % and unsubstituted specifiers)
         var method = typeBuilder.DefineMethod(
@@ -1201,7 +1198,7 @@ public partial class RuntimeEmitter
             _types.String,
             [_types.String]
         );
-        runtime.FormatSingleArg = method;
+        console.FormatSingleArg = method;
 
         var il = method.GetILGenerator();
 
@@ -1286,7 +1283,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitConsoleLogMultiple(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitConsoleLogMultiple(TypeBuilder typeBuilder, EmittedConsoleRuntime console)
     {
         var method = typeBuilder.DefineMethod(
             "ConsoleLogMultiple",
@@ -1294,7 +1291,7 @@ public partial class RuntimeEmitter
             _types.Void,
             [_types.ObjectArray]
         );
-        runtime.ConsoleLogMultiple = method;
+        console.LogMultiple = method;
 
         var il = method.GetILGenerator();
 
@@ -1321,14 +1318,14 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldelem_Ref);
         il.Emit(OpCodes.Castclass, _types.String);
-        il.Emit(OpCodes.Call, runtime.HasFormatSpecifiers);
+        il.Emit(OpCodes.Call, console.HasFormatSpecifiers);
         il.Emit(OpCodes.Brfalse, noFormatLabel);
 
         // Format string case: call FormatConsoleArgs, prepend indent
         // Console.WriteLine(GetConsoleIndent() + FormatConsoleArgs(args))
-        il.Emit(OpCodes.Call, runtime.GetConsoleIndent);
+        il.Emit(OpCodes.Call, console.GetIndent);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.FormatConsoleArgs);
+        il.Emit(OpCodes.Call, console.FormatArgs);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", _types.String, _types.String));
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Console, "WriteLine", _types.String));
         il.Emit(OpCodes.Ret);
@@ -1336,10 +1333,10 @@ public partial class RuntimeEmitter
         // No format specifiers: join with spaces using Stringify for JS-compatible output
         // Console.WriteLine(GetConsoleIndent() + JoinWithStringify(" ", args))
         il.MarkLabel(noFormatLabel);
-        il.Emit(OpCodes.Call, runtime.GetConsoleIndent);
+        il.Emit(OpCodes.Call, console.GetIndent);
         il.Emit(OpCodes.Ldstr, " ");
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.JoinWithStringify);
+        il.Emit(OpCodes.Call, console.JoinWithStringify);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", _types.String, _types.String));
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Console, "WriteLine", _types.String));
         il.Emit(OpCodes.Ret);
@@ -1357,7 +1354,7 @@ public partial class RuntimeEmitter
             _types.String,
             [_types.String, _types.ObjectArray]
         );
-        runtime.JoinWithStringify = method;
+        runtime.Console.JoinWithStringify = method;
 
         var il = method.GetILGenerator();
 
@@ -1418,7 +1415,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitHasFormatSpecifiers(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitHasFormatSpecifiers(TypeBuilder typeBuilder, EmittedConsoleRuntime console)
     {
         var method = typeBuilder.DefineMethod(
             "HasFormatSpecifiers",
@@ -1426,7 +1423,7 @@ public partial class RuntimeEmitter
             _types.Boolean,
             [_types.String]
         );
-        runtime.HasFormatSpecifiers = method;
+        console.HasFormatSpecifiers = method;
 
         var il = method.GetILGenerator();
         var indexLocal = il.DeclareLocal(_types.Int32);
@@ -1524,7 +1521,7 @@ public partial class RuntimeEmitter
             _types.String,
             [_types.ObjectArray]
         );
-        runtime.FormatConsoleArgs = method;
+        runtime.Console.FormatArgs = method;
 
         var il = method.GetILGenerator();
 
@@ -1680,7 +1677,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, argIndexLocal);
         il.Emit(OpCodes.Ldelem_Ref);
-        il.Emit(OpCodes.Call, runtime.FormatAsInteger);
+        il.Emit(OpCodes.Call, runtime.Console.FormatAsInteger);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StringBuilder, "Append", _types.String));
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Br, afterS);
@@ -1691,7 +1688,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, argIndexLocal);
         il.Emit(OpCodes.Ldelem_Ref);
-        il.Emit(OpCodes.Call, runtime.FormatAsFloat);
+        il.Emit(OpCodes.Call, runtime.Console.FormatAsFloat);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StringBuilder, "Append", _types.String));
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Br, afterS);
@@ -1713,7 +1710,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, argIndexLocal);
         il.Emit(OpCodes.Ldelem_Ref);
-        il.Emit(OpCodes.Call, runtime.FormatAsJson);
+        il.Emit(OpCodes.Call, runtime.Console.FormatAsJson);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StringBuilder, "Append", _types.String));
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Br, afterS);
@@ -1793,7 +1790,7 @@ public partial class RuntimeEmitter
             _types.String,
             [_types.Object]
         );
-        runtime.FormatAsInteger = method;
+        runtime.Console.FormatAsInteger = method;
 
         var il = method.GetILGenerator();
         var nullLabel = il.DefineLabel();
@@ -1903,7 +1900,7 @@ public partial class RuntimeEmitter
             _types.String,
             [_types.Object]
         );
-        runtime.FormatAsFloat = method;
+        runtime.Console.FormatAsFloat = method;
 
         var il = method.GetILGenerator();
         var nanLabel = il.DefineLabel();
@@ -2039,7 +2036,7 @@ public partial class RuntimeEmitter
             _types.String,
             [_types.Object]
         );
-        runtime.FormatAsJson = method;
+        runtime.Console.FormatAsJson = method;
 
         var il = method.GetILGenerator();
         var endLabel = il.DefineLabel();
