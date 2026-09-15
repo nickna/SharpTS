@@ -104,8 +104,8 @@ public partial class RuntimeEmitter
         EmitLookup(_types.Double, "isSafeInteger", runtime.NumberIsSafeInteger, 1);
 
         // String.* — bare `String` identifier resolves to typeof(string).
-        EmitLookup(_types.String, "fromCharCode",  runtime.StringFromCharCode, 1);
-        EmitLookup(_types.String, "fromCodePoint", runtime.StringFromCodePoint, 1);
+        EmitLookup(_types.String, "fromCharCode",  runtime.Strings.FromCharCode, 1);
+        EmitLookup(_types.String, "fromCodePoint", runtime.Strings.FromCodePoint, 1);
         EmitLookup(_types.String, "raw",           runtime.StringRaw, 1);
 
         // Object.* — bracket-form access (`Object["assign"]`) and value-form

@@ -83,7 +83,7 @@ public sealed class StringEmitter : ITypeEmitterStrategy
 
             case "trim":
                 il.Emit(OpCodes.Ldc_I4_0);
-                il.Emit(OpCodes.Call, ctx.Runtime!.JsTrimInline);
+                il.Emit(OpCodes.Call, ctx.Runtime!.Strings.TrimInline);
                 return true;
 
             case "replace":
@@ -154,12 +154,12 @@ public sealed class StringEmitter : ITypeEmitterStrategy
 
             case "trimStart":
                 il.Emit(OpCodes.Ldc_I4_1);
-                il.Emit(OpCodes.Call, ctx.Runtime!.JsTrimInline);
+                il.Emit(OpCodes.Call, ctx.Runtime!.Strings.TrimInline);
                 return true;
 
             case "trimEnd":
                 il.Emit(OpCodes.Ldc_I4_2);
-                il.Emit(OpCodes.Call, ctx.Runtime!.JsTrimInline);
+                il.Emit(OpCodes.Call, ctx.Runtime!.Strings.TrimInline);
                 return true;
 
             case "at":
@@ -167,12 +167,12 @@ public sealed class StringEmitter : ITypeEmitterStrategy
                 return true;
 
             case "isWellFormed":
-                il.Emit(OpCodes.Call, ctx.Runtime!.StringIsWellFormed);
+                il.Emit(OpCodes.Call, ctx.Runtime!.Strings.IsWellFormed);
                 il.Emit(OpCodes.Box, ctx.Types.Boolean);
                 return true;
 
             case "toWellFormed":
-                il.Emit(OpCodes.Call, ctx.Runtime!.StringToWellFormed);
+                il.Emit(OpCodes.Call, ctx.Runtime!.Strings.ToWellFormed);
                 return true;
 
             case "normalize":
@@ -274,8 +274,8 @@ public sealed class StringEmitter : ITypeEmitterStrategy
             ctx.IL.Emit(
                 OpCodes.Call,
                 methodName == "slice"
-                    ? ctx.Runtime!.StringSliceFromLengthPrimitive
-                    : ctx.Runtime!.StringSubstringFromLengthPrimitive);
+                    ? ctx.Runtime!.Strings.SliceFromLengthPrimitive
+                    : ctx.Runtime!.Strings.SubstringFromLengthPrimitive);
         }
         else
         {
@@ -283,8 +283,8 @@ public sealed class StringEmitter : ITypeEmitterStrategy
             ctx.IL.Emit(
                 OpCodes.Call,
                 methodName == "slice"
-                    ? ctx.Runtime!.StringSliceLengthPrimitive
-                    : ctx.Runtime!.StringSubstringLengthPrimitive);
+                    ? ctx.Runtime!.Strings.SliceLengthPrimitive
+                    : ctx.Runtime!.Strings.SubstringLengthPrimitive);
         }
         emitter.SetStackType(StackType.Double);
         return true;
@@ -316,7 +316,7 @@ public sealed class StringEmitter : ITypeEmitterStrategy
             emitter.EmitBoxIfNeeded(arguments[i]);
             il.Emit(OpCodes.Stelem_Ref);
         }
-        il.Emit(OpCodes.Call, ctx.Runtime!.StringCharAt);
+        il.Emit(OpCodes.Call, ctx.Runtime!.Strings.CharAt);
     }
 
     private static void EmitSubstring(IEmitterContext emitter, List<Expr> arguments)
@@ -334,7 +334,7 @@ public sealed class StringEmitter : ITypeEmitterStrategy
             emitter.EmitBoxIfNeeded(arguments[i]);
             il.Emit(OpCodes.Stelem_Ref);
         }
-        il.Emit(OpCodes.Call, ctx.Runtime!.StringSubstring);
+        il.Emit(OpCodes.Call, ctx.Runtime!.Strings.Substring);
     }
 
     private static void EmitSubstr(IEmitterContext emitter, List<Expr> arguments)
@@ -352,7 +352,7 @@ public sealed class StringEmitter : ITypeEmitterStrategy
             emitter.EmitBoxIfNeeded(arguments[i]);
             il.Emit(OpCodes.Stelem_Ref);
         }
-        il.Emit(OpCodes.Call, ctx.Runtime!.StringSubstr);
+        il.Emit(OpCodes.Call, ctx.Runtime!.Strings.Substr);
     }
 
     private static void EmitIndexOf(IEmitterContext emitter, List<Expr> arguments)
@@ -380,11 +380,11 @@ public sealed class StringEmitter : ITypeEmitterStrategy
         {
             emitter.EmitExpression(arguments[1]);
             emitter.EmitBoxIfNeeded(arguments[1]);
-            il.Emit(OpCodes.Call, ctx.Runtime!.StringIndexOfFrom);
+            il.Emit(OpCodes.Call, ctx.Runtime!.Strings.IndexOfFrom);
         }
         else
         {
-            il.Emit(OpCodes.Call, ctx.Runtime!.StringIndexOf);
+            il.Emit(OpCodes.Call, ctx.Runtime!.Strings.IndexOf);
         }
         il.Emit(OpCodes.Box, ctx.Types.Double);
     }
@@ -510,12 +510,12 @@ public sealed class StringEmitter : ITypeEmitterStrategy
 
             if (methodName == "indexOf")
             {
-                ctx.IL.Emit(OpCodes.Call, ctx.Runtime!.StringIndexOfPrimitive);
+                ctx.IL.Emit(OpCodes.Call, ctx.Runtime!.Strings.IndexOfPrimitive);
                 emitter.SetStackType(StackType.Double);
             }
             else
             {
-                ctx.IL.Emit(OpCodes.Call, ctx.Runtime!.StringIncludesPrimitive);
+                ctx.IL.Emit(OpCodes.Call, ctx.Runtime!.Strings.IncludesPrimitive);
                 emitter.SetStackType(StackType.Boolean);
             }
             return true;
@@ -540,8 +540,8 @@ public sealed class StringEmitter : ITypeEmitterStrategy
         ctx.IL.Emit(
             OpCodes.Call,
             methodName == "slice"
-                ? ctx.Runtime!.StringSlicePrimitive
-                : ctx.Runtime!.StringSubstringPrimitive);
+                ? ctx.Runtime!.Strings.SlicePrimitive
+                : ctx.Runtime!.Strings.SubstringPrimitive);
         emitter.SetStackType(StackType.String);
         return true;
     }
@@ -696,17 +696,17 @@ public sealed class StringEmitter : ITypeEmitterStrategy
 
     private static void EmitIncludes(IEmitterContext emitter, List<Expr> arguments)
     {
-        EmitStringSearchCall(emitter, arguments, emitter.Context.Runtime!.StringIncludes);
+        EmitStringSearchCall(emitter, arguments, emitter.Context.Runtime!.Strings.Includes);
     }
 
     private static void EmitStartsWith(IEmitterContext emitter, List<Expr> arguments)
     {
-        EmitStringSearchCall(emitter, arguments, emitter.Context.Runtime!.StringStartsWith);
+        EmitStringSearchCall(emitter, arguments, emitter.Context.Runtime!.Strings.StartsWith);
     }
 
     private static void EmitEndsWith(IEmitterContext emitter, List<Expr> arguments)
     {
-        EmitStringSearchCall(emitter, arguments, emitter.Context.Runtime!.StringEndsWith);
+        EmitStringSearchCall(emitter, arguments, emitter.Context.Runtime!.Strings.EndsWith);
     }
 
     /// <summary>
@@ -763,7 +763,7 @@ public sealed class StringEmitter : ITypeEmitterStrategy
             emitter.EmitBoxIfNeeded(arguments[i]);
             il.Emit(OpCodes.Stelem_Ref);
         }
-        il.Emit(OpCodes.Call, ctx.Runtime!.StringSlice);
+        il.Emit(OpCodes.Call, ctx.Runtime!.Strings.Slice);
     }
 
     private static void EmitRepeat(IEmitterContext emitter, List<Expr> arguments)
@@ -783,7 +783,7 @@ public sealed class StringEmitter : ITypeEmitterStrategy
         {
             il.Emit(OpCodes.Ldnull);
         }
-        il.Emit(OpCodes.Call, ctx.Runtime!.StringRepeat);
+        il.Emit(OpCodes.Call, ctx.Runtime!.Strings.Repeat);
     }
 
     private static void EmitPadStart(IEmitterContext emitter, List<Expr> arguments)
@@ -802,7 +802,7 @@ public sealed class StringEmitter : ITypeEmitterStrategy
             emitter.EmitBoxIfNeeded(arguments[i]);
             il.Emit(OpCodes.Stelem_Ref);
         }
-        il.Emit(OpCodes.Call, ctx.Runtime!.StringPadStart);
+        il.Emit(OpCodes.Call, ctx.Runtime!.Strings.PadStart);
     }
 
     private static void EmitPadEnd(IEmitterContext emitter, List<Expr> arguments)
@@ -821,7 +821,7 @@ public sealed class StringEmitter : ITypeEmitterStrategy
             emitter.EmitBoxIfNeeded(arguments[i]);
             il.Emit(OpCodes.Stelem_Ref);
         }
-        il.Emit(OpCodes.Call, ctx.Runtime!.StringPadEnd);
+        il.Emit(OpCodes.Call, ctx.Runtime!.Strings.PadEnd);
     }
 
     private static void EmitCharCodeAt(IEmitterContext emitter, List<Expr> arguments)
@@ -841,7 +841,7 @@ public sealed class StringEmitter : ITypeEmitterStrategy
         {
             il.Emit(OpCodes.Ldc_R8, 0.0);
         }
-        il.Emit(OpCodes.Call, ctx.Runtime!.StringCharCodeAt);
+        il.Emit(OpCodes.Call, ctx.Runtime!.Strings.CharCodeAt);
         il.Emit(OpCodes.Box, ctx.Types.Double);
     }
 
@@ -859,7 +859,7 @@ public sealed class StringEmitter : ITypeEmitterStrategy
         {
             il.Emit(OpCodes.Ldsfld, ctx.Runtime!.UndefinedInstance);
         }
-        il.Emit(OpCodes.Call, ctx.Runtime!.StringCodePointAt);
+        il.Emit(OpCodes.Call, ctx.Runtime!.Strings.CodePointAt);
         // Result is already boxed (returns object: double or null)
     }
 
@@ -878,7 +878,7 @@ public sealed class StringEmitter : ITypeEmitterStrategy
             emitter.EmitBoxIfNeeded(arguments[i]);
             il.Emit(OpCodes.Stelem_Ref);
         }
-        il.Emit(OpCodes.Call, ctx.Runtime!.StringConcat);
+        il.Emit(OpCodes.Call, ctx.Runtime!.Strings.Concat);
     }
 
     private static void EmitLastIndexOf(IEmitterContext emitter, List<Expr> arguments)
@@ -914,7 +914,7 @@ public sealed class StringEmitter : ITypeEmitterStrategy
             il.Emit(OpCodes.Pop);
         }
 
-        il.Emit(OpCodes.Call, ctx.Runtime!.StringLastIndexOf);
+        il.Emit(OpCodes.Call, ctx.Runtime!.Strings.LastIndexOf);
         il.Emit(OpCodes.Box, ctx.Types.Double);
     }
 
@@ -960,7 +960,7 @@ public sealed class StringEmitter : ITypeEmitterStrategy
         {
             il.Emit(OpCodes.Ldc_R8, 0.0);
         }
-        il.Emit(OpCodes.Call, ctx.Runtime!.StringAt);
+        il.Emit(OpCodes.Call, ctx.Runtime!.Strings.At);
     }
 
     private static void EmitNormalize(IEmitterContext emitter, List<Expr> arguments)
@@ -979,7 +979,7 @@ public sealed class StringEmitter : ITypeEmitterStrategy
             emitter.EmitBoxIfNeeded(arguments[i]);
             il.Emit(OpCodes.Stelem_Ref);
         }
-        il.Emit(OpCodes.Call, ctx.Runtime!.StringNormalize);
+        il.Emit(OpCodes.Call, ctx.Runtime!.Strings.Normalize);
     }
 
     private static void EmitLocaleCompare(IEmitterContext emitter, List<Expr> arguments)
@@ -1003,7 +1003,7 @@ public sealed class StringEmitter : ITypeEmitterStrategy
             // diverged from `.localeCompare(undefined)` and `.localeCompare("undefined")`.
             il.Emit(OpCodes.Ldstr, "undefined");
         }
-        il.Emit(OpCodes.Call, ctx.Runtime!.StringLocaleCompare);
+        il.Emit(OpCodes.Call, ctx.Runtime!.Strings.LocaleCompare);
         il.Emit(OpCodes.Box, ctx.Types.Double);
     }
 

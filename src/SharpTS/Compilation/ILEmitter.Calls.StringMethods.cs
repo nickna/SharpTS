@@ -66,7 +66,7 @@ public partial class ILEmitter
                     EmitBoxIfNeeded(arguments[i]);
                     IL.Emit(OpCodes.Stelem_Ref);
                 }
-                IL.Emit(OpCodes.Call, _ctx.Runtime!.StringPadEnd);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.Strings.PadEnd);
                 break;
 
             case "padStart":
@@ -80,22 +80,22 @@ public partial class ILEmitter
                     EmitBoxIfNeeded(arguments[i]);
                     IL.Emit(OpCodes.Stelem_Ref);
                 }
-                IL.Emit(OpCodes.Call, _ctx.Runtime!.StringPadStart);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.Strings.PadStart);
                 break;
 
             case "trim":
                 IL.Emit(OpCodes.Ldc_I4_0);
-                IL.Emit(OpCodes.Call, _ctx.Runtime!.JsTrimInline);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.Strings.TrimInline);
                 break;
 
             case "trimStart":
                 IL.Emit(OpCodes.Ldc_I4_1);
-                IL.Emit(OpCodes.Call, _ctx.Runtime!.JsTrimInline);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.Strings.TrimInline);
                 break;
 
             case "trimEnd":
                 IL.Emit(OpCodes.Ldc_I4_2);
-                IL.Emit(OpCodes.Call, _ctx.Runtime!.JsTrimInline);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.Strings.TrimInline);
                 break;
 
             case "toUpperCase":
@@ -218,7 +218,7 @@ public partial class ILEmitter
                 {
                     IL.Emit(OpCodes.Ldnull);
                 }
-                IL.Emit(OpCodes.Call, _ctx.Runtime!.StringRepeat);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.Strings.Repeat);
                 break;
 
             case "charCodeAt":
@@ -235,7 +235,7 @@ public partial class ILEmitter
                 {
                     IL.Emit(OpCodes.Ldc_R8, 0.0);
                 }
-                IL.Emit(OpCodes.Call, _ctx.Runtime!.StringCharCodeAt);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.Strings.CharCodeAt);
                 IL.Emit(OpCodes.Box, _ctx.Types.Double);
                 break;
 
@@ -250,7 +250,7 @@ public partial class ILEmitter
                 {
                     IL.Emit(OpCodes.Ldc_R8, 0.0);
                 }
-                IL.Emit(OpCodes.Call, _ctx.Runtime!.StringAt);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.Strings.At);
                 break;
 
             case "lastIndexOf":
@@ -274,7 +274,7 @@ public partial class ILEmitter
                     IL.Emit(OpCodes.Call, _ctx.Runtime!.ToNumber);
                     IL.Emit(OpCodes.Pop);
                 }
-                IL.Emit(OpCodes.Call, _ctx.Runtime!.StringLastIndexOf);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.Strings.LastIndexOf);
                 IL.Emit(OpCodes.Box, _ctx.Types.Double);
                 break;
 
@@ -290,7 +290,7 @@ public partial class ILEmitter
                     EmitBoxIfNeeded(arguments[i]);
                     IL.Emit(OpCodes.Stelem_Ref);
                 }
-                IL.Emit(OpCodes.Call, _ctx.Runtime!.StringNormalize);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.Strings.Normalize);
                 break;
 
             case "localeCompare":
@@ -305,7 +305,7 @@ public partial class ILEmitter
                     // ECMA-262 22.1.3.10: missing arg → undefined → "undefined".
                     IL.Emit(OpCodes.Ldstr, "undefined");
                 }
-                IL.Emit(OpCodes.Call, _ctx.Runtime!.StringLocaleCompare);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.Strings.LocaleCompare);
                 IL.Emit(OpCodes.Box, _ctx.Types.Double);
                 break;
         }

@@ -808,6 +808,21 @@ Global calls, exception normalization, MessagePort, and BroadcastChannel use the
 The existing wrapper signature and ignored transfer argument, foreign-runtime pass-through,
 recursive data copying, and receiver-side clone-error behavior remain unchanged.
 
+Core string operations and their prototype metadata live in required `EmittedStringRuntime`:
+43 method declarations and one prototype field replace 44 unchecked flat properties. The prototype
+field and population shell are declared early; operation bodies and prototype wiring remain in their
+original order, and completion validates and freezes every handle. Primitive intrinsic signatures,
+inlining flags, local integer/slow-path helpers, method names, descriptor flags, and function caches
+are preserved. Core emitters take the component and explicit peer declarations. The mixed stub
+orchestrator keeps Object and Array helpers with their existing owners.
+
+Prototype descriptor installation has narrow shared helpers with immutable scoped inputs; existing
+entry points adapt remaining peer families. String population receives scoped descriptor, function,
+symbol, and optional RegExp protocol inputs. Optional null protocol methods still skip wiring;
+search helpers preserve the existing optional RegExp brand check. These inputs retain no emitter
+state and remain subject to the final peer-ownership audit. String coercion, templates/String.raw,
+boxed-primitive unwrapping, and RegExp-aware protocols remain separate later families.
+
 During emission, each handle becomes readable as soon as its declaration is assigned, so forward
 references do not require a method body to exist yet. An early read names the missing declaration.
 Completion is an orchestration boundary, not an IL verifier: body emission and type finalization

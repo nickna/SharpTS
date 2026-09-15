@@ -134,7 +134,7 @@ public partial class RuntimeEmitter
             "_stringPrototype",
             _types.DictionaryStringObject,
             FieldAttributes.Public | FieldAttributes.Static);
-        runtime.StringPrototypeField = stringPrototypeField;
+        runtime.Strings.PrototypeField = stringPrototypeField;
         var bigIntPrototypeField = typeBuilder.DefineField(
             "_bigIntPrototype",
             _types.DictionaryStringObject,
@@ -525,7 +525,7 @@ public partial class RuntimeEmitter
         DefineJsonSingletonPopulateShell(typeBuilder, runtime);
         if (_features.UsesReflect)
             DefineReflectSingletonPopulateShell(typeBuilder, runtime);
-        DefineStringPrototypePopulateShell(typeBuilder, runtime);
+        DefineStringPrototypePopulateShell(typeBuilder, runtime.Strings);
         DefineNumberPrototypePopulateShell(typeBuilder, runtime);
         DefineBigIntPrototypePopulateShell(typeBuilder, runtime);
         DefineSymbolPrototypePopulateShell(typeBuilder, runtime);
@@ -746,7 +746,7 @@ public partial class RuntimeEmitter
         cctorIL.Emit(OpCodes.Call, runtime.SymbolPrototypePopulateMethod);
         cctorIL.Emit(OpCodes.Call, runtime.BooleanPrototypePopulateMethod);
         cctorIL.Emit(OpCodes.Call, runtime.DatePrototypePopulateMethod);
-        cctorIL.Emit(OpCodes.Call, runtime.StringPrototypePopulateMethod);
+        cctorIL.Emit(OpCodes.Call, runtime.Strings.PrototypePopulateMethod);
         cctorIL.Emit(OpCodes.Call, runtime.ErrorPrototypePopulateMethod);
         cctorIL.Emit(OpCodes.Call, runtime.FunctionPrototypePopulateMethod);
         cctorIL.Emit(OpCodes.Call, runtime.RegExpPrototypePopulateMethod);
@@ -1294,32 +1294,40 @@ public partial class RuntimeEmitter
         EmitUnwrapStringReceiver(typeBuilder, runtime);
         // EmitUnwrapIfBoxed moved earlier — see comment above EmitStringify.
         // String methods
-        EmitStringCharAt(typeBuilder, runtime);
-        EmitStringSubstring(typeBuilder, runtime);
-        EmitStringSubstr(typeBuilder, runtime);
-        EmitStringIndexOf(typeBuilder, runtime);
-        EmitStringIndexOfFrom(typeBuilder, runtime);
-        EmitPrimitiveStringIntrinsics(typeBuilder, runtime);
-        EmitStringReplace(typeBuilder, runtime);
-        EmitStringIncludes(typeBuilder, runtime);
-        EmitStringStartsWith(typeBuilder, runtime);
-        EmitStringEndsWith(typeBuilder, runtime);
-        EmitStringSlice(typeBuilder, runtime);
-        EmitStringRepeat(typeBuilder, runtime);
-        EmitStringPadStart(typeBuilder, runtime);
-        EmitStringPadEnd(typeBuilder, runtime);
-        EmitStringCharCodeAt(typeBuilder, runtime);
-        EmitStringConcat(typeBuilder, runtime);
-        EmitStringLastIndexOf(typeBuilder, runtime);
-        EmitStringReplaceAll(typeBuilder, runtime);
-        EmitStringAt(typeBuilder, runtime);
-        EmitStringFromCharCode(typeBuilder, runtime);
-        EmitStringCodePointAt(typeBuilder, runtime);
-        EmitStringWellFormedMethods(typeBuilder, runtime);
-        EmitStringIterator(typeBuilder, runtime);
-        EmitStringFromCodePoint(typeBuilder, runtime);
-        EmitStringNormalize(typeBuilder, runtime);
-        EmitStringLocaleCompare(typeBuilder, runtime);
+        EmitStringCharAt(typeBuilder, runtime.Strings, runtime.ToNumber);
+        EmitStringSubstring(typeBuilder, runtime.Strings, runtime.CreateException, runtime.TSTypeErrorCtor, runtime.ToIntegerOrInfinity,
+            runtime.ToJsString, runtime.UndefinedInstance, runtime.UndefinedType);
+        EmitStringSubstr(typeBuilder, runtime.Strings, runtime.ToIntegerOrInfinity);
+        EmitStringIndexOf(typeBuilder, runtime.Strings, runtime.ToJsString);
+        EmitStringIndexOfFrom(typeBuilder, runtime.Strings, runtime.ToIntegerOrInfinity, runtime.ToJsString);
+        EmitPrimitiveStringIntrinsics(typeBuilder, runtime.Strings);
+        EmitStringReplace(typeBuilder, runtime.Strings);
+        EmitStringIncludes(typeBuilder, runtime.Strings, new StringSearchInputs(runtime.TSRegExpType, runtime.UndefinedType, runtime.SymbolMatch,
+                runtime.GetIndex, runtime.IsTruthy, runtime.ToIntegerOrInfinity, runtime.ToJsString, runtime.CreateException, runtime.TSTypeErrorCtor));
+        EmitStringStartsWith(typeBuilder, runtime.Strings, new StringSearchInputs(runtime.TSRegExpType, runtime.UndefinedType, runtime.SymbolMatch,
+                runtime.GetIndex, runtime.IsTruthy, runtime.ToIntegerOrInfinity, runtime.ToJsString, runtime.CreateException, runtime.TSTypeErrorCtor));
+        EmitStringEndsWith(typeBuilder, runtime.Strings, new StringSearchInputs(runtime.TSRegExpType, runtime.UndefinedType, runtime.SymbolMatch,
+                runtime.GetIndex, runtime.IsTruthy, runtime.ToIntegerOrInfinity, runtime.ToJsString, runtime.CreateException, runtime.TSTypeErrorCtor));
+        EmitStringSlice(typeBuilder, runtime.Strings, runtime.CreateException, runtime.TSTypeErrorCtor, runtime.ToIntegerOrInfinity,
+            runtime.ToJsString, runtime.UndefinedInstance, runtime.UndefinedType);
+        EmitStringRepeat(typeBuilder, runtime.Strings, runtime.CreateException, runtime.TSRangeErrorCtor, runtime.ToNumber);
+        EmitStringPadStart(typeBuilder, runtime.Strings, runtime.ToJsString, runtime.ToNumber, runtime.UndefinedType);
+        EmitStringPadEnd(typeBuilder, runtime.Strings, runtime.ToJsString, runtime.ToNumber, runtime.UndefinedType);
+        EmitStringCharCodeAt(typeBuilder, runtime.Strings);
+        EmitStringConcat(typeBuilder, runtime.Strings, runtime.ToJsString);
+        EmitStringLastIndexOf(typeBuilder, runtime.Strings);
+        EmitStringReplaceAll(typeBuilder, runtime.Strings);
+        EmitStringAt(typeBuilder, runtime.Strings, runtime.UndefinedInstance);
+        EmitStringFromCharCode(typeBuilder, runtime.Strings, runtime.ToNumber);
+        EmitStringCodePointAt(typeBuilder, runtime.Strings, runtime.ToIntegerOrInfinity, runtime.UndefinedInstance);
+        EmitStringWellFormedMethods(typeBuilder, runtime.Strings);
+        EmitStringIterator(typeBuilder, runtime.Strings, runtime.CreateException, runtime.NormalizeToEnumerator, runtime.TSTypeErrorCtor,
+            runtime.ToJsString, runtime.UndefinedType);
+        EmitStringFromCodePoint(typeBuilder, runtime.Strings, runtime.CreateException, runtime.TSRangeErrorCtor, runtime.ToJsString,
+            runtime.ToNumber);
+        EmitStringNormalize(typeBuilder, runtime.Strings, runtime.CreateException, runtime.TSRangeErrorCtor, runtime.ToJsString,
+            runtime.UndefinedType);
+        EmitStringLocaleCompare(typeBuilder, runtime.Strings);
         EmitStringTryInvokeSymbolMethod(typeBuilder, runtime);
         // RegExp methods emitted before String.prototype populate so the
         // spec-correct match/matchAll/search/split slots can reference the
@@ -1332,7 +1340,14 @@ public partial class RuntimeEmitter
             EmitRegExpMethods(typeBuilder, runtime);
         // String.prototype dict populate — must come AFTER all the String* helpers,
         // the stubs (emitted earlier), AND the RegExp methods above.
-        EmitStringPrototypePopulate(typeBuilder, runtime);
+        EmitStringPrototypePopulate(runtime.Strings,
+            new StringPrototypeInputs(runtime.CompiledPropertyDescriptorType,
+                new PrototypeDescriptorInputs(runtime.CompiledPropertyDescriptorCtor, runtime.CompiledPropertyDescriptorValue.GetSetMethod()!,
+                    runtime.CompiledPropertyDescriptorEnumerable.GetSetMethod()!, runtime.PDSDefineProperty),
+                runtime.TSFunctionGetOrCreate, runtime.TSFunctionCtorWithCache, runtime.GetSymbolDictMethod,
+                runtime.SymbolIterator, runtime.ObjectPrototypeField, runtime.PDSSetPrototype),
+            _features.UsesRegExp ? new StringPrototypeRegExpInputs(runtime.StringMatchRegExp, runtime.StringMatchAllRegExp,
+                runtime.StringSearchRegExp, runtime.StringReplaceAllRegExp, runtime.StringSplitProto) : null);
         // Boolean.prototype populate — uses the StringPrototypeGenericStub
         // for both toString and valueOf (no dedicated Boolean helpers).
         EmitBooleanPrototypePopulate(typeBuilder, runtime);

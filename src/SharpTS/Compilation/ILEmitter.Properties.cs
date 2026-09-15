@@ -2314,7 +2314,7 @@ public partial class ILEmitter
             IL.Emit(OpCodes.Ldloc, snapshot);
             if (arguments.Count > 0) EmitExpressionAsDouble(arguments[0]);
             else IL.Emit(OpCodes.Ldc_R8, 0.0);
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.StringCharCodeAt);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.Strings.CharCodeAt);
             SetStackType(StackType.Double);
             return;
         }

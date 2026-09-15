@@ -850,12 +850,12 @@ public abstract partial class ExpressionEmitterBase
             case "substring":
                 // StringSubstring takes (string, object[]): pack args into object[].
                 EmitBoxedArgsArray(arguments, argLocals);
-                IL.Emit(OpCodes.Call, Ctx.Runtime!.StringSubstring);
+                IL.Emit(OpCodes.Call, Ctx.Runtime!.Strings.Substring);
                 break;
 
             case "substr":
                 EmitBoxedArgsArray(arguments, argLocals);
-                IL.Emit(OpCodes.Call, Ctx.Runtime!.StringSubstr);
+                IL.Emit(OpCodes.Call, Ctx.Runtime!.Strings.Substr);
                 break;
 
             case "toUpperCase":
@@ -2646,20 +2646,20 @@ public abstract partial class ExpressionEmitterBase
                 else { IL.Emit(OpCodes.Ldstr, ""); }
                 if (arguments.Count > 1) { EmitExpression(arguments[1]); EnsureBoxed(); }
                 else { IL.Emit(OpCodes.Ldnull); }
-                IL.Emit(OpCodes.Call, Ctx.Runtime!.StringIncludes);
+                IL.Emit(OpCodes.Call, Ctx.Runtime!.Strings.Includes);
                 IL.Emit(OpCodes.Box, typeof(bool));
                 break;
             case "indexOf":
                 // ECMA-262 §22.1.3.8 step 3: searchString = ? ToString(searchString).
                 if (arguments.Count > 0) { EmitExpression(arguments[0]); EnsureBoxed(); IL.Emit(OpCodes.Call, Ctx.Runtime!.ToJsString); }
                 else { IL.Emit(OpCodes.Ldstr, "undefined"); }
-                IL.Emit(OpCodes.Call, Ctx.Runtime!.StringIndexOf);
+                IL.Emit(OpCodes.Call, Ctx.Runtime!.Strings.IndexOf);
                 IL.Emit(OpCodes.Box, typeof(double));
                 break;
             case "lastIndexOf":
                 if (arguments.Count > 0) { EmitExpression(arguments[0]); EnsureBoxed(); IL.Emit(OpCodes.Call, Ctx.Runtime!.ToJsString); }
                 else { IL.Emit(OpCodes.Ldstr, "undefined"); }
-                IL.Emit(OpCodes.Call, Ctx.Runtime!.StringLastIndexOf);
+                IL.Emit(OpCodes.Call, Ctx.Runtime!.Strings.LastIndexOf);
                 IL.Emit(OpCodes.Box, typeof(double));
                 break;
             case "slice":
@@ -2672,7 +2672,7 @@ public abstract partial class ExpressionEmitterBase
                     EmitExpression(arguments[i]); EnsureBoxed();
                     IL.Emit(OpCodes.Stelem_Ref);
                 }
-                IL.Emit(OpCodes.Call, Ctx.Runtime!.StringSlice);
+                IL.Emit(OpCodes.Call, Ctx.Runtime!.Strings.Slice);
                 break;
             case "concat":
                 IL.Emit(OpCodes.Ldc_I4, arguments.Count);
@@ -2683,7 +2683,7 @@ public abstract partial class ExpressionEmitterBase
                     EmitExpression(arguments[i]); EnsureBoxed();
                     IL.Emit(OpCodes.Stelem_Ref);
                 }
-                IL.Emit(OpCodes.Call, Ctx.Runtime!.StringConcat);
+                IL.Emit(OpCodes.Call, Ctx.Runtime!.Strings.Concat);
                 break;
         }
         IL.Emit(OpCodes.Br, doneLabel);

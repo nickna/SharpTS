@@ -704,8 +704,8 @@ public partial class RuntimeEmitter
         // ECMA-262 7.3.2: walk String.prototype for borrowed-method patterns
         // (`s.valueOf`, `s.toString`, `s.toLowerCase`, etc.). Pre-fix returned
         // null for any property other than length/constructor.
-        il.Emit(OpCodes.Call, runtime.StringPrototypePopulateMethod);
-        il.Emit(OpCodes.Ldsfld, runtime.StringPrototypeField);
+        il.Emit(OpCodes.Call, runtime.Strings.PrototypePopulateMethod);
+        il.Emit(OpCodes.Ldsfld, runtime.Strings.PrototypeField);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, method);
         il.Emit(OpCodes.Ret);

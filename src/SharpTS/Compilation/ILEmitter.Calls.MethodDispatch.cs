@@ -432,7 +432,7 @@ public partial class ILEmitter
                 }
             }
             else IL.Emit(OpCodes.Ldc_R8, 0.0);
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.StringCharCodeAt);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.Strings.CharCodeAt);
             SetStackType(StackType.Double);
             return;
         }
