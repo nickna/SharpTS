@@ -1211,6 +1211,115 @@ public class StandaloneDllTests
         }
     }
 
+    public static IEnumerable<object[]> FileSystemWatcherMetadataPrograms
+    {
+        get
+        {
+            yield return new object[]
+            {
+                """
+                import { watch, writeFileSync, unlinkSync } from 'node:fs';
+                const path = process.cwd() + '/watch.txt'; writeFileSync(path, 'old'); let detected = false;
+                const watcher: any = watch(path, (event: string, filename: string) => {
+                    if (detected) return; detected = true; watcher.close(); watcher.close(); clearTimeout(timeout);
+                    console.log(event, filename === 'watch.txt'); unlinkSync(path);
+                });
+                const timeout = setTimeout(() => { watcher.close(); throw new Error('watch callback timed out'); }, 5000);
+                setTimeout(() => writeFileSync(path, 'updated'), 50);
+                """,
+                "change true\n"
+            };
+            yield return new object[]
+            {
+                """
+                import * as fs from 'fs';
+                const path = process.cwd() + '/watch-options.txt'; fs.writeFileSync(path, 'old'); let detected = false;
+                const watch = fs.watch;
+                const watcher: any = watch(path, {}, (event: string, filename: string) => {
+                    if (detected) return; detected = true; watcher.close(); clearTimeout(timeout);
+                    console.log(event, filename === 'watch-options.txt'); fs.unlinkSync(path);
+                });
+                const timeout = setTimeout(() => { watcher.close(); throw new Error('options callback timed out'); }, 5000);
+                setTimeout(() => fs.writeFileSync(path, 'updated'), 50);
+                """,
+                "change true\n"
+            };
+            yield return new object[]
+            {
+                """
+                import * as fs from 'fs';
+                const directory = process.cwd() + '/watch-directory'; fs.mkdirSync(directory); let detected = false;
+                const watcher: any = fs.watch(directory);
+                watcher.on('change', (event: string, filename: string) => {
+                    if (detected) return; detected = true; watcher.close(); clearTimeout(timeout);
+                    console.log(event, filename === 'created.txt'); fs.unlinkSync(directory + '/created.txt'); fs.rmdirSync(directory);
+                });
+                const timeout = setTimeout(() => { watcher.close(); throw new Error('directory callback timed out'); }, 5000);
+                setTimeout(() => fs.writeFileSync(directory + '/created.txt', 'created'), 50);
+                """,
+                "change true\n"
+            };
+            yield return new object[]
+            {
+                """
+                import { watchFile, unwatchFile, writeFileSync, appendFileSync, unlinkSync } from 'fs';
+                const path = process.cwd() + '/poll.txt'; writeFileSync(path, 'old'); let detected = false;
+                watchFile(path, { interval: 25 }, (curr: any, prev: any) => {
+                    if (detected || curr.size !== 7) return; detected = true; unwatchFile(path); clearTimeout(timeout);
+                    console.log(curr.size, prev.size, curr.isFile(), prev.isFile()); unlinkSync(path);
+                });
+                const timeout = setTimeout(() => { unwatchFile(path); throw new Error('poll callback timed out'); }, 5000);
+                setTimeout(() => appendFileSync(path, 'new!'), 50);
+                """,
+                "7 3 true true\n"
+            };
+            yield return new object[]
+            {
+                """
+                import * as fs from 'fs';
+                class Options { interval: number = 25; }
+                const path = process.cwd() + '/poll-class.txt'; fs.writeFileSync(path, 'old'); let detected = false;
+                const watchFile = fs.watchFile; const unwatchFile = fs.unwatchFile;
+                watchFile(path, new Options(), (curr: any, prev: any) => {
+                    if (detected || curr.size !== 7) return; detected = true; unwatchFile(path); clearTimeout(timeout);
+                    console.log(curr.size, prev.size); fs.unlinkSync(path);
+                });
+                const timeout = setTimeout(() => { unwatchFile(path); throw new Error('class options callback timed out'); }, 5000);
+                setTimeout(() => fs.appendFileSync(path, 'new!'), 50);
+                """,
+                "7 3\n"
+            };
+            yield return new object[]
+            {
+                """
+                import * as fs from 'fs';
+                const path = process.cwd() + '/unwatch.txt'; fs.writeFileSync(path, 'old');
+                fs.unwatchFile(path);
+                fs.watchFile('unwatch.txt', (curr: any, prev: any) => console.log('unexpected'));
+                fs.unwatchFile(path); fs.unwatchFile('unwatch.txt');
+                const watcher: any = fs.watch(path); watcher.close(); watcher.close();
+                fs.writeFileSync(path, 'updated'); fs.unlinkSync(path); console.log('closed');
+                """,
+                "closed\n"
+            };
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(FileSystemWatcherMetadataPrograms))]
+    public void Isolated_FileSystemWatcherMetadata_PreservesCallbacksPollingAndClose(string source, string expected)
+    {
+        var files = new Dictionary<string, string> { ["main.ts"] = source };
+        Assert.Empty(TestHarness.CompileModulesAndVerifyOnly(files, "main.ts"));
+        var (tempDir, dllPath) = CompileStandaloneModule(files, "main.ts");
+        try
+        {
+            Assert.DoesNotContain(GetAssemblyReferences(dllPath), name => name == "SharpTS");
+            Assert.Equal(expected, ExecuteCompiledDllIsolated(dllPath, timeoutMs: 15000));
+        }
+        finally { CleanupTempDir(tempDir); }
+    }
+
     public static IEnumerable<object[]> FileSystemStreamMetadataPrograms
     {
         get

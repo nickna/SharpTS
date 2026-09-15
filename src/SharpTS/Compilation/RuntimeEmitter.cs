@@ -66,6 +66,7 @@ public partial class RuntimeEmitter
             runtime.BeginFileSystemEmission();
             runtime.BeginFileSystemAsyncEmission();
             runtime.BeginFileSystemStreamEmission();
+            runtime.BeginFileSystemWatcherEmission();
         }
         if (features.UsesWebStreams)
             runtime.BeginWebStreamEmission();
@@ -480,8 +481,8 @@ public partial class RuntimeEmitter
         if (features.UsesFs)
         {
             EmitFsStreamTypeDefinitions(moduleBuilder, runtime);
-            EmitFsWatcherClass(moduleBuilder, runtime);
-            EmitStatWatcherClass(moduleBuilder, runtime);
+            EmitFsWatcherClass(moduleBuilder, runtime.RequireFileSystemWatchers(), runtime.EventEmitter, runtime.EventLoop);
+            EmitStatWatcherClass(moduleBuilder, runtime.RequireFileSystemWatchers(), runtime.EventEmitter, runtime.EventLoop, runtime.RequireFileSystem());
         }
 
         // Reflect.construct and Proxy [[Construct]] need this token while the
@@ -659,6 +660,7 @@ public partial class RuntimeEmitter
         runtime.FileSystem?.CompleteEmission();
         runtime.FileSystemAsync?.CompleteEmission();
         runtime.FileSystemStreams?.CompleteEmission();
+        runtime.FileSystemWatchers?.CompleteEmission();
         runtime.Timers.CompleteEmission();
         runtime.Microtasks.CompleteEmission();
         runtime.TimerPromises?.CompleteEmission();

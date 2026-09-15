@@ -12,119 +12,97 @@ namespace SharpTS.Compilation;
 /// </summary>
 public partial class RuntimeEmitter
 {
-    // $StatWatcher type and members
-    private TypeBuilder _statWatcherType = null!;
-    private ConstructorBuilder _statWatcherCtor = null!;
-    private FieldBuilder _statWatcherTimerField = null!;
-    private FieldBuilder _statWatcherClosedField = null!;
-    private FieldBuilder _statWatcherFilenameField = null!;
-    private FieldBuilder _statWatcherLastSizeField = null!;
-    private FieldBuilder _statWatcherLastModifiedField = null!;
-    private MethodBuilder _statWatcherCloseMethod = null!;
-    private MethodBuilder _statWatcherPollCallback = null!;
-
-    // $StatWatchPollClosure
-    private TypeBuilder _statWatchPollClosureType = null!;
-    private ConstructorBuilder _statWatchPollClosureCtor = null!;
-    private FieldBuilder _statPollClosureWatcherField = null!;
-    private FieldBuilder _statPollClosureCurrField = null!;
-    private FieldBuilder _statPollClosurePrevField = null!;
-    private MethodBuilder _statPollClosureRun = null!;
-
-    // Static watcher registry for unwatchFile
-    private FieldBuilder _statWatcherRegistryField = null!;
-
-    private void EmitStatWatcherClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private void EmitStatWatcherClass(ModuleBuilder moduleBuilder, EmittedFileSystemWatcherRuntime watchers, EmittedEventEmitterRuntime events, EmittedEventLoopRuntime eventLoop, EmittedFileSystemRuntime fileSystem)
     {
-        EmitStatWatchPollClosure(moduleBuilder, runtime);
+        EmitStatWatchPollClosure(moduleBuilder, watchers, events);
 
-        _statWatcherType = EmitTypeDefinitions.DefineType(moduleBuilder,
+        watchers.StatType = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$StatWatcher",
             TypeAttributes.Public | TypeAttributes.BeforeFieldInit,
-            runtime.EventEmitter.Type);
+            events.Type);
 
-        _statWatcherTimerField = _statWatcherType.DefineField("_timer", typeof(Timer), FieldAttributes.Private);
-        _statWatcherClosedField = _statWatcherType.DefineField("_closed", _types.Boolean, FieldAttributes.Private);
-        _statWatcherFilenameField = _statWatcherType.DefineField("_filename", _types.String, FieldAttributes.Private);
-        _statWatcherLastSizeField = _statWatcherType.DefineField("_lastSize", typeof(long), FieldAttributes.Private);
-        _statWatcherLastModifiedField = _statWatcherType.DefineField("_lastModified", typeof(long), FieldAttributes.Private);
+        watchers.StatTimerField = watchers.StatType.DefineField("_timer", typeof(Timer), FieldAttributes.Private);
+        watchers.StatClosedField = watchers.StatType.DefineField("_closed", _types.Boolean, FieldAttributes.Private);
+        watchers.StatFilenameField = watchers.StatType.DefineField("_filename", _types.String, FieldAttributes.Private);
+        watchers.StatLastSizeField = watchers.StatType.DefineField("_lastSize", typeof(long), FieldAttributes.Private);
+        watchers.StatLastModifiedField = watchers.StatType.DefineField("_lastModified", typeof(long), FieldAttributes.Private);
 
-        EmitStatWatcherPollCallback(runtime);
-        EmitStatWatcherConstructor(runtime);
-        EmitStatWatcherCloseMethod(runtime);
+        EmitStatWatcherPollCallback(watchers, eventLoop, fileSystem);
+        EmitStatWatcherConstructor(watchers, events, eventLoop);
+        EmitStatWatcherCloseMethod(watchers, eventLoop);
 
-        _ = _statWatcherType;
-        _ = _statWatcherCtor;
-        _ = _statWatcherCloseMethod;
+        _ = watchers.StatType;
+        _ = watchers.StatCtor;
+        _ = watchers.StatClose;
 
-        _statWatcherType.CreateType();
+        watchers.StatType.CreateType();
     }
 
-    private void EmitStatWatchPollClosure(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private void EmitStatWatchPollClosure(ModuleBuilder moduleBuilder, EmittedFileSystemWatcherRuntime watchers, EmittedEventEmitterRuntime events)
     {
-        _statWatchPollClosureType = moduleBuilder.DefineType(
+        watchers.PollClosureType = moduleBuilder.DefineType(
             "$StatWatchPollClosure",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit);
 
-        _statPollClosureWatcherField = _statWatchPollClosureType.DefineField("_watcher", runtime.EventEmitter.Type, FieldAttributes.Public);
-        _statPollClosureCurrField = _statWatchPollClosureType.DefineField("_curr", _types.Object, FieldAttributes.Public);
-        _statPollClosurePrevField = _statWatchPollClosureType.DefineField("_prev", _types.Object, FieldAttributes.Public);
+        watchers.PollClosureWatcherField = watchers.PollClosureType.DefineField("_watcher", events.Type, FieldAttributes.Public);
+        watchers.PollClosureCurrentField = watchers.PollClosureType.DefineField("_curr", _types.Object, FieldAttributes.Public);
+        watchers.PollClosurePreviousField = watchers.PollClosureType.DefineField("_prev", _types.Object, FieldAttributes.Public);
 
-        _statWatchPollClosureCtor = _statWatchPollClosureType.DefineConstructor(
+        watchers.PollClosureCtor = watchers.PollClosureType.DefineConstructor(
             MethodAttributes.Public, CallingConventions.Standard,
-            [runtime.EventEmitter.Type, _types.Object, _types.Object]);
+            [events.Type, _types.Object, _types.Object]);
         {
-            var il = _statWatchPollClosureCtor.GetILGenerator();
+            var il = watchers.PollClosureCtor.GetILGenerator();
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Call, typeof(object).GetConstructor(Type.EmptyTypes)!);
-            il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldarg_1); il.Emit(OpCodes.Stfld, _statPollClosureWatcherField);
-            il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldarg_2); il.Emit(OpCodes.Stfld, _statPollClosureCurrField);
-            il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldarg_3); il.Emit(OpCodes.Stfld, _statPollClosurePrevField);
+            il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldarg_1); il.Emit(OpCodes.Stfld, watchers.PollClosureWatcherField);
+            il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldarg_2); il.Emit(OpCodes.Stfld, watchers.PollClosureCurrentField);
+            il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldarg_3); il.Emit(OpCodes.Stfld, watchers.PollClosurePreviousField);
             il.Emit(OpCodes.Ret);
         }
 
         // Run(): Emit("change", [curr, prev])
-        _statPollClosureRun = _statWatchPollClosureType.DefineMethod(
+        watchers.PollClosureRun = watchers.PollClosureType.DefineMethod(
             "Run", MethodAttributes.Public, _types.Void, Type.EmptyTypes);
         {
-            var il = _statPollClosureRun.GetILGenerator();
+            var il = watchers.PollClosureRun.GetILGenerator();
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldfld, _statPollClosureWatcherField);
+            il.Emit(OpCodes.Ldfld, watchers.PollClosureWatcherField);
             il.Emit(OpCodes.Ldstr, "change");
             il.Emit(OpCodes.Ldc_I4_2);
             il.Emit(OpCodes.Newarr, _types.Object);
             il.Emit(OpCodes.Dup); il.Emit(OpCodes.Ldc_I4_0);
-            il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, _statPollClosureCurrField);
+            il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, watchers.PollClosureCurrentField);
             il.Emit(OpCodes.Stelem_Ref);
             il.Emit(OpCodes.Dup); il.Emit(OpCodes.Ldc_I4_1);
-            il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, _statPollClosurePrevField);
+            il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, watchers.PollClosurePreviousField);
             il.Emit(OpCodes.Stelem_Ref);
-            il.Emit(OpCodes.Call, runtime.EventEmitter.Emit);
+            il.Emit(OpCodes.Call, events.Emit);
             il.Emit(OpCodes.Pop);
             il.Emit(OpCodes.Ret);
         }
 
-        _statWatchPollClosureType.CreateType();
+        watchers.PollClosureType.CreateType();
     }
 
     /// <summary>
     /// PollCallback(object? state): reads file info, compares, schedules event if changed.
     /// </summary>
-    private void EmitStatWatcherPollCallback(EmittedRuntime runtime)
+    private void EmitStatWatcherPollCallback(EmittedFileSystemWatcherRuntime watchers, EmittedEventLoopRuntime eventLoop, EmittedFileSystemRuntime fileSystem)
     {
-        _statWatcherPollCallback = _statWatcherType.DefineMethod(
+        watchers.StatPollCallback = watchers.StatType.DefineMethod(
             "PollCallback",
             MethodAttributes.Public,
             _types.Void,
             [_types.Object]); // TimerCallback signature: void(object? state)
 
-        var il = _statWatcherPollCallback.GetILGenerator();
+        var il = watchers.StatPollCallback.GetILGenerator();
 
         // if (_closed) return
         var notClosedLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Volatile);
-        il.Emit(OpCodes.Ldfld, _statWatcherClosedField);
+        il.Emit(OpCodes.Ldfld, watchers.StatClosedField);
         il.Emit(OpCodes.Brfalse, notClosedLabel);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notClosedLabel);
@@ -134,7 +112,7 @@ public partial class RuntimeEmitter
 
         var fiLocal = il.DeclareLocal(typeof(FileInfo));
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _statWatcherFilenameField);
+        il.Emit(OpCodes.Ldfld, watchers.StatFilenameField);
         il.Emit(OpCodes.Newobj, typeof(FileInfo).GetConstructor([typeof(string)])!);
         il.Emit(OpCodes.Stloc, fiLocal);
 
@@ -158,11 +136,11 @@ public partial class RuntimeEmitter
         var changedLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, currentSizeLocal);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _statWatcherLastSizeField);
+        il.Emit(OpCodes.Ldfld, watchers.StatLastSizeField);
         il.Emit(OpCodes.Bne_Un, changedLabel);
         il.Emit(OpCodes.Ldloc, currentModifiedLocal);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _statWatcherLastModifiedField);
+        il.Emit(OpCodes.Ldfld, watchers.StatLastModifiedField);
         il.Emit(OpCodes.Bne_Un, changedLabel);
 
         // No change — just leave
@@ -174,35 +152,35 @@ public partial class RuntimeEmitter
         // Build prev stats: new $Stats(true, false, false, _lastSize, 0, 0, _lastModified/10000 - epoch, 0, 0)
         // Simplified: just pass size as the key differentiator
         var prevStatsLocal = il.DeclareLocal(_types.Object);
-        EmitCreateStats(il, runtime, isFile: true,
-            sizeEmitter: () => { il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, _statWatcherLastSizeField); il.Emit(OpCodes.Conv_R8); },
-            mtimeMsEmitter: () => { EmitTicksToEpochMs(il, () => { il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, _statWatcherLastModifiedField); }); });
+        EmitCreateStats(il, fileSystem, isFile: true,
+            sizeEmitter: () => { il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, watchers.StatLastSizeField); il.Emit(OpCodes.Conv_R8); },
+            mtimeMsEmitter: () => { EmitTicksToEpochMs(il, () => { il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, watchers.StatLastModifiedField); }); });
         il.Emit(OpCodes.Stloc, prevStatsLocal);
 
         // Update stored values
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, currentSizeLocal);
-        il.Emit(OpCodes.Stfld, _statWatcherLastSizeField);
+        il.Emit(OpCodes.Stfld, watchers.StatLastSizeField);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, currentModifiedLocal);
-        il.Emit(OpCodes.Stfld, _statWatcherLastModifiedField);
+        il.Emit(OpCodes.Stfld, watchers.StatLastModifiedField);
 
         // Build curr stats
         var currStatsLocal = il.DeclareLocal(_types.Object);
-        EmitCreateStats(il, runtime, isFile: true,
+        EmitCreateStats(il, fileSystem, isFile: true,
             sizeEmitter: () => { il.Emit(OpCodes.Ldloc, currentSizeLocal); il.Emit(OpCodes.Conv_R8); },
             mtimeMsEmitter: () => { EmitTicksToEpochMs(il, () => il.Emit(OpCodes.Ldloc, currentModifiedLocal)); });
         il.Emit(OpCodes.Stloc, currStatsLocal);
 
         // Schedule: EventLoop.GetInstance().Schedule(new Action(new $StatWatchPollClosure(this, curr, prev).Run))
-        il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
+        il.Emit(OpCodes.Call, eventLoop.GetInstance);
         il.Emit(OpCodes.Ldarg_0); // this ($StatWatcher, which IS $EventEmitter)
         il.Emit(OpCodes.Ldloc, currStatsLocal);
         il.Emit(OpCodes.Ldloc, prevStatsLocal);
-        il.Emit(OpCodes.Newobj, _statWatchPollClosureCtor);
-        il.Emit(OpCodes.Ldftn, _statPollClosureRun);
+        il.Emit(OpCodes.Newobj, watchers.PollClosureCtor);
+        il.Emit(OpCodes.Ldftn, watchers.PollClosureRun);
         il.Emit(OpCodes.Newobj, typeof(Action).GetConstructor([typeof(object), typeof(IntPtr)])!);
-        il.Emit(OpCodes.Call, runtime.EventLoop.Schedule);
+        il.Emit(OpCodes.Call, eventLoop.Schedule);
 
         il.Emit(OpCodes.Leave, leaveLabel);
 
@@ -220,7 +198,7 @@ public partial class RuntimeEmitter
     /// Helper: emits new $Stats(isFile, isDir, isSymlink, size, mode, atimeMs, mtimeMs, ctimeMs, birthtimeMs)
     /// Leaves stats object on the stack.
     /// </summary>
-    private void EmitCreateStats(ILGenerator il, EmittedRuntime runtime, bool isFile,
+    private void EmitCreateStats(ILGenerator il, EmittedFileSystemRuntime fileSystem, bool isFile,
         Action sizeEmitter, Action mtimeMsEmitter)
     {
         il.Emit(isFile ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0); // isFile
@@ -232,7 +210,7 @@ public partial class RuntimeEmitter
         mtimeMsEmitter(); // mtimeMs (double)
         il.Emit(OpCodes.Ldc_R8, 0.0); // ctimeMs
         il.Emit(OpCodes.Ldc_R8, 0.0); // birthtimeMs
-        il.Emit(OpCodes.Newobj, runtime.RequireFileSystem().StatsCtor);
+        il.Emit(OpCodes.Newobj, fileSystem.StatsCtor);
     }
 
     /// <summary>
@@ -252,42 +230,42 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Constructor(path, intervalMs): captures initial stats, creates timer, Ref().
     /// </summary>
-    private void EmitStatWatcherConstructor(EmittedRuntime runtime)
+    private void EmitStatWatcherConstructor(EmittedFileSystemWatcherRuntime watchers, EmittedEventEmitterRuntime events, EmittedEventLoopRuntime eventLoop)
     {
-        _statWatcherCtor = _statWatcherType.DefineConstructor(
+        watchers.StatCtor = watchers.StatType.DefineConstructor(
             MethodAttributes.Public, CallingConventions.Standard,
             [_types.String, _types.Int32]);
 
-        var il = _statWatcherCtor.GetILGenerator();
+        var il = watchers.StatCtor.GetILGenerator();
 
         // Call base $EventEmitter ctor
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.EventEmitter.Ctor);
+        il.Emit(OpCodes.Call, events.Ctor);
 
         // _closed = false
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Volatile);
-        il.Emit(OpCodes.Stfld, _statWatcherClosedField);
+        il.Emit(OpCodes.Stfld, watchers.StatClosedField);
 
         // _filename = Path.GetFullPath(path)
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, typeof(Path).GetMethod("GetFullPath", [typeof(string)])!);
-        il.Emit(OpCodes.Stfld, _statWatcherFilenameField);
+        il.Emit(OpCodes.Stfld, watchers.StatFilenameField);
 
         // Capture initial stats
         il.BeginExceptionBlock();
         var fiLocal = il.DeclareLocal(typeof(FileInfo));
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _statWatcherFilenameField);
+        il.Emit(OpCodes.Ldfld, watchers.StatFilenameField);
         il.Emit(OpCodes.Newobj, typeof(FileInfo).GetConstructor([typeof(string)])!);
         il.Emit(OpCodes.Stloc, fiLocal);
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, fiLocal);
         il.Emit(OpCodes.Callvirt, typeof(FileInfo).GetProperty("Length")!.GetGetMethod()!);
-        il.Emit(OpCodes.Stfld, _statWatcherLastSizeField);
+        il.Emit(OpCodes.Stfld, watchers.StatLastSizeField);
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, fiLocal);
@@ -296,7 +274,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, dtLocal);
         il.Emit(OpCodes.Ldloca, dtLocal);
         il.Emit(OpCodes.Call, typeof(DateTime).GetProperty("Ticks")!.GetGetMethod()!);
-        il.Emit(OpCodes.Stfld, _statWatcherLastModifiedField);
+        il.Emit(OpCodes.Stfld, watchers.StatLastModifiedField);
 
         var afterInitLabel = il.DefineLabel();
         il.Emit(OpCodes.Leave, afterInitLabel);
@@ -309,17 +287,17 @@ public partial class RuntimeEmitter
         // _timer = new Timer(new TimerCallback(this.PollCallback), null, intervalMs, intervalMs)
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_0); // this
-        il.Emit(OpCodes.Ldftn, _statWatcherPollCallback);
+        il.Emit(OpCodes.Ldftn, watchers.StatPollCallback);
         il.Emit(OpCodes.Newobj, typeof(TimerCallback).GetConstructor([typeof(object), typeof(IntPtr)])!);
         il.Emit(OpCodes.Ldnull); // state
         il.Emit(OpCodes.Ldarg_2); // dueTime = intervalMs
         il.Emit(OpCodes.Ldarg_2); // period = intervalMs
         il.Emit(OpCodes.Newobj, typeof(Timer).GetConstructor([typeof(TimerCallback), typeof(object), typeof(int), typeof(int)])!);
-        il.Emit(OpCodes.Stfld, _statWatcherTimerField);
+        il.Emit(OpCodes.Stfld, watchers.StatTimerField);
 
         // EventLoop.GetInstance().Ref()
-        il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
-        il.Emit(OpCodes.Call, runtime.EventLoop.Ref);
+        il.Emit(OpCodes.Call, eventLoop.GetInstance);
+        il.Emit(OpCodes.Call, eventLoop.Ref);
 
         il.Emit(OpCodes.Ret);
     }
@@ -327,17 +305,17 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Close(): disposes timer, Unref().
     /// </summary>
-    private void EmitStatWatcherCloseMethod(EmittedRuntime runtime)
+    private void EmitStatWatcherCloseMethod(EmittedFileSystemWatcherRuntime watchers, EmittedEventLoopRuntime eventLoop)
     {
-        _statWatcherCloseMethod = _statWatcherType.DefineMethod(
+        watchers.StatClose = watchers.StatType.DefineMethod(
             "Close", MethodAttributes.Public, _types.Void, Type.EmptyTypes);
 
-        var il = _statWatcherCloseMethod.GetILGenerator();
+        var il = watchers.StatClose.GetILGenerator();
 
         var notClosedLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Volatile);
-        il.Emit(OpCodes.Ldfld, _statWatcherClosedField);
+        il.Emit(OpCodes.Ldfld, watchers.StatClosedField);
         il.Emit(OpCodes.Brfalse, notClosedLabel);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notClosedLabel);
@@ -345,16 +323,16 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Volatile);
-        il.Emit(OpCodes.Stfld, _statWatcherClosedField);
+        il.Emit(OpCodes.Stfld, watchers.StatClosedField);
 
         // _timer.Dispose()
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _statWatcherTimerField);
+        il.Emit(OpCodes.Ldfld, watchers.StatTimerField);
         il.Emit(OpCodes.Callvirt, typeof(Timer).GetMethod("Dispose", Type.EmptyTypes)!);
 
         // EventLoop.GetInstance().Unref()
-        il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
-        il.Emit(OpCodes.Call, runtime.EventLoop.Unref);
+        il.Emit(OpCodes.Call, eventLoop.GetInstance);
+        il.Emit(OpCodes.Call, eventLoop.Unref);
 
         il.Emit(OpCodes.Ret);
     }

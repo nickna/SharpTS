@@ -1129,7 +1129,7 @@ public sealed class FsModuleEmitter : IBuiltInModuleEmitter
                 il.Emit(OpCodes.Ldnull);
         }
 
-        il.Emit(OpCodes.Call, ctx.Runtime!.FsWatch);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireFileSystemWatchers().Watch);
         return true;
     }
 
@@ -1155,7 +1155,7 @@ public sealed class FsModuleEmitter : IBuiltInModuleEmitter
                 il.Emit(OpCodes.Ldnull);
         }
 
-        il.Emit(OpCodes.Call, ctx.Runtime!.FsWatchFile);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireFileSystemWatchers().WatchFile);
         return true;
     }
 
@@ -1170,7 +1170,7 @@ public sealed class FsModuleEmitter : IBuiltInModuleEmitter
         else
             il.Emit(OpCodes.Ldnull);
 
-        il.Emit(OpCodes.Call, ctx.Runtime!.FsUnwatchFile);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireFileSystemWatchers().UnwatchFile);
         return true;
     }
 

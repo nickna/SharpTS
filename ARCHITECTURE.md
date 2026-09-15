@@ -511,9 +511,8 @@ missing declarations or subsequent writes. No migrated flat aliases or emitter-h
 remain; feature selection, generated public signatures, native imports, and method bodies
 are preserved.
 
-Filesystem watcher/poll-closure metadata remains a subsequent phase under #1599. Local descriptor
-table fields and builders, BCL lookups, and the shared built-in module registry remain with their
-existing construction infrastructure for the final ownership audit.
+Local descriptor table fields and builders, BCL lookups, and the shared built-in module registry
+remain with their existing construction infrastructure for the final ownership audit.
 
 Filesystem async I/O uses optional `EmittedFileSystemAsyncRuntime` for 26 fixed declarations
 and 21 Promise-wrapper declarations. It replaces 22 flat method handles, the mutable wrapper
@@ -550,6 +549,21 @@ read Pipe body. Completion validates every declaration and freezes writes after 
 Listener replay, ranges/chunking, descriptor ownership, close behavior, and both filesystem
 and ordinary Writable pipe paths keep their existing behavior. Method-local property/accessor
 builders and BCL lookups remain local construction state for the final ownership audit.
+
+Filesystem watchers use optional `EmittedFileSystemWatcherRuntime`, selected by the same `UsesFs`
+gate. Its 31 checked declarations replace three flat factory properties and 28 emitter fields:
+the filesystem and stat watcher types, constructors, private storage, event/poll and close methods,
+both scheduled callback closures, the factories, and the emitted stat-watcher registry field.
+Thirteen helpers accept explicit watcher, EventEmitter, event-loop, or filesystem dependencies.
+The two callback-accepting factories retain shared function and object-access metadata.
+
+Closures are still emitted before their watcher types; the runtime registry and factories follow
+later. Completion validates every declaration and freezes writes after runtime finalization.
+Volatile closed-state access, event-loop scheduling and Ref/Unref, callback argument order, polling
+error handling, path normalization, and lazy guest registry initialization are preserved. The
+component owns the registry's field declaration; the generated dictionary retains its runtime
+lifecycle. Method-local builders and BCL reflection lookups remain local construction state for
+the final #1599 ownership audit. No migrated flat aliases or emitter-held copies remain.
 
 During emission, each handle becomes readable as soon as its declaration is assigned, so forward
 references do not require a method body to exist yet. An early read names the missing declaration.

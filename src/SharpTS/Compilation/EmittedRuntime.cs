@@ -1773,10 +1773,18 @@ public class EmittedRuntime
     public EmittedFileSystemStreamRuntime RequireFileSystemStreams() => FileSystemStreams
         ?? throw new InvalidOperationException("Filesystem stream runtime was not enabled for this compilation.");
 
-    // fs.watch / fs.watchFile / fs.unwatchFile
-    public MethodBuilder FsWatch { get; set; } = null!;
-    public MethodBuilder FsWatchFile { get; set; } = null!;
-    public MethodBuilder FsUnwatchFile { get; set; } = null!;
+    /// <summary>Filesystem watcher metadata, or null when UsesFs is off.</summary>
+    public EmittedFileSystemWatcherRuntime? FileSystemWatchers { get; private set; }
+
+    internal void BeginFileSystemWatcherEmission()
+    {
+        if (FileSystemWatchers is not null)
+            throw new InvalidOperationException("Filesystem watcher metadata emission has already started.");
+        FileSystemWatchers = new EmittedFileSystemWatcherRuntime();
+    }
+
+    public EmittedFileSystemWatcherRuntime RequireFileSystemWatchers() => FileSystemWatchers
+        ?? throw new InvalidOperationException("Filesystem watcher runtime was not enabled for this compilation.");
 
     // Built-in module methods (module name -> method name -> MethodBuilder)
     // Used for creating TSFunction wrappers when importing named exports
