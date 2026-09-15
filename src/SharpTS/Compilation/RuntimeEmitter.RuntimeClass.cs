@@ -11,24 +11,24 @@ public partial class RuntimeEmitter
     /// Defines util inspect method signatures early so ConsoleDir can reference them.
     /// Method bodies are emitted later in EmitUtilStandaloneMethods.
     /// </summary>
-    private void DefineUtilInspectSignatures(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void DefineUtilInspectSignatures(TypeBuilder typeBuilder, EmittedInspectionRuntime inspection)
     {
         // InspectValue(object value, int depth, int currentDepth) -> string
-        runtime.UtilInspectValue = typeBuilder.DefineMethod(
+        inspection.InspectValue = typeBuilder.DefineMethod(
             "UtilInspectValue",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.String,
             [_types.Object, _types.Int32, _types.Int32]);
 
         // InspectArray(object arr, int depth, int currentDepth) -> string
-        runtime.UtilInspectArray = typeBuilder.DefineMethod(
+        inspection.InspectArray = typeBuilder.DefineMethod(
             "UtilInspectArray",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.String,
             [_types.Object, _types.Int32, _types.Int32]);
 
         // InspectObject(object obj, int depth, int currentDepth) -> string
-        runtime.UtilInspectObject = typeBuilder.DefineMethod(
+        inspection.InspectObject = typeBuilder.DefineMethod(
             "UtilInspectObject",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.String,
@@ -1523,7 +1523,7 @@ public partial class RuntimeEmitter
         // globalThis methods (ES2020) - must be after HTTP for fetch reference
         EmitGlobalThisMethods(typeBuilder, runtime);
         // Define util inspect method signatures before ConsoleExtensions (ConsoleDir uses UtilInspectValue)
-        DefineUtilInspectSignatures(typeBuilder, runtime);
+        DefineUtilInspectSignatures(typeBuilder, runtime.Inspection);
         // Console extensions (error, warn, clear, time, timeEnd, timeLog)
         EmitConsoleExtensions(typeBuilder, runtime);
         // Crypto module methods — gated alongside the crypto type emissions.
@@ -1544,7 +1544,7 @@ public partial class RuntimeEmitter
         }
         // Util inspect helper bodies (console.dir depends on them; the rest of
         // the emitted util surface died when util moved to stdlib/node/util.ts).
-        EmitUtilStandaloneMethods(typeBuilder, runtime);
+        EmitUtilStandaloneMethods(runtime.Inspection);
         // Readline module methods — gated on UsesReadline (flag was already
         // detected via `import 'readline'` but the call site used to ignore it).
         if (_features.UsesReadline)

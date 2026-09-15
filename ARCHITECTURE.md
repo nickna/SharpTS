@@ -625,9 +625,17 @@ field and the later timer/count dictionary fields. Those dictionaries remain laz
 their declaration order and emitted initialization are unchanged. Ten console-only emission helpers
 and the six shared call helpers accept the component directly, including the call path used by async
 and generator expressions. Completion validates every declaration after runtime finalization and
-freezes writes. Shared coercion and util dependencies remain on the runtime until their own migration;
+freezes writes. Shared coercion dependencies remain on the runtime until their own migration;
 method-local BCL lookups remain construction locals. No flat console aliases or emitter-held copies
 remain. Output streams, formatting, argument suspension, and standalone behavior are unchanged.
+
+Inspection uses required `EmittedInspectionRuntime` for the three mutually recursive helpers used
+by `console.dir`. All signatures are declared before console extensions and their bodies are emitted
+later, preserving forward calls. Five inspection helpers and the console-dir emitter accept explicit
+component dependencies. Completion validates all three declarations after runtime finalization and
+freezes writes. Formatting, recursion/depth boundaries, emitted signatures, and standalone dependencies
+are unchanged. The `util` module remains in `stdlib/node/util.ts`; method-local BCL reflection stays
+scoped construction state. No flat inspection aliases or emitter-held copies remain.
 
 During emission, each handle becomes readable as soon as its declaration is assigned, so forward
 references do not require a method body to exist yet. An early read names the missing declaration.
