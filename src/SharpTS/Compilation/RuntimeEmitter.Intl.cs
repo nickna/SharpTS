@@ -13,15 +13,15 @@ public partial class RuntimeEmitter
     /// Instance methods (format/resolvedOptions/…) need no stubs: the factories return
     /// SharpTSIntl* runtime objects and calls dispatch reflectively onto those directly.
     /// </summary>
-    private void EmitIntlMethods(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitIntlMethods(TypeBuilder typeBuilder, EmittedIntlRuntime intl)
     {
-        runtime.CreateIntlNumberFormat = EmitReflectionHelper(typeBuilder, "CreateIntlNumberFormat", 2);
-        runtime.CreateIntlDateTimeFormat = EmitReflectionHelper(typeBuilder, "CreateIntlDateTimeFormat", 2);
-        runtime.CreateIntlCollator = EmitReflectionHelper(typeBuilder, "CreateIntlCollator", 2);
-        runtime.CreateIntlPluralRules = EmitReflectionHelper(typeBuilder, "CreateIntlPluralRules", 2);
-        runtime.CreateIntlRelativeTimeFormat = EmitReflectionHelper(typeBuilder, "CreateIntlRelativeTimeFormat", 2);
-        runtime.CreateIntlListFormat = EmitReflectionHelper(typeBuilder, "CreateIntlListFormat", 2);
-        runtime.CreateIntlDisplayNames = EmitReflectionHelper(typeBuilder, "CreateIntlDisplayNames", 2);
-        runtime.CreateIntlSegmenter = EmitReflectionHelper(typeBuilder, "CreateIntlSegmenter", 2);
+        intl.CreateNumberFormat = EmitReflectionHelper(typeBuilder, "CreateIntlNumberFormat", 2);
+        intl.CreateDateTimeFormat = EmitReflectionHelper(typeBuilder, "CreateIntlDateTimeFormat", 2);
+        intl.CreateCollator = EmitReflectionHelper(typeBuilder, "CreateIntlCollator", 2);
+        intl.CreatePluralRules = EmitReflectionHelper(typeBuilder, "CreateIntlPluralRules", 2);
+        intl.CreateRelativeTimeFormat = EmitReflectionHelper(typeBuilder, "CreateIntlRelativeTimeFormat", 2);
+        intl.CreateListFormat = EmitReflectionHelper(typeBuilder, "CreateIntlListFormat", 2);
+        intl.CreateDisplayNames = EmitReflectionHelper(typeBuilder, "CreateIntlDisplayNames", 2);
+        intl.CreateSegmenter = EmitReflectionHelper(typeBuilder, "CreateIntlSegmenter", 2);
     }
 }

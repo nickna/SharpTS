@@ -68,6 +68,8 @@ public partial class RuntimeEmitter
             runtime.BeginPromiseEmission();
             runtime.BeginTimerPromiseEmission();
         }
+        if (features.UsesIntl)
+            runtime.BeginIntlEmission();
         if (features.UsesAsyncLocalStorage)
             runtime.BeginAsyncLocalStorageEmission();
         if (features.UsesAbortController)
@@ -555,7 +557,7 @@ public partial class RuntimeEmitter
         // AbortSignal / Intl value-position singletons (#224). Must follow
         // EmitRuntimeClass — they wrap the AbortSignal*/CreateIntl* helpers
         // emitted there.
-        EmitNamespaceSingletons(_runtimeTypeBuilder!, runtime);
+        EmitNamespaceSingletons(_runtimeTypeBuilder!, runtime.Abort, runtime.Intl, runtime.TSFunctionGetOrCreate);
 
         // Emit $BroadcastChannel — extends $EventEmitter, dispatches via $EventLoop,
         // and clones messages via $Runtime.StructuredClone (populated during EmitRuntimeClass
@@ -691,6 +693,7 @@ public partial class RuntimeEmitter
         runtime.Microtasks.CompleteEmission();
         runtime.TimerPromises?.CompleteEmission();
         runtime.Modules.CompleteEmission();
+        runtime.Intl?.CompleteEmission();
         runtime.AsyncLocalStorage?.CompleteEmission();
         runtime.Abort?.CompleteEmission();
         runtime.SourceExecution?.CompleteEmission();

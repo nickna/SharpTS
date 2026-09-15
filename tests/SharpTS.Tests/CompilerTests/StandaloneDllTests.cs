@@ -1319,6 +1319,95 @@ public class StandaloneDllTests
         finally { CleanupTempDir(tempDir); }
     }
 
+    public static IEnumerable<object[]> IntlMetadataPrograms =>
+    [
+        new object[]
+        {
+            """
+            const number=new Intl.NumberFormat('en-US',{useGrouping:false,minimumFractionDigits:2,maximumFractionDigits:2});console.log(number.format(1234.5));
+            const date=new Intl.DateTimeFormat('en-US',{timeZone:'UTC'});console.log(date.resolvedOptions().timeZone);
+            const collator=new Intl.Collator('en');console.log(collator.compare('a','b')<0);
+            const plural=new Intl.PluralRules('en');console.log(plural.select(1),plural.select(2));
+            const relative=new Intl.RelativeTimeFormat('en',{numeric:'auto'});console.log(relative.format(-1,'day'));
+            const list=new Intl.ListFormat('en',{type:'conjunction'});console.log(list.format(['a','b']));
+            const names=new Intl.DisplayNames('en-US',{type:'script'});console.log(names.of('Latn'));
+            const segments=new Intl.Segmenter('en',{granularity:'grapheme'});console.log([...segments.segment('AB')].length);
+            """,
+            "1234.50\nUTC\ntrue\none other\nyesterday\na and b\nLatin\n2\n", "main.ts", false
+        },
+        new object[]
+        {
+            """
+            const I:any=Intl;const J:any=Intl;console.log(typeof I,I===J);
+            console.log(Object.keys(I).join(','));console.log(typeof I.NumberFormat,I.NumberFormat.length,I.NumberFormat===J.NumberFormat);
+            const value=new I.NumberFormat('en-US',{useGrouping:false});console.log(value.format(1234.5));
+            """,
+            "object true\nNumberFormat,DateTimeFormat,Collator,PluralRules,RelativeTimeFormat,ListFormat,Segmenter,DisplayNames\nfunction 2 true\n1234.5\n", "main.ts", false
+        },
+        new object[]
+        {
+            """
+            const I:any=Intl;const constructor=I.NumberFormat;
+            const value:any=Reflect.construct(constructor,['en-US',{minimumFractionDigits:2,maximumFractionDigits:2,useGrouping:false}]);
+            console.log(value.format(1234.5));
+            """,
+            "1,234.5\n", "main.ts", false
+        },
+        new object[]
+        {
+            """
+            const I:any=Intl;console.log(typeof I,I===Intl,typeof I.NumberFormat,Object.keys(I).length);
+            """,
+            "object true function 8\n", "main.ts", true
+        },
+        new object[]
+        {
+            """
+            try{new Intl.NumberFormat('en-US');}catch(e:any){console.log(String(e).includes('CreateIntlNumberFormat requires the SharpTS runtime'));}
+            """,
+            "true\n", "main.ts", true
+        },
+        new object[]
+        {
+            """
+            async function run(){await Promise.resolve(1);console.log(new Intl.PluralRules('en').select(1));}run();
+            """,
+            "one\n", "main.ts", false
+        },
+        new object[]
+        {
+            """
+            function* values():Generator<string,void,any>{const I:any=Intl;yield new I.NumberFormat('en-US',{useGrouping:false}).format(1234.5);}console.log(values().next().value);
+            """,
+            "1234.5\n", "main.ts", false
+        },
+        new object[]
+        {
+            """
+            const I=Intl;const value=new I.NumberFormat('en-US',{useGrouping:false});console.log(value.format(1234.5));
+            """,
+            "1234.5\n", "main.cjs", false
+        }
+    ];
+
+    [Theory]
+    [MemberData(nameof(IntlMetadataPrograms))]
+    public void Isolated_IntlMetadata_PreservesFactoriesNamespaceAndDeployment(string source, string expected, string entryPoint, bool standalone)
+    {
+        using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        tempDir.CreateFile(entryPoint, source);
+        var dllPath = tempDir.GetPath("intl_metadata.dll");
+        var deployment = standalone ? " --standalone" : "";
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{tempDir.GetPath(entryPoint)}\" -o \"{dllPath}\" --verify{deployment}", tempDir.Path);
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(dllPath));
+        // Intl constructors use the late-bound runtime; namespace reads alone work without it.
+        Assert.Equal(!standalone, File.Exists(tempDir.GetPath("SharpTS.dll")));
+        Assert.Equal(expected, ExecuteCompiledDllIsolated(dllPath, timeoutMs: 15000,
+            verifyStandardError: error => Assert.Empty(error)));
+    }
+
     public static IEnumerable<object[]> AsyncLocalStorageMetadataPrograms =>
     [
         new object[]

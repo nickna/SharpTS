@@ -714,6 +714,15 @@ handles remain scoped construction locals. Run/Exit keep their existing try/fina
 callback casts, disabled behavior, and async context propagation. The TypeScript facade and
 standalone deployment are unchanged; no flat constructor alias or emitter-held copy remains.
 
+Intl uses optional `EmittedIntlRuntime`, selected by `UsesIntl`, for eight factories and the
+namespace field/populate method. The field is declared early, factories follow in their existing
+order, and lazy namespace population precedes completion. Factory emission and the two shared
+AbortSignal/Intl namespace orchestrators take explicit component dependencies. Consumers check
+availability before loading the namespace and use checked handles for direct construction.
+Emitted `CreateIntl*` names retain the constructor-dispatch contract. The shared reflection helper,
+runtime requirement, wrapper identity/member order, and instance dispatch are unchanged; no flat
+Intl aliases or emitter-held copies remain. BCL reflection and body locals stay scoped.
+
 During emission, each handle becomes readable as soon as its declaration is assigned, so forward
 references do not require a method body to exist yet. An early read names the missing declaration.
 Completion is an orchestration boundary, not an IL verifier: body emission and type finalization

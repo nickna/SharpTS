@@ -902,7 +902,7 @@ public partial class RuntimeEmitter
         // Pre-define the AbortSignal/Intl namespace singleton fields so
         // InstanceOf can brand-check the AbortSignal singleton (#246).
         // Populate bodies are emitted later (EmitNamespaceSingletons).
-        DefineNamespaceSingletonFields(typeBuilder, runtime);
+        DefineNamespaceSingletonFields(typeBuilder, runtime.Abort, runtime.Intl);
         // InstanceOf walks the prototype chain via GetFunctionMethod (for the
         // `F.prototype` fetch) — must be emitted AFTER GetFunctionMethod so
         // `runtime.GetFunctionMethod` is populated when InstanceOf references it.
@@ -1597,7 +1597,7 @@ public partial class RuntimeEmitter
         if (_features.UsesIntl)
         {
             runtime.RequireSharpTSRuntime("Intl");
-            EmitIntlMethods(typeBuilder, runtime);
+            EmitIntlMethods(typeBuilder, runtime.RequireIntl());
         }
 
         // (TLS handshake is now emitted as pure-BCL IL inside $TlsSocket/$TlsServer —

@@ -28,12 +28,12 @@ public partial class RuntimeEmitter
     /// (#246) and is emitted before the populate bodies (which need the
     /// AbortSignal*/CreateIntl* helpers emitted later in EmitRuntimeClass).
     /// </summary>
-    private void DefineNamespaceSingletonFields(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void DefineNamespaceSingletonFields(TypeBuilder typeBuilder, EmittedAbortRuntime? abort, EmittedIntlRuntime? intl)
     {
-        if (_features.UsesAbortController)
-            runtime.RequireAbort().NamespaceField = DefineNamespaceSingletonField(typeBuilder, "AbortSignal");
-        if (_features.UsesIntl)
-            runtime.IntlNamespaceField = DefineNamespaceSingletonField(typeBuilder, "Intl");
+        if (abort is not null)
+            abort.NamespaceField = DefineNamespaceSingletonField(typeBuilder, "AbortSignal");
+        if (intl is not null)
+            intl.NamespaceField = DefineNamespaceSingletonField(typeBuilder, "Intl");
     }
 
     private FieldBuilder DefineNamespaceSingletonField(TypeBuilder typeBuilder, string namespaceName) =>
@@ -42,32 +42,34 @@ public partial class RuntimeEmitter
             _types.DictionaryStringObject,
             FieldAttributes.Public | FieldAttributes.Static);
 
-    private void EmitNamespaceSingletons(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitNamespaceSingletons(
+        TypeBuilder typeBuilder, EmittedAbortRuntime? abort, EmittedIntlRuntime? intl,
+        MethodBuilder functionGetOrCreate)
     {
-        if (_features.UsesAbortController)
+        if (abort is not null)
         {
-            runtime.RequireAbort().NamespacePopulate =
-                EmitNamespaceSingleton(typeBuilder, runtime.TSFunctionGetOrCreate, "AbortSignal", runtime.RequireAbort().NamespaceField,
+            abort.NamespacePopulate =
+                EmitNamespaceSingleton(typeBuilder, functionGetOrCreate, "AbortSignal", abort.NamespaceField,
                 [
-                    ("abort", runtime.RequireAbort().SignalAbort, 1),
-                    ("timeout", runtime.RequireAbort().SignalTimeout, 1),
-                    ("any", runtime.RequireAbort().SignalAny, 1),
+                    ("abort", abort.SignalAbort, 1),
+                    ("timeout", abort.SignalTimeout, 1),
+                    ("any", abort.SignalAny, 1),
                 ]);
         }
 
-        if (_features.UsesIntl)
+        if (intl is not null)
         {
-            runtime.IntlNamespacePopulate =
-                EmitNamespaceSingleton(typeBuilder, runtime.TSFunctionGetOrCreate, "Intl", runtime.IntlNamespaceField!,
+            intl.NamespacePopulate =
+                EmitNamespaceSingleton(typeBuilder, functionGetOrCreate, "Intl", intl.NamespaceField,
                 [
-                    ("NumberFormat", runtime.CreateIntlNumberFormat, 2),
-                    ("DateTimeFormat", runtime.CreateIntlDateTimeFormat, 2),
-                    ("Collator", runtime.CreateIntlCollator, 2),
-                    ("PluralRules", runtime.CreateIntlPluralRules, 2),
-                    ("RelativeTimeFormat", runtime.CreateIntlRelativeTimeFormat, 2),
-                    ("ListFormat", runtime.CreateIntlListFormat, 2),
-                    ("Segmenter", runtime.CreateIntlSegmenter, 2),
-                    ("DisplayNames", runtime.CreateIntlDisplayNames, 2),
+                    ("NumberFormat", intl.CreateNumberFormat, 2),
+                    ("DateTimeFormat", intl.CreateDateTimeFormat, 2),
+                    ("Collator", intl.CreateCollator, 2),
+                    ("PluralRules", intl.CreatePluralRules, 2),
+                    ("RelativeTimeFormat", intl.CreateRelativeTimeFormat, 2),
+                    ("ListFormat", intl.CreateListFormat, 2),
+                    ("Segmenter", intl.CreateSegmenter, 2),
+                    ("DisplayNames", intl.CreateDisplayNames, 2),
                 ]);
         }
     }

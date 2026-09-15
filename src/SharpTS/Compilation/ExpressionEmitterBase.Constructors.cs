@@ -677,17 +677,17 @@ public abstract partial class ExpressionEmitterBase
         if (namespaceParts is not ["Intl"])
             return false;
 
-        var runtime = Ctx.Runtime!;
+        var intl = Ctx.Runtime!.RequireIntl();
         System.Reflection.MethodInfo? method = className switch
         {
-            "NumberFormat" => runtime.CreateIntlNumberFormat,
-            "DateTimeFormat" => runtime.CreateIntlDateTimeFormat,
-            "Collator" => runtime.CreateIntlCollator,
-            "PluralRules" => runtime.CreateIntlPluralRules,
-            "RelativeTimeFormat" => runtime.CreateIntlRelativeTimeFormat,
-            "ListFormat" => runtime.CreateIntlListFormat,
-            "Segmenter" => runtime.CreateIntlSegmenter,
-            "DisplayNames" => runtime.CreateIntlDisplayNames,
+            "NumberFormat" => intl.CreateNumberFormat,
+            "DateTimeFormat" => intl.CreateDateTimeFormat,
+            "Collator" => intl.CreateCollator,
+            "PluralRules" => intl.CreatePluralRules,
+            "RelativeTimeFormat" => intl.CreateRelativeTimeFormat,
+            "ListFormat" => intl.CreateListFormat,
+            "Segmenter" => intl.CreateSegmenter,
+            "DisplayNames" => intl.CreateDisplayNames,
             _ => null
         };
 
