@@ -1613,7 +1613,10 @@ public partial class RuntimeEmitter
         if (_features.UsesVm)
         {
             runtime.RequireSharpTSRuntime("vm module");
-            EmitVmMethods(typeBuilder, runtime);
+            // Keep the shared module index at the orchestration boundary. Helpers register
+            // each declaration before emitting its body, preserving forward lookup timing.
+            EmitVmMethods(typeBuilder, runtime.RequireVm(), runtime.RequirePromise(),
+                (name, method) => runtime.RegisterBuiltInModuleMethod("vm", name, method));
         }
 
         if (_features.UsesSourceExecution)

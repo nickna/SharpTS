@@ -1319,6 +1319,115 @@ public class StandaloneDllTests
         finally { CleanupTempDir(tempDir); }
     }
 
+    public static IEnumerable<object[]> VmMetadataPrograms =>
+    [
+        new object[]
+        {
+            """
+            import * as vm from 'node:vm';
+            console.log(vm.runInNewContext('1+2'));
+            const ctx = vm.createContext({x: 1});
+            console.log(vm.isContext(ctx), vm.isContext({}));
+            vm.runInContext('x=42', ctx); console.log(ctx.x);
+            try {console.log(vm.runInThisContext('6*7'));} catch(e:any) {console.log('current-context-error');}
+            console.log(typeof vm.constants === 'object');
+            console.log(vm.constants.USE_MAIN_CONTEXT_DEFAULT_LOADER === vm.constants.USE_MAIN_CONTEXT_DEFAULT_LOADER);
+            """,
+            "3\ntrue false\n42\ncurrent-context-error\ntrue\ntrue\n", "main.ts", false
+        },
+        new object[]
+        {
+            """
+            import { Script, createContext } from 'vm';
+            const s = new Script('x+y');
+            console.log(s.runInNewContext({x:1,y:2}));
+            console.log(s.runInContext(createContext({x:10,y:20})));
+            console.log(new Script('40+2').runInThisContext());
+            """,
+            "3\n30\n42\n", "main.ts", false
+        },
+        new object[]
+        {
+            """
+            import { compileFunction, createContext } from 'vm';
+            const add = compileFunction('return a + b;', ['a','b']);
+            console.log(add(2,3), add(10,20));
+            const context = createContext({x:7});
+            const read = compileFunction('return x;', [], {parsingContext:context}); console.log(read());
+            """,
+            "5 30\n7\n", "main.ts", false
+        },
+        new object[]
+        {
+            """
+            import { SourceTextModule, SyntheticModule } from 'vm';
+            async function main() {
+            const syn = new SyntheticModule(['x','y'], function(this:any) {this.setExport('x',42);this.setExport('y','hello');});
+            const m = new SourceTextModule('import {x,y} from "syn"; export const r=x+1; export const s=y+"!";');
+            console.log(m.status); await m.link((spec:string)=>syn); console.log(m.status); await m.evaluate();
+            console.log(m.namespace.r, m.namespace.s, syn.namespace.x, syn.status);
+            } main();
+            """,
+            "unlinked\nlinked\n43 hello! 42 evaluated\n", "main.ts", false
+        },
+        new object[]
+        {
+            """
+            import { measureMemory } from 'vm';
+            async function run() {const result:any = await measureMemory();
+            console.log(typeof result.total.jsMemoryEstimate === 'number');
+            console.log(result.total.jsMemoryRange !== undefined && result.total.jsMemoryRange !== null);
+            } run();
+            """,
+            "true\ntrue\n", "main.ts", false
+        },
+        new object[]
+        {
+            """
+            const vm = require('node:vm');
+            console.log(typeof vm, typeof vm.runInNewContext, typeof vm.Script, typeof vm.constants);
+            try {console.log(vm.runInNewContext('4+5'));} catch(e) {console.log('cjs-call-error');}
+            """,
+            "object object object object\ncjs-call-error\n", "main.cjs", false
+        },
+        new object[]
+        {
+            """
+            import { runInNewContext } from 'vm';
+            async function run() {await Promise.resolve(0); console.log(runInNewContext('20+1'));} run();
+            function* items():Generator<any,void,any> {yield runInNewContext('6*7');}
+            console.log(items().next().value);
+            """,
+            "21\n42\n", "main.ts", false
+        },
+        new object[]
+        {
+            """
+            import { runInNewContext } from 'vm';
+            try {runInNewContext('1+1');} catch(e:any) {console.log(e.message);}
+            """,
+            "vm module is not supported in standalone compiled output (SharpTS runtime not present).\n", "main.ts", true
+        }
+    ];
+
+    [Theory]
+    [MemberData(nameof(VmMetadataPrograms))]
+    public void Isolated_VmMetadata_PreservesInterpreterBridgeAndDeployment(string source, string expected, string entryPoint, bool standalone)
+    {
+        using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        tempDir.CreateFile(entryPoint, source);
+        var dllPath = tempDir.GetPath("vm_metadata.dll");
+        var deployment = standalone ? " --standalone" : "";
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{tempDir.GetPath(entryPoint)}\" -o \"{dllPath}\" --verify{deployment}", tempDir.Path);
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(dllPath));
+        // VM is late-bound: normal output co-locates the interpreter; standalone output reports its absence.
+        Assert.Equal(!standalone, File.Exists(tempDir.GetPath("SharpTS.dll")));
+        Assert.Equal(expected, ExecuteCompiledDllIsolated(dllPath, timeoutMs: 15000,
+            verifyStandardError: error => Assert.Empty(error)));
+    }
+
     public static IEnumerable<object[]> ModuleLoadingMetadataPrograms =>
     [
         new object[]

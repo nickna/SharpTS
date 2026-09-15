@@ -1839,19 +1839,18 @@ public class EmittedRuntime
     /// <summary>Required scheduler and synchronization-context metadata, with optional hosted hooks.</summary>
     public EmittedEventLoopRuntime EventLoop { get; } = new();
 
-    // Vm module methods
-    public MethodBuilder VmRunInNewContext { get; set; } = null!;
-    public MethodBuilder VmRunInThisContext { get; set; } = null!;
-    public MethodBuilder VmRunInContext { get; set; } = null!;
-    public MethodBuilder VmCreateContext { get; set; } = null!;
-    public MethodBuilder VmIsContext { get; set; } = null!;
-    public MethodBuilder VmGetScriptConstructor { get; set; } = null!;
-    public MethodBuilder VmNewScript { get; set; } = null!;
-    public MethodBuilder VmCompileFunction { get; set; } = null!;
-    public MethodBuilder VmGetConstants { get; set; } = null!;
-    public MethodBuilder VmMeasureMemory { get; set; } = null!;
-    public MethodBuilder VmNewSourceTextModule { get; set; } = null!;
-    public MethodBuilder VmNewSyntheticModule { get; set; } = null!;
+    /// <summary>VM metadata, or null when the feature is omitted.</summary>
+    public EmittedVmRuntime? Vm { get; private set; }
+
+    internal void BeginVmEmission()
+    {
+        if (Vm is not null)
+            throw new InvalidOperationException("VM metadata emission has already started.");
+        Vm = new EmittedVmRuntime();
+    }
+
+    public EmittedVmRuntime RequireVm() => Vm
+        ?? throw new InvalidOperationException("VM runtime was not enabled for this compilation.");
 
     // sharpts:execution trusted-host bridge
     public MethodBuilder SourceExecutionRunJson { get; set; } = null!;

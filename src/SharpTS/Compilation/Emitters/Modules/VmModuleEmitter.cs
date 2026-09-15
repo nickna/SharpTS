@@ -42,14 +42,14 @@ public sealed class VmModuleEmitter : IBuiltInModuleEmitter
 
         if (propertyName == "Script")
         {
-            il.Emit(OpCodes.Call, ctx.Runtime!.VmGetScriptConstructor);
+            il.Emit(OpCodes.Call, ctx.Runtime!.RequireVm().GetScriptConstructor);
             emitter.SetStackUnknown();
             return true;
         }
 
         if (propertyName == "constants")
         {
-            il.Emit(OpCodes.Call, ctx.Runtime!.VmGetConstants);
+            il.Emit(OpCodes.Call, ctx.Runtime!.RequireVm().GetConstants);
             emitter.SetStackUnknown();
             return true;
         }
@@ -105,7 +105,7 @@ public sealed class VmModuleEmitter : IBuiltInModuleEmitter
             il.Emit(OpCodes.Ldnull);
         }
 
-        il.Emit(OpCodes.Call, ctx.Runtime!.VmRunInNewContext);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireVm().RunInNewContext);
         emitter.SetStackUnknown();
         return true;
     }
@@ -148,7 +148,7 @@ public sealed class VmModuleEmitter : IBuiltInModuleEmitter
             il.Emit(OpCodes.Ldnull);
         }
 
-        il.Emit(OpCodes.Call, ctx.Runtime!.VmRunInContext);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireVm().RunInContext);
         emitter.SetStackUnknown();
         return true;
     }
@@ -180,7 +180,7 @@ public sealed class VmModuleEmitter : IBuiltInModuleEmitter
             il.Emit(OpCodes.Ldnull);
         }
 
-        il.Emit(OpCodes.Call, ctx.Runtime!.VmRunInThisContext);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireVm().RunInThisContext);
         emitter.SetStackUnknown();
         return true;
     }
@@ -212,7 +212,7 @@ public sealed class VmModuleEmitter : IBuiltInModuleEmitter
             il.Emit(OpCodes.Ldnull);
         }
 
-        il.Emit(OpCodes.Call, ctx.Runtime!.VmCreateContext);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireVm().CreateContext);
         emitter.SetStackUnknown();
         return true;
     }
@@ -233,7 +233,7 @@ public sealed class VmModuleEmitter : IBuiltInModuleEmitter
             il.Emit(OpCodes.Ldnull);
         }
 
-        il.Emit(OpCodes.Call, ctx.Runtime!.VmMeasureMemory);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireVm().MeasureMemory);
         emitter.SetStackUnknown();
         return true;
     }
@@ -253,7 +253,7 @@ public sealed class VmModuleEmitter : IBuiltInModuleEmitter
             il.Emit(OpCodes.Ldnull);
         }
 
-        il.Emit(OpCodes.Call, ctx.Runtime!.VmIsContext);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireVm().IsContext);
         emitter.SetStackUnknown();
         return true;
     }
@@ -296,7 +296,7 @@ public sealed class VmModuleEmitter : IBuiltInModuleEmitter
             il.Emit(OpCodes.Ldnull);
         }
 
-        il.Emit(OpCodes.Call, ctx.Runtime!.VmCompileFunction);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireVm().CompileFunction);
         emitter.SetStackUnknown();
         return true;
     }
