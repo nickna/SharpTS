@@ -3540,6 +3540,174 @@ public class StandaloneDllTests
             verifyStandardError: error => Assert.Empty(error)));
     }
 
+    public static IEnumerable<object[]> ReflectMetadataPrograms =>
+    [
+        new object[]
+        {
+            "has",
+            "class Base {\n    baseMethod(): number { return 1; }\n}\nclass Child extends Base {\n    childProp: number = 42;\n}\nlet c: any = new Child();\nconsole.log(Reflect.has(c, \"childProp\"));\nconsole.log(Reflect.has(c, \"baseMethod\"));\nconsole.log(Reflect.has(c, \"missing\"));",
+            "true\ntrue\nfalse\n",
+            true,
+            ""
+        },
+        new object[]
+        {
+            "get",
+            "let obj: any = { name: \"hello\", value: 42 };\nconsole.log(Reflect.get(obj, \"name\"));\nconsole.log(Reflect.get(obj, \"value\"));",
+            "hello\n42\n",
+            true,
+            ""
+        },
+        new object[]
+        {
+            "set",
+            "let obj: any = {};\nlet result: boolean = Reflect.set(obj, \"x\", 42);\nconsole.log(result);\nconsole.log(obj.x);",
+            "true\n42\n",
+            true,
+            ""
+        },
+        new object[]
+        {
+            "delete_frozen",
+            "let obj: any = { x: 1 };\nObject.freeze(obj);\nconsole.log(Reflect.deleteProperty(obj, \"x\"));\nconsole.log(obj.x);",
+            "false\n1\n",
+            true,
+            ""
+        },
+        new object[]
+        {
+            "own_keys",
+            "let obj: any = { a: 1, b: 2, c: 3 };\nlet keys: any = Reflect.ownKeys(obj);\nconsole.log(keys.length);\nconsole.log(keys[0]);\nconsole.log(keys[1]);\nconsole.log(keys[2]);",
+            "3\na\nb\nc\n",
+            true,
+            ""
+        },
+        new object[]
+        {
+            "prototype_validation",
+            "const object: any = {};\nObject.preventExtensions(object);\nconsole.log(Reflect.setPrototypeOf(object, Object.prototype));\ntry {\n    Reflect.setPrototypeOf({}, 1 as any);\n} catch (error) {\n    console.log(error instanceof TypeError);\n}",
+            "true\ntrue\n",
+            true,
+            ""
+        },
+        new object[]
+        {
+            "define",
+            "let obj: any = {};\nlet result: boolean = Reflect.defineProperty(obj, \"x\", { value: 42, writable: true, enumerable: true, configurable: true });\nconsole.log(result);\nconsole.log(obj.x);",
+            "true\n42\n",
+            true,
+            ""
+        },
+        new object[]
+        {
+            "apply",
+            "function add(a: number, b: number): number {\n    return a + b;\n}\nlet result: any = Reflect.apply(add, undefined, [3, 4]);\nconsole.log(result);",
+            "7\n",
+            true,
+            ""
+        },
+        new object[]
+        {
+            "construct",
+            "class Point {\n    x: number;\n    y: number;\n    constructor(x: number, y: number) {\n        this.x = x;\n        this.y = y;\n    }\n}\nlet p: any = Reflect.construct(Point, [10, 20]);\nconsole.log(p.x);\nconsole.log(p.y);",
+            "10\n20\n",
+            true,
+            ""
+        },
+        new object[]
+        {
+            "aliases",
+            "const target: any = { x: 1 };\nconst get: any = Reflect.get;\nconst set: any = Reflect.set;\nconsole.log(typeof Reflect.apply);\nconsole.log(Reflect.apply.name);\nconsole.log(Reflect.apply.length);\nconsole.log(get(target, \"x\"));\nconsole.log(set(target, \"y\", 2));\nconsole.log(target.y);",
+            "function\napply\n3\n1\ntrue\n2\n",
+            true,
+            ""
+        },
+        new object[]
+        {
+            "receiver_descriptor",
+            "const target: any = {};\nconst receiver: any = {};\nObject.defineProperty(receiver, \"p\", { get() { return 1; } });\nconsole.log(Reflect.set(target, \"p\", 2, receiver));\nconsole.log(receiver.p);\nconsole.log(target.hasOwnProperty(\"p\"));",
+            "false\n1\nfalse\n",
+            true,
+            ""
+        },
+        new object[]
+        {
+            "metadata_decorator",
+            "@Reflect.metadata(\"role\", \"admin\")\nclass MyClass {}\n\nconsole.log(Reflect.getMetadata(\"role\", MyClass));",
+            "null\n",
+            true,
+            "--experimentalDecorators"
+        },
+        new object[]
+        {
+            "proxy_forwarding",
+            "const log: string[] = [];\nconst target: any = { x: 1 };\nconst proxy: any = new Proxy(target, {\n    set(t: any, key: string, value: any, receiver: any) {\n        log.push(\"set\");\n        if (receiver !== proxy) throw new Error(\"receiver was not proxy\");\n        return Reflect.set(t, key, value, receiver);\n    },\n    getOwnPropertyDescriptor(t: any, key: string) {\n        log.push(\"getOwnPropertyDescriptor\");\n        return Reflect.getOwnPropertyDescriptor(t, key);\n    },\n    defineProperty(t: any, key: string, descriptor: any) {\n        log.push(\"defineProperty\");\n        return Reflect.defineProperty(t, key, descriptor);\n    }\n});\n\nconsole.log(Object.getOwnPropertyDescriptor(proxy, \"x\").value);\nlog.length = 0;\nReflect.set(proxy, \"x\", 2, proxy);\nconsole.log(log.join(\",\"));\nconsole.log(target.x);",
+            "1\nset,getOwnPropertyDescriptor,defineProperty\n2\n",
+            false,
+            ""
+        },
+        new object[]
+        {
+            "metadata",
+            "const target:any={};console.log(Reflect.hasMetadata('a',target));Reflect.defineMetadata('a',1,target);Reflect.defineMetadata('b',2,target,'x');console.log(Reflect.getMetadata('a',target),Reflect.getMetadata('b',target,'x'),Reflect.getMetadataKeys(target).join(','));console.log(Reflect.deleteMetadata('a',target),Reflect.hasMetadata('a',target),Reflect.getMetadata('b',target,'x'));",
+            "false\n1 2 a\ntrue false 2\n",
+            true,
+            ""
+        },
+        new object[]
+        {
+            "proxy_only",
+            "const target:any={x:1};const p:any=new Proxy(target,{});p.x=4;console.log(p.x,target.x);",
+            "4 4\n",
+            false,
+            ""
+        },
+        new object[]
+        {
+            "mutable_namespace",
+            "const ns:any=Reflect;const original=ns.get;ns.get=function(){return 9;};const alias:any=Reflect.get;console.log(ns.get({},'x'),alias({},'x'));ns.get=original;console.log(ns.get({x:3},'x'));delete ns.get;const removed:any=Reflect.get;console.log(typeof removed);",
+            "9 9\n3\nundefined\n",
+            true,
+            ""
+        },
+        new object[]
+        {
+            "receiver",
+            "const target:any={get x(){return (this as any).marker;},set x(v:number){(this as any).marker=v;}};const receiver:any={marker:7};console.log(Reflect.get(target,'x',receiver));console.log(Reflect.set(target,'x',9,receiver),receiver.marker,target.marker);",
+            "7\ntrue 9 undefined\n",
+            true,
+            ""
+        },
+        new object[]
+        {
+            "minimal",
+            "const value=1;",
+            "",
+            true,
+            ""
+        },
+    ];
+
+    [Theory]
+    [MemberData(nameof(ReflectMetadataPrograms))]
+    public void Isolated_ReflectMetadata_PreservesOperationsReceiversMetadataAndProxyDeployment(
+        string name, string source, string expected, bool standalone, string options)
+    {
+        // The CLI decorator case preserves the baseline null output; direct
+        // metadata and native decorator closure behavior have separate coverage.
+        using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var sourcePath = tempDir.CreateFile("main.ts", source);
+        var dllPath = tempDir.GetPath($"reflect-metadata_{name}.dll");
+        var deployment = standalone ? " --standalone" : "";
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --noLib --compile \"{sourcePath}\" -o \"{dllPath}\" --verify {options}{deployment}", tempDir.Path);
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        if (standalone) Assert.DoesNotContain("SharpTS", GetAssemblyReferences(dllPath));
+        Assert.Equal(!standalone, File.Exists(tempDir.GetPath("SharpTS.dll")));
+        Assert.Equal(expected, ExecuteCompiledDllIsolated(dllPath, timeoutMs: 30000,
+            verifyStandardError: error => Assert.Empty(error)));
+    }
+
     public static IEnumerable<object[]> BroadcastChannelMetadataPrograms =>
     [
         new object[]

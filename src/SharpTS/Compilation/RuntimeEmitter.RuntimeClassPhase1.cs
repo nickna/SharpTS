@@ -71,9 +71,9 @@ public partial class RuntimeEmitter
         // Proxy [[Set]] needs the receiver-aware OrdinarySet helper while
         // SetPropertyStrict is being emitted, before Reflect's public methods
         // receive their bodies later in EmitRuntimeClass.
-        if (_features.UsesReflect || _features.UsesProxy)
+        if (runtime.Reflect.Assignment is not null)
         {
-            runtime.ReflectSet = typeBuilder.DefineMethod(
+            runtime.Reflect.RequireAssignment().Set = typeBuilder.DefineMethod(
                 "ReflectSet",
                 MethodAttributes.Public | MethodAttributes.Static,
                 _types.Boolean,
@@ -84,9 +84,9 @@ public partial class RuntimeEmitter
         // [[DefineOwnProperty]] operation rather than Object.defineProperty's
         // throwing wrapper. Reserve it here so ReflectSet can call it before
         // its body is emitted later in EmitRuntimeClass.
-        if (_features.UsesReflect || _features.UsesProxy)
+        if (runtime.Reflect.Assignment is not null)
         {
-            runtime.ReflectDefineProperty = typeBuilder.DefineMethod(
+            runtime.Reflect.RequireAssignment().DefineProperty = typeBuilder.DefineMethod(
                 "ReflectDefineProperty",
                 MethodAttributes.Public | MethodAttributes.Static,
                 _types.Boolean,

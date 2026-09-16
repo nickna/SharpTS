@@ -11,14 +11,12 @@ namespace SharpTS.Compilation;
 /// </summary>
 public partial class RuntimeEmitter
 {
-    // Static field on $Runtime for the metadata store
-    private FieldBuilder _reflectMetadataStore = null!;
-
-    private void EmitReflectMetadataMethods(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitReflectMetadataMethods(TypeBuilder typeBuilder, EmittedReflectMetadata metadata,
+        ConstructorInfo arrayConstructor)
     {
         // Static field: Dictionary<string, Dictionary<string, object?>> _metadataStore
         // Key is target.GetHashCode() + ":" + propertyKey (composite string key)
-        _reflectMetadataStore = typeBuilder.DefineField(
+        var metadataStore = typeBuilder.DefineField(
             "_metadataStore",
             _types.DictionaryStringObject,
             FieldAttributes.Private | FieldAttributes.Static);
@@ -26,11 +24,11 @@ public partial class RuntimeEmitter
         // Static constructor to initialize the store
         // (Or we init lazily in each method)
 
-        EmitReflectDefineMetadata(typeBuilder, runtime);
-        EmitReflectGetMetadata(typeBuilder, runtime);
-        EmitReflectHasMetadata(typeBuilder, runtime);
-        EmitReflectGetMetadataKeys(typeBuilder, runtime);
-        EmitReflectDeleteMetadata(typeBuilder, runtime);
+        EmitReflectDefineMetadata(typeBuilder, metadata, metadataStore);
+        EmitReflectGetMetadata(typeBuilder, metadata, metadataStore);
+        EmitReflectHasMetadata(typeBuilder, metadata, metadataStore);
+        EmitReflectGetMetadataKeys(typeBuilder, metadata, metadataStore, arrayConstructor);
+        EmitReflectDeleteMetadata(typeBuilder, metadata, metadataStore);
     }
 
     /// <summary>
@@ -39,7 +37,7 @@ public partial class RuntimeEmitter
     /// Leaves the inner Dictionary&lt;string, object?&gt; on stack.
     /// Also stores the composite key string in keyLocal for later use.
     /// </summary>
-    private void EmitGetOrCreateMetadataDict(ILGenerator il, LocalBuilder keyLocal)
+    private void EmitGetOrCreateMetadataDict(ILGenerator il, LocalBuilder keyLocal, FieldBuilder metadataStore)
     {
         var targetLocal = il.DeclareLocal(_types.Object);
         var propKeyLocal = il.DeclareLocal(_types.Object);
@@ -48,10 +46,10 @@ public partial class RuntimeEmitter
 
         // Ensure store is initialized
         var storeOkLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldsfld, _reflectMetadataStore);
+        il.Emit(OpCodes.Ldsfld, metadataStore);
         il.Emit(OpCodes.Brtrue, storeOkLabel);
         il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.DictionaryStringObject));
-        il.Emit(OpCodes.Stsfld, _reflectMetadataStore);
+        il.Emit(OpCodes.Stsfld, metadataStore);
         il.MarkLabel(storeOkLabel);
 
         // Compute composite key: RuntimeHelpers.GetHashCode(target) + ":" + (propKey?.ToString() ?? "")
@@ -83,7 +81,7 @@ public partial class RuntimeEmitter
         var innerLocal = il.DeclareLocal(_types.Object);
         var foundLabel = il.DefineLabel();
 
-        il.Emit(OpCodes.Ldsfld, _reflectMetadataStore);
+        il.Emit(OpCodes.Ldsfld, metadataStore);
         il.Emit(OpCodes.Ldloc, keyLocal);
         il.Emit(OpCodes.Ldloca, innerLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "TryGetValue",
@@ -93,7 +91,7 @@ public partial class RuntimeEmitter
         // Not found — create new inner dict
         il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.DictionaryStringObject));
         il.Emit(OpCodes.Stloc, innerLocal);
-        il.Emit(OpCodes.Ldsfld, _reflectMetadataStore);
+        il.Emit(OpCodes.Ldsfld, metadataStore);
         il.Emit(OpCodes.Ldloc, keyLocal);
         il.Emit(OpCodes.Ldloc, innerLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item", _types.String, _types.Object));
@@ -106,14 +104,15 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Reflect.defineMetadata(metadataKey, metadataValue, target[, propertyKey])
     /// </summary>
-    private void EmitReflectDefineMetadata(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitReflectDefineMetadata(TypeBuilder typeBuilder, EmittedReflectMetadata metadata,
+        FieldBuilder metadataStore)
     {
         var method = typeBuilder.DefineMethod(
             "ReflectDefineMetadata",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Void,
             [_types.Object, _types.Object, _types.Object, _types.Object]); // key, value, target, propKey
-        runtime.ReflectDefineMetadata = method;
+        metadata.Define = method;
 
         var il = method.GetILGenerator();
         var compositeKeyLocal = il.DeclareLocal(_types.String);
@@ -121,7 +120,7 @@ public partial class RuntimeEmitter
         // Get or create inner dict for (target, propertyKey)
         il.Emit(OpCodes.Ldarg_2); // target
         il.Emit(OpCodes.Ldarg_3); // propertyKey
-        EmitGetOrCreateMetadataDict(il, compositeKeyLocal);
+        EmitGetOrCreateMetadataDict(il, compositeKeyLocal, metadataStore);
 
         // innerDict[metadataKey.ToString()] = metadataValue
         il.Emit(OpCodes.Ldarg_0); // metadataKey
@@ -135,20 +134,21 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Reflect.getMetadata(metadataKey, target[, propertyKey]) → value or undefined
     /// </summary>
-    private void EmitReflectGetMetadata(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitReflectGetMetadata(TypeBuilder typeBuilder, EmittedReflectMetadata metadata,
+        FieldBuilder metadataStore)
     {
         var method = typeBuilder.DefineMethod(
             "ReflectGetMetadata",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.Object, _types.Object, _types.Object]); // key, target, propKey
-        runtime.ReflectGetMetadata = method;
+        metadata.Get = method;
 
         var il = method.GetILGenerator();
 
         // If store is null, return null
         var storeExistsLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldsfld, _reflectMetadataStore);
+        il.Emit(OpCodes.Ldsfld, metadataStore);
         il.Emit(OpCodes.Brtrue, storeExistsLabel);
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ret);
@@ -157,7 +157,7 @@ public partial class RuntimeEmitter
         var compositeKeyLocal = il.DeclareLocal(_types.String);
         il.Emit(OpCodes.Ldarg_1); // target
         il.Emit(OpCodes.Ldarg_2); // propertyKey
-        EmitGetOrCreateMetadataDict(il, compositeKeyLocal);
+        EmitGetOrCreateMetadataDict(il, compositeKeyLocal, metadataStore);
 
         // Try to get value from inner dict
         var resultLocal = il.DeclareLocal(_types.Object);
@@ -180,19 +180,20 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Reflect.hasMetadata(metadataKey, target[, propertyKey]) → bool
     /// </summary>
-    private void EmitReflectHasMetadata(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitReflectHasMetadata(TypeBuilder typeBuilder, EmittedReflectMetadata metadata,
+        FieldBuilder metadataStore)
     {
         var method = typeBuilder.DefineMethod(
             "ReflectHasMetadata",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.Object, _types.Object, _types.Object]); // key, target, propKey
-        runtime.ReflectHasMetadata = method;
+        metadata.Has = method;
 
         var il = method.GetILGenerator();
 
         var storeExistsLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldsfld, _reflectMetadataStore);
+        il.Emit(OpCodes.Ldsfld, metadataStore);
         il.Emit(OpCodes.Brtrue, storeExistsLabel);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Box, _types.Boolean);
@@ -202,7 +203,7 @@ public partial class RuntimeEmitter
         var compositeKeyLocal = il.DeclareLocal(_types.String);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldarg_2);
-        EmitGetOrCreateMetadataDict(il, compositeKeyLocal);
+        EmitGetOrCreateMetadataDict(il, compositeKeyLocal, metadataStore);
 
         // Check if inner dict contains key
         il.Emit(OpCodes.Ldarg_0);
@@ -215,30 +216,31 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Reflect.getMetadataKeys(target[, propertyKey]) → string[]
     /// </summary>
-    private void EmitReflectGetMetadataKeys(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitReflectGetMetadataKeys(TypeBuilder typeBuilder, EmittedReflectMetadata metadata,
+        FieldBuilder metadataStore, ConstructorInfo arrayConstructor)
     {
         var method = typeBuilder.DefineMethod(
             "ReflectGetMetadataKeys",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.Object, _types.Object]); // target, propKey
-        runtime.ReflectGetMetadataKeys = method;
+        metadata.GetKeys = method;
 
         var il = method.GetILGenerator();
 
         var storeExistsLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldsfld, _reflectMetadataStore);
+        il.Emit(OpCodes.Ldsfld, metadataStore);
         il.Emit(OpCodes.Brtrue, storeExistsLabel);
         // Return empty array
         il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, Type.EmptyTypes)!);
-        il.Emit(OpCodes.Newobj, runtime.ArrayStorage.Ctor);
+        il.Emit(OpCodes.Newobj, arrayConstructor);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(storeExistsLabel);
 
         var compositeKeyLocal = il.DeclareLocal(_types.String);
         il.Emit(OpCodes.Ldarg_0); // target
         il.Emit(OpCodes.Ldarg_1); // propertyKey
-        EmitGetOrCreateMetadataDict(il, compositeKeyLocal);
+        EmitGetOrCreateMetadataDict(il, compositeKeyLocal, metadataStore);
 
         // Get keys from inner dict, convert to List<object?>
         var innerDictLocal = il.DeclareLocal(_types.DictionaryStringObject);
@@ -282,26 +284,27 @@ public partial class RuntimeEmitter
 
         // Wrap in TSArray
         il.Emit(OpCodes.Ldloc, listLocal);
-        il.Emit(OpCodes.Newobj, runtime.ArrayStorage.Ctor);
+        il.Emit(OpCodes.Newobj, arrayConstructor);
         il.Emit(OpCodes.Ret);
     }
 
     /// <summary>
     /// Reflect.deleteMetadata(metadataKey, target[, propertyKey]) → bool
     /// </summary>
-    private void EmitReflectDeleteMetadata(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitReflectDeleteMetadata(TypeBuilder typeBuilder, EmittedReflectMetadata metadata,
+        FieldBuilder metadataStore)
     {
         var method = typeBuilder.DefineMethod(
             "ReflectDeleteMetadata",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.Object, _types.Object, _types.Object]); // key, target, propKey
-        runtime.ReflectDeleteMetadata = method;
+        metadata.Delete = method;
 
         var il = method.GetILGenerator();
 
         var storeExistsLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldsfld, _reflectMetadataStore);
+        il.Emit(OpCodes.Ldsfld, metadataStore);
         il.Emit(OpCodes.Brtrue, storeExistsLabel);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Box, _types.Boolean);
@@ -311,7 +314,7 @@ public partial class RuntimeEmitter
         var compositeKeyLocal = il.DeclareLocal(_types.String);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldarg_2);
-        EmitGetOrCreateMetadataDict(il, compositeKeyLocal);
+        EmitGetOrCreateMetadataDict(il, compositeKeyLocal, metadataStore);
 
         // Remove key from inner dict
         il.Emit(OpCodes.Ldarg_0);
@@ -325,7 +328,7 @@ public partial class RuntimeEmitter
     /// Emits $ReflectMetadataDecorator: a closure class that captures (key, value)
     /// and returns a decorator function (target) => { defineMetadata(key, value, target); return target; }.
     /// </summary>
-    private void EmitReflectMetadataDecoratorClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private void EmitReflectMetadataDecoratorClass(ModuleBuilder moduleBuilder, EmittedReflectMetadata metadata)
     {
         var typeBuilder = moduleBuilder.DefineType(
             "$ReflectMetadataDecorator",
@@ -342,7 +345,7 @@ public partial class RuntimeEmitter
             CallingConventions.Standard,
             [_types.Object, _types.Object]
         );
-        runtime.ReflectMetadataDecoratorCtor = ctor;
+        metadata.DecoratorConstructor = ctor;
         {
             var il = ctor.GetILGenerator();
             il.Emit(OpCodes.Ldarg_0);
@@ -366,7 +369,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.ObjectArray]
         );
-        runtime.ReflectMetadataDecoratorInvoke = invoke;
+        metadata.DecoratorInvoke = invoke;
         {
             var il = invoke.GetILGenerator();
 
@@ -379,7 +382,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldc_I4_0);
             il.Emit(OpCodes.Ldelem_Ref);         // target = args[0]
             il.Emit(OpCodes.Ldnull);             // propertyKey = null
-            il.Emit(OpCodes.Call, runtime.ReflectDefineMetadata);
+            il.Emit(OpCodes.Call, metadata.Define);
             // ReflectDefineMetadata returns void, nothing to pop
 
             // Return target

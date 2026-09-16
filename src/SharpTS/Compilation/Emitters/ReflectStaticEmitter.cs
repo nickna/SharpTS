@@ -70,7 +70,7 @@ public sealed class ReflectStaticEmitter : IStaticTypeEmitterStrategy
                 }
                 else
                     il.Emit(OpCodes.Ldnull);
-                il.Emit(OpCodes.Call, ctx.Runtime!.ReflectDeleteProperty);
+                il.Emit(OpCodes.Call, ctx.Runtime!.Reflect.RequireNamespace().DeleteProperty);
                 il.Emit(OpCodes.Box, typeof(bool));
                 return true;
             }
@@ -110,7 +110,7 @@ public sealed class ReflectStaticEmitter : IStaticTypeEmitterStrategy
                 {
                     il.Emit(OpCodes.Ldloc, targetLocal);
                 }
-                il.Emit(OpCodes.Call, ctx.Runtime.ReflectGet);
+                il.Emit(OpCodes.Call, ctx.Runtime.Reflect.Get);
                 return true;
             }
 
@@ -152,7 +152,7 @@ public sealed class ReflectStaticEmitter : IStaticTypeEmitterStrategy
                 else
                     il.Emit(OpCodes.Ldloc, targetLocal);
 
-                il.Emit(OpCodes.Call, ctx.Runtime!.ReflectSet);
+                il.Emit(OpCodes.Call, ctx.Runtime!.Reflect.RequireAssignment().Set);
                 il.Emit(OpCodes.Box, typeof(bool));
                 return true;
             }
@@ -191,7 +191,7 @@ public sealed class ReflectStaticEmitter : IStaticTypeEmitterStrategy
                 else
                     il.Emit(OpCodes.Ldnull);
 
-                il.Emit(OpCodes.Call, ctx.Runtime!.ReflectSetPrototypeOf);
+                il.Emit(OpCodes.Call, ctx.Runtime!.Reflect.RequireNamespace().SetPrototypeOf);
                 il.Emit(OpCodes.Box, typeof(bool));
                 return true;
             }
@@ -223,7 +223,7 @@ public sealed class ReflectStaticEmitter : IStaticTypeEmitterStrategy
                 else
                     il.Emit(OpCodes.Ldnull);
 
-                il.Emit(OpCodes.Call, ctx.Runtime!.ReflectPreventExtensions);
+                il.Emit(OpCodes.Call, ctx.Runtime!.Reflect.RequireNamespace().PreventExtensions);
                 il.Emit(OpCodes.Box, typeof(bool));
                 return true;
             }
@@ -278,7 +278,7 @@ public sealed class ReflectStaticEmitter : IStaticTypeEmitterStrategy
                 else
                     il.Emit(OpCodes.Ldnull);
 
-                il.Emit(OpCodes.Call, ctx.Runtime!.ReflectDefineProperty);
+                il.Emit(OpCodes.Call, ctx.Runtime!.Reflect.RequireAssignment().DefineProperty);
                 il.Emit(OpCodes.Box, typeof(bool));
                 return true;
             }
@@ -294,7 +294,7 @@ public sealed class ReflectStaticEmitter : IStaticTypeEmitterStrategy
                 else
                     il.Emit(OpCodes.Ldnull);
 
-                il.Emit(OpCodes.Call, ctx.Runtime!.ReflectOwnKeys);
+                il.Emit(OpCodes.Call, ctx.Runtime!.Reflect.RequireNamespace().OwnKeys);
                 return true;
             }
 
@@ -325,7 +325,7 @@ public sealed class ReflectStaticEmitter : IStaticTypeEmitterStrategy
                 else
                     il.Emit(OpCodes.Ldnull);
 
-                il.Emit(OpCodes.Call, ctx.Runtime!.ReflectApply);
+                il.Emit(OpCodes.Call, ctx.Runtime!.Reflect.RequireNamespace().Apply);
                 return true;
             }
 
@@ -357,7 +357,7 @@ public sealed class ReflectStaticEmitter : IStaticTypeEmitterStrategy
                 else
                     il.Emit(OpCodes.Ldnull);
 
-                il.Emit(OpCodes.Call, ctx.Runtime!.ReflectConstruct);
+                il.Emit(OpCodes.Call, ctx.Runtime!.Reflect.RequireNamespace().Construct);
                 return true;
             }
 
@@ -374,7 +374,7 @@ public sealed class ReflectStaticEmitter : IStaticTypeEmitterStrategy
                     else
                         il.Emit(OpCodes.Ldnull);
                 }
-                il.Emit(OpCodes.Call, ctx.Runtime!.ReflectDefineMetadata);
+                il.Emit(OpCodes.Call, ctx.Runtime!.Reflect.RequireMetadata().Define);
                 il.Emit(OpCodes.Ldnull); // defineMetadata returns void; push null for expression result
                 return true;
             }
@@ -392,7 +392,7 @@ public sealed class ReflectStaticEmitter : IStaticTypeEmitterStrategy
                     else
                         il.Emit(OpCodes.Ldnull);
                 }
-                il.Emit(OpCodes.Call, ctx.Runtime!.ReflectGetMetadata);
+                il.Emit(OpCodes.Call, ctx.Runtime!.Reflect.RequireMetadata().Get);
                 return true;
             }
 
@@ -409,7 +409,7 @@ public sealed class ReflectStaticEmitter : IStaticTypeEmitterStrategy
                     else
                         il.Emit(OpCodes.Ldnull);
                 }
-                il.Emit(OpCodes.Call, ctx.Runtime!.ReflectHasMetadata);
+                il.Emit(OpCodes.Call, ctx.Runtime!.Reflect.RequireMetadata().Has);
                 return true;
             }
 
@@ -426,7 +426,7 @@ public sealed class ReflectStaticEmitter : IStaticTypeEmitterStrategy
                     else
                         il.Emit(OpCodes.Ldnull);
                 }
-                il.Emit(OpCodes.Call, ctx.Runtime!.ReflectGetMetadataKeys);
+                il.Emit(OpCodes.Call, ctx.Runtime!.Reflect.RequireMetadata().GetKeys);
                 return true;
             }
 
@@ -443,7 +443,7 @@ public sealed class ReflectStaticEmitter : IStaticTypeEmitterStrategy
                     else
                         il.Emit(OpCodes.Ldnull);
                 }
-                il.Emit(OpCodes.Call, ctx.Runtime!.ReflectDeleteMetadata);
+                il.Emit(OpCodes.Call, ctx.Runtime!.Reflect.RequireMetadata().Delete);
                 return true;
             }
 
@@ -454,8 +454,7 @@ public sealed class ReflectStaticEmitter : IStaticTypeEmitterStrategy
                 // When invoked as @Reflect.metadata("role", "admin") class MyClass {},
                 // the decorator system calls: Reflect.metadata("role", "admin")(MyClass)
 
-                if (ctx.Runtime!.ReflectMetadataDecoratorCtor == null ||
-                    ctx.Runtime!.ReflectMetadataDecoratorInvoke == null)
+                if (ctx.Runtime!.Reflect.Metadata is null)
                     return false;
 
                 // Emit args
@@ -476,13 +475,13 @@ public sealed class ReflectStaticEmitter : IStaticTypeEmitterStrategy
                     il.Emit(OpCodes.Ldnull);
 
                 // new $ReflectMetadataDecorator(key, value)
-                il.Emit(OpCodes.Newobj, ctx.Runtime!.ReflectMetadataDecoratorCtor);
+                il.Emit(OpCodes.Newobj, ctx.Runtime!.Reflect.RequireMetadata().DecoratorConstructor);
 
                 // Store instance, then wrap in TSFunction: new $TSFunction(instance, Invoke)
                 var closureLocal = il.DeclareLocal(typeof(object));
                 il.Emit(OpCodes.Stloc, closureLocal);
                 il.Emit(OpCodes.Ldloc, closureLocal); // target for TSFunction ctor
-                ctx.Types.EmitLoadMethodInfoViaHandle(il, ctx.Runtime!.ReflectMetadataDecoratorInvoke);
+                ctx.Types.EmitLoadMethodInfoViaHandle(il, ctx.Runtime!.Reflect.RequireMetadata().DecoratorInvoke);
                 il.Emit(OpCodes.Newobj, ctx.Runtime!.TSFunctionCtor);
 
                 return true;
@@ -500,24 +499,23 @@ public sealed class ReflectStaticEmitter : IStaticTypeEmitterStrategy
     public bool TryEmitStaticPropertyGet(IEmitterContext emitter, string propertyName)
     {
         var runtime = emitter.Context.Runtime!;
-        if (!runtime.ReflectValueFormMethods.ContainsKey(propertyName)
-            || runtime.ReflectSingletonPopulateMethod is null
-            || runtime.ReflectSingletonField is null)
+        if (runtime.Reflect.Namespace is not { } reflectNamespace
+            || !reflectNamespace.ValueFormMethods.ContainsKey(propertyName))
             return false;
 
         var il = emitter.Context.IL;
-        il.Emit(OpCodes.Call, runtime.ReflectSingletonPopulateMethod);
-        il.Emit(OpCodes.Ldsfld, runtime.ReflectSingletonField);
+        il.Emit(OpCodes.Call, reflectNamespace.SingletonPopulateMethod);
+        il.Emit(OpCodes.Ldsfld, reflectNamespace.SingletonField);
         il.Emit(OpCodes.Ldstr, propertyName);
         il.Emit(OpCodes.Call, runtime.GetProperty);
         return true;
     }
 
     internal static IEnumerable<(string Name, MethodInfo? Backing, int Length)>
-        EnumerateValueFormMethods(EmittedRuntime runtime)
+        EnumerateValueFormMethods(EmittedReflectNamespace reflectNamespace)
     {
         MethodInfo? Lookup(string name) =>
-            runtime.ReflectValueFormMethods.TryGetValue(name, out var method)
+            reflectNamespace.ValueFormMethods.TryGetValue(name, out var method)
                 ? method
                 : null;
 

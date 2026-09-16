@@ -239,7 +239,7 @@ undefined, interface, and error-constructor dependencies. The six generated stor
 local construction inputs rather than state retained on `RuntimeEmitter`. Early strict-mode
 errors still wrap the guest TypeError in a CLR exception before `$Runtime.CreateException` exists.
 `EmitAll` validates and freezes the metadata after runtime finalization; this does not freeze guest
-objects or their original mutable field dictionaries. Generic object operations, Reflect, and shared
+objects or their original mutable field dictionaries. Generic object operations and shared
 interfaces remain separate residual work under #1599.
 
 Descriptor, prototype and extensibility storage uses required `EmittedDescriptorStorageRuntime`
@@ -252,8 +252,28 @@ The family helpers take the owner and exact function-key or undefined inputs whe
 Function wrappers still normalize to their MethodInfo when available; methodless wrappers keep
 their own identity. Four ConditionalWeakTable fields and closed BCL construction references stay
 local to emission, and each saved output owns fresh mutable descriptor/prototype/extensibility
-and symbol tables. Generic Object/Reflect operations, JSON helper lifetime, and the shared
+and symbol tables. Generic Object operations, JSON helper lifetime, and the shared
 auto-property emitter remain separate ownership and infrastructure work under #1599.
+
+Reflect uses required `EmittedReflectRuntime` for ordinary receiver-aware reads, plus three
+explicit optional capabilities. Assignment has three declarations selected by `UsesReflect || UsesProxy`;
+its Set and DefineProperty shells keep their phase-one positions and receive bodies later.
+Namespace has eight declarations and thirteen callable wrappers selected by `UsesReflect`.
+Metadata has seven declarations selected independently by `UsesReflectMetadata`; its five helpers
+precede the later decorator constructor and Invoke method. These nineteen handles retain their
+original builder kinds, emitted signatures and declaration order. Checked getters report missing
+declarations. Completion validates every selected capability and required wrapper before freezing
+any, so failed validation remains repairable across the entire family.
+
+Namespace registration is ordinal, rejects duplicate/unknown names and closes at completion; its
+public dictionary is a read-only view. Guest singleton fields and metadata dictionaries remain mutable.
+Value-form property reads still populate and then inspect the singleton so replacement/deletion stays
+observable. The lazy metadata-store field is a local construction input; repeated compilation keeps
+stores and decorator closures isolated in their own generated assemblies. Family operations receive
+their owner and exact immutable inputs, including actual optional Promise/DataView components.
+Shared Proxy bridges accept exact callback/unwrapping inputs and retain adapters for generic callers.
+The separate constructor classifier, generic Object/invocation/Proxy ownership, JSON helper lifetime,
+and shared BCL/singleton infrastructure remain residual work under #1599.
 
 Array operations use the required `ArrayOperations` component for 108 declarations: construction
 and static helpers, ordinary and specialized operations, prototype population, bound-method

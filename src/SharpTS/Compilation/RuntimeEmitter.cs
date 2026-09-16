@@ -40,6 +40,12 @@ public partial class RuntimeEmitter
         if (_emitHosted)
             _features.UsesPromise = true;
         var runtime = new EmittedRuntime();
+        if (features.UsesReflect || features.UsesProxy)
+            runtime.Reflect.BeginAssignmentEmission();
+        if (features.UsesReflect)
+            runtime.Reflect.BeginNamespaceEmission();
+        if (features.UsesReflectMetadata)
+            runtime.Reflect.BeginMetadataEmission();
         if (features.UsesBigInt)
             runtime.BigInt.BeginImplementationEmission();
         if (features.UsesCjsRequire)
@@ -618,8 +624,8 @@ public partial class RuntimeEmitter
         // Must come after EmitRuntimeClass (calls ReflectDefineMetadata)
         // External usage in ReflectStaticEmitter has a null-check fallback, so
         // skipping this is safe even if some path slips past the detector.
-        if (features.UsesReflectMetadata)
-            EmitReflectMetadataDecoratorClass(moduleBuilder, runtime);
+        if (runtime.Reflect.Metadata is not null)
+            EmitReflectMetadataDecoratorClass(moduleBuilder, runtime.Reflect.RequireMetadata());
 
         // Finalize $BoundArrayMethod with Invoke method (Phase 2)
         // Must come after EmitRuntimeClass (needs array methods defined)
@@ -721,6 +727,7 @@ public partial class RuntimeEmitter
         runtime.NumericCoercion.CompleteEmission();
         runtime.ObjectStorage.CompleteEmission();
         runtime.DescriptorStorage.CompleteEmission();
+        runtime.Reflect.CompleteEmission();
         runtime.BroadcastChannel?.CompleteEmission();
         runtime.EventEmitter.CompleteEmission();
         runtime.NodeStreams?.CompleteEmission();

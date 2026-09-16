@@ -157,9 +157,9 @@ public partial class RuntimeEmitter
             _types.DictionaryStringObject,
             FieldAttributes.Public | FieldAttributes.Static);
         runtime.JsonSingletonField = jsonSingletonField;
-        if (_features.UsesReflect)
+        if (runtime.Reflect.Namespace is not null)
         {
-            runtime.ReflectSingletonField = typeBuilder.DefineField(
+            runtime.Reflect.RequireNamespace().SingletonField = typeBuilder.DefineField(
                 "_reflectSingleton",
                 _types.DictionaryStringObject,
                 FieldAttributes.Public | FieldAttributes.Static);
@@ -523,8 +523,8 @@ public partial class RuntimeEmitter
         DefineArrayPrototypePopulateShell(typeBuilder, runtime.ArrayOperations);
         DefineMathSingletonPopulateShell(typeBuilder, runtime.Math);
         DefineJsonSingletonPopulateShell(typeBuilder, runtime);
-        if (_features.UsesReflect)
-            DefineReflectSingletonPopulateShell(typeBuilder, runtime);
+        if (runtime.Reflect.Namespace is not null)
+            DefineReflectSingletonPopulateShell(typeBuilder, runtime.Reflect.RequireNamespace());
         DefineStringPrototypePopulateShell(typeBuilder, runtime.Strings);
         DefineNumberPrototypePopulateShell(typeBuilder, runtime.Numbers);
         DefineBigIntPrototypePopulateShell(typeBuilder, runtime.BigInt);
@@ -599,10 +599,10 @@ public partial class RuntimeEmitter
         cctorIL.Emit(OpCodes.Stsfld, symbolPrototypeField);
         cctorIL.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.DictionaryStringObject));
         cctorIL.Emit(OpCodes.Stsfld, jsonSingletonField);
-        if (runtime.ReflectSingletonField is not null)
+        if (runtime.Reflect.Namespace is not null)
         {
             cctorIL.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.DictionaryStringObject));
-            cctorIL.Emit(OpCodes.Stsfld, runtime.ReflectSingletonField);
+            cctorIL.Emit(OpCodes.Stsfld, runtime.Reflect.RequireNamespace().SingletonField);
         }
         cctorIL.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.DictionaryStringObject));
         cctorIL.Emit(OpCodes.Stsfld, runtime.DatePrototypeField);
@@ -755,8 +755,8 @@ public partial class RuntimeEmitter
         // unconditionally is safe even when the program doesn't use JSON (#276).
         cctorIL.Emit(OpCodes.Call, runtime.Math.SingletonPopulateMethod);
         cctorIL.Emit(OpCodes.Call, runtime.JsonSingletonPopulateMethod);
-        if (runtime.ReflectSingletonPopulateMethod is not null)
-            cctorIL.Emit(OpCodes.Call, runtime.ReflectSingletonPopulateMethod);
+        if (runtime.Reflect.Namespace is not null)
+            cctorIL.Emit(OpCodes.Call, runtime.Reflect.RequireNamespace().SingletonPopulateMethod);
 
         cctorIL.Emit(OpCodes.Ret);
 
@@ -936,7 +936,7 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.Object, _types.Object, _types.ObjectArray]);
-        runtime.ReflectGet = typeBuilder.DefineMethod(
+        runtime.Reflect.Get = typeBuilder.DefineMethod(
             "ReflectGet",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
@@ -1175,22 +1175,159 @@ public partial class RuntimeEmitter
         // ReflectGet is also the receiver-preserving ordinary [[Get]] helper
         // used by prototype recursion in GetProperty, so its reserved method
         // must always receive a body even when guest code never names Reflect.
-        EmitReflectGet(typeBuilder, runtime);
-        if (_features.UsesReflect || _features.UsesProxy)
+        EmitReflectGet(
+            typeBuilder,
+            runtime.Reflect,
+            new ReflectGetInputs(
+                runtime.InvokeMethodUnwrapped,
+                runtime.ObjectGetOwnPropertyDescriptor,
+                runtime.HasOwnPropertyHelperMethod,
+                runtime.GetFunctionMethod,
+                runtime.InvokeMethodValue,
+                runtime.UndefinedInstance,
+                runtime.UndefinedType,
+                runtime.GetProperty
+            )
+        );
+        if (runtime.Reflect.Assignment is not null)
         {
-            EmitReflectSet(typeBuilder, runtime);
-            EmitReflectDefineProperty(typeBuilder, runtime);
+            EmitReflectSet(
+                typeBuilder,
+                runtime.Reflect.RequireAssignment(),
+                new ReflectSetInputs(
+                    new ProxySetCallInputs(
+                        runtime.Reflect.RequireAssignment().Set,
+                        runtime.ObjectGetOwnPropertyDescriptor,
+                        runtime.GetProperty,
+                        runtime.InvokeMethodUnwrapped
+                    ),
+                    runtime.ObjectGetOwnPropertyDescriptor,
+                    runtime.DescriptorStorage.IsFrozen,
+                    runtime.HasOwnPropertyHelperMethod,
+                    runtime.StringCoercion.ToJsString,
+                    runtime.ObjectGetPrototypeOf,
+                    runtime.Booleans.IsTruthy,
+                    runtime.InvokeMethodValue,
+                    runtime.UndefinedType,
+                    runtime.GetProperty,
+                    runtime.SetProperty
+                )
+            );
+            EmitReflectDefineProperty(
+                typeBuilder,
+                runtime.Reflect.RequireAssignment(),
+                new ReflectDefinePropertyInputs(
+                    runtime.InvokeMethodUnwrapped,
+                    runtime.ObjectGetOwnPropertyDescriptor,
+                    runtime.HasOwnPropertyHelperMethod,
+                    runtime.StringCoercion.ToJsString,
+                    runtime.ObjectDefineProperty,
+                    runtime.ObjectIsExtensible,
+                    runtime.GetProperty
+                )
+            );
         }
-        if (_features.UsesReflect)
+        if (runtime.Reflect.Namespace is not null)
         {
-            EmitReflectDeleteProperty(typeBuilder, runtime);
-            EmitReflectPreventExtensions(typeBuilder, runtime);
-            EmitReflectSetPrototypeOf(typeBuilder, runtime, prototypeStoreField, nonExtensibleObjectsField);
-            EmitReflectOwnKeys(typeBuilder, runtime);
-            EmitReflectApply(typeBuilder, runtime);
-            EmitReflectConstruct(typeBuilder, runtime);
-            EmitReflectValueFormMethods(typeBuilder, runtime);
-            EmitReflectSingletonPopulate(runtime);
+            EmitReflectDeleteProperty(
+                typeBuilder,
+                runtime.Reflect.RequireNamespace(),
+                new ReflectDeletePropertyInputs(
+                    runtime.InvokeMethodUnwrapped,
+                    runtime.ObjectGetOwnPropertyDescriptor,
+                    runtime.StringCoercion.ToJsString,
+                    runtime.ObjectIsExtensible,
+                    runtime.DeleteProperty,
+                    runtime.UndefinedType,
+                    runtime.GetProperty
+                )
+            );
+            EmitReflectPreventExtensions(
+                typeBuilder,
+                runtime.Reflect.RequireNamespace(),
+                new ReflectPreventExtensionsInputs(
+                    runtime.InvokeMethodUnwrapped,
+                    runtime.ObjectPreventExtensions,
+                    runtime.ObjectIsExtensible,
+                    runtime.GetProperty
+                )
+            );
+            EmitReflectSetPrototypeOf(
+                typeBuilder,
+                runtime.Reflect.RequireNamespace(),
+                prototypeStoreField,
+                nonExtensibleObjectsField,
+                new ReflectSetPrototypeOfInputs(
+                    runtime.CreateException,
+                    runtime.TSTypeErrorCtor,
+                    runtime.InvokeMethodUnwrapped,
+                    runtime.ObjectGetPrototypeOf,
+                    runtime.ObjectSetPrototypeOf,
+                    runtime.ObjectIsExtensible,
+                    runtime.UndefinedType,
+                    runtime.TSSymbolType,
+                    runtime.GetProperty
+                )
+            );
+            EmitReflectOwnKeys(
+                typeBuilder,
+                runtime.Reflect.RequireNamespace(),
+                new ReflectOwnKeysInputs(
+                    runtime.CreateException,
+                    runtime.TSTypeErrorCtor,
+                    new ProxyOwnKeysCallInputs(
+                        runtime.GetOrdinaryOwnPropertyKeys,
+                        runtime.CreateProxyOwnKeysList,
+                        runtime.ObjectGetOwnPropertyDescriptor,
+                        runtime.ObjectIsExtensible,
+                        runtime.IsSymbolMethod,
+                        runtime.GetProperty,
+                        runtime.InvokeMethodUnwrapped
+                    ),
+                    runtime.GetOrdinaryOwnPropertyKeys,
+                    runtime.GetOwnPropertySymbols,
+                    runtime.GetOwnPropertyNames,
+                    runtime.UndefinedType,
+                    runtime.TSSymbolType
+                )
+            );
+            EmitReflectApply(
+                typeBuilder,
+                runtime.Reflect.RequireNamespace(),
+                new ReflectApplyInputs(runtime.InvokeMethodValue)
+            );
+            EmitReflectConstruct(
+                typeBuilder,
+                runtime.Reflect.RequireNamespace(),
+                new ReflectConstructInputs(
+                    runtime.CreateException,
+                    runtime.TSTypeErrorCtor,
+                    runtime.InvokeMethodUnwrapped,
+                    runtime.CreateErrorFromTypeOrNull,
+                    runtime.NumericCoercion.ToNumber,
+                    runtime.IsConstructorMethod,
+                    runtime.NewOnFunction,
+                    runtime.UndefinedType,
+                    runtime.GetProperty,
+                    runtime.DataView,
+                    runtime.Promise
+                )
+            );
+            EmitReflectValueFormMethods(
+                typeBuilder,
+                runtime.Reflect.RequireNamespace(),
+                new ReflectValueFormMethodsInputs(
+                    runtime.Reflect.Get,
+                    runtime.Reflect.RequireAssignment().Set,
+                    runtime.Reflect.RequireAssignment().DefineProperty,
+                    runtime.ObjectGetOwnPropertyDescriptor,
+                    runtime.StringCoercion.ToJsString,
+                    runtime.ObjectGetPrototypeOf,
+                    runtime.ObjectIsExtensible,
+                    runtime.HasIn
+                )
+            );
+            EmitReflectSingletonPopulate(runtime.Reflect.RequireNamespace(), GetBuiltinSingletonInputs(runtime));
         }
         EmitIsArray(typeBuilder, runtime);
         EmitConcatArrays(typeBuilder, runtime);
@@ -1677,8 +1814,8 @@ public partial class RuntimeEmitter
         if (_features.UsesChildProcess)
             EmitChildProcessMethods(typeBuilder, runtime);
         // Reflect metadata API — gated on UsesReflectMetadata (orphan-flag fix).
-        if (_features.UsesReflectMetadata)
-            EmitReflectMetadataMethods(typeBuilder, runtime);
+        if (runtime.Reflect.Metadata is not null)
+            EmitReflectMetadataMethods(typeBuilder, runtime.Reflect.RequireMetadata(), runtime.ArrayStorage.Ctor);
         // fs.watch / fs.watchFile / fs.unwatchFile — gated on UsesFs.
         if (_features.UsesFs)
             EmitFsWatchFactories(typeBuilder, runtime);
