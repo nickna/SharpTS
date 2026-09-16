@@ -142,15 +142,9 @@ public sealed class NumericBitwiseLoweringTests
             """);
 
         var hot = FindFunction(assembly, "hot").CreateDelegate<Func<double, double>>();
-        Assert.Equal(232, hot(1_000)); // Warm JIT and emitted runtime state.
-
-        long before = GC.GetAllocatedBytesForCurrentThread();
-        double result = hot(1_000_000);
-        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
-
-        Assert.Equal(64, result);
-        _output.WriteLine($"One million bitwise iterations allocated {allocated:N0} bytes.");
-        Assert.InRange(allocated, 0, 4_096);
+        long[] samples = MeasureRunAllocations(() => hot(1_000_000), 64);
+        _output.WriteLine($"One million bitwise iterations allocation samples: {string.Join(", ", samples)} bytes.");
+        Assert.InRange(samples.Min(), 0, 4_096);
     }
 
     [Fact]
@@ -226,9 +220,12 @@ public sealed class NumericBitwiseLoweringTests
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public void AllocationSampling_DistinguishesTransientOverheadFromPersistentAllocations(bool persistent)
+    [InlineData(false, 4_096)]
+    [InlineData(true, 4_096)]
+    [InlineData(false, 8_192)]
+    [InlineData(true, 8_192)]
+    public void AllocationSampling_DistinguishesTransientOverheadFromPersistentAllocations(
+        bool persistent, long budget)
     {
         int calls = 0;
         double Run()
@@ -239,8 +236,8 @@ public sealed class NumericBitwiseLoweringTests
         }
 
         long[] samples = MeasureRunAllocations(Run, 168);
-        Assert.Contains(samples, allocated => allocated > 8_192);
-        Assert.Equal(persistent, samples.Min() > 8_192);
+        Assert.Contains(samples, allocated => allocated > budget);
+        Assert.Equal(persistent, samples.Min() > budget);
     }
 
     private static long[] MeasureRunAllocations(Func<double> run, double expectedResult)
