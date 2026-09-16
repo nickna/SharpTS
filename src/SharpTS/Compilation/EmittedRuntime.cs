@@ -1821,12 +1821,18 @@ public class EmittedRuntime
     public EmittedClusterRuntime RequireCluster() => Cluster
         ?? throw new InvalidOperationException("Cluster runtime was not enabled for this compilation.");
 
-    // ============================================================
-    // $BroadcastChannel — emitted WHATWG/Node BroadcastChannel
-    // Pure-IL: extends $EventEmitter, uses $EventLoop for delivery scheduling.
-    // ============================================================
-    public Type BroadcastChannelType { get; set; } = null!;
-    public ConstructorBuilder BroadcastChannelCtor { get; set; } = null!;
+    /// <summary>BroadcastChannel declarations, or null when the feature is omitted.</summary>
+    public EmittedBroadcastChannelRuntime? BroadcastChannel { get; private set; }
+
+    internal void BeginBroadcastChannelEmission()
+    {
+        if (BroadcastChannel is not null)
+            throw new InvalidOperationException("BroadcastChannel metadata emission has already started.");
+        BroadcastChannel = new EmittedBroadcastChannelRuntime();
+    }
+
+    public EmittedBroadcastChannelRuntime RequireBroadcastChannel() => BroadcastChannel
+        ?? throw new InvalidOperationException("BroadcastChannel runtime was not enabled for this compilation.");
 
     /// <summary>Required scheduler and synchronization-context metadata, with optional hosted hooks.</summary>
     public EmittedEventLoopRuntime EventLoop { get; } = new();

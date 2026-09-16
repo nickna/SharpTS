@@ -71,6 +71,8 @@ public partial class RuntimeEmitter
         }
         if (features.UsesCluster)
             runtime.BeginClusterEmission();
+        if (features.UsesBroadcastChannel)
+            runtime.BeginBroadcastChannelEmission();
         if (features.UsesTty)
             runtime.BeginTtyEmission();
         if (features.UsesPerf)
@@ -572,7 +574,9 @@ public partial class RuntimeEmitter
         // NOTE: Must come after EmitRuntimeClass so runtime.StructuredCloneClone is set.
         // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSBroadcastChannel
         if (features.UsesBroadcastChannel)
-            EmitBroadcastChannelClass(moduleBuilder, runtime);
+            EmitBroadcastChannelClass(moduleBuilder, runtime.RequireBroadcastChannel(), runtime.EventEmitter,
+                runtime.EventLoop, runtime.TSFunctionType, runtime.TSFunctionInvoke,
+                runtime.StructuredCloneClone, runtime.TSDataCloneErrorType);
 
         // Emit $MessagePort/$MessageChannel — same constraints as
         // $BroadcastChannel ($EventEmitter base, $EventLoop dispatch,
@@ -694,6 +698,7 @@ public partial class RuntimeEmitter
         runtime.Cluster?.CompleteEmission();
         runtime.MessageChannels.CompleteEmission();
         runtime.Workers.CompleteEmission();
+        runtime.BroadcastChannel?.CompleteEmission();
         runtime.EventEmitter.CompleteEmission();
         runtime.NodeStreams?.CompleteEmission();
         runtime.WebStreams?.CompleteEmission();

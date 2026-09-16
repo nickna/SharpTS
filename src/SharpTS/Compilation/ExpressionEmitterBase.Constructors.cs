@@ -222,7 +222,7 @@ public abstract partial class ExpressionEmitterBase
                 EmitExpression(arguments[0]);
                 EnsureBoxed();
                 IL.Emit(OpCodes.Call, Ctx.Runtime!.Stringify);
-                IL.Emit(OpCodes.Newobj, Ctx.Runtime!.BroadcastChannelCtor);
+                IL.Emit(OpCodes.Newobj, Ctx.Runtime!.RequireBroadcastChannel().Ctor);
                 SetStackUnknown();
                 return true;
 

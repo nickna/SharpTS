@@ -24,61 +24,39 @@ namespace SharpTS.Compilation;
 /// </remarks>
 public partial class RuntimeEmitter
 {
-    // Field/method handles cached during emission so subsequent helpers (e.g. constructor wiring
-    // in ExpressionEmitterBase) can reference them.
-    private TypeBuilder _broadcastChannelType = null!;
-    private FieldBuilder _broadcastChannelRegistryField = null!;
-    private FieldBuilder _broadcastChannelNextIdField = null!;
-    // Shared clone-failure sentinel (#1255), mirroring $MessagePort's _cloneError: enqueued
-    // in place of a per-subscriber clone when the posted value cannot be structured-cloned.
-    // Drain compares by reference and fires 'messageerror' instead of 'message'.
-    private FieldBuilder _broadcastChannelCloneErrorField = null!;
-    private FieldBuilder _broadcastChannelNameField = null!;
-    private FieldBuilder _broadcastChannelIdField = null!;
-    private FieldBuilder _broadcastChannelClosedField = null!;
-    private FieldBuilder _broadcastChannelRefedField = null!;
-    private FieldBuilder _broadcastChannelPendingField = null!;
-    // Property-style handlers (bc.onmessage = h / bc.onmessageerror = h).
-    private FieldBuilder _broadcastChannelOnMessageField = null!;
-    private FieldBuilder _broadcastChannelOnMessageErrorField = null!;
-    private ConstructorBuilder _broadcastChannelCtor = null!;
-    private MethodBuilder _broadcastChannelPostMessage = null!;
-    private MethodBuilder _broadcastChannelClose = null!;
-    private MethodBuilder _broadcastChannelRef = null!;
-    private MethodBuilder _broadcastChannelUnref = null!;
-    private MethodBuilder _broadcastChannelDrain = null!;
-
-    private Type _bcInnerDictType = null!;   // ConcurrentDictionary<long, object>
-    private Type _bcRegistryDictType = null!; // ConcurrentDictionary<string, object>
-
     /// <summary>
     /// Emits the $BroadcastChannel type. Must be called AFTER $EventEmitter is emitted
     /// (uses EventEmitter.Type as base) and AFTER $EventLoop is emitted (Schedule/Ref/Unref).
     /// </summary>
-    private void EmitBroadcastChannelClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private void EmitBroadcastChannelClass(
+        ModuleBuilder moduleBuilder,
+        EmittedBroadcastChannelRuntime channel,
+        EmittedEventEmitterRuntime eventEmitter,
+        EmittedEventLoopRuntime eventLoop,
+        Type functionType,
+        MethodInfo functionInvoke,
+        MethodInfo structuredClone,
+        Type dataCloneError)
     {
-        // Inner registry dictionaries are typed as ConcurrentDictionary<TKey, object> so the
-        // generic args are concrete CLR types — avoids TypeBuilder.GetConstructor gymnastics.
-        _bcInnerDictType = typeof(ConcurrentDictionary<long, object>);
-        _bcRegistryDictType = typeof(ConcurrentDictionary<string, object>);
-
+        var registryDictType = typeof(ConcurrentDictionary<string, object>);
+        // Concrete BCL dictionary types stay local to construction; generated declarations belong to channel.
         var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$BroadcastChannel",
             TypeAttributes.Public | TypeAttributes.Class | TypeAttributes.BeforeFieldInit,
-            runtime.EventEmitter.Type
+            eventEmitter.Type
         );
-        _broadcastChannelType = typeBuilder;
+        channel.Type = typeBuilder;
 
         // ---- Static fields ----
-        _broadcastChannelRegistryField = typeBuilder.DefineField(
-            "_registry", _bcRegistryDictType,
+        channel.Registry = typeBuilder.DefineField(
+            "_registry", registryDictType,
             FieldAttributes.Private | FieldAttributes.Static);
 
-        _broadcastChannelNextIdField = typeBuilder.DefineField(
+        channel.NextId = typeBuilder.DefineField(
             "_nextId", _types.Int64,
             FieldAttributes.Private | FieldAttributes.Static);
 
-        _broadcastChannelCloneErrorField = typeBuilder.DefineField(
+        channel.CloneError = typeBuilder.DefineField(
             "_cloneError", _types.Object,
             FieldAttributes.Private | FieldAttributes.Static | FieldAttributes.InitOnly);
 
@@ -94,114 +72,112 @@ public partial class RuntimeEmitter
             // _registry = new ConcurrentDictionary<string, object>(StringComparer.Ordinal)
             var ordinal = typeof(StringComparer).GetProperty("Ordinal")!.GetGetMethod()!;
             il.Emit(OpCodes.Call, ordinal);
-            var bcRegistryCtor = _types.GetConstructor(_bcRegistryDictType, [typeof(IEqualityComparer<string>)])!;
+            var bcRegistryCtor = _types.GetConstructor(registryDictType, [typeof(IEqualityComparer<string>)])!;
             il.Emit(OpCodes.Newobj, bcRegistryCtor);
-            il.Emit(OpCodes.Stsfld, _broadcastChannelRegistryField);
+            il.Emit(OpCodes.Stsfld, channel.Registry);
             // _cloneError = new object()
             il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.Object));
-            il.Emit(OpCodes.Stsfld, _broadcastChannelCloneErrorField);
+            il.Emit(OpCodes.Stsfld, channel.CloneError);
             il.Emit(OpCodes.Ret);
         }
 
         // ---- Instance fields ----
-        _broadcastChannelNameField = typeBuilder.DefineField("_name", _types.String, FieldAttributes.Private);
-        _broadcastChannelIdField = typeBuilder.DefineField("_id", _types.Int64, FieldAttributes.Private);
-        _broadcastChannelClosedField = typeBuilder.DefineField("_closed", _types.Boolean, FieldAttributes.Private);
-        _broadcastChannelRefedField = typeBuilder.DefineField("_refed", _types.Boolean, FieldAttributes.Private);
-        _broadcastChannelPendingField = typeBuilder.DefineField("_pending", _types.ConcurrentQueueOfObject, FieldAttributes.Private);
-        _broadcastChannelOnMessageField = typeBuilder.DefineField("_onmessage", _types.Object, FieldAttributes.Private);
-        _broadcastChannelOnMessageErrorField = typeBuilder.DefineField("_onmessageerror", _types.Object, FieldAttributes.Private);
+        channel.Name = typeBuilder.DefineField("_name", _types.String, FieldAttributes.Private);
+        channel.Id = typeBuilder.DefineField("_id", _types.Int64, FieldAttributes.Private);
+        channel.Closed = typeBuilder.DefineField("_closed", _types.Boolean, FieldAttributes.Private);
+        channel.Refed = typeBuilder.DefineField("_refed", _types.Boolean, FieldAttributes.Private);
+        channel.Pending = typeBuilder.DefineField("_pending", _types.ConcurrentQueueOfObject, FieldAttributes.Private);
+        channel.OnMessage = typeBuilder.DefineField("_onmessage", _types.Object, FieldAttributes.Private);
+        channel.OnMessageError = typeBuilder.DefineField("_onmessageerror", _types.Object, FieldAttributes.Private);
 
         // ---- Constructor: $BroadcastChannel(string name) ----
-        EmitBroadcastChannelConstructor(typeBuilder, runtime);
+        EmitBroadcastChannelConstructor(typeBuilder, channel, eventEmitter, eventLoop);
 
         // ---- Instance methods ----
-        EmitBroadcastChannelDrain(typeBuilder, runtime);
-        EmitBroadcastChannelPostMessage(typeBuilder, runtime);
-        EmitBroadcastChannelClose(typeBuilder, runtime);
-        EmitBroadcastChannelRef(typeBuilder, runtime);
-        EmitBroadcastChannelUnref(typeBuilder, runtime);
-        EmitBroadcastChannelGetName(typeBuilder, runtime);
-        EmitBroadcastChannelOnMessageAccessors(typeBuilder, runtime);
-        EmitBroadcastChannelSetMember(typeBuilder, runtime);
-        EmitBroadcastChannelAddEventListener(typeBuilder, runtime);
-        EmitBroadcastChannelRemoveEventListener(typeBuilder, runtime);
+        EmitBroadcastChannelDrain(typeBuilder, channel, eventEmitter, functionType, functionInvoke);
+        EmitBroadcastChannelPostMessage(typeBuilder, channel, eventLoop, structuredClone, dataCloneError);
+        EmitBroadcastChannelClose(typeBuilder, channel, eventEmitter, eventLoop);
+        EmitBroadcastChannelRef(typeBuilder, channel, eventLoop);
+        EmitBroadcastChannelUnref(typeBuilder, channel, eventLoop);
+        EmitBroadcastChannelGetName(typeBuilder, channel);
+        EmitBroadcastChannelOnMessageAccessors(typeBuilder, channel);
+        EmitBroadcastChannelSetMember(typeBuilder, channel);
+        EmitBroadcastChannelAddEventListener(typeBuilder, eventEmitter);
+        EmitBroadcastChannelRemoveEventListener(typeBuilder, eventEmitter);
 
         typeBuilder.CreateType();
-
-        // Publish handles for use by ExpressionEmitterBase.TryEmitBuiltInConstructor.
-        runtime.BroadcastChannelType = _broadcastChannelType;
-        runtime.BroadcastChannelCtor = _broadcastChannelCtor;
-        _ = _broadcastChannelPostMessage;
-        _ = _broadcastChannelClose;
-        _ = _broadcastChannelRef;
-        _ = _broadcastChannelUnref;
     }
 
-    private void EmitBroadcastChannelConstructor(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitBroadcastChannelConstructor(
+        TypeBuilder typeBuilder,
+        EmittedBroadcastChannelRuntime channel,
+        EmittedEventEmitterRuntime eventEmitter,
+        EmittedEventLoopRuntime eventLoop)
     {
+        var registryDictType = typeof(ConcurrentDictionary<string, object>);
+        var innerDictType = typeof(ConcurrentDictionary<long, object>);
         var ctor = typeBuilder.DefineConstructor(
             MethodAttributes.Public,
             CallingConventions.Standard,
             [_types.String]
         );
-        _broadcastChannelCtor = ctor;
+        channel.Ctor = ctor;
 
         var il = ctor.GetILGenerator();
 
         // base()  — $EventEmitter parameterless ctor
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.EventEmitter.Ctor);
+        il.Emit(OpCodes.Call, eventEmitter.Ctor);
 
         // _name = name
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Stfld, _broadcastChannelNameField);
+        il.Emit(OpCodes.Stfld, channel.Name);
 
         // _id = Interlocked.Increment(ref _nextId)
         var interlockedIncLong = typeof(Interlocked).GetMethod("Increment", [typeof(long).MakeByRefType()])!;
         var idLocal = il.DeclareLocal(_types.Int64);
-        il.Emit(OpCodes.Ldsflda, _broadcastChannelNextIdField);
+        il.Emit(OpCodes.Ldsflda, channel.NextId);
         il.Emit(OpCodes.Call, interlockedIncLong);
         il.Emit(OpCodes.Stloc, idLocal);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, idLocal);
-        il.Emit(OpCodes.Stfld, _broadcastChannelIdField);
+        il.Emit(OpCodes.Stfld, channel.Id);
 
         // _pending = new ConcurrentQueue<object>()
         il.Emit(OpCodes.Ldarg_0);
         var queueCtor = _types.GetConstructor(_types.ConcurrentQueueOfObject, Type.EmptyTypes)!;
         il.Emit(OpCodes.Newobj, queueCtor);
-        il.Emit(OpCodes.Stfld, _broadcastChannelPendingField);
+        il.Emit(OpCodes.Stfld, channel.Pending);
 
         // _refed = true
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Stfld, _broadcastChannelRefedField);
+        il.Emit(OpCodes.Stfld, channel.Refed);
 
         // bucket = (ConcurrentDictionary<long, object>)_registry.GetOrAdd(name, new ConcurrentDictionary<long, object>())
         // Use the simple value-overload of GetOrAdd. It allocates an unused dict on the cold path,
         // which is fine for the rare ctor case.
-        var bucketLocal = il.DeclareLocal(_bcInnerDictType);
-        il.Emit(OpCodes.Ldsfld, _broadcastChannelRegistryField);
+        var bucketLocal = il.DeclareLocal(innerDictType);
+        il.Emit(OpCodes.Ldsfld, channel.Registry);
         il.Emit(OpCodes.Ldarg_1);  // name
-        var innerCtor = _types.GetConstructor(_bcInnerDictType, Type.EmptyTypes)!;
+        var innerCtor = _types.GetConstructor(innerDictType, Type.EmptyTypes)!;
         il.Emit(OpCodes.Newobj, innerCtor);
-        var getOrAddValue = _types.GetMethod(_bcRegistryDictType, "GetOrAdd", [_types.String, _types.Object])!;
+        var getOrAddValue = _types.GetMethod(registryDictType, "GetOrAdd", [_types.String, _types.Object])!;
         il.Emit(OpCodes.Callvirt, getOrAddValue);
-        il.Emit(OpCodes.Castclass, _bcInnerDictType);
+        il.Emit(OpCodes.Castclass, innerDictType);
         il.Emit(OpCodes.Stloc, bucketLocal);
 
         // bucket[_id] = this
         il.Emit(OpCodes.Ldloc, bucketLocal);
         il.Emit(OpCodes.Ldloc, idLocal);
         il.Emit(OpCodes.Ldarg_0);
-        var setItem = _types.GetProperty(_bcInnerDictType, "Item")!.GetSetMethod()!;
+        var setItem = _types.GetProperty(innerDictType, "Item")!.GetSetMethod()!;
         il.Emit(OpCodes.Callvirt, setItem);
 
         // $EventLoop.GetInstance().Ref()
-        il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
-        il.Emit(OpCodes.Callvirt, runtime.EventLoop.Ref);
+        il.Emit(OpCodes.Call, eventLoop.GetInstance);
+        il.Emit(OpCodes.Callvirt, eventLoop.Ref);
 
         il.Emit(OpCodes.Ret);
     }
@@ -209,7 +185,12 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits Drain() — dequeues pending messages and emits them as 'message' events.
     /// </summary>
-    private void EmitBroadcastChannelDrain(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitBroadcastChannelDrain(
+        TypeBuilder typeBuilder,
+        EmittedBroadcastChannelRuntime channel,
+        EmittedEventEmitterRuntime eventEmitter,
+        Type functionType,
+        MethodInfo functionInvoke)
     {
         var method = typeBuilder.DefineMethod(
             "Drain",
@@ -217,7 +198,7 @@ public partial class RuntimeEmitter
             _types.Void,
             Type.EmptyTypes
         );
-        _broadcastChannelDrain = method;
+        channel.Drain = method;
 
         var il = method.GetILGenerator();
 
@@ -235,7 +216,7 @@ public partial class RuntimeEmitter
 
         // if (!_pending.TryDequeue(out msg)) return
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _broadcastChannelPendingField);
+        il.Emit(OpCodes.Ldfld, channel.Pending);
         il.Emit(OpCodes.Ldloca, msgLocal);
         var tryDequeue = _types.GetMethod(_types.ConcurrentQueueOfObject, "TryDequeue", [_types.Object.MakeByRefType()])!;
         il.Emit(OpCodes.Callvirt, tryDequeue);
@@ -246,7 +227,7 @@ public partial class RuntimeEmitter
         // $MessagePort. ReferenceEquals(msg, _cloneError).
         var notCloneErrorLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, msgLocal);
-        il.Emit(OpCodes.Ldsfld, _broadcastChannelCloneErrorField);
+        il.Emit(OpCodes.Ldsfld, channel.CloneError);
         il.Emit(OpCodes.Bne_Un, notCloneErrorLabel);
 
         il.Emit(OpCodes.Ldarg_0);
@@ -255,21 +236,21 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Newarr, _types.Object);
         il.Emit(OpCodes.Stloc, argsLocal);
         il.Emit(OpCodes.Ldloc, argsLocal);
-        il.Emit(OpCodes.Callvirt, runtime.EventEmitter.Emit);
+        il.Emit(OpCodes.Callvirt, eventEmitter.Emit);
         il.Emit(OpCodes.Pop);
 
         // Also invoke the property-style onmessageerror handler if set.
         var skipOnMessageErrorLabel = il.DefineLabel();
-        var onMsgErrLocal = il.DeclareLocal(runtime.TSFunctionType);
+        var onMsgErrLocal = il.DeclareLocal(functionType);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _broadcastChannelOnMessageErrorField);
-        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Ldfld, channel.OnMessageError);
+        il.Emit(OpCodes.Isinst, functionType);
         il.Emit(OpCodes.Stloc, onMsgErrLocal);
         il.Emit(OpCodes.Ldloc, onMsgErrLocal);
         il.Emit(OpCodes.Brfalse, skipOnMessageErrorLabel);
         il.Emit(OpCodes.Ldloc, onMsgErrLocal);
         il.Emit(OpCodes.Ldloc, argsLocal);
-        il.Emit(OpCodes.Callvirt, runtime.TSFunctionInvoke);
+        il.Emit(OpCodes.Callvirt, functionInvoke);
         il.Emit(OpCodes.Pop);
         il.MarkLabel(skipOnMessageErrorLabel);
 
@@ -310,22 +291,22 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "message");
         il.Emit(OpCodes.Ldloc, argsLocal);
-        il.Emit(OpCodes.Callvirt, runtime.EventEmitter.Emit);
+        il.Emit(OpCodes.Callvirt, eventEmitter.Emit);
         il.Emit(OpCodes.Pop);
 
         // Also invoke the property-style onmessage handler if set (WHATWG spec):
         // if (_onmessage is $TSFunction tf) tf.Invoke(args);
         var skipOnMessageLabel = il.DefineLabel();
-        var onMsgLocal = il.DeclareLocal(runtime.TSFunctionType);
+        var onMsgLocal = il.DeclareLocal(functionType);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _broadcastChannelOnMessageField);
-        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Ldfld, channel.OnMessage);
+        il.Emit(OpCodes.Isinst, functionType);
         il.Emit(OpCodes.Stloc, onMsgLocal);
         il.Emit(OpCodes.Ldloc, onMsgLocal);
         il.Emit(OpCodes.Brfalse, skipOnMessageLabel);
         il.Emit(OpCodes.Ldloc, onMsgLocal);
         il.Emit(OpCodes.Ldloc, argsLocal);
-        il.Emit(OpCodes.Callvirt, runtime.TSFunctionInvoke);
+        il.Emit(OpCodes.Callvirt, functionInvoke);
         il.Emit(OpCodes.Pop);
         il.MarkLabel(skipOnMessageLabel);
 
@@ -338,15 +319,21 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits PostMessage(object msg).
     /// </summary>
-    private void EmitBroadcastChannelPostMessage(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitBroadcastChannelPostMessage(
+        TypeBuilder typeBuilder,
+        EmittedBroadcastChannelRuntime channel,
+        EmittedEventLoopRuntime eventLoop,
+        MethodInfo structuredClone,
+        Type dataCloneError)
     {
+        var registryDictType = typeof(ConcurrentDictionary<string, object>);
+        var innerDictType = typeof(ConcurrentDictionary<long, object>);
         var method = typeBuilder.DefineMethod(
             "PostMessage",
             MethodAttributes.Public,
             _types.Void,
             [_types.Object]
         );
-        _broadcastChannelPostMessage = method;
 
         var il = method.GetILGenerator();
 
@@ -359,7 +346,7 @@ public partial class RuntimeEmitter
 
         // if (_closed) throw new InvalidOperationException("InvalidStateError: BroadcastChannel is closed")
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _broadcastChannelClosedField);
+        il.Emit(OpCodes.Ldfld, channel.Closed);
         il.Emit(OpCodes.Brfalse, notClosedLabel);
         il.Emit(OpCodes.Ldstr, "InvalidStateError: BroadcastChannel is closed");
         il.Emit(OpCodes.Newobj, typeof(InvalidOperationException).GetConstructor([_types.String])!);
@@ -368,23 +355,23 @@ public partial class RuntimeEmitter
 
         // bucket = _registry.TryGetValue(_name, out bucketObj) ? bucketObj : null
         var bucketObjLocal = il.DeclareLocal(_types.Object);
-        var bucketLocal = il.DeclareLocal(_bcInnerDictType);
-        il.Emit(OpCodes.Ldsfld, _broadcastChannelRegistryField);
+        var bucketLocal = il.DeclareLocal(innerDictType);
+        il.Emit(OpCodes.Ldsfld, channel.Registry);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _broadcastChannelNameField);
+        il.Emit(OpCodes.Ldfld, channel.Name);
         il.Emit(OpCodes.Ldloca, bucketObjLocal);
-        var registryTryGet = _types.GetMethod(_bcRegistryDictType, "TryGetValue", [_types.String, _types.Object.MakeByRefType()])!;
+        var registryTryGet = _types.GetMethod(registryDictType, "TryGetValue", [_types.String, _types.Object.MakeByRefType()])!;
         il.Emit(OpCodes.Callvirt, registryTryGet);
         il.Emit(OpCodes.Brfalse, exitLabel);
 
         il.Emit(OpCodes.Ldloc, bucketObjLocal);
-        il.Emit(OpCodes.Castclass, _bcInnerDictType);
+        il.Emit(OpCodes.Castclass, innerDictType);
         il.Emit(OpCodes.Stloc, bucketLocal);
 
         // Snapshot subscribers: object[] snapshot = bucket.Values.ToArray()? — ConcurrentDictionary<long,object>.Values
         // Use Linq's ToArray? Not available without linq. Manually iterate via GetEnumerator.
         // Simpler: copy to a List<object> via the Values collection, then iterate.
-        var valuesCollection = _types.GetProperty(_bcInnerDictType, "Values")!.GetGetMethod()!; // ICollection<object>
+        var valuesCollection = _types.GetProperty(innerDictType, "Values")!.GetGetMethod()!; // ICollection<object>
         var snapshotLocal = il.DeclareLocal(_types.ListOfObject);
         il.Emit(OpCodes.Ldloc, bucketLocal);
         il.Emit(OpCodes.Callvirt, valuesCollection);
@@ -394,7 +381,7 @@ public partial class RuntimeEmitter
 
         // for (int i = 0; i < snapshot.Count; i++) { var sub = snapshot[i]; if (sub == this) continue; deliver(sub, msg); }
         var indexLocal = il.DeclareLocal(_types.Int32);
-        var subLocal = il.DeclareLocal(_broadcastChannelType);
+        var subLocal = il.DeclareLocal(channel.Type);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Stloc, indexLocal);
 
@@ -410,7 +397,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, indexLocal);
         var listGetItem = _types.GetMethod(_types.ListOfObject, "get_Item", [_types.Int32])!;
         il.Emit(OpCodes.Callvirt, listGetItem);
-        il.Emit(OpCodes.Castclass, _broadcastChannelType);
+        il.Emit(OpCodes.Castclass, channel.Type);
         il.Emit(OpCodes.Stloc, subLocal);
 
         // if (sub == this) goto skipSelf
@@ -420,7 +407,7 @@ public partial class RuntimeEmitter
 
         // if (sub._closed) goto skipSelf
         il.Emit(OpCodes.Ldloc, subLocal);
-        il.Emit(OpCodes.Ldfld, _broadcastChannelClosedField);
+        il.Emit(OpCodes.Ldfld, channel.Closed);
         il.Emit(OpCodes.Brtrue, skipSelfLabel);
 
         // Deep-clone the message for this subscriber via $Runtime.StructuredClone(msg, null).
@@ -436,13 +423,13 @@ public partial class RuntimeEmitter
         il.BeginExceptionBlock();
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldnull);  // transferList
-        il.Emit(OpCodes.Call, runtime.StructuredCloneClone);
+        il.Emit(OpCodes.Call, structuredClone);
         il.Emit(OpCodes.Stloc, clonedLocal);
         il.Emit(OpCodes.Leave, haveClonedLabel);
 
-        il.BeginCatchBlock(runtime.TSDataCloneErrorType);
+        il.BeginCatchBlock(dataCloneError);
         il.Emit(OpCodes.Pop);
-        il.Emit(OpCodes.Ldsfld, _broadcastChannelCloneErrorField);
+        il.Emit(OpCodes.Ldsfld, channel.CloneError);
         il.Emit(OpCodes.Stloc, clonedLocal);
         il.EndExceptionBlock();
 
@@ -450,18 +437,18 @@ public partial class RuntimeEmitter
 
         // sub._pending.Enqueue(cloned)
         il.Emit(OpCodes.Ldloc, subLocal);
-        il.Emit(OpCodes.Ldfld, _broadcastChannelPendingField);
+        il.Emit(OpCodes.Ldfld, channel.Pending);
         il.Emit(OpCodes.Ldloc, clonedLocal);
         var enqueue = _types.GetMethod(_types.ConcurrentQueueOfObject, "Enqueue", [_types.Object])!;
         il.Emit(OpCodes.Callvirt, enqueue);
 
         // $EventLoop.GetInstance().Schedule(new Action(sub.Drain))
-        il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
+        il.Emit(OpCodes.Call, eventLoop.GetInstance);
         il.Emit(OpCodes.Ldloc, subLocal);
-        il.Emit(OpCodes.Ldftn, _broadcastChannelDrain);
+        il.Emit(OpCodes.Ldftn, channel.Drain);
         var actionCtor = typeof(Action).GetConstructor([_types.Object, typeof(IntPtr)])!;
         il.Emit(OpCodes.Newobj, actionCtor);
-        il.Emit(OpCodes.Callvirt, runtime.EventLoop.Schedule);
+        il.Emit(OpCodes.Callvirt, eventLoop.Schedule);
 
         il.MarkLabel(skipSelfLabel);
         il.Emit(OpCodes.Ldloc, indexLocal);
@@ -479,15 +466,20 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits Close().
     /// </summary>
-    private void EmitBroadcastChannelClose(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitBroadcastChannelClose(
+        TypeBuilder typeBuilder,
+        EmittedBroadcastChannelRuntime channel,
+        EmittedEventEmitterRuntime eventEmitter,
+        EmittedEventLoopRuntime eventLoop)
     {
+        var registryDictType = typeof(ConcurrentDictionary<string, object>);
+        var innerDictType = typeof(ConcurrentDictionary<long, object>);
         var method = typeBuilder.DefineMethod(
             "Close",
             MethodAttributes.Public,
             _types.Void,
             Type.EmptyTypes
         );
-        _broadcastChannelClose = method;
 
         var il = method.GetILGenerator();
         var alreadyClosedLabel = il.DefineLabel();
@@ -496,21 +488,21 @@ public partial class RuntimeEmitter
 
         // if (_closed) return
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _broadcastChannelClosedField);
+        il.Emit(OpCodes.Ldfld, channel.Closed);
         il.Emit(OpCodes.Brtrue, alreadyClosedLabel);
 
         // _closed = true
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Stfld, _broadcastChannelClosedField);
+        il.Emit(OpCodes.Stfld, channel.Closed);
 
         // if (_registry.TryGetValue(_name, out bucketObj)) bucket.TryRemove(_id, out _)
         var bucketObjLocal = il.DeclareLocal(_types.Object);
-        il.Emit(OpCodes.Ldsfld, _broadcastChannelRegistryField);
+        il.Emit(OpCodes.Ldsfld, channel.Registry);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _broadcastChannelNameField);
+        il.Emit(OpCodes.Ldfld, channel.Name);
         il.Emit(OpCodes.Ldloca, bucketObjLocal);
-        var registryTryGet = _types.GetMethod(_bcRegistryDictType, "TryGetValue", [_types.String, _types.Object.MakeByRefType()])!;
+        var registryTryGet = _types.GetMethod(registryDictType, "TryGetValue", [_types.String, _types.Object.MakeByRefType()])!;
         il.Emit(OpCodes.Callvirt, registryTryGet);
         il.Emit(OpCodes.Brfalse, noBucketLabel);
 
@@ -518,11 +510,11 @@ public partial class RuntimeEmitter
         // bucket.TryRemove(_id, out _)
         var dummyOutLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldloc, bucketObjLocal);
-        il.Emit(OpCodes.Castclass, _bcInnerDictType);
+        il.Emit(OpCodes.Castclass, innerDictType);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _broadcastChannelIdField);
+        il.Emit(OpCodes.Ldfld, channel.Id);
         il.Emit(OpCodes.Ldloca, dummyOutLocal);
-        var innerTryRemove = _types.GetMethod(_bcInnerDictType, "TryRemove", [_types.Int64, _types.Object.MakeByRefType()])!;
+        var innerTryRemove = _types.GetMethod(innerDictType, "TryRemove", [_types.Int64, _types.Object.MakeByRefType()])!;
         il.Emit(OpCodes.Callvirt, innerTryRemove);
         il.Emit(OpCodes.Pop);
 
@@ -530,13 +522,13 @@ public partial class RuntimeEmitter
 
         // if (_refed) { $EventLoop.GetInstance().Unref(); _refed = false; }
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _broadcastChannelRefedField);
+        il.Emit(OpCodes.Ldfld, channel.Refed);
         il.Emit(OpCodes.Brfalse, notRefedLabel);
-        il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
-        il.Emit(OpCodes.Callvirt, runtime.EventLoop.Unref);
+        il.Emit(OpCodes.Call, eventLoop.GetInstance);
+        il.Emit(OpCodes.Callvirt, eventLoop.Unref);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Stfld, _broadcastChannelRefedField);
+        il.Emit(OpCodes.Stfld, channel.Refed);
         il.MarkLabel(notRefedLabel);
 
         // this.Emit("close", new object[0])
@@ -544,7 +536,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, "close");
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Newarr, _types.Object);
-        il.Emit(OpCodes.Callvirt, runtime.EventEmitter.Emit);
+        il.Emit(OpCodes.Callvirt, eventEmitter.Emit);
         il.Emit(OpCodes.Pop);
 
         il.MarkLabel(alreadyClosedLabel);
@@ -554,7 +546,10 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits Ref().
     /// </summary>
-    private void EmitBroadcastChannelRef(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitBroadcastChannelRef(
+        TypeBuilder typeBuilder,
+        EmittedBroadcastChannelRuntime channel,
+        EmittedEventLoopRuntime eventLoop)
     {
         var method = typeBuilder.DefineMethod(
             "Ref",
@@ -562,22 +557,21 @@ public partial class RuntimeEmitter
             _types.Void,
             Type.EmptyTypes
         );
-        _broadcastChannelRef = method;
 
         var il = method.GetILGenerator();
         var alreadyRefedLabel = il.DefineLabel();
 
         // if (_refed) return
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _broadcastChannelRefedField);
+        il.Emit(OpCodes.Ldfld, channel.Refed);
         il.Emit(OpCodes.Brtrue, alreadyRefedLabel);
 
         // _refed = true; loop.Ref()
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Stfld, _broadcastChannelRefedField);
-        il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
-        il.Emit(OpCodes.Callvirt, runtime.EventLoop.Ref);
+        il.Emit(OpCodes.Stfld, channel.Refed);
+        il.Emit(OpCodes.Call, eventLoop.GetInstance);
+        il.Emit(OpCodes.Callvirt, eventLoop.Ref);
 
         il.MarkLabel(alreadyRefedLabel);
         il.Emit(OpCodes.Ret);
@@ -586,7 +580,10 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits Unref().
     /// </summary>
-    private void EmitBroadcastChannelUnref(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitBroadcastChannelUnref(
+        TypeBuilder typeBuilder,
+        EmittedBroadcastChannelRuntime channel,
+        EmittedEventLoopRuntime eventLoop)
     {
         var method = typeBuilder.DefineMethod(
             "Unref",
@@ -594,22 +591,21 @@ public partial class RuntimeEmitter
             _types.Void,
             Type.EmptyTypes
         );
-        _broadcastChannelUnref = method;
 
         var il = method.GetILGenerator();
         var notRefedLabel = il.DefineLabel();
 
         // if (!_refed) return
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _broadcastChannelRefedField);
+        il.Emit(OpCodes.Ldfld, channel.Refed);
         il.Emit(OpCodes.Brfalse, notRefedLabel);
 
         // _refed = false; loop.Unref()
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Stfld, _broadcastChannelRefedField);
-        il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
-        il.Emit(OpCodes.Callvirt, runtime.EventLoop.Unref);
+        il.Emit(OpCodes.Stfld, channel.Refed);
+        il.Emit(OpCodes.Call, eventLoop.GetInstance);
+        il.Emit(OpCodes.Callvirt, eventLoop.Unref);
 
         il.MarkLabel(notRefedLabel);
         il.Emit(OpCodes.Ret);
@@ -620,7 +616,7 @@ public partial class RuntimeEmitter
     /// The reflection PascalCase fallback in <c>GetFieldsProperty</c> resolves <c>bc.name</c>
     /// to <c>get_Name</c> via case-insensitive property lookup.
     /// </summary>
-    private void EmitBroadcastChannelGetName(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitBroadcastChannelGetName(TypeBuilder typeBuilder, EmittedBroadcastChannelRuntime channel)
     {
         var getter = typeBuilder.DefineMethod(
             "get_Name",
@@ -630,7 +626,7 @@ public partial class RuntimeEmitter
         );
         var il = getter.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _broadcastChannelNameField);
+        il.Emit(OpCodes.Ldfld, channel.Name);
         il.Emit(OpCodes.Ret);
 
         var prop = typeBuilder.DefineProperty("Name", PropertyAttributes.None, _types.String, Type.EmptyTypes);
@@ -642,10 +638,10 @@ public partial class RuntimeEmitter
     /// by private fields, so <c>bc.onmessage = h</c> maps through the PascalCase reflection
     /// fallback in <c>GetFieldsProperty</c> / <c>SetFieldsProperty</c>.
     /// </summary>
-    private void EmitBroadcastChannelOnMessageAccessors(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitBroadcastChannelOnMessageAccessors(TypeBuilder typeBuilder, EmittedBroadcastChannelRuntime channel)
     {
-        EmitSimpleObjectProperty(typeBuilder, "Onmessage", _broadcastChannelOnMessageField);
-        EmitSimpleObjectProperty(typeBuilder, "Onmessageerror", _broadcastChannelOnMessageErrorField);
+        EmitSimpleObjectProperty(typeBuilder, "Onmessage", channel.OnMessage);
+        EmitSimpleObjectProperty(typeBuilder, "Onmessageerror", channel.OnMessageError);
     }
 
     /// <summary>
@@ -691,7 +687,7 @@ public partial class RuntimeEmitter
     /// <c>bc.onmessage = h</c>. Without this, property-style writes have nowhere to land
     /// because SetFieldsProperty has no PascalCase-property reflection path (only GetFieldsProperty does).
     /// </summary>
-    private void EmitBroadcastChannelSetMember(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitBroadcastChannelSetMember(TypeBuilder typeBuilder, EmittedBroadcastChannelRuntime channel)
     {
         var method = typeBuilder.DefineMethod(
             "SetMember",
@@ -711,7 +707,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, tryOnMessageErrorLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Stfld, _broadcastChannelOnMessageField);
+        il.Emit(OpCodes.Stfld, channel.OnMessage);
         il.Emit(OpCodes.Ret);
 
         // if (name == "onmessageerror") { _onmessageerror = value; return; }
@@ -722,7 +718,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, endLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Stfld, _broadcastChannelOnMessageErrorField);
+        il.Emit(OpCodes.Stfld, channel.OnMessageError);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(endLabel);
@@ -734,7 +730,7 @@ public partial class RuntimeEmitter
     /// Lets <c>bc.addEventListener('message', h)</c> resolve via the reflection method-name
     /// fallback in compiled mode.
     /// </summary>
-    private void EmitBroadcastChannelAddEventListener(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitBroadcastChannelAddEventListener(TypeBuilder typeBuilder, EmittedEventEmitterRuntime eventEmitter)
     {
         var method = typeBuilder.DefineMethod(
             "AddEventListener",
@@ -748,7 +744,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Callvirt, runtime.EventEmitter.On);
+        il.Emit(OpCodes.Callvirt, eventEmitter.On);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Ret);
     }
@@ -756,7 +752,7 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits RemoveEventListener(string type, object listener) which delegates to base.Off.
     /// </summary>
-    private void EmitBroadcastChannelRemoveEventListener(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitBroadcastChannelRemoveEventListener(TypeBuilder typeBuilder, EmittedEventEmitterRuntime eventEmitter)
     {
         var method = typeBuilder.DefineMethod(
             "RemoveEventListener",
@@ -769,7 +765,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Callvirt, runtime.EventEmitter.Off);
+        il.Emit(OpCodes.Callvirt, eventEmitter.Off);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Ret);
     }
