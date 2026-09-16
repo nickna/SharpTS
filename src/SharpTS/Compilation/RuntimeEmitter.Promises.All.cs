@@ -310,7 +310,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, arrayResultLocal);
         il.Emit(OpCodes.Ldloc, resultIndexLocal);
         il.Emit(OpCodes.Ldelem_Ref);
-        il.Emit(OpCodes.Call, runtime.ConvertToNumber);
+        il.Emit(OpCodes.Call, runtime.NumericCoercion.ConvertToNumber);
         il.Emit(OpCodes.Callvirt, doubleListType.GetMethod("Add")!);
         il.Emit(OpCodes.Ldloc, resultIndexLocal);
         il.Emit(OpCodes.Ldc_I4_1);

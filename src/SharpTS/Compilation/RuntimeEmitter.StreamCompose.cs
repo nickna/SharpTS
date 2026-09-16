@@ -409,13 +409,13 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Call, runtime.Booleans.IsTruthy);
             il.Emit(OpCodes.Brfalse, byteLabel);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Call, runtime.ToNumber);
+            il.Emit(OpCodes.Call, runtime.NumericCoercion.ToNumber);
             il.Emit(OpCodes.Conv_I4);
             il.Emit(OpCodes.Stsfld, objField);
             il.Emit(OpCodes.Br, done);
             il.MarkLabel(byteLabel);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Call, runtime.ToNumber);
+            il.Emit(OpCodes.Call, runtime.NumericCoercion.ToNumber);
             il.Emit(OpCodes.Conv_I4);
             il.Emit(OpCodes.Stsfld, byteField);
             il.MarkLabel(done);

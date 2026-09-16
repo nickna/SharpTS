@@ -532,7 +532,7 @@ public partial class ILEmitter
                         {
                             if (local.LocalType.IsValueType)
                                 IL.Emit(OpCodes.Box, local.LocalType);
-                            IL.Emit(OpCodes.Call, _ctx.Runtime!.ConvertToNumber);
+                            IL.Emit(OpCodes.Call, _ctx.Runtime!.NumericCoercion.ConvertToNumber);
                         }
                     }
                     // General capture fields are object-typed, so a value-type local

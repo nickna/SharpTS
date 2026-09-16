@@ -435,7 +435,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "length");
         il.Emit(OpCodes.Call, runtime.GetProperty);
-        il.Emit(OpCodes.Call, runtime.ToNumber);
+        il.Emit(OpCodes.Call, runtime.NumericCoercion.ToNumber);
         il.Emit(OpCodes.Stloc, lengthNumber);
 
         var zeroLength = il.DefineLabel();

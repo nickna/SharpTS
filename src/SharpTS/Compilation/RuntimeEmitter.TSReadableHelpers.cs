@@ -283,7 +283,7 @@ public partial class RuntimeEmitter
 
         // n = (int)ToNumber(arg1)
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.ToNumber);
+        il.Emit(OpCodes.Call, runtime.NumericCoercion.ToNumber);
         il.Emit(OpCodes.Conv_I4);
         il.Emit(OpCodes.Stloc, nLocal);
 

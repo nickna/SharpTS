@@ -298,7 +298,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Isinst, runtime.UndefinedType);
             il.Emit(OpCodes.Brtrue, useDefault);
             il.Emit(OpCodes.Ldarg, arg);
-            il.Emit(OpCodes.Call, runtime.ToNumber);
+            il.Emit(OpCodes.Call, runtime.NumericCoercion.ToNumber);
             il.Emit(OpCodes.Call, _types.GetMethod(_types.Math, "Truncate", _types.Double));
             il.Emit(OpCodes.Conv_I4);
             il.Emit(OpCodes.Stloc, target);

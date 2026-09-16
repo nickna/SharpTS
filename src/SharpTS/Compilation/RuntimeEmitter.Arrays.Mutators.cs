@@ -5,6 +5,19 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
+    private readonly record struct IntegerOrInfinityInputs(
+        Type UndefinedType,
+        Type ObjectType,
+        Type HasFieldsType,
+        FieldInfo SymbolToPrimitive,
+        MethodInfo GetSymbolDictionary,
+        MethodInfo GetProperty,
+        MethodInfo InvokeMethodValue,
+        MethodInfo TypeOf,
+        MethodInfo BoxedIsOfType,
+        MethodInfo CreateException,
+        ConstructorInfo TypeErrorCtor);
+
     private void EmitRequireWritableArrayLength(
         ILGenerator il, EmittedRuntime runtime, LocalBuilder receiver)
     {
@@ -145,7 +158,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, receiver);
         il.Emit(OpCodes.Ldstr, "length");
         il.Emit(OpCodes.Call, runtime.GetProperty);
-        il.Emit(OpCodes.Call, runtime.ToNumber);
+        il.Emit(OpCodes.Call, runtime.NumericCoercion.ToNumber);
         il.Emit(OpCodes.Stloc, length);
 
         var useZero = il.DefineLabel();
@@ -198,7 +211,7 @@ public partial class RuntimeEmitter
     {
         var number = il.DeclareLocal(_types.Double);
         emitArgument();
-        il.Emit(OpCodes.Call, runtime.ToNumber);
+        il.Emit(OpCodes.Call, runtime.NumericCoercion.ToNumber);
         il.Emit(OpCodes.Stloc, number);
 
         var useZero = il.DefineLabel();
@@ -3129,7 +3142,8 @@ public partial class RuntimeEmitter
     /// Helper method implementing JavaScript's ToIntegerOrInfinity algorithm.
     /// Used by splice/toSpliced for argument coercion.
     /// </summary>
-    private void EmitToIntegerOrInfinityHelper(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitToIntegerOrInfinityHelper(TypeBuilder typeBuilder, EmittedNumericCoercionRuntime numeric,
+        IntegerOrInfinityInputs peers)
     {
         // ToIntegerOrInfinity(object? value, int defaultValue) -> int
         var method = typeBuilder.DefineMethod(
@@ -3138,7 +3152,7 @@ public partial class RuntimeEmitter
             _types.Int32,
             [_types.Object, _types.Int32]
         );
-        runtime.ToIntegerOrInfinity = method;
+        numeric.ToIntegerOrInfinity = method;
 
         var il = method.GetILGenerator();
 
@@ -3153,7 +3167,7 @@ public partial class RuntimeEmitter
         // (where it becomes +0), rather than being mistaken for an omitted
         // argument.
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, peers.UndefinedType);
         il.Emit(OpCodes.Brtrue, returnDefault);
 
         // ECMA-262 ToPrimitive("number"): for Dictionary/$TSObject receivers,
@@ -3177,10 +3191,10 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
         il.Emit(OpCodes.Brtrue, isObjectLikeLabel);
         il.Emit(OpCodes.Ldloc, coercedLocal);
-        il.Emit(OpCodes.Isinst, runtime.TSObjectType);
+        il.Emit(OpCodes.Isinst, peers.ObjectType);
         il.Emit(OpCodes.Brtrue, isObjectLikeLabel);
         il.Emit(OpCodes.Ldloc, coercedLocal);
-        il.Emit(OpCodes.Isinst, runtime.IHasFieldsInterface);
+        il.Emit(OpCodes.Isinst, peers.HasFieldsType);
         il.Emit(OpCodes.Brtrue, isObjectLikeLabel);
         // ECMA-262 ToNumber([1]) → ToPrimitive routes via valueOf/toString,
         // and Array.prototype.toString returns the comma-joined representation.
@@ -3201,12 +3215,12 @@ public partial class RuntimeEmitter
         var symbolMethodLocal = il.DeclareLocal(_types.Object);
         var noSymbolPrimitive = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, coercedLocal);
-        il.Emit(OpCodes.Call, runtime.GetSymbolDictMethod);
+        il.Emit(OpCodes.Call, peers.GetSymbolDictionary);
         il.Emit(OpCodes.Stloc, symbolDictLocal);
         il.Emit(OpCodes.Ldloc, symbolDictLocal);
         il.Emit(OpCodes.Brfalse, noSymbolPrimitive);
         il.Emit(OpCodes.Ldloc, symbolDictLocal);
-        il.Emit(OpCodes.Ldsfld, runtime.SymbolToPrimitive);
+        il.Emit(OpCodes.Ldsfld, peers.SymbolToPrimitive);
         il.Emit(OpCodes.Ldloca, symbolMethodLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryObjectObject, "TryGetValue"));
         il.Emit(OpCodes.Brtrue, notObjectLabel);
@@ -3216,7 +3230,7 @@ public partial class RuntimeEmitter
         {
             il.Emit(OpCodes.Ldloc, coercedLocal);
             il.Emit(OpCodes.Ldstr, primitiveTag);
-            il.Emit(OpCodes.Call, runtime.BoxedPrimitives.IsOfType);
+            il.Emit(OpCodes.Call, peers.BoxedIsOfType);
             il.Emit(OpCodes.Brtrue, notObjectLabel);
         }
 
@@ -3230,12 +3244,12 @@ public partial class RuntimeEmitter
             var fnLocal = il.DeclareLocal(_types.Object);
             il.Emit(OpCodes.Ldloc, coercedLocal);
             il.Emit(OpCodes.Ldstr, name);
-            il.Emit(OpCodes.Call, runtime.GetProperty);
+            il.Emit(OpCodes.Call, peers.GetProperty);
             il.Emit(OpCodes.Stloc, fnLocal);
             il.Emit(OpCodes.Ldloc, fnLocal);
             il.Emit(OpCodes.Brfalse, afterLabel);
             il.Emit(OpCodes.Ldloc, fnLocal);
-            il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+            il.Emit(OpCodes.Isinst, peers.UndefinedType);
             il.Emit(OpCodes.Brtrue, afterLabel);
 
             // OrdinaryToPrimitive ignores a present valueOf/toString property
@@ -3243,7 +3257,7 @@ public partial class RuntimeEmitter
             // for non-functions, so perform the spec callability check here
             // before dispatching. This mirrors the shared ToNumber helper.
             il.Emit(OpCodes.Ldloc, fnLocal);
-            il.Emit(OpCodes.Call, runtime.TypeOf);
+            il.Emit(OpCodes.Call, peers.TypeOf);
             il.Emit(OpCodes.Ldstr, "function");
             il.Emit(OpCodes.Call, _types.GetMethod(
                 _types.String, "op_Equality", _types.String, _types.String));
@@ -3253,17 +3267,17 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldloc, coercedLocal);
             il.Emit(OpCodes.Ldloc, fnLocal);
             il.Emit(OpCodes.Ldloc, primEmptyArgsLocal);
-            il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+            il.Emit(OpCodes.Call, peers.InvokeMethodValue);
             il.Emit(OpCodes.Stloc, invResultLocal);
 
             il.Emit(OpCodes.Ldloc, invResultLocal);
             il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
             il.Emit(OpCodes.Brtrue, afterLabel);
             il.Emit(OpCodes.Ldloc, invResultLocal);
-            il.Emit(OpCodes.Isinst, runtime.TSObjectType);
+            il.Emit(OpCodes.Isinst, peers.ObjectType);
             il.Emit(OpCodes.Brtrue, afterLabel);
             il.Emit(OpCodes.Ldloc, invResultLocal);
-            il.Emit(OpCodes.Isinst, runtime.IHasFieldsInterface);
+            il.Emit(OpCodes.Isinst, peers.HasFieldsType);
             il.Emit(OpCodes.Brtrue, afterLabel);
             il.Emit(OpCodes.Ldloc, invResultLocal);
             il.Emit(OpCodes.Stloc, coercedLocal);
@@ -3278,10 +3292,10 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
         il.Emit(OpCodes.Brtrue, stillObjectLabel);
         il.Emit(OpCodes.Ldloc, coercedLocal);
-        il.Emit(OpCodes.Isinst, runtime.TSObjectType);
+        il.Emit(OpCodes.Isinst, peers.ObjectType);
         il.Emit(OpCodes.Brtrue, stillObjectLabel);
         il.Emit(OpCodes.Ldloc, coercedLocal);
-        il.Emit(OpCodes.Isinst, runtime.IHasFieldsInterface);
+        il.Emit(OpCodes.Isinst, peers.HasFieldsType);
         il.Emit(OpCodes.Brtrue, stillObjectLabel);
         il.Emit(OpCodes.Ldloc, coercedLocal);
         il.Emit(OpCodes.Isinst, _types.ListOfObject);
@@ -3308,13 +3322,13 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
         il.Emit(OpCodes.Brtrue, stillObjThrowLabel);
         il.Emit(OpCodes.Ldloc, coercedLocal);
-        il.Emit(OpCodes.Isinst, runtime.TSObjectType);
+        il.Emit(OpCodes.Isinst, peers.ObjectType);
         il.Emit(OpCodes.Brtrue, stillObjThrowLabel);
         il.Emit(OpCodes.Ldloc, coercedLocal);
-        il.Emit(OpCodes.Isinst, runtime.IHasFieldsInterface);
+        il.Emit(OpCodes.Isinst, peers.HasFieldsType);
         il.Emit(OpCodes.Brfalse, afterToPrimCheck);
         il.MarkLabel(stillObjThrowLabel);
-        GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot convert object to primitive value");
+        GuestErrorEmitter.ThrowError(il, peers.CreateException, peers.TypeErrorCtor, "Cannot convert object to primitive value");
         il.MarkLabel(afterToPrimCheck);
 
         il.MarkLabel(notObjectLabel);
@@ -3322,7 +3336,7 @@ public partial class RuntimeEmitter
         // Now coercedLocal is hopefully a primitive — coerce via ToNumber.
         var doubleLocal = il.DeclareLocal(_types.Double);
         il.Emit(OpCodes.Ldloc, coercedLocal);
-        il.Emit(OpCodes.Call, runtime.ToNumber);
+        il.Emit(OpCodes.Call, numeric.ToNumber);
         il.Emit(OpCodes.Stloc, doubleLocal);
 
         // if (double.IsNaN(d)) return 0
@@ -3407,7 +3421,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldelem_Ref);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Call, runtime.ToIntegerOrInfinity);
+        il.Emit(OpCodes.Call, runtime.NumericCoercion.ToIntegerOrInfinity);
         il.Emit(OpCodes.Stloc, relStartLocal);
 
         // actualStart = relStart < 0 ? Max(len + relStart, 0) : Min(relStart, len)
@@ -3459,7 +3473,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Ldelem_Ref);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Call, runtime.ToIntegerOrInfinity);
+        il.Emit(OpCodes.Call, runtime.NumericCoercion.ToIntegerOrInfinity);
         il.Emit(OpCodes.Stloc, dcLocal);
 
         // Min(dc, len - actualStart)
@@ -3622,7 +3636,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Ldelem_Ref);
-        il.Emit(OpCodes.Call, runtime.ToNumber);
+        il.Emit(OpCodes.Call, runtime.NumericCoercion.ToNumber);
         il.Emit(OpCodes.Stloc, deleteNumber);
         // NaN becomes +0; Math.Max below handles negative values/infinity.
         il.Emit(OpCodes.Ldloc, deleteNumber);
@@ -4008,7 +4022,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldelem_Ref);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Call, runtime.ToIntegerOrInfinity);
+        il.Emit(OpCodes.Call, runtime.NumericCoercion.ToIntegerOrInfinity);
         il.Emit(OpCodes.Stloc, indexLocal);
 
         // actualIndex = index < 0 ? len + index : index
@@ -4144,7 +4158,7 @@ public partial class RuntimeEmitter
         // index = ToIntegerOrInfinity(indexArg, 0)
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Call, runtime.ToIntegerOrInfinity);
+        il.Emit(OpCodes.Call, runtime.NumericCoercion.ToIntegerOrInfinity);
         il.Emit(OpCodes.Stloc, indexLocal);
 
         // actualIndex = index < 0 ? len + index : index
@@ -4266,7 +4280,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Ldelem_Ref);
-        il.Emit(OpCodes.Call, runtime.ToNumber);
+        il.Emit(OpCodes.Call, runtime.NumericCoercion.ToNumber);
         il.Emit(OpCodes.Stloc, skipNumber);
         il.Emit(OpCodes.Ldloc, skipNumber);
         il.Emit(OpCodes.Ldloc, skipNumber);
@@ -4456,7 +4470,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldelem_Ref);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Call, runtime.ToIntegerOrInfinity);
+        il.Emit(OpCodes.Call, runtime.NumericCoercion.ToIntegerOrInfinity);
         il.Emit(OpCodes.Stloc, relStartLocal);
 
         // actualStart = relStart < 0 ? Max(len + relStart, 0) : Min(relStart, len)
@@ -4508,7 +4522,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Ldelem_Ref);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Call, runtime.ToIntegerOrInfinity);
+        il.Emit(OpCodes.Call, runtime.NumericCoercion.ToIntegerOrInfinity);
         il.Emit(OpCodes.Stloc, scLocal);
 
         // Min(sc, len - actualStart)
@@ -4689,7 +4703,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Ldelem_Ref);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Call, runtime.ToIntegerOrInfinity);
+        il.Emit(OpCodes.Call, runtime.NumericCoercion.ToIntegerOrInfinity);
         il.Emit(OpCodes.Stloc, relStartLocal);
         il.MarkLabel(startParseDone);
 
@@ -4734,7 +4748,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_2);
         il.Emit(OpCodes.Ldelem_Ref);
         il.Emit(OpCodes.Ldloc, lenLocal);
-        il.Emit(OpCodes.Call, runtime.ToIntegerOrInfinity);
+        il.Emit(OpCodes.Call, runtime.NumericCoercion.ToIntegerOrInfinity);
         il.Emit(OpCodes.Stloc, relEndLocal);
         il.MarkLabel(endParseDone);
 
@@ -4956,7 +4970,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldelem_Ref);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Call, runtime.ToIntegerOrInfinity);
+        il.Emit(OpCodes.Call, runtime.NumericCoercion.ToIntegerOrInfinity);
         il.Emit(OpCodes.Stloc, relTargetLocal);
         il.MarkLabel(targetParseDone);
 
@@ -5001,7 +5015,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Ldelem_Ref);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Call, runtime.ToIntegerOrInfinity);
+        il.Emit(OpCodes.Call, runtime.NumericCoercion.ToIntegerOrInfinity);
         il.Emit(OpCodes.Stloc, relStartLocal);
         il.MarkLabel(startParseDone);
 
@@ -5046,7 +5060,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_2);
         il.Emit(OpCodes.Ldelem_Ref);
         il.Emit(OpCodes.Ldloc, lenLocal);
-        il.Emit(OpCodes.Call, runtime.ToIntegerOrInfinity);
+        il.Emit(OpCodes.Call, runtime.NumericCoercion.ToIntegerOrInfinity);
         il.Emit(OpCodes.Stloc, relEndLocal);
         il.MarkLabel(endParseDone);
 

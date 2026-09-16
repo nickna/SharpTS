@@ -3709,7 +3709,7 @@ public partial class RuntimeEmitter
         // _status = (double)status
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, statusLocal);
-        il.Emit(OpCodes.Call, runtime.ToNumber);
+        il.Emit(OpCodes.Call, runtime.NumericCoercion.ToNumber);
         il.Emit(OpCodes.Stfld, fetch.ResponseStatusField);
         // _ok = status >= 200 && status <= 299
         il.Emit(OpCodes.Ldarg_0);
@@ -4000,7 +4000,7 @@ public partial class RuntimeEmitter
         // status = ToNumber(arg1)
         il.Emit(OpCodes.Ldloc, rLocal);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.ToNumber);
+        il.Emit(OpCodes.Call, runtime.NumericCoercion.ToNumber);
         il.Emit(OpCodes.Stfld, fetch.ResponseStatusField);
         il.Emit(OpCodes.Br, statusDone);
 

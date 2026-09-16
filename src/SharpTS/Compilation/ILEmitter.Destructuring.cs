@@ -183,7 +183,7 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Ldloc, binding.ArrayLocal);
         IL.Emit(OpCodes.Ldc_I8, (long)intIndex);
         IL.Emit(OpCodes.Callvirt, _ctx.Runtime.ArrayStorage.GetLong);
-        IL.Emit(OpCodes.Call, _ctx.Runtime.ConvertToNumber);
+        IL.Emit(OpCodes.Call, _ctx.Runtime.NumericCoercion.ConvertToNumber);
         IL.Emit(OpCodes.Stloc, result);
         IL.Emit(OpCodes.Br, end);
 
@@ -192,7 +192,7 @@ public partial class ILEmitter
         EmitDoubleConstant(index);
         IL.Emit(OpCodes.Box, _ctx.Types.Double);
         IL.Emit(OpCodes.Call, _ctx.Runtime.GetIndex);
-        IL.Emit(OpCodes.Call, _ctx.Runtime.ConvertToNumber);
+        IL.Emit(OpCodes.Call, _ctx.Runtime.NumericCoercion.ConvertToNumber);
         IL.Emit(OpCodes.Stloc, result);
 
         IL.MarkLabel(end);
@@ -291,7 +291,7 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Ldloc, binding.ObjectLocal);
         IL.Emit(OpCodes.Ldstr, expression.Name.Lexeme);
         IL.Emit(OpCodes.Call, _ctx.Runtime!.GetProperty);
-        IL.Emit(OpCodes.Call, _ctx.Runtime.ConvertToNumber);
+        IL.Emit(OpCodes.Call, _ctx.Runtime.NumericCoercion.ConvertToNumber);
         IL.Emit(OpCodes.Stloc, result);
         IL.MarkLabel(end);
         IL.Emit(OpCodes.Ldloc, result);

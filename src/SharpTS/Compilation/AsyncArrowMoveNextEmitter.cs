@@ -82,7 +82,7 @@ public partial class AsyncArrowMoveNextEmitter : AsyncFunctionMoveNextEmitter, I
 
         _il.MarkLabel(skipUnbox);
         // Not a double - use runtime ToNumber conversion
-        _il.Emit(OpCodes.Call, _ctx!.Runtime!.ToNumber);
+        _il.Emit(OpCodes.Call, _ctx!.Runtime!.NumericCoercion.ToNumber);
 
         _il.MarkLabel(endLabel);
     }

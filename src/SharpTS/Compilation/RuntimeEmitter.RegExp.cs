@@ -1457,7 +1457,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, regexpLocal);
         il.Emit(OpCodes.Ldstr, "lastIndex");
         il.Emit(OpCodes.Call, runtime.GetProperty);
-        il.Emit(OpCodes.Call, runtime.JsToInt32);
+        il.Emit(OpCodes.Call, runtime.NumericCoercion.JsToInt32);
         il.Emit(OpCodes.Stloc, startIndexLocal);
         il.Emit(OpCodes.Ldloc, startIndexLocal);
         il.Emit(OpCodes.Ldc_I4_0);
@@ -2361,7 +2361,7 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(coerceLimitLabel);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Call, runtime.ToNumber);
+        il.Emit(OpCodes.Call, runtime.NumericCoercion.ToNumber);
         il.Emit(OpCodes.Stloc, numberLocal);
         il.Emit(OpCodes.Ldloc, numberLocal);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Double, "IsFinite", [_types.Double])!);

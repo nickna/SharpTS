@@ -835,7 +835,7 @@ public sealed class StringEmitter : ITypeEmitterStrategy
             emitter.EmitBoxIfNeeded(arguments[0]);
             // Use ToNumber instead of raw Unbox_Any Double — non-double args
             // (bool, string, object) per ECMA-262 ToInteger.
-            il.Emit(OpCodes.Call, ctx.Runtime!.ToNumber);
+            il.Emit(OpCodes.Call, ctx.Runtime!.NumericCoercion.ToNumber);
         }
         else
         {
@@ -910,7 +910,7 @@ public sealed class StringEmitter : ITypeEmitterStrategy
         {
             emitter.EmitExpression(arguments[1]);
             emitter.EmitBoxIfNeeded(arguments[1]);
-            il.Emit(OpCodes.Call, ctx.Runtime!.ToNumber);
+            il.Emit(OpCodes.Call, ctx.Runtime!.NumericCoercion.ToNumber);
             il.Emit(OpCodes.Pop);
         }
 
@@ -954,7 +954,7 @@ public sealed class StringEmitter : ITypeEmitterStrategy
         {
             emitter.EmitExpression(arguments[0]);
             emitter.EmitBoxIfNeeded(arguments[0]);
-            il.Emit(OpCodes.Call, ctx.Runtime!.ToNumber);
+            il.Emit(OpCodes.Call, ctx.Runtime!.NumericCoercion.ToNumber);
         }
         else
         {

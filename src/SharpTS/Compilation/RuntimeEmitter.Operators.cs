@@ -45,7 +45,7 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(numberPath);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.ToNumber);
+        il.Emit(OpCodes.Call, runtime.NumericCoercion.ToNumber);
         il.Emit(OpCodes.Ldc_R8, 1.0);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Brfalse, subtractNumber);
@@ -245,10 +245,10 @@ public partial class RuntimeEmitter
         var aLocal = il.DeclareLocal(_types.Double);
         var bLocal = il.DeclareLocal(_types.Double);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.ToNumber);
+        il.Emit(OpCodes.Call, runtime.NumericCoercion.ToNumber);
         il.Emit(OpCodes.Stloc, aLocal);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.ToNumber);
+        il.Emit(OpCodes.Call, runtime.NumericCoercion.ToNumber);
         il.Emit(OpCodes.Stloc, bLocal);
         // NaN check: a == a, b == b
         var notNaN = il.DefineLabel();
@@ -312,10 +312,10 @@ public partial class RuntimeEmitter
         var aLocal = il.DeclareLocal(_types.Double);
         var bLocal = il.DeclareLocal(_types.Double);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.ToNumber);
+        il.Emit(OpCodes.Call, runtime.NumericCoercion.ToNumber);
         il.Emit(OpCodes.Stloc, aLocal);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.ToNumber);
+        il.Emit(OpCodes.Call, runtime.NumericCoercion.ToNumber);
         il.Emit(OpCodes.Stloc, bLocal);
         var falseLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, aLocal);
@@ -1224,9 +1224,9 @@ public partial class RuntimeEmitter
         // ToPrimitive, Symbol must throw a guest TypeError, and undefined is
         // NaN rather than an InvalidCastException.
         il.Emit(OpCodes.Ldloc, leftLocal);
-        il.Emit(OpCodes.Call, runtime.ToNumber);
+        il.Emit(OpCodes.Call, runtime.NumericCoercion.ToNumber);
         il.Emit(OpCodes.Ldloc, rightLocal);
-        il.Emit(OpCodes.Call, runtime.ToNumber);
+        il.Emit(OpCodes.Call, runtime.NumericCoercion.ToNumber);
         il.Emit(OpCodes.Add);
         il.Emit(OpCodes.Box, _types.Double);
         il.Emit(OpCodes.Ret);
@@ -1438,9 +1438,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, notLeftCoercibleLabel);
         il.MarkLabel(leftObjVsNumLabel);
         il.Emit(OpCodes.Ldloc, leftLocal);
-        il.Emit(OpCodes.Call, runtime.ToNumber);
+        il.Emit(OpCodes.Call, runtime.NumericCoercion.ToNumber);
         il.Emit(OpCodes.Ldloc, rightLocal);
-        il.Emit(OpCodes.Call, runtime.ToNumber);
+        il.Emit(OpCodes.Call, runtime.NumericCoercion.ToNumber);
         il.Emit(OpCodes.Ceq);
         il.Emit(OpCodes.Br, endLabel);
         // Object-vs-String: ToJsString(LEFT) and string-compare via op_Equality.
@@ -1478,9 +1478,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, notRightCoercibleLabel);
         il.MarkLabel(rightObjVsNumLabel);
         il.Emit(OpCodes.Ldloc, leftLocal);
-        il.Emit(OpCodes.Call, runtime.ToNumber);
+        il.Emit(OpCodes.Call, runtime.NumericCoercion.ToNumber);
         il.Emit(OpCodes.Ldloc, rightLocal);
-        il.Emit(OpCodes.Call, runtime.ToNumber);
+        il.Emit(OpCodes.Call, runtime.NumericCoercion.ToNumber);
         il.Emit(OpCodes.Ceq);
         il.Emit(OpCodes.Br, endLabel);
         // String-vs-Object: ToJsString(RIGHT) and string-compare.

@@ -480,7 +480,7 @@ public partial class RuntimeEmitter
         var newLenLocal = il.DeclareLocal(_types.Double);
         var numberLenLocal = il.DeclareLocal(_types.Double);
         il.Emit(OpCodes.Ldloc, lenValLocal);
-        il.Emit(OpCodes.Call, runtime.ToNumber);
+        il.Emit(OpCodes.Call, runtime.NumericCoercion.ToNumber);
         il.Emit(OpCodes.Stloc, lenNumLocal);
         // newLen = ToUint32(lenNum): NaN/±Inf → 0; else truncate, fmod 2^32,
         // normalize into [0, 2^32).
@@ -516,7 +516,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, newLenLocal);
         // Second coercion — valueOf call #2.
         il.Emit(OpCodes.Ldloc, lenValLocal);
-        il.Emit(OpCodes.Call, runtime.ToNumber);
+        il.Emit(OpCodes.Call, runtime.NumericCoercion.ToNumber);
         il.Emit(OpCodes.Stloc, numberLenLocal);
         // SameValueZero(newLen, numberLen) — Bne_Un branches on unordered,
         // so a NaN numberLen lands at rangeErr; ±0 compare equal.

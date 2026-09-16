@@ -197,7 +197,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, limitReady);
         il.MarkLabel(limitNotUndefined);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Call, runtime.ToNumber);
+        il.Emit(OpCodes.Call, runtime.NumericCoercion.ToNumber);
         il.Emit(OpCodes.Stloc, number);
         var zeroLimit = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, number);
@@ -405,7 +405,7 @@ public partial class RuntimeEmitter
         System.Reflection.MethodInfo isNaN,
         System.Reflection.MethodInfo floor)
     {
-        il.Emit(OpCodes.Call, runtime.ToNumber);
+        il.Emit(OpCodes.Call, runtime.NumericCoercion.ToNumber);
         il.Emit(OpCodes.Stloc, number);
         var zero = il.DefineLabel();
         var max = il.DefineLabel();

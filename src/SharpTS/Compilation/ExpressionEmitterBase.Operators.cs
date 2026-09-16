@@ -225,7 +225,7 @@ public abstract partial class ExpressionEmitterBase
             // Convert.ToDouble throws InvalidCastException on $Undefined (#190).
             EmitVariable(v);
             EnsureBoxed();
-            IL.Emit(OpCodes.Call, Ctx.Runtime?.ConvertToNumber ?? Types.ConvertToDoubleFromObject);
+            IL.Emit(OpCodes.Call, Ctx.Runtime?.NumericCoercion.ConvertToNumber ?? Types.ConvertToDoubleFromObject);
             IL.Emit(OpCodes.Ldc_R8, delta);
             IL.Emit(OpCodes.Add);
             IL.Emit(OpCodes.Box, typeof(double));
@@ -292,7 +292,7 @@ public abstract partial class ExpressionEmitterBase
             IL.Emit(OpCodes.Dup);  // Dup original for expression result
 
             // Convert to double, add delta, box (ToNumber semantics — see EmitPrefixIncrement)
-            IL.Emit(OpCodes.Call, Ctx.Runtime?.ConvertToNumber ?? Types.ConvertToDoubleFromObject);
+            IL.Emit(OpCodes.Call, Ctx.Runtime?.NumericCoercion.ConvertToNumber ?? Types.ConvertToDoubleFromObject);
             IL.Emit(OpCodes.Ldc_R8, delta);
             IL.Emit(OpCodes.Add);
             IL.Emit(OpCodes.Box, typeof(double));
@@ -408,7 +408,7 @@ public abstract partial class ExpressionEmitterBase
         IL.Emit(OpCodes.Ldloc, objLocal);
         emitKey();
         IL.Emit(OpCodes.Call, getMethod);
-        IL.Emit(OpCodes.Call, Ctx.Runtime?.ConvertToNumber ?? Types.ConvertToDoubleFromObject);
+        IL.Emit(OpCodes.Call, Ctx.Runtime?.NumericCoercion.ConvertToNumber ?? Types.ConvertToDoubleFromObject);
 
         var newValue = IL.DeclareLocal(typeof(object));
         var resultValue = IL.DeclareLocal(typeof(object));
@@ -481,7 +481,7 @@ public abstract partial class ExpressionEmitterBase
         if (Ctx.ClassRegistry!.TryGetOwnCallableStaticField(resolvedClassName, get.Name.Lexeme, classBuilder, out var ownField))
         {
             IL.Emit(OpCodes.Ldsfld, ownField!);
-            IL.Emit(OpCodes.Call, Ctx.Runtime?.ConvertToNumber ?? Types.ConvertToDoubleFromObject);
+            IL.Emit(OpCodes.Call, Ctx.Runtime?.NumericCoercion.ConvertToNumber ?? Types.ConvertToDoubleFromObject);
             EmitIncrementComputeStoreResult(isPrefix, delta, newValue, resultValue);
 
             IL.Emit(OpCodes.Ldloc, newValue);
@@ -496,7 +496,7 @@ public abstract partial class ExpressionEmitterBase
         if (Ctx.ClassRegistry!.TryGetCallableStaticField(resolvedClassName, get.Name.Lexeme, classBuilder, out var inheritedField))
         {
             EmitStaticFieldLoadWithShadow(resolvedClassName, classBuilder, get.Name.Lexeme, inheritedField!);
-            IL.Emit(OpCodes.Call, Ctx.Runtime?.ConvertToNumber ?? Types.ConvertToDoubleFromObject);
+            IL.Emit(OpCodes.Call, Ctx.Runtime?.NumericCoercion.ConvertToNumber ?? Types.ConvertToDoubleFromObject);
             EmitIncrementComputeStoreResult(isPrefix, delta, newValue, resultValue);
 
             IL.Emit(OpCodes.Ldtoken, classBuilder);

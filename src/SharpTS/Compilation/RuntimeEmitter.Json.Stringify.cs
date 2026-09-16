@@ -1733,7 +1733,7 @@ public partial class RuntimeEmitter
         // Number tag → ToNumber (number-hint ToPrimitive → valueOf first).
         il.MarkLabel(numberCase);
         il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Call, runtime.ToNumber);
+        il.Emit(OpCodes.Call, runtime.NumericCoercion.ToNumber);
         il.Emit(OpCodes.Box, _types.Double);
         il.Emit(OpCodes.Stloc, valueLocal);
         il.Emit(OpCodes.Br, done);

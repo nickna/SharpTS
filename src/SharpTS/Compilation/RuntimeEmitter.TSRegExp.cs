@@ -1694,7 +1694,7 @@ public partial class RuntimeEmitter
         // forward-declared, so it's available during $RegExp emission)
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, _tsRegExpLastIndexBoxedField);
-        il.Emit(OpCodes.Call, runtime.ToNumber);
+        il.Emit(OpCodes.Call, runtime.NumericCoercion.ToNumber);
         il.Emit(OpCodes.Stloc, dLocal);
         // ToLength: NaN or d<=0 → 0; d>int.MaxValue → int.MaxValue; else (int)d.
         il.Emit(OpCodes.Ldloc, dLocal);
@@ -3440,7 +3440,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, rxObjLocal);
         il.Emit(OpCodes.Ldstr, "lastIndex");
         il.Emit(OpCodes.Call, runtime.GetProperty);
-        il.Emit(OpCodes.Call, runtime.JsToInt32);
+        il.Emit(OpCodes.Call, runtime.NumericCoercion.JsToInt32);
         il.Emit(OpCodes.Stloc, currentIndexLocal);
         il.Emit(OpCodes.Ldloc, sLocal);
         il.Emit(OpCodes.Ldloc, currentIndexLocal);
@@ -4154,7 +4154,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, rx);
         il.Emit(OpCodes.Ldstr, "lastIndex");
         il.Emit(OpCodes.Call, runtime.GetProperty);
-        il.Emit(OpCodes.Call, runtime.JsToInt32);
+        il.Emit(OpCodes.Call, runtime.NumericCoercion.JsToInt32);
         il.Emit(OpCodes.Stloc, currentIndex);
         il.Emit(OpCodes.Ldloc, sLocal);
         il.Emit(OpCodes.Ldloc, currentIndex);
@@ -4213,7 +4213,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, execResult);
         il.Emit(OpCodes.Ldstr, "index");
         il.Emit(OpCodes.Call, runtime.GetProperty);
-        il.Emit(OpCodes.Call, runtime.JsToInt32);
+        il.Emit(OpCodes.Call, runtime.NumericCoercion.JsToInt32);
         il.Emit(OpCodes.Stloc, position);
         il.Emit(OpCodes.Ldloc, position);
         il.Emit(OpCodes.Ldc_I4_0);
@@ -4233,7 +4233,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, execResult);
         il.Emit(OpCodes.Ldstr, "length");
         il.Emit(OpCodes.Call, runtime.GetProperty);
-        il.Emit(OpCodes.Call, runtime.JsToInt32);
+        il.Emit(OpCodes.Call, runtime.NumericCoercion.JsToInt32);
         il.Emit(OpCodes.Stloc, length);
         il.Emit(OpCodes.Ldloc, length);
         il.Emit(OpCodes.Ldc_I4_0);

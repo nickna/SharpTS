@@ -144,9 +144,9 @@ public partial class ILEmitter
                     var left = SpillBoxed(b.Left);
                     var right = SpillBoxed(b.Right);
                     IL.Emit(OpCodes.Ldloc, left);
-                    IL.Emit(OpCodes.Call, _ctx.Runtime!.ToNumber);
+                    IL.Emit(OpCodes.Call, _ctx.Runtime!.NumericCoercion.ToNumber);
                     IL.Emit(OpCodes.Ldloc, right);
-                    IL.Emit(OpCodes.Call, _ctx.Runtime.ToNumber);
+                    IL.Emit(OpCodes.Call, _ctx.Runtime.NumericCoercion.ToNumber);
                 }
                 IL.Emit(arith.Opcode);
                 SetStackType(StackType.Double);
@@ -340,9 +340,9 @@ public partial class ILEmitter
             var left = SpillBoxed(b.Left);
             var right = SpillBoxed(b.Right);
             IL.Emit(OpCodes.Ldloc, left);
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.ToNumber);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.NumericCoercion.ToNumber);
             IL.Emit(OpCodes.Ldloc, right);
-            IL.Emit(OpCodes.Call, _ctx.Runtime.ToNumber);
+            IL.Emit(OpCodes.Call, _ctx.Runtime.NumericCoercion.ToNumber);
         }
         IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(_ctx.Types.Math, "Pow", _ctx.Types.Double, _ctx.Types.Double));
         SetStackType(StackType.Double);
@@ -434,9 +434,9 @@ public partial class ILEmitter
         var left = SpillBoxed(b.Left);
         var right = SpillBoxed(b.Right);
         IL.Emit(OpCodes.Ldloc, left);
-        IL.Emit(OpCodes.Call, _ctx.Runtime!.JsToInt32);
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.NumericCoercion.JsToInt32);
         IL.Emit(OpCodes.Ldloc, right);
-        IL.Emit(OpCodes.Call, _ctx.Runtime!.JsToInt32);
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.NumericCoercion.JsToInt32);
 
         switch (b.Operator.Type)
         {
@@ -485,12 +485,12 @@ public partial class ILEmitter
         // Spill the converted left value before evaluating the right operand to
         // preserve JavaScript's left-to-right evaluation order.
         EmitExpressionAsDouble(b.Left);
-        IL.Emit(OpCodes.Call, _ctx.Runtime!.JsNumberToInt32);
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.NumericCoercion.JsNumberToInt32);
         var left = IL.DeclareLocal(_ctx.Types.Int32);
         IL.Emit(OpCodes.Stloc, left);
 
         EmitExpressionAsDouble(b.Right);
-        IL.Emit(OpCodes.Call, _ctx.Runtime.JsNumberToInt32);
+        IL.Emit(OpCodes.Call, _ctx.Runtime.NumericCoercion.JsNumberToInt32);
         var right = IL.DeclareLocal(_ctx.Types.Int32);
         IL.Emit(OpCodes.Stloc, right);
 
@@ -647,7 +647,7 @@ public partial class ILEmitter
                     EmitBoxIfNeeded(u.Right);
                     // ECMA-262 21.1.1.1 ToNumber: handles hex strings ("0x..."),
                     // "Infinity", boolean coercion. Convert.ToDouble doesn't.
-                    IL.Emit(OpCodes.Call, _ctx.Runtime!.ToNumber);
+                    IL.Emit(OpCodes.Call, _ctx.Runtime!.NumericCoercion.ToNumber);
                     EmitBoxDouble();
                 }
                 break;
@@ -707,7 +707,7 @@ public partial class ILEmitter
                 {
                     EmitExpression(u.Right);
                     EmitBoxIfNeeded(u.Right);
-                    IL.Emit(OpCodes.Call, _ctx.Runtime!.JsToInt32);
+                    IL.Emit(OpCodes.Call, _ctx.Runtime!.NumericCoercion.JsToInt32);
                     IL.Emit(OpCodes.Not);
                     EmitConvR8AndBox();
                 }
@@ -874,7 +874,7 @@ public partial class ILEmitter
 
         if (isTypedDouble && local != null)
         {
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.ConvertToNumber);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.NumericCoercion.ConvertToNumber);
             IL.Emit(OpCodes.Dup);
             IL.Emit(OpCodes.Stloc, local);
             SetStackType(StackType.Double);
@@ -2301,7 +2301,7 @@ public partial class ILEmitter
 
         IL.MarkLabel(numberPath);
         IL.Emit(OpCodes.Ldloc, rawValue);
-        IL.Emit(OpCodes.Call, _ctx.Runtime!.ToNumber);
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.NumericCoercion.ToNumber);
         IL.Emit(OpCodes.Box, _ctx.Types.Double);
         IL.Emit(OpCodes.Stloc, oldNumeric);
 

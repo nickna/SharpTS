@@ -1016,7 +1016,7 @@ public partial class RuntimeEmitter
 
         // Convert mode to int32
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.ToNumber);
+        il.Emit(OpCodes.Call, runtime.NumericCoercion.ToNumber);
         il.Emit(OpCodes.Conv_I4);
         var modeLocal = il.DeclareLocal(_types.Int32);
         il.Emit(OpCodes.Stloc, modeLocal);
@@ -1099,14 +1099,14 @@ public partial class RuntimeEmitter
 
         // Convert uid to int32
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.ToNumber);
+        il.Emit(OpCodes.Call, runtime.NumericCoercion.ToNumber);
         il.Emit(OpCodes.Conv_I4);
         var uidLocal = il.DeclareLocal(_types.Int32);
         il.Emit(OpCodes.Stloc, uidLocal);
 
         // Convert gid to int32
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Call, runtime.ToNumber);
+        il.Emit(OpCodes.Call, runtime.NumericCoercion.ToNumber);
         il.Emit(OpCodes.Conv_I4);
         var gidLocal = il.DeclareLocal(_types.Int32);
         il.Emit(OpCodes.Stloc, gidLocal);
@@ -1181,14 +1181,14 @@ public partial class RuntimeEmitter
 
         // Convert uid to int32
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.ToNumber);
+        il.Emit(OpCodes.Call, runtime.NumericCoercion.ToNumber);
         il.Emit(OpCodes.Conv_I4);
         var uidLocal = il.DeclareLocal(_types.Int32);
         il.Emit(OpCodes.Stloc, uidLocal);
 
         // Convert gid to int32
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Call, runtime.ToNumber);
+        il.Emit(OpCodes.Call, runtime.NumericCoercion.ToNumber);
         il.Emit(OpCodes.Conv_I4);
         var gidLocal = il.DeclareLocal(_types.Int32);
         il.Emit(OpCodes.Stloc, gidLocal);
@@ -1266,7 +1266,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, afterLenLabel); // null -> use default 0
 
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.ToNumber);
+        il.Emit(OpCodes.Call, runtime.NumericCoercion.ToNumber);
         il.Emit(OpCodes.Conv_I8);
         il.Emit(OpCodes.Stloc, lenLocal);
         il.Emit(OpCodes.Br, hasLenLabel);
@@ -1615,7 +1615,7 @@ public partial class RuntimeEmitter
 
         // Convert atime to DateTime (Unix timestamp in seconds)
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.ToNumber);
+        il.Emit(OpCodes.Call, runtime.NumericCoercion.ToNumber);
         il.Emit(OpCodes.Conv_I8);
         var atimeSecondsLocal = il.DeclareLocal(_types.Int64);
         il.Emit(OpCodes.Stloc, atimeSecondsLocal);
@@ -1635,7 +1635,7 @@ public partial class RuntimeEmitter
 
         // Convert mtime to DateTime (Unix timestamp in seconds)
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Call, runtime.ToNumber);
+        il.Emit(OpCodes.Call, runtime.NumericCoercion.ToNumber);
         il.Emit(OpCodes.Conv_I8);
         var mtimeSecondsLocal = il.DeclareLocal(_types.Int64);
         il.Emit(OpCodes.Stloc, mtimeSecondsLocal);

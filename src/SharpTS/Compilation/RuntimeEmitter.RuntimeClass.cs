@@ -805,11 +805,11 @@ public partial class RuntimeEmitter
         // ToNumber slot is forward-declared in DefineRuntimeClassPhase1 so
         // $RegExp's Symbol.split limit-coercion (which runs before $Runtime
         // body emit) can bind to it. Skip the duplicate-define here.
-        DeclareConvertToNumber(typeBuilder, runtime);
+        DeclareConvertToNumber(typeBuilder, runtime.NumericCoercion);
         // ConvertToNumber's explicit Number(BigInt) branch needs the exact
         // binary64-rounding helper before its body is filled later below.
         EmitBigIntToNumber(typeBuilder, runtime.BigInt);
-        EmitJsToInt32(typeBuilder, runtime);
+        EmitJsToInt32(typeBuilder, runtime.NumericCoercion);
         EmitJsLessThan(typeBuilder, runtime);
         EmitJsLessOrEqual(typeBuilder, runtime);
         EmitUpdateNumeric(typeBuilder, runtime);
@@ -1039,12 +1039,22 @@ public partial class RuntimeEmitter
         // ToNumber/ConvertToNumber bodies: emit AFTER GetProperty/InvokeMethodValue
         // so their ToPrimitive(value, "number") on Dictionary/$Object args can
         // call those helpers.
-        EmitToNumber(typeBuilder, runtime);
-        EmitConvertToNumber(typeBuilder, runtime);
+        EmitToNumber(typeBuilder, runtime.NumericCoercion,
+            new AbstractNumberInputs(runtime.UndefinedType, runtime.TSSymbolType, runtime.TSObjectType,
+                runtime.TSFunctionType, runtime.BoundAnyFunctionType, runtime.IHasFieldsInterface,
+                runtime.CompiledPropertyDescriptorType, runtime.CompiledPropertyDescriptorGetter.GetGetMethod()!,
+                runtime.CompiledPropertyDescriptorSetter.GetGetMethod()!, runtime.CompiledPropertyDescriptorValue.GetGetMethod()!,
+                runtime.SymbolToPrimitive, runtime.GetSymbolDictMethod, runtime.GetProperty, runtime.InvokeMethodValue,
+                runtime.TypeOf, runtime.StringCoercion.ToJsString, runtime.BoxedPrimitives.UnwrapIfBoxed,
+                runtime.CreateException, runtime.TSTypeErrorCtor));
+        EmitConvertToNumber(typeBuilder, runtime.NumericCoercion,
+            new ExplicitNumberInputs(runtime.UndefinedType, runtime.TSSymbolType, runtime.TSObjectType,
+                runtime.GetProperty, runtime.InvokeMethodValue, runtime.StringCoercion.ToJsString,
+                runtime.BigInt.ToNumber, runtime.CreateException, runtime.TSTypeErrorCtor));
         // String.raw lives here so its body can read `template.raw` via
         // GetProperty and ToString-coerce substitutions via ToJsString.
         EmitStringRaw(typeBuilder, runtime.Templates,
-            runtime.UndefinedType, runtime.GetProperty, runtime.ToNumber, runtime.StringCoercion.ToJsString, runtime.CreateException, runtime.TSTypeErrorCtor);
+            runtime.UndefinedType, runtime.GetProperty, runtime.NumericCoercion.ToNumber, runtime.StringCoercion.ToJsString, runtime.CreateException, runtime.TSTypeErrorCtor);
         EmitSetProperty(typeBuilder, runtime);
         EmitSetPropertyStrict(typeBuilder, runtime);
         EmitDeleteProperty(typeBuilder, runtime);
@@ -1129,7 +1139,7 @@ public partial class RuntimeEmitter
         // `desc.value === Math.X` for built-in methods. Moved up from the
         // original site at the end of the runtime emit. Dep: runtime.ToNumber
         // (emitted at line 580, before this site).
-        EmitMathAdapters(typeBuilder, runtime.Math, runtime.ToNumber, runtime.JsToInt32);
+        EmitMathAdapters(typeBuilder, runtime.Math, runtime.NumericCoercion.ToNumber, runtime.NumericCoercion.JsToInt32);
         // Error.isError is a small standalone type-brand helper. Emit it before
         // gOPD so built-in static descriptor synthesis can reference it.
         EmitErrorIsError(typeBuilder, runtime);
@@ -1232,7 +1242,10 @@ public partial class RuntimeEmitter
         EmitArrayReduceDouble(typeBuilder, runtime.ArrayOperations);
         EmitArrayReduceRight(typeBuilder, runtime);
         // Search helpers use ToIntegerOrInfinity for spec-compliant fromIndex clamping.
-        EmitToIntegerOrInfinityHelper(typeBuilder, runtime);
+        EmitToIntegerOrInfinityHelper(typeBuilder, runtime.NumericCoercion,
+            new IntegerOrInfinityInputs(runtime.UndefinedType, runtime.TSObjectType, runtime.IHasFieldsInterface,
+                runtime.SymbolToPrimitive, runtime.GetSymbolDictMethod, runtime.GetProperty, runtime.InvokeMethodValue,
+                runtime.TypeOf, runtime.BoxedPrimitives.IsOfType, runtime.CreateException, runtime.TSTypeErrorCtor));
         EmitArrayIncludes(typeBuilder, runtime);
         EmitArrayIncludesProto(typeBuilder, runtime);
         EmitArrayIncludesDouble(typeBuilder, runtime);
@@ -1328,37 +1341,37 @@ public partial class RuntimeEmitter
             runtime.TSObjectType, runtime.GetProperty, runtime.StringCoercion);
         // EmitUnwrapIfBoxed moved earlier — see comment above EmitStringify.
         // String methods
-        EmitStringCharAt(typeBuilder, runtime.Strings, runtime.ToNumber);
-        EmitStringSubstring(typeBuilder, runtime.Strings, runtime.CreateException, runtime.TSTypeErrorCtor, runtime.ToIntegerOrInfinity,
+        EmitStringCharAt(typeBuilder, runtime.Strings, runtime.NumericCoercion.ToNumber);
+        EmitStringSubstring(typeBuilder, runtime.Strings, runtime.CreateException, runtime.TSTypeErrorCtor, runtime.NumericCoercion.ToIntegerOrInfinity,
             runtime.StringCoercion.ToJsString, runtime.UndefinedInstance, runtime.UndefinedType);
-        EmitStringSubstr(typeBuilder, runtime.Strings, runtime.ToIntegerOrInfinity);
+        EmitStringSubstr(typeBuilder, runtime.Strings, runtime.NumericCoercion.ToIntegerOrInfinity);
         EmitStringIndexOf(typeBuilder, runtime.Strings, runtime.StringCoercion.ToJsString);
-        EmitStringIndexOfFrom(typeBuilder, runtime.Strings, runtime.ToIntegerOrInfinity, runtime.StringCoercion.ToJsString);
+        EmitStringIndexOfFrom(typeBuilder, runtime.Strings, runtime.NumericCoercion.ToIntegerOrInfinity, runtime.StringCoercion.ToJsString);
         EmitPrimitiveStringIntrinsics(typeBuilder, runtime.Strings);
         EmitStringReplace(typeBuilder, runtime.Strings);
         EmitStringIncludes(typeBuilder, runtime.Strings, new StringSearchInputs(runtime.TSRegExpType, runtime.UndefinedType, runtime.SymbolMatch,
-                runtime.GetIndex, runtime.Booleans.IsTruthy, runtime.ToIntegerOrInfinity, runtime.StringCoercion.ToJsString, runtime.CreateException, runtime.TSTypeErrorCtor));
+                runtime.GetIndex, runtime.Booleans.IsTruthy, runtime.NumericCoercion.ToIntegerOrInfinity, runtime.StringCoercion.ToJsString, runtime.CreateException, runtime.TSTypeErrorCtor));
         EmitStringStartsWith(typeBuilder, runtime.Strings, new StringSearchInputs(runtime.TSRegExpType, runtime.UndefinedType, runtime.SymbolMatch,
-                runtime.GetIndex, runtime.Booleans.IsTruthy, runtime.ToIntegerOrInfinity, runtime.StringCoercion.ToJsString, runtime.CreateException, runtime.TSTypeErrorCtor));
+                runtime.GetIndex, runtime.Booleans.IsTruthy, runtime.NumericCoercion.ToIntegerOrInfinity, runtime.StringCoercion.ToJsString, runtime.CreateException, runtime.TSTypeErrorCtor));
         EmitStringEndsWith(typeBuilder, runtime.Strings, new StringSearchInputs(runtime.TSRegExpType, runtime.UndefinedType, runtime.SymbolMatch,
-                runtime.GetIndex, runtime.Booleans.IsTruthy, runtime.ToIntegerOrInfinity, runtime.StringCoercion.ToJsString, runtime.CreateException, runtime.TSTypeErrorCtor));
-        EmitStringSlice(typeBuilder, runtime.Strings, runtime.CreateException, runtime.TSTypeErrorCtor, runtime.ToIntegerOrInfinity,
+                runtime.GetIndex, runtime.Booleans.IsTruthy, runtime.NumericCoercion.ToIntegerOrInfinity, runtime.StringCoercion.ToJsString, runtime.CreateException, runtime.TSTypeErrorCtor));
+        EmitStringSlice(typeBuilder, runtime.Strings, runtime.CreateException, runtime.TSTypeErrorCtor, runtime.NumericCoercion.ToIntegerOrInfinity,
             runtime.StringCoercion.ToJsString, runtime.UndefinedInstance, runtime.UndefinedType);
-        EmitStringRepeat(typeBuilder, runtime.Strings, runtime.CreateException, runtime.TSRangeErrorCtor, runtime.ToNumber);
-        EmitStringPadStart(typeBuilder, runtime.Strings, runtime.StringCoercion.ToJsString, runtime.ToNumber, runtime.UndefinedType);
-        EmitStringPadEnd(typeBuilder, runtime.Strings, runtime.StringCoercion.ToJsString, runtime.ToNumber, runtime.UndefinedType);
+        EmitStringRepeat(typeBuilder, runtime.Strings, runtime.CreateException, runtime.TSRangeErrorCtor, runtime.NumericCoercion.ToNumber);
+        EmitStringPadStart(typeBuilder, runtime.Strings, runtime.StringCoercion.ToJsString, runtime.NumericCoercion.ToNumber, runtime.UndefinedType);
+        EmitStringPadEnd(typeBuilder, runtime.Strings, runtime.StringCoercion.ToJsString, runtime.NumericCoercion.ToNumber, runtime.UndefinedType);
         EmitStringCharCodeAt(typeBuilder, runtime.Strings);
         EmitStringConcat(typeBuilder, runtime.Strings, runtime.StringCoercion.ToJsString);
         EmitStringLastIndexOf(typeBuilder, runtime.Strings);
         EmitStringReplaceAll(typeBuilder, runtime.Strings);
         EmitStringAt(typeBuilder, runtime.Strings, runtime.UndefinedInstance);
-        EmitStringFromCharCode(typeBuilder, runtime.Strings, runtime.ToNumber);
-        EmitStringCodePointAt(typeBuilder, runtime.Strings, runtime.ToIntegerOrInfinity, runtime.UndefinedInstance);
+        EmitStringFromCharCode(typeBuilder, runtime.Strings, runtime.NumericCoercion.ToNumber);
+        EmitStringCodePointAt(typeBuilder, runtime.Strings, runtime.NumericCoercion.ToIntegerOrInfinity, runtime.UndefinedInstance);
         EmitStringWellFormedMethods(typeBuilder, runtime.Strings);
         EmitStringIterator(typeBuilder, runtime.Strings, runtime.CreateException, runtime.NormalizeToEnumerator, runtime.TSTypeErrorCtor,
             runtime.StringCoercion.ToJsString, runtime.UndefinedType);
         EmitStringFromCodePoint(typeBuilder, runtime.Strings, runtime.CreateException, runtime.TSRangeErrorCtor, runtime.StringCoercion.ToJsString,
-            runtime.ToNumber);
+            runtime.NumericCoercion.ToNumber);
         EmitStringNormalize(typeBuilder, runtime.Strings, runtime.CreateException, runtime.TSRangeErrorCtor, runtime.StringCoercion.ToJsString,
             runtime.UndefinedType);
         EmitStringLocaleCompare(typeBuilder, runtime.Strings);
@@ -1446,7 +1459,7 @@ public partial class RuntimeEmitter
                         runtime.SymbolToPrimitive, runtime.TSSymbolType, runtime.TypeOf, runtime.UndefinedType,
                         runtime.CreateException, runtime.TSTypeErrorCtor),
                     runtime.TSObjectType, runtime.StringCoercion.ToJsString, runtime.TSRangeErrorCtor, runtime.TSSyntaxErrorCtor));
-            EmitBigIntStaticMethods(typeBuilder, bigInt, runtime.ToNumber, runtime.CreateException, runtime.TSRangeErrorCtor);
+            EmitBigIntStaticMethods(typeBuilder, bigInt, runtime.NumericCoercion.ToNumber, runtime.CreateException, runtime.TSRangeErrorCtor);
             EmitBigIntArithmetic(typeBuilder, bigInt);
             EmitBigIntComparison(typeBuilder, bigInt, runtime.CreateException, runtime.TSRangeErrorCtor);
             EmitBigIntBitwise(typeBuilder, bigInt);
@@ -1459,7 +1472,7 @@ public partial class RuntimeEmitter
                     runtime.CompiledPropertyDescriptorWritable.GetSetMethod()!, runtime.CompiledPropertyDescriptorConfigurable.GetSetMethod()!,
                     runtime.TSFunctionGetOrCreate, runtime.GetSymbolDictMethod, runtime.SymbolToStringTag,
                     runtime.ObjectPrototypeField, runtime.PDSSetPrototype,
-                    runtime.TSObjectType, runtime.TSObjectFieldsGetter, runtime.ToNumber, runtime.UndefinedType,
+                    runtime.TSObjectType, runtime.TSObjectFieldsGetter, runtime.NumericCoercion.ToNumber, runtime.UndefinedType,
                     runtime.CreateException, runtime.TSTypeErrorCtor));
         }
         // Promise methods moved earlier (before GetProperty, which needs PromiseThen for typeof p.then)
@@ -1468,7 +1481,7 @@ public partial class RuntimeEmitter
             new NumberMethodInputs(
                 runtime.GetProperty,
                 runtime.UndefinedType,
-                runtime.ToIntegerOrInfinity,
+                runtime.NumericCoercion.ToIntegerOrInfinity,
                 runtime.TSObjectType,
                 runtime.TSSymbolType,
                 runtime.CreateException,
@@ -1617,7 +1630,7 @@ public partial class RuntimeEmitter
         // primitive:tty — just isatty; user-facing tty is stdlib/node/tty.ts.
         // Gated on UsesTty (set by `import 'tty'` or any `.isTTY` access).
         if (_features.UsesTty)
-            EmitTtyPrimitiveMethods(typeBuilder, runtime.RequireTty(), runtime.ToNumber);
+            EmitTtyPrimitiveMethods(typeBuilder, runtime.RequireTty(), runtime.NumericCoercion.ToNumber);
         // URL module — migrated to stdlib/node/url.ts; no runtime helpers emitted.
         // HTTP module methods (fetch, http.createServer, etc.) - must be before globalThis
         if (_features.UsesHttp)
