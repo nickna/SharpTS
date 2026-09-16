@@ -1868,6 +1868,179 @@ public class StandaloneDllTests
             verifyStandardError: error => Assert.Empty(error)));
     }
 
+    public static IEnumerable<object[]> StringCoreMetadataPrograms =>
+    [
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "const s='Abcd';console.log(s.charAt(1),s.charCodeAt(1),s.toUpperCase(),s.toLowerCase(),s.concat('!','?'));"
+            },
+            "b 98 ABCD abcd Abcd!?\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "const s='abcdef';console.log(s.slice(-3,-1),s.substring(4,1),s.substr(-3,2),s.at(-1),s.charAt(99)==='');console.log(s.substring(NaN,Infinity),s.slice(-Infinity,Infinity));"
+            },
+            "de bcd de f true\nabcdef abcdef\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "const s='ababa';console.log(s.indexOf('ba'),s.indexOf('ba',2),s.lastIndexOf('ba'),s.includes('ab',1),s.startsWith('ba',1),s.endsWith('ba',5));"
+            },
+            "1 3 3 true true true\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "function examine(s:string,start:number):string{return s.slice(start,s.length-1)+':'+s.substring(start,4)+':'+s.indexOf('b',start)+':'+s.includes('b',start);}console.log(examine('abcdef',1));console.log(examine('ababa',2));"
+            },
+            "bcde:bcd:1:true\nab:ab:3:true\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "const trim:any=String.prototype.trim;const substring:any=String.prototype.substring;const upper:any=String.prototype.toUpperCase;console.log(trim.call(false),substring.call(1234,1,3),upper.call({toString(){return 'abc';}}));"
+            },
+            "false 23 ABC\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "const method:any=String.prototype.substring;const desc:any=Object.getOwnPropertyDescriptor(String.prototype,'substring');const iterator:any=String.prototype[Symbol.iterator];console.log(method.name,method.length,desc.value===method,desc.writable,desc.enumerable,desc.configurable);console.log(String.prototype.constructor===String,iterator.name,iterator.length);"
+            },
+            "substring 2 true true false true\ntrue [Symbol.iterator] 0\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "const saved:any=String.prototype.indexOf;(String.prototype as any).indexOf=function(search:any,position:any){return 42;};const value:string='abc';console.log(value.indexOf('b'));(String.prototype as any).indexOf=saved;console.log(value.indexOf('b'));(String.prototype as any).custom='value';console.log((value as any).custom);delete (String.prototype as any).custom;console.log(typeof (value as any).custom);"
+            },
+            "42\n1\nvalue\nundefined\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "const s='\\uFEFF \\tvalue\\n\\uFEFF';console.log(s.trim()==='value',s.trimStart().startsWith('value'),s.trimEnd().endsWith('value'));"
+            },
+            "true true true\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "console.log('ab'.repeat(3),'x'.padStart(5,'ab'),'x'.padEnd(5,'ab'),'x'.padStart(2),''.repeat(4)==='');"
+            },
+            "ababab ababx xabab  x true\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "const s='ababa';console.log(s.replace('b','X'),s.replaceAll('a','Q'),s.replace('b',(value:string)=>value.toUpperCase()));"
+            },
+            "aXaba QbQbQ aBaba\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "const s='A\\uD83D\\uDE00B';console.log(s.length,s.codePointAt(1),String.fromCodePoint(128512).length,String.fromCharCode(65,66));console.log('\\uD800\\uDC00'.isWellFormed(),'x\\uD800y'.isWellFormed());const fixed='\\uD800A\\uDC00'.toWellFormed();console.log(fixed.charCodeAt(0),fixed.charCodeAt(2));"
+            },
+            "4 128512 2 AB\ntrue false\n65533 65533\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "console.log('\\u00e9'.normalize('NFD').length,'e\\u0301'.normalize('NFC').length,'a'.localeCompare('b')<0,'b'.localeCompare('a')>0,'a'.localeCompare('a'));"
+            },
+            "2 1 true true 0\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "const values:string[]=[];for(const part of 'A\\uD83D\\uDE00B')values.push(part.length+':'+part.codePointAt(0));console.log(values.join(','));const method:any=String.prototype[Symbol.iterator];const iterator:any=method.call(123);console.log(iterator.next().value,iterator.next().value,iterator.next().value,iterator.next().done);"
+            },
+            "1:65,2:128512,1:66\n1 2 3 true\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "const methods:any[]=[String.prototype.trim,String.prototype.substring,String.prototype.toUpperCase,String.prototype.valueOf];for(const method of methods){try{method.call(null);console.log('unexpected');}catch(error:any){console.log(error.name);}}try{String.fromCodePoint(-1);}catch(error:any){console.log(error.name);}try{'x'.normalize('invalid');}catch(error:any){console.log(error.name);}"
+            },
+            "TypeError\nTypeError\nTypeError\nTypeError\nRangeError\nRangeError\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "const boxed:any=new String('abc');console.log(boxed.toString(),boxed.valueOf(),boxed.substring(1),String.prototype.valueOf.call(String.prototype)==='');"
+            },
+            "abc abc bc true\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "console.log('aba'.replaceAll(/a/g,'X'),'aba'.search(/b/),'a,b,c'.split(/,/,2).join('|'));const matches:any='aba'.match(/a/g);console.log(matches.length);"
+            },
+            "XbX 1 a|b\n2\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "async function run(){await new Promise<void>(resolve=>setTimeout(resolve,1));const value:any=' abc ';console.log(value.trim().substring(1));}run();"
+            },
+            "bc\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "function* values():Generator<string,void,any>{const value='abcdef';yield value.slice(1,3);yield value.substring(4,2);yield value.toUpperCase();}console.log(Array.from(values()).join(','));"
+            },
+            "bc,cd,ABCDEF\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.cjs"] = "const method=String.prototype.substring;console.log(method.call('abcdef',1,3),' abc '.trim());"
+            },
+            "bc abc\n", "main.cjs", true
+        }
+    ];
+
+    [Theory]
+    [MemberData(nameof(StringCoreMetadataPrograms))]
+    public void Isolated_StringCoreMetadata_PreservesMethodsPrototypesAndUnicode(Dictionary<string, string> files, string expected, string entryPoint, bool standalone)
+    {
+        using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        foreach (var (path, source) in files) tempDir.CreateFile(path, source);
+        var dllPath = tempDir.GetPath("string_core_metadata.dll");
+        var deployment = standalone ? " --standalone" : "";
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{tempDir.GetPath(entryPoint)}\" -o \"{dllPath}\" --verify{deployment}", tempDir.Path);
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(dllPath));
+        Assert.Equal(!standalone, File.Exists(tempDir.GetPath("SharpTS.dll")));
+        Assert.Equal(expected, ExecuteCompiledDllIsolated(dllPath, timeoutMs: 30000,
+            verifyStandardError: error => Assert.Empty(error)));
+    }
+
     public static IEnumerable<object[]> BroadcastChannelMetadataPrograms =>
     [
         new object[]

@@ -79,7 +79,7 @@ public partial class ILEmitter
                 {
                     IL.Emit(OpCodes.Ldnull);
                 }
-                IL.Emit(OpCodes.Call, _ctx.Runtime!.StringIncludes);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.Strings.Includes);
                 IL.Emit(OpCodes.Box, _ctx.Types.Boolean);
                 break;
 
@@ -108,11 +108,11 @@ public partial class ILEmitter
                 {
                     EmitExpression(arguments[1]);
                     EmitBoxIfNeeded(arguments[1]);
-                    IL.Emit(OpCodes.Call, _ctx.Runtime!.StringIndexOfFrom);
+                    IL.Emit(OpCodes.Call, _ctx.Runtime!.Strings.IndexOfFrom);
                 }
                 else
                 {
-                    IL.Emit(OpCodes.Call, _ctx.Runtime!.StringIndexOf);
+                    IL.Emit(OpCodes.Call, _ctx.Runtime!.Strings.IndexOf);
                 }
                 IL.Emit(OpCodes.Box, _ctx.Types.Double);
                 break;
@@ -131,7 +131,7 @@ public partial class ILEmitter
                     // \`"".lastIndexOf()\` should look for "undefined" not "".
                     IL.Emit(OpCodes.Ldstr, "undefined");
                 }
-                IL.Emit(OpCodes.Call, _ctx.Runtime!.StringLastIndexOf);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.Strings.LastIndexOf);
                 IL.Emit(OpCodes.Box, _ctx.Types.Double);
                 break;
 
@@ -147,7 +147,7 @@ public partial class ILEmitter
                     EmitBoxIfNeeded(arguments[i]);
                     IL.Emit(OpCodes.Stelem_Ref);
                 }
-                IL.Emit(OpCodes.Call, _ctx.Runtime!.StringSlice);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.Strings.Slice);
                 break;
 
             case "concat":
@@ -162,7 +162,7 @@ public partial class ILEmitter
                     EmitBoxIfNeeded(arguments[i]);
                     IL.Emit(OpCodes.Stelem_Ref);
                 }
-                IL.Emit(OpCodes.Call, _ctx.Runtime!.StringConcat);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.Strings.Concat);
                 break;
 
             case "startsWith":
@@ -184,7 +184,7 @@ public partial class ILEmitter
                 {
                     IL.Emit(OpCodes.Ldnull);
                 }
-                IL.Emit(OpCodes.Call, _ctx.Runtime!.StringStartsWith);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.Strings.StartsWith);
                 IL.Emit(OpCodes.Box, _ctx.Types.Boolean);
                 break;
 
@@ -207,7 +207,7 @@ public partial class ILEmitter
                 {
                     IL.Emit(OpCodes.Ldnull);
                 }
-                IL.Emit(OpCodes.Call, _ctx.Runtime!.StringEndsWith);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.Strings.EndsWith);
                 IL.Emit(OpCodes.Box, _ctx.Types.Boolean);
                 break;
 
@@ -223,7 +223,7 @@ public partial class ILEmitter
                     EmitBoxIfNeeded(arguments[i]);
                     IL.Emit(OpCodes.Stelem_Ref);
                 }
-                IL.Emit(OpCodes.Call, _ctx.Runtime!.StringSubstring);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.Strings.Substring);
                 break;
 
             case "charAt":
@@ -238,7 +238,7 @@ public partial class ILEmitter
                     EmitBoxIfNeeded(arguments[i]);
                     IL.Emit(OpCodes.Stelem_Ref);
                 }
-                IL.Emit(OpCodes.Call, _ctx.Runtime!.StringCharAt);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.Strings.CharAt);
                 break;
         }
         builder.Emit_Br(doneLabel);

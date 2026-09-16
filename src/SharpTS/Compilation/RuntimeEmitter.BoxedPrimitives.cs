@@ -217,7 +217,7 @@ public partial class RuntimeEmitter
         }
         LinkProto("Boolean", runtime.BooleanPrototypeField, runtime.BooleanPrototypePopulateMethod);
         LinkProto("Number",  runtime.NumberPrototypeField,  runtime.NumberPrototypePopulateMethod);
-        LinkProto("String",  runtime.StringPrototypeField,  runtime.StringPrototypePopulateMethod);
+        LinkProto("String",  runtime.Strings.PrototypeField,  runtime.Strings.PrototypePopulateMethod);
         if (_features.UsesBigInt)
             LinkProto("BigInt", runtime.BigIntPrototypeField, runtime.BigIntPrototypePopulateMethod);
         LinkProto("Symbol", runtime.SymbolPrototypeField, runtime.SymbolPrototypePopulateMethod);

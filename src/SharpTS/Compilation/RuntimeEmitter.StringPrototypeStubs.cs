@@ -22,36 +22,44 @@ public partial class RuntimeEmitter
         // RequireObjectCoercible (throw TypeError on undefined/null) and
         // coerce via JS-spec ToJsString (so .call(false) → "false" not
         // .NET "False").
-        runtime.StringToUpperCase = EmitStringStringStub(typeBuilder, runtime, "StringToUpperCase", "ToUpper", strictReceiver: true);
-        runtime.StringToLowerCase = EmitStringStringStub(typeBuilder, runtime, "StringToLowerCase", "ToLower", strictReceiver: true);
+        runtime.Strings.ToUpperCase = EmitStringStringStub(typeBuilder, runtime.CreateException, runtime.TSTypeErrorCtor, runtime.ToJsString,
+            runtime.UndefinedType, "StringToUpperCase", "ToUpper", strictReceiver: true);
+        runtime.Strings.ToLowerCase = EmitStringStringStub(typeBuilder, runtime.CreateException, runtime.TSTypeErrorCtor, runtime.ToJsString,
+            runtime.UndefinedType, "StringToLowerCase", "ToLower", strictReceiver: true);
         // JsTrim(string, int mode) for inline call sites that already have a
         // string on the stack. mode: 0=both, 1=start, 2=end. Define BEFORE
         // StringTrim* stubs since those forward to it.
-        runtime.JsTrimInline = EmitJsTrimInline(typeBuilder, runtime);
+        runtime.Strings.TrimInline = EmitJsTrimInline(typeBuilder);
         // Trim variants need ECMA-262 whitespace set, which differs from .NET's
         // char.IsWhiteSpace by including ﻿ (ZWNBSP). Use a custom helper.
-        runtime.StringTrim = EmitJsTrimHelper(typeBuilder, runtime, "StringTrim", trimMode: 0, strictReceiver: true);
-        runtime.StringTrimStart = EmitJsTrimHelper(typeBuilder, runtime, "StringTrimStart", trimMode: 1, strictReceiver: true);
-        runtime.StringTrimEnd = EmitJsTrimHelper(typeBuilder, runtime, "StringTrimEnd", trimMode: 2, strictReceiver: true);
+        runtime.Strings.Trim = EmitJsTrimHelper(typeBuilder, runtime.Strings, runtime.CreateException, runtime.TSTypeErrorCtor,
+            runtime.ToJsString, runtime.UndefinedType, "StringTrim", trimMode: 0, strictReceiver: true);
+        runtime.Strings.TrimStart = EmitJsTrimHelper(typeBuilder, runtime.Strings, runtime.CreateException, runtime.TSTypeErrorCtor,
+            runtime.ToJsString, runtime.UndefinedType, "StringTrimStart", trimMode: 1, strictReceiver: true);
+        runtime.Strings.TrimEnd = EmitJsTrimHelper(typeBuilder, runtime.Strings, runtime.CreateException, runtime.TSTypeErrorCtor,
+            runtime.ToJsString, runtime.UndefinedType, "StringTrimEnd", trimMode: 2, strictReceiver: true);
 
         // Generic stub for methods without specific helpers — used only for
         // typeof + isConstructor probes via $TSFunction wrappers, AND wired
         // into Object.prototype.toString / Array.prototype.toString. Stays
         // tolerant of null/undefined receivers (returns empty string) since
         // those wirings legitimately call with non-string receivers.
-        runtime.StringPrototypeGenericStub = EmitStringStringStub(typeBuilder, runtime, "_StringPrototypeStub", "ToString", strictReceiver: false);
+        runtime.Strings.PrototypeGenericStub = EmitStringStringStub(typeBuilder, runtime.CreateException, runtime.TSTypeErrorCtor,
+            runtime.ToJsString, runtime.UndefinedType, "_StringPrototypeStub", "ToString", strictReceiver: false);
 
         // Strict variant for methods whose first spec step is RequireObjectCoercible
         // (match/matchAll/search/etc.) — these throw TypeError on null/undefined
         // receivers per ECMA-262 22.1.3.* step 1. Used for borrowed-method
         // patterns (`String.prototype.match.call(null, /./)`) where the inline
         // dispatch path doesn't fire.
-        _ = EmitStringStringStub(typeBuilder, runtime, "_StringPrototypeStrictStub", "ToString", strictReceiver: true);
+        _ = EmitStringStringStub(typeBuilder, runtime.CreateException, runtime.TSTypeErrorCtor, runtime.ToJsString, runtime.UndefinedType,
+            "_StringPrototypeStrictStub", "ToString", strictReceiver: true);
 
         // ECMA-262 22.1.3.27 String.prototype.toString === valueOf === thisStringValue.
         // Returns the underlying string for both primitive strings and Stage-4z19
         // boxed wrappers; throws TypeError on non-string-like receivers (per spec).
-        runtime.StringProtoToStringHelper = EmitStringProtoToStringHelper(typeBuilder, runtime);
+        runtime.Strings.ProtoToStringHelper = EmitStringProtoToStringHelper(typeBuilder, runtime.Strings, runtime.CreateException,
+            runtime.TSObjectFieldsGetter, runtime.TSObjectType, runtime.TSTypeErrorCtor);
 
         // ECMA-262 19.1.3.6 Object.prototype.toString — returns "[object X]"
         // brand based on receiver type. Wired into the Object.prototype slot
@@ -454,7 +462,7 @@ public partial class RuntimeEmitter
 
         var notStringProtoLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldsfld, runtime.StringPrototypeField);
+        il.Emit(OpCodes.Ldsfld, runtime.Strings.PrototypeField);
         il.Emit(OpCodes.Bne_Un, notStringProtoLabel);
         EmitTag("[object String]");
         il.MarkLabel(notStringProtoLabel);
@@ -669,7 +677,8 @@ public partial class RuntimeEmitter
     /// directly via TSObject's fields dict to avoid recursing through GetProperty
     /// (which would walk the prototype chain back to this very helper).
     /// </summary>
-    private MethodBuilder EmitStringProtoToStringHelper(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private MethodBuilder EmitStringProtoToStringHelper(TypeBuilder typeBuilder, EmittedStringRuntime strings, MethodInfo createException,
+        MethodInfo objectFieldsGetter, Type objectType, ConstructorInfo typeErrorCtor)
     {
         var method = typeBuilder.DefineMethod(
             "StringProtoToString",
@@ -693,7 +702,7 @@ public partial class RuntimeEmitter
         // String.prototype singleton itself: [[StringData]] is "" per spec.
         var notStringPrototypeLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldsfld, runtime.StringPrototypeField);
+        il.Emit(OpCodes.Ldsfld, strings.PrototypeField);
         il.Emit(OpCodes.Bne_Un, notStringPrototypeLabel);
         il.Emit(OpCodes.Ldstr, "");
         il.Emit(OpCodes.Ret);
@@ -702,12 +711,12 @@ public partial class RuntimeEmitter
         // $TSObject wrapper — read __primitiveValue from the field dict directly.
         var notTSObjectLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSObjectType);
+        il.Emit(OpCodes.Isinst, objectType);
         il.Emit(OpCodes.Brfalse, notTSObjectLabel);
         var primValLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSObjectType);
-        il.Emit(OpCodes.Callvirt, runtime.TSObjectFieldsGetter);
+        il.Emit(OpCodes.Castclass, objectType);
+        il.Emit(OpCodes.Callvirt, objectFieldsGetter);
         il.Emit(OpCodes.Ldstr, "__primitiveValue");
         il.Emit(OpCodes.Ldloca, primValLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "TryGetValue",
@@ -723,12 +732,13 @@ public partial class RuntimeEmitter
 
         // Other receivers — TypeError per spec. Borrowed-method calls of the
         // form `String.prototype.toString.call(42)` rely on this throw.
-        GuestErrorEmitter.ThrowTypeError(il, runtime, "String.prototype.toString requires that 'this' be a String");
+        GuestErrorEmitter.ThrowError(il, createException, typeErrorCtor, "String.prototype.toString requires that 'this' be a String");
 
         return method;
     }
 
-    private MethodBuilder EmitStringStringStub(TypeBuilder typeBuilder, EmittedRuntime runtime, string runtimeName, string netName, bool strictReceiver)
+    private MethodBuilder EmitStringStringStub(TypeBuilder typeBuilder, MethodInfo createException, ConstructorInfo typeErrorCtor,
+        MethodInfo toJsString, Type undefinedType, string runtimeName, string netName, bool strictReceiver)
     {
         var method = typeBuilder.DefineMethod(
             runtimeName,
@@ -746,21 +756,21 @@ public partial class RuntimeEmitter
             var notNullLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Brtrue, notNullLabel);
-            GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot convert undefined or null to object");
+            GuestErrorEmitter.ThrowError(il, createException, typeErrorCtor, "Cannot convert undefined or null to object");
             il.MarkLabel(notNullLabel);
 
             var notUndefLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+            il.Emit(OpCodes.Isinst, undefinedType);
             il.Emit(OpCodes.Brfalse, notUndefLabel);
-            GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot convert undefined or null to object");
+            GuestErrorEmitter.ThrowError(il, createException, typeErrorCtor, "Cannot convert undefined or null to object");
             il.MarkLabel(notUndefLabel);
 
             // Coerce via $Runtime.ToJsString — JS-spec ToString protocol so
             // booleans surface as "true"/"false" (not .NET "True"/"False"),
             // numbers via JS formatting, objects via valueOf/toString.
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Call, runtime.ToJsString);
+            il.Emit(OpCodes.Call, toJsString);
         }
         else
         {
@@ -788,7 +798,8 @@ public partial class RuntimeEmitter
     /// 7.2.10 IsWhiteSpace + IsLineTerminator predicate (which adds U+FEFF
     /// vs .NET's <c>char.IsWhiteSpace</c>).
     /// </summary>
-    private MethodBuilder EmitJsTrimHelper(TypeBuilder typeBuilder, EmittedRuntime runtime, string runtimeName, int trimMode, bool strictReceiver)
+    private MethodBuilder EmitJsTrimHelper(TypeBuilder typeBuilder, EmittedStringRuntime strings, MethodInfo createException,
+        ConstructorInfo typeErrorCtor, MethodInfo toJsString, Type undefinedType, string runtimeName, int trimMode, bool strictReceiver)
     {
         var method = typeBuilder.DefineMethod(
             runtimeName,
@@ -803,18 +814,18 @@ public partial class RuntimeEmitter
             var notNullLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Brtrue, notNullLabel);
-            GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot convert undefined or null to object");
+            GuestErrorEmitter.ThrowError(il, createException, typeErrorCtor, "Cannot convert undefined or null to object");
             il.MarkLabel(notNullLabel);
 
             var notUndefLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+            il.Emit(OpCodes.Isinst, undefinedType);
             il.Emit(OpCodes.Brfalse, notUndefLabel);
-            GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot convert undefined or null to object");
+            GuestErrorEmitter.ThrowError(il, createException, typeErrorCtor, "Cannot convert undefined or null to object");
             il.MarkLabel(notUndefLabel);
 
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Call, runtime.ToJsString);
+            il.Emit(OpCodes.Call, toJsString);
         }
         else
         {
@@ -824,18 +835,18 @@ public partial class RuntimeEmitter
 
         // Now stack has the string. Inline the trim algorithm.
         il.Emit(OpCodes.Ldc_I4, trimMode);
-        il.Emit(OpCodes.Call, runtime.JsTrimInline);
+        il.Emit(OpCodes.Call, strings.TrimInline);
         il.Emit(OpCodes.Ret);
 
         return method;
     }
 
     /// <summary>
-    /// Emits <c>$Runtime.JsTrimInline(string s, int mode) -&gt; string</c>:
+    /// Emits <c>$Runtime.Strings.TrimInline(string s, int mode) -&gt; string</c>:
     /// JS-spec trim that adds U+FEFF (ZWNBSP) to the .NET whitespace set.
     /// mode: 0=both, 1=start only, 2=end only.
     /// </summary>
-    private MethodBuilder EmitJsTrimInline(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private MethodBuilder EmitJsTrimInline(TypeBuilder typeBuilder)
     {
         var method = typeBuilder.DefineMethod(
             "JsTrimInline",

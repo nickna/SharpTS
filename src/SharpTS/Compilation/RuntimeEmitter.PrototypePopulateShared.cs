@@ -5,6 +5,10 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
+    // Immutable construction inputs shared by prototype installation; descriptor ownership stays with its family.
+    private readonly record struct PrototypeDescriptorInputs(
+        ConstructorInfo Ctor, MethodInfo ValueSetter, MethodInfo EnumerableSetter, MethodInfo DefineProperty);
+
     /// <summary>
     /// Shared IL idioms for the <c>*PrototypePopulate</c> emitters. Each
     /// prototype singleton (Array/Boolean/Error/Function/Number/Object/
@@ -40,18 +44,27 @@ public partial class RuntimeEmitter
     private void EmitInstallNonEnumerable(ILGenerator il, EmittedRuntime runtime,
         FieldBuilder protoField, LocalBuilder descLocal, string jsName, System.Action emitValue)
     {
-        il.Emit(OpCodes.Newobj, runtime.CompiledPropertyDescriptorCtor);
+        EmitInstallNonEnumerableDescriptor(il, new PrototypeDescriptorInputs(runtime.CompiledPropertyDescriptorCtor,
+            runtime.CompiledPropertyDescriptorValue.GetSetMethod()!, runtime.CompiledPropertyDescriptorEnumerable.GetSetMethod()!,
+            runtime.PDSDefineProperty),
+            protoField, descLocal, jsName, emitValue);
+    }
+
+    private void EmitInstallNonEnumerableDescriptor(ILGenerator il, PrototypeDescriptorInputs descriptors,
+        FieldBuilder protoField, LocalBuilder descLocal, string jsName, System.Action emitValue)
+    {
+        il.Emit(OpCodes.Newobj, descriptors.Ctor);
         il.Emit(OpCodes.Stloc, descLocal);
         il.Emit(OpCodes.Ldloc, descLocal);
         emitValue();
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorValue.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, descriptors.ValueSetter);
         il.Emit(OpCodes.Ldloc, descLocal);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorEnumerable.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, descriptors.EnumerableSetter);
         il.Emit(OpCodes.Ldsfld, protoField);
         il.Emit(OpCodes.Ldstr, jsName);
         il.Emit(OpCodes.Ldloc, descLocal);
-        il.Emit(OpCodes.Call, runtime.PDSDefineProperty);
+        il.Emit(OpCodes.Call, descriptors.DefineProperty);
         il.Emit(OpCodes.Pop);
     }
 
@@ -63,11 +76,20 @@ public partial class RuntimeEmitter
     private void EmitInstallConstructor(ILGenerator il, EmittedRuntime runtime,
         FieldBuilder protoField, LocalBuilder descLocal, MethodInfo setItem, System.Action emitValue)
     {
+        EmitInstallConstructorDescriptor(il, new PrototypeDescriptorInputs(runtime.CompiledPropertyDescriptorCtor,
+            runtime.CompiledPropertyDescriptorValue.GetSetMethod()!, runtime.CompiledPropertyDescriptorEnumerable.GetSetMethod()!,
+            runtime.PDSDefineProperty),
+            protoField, descLocal, setItem, emitValue);
+    }
+
+    private void EmitInstallConstructorDescriptor(ILGenerator il, PrototypeDescriptorInputs descriptors,
+        FieldBuilder protoField, LocalBuilder descLocal, MethodInfo setItem, System.Action emitValue)
+    {
         il.Emit(OpCodes.Ldsfld, protoField);
         il.Emit(OpCodes.Ldstr, "constructor");
         emitValue();
         il.Emit(OpCodes.Callvirt, setItem);
-        EmitInstallNonEnumerable(il, runtime, protoField, descLocal, "constructor", emitValue);
+        EmitInstallNonEnumerableDescriptor(il, descriptors, protoField, descLocal, "constructor", emitValue);
     }
 
     /// <summary>
@@ -88,6 +110,17 @@ public partial class RuntimeEmitter
         string jsName, MethodBuilder? helper, int jsLength, bool nameThisParam = true)
     {
         if (helper is null) return;
+        EmitWirePrototypeMethodDescriptor(il, new PrototypeDescriptorInputs(runtime.CompiledPropertyDescriptorCtor,
+            runtime.CompiledPropertyDescriptorValue.GetSetMethod()!, runtime.CompiledPropertyDescriptorEnumerable.GetSetMethod()!,
+            runtime.PDSDefineProperty), runtime.TSFunctionGetOrCreate,
+            protoField, descLocal, setItem, jsName, helper, jsLength, nameThisParam);
+    }
+
+    private void EmitWirePrototypeMethodDescriptor(ILGenerator il, PrototypeDescriptorInputs descriptors, MethodInfo functionGetOrCreate,
+        FieldBuilder protoField, LocalBuilder descLocal, MethodInfo setItem,
+        string jsName, MethodBuilder? helper, int jsLength, bool nameThisParam = true)
+    {
+        if (helper is null) return;
         if (nameThisParam)
         {
             try { helper.DefineParameter(1, ParameterAttributes.None, "__this"); }
@@ -100,7 +133,7 @@ public partial class RuntimeEmitter
         // Use the declaration cache shared by GetProperty's synthesized
         // Object.prototype method path so descriptor.value and direct reads
         // preserve function identity.
-        il.Emit(OpCodes.Call, runtime.TSFunctionGetOrCreate);
+        il.Emit(OpCodes.Call, functionGetOrCreate);
         il.Emit(OpCodes.Stloc, wrapperLocal);
         // Fast-path dict store
         il.Emit(OpCodes.Ldsfld, protoField);
@@ -108,7 +141,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, wrapperLocal);
         il.Emit(OpCodes.Callvirt, setItem);
         // Non-enumerable PDS descriptor
-        EmitInstallNonEnumerable(il, runtime, protoField, descLocal, jsName,
+        EmitInstallNonEnumerableDescriptor(il, descriptors, protoField, descLocal, jsName,
             () => il.Emit(OpCodes.Ldloc, wrapperLocal));
     }
 }

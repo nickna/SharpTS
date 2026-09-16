@@ -257,8 +257,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, _types.String);
         il.Emit(OpCodes.Brfalse, notStringForSymbolLabel);
-        il.Emit(OpCodes.Call, runtime.StringPrototypePopulateMethod);
-        il.Emit(OpCodes.Ldsfld, runtime.StringPrototypeField);
+        il.Emit(OpCodes.Call, runtime.Strings.PrototypePopulateMethod);
+        il.Emit(OpCodes.Ldsfld, runtime.Strings.PrototypeField);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, method);
         il.Emit(OpCodes.Ret);

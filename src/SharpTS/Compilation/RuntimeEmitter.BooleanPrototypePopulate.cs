@@ -10,7 +10,7 @@ public partial class RuntimeEmitter
     /// <c>$TSFunction</c> wrappers for toString/valueOf. No dedicated
     /// $Runtime helpers exist for these (compiled mode handles
     /// <c>Boolean.toString()</c> via the inline String-conversion path),
-    /// so the wrappers point at <see cref="EmittedRuntime.StringPrototypeGenericStub"/>
+    /// so the wrappers point at <see cref="EmittedStringRuntime.PrototypeGenericStub"/>
     /// — sufficient for typeof + IsConstructor probes from
     /// Test262 not-a-constructor.js tests.
     /// </summary>

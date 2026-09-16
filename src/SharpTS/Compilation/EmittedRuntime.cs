@@ -276,47 +276,8 @@ public class EmittedRuntime
     public TypeBuilder ExpectsThisAttrType { get; set; } = null!;
     public ConstructorBuilder ExpectsThisAttrCtor { get; set; } = null!;
 
-    // String methods
-    public MethodBuilder StringCharAt { get; set; } = null!;
-    public MethodBuilder StringSubstring { get; set; } = null!;
-    public MethodBuilder StringSubstr { get; set; } = null!;
-    public MethodBuilder StringIndexOf { get; set; } = null!;
-    public MethodBuilder StringIndexOfFrom { get; set; } = null!;
-    public MethodBuilder StringIndexOfPrimitive { get; set; } = null!;
-    public MethodBuilder StringIncludesPrimitive { get; set; } = null!;
-    public MethodBuilder StringSlicePrimitive { get; set; } = null!;
-    public MethodBuilder StringSubstringPrimitive { get; set; } = null!;
-    public MethodBuilder StringSliceFromLengthPrimitive { get; set; } = null!;
-    public MethodBuilder StringSliceLengthPrimitive { get; set; } = null!;
-    public MethodBuilder StringSubstringFromLengthPrimitive { get; set; } = null!;
-    public MethodBuilder StringSubstringLengthPrimitive { get; set; } = null!;
-    public MethodBuilder StringToUpperCase { get; set; } = null!;
-    public MethodBuilder StringToLowerCase { get; set; } = null!;
-    public MethodBuilder StringTrim { get; set; } = null!;
-    public MethodBuilder StringReplace { get; set; } = null!;
-    public MethodBuilder StringIncludes { get; set; } = null!;
-    public MethodBuilder StringStartsWith { get; set; } = null!;
-    public MethodBuilder StringEndsWith { get; set; } = null!;
-    public MethodBuilder StringSlice { get; set; } = null!;
-    public MethodBuilder StringRepeat { get; set; } = null!;
-    public MethodBuilder StringPadStart { get; set; } = null!;
-    public MethodBuilder StringPadEnd { get; set; } = null!;
-    public MethodBuilder StringCharCodeAt { get; set; } = null!;
-    public MethodBuilder StringConcat { get; set; } = null!;
-    public MethodBuilder StringLastIndexOf { get; set; } = null!;
-    public MethodBuilder StringTrimStart { get; set; } = null!;
-    public MethodBuilder StringTrimEnd { get; set; } = null!;
-    public MethodBuilder JsTrimInline { get; set; } = null!;
-    public MethodBuilder StringReplaceAll { get; set; } = null!;
-    public MethodBuilder StringAt { get; set; } = null!;
-    public MethodBuilder StringFromCharCode { get; set; } = null!;
-    public MethodBuilder StringCodePointAt { get; set; } = null!;
-    public MethodBuilder StringIsWellFormed { get; set; } = null!;
-    public MethodBuilder StringToWellFormed { get; set; } = null!;
-    public MethodBuilder StringIterator { get; set; } = null!;
-    public MethodBuilder StringFromCodePoint { get; set; } = null!;
-    public MethodBuilder StringNormalize { get; set; } = null!;
-    public MethodBuilder StringLocaleCompare { get; set; } = null!;
+    /// <summary>Required core string operations and prototype declarations.</summary>
+    public EmittedStringRuntime Strings { get; } = new();
 
     // Object methods
     public MethodBuilder CreateObject { get; set; } = null!;
@@ -396,8 +357,6 @@ public class EmittedRuntime
     /// or monkey-patching. Null-backed when the program never mentions Date.
     /// </summary>
     public FieldBuilder DatePrototypeField { get; set; } = null!;
-    /// <summary>String.prototype singleton; mirror of <see cref="BooleanPrototypeField"/> for primitive strings.</summary>
-    public FieldBuilder StringPrototypeField { get; set; } = null!;
     /// <summary>BigInt.prototype singleton used by value-position BigInt and primitive BigInteger symbol lookup.</summary>
     public FieldBuilder BigIntPrototypeField { get; set; } = null!;
     /// <summary>Symbol.prototype singleton used by value-position Symbol prototype access.</summary>
@@ -428,19 +387,12 @@ public class EmittedRuntime
     /// </summary>
     public Dictionary<string, MethodBuilder> ReflectValueFormMethods { get; } =
         new(StringComparer.Ordinal);
-    /// <summary>Populates <see cref="StringPrototypeField"/> with $TSFunction wrappers; idempotent.</summary>
-    public MethodBuilder StringPrototypePopulateMethod { get; set; } = null!;
     /// <summary>Populates <see cref="NumberPrototypeField"/> with $TSFunction wrappers; idempotent.</summary>
     public MethodBuilder NumberPrototypePopulateMethod { get; set; } = null!;
     /// <summary>Populates <see cref="BigIntPrototypeField"/> with $TSFunction wrappers; idempotent.</summary>
     public MethodBuilder BigIntPrototypePopulateMethod { get; set; } = null!;
-    /// <summary>Generic <c>$Runtime</c> stub used as MethodInfo backing for String.prototype wrappers without dedicated helpers (match/search/toString/valueOf/etc.) — only typeof + isConstructor are ever observed.</summary>
-    public MethodBuilder StringPrototypeGenericStub { get; set; } = null!;
     /// <summary>$Runtime.StringReplaceWithFunction(str, pattern, fn, replaceAll) — handles functional replacement for replace/replaceAll and stringifies each callback result.</summary>
     public MethodBuilder StringReplaceWithFunction { get; set; } = null!;
-    /// <summary>Strict variant of <see cref="StringPrototypeGenericStub"/> that throws TypeError on null/undefined receivers per ECMA-262 22.1.3.* step 1 (RequireObjectCoercible). Used for borrowed-method calls of <c>String.prototype.match/search/matchAll/etc.</c></summary>
-    /// <summary>$Runtime.StringProtoToString(this) — ECMA-262 22.1.3.27 String.prototype.toString. thisStringValue extraction: string→as-is; $Object with __primitiveType="String"→__primitiveValue; String.prototype itself→""; else throws TypeError. Reads the marker dict directly to avoid prototype-chain recursion.</summary>
-    public MethodBuilder StringProtoToStringHelper { get; set; } = null!;
     /// <summary>$Runtime.ObjectProtoToString(this) — ECMA-262 19.1.3.6 toString returns "[object X]" branded by receiver type. Wired into Object.prototype.toString slot for borrowed-method dispatch (`obj.toString = Object.prototype.toString; obj.toString()`).</summary>
     public MethodBuilder ObjectProtoToStringHelper { get; set; } = null!;
     /// <summary>$Runtime.ObjectProtoValueOf(this) — ECMA-262 19.1.3.7. Returns the receiver as-is (primitives stay primitive, objects stay objects). Wired into Object.prototype.valueOf so the materializer's ToPrimitive picks up the inherited method and sees a non-primitive return for plain objects (triggering the toString fallback).</summary>

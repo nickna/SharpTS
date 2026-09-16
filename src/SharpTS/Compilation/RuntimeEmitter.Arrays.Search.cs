@@ -2667,7 +2667,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.String, "Length").GetGetMethod()!);
         il.Emit(OpCodes.Blt, trueLabel);
         il.MarkLabel(walkStringPrototype);
-        il.Emit(OpCodes.Ldsfld, runtime.StringPrototypeField);
+        il.Emit(OpCodes.Ldsfld, runtime.Strings.PrototypeField);
         il.Emit(OpCodes.Stloc, currentLocal);
         il.Emit(OpCodes.Br, loopStart);
         il.MarkLabel(notStringPrimitive);

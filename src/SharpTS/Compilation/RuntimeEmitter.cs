@@ -699,6 +699,7 @@ public partial class RuntimeEmitter
         runtime.MessageChannels.CompleteEmission();
         runtime.Workers.CompleteEmission();
         runtime.StructuredClone.CompleteEmission();
+        runtime.Strings.CompleteEmission();
         runtime.BroadcastChannel?.CompleteEmission();
         runtime.EventEmitter.CompleteEmission();
         runtime.NodeStreams?.CompleteEmission();

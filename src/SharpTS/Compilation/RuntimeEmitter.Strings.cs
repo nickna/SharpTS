@@ -5,7 +5,12 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
-    private void EmitStringCharAt(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    // Scoped inputs for coercion, error, and RegExp peers; no persistent copy is retained.
+    private readonly record struct StringSearchInputs(
+        Type? RegExpType, Type UndefinedType, FieldInfo SymbolMatch, MethodInfo GetIndex, MethodInfo IsTruthy,
+        MethodInfo ToIntegerOrInfinity, MethodInfo ToJsString, MethodInfo CreateException, ConstructorInfo TypeErrorCtor);
+
+    private void EmitStringCharAt(TypeBuilder typeBuilder, EmittedStringRuntime strings, MethodInfo toNumber)
     {
         var method = typeBuilder.DefineMethod(
             "StringCharAt",
@@ -15,7 +20,7 @@ public partial class RuntimeEmitter
         );
         // First param naming as "__this" happens in StringPrototypePopulate.Wire
         // so all wired helpers get the same treatment uniformly.
-        runtime.StringCharAt = method;
+        strings.CharAt = method;
 
         var il = method.GetILGenerator();
 
@@ -38,7 +43,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldelem_Ref);
-        il.Emit(OpCodes.Call, runtime.ToNumber);
+        il.Emit(OpCodes.Call, toNumber);
         il.Emit(OpCodes.Conv_I4);
         il.Emit(OpCodes.Stloc, indexLocal);
         il.MarkLabel(afterIndexLabel);
@@ -72,7 +77,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitStringSubstring(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitStringSubstring(TypeBuilder typeBuilder, EmittedStringRuntime strings, MethodInfo createException,
+        ConstructorInfo typeErrorCtor, MethodInfo toIntegerOrInfinity, MethodInfo toJsString, FieldInfo undefinedInstance, Type undefinedType)
     {
         var method = typeBuilder.DefineMethod(
             "StringSubstring",
@@ -80,7 +86,7 @@ public partial class RuntimeEmitter
             _types.String,
             [_types.Object, _types.ObjectArray]
         );
-        runtime.StringSubstring = method;
+        strings.Substring = method;
 
         var il = method.GetILGenerator();
 
@@ -91,15 +97,15 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Brfalse, substringReceiverOkLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, undefinedType);
         var substringReceiverCoerceLabel = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, substringReceiverCoerceLabel);
         il.MarkLabel(substringReceiverOkLabel);
-        GuestErrorEmitter.ThrowTypeError(il, runtime, "String.prototype.substring called on null or undefined");
+        GuestErrorEmitter.ThrowError(il, createException, typeErrorCtor, "String.prototype.substring called on null or undefined");
         il.MarkLabel(substringReceiverCoerceLabel);
         var substringStringLocal = il.DeclareLocal(_types.String);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, toJsString);
         il.Emit(OpCodes.Stloc, substringStringLocal);
 
         // ECMA-262 22.1.3.22: ToIntegerOrInfinity on each arg (NaN → 0,
@@ -114,7 +120,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldlen);
         il.Emit(OpCodes.Conv_I4);
         il.Emit(OpCodes.Brtrue, substringHasStartLabel);
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, undefinedInstance);
         il.Emit(OpCodes.Br, substringStartReadyLabel);
         il.MarkLabel(substringHasStartLabel);
         il.Emit(OpCodes.Ldarg_1);
@@ -122,7 +128,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldelem_Ref);
         il.MarkLabel(substringStartReadyLabel);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Call, runtime.ToIntegerOrInfinity);
+        il.Emit(OpCodes.Call, toIntegerOrInfinity);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Math, "Max", _types.Int32, _types.Int32));
         il.Emit(OpCodes.Stloc, startLocal);
 
@@ -148,13 +154,13 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Ldelem_Ref);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, undefinedType);
         il.Emit(OpCodes.Brtrue, defaultEnd);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Ldelem_Ref);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Call, runtime.ToIntegerOrInfinity);
+        il.Emit(OpCodes.Call, toIntegerOrInfinity);
         il.MarkLabel(afterEnd);
         il.Emit(OpCodes.Stloc, endLocal);
 
@@ -203,7 +209,7 @@ public partial class RuntimeEmitter
     /// Negative start counts from end; length clamped. Returns substring of specified length.
     /// Needed by yaml's lexer (pushCount uses `buffer.substr(pos, n)` to emit single-char tokens).
     /// </summary>
-    private void EmitStringSubstr(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitStringSubstr(TypeBuilder typeBuilder, EmittedStringRuntime strings, MethodInfo toIntegerOrInfinity)
     {
         var method = typeBuilder.DefineMethod(
             "StringSubstr",
@@ -211,7 +217,7 @@ public partial class RuntimeEmitter
             _types.String,
             [_types.String, _types.ObjectArray]
         );
-        runtime.StringSubstr = method;
+        strings.Substr = method;
 
         var il = method.GetILGenerator();
         var lenLocal = il.DeclareLocal(_types.Int32);
@@ -230,7 +236,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldelem_Ref);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Call, runtime.ToIntegerOrInfinity);
+        il.Emit(OpCodes.Call, toIntegerOrInfinity);
         il.Emit(OpCodes.Stloc, startLocal);
 
         var nonNegStart = il.DefineLabel();
@@ -268,7 +274,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Ldelem_Ref);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Call, runtime.ToIntegerOrInfinity);
+        il.Emit(OpCodes.Call, toIntegerOrInfinity);
         il.MarkLabel(afterLength);
         il.Emit(OpCodes.Stloc, lengthLocal);
 
@@ -297,7 +303,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitStringIndexOf(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitStringIndexOf(TypeBuilder typeBuilder, EmittedStringRuntime strings, MethodInfo toJsString)
     {
         var method = typeBuilder.DefineMethod(
             "StringIndexOf",
@@ -305,14 +311,14 @@ public partial class RuntimeEmitter
             _types.Double,
             [_types.String, _types.Object]
         );
-        runtime.StringIndexOf = method;
+        strings.IndexOf = method;
 
         var il = method.GetILGenerator();
 
         // return (double)str.IndexOf(search)
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, toJsString);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "IndexOf", _types.String));
         il.Emit(OpCodes.Conv_R8);
         il.Emit(OpCodes.Ret);
@@ -322,7 +328,7 @@ public partial class RuntimeEmitter
     /// Emits StringIndexOfFrom: str.indexOf(search, fromIndex). JS-spec: fromIndex is clamped
     /// to [0, length]; out-of-range returns -1. Needed by yaml's lexer (buffer.indexOf('\n', pos)).
     /// </summary>
-    private void EmitStringIndexOfFrom(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitStringIndexOfFrom(TypeBuilder typeBuilder, EmittedStringRuntime strings, MethodInfo toIntegerOrInfinity, MethodInfo toJsString)
     {
         var method = typeBuilder.DefineMethod(
             "StringIndexOfFrom",
@@ -330,7 +336,7 @@ public partial class RuntimeEmitter
             _types.Double,
             [_types.String, _types.Object, _types.Object]
         );
-        runtime.StringIndexOfFrom = method;
+        strings.IndexOfFrom = method;
 
         var il = method.GetILGenerator();
         var idxLocal = il.DeclareLocal(_types.Int32);
@@ -347,14 +353,14 @@ public partial class RuntimeEmitter
         // Search-string coercion precedes position coercion (§22.1.3.8).
         // Both are observable and may throw.
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, toJsString);
         il.Emit(OpCodes.Stloc, indexOfSearchLocal);
 
         // ToIntegerOrInfinity performs observable object coercion and maps the
         // infinities to sentinel int extrema suitable for the clamps below.
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Call, runtime.ToIntegerOrInfinity);
+        il.Emit(OpCodes.Call, toIntegerOrInfinity);
         il.Emit(OpCodes.Stloc, idxLocal);
 
         // if (idx < 0) idx = 0
@@ -388,7 +394,7 @@ public partial class RuntimeEmitter
     /// intrinsics. Their signatures deliberately contain no <see cref="object"/>
     /// or <c>object[]</c> slots, so a statically proven call stays in typed IL.
     /// </summary>
-    private void EmitPrimitiveStringIntrinsics(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitPrimitiveStringIntrinsics(TypeBuilder typeBuilder, EmittedStringRuntime strings)
     {
         MethodBuilder toInteger = EmitPrimitiveStringToInteger(typeBuilder);
         MethodImplAttributes inlineAndOptimize =
@@ -409,7 +415,7 @@ public partial class RuntimeEmitter
             _types.Double,
             [_types.String, _types.String, _types.Double]);
         indexOf.SetImplementationFlags(inlineAndOptimize);
-        runtime.StringIndexOfPrimitive = indexOf;
+        strings.IndexOfPrimitive = indexOf;
         {
             var il = indexOf.GetILGenerator();
             var start = il.DeclareLocal(_types.Int32);
@@ -441,7 +447,7 @@ public partial class RuntimeEmitter
             _types.Boolean,
             [_types.String, _types.String, _types.Double]);
         includes.SetImplementationFlags(inlineAndOptimize);
-        runtime.StringIncludesPrimitive = includes;
+        strings.IncludesPrimitive = includes;
         {
             var il = includes.GetILGenerator();
             var found = il.DefineLabel();
@@ -464,7 +470,7 @@ public partial class RuntimeEmitter
             _types.String,
             [_types.String, _types.Double, _types.Double, _types.Boolean]);
         slice.SetImplementationFlags(inlineAndOptimize);
-        runtime.StringSlicePrimitive = slice;
+        strings.SlicePrimitive = slice;
         {
             var il = slice.GetILGenerator();
             var length = il.DeclareLocal(_types.Int32);
@@ -548,7 +554,7 @@ public partial class RuntimeEmitter
             _types.String,
             [_types.String, _types.Double, _types.Double, _types.Boolean]);
         substringPrimitive.SetImplementationFlags(inlineAndOptimize);
-        runtime.StringSubstringPrimitive = substringPrimitive;
+        strings.SubstringPrimitive = substringPrimitive;
         {
             var il = substringPrimitive.GetILGenerator();
             var length = il.DeclareLocal(_types.Int32);
@@ -681,7 +687,7 @@ public partial class RuntimeEmitter
             _types.Double,
             [_types.String, _types.Double, _types.Double]);
         sliceLength.SetImplementationFlags(inlineAndOptimize);
-        runtime.StringSliceLengthPrimitive = sliceLength;
+        strings.SliceLengthPrimitive = sliceLength;
         {
             var il = sliceLength.GetILGenerator();
             var length = il.DeclareLocal(_types.Int32);
@@ -749,7 +755,7 @@ public partial class RuntimeEmitter
             _types.Double,
             [_types.String, _types.Double]);
         sliceFromLength.SetImplementationFlags(inlineAndOptimize);
-        runtime.StringSliceFromLengthPrimitive = sliceFromLength;
+        strings.SliceFromLengthPrimitive = sliceFromLength;
         {
             var il = sliceFromLength.GetILGenerator();
             var length = il.DeclareLocal(_types.Int32);
@@ -838,7 +844,7 @@ public partial class RuntimeEmitter
             _types.Double,
             [_types.String, _types.Double, _types.Double]);
         substringLength.SetImplementationFlags(inlineAndOptimize);
-        runtime.StringSubstringLengthPrimitive = substringLength;
+        strings.SubstringLengthPrimitive = substringLength;
         {
             var il = substringLength.GetILGenerator();
             var length = il.DeclareLocal(_types.Int32);
@@ -910,7 +916,7 @@ public partial class RuntimeEmitter
             _types.Double,
             [_types.String, _types.Double]);
         substringFromLength.SetImplementationFlags(inlineAndOptimize);
-        runtime.StringSubstringFromLengthPrimitive = substringFromLength;
+        strings.SubstringFromLengthPrimitive = substringFromLength;
         {
             var il = substringFromLength.GetILGenerator();
             var length = il.DeclareLocal(_types.Int32);
@@ -993,7 +999,7 @@ public partial class RuntimeEmitter
         return method;
     }
 
-    private void EmitStringReplace(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitStringReplace(TypeBuilder typeBuilder, EmittedStringRuntime strings)
     {
         var method = typeBuilder.DefineMethod(
             "StringReplace",
@@ -1001,7 +1007,7 @@ public partial class RuntimeEmitter
             _types.String,
             [_types.String, _types.String, _types.String]
         );
-        runtime.StringReplace = method;
+        strings.Replace = method;
 
         var il = method.GetILGenerator();
 
@@ -1041,22 +1047,22 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitStringIncludes(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitStringIncludes(TypeBuilder typeBuilder, EmittedStringRuntime strings, StringSearchInputs search)
     {
-        EmitStringSearchHelper(typeBuilder, runtime, "StringIncludes", "Contains", "includes",
-            m => runtime.StringIncludes = m);
+        EmitStringSearchHelper(typeBuilder, search, "StringIncludes", "Contains", "includes",
+            m => strings.Includes = m);
     }
 
-    private void EmitStringStartsWith(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitStringStartsWith(TypeBuilder typeBuilder, EmittedStringRuntime strings, StringSearchInputs search)
     {
-        EmitStringSearchHelper(typeBuilder, runtime, "StringStartsWith", "StartsWith", "startsWith",
-            m => runtime.StringStartsWith = m);
+        EmitStringSearchHelper(typeBuilder, search, "StringStartsWith", "StartsWith", "startsWith",
+            m => strings.StartsWith = m);
     }
 
-    private void EmitStringEndsWith(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitStringEndsWith(TypeBuilder typeBuilder, EmittedStringRuntime strings, StringSearchInputs search)
     {
-        EmitStringSearchHelper(typeBuilder, runtime, "StringEndsWith", "EndsWith", "endsWith",
-            m => runtime.StringEndsWith = m);
+        EmitStringSearchHelper(typeBuilder, search, "StringEndsWith", "EndsWith", "endsWith",
+            m => strings.EndsWith = m);
     }
 
     /// <summary>
@@ -1066,7 +1072,7 @@ public partial class RuntimeEmitter
     /// path silently casts RegExp to string via Castclass, throwing an
     /// InvalidCastException instead of a spec TypeError.
     /// </summary>
-    private void EmitStringSearchHelper(TypeBuilder typeBuilder, EmittedRuntime runtime,
+    private void EmitStringSearchHelper(TypeBuilder typeBuilder, StringSearchInputs search,
         string methodName, string clrMethodName, string jsMethodName,
         Action<MethodBuilder> assign)
     {
@@ -1087,39 +1093,39 @@ public partial class RuntimeEmitter
         // non-nullish value controls the answer (and its getter may throw);
         // only when absent do native RegExp objects fall back to their brand.
         // This check must precede ToString(searchString).
-        if (runtime.TSRegExpType != null)
+        if (search.RegExpType != null)
         {
             var rejectRegExpLabel = il.DefineLabel();
             var brandCheckLabel = il.DefineLabel();
             var notRegExpLabel = il.DefineLabel();
             var matchValueLocal = il.DeclareLocal(_types.Object);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Ldsfld, runtime.SymbolMatch);
-            il.Emit(OpCodes.Call, runtime.GetIndex);
+            il.Emit(OpCodes.Ldsfld, search.SymbolMatch);
+            il.Emit(OpCodes.Call, search.GetIndex);
             il.Emit(OpCodes.Stloc, matchValueLocal);
             il.Emit(OpCodes.Ldloc, matchValueLocal);
             il.Emit(OpCodes.Brfalse, brandCheckLabel);
             il.Emit(OpCodes.Ldloc, matchValueLocal);
-            il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+            il.Emit(OpCodes.Isinst, search.UndefinedType);
             il.Emit(OpCodes.Brtrue, brandCheckLabel);
             il.Emit(OpCodes.Ldloc, matchValueLocal);
-            il.Emit(OpCodes.Call, runtime.IsTruthy);
+            il.Emit(OpCodes.Call, search.IsTruthy);
             il.Emit(OpCodes.Brtrue, rejectRegExpLabel);
             il.Emit(OpCodes.Br, notRegExpLabel);
             il.MarkLabel(brandCheckLabel);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Isinst, runtime.TSRegExpType);
+            il.Emit(OpCodes.Isinst, search.RegExpType);
             il.Emit(OpCodes.Brfalse, notRegExpLabel);
             il.MarkLabel(rejectRegExpLabel);
             il.Emit(OpCodes.Ldstr, "First argument to String.prototype." + jsMethodName + " must not be a regular expression");
-            GuestErrorEmitter.ThrowErrorFromStack(il, runtime, runtime.TSTypeErrorCtor);
+            GuestErrorEmitter.ThrowErrorFromStack(il, search.CreateException, search.TypeErrorCtor);
             il.MarkLabel(notRegExpLabel);
         }
 
         // Coerce searchString via ToJsString (handles non-string, throws on Symbol).
         var searchStrLocal = il.DeclareLocal(_types.String);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, search.ToJsString);
         il.Emit(OpCodes.Stloc, searchStrLocal);
 
         // Coerce position via ToIntegerOrInfinity (throws TypeError on Symbol
@@ -1133,11 +1139,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Brfalse, posUndefLabel);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, search.UndefinedType);
         il.Emit(OpCodes.Brtrue, posUndefLabel);
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Call, runtime.ToIntegerOrInfinity);
+        il.Emit(OpCodes.Call, search.ToIntegerOrInfinity);
         il.Emit(OpCodes.Stloc, posLocal);
         il.Emit(OpCodes.Br, posDoneLabel);
         il.MarkLabel(posUndefLabel);
@@ -1255,7 +1261,8 @@ public partial class RuntimeEmitter
         }
     }
 
-    private void EmitStringSlice(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitStringSlice(TypeBuilder typeBuilder, EmittedStringRuntime strings, MethodInfo createException, ConstructorInfo typeErrorCtor,
+        MethodInfo toIntegerOrInfinity, MethodInfo toJsString, FieldInfo undefinedInstance, Type undefinedType)
     {
         // StringSlice(object receiver, object[] args) -> string
         // Handles negative indices and optional end parameter.
@@ -1268,7 +1275,7 @@ public partial class RuntimeEmitter
             _types.String,
             [_types.Object, _types.ObjectArray]
         );
-        runtime.StringSlice = method;
+        strings.Slice = method;
 
         var il = method.GetILGenerator();
         var startLocal = il.DeclareLocal(_types.Int32);
@@ -1279,14 +1286,14 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Brfalse, sliceReceiverThrowLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, undefinedType);
         il.Emit(OpCodes.Brfalse, sliceReceiverReadyLabel);
         il.MarkLabel(sliceReceiverThrowLabel);
-        GuestErrorEmitter.ThrowTypeError(il, runtime, "String.prototype.slice called on null or undefined");
+        GuestErrorEmitter.ThrowError(il, createException, typeErrorCtor, "String.prototype.slice called on null or undefined");
         il.MarkLabel(sliceReceiverReadyLabel);
         var sliceStringLocal = il.DeclareLocal(_types.String);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, toJsString);
         il.Emit(OpCodes.Stloc, sliceStringLocal);
 
         // lengthLocal = str.Length
@@ -1303,7 +1310,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldlen);
         il.Emit(OpCodes.Conv_I4);
         il.Emit(OpCodes.Brtrue, sliceHasStartLabel);
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, undefinedInstance);
         il.Emit(OpCodes.Br, sliceStartReadyLabel);
         il.MarkLabel(sliceHasStartLabel);
         il.Emit(OpCodes.Ldarg_1);
@@ -1311,7 +1318,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldelem_Ref);
         il.MarkLabel(sliceStartReadyLabel);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Call, runtime.ToIntegerOrInfinity);
+        il.Emit(OpCodes.Call, toIntegerOrInfinity);
         il.Emit(OpCodes.Stloc, startLocal);
 
         // end = args.Length > 1 && args[1] != null/undefined ? ToIntegerOrInfinity(args[1], 0) : length
@@ -1331,13 +1338,13 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Ldelem_Ref);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, undefinedType);
         il.Emit(OpCodes.Brtrue, noEndArg);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Ldelem_Ref);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Call, runtime.ToIntegerOrInfinity);
+        il.Emit(OpCodes.Call, toIntegerOrInfinity);
         il.Emit(OpCodes.Stloc, endLocal);
         il.Emit(OpCodes.Br, endArgDone);
         il.MarkLabel(noEndArg);
@@ -1405,7 +1412,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitStringRepeat(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitStringRepeat(TypeBuilder typeBuilder, EmittedStringRuntime strings, MethodInfo createException,
+        ConstructorInfo rangeErrorCtor, MethodInfo toNumber)
     {
         // StringRepeat(string str, object count) -> string. count is `object`
         // so a Symbol or other primitive coerces through ToNumber here, which
@@ -1418,7 +1426,7 @@ public partial class RuntimeEmitter
             _types.String,
             [_types.String, _types.Object]
         );
-        runtime.StringRepeat = method;
+        strings.Repeat = method;
 
         var il = method.GetILGenerator();
         var countDoubleLocal = il.DeclareLocal(_types.Double);
@@ -1433,7 +1441,7 @@ public partial class RuntimeEmitter
         // Coerce via ToNumber (throws on Symbol / BigInt / object-with-throwing-
         // valueOf). undefined → NaN → 0 (per ToIntegerOrInfinity step 2).
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.ToNumber);
+        il.Emit(OpCodes.Call, toNumber);
         il.Emit(OpCodes.Stloc, countDoubleLocal);
 
         // ECMA-262 21.1.3.13: validate count first.
@@ -1457,7 +1465,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, nonNegLabel);
 
         il.MarkLabel(throwRangeLabel);
-        GuestErrorEmitter.ThrowRangeError(il, runtime, "Invalid count value");
+        GuestErrorEmitter.ThrowError(il, createException, rangeErrorCtor, "Invalid count value");
 
         il.MarkLabel(nonNegLabel);
 
@@ -1506,7 +1514,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitStringPadStart(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitStringPadStart(TypeBuilder typeBuilder, EmittedStringRuntime strings, MethodInfo toJsString, MethodInfo toNumber,
+        Type undefinedType)
     {
         // StringPadStart(string str, object[] args) -> string. argCount derived
         // from args.Length internally so the helper is borrowable via \$TSFunction.
@@ -1516,7 +1525,7 @@ public partial class RuntimeEmitter
             _types.String,
             [_types.String, _types.ObjectArray]
         );
-        runtime.StringPadStart = method;
+        strings.PadStart = method;
 
         var il = method.GetILGenerator();
         var targetLengthLocal = il.DeclareLocal(_types.Int32);
@@ -1535,7 +1544,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldelem_Ref);
-        il.Emit(OpCodes.Call, runtime.ToNumber);
+        il.Emit(OpCodes.Call, toNumber);
         il.Emit(OpCodes.Conv_I4);
         il.Emit(OpCodes.Stloc, targetLengthLocal);
 
@@ -1567,10 +1576,10 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldelem_Ref);
         il.Emit(OpCodes.Stloc, padArgLocal);
         il.Emit(OpCodes.Ldloc, padArgLocal);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, undefinedType);
         il.Emit(OpCodes.Brtrue, padArgIsUndefLabel);
         il.Emit(OpCodes.Ldloc, padArgLocal);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, toJsString);
         il.Emit(OpCodes.Stloc, padStringLocal);
         il.Emit(OpCodes.Br, padArgDoneLabel);
         il.MarkLabel(padArgIsUndefLabel);
@@ -1623,7 +1632,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitStringPadEnd(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitStringPadEnd(TypeBuilder typeBuilder, EmittedStringRuntime strings, MethodInfo toJsString, MethodInfo toNumber,
+        Type undefinedType)
     {
         // StringPadEnd(string str, object[] args) -> string. argCount derived
         // from args.Length internally so the helper is borrowable via \$TSFunction.
@@ -1633,7 +1643,7 @@ public partial class RuntimeEmitter
             _types.String,
             [_types.String, _types.ObjectArray]
         );
-        runtime.StringPadEnd = method;
+        strings.PadEnd = method;
 
         var il = method.GetILGenerator();
         var targetLengthLocal = il.DeclareLocal(_types.Int32);
@@ -1651,7 +1661,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldelem_Ref);
-        il.Emit(OpCodes.Call, runtime.ToNumber);
+        il.Emit(OpCodes.Call, toNumber);
         il.Emit(OpCodes.Conv_I4);
         il.Emit(OpCodes.Stloc, targetLengthLocal);
 
@@ -1681,10 +1691,10 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldelem_Ref);
         il.Emit(OpCodes.Stloc, padArgLocalEnd);
         il.Emit(OpCodes.Ldloc, padArgLocalEnd);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, undefinedType);
         il.Emit(OpCodes.Brtrue, padArgIsUndefLabelEnd);
         il.Emit(OpCodes.Ldloc, padArgLocalEnd);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, toJsString);
         il.Emit(OpCodes.Stloc, padStringLocal);
         il.Emit(OpCodes.Br, padArgDoneLabelEnd);
         il.MarkLabel(padArgIsUndefLabelEnd);
@@ -1735,7 +1745,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitStringCharCodeAt(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitStringCharCodeAt(TypeBuilder typeBuilder, EmittedStringRuntime strings)
     {
         // StringCharCodeAt(string str, double index) -> double
         var method = typeBuilder.DefineMethod(
@@ -1749,7 +1759,7 @@ public partial class RuntimeEmitter
         // but let RyuJIT fold the tiny helper into the caller so Length and
         // get_Chars can optimize with the surrounding loop.
         method.SetImplementationFlags(MethodImplAttributes.AggressiveInlining);
-        runtime.StringCharCodeAt = method;
+        strings.CharCodeAt = method;
 
         var il = method.GetILGenerator();
         var indexLocal = il.DeclareLocal(_types.Int32);
@@ -1783,7 +1793,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitStringConcat(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitStringConcat(TypeBuilder typeBuilder, EmittedStringRuntime strings, MethodInfo toJsString)
     {
         // StringConcat(string str, object[] args) -> string
         var method = typeBuilder.DefineMethod(
@@ -1792,7 +1802,7 @@ public partial class RuntimeEmitter
             _types.String,
             [_types.String, _types.ObjectArray]
         );
-        runtime.StringConcat = method;
+        strings.Concat = method;
 
         var il = method.GetILGenerator();
         var resultLocal = il.DeclareLocal(_types.String);
@@ -1821,7 +1831,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloc, iLocal);
         il.Emit(OpCodes.Ldelem_Ref);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, toJsString);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", _types.String, _types.String));
         il.Emit(OpCodes.Stloc, resultLocal);
 
@@ -1836,7 +1846,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitStringLastIndexOf(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitStringLastIndexOf(TypeBuilder typeBuilder, EmittedStringRuntime strings)
     {
         // StringLastIndexOf(string str, string search) -> double
         var method = typeBuilder.DefineMethod(
@@ -1845,7 +1855,7 @@ public partial class RuntimeEmitter
             _types.Double,
             [_types.String, _types.String]
         );
-        runtime.StringLastIndexOf = method;
+        strings.LastIndexOf = method;
 
         var il = method.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
@@ -1855,7 +1865,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitStringReplaceAll(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitStringReplaceAll(TypeBuilder typeBuilder, EmittedStringRuntime strings)
     {
         // StringReplaceAll(string str, string search, string replacement) -> string
         // ECMA-262 22.1.3.20 GetSubstitution requires `$$` → `$`, `$&` →
@@ -1871,7 +1881,7 @@ public partial class RuntimeEmitter
             _types.String,
             [_types.String, _types.String, _types.String]
         );
-        runtime.StringReplaceAll = method;
+        strings.ReplaceAll = method;
 
         var il = method.GetILGenerator();
         var emptySearchLabel = il.DefineLabel();
@@ -1945,7 +1955,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitStringAt(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitStringAt(TypeBuilder typeBuilder, EmittedStringRuntime strings, FieldInfo undefinedInstance)
     {
         // StringAt(string str, double index) -> object (string or null)
         var method = typeBuilder.DefineMethod(
@@ -1954,7 +1964,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.String, _types.Double]
         );
-        runtime.StringAt = method;
+        strings.At = method;
 
         var il = method.GetILGenerator();
         var indexLocal = il.DeclareLocal(_types.Int32);
@@ -2002,12 +2012,12 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(nullLabel);
         // ECMA-262 22.1.3.1 String.prototype.at: out-of-range → undefined.
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, undefinedInstance);
         il.MarkLabel(doneLabel);
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitStringFromCharCode(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitStringFromCharCode(TypeBuilder typeBuilder, EmittedStringRuntime strings, MethodInfo toNumber)
     {
         // StringFromCharCode(object[] args) -> string
         // Creates a string from the specified sequence of UTF-16 code units
@@ -2017,7 +2027,7 @@ public partial class RuntimeEmitter
             _types.String,
             [_types.ObjectArray]
         );
-        runtime.StringFromCharCode = method;
+        strings.FromCharCode = method;
 
         var il = method.GetILGenerator();
         var lengthLocal = il.DeclareLocal(_types.Int32);
@@ -2062,7 +2072,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, iLocal);
         il.Emit(OpCodes.Ldelem_Ref);
-        il.Emit(OpCodes.Call, runtime.ToNumber);
+        il.Emit(OpCodes.Call, toNumber);
         il.Emit(OpCodes.Stloc, dLocal);
 
         il.Emit(OpCodes.Ldloc, dLocal);
@@ -2102,7 +2112,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitStringCodePointAt(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitStringCodePointAt(TypeBuilder typeBuilder, EmittedStringRuntime strings, MethodInfo toIntegerOrInfinity,
+        FieldInfo undefinedInstance)
     {
         // StringCodePointAt(string str, object index) -> object (double or undefined)
         var method = typeBuilder.DefineMethod(
@@ -2111,7 +2122,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.String, _types.Object]
         );
-        runtime.StringCodePointAt = method;
+        strings.CodePointAt = method;
 
         var il = method.GetILGenerator();
         var indexLocal = il.DeclareLocal(_types.Int32);
@@ -2123,7 +2134,7 @@ public partial class RuntimeEmitter
         // preserves object/array ToPrimitive semantics (e.g. [1] -> "1" -> 1).
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Call, runtime.ToIntegerOrInfinity);
+        il.Emit(OpCodes.Call, toIntegerOrInfinity);
         il.Emit(OpCodes.Stloc, indexLocal);
 
         // if (index < 0 || index >= str.Length) return null
@@ -2186,12 +2197,12 @@ public partial class RuntimeEmitter
         // ECMA-262 22.1.3.3 step 7: out-of-range index → return undefined.
         // Pre-fix used null which fails `=== undefined` strict equality
         // checks in Test262 (which uses assert.sameValue).
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, undefinedInstance);
         il.MarkLabel(doneLabel);
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitStringWellFormedMethods(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitStringWellFormedMethods(TypeBuilder typeBuilder, EmittedStringRuntime strings)
     {
         // The $TSFunction wrapper coerces the borrowed receiver to string before
         // entering these helpers, preserving RequireObjectCoercible/ToString
@@ -2201,7 +2212,7 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Boolean,
             [_types.String]);
-        runtime.StringIsWellFormed = isWellFormed;
+        strings.IsWellFormed = isWellFormed;
         {
             var il = isWellFormed.GetILGenerator();
             var index = il.DeclareLocal(_types.Int32);
@@ -2271,7 +2282,7 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             _types.String,
             [_types.String]);
-        runtime.StringToWellFormed = toWellFormed;
+        strings.ToWellFormed = toWellFormed;
         {
             var il = toWellFormed.GetILGenerator();
             var chars = il.DeclareLocal(_types.CharArray);
@@ -2348,7 +2359,8 @@ public partial class RuntimeEmitter
         }
     }
 
-    private void EmitStringFromCodePoint(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitStringFromCodePoint(TypeBuilder typeBuilder, EmittedStringRuntime strings, MethodInfo createException,
+        ConstructorInfo rangeErrorCtor, MethodInfo toJsString, MethodInfo toNumber)
     {
         // StringFromCodePoint(object[] args) -> string
         // Creates a string from Unicode code points, handling supplementary characters via surrogate pairs
@@ -2358,7 +2370,7 @@ public partial class RuntimeEmitter
             _types.String,
             [_types.ObjectArray]
         );
-        runtime.StringFromCodePoint = method;
+        strings.FromCodePoint = method;
 
         var il = method.GetILGenerator();
         var lengthLocal = il.DeclareLocal(_types.Int32);
@@ -2401,7 +2413,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, iLocal);
         il.Emit(OpCodes.Ldelem_Ref);
-        il.Emit(OpCodes.Call, runtime.ToNumber);
+        il.Emit(OpCodes.Call, toNumber);
         il.Emit(OpCodes.Stloc, dLocal);
 
         var validLabel = il.DefineLabel();
@@ -2438,9 +2450,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, "Invalid code point ");
         il.Emit(OpCodes.Ldloc, dLocal);
         il.Emit(OpCodes.Box, _types.Double);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, toJsString);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", _types.String, _types.String));
-        GuestErrorEmitter.ThrowErrorFromStack(il, runtime, runtime.TSRangeErrorCtor);
+        GuestErrorEmitter.ThrowErrorFromStack(il, createException, rangeErrorCtor);
 
         il.MarkLabel(validLabel);
 
@@ -2486,7 +2498,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitStringIterator(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitStringIterator(TypeBuilder typeBuilder, EmittedStringRuntime strings, MethodInfo createException,
+        MethodInfo normalizeToEnumerator, ConstructorInfo typeErrorCtor, MethodInfo toJsString, Type undefinedType)
     {
         var method = typeBuilder.DefineMethod(
             "StringIterator",
@@ -2494,7 +2507,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object]);
         method.DefineParameter(1, ParameterAttributes.None, "__this");
-        runtime.StringIterator = method;
+        strings.Iterator = method;
 
         var il = method.GetILGenerator();
         var receiverOkLabel = il.DefineLabel();
@@ -2511,15 +2524,15 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Brfalse, receiverOkLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, undefinedType);
         il.Emit(OpCodes.Brfalse, singleCodeUnitLabel);
         il.MarkLabel(receiverOkLabel);
-        GuestErrorEmitter.ThrowTypeError(il, runtime, "String.prototype[Symbol.iterator] called on null or undefined");
+        GuestErrorEmitter.ThrowError(il, createException, typeErrorCtor, "String.prototype[Symbol.iterator] called on null or undefined");
 
         // Reuse the label after the receiver guard as the normal entry point.
         il.MarkLabel(singleCodeUnitLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, toJsString);
         il.Emit(OpCodes.Stloc, strLocal);
         il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, Type.EmptyTypes));
         il.Emit(OpCodes.Stloc, resultLocal);
@@ -2583,11 +2596,12 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(loopEndLabel);
         il.Emit(OpCodes.Ldloc, resultLocal);
-        il.Emit(OpCodes.Call, runtime.NormalizeToEnumerator);
+        il.Emit(OpCodes.Call, normalizeToEnumerator);
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitStringNormalize(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitStringNormalize(TypeBuilder typeBuilder, EmittedStringRuntime strings, MethodInfo createException,
+        ConstructorInfo rangeErrorCtor, MethodInfo toJsString, Type undefinedType)
     {
         // StringNormalize(string str, int argCount, object[] args) -> string
         var method = typeBuilder.DefineMethod(
@@ -2596,7 +2610,7 @@ public partial class RuntimeEmitter
             _types.String,
             [_types.String, _types.Int32, _types.ObjectArray]
         );
-        runtime.StringNormalize = method;
+        strings.Normalize = method;
 
         var il = method.GetILGenerator();
         var formLocal = il.DeclareLocal(_types.String);
@@ -2622,7 +2636,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldelem_Ref);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, undefinedType);
         il.Emit(OpCodes.Brtrue, nfcLabel);
 
         // Otherwise form = ToString(args[0]). This preserves user coercion and
@@ -2630,7 +2644,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_2); // args
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldelem_Ref);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, toJsString);
         il.Emit(OpCodes.Stloc, formLocal);
 
         il.MarkLabel(afterFormLabel);
@@ -2693,10 +2707,10 @@ public partial class RuntimeEmitter
 
         // Throw RangeError
         il.MarkLabel(throwLabel);
-        GuestErrorEmitter.ThrowRangeError(il, runtime, "The normalization form should be one of NFC, NFD, NFKC, NFKD.");
+        GuestErrorEmitter.ThrowError(il, createException, rangeErrorCtor, "The normalization form should be one of NFC, NFD, NFKC, NFKD.");
     }
 
-    private void EmitStringLocaleCompare(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitStringLocaleCompare(TypeBuilder typeBuilder, EmittedStringRuntime strings)
     {
         // StringLocaleCompare(string str, string that) -> double
         var method = typeBuilder.DefineMethod(
@@ -2705,7 +2719,7 @@ public partial class RuntimeEmitter
             _types.Double,
             [_types.String, _types.String]
         );
-        runtime.StringLocaleCompare = method;
+        strings.LocaleCompare = method;
 
         var il = method.GetILGenerator();
         var resultLocal = il.DeclareLocal(_types.Int32);

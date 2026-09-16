@@ -34,7 +34,7 @@ public sealed class StringStaticEmitter : IStaticTypeEmitterStrategy
                     il.Emit(OpCodes.Stelem_Ref);
                 }
 
-                il.Emit(OpCodes.Call, ctx.Runtime!.StringFromCharCode);
+                il.Emit(OpCodes.Call, ctx.Runtime!.Strings.FromCharCode);
                 return true;
 
             case "fromCodePoint":
@@ -51,7 +51,7 @@ public sealed class StringStaticEmitter : IStaticTypeEmitterStrategy
                     il.Emit(OpCodes.Stelem_Ref);
                 }
 
-                il.Emit(OpCodes.Call, ctx.Runtime!.StringFromCodePoint);
+                il.Emit(OpCodes.Call, ctx.Runtime!.Strings.FromCodePoint);
                 return true;
 
             case "raw":
@@ -110,8 +110,8 @@ public sealed class StringStaticEmitter : IStaticTypeEmitterStrategy
         if (propertyName == "prototype")
         {
             var protoIL = ctx.IL;
-            protoIL.Emit(OpCodes.Call, runtime.StringPrototypePopulateMethod);
-            protoIL.Emit(OpCodes.Ldsfld, runtime.StringPrototypeField);
+            protoIL.Emit(OpCodes.Call, runtime.Strings.PrototypePopulateMethod);
+            protoIL.Emit(OpCodes.Ldsfld, runtime.Strings.PrototypeField);
             return true;
         }
 
@@ -130,8 +130,8 @@ public sealed class StringStaticEmitter : IStaticTypeEmitterStrategy
 
         MethodInfo? method = propertyName switch
         {
-            "fromCharCode"  => runtime.StringFromCharCode,
-            "fromCodePoint" => runtime.StringFromCodePoint,
+            "fromCharCode"  => runtime.Strings.FromCharCode,
+            "fromCodePoint" => runtime.Strings.FromCodePoint,
             "raw"           => runtime.StringRaw,
             _ => null
         };

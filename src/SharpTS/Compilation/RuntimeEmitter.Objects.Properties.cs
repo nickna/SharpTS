@@ -1847,8 +1847,8 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
             il.Emit(OpCodes.Bne_Un, notStringLabel);
             // Lazy-populate String.prototype with $TSFunction wrappers on first read.
-            il.Emit(OpCodes.Call, runtime.StringPrototypePopulateMethod);
-            il.Emit(OpCodes.Ldsfld, runtime.StringPrototypeField);
+            il.Emit(OpCodes.Call, runtime.Strings.PrototypePopulateMethod);
+            il.Emit(OpCodes.Ldsfld, runtime.Strings.PrototypeField);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(notStringLabel);
             // typeof($Error) and its native-error subclasses → return the

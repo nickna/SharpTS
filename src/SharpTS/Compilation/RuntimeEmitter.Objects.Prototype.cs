@@ -894,7 +894,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, _types.String);
         il.Emit(OpCodes.Brfalse, notStrForProtoLabel);
-        il.Emit(OpCodes.Ldsfld, runtime.StringPrototypeField);
+        il.Emit(OpCodes.Ldsfld, runtime.Strings.PrototypeField);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notStrForProtoLabel);
 
