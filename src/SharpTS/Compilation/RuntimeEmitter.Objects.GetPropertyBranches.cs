@@ -195,7 +195,7 @@ public partial class RuntimeEmitter
         // Object.defineProperty stores array index accessors in the shared
         // descriptor store. They must win over raw list slots for ordinary
         // Get operations and array-iteration element reads.
-        var tsArrayDescriptorLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+        var tsArrayDescriptorLocal = il.DeclareLocal(runtime.DescriptorStorage.DescriptorType);
         var noTSArrayDescriptor = il.DefineLabel();
         // `length` is an Array exotic internal slot whose live value changes
         // with mutations; a PDS entry only records its attributes and must not
@@ -206,14 +206,14 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, noTSArrayDescriptor);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetPropertyDescriptor);
         il.Emit(OpCodes.Stloc, tsArrayDescriptorLocal);
         il.Emit(OpCodes.Ldloc, tsArrayDescriptorLocal);
         il.Emit(OpCodes.Brfalse, noTSArrayDescriptor);
         var tsArrayDataDescriptor = il.DefineLabel();
         var tsArrayGetterLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldloc, tsArrayDescriptorLocal);
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorGetter.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorGetter.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, tsArrayGetterLocal);
         il.Emit(OpCodes.Ldloc, tsArrayGetterLocal);
         il.Emit(OpCodes.Brfalse, tsArrayDataDescriptor);
@@ -232,7 +232,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
         il.MarkLabel(tsArrayDataDescriptor);
         il.Emit(OpCodes.Ldloc, tsArrayDescriptorLocal);
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorSetter.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorSetter.GetGetMethod()!);
         var tsArrayDataHasNoSetter = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, tsArrayDataHasNoSetter);
         // Setter-only accessor: own property shadows storage/prototype but Get
@@ -262,7 +262,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Bne_Un, noTSArrayDescriptor);
         il.MarkLabel(returnTSArrayDescriptorValue);
         il.Emit(OpCodes.Ldloc, tsArrayDescriptorLocal);
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorValue.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorValue.GetGetMethod()!);
         var returnTSArrayDescriptorValuePresent = il.DefineLabel();
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Brtrue, returnTSArrayDescriptorValuePresent);
@@ -330,7 +330,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, tsArrayDescriptorLocal);
         il.Emit(OpCodes.Brfalse, tsArrayNoDescriptorFallback);
         il.Emit(OpCodes.Ldloc, tsArrayDescriptorLocal);
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorValue.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorValue.GetGetMethod()!);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(tsArrayNoDescriptorFallback);
         il.Emit(OpCodes.Ldarg_0);
@@ -378,17 +378,17 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, runtime.ArgumentsType);
         il.Emit(OpCodes.Brfalse, listNoDescriptorLabel);
         il.MarkLabel(listCheckDescriptorLabel);
-        var listOwnDescriptor = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+        var listOwnDescriptor = il.DeclareLocal(runtime.DescriptorStorage.DescriptorType);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetPropertyDescriptor);
         il.Emit(OpCodes.Stloc, listOwnDescriptor);
         il.Emit(OpCodes.Ldloc, listOwnDescriptor);
         il.Emit(OpCodes.Brfalse, listNoDescriptorLabel);
         var listDataDescriptorLabel = il.DefineLabel();
         var listGetterLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldloc, listOwnDescriptor);
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorGetter.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorGetter.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, listGetterLocal);
         il.Emit(OpCodes.Ldloc, listGetterLocal);
         il.Emit(OpCodes.Brfalse, listDataDescriptorLabel);
@@ -407,7 +407,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
         il.MarkLabel(listDataDescriptorLabel);
         il.Emit(OpCodes.Ldloc, listOwnDescriptor);
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorSetter.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorSetter.GetGetMethod()!);
         var listDataDescriptorValueLabel = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, listDataDescriptorValueLabel);
         il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
@@ -424,7 +424,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
         il.Emit(OpCodes.Brfalse, listNoDescriptorLabel);
         il.Emit(OpCodes.Ldloc, listOwnDescriptor);
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorValue.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorValue.GetGetMethod()!);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(listNoDescriptorLabel);
 
@@ -500,7 +500,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, listOwnDescriptor);
         il.Emit(OpCodes.Brfalse, listNoDescriptorFallback);
         il.Emit(OpCodes.Ldloc, listOwnDescriptor);
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorValue.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorValue.GetGetMethod()!);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(listNoDescriptorFallback);
         il.Emit(OpCodes.Ldarg_0);
@@ -516,16 +516,16 @@ public partial class RuntimeEmitter
         // returned value can be a real Array exotic — `instanceof Array` true
         // — while still answering `result.index` / `result.input` correctly).
         // Without this, those metadata properties are invisible.
-        var listPdsLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+        var listPdsLocal = il.DeclareLocal(runtime.DescriptorStorage.DescriptorType);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetPropertyDescriptor);
         il.Emit(OpCodes.Stloc, listPdsLocal);
         il.Emit(OpCodes.Ldloc, listPdsLocal);
         var listSkipPdsLabel = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, listSkipPdsLabel);
         il.Emit(OpCodes.Ldloc, listPdsLocal);
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorValue.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorValue.GetGetMethod()!);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(listSkipPdsLabel);
         // For other properties on List (like methods push, pop, etc.), use GetListProperty
@@ -757,10 +757,10 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
         // Check PDS for own data descriptor / accessor before walking chain
         il.MarkLabel(tsObjectCheckPDS);
-        var tsObjectPDSDescLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+        var tsObjectPDSDescLocal = il.DeclareLocal(runtime.DescriptorStorage.DescriptorType);
         il.Emit(OpCodes.Ldloc, tsObjectInstanceLocal);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetPropertyDescriptor);
         il.Emit(OpCodes.Stloc, tsObjectPDSDescLocal);
         var tsObjectWalkProto = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, tsObjectPDSDescLocal);
@@ -768,7 +768,7 @@ public partial class RuntimeEmitter
         // Has own descriptor: getter wins, else return value
         var tsObjectPDSValue = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, tsObjectPDSDescLocal);
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorGetter.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorGetter.GetGetMethod()!);
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Brfalse, tsObjectPDSValue);
         // Invoke getter via InvokeMethodValue(obj, getter, [])
@@ -784,13 +784,13 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Pop); // discard the null getter
         var tsObjectPDSDataValue = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, tsObjectPDSDescLocal);
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorSetter.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorSetter.GetGetMethod()!);
         il.Emit(OpCodes.Brfalse, tsObjectPDSDataValue);
         il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(tsObjectPDSDataValue);
         il.Emit(OpCodes.Ldloc, tsObjectPDSDescLocal);
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorValue.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorValue.GetGetMethod()!);
         il.Emit(OpCodes.Ret);
         // Walk prototype chain
         il.MarkLabel(tsObjectWalkProto);
@@ -837,7 +837,7 @@ public partial class RuntimeEmitter
 
         var tsObjectProtoLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldloc, tsObjectInstanceLocal);
-        il.Emit(OpCodes.Call, runtime.PDSGetPrototype);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetPrototype);
         il.Emit(OpCodes.Stloc, tsObjectProtoLocal);
         var tsObjectNoProto = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, tsObjectProtoLocal);
@@ -853,7 +853,7 @@ public partial class RuntimeEmitter
         // Object.prototype fallback.
         var tsObjectImplicitProtoLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, tsObjectInstanceLocal);
-        il.Emit(OpCodes.Call, runtime.PDSHasPrototypeEntry);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.HasPrototypeEntry);
         il.Emit(OpCodes.Brfalse, tsObjectImplicitProtoLabel);
         il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
         il.Emit(OpCodes.Ret);
@@ -904,10 +904,10 @@ public partial class RuntimeEmitter
             // fast-paths below. Symbol.match's get-flags-err.js,
             // builtin-coerce-lastindex.js and friends rely on the override
             // path running before the internal-slot read.
-            var pdsDescLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+            var pdsDescLocal = il.DeclareLocal(runtime.DescriptorStorage.DescriptorType);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+            il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetPropertyDescriptor);
             il.Emit(OpCodes.Stloc, pdsDescLocal);
             var noPdsDescLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldloc, pdsDescLocal);
@@ -915,7 +915,7 @@ public partial class RuntimeEmitter
             // Accessor descriptor? Getter != null → invoke fn(thisArg=rx).
             var dataDescLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldloc, pdsDescLocal);
-            il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorGetter.GetGetMethod()!);
+            il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorGetter.GetGetMethod()!);
             var regexpGetterLocal = il.DeclareLocal(_types.Object);
             il.Emit(OpCodes.Stloc, regexpGetterLocal);
             il.Emit(OpCodes.Ldloc, regexpGetterLocal);
@@ -937,7 +937,7 @@ public partial class RuntimeEmitter
             il.MarkLabel(dataDescLabel);
             // Data descriptor — return descriptor.Value.
             il.Emit(OpCodes.Ldloc, pdsDescLocal);
-            il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorValue.GetGetMethod()!);
+            il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorValue.GetGetMethod()!);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(noPdsDescLabel);
 
@@ -1091,10 +1091,10 @@ public partial class RuntimeEmitter
                 {
                     il.Emit(OpCodes.Call, runtime.RegExpPrototypePopulateMethod);
                     var prototypeDescriptorLocal =
-                        il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+                        il.DeclareLocal(runtime.DescriptorStorage.DescriptorType);
                     il.Emit(OpCodes.Ldsfld, runtime.RegExpPrototypeField);
                     il.Emit(OpCodes.Ldstr, propName);
-                    il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+                    il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetPropertyDescriptor);
                     il.Emit(OpCodes.Stloc, prototypeDescriptorLocal);
                     var descriptorPresentLabel = il.DefineLabel();
                     var prototypeDataLabel = il.DefineLabel();
@@ -1108,7 +1108,7 @@ public partial class RuntimeEmitter
                     var prototypeGetterLocal = il.DeclareLocal(_types.Object);
                     il.Emit(OpCodes.Ldloc, prototypeDescriptorLocal);
                     il.Emit(OpCodes.Callvirt,
-                        runtime.CompiledPropertyDescriptorGetter.GetGetMethod()!);
+                        runtime.DescriptorStorage.DescriptorGetter.GetGetMethod()!);
                     il.Emit(OpCodes.Stloc, prototypeGetterLocal);
                     il.Emit(OpCodes.Ldloc, prototypeGetterLocal);
                     il.Emit(OpCodes.Brfalse, prototypeDataLabel);
@@ -1132,14 +1132,14 @@ public partial class RuntimeEmitter
                     var prototypeValueLabel = il.DefineLabel();
                     il.Emit(OpCodes.Ldloc, prototypeDescriptorLocal);
                     il.Emit(OpCodes.Callvirt,
-                        runtime.CompiledPropertyDescriptorSetter.GetGetMethod()!);
+                        runtime.DescriptorStorage.DescriptorSetter.GetGetMethod()!);
                     il.Emit(OpCodes.Brfalse, prototypeValueLabel);
                     il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
                     il.Emit(OpCodes.Br, prototypeDoneLabel);
                     il.MarkLabel(prototypeValueLabel);
                     il.Emit(OpCodes.Ldloc, prototypeDescriptorLocal);
                     il.Emit(OpCodes.Callvirt,
-                        runtime.CompiledPropertyDescriptorValue.GetGetMethod()!);
+                        runtime.DescriptorStorage.DescriptorValue.GetGetMethod()!);
                     il.MarkLabel(prototypeDoneLabel);
                 });
             }
@@ -1194,7 +1194,7 @@ public partial class RuntimeEmitter
             // which have no PDS prototype entry, get the implicit
             // Object.prototype fast path.
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Call, runtime.PDSHasPrototypeEntry);
+            il.Emit(OpCodes.Call, runtime.DescriptorStorage.HasPrototypeEntry);
             il.Emit(OpCodes.Brtrue, skip);
             _types.EmitLoadMethodInfo(il, helper);
             il.Emit(OpCodes.Ldstr, jsName);
@@ -1214,17 +1214,17 @@ public partial class RuntimeEmitter
         // dictionary's ordinary storage and its prototype. This includes
         // setter-only accessors, whose [[Get]] result is undefined, and data
         // descriptors stored only in the PDS.
-        var ownDescriptorLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+        var ownDescriptorLocal = il.DeclareLocal(runtime.DescriptorStorage.DescriptorType);
         var noOwnDescriptorLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetPropertyDescriptor);
         il.Emit(OpCodes.Stloc, ownDescriptorLocal);
         il.Emit(OpCodes.Ldloc, ownDescriptorLocal);
         il.Emit(OpCodes.Brfalse, noOwnDescriptorLabel);
         var returnDescriptorValueLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, ownDescriptorLocal);
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorGetter.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorGetter.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, getterLocal);
         il.Emit(OpCodes.Ldloc, getterLocal);
         il.Emit(OpCodes.Brfalse, returnDescriptorValueLabel);
@@ -1246,7 +1246,7 @@ public partial class RuntimeEmitter
         // mirrored into the dictionary so ordinary writable assignments keep
         // that canonical storage current; continue to the TryGetValue path.
         il.Emit(OpCodes.Ldloc, ownDescriptorLocal);
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorSetter.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorSetter.GetGetMethod()!);
         il.Emit(OpCodes.Brfalse, noOwnDescriptorLabel);
         il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
         il.Emit(OpCodes.Ret);
@@ -1373,7 +1373,7 @@ public partial class RuntimeEmitter
         // Property not found on object - check prototype chain
         // Get prototype: $PropertyDescriptorStore.GetPrototype(obj)
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.PDSGetPrototype);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetPrototype);
         il.Emit(OpCodes.Stloc, protoLocal);
 
         // If prototype is null, return undefined
@@ -1395,7 +1395,7 @@ public partial class RuntimeEmitter
         // implicit Object.prototype behavior below.
         var useImplicitObjectPrototype = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.PDSHasPrototypeEntry);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.HasPrototypeEntry);
         il.Emit(OpCodes.Brfalse, useImplicitObjectPrototype);
         il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
         il.Emit(OpCodes.Ret);

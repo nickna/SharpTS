@@ -475,7 +475,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, allowPooledKeysLocal);
         il.Emit(OpCodes.Brfalse, fallbackSnapshot);
         il.Emit(OpCodes.Ldloc, dictLocal);
-        il.Emit(OpCodes.Call, runtime.PDSHasPropertyDescriptors);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.HasPropertyDescriptors);
         il.Emit(OpCodes.Brtrue, fallbackSnapshot);
         il.Emit(OpCodes.Ldloc, dictLocal);
         il.Emit(OpCodes.Call, _jsonTryRentDictionaryKeysMethod!);

@@ -694,7 +694,7 @@ public partial class RuntimeEmitter
         {
             cctorIL.Emit(OpCodes.Ldsfld, child);
             cctorIL.Emit(OpCodes.Ldsfld, objectPrototypeField);
-            cctorIL.Emit(OpCodes.Call, runtime.PDSSetPrototype);
+            cctorIL.Emit(OpCodes.Call, runtime.DescriptorStorage.SetPrototype);
         }
         EmitLinkProto(mathSingletonField);
         EmitLinkProto(jsonSingletonField);
@@ -1020,10 +1020,10 @@ public partial class RuntimeEmitter
                 runtime.UndefinedType, runtime.TSSymbolType, runtime.GlobalThisSingletonField, runtime.GlobalThisGetProperty,
                 runtime.TypeOf, runtime.InvokeMethodValue, runtime.ArgumentsType, runtime.GetProperty, runtime.ObjectStorage.Type,
                 runtime.TSFunctionType, runtime.BoundAnyFunctionType, runtime.HasOwnPropertyHelperMethod, runtime.IHasFieldsInterface,
-                runtime.GetSymbolDictMethod, runtime.SymbolToPrimitive, runtime.CompiledPropertyDescriptorType,
-                runtime.CompiledPropertyDescriptorGetter.GetGetMethod()!,
-                runtime.CompiledPropertyDescriptorSetter.GetGetMethod()!, runtime.CompiledPropertyDescriptorValue.GetGetMethod()!,
-                runtime.PDSHasPrototypeEntry, runtime.PDSGetPrototype, runtime.CreateException, runtime.TSTypeErrorCtor),
+                runtime.GetSymbolDictMethod, runtime.SymbolToPrimitive, runtime.DescriptorStorage.DescriptorType,
+                runtime.DescriptorStorage.DescriptorGetter.GetGetMethod()!,
+                runtime.DescriptorStorage.DescriptorSetter.GetGetMethod()!, runtime.DescriptorStorage.DescriptorValue.GetGetMethod()!,
+                runtime.DescriptorStorage.HasPrototypeEntry, runtime.DescriptorStorage.GetPrototype, runtime.CreateException, runtime.TSTypeErrorCtor),
             _features.UsesRegExp ? runtime.TSRegExpType : null);
         // StringFromValue (String(x) call form) wraps ToJsString with the
         // §22.1.1.1 Symbol exemption; emit right after it.
@@ -1042,8 +1042,8 @@ public partial class RuntimeEmitter
         EmitToNumber(typeBuilder, runtime.NumericCoercion,
             new AbstractNumberInputs(runtime.UndefinedType, runtime.TSSymbolType, runtime.ObjectStorage.Type,
                 runtime.TSFunctionType, runtime.BoundAnyFunctionType, runtime.IHasFieldsInterface,
-                runtime.CompiledPropertyDescriptorType, runtime.CompiledPropertyDescriptorGetter.GetGetMethod()!,
-                runtime.CompiledPropertyDescriptorSetter.GetGetMethod()!, runtime.CompiledPropertyDescriptorValue.GetGetMethod()!,
+                runtime.DescriptorStorage.DescriptorType, runtime.DescriptorStorage.DescriptorGetter.GetGetMethod()!,
+                runtime.DescriptorStorage.DescriptorSetter.GetGetMethod()!, runtime.DescriptorStorage.DescriptorValue.GetGetMethod()!,
                 runtime.SymbolToPrimitive, runtime.GetSymbolDictMethod, runtime.GetProperty, runtime.InvokeMethodValue,
                 runtime.TypeOf, runtime.StringCoercion.ToJsString, runtime.BoxedPrimitives.UnwrapIfBoxed,
                 runtime.CreateException, runtime.TSTypeErrorCtor));
@@ -1316,14 +1316,14 @@ public partial class RuntimeEmitter
             runtime.Strings, new BoxedPrimitiveInputs(
                 runtime.ObjectStorage.Type,
                 runtime.ObjectStorage.Constructor,
-                runtime.CompiledPropertyDescriptorType,
-                runtime.CompiledPropertyDescriptorCtor,
-                runtime.CompiledPropertyDescriptorValue.GetSetMethod()!,
-                runtime.CompiledPropertyDescriptorWritable.GetSetMethod()!,
-                runtime.CompiledPropertyDescriptorEnumerable.GetSetMethod()!,
-                runtime.CompiledPropertyDescriptorConfigurable.GetSetMethod()!,
-                runtime.PDSDefineProperty,
-                runtime.PDSSetPrototype,
+                runtime.DescriptorStorage.DescriptorType,
+                runtime.DescriptorStorage.DescriptorConstructor,
+                runtime.DescriptorStorage.DescriptorValue.GetSetMethod()!,
+                runtime.DescriptorStorage.DescriptorWritable.GetSetMethod()!,
+                runtime.DescriptorStorage.DescriptorEnumerable.GetSetMethod()!,
+                runtime.DescriptorStorage.DescriptorConfigurable.GetSetMethod()!,
+                runtime.DescriptorStorage.DefineProperty,
+                runtime.DescriptorStorage.SetPrototype,
                 runtime.Booleans.PrototypeField,
                 runtime.Booleans.PrototypePopulateMethod,
                 runtime.Numbers.PrototypeField,
@@ -1388,21 +1388,21 @@ public partial class RuntimeEmitter
         // String.prototype dict populate — must come AFTER all the String* helpers,
         // the stubs (emitted earlier), AND the RegExp methods above.
         EmitStringPrototypePopulate(runtime.Strings,
-            new StringPrototypeInputs(runtime.CompiledPropertyDescriptorType,
-                new PrototypeDescriptorInputs(runtime.CompiledPropertyDescriptorCtor, runtime.CompiledPropertyDescriptorValue.GetSetMethod()!,
-                    runtime.CompiledPropertyDescriptorEnumerable.GetSetMethod()!, runtime.PDSDefineProperty),
+            new StringPrototypeInputs(runtime.DescriptorStorage.DescriptorType,
+                new PrototypeDescriptorInputs(runtime.DescriptorStorage.DescriptorConstructor, runtime.DescriptorStorage.DescriptorValue.GetSetMethod()!,
+                    runtime.DescriptorStorage.DescriptorEnumerable.GetSetMethod()!, runtime.DescriptorStorage.DefineProperty),
                 runtime.TSFunctionGetOrCreate, runtime.TSFunctionCtorWithCache, runtime.GetSymbolDictMethod,
-                runtime.SymbolIterator, runtime.ObjectPrototypeField, runtime.PDSSetPrototype),
+                runtime.SymbolIterator, runtime.ObjectPrototypeField, runtime.DescriptorStorage.SetPrototype),
             _features.UsesRegExp ? new StringPrototypeRegExpInputs(runtime.StringMatchRegExp, runtime.StringMatchAllRegExp,
                 runtime.StringSearchRegExp, runtime.StringReplaceAllRegExp, runtime.StringSplitProto) : null);
         // Boolean.prototype population wires dedicated toString and valueOf helpers.
         EmitBooleanPrototypePopulate(typeBuilder, runtime.Booleans,
             new BooleanPrototypeInputs(
-                new PrototypeDescriptorInputs(runtime.CompiledPropertyDescriptorCtor,
-                    runtime.CompiledPropertyDescriptorValue.GetSetMethod()!, runtime.CompiledPropertyDescriptorEnumerable.GetSetMethod()!,
-                    runtime.PDSDefineProperty),
-                runtime.CompiledPropertyDescriptorType, runtime.TSFunctionGetOrCreate,
-                runtime.ObjectPrototypeField, runtime.PDSSetPrototype,
+                new PrototypeDescriptorInputs(runtime.DescriptorStorage.DescriptorConstructor,
+                    runtime.DescriptorStorage.DescriptorValue.GetSetMethod()!, runtime.DescriptorStorage.DescriptorEnumerable.GetSetMethod()!,
+                    runtime.DescriptorStorage.DefineProperty),
+                runtime.DescriptorStorage.DescriptorType, runtime.TSFunctionGetOrCreate,
+                runtime.ObjectPrototypeField, runtime.DescriptorStorage.SetPrototype,
                 new BooleanReceiverInputs(runtime.ObjectStorage.Type, runtime.ObjectStorage.FieldsGetter,
                     runtime.CreateException, runtime.TSTypeErrorCtor)));
         // Number.prototype populate is wired after EmitNumberMethods below.
@@ -1465,13 +1465,13 @@ public partial class RuntimeEmitter
             EmitBigIntBitwise(typeBuilder, bigInt);
             EmitBigIntPrototypePopulate(typeBuilder, runtime.BigInt, bigInt.ToStringRadix,
                 new BigIntPrototypeInputs(
-                    new PrototypeDescriptorInputs(runtime.CompiledPropertyDescriptorCtor,
-                        runtime.CompiledPropertyDescriptorValue.GetSetMethod()!, runtime.CompiledPropertyDescriptorEnumerable.GetSetMethod()!,
-                        runtime.PDSDefineProperty),
-                    runtime.CompiledPropertyDescriptorType,
-                    runtime.CompiledPropertyDescriptorWritable.GetSetMethod()!, runtime.CompiledPropertyDescriptorConfigurable.GetSetMethod()!,
+                    new PrototypeDescriptorInputs(runtime.DescriptorStorage.DescriptorConstructor,
+                        runtime.DescriptorStorage.DescriptorValue.GetSetMethod()!, runtime.DescriptorStorage.DescriptorEnumerable.GetSetMethod()!,
+                        runtime.DescriptorStorage.DefineProperty),
+                    runtime.DescriptorStorage.DescriptorType,
+                    runtime.DescriptorStorage.DescriptorWritable.GetSetMethod()!, runtime.DescriptorStorage.DescriptorConfigurable.GetSetMethod()!,
                     runtime.TSFunctionGetOrCreate, runtime.GetSymbolDictMethod, runtime.SymbolToStringTag,
-                    runtime.ObjectPrototypeField, runtime.PDSSetPrototype,
+                    runtime.ObjectPrototypeField, runtime.DescriptorStorage.SetPrototype,
                     runtime.ObjectStorage.Type, runtime.ObjectStorage.FieldsGetter, runtime.NumericCoercion.ToNumber, runtime.UndefinedType,
                     runtime.CreateException, runtime.TSTypeErrorCtor));
         }
@@ -1491,13 +1491,13 @@ public partial class RuntimeEmitter
         // NumberToFixed/etc. MethodBuilders are non-null.
         EmitNumberPrototypePopulate(typeBuilder, runtime.Numbers,
             new NumberPrototypeInputs(
-                new PrototypeDescriptorInputs(runtime.CompiledPropertyDescriptorCtor,
-                    runtime.CompiledPropertyDescriptorValue.GetSetMethod()!, runtime.CompiledPropertyDescriptorEnumerable.GetSetMethod()!,
-                    runtime.PDSDefineProperty),
-                runtime.CompiledPropertyDescriptorType,
+                new PrototypeDescriptorInputs(runtime.DescriptorStorage.DescriptorConstructor,
+                    runtime.DescriptorStorage.DescriptorValue.GetSetMethod()!, runtime.DescriptorStorage.DescriptorEnumerable.GetSetMethod()!,
+                    runtime.DescriptorStorage.DefineProperty),
+                runtime.DescriptorStorage.DescriptorType,
                 runtime.TSFunctionGetOrCreate,
                 runtime.ObjectPrototypeField,
-                runtime.PDSSetPrototype,
+                runtime.DescriptorStorage.SetPrototype,
                 runtime.ObjectStorage.Type,
                 runtime.GetProperty,
                 runtime.CreateException,

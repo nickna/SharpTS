@@ -86,16 +86,16 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitDefineDataDescriptorFromValue(ILGenerator il, EmittedRuntime runtime)
     {
-        var descLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
-        il.Emit(OpCodes.Newobj, runtime.CompiledPropertyDescriptorCtor);
+        var descLocal = il.DeclareLocal(runtime.DescriptorStorage.DescriptorType);
+        il.Emit(OpCodes.Newobj, runtime.DescriptorStorage.DescriptorConstructor);
         il.Emit(OpCodes.Stloc, descLocal);
         il.Emit(OpCodes.Ldloc, descLocal);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorValue.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorValue.GetSetMethod()!);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloc, descLocal);
-        il.Emit(OpCodes.Call, runtime.PDSDefineProperty);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.DefineProperty);
         il.Emit(OpCodes.Pop);
     }
 

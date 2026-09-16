@@ -1124,7 +1124,7 @@ public partial class RuntimeEmitter
         // dictionary. Route only that shape through ordinary symbol [[Get]] so
         // accessor getters are invoked (and abrupt completion is propagated).
         il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Isinst, runtime.CompiledPropertyDescriptorType);
+        il.Emit(OpCodes.Isinst, runtime.DescriptorStorage.DescriptorType);
         il.Emit(OpCodes.Brfalse, rawValueLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);

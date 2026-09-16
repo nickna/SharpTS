@@ -67,7 +67,7 @@ public partial class RuntimeEmitter
         // Set prototype: $PropertyDescriptorStore.SetPrototype(result, proto)
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ldarg_0);  // proto
-        il.Emit(OpCodes.Call, runtime.PDSSetPrototype);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.SetPrototype);
 
         // ECMA-262 §20.1.2.2 step 2: Let obj be OrdinaryObjectCreate(O).
         // OrdinaryObjectCreate creates a FRESH object whose [[Prototype]] is O.
@@ -239,7 +239,7 @@ public partial class RuntimeEmitter
 
         // Call $PropertyDescriptorStore.PreventExtensions(obj) - fully standalone, no reflection
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.PDSPreventExtensions);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.PreventExtensions);
 
         // Also add to local non-extensible objects table for standalone checks
         il.Emit(OpCodes.Ldsfld, nonExtensibleObjectsField);
@@ -352,7 +352,7 @@ public partial class RuntimeEmitter
         // Check $PropertyDescriptorStore.IsExtensible(obj) - fully standalone, no reflection
         il.MarkLabel(checkPropertyStoreLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.PDSIsExtensible);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.IsExtensible);
         il.Emit(OpCodes.Brfalse, returnFalseLabel); // Not extensible per property store
 
         // Also check local tables for backward compatibility
@@ -577,10 +577,10 @@ public partial class RuntimeEmitter
         // default-fallback below. HasPrototypeEntry returns the success bit
         // separately; GetPrototype returns the value.
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.PDSHasPrototypeEntry);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.HasPrototypeEntry);
         il.Emit(OpCodes.Brfalse, checkLocalTableLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.PDSGetPrototype);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetPrototype);
         il.Emit(OpCodes.Ret);
 
         // Also check local _prototypeStore table for backward compatibility
@@ -1161,7 +1161,7 @@ public partial class RuntimeEmitter
         // Call $PropertyDescriptorStore.SetPrototype(obj, proto)
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.PDSSetPrototype);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.SetPrototype);
 
         // Also store in local prototype table for backward compatibility
         il.Emit(OpCodes.Ldsfld, prototypeStoreField);

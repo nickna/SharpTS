@@ -1070,7 +1070,7 @@ public partial class RuntimeEmitter
             var tsArrNoOwnDescriptor = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Ldloc, tsArrKeyStrLocal);
-            il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+            il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetPropertyDescriptor);
             il.Emit(OpCodes.Brfalse, tsArrNoOwnDescriptor);
             il.Emit(OpCodes.Ldc_I4_1);
             il.Emit(OpCodes.Ret);

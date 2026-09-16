@@ -37,7 +37,7 @@ public partial class RuntimeEmitter
         // Raw JSON objects have a null prototype and are frozen.
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Call, runtime.PDSSetPrototype);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.SetPrototype);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Callvirt, runtime.ObjectStorage.Freeze);
         il.Emit(OpCodes.Ret);

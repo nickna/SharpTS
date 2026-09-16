@@ -540,7 +540,7 @@ public partial class ILEmitter
             if (_ctx.RuntimeFeatures?.UsesDynamicPropertyDescriptors == true)
             {
                 IL.Emit(OpCodes.Ldloc, jsonExact);
-                IL.Emit(OpCodes.Call, runtime.PDSHasPropertyDescriptors);
+                IL.Emit(OpCodes.Call, runtime.DescriptorStorage.HasPropertyDescriptors);
                 IL.Emit(OpCodes.Brtrue, fallback);
             }
             IL.Emit(OpCodes.Ldloc, jsonExact);
@@ -568,7 +568,7 @@ public partial class ILEmitter
             if (_ctx.RuntimeFeatures?.UsesDynamicPropertyDescriptors == true)
             {
                 IL.Emit(OpCodes.Ldloc, compactExact);
-                IL.Emit(OpCodes.Call, runtime.PDSHasPropertyDescriptors);
+                IL.Emit(OpCodes.Call, runtime.DescriptorStorage.HasPropertyDescriptors);
                 IL.Emit(OpCodes.Brtrue, fallback);
             }
             IL.Emit(OpCodes.Ldloc, compactExact);
@@ -663,7 +663,7 @@ public partial class ILEmitter
                 if (_ctx.RuntimeFeatures?.UsesDynamicPropertyDescriptors == true)
                 {
                     IL.Emit(OpCodes.Ldloc, jsonExactLocal);
-                    IL.Emit(OpCodes.Call, _ctx.Runtime.PDSHasPropertyDescriptors);
+                    IL.Emit(OpCodes.Call, _ctx.Runtime.DescriptorStorage.HasPropertyDescriptors);
                     IL.Emit(OpCodes.Brtrue, jsonFallback);
                 }
                 IL.Emit(OpCodes.Ldloc, jsonExactLocal);
@@ -717,7 +717,7 @@ public partial class ILEmitter
                 if (_ctx.RuntimeFeatures?.UsesDynamicPropertyDescriptors == true)
                 {
                     IL.Emit(OpCodes.Ldloc, exactLocal);
-                    IL.Emit(OpCodes.Call, _ctx.Runtime.PDSHasPropertyDescriptors);
+                    IL.Emit(OpCodes.Call, _ctx.Runtime.DescriptorStorage.HasPropertyDescriptors);
                     IL.Emit(OpCodes.Brtrue, fallbackLabel);
                 }
                 IL.Emit(OpCodes.Ldloc, exactLocal);
@@ -756,7 +756,7 @@ public partial class ILEmitter
                 if (_ctx.RuntimeFeatures?.UsesDynamicPropertyDescriptors == true)
                 {
                     IL.Emit(OpCodes.Ldloc, inlineLocal);
-                    IL.Emit(OpCodes.Call, _ctx.Runtime.PDSHasPropertyDescriptors);
+                    IL.Emit(OpCodes.Call, _ctx.Runtime.DescriptorStorage.HasPropertyDescriptors);
                     IL.Emit(OpCodes.Brtrue, fallbackLabel);
                 }
                 // Prototype mutation cannot shadow this carrier's known own slot.

@@ -104,7 +104,7 @@ public partial class RuntimeEmitter
             il.MarkLabel(prototypeReady);
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Ldloc, basePrototypeLocal);
-            il.Emit(OpCodes.Call, runtime.PDSSetPrototype);
+            il.Emit(OpCodes.Call, runtime.DescriptorStorage.SetPrototype);
             il.Emit(OpCodes.Ret);
         }
     }

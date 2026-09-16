@@ -119,12 +119,12 @@ public class EmittedBoxedPrimitiveRuntimeTests
         var boxed = new EmittedBoxedPrimitiveRuntime();
         var peers = CreateInputs("BoxedPrimitiveInputs",
             runtime.ObjectStorage.Type, runtime.ObjectStorage.Constructor,
-            runtime.CompiledPropertyDescriptorType, runtime.CompiledPropertyDescriptorCtor,
-            runtime.CompiledPropertyDescriptorValue.GetSetMethod()!,
-            runtime.CompiledPropertyDescriptorWritable.GetSetMethod()!,
-            runtime.CompiledPropertyDescriptorEnumerable.GetSetMethod()!,
-            runtime.CompiledPropertyDescriptorConfigurable.GetSetMethod()!,
-            runtime.PDSDefineProperty, runtime.PDSSetPrototype,
+            runtime.DescriptorStorage.DescriptorType, runtime.DescriptorStorage.DescriptorConstructor,
+            runtime.DescriptorStorage.DescriptorValue.GetSetMethod()!,
+            runtime.DescriptorStorage.DescriptorWritable.GetSetMethod()!,
+            runtime.DescriptorStorage.DescriptorEnumerable.GetSetMethod()!,
+            runtime.DescriptorStorage.DescriptorConfigurable.GetSetMethod()!,
+            runtime.DescriptorStorage.DefineProperty, runtime.DescriptorStorage.SetPrototype,
             runtime.Booleans.PrototypeField, runtime.Booleans.PrototypePopulateMethod,
             runtime.Numbers.PrototypeField, runtime.Numbers.PrototypePopulateMethod,
             runtime.SymbolPrototypeField, runtime.SymbolPrototypePopulateMethod);
@@ -140,8 +140,8 @@ public class EmittedBoxedPrimitiveRuntimeTests
         var helperType = assembly.GetType(helper.Name)!;
         var wrapper = Call(helperType, boxed.New, "BigInt", new BigInteger(42));
         Assert.Equal(new BigInteger(42), Call(runtimeType, runtime.BoxedPrimitives.UnwrapIfBoxed, wrapper));
-        var descriptorStoreType = assembly.GetType(runtime.PDSGetPrototype.DeclaringType!.FullName!)!;
-        var actualPrototype = Call(descriptorStoreType, runtime.PDSGetPrototype, wrapper);
+        var descriptorStoreType = assembly.GetType(runtime.DescriptorStorage.GetPrototype.DeclaringType!.FullName!)!;
+        var actualPrototype = Call(descriptorStoreType, runtime.DescriptorStorage.GetPrototype, wrapper);
         if (includePrototype)
         {
             var expectedPrototype = Assert.IsType<Dictionary<string, object>>(

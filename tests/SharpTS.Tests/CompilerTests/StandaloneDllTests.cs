@@ -3434,6 +3434,112 @@ public class StandaloneDllTests
             verifyStandardError: error => Assert.Empty(error)));
     }
 
+    public static IEnumerable<object[]> DescriptorStorageMetadataPrograms =>
+    [
+        new object[]
+        {
+            "data", "const value:any={a:1};Object.defineProperty(value,'b',{value:2,writable:false,enumerable:false,configurable:true});const d=Object.getOwnPropertyDescriptor(value,'b')!;console.log(value.b,d.value,d.writable,d.enumerable,d.configurable,Object.keys(value).join(','));",
+            "2 2 false false true a\n", true
+        },
+        new object[]
+        {
+            "accessors", "let trace='';let stored=1;const value:any={};Object.defineProperty(value,'a',{get(){trace+='g';return stored;},set(v:number){trace+='s';stored=v;},enumerable:true,configurable:true});value.a=7;console.log(value.a,stored,trace,Object.keys(value).join(','));",
+            "7 7 sg a\n", true
+        },
+        new object[]
+        {
+            "setter_only", "let stored=0;const value:any={};Object.defineProperty(value,'a',{set(v:number){stored=v;},enumerable:true,configurable:true});value.a=8;console.log(value.a,stored,Object.getOwnPropertyDescriptor(value,'a')!.get===undefined);",
+            "undefined 8 true\n", true
+        },
+        new object[]
+        {
+            "keys", "const value:any={a:1};Object.defineProperty(value,'hidden',{value:2});Object.defineProperty(value,'visible',{get(){return 3;},enumerable:true});console.log(Object.keys(value).join(','),Object.getOwnPropertyNames(value).join(','));",
+            "a,visible a,hidden,visible\n", true
+        },
+        new object[]
+        {
+            "delete", "const value:any={};Object.defineProperty(value,'a',{value:2,configurable:true});console.log(value.a,delete value.a,Object.getOwnPropertyDescriptor(value,'a')===undefined);",
+            "2 true true\n", true
+        },
+        new object[]
+        {
+            "redefine", "const value:any={};Object.defineProperty(value,'a',{value:2,writable:true,configurable:true,enumerable:true});Object.defineProperty(value,'a',{get(){return 3;},configurable:true,enumerable:true});console.log(value.a,Object.getOwnPropertyDescriptor(value,'a')!.get!==undefined);Object.defineProperty(value,'a',{value:4,writable:true});value.a=5;console.log(value.a);",
+            "3 true\n5\n", true
+        },
+        new object[]
+        {
+            "function_keys", "function target(){return 1;}(target as any).a=2;console.log((target as any).a);Object.defineProperty(target,'b',{value:3,configurable:true});console.log((target as any).b,Object.getOwnPropertyDescriptor(target,'b')!.value);",
+            "2\n3 3\n", true
+        },
+        new object[]
+        {
+            "static_shadow", "class Base{static value:number=1;}class Child extends Base{};(Child as any).value=2;console.log(Base.value,Child.value);Object.defineProperty(Child,'extra',{value:3,configurable:true});console.log((Child as any).extra,(Base as any).extra);",
+            "1 2\n3 undefined\n", true
+        },
+        new object[]
+        {
+            "prototype_null", "const value:any=Object.create(null);Object.defineProperty(value,'a',{value:2,enumerable:true});console.log(Object.getPrototypeOf(value)===null,value.a,Object.keys(value).join(','));const proto:any={b:3};Object.setPrototypeOf(value,proto);console.log(Object.getPrototypeOf(value)===proto,value.b);",
+            "true 2 a\ntrue 3\n", true
+        },
+        new object[]
+        {
+            "freeze", "function run(){'use strict';const value:any={a:1};Object.freeze(value);console.log(Object.isFrozen(value),Object.isSealed(value),Object.isExtensible(value));try{value.a=2;}catch(e:any){console.log(e.name);}console.log(value.a);}run();",
+            "true true false\nTypeError\n1\n", true
+        },
+        new object[]
+        {
+            "seal", "function run(){'use strict';const value:any={a:1};Object.seal(value);value.a=2;console.log(value.a,Object.isSealed(value),Object.isFrozen(value),Object.isExtensible(value));try{value.b=3;}catch(e:any){console.log(e.name);}}run();",
+            "2 true false false\nTypeError\n", true
+        },
+        new object[]
+        {
+            "prevent_extensions", "function run(){'use strict';const value:any={a:1};Object.preventExtensions(value);value.a=2;console.log(value.a,Object.isExtensible(value),Object.isSealed(value));try{value.b=3;}catch(e:any){console.log(e.name);}}run();",
+            "2 false false\nTypeError\n", true
+        },
+        new object[]
+        {
+            "array_truncation", "const value:any[]=[1,2,3];Object.defineProperty(value,'2',{value:9,configurable:true});value.length=1;console.log(value.length,Object.getOwnPropertyDescriptor(value,'2')===undefined,Object.keys(value).join(','));",
+            "1 true 0\n", true
+        },
+        new object[]
+        {
+            "compact", "interface Point{x:number;y:number;}function make(x:number):Point{return {x:x,y:2};}const p=make(3);const copy={...p,z:4};console.log(copy.x,copy.y,copy.z,Object.keys(copy).join(','));",
+            "3 2 4 x,y,z\n", true
+        },
+        new object[]
+        {
+            "async", "async function run(){const value:any=await Promise.resolve({_value:4,get value(){return this._value;}});console.log(value.value);}run();",
+            "4\n", true
+        },
+        new object[]
+        {
+            "generator", "function* values():Generator<any,void,any>{yield {_value:5,get value(){return this._value;}};}for(const value of values())console.log(value.value);",
+            "5\n", true
+        },
+        new object[]
+        {
+            "minimal", "const value=1;",
+            "", true
+        },
+    ];
+
+    [Theory]
+    [MemberData(nameof(DescriptorStorageMetadataPrograms))]
+    public void Isolated_DescriptorStorageMetadata_PreservesDescriptorsKeysAndRestrictions(string name, string source, string expected, bool standalone)
+    {
+        using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var sourcePath = tempDir.CreateFile("main.ts", source);
+        var dllPath = tempDir.GetPath($"descriptor-storage_{name}.dll");
+        var deployment = standalone ? " --standalone" : "";
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --noLib --compile \"{sourcePath}\" -o \"{dllPath}\" --verify{deployment}", tempDir.Path);
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(dllPath));
+        Assert.Equal(!standalone, File.Exists(tempDir.GetPath("SharpTS.dll")));
+        Assert.Equal(expected, ExecuteCompiledDllIsolated(dllPath, timeoutMs: 30000,
+            verifyStandardError: error => Assert.Empty(error)));
+    }
+
     public static IEnumerable<object[]> BroadcastChannelMetadataPrograms =>
     [
         new object[]

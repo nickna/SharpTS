@@ -146,9 +146,9 @@ public class EmittedStringCoercionRuntimeTests
             runtime.UndefinedType, runtime.TSSymbolType, runtime.GlobalThisSingletonField, runtime.GlobalThisGetProperty,
             runtime.TypeOf, runtime.InvokeMethodValue, runtime.ArgumentsType, runtime.GetProperty, runtime.ObjectStorage.Type,
             runtime.TSFunctionType, runtime.BoundAnyFunctionType, runtime.HasOwnPropertyHelperMethod, runtime.IHasFieldsInterface,
-            getSymbols, runtime.SymbolToPrimitive, runtime.CompiledPropertyDescriptorType,
-            runtime.CompiledPropertyDescriptorGetter.GetGetMethod()!, runtime.CompiledPropertyDescriptorSetter.GetGetMethod()!,
-            runtime.CompiledPropertyDescriptorValue.GetGetMethod()!, runtime.PDSHasPrototypeEntry, runtime.PDSGetPrototype,
+            getSymbols, runtime.SymbolToPrimitive, runtime.DescriptorStorage.DescriptorType,
+            runtime.DescriptorStorage.DescriptorGetter.GetGetMethod()!, runtime.DescriptorStorage.DescriptorSetter.GetGetMethod()!,
+            runtime.DescriptorStorage.DescriptorValue.GetGetMethod()!, runtime.DescriptorStorage.HasPrototypeEntry, runtime.DescriptorStorage.GetPrototype,
             runtime.CreateException, runtime.TSTypeErrorCtor
         ]);
         typeof(RuntimeEmitter).GetMethod("EmitToJsString", privateInstance)!.Invoke(emitter,

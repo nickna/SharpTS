@@ -44,9 +44,9 @@ public partial class RuntimeEmitter
     private void EmitInstallNonEnumerable(ILGenerator il, EmittedRuntime runtime,
         FieldBuilder protoField, LocalBuilder descLocal, string jsName, System.Action emitValue)
     {
-        EmitInstallNonEnumerableDescriptor(il, new PrototypeDescriptorInputs(runtime.CompiledPropertyDescriptorCtor,
-            runtime.CompiledPropertyDescriptorValue.GetSetMethod()!, runtime.CompiledPropertyDescriptorEnumerable.GetSetMethod()!,
-            runtime.PDSDefineProperty),
+        EmitInstallNonEnumerableDescriptor(il, new PrototypeDescriptorInputs(runtime.DescriptorStorage.DescriptorConstructor,
+            runtime.DescriptorStorage.DescriptorValue.GetSetMethod()!, runtime.DescriptorStorage.DescriptorEnumerable.GetSetMethod()!,
+            runtime.DescriptorStorage.DefineProperty),
             protoField, descLocal, jsName, emitValue);
     }
 
@@ -76,9 +76,9 @@ public partial class RuntimeEmitter
     private void EmitInstallConstructor(ILGenerator il, EmittedRuntime runtime,
         FieldBuilder protoField, LocalBuilder descLocal, MethodInfo setItem, System.Action emitValue)
     {
-        EmitInstallConstructorDescriptor(il, new PrototypeDescriptorInputs(runtime.CompiledPropertyDescriptorCtor,
-            runtime.CompiledPropertyDescriptorValue.GetSetMethod()!, runtime.CompiledPropertyDescriptorEnumerable.GetSetMethod()!,
-            runtime.PDSDefineProperty),
+        EmitInstallConstructorDescriptor(il, new PrototypeDescriptorInputs(runtime.DescriptorStorage.DescriptorConstructor,
+            runtime.DescriptorStorage.DescriptorValue.GetSetMethod()!, runtime.DescriptorStorage.DescriptorEnumerable.GetSetMethod()!,
+            runtime.DescriptorStorage.DefineProperty),
             protoField, descLocal, setItem, emitValue);
     }
 
@@ -110,9 +110,9 @@ public partial class RuntimeEmitter
         string jsName, MethodBuilder? helper, int jsLength, bool nameThisParam = true)
     {
         if (helper is null) return;
-        EmitWirePrototypeMethodDescriptor(il, new PrototypeDescriptorInputs(runtime.CompiledPropertyDescriptorCtor,
-            runtime.CompiledPropertyDescriptorValue.GetSetMethod()!, runtime.CompiledPropertyDescriptorEnumerable.GetSetMethod()!,
-            runtime.PDSDefineProperty), runtime.TSFunctionGetOrCreate,
+        EmitWirePrototypeMethodDescriptor(il, new PrototypeDescriptorInputs(runtime.DescriptorStorage.DescriptorConstructor,
+            runtime.DescriptorStorage.DescriptorValue.GetSetMethod()!, runtime.DescriptorStorage.DescriptorEnumerable.GetSetMethod()!,
+            runtime.DescriptorStorage.DefineProperty), runtime.TSFunctionGetOrCreate,
             protoField, descLocal, setItem, jsName, helper, jsLength, nameThisParam);
     }
 

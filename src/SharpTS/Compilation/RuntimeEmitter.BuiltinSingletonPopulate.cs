@@ -12,11 +12,11 @@ public partial class RuntimeEmitter
         MethodInfo FunctionGetOrCreate, MethodInfo GetSymbolDict, FieldInfo ToStringTag);
 
     private static BuiltinSingletonInputs GetBuiltinSingletonInputs(EmittedRuntime runtime) => new(
-        runtime.CompiledPropertyDescriptorType,
-        new PrototypeDescriptorInputs(runtime.CompiledPropertyDescriptorCtor,
-            runtime.CompiledPropertyDescriptorValue.GetSetMethod()!, runtime.CompiledPropertyDescriptorEnumerable.GetSetMethod()!,
-            runtime.PDSDefineProperty),
-        runtime.CompiledPropertyDescriptorWritable.GetSetMethod()!, runtime.TSFunctionGetOrCreate,
+        runtime.DescriptorStorage.DescriptorType,
+        new PrototypeDescriptorInputs(runtime.DescriptorStorage.DescriptorConstructor,
+            runtime.DescriptorStorage.DescriptorValue.GetSetMethod()!, runtime.DescriptorStorage.DescriptorEnumerable.GetSetMethod()!,
+            runtime.DescriptorStorage.DefineProperty),
+        runtime.DescriptorStorage.DescriptorWritable.GetSetMethod()!, runtime.TSFunctionGetOrCreate,
         runtime.GetSymbolDictMethod, runtime.SymbolToStringTag);
 
     // Math.* / JSON.* are normally intercepted at compile time by the dedicated

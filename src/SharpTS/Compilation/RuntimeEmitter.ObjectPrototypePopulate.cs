@@ -32,7 +32,7 @@ public partial class RuntimeEmitter
         // ECMA-262 19.1.3 Object.prototype.constructor === Object. Compiled
         // bare `Object` resolves to typeof(object) (per ObjectStaticEmitter).
         // Plant in dict + non-enumerable PDS descriptor (built-in §17 attrs).
-        var protoDescLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+        var protoDescLocal = il.DeclareLocal(runtime.DescriptorStorage.DescriptorType);
         EmitInstallConstructor(il, runtime, runtime.ObjectPrototypeField, protoDescLocal, setItem, () =>
         {
             il.Emit(OpCodes.Ldtoken, _types.Object);

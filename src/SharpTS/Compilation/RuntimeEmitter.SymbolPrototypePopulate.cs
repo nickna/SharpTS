@@ -28,7 +28,7 @@ public partial class RuntimeEmitter
         var setItem = _types.GetMethod(_types.DictionaryStringObject, "set_Item",
             _types.String, _types.Object);
         EmitPrototypePopulateGuard(il, runtime.SymbolPrototypeField);
-        var descLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+        var descLocal = il.DeclareLocal(runtime.DescriptorStorage.DescriptorType);
 
         EmitInstallConstructor(il, runtime, runtime.SymbolPrototypeField, descLocal, setItem, () =>
         {
@@ -48,26 +48,26 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Call, runtime.TSFunctionGetOrCreate);
         il.Emit(OpCodes.Stloc, getterLocal);
-        il.Emit(OpCodes.Newobj, runtime.CompiledPropertyDescriptorCtor);
+        il.Emit(OpCodes.Newobj, runtime.DescriptorStorage.DescriptorConstructor);
         il.Emit(OpCodes.Stloc, descLocal);
         il.Emit(OpCodes.Ldloc, descLocal);
         il.Emit(OpCodes.Ldloc, getterLocal);
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorGetter.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorGetter.GetSetMethod()!);
         il.Emit(OpCodes.Ldloc, descLocal);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorEnumerable.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorEnumerable.GetSetMethod()!);
         il.Emit(OpCodes.Ldloc, descLocal);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorConfigurable.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorConfigurable.GetSetMethod()!);
         il.Emit(OpCodes.Ldsfld, runtime.SymbolPrototypeField);
         il.Emit(OpCodes.Ldstr, "description");
         il.Emit(OpCodes.Ldloc, descLocal);
-        il.Emit(OpCodes.Call, runtime.PDSDefineProperty);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.DefineProperty);
         il.Emit(OpCodes.Pop);
 
         il.Emit(OpCodes.Ldsfld, runtime.SymbolPrototypeField);
         il.Emit(OpCodes.Ldsfld, runtime.ObjectPrototypeField);
-        il.Emit(OpCodes.Call, runtime.PDSSetPrototype);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.SetPrototype);
         il.Emit(OpCodes.Ret);
     }
 

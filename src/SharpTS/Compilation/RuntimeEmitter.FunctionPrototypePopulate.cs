@@ -59,7 +59,7 @@ public partial class RuntimeEmitter
         // Object.getOwnPropertyDescriptor reports the spec attrs (built-in
         // methods are W:T, E:F, C:T per ECMA-262 §17). Test262 verifies via
         // verifyProperty(Function.prototype, "bind", {W:T,E:F,C:T}).
-        var fnDescLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+        var fnDescLocal = il.DeclareLocal(runtime.DescriptorStorage.DescriptorType);
         void Wire(string jsName, MethodBuilder helper, int jsLength)
             => EmitWirePrototypeMethod(il, runtime, runtime.FunctionPrototypeField, fnDescLocal,
                 setItem, jsName, helper, jsLength);
@@ -80,7 +80,7 @@ public partial class RuntimeEmitter
         // ECMA-262 §20.2.3.
         il.Emit(OpCodes.Ldsfld, runtime.FunctionPrototypeField);
         il.Emit(OpCodes.Ldsfld, runtime.ObjectPrototypeField);
-        il.Emit(OpCodes.Call, runtime.PDSSetPrototype);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.SetPrototype);
 
         il.Emit(OpCodes.Ret);
     }

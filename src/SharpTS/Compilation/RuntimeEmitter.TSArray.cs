@@ -2499,7 +2499,7 @@ public partial class RuntimeEmitter
         var descriptorKeysLocal = il.DeclareLocal(_types.ListOfObject);
         var descriptorKeyLocal = il.DeclareLocal(_types.String);
         var descriptorIndexLocal = il.DeclareLocal(_types.UInt32);
-        var descriptorLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+        var descriptorLocal = il.DeclareLocal(runtime.DescriptorStorage.DescriptorType);
         var descriptorLoopIndexLocal = il.DeclareLocal(_types.Int32);
         var descriptorLoopCountLocal = il.DeclareLocal(_types.Int32);
         var descriptorFirstLoop = il.DefineLabel();
@@ -2511,7 +2511,7 @@ public partial class RuntimeEmitter
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Call, runtime.PDSGetAllExtraKeys);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetAllExtraKeys);
         il.Emit(OpCodes.Stloc, descriptorKeysLocal);
         il.Emit(OpCodes.Ldloc, descriptorKeysLocal);
         il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
@@ -2551,12 +2551,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Blt_Un, descriptorFirstNext);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, descriptorKeyLocal);
-        il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetPropertyDescriptor);
         il.Emit(OpCodes.Stloc, descriptorLocal);
         il.Emit(OpCodes.Ldloc, descriptorLocal);
         il.Emit(OpCodes.Brfalse, descriptorFirstNext);
         il.Emit(OpCodes.Ldloc, descriptorLocal);
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorConfigurable.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorConfigurable.GetGetMethod()!);
         il.Emit(OpCodes.Brtrue, descriptorFirstNext);
         il.Emit(OpCodes.Ldloc, descriptorIndexLocal);
         il.Emit(OpCodes.Conv_U8);
@@ -2606,7 +2606,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Blt_Un, descriptorSecondNext);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, descriptorKeyLocal);
-        il.Emit(OpCodes.Call, runtime.PDSDeleteProperty);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.DeleteProperty);
         il.Emit(OpCodes.Pop);
         il.MarkLabel(descriptorSecondNext);
         il.Emit(OpCodes.Ldloc, descriptorLoopIndexLocal);

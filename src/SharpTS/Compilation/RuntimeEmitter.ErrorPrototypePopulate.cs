@@ -73,7 +73,7 @@ public partial class RuntimeEmitter
         // Install non-enumerable PDS descriptors for constructor/name/message/
         // toString per ECMA-262 §20.5.3 + §17 (built-in data properties are
         // W:T,E:F,C:T).
-        var errDescLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+        var errDescLocal = il.DeclareLocal(runtime.DescriptorStorage.DescriptorType);
         void InstallNonEnumerableErr(string jsName, System.Action emitValue)
             => EmitInstallNonEnumerable(il, runtime, runtime.ErrorPrototypeField, errDescLocal, jsName, emitValue);
         InstallNonEnumerableErr("constructor", () =>
@@ -88,7 +88,7 @@ public partial class RuntimeEmitter
         // Per ECMA-262 §20.5.3 Error.prototype's [[Prototype]] is %Object.prototype%.
         il.Emit(OpCodes.Ldsfld, runtime.ErrorPrototypeField);
         il.Emit(OpCodes.Ldsfld, runtime.ObjectPrototypeField);
-        il.Emit(OpCodes.Call, runtime.PDSSetPrototype);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.SetPrototype);
 
         il.Emit(OpCodes.Ret);
     }
@@ -308,7 +308,7 @@ public partial class RuntimeEmitter
 
         // Install non-enumerable PDS descriptors for constructor/name/message
         // (ECMA-262 §17 — built-in data properties are W:T, E:F, C:T).
-        var descLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+        var descLocal = il.DeclareLocal(runtime.DescriptorStorage.DescriptorType);
         void InstallNonEnum(string jsName, System.Action emitValue)
             => EmitInstallNonEnumerable(il, runtime, protoField, descLocal, jsName, emitValue);
         InstallNonEnum("constructor", () =>
@@ -325,7 +325,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, runtime.ErrorPrototypePopulateMethod);
         il.Emit(OpCodes.Ldsfld, protoField);
         il.Emit(OpCodes.Ldsfld, runtime.ErrorPrototypeField);
-        il.Emit(OpCodes.Call, runtime.PDSSetPrototype);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.SetPrototype);
 
         il.Emit(OpCodes.Ret);
     }

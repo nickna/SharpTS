@@ -199,7 +199,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, source);
         il.Emit(OpCodes.Brfalse, fallback);
         il.Emit(OpCodes.Ldloc, source);
-        il.Emit(OpCodes.Call, runtime.PDSHasPropertyDescriptors);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.HasPropertyDescriptors);
         il.Emit(OpCodes.Brtrue, fallback);
         il.Emit(OpCodes.Ldloc, source);
         il.Emit(OpCodes.Call, runtime.TryGetSymbolDictMethod);
@@ -530,7 +530,7 @@ public partial class RuntimeEmitter
         // hidden properties are filtered and accessors are invoked.
         var directFieldsLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.PDSHasPropertyDescriptors);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.HasPropertyDescriptors);
         il.Emit(OpCodes.Brfalse, directFieldsLabel);
 
         var descriptorResultLocal = il.DeclareLocal(_types.DictionaryStringObject);
@@ -616,17 +616,17 @@ public partial class RuntimeEmitter
 
         // Symbol path: build $CompiledPropertyDescriptor and store in symbol-dict.
         il.MarkLabel(symKeyLabel);
-        var descLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
-        il.Emit(OpCodes.Newobj, runtime.CompiledPropertyDescriptorCtor);
+        var descLocal = il.DeclareLocal(runtime.DescriptorStorage.DescriptorType);
+        il.Emit(OpCodes.Newobj, runtime.DescriptorStorage.DescriptorConstructor);
         il.Emit(OpCodes.Stloc, descLocal);
         // desc.Getter = arg2
         il.Emit(OpCodes.Ldloc, descLocal);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorGetter.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorGetter.GetSetMethod()!);
         // desc.Setter = arg3
         il.Emit(OpCodes.Ldloc, descLocal);
         il.Emit(OpCodes.Ldarg_3);
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorSetter.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorSetter.GetSetMethod()!);
         // GetSymbolDict(obj)[key] = desc
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Call, runtime.GetSymbolDictMethod);
