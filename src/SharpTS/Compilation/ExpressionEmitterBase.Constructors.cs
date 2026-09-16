@@ -209,7 +209,7 @@ public abstract partial class ExpressionEmitterBase
                 return true;
 
             case "MessageChannel":
-                IL.Emit(OpCodes.Call, Ctx.Runtime!.TSMessageChannelCtor);
+                IL.Emit(OpCodes.Call, Ctx.Runtime!.MessageChannels.Create);
                 SetStackUnknown();
                 return true;
 

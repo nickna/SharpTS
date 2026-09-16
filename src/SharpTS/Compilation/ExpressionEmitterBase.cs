@@ -2267,8 +2267,8 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
             "WritableStream" => Ctx.Runtime!.WebStreams?.WritableType,
             "TransformStream" => Ctx.Runtime!.WebStreams?.TransformType,
             // Real emitted types since #222 (always emitted).
-            "MessageChannel" => Ctx.Runtime!.TSMessageChannelType,
-            "MessagePort" => Ctx.Runtime!.TSMessagePortType,
+            "MessageChannel" => Ctx.Runtime!.MessageChannels.Type,
+            "MessagePort" => Ctx.Runtime!.MessageChannels.Port.Type,
             // Typed-array / buffer constructors in value position (#331) — the
             // bare-identifier form (`var x = Int8Array`, `typeof Uint8Array`,
             // `x instanceof ArrayBuffer`). `new Int8Array(...)` is intercepted
