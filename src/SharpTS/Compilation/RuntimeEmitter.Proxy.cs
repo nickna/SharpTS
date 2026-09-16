@@ -216,7 +216,7 @@ public partial class RuntimeEmitter
             () =>
             {
                 emitLoadIndex();
-                il.Emit(OpCodes.Call, runtime.ToJsString);
+                il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
             },
             emitLoadValue, emitLoadObj);
         il.Emit(OpCodes.Pop);

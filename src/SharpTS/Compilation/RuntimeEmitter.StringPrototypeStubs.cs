@@ -22,9 +22,9 @@ public partial class RuntimeEmitter
         // RequireObjectCoercible (throw TypeError on undefined/null) and
         // coerce via JS-spec ToJsString (so .call(false) → "false" not
         // .NET "False").
-        runtime.Strings.ToUpperCase = EmitStringStringStub(typeBuilder, runtime.CreateException, runtime.TSTypeErrorCtor, runtime.ToJsString,
+        runtime.Strings.ToUpperCase = EmitStringStringStub(typeBuilder, runtime.CreateException, runtime.TSTypeErrorCtor, runtime.StringCoercion.ToJsString,
             runtime.UndefinedType, "StringToUpperCase", "ToUpper", strictReceiver: true);
-        runtime.Strings.ToLowerCase = EmitStringStringStub(typeBuilder, runtime.CreateException, runtime.TSTypeErrorCtor, runtime.ToJsString,
+        runtime.Strings.ToLowerCase = EmitStringStringStub(typeBuilder, runtime.CreateException, runtime.TSTypeErrorCtor, runtime.StringCoercion.ToJsString,
             runtime.UndefinedType, "StringToLowerCase", "ToLower", strictReceiver: true);
         // JsTrim(string, int mode) for inline call sites that already have a
         // string on the stack. mode: 0=both, 1=start, 2=end. Define BEFORE
@@ -33,11 +33,11 @@ public partial class RuntimeEmitter
         // Trim variants need ECMA-262 whitespace set, which differs from .NET's
         // char.IsWhiteSpace by including ﻿ (ZWNBSP). Use a custom helper.
         runtime.Strings.Trim = EmitJsTrimHelper(typeBuilder, runtime.Strings, runtime.CreateException, runtime.TSTypeErrorCtor,
-            runtime.ToJsString, runtime.UndefinedType, "StringTrim", trimMode: 0, strictReceiver: true);
+            runtime.StringCoercion.ToJsString, runtime.UndefinedType, "StringTrim", trimMode: 0, strictReceiver: true);
         runtime.Strings.TrimStart = EmitJsTrimHelper(typeBuilder, runtime.Strings, runtime.CreateException, runtime.TSTypeErrorCtor,
-            runtime.ToJsString, runtime.UndefinedType, "StringTrimStart", trimMode: 1, strictReceiver: true);
+            runtime.StringCoercion.ToJsString, runtime.UndefinedType, "StringTrimStart", trimMode: 1, strictReceiver: true);
         runtime.Strings.TrimEnd = EmitJsTrimHelper(typeBuilder, runtime.Strings, runtime.CreateException, runtime.TSTypeErrorCtor,
-            runtime.ToJsString, runtime.UndefinedType, "StringTrimEnd", trimMode: 2, strictReceiver: true);
+            runtime.StringCoercion.ToJsString, runtime.UndefinedType, "StringTrimEnd", trimMode: 2, strictReceiver: true);
 
         // Generic stub for methods without specific helpers — used only for
         // typeof + isConstructor probes via $TSFunction wrappers, AND wired
@@ -45,14 +45,14 @@ public partial class RuntimeEmitter
         // tolerant of null/undefined receivers (returns empty string) since
         // those wirings legitimately call with non-string receivers.
         runtime.Strings.PrototypeGenericStub = EmitStringStringStub(typeBuilder, runtime.CreateException, runtime.TSTypeErrorCtor,
-            runtime.ToJsString, runtime.UndefinedType, "_StringPrototypeStub", "ToString", strictReceiver: false);
+            runtime.StringCoercion.ToJsString, runtime.UndefinedType, "_StringPrototypeStub", "ToString", strictReceiver: false);
 
         // Strict variant for methods whose first spec step is RequireObjectCoercible
         // (match/matchAll/search/etc.) — these throw TypeError on null/undefined
         // receivers per ECMA-262 22.1.3.* step 1. Used for borrowed-method
         // patterns (`String.prototype.match.call(null, /./)`) where the inline
         // dispatch path doesn't fire.
-        _ = EmitStringStringStub(typeBuilder, runtime.CreateException, runtime.TSTypeErrorCtor, runtime.ToJsString, runtime.UndefinedType,
+        _ = EmitStringStringStub(typeBuilder, runtime.CreateException, runtime.TSTypeErrorCtor, runtime.StringCoercion.ToJsString, runtime.UndefinedType,
             "_StringPrototypeStrictStub", "ToString", strictReceiver: true);
 
         // ECMA-262 22.1.3.27 String.prototype.toString === valueOf === thisStringValue.
@@ -220,7 +220,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Newarr, _types.Object);
         il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", _types.String, _types.String));
         il.Emit(OpCodes.Stloc, resultLocal);
 
@@ -286,7 +286,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Newarr, _types.Object);
         il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Ret);
         return method;
     }

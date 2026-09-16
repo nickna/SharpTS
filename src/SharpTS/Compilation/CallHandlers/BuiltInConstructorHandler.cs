@@ -60,7 +60,7 @@ public class BuiltInConstructorHandler : ICallHandler
             il.Emit(OpCodes.Br, ready);
             il.MarkLabel(stringify);
             il.Emit(OpCodes.Ldloc, description);
-            il.Emit(OpCodes.Call, ctx.Runtime!.ToJsString);
+            il.Emit(OpCodes.Call, ctx.Runtime!.StringCoercion.ToJsString);
             il.MarkLabel(ready);
         }
         // Create new $TSSymbol instance

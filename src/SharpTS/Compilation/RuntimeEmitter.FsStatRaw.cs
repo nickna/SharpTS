@@ -152,7 +152,7 @@ public partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
         var resultLocal = il.DeclareLocal(_types.Object);
-        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Call, runtime.Stringify);
+        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Call, runtime.StringCoercion.Stringify);
         var pathLocal = il.DeclareLocal(_types.String); il.Emit(OpCodes.Stloc, pathLocal);
 
         EmitWithFsErrorHandling(il, runtime.NodeErrors, pathLocal, "stat", afterTry =>
@@ -206,7 +206,7 @@ public partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
         var resultLocal = il.DeclareLocal(_types.Object);
-        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Call, runtime.Stringify);
+        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Call, runtime.StringCoercion.Stringify);
         var pathLocal = il.DeclareLocal(_types.String); il.Emit(OpCodes.Stloc, pathLocal);
 
         EmitWithFsErrorHandling(il, runtime.NodeErrors, pathLocal, "lstat", afterTry =>

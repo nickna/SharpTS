@@ -156,19 +156,13 @@ public class EmittedRuntime
     public MethodInfo IUnionTypeValueGetter { get; set; } = null!;
 
     // Type coercion methods
+    /// <summary>Required display and language string-conversion declarations.</summary>
+    public EmittedStringCoercionRuntime StringCoercion { get; } = new();
+
     /// <summary>$Runtime.FormatNumber(double) -> string — ECMA-262 7.1.12.1 Number::toString(10).
     /// Byte-for-byte equivalent of SharpTS.Compilation.RuntimeTypes.FormatNumber so interpreted
     /// and compiled output match. Emitted in RuntimeEmitter.NumberFormat.cs.</summary>
     public MethodBuilder FormatNumber { get; set; } = null!;
-    /// <summary>$Runtime.ConcatStringInt64(string, long, bool) -> string —
-    /// allocation-minimal concatenation for proven integer loop counters.</summary>
-    public MethodBuilder ConcatStringInt64 { get; set; } = null!;
-    public MethodBuilder Stringify { get; set; } = null!;
-    public MethodBuilder ToJsString { get; set; } = null!;
-    /// <summary>$Runtime.StringFromValue(object) -> string — ECMA-262 §22.1.1.1 String(value) call form: Symbol → SymbolDescriptiveString (via $TSSymbol.ToString()); everything else → ToJsString. Only the String() constructor-call form is exempt from ToString's Symbol TypeError; implicit coercions (template literals, concat) must keep throwing.</summary>
-    public MethodBuilder StringFromValueMethod { get; set; } = null!;
-    /// <summary>$Runtime.StringifyCoerce(object) -> string — Stringify with the ECMA-262 §7.1.17 Symbol guard: implicit ToString coercion sites (template-literal interpolation, string <c>+</c>/<c>+=</c> concatenation) throw TypeError for Symbol values. Console formatting and the String() call form must NOT route through this.</summary>
-    public MethodBuilder StringifyCoerce { get; set; } = null!;
     public MethodBuilder ToNumber { get; set; } = null!;
     public MethodBuilder ConvertToNumber { get; set; } = null!;
     /// <summary>$Runtime.JsNumberToInt32(double) - allocation-free ECMA-262 ToInt32 for statically numeric operands.</summary>

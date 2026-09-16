@@ -1913,7 +1913,7 @@ public partial class RuntimeEmitter
 
         // string url = arg0?.ToString() ?? ""
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.Stringify);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.Stringify);
         il.Emit(OpCodes.Stloc, urlLocal);
 
         // Extract redirect option from options (default: "follow")
@@ -1984,7 +1984,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, runtime.GetProperty);
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Brfalse, useDefaultMethod2Label);
-        il.Emit(OpCodes.Call, runtime.Stringify);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.Stringify);
         il.Emit(OpCodes.Stloc, methodStrLocal);
         il.Emit(OpCodes.Br, methodDoneLabel);
 
@@ -2035,7 +2035,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, hasBodyLabel2);
 
         // Body is present and not undefined - convert to string and set as content
-        il.Emit(OpCodes.Call, runtime.Stringify);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.Stringify);
         var bodyStrLocal = il.DeclareLocal(_types.String);
         il.Emit(OpCodes.Stloc, bodyStrLocal);
 
@@ -2600,7 +2600,7 @@ public partial class RuntimeEmitter
         var valueLocal = il.DeclareLocal(_types.String);
         il.Emit(OpCodes.Ldloca, kvpLocal);
         il.Emit(OpCodes.Call, valueProperty.GetGetMethod()!);
-        il.Emit(OpCodes.Call, runtime.Stringify);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.Stringify);
         il.Emit(OpCodes.Stloc, valueLocal);
 
         // request.Headers.TryAddWithoutValidation(key, value)

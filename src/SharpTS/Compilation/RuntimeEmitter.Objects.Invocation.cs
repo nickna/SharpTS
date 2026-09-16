@@ -317,7 +317,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, symbolDescriptionReadyLabel);
         il.MarkLabel(symbolStringifyDescriptionLabel);
         il.Emit(OpCodes.Ldloc, symbolDescriptionLocal);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.MarkLabel(symbolDescriptionReadyLabel);
         il.Emit(OpCodes.Newobj, runtime.TSSymbolCtor);
         il.Emit(OpCodes.Ret);
@@ -381,7 +381,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldelem_Ref);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(stringNoArgLabel);
         il.Emit(OpCodes.Ldstr, "");

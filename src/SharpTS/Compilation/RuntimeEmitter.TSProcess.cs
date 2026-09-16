@@ -1212,7 +1212,7 @@ public partial class RuntimeEmitter
             }
             else
             {
-                il.Emit(OpCodes.Call, runtime.Stringify);
+                il.Emit(OpCodes.Call, runtime.StringCoercion.Stringify);
             }
             il.Emit(OpCodes.Call, _types.GetMethod(_types.File, "WriteAllText", _types.String, _types.String));
             il.Emit(OpCodes.Ldloc, nameLocal);

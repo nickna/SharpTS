@@ -2182,6 +2182,203 @@ public class StandaloneDllTests
             verifyStandardError: error => Assert.Empty(error)));
     }
 
+    public static IEnumerable<object[]> StringCoercionMetadataPrograms =>
+    [
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "console.log(String(null),String(undefined),String(false),String(-0),String(NaN),String(Infinity));"
+            },
+            "null undefined false 0 NaN Infinity\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "const values:any[]=[0.1+0.2,1e21,1e20,1e-6,1e-7];for(const value of values)console.log(String(value),`${value}`);"
+            },
+            "0.30000000000000004 0.30000000000000004\n1e+21 1e+21\n100000000000000000000 100000000000000000000\n0.000001 0.000001\n1e-7 1e-7\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "const value:any=42n;console.log(value);console.log(String(value),`${value}`,'v='+value);console.log(String(Object(value)));"
+            },
+            "42n\n42 42 v=42\n42\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "const value:any=Symbol('x');console.log(String(value));try{console.log(`${value}`);}catch(e:any){console.log(e.name);}try{console.log(''+value);}catch(e:any){console.log(e.name);}try{console.log(String(Object(value)));}catch(e:any){console.log(e.name);}"
+            },
+            "Symbol(x)\nTypeError\nTypeError\nTypeError\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "const values:number[]=[1,2,3];console.log(String(values),`${values}`);console.log(values.length,values[1]);const holes:any[]=[1,,3];console.log(String(holes));"
+            },
+            "1,2,3 1,2,3\n3 2\n1,,3\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "const saved:any=Array.prototype.toString;(Array.prototype as any).toString=function(){return 'override';};const values:any=[1,2];console.log(String(values),`${values}`);(Array.prototype as any).toString=saved;console.log(String(values));"
+            },
+            "override override\n1,2\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "const first:any={toString(){return 'own';},valueOf(){return 99;}};console.log(String(first),`${first}`);const second:any={toString(){return {};},valueOf(){return 7;}};console.log(String(second));const third:any={toString:null,valueOf(){return true;}};console.log(String(third));"
+            },
+            "own own\n7\ntrue\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "class Plain{}class Custom{toString(){return 'custom';}}const plain:any=new Plain();const custom:any=new Custom();console.log(String(plain),`${plain}`);console.log(String(custom),`${custom}`,'v='+custom);"
+            },
+            "[object Object] [object Object]\ncustom custom v=custom\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "for(const value of [new String('abc'),new Number(7),new Boolean(false)])console.log(String(value),`${value}`);const box:any=new String('abc');box.toString=function(){return 'own';};console.log(String(box));"
+            },
+            "abc abc\n7 7\nfalse false\nown\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "let order='';const value:any={};Object.defineProperty(value,Symbol.toPrimitive,{get(){order+='G';return function(hint:any){order+=hint;return 12;};}});console.log(String(value),order);"
+            },
+            "12 Gstring\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "for(const value of [{[Symbol.toPrimitive]:1},{[Symbol.toPrimitive](){return {};}}]){try{console.log(String(value));}catch(e:any){console.log(e.name);}}const value:any={[Symbol.toPrimitive](){throw 'sentinel';}};try{String(value);}catch(e){console.log(e);}"
+            },
+            "TypeError\nTypeError\nsentinel\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "const values:any[]=[{toString:undefined,valueOf:undefined},{toString(){return {};},valueOf(){return {};}},Object.create(null)];for(const value of values){try{console.log(String(value));}catch(e:any){console.log(e.name);}}"
+            },
+            "TypeError\nTypeError\nTypeError\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "for(const result of [null,undefined,false,42n]){const value:any={toString(){return result;}};console.log(String(value));}"
+            },
+            "null\nundefined\nfalse\n42\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "var toString=function(){return 'GLOBAL';};console.log(String(this));"
+            },
+            "GLOBAL\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "function inspect(a:any,b:any){console.log(String(arguments));}inspect(1,2);"
+            },
+            "[object Arguments]\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "const values=new Map<any,any>([['a',2],[null,undefined]]);for(const value of values)console.log(String(value));"
+            },
+            "a,2\n,\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "const value:any=function(){};value.toString=function(){return 'FUNCTION';};console.log(String(value));"
+            },
+            "FUNCTION\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "const value:any=/a/g;console.log(String(value));value.toString=function(){return 'REGEXP';};console.log(String(value));console.log(String(new TypeError('message')));"
+            },
+            "/a/g\nREGEXP\nTypeError: message\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "function render(n:number):string{let result='';for(let i=0;i<n;i++){result+='['+i+']';result+=i+';';}return result;}console.log(render(4));console.log('v='+-42,42+'=v','v='+-0);"
+            },
+            "[0]0;[1]1;[2]2;[3]3;\nv=-42 42=v v=0\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "async function run(){const value:any=await Promise.resolve({toString(){return 'async';}});console.log(String(value),`${value}`);}run();"
+            },
+            "async async\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "function* run():Generator<string,void,any>{const value:any={toString(){return 'generator';}};yield String(value);yield `${value}`;}console.log(Array.from(run()).join(','));"
+            },
+            "generator,generator\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.cjs"] = "const value={toString(){return 'commonjs';}};console.log(String(value),`${value}`);console.log(String(Symbol('x')));"
+            },
+            "commonjs commonjs\nSymbol(x)\n", "main.cjs", true
+        }
+    ];
+
+    [Theory]
+    [MemberData(nameof(StringCoercionMetadataPrograms))]
+    public void Isolated_StringCoercionMetadata_PreservesDisplayLanguageAndPrimitiveConversions(Dictionary<string, string> files, string expected, string entryPoint, bool standalone)
+    {
+        using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        foreach (var (path, source) in files) tempDir.CreateFile(path, source);
+        var dllPath = tempDir.GetPath("string_coercion_metadata.dll");
+        var deployment = standalone ? " --standalone" : "";
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --noLib --compile \"{tempDir.GetPath(entryPoint)}\" -o \"{dllPath}\" --verify{deployment}", tempDir.Path);
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(dllPath));
+        Assert.Equal(!standalone, File.Exists(tempDir.GetPath("SharpTS.dll")));
+        Assert.Equal(expected, ExecuteCompiledDllIsolated(dllPath, timeoutMs: 30000,
+            verifyStandardError: error => Assert.Empty(error)));
+    }
+
     public static IEnumerable<object[]> BroadcastChannelMetadataPrograms =>
     [
         new object[]

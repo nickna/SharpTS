@@ -161,7 +161,7 @@ public sealed class RegExpEmitter : ITypeEmitterStrategy
         {
             emitter.EmitExpression(arguments[0]);
             emitter.EmitBoxIfNeeded(arguments[0]);
-            il.Emit(OpCodes.Call, ctx.Runtime!.Stringify);
+            il.Emit(OpCodes.Call, ctx.Runtime!.StringCoercion.Stringify);
         }
         else
         {

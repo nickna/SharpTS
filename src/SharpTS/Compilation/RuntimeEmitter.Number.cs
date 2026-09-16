@@ -680,7 +680,7 @@ public partial class RuntimeEmitter
         // stringifies negative zero as "0" (where Double.ToString() yields
         // "-0"), and object arguments must observe their coercion hooks.
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Stloc, rawStrLocal);
         il.Emit(OpCodes.Ldloc, rawStrLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "Trim", Type.EmptyTypes)!);
@@ -2844,7 +2844,7 @@ public partial class RuntimeEmitter
         // and uppercase "E", but JS spec wants plain decimal up to 1e21.)
         il.Emit(OpCodes.Ldloc, valueLocal);
         il.Emit(OpCodes.Box, _types.Double);
-        il.Emit(OpCodes.Call, runtime.Stringify);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.Stringify);
         il.Emit(OpCodes.Ret);
 
         // ECMA-262 21.1.3.6: radix coerced via ToIntegerOrInfinity (default 10).
@@ -2907,7 +2907,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Bne_Un, notRadix10Label);
         il.Emit(OpCodes.Ldloc, valueLocal);
         il.Emit(OpCodes.Box, _types.Double);
-        il.Emit(OpCodes.Call, runtime.Stringify);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.Stringify);
         il.Emit(OpCodes.Ret);
 
         // if (value == 0) return "0"

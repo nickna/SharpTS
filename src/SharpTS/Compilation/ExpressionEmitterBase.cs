@@ -1287,7 +1287,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
             IL.Emit(OpCodes.Ldloc, exprTemps[i]);
             // StringifyCoerce: interpolation is an implicit ToString coercion —
             // Symbol parts throw TypeError (ECMA-262 §7.1.17).
-            IL.Emit(OpCodes.Call, Ctx.Runtime!.StringifyCoerce);
+            IL.Emit(OpCodes.Call, Ctx.Runtime!.StringCoercion.StringifyCoerce);
             IL.Emit(OpCodes.Call, Types.StringConcat2);
 
             if (i + 1 < tl.Strings.Count)

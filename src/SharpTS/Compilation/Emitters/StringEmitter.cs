@@ -367,7 +367,7 @@ public sealed class StringEmitter : ITypeEmitterStrategy
             // ECMA-262: argument coerced via ToString protocol — handles objects
             // with custom toString/valueOf and avoids InvalidCastException for
             // non-string args (e.g. `"abc".indexOf({toString: () => "b"})`).
-            il.Emit(OpCodes.Call, ctx.Runtime!.ToJsString);
+            il.Emit(OpCodes.Call, ctx.Runtime!.StringCoercion.ToJsString);
         }
         else
         {
@@ -893,7 +893,7 @@ public sealed class StringEmitter : ITypeEmitterStrategy
             // ECMA-262: argument coerced via ToString protocol — handles objects
             // with custom toString/valueOf and avoids InvalidCastException for
             // non-string args (e.g. `"abc".indexOf({toString: () => "b"})`).
-            il.Emit(OpCodes.Call, ctx.Runtime!.ToJsString);
+            il.Emit(OpCodes.Call, ctx.Runtime!.StringCoercion.ToJsString);
         }
         else
         {
@@ -994,7 +994,7 @@ public sealed class StringEmitter : ITypeEmitterStrategy
             // ECMA-262: argument coerced via ToString protocol — handles objects
             // with custom toString/valueOf and avoids InvalidCastException for
             // non-string args (e.g. `"abc".indexOf({toString: () => "b"})`).
-            il.Emit(OpCodes.Call, ctx.Runtime!.ToJsString);
+            il.Emit(OpCodes.Call, ctx.Runtime!.StringCoercion.ToJsString);
         }
         else
         {

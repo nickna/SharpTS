@@ -110,7 +110,7 @@ public partial class RuntimeEmitter
         var il = method.GetILGenerator();
         var keyLocal = il.DeclareLocal(_types.String);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Stloc, keyLocal);
 
         var proxyLabel = il.DefineLabel();
@@ -245,7 +245,7 @@ public partial class RuntimeEmitter
 
         var keyLocal = il.DeclareLocal(_types.String);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Stloc, keyLocal);
 
         // Proxy target: perform its [[Set]] with the caller-provided receiver.
@@ -598,7 +598,7 @@ public partial class RuntimeEmitter
         // whose catch converts only ordinary definition rejection to false.
         var reflectDefineKeyLocal = il.DeclareLocal(_types.String);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Stloc, reflectDefineKeyLocal);
         var proxyDefineLabel = il.DefineLabel();
         var ordinaryDefineLabel = il.DefineLabel();
@@ -1468,7 +1468,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Stloc, target);
             il.Emit(OpCodes.Ldloc, target);
             EmitArgument(il, 1);
-            il.Emit(OpCodes.Call, runtime.ToJsString);
+            il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
             EmitArgumentOrLocal(il, 2, target);
             il.Emit(OpCodes.Call, runtime.ReflectGet);
             il.Emit(OpCodes.Ret);

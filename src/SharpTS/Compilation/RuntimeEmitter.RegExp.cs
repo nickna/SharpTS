@@ -154,7 +154,7 @@ public partial class RuntimeEmitter
         // S15.10.4.1_A8_T9 (`new RegExp(1, new Object("gi"))`) regressed when
         // Object("gi") started returning a wrapper instead of the raw string.
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Ret);
     }
 
@@ -220,7 +220,7 @@ public partial class RuntimeEmitter
         // the spec's ToString(O), retaining its abrupt-completion ordering
         // relative to replaceValue coercion.
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Stloc, stringLocal);
 
         // For the ordinary string-search fallback, ToString(searchValue)
@@ -241,7 +241,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Stloc, regexpLocal);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Stloc, searchLocal);
         il.Emit(OpCodes.Ldloc, searchLocal);
         il.Emit(OpCodes.Stloc, effectivePatternLocal);
@@ -269,7 +269,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(nonCallableReplacementLabel);
 
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Stloc, replacementLocal);
 
         // Native patterns retain the RegExp path; string fallback patterns
@@ -453,7 +453,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "source");
         il.Emit(OpCodes.Call, runtime.GetProperty);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Stloc, srcLocal);
         // flags = arg1 undefined ? ToJsString(Get(pattern,"flags")) : RegExpCoerceArg(arg1)
         il.Emit(OpCodes.Ldarg_1);
@@ -469,7 +469,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "flags");
         il.Emit(OpCodes.Call, runtime.GetProperty);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Stloc, flagsLocal);
         il.Emit(OpCodes.Br, flagsResolvedLabel);
         il.MarkLabel(skipRegexLike);
@@ -1202,7 +1202,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Pop);
         GuestErrorEmitter.ThrowTypeError(il, runtime, "RegExp flags are null or undefined");
         il.MarkLabel(flagsPresent);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Stloc, flagsLocal);
         il.Emit(OpCodes.Ldloc, flagsLocal);
         il.Emit(OpCodes.Ldstr, "g");
@@ -1246,7 +1246,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(standardReceiverOk);
         il.MarkLabel(preparedMatcherLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Stloc, stringLocal);
         il.Emit(OpCodes.Ldloc, regexpLocal);
         il.Emit(OpCodes.Ldfld, _tsRegExpRegexField);
@@ -1259,7 +1259,7 @@ public partial class RuntimeEmitter
         // overridden RegExp.prototype[@@matchAll] observes the correct `this`.
         il.MarkLabel(fallbackCreateLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Stloc, stringLocal);
         var sourceReadyLabel = il.DefineLabel();
         var sourceCoerceLabel = il.DefineLabel();
@@ -1279,7 +1279,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, sourceReadyLabel);
         il.MarkLabel(sourceCoerceLabel);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Stloc, sourceLocal);
         il.MarkLabel(sourceReadyLabel);
         il.Emit(OpCodes.Ldloc, sourceLocal);
@@ -1652,7 +1652,7 @@ public partial class RuntimeEmitter
         // Pass typed `_global` directly — String.prototype.replace doesn't
         // observe user PDS overrides on `r.global`.
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Stloc, replacementLocal);
 
         il.Emit(OpCodes.Ldloc, regexpLocal);
@@ -1668,12 +1668,12 @@ public partial class RuntimeEmitter
 
         // Step 4: ToJsString(searchValue) FIRST.
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Stloc, searchLocal);
 
         // Step 5: ToJsString(replaceValue) AFTER the search has been coerced.
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Stloc, replacementLocal);
 
         // var idx = str.IndexOf(search)
@@ -1898,7 +1898,7 @@ public partial class RuntimeEmitter
         // sb.Append(ToJsString(result))
         il.Emit(OpCodes.Ldloc, sbLocal);
         il.Emit(OpCodes.Ldloc, resultObjLocal);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StringBuilder, "Append", [_types.String])!);
         il.Emit(OpCodes.Pop);
 
@@ -1953,7 +1953,7 @@ public partial class RuntimeEmitter
         // String pattern path
         il.MarkLabel(stringPatternLabel);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Stloc, searchLocal);
 
         // replaceAll with a string search reuses the regex loop with an escaped
@@ -2017,7 +2017,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "Substring", [_types.Int32, _types.Int32])!);
 
         il.Emit(OpCodes.Ldloc, resultStrLocal);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, idxLocal2);
@@ -2186,7 +2186,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(isStringPatternLabel);
 
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Stloc, sepLocal);
 
         // Handle empty separator: split into characters
@@ -2332,7 +2332,7 @@ public partial class RuntimeEmitter
         // above receives the original value and can return without observing
         // receiver.toString.
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Stloc, stringLocal);
 
         // The inherited native RegExp @@split is intentionally skipped by the
@@ -2403,7 +2403,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, separatorReadyLabel);
         il.MarkLabel(coerceSeparatorLabel);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Stloc, separatorLocal);
         il.MarkLabel(separatorReadyLabel);
 

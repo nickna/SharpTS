@@ -1431,7 +1431,7 @@ public partial class RuntimeEmitter
 
         il.Emit(OpCodes.Ldloc, indexLocal);
         il.Emit(OpCodes.Box, _types.Double);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Stloc, keyLocal);
 
         // ECMA-262 requires HasProperty for every visited index, even when the
@@ -1512,7 +1512,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, setSepLabel);
         il.MarkLabel(hasSep);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.MarkLabel(setSepLabel);
         il.Emit(OpCodes.Stloc, sepLocal);
 
@@ -1573,7 +1573,7 @@ public partial class RuntimeEmitter
         // ("[1, 2]" / "{ a: 1 }" / "ClassName") (#922 follow-up).
         il.Emit(OpCodes.Ldloc, sbLocal);
         il.Emit(OpCodes.Ldloc, elemLocal);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StringBuilder, "Append", _types.String));
         il.Emit(OpCodes.Pop);
 

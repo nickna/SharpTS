@@ -2352,7 +2352,7 @@ public partial class RuntimeEmitter
         var strictArrayRejectLabel = il.DefineLabel();
 
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Stloc, strictArrayKeyLocal);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, strictArrayKeyLocal);
@@ -2472,7 +2472,7 @@ public partial class RuntimeEmitter
         var strictListKeyLocal = il.DeclareLocal(_types.String);
         var strictListIndexLocal = il.DeclareLocal(_types.Int32);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Stloc, strictListKeyLocal);
 
         // Non-canonical/non-integer keys are ordinary named properties.

@@ -180,7 +180,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(nameDefinedLabel);
         // ToString(name) via $Runtime.ToJsString.
         il.Emit(OpCodes.Ldloc, nameLocal);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Stloc, nameStrLocal);
         il.MarkLabel(nameDoneLabel);
 
@@ -207,7 +207,7 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(msgDefinedLabel);
         il.Emit(OpCodes.Ldloc, msgLocal);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Stloc, msgStrLocal);
         il.MarkLabel(msgDoneLabel);
 

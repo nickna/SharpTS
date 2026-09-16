@@ -23,7 +23,7 @@ public partial class RuntimeEmitter
         var global = il.DeclareLocal(_types.Boolean);
 
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Stloc, s);
 
         // C = SpeciesConstructor(rx, %RegExp%).
@@ -61,7 +61,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "flags");
         il.Emit(OpCodes.Call, runtime.GetProperty);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Stloc, flags);
 
         il.Emit(OpCodes.Ldloc, flags);

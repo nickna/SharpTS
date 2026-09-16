@@ -832,6 +832,18 @@ remain local construction values. Direct, value, async and generator consumers u
 handles while retaining the existing argument shapes, freezing and receiver behavior. General
 coercion and function/object metadata remain with their families for later migration and audit.
 
+String conversion metadata lives in required `EmittedStringCoercionRuntime`: display Stringify,
+language ToJsString, String(value), implicit StringifyCoerce, and typed integer concatenation.
+The three forward declarations retain their separate early positions; later body emission and
+completion preserve those references. Five emitters take the component and explicit dependencies.
+ToJsString receives existing array components plus immutable scoped inputs for object, descriptor,
+function, symbol and global peers; the RegExp type is supplied only under its existing feature gate.
+Those inputs are never retained as emitter state and remain part of the final ownership audit.
+Number formatting stays with its own family. The integer formatting buffer and span/BCL handles
+remain construction-local, with unchanged guest thread-static storage and optimization flags.
+Display formatting, language conversion, Symbol errors and String(value)'s Symbol exception keep
+their distinct behavior, including live prototype and coercion-hook lookups.
+
 During emission, each handle becomes readable as soon as its declaration is assigned, so forward
 references do not require a method body to exist yet. An early read names the missing declaration.
 Completion is an orchestration boundary, not an IL verifier: body emission and type finalization

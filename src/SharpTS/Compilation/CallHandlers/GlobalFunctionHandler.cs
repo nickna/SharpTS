@@ -279,7 +279,7 @@ public class GlobalFunctionHandler : ICallHandler
             // emitter's String(x) handling in ILEmitter.Calls.cs.
             emitter.EmitExpression(call.Arguments[0]);
             emitter.EmitBoxIfNeeded(call.Arguments[0]);
-            il.Emit(System.Reflection.Emit.OpCodes.Call, ctx.Runtime!.StringFromValueMethod);
+            il.Emit(System.Reflection.Emit.OpCodes.Call, ctx.Runtime!.StringCoercion.FromValue);
         }
         emitter.SetStackType(StackType.String);
         return true;

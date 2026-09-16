@@ -61,7 +61,7 @@ public partial class RuntimeEmitter
 
             var il = method.GetILGenerator();
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Call, runtime.ToJsString);
+            il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
             il.Emit(OpCodes.Call, uriMethod);
             il.Emit(OpCodes.Ret);
             return method;

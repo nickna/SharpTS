@@ -16,7 +16,7 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Ldstr, "");
         _ = TryEmitIntegerCounterValueI8(expression);
         IL.Emit(OpCodes.Ldc_I4_0);
-        IL.Emit(OpCodes.Call, _ctx.Runtime!.ConcatStringInt64);
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.StringCoercion.ConcatInt64);
         SetStackType(StackType.String);
         return true;
     }

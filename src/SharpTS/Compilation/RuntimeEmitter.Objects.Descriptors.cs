@@ -361,11 +361,11 @@ public partial class RuntimeEmitter
         // propName = $Runtime.ToJsString(prop) — ECMA-262 §7.1.19 ToPropertyKey
         // string path via the spec-shaped ToString. Avoids the prop.ToString()
         // Callvirt-on-null NRE for `Object.defineProperty(obj, null, ...)`,
-        // and unlike runtime.Stringify (which produces debug "[1, 2]" form for
+        // and unlike runtime.StringCoercion.Stringify (which produces debug "[1, 2]" form for
         // arrays) honors `Array.prototype.toString` join semantics so
         // `defineProperty(obj, [1], ...)` lands at key "1" (matches V8/SM).
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Stloc, propNameLocal);
 
         EmitDefinePropertyProxyReceiver(il, runtime, method, propNameLocal);
@@ -1230,7 +1230,7 @@ public partial class RuntimeEmitter
         // Array.prototype.toString (so `gOPD(obj, [1])` looks up "1", not "[1]"),
         // and avoids the prop.ToString() NRE for null.
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Stloc, propNameLocal);
 
         EmitGetOwnDescriptorGlobalReceiver(

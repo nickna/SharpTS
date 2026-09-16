@@ -496,7 +496,7 @@ public partial class RuntimeEmitter
         // dispatch flows through CoercePrimitiveArgs.RequireObjectCoercibleThis
         // which is the spec gate.
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Ret);
     }
 

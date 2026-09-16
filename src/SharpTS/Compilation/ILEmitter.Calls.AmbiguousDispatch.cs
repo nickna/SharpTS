@@ -93,7 +93,7 @@ public partial class ILEmitter
                     // throws ArgumentNullException) or InvalidCastException on
                     // $Undefined/other objects. ToJsString handles all primitives
                     // and invokes the @@toPrimitive/toString protocol for objects.
-                    IL.Emit(OpCodes.Call, _ctx.Runtime!.ToJsString);
+                    IL.Emit(OpCodes.Call, _ctx.Runtime!.StringCoercion.ToJsString);
                 }
                 else
                 {
@@ -123,7 +123,7 @@ public partial class ILEmitter
                     EmitExpression(arguments[0]);
                     EmitBoxIfNeeded(arguments[0]);
                     // ECMA-262 §22.1.3.9 step 3: searchString = ? ToString(searchString).
-                    IL.Emit(OpCodes.Call, _ctx.Runtime!.ToJsString);
+                    IL.Emit(OpCodes.Call, _ctx.Runtime!.StringCoercion.ToJsString);
                 }
                 else
                 {

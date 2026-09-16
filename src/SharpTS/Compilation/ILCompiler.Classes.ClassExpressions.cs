@@ -738,7 +738,7 @@ public partial class ILCompiler
                 il.Emit(OpCodes.Ldc_I4_1);
                 il.Emit(OpCodes.Stloc, hasMessageLocal);
                 il.Emit(aggregate ? OpCodes.Ldarg_2 : OpCodes.Ldarg_1);
-                il.Emit(OpCodes.Call, _runtime.ToJsString);
+                il.Emit(OpCodes.Call, _runtime.StringCoercion.ToJsString);
                 il.MarkLabel(haveMessage);
                 il.Emit(OpCodes.Stloc, messageLocal);
 

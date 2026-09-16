@@ -111,7 +111,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldelem_Ref);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.MarkLabel(stringValueReadyLabel);
         il.Emit(OpCodes.Call, runtime.NewBoxedPrimitiveMethod);
         il.Emit(OpCodes.Ret);

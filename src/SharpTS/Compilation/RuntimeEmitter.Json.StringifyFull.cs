@@ -336,7 +336,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, _types.Double);
         il.Emit(OpCodes.Brfalse, notDoubleLabel);
         il.Emit(OpCodes.Ldloc, elemLocal);
-        il.Emit(OpCodes.Call, runtime.Stringify);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.Stringify);
         il.Emit(OpCodes.Stloc, keyLocal);
         il.Emit(OpCodes.Br, addLabel);
 
@@ -371,7 +371,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, skipLabel);
         il.MarkLabel(wrapperKeyLabel);
         il.Emit(OpCodes.Ldloc, elemLocal);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Stloc, keyLocal);
 
         il.MarkLabel(addLabel);

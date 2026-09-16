@@ -30,7 +30,7 @@ public partial class RuntimeEmitter
         // Reserve Stringify(object) → string. EmitStringify fills the body
         // later; it must skip its own DefineMethod call when this signature
         // is already present.
-        runtime.Stringify = typeBuilder.DefineMethod(
+        runtime.StringCoercion.Stringify = typeBuilder.DefineMethod(
             "Stringify",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.String,
@@ -173,7 +173,7 @@ public partial class RuntimeEmitter
         // objects; ToJsString does (ECMA-262 §7.1.1). Forward-declared so
         // Symbol.{replace,split,matchAll}'s flags coercion can route through
         // the spec-aligned ToString chain.
-        runtime.ToJsString = typeBuilder.DefineMethod(
+        runtime.StringCoercion.ToJsString = typeBuilder.DefineMethod(
             "ToJsString",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.String,
@@ -202,7 +202,7 @@ public partial class RuntimeEmitter
         // TypeError for Symbol values). Reserved here because $Runtime.Add's
         // string-concat arm (emitted before EmitToJsString) references it;
         // EmitStringifyCoerce fills the body later.
-        runtime.StringifyCoerce = typeBuilder.DefineMethod(
+        runtime.StringCoercion.StringifyCoerce = typeBuilder.DefineMethod(
             "StringifyCoerce",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.String,

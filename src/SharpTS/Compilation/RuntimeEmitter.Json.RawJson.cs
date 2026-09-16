@@ -63,7 +63,7 @@ public partial class RuntimeEmitter
         var text = il.DeclareLocal(_types.String);
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Stloc, text);
 
         var invalidBoundary = il.DefineLabel();

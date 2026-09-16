@@ -221,7 +221,7 @@ public abstract partial class ExpressionEmitterBase
                     throw new CompileException("BroadcastChannel constructor requires exactly 1 argument (name).");
                 EmitExpression(arguments[0]);
                 EnsureBoxed();
-                IL.Emit(OpCodes.Call, Ctx.Runtime!.Stringify);
+                IL.Emit(OpCodes.Call, Ctx.Runtime!.StringCoercion.Stringify);
                 IL.Emit(OpCodes.Newobj, Ctx.Runtime!.RequireBroadcastChannel().Ctor);
                 SetStackUnknown();
                 return true;
@@ -357,7 +357,7 @@ public abstract partial class ExpressionEmitterBase
                 {
                     EmitExpression(arguments[0]);
                     EnsureBoxed();
-                    IL.Emit(OpCodes.Call, Ctx.Runtime!.ToJsString);
+                    IL.Emit(OpCodes.Call, Ctx.Runtime!.StringCoercion.ToJsString);
                 }
                 IL.Emit(OpCodes.Call, Ctx.Runtime!.NewBoxedPrimitiveMethod);
                 SetStackUnknown();
@@ -499,7 +499,7 @@ public abstract partial class ExpressionEmitterBase
                 {
                     EmitExpression(arguments[0]);
                     EnsureBoxed();
-                    IL.Emit(OpCodes.Call, Ctx.Runtime!.Stringify);
+                    IL.Emit(OpCodes.Call, Ctx.Runtime!.StringCoercion.Stringify);
                 }
                 else
                 {
@@ -585,7 +585,7 @@ public abstract partial class ExpressionEmitterBase
                     SharpTSRuntimeRequirements.ManagedCompilerHost);
                 EmitExpression(arguments[0]);
                 EnsureBoxed();
-                IL.Emit(OpCodes.Call, Ctx.Runtime!.Stringify);
+                IL.Emit(OpCodes.Call, Ctx.Runtime!.StringCoercion.Stringify);
                 EmitBoxedArgOrNull(arguments, 1);
                 IL.Emit(OpCodes.Ldnull); // parentInterpreter (null in compiled code)
                 IL.Emit(OpCodes.Call, Ctx.Runtime!.Workers.Create);
