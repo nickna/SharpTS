@@ -60,7 +60,7 @@ public sealed class EmittedReflectMetadata
     }
 
     private static T Require<T>(T? handle, [CallerMemberName] string name = "") where T : class =>
-        handle ?? throw new InvalidOperationException($"Reflect metadata metadata '{name}' has not been declared.");
+        handle ?? throw new InvalidOperationException($"Reflect metadata '{name}' has not been declared.");
 
     private void SetHandle<T>(ref T? field, T value) where T : class
     {
@@ -72,7 +72,7 @@ public sealed class EmittedReflectMetadata
     private void EnsureMutable()
     {
         if (IsComplete)
-            throw new InvalidOperationException("Reflect metadata metadata emission is already complete.");
+            throw new InvalidOperationException("Reflect metadata emission is already complete.");
     }
 
     internal void ValidateEmission()
