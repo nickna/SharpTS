@@ -1850,8 +1850,16 @@ public class StandaloneDllTests
         new object[]
         {
             """
-            async function run(){const s=AbortSignal.timeout(1);await new Promise<void>(resolve=>setTimeout(resolve,100));
-            console.log(s.aborted); console.log(String(s.reason).includes('TimeoutError'));}run();
+            async function run() {
+                const s=AbortSignal.timeout(1);
+                // CLR cancellation and guest timers use separate schedulers.
+                while (!s.aborted) {
+                    await new Promise<void>(resolve=>setTimeout(resolve,10));
+                }
+                console.log(s.aborted);
+                console.log(String(s.reason).includes('TimeoutError'));
+            }
+            run();
             """,
             "true\ntrue\n", "main.ts", true
         },
