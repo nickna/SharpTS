@@ -120,7 +120,7 @@ public partial class RuntimeEmitter
         // to land in the same store as `obj.length` (own _fields).
         var tsObjectIdxLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSObjectType);
+        il.Emit(OpCodes.Isinst, runtime.ObjectStorage.Type);
         il.Emit(OpCodes.Brtrue, tsObjectIdxLabel);
 
         // $TSFunction indexed read: route through GetProperty so PDS-stored
@@ -531,7 +531,7 @@ public partial class RuntimeEmitter
         var tsArrayCoerceObjectKeyLabel = il.DefineLabel();
         il.Emit(OpCodes.Brtrue, tsArrayCoerceObjectKeyLabel);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, runtime.TSObjectType);
+        il.Emit(OpCodes.Isinst, runtime.ObjectStorage.Type);
         il.Emit(OpCodes.Brfalse, tsArrayIndexIsPrimitiveLabel);
         il.MarkLabel(tsArrayCoerceObjectKeyLabel);
         il.Emit(OpCodes.Ldarg_0);
@@ -1190,7 +1190,7 @@ public partial class RuntimeEmitter
         // writes silently dropped on $Object instances (e.g. `new Foo()[0] = 11`).
         var tsObjectIdxSetLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSObjectType);
+        il.Emit(OpCodes.Isinst, runtime.ObjectStorage.Type);
         il.Emit(OpCodes.Brtrue, tsObjectIdxSetLabel);
 
         // $TSFunction indexed set: route to $Runtime.SetProperty so PDS-backed

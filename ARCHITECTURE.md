@@ -231,6 +231,17 @@ queue declarations as well as array handles. Boolean queues intentionally omit u
 reads. Array operations have a separate component described below. ArrayBuffer/TypedArray
 metadata and the shared call-argument pool remain separate residual work under #1599.
 
+Object literal storage uses the required `ObjectStorage` component for 18 declarations: the
+`$Object` type, constructor, field access, accessor maps, and mutation restrictions. Its type
+slot retains the original `TypeBuilder` identity after finalization, and its members retain
+their builder kinds. Object helpers receive this owner and their exact descriptor, invocation,
+undefined, interface, and error-constructor dependencies. The six generated storage fields are
+local construction inputs rather than state retained on `RuntimeEmitter`. Early strict-mode
+errors still wrap the guest TypeError in a CLR exception before `$Runtime.CreateException` exists.
+`EmitAll` validates and freezes the metadata after runtime finalization; this does not freeze guest
+objects or their original mutable field dictionaries. Descriptor storage, generic object operations,
+Reflect, and shared interfaces remain separate residual work under #1599.
+
 Array operations use the required `ArrayOperations` component for 108 declarations: construction
 and static helpers, ordinary and specialized operations, prototype population, bound-method
 dispatch, the live array iterator constructor, and array-like receiver/callback context. Like

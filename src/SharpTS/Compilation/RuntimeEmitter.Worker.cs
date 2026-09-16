@@ -40,7 +40,7 @@ public partial class RuntimeEmitter
 
         // StructuredClone helper
         EmitStructuredCloneHelper(runtimeType, runtime.StructuredClone, runtime.ArrayStorage, runtime.UndefinedType,
-            new StructuredCloneObjectInputs(runtime.TSObjectType, runtime.TSObjectCtor, runtime.TSObjectFieldsGetter),
+            new StructuredCloneObjectInputs(runtime.ObjectStorage.Type, runtime.ObjectStorage.Constructor, runtime.ObjectStorage.FieldsGetter),
             new StructuredCloneErrorInputs(runtime.TSErrorType, runtime.IHasFieldsInterface,
                 runtime.TSErrorNameGetter, runtime.TSErrorMessageGetter, runtime.TSErrorStackGetter, runtime.TSErrorStackSetter,
                 runtime.TSErrorCtorMessage, runtime.TSTypeErrorCtor, runtime.TSRangeErrorCtor, runtime.TSReferenceErrorCtor,

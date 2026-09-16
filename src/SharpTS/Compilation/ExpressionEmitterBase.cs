@@ -1525,9 +1525,9 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
     protected virtual void EmitObjectLiteralWithAccessors(Expr.ObjectLiteral o)
     {
         IL.Emit(OpCodes.Newobj, Types.DictionaryStringObjectNullableCtor);
-        IL.Emit(OpCodes.Newobj, Ctx.Runtime!.TSObjectCtor);
+        IL.Emit(OpCodes.Newobj, Ctx.Runtime!.ObjectStorage.Constructor);
 
-        var objLocal = IL.DeclareLocal(Ctx.Runtime!.TSObjectType);
+        var objLocal = IL.DeclareLocal(Ctx.Runtime!.ObjectStorage.Type);
         IL.Emit(OpCodes.Stloc, objLocal);
 
         foreach (var prop in o.Properties)
@@ -1552,15 +1552,15 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
             switch (prop.Kind)
             {
                 case Expr.ObjectPropertyKind.Getter:
-                    IL.Emit(OpCodes.Callvirt, Ctx.Runtime!.TSObjectDefineGetter);
+                    IL.Emit(OpCodes.Callvirt, Ctx.Runtime!.ObjectStorage.DefineGetter);
                     break;
 
                 case Expr.ObjectPropertyKind.Setter:
-                    IL.Emit(OpCodes.Callvirt, Ctx.Runtime!.TSObjectDefineSetter);
+                    IL.Emit(OpCodes.Callvirt, Ctx.Runtime!.ObjectStorage.DefineSetter);
                     break;
 
                 default:
-                    IL.Emit(OpCodes.Callvirt, Ctx.Runtime!.TSObjectSetProperty);
+                    IL.Emit(OpCodes.Callvirt, Ctx.Runtime!.ObjectStorage.SetProperty);
                     break;
             }
         }

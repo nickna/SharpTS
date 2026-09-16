@@ -270,7 +270,7 @@ public partial class RuntimeEmitter
             "MergeIntoTSObject",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Void,
-            [runtime.TSObjectType, _types.Object]
+            [runtime.ObjectStorage.Type, _types.Object]
         );
         runtime.MergeIntoTSObject = method;
 
@@ -323,7 +323,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Call, _types.GetProperty(keyValuePairType, "Key")!.GetGetMethod()!);
             il.Emit(OpCodes.Ldloca, kvpLocal);
             il.Emit(OpCodes.Call, _types.GetProperty(keyValuePairType, "Value")!.GetGetMethod()!);
-            il.Emit(OpCodes.Callvirt, runtime.TSObjectSetProperty);
+            il.Emit(OpCodes.Callvirt, runtime.ObjectStorage.SetProperty);
 
             il.Emit(OpCodes.Br, loopStart);
 
@@ -372,7 +372,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Call, _types.GetProperty(kvpType, "Key")!.GetGetMethod()!);
             il.Emit(OpCodes.Ldloca, kvpLocal);
             il.Emit(OpCodes.Call, _types.GetProperty(kvpType, "Value")!.GetGetMethod()!);
-            il.Emit(OpCodes.Callvirt, runtime.TSObjectSetProperty);
+            il.Emit(OpCodes.Callvirt, runtime.ObjectStorage.SetProperty);
 
             il.Emit(OpCodes.Br, loopStart);
 
@@ -427,7 +427,7 @@ public partial class RuntimeEmitter
 
         // If receiver is not $Object, fall back to the IHasFields path.
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSObjectType);
+        il.Emit(OpCodes.Isinst, runtime.ObjectStorage.Type);
         il.Emit(OpCodes.Brfalse, fallbackLabel);
 
         // result = new Dictionary<string, object>()
@@ -474,8 +474,8 @@ public partial class RuntimeEmitter
         // Iterate _getters (if any). For each getter, invoke and store result.
         var gettersLocal = il.DeclareLocal(_types.DictionaryStringObject);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSObjectType);
-        il.Emit(OpCodes.Callvirt, runtime.TSObjectGetGettersDict);
+        il.Emit(OpCodes.Castclass, runtime.ObjectStorage.Type);
+        il.Emit(OpCodes.Callvirt, runtime.ObjectStorage.GetGettersDictionary);
         il.Emit(OpCodes.Stloc, gettersLocal);
 
         var noGettersLabel = il.DefineLabel();
@@ -640,7 +640,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(stringKeyLabel);
         var notTSObjLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSObjectType);
+        il.Emit(OpCodes.Isinst, runtime.ObjectStorage.Type);
         il.Emit(OpCodes.Brfalse, notTSObjLabel);
         // keyStr = ToPropertyKey(key).  The Symbol case was handled above;
         // ToJsString supplies the required string-hint ToPrimitive semantics
@@ -654,20 +654,20 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Brfalse, skipGetterLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSObjectType);
+        il.Emit(OpCodes.Castclass, runtime.ObjectStorage.Type);
         il.Emit(OpCodes.Ldloc, keyStrLocal);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Callvirt, runtime.TSObjectDefineGetter);
+        il.Emit(OpCodes.Callvirt, runtime.ObjectStorage.DefineGetter);
         il.MarkLabel(skipGetterLabel);
         // if (setter != null) obj.DefineSetter(keyStr, setter)
         var skipSetterLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_3);
         il.Emit(OpCodes.Brfalse, skipSetterLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSObjectType);
+        il.Emit(OpCodes.Castclass, runtime.ObjectStorage.Type);
         il.Emit(OpCodes.Ldloc, keyStrLocal);
         il.Emit(OpCodes.Ldarg_3);
-        il.Emit(OpCodes.Callvirt, runtime.TSObjectDefineSetter);
+        il.Emit(OpCodes.Callvirt, runtime.ObjectStorage.DefineSetter);
         il.MarkLabel(skipSetterLabel);
         il.MarkLabel(notTSObjLabel);
 

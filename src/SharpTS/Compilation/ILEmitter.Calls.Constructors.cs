@@ -548,7 +548,7 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(_ctx.Types.Type, "GetTypeFromHandle", _ctx.Types.RuntimeTypeHandle));
         IL.Emit(OpCodes.Bne_Un, notObjectType);
         IL.Emit(OpCodes.Newobj, _ctx.Types.GetDefaultConstructor(_ctx.Types.DictionaryStringObject));
-        IL.Emit(OpCodes.Newobj, _ctx.Runtime!.TSObjectCtor);
+        IL.Emit(OpCodes.Newobj, _ctx.Runtime!.ObjectStorage.Constructor);
         IL.Emit(OpCodes.Br, constructionDone);
         IL.MarkLabel(notObjectType);
 

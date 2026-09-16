@@ -361,8 +361,8 @@ public partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
         il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.DictionaryStringObject));
-        il.Emit(OpCodes.Newobj, runtime.TSObjectCtor);
-        var objLocal = il.DeclareLocal(runtime.TSObjectType);
+        il.Emit(OpCodes.Newobj, runtime.ObjectStorage.Constructor);
+        var objLocal = il.DeclareLocal(runtime.ObjectStorage.Type);
         il.Emit(OpCodes.Stloc, objLocal);
 
         void AddConst(string name, double value)
@@ -371,7 +371,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldstr, name);
             il.Emit(OpCodes.Ldc_R8, value);
             il.Emit(OpCodes.Box, _types.Double);
-            il.Emit(OpCodes.Callvirt, runtime.TSObjectSetProperty);
+            il.Emit(OpCodes.Callvirt, runtime.ObjectStorage.SetProperty);
         }
 
         AddConst("MAX_LENGTH", 4294967296.0);

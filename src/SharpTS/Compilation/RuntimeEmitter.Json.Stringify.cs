@@ -1665,7 +1665,7 @@ public partial class RuntimeEmitter
         // The wrapper brand is represented by an own internal marker. Read it
         // directly: inherited/accessor properties are not [[PrimitiveData]].
         il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Isinst, runtime.TSObjectType);
+        il.Emit(OpCodes.Isinst, runtime.ObjectStorage.Type);
         il.Emit(OpCodes.Brtrue, readTsObjectTag);
         il.Emit(OpCodes.Ldloc, valueLocal);
         il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
@@ -1684,9 +1684,9 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(readTsObjectTag);
         il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Castclass, runtime.TSObjectType);
+        il.Emit(OpCodes.Castclass, runtime.ObjectStorage.Type);
         il.Emit(OpCodes.Ldstr, "__primitiveType");
-        il.Emit(OpCodes.Callvirt, runtime.TSObjectGetProperty);
+        il.Emit(OpCodes.Callvirt, runtime.ObjectStorage.GetProperty);
         il.Emit(OpCodes.Stloc, tagValue);
 
         il.MarkLabel(tagRead);

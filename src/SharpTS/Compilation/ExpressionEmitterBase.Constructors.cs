@@ -320,7 +320,7 @@ public abstract partial class ExpressionEmitterBase
                 if (arguments.Count == 0)
                 {
                     IL.Emit(OpCodes.Newobj, Ctx.Types.GetDefaultConstructor(Ctx.Types.DictionaryStringObject));
-                    IL.Emit(OpCodes.Newobj, Ctx.Runtime!.TSObjectCtor);
+                    IL.Emit(OpCodes.Newobj, Ctx.Runtime!.ObjectStorage.Constructor);
                     SetStackUnknown();
                     return true;
                 }

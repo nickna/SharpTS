@@ -32,7 +32,7 @@ public partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
 
-        var newObjLocal = il.DeclareLocal(runtime.TSObjectType);
+        var newObjLocal = il.DeclareLocal(runtime.ObjectStorage.Type);
         var resultLocal = il.DeclareLocal(_types.Object);
         var prevThisLocal = il.DeclareLocal(_types.Object);
         var notCallableLocal = il.DeclareLocal(_types.Boolean);
@@ -111,7 +111,7 @@ public partial class RuntimeEmitter
         // newObj = new $Object(new Dictionary<string, object>())
         var dictCtor = _types.GetDefaultConstructor(_types.DictionaryStringObject);
         il.Emit(OpCodes.Newobj, dictCtor);
-        il.Emit(OpCodes.Newobj, runtime.TSObjectCtor);
+        il.Emit(OpCodes.Newobj, runtime.ObjectStorage.Constructor);
         il.Emit(OpCodes.Stloc, newObjLocal);
 
         // Per JS spec, `new F()` links the freshly-created object to F.prototype:

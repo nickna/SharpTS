@@ -1312,7 +1312,7 @@ public partial class RuntimeEmitter
         // so Proxy [[Get]]/[[Set]] can preserve an explicit Receiver.
         var notTSObjectAccessorLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSObjectType);
+        il.Emit(OpCodes.Isinst, runtime.ObjectStorage.Type);
         il.Emit(OpCodes.Brfalse, notTSObjectAccessorLabel);
         var literalGetterLocal = il.DeclareLocal(_types.Object);
         var literalSetterLocal = il.DeclareLocal(_types.Object);
@@ -1321,8 +1321,8 @@ public partial class RuntimeEmitter
         var checkLiteralSetterLabel = il.DefineLabel();
         var literalAccessorFoundLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSObjectType);
-        il.Emit(OpCodes.Callvirt, runtime.TSObjectGetGettersDict);
+        il.Emit(OpCodes.Castclass, runtime.ObjectStorage.Type);
+        il.Emit(OpCodes.Callvirt, runtime.ObjectStorage.GetGettersDictionary);
         il.Emit(OpCodes.Stloc, literalGetterDictLocal);
         il.Emit(OpCodes.Ldloc, literalGetterDictLocal);
         il.Emit(OpCodes.Brfalse, checkLiteralSetterLabel);
@@ -1335,8 +1335,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, literalAccessorFoundLabel);
         il.MarkLabel(checkLiteralSetterLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSObjectType);
-        il.Emit(OpCodes.Callvirt, runtime.TSObjectGetSettersDict);
+        il.Emit(OpCodes.Castclass, runtime.ObjectStorage.Type);
+        il.Emit(OpCodes.Callvirt, runtime.ObjectStorage.GetSettersDictionary);
         il.Emit(OpCodes.Stloc, literalSetterDictLocal);
         il.Emit(OpCodes.Ldloc, literalSetterDictLocal);
         il.Emit(OpCodes.Brfalse, notTSObjectAccessorLabel);
@@ -1354,8 +1354,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, literalSetterLocal);
         il.Emit(OpCodes.Brtrue, literalOtherHalfDoneLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSObjectType);
-        il.Emit(OpCodes.Callvirt, runtime.TSObjectGetSettersDict);
+        il.Emit(OpCodes.Castclass, runtime.ObjectStorage.Type);
+        il.Emit(OpCodes.Callvirt, runtime.ObjectStorage.GetSettersDictionary);
         il.Emit(OpCodes.Stloc, literalSetterDictLocal);
         il.Emit(OpCodes.Ldloc, literalSetterDictLocal);
         il.Emit(OpCodes.Brfalse, literalOtherHalfDoneLabel);

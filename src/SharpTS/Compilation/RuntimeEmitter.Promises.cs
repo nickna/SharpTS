@@ -541,7 +541,7 @@ public partial class RuntimeEmitter
 
             // var result = new $Object(dict)
             il.Emit(OpCodes.Ldloc, dictLocal);
-            il.Emit(OpCodes.Newobj, runtime.TSObjectCtor);
+            il.Emit(OpCodes.Newobj, runtime.ObjectStorage.Constructor);
 
             // return result directly (not wrapped in Task - withResolvers is synchronous)
             il.Emit(OpCodes.Ret);

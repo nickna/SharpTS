@@ -144,7 +144,7 @@ public class EmittedStringCoercionRuntimeTests
         var peers = Activator.CreateInstance(inputType,
         [
             runtime.UndefinedType, runtime.TSSymbolType, runtime.GlobalThisSingletonField, runtime.GlobalThisGetProperty,
-            runtime.TypeOf, runtime.InvokeMethodValue, runtime.ArgumentsType, runtime.GetProperty, runtime.TSObjectType,
+            runtime.TypeOf, runtime.InvokeMethodValue, runtime.ArgumentsType, runtime.GetProperty, runtime.ObjectStorage.Type,
             runtime.TSFunctionType, runtime.BoundAnyFunctionType, runtime.HasOwnPropertyHelperMethod, runtime.IHasFieldsInterface,
             getSymbols, runtime.SymbolToPrimitive, runtime.CompiledPropertyDescriptorType,
             runtime.CompiledPropertyDescriptorGetter.GetGetMethod()!, runtime.CompiledPropertyDescriptorSetter.GetGetMethod()!,

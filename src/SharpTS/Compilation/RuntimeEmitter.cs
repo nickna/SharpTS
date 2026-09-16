@@ -258,7 +258,14 @@ public partial class RuntimeEmitter
 
         // Emit $Object class for standalone object support
         // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSObject
-        EmitTSObjectClass(moduleBuilder, runtime);
+        EmitTSObjectClass(moduleBuilder, runtime.ObjectStorage,
+            new ObjectStorageInputs(runtime.IHasFieldsInterface,
+                new ObjectReadInputs(runtime.CompiledPropertyDescriptorType, runtime.PDSTryGetGetter,
+                    runtime.PDSGetPropertyDescriptor, runtime.CompiledPropertyDescriptorSetter.GetGetMethod()!,
+                    runtime.CompiledPropertyDescriptorValue.GetGetMethod()!, runtime.TSFunctionType,
+                    runtime.TSFunctionInvokeWithThis, runtime.UndefinedInstance),
+                new ObjectInvokeInputs(runtime.TSFunctionType, runtime.TSFunctionInvokeWithThis),
+                runtime.TSTypeErrorCtor));
 
         if (features.UsesJSON || features.UsesCompactObjectRecords)
         {
@@ -710,6 +717,7 @@ public partial class RuntimeEmitter
         runtime.BigInt.CompleteEmission();
         runtime.Booleans.CompleteEmission();
         runtime.NumericCoercion.CompleteEmission();
+        runtime.ObjectStorage.CompleteEmission();
         runtime.BroadcastChannel?.CompleteEmission();
         runtime.EventEmitter.CompleteEmission();
         runtime.NodeStreams?.CompleteEmission();

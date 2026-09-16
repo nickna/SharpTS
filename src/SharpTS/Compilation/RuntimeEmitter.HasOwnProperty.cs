@@ -215,13 +215,13 @@ public partial class RuntimeEmitter
         // $Object branch
         var notTSObject = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSObjectType);
+        il.Emit(OpCodes.Isinst, runtime.ObjectStorage.Type);
         il.Emit(OpCodes.Brfalse, notTSObject);
         // First: HasProperty (checks _fields + _getters + _setters).
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSObjectType);
+        il.Emit(OpCodes.Castclass, runtime.ObjectStorage.Type);
         il.Emit(OpCodes.Ldloc, nameLocal);
-        il.Emit(OpCodes.Callvirt, runtime.TSObjectHasProperty);
+        il.Emit(OpCodes.Callvirt, runtime.ObjectStorage.HasProperty);
         il.Emit(OpCodes.Brtrue, trueLabel);
         // Fallback: PDS check (defineProperty-installed accessors on $TSObject
         // sit in PDS, not in TSObject._getters/_setters). Without this, hasOwn

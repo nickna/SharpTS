@@ -779,7 +779,7 @@ public partial class RuntimeEmitter
                  && m.GetParameters()[1].ParameterType == _types.Object);
 
         var cachedProto = il.DeclareLocal(_types.Object);
-        var newProto = il.DeclareLocal(runtime.TSObjectType);
+        var newProto = il.DeclareLocal(runtime.ObjectStorage.Type);
         var methodKeyLocal = il.DeclareLocal(_types.MethodInfo);
         il.Emit(OpCodes.Ldloc, tsfuncLocal);
         il.Emit(OpCodes.Callvirt, runtime.TSFunctionGetMethodInfo);
@@ -852,7 +852,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item", _types.String, _types.Object));
         il.Emit(OpCodes.Ldloc, protoDictLocal);
-        il.Emit(OpCodes.Newobj, runtime.TSObjectCtor);
+        il.Emit(OpCodes.Newobj, runtime.ObjectStorage.Constructor);
         il.Emit(OpCodes.Stloc, newProto);
 
         // The auto-created prototype object's `constructor` is an own
