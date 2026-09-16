@@ -1740,17 +1740,8 @@ public class EmittedRuntime
     /// <summary>Required worker factory, context, environment, and receive-bridge declarations.</summary>
     public EmittedWorkerRuntime Workers { get; } = new();
 
-    // StructuredClone helper methods
-    // NOTE: Must stay in sync with SharpTS.Runtime.Types.StructuredClone
-    public MethodBuilder StructuredCloneClone { get; set; } = null!;
-
-    // $DataCloneError : Exception — thrown by StructuredCloneCore for uncloneable values
-    // (functions, symbols, class instances, Promises, etc.) and on nested occurrences
-    // inside objects/arrays/maps/sets. Dedicated type (not a generic Exception) so
-    // $MessagePort/$BroadcastChannel PostMessage can catch specifically a clone failure
-    // and convert it to a receiver-side 'messageerror' event without swallowing other bugs.
-    public TypeBuilder TSDataCloneErrorType { get; set; } = null!;
-    public ConstructorBuilder TSDataCloneErrorCtor { get; set; } = null!;
+    /// <summary>Required structured-clone helper and dedicated receiver-side clone-failure exception.</summary>
+    public EmittedStructuredCloneRuntime StructuredClone { get; } = new();
 
     /// <summary>DNS metadata, or null when DNS is tree-shaken from this compilation.</summary>
     public EmittedDnsRuntime? Dns { get; private set; }

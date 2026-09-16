@@ -112,7 +112,7 @@ public partial class RuntimeEmitter
         // Statements.cs: `ex is ThrowException tex ? tex.Value : ex.Message`).
         il.MarkLabel(checkDataCloneErrorLabel);
         il.Emit(OpCodes.Ldloc, exLocal);
-        il.Emit(OpCodes.Isinst, runtime.TSDataCloneErrorType);
+        il.Emit(OpCodes.Isinst, runtime.StructuredClone.ErrorType);
         il.Emit(OpCodes.Brfalse, checkNodeErrorLabel);
 
         il.Emit(OpCodes.Ldloc, exLocal);

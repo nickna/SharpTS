@@ -783,7 +783,7 @@ alias, so its sole consumer now uses `TypeProvider.Object`; no generated worker 
 module emission. Reflected bridge names, hit/miss caching, worker factory delegates, managed
 dependency deployment, and environment/undefined behavior retain their existing contracts.
 The mixed worker helper orchestrator still coordinates buffer, typed-array, Atomics, and structured
-clone emission; remaining structured-clone metadata is part of the subsequent phase and final audit.
+clone emission; structured-clone metadata has its own component as described below.
 
 BroadcastChannel has an optional `EmittedBroadcastChannelRuntime` owner under the existing
 `UsesBroadcastChannel` gate. Thirteen shared declarations replace two flat aliases and seventeen
@@ -794,6 +794,19 @@ event-emitter, event-loop, function, and clone dependencies. Declarations retain
 construction order, and external consumers read checked handles after class emission. Ordinal
 registry lookup, per-subscriber cloning, receiver-side errors, queued delivery after close,
 property/listener callbacks, and event-loop reference behavior remain unchanged.
+
+Structured clone has a required `EmittedStructuredCloneRuntime` component containing the public
+clone method and the dedicated `$DataCloneError` type and constructor. The exception is declared
+and created before `$Runtime`; the clone method is published after its body, and all three handles
+are checked and frozen at completion. The private recursive core remains local to construction.
+The clone and error emitters receive explicit dependencies; optional binary, Date, RegExp, and
+Buffer inputs preserve their existing gates. Readonly, scoped object/error/Date/RegExp inputs bridge
+peer families awaiting migration; they retain no emitter state and remain part of the final audit.
+Numeric-array materialization uses the ArrayStorage component through a narrow shared helper;
+other generic-consumption adapters and Date's construction handle remain for their own phases.
+Global calls, exception normalization, MessagePort, and BroadcastChannel use the checked component.
+The existing wrapper signature and ignored transfer argument, foreign-runtime pass-through,
+recursive data copying, and receiver-side clone-error behavior remain unchanged.
 
 During emission, each handle becomes readable as soon as its declaration is assigned, so forward
 references do not require a method body to exist yet. An early read names the missing declaration.

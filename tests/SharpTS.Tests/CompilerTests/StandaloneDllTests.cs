@@ -1686,6 +1686,188 @@ public class StandaloneDllTests
         }
     ];
 
+    public static IEnumerable<object[]> StructuredCloneMetadataPrograms =>
+    [
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "const values:any[]=[null,undefined,1,true,'text',123n];for(const value of values)console.log(structuredClone(value)===value);"
+            },
+            "true\ntrue\ntrue\ntrue\ntrue\ntrue\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "const value:any={id:1,nested:[{value:2}]};const copy:any=structuredClone(value);value.id=9;value.nested[0].value=8;console.log(copy.id,copy.nested[0].value,copy===value,copy.nested===value.nested);"
+            },
+            "1 2 false false\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "const values:number[]=[];for(let i=0;i<3;i++)values.push(i+1);const copy:any=structuredClone(values);values[0]=9;console.log(copy.join(','),values[0]);"
+            },
+            "1,2,3 9\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "const key:any={id:1};const value:any={n:2};const map=new Map<any,any>();map.set(key,value);const copy:any=structuredClone(map);value.n=8;const copiedKey:any=Array.from(copy.keys())[0];console.log(copy.size,copy.has(key),copiedKey.id,copy.get(copiedKey).n);"
+            },
+            "1 false 1 2\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "const value=new Set<any>([1,2]);const copy:any=structuredClone(value);copy.add(3);console.log(value.size,copy.size,value.has(3),copy.has(2));"
+            },
+            "2 3 false true\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "const value=new ArrayBuffer(4);const view=new Uint8Array(value);view[0]=7;const copy:any=structuredClone(value);view[0]=9;const copiedView=new Uint8Array(copy);console.log(copy.byteLength,copiedView[0],copy===value);"
+            },
+            "4 7 false\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "const buffer=new SharedArrayBuffer(8);const view=new Int32Array(buffer);view[0]=7;const copy:any=structuredClone(view);copy[0]=9;console.log(copy!==view,copy.buffer===buffer,view[0],structuredClone(buffer)===buffer);"
+            },
+            "true true 9 true\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "const value=new Uint8Array([1,2]);const copy:any=structuredClone(value);value[0]=9;console.log(copy[0],copy[1],copy===value);"
+            },
+            "1 2 false\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "import {Buffer} from 'buffer';const value=Buffer.from([1,2]);const copy:any=structuredClone(value);value[0]=9;console.log(copy[0],copy[1],copy===value);"
+            },
+            "1 2 false\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "const value=new Date(1000);const copy:any=structuredClone(value);value.setTime(9000);console.log(copy.getTime(),copy===value);"
+            },
+            "1000 false\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "const value=/abc/gi;value.lastIndex=3;const copy:any=structuredClone(value);console.log(copy.source,copy.flags,copy.lastIndex);"
+            },
+            "abc gi 0\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "const values:any[]=[new Error('a'),new TypeError('b'),new RangeError('c'),new ReferenceError('d'),new SyntaxError('e'),new URIError('f'),new EvalError('g')];for(const value of values){const copy:any=structuredClone(value);console.log(copy.name,copy.message,copy.stack===value.stack,copy===value);}"
+            },
+            "Error a true false\nTypeError b true false\nRangeError c true false\nReferenceError d true false\nSyntaxError e true false\nURIError f true false\nEvalError g true false\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "class Value{value=1;}const map=new Map<any,any>();map.set('key',()=>{});const set=new Set<any>([()=>{}]);const values:any[]=[()=>{},Symbol('x'),new Value(),{nested:[()=>{}]},map,set];for(const value of values){try{structuredClone(value);console.log('unexpected');}catch(error:any){console.log(typeof error,error.includes('DataCloneError'));}}"
+            },
+            "string true\nstring true\nstring true\nstring true\nstring true\nstring true\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "const value=new ArrayBuffer(4);const copy:any=structuredClone(value,{transfer:[value]});console.log(value.byteLength,copy.byteLength,copy===value);"
+            },
+            "4 4 false\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "import {MessageChannel} from 'worker_threads';const channel:any=new MessageChannel();channel.port2.on('messageerror',()=>console.log('error'));channel.port2.on('message',(value:any)=>console.log(value));channel.port1.postMessage({nested:[()=>{}]});channel.port1.postMessage('after');"
+            },
+            "error\nafter\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "const a=new BroadcastChannel('errors');const b=new BroadcastChannel('errors');b.on('messageerror',()=>console.log('listener-error'));b.onmessageerror=()=>console.log('property-error');b.on('message',(event:any)=>console.log(event.data));a.postMessage({nested:[()=>{}]});a.postMessage('after');a.close();b.close();"
+            },
+            "listener-error\nproperty-error\nafter\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "async function run(){await new Promise<void>(resolve=>setTimeout(resolve,1));const value:any=structuredClone({value:7});console.log(value.value);}run();"
+            },
+            "7\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "function* values():Generator<any,void,any>{yield structuredClone({value:42});}console.log(values().next().value.value);"
+            },
+            "42\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.cjs"] = "const value=structuredClone({value:7});console.log(value.value);"
+            },
+            "7\n", "main.cjs", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "import {Worker,MessageChannel} from 'worker_threads';const {port1,port2}=new MessageChannel();const worker=new Worker(__dirname+'/worker.ts',{workerData:{port:port1},transferList:[port1]});port2.on('message',(value:any)=>{console.log(value.value);port2.close();});port2.postMessage({value:7});",
+                ["worker.ts"] = "import {workerData,receiveMessageOnPort} from 'worker_threads';const port:any=workerData.port;const timer=setInterval(()=>{const item:any=receiveMessageOnPort(port);if(item){port.postMessage({value:item.message.value+1});clearInterval(timer);port.close();}},10);"
+            },
+            "8\n", "main.ts", false
+        }
+    ];
+
+    [Theory]
+    [MemberData(nameof(StructuredCloneMetadataPrograms))]
+    public void Isolated_StructuredCloneMetadata_PreservesDataErrorsAndWorkerBoundaries(Dictionary<string, string> files, string expected, string entryPoint, bool standalone)
+    {
+        using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        foreach (var (path, source) in files) tempDir.CreateFile(path, source);
+        var dllPath = tempDir.GetPath("structured_clone_metadata.dll");
+        var deployment = standalone ? " --standalone" : "";
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{tempDir.GetPath(entryPoint)}\" -o \"{dllPath}\" --verify{deployment}", tempDir.Path);
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(dllPath));
+        Assert.Equal(!standalone, File.Exists(tempDir.GetPath("SharpTS.dll")));
+        Assert.Equal(expected, ExecuteCompiledDllIsolated(dllPath, timeoutMs: 30000,
+            verifyStandardError: error => Assert.Empty(error)));
+    }
+
     public static IEnumerable<object[]> BroadcastChannelMetadataPrograms =>
     [
         new object[]

@@ -247,20 +247,26 @@ public partial class RuntimeEmitter
     /// read sees the elements. Costs one isinst on the cold generic-consumption path.
     /// </summary>
     private void EmitDeoptIfNumericArray(ILGenerator il, EmittedRuntime runtime, Action loadValue)
+        => EmitDeoptIfNumericArrayStorage(il, runtime.ArrayStorage, loadValue);
+
+    private void EmitDeoptIfNumericArrayStorage(ILGenerator il, EmittedArrayStorageRuntime arrays, Action loadValue)
     {
         var skip = il.DefineLabel();
         loadValue();
-        il.Emit(OpCodes.Isinst, runtime.ArrayStorage.Type);
+        il.Emit(OpCodes.Isinst, arrays.Type);
         il.Emit(OpCodes.Brfalse, skip);
         loadValue();
-        il.Emit(OpCodes.Castclass, runtime.ArrayStorage.Type);
-        il.Emit(OpCodes.Callvirt, runtime.ArrayStorage.EnsureBoxed);
+        il.Emit(OpCodes.Castclass, arrays.Type);
+        il.Emit(OpCodes.Callvirt, arrays.EnsureBoxed);
         il.MarkLabel(skip);
     }
 
     /// <summary>Convenience: <see cref="EmitDeoptIfNumericArray"/> for a method argument by index.</summary>
     private void EmitDeoptArgIfNumericArray(ILGenerator il, EmittedRuntime runtime, int argIndex)
         => EmitDeoptIfNumericArray(il, runtime, () => il.Emit(OpCodes.Ldarg, checked((short)argIndex)));
+
+    private void EmitDeoptArgIfNumericArrayStorage(ILGenerator il, EmittedArrayStorageRuntime arrays, int argIndex)
+        => EmitDeoptIfNumericArrayStorage(il, arrays, () => il.Emit(OpCodes.Ldarg, checked((short)argIndex)));
 
     /// <summary>
     /// Emits the unboxed packed-double accessors on <c>$Array</c>:
