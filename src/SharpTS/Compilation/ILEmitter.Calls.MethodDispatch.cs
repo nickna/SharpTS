@@ -428,7 +428,7 @@ public partial class ILEmitter
                 {
                     EmitExpression(arguments[0]);
                     EmitBoxIfNeeded(arguments[0]);
-                    IL.Emit(OpCodes.Call, _ctx.Runtime!.ToNumber);
+                    IL.Emit(OpCodes.Call, _ctx.Runtime!.NumericCoercion.ToNumber);
                 }
             }
             else IL.Emit(OpCodes.Ldc_R8, 0.0);

@@ -3208,6 +3208,118 @@ public class StandaloneDllTests
             verifyStandardError: error => Assert.Empty(error)));
     }
 
+    public static IEnumerable<object[]> NumericCoercionMetadataPrograms =>
+    [
+        new object[]
+        {
+            "primitives", "console.log(Number(),Number(undefined),Number(null),Number(false),Number(true),Number(''),Number('  '));",
+            "0 NaN 0 0 1 0 0\n", "main.ts"
+        },
+        new object[]
+        {
+            "strings", "console.log(Number('0xff'),Number('0b101'),Number('0o17'),Number('1e2'),Number('1.5'),Number('bad'));console.log(1/Number('-0')===-Infinity);",
+            "255 5 15 100 1.5 NaN\ntrue\n", "main.ts"
+        },
+        new object[]
+        {
+            "arrays", "console.log(Number([]),Number([4]),Number([1,2]),Number([null]),Number([undefined]));",
+            "0 4 NaN 0 0\n", "main.ts"
+        },
+        new object[]
+        {
+            "boxed", "console.log(Number(Object(3)),Number(Object(false)),Number(Object('7')));",
+            "3 0 7\n", "main.ts"
+        },
+        // Preserve the existing compatibility limitation while changing metadata ownership.
+        new object[]
+        {
+            "exotic", "let trace='';const value:any={[Symbol.toPrimitive](hint:any){trace+=hint;return '9';}};console.log(Number(value),+value,trace);",
+            "NaN 9 number\n", "main.ts"
+        },
+        new object[]
+        {
+            "ordinary", "let trace='';const value:any={valueOf(){trace+='v';return {};},toString(){trace+='s';return '7';}};console.log(+value,trace);",
+            "7 vs\n", "main.ts"
+        },
+        new object[]
+        {
+            "errors", "const values:any[]=[Symbol('x'),{[Symbol.toPrimitive]:1},{[Symbol.toPrimitive](){return {};}}];for(const value of values){try{console.log(+value);}catch(e:any){console.log(e.name);}}",
+            "TypeError\nTypeError\nTypeError\n", "main.ts"
+        },
+        new object[]
+        {
+            "abrupt", "const value:any={valueOf(){throw new RangeError('sentinel');}};try{console.log(+value);}catch(e:any){console.log(e.name,e.message);}",
+            "RangeError sentinel\n", "main.ts"
+        },
+        new object[]
+        {
+            "bigint", "console.log(Number(1n),Number(9007199254740993n));const value:any=1n;try{console.log(+value);}catch(e:any){console.log(e.name);}try{console.log(Math.abs(value));}catch(e:any){console.log(e.name);}",
+            "1 9007199254740992\nTypeError\nTypeError\n", "main.ts"
+        },
+        new object[]
+        {
+            "int32", "function typed(value:number):number{return value|0;}function dynamic(value:any):number{return value|0;}for(const value of [1.9,-1.9,4294967295,4294967296,2147483648,NaN,Infinity,-Infinity])console.log(typed(value),dynamic(value));",
+            "1 1\n-1 -1\n-1 -1\n0 0\n-2147483648 -2147483648\n0 0\n0 0\n0 0\n", "main.ts"
+        },
+        new object[]
+        {
+            "operator_order", "let trace='';const left:any={valueOf(){trace+='l';return 1;}};const right:any={valueOf(){trace+='r';return 2;}};console.log(left|right,trace);",
+            "3 lr\n", "main.ts"
+        },
+        new object[]
+        {
+            "indices", "const a=[1,2,3];console.log(a.slice(undefined).join(','),a.slice(null as any).join(','),a.slice(Infinity).length,a.slice(-Infinity).length,a.indexOf(2,1.9));",
+            "1,2,3 1,2,3 0 3 1\n", "main.ts"
+        },
+        new object[]
+        {
+            "index_hook", "let trace='';const index:any={[Symbol.toPrimitive](hint:any){trace+=hint;return 1.9;}};console.log([1,2,3].indexOf(2,index),trace);",
+            "1 number\n", "main.ts"
+        },
+        new object[]
+        {
+            "regexp", "const re:any=/a/g;re.lastIndex='1';console.log(re.exec('ba')[0],re.lastIndex);",
+            "a 2\n", "main.ts"
+        },
+        new object[]
+        {
+            "async", "async function run(){const value:any=await Promise.resolve('7');console.log(+value,value|0);}run();",
+            "7 7\n", "main.ts"
+        },
+        new object[]
+        {
+            "generator", "function* values():Generator<any,void,any>{yield '2';yield '-3';}for(const value of values())console.log(+value,value|0);",
+            "2 2\n-3 -3\n", "main.ts"
+        },
+        // Preserve the existing compatibility limitation while changing metadata ownership.
+        new object[]
+        {
+            "cjs", "const N=Number;console.log(Number('2'),N('2'),N===Number);",
+            "2 null true\n", "main.cjs"
+        },
+        new object[]
+        {
+            "minimal", "const value=1;",
+            "", "main.ts"
+        },
+    ];
+
+    [Theory]
+    [MemberData(nameof(NumericCoercionMetadataPrograms))]
+    public void Isolated_NumericCoercionMetadata_PreservesConversionAndCoercionOrder(string name, string source, string expected, string entryPoint)
+    {
+        using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        tempDir.CreateFile(entryPoint, source);
+        var dllPath = tempDir.GetPath($"numeric-coercion_{name}.dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --noLib --compile \"{tempDir.GetPath(entryPoint)}\" -o \"{dllPath}\" --verify --standalone", tempDir.Path);
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(dllPath));
+        Assert.False(File.Exists(tempDir.GetPath("SharpTS.dll")));
+        Assert.Equal(expected, ExecuteCompiledDllIsolated(dllPath, timeoutMs: 30000,
+            verifyStandardError: error => Assert.Empty(error)));
+    }
+
     public static IEnumerable<object[]> BroadcastChannelMetadataPrograms =>
     [
         new object[]

@@ -863,8 +863,8 @@ take the component and narrow dependencies; method and prototype orchestration u
 scoped peer inputs and the shared descriptor-installation helpers. The exact fixed formatter's
 BigInteger fallback and prototype valueOf builder remain local to their callers. Cached delegate
 initialization, native signatures, optimization flags, parsing/rounding behavior and prototype
-identity remain unchanged. General numeric coercion retains its own later migration boundary,
-and scoped BCL/descriptor inputs remain in the final audit.
+identity remain unchanged. General numeric coercion has its own owner, and scoped BCL/descriptor
+inputs remain in the final audit.
 
 During emission, each handle becomes readable as soon as its declaration is assigned, so forward
 references do not require a method body to exist yet. An early read names the missing declaration.
@@ -903,7 +903,18 @@ with explicit Undefined, receiver, guest-error and immutable descriptor/prototyp
 truthiness helper uses BCL BigInteger metadata without requiring optional BigInt operations and
 does not invoke object conversion hooks. Local toString/valueOf builders remain local; prototype
 descriptors, function identity, receiver branding and mutable guest prototype state are unchanged.
-General numeric conversion and the broader construction/shared-infrastructure audit remain separate.
+The broader construction/shared-infrastructure audit remains separate.
+
+General numeric conversion metadata lives in required `EmittedNumericCoercionRuntime`. Its five
+checked declarations are ToNumber, ConvertToNumber, JsNumberToInt32, JsToInt32 and
+ToIntegerOrInfinity. ToNumber and JsToInt32 remain early forward declarations for RegExp;
+later declarations and bodies keep their existing order. Five emission boundaries take the owner
+and immutable inputs for primitive/object conversion, descriptors, invocation and guest errors.
+Explicit Number conversion receives the required BigInt numeric adapter independently of optional
+BigInt operations. The native int32 body and prefixed-integer parser retain their local BCL inputs.
+Completion validates all five declarations and freezes metadata assignments. Native signatures,
+inlining, conversion hooks, abrupt completions, undefined defaults and generated instructions stay
+unchanged. TSFunction's indirect ToNumber lookup retains its generated name and per-assembly cache.
 
 Follow this pattern for subsequent families: explicit optional availability, checked declarations,
 one completion boundary, and no retained flat aliases. Pass the component to helpers that only

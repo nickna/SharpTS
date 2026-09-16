@@ -806,7 +806,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, runtime.ArrayStorage.Type);
         il.Emit(OpCodes.Ldloc, valueToWriteLocal);
-        il.Emit(OpCodes.Call, runtime.ToNumber);
+        il.Emit(OpCodes.Call, runtime.NumericCoercion.ToNumber);
         il.Emit(OpCodes.Conv_I8);
         il.Emit(OpCodes.Callvirt, runtime.ArrayStorage.SetLength);
         il.Emit(OpCodes.Br, endLabel);

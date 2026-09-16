@@ -205,7 +205,7 @@ public partial class RuntimeEmitter
             ldHolder: () => il.Emit(OpCodes.Ldloc, valLocal),
             ldKey: () => il.Emit(OpCodes.Ldstr, "length"));
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Call, runtime.ToIntegerOrInfinity);
+        il.Emit(OpCodes.Call, runtime.NumericCoercion.ToIntegerOrInfinity);
         il.Emit(OpCodes.Stloc, proxyArrayLength);
 
         var arrayDeleteMethod = il.DeclareLocal(_types.MethodInfo);

@@ -1469,7 +1469,7 @@ public partial class ILCompiler
                 {
                     if (sourceType.IsValueType)
                         il.Emit(OpCodes.Box, sourceType);
-                    il.Emit(OpCodes.Call, _runtime!.ConvertToNumber);
+                    il.Emit(OpCodes.Call, _runtime!.NumericCoercion.ConvertToNumber);
                 }
                 else if (field.FieldType == _types.Object && sourceType.IsValueType)
                 {

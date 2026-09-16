@@ -585,7 +585,7 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Ldloc, receiver);
         IL.Emit(OpCodes.Ldstr, g.Name.Lexeme);
         IL.Emit(OpCodes.Call, runtime.GetProperty);
-        IL.Emit(OpCodes.Call, runtime.ConvertToNumber);
+        IL.Emit(OpCodes.Call, runtime.NumericCoercion.ConvertToNumber);
         IL.Emit(OpCodes.Stloc, result);
 
         IL.MarkLabel(end);
@@ -674,7 +674,7 @@ public partial class ILEmitter
                 IL.Emit(OpCodes.Ldloc, receiverLocal);
                 IL.Emit(OpCodes.Ldstr, g.Name.Lexeme);
                 IL.Emit(OpCodes.Call, _ctx.Runtime.GetProperty);
-                IL.Emit(OpCodes.Call, _ctx.Runtime.ConvertToNumber);
+                IL.Emit(OpCodes.Call, _ctx.Runtime.NumericCoercion.ConvertToNumber);
                 IL.Emit(OpCodes.Stloc, numberResult);
                 IL.MarkLabel(jsonEnd);
                 IL.Emit(OpCodes.Ldloc, numberResult);

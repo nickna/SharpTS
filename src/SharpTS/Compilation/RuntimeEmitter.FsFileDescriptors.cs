@@ -79,7 +79,7 @@ public partial class RuntimeEmitter
 
         // Convert fd to int
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.ToNumber);
+        il.Emit(OpCodes.Call, runtime.NumericCoercion.ToNumber);
         il.Emit(OpCodes.Conv_I4);
         var fdLocal = il.DeclareLocal(_types.Int32);
         il.Emit(OpCodes.Stloc, fdLocal);
@@ -121,21 +121,21 @@ public partial class RuntimeEmitter
 
         // Convert fd to int
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.ToNumber);
+        il.Emit(OpCodes.Call, runtime.NumericCoercion.ToNumber);
         il.Emit(OpCodes.Conv_I4);
         var fdLocal = il.DeclareLocal(_types.Int32);
         il.Emit(OpCodes.Stloc, fdLocal);
 
         // Convert offset to int
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Call, runtime.ToNumber);
+        il.Emit(OpCodes.Call, runtime.NumericCoercion.ToNumber);
         il.Emit(OpCodes.Conv_I4);
         var offsetLocal = il.DeclareLocal(_types.Int32);
         il.Emit(OpCodes.Stloc, offsetLocal);
 
         // Convert length to int
         il.Emit(OpCodes.Ldarg_3);
-        il.Emit(OpCodes.Call, runtime.ToNumber);
+        il.Emit(OpCodes.Call, runtime.NumericCoercion.ToNumber);
         il.Emit(OpCodes.Conv_I4);
         var lengthLocal = il.DeclareLocal(_types.Int32);
         il.Emit(OpCodes.Stloc, lengthLocal);
@@ -169,7 +169,7 @@ public partial class RuntimeEmitter
             // Seek to position
             il.Emit(OpCodes.Ldloc, streamLocal);
             il.Emit(OpCodes.Ldarg, 4);
-            il.Emit(OpCodes.Call, runtime.ToNumber);
+            il.Emit(OpCodes.Call, runtime.NumericCoercion.ToNumber);
             il.Emit(OpCodes.Conv_I8);
             il.Emit(OpCodes.Ldc_I4_0); // SeekOrigin.Begin
             il.Emit(OpCodes.Callvirt, fileStreamSeekMethod);
@@ -217,7 +217,7 @@ public partial class RuntimeEmitter
 
         // Convert fd to int
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.ToNumber);
+        il.Emit(OpCodes.Call, runtime.NumericCoercion.ToNumber);
         il.Emit(OpCodes.Conv_I4);
         var fdLocal = il.DeclareLocal(_types.Int32);
         il.Emit(OpCodes.Stloc, fdLocal);
@@ -250,7 +250,7 @@ public partial class RuntimeEmitter
 
             il.Emit(OpCodes.Ldloc, streamLocal);
             il.Emit(OpCodes.Ldarg, 4);
-            il.Emit(OpCodes.Call, runtime.ToNumber);
+            il.Emit(OpCodes.Call, runtime.NumericCoercion.ToNumber);
             il.Emit(OpCodes.Conv_I8);
             il.Emit(OpCodes.Ldc_I4_0);
             il.Emit(OpCodes.Callvirt, fileStreamSeekMethod);
@@ -297,7 +297,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_2);
             il.Emit(OpCodes.Brfalse, useDefaultOffsetLabel);
             il.Emit(OpCodes.Ldarg_2);
-            il.Emit(OpCodes.Call, runtime.ToNumber);
+            il.Emit(OpCodes.Call, runtime.NumericCoercion.ToNumber);
             il.Emit(OpCodes.Conv_I4);
             il.Emit(OpCodes.Stloc, offsetLocal);
             il.Emit(OpCodes.Br, afterOffsetLabel);
@@ -312,7 +312,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_3);
             il.Emit(OpCodes.Brfalse, useDefaultLengthLabel);
             il.Emit(OpCodes.Ldarg_3);
-            il.Emit(OpCodes.Call, runtime.ToNumber);
+            il.Emit(OpCodes.Call, runtime.NumericCoercion.ToNumber);
             il.Emit(OpCodes.Conv_I4);
             il.Emit(OpCodes.Stloc, lengthLocal);
             il.Emit(OpCodes.Br, afterLengthLabel);
@@ -360,7 +360,7 @@ public partial class RuntimeEmitter
 
         // Convert fd to int
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.ToNumber);
+        il.Emit(OpCodes.Call, runtime.NumericCoercion.ToNumber);
         il.Emit(OpCodes.Conv_I4);
         var fdLocal = il.DeclareLocal(_types.Int32);
         il.Emit(OpCodes.Stloc, fdLocal);
@@ -425,14 +425,14 @@ public partial class RuntimeEmitter
 
         // Convert fd to int
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.ToNumber);
+        il.Emit(OpCodes.Call, runtime.NumericCoercion.ToNumber);
         il.Emit(OpCodes.Conv_I4);
         var fdLocal = il.DeclareLocal(_types.Int32);
         il.Emit(OpCodes.Stloc, fdLocal);
 
         // Convert len to long (default 0)
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.ToNumber);
+        il.Emit(OpCodes.Call, runtime.NumericCoercion.ToNumber);
         il.Emit(OpCodes.Conv_I8);
         var lenLocal = il.DeclareLocal(_types.Int64);
         il.Emit(OpCodes.Stloc, lenLocal);

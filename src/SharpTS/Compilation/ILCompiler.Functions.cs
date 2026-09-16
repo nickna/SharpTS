@@ -86,7 +86,7 @@ public partial class ILCompiler
             {
                 if (parameterType.IsValueType)
                     il.Emit(OpCodes.Box, parameterType);
-                il.Emit(OpCodes.Call, _runtime!.ConvertToNumber);
+                il.Emit(OpCodes.Call, _runtime!.NumericCoercion.ConvertToNumber);
             }
             else if (field.FieldType == _types.Object && parameterType.IsValueType)
                 il.Emit(OpCodes.Box, parameterType);
@@ -639,7 +639,7 @@ public partial class ILCompiler
                     {
                         if (paramType.IsValueType)
                             il.Emit(OpCodes.Box, paramType);
-                        il.Emit(OpCodes.Call, _runtime!.ConvertToNumber);
+                        il.Emit(OpCodes.Call, _runtime!.NumericCoercion.ConvertToNumber);
                     }
                     else if (field.FieldType == _types.Object && paramType.IsValueType)
                     {

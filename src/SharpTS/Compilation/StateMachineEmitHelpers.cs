@@ -290,7 +290,7 @@ public class StateMachineEmitHelpers
     {
         if (_runtime != null)
         {
-            _il.Emit(OpCodes.Call, _runtime.ConvertToNumber);
+            _il.Emit(OpCodes.Call, _runtime.NumericCoercion.ConvertToNumber);
         }
         else
         {
@@ -870,7 +870,7 @@ public class StateMachineEmitHelpers
         // the runtime helper isn't yet available.
         if (_runtime != null)
         {
-            _il.Emit(OpCodes.Call, _runtime.ConvertToNumber);
+            _il.Emit(OpCodes.Call, _runtime.NumericCoercion.ConvertToNumber);
         }
         else
         {
@@ -912,7 +912,7 @@ public class StateMachineEmitHelpers
     {
         emitOperand();
         EnsureBoxed();
-        _il.Emit(OpCodes.Call, _runtime!.JsToInt32);
+        _il.Emit(OpCodes.Call, _runtime!.NumericCoercion.JsToInt32);
         _il.Emit(OpCodes.Not);
         _il.Emit(OpCodes.Conv_R8);
         _il.Emit(OpCodes.Box, _types.Double);
@@ -1190,9 +1190,9 @@ public class StateMachineEmitHelpers
             if (CompoundOperatorHelper.IsBitwise(opType))
             {
                 _il.Emit(OpCodes.Ldloc, left);
-                _il.Emit(OpCodes.Call, _runtime!.JsToInt32);
+                _il.Emit(OpCodes.Call, _runtime!.NumericCoercion.JsToInt32);
                 _il.Emit(OpCodes.Ldloc, right);
-                _il.Emit(OpCodes.Call, _runtime.JsToInt32);
+                _il.Emit(OpCodes.Call, _runtime.NumericCoercion.JsToInt32);
                 _il.Emit(opcode.Value);
                 if (opType == TokenType.GREATER_GREATER_GREATER_EQUAL)
                     _il.Emit(OpCodes.Conv_U8);
@@ -1202,9 +1202,9 @@ public class StateMachineEmitHelpers
             else
             {
                 _il.Emit(OpCodes.Ldloc, left);
-                _il.Emit(OpCodes.Call, _runtime!.ConvertToNumber);
+                _il.Emit(OpCodes.Call, _runtime!.NumericCoercion.ConvertToNumber);
                 _il.Emit(OpCodes.Ldloc, right);
-                _il.Emit(OpCodes.Call, _runtime.ConvertToNumber);
+                _il.Emit(OpCodes.Call, _runtime.NumericCoercion.ConvertToNumber);
                 _il.Emit(opcode.Value);
                 _il.Emit(OpCodes.Box, _types.Double);
             }
@@ -1227,11 +1227,11 @@ public class StateMachineEmitHelpers
         // Convert left to int32 (ECMA-262 ToInt32: wraps, never throws)
         var rightLocal = _il.DeclareLocal(_types.Object);
         _il.Emit(OpCodes.Stloc, rightLocal);
-        _il.Emit(OpCodes.Call, _runtime!.JsToInt32);
+        _il.Emit(OpCodes.Call, _runtime!.NumericCoercion.JsToInt32);
 
         // Convert right to int32
         _il.Emit(OpCodes.Ldloc, rightLocal);
-        _il.Emit(OpCodes.Call, _runtime!.JsToInt32);
+        _il.Emit(OpCodes.Call, _runtime!.NumericCoercion.JsToInt32);
 
         // Apply bitwise operation
         _il.Emit(bitwiseOp);

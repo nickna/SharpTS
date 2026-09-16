@@ -532,13 +532,13 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
         // Spill the coerced left operand so an await inside Right suspends with an empty stack.
         EmitExpression(b.Left);
         EnsureBoxed();
-        IL.Emit(OpCodes.Call, Ctx.Runtime!.JsToInt32);
+        IL.Emit(OpCodes.Call, Ctx.Runtime!.NumericCoercion.JsToInt32);
         var leftLocal = IL.DeclareLocal(typeof(int));
         IL.Emit(OpCodes.Stloc, leftLocal);
 
         EmitExpression(b.Right);
         EnsureBoxed();
-        IL.Emit(OpCodes.Call, Ctx.Runtime!.JsToInt32);
+        IL.Emit(OpCodes.Call, Ctx.Runtime!.NumericCoercion.JsToInt32);
         var rightLocal = IL.DeclareLocal(typeof(int));
         IL.Emit(OpCodes.Stloc, rightLocal);
 

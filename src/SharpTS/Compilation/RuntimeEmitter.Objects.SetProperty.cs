@@ -682,7 +682,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, runtime.ArgumentsType);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Call, runtime.ToNumber);
+        il.Emit(OpCodes.Call, runtime.NumericCoercion.ToNumber);
         il.Emit(OpCodes.Conv_I4);
         il.Emit(OpCodes.Stfld, runtime.ArgumentsLengthField);
         il.Emit(OpCodes.Ret);
@@ -1161,7 +1161,7 @@ public partial class RuntimeEmitter
             var rangeErrorLabel = il.DefineLabel();
 
             il.Emit(OpCodes.Ldarg_2);
-            il.Emit(OpCodes.Call, runtime.ToNumber);
+            il.Emit(OpCodes.Call, runtime.NumericCoercion.ToNumber);
             il.Emit(OpCodes.Stloc, doubleValLocal);
 
             // Reject NaN / +Infinity / -Infinity via IsFinite.

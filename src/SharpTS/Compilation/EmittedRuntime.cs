@@ -162,11 +162,9 @@ public class EmittedRuntime
     /// <summary>Required primitive-wrapper and default-hint conversion declarations.</summary>
     public EmittedBoxedPrimitiveRuntime BoxedPrimitives { get; } = new();
 
-    public MethodBuilder ToNumber { get; set; } = null!;
-    public MethodBuilder ConvertToNumber { get; set; } = null!;
-    /// <summary>$Runtime.JsNumberToInt32(double) - allocation-free ECMA-262 ToInt32 for statically numeric operands.</summary>
-    public MethodBuilder JsNumberToInt32 { get; set; } = null!;
-    public MethodBuilder JsToInt32 { get; set; } = null!;
+    /// <summary>Required numeric conversion declarations, including early RegExp coercion references.</summary>
+    public EmittedNumericCoercionRuntime NumericCoercion { get; } = new();
+
     public MethodBuilder JsLessThan { get; set; } = null!;
     public MethodBuilder JsLessOrEqual { get; set; } = null!;
     public MethodBuilder TypeOf { get; set; } = null!;
@@ -203,7 +201,6 @@ public class EmittedRuntime
     // compile-time ArrayStaticEmitter / NumberStaticEmitter / etc. would emit.
     public MethodBuilder LookupBuiltInStaticMember { get; set; } = null!;
     public MethodBuilder ExpandCallArgs { get; set; } = null!;
-    public MethodBuilder ToIntegerOrInfinity { get; set; } = null!;
     public ConstructorBuilder MapCollectionIteratorCtor { get; set; } = null!;
     public ConstructorBuilder SetCollectionIteratorCtor { get; set; } = null!;
     // ECMA-262 RequireObjectCoercible(this) — throws TypeError if `this` is

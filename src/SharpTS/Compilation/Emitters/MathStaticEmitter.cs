@@ -87,12 +87,12 @@ public sealed class MathStaticEmitter : IStaticTypeEmitterStrategy
                 // \`Math.max(undefined, 1)\` returning NaN (spec) instead of crashing.
                 emitter.EmitExpression(arguments[0]);
                 emitter.EnsureBoxed();
-                il.Emit(OpCodes.Call, ctx.Runtime!.ToNumber);
+                il.Emit(OpCodes.Call, ctx.Runtime!.NumericCoercion.ToNumber);
                 for (int i = 1; i < arguments.Count; i++)
                 {
                     emitter.EmitExpression(arguments[i]);
                     emitter.EnsureBoxed();
-                    il.Emit(OpCodes.Call, ctx.Runtime!.ToNumber);
+                    il.Emit(OpCodes.Call, ctx.Runtime!.NumericCoercion.ToNumber);
                     il.Emit(OpCodes.Call, minMaxMethod);
                 }
             }
@@ -149,7 +149,7 @@ public sealed class MathStaticEmitter : IStaticTypeEmitterStrategy
         {
             emitter.EmitExpression(arg);
             emitter.EnsureBoxed();
-            il.Emit(OpCodes.Call, ctx.Runtime!.ToNumber);
+            il.Emit(OpCodes.Call, ctx.Runtime!.NumericCoercion.ToNumber);
         }
 
         if (methodName == "round")
@@ -399,7 +399,7 @@ public sealed class MathStaticEmitter : IStaticTypeEmitterStrategy
         {
             // Stack: [double]. Box, JsToInt32 → int32, then uint32 view.
             il.Emit(OpCodes.Box, ctx.Types.Double);
-            il.Emit(OpCodes.Call, ctx.Runtime!.JsToInt32);
+            il.Emit(OpCodes.Call, ctx.Runtime!.NumericCoercion.JsToInt32);
             // int32 → uint32 reinterpret (no-op at IL level)
             il.Emit(OpCodes.Call, typeof(System.Numerics.BitOperations).GetMethod("LeadingZeroCount", [typeof(uint)])!);
             il.Emit(OpCodes.Conv_R8);
@@ -418,11 +418,11 @@ public sealed class MathStaticEmitter : IStaticTypeEmitterStrategy
             var bDoubleLocal = il.DeclareLocal(ctx.Types.Double);
             il.Emit(OpCodes.Stloc, bDoubleLocal);
             il.Emit(OpCodes.Box, ctx.Types.Double);
-            il.Emit(OpCodes.Call, ctx.Runtime!.JsToInt32);
+            il.Emit(OpCodes.Call, ctx.Runtime!.NumericCoercion.JsToInt32);
             // Stack: [a_int32]. Box b, call JsToInt32 → int32 b.
             il.Emit(OpCodes.Ldloc, bDoubleLocal);
             il.Emit(OpCodes.Box, ctx.Types.Double);
-            il.Emit(OpCodes.Call, ctx.Runtime!.JsToInt32);
+            il.Emit(OpCodes.Call, ctx.Runtime!.NumericCoercion.JsToInt32);
             // Stack: [a_int32, b_int32]. Multiply (Mul wraps mod 2^32).
             il.Emit(OpCodes.Mul);
             il.Emit(OpCodes.Conv_R8);

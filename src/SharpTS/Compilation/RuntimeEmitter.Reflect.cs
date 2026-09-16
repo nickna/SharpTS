@@ -1332,7 +1332,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, argsLocal);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Ldelem_Ref);
-        il.Emit(OpCodes.Call, runtime.ToNumber);
+        il.Emit(OpCodes.Call, runtime.NumericCoercion.ToNumber);
         il.Emit(OpCodes.Br, dataViewHaveOffsetLabel);
         il.MarkLabel(dataViewDefaultOffsetLabel);
         il.Emit(OpCodes.Ldc_R8, 0.0);

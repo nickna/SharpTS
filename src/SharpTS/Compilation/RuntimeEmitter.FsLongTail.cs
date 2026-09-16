@@ -30,7 +30,7 @@ public partial class RuntimeEmitter
         var il = method.GetILGenerator();
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.ToNumber);
+        il.Emit(OpCodes.Call, runtime.NumericCoercion.ToNumber);
         il.Emit(OpCodes.Conv_I4);
         var fdLocal = il.DeclareLocal(_types.Int32);
         il.Emit(OpCodes.Stloc, fdLocal);
@@ -65,7 +65,7 @@ public partial class RuntimeEmitter
         var resultLocal = il.DeclareLocal(_types.Object);
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.ToNumber);
+        il.Emit(OpCodes.Call, runtime.NumericCoercion.ToNumber);
         il.Emit(OpCodes.Conv_I4);
         var fdLocal = il.DeclareLocal(_types.Int32);
         il.Emit(OpCodes.Stloc, fdLocal);

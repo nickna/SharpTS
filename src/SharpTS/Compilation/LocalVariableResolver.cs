@@ -321,7 +321,7 @@ public class LocalVariableResolver : IVariableResolver
         {
             var temp = _il.DeclareLocal(funcDCField.FieldType);
             if (funcDCField.FieldType == _types.Double)
-                _il.Emit(OpCodes.Call, _ctx.Runtime!.ConvertToNumber);
+                _il.Emit(OpCodes.Call, _ctx.Runtime!.NumericCoercion.ConvertToNumber);
             _il.Emit(OpCodes.Stloc, temp);
 
             if (_ctx.FunctionDisplayClassLocal != null)

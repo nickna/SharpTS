@@ -606,7 +606,7 @@ public partial class RuntimeEmitter
             // DataView numeric setters perform ToNumber before converting to
             // their element representation. This supplies NaN for undefined
             // and raises the guest TypeError for Symbol values.
-            il.Emit(OpCodes.Call, runtime.ToNumber);
+            il.Emit(OpCodes.Call, runtime.NumericCoercion.ToNumber);
             il.Emit(OpCodes.Box, _types.Double);
         }
         if (hasEndianness)

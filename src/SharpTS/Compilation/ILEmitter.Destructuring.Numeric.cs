@@ -90,7 +90,7 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Ldstr, expression.Name.Lexeme);
         IL.Emit(OpCodes.Call, _ctx.Runtime!.GetProperty);
         if (!boxed)
-            IL.Emit(OpCodes.Call, _ctx.Runtime.ConvertToNumber);
+            IL.Emit(OpCodes.Call, _ctx.Runtime.NumericCoercion.ConvertToNumber);
         IL.MarkLabel(end);
         if (boxed)
             SetStackUnknown();

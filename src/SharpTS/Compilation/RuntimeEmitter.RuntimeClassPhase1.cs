@@ -149,7 +149,7 @@ public partial class RuntimeEmitter
         // Reserve ToNumber(object) → double. Used by $RegExp's Symbol.split
         // to coerce `limit` per ECMA-262 §22.2.5.13 step 7 (and to throw
         // TypeError on Symbol limits). EmitToNumber later fills the body.
-        runtime.ToNumber = typeBuilder.DefineMethod(
+        runtime.NumericCoercion.ToNumber = typeBuilder.DefineMethod(
             "ToNumber",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Double,
@@ -214,7 +214,7 @@ public partial class RuntimeEmitter
         // `valueOf` throws, and so SetProperty's `r.lastIndex = obj` coerce
         // path can route through the spec-aligned ToInt32 chain. EmitJsToInt32
         // later fills the body.
-        runtime.JsToInt32 = typeBuilder.DefineMethod(
+        runtime.NumericCoercion.JsToInt32 = typeBuilder.DefineMethod(
             "JsToInt32",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Int32,

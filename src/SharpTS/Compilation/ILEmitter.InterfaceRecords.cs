@@ -62,7 +62,7 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Call, runtime.GetProperty);
         // Only a numeric consumer may coerce the fallback. An interface annotation
         // alone must not turn a dynamically replaced string field into a number.
-        if (numericConsumer) IL.Emit(OpCodes.Call, runtime.ConvertToNumber);
+        if (numericConsumer) IL.Emit(OpCodes.Call, runtime.NumericCoercion.ConvertToNumber);
         IL.MarkLabel(end);
         if (numericConsumer) SetStackType(StackType.Double);
         else SetStackUnknown();

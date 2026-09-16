@@ -571,7 +571,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, "length");
         il.Emit(OpCodes.Call, runtime.GetProperty);
         // double d = $Runtime.ToNumber(lenVal);
-        il.Emit(OpCodes.Call, runtime.ToNumber);
+        il.Emit(OpCodes.Call, runtime.NumericCoercion.ToNumber);
         var dLocal = il.DeclareLocal(_types.Double);
         il.Emit(OpCodes.Stloc, dLocal);
 
@@ -770,7 +770,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(haveLen);
         // len = (int)$Runtime.ToNumber(lenVal); clamp [0, 1<<20]
         il.Emit(OpCodes.Ldloc, lenValLocal);
-        il.Emit(OpCodes.Call, runtime.ToNumber);
+        il.Emit(OpCodes.Call, runtime.NumericCoercion.ToNumber);
         var lenAsDouble = il.DeclareLocal(_types.Double);
         il.Emit(OpCodes.Stloc, lenAsDouble);
         // NaN/Infinity → 0; else clamp
@@ -916,7 +916,7 @@ public partial class RuntimeEmitter
         // produces undefined behavior (typically int.MinValue), which would clamp
         // wrongly to 0 instead of 1<<20 / 0 respectively.
         il.Emit(OpCodes.Ldloc, lenValLocal);
-        il.Emit(OpCodes.Call, runtime.ToNumber);
+        il.Emit(OpCodes.Call, runtime.NumericCoercion.ToNumber);
         var dLocal = il.DeclareLocal(_types.Double);
         il.Emit(OpCodes.Stloc, dLocal);
 
@@ -1144,7 +1144,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(hasFromIndex);
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Call, runtime.ToIntegerOrInfinity);
+        il.Emit(OpCodes.Call, runtime.NumericCoercion.ToIntegerOrInfinity);
         il.Emit(OpCodes.Stloc, nLocal);
 
         var notPosInf = il.DefineLabel();
@@ -1252,7 +1252,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "length");
         il.Emit(OpCodes.Call, runtime.GetProperty);
-        il.Emit(OpCodes.Call, runtime.ToNumber);
+        il.Emit(OpCodes.Call, runtime.NumericCoercion.ToNumber);
         il.Emit(OpCodes.Stloc, rawLenLocal);
 
         var positiveLength = il.DefineLabel();
@@ -1308,7 +1308,7 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(suppliedFromIndex);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Call, runtime.ToNumber);
+        il.Emit(OpCodes.Call, runtime.NumericCoercion.ToNumber);
         il.Emit(OpCodes.Stloc, nLocal);
 
         // ToIntegerOrInfinity: NaN => 0; finite values truncate toward zero.
@@ -1732,7 +1732,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, elementLocal);
         il.Emit(OpCodes.Ldstr, "length");
         il.Emit(OpCodes.Call, runtime.GetProperty);
-        il.Emit(OpCodes.Call, runtime.ToNumber);
+        il.Emit(OpCodes.Call, runtime.NumericCoercion.ToNumber);
         il.Emit(OpCodes.Stloc, rawLengthLocal);
 
         var lengthZeroLabel = il.DefineLabel();
@@ -2015,7 +2015,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "length");
         il.Emit(OpCodes.Call, runtime.GetProperty);
-        il.Emit(OpCodes.Call, runtime.ToNumber);
+        il.Emit(OpCodes.Call, runtime.NumericCoercion.ToNumber);
         il.Emit(OpCodes.Stloc, dLocal);
 
         if (rejectOverArrayLength)

@@ -224,7 +224,7 @@ public partial class ILEmitter
                 case "Number":
                     EmitExpression(c.Arguments[0]);
                     EmitBoxIfNeeded(c.Arguments[0]);
-                    IL.Emit(OpCodes.Call, _ctx.Runtime!.ConvertToNumber);
+                    IL.Emit(OpCodes.Call, _ctx.Runtime!.NumericCoercion.ConvertToNumber);
                     IL.Emit(OpCodes.Box, _ctx.Types.Double);
                     SetStackUnknown();
                     return;
@@ -655,7 +655,7 @@ public partial class ILEmitter
             IL.Emit(OpCodes.Ldloc, receiverLocal);
             IL.Emit(OpCodes.Ldstr, "length");
             IL.Emit(OpCodes.Call, runtime.GetProperty);
-            IL.Emit(OpCodes.Call, runtime.ToNumber);
+            IL.Emit(OpCodes.Call, runtime.NumericCoercion.ToNumber);
             IL.Emit(OpCodes.Ldc_R8, 4294967295.0); // 2^32 - 1
             IL.Emit(OpCodes.Ble_Un, lengthOkLabel);
             // Pop the duplicated receiver since we're going to throw and skip
@@ -710,7 +710,7 @@ public partial class ILEmitter
             IL.Emit(OpCodes.Ldloc, receiverLocal);
             IL.Emit(OpCodes.Ldstr, "length");
             IL.Emit(OpCodes.Call, runtime.GetProperty);
-            IL.Emit(OpCodes.Call, runtime.ToNumber);
+            IL.Emit(OpCodes.Call, runtime.NumericCoercion.ToNumber);
             IL.Emit(OpCodes.Pop);
         }
 

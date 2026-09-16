@@ -552,7 +552,7 @@ public partial class RuntimeEmitter
             var loc = il.DeclareLocal(_types.Double);
             var useDflt = il.DefineLabel(); var done = il.DefineLabel();
             il.Emit(OpCodes.Ldloc, raw); il.Emit(OpCodes.Brfalse, useDflt);
-            il.Emit(OpCodes.Ldloc, raw); il.Emit(OpCodes.Call, runtime.ToNumber); il.Emit(OpCodes.Br, done);
+            il.Emit(OpCodes.Ldloc, raw); il.Emit(OpCodes.Call, runtime.NumericCoercion.ToNumber); il.Emit(OpCodes.Br, done);
             il.MarkLabel(useDflt); il.Emit(OpCodes.Ldc_R8, dflt);
             il.MarkLabel(done); il.Emit(OpCodes.Stloc, loc); return loc;
         }
@@ -738,7 +738,7 @@ public partial class RuntimeEmitter
             var loc = il.DeclareLocal(_types.Double);
             var useDflt = il.DefineLabel(); var done = il.DefineLabel();
             il.Emit(OpCodes.Ldloc, raw); il.Emit(OpCodes.Brfalse, useDflt);
-            il.Emit(OpCodes.Ldloc, raw); il.Emit(OpCodes.Call, runtime.ToNumber); il.Emit(OpCodes.Br, done);
+            il.Emit(OpCodes.Ldloc, raw); il.Emit(OpCodes.Call, runtime.NumericCoercion.ToNumber); il.Emit(OpCodes.Br, done);
             il.MarkLabel(useDflt); il.Emit(OpCodes.Ldc_R8, dflt);
             il.MarkLabel(done); il.Emit(OpCodes.Stloc, loc); return loc;
         }
