@@ -110,6 +110,77 @@ public class EmittedBoxedPrimitiveRuntimeTests
     }
 
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void WrapperCreationUsesExplicitBigIntPrototypeAvailability(bool includePrototype)
+    {
+        var (runtime, helper, emitter) = CreateExplicitDependencyFixture(includePrototype);
+        var boxed = new EmittedBoxedPrimitiveRuntime();
+        var peers = CreateInputs("BoxedPrimitiveInputs",
+            runtime.TSObjectType, runtime.TSObjectCtor,
+            runtime.CompiledPropertyDescriptorType, runtime.CompiledPropertyDescriptorCtor,
+            runtime.CompiledPropertyDescriptorValue.GetSetMethod()!,
+            runtime.CompiledPropertyDescriptorWritable.GetSetMethod()!,
+            runtime.CompiledPropertyDescriptorEnumerable.GetSetMethod()!,
+            runtime.CompiledPropertyDescriptorConfigurable.GetSetMethod()!,
+            runtime.PDSDefineProperty, runtime.PDSSetPrototype,
+            runtime.BooleanPrototypeField, runtime.BooleanPrototypePopulateMethod,
+            runtime.NumberPrototypeField, runtime.NumberPrototypePopulateMethod,
+            runtime.SymbolPrototypeField, runtime.SymbolPrototypePopulateMethod);
+        var prototype = includePrototype
+            ? CreateInputs("BoxedBigIntPrototype", runtime.BigIntPrototypeField, runtime.BigIntPrototypePopulateMethod)
+            : null;
+        InvokeEmitter("EmitNewBoxedPrimitive", emitter, helper, boxed, runtime.Strings, peers, prototype);
+        helper.CreateType();
+        using var bytes = Save(runtime);
+        Verify(bytes);
+        var assembly = Assembly.Load(bytes.ToArray());
+        var runtimeType = assembly.GetType("$Runtime")!;
+        var helperType = assembly.GetType(helper.Name)!;
+        var wrapper = Call(helperType, boxed.New, "BigInt", new BigInteger(42));
+        Assert.Equal(new BigInteger(42), Call(runtimeType, runtime.BoxedPrimitives.UnwrapIfBoxed, wrapper));
+        var descriptorStoreType = assembly.GetType(runtime.PDSGetPrototype.DeclaringType!.FullName!)!;
+        var actualPrototype = Call(descriptorStoreType, runtime.PDSGetPrototype, wrapper);
+        if (includePrototype)
+        {
+            var expectedPrototype = Assert.IsType<Dictionary<string, object>>(
+                runtimeType.GetField(runtime.BigIntPrototypeField.Name)!.GetValue(null));
+            Assert.Same(expectedPrototype, actualPrototype);
+        }
+        else
+            Assert.Null(actualPrototype);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void DefaultConversionUsesExplicitDateAvailability(bool includeDate)
+    {
+        var (runtime, helper, emitter) = CreateExplicitDependencyFixture(includeDate);
+        var boxed = new EmittedBoxedPrimitiveRuntime();
+        InvokeEmitter("DeclareUnwrapIfBoxed", emitter, helper, boxed);
+        var peers = CreateInputs("UnwrapPrimitiveInputs",
+            runtime.TSObjectType, runtime.SymbolToPrimitive, runtime.GetIndex, runtime.UndefinedType,
+            runtime.TypeOf, runtime.InvokeMethodValue, runtime.TSObjectGetProperty,
+            runtime.HasOwnPropertyHelperMethod, runtime.GetProperty, runtime.CreateException, runtime.TSTypeErrorCtor);
+        var dateInputs = includeDate ? CreateInputs("BoxedDateInputs", runtime.TSDateType, runtime.DateToString) : null;
+        InvokeEmitter("EmitUnwrapIfBoxedBody", emitter, boxed, peers, dateInputs);
+        helper.CreateType();
+        using var bytes = Save(runtime);
+        Verify(bytes);
+        var assembly = Assembly.Load(bytes.ToArray());
+        var runtimeType = assembly.GetType("$Runtime")!;
+        var helperType = assembly.GetType(helper.Name)!;
+        Assert.Equal(42d, Call(helperType, boxed.UnwrapIfBoxed, 42d));
+        var date = Activator.CreateInstance(assembly.GetType(runtime.TSDateType.Name)!, [0d]);
+        var actual = Call(helperType, boxed.UnwrapIfBoxed, date);
+        if (includeDate)
+            Assert.Equal(Call(runtimeType, runtime.DateToString, date), Assert.IsType<string>(actual));
+        else
+            Assert.Same(date, actual);
+    }
+
+    [Theory]
     [InlineData("Number", 7d)]
     [InlineData("Boolean", false)]
     [InlineData("String", "hello")]
@@ -248,8 +319,25 @@ public class EmittedBoxedPrimitiveRuntimeTests
     private static object? Call(Type type, MethodInfo method, params object?[] arguments) =>
         type.GetMethod(method.Name)!.Invoke(null, arguments);
 
-    private static void InvokeEmitter(string name, RuntimeEmitter emitter, params object[] arguments) =>
+    private static void InvokeEmitter(string name, RuntimeEmitter emitter, params object?[] arguments) =>
         typeof(RuntimeEmitter).GetMethod(name, BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(emitter, arguments);
+
+    private static object CreateInputs(string name, params object?[] arguments) =>
+        Activator.CreateInstance(typeof(RuntimeEmitter).GetNestedType(name, BindingFlags.NonPublic)!, arguments)!;
+
+    private static (EmittedRuntime Runtime, TypeBuilder Helper, RuntimeEmitter Emitter)
+        CreateExplicitDependencyFixture(bool includeDependency)
+    {
+        var assembly = new PersistedAssemblyBuilder(new AssemblyName($"explicit_boxed_{Guid.NewGuid():N}"), typeof(object).Assembly);
+        var module = assembly.DefineDynamicModule("main");
+        var runtime = new RuntimeEmitter(TypeProvider.Runtime).EmitAll(module, Detect("Object(42n);new Date(0);"));
+        var helper = module.DefineType("ExplicitBoxed", TypeAttributes.Public | TypeAttributes.Abstract | TypeAttributes.Sealed);
+        var emitter = new RuntimeEmitter(TypeProvider.Runtime);
+        // Exercise each scoped input with the opposite global feature selection.
+        typeof(RuntimeEmitter).GetField("_features", BindingFlags.NonPublic | BindingFlags.Instance)!.SetValue(emitter,
+            includeDependency ? Detect("const value=1;") : RuntimeFeatureSet.EmitEverything());
+        return (runtime, helper, emitter);
+    }
 
     private static EmittedBoxedPrimitiveRuntime CreateDeclarations(string? omitted = null)
     {

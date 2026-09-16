@@ -256,8 +256,8 @@ public partial class RuntimeEmitter
         LinkProto("Boolean", peers.BooleanPrototype, peers.PopulateBooleanPrototype);
         LinkProto("Number",  peers.NumberPrototype,  peers.PopulateNumberPrototype);
         LinkProto("String",  strings.PrototypeField,  strings.PrototypePopulateMethod);
-        if (_features.UsesBigInt)
-            LinkProto("BigInt", bigIntPrototype!.Value.Field, bigIntPrototype!.Value.Populate);
+        if (bigIntPrototype is not null)
+            LinkProto("BigInt", bigIntPrototype.Value.Field, bigIntPrototype.Value.Populate);
         LinkProto("Symbol", peers.SymbolPrototype, peers.PopulateSymbolPrototype);
 
         il.Emit(OpCodes.Ldloc, objLocal);
@@ -633,10 +633,10 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, peers.ObjectType);
         il.Emit(OpCodes.Brtrue, objectLikeLabel);
-        if (_features.UsesDate)
+        if (date is not null)
         {
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, date!.Value.Type);
+            il.Emit(OpCodes.Isinst, date.Value.Type);
             il.Emit(OpCodes.Brtrue, objectLikeLabel);
         }
         il.Emit(OpCodes.Ldarg_0);
@@ -715,14 +715,14 @@ public partial class RuntimeEmitter
         // Date is the sole built-in whose absent/default hint behaves as the
         // string hint.  An explicit @@toPrimitive above still wins; otherwise
         // use Date.prototype.toString before the number-hint ordinary path.
-        if (_features.UsesDate)
+        if (date is not null)
         {
             var notDateLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, date!.Value.Type);
+            il.Emit(OpCodes.Isinst, date.Value.Type);
             il.Emit(OpCodes.Brfalse, notDateLabel);
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Call, date!.Value.ToStringMethod);
+            il.Emit(OpCodes.Call, date.Value.ToStringMethod);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(notDateLabel);
         }
