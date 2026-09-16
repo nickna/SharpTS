@@ -1,4 +1,7 @@
 using System.Diagnostics;
+using System.Reflection;
+using System.Runtime.InteropServices;
+using Microsoft.Win32.SafeHandles;
 using SharpTS.Execution;
 using SharpTS.ProcessTreeFixture;
 using SharpTS.Runtime;
@@ -14,6 +17,45 @@ public sealed class OwnedProcessRegistryTests
     private static readonly TimeSpan ExitTimeout = TimeSpan.FromSeconds(10);
     private static readonly TimeSpan FixtureReadyTimeout = TimeSpan.FromSeconds(10);
     private static readonly TimeSpan ExecutionTimeout = TimeSpan.FromSeconds(5);
+
+    [SkippableFact]
+    public void TryWaitForExit_ToleratesWindowsInvalidHandleDuringCleanup()
+    {
+        Skip.IfNot(OperatingSystem.IsWindows(), "Windows process-wait handle regression.");
+
+        // Reproduce the native failure from concurrent disposal without racing real
+        // resources: this non-owning handle is deliberately invalid. Populate only
+        // the Process fields required to reach the framework's wait-handle creation.
+        using var process = new Process();
+        using var handle = new SafeProcessHandle(new IntPtr(0x7ffffffc), ownsHandle: false);
+        var handleField = typeof(Process).GetField("_processHandle", BindingFlags.Instance | BindingFlags.NonPublic);
+        var hasHandleField = typeof(Process).GetField("_haveProcessHandle", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.NotNull(handleField);
+        Assert.NotNull(hasHandleField);
+        handleField.SetValue(process, handle);
+        hasHandleField.SetValue(process, true);
+
+        // Check that this fixture reaches the same native failure seen in Windows CI.
+        var error = Assert.Throws<COMException>(() => process.WaitForExit(0));
+        Assert.Equal(unchecked((int)0x80070006), error.HResult);
+        Assert.True(ProcessTreeTermination.TryWaitForExit(process, TimeSpan.Zero));
+    }
+
+    [Fact]
+    public void TryWaitForExit_PreservesLiveAndExitedProcessResults()
+    {
+        using Process process = StartLongRunningProcess();
+        try
+        {
+            Assert.False(ProcessTreeTermination.TryWaitForExit(process, TimeSpan.Zero));
+            Assert.True(ProcessTreeTermination.TryKill(process));
+            Assert.True(ProcessTreeTermination.TryWaitForExit(process, ExitTimeout));
+        }
+        finally
+        {
+            ProcessTreeTermination.Terminate(process);
+        }
+    }
 
     [Fact]
     public void InterpreterDispose_TerminatesOnlyItsOwnProcesses()

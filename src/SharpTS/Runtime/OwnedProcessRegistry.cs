@@ -73,6 +73,12 @@ internal static class ProcessTreeTermination
         {
             return true;
         }
+        catch (System.Runtime.InteropServices.COMException exception)
+            when (exception.HResult == unchecked((int)0x80070006))
+        {
+            // Windows can report a concurrently invalidated wait handle as E_HANDLE.
+            return true;
+        }
         catch (NullReferenceException)
         {
             // Process.WaitForExitCore can dereference a handle cleared by a concurrent
