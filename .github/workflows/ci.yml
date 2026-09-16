@@ -80,8 +80,8 @@ jobs:
     needs: workflow-policy
     if: needs.workflow-policy.outputs.mode == 'full'
     runs-on: ${{ matrix.os }}
-    # Windows needs room for the full core suite plus build and packaging gates.
-    timeout-minutes: ${{ matrix.os == 'windows-2025' && 30 || 20 }}
+    # Leave room for the full test suites plus build and final packaging gates.
+    timeout-minutes: ${{ matrix.os == 'windows-2025' && 30 || 25 }}
     strategy:
       # Don't let one platform's failure cancel the others — we want to see each
       # platform's real result independently (a flake on one shouldn't hide the rest).
