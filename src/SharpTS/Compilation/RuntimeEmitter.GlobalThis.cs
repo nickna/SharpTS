@@ -343,7 +343,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Br, returnLabel);
             il.MarkLabel(notThisName);
         }
-        EmitSingletonBranch("Math", runtime.MathSingletonField);
+        EmitSingletonBranch("Math", runtime.Math.SingletonField);
         EmitSingletonBranch("JSON", runtime.JsonSingletonField);
         if (runtime.ReflectSingletonField is not null)
             EmitSingletonBranch("Reflect", runtime.ReflectSingletonField);

@@ -1041,7 +1041,7 @@ public partial class RuntimeEmitter
         // synth if the (Math, name) pair was deleted (IsBuiltinDeleted).
         var notMathSingletonLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldsfld, runtime.MathSingletonField);
+        il.Emit(OpCodes.Ldsfld, runtime.Math.SingletonField);
         il.Emit(OpCodes.Bne_Un, notMathSingletonLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, propNameLocal);
@@ -1091,46 +1091,48 @@ public partial class RuntimeEmitter
         // Spec lengths per ECMA-262 §21.3.2 — same as MathStaticEmitter.
         (string n, MethodBuilder? m, int len)[] mathMethods =
         {
-            ("abs",    runtime.MathAbsAdapter,    1),
-            ("acos",   runtime.MathAcosAdapter,   1),
-            ("acosh",  runtime.MathAcoshAdapter,  1),
-            ("asin",   runtime.MathAsinAdapter,   1),
-            ("asinh",  runtime.MathAsinhAdapter,  1),
-            ("atan",   runtime.MathAtanAdapter,   1),
-            ("atan2",  runtime.MathAtan2Adapter,  2),
-            ("atanh",  runtime.MathAtanhAdapter,  1),
-            ("cbrt",   runtime.MathCbrtAdapter,   1),
-            ("ceil",   runtime.MathCeilAdapter,   1),
-            ("clz32",  runtime.MathClz32Adapter,  1),
-            ("cos",    runtime.MathCosAdapter,    1),
-            ("cosh",   runtime.MathCoshAdapter,   1),
-            ("exp",    runtime.MathExpAdapter,    1),
-            ("expm1",  runtime.MathExpm1Adapter,  1),
-            ("floor",  runtime.MathFloorAdapter,  1),
-            ("fround", runtime.MathFroundAdapter, 1),
-            ("f16round", runtime.MathF16RoundAdapter, 1),
-            ("hypot",  runtime.MathHypotAdapter,  2),
-            ("imul",   runtime.MathImulAdapter,   2),
-            ("log",    runtime.MathLogAdapter,    1),
-            ("log10",  runtime.MathLog10Adapter,  1),
-            ("log1p",  runtime.MathLog1pAdapter,  1),
-            ("log2",   runtime.MathLog2Adapter,   1),
-            ("max",    runtime.MathMaxAdapter,    2),
-            ("min",    runtime.MathMinAdapter,    2),
-            ("pow",    runtime.MathPowAdapter,    2),
-            // "random" → runtime.Random; EmitRandom now precedes gOPD emit
+            ("abs",    runtime.Math.AbsAdapter,    1),
+            ("acos",   runtime.Math.AcosAdapter,   1),
+            ("acosh",  runtime.Math.AcoshAdapter,  1),
+            ("asin",   runtime.Math.AsinAdapter,   1),
+            ("asinh",  runtime.Math.AsinhAdapter,  1),
+            ("atan",   runtime.Math.AtanAdapter,   1),
+            ("atan2",  runtime.Math.Atan2Adapter,  2),
+            ("atanh",  runtime.Math.AtanhAdapter,  1),
+            ("cbrt",   runtime.Math.CbrtAdapter,   1),
+            ("ceil",   runtime.Math.CeilAdapter,   1),
+            ("clz32",  runtime.Math.Clz32Adapter,  1),
+            ("cos",    runtime.Math.CosAdapter,    1),
+            ("cosh",   runtime.Math.CoshAdapter,   1),
+            ("exp",    runtime.Math.ExpAdapter,    1),
+            ("expm1",  runtime.Math.Expm1Adapter,  1),
+            ("floor",  runtime.Math.FloorAdapter,  1),
+            ("fround", runtime.Math.FroundAdapter, 1),
+            ("f16round", runtime.Math.F16RoundAdapter, 1),
+            ("hypot",  runtime.Math.HypotAdapter,  2),
+            ("imul",   runtime.Math.ImulAdapter,   2),
+            ("log",    runtime.Math.LogAdapter,    1),
+            ("log10",  runtime.Math.Log10Adapter,  1),
+            ("log1p",  runtime.Math.Log1pAdapter,  1),
+            ("log2",   runtime.Math.Log2Adapter,   1),
+            ("max",    runtime.Math.MaxAdapter,    2),
+            ("min",    runtime.Math.MinAdapter,    2),
+            ("pow",    runtime.Math.PowAdapter,    2),
+            // "random" → runtime.Math.Random; EmitRandom now precedes gOPD emit
             // (see RuntimeEmitter.RuntimeClass.cs ~line 660), so we can wire
             // the actual MethodBuilder here for `desc.value === Math.random`.
-            ("random", runtime.Random,             0),
-            ("round",  runtime.MathRoundAdapter,  1),
-            ("sign",   runtime.MathSignAdapter,   1),
-            ("sin",    runtime.MathSinAdapter,    1),
-            ("sinh",   runtime.MathSinhAdapter,   1),
-            ("sqrt",   runtime.MathSqrtAdapter,   1),
-            ("tan",    runtime.MathTanAdapter,    1),
-            ("tanh",   runtime.MathTanhAdapter,   1),
-            ("trunc",  runtime.MathTruncAdapter,  1),
-            ("sumPrecise", runtime.MathSumPrecise, 1),
+            ("random", runtime.Math.Random,             0),
+            ("round",  runtime.Math.RoundAdapter,  1),
+            ("sign",   runtime.Math.SignAdapter,   1),
+            ("sin",    runtime.Math.SinAdapter,    1),
+            ("sinh",   runtime.Math.SinhAdapter,   1),
+            ("sqrt",   runtime.Math.SqrtAdapter,   1),
+            ("tan",    runtime.Math.TanAdapter,    1),
+            ("tanh",   runtime.Math.TanhAdapter,   1),
+            ("trunc",  runtime.Math.TruncAdapter,  1),
+            // This early fallback historically precedes SumPrecise's declaration.
+            // Preserve its undefined value; the later populated PDS supplies the actual function.
+            ("sumPrecise", null, 1),
         };
         foreach (var (mn, mb, ml) in mathMethods)
             EmitMathNameDesc(mn, isMethod: true, methodTarget: mb, methodArity: ml);

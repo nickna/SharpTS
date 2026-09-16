@@ -307,7 +307,7 @@ public partial class RuntimeEmitter
         // hasOwn(Math, "abs") === true.
         var notMathForHasOwnLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldsfld, runtime.MathSingletonField);
+        il.Emit(OpCodes.Ldsfld, runtime.Math.SingletonField);
         il.Emit(OpCodes.Bne_Un, notMathForHasOwnLabel);
         // First skip if marked deleted in tracker.
         il.Emit(OpCodes.Ldarg_0);

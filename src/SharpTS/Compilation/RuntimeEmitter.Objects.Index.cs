@@ -1727,7 +1727,7 @@ public partial class RuntimeEmitter
         var dictSkipMathConstLabel = il.DefineLabel();
         var dictNotMathLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldsfld, runtime.MathSingletonField);
+        il.Emit(OpCodes.Ldsfld, runtime.Math.SingletonField);
         il.Emit(OpCodes.Bne_Un, dictNotMathLabel);
         // Argument 1 must be a string key matching a constant name.
         il.Emit(OpCodes.Ldarg_1);
@@ -2237,7 +2237,7 @@ public partial class RuntimeEmitter
         // (E/LN10/.../SQRT2 per ECMA-262 §21.3.1 — C:F).
         var didxNotMathConstLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldsfld, runtime.MathSingletonField);
+        il.Emit(OpCodes.Ldsfld, runtime.Math.SingletonField);
         il.Emit(OpCodes.Bne_Un, didxNotMathConstLabel);
         var didxFalseRetLabel = il.DefineLabel();
         void DidxRejectIfMathConst(string n)
@@ -2259,7 +2259,7 @@ public partial class RuntimeEmitter
         var didxMarkDelLabel = il.DefineLabel();
         var didxAfterMarkLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldsfld, runtime.MathSingletonField);
+        il.Emit(OpCodes.Ldsfld, runtime.Math.SingletonField);
         il.Emit(OpCodes.Beq, didxMarkDelLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldsfld, runtime.JsonSingletonField);

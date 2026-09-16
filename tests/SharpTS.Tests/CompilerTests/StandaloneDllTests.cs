@@ -2733,6 +2733,211 @@ public class StandaloneDllTests
             verifyStandardError: error => Assert.Empty(error)));
     }
 
+    public static IEnumerable<object[]> MathMetadataPrograms =>
+    [
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "const m:any=Math;console.log(m.floor('2.8'),m.ceil(-2.8),m.abs(-4),m.sqrt(9),m.trunc(-2.8),m.sin(0),m.cos(0),m.tan(0),m.log(1),m.exp(0));"
+            },
+            "2 -2 4 3 -2 0 1 0 0 1\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "const m:any=Math;console.log(m.asin(0),m.acos(1),m.atan(0),m.atan2(0,1),m.sinh(0),m.cosh(0),m.tanh(0),m.asinh(0),m.acosh(1),m.atanh(0),m.cbrt(8),m.log10(100),m.log2(8),m.log1p(0),m.expm1(0));"
+            },
+            "0 0 0 0 0 1 0 0 0 0 2 2 3 0 0\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "const f:any=Math.round;console.log(f(0.5),f(-0.5),f(-1.5),f(4503599627370497),f(NaN),f(Infinity));console.log(Object.is(f(-0),-0),Object.is(f(-0.25),-0));"
+            },
+            "1 0 -1 4503599627370497 NaN Infinity\ntrue true\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "const sign:any=Math.sign;const pow:any=Math.pow;console.log(sign(-2),sign(0),sign(3),sign(NaN),Object.is(sign(-0),-0));console.log(pow('2','3'),pow(NaN,0),pow(-1,0.5));"
+            },
+            "-1 0 1 NaN false\n8 1 NaN\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "const m:any=Math;console.log(m.clz32(0),m.clz32(1),m.clz32(-1),m.clz32(Infinity),m.imul(4294967295,5),m.imul(4294967296,7),m.imul('7','6'));"
+            },
+            "32 31 0 32 -5 0 42\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "const m:any=Math;console.log(m.fround(1.5),m.f16round(1.5),m.fround(Infinity),m.f16round(65520),Object.is(m.f16round(-0),-0));console.log(m.hypot(3,4),m.hypot(NaN,Infinity),m.hypot());"
+            },
+            "1.5 1.5 Infinity Infinity true\n5 Infinity 0\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "const m:any=Math;console.log(m.max(),m.min(),m.max(1,9,3),m.min(1,-2,3),m.max(1,NaN));console.log(Object.is(m.max(-0,0),-0),Object.is(m.min(0,-0),-0));"
+            },
+            "-Infinity Infinity 9 -2 NaN\ntrue false\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "let order='';const a:any={valueOf(){order+='a';return 2;}};const b:any={valueOf(){order+='b';return 3;}};const pow:any=Math.pow;console.log(pow(a,b),order);const floor:any=Math.floor;console.log(floor(null),floor(undefined),floor('2.9'));"
+            },
+            "8 ab\n0 NaN 2\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "const values=[3,9,1];console.log(Math.max(...values),Math.min(...values),Math.hypot(...[3,4]));const max:any=Math.max;console.log(max.apply(null,values),max.call(null,1,5,2));"
+            },
+            "9 1 5\n9 5\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "const m:any=Math;console.log(m===globalThis.Math,m.floor===Math.floor,m.random===Math.random,m.sumPrecise===Math.sumPrecise);console.log(m.floor.name,m.floor.length,m.random.length,m.pow.length,m.hypot.length);"
+            },
+            "false true true true\nfloor 1 0 2 2\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "const d:any=Object.getOwnPropertyDescriptor(Math,'sumPrecise');console.log(d.value===Math.sumPrecise,d.writable,d.enumerable,d.configurable);const c:any=Object.getOwnPropertyDescriptor(Math,'PI');console.log(c.value===Math.PI,c.writable,c.enumerable,c.configurable);console.log(Object.keys(Math).length);"
+            },
+            "true true false true\ntrue false false false\n0\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "console.log(Object.prototype.toString.call(Math));const d:any=Object.getOwnPropertyDescriptor(Math,Symbol.toStringTag);console.log(d.value,d.writable,d.enumerable,d.configurable);"
+            },
+            "[object Math]\nMath false false true\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "const m:any=Math;const saved=m.floor;m.floor=function(){return 99;};console.log(m.floor(2.5));m.floor=saved;console.log(m.floor(2.5));m.extra=7;console.log(Object.keys(m).join(','),Object.values(m)[0]);"
+            },
+            "99\n2\nextra 7\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "const m:any=Math;const random:any=Math.random;let valid=true;for(let i=0;i<64;i++){const n=m.random();const k=random();if(!(n>=0&&n<1&&k>=0&&k<1))valid=false;}console.log(valid,m.random===random);"
+            },
+            "true true\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "const sum:any=Math.sumPrecise;console.log(sum([1e30,0.1,-1e30]),sum([1,2,3]),sum([Number.MIN_VALUE,Number.MIN_VALUE]));console.log(Object.is(sum([]),-0),Object.is(sum([-0,-0]),-0),Object.is(sum([-0,0]),0));"
+            },
+            "0.1 6 1e-323\ntrue true true\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "const sum:any=Math.sumPrecise;console.log(sum([Infinity,1]),sum([-Infinity,1]),sum([Infinity,-Infinity]),sum([NaN,1]),sum([Number.MAX_VALUE,Number.MAX_VALUE]));"
+            },
+            "0 -Infinity NaN 0 Infinity\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "const values:any=[100];values[Symbol.iterator]=function(){let i=0;return {next(){return i++<3?{value:2,done:false}:{done:true};}};};console.log(Math.sumPrecise(values));"
+            },
+            "6\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "let closed=0;const value:any={[Symbol.iterator](){return {next(){return {value:'bad',done:false};},return(){closed++;return {done:true};}};}};try{Math.sumPrecise(value);}catch(e:any){console.log(e.name);}console.log(closed);"
+            },
+            "TypeError\n1\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "const m:any=Math;try{m.floor(Symbol('x'));}catch(e:any){console.log(e.name);}try{m.sumPrecise([1,'2']);}catch(e:any){console.log(e.name);}try{m.sumPrecise(42);}catch(e:any){console.log(e.name);}"
+            },
+            "TypeError\nTypeError\nTypeError\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "const j:any=JSON;const r:any=Reflect;console.log(j.stringify({x:1}),j.parse('{\"y\":2}').y,r.get({z:3},'z'));console.log(j.stringify===JSON.stringify,r.get===Reflect.get,Object.keys(j).length,Object.keys(r).length);"
+            },
+            "{\"x\":1} 2 3\ntrue true 0 0\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "const floor:any=Math.floor;async function run(){const n=await Promise.resolve(2.5);console.log(floor(n));}run();"
+            },
+            "2\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "function* values():Generator<number,void,any>{yield 1e30;yield 0.1;yield -1e30;}console.log(Math.sumPrecise(values()));"
+            },
+            "0.1\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.cjs"] = "const m=Math;console.log(m.floor(2.5),m.sumPrecise([1,2]),m.max(1,3));"
+            },
+            "2 3 3\n", "main.cjs", true
+        }
+    ];
+
+    [Theory]
+    [MemberData(nameof(MathMetadataPrograms))]
+    public void Isolated_MathMetadata_PreservesAdaptersSummationAndSingletonBehavior(Dictionary<string, string> files, string expected, string entryPoint, bool standalone)
+    {
+        using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        foreach (var (path, source) in files) tempDir.CreateFile(path, source);
+        var dllPath = tempDir.GetPath("math_metadata.dll");
+        var deployment = standalone ? " --standalone" : "";
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --noLib --compile \"{tempDir.GetPath(entryPoint)}\" -o \"{dllPath}\" --verify{deployment}", tempDir.Path);
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(dllPath));
+        Assert.Equal(!standalone, File.Exists(tempDir.GetPath("SharpTS.dll")));
+        Assert.Equal(expected, ExecuteCompiledDllIsolated(dllPath, timeoutMs: 30000,
+            verifyStandardError: error => Assert.Empty(error)));
+    }
+
     public static IEnumerable<object[]> BroadcastChannelMetadataPrograms =>
     [
         new object[]

@@ -317,12 +317,11 @@ public class EmittedRuntime
     /// </summary>
     public FieldBuilder CurrentArgumentsField { get; set; } = null!;
 
-    // Math singleton (Dictionary<string, object>). ECMA-262 treats Math as an
+
     // ordinary extensible object — user code can assign `Math.length = 1;
     // Math[0] = 1` and then iterate via `Array.prototype.X.call(Math, cb)`.
     // Pre-fix, bare `Math` in compiled mode evaluated to null, so writes
     // silently vanished.
-    public FieldBuilder MathSingletonField { get; set; } = null!;
     /// <summary>
     /// globalThis/global singleton — a sentinel object referenced from value
     /// position (`var root = globalThis`) so root/context detection in packages
@@ -357,12 +356,6 @@ public class EmittedRuntime
     public FieldBuilder JsonSingletonField { get; set; } = null!;
     /// <summary>Reflect singleton — the value-form ES namespace object.</summary>
     public FieldBuilder? ReflectSingletonField { get; set; }
-    /// <summary>
-    /// Populates <see cref="MathSingletonField"/> with $TSFunction wrappers for
-    /// the Math static methods (max/min/floor/…) so value-form access
-    /// (<c>const m = Math; m.max(1,2)</c>) resolves. Idempotent. See issue #276.
-    /// </summary>
-    public MethodBuilder MathSingletonPopulateMethod { get; set; } = null!;
     /// <summary>
     /// Populates <see cref="JsonSingletonField"/> with $TSFunction wrappers for
     /// JSON.parse / JSON.stringify so value-form access
@@ -603,55 +596,12 @@ public class EmittedRuntime
     public MethodBuilder ThrowUndefinedVariable { get; set; } = null!;
 
     // Utility methods
-    public MethodBuilder Random { get; set; } = null!;
-    public MethodBuilder MathSumPrecise { get; set; } = null!;
     public MethodBuilder DefineSymbolAccessor { get; set; } = null!;
     public MethodBuilder TSObjectMergeEnumerable { get; set; } = null!;
     public MethodBuilder GetEnumMemberName { get; set; } = null!;
 
-    // Math static-method-as-value adapters. Wrap System.Math methods with
-    // JS-coercing signatures (object → object via ToNumber) so that
-    // `var f = Math.floor; f(x)` resolves to a callable $TSFunction that
-    // preserves spec behavior (`Math.floor(null) === 0`, `Math.floor("2.5") === 2`,
-    // `Math.floor(undefined)` is NaN). See issue #60.
-    public MethodBuilder MathFloorAdapter { get; set; } = null!;
-    public MethodBuilder MathCeilAdapter { get; set; } = null!;
-    public MethodBuilder MathAbsAdapter { get; set; } = null!;
-    public MethodBuilder MathSqrtAdapter { get; set; } = null!;
-    public MethodBuilder MathRoundAdapter { get; set; } = null!;
-    public MethodBuilder MathTruncAdapter { get; set; } = null!;
-    public MethodBuilder MathSignAdapter { get; set; } = null!;
-    public MethodBuilder MathSinAdapter { get; set; } = null!;
-    public MethodBuilder MathCosAdapter { get; set; } = null!;
-    public MethodBuilder MathTanAdapter { get; set; } = null!;
-    public MethodBuilder MathLogAdapter { get; set; } = null!;
-    public MethodBuilder MathExpAdapter { get; set; } = null!;
-    public MethodBuilder MathPowAdapter { get; set; } = null!;
-    public MethodBuilder MathMaxAdapter { get; set; } = null!;
-    public MethodBuilder MathMinAdapter { get; set; } = null!;
-    // Stage 4y: ES2015+ Math methods exposed as values for `let f = Math.acos`
-    // patterns (and the test262 `isConstructor` harness which wants
-    // `typeof Math.acos === "function"`).
-    public MethodBuilder MathAsinAdapter { get; set; } = null!;
-    public MethodBuilder MathAcosAdapter { get; set; } = null!;
-    public MethodBuilder MathAtanAdapter { get; set; } = null!;
-    public MethodBuilder MathAtan2Adapter { get; set; } = null!;
-    public MethodBuilder MathSinhAdapter { get; set; } = null!;
-    public MethodBuilder MathCoshAdapter { get; set; } = null!;
-    public MethodBuilder MathTanhAdapter { get; set; } = null!;
-    public MethodBuilder MathAsinhAdapter { get; set; } = null!;
-    public MethodBuilder MathAcoshAdapter { get; set; } = null!;
-    public MethodBuilder MathAtanhAdapter { get; set; } = null!;
-    public MethodBuilder MathCbrtAdapter { get; set; } = null!;
-    public MethodBuilder MathLog10Adapter { get; set; } = null!;
-    public MethodBuilder MathLog2Adapter { get; set; } = null!;
-    public MethodBuilder MathLog1pAdapter { get; set; } = null!;
-    public MethodBuilder MathExpm1Adapter { get; set; } = null!;
-    public MethodBuilder MathFroundAdapter { get; set; } = null!;
-    public MethodBuilder MathF16RoundAdapter { get; set; } = null!;
-    public MethodBuilder MathClz32Adapter { get; set; } = null!;
-    public MethodBuilder MathImulAdapter { get; set; } = null!;
-    public MethodBuilder MathHypotAdapter { get; set; } = null!;
+    /// <summary>Required Math singleton, numeric adapters and exact summation declarations.</summary>
+    public EmittedMathRuntime Math { get; } = new();
 
     public MethodBuilder ObjectRest { get; set; } = null!;
     public MethodBuilder ArrayDestructureSource { get; set; } = null!;  // #685: normalize array binding-pattern source via the iterator protocol

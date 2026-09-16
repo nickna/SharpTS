@@ -122,7 +122,7 @@ public partial class ILEmitter
             // route through MathStaticEmitter's compile-time interception
             // *before* this bare-reference path, so static-member dispatch is
             // unaffected.
-            IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.MathSingletonField);
+            IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.Math.SingletonField);
             SetStackUnknown();
             return;
         }

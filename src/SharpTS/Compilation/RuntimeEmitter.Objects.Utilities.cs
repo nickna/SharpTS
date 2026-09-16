@@ -6,6 +6,21 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
+    // Scoped exact-sum construction inputs; peer declarations stay with their own families.
+    private readonly record struct MathSumInputs(
+        MethodInfo GetSymbolDict,
+        FieldInfo SymbolIterator,
+        MethodInfo GetIteratorFunction,
+        Type UndefinedType,
+        MethodInfo InvokeMethodValue,
+        MethodInfo GetIteratorNextMethod,
+        MethodInfo InvokeCapturedIteratorNext,
+        MethodInfo GetIteratorDone,
+        MethodInfo GetIteratorValue,
+        MethodInfo GetProperty,
+        MethodInfo CreateException,
+        ConstructorInfo TypeErrorCtor);
+
     private void EmitCreateObject(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
@@ -368,7 +383,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitRandom(TypeBuilder typeBuilder, EmittedRuntime runtime, FieldBuilder randomField)
+    private void EmitRandom(TypeBuilder typeBuilder, EmittedMathRuntime math, FieldBuilder randomField)
     {
         var method = typeBuilder.DefineMethod(
             "Random",
@@ -376,7 +391,7 @@ public partial class RuntimeEmitter
             _types.Double,
             _types.EmptyTypes
         );
-        runtime.Random = method;
+        math.Random = method;
 
         var il = method.GetILGenerator();
         il.Emit(OpCodes.Ldsfld, randomField);
@@ -668,7 +683,7 @@ public partial class RuntimeEmitter
     /// iterators before throwing; empty/all-negative-zero and infinity/NaN cases follow
     /// the specification directly.
     /// </summary>
-    private void EmitMathSumPrecise(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitMathSumPrecise(TypeBuilder typeBuilder, EmittedMathRuntime math, MathSumInputs peers)
     {
         var toUnits = EmitMathSumPreciseToUnits(typeBuilder);
         var fromUnits = EmitMathSumPreciseFromUnits(typeBuilder);
@@ -679,7 +694,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object]
         );
-        runtime.MathSumPrecise = method;
+        math.SumPrecise = method;
 
         var il = method.GetILGenerator();
         var list = il.DeclareLocal(_types.ListOfObject);
@@ -752,30 +767,30 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, list);
         il.Emit(OpCodes.Brfalse, setupIterator);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.GetSymbolDictMethod);
+        il.Emit(OpCodes.Call, peers.GetSymbolDict);
         il.Emit(OpCodes.Stloc, symbolDict);
         il.Emit(OpCodes.Ldloc, symbolDict);
-        il.Emit(OpCodes.Ldsfld, runtime.SymbolIterator);
+        il.Emit(OpCodes.Ldsfld, peers.SymbolIterator);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(
             _types.DictionaryObjectObject, "ContainsKey", _types.Object));
         il.Emit(OpCodes.Brfalse, setupList);
 
         il.MarkLabel(setupIterator);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldsfld, runtime.SymbolIterator);
-        il.Emit(OpCodes.Call, runtime.GetIteratorFunction);
+        il.Emit(OpCodes.Ldsfld, peers.SymbolIterator);
+        il.Emit(OpCodes.Call, peers.GetIteratorFunction);
         il.Emit(OpCodes.Stloc, iteratorFunction);
         il.Emit(OpCodes.Ldloc, iteratorFunction);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, peers.UndefinedType);
         il.Emit(OpCodes.Brtrue, iterableTypeError);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, iteratorFunction);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Newarr, _types.Object);
-        il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+        il.Emit(OpCodes.Call, peers.InvokeMethodValue);
         il.Emit(OpCodes.Stloc, iterator);
         il.Emit(OpCodes.Ldloc, iterator);
-        il.Emit(OpCodes.Call, runtime.GetIteratorNextMethod);
+        il.Emit(OpCodes.Call, peers.GetIteratorNextMethod);
         il.Emit(OpCodes.Stloc, nextMethod);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Stloc, customIterator);
@@ -804,13 +819,13 @@ public partial class RuntimeEmitter
         il.MarkLabel(jsIteratorElement);
         il.Emit(OpCodes.Ldloc, iterator);
         il.Emit(OpCodes.Ldloc, nextMethod);
-        il.Emit(OpCodes.Call, runtime.InvokeCapturedIteratorNext);
+        il.Emit(OpCodes.Call, peers.InvokeCapturedIteratorNext);
         il.Emit(OpCodes.Stloc, iteratorResult);
         il.Emit(OpCodes.Ldloc, iteratorResult);
-        il.Emit(OpCodes.Call, runtime.GetIteratorDone);
+        il.Emit(OpCodes.Call, peers.GetIteratorDone);
         il.Emit(OpCodes.Brtrue, done);
         il.Emit(OpCodes.Ldloc, iteratorResult);
-        il.Emit(OpCodes.Call, runtime.GetIteratorValue);
+        il.Emit(OpCodes.Call, peers.GetIteratorValue);
         il.Emit(OpCodes.Stloc, element);
         il.Emit(OpCodes.Br, processElement);
 
@@ -907,25 +922,24 @@ public partial class RuntimeEmitter
         il.MarkLabel(closeJsIterator);
         il.Emit(OpCodes.Ldloc, iterator);
         il.Emit(OpCodes.Ldstr, "return");
-        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, peers.GetProperty);
         il.Emit(OpCodes.Stloc, returnFunction);
         il.Emit(OpCodes.Ldloc, returnFunction);
         il.Emit(OpCodes.Brfalse, throwInvalidElement);
         il.Emit(OpCodes.Ldloc, returnFunction);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, peers.UndefinedType);
         il.Emit(OpCodes.Brtrue, throwInvalidElement);
         il.Emit(OpCodes.Ldloc, iterator);
         il.Emit(OpCodes.Ldloc, returnFunction);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Newarr, _types.Object);
-        il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+        il.Emit(OpCodes.Call, peers.InvokeMethodValue);
         il.Emit(OpCodes.Pop);
         il.MarkLabel(throwInvalidElement);
-        GuestErrorEmitter.ThrowTypeError(
-            il, runtime, "Math.sumPrecise: every element must be a Number");
+        GuestErrorEmitter.ThrowError(il, peers.CreateException, peers.TypeErrorCtor, "Math.sumPrecise: every element must be a Number");
 
         il.MarkLabel(iterableTypeError);
-        GuestErrorEmitter.ThrowTypeError(il, runtime, "Math.sumPrecise requires an iterable");
+        GuestErrorEmitter.ThrowError(il, peers.CreateException, peers.TypeErrorCtor, "Math.sumPrecise requires an iterable");
 
         il.MarkLabel(done);
         il.Emit(OpCodes.Ldloc, any);

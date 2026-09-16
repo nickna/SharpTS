@@ -94,7 +94,7 @@ public partial class RuntimeEmitter
             "_mathSingleton",
             _types.DictionaryStringObject,
             FieldAttributes.Public | FieldAttributes.Static);
-        runtime.MathSingletonField = mathSingletonField;
+        runtime.Math.SingletonField = mathSingletonField;
 
         // globalThis/global sentinel (#271) — a plain object whose identity lets
         // the dynamic property paths recognize a value-position globalThis and
@@ -521,7 +521,7 @@ public partial class RuntimeEmitter
         // referenced. Idempotent — populate methods early-return if Count > 0.
         DefineObjectPrototypePopulateShell(typeBuilder, runtime);
         DefineArrayPrototypePopulateShell(typeBuilder, runtime.ArrayOperations);
-        DefineMathSingletonPopulateShell(typeBuilder, runtime);
+        DefineMathSingletonPopulateShell(typeBuilder, runtime.Math);
         DefineJsonSingletonPopulateShell(typeBuilder, runtime);
         if (_features.UsesReflect)
             DefineReflectSingletonPopulateShell(typeBuilder, runtime);
@@ -753,7 +753,7 @@ public partial class RuntimeEmitter
         // Math / JSON value-form singletons (`const m = Math; m.max(...)`). Each
         // populate is idempotent and skips null backings, so calling the JSON one
         // unconditionally is safe even when the program doesn't use JSON (#276).
-        cctorIL.Emit(OpCodes.Call, runtime.MathSingletonPopulateMethod);
+        cctorIL.Emit(OpCodes.Call, runtime.Math.SingletonPopulateMethod);
         cctorIL.Emit(OpCodes.Call, runtime.JsonSingletonPopulateMethod);
         if (runtime.ReflectSingletonPopulateMethod is not null)
             cctorIL.Emit(OpCodes.Call, runtime.ReflectSingletonPopulateMethod);
@@ -1129,16 +1129,16 @@ public partial class RuntimeEmitter
         // `desc.value === Math.X` for built-in methods. Moved up from the
         // original site at the end of the runtime emit. Dep: runtime.ToNumber
         // (emitted at line 580, before this site).
-        EmitMathAdapters(typeBuilder, runtime);
+        EmitMathAdapters(typeBuilder, runtime.Math, runtime.ToNumber, runtime.JsToInt32);
         // Error.isError is a small standalone type-brand helper. Emit it before
         // gOPD so built-in static descriptor synthesis can reference it.
         EmitErrorIsError(typeBuilder, runtime);
         // EmitRandom moved here from the original late-site so gOPD's Math
-        // singleton synth can reach runtime.Random and produce an identity-
+        // singleton synth can reach runtime.Math.Random and produce an identity-
         // stable `desc.value === Math.random` descriptor. The Random method
         // builder only needs randomField (defined at line 215) — both
         // available now.
-        EmitRandom(typeBuilder, runtime, randomField);
+        EmitRandom(typeBuilder, runtime.Math, randomField);
         EmitObjectGetOwnPropertyDescriptor(typeBuilder, runtime);
         EmitObjectDefineProperties(typeBuilder, runtime);
         EmitObjectGetOwnPropertyDescriptors(typeBuilder, runtime);
@@ -1392,7 +1392,8 @@ public partial class RuntimeEmitter
         EmitThrowUndefinedVariable(typeBuilder, runtime);
         // EmitRandom moved to before gOPD (see line ~660). The original site
         // here is now empty.
-        EmitMathSumPrecise(typeBuilder, runtime);
+        EmitMathSumPrecise(typeBuilder, runtime.Math, new MathSumInputs(
+            runtime.GetSymbolDictMethod, runtime.SymbolIterator, runtime.GetIteratorFunction, runtime.UndefinedType, runtime.InvokeMethodValue, runtime.GetIteratorNextMethod, runtime.InvokeCapturedIteratorNext, runtime.GetIteratorDone, runtime.GetIteratorValue, runtime.GetProperty, runtime.CreateException, runtime.TSTypeErrorCtor));
         EmitDefineSymbolAccessor(typeBuilder, runtime);
         EmitTSObjectMergeEnumerable(typeBuilder, runtime);
         // Math.* adapters moved earlier (before EmitObjectGetOwnPropertyDescriptor)
@@ -1421,7 +1422,7 @@ public partial class RuntimeEmitter
         // EmitMathAdapters (Math.*Adapter) and the JSON methods above — so their
         // backing MethodBuilders are resolved. JSON helpers are null when JSON is
         // unused; EmitBuiltinSingletonPopulate skips null backings. (#276)
-        EmitMathSingletonPopulate(runtime);
+        EmitMathSingletonPopulate(runtime.Math, GetBuiltinSingletonInputs(runtime));
         EmitJsonSingletonPopulate(runtime);
         // BigInt methods — gated on UsesBigInt. Detector flips it on for any
         // `123n` literal, bare `BigInt` identifier, or BigInt64Array/BigUint64Array
