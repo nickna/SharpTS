@@ -14,20 +14,28 @@ namespace SharpTS.Compilation;
 internal static class GuestErrorEmitter
 {
     /// <summary>Emits <c>throw CreateException(new errorCtor(message))</c>.</summary>
-    public static void ThrowError(ILGenerator il, EmittedRuntime runtime, ConstructorInfo errorCtor, string message)
+    public static void ThrowError(ILGenerator il, EmittedRuntime runtime, ConstructorInfo errorCtor, string message) =>
+        ThrowError(il, runtime.CreateException, errorCtor, message);
+
+    /// <summary>Emits a guest error using explicit constructor and exception-wrapper declarations.</summary>
+    public static void ThrowError(ILGenerator il, MethodInfo createException, ConstructorInfo errorCtor, string message)
     {
         il.Emit(OpCodes.Ldstr, message);
-        ThrowErrorFromStack(il, runtime, errorCtor);
+        ThrowErrorFromStack(il, createException, errorCtor);
     }
 
     /// <summary>
     /// Emits <c>throw CreateException(new errorCtor(message))</c> with the message string
     /// already on the evaluation stack (for computed messages).
     /// </summary>
-    public static void ThrowErrorFromStack(ILGenerator il, EmittedRuntime runtime, ConstructorInfo errorCtor)
+    public static void ThrowErrorFromStack(ILGenerator il, EmittedRuntime runtime, ConstructorInfo errorCtor) =>
+        ThrowErrorFromStack(il, runtime.CreateException, errorCtor);
+
+    /// <summary>Raises the message on the stack using explicit error and exception-wrapper declarations.</summary>
+    public static void ThrowErrorFromStack(ILGenerator il, MethodInfo createException, ConstructorInfo errorCtor)
     {
         il.Emit(OpCodes.Newobj, errorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
+        il.Emit(OpCodes.Call, createException);
         il.Emit(OpCodes.Throw);
     }
 

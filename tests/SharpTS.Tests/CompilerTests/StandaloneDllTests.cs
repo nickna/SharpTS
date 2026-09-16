@@ -1411,6 +1411,116 @@ public class StandaloneDllTests
             verifyStandardError: error => Assert.Empty(error), standardInput: ""));
     }
 
+    public static IEnumerable<object[]> AtomicsMetadataPrograms =>
+    [
+        new object[]
+        {
+            """
+            const a=new Int32Array(new SharedArrayBuffer(16));a[0]=10;
+            console.log(Atomics.add(a,0,3),Atomics.load(a,0));Atomics.add(a,0,1);
+            console.log(Atomics.sub(a,0,4),Atomics.and(a,0,7),Atomics.or(a,0,8),Atomics.xor(a,0,3));
+            console.log(Atomics.exchange(a,0,20),Atomics.compareExchange(a,0,20,30),Atomics.compareExchange(a,0,5,44),Atomics.load(a,0));
+            const b=new Uint32Array(new SharedArrayBuffer(4));console.log(Atomics.add(b,0,-1),Atomics.load(b,0));Atomics.add(b,0,1);console.log(Atomics.load(b,0));
+            """,
+            "10 13\n14 10 2 10\n9 20 30 30\n0 4294967295\n0\n", "main.ts"
+        },
+        new object[]
+        {
+            """
+            const a=new Int32Array(new SharedArrayBuffer(4));a[0]=1;
+            console.log(Atomics.add(a,0,5000000000),Atomics.load(a,0));
+            console.log(Atomics.exchange(a,0,NaN),Atomics.load(a,0),Atomics.compareExchange(a,0,Infinity,7),Atomics.load(a,0));
+            console.log(Atomics.store(a,0,4294967296),Atomics.load(a,0));
+            """,
+            "1 705032705\n705032705 0 0 7\n0 0\n", "main.ts"
+        },
+        new object[]
+        {
+            """
+            const view:any=new Int32Array(new SharedArrayBuffer(4));view[0]=5;
+            console.log(Atomics.load(view,0),Atomics.store(view,0,9),Atomics.add(view,0,3),Atomics.sub(view,0,1),Atomics.and(view,0,7),Atomics.or(view,0,8),Atomics.xor(view,0,3),Atomics.exchange(view,0,20),Atomics.compareExchange(view,0,20,30),Atomics.load(view,0));
+            """,
+            "5 9 9 12 11 3 11 8 20 30\n", "main.ts"
+        },
+        new object[]
+        {
+            """
+            function check(view:any){view[0]=5;console.log(Atomics.load(view,0),Atomics.store(view,0,9),Atomics.add(view,0,3),Atomics.sub(view,0,1),Atomics.and(view,0,7),Atomics.or(view,0,8),Atomics.xor(view,0,3),Atomics.exchange(view,0,20),Atomics.compareExchange(view,0,20,30),Atomics.load(view,0));}
+            check(new Int8Array(new SharedArrayBuffer(4)));check(new Uint8Array(new SharedArrayBuffer(4)));check(new Int16Array(new SharedArrayBuffer(4)));check(new Uint16Array(new SharedArrayBuffer(4)));
+            """,
+            "5 9 9 12 11 3 11 8 20 30\n5 9 9 12 11 3 11 8 20 30\n5 9 9 12 11 3 11 8 20 30\n5 9 9 12 11 3 11 8 20 30\n", "main.ts"
+        },
+        new object[]
+        {
+            """
+            const shared=new SharedArrayBuffer(16);const view=new Int32Array(shared,4,1);const neighbour=new Int32Array(shared,0,1);neighbour[0]=77;view[0]=5;
+            console.log(Atomics.add(view,0,3),Atomics.load(view,0),neighbour[0]);
+            try{Atomics.add(view,1,1);}catch(error){console.log(error instanceof RangeError);}
+            try{console.log(Atomics.add(view,-1,1));}catch(error){console.log(error instanceof RangeError);}
+            console.log(neighbour[0]);
+            """,
+            "5 8 77\ntrue\ntrue\n77\n", "main.ts"
+        },
+        new object[]
+        {
+            """
+            console.log(Atomics.pause()===undefined,Atomics.pause(42)===undefined);
+            const pause:any=Atomics.pause;console.log(pause.name,pause.length,pause(-1)===undefined);
+            for(const value of [true,1.5,'2',null,NaN,Infinity]){try{Atomics.pause(value as any);}catch(error){console.log(error instanceof TypeError);}}
+            """,
+            "true true\npause 0 true\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\n", "main.ts"
+        },
+        new object[]
+        {
+            """
+            const view=new Int32Array(new SharedArrayBuffer(4));view[0]=1;
+            console.log(Atomics.wait(view,0,2,0),Atomics.wait(view,0,1,0),Atomics.notify(view,0,1));
+            console.log(Atomics.isLockFree(1),Atomics.isLockFree(2),Atomics.isLockFree(4),Atomics.isLockFree(8),Atomics.isLockFree(3));
+            """,
+            "not-equal ok 0\ntrue true true true false\n", "main.ts"
+        },
+        new object[]
+        {
+            """
+            const view=new Int32Array(new SharedArrayBuffer(4));
+            async function run(){Atomics.add(view,0,1);await new Promise<void>(resolve=>setTimeout(resolve,1));console.log(Atomics.add(view,0,2),Atomics.load(view,0));}run();
+            """,
+            "1 3\n", "main.ts"
+        },
+        new object[]
+        {
+            """
+            const view=new Int32Array(new SharedArrayBuffer(4));
+            function* values():Generator<number,void,any>{yield Atomics.add(view,0,2);yield Atomics.load(view,0);}
+            const iterator=values();console.log(iterator.next().value,iterator.next().value);
+            """,
+            "0 2\n", "main.ts"
+        },
+        new object[]
+        {
+            """
+            const view=new Int32Array(new SharedArrayBuffer(4));view[0]=3;console.log(Atomics.add(view,0,2),Atomics.load(view,0));
+            """,
+            "3 5\n", "main.cjs"
+        }
+    ];
+
+    [Theory]
+    [MemberData(nameof(AtomicsMetadataPrograms))]
+    public void Isolated_AtomicsMetadata_PreservesOptimizedLockedAndSuspendedOperations(string source, string expected, string entryPoint)
+    {
+        using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        tempDir.CreateFile(entryPoint, source);
+        var dllPath = tempDir.GetPath("atomics_metadata.dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{tempDir.GetPath(entryPoint)}\" -o \"{dllPath}\" --verify --standalone", tempDir.Path);
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(dllPath));
+        Assert.False(File.Exists(tempDir.GetPath("SharpTS.dll")));
+        Assert.Equal(expected, ExecuteCompiledDllIsolated(dllPath, timeoutMs: 15000,
+            verifyStandardError: error => Assert.Empty(error)));
+    }
+
     public static IEnumerable<object[]> NodeErrorMetadataPrograms =>
     [
         new object[]
@@ -1740,8 +1850,16 @@ public class StandaloneDllTests
         new object[]
         {
             """
-            async function run(){const s=AbortSignal.timeout(1);await new Promise<void>(resolve=>setTimeout(resolve,100));
-            console.log(s.aborted); console.log(String(s.reason).includes('TimeoutError'));}run();
+            async function run() {
+                const s=AbortSignal.timeout(1);
+                // CLR cancellation and guest timers use separate schedulers.
+                while (!s.aborted) {
+                    await new Promise<void>(resolve=>setTimeout(resolve,10));
+                }
+                console.log(s.aborted);
+                console.log(String(s.reason).includes('TimeoutError'));
+            }
+            run();
             """,
             "true\ntrue\n", "main.ts", true
         },

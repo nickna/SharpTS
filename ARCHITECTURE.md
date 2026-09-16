@@ -742,6 +742,18 @@ Constructor formatting, exception-data markers, errno behavior, descriptor lifet
 error paths, declaration order, and standalone dependencies are unchanged. No flat aliases or
 emitter-held error fields remain; BCL references retain their original scope.
 
+Atomics has an optional `EmittedAtomicsRuntime`, selected by the existing
+`HasAnyTypedArray` gate. It owns fifteen operation declarations, including the optimized signed/
+unsigned add and discarded-increment helpers. Twenty-one emission helpers take explicit typed-array
+and error-construction dependencies. The five private locking/conversion/update methods remain
+scoped construction values, passed to their consumers; the conversion emitter also receives its
+method explicitly. Operations are recorded after their bodies and validated before completion.
+Static dispatch, optimized calls, and pause function values use the checked owner. Shared guest-error
+helpers accept explicit constructor/wrapper declarations while retaining their existing root-based
+entry points. Emitted order, inlining, numeric coercion, bounds and pause errors, shared-buffer locks,
+current wait/notify behavior, and standalone dependencies are unchanged. No flat aliases or private
+Atomics method copies remain on the emitter; BCL/Unsafe references and body locals retain their scope.
+
 During emission, each handle becomes readable as soon as its declaration is assigned, so forward
 references do not require a method body to exist yet. An early read names the missing declaration.
 Completion is an orchestration boundary, not an IL verifier: body emission and type finalization

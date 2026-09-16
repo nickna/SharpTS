@@ -48,7 +48,7 @@ public sealed class AtomicsStaticEmitter : IStaticTypeEmitterStrategy
 
         var ctx = emitter.Context;
         var il = ctx.IL;
-        il.Emit(OpCodes.Ldtoken, ctx.Runtime!.AtomicsPause);
+        il.Emit(OpCodes.Ldtoken, ctx.Runtime!.RequireAtomics().Pause);
         il.Emit(OpCodes.Call, ctx.Types.MethodBaseGetMethodFromHandle);
         il.Emit(OpCodes.Castclass, ctx.Types.MethodInfo);
         il.Emit(OpCodes.Ldstr, "pause");
@@ -69,7 +69,7 @@ public sealed class AtomicsStaticEmitter : IStaticTypeEmitterStrategy
         emitter.EmitBoxIfNeeded(arguments[0]);
         emitter.EmitExpressionAsDouble(arguments[1]);
 
-        il.Emit(OpCodes.Call, ctx.Runtime!.AtomicsLoad);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireAtomics().Load);
         return true;
     }
 
@@ -87,7 +87,7 @@ public sealed class AtomicsStaticEmitter : IStaticTypeEmitterStrategy
         emitter.EmitExpression(arguments[2]);
         emitter.EmitBoxIfNeeded(arguments[2]);
 
-        il.Emit(OpCodes.Call, ctx.Runtime!.AtomicsStore);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireAtomics().Store);
         return true;
     }
 
@@ -107,7 +107,7 @@ public sealed class AtomicsStaticEmitter : IStaticTypeEmitterStrategy
             il.Emit(OpCodes.Conv_I4);
             emitter.EmitExpressionAsDouble(arguments[2]);
             il.Emit(typedArray.ElementType == "Uint32" ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
-            il.Emit(OpCodes.Call, ctx.Runtime.AtomicsAddInt32);
+            il.Emit(OpCodes.Call, ctx.Runtime.RequireAtomics().AddInt32);
             il.Emit(OpCodes.Box, ctx.Types.Double);
             return true;
         }
@@ -118,7 +118,7 @@ public sealed class AtomicsStaticEmitter : IStaticTypeEmitterStrategy
         emitter.EmitExpression(arguments[2]);
         emitter.EmitBoxIfNeeded(arguments[2]);
 
-        il.Emit(OpCodes.Call, ctx.Runtime!.AtomicsAdd);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireAtomics().Add);
         return true;
     }
 
@@ -135,7 +135,7 @@ public sealed class AtomicsStaticEmitter : IStaticTypeEmitterStrategy
         emitter.EmitExpression(arguments[2]);
         emitter.EmitBoxIfNeeded(arguments[2]);
 
-        il.Emit(OpCodes.Call, ctx.Runtime!.AtomicsSub);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireAtomics().Sub);
         return true;
     }
 
@@ -152,7 +152,7 @@ public sealed class AtomicsStaticEmitter : IStaticTypeEmitterStrategy
         emitter.EmitExpression(arguments[2]);
         emitter.EmitBoxIfNeeded(arguments[2]);
 
-        il.Emit(OpCodes.Call, ctx.Runtime!.AtomicsAnd);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireAtomics().And);
         return true;
     }
 
@@ -169,7 +169,7 @@ public sealed class AtomicsStaticEmitter : IStaticTypeEmitterStrategy
         emitter.EmitExpression(arguments[2]);
         emitter.EmitBoxIfNeeded(arguments[2]);
 
-        il.Emit(OpCodes.Call, ctx.Runtime!.AtomicsOr);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireAtomics().Or);
         return true;
     }
 
@@ -186,7 +186,7 @@ public sealed class AtomicsStaticEmitter : IStaticTypeEmitterStrategy
         emitter.EmitExpression(arguments[2]);
         emitter.EmitBoxIfNeeded(arguments[2]);
 
-        il.Emit(OpCodes.Call, ctx.Runtime!.AtomicsXor);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireAtomics().Xor);
         return true;
     }
 
@@ -203,7 +203,7 @@ public sealed class AtomicsStaticEmitter : IStaticTypeEmitterStrategy
         emitter.EmitExpression(arguments[2]);
         emitter.EmitBoxIfNeeded(arguments[2]);
 
-        il.Emit(OpCodes.Call, ctx.Runtime!.AtomicsExchange);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireAtomics().Exchange);
         return true;
     }
 
@@ -222,7 +222,7 @@ public sealed class AtomicsStaticEmitter : IStaticTypeEmitterStrategy
         emitter.EmitExpression(arguments[3]);
         emitter.EmitBoxIfNeeded(arguments[3]);
 
-        il.Emit(OpCodes.Call, ctx.Runtime!.AtomicsCompareExchange);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireAtomics().CompareExchange);
         return true;
     }
 
@@ -250,7 +250,7 @@ public sealed class AtomicsStaticEmitter : IStaticTypeEmitterStrategy
             il.Emit(OpCodes.Ldnull);
         }
 
-        il.Emit(OpCodes.Call, ctx.Runtime!.AtomicsWait);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireAtomics().Wait);
         return true;
     }
 
@@ -276,7 +276,7 @@ public sealed class AtomicsStaticEmitter : IStaticTypeEmitterStrategy
             il.Emit(OpCodes.Ldnull);
         }
 
-        il.Emit(OpCodes.Call, ctx.Runtime!.AtomicsNotify);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireAtomics().Notify);
         il.Emit(OpCodes.Box, ctx.Types.Double);
         return true;
     }
@@ -289,7 +289,7 @@ public sealed class AtomicsStaticEmitter : IStaticTypeEmitterStrategy
         var il = ctx.IL;
 
         emitter.EmitExpressionAsDouble(arguments[0]);
-        il.Emit(OpCodes.Call, ctx.Runtime!.AtomicsIsLockFree);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireAtomics().IsLockFree);
         il.Emit(OpCodes.Box, ctx.Types.Boolean);
         return true;
     }
@@ -307,7 +307,7 @@ public sealed class AtomicsStaticEmitter : IStaticTypeEmitterStrategy
         {
             il.Emit(OpCodes.Ldsfld, ctx.Runtime!.UndefinedInstance);
         }
-        il.Emit(OpCodes.Call, ctx.Runtime!.AtomicsPause);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireAtomics().Pause);
         return true;
     }
 }

@@ -61,13 +61,13 @@ public partial class ILEmitter
             IL.Emit(OpCodes.Conv_I4);
             if (atomicValue is Expr.Literal { Value: 1.0 })
             {
-                IL.Emit(OpCodes.Call, _ctx.Runtime.AtomicsIncrementInt32Discarded);
+                IL.Emit(OpCodes.Call, _ctx.Runtime.RequireAtomics().IncrementInt32Discarded);
             }
             else
             {
                 EmitExpressionAsDouble(atomicValue);
                 IL.Emit(atomicArray.ElementType == "Uint32" ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
-                IL.Emit(OpCodes.Call, _ctx.Runtime.AtomicsAddInt32);
+                IL.Emit(OpCodes.Call, _ctx.Runtime.RequireAtomics().AddInt32);
                 IL.Emit(OpCodes.Pop);
             }
             SetStackUnknown();

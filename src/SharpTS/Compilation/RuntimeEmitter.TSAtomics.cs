@@ -12,76 +12,78 @@ public partial class RuntimeEmitter
 {
     private delegate ref int UnsafeByteToInt32Delegate(ref byte source);
 
-    private MethodBuilder _atomicsLoadLocked = null!;
-    private MethodBuilder _atomicsStoreLocked = null!;
-    private MethodBuilder _atomicsUpdateLocked = null!;
-    private MethodBuilder _atomicsUpdateInt32 = null!;
-    private MethodBuilder _atomicsConvertInt32Operand = null!;
-
     /// <summary>
     /// Emits Atomics static method helpers with pure-IL implementations for emitted types.
     /// Falls back to reflection-based SharpTS calls only if input is not an emitted type.
     /// </summary>
-    private void EmitAtomicsHelpersPure(TypeBuilder runtimeType, EmittedRuntime runtime)
+    private void EmitAtomicsHelpersPure(
+        TypeBuilder runtimeType,
+        EmittedAtomicsRuntime atomics,
+        EmittedTypedArrayImplementation typedArrays,
+        Type undefinedType,
+        FieldInfo undefinedInstance,
+        ConstructorInfo typeErrorCtor,
+        MethodInfo createException,
+        ConstructorInfo rangeErrorCtor)
     {
         // Every emitted realm sees the same byte[] for a shared buffer. Locking that backing
         // object provides a cross-AssemblyLoadContext correctness fallback for integer element
         // kinds without a directly usable CLR Interlocked primitive.
-        _atomicsLoadLocked = EmitAtomicsLoadLocked(runtimeType, runtime);
-        _atomicsStoreLocked = EmitAtomicsStoreLocked(runtimeType, runtime);
-        _atomicsUpdateLocked = EmitAtomicsUpdateLocked(runtimeType, runtime);
-        _atomicsConvertInt32Operand = EmitAtomicsConvertInt32Operand(runtimeType);
+        var loadLocked = EmitAtomicsLoadLocked(runtimeType, typedArrays);
+        var storeLocked = EmitAtomicsStoreLocked(runtimeType, typedArrays);
+        var updateLocked = EmitAtomicsUpdateLocked(runtimeType, typedArrays);
+        var convertInt32Operand = EmitAtomicsConvertInt32Operand(runtimeType);
 
         // Unboxed hot path used when the compiler knows the receiver is Int32Array/Uint32Array.
-        runtime.AtomicsAddInt32 = EmitAtomicsAddInt32(runtimeType, runtime);
-        runtime.AtomicsIncrementInt32Discarded = EmitAtomicsIncrementInt32Discarded(runtimeType, runtime);
-        _atomicsUpdateInt32 = EmitAtomicsUpdateInt32(runtimeType, runtime);
+        atomics.AddInt32 = EmitAtomicsAddInt32(runtimeType, typedArrays, convertInt32Operand, rangeErrorCtor, createException);
+        atomics.IncrementInt32Discarded = EmitAtomicsIncrementInt32Discarded(runtimeType, typedArrays, rangeErrorCtor, createException);
+        var updateInt32 = EmitAtomicsUpdateInt32(runtimeType, typedArrays, convertInt32Operand, rangeErrorCtor, createException);
 
         // Atomics.load(typedArray, index) -> object
-        runtime.AtomicsLoad = EmitAtomicsLoadPure(runtimeType, runtime);
+        atomics.Load = EmitAtomicsLoadPure(runtimeType, typedArrays, loadLocked, rangeErrorCtor, createException);
 
         // Atomics.store(typedArray, index, value) -> object (returns value)
-        runtime.AtomicsStore = EmitAtomicsStorePure(runtimeType, runtime);
+        atomics.Store = EmitAtomicsStorePure(runtimeType, typedArrays, storeLocked, convertInt32Operand, rangeErrorCtor, createException);
 
         // Atomics.add(typedArray, index, value) -> object (returns old value)
-        runtime.AtomicsAdd = EmitAtomicsAddPure(runtimeType, runtime);
+        atomics.Add = EmitAtomicsAddPure(runtimeType, typedArrays, updateLocked, convertInt32Operand, rangeErrorCtor, createException);
 
         // Atomics.sub(typedArray, index, value) -> object (returns old value)
-        runtime.AtomicsSub = EmitAtomicsSubPure(runtimeType, runtime);
+        atomics.Sub = EmitAtomicsSubPure(runtimeType, typedArrays, updateLocked, updateInt32);
 
         // Atomics.and(typedArray, index, value) -> object (returns old value)
-        runtime.AtomicsAnd = EmitAtomicsAndPure(runtimeType, runtime);
+        atomics.And = EmitAtomicsAndPure(runtimeType, typedArrays, updateLocked, updateInt32);
 
         // Atomics.or(typedArray, index, value) -> object (returns old value)
-        runtime.AtomicsOr = EmitAtomicsOrPure(runtimeType, runtime);
+        atomics.Or = EmitAtomicsOrPure(runtimeType, typedArrays, updateLocked, updateInt32);
 
         // Atomics.xor(typedArray, index, value) -> object (returns old value)
-        runtime.AtomicsXor = EmitAtomicsXorPure(runtimeType, runtime);
+        atomics.Xor = EmitAtomicsXorPure(runtimeType, typedArrays, updateLocked, updateInt32);
 
         // Atomics.exchange(typedArray, index, value) -> object (returns old value)
-        runtime.AtomicsExchange = EmitAtomicsExchangePure(runtimeType, runtime);
+        atomics.Exchange = EmitAtomicsExchangePure(runtimeType, typedArrays, updateLocked, updateInt32);
 
         // Atomics.compareExchange(typedArray, index, expected, replacement) -> object (returns old value)
-        runtime.AtomicsCompareExchange = EmitAtomicsCompareExchangePure(runtimeType, runtime);
+        atomics.CompareExchange = EmitAtomicsCompareExchangePure(runtimeType, typedArrays, updateLocked, updateInt32);
 
         // Atomics.wait(typedArray, index, value, timeout?) -> string
-        runtime.AtomicsWait = EmitAtomicsWaitPure(runtimeType, runtime);
+        atomics.Wait = EmitAtomicsWaitPure(runtimeType, typedArrays);
 
         // Atomics.notify(typedArray, index, count?) -> double
-        runtime.AtomicsNotify = EmitAtomicsNotifyPure(runtimeType, runtime);
+        atomics.Notify = EmitAtomicsNotifyPure(runtimeType, typedArrays);
 
         // Atomics.isLockFree(size) -> bool
-        runtime.AtomicsIsLockFree = EmitAtomicsIsLockFreePure(runtimeType);
+        atomics.IsLockFree = EmitAtomicsIsLockFreePure(runtimeType);
 
         // Atomics.pause(iterationNumber?) -> undefined
-        runtime.AtomicsPause = EmitAtomicsPausePure(runtimeType, runtime);
+        atomics.Pause = EmitAtomicsPausePure(runtimeType, undefinedType, undefinedInstance, typeErrorCtor, createException);
     }
 
-    private MethodBuilder EmitAtomicsLoadLocked(TypeBuilder runtimeType, EmittedRuntime runtime)
+    private MethodBuilder EmitAtomicsLoadLocked(TypeBuilder runtimeType, EmittedTypedArrayImplementation typedArrays)
     {
         var method = runtimeType.DefineMethod(
             "AtomicsLoadLocked", MethodAttributes.Private | MethodAttributes.Static,
-            _types.Object, [runtime.TypedArrays.RequireImplementation().BaseType, _types.Int32]);
+            _types.Object, [typedArrays.BaseType, _types.Int32]);
         var il = method.GetILGenerator();
         var buffer = il.DeclareLocal(typeof(byte[]));
         var lockTaken = il.DeclareLocal(_types.Boolean);
@@ -89,7 +91,7 @@ public partial class RuntimeEmitter
         var done = il.DefineLabel();
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Callvirt, runtime.TypedArrays.RequireImplementation().GetBuffer);
+        il.Emit(OpCodes.Callvirt, typedArrays.GetBuffer);
         il.Emit(OpCodes.Stloc, buffer);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Stloc, lockTaken);
@@ -97,7 +99,7 @@ public partial class RuntimeEmitter
         EmitEnterAtomicBufferLock(il, buffer, lockTaken);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, runtime.TypedArrays.RequireImplementation().ElementGet);
+        il.Emit(OpCodes.Callvirt, typedArrays.ElementGet);
         il.Emit(OpCodes.Stloc, result);
         il.Emit(OpCodes.Leave, done);
         EmitAtomicBufferLockFinally(il, buffer, lockTaken);
@@ -108,18 +110,18 @@ public partial class RuntimeEmitter
         return method;
     }
 
-    private MethodBuilder EmitAtomicsStoreLocked(TypeBuilder runtimeType, EmittedRuntime runtime)
+    private MethodBuilder EmitAtomicsStoreLocked(TypeBuilder runtimeType, EmittedTypedArrayImplementation typedArrays)
     {
         var method = runtimeType.DefineMethod(
             "AtomicsStoreLocked", MethodAttributes.Private | MethodAttributes.Static,
-            _types.Object, [runtime.TypedArrays.RequireImplementation().BaseType, _types.Int32, _types.Object]);
+            _types.Object, [typedArrays.BaseType, _types.Int32, _types.Object]);
         var il = method.GetILGenerator();
         var buffer = il.DeclareLocal(typeof(byte[]));
         var lockTaken = il.DeclareLocal(_types.Boolean);
         var done = il.DefineLabel();
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Callvirt, runtime.TypedArrays.RequireImplementation().GetBuffer);
+        il.Emit(OpCodes.Callvirt, typedArrays.GetBuffer);
         il.Emit(OpCodes.Stloc, buffer);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Stloc, lockTaken);
@@ -128,7 +130,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Callvirt, runtime.TypedArrays.RequireImplementation().ElementSet);
+        il.Emit(OpCodes.Callvirt, typedArrays.ElementSet);
         il.Emit(OpCodes.Leave, done);
         EmitAtomicBufferLockFinally(il, buffer, lockTaken);
         il.EndExceptionBlock();
@@ -139,12 +141,12 @@ public partial class RuntimeEmitter
     }
 
     // operation: 0 add, 1 sub, 2 and, 3 or, 4 xor, 5 exchange, 6 compareExchange.
-    private MethodBuilder EmitAtomicsUpdateLocked(TypeBuilder runtimeType, EmittedRuntime runtime)
+    private MethodBuilder EmitAtomicsUpdateLocked(TypeBuilder runtimeType, EmittedTypedArrayImplementation typedArrays)
     {
         var method = runtimeType.DefineMethod(
             "AtomicsUpdateLocked", MethodAttributes.Private | MethodAttributes.Static,
             _types.Object,
-            [runtime.TypedArrays.RequireImplementation().BaseType, _types.Int32, _types.Object, _types.Object, _types.Int32]);
+            [typedArrays.BaseType, _types.Int32, _types.Object, _types.Object, _types.Int32]);
         var il = method.GetILGenerator();
         var buffer = il.DeclareLocal(typeof(byte[]));
         var lockTaken = il.DeclareLocal(_types.Boolean);
@@ -155,7 +157,7 @@ public partial class RuntimeEmitter
         var operations = Enumerable.Range(0, 7).Select(_ => il.DefineLabel()).ToArray();
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Callvirt, runtime.TypedArrays.RequireImplementation().GetBuffer);
+        il.Emit(OpCodes.Callvirt, typedArrays.GetBuffer);
         il.Emit(OpCodes.Stloc, buffer);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Stloc, lockTaken);
@@ -163,7 +165,7 @@ public partial class RuntimeEmitter
         EmitEnterAtomicBufferLock(il, buffer, lockTaken);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, runtime.TypedArrays.RequireImplementation().ElementGet);
+        il.Emit(OpCodes.Callvirt, typedArrays.ElementGet);
         il.Emit(OpCodes.Stloc, oldValue);
         il.Emit(OpCodes.Ldarg, 4);
         il.Emit(OpCodes.Switch, operations);
@@ -218,7 +220,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloc, newValue);
-        il.Emit(OpCodes.Callvirt, runtime.TypedArrays.RequireImplementation().ElementSet);
+        il.Emit(OpCodes.Callvirt, typedArrays.ElementSet);
 
         il.MarkLabel(done);
         var afterFinally = il.DefineLabel();
@@ -253,13 +255,18 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Endfinally);
     }
 
-    private MethodBuilder EmitAtomicsAddInt32(TypeBuilder runtimeType, EmittedRuntime runtime)
+    private MethodBuilder EmitAtomicsAddInt32(
+        TypeBuilder runtimeType,
+        EmittedTypedArrayImplementation typedArrays,
+        MethodBuilder convertInt32Operand,
+        ConstructorInfo rangeErrorCtor,
+        MethodInfo createException)
     {
         var method = runtimeType.DefineMethod(
             "AtomicsAddInt32",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Double,
-            [runtime.TypedArrays.RequireImplementation().BaseType, _types.Int32, _types.Double, _types.Boolean]);
+            [typedArrays.BaseType, _types.Int32, _types.Double, _types.Boolean]);
         method.SetImplementationFlags(MethodImplAttributes.AggressiveInlining);
 
         var il = method.GetILGenerator();
@@ -271,10 +278,10 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Stloc, indexLocal);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Call, _atomicsConvertInt32Operand);
+        il.Emit(OpCodes.Call, convertInt32Operand);
         il.Emit(OpCodes.Stloc, deltaLocal);
 
-        EmitInt32ElementReference(il, runtime, indexLocal);
+        EmitInt32ElementReference(il, typedArrays, rangeErrorCtor, createException, indexLocal);
         il.Emit(OpCodes.Ldloc, deltaLocal);
         il.Emit(OpCodes.Call, typeof(Interlocked).GetMethod(
             nameof(Interlocked.Add), [typeof(int).MakeByRefType(), typeof(int)])!);
@@ -301,19 +308,22 @@ public partial class RuntimeEmitter
     }
 
     private MethodBuilder EmitAtomicsIncrementInt32Discarded(
-        TypeBuilder runtimeType, EmittedRuntime runtime)
+        TypeBuilder runtimeType,
+        EmittedTypedArrayImplementation typedArrays,
+        ConstructorInfo rangeErrorCtor,
+        MethodInfo createException)
     {
         var method = runtimeType.DefineMethod(
             "AtomicsIncrementInt32Discarded",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Void,
-            [runtime.TypedArrays.RequireImplementation().BaseType, _types.Int32]);
+            [typedArrays.BaseType, _types.Int32]);
         method.SetImplementationFlags(MethodImplAttributes.AggressiveInlining);
         var il = method.GetILGenerator();
         var indexLocal = il.DeclareLocal(_types.Int32);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Stloc, indexLocal);
-        EmitInt32ElementReference(il, runtime, indexLocal);
+        EmitInt32ElementReference(il, typedArrays, rangeErrorCtor, createException, indexLocal);
         il.Emit(OpCodes.Call, typeof(Interlocked).GetMethod(
             nameof(Interlocked.Increment), [typeof(int).MakeByRefType()])!);
         il.Emit(OpCodes.Pop);
@@ -323,13 +333,18 @@ public partial class RuntimeEmitter
 
     // operation: 0 add, 1 sub, 2 and, 3 or, 4 xor, 5 exchange, 6 compareExchange.
     // Atomics.add also has a smaller dedicated helper because it dominates shared-counter workloads.
-    private MethodBuilder EmitAtomicsUpdateInt32(TypeBuilder runtimeType, EmittedRuntime runtime)
+    private MethodBuilder EmitAtomicsUpdateInt32(
+        TypeBuilder runtimeType,
+        EmittedTypedArrayImplementation typedArrays,
+        MethodBuilder convertInt32Operand,
+        ConstructorInfo rangeErrorCtor,
+        MethodInfo createException)
     {
         var method = runtimeType.DefineMethod(
             "AtomicsUpdateInt32",
             MethodAttributes.Private | MethodAttributes.Static,
             _types.Double,
-            [runtime.TypedArrays.RequireImplementation().BaseType, _types.Int32, _types.Double, _types.Double,
+            [typedArrays.BaseType, _types.Int32, _types.Double, _types.Double,
                 _types.Int32, _types.Boolean]);
         method.SetImplementationFlags(MethodImplAttributes.AggressiveInlining);
 
@@ -349,10 +364,10 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Stloc, indexLocal);
 
-        EmitConvertAtomicsInt32Operand(il, argument: 2, operandLocal);
-        EmitConvertAtomicsInt32Operand(il, argument: 3, expectedLocal);
+        EmitConvertAtomicsInt32Operand(il, convertInt32Operand, argument: 2, operandLocal);
+        EmitConvertAtomicsInt32Operand(il, convertInt32Operand, argument: 3, expectedLocal);
 
-        EmitInt32ElementReference(il, runtime, indexLocal);
+        EmitInt32ElementReference(il, typedArrays, rangeErrorCtor, createException, indexLocal);
         il.Emit(OpCodes.Stloc, elementLocal);
 
         il.Emit(OpCodes.Ldarg, 4);
@@ -460,10 +475,13 @@ public partial class RuntimeEmitter
     }
 
     private void EmitConvertAtomicsInt32Operand(
-        ILGenerator il, int argument, LocalBuilder destination)
+        ILGenerator il,
+        MethodBuilder convertInt32Operand,
+        int argument,
+        LocalBuilder destination)
     {
         il.Emit(OpCodes.Ldarg, argument);
-        il.Emit(OpCodes.Call, _atomicsConvertInt32Operand);
+        il.Emit(OpCodes.Call, convertInt32Operand);
         il.Emit(OpCodes.Stloc, destination);
     }
 
@@ -530,7 +548,12 @@ public partial class RuntimeEmitter
         return method;
     }
 
-    private MethodBuilder EmitAtomicsPausePure(TypeBuilder runtimeType, EmittedRuntime runtime)
+    private MethodBuilder EmitAtomicsPausePure(
+        TypeBuilder runtimeType,
+        Type undefinedType,
+        FieldInfo undefinedInstance,
+        ConstructorInfo typeErrorCtor,
+        MethodInfo createException)
     {
         var method = runtimeType.DefineMethod(
             "AtomicsPause",
@@ -545,7 +568,7 @@ public partial class RuntimeEmitter
 
         // Omitted/undefined is valid.
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, undefinedType);
         il.Emit(OpCodes.Brtrue, valid);
 
         // A supplied value must be a finite integral Number. No coercion is
@@ -570,11 +593,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Beq, valid);
 
         il.MarkLabel(invalid);
-        GuestErrorEmitter.ThrowTypeError(
-            il, runtime, "Atomics.pause iterationNumber must be an integral Number");
+        GuestErrorEmitter.ThrowError(
+            il, createException, typeErrorCtor, "Atomics.pause iterationNumber must be an integral Number");
 
         il.MarkLabel(valid);
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, undefinedInstance);
         il.Emit(OpCodes.Ret);
         return method;
     }
@@ -582,7 +605,12 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits Atomics.load - reads a value atomically.
     /// </summary>
-    private MethodBuilder EmitAtomicsLoadPure(TypeBuilder runtimeType, EmittedRuntime runtime)
+    private MethodBuilder EmitAtomicsLoadPure(
+        TypeBuilder runtimeType,
+        EmittedTypedArrayImplementation typedArrays,
+        MethodBuilder loadLocked,
+        ConstructorInfo rangeErrorCtor,
+        MethodInfo createException)
     {
         var method = runtimeType.DefineMethod(
             "AtomicsLoad",
@@ -601,7 +629,7 @@ public partial class RuntimeEmitter
 
         // Check if it's an emitted $TypedArray
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TypedArrays.RequireImplementation().BaseType);
+        il.Emit(OpCodes.Isinst, typedArrays.BaseType);
         il.Emit(OpCodes.Brtrue, emittedPath);
 
         // Non-emitted typed arrays are not supported in standalone mode.
@@ -616,9 +644,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, indexLocal);
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TypedArrays.RequireImplementation().Int32ArrayType);
+        il.Emit(OpCodes.Isinst, typedArrays.Int32ArrayType);
         il.Emit(OpCodes.Brfalse, uint32Path);
-        EmitInt32ElementReference(il, runtime, indexLocal);
+        EmitInt32ElementReference(il, typedArrays, rangeErrorCtor, createException, indexLocal);
         il.Emit(OpCodes.Call, typeof(Volatile).GetMethod(
             nameof(Volatile.Read), [typeof(int).MakeByRefType()])!);
         il.Emit(OpCodes.Conv_R8);
@@ -627,9 +655,9 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(uint32Path);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TypedArrays.RequireImplementation().Uint32ArrayType);
+        il.Emit(OpCodes.Isinst, typedArrays.Uint32ArrayType);
         il.Emit(OpCodes.Brfalse, lockedPath);
-        EmitInt32ElementReference(il, runtime, indexLocal);
+        EmitInt32ElementReference(il, typedArrays, rangeErrorCtor, createException, indexLocal);
         il.Emit(OpCodes.Call, typeof(Volatile).GetMethod(
             nameof(Volatile.Read), [typeof(int).MakeByRefType()])!);
         il.Emit(OpCodes.Br, unsignedResult);
@@ -643,9 +671,9 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(lockedPath);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TypedArrays.RequireImplementation().BaseType);
+        il.Emit(OpCodes.Castclass, typedArrays.BaseType);
         il.Emit(OpCodes.Ldloc, indexLocal);
-        il.Emit(OpCodes.Call, _atomicsLoadLocked);
+        il.Emit(OpCodes.Call, loadLocked);
 
         il.MarkLabel(endLabel);
         il.Emit(OpCodes.Ret);
@@ -656,7 +684,13 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits Atomics.store - writes a value atomically and returns that value.
     /// </summary>
-    private MethodBuilder EmitAtomicsStorePure(TypeBuilder runtimeType, EmittedRuntime runtime)
+    private MethodBuilder EmitAtomicsStorePure(
+        TypeBuilder runtimeType,
+        EmittedTypedArrayImplementation typedArrays,
+        MethodBuilder storeLocked,
+        MethodBuilder convertInt32Operand,
+        ConstructorInfo rangeErrorCtor,
+        MethodInfo createException)
     {
         var method = runtimeType.DefineMethod(
             "AtomicsStore",
@@ -677,7 +711,7 @@ public partial class RuntimeEmitter
 
         // Check if it's an emitted $TypedArray
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TypedArrays.RequireImplementation().BaseType);
+        il.Emit(OpCodes.Isinst, typedArrays.BaseType);
         il.Emit(OpCodes.Brtrue, emittedPath);
 
         // Non-emitted typed arrays are not supported in standalone mode.
@@ -692,13 +726,13 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, indexLocal);
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TypedArrays.RequireImplementation().Int32ArrayType);
+        il.Emit(OpCodes.Isinst, typedArrays.Int32ArrayType);
         il.Emit(OpCodes.Brfalse, uint32Path);
         EmitStore(unsigned: false);
 
         il.MarkLabel(uint32Path);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TypedArrays.RequireImplementation().Uint32ArrayType);
+        il.Emit(OpCodes.Isinst, typedArrays.Uint32ArrayType);
         il.Emit(OpCodes.Brfalse, lockedPath);
         EmitStore(unsigned: true);
 
@@ -718,10 +752,10 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(lockedPath);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TypedArrays.RequireImplementation().BaseType);
+        il.Emit(OpCodes.Castclass, typedArrays.BaseType);
         il.Emit(OpCodes.Ldloc, indexLocal);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Call, _atomicsStoreLocked);
+        il.Emit(OpCodes.Call, storeLocked);
 
         il.MarkLabel(endLabel);
         il.Emit(OpCodes.Ret);
@@ -732,9 +766,9 @@ public partial class RuntimeEmitter
         {
             il.Emit(OpCodes.Ldarg_2);
             il.Emit(OpCodes.Call, _types.GetMethod(_types.Convert, "ToDouble", _types.Object));
-            il.Emit(OpCodes.Call, _atomicsConvertInt32Operand);
+            il.Emit(OpCodes.Call, convertInt32Operand);
             il.Emit(OpCodes.Stloc, valueLocal);
-            EmitInt32ElementReference(il, runtime, indexLocal);
+            EmitInt32ElementReference(il, typedArrays, rangeErrorCtor, createException, indexLocal);
             il.Emit(OpCodes.Ldloc, valueLocal);
             il.Emit(OpCodes.Call, typeof(Volatile).GetMethod(
                 nameof(Volatile.Write), [typeof(int).MakeByRefType(), typeof(int)])!);
@@ -745,7 +779,13 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits Atomics.add - adds and returns old value.
     /// </summary>
-    private MethodBuilder EmitAtomicsAddPure(TypeBuilder runtimeType, EmittedRuntime runtime)
+    private MethodBuilder EmitAtomicsAddPure(
+        TypeBuilder runtimeType,
+        EmittedTypedArrayImplementation typedArrays,
+        MethodBuilder updateLocked,
+        MethodBuilder convertInt32Operand,
+        ConstructorInfo rangeErrorCtor,
+        MethodInfo createException)
     {
         var method = runtimeType.DefineMethod(
             "AtomicsAdd",
@@ -768,7 +808,7 @@ public partial class RuntimeEmitter
 
         // Check if it's an emitted $TypedArray
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TypedArrays.RequireImplementation().BaseType);
+        il.Emit(OpCodes.Isinst, typedArrays.BaseType);
         il.Emit(OpCodes.Brtrue, emittedPath);
 
         // Non-emitted typed arrays are not supported in standalone mode.
@@ -786,13 +826,13 @@ public partial class RuntimeEmitter
         // CLR's lock-free atomic primitive instead of the old Get + boxed arithmetic + Set
         // sequence (which both lost updates and paid two virtual calls per increment).
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TypedArrays.RequireImplementation().Int32ArrayType);
+        il.Emit(OpCodes.Isinst, typedArrays.Int32ArrayType);
         il.Emit(OpCodes.Brfalse, uint32Path);
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Convert, "ToDouble", _types.Object));
-        il.Emit(OpCodes.Call, _atomicsConvertInt32Operand);
+        il.Emit(OpCodes.Call, convertInt32Operand);
         il.Emit(OpCodes.Stloc, deltaLocal);
-        EmitInt32ElementReference(il, runtime, indexLocal);
+        EmitInt32ElementReference(il, typedArrays, rangeErrorCtor, createException, indexLocal);
         il.Emit(OpCodes.Ldloc, deltaLocal);
         il.Emit(OpCodes.Call, typeof(Interlocked).GetMethod(
             nameof(Interlocked.Add), [typeof(int).MakeByRefType(), typeof(int)])!);
@@ -801,13 +841,13 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(uint32Path);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TypedArrays.RequireImplementation().Uint32ArrayType);
+        il.Emit(OpCodes.Isinst, typedArrays.Uint32ArrayType);
         il.Emit(OpCodes.Brfalse, generalPath);
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Convert, "ToDouble", _types.Object));
-        il.Emit(OpCodes.Call, _atomicsConvertInt32Operand);
+        il.Emit(OpCodes.Call, convertInt32Operand);
         il.Emit(OpCodes.Stloc, deltaLocal);
-        EmitInt32ElementReference(il, runtime, indexLocal);
+        EmitInt32ElementReference(il, typedArrays, rangeErrorCtor, createException, indexLocal);
         il.Emit(OpCodes.Ldloc, deltaLocal);
         il.Emit(OpCodes.Call, typeof(Interlocked).GetMethod(
             nameof(Interlocked.Add), [typeof(int).MakeByRefType(), typeof(int)])!);
@@ -835,12 +875,12 @@ public partial class RuntimeEmitter
         // Get old value
         il.MarkLabel(generalPath);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TypedArrays.RequireImplementation().BaseType);
+        il.Emit(OpCodes.Castclass, typedArrays.BaseType);
         il.Emit(OpCodes.Ldloc, indexLocal);
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Call, _atomicsUpdateLocked);
+        il.Emit(OpCodes.Call, updateLocked);
 
         il.MarkLabel(endLabel);
         il.Emit(OpCodes.Ret);
@@ -853,25 +893,29 @@ public partial class RuntimeEmitter
     /// SharedArrayBuffer byte offsets for these views are four-byte aligned by construction.
     /// </summary>
     private void EmitInt32ElementReference(
-        ILGenerator il, EmittedRuntime runtime, LocalBuilder indexLocal)
+        ILGenerator il,
+        EmittedTypedArrayImplementation typedArrays,
+        ConstructorInfo rangeErrorCtor,
+        MethodInfo createException,
+        LocalBuilder indexLocal)
     {
         var validIndex = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, indexLocal);
         il.Emit(OpCodes.Conv_U4);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TypedArrays.RequireImplementation().BaseType);
-        il.Emit(OpCodes.Callvirt, runtime.TypedArrays.RequireImplementation().LengthGetter);
+        il.Emit(OpCodes.Castclass, typedArrays.BaseType);
+        il.Emit(OpCodes.Callvirt, typedArrays.LengthGetter);
         il.Emit(OpCodes.Conv_U4);
         il.Emit(OpCodes.Blt_Un, validIndex);
-        GuestErrorEmitter.ThrowRangeError(il, runtime, "Atomics index is out of range");
+        GuestErrorEmitter.ThrowError(il, createException, rangeErrorCtor, "Atomics index is out of range");
 
         il.MarkLabel(validIndex);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TypedArrays.RequireImplementation().BaseType);
-        il.Emit(OpCodes.Callvirt, runtime.TypedArrays.RequireImplementation().GetBuffer);
+        il.Emit(OpCodes.Castclass, typedArrays.BaseType);
+        il.Emit(OpCodes.Callvirt, typedArrays.GetBuffer);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TypedArrays.RequireImplementation().BaseType);
-        il.Emit(OpCodes.Callvirt, runtime.TypedArrays.RequireImplementation().ByteOffsetGetter);
+        il.Emit(OpCodes.Castclass, typedArrays.BaseType);
+        il.Emit(OpCodes.Callvirt, typedArrays.ByteOffsetGetter);
         il.Emit(OpCodes.Ldloc, indexLocal);
         il.Emit(OpCodes.Ldc_I4_4);
         il.Emit(OpCodes.Mul);
@@ -891,7 +935,8 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitAtomicsInt32UpdateFastPath(
         ILGenerator il,
-        EmittedRuntime runtime,
+        EmittedTypedArrayImplementation typedArrays,
+        MethodBuilder updateInt32,
         int operation,
         int valueArgument,
         int? expectedArgument,
@@ -901,13 +946,13 @@ public partial class RuntimeEmitter
         var uint32Path = il.DefineLabel();
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TypedArrays.RequireImplementation().Int32ArrayType);
+        il.Emit(OpCodes.Isinst, typedArrays.Int32ArrayType);
         il.Emit(OpCodes.Brfalse, uint32Path);
         EmitCall(unsigned: false);
 
         il.MarkLabel(uint32Path);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TypedArrays.RequireImplementation().Uint32ArrayType);
+        il.Emit(OpCodes.Isinst, typedArrays.Uint32ArrayType);
         il.Emit(OpCodes.Brfalse, generalPath);
         EmitCall(unsigned: true);
         return;
@@ -915,7 +960,7 @@ public partial class RuntimeEmitter
         void EmitCall(bool unsigned)
         {
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Castclass, runtime.TypedArrays.RequireImplementation().BaseType);
+            il.Emit(OpCodes.Castclass, typedArrays.BaseType);
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Conv_I4);
             il.Emit(OpCodes.Ldarg, valueArgument);
@@ -931,7 +976,7 @@ public partial class RuntimeEmitter
             }
             il.Emit(OpCodes.Ldc_I4, operation);
             il.Emit(unsigned ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
-            il.Emit(OpCodes.Call, _atomicsUpdateInt32);
+            il.Emit(OpCodes.Call, updateInt32);
             il.Emit(OpCodes.Box, _types.Double);
             il.Emit(OpCodes.Br, endLabel);
         }
@@ -940,7 +985,11 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits Atomics.sub - subtracts and returns old value.
     /// </summary>
-    private MethodBuilder EmitAtomicsSubPure(TypeBuilder runtimeType, EmittedRuntime runtime)
+    private MethodBuilder EmitAtomicsSubPure(
+        TypeBuilder runtimeType,
+        EmittedTypedArrayImplementation typedArrays,
+        MethodBuilder updateLocked,
+        MethodBuilder updateInt32)
     {
         var method = runtimeType.DefineMethod(
             "AtomicsSub",
@@ -956,7 +1005,7 @@ public partial class RuntimeEmitter
 
         // Check if it's an emitted $TypedArray
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TypedArrays.RequireImplementation().BaseType);
+        il.Emit(OpCodes.Isinst, typedArrays.BaseType);
         il.Emit(OpCodes.Brtrue, emittedPath);
 
         // Non-emitted typed arrays are not supported in standalone mode.
@@ -967,18 +1016,18 @@ public partial class RuntimeEmitter
         il.MarkLabel(emittedPath);
 
         EmitAtomicsInt32UpdateFastPath(
-            il, runtime, operation: 1, valueArgument: 2, expectedArgument: null,
+            il, typedArrays, updateInt32, operation: 1, valueArgument: 2, expectedArgument: null,
             generalPath, endLabel);
 
         il.MarkLabel(generalPath);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TypedArrays.RequireImplementation().BaseType);
+        il.Emit(OpCodes.Castclass, typedArrays.BaseType);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Conv_I4);
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Call, _atomicsUpdateLocked);
+        il.Emit(OpCodes.Call, updateLocked);
 
         il.MarkLabel(endLabel);
         il.Emit(OpCodes.Ret);
@@ -989,7 +1038,11 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits Atomics.and - bitwise AND and returns old value.
     /// </summary>
-    private MethodBuilder EmitAtomicsAndPure(TypeBuilder runtimeType, EmittedRuntime runtime)
+    private MethodBuilder EmitAtomicsAndPure(
+        TypeBuilder runtimeType,
+        EmittedTypedArrayImplementation typedArrays,
+        MethodBuilder updateLocked,
+        MethodBuilder updateInt32)
     {
         var method = runtimeType.DefineMethod(
             "AtomicsAnd",
@@ -1005,7 +1058,7 @@ public partial class RuntimeEmitter
 
         // Check if it's an emitted $TypedArray
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TypedArrays.RequireImplementation().BaseType);
+        il.Emit(OpCodes.Isinst, typedArrays.BaseType);
         il.Emit(OpCodes.Brtrue, emittedPath);
 
         // Non-emitted typed arrays are not supported in standalone mode.
@@ -1016,18 +1069,18 @@ public partial class RuntimeEmitter
         il.MarkLabel(emittedPath);
 
         EmitAtomicsInt32UpdateFastPath(
-            il, runtime, operation: 2, valueArgument: 2, expectedArgument: null,
+            il, typedArrays, updateInt32, operation: 2, valueArgument: 2, expectedArgument: null,
             generalPath, endLabel);
 
         il.MarkLabel(generalPath);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TypedArrays.RequireImplementation().BaseType);
+        il.Emit(OpCodes.Castclass, typedArrays.BaseType);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Conv_I4);
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ldc_I4_2);
-        il.Emit(OpCodes.Call, _atomicsUpdateLocked);
+        il.Emit(OpCodes.Call, updateLocked);
 
         il.MarkLabel(endLabel);
         il.Emit(OpCodes.Ret);
@@ -1038,7 +1091,11 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits Atomics.or - bitwise OR and returns old value.
     /// </summary>
-    private MethodBuilder EmitAtomicsOrPure(TypeBuilder runtimeType, EmittedRuntime runtime)
+    private MethodBuilder EmitAtomicsOrPure(
+        TypeBuilder runtimeType,
+        EmittedTypedArrayImplementation typedArrays,
+        MethodBuilder updateLocked,
+        MethodBuilder updateInt32)
     {
         var method = runtimeType.DefineMethod(
             "AtomicsOr",
@@ -1054,7 +1111,7 @@ public partial class RuntimeEmitter
 
         // Check if it's an emitted $TypedArray
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TypedArrays.RequireImplementation().BaseType);
+        il.Emit(OpCodes.Isinst, typedArrays.BaseType);
         il.Emit(OpCodes.Brtrue, emittedPath);
 
         // Non-emitted typed arrays are not supported in standalone mode.
@@ -1065,18 +1122,18 @@ public partial class RuntimeEmitter
         il.MarkLabel(emittedPath);
 
         EmitAtomicsInt32UpdateFastPath(
-            il, runtime, operation: 3, valueArgument: 2, expectedArgument: null,
+            il, typedArrays, updateInt32, operation: 3, valueArgument: 2, expectedArgument: null,
             generalPath, endLabel);
 
         il.MarkLabel(generalPath);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TypedArrays.RequireImplementation().BaseType);
+        il.Emit(OpCodes.Castclass, typedArrays.BaseType);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Conv_I4);
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ldc_I4_3);
-        il.Emit(OpCodes.Call, _atomicsUpdateLocked);
+        il.Emit(OpCodes.Call, updateLocked);
 
         il.MarkLabel(endLabel);
         il.Emit(OpCodes.Ret);
@@ -1087,7 +1144,11 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits Atomics.xor - bitwise XOR and returns old value.
     /// </summary>
-    private MethodBuilder EmitAtomicsXorPure(TypeBuilder runtimeType, EmittedRuntime runtime)
+    private MethodBuilder EmitAtomicsXorPure(
+        TypeBuilder runtimeType,
+        EmittedTypedArrayImplementation typedArrays,
+        MethodBuilder updateLocked,
+        MethodBuilder updateInt32)
     {
         var method = runtimeType.DefineMethod(
             "AtomicsXor",
@@ -1103,7 +1164,7 @@ public partial class RuntimeEmitter
 
         // Check if it's an emitted $TypedArray
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TypedArrays.RequireImplementation().BaseType);
+        il.Emit(OpCodes.Isinst, typedArrays.BaseType);
         il.Emit(OpCodes.Brtrue, emittedPath);
 
         // Non-emitted typed arrays are not supported in standalone mode.
@@ -1114,18 +1175,18 @@ public partial class RuntimeEmitter
         il.MarkLabel(emittedPath);
 
         EmitAtomicsInt32UpdateFastPath(
-            il, runtime, operation: 4, valueArgument: 2, expectedArgument: null,
+            il, typedArrays, updateInt32, operation: 4, valueArgument: 2, expectedArgument: null,
             generalPath, endLabel);
 
         il.MarkLabel(generalPath);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TypedArrays.RequireImplementation().BaseType);
+        il.Emit(OpCodes.Castclass, typedArrays.BaseType);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Conv_I4);
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ldc_I4_4);
-        il.Emit(OpCodes.Call, _atomicsUpdateLocked);
+        il.Emit(OpCodes.Call, updateLocked);
 
         il.MarkLabel(endLabel);
         il.Emit(OpCodes.Ret);
@@ -1136,7 +1197,11 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits Atomics.exchange - exchanges value and returns old value.
     /// </summary>
-    private MethodBuilder EmitAtomicsExchangePure(TypeBuilder runtimeType, EmittedRuntime runtime)
+    private MethodBuilder EmitAtomicsExchangePure(
+        TypeBuilder runtimeType,
+        EmittedTypedArrayImplementation typedArrays,
+        MethodBuilder updateLocked,
+        MethodBuilder updateInt32)
     {
         var method = runtimeType.DefineMethod(
             "AtomicsExchange",
@@ -1152,7 +1217,7 @@ public partial class RuntimeEmitter
 
         // Check if it's an emitted $TypedArray
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TypedArrays.RequireImplementation().BaseType);
+        il.Emit(OpCodes.Isinst, typedArrays.BaseType);
         il.Emit(OpCodes.Brtrue, emittedPath);
 
         // Non-emitted typed arrays are not supported in standalone mode.
@@ -1163,18 +1228,18 @@ public partial class RuntimeEmitter
         il.MarkLabel(emittedPath);
 
         EmitAtomicsInt32UpdateFastPath(
-            il, runtime, operation: 5, valueArgument: 2, expectedArgument: null,
+            il, typedArrays, updateInt32, operation: 5, valueArgument: 2, expectedArgument: null,
             generalPath, endLabel);
 
         il.MarkLabel(generalPath);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TypedArrays.RequireImplementation().BaseType);
+        il.Emit(OpCodes.Castclass, typedArrays.BaseType);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Conv_I4);
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ldc_I4_5);
-        il.Emit(OpCodes.Call, _atomicsUpdateLocked);
+        il.Emit(OpCodes.Call, updateLocked);
 
         il.MarkLabel(endLabel);
         il.Emit(OpCodes.Ret);
@@ -1185,7 +1250,11 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits Atomics.compareExchange - atomically compares and exchanges.
     /// </summary>
-    private MethodBuilder EmitAtomicsCompareExchangePure(TypeBuilder runtimeType, EmittedRuntime runtime)
+    private MethodBuilder EmitAtomicsCompareExchangePure(
+        TypeBuilder runtimeType,
+        EmittedTypedArrayImplementation typedArrays,
+        MethodBuilder updateLocked,
+        MethodBuilder updateInt32)
     {
         var method = runtimeType.DefineMethod(
             "AtomicsCompareExchange",
@@ -1201,7 +1270,7 @@ public partial class RuntimeEmitter
 
         // Check if it's an emitted $TypedArray
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TypedArrays.RequireImplementation().BaseType);
+        il.Emit(OpCodes.Isinst, typedArrays.BaseType);
         il.Emit(OpCodes.Brtrue, emittedPath);
 
         // Non-emitted typed arrays are not supported in standalone mode.
@@ -1212,18 +1281,18 @@ public partial class RuntimeEmitter
         il.MarkLabel(emittedPath);
 
         EmitAtomicsInt32UpdateFastPath(
-            il, runtime, operation: 6, valueArgument: 3, expectedArgument: 2,
+            il, typedArrays, updateInt32, operation: 6, valueArgument: 3, expectedArgument: 2,
             generalPath, endLabel);
 
         il.MarkLabel(generalPath);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TypedArrays.RequireImplementation().BaseType);
+        il.Emit(OpCodes.Castclass, typedArrays.BaseType);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Conv_I4);
         il.Emit(OpCodes.Ldarg_3); // replacement
         il.Emit(OpCodes.Ldarg_2); // expected
         il.Emit(OpCodes.Ldc_I4_6);
-        il.Emit(OpCodes.Call, _atomicsUpdateLocked);
+        il.Emit(OpCodes.Call, updateLocked);
 
         il.MarkLabel(endLabel);
         il.Emit(OpCodes.Ret);
@@ -1235,7 +1304,7 @@ public partial class RuntimeEmitter
     /// Emits Atomics.wait - waits until value changes.
     /// For emitted types, returns "not-equal" or "ok" based on current value.
     /// </summary>
-    private MethodBuilder EmitAtomicsWaitPure(TypeBuilder runtimeType, EmittedRuntime runtime)
+    private MethodBuilder EmitAtomicsWaitPure(TypeBuilder runtimeType, EmittedTypedArrayImplementation typedArrays)
     {
         var method = runtimeType.DefineMethod(
             "AtomicsWait",
@@ -1253,7 +1322,7 @@ public partial class RuntimeEmitter
 
         // Check if it's an emitted $TypedArray
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TypedArrays.RequireImplementation().BaseType);
+        il.Emit(OpCodes.Isinst, typedArrays.BaseType);
         il.Emit(OpCodes.Brtrue, emittedPath);
 
         // Non-emitted typed arrays are not supported in standalone mode.
@@ -1267,7 +1336,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Conv_I4);  // Convert double index to int
-        il.Emit(OpCodes.Call, runtime.TypedArrays.RequireImplementation().GetElement);
+        il.Emit(OpCodes.Call, typedArrays.GetElement);
         il.Emit(OpCodes.Stloc, currentValueLocal);
 
         // Compare with expected value
@@ -1295,7 +1364,7 @@ public partial class RuntimeEmitter
     /// Emits Atomics.notify - wakes up waiting threads.
     /// For emitted types, returns 0 since we don't have SharedArrayBuffer tracking.
     /// </summary>
-    private MethodBuilder EmitAtomicsNotifyPure(TypeBuilder runtimeType, EmittedRuntime runtime)
+    private MethodBuilder EmitAtomicsNotifyPure(TypeBuilder runtimeType, EmittedTypedArrayImplementation typedArrays)
     {
         var method = runtimeType.DefineMethod(
             "AtomicsNotify",
@@ -1311,7 +1380,7 @@ public partial class RuntimeEmitter
 
         // Check if it's an emitted $TypedArray
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TypedArrays.RequireImplementation().BaseType);
+        il.Emit(OpCodes.Isinst, typedArrays.BaseType);
         il.Emit(OpCodes.Brtrue, emittedPath);
 
         // Non-emitted typed arrays are not supported in standalone mode.

@@ -55,6 +55,7 @@ public partial class RuntimeEmitter
             runtime.BeginSharedArrayBufferEmission();
             runtime.BeginDataViewEmission();
             runtime.TypedArrays.BeginImplementationEmission();
+            runtime.BeginAtomicsEmission();
         }
         if (features.UsesBuffer)
             runtime.BeginBufferEmission(features.HasAnyTypedArray);
@@ -686,6 +687,7 @@ public partial class RuntimeEmitter
         runtime.SharedArrayBuffer?.CompleteEmission();
         runtime.DataView?.CompleteEmission();
         runtime.TypedArrays.CompleteEmission();
+        runtime.Atomics?.CompleteEmission();
         runtime.EventEmitter.CompleteEmission();
         runtime.NodeStreams?.CompleteEmission();
         runtime.WebStreams?.CompleteEmission();

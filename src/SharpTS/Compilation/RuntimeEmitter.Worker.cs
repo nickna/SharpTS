@@ -27,7 +27,8 @@ public partial class RuntimeEmitter
             // EmitRuntimeClass because dynamic method values bind them.
             EmitTypedArrayHelpers(runtimeType, runtime);
             // Atomics static methods (pure-IL with reflection fallback for SharpTS types)
-            EmitAtomicsHelpersPure(runtimeType, runtime);
+            EmitAtomicsHelpersPure(runtimeType, runtime.RequireAtomics(), runtime.TypedArrays.RequireImplementation(),
+                runtime.UndefinedType, runtime.UndefinedInstance, runtime.TSTypeErrorCtor, runtime.CreateException, runtime.TSRangeErrorCtor);
         }
 
         // MessageChannel/MessagePort moved to RuntimeEmitter.MessageChannel.cs —

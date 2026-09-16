@@ -1721,23 +1721,18 @@ public class EmittedRuntime
     // Worker Threads Support
     // ============================================================
 
-    // Atomics static methods
-    // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSAtomics
-    public MethodBuilder AtomicsLoad { get; set; } = null!;
-    public MethodBuilder AtomicsStore { get; set; } = null!;
-    public MethodBuilder AtomicsAdd { get; set; } = null!;
-    public MethodBuilder AtomicsAddInt32 { get; set; } = null!;
-    public MethodBuilder AtomicsIncrementInt32Discarded { get; set; } = null!;
-    public MethodBuilder AtomicsSub { get; set; } = null!;
-    public MethodBuilder AtomicsAnd { get; set; } = null!;
-    public MethodBuilder AtomicsOr { get; set; } = null!;
-    public MethodBuilder AtomicsXor { get; set; } = null!;
-    public MethodBuilder AtomicsExchange { get; set; } = null!;
-    public MethodBuilder AtomicsCompareExchange { get; set; } = null!;
-    public MethodBuilder AtomicsWait { get; set; } = null!;
-    public MethodBuilder AtomicsNotify { get; set; } = null!;
-    public MethodBuilder AtomicsIsLockFree { get; set; } = null!;
-    public MethodBuilder AtomicsPause { get; set; } = null!;
+    /// <summary>Atomics declarations, or null when typed-array implementation is omitted.</summary>
+    public EmittedAtomicsRuntime? Atomics { get; private set; }
+
+    internal void BeginAtomicsEmission()
+    {
+        if (Atomics is not null)
+            throw new InvalidOperationException("Atomics metadata emission has already started.");
+        Atomics = new EmittedAtomicsRuntime();
+    }
+
+    public EmittedAtomicsRuntime RequireAtomics() => Atomics
+        ?? throw new InvalidOperationException("Atomics runtime was not enabled for this compilation.");
 
     // $MessagePort type - emitted for standalone worker support
     // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSMessagePort
