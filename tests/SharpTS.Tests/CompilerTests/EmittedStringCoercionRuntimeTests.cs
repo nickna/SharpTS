@@ -107,6 +107,69 @@ public class EmittedStringCoercionRuntimeTests
     }
 
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void LanguageConversionUsesExplicitRegExpAvailability(bool includeRegExp)
+    {
+        var assembly = new PersistedAssemblyBuilder(new AssemblyName($"explicit_coercion_{Guid.NewGuid():N}"), typeof(object).Assembly);
+        var module = assembly.DefineDynamicModule("main");
+        var features = Detect(includeRegExp ? "new RegExp('value');" : "const value=1;");
+        var runtime = new RuntimeEmitter(TypeProvider.Runtime).EmitAll(module, features);
+        var helper = module.DefineType("ExplicitCoercion", TypeAttributes.Public | TypeAttributes.Abstract | TypeAttributes.Sealed);
+        var coercion = new EmittedStringCoercionRuntime
+        {
+            Stringify = runtime.StringCoercion.Stringify,
+            ToJsString = helper.DefineMethod("ToJsString", MethodAttributes.Public | MethodAttributes.Static,
+                typeof(string), [typeof(object)])
+        };
+        var customToString = helper.DefineMethod("CustomToString", MethodAttributes.Public | MethodAttributes.Static,
+            typeof(object), Type.EmptyTypes);
+        customToString.GetILGenerator().Emit(OpCodes.Ldstr, "custom regex");
+        customToString.GetILGenerator().Emit(OpCodes.Ret);
+        // This fixture's helper lives outside $Runtime, whose symbol reader is private.
+        // No symbol hooks are needed here; supply an accessible empty dictionary reader.
+        var getSymbols = helper.DefineMethod("GetSymbols", MethodAttributes.Public | MethodAttributes.Static,
+            typeof(Dictionary<object, object>), [typeof(object)]);
+        getSymbols.GetILGenerator().Emit(OpCodes.Newobj, typeof(Dictionary<object, object>).GetConstructor(Type.EmptyTypes)!);
+        getSymbols.GetILGenerator().Emit(OpCodes.Ret);
+
+        const BindingFlags privateInstance = BindingFlags.NonPublic | BindingFlags.Instance;
+        var emitter = new RuntimeEmitter(TypeProvider.Runtime);
+        // A scoped helper must follow the supplied metadata even when the emitter's
+        // unrelated compilation selection differs in either direction.
+        typeof(RuntimeEmitter).GetField("_features", privateInstance)!.SetValue(emitter,
+            includeRegExp ? Detect("const value=1;") : RuntimeFeatureSet.EmitEverything());
+        var inputType = typeof(RuntimeEmitter).GetNestedType("StringCoercionInputs", BindingFlags.NonPublic)!;
+        var peers = Activator.CreateInstance(inputType,
+        [
+            runtime.UndefinedType, runtime.TSSymbolType, runtime.GlobalThisSingletonField, runtime.GlobalThisGetProperty,
+            runtime.TypeOf, runtime.InvokeMethodValue, runtime.ArgumentsType, runtime.GetProperty, runtime.TSObjectType,
+            runtime.TSFunctionType, runtime.BoundAnyFunctionType, runtime.HasOwnPropertyHelperMethod, runtime.IHasFieldsInterface,
+            getSymbols, runtime.SymbolToPrimitive, runtime.CompiledPropertyDescriptorType,
+            runtime.CompiledPropertyDescriptorGetter.GetGetMethod()!, runtime.CompiledPropertyDescriptorSetter.GetGetMethod()!,
+            runtime.CompiledPropertyDescriptorValue.GetGetMethod()!, runtime.PDSHasPrototypeEntry, runtime.PDSGetPrototype,
+            runtime.CreateException, runtime.TSTypeErrorCtor
+        ]);
+        typeof(RuntimeEmitter).GetMethod("EmitToJsString", privateInstance)!.Invoke(emitter,
+            [helper, coercion, runtime.ArrayStorage, runtime.ArrayOperations, peers, includeRegExp ? runtime.TSRegExpType : null]);
+        helper.CreateType();
+        using var bytes = Save(runtime);
+        Verify(bytes);
+        var loaded = Assembly.Load(bytes.ToArray());
+        var helperType = loaded.GetType("ExplicitCoercion")!;
+        var convert = helperType.GetMethod("ToJsString")!;
+        Assert.Equal("42", convert.Invoke(null, [42d]));
+        if (includeRegExp)
+        {
+            var regex = Activator.CreateInstance(loaded.GetType(runtime.TSRegExpType.Name)!, ["value", ""]);
+            var function = Activator.CreateInstance(loaded.GetType(runtime.TSFunctionType.Name)!,
+                [null, helperType.GetMethod("CustomToString")!, "toString", 0]);
+            loaded.GetType("$Runtime")!.GetMethod("SetProperty")!.Invoke(null, [regex, "toString", function]);
+            Assert.Equal("custom regex", convert.Invoke(null, [regex]));
+        }
+    }
+
+    [Theory]
     [InlineData(null, "null")]
     [InlineData(false, "false")]
     [InlineData(true, "true")]
