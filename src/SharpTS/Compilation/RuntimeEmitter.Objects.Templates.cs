@@ -6,7 +6,8 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
-    private void EmitConcatTemplate(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitConcatTemplate(TypeBuilder typeBuilder, EmittedTemplateRuntime templates,
+        MethodInfo stringifyCoerce)
     {
         var method = typeBuilder.DefineMethod(
             "ConcatTemplate",
@@ -14,7 +15,7 @@ public partial class RuntimeEmitter
             _types.String,
             [_types.ObjectArray]
         );
-        runtime.ConcatTemplate = method;
+        templates.Concat = method;
 
         var il = method.GetILGenerator();
 
@@ -53,7 +54,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, indexLocal);
         il.Emit(OpCodes.Ldelem_Ref);
-        il.Emit(OpCodes.Call, runtime.StringifyCoerce);
+        il.Emit(OpCodes.Call, stringifyCoerce);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StringBuilder, "Append", _types.String));
         il.Emit(OpCodes.Pop); // discard StringBuilder return value
 
@@ -75,7 +76,7 @@ public partial class RuntimeEmitter
     /// Emits the $TemplateStringsList class for tagged template literals.
     /// This is a List&lt;object&gt; subclass with a "raw" property for accessing raw strings.
     /// </summary>
-    internal void EmitTemplateStringsListClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    internal void EmitTemplateStringsListClass(ModuleBuilder moduleBuilder, EmittedTemplateRuntime templates)
     {
         // Define class: public sealed class $TemplateStringsList : List<object>
         var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
@@ -206,12 +207,16 @@ public partial class RuntimeEmitter
 
         // Create the type
         var createdType = typeBuilder.CreateType()!;
-        runtime.TemplateStringsListType = createdType;
-        runtime.TemplateStringsListCtor = createdType.GetConstructor([_types.ObjectArray, _types.StringArray])!;
-        runtime.TemplateStringsListRawGetter = createdType.GetProperty("raw")!.GetGetMethod()!;
+        templates.StringsListType = createdType;
+        templates.StringsListCtor = createdType.GetConstructor([_types.ObjectArray, _types.StringArray])!;
+        templates.RawGetter = createdType.GetProperty("raw")!.GetGetMethod()!;
     }
 
-    private void EmitInvokeTaggedTemplate(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitInvokeTaggedTemplate(TypeBuilder typeBuilder, EmittedTemplateRuntime templates,
+        MethodInfo objectFreeze,
+        MethodInfo invokeValue,
+        MethodInfo createException,
+        ConstructorInfo typeErrorCtor)
     {
         // InvokeTaggedTemplate(tag: object, cooked: object[], raw: string[], expressions: object[]) -> object?
         var method = typeBuilder.DefineMethod(
@@ -220,24 +225,24 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object, _types.ObjectArray, _types.StringArray, _types.ObjectArray]
         );
-        runtime.InvokeTaggedTemplate = method;
+        templates.Invoke = method;
 
         var il = method.GetILGenerator();
 
         // Create strings array: new $TemplateStringsList(cooked, raw)
-        var stringsLocal = il.DeclareLocal(runtime.TemplateStringsListType);
+        var stringsLocal = il.DeclareLocal(templates.StringsListType);
         il.Emit(OpCodes.Ldarg_1); // cooked
         il.Emit(OpCodes.Ldarg_2); // raw
-        il.Emit(OpCodes.Newobj, runtime.TemplateStringsListCtor);
+        il.Emit(OpCodes.Newobj, templates.StringsListCtor);
         il.Emit(OpCodes.Stloc, stringsLocal);
 
         // Freeze the template strings array and its raw property (JS spec: frozen/immutable)
         il.Emit(OpCodes.Ldloc, stringsLocal);
-        il.Emit(OpCodes.Call, runtime.ObjectFreeze);
+        il.Emit(OpCodes.Call, objectFreeze);
         il.Emit(OpCodes.Pop); // ObjectFreeze returns the object, discard
         il.Emit(OpCodes.Ldloc, stringsLocal);
-        il.Emit(OpCodes.Callvirt, runtime.TemplateStringsListRawGetter);
-        il.Emit(OpCodes.Call, runtime.ObjectFreeze);
+        il.Emit(OpCodes.Callvirt, templates.RawGetter);
+        il.Emit(OpCodes.Call, objectFreeze);
         il.Emit(OpCodes.Pop); // discard
 
         // Build args array: new object[1 + expressions.Length]
@@ -298,18 +303,22 @@ public partial class RuntimeEmitter
         // return InvokeValue(tag, args)
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, argsLocal);
-        il.Emit(OpCodes.Call, runtime.InvokeValue);
+        il.Emit(OpCodes.Call, invokeValue);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(errorLabel);
-        GuestErrorEmitter.ThrowTypeError(il, runtime, "Tagged template tag must be a function.");
+        GuestErrorEmitter.ThrowError(il, createException, typeErrorCtor, "Tagged template tag must be a function.");
     }
 
     /// <summary>
     /// Emits InvokeTaggedTemplateWithThis - like InvokeTaggedTemplate but passes a this binding.
     /// Signature: object? InvokeTaggedTemplateWithThis(tag, thisArg, cooked, raw, expressions)
     /// </summary>
-    private void EmitInvokeTaggedTemplateWithThis(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitInvokeTaggedTemplateWithThis(TypeBuilder typeBuilder, EmittedTemplateRuntime templates,
+        MethodInfo objectFreeze,
+        MethodInfo invokeMethodValue,
+        MethodInfo createException,
+        ConstructorInfo typeErrorCtor)
     {
         var method = typeBuilder.DefineMethod(
             "InvokeTaggedTemplateWithThis",
@@ -317,24 +326,24 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object, _types.Object, _types.ObjectArray, _types.StringArray, _types.ObjectArray]
         );
-        runtime.InvokeTaggedTemplateWithThis = method;
+        templates.InvokeWithThis = method;
 
         var il = method.GetILGenerator();
 
         // Create strings array: new $TemplateStringsList(cooked, raw)
-        var stringsLocal = il.DeclareLocal(runtime.TemplateStringsListType);
+        var stringsLocal = il.DeclareLocal(templates.StringsListType);
         il.Emit(OpCodes.Ldarg_2); // cooked
         il.Emit(OpCodes.Ldarg_3); // raw
-        il.Emit(OpCodes.Newobj, runtime.TemplateStringsListCtor);
+        il.Emit(OpCodes.Newobj, templates.StringsListCtor);
         il.Emit(OpCodes.Stloc, stringsLocal);
 
         // Freeze the template strings array and its raw property (JS spec)
         il.Emit(OpCodes.Ldloc, stringsLocal);
-        il.Emit(OpCodes.Call, runtime.ObjectFreeze);
+        il.Emit(OpCodes.Call, objectFreeze);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Ldloc, stringsLocal);
-        il.Emit(OpCodes.Callvirt, runtime.TemplateStringsListRawGetter);
-        il.Emit(OpCodes.Call, runtime.ObjectFreeze);
+        il.Emit(OpCodes.Callvirt, templates.RawGetter);
+        il.Emit(OpCodes.Call, objectFreeze);
         il.Emit(OpCodes.Pop);
 
         // Build args array: new object[1 + expressions.Length]
@@ -394,10 +403,10 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1); // thisArg (receiver)
         il.Emit(OpCodes.Ldarg_0); // tag (function)
         il.Emit(OpCodes.Ldloc, argsLocal);
-        il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+        il.Emit(OpCodes.Call, invokeMethodValue);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(errorLabel);
-        GuestErrorEmitter.ThrowTypeError(il, runtime, "Tagged template tag must be a function.");
+        GuestErrorEmitter.ThrowError(il, createException, typeErrorCtor, "Tagged template tag must be a function.");
     }
 }

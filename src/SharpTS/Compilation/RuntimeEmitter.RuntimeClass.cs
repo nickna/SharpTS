@@ -1032,7 +1032,8 @@ public partial class RuntimeEmitter
         EmitConvertToNumber(typeBuilder, runtime);
         // String.raw lives here so its body can read `template.raw` via
         // GetProperty and ToString-coerce substitutions via ToJsString.
-        EmitStringRaw(typeBuilder, runtime);
+        EmitStringRaw(typeBuilder, runtime.Templates,
+            runtime.UndefinedType, runtime.GetProperty, runtime.ToNumber, runtime.ToJsString, runtime.CreateException, runtime.TSTypeErrorCtor);
         EmitSetProperty(typeBuilder, runtime);
         EmitSetPropertyStrict(typeBuilder, runtime);
         EmitDeleteProperty(typeBuilder, runtime);
@@ -1365,9 +1366,11 @@ public partial class RuntimeEmitter
         // so gOPD's Math singleton synth can produce identity-stable
         // `desc.value === Math.X` descriptors.
         EmitGetEnumMemberName(typeBuilder, runtime);
-        EmitConcatTemplate(typeBuilder, runtime);
-        EmitInvokeTaggedTemplate(typeBuilder, runtime);
-        EmitInvokeTaggedTemplateWithThis(typeBuilder, runtime);
+        EmitConcatTemplate(typeBuilder, runtime.Templates, runtime.StringifyCoerce);
+        EmitInvokeTaggedTemplate(typeBuilder, runtime.Templates,
+            runtime.ObjectFreeze, runtime.InvokeValue, runtime.CreateException, runtime.TSTypeErrorCtor);
+        EmitInvokeTaggedTemplateWithThis(typeBuilder, runtime.Templates,
+            runtime.ObjectFreeze, runtime.InvokeMethodValue, runtime.CreateException, runtime.TSTypeErrorCtor);
         EmitObjectRest(typeBuilder, runtime);
         // #685: array binding-pattern source normalizer — depends on IterateToList /
         // GetIteratorFunction (emitted above via EmitIteratorMethodsAdvanced).

@@ -2041,6 +2041,147 @@ public class StandaloneDllTests
             verifyStandardError: error => Assert.Empty(error)));
     }
 
+    public static IEnumerable<object[]> TemplateMetadataPrograms =>
+    [
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "const a:any=12;const b:any=false;console.log(`x${a}:${b}:${null}:${undefined}`);const value:any=42n;console.log(`big=${value}`);"
+            },
+            "x12:false:null:undefined\nbig=42\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "function tag(strings:any,...values:any[]):string{return strings.join('|')+':'+values.join(',');}console.log(tag`a${1}b${2}c`);console.log(tag`only`);"
+            },
+            "a|b|c:1,2\nonly:\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "function tag(strings:any):string{return strings[0].length+':'+strings.raw[0].length+':'+strings.raw[0];}console.log(tag`a\\nb`);console.log(String.raw`x\\n${3}\\t`);"
+            },
+            "3:4:a\\nb\nx\\n3\\t\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "const obj:any={prefix:'P',tag(strings:any,...values:any[]){return this.prefix+':'+strings.join('|')+':'+values.join(',');}};console.log(obj.tag`a${7}b`);console.log(obj['tag']`c${8}d`);"
+            },
+            "P:a|b:7\nundefined:c|d:8\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "function tag(strings:any,...values:any[]){console.log(Object.isFrozen(strings),Object.isFrozen(strings.raw),strings.length,values[0]);return strings.raw.join('|');}console.log(tag`a${5}b`);"
+            },
+            "true true 2 5\na|b\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "console.log(String.raw({raw:['a','b','c']},1,2));console.log(String.raw({raw:'ABC'},'x','y'));console.log(String.raw({raw:{0:'p',1:'q',length:2}},9));"
+            },
+            "a1b2c\nAxByC\np9q\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "for(const length of [-1,NaN,0,1,2.8])console.log('['+String.raw({raw:{0:'a',1:'b',length}},7)+']');"
+            },
+            "[]\n[]\n[]\n[a]\n[a7b]\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "console.log(String.raw({raw:['a','b','c']},1));console.log(String.raw({raw:['a','b']},1,2,3));console.log(String.raw({raw:[1,2]},42n));"
+            },
+            "a1bc\na1b\n1422\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "const raw:any=String.raw;console.log(raw({raw:['a','b']},9));console.log(raw.call(null,{raw:['x','y']},8));const ctor:any=String;console.log(ctor.raw({raw:['p','q']},7));console.log(raw.length,raw.name);"
+            },
+            "a9b\nx8y\np7q\n1 raw\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "for(const value of [null,undefined,{}, {raw:null},{raw:undefined}]){try{String.raw(value as any);console.log('unexpected');}catch(e:any){console.log(e.name);}}const tag:any=null;try{tag`x`;}catch(e:any){console.log(e.name);}"
+            },
+            "TypeError\nTypeError\nTypeError\nTypeError\nTypeError\nTypeError\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "const symbol:any=Symbol('x');try{console.log(`${symbol}`);}catch(e:any){console.log(e.name);}try{console.log(String.raw({raw:['a','b']},symbol));}catch(e:any){console.log(e.name);}try{console.log(String.raw({raw:[symbol]}));}catch(e:any){console.log(e.name);}function tag(strings:any,...values:any[]){return values[0]===symbol;}console.log(tag`${symbol}`);"
+            },
+            "TypeError\nTypeError\nTypeError\ntrue\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "let log='';const raw:any={get length(){log+='L';return 2;},get 0(){log+='A';return 'a';},get 1(){log+='B';return 'b';}};const template:any={get raw(){log+='R';return raw;}};const value:any={toString(){log+='S';return 'x';}};console.log(String.raw(template,value),log);"
+            },
+            "axb RLASB\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "function tag(strings:any,...values:any[]){return strings.join('|')+':'+values.join(',');}async function run(){const value=await Promise.resolve(3);console.log(tag`a${value}b`);console.log(`v=${value}`);}run();"
+            },
+            "a|b:3\nv=3\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = "function tag(strings:any,...values:any[]){return strings.join('|')+':'+values.join(',');}function* run():Generator<string,void,any>{yield tag`a${2}b`;yield `v=${3}`;}console.log(Array.from(run()).join(','));"
+            },
+            "a|b:2,v=3\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.cjs"] = "function tag(strings,...values){return strings.join('|')+':'+values.join(',');}console.log(tag`a${4}b`);console.log(String.raw({raw:['x','y']},5));"
+            },
+            "a|b:4\nx5y\n", "main.cjs", true
+        }
+    ];
+
+    [Theory]
+    [MemberData(nameof(TemplateMetadataPrograms))]
+    public void Isolated_TemplateMetadata_PreservesRawValuesInvocationAndEvaluationOrder(Dictionary<string, string> files, string expected, string entryPoint, bool standalone)
+    {
+        using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        foreach (var (path, source) in files) tempDir.CreateFile(path, source);
+        var dllPath = tempDir.GetPath("template_metadata.dll");
+        var deployment = standalone ? " --standalone" : "";
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --noLib --compile \"{tempDir.GetPath(entryPoint)}\" -o \"{dllPath}\" --verify{deployment}", tempDir.Path);
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(dllPath));
+        Assert.Equal(!standalone, File.Exists(tempDir.GetPath("SharpTS.dll")));
+        Assert.Equal(expected, ExecuteCompiledDllIsolated(dllPath, timeoutMs: 30000,
+            verifyStandardError: error => Assert.Empty(error)));
+    }
+
     public static IEnumerable<object[]> BroadcastChannelMetadataPrograms =>
     [
         new object[]
