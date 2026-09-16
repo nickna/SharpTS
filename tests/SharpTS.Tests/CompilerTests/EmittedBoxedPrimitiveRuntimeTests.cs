@@ -51,6 +51,7 @@ public class EmittedBoxedPrimitiveRuntimeTests
         var assembly = new PersistedAssemblyBuilder(new AssemblyName("boxed_staged"), typeof(object).Assembly);
         var module = assembly.DefineDynamicModule("main");
         var runtime = new EmittedRuntime();
+        runtime.BigInt.BeginImplementationEmission();
         var emitter = new RuntimeEmitter(TypeProvider.Runtime);
         InvokeEmitter("DefineRuntimeClassPhase1", emitter, module, runtime);
         var boxed = runtime.BoxedPrimitives;
@@ -128,7 +129,7 @@ public class EmittedBoxedPrimitiveRuntimeTests
             runtime.Numbers.PrototypeField, runtime.Numbers.PrototypePopulateMethod,
             runtime.SymbolPrototypeField, runtime.SymbolPrototypePopulateMethod);
         var prototype = includePrototype
-            ? CreateInputs("BoxedBigIntPrototype", runtime.BigIntPrototypeField, runtime.BigIntPrototypePopulateMethod)
+            ? CreateInputs("BoxedBigIntPrototype", runtime.BigInt.PrototypeField, runtime.BigInt.PrototypePopulateMethod)
             : null;
         InvokeEmitter("EmitNewBoxedPrimitive", emitter, helper, boxed, runtime.Strings, peers, prototype);
         helper.CreateType();
@@ -144,7 +145,7 @@ public class EmittedBoxedPrimitiveRuntimeTests
         if (includePrototype)
         {
             var expectedPrototype = Assert.IsType<Dictionary<string, object>>(
-                runtimeType.GetField(runtime.BigIntPrototypeField.Name)!.GetValue(null));
+                runtimeType.GetField(runtime.BigInt.PrototypeField.Name)!.GetValue(null));
             Assert.Same(expectedPrototype, actualPrototype);
         }
         else

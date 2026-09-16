@@ -2938,6 +2938,160 @@ public class StandaloneDllTests
             verifyStandardError: error => Assert.Empty(error)));
     }
 
+    public static IEnumerable<object[]> BigIntMetadataPrograms =>
+    [
+        new object[]
+        {
+            "arithmetic", "let a=7n;let b=3n;console.log(a+b,a-b,a*b,a/b,-a/b,a%b,-a%b,a**b,-a);",
+            "10n 4n 21n 2n -2n 1n -1n 343n -7n\n", "main.ts"
+        },
+        new object[]
+        {
+            "bitwise", "let a=10n;let b=6n;console.log(a&b,a|b,a^b,~a,a<<3n,a>>1n,(-a)>>1n);",
+            "2n 14n 12n -11n 80n 5n -5n\n", "main.ts"
+        },
+        new object[]
+        {
+            "comparisons", "let a=7n;let b=3n;console.log(a===b,a!==b,a>b,a>=b,a<b,a<=b,a===7n);",
+            "false true true true false false true\n", "main.ts"
+        },
+        new object[]
+        {
+            "loose", "console.log(10n==10,10n==10.5,10n=='10',10n=='bad',0n=='',1n==true,0n==false);console.log(10n==Infinity,10n==NaN,10n===10);",
+            "true false true false true true true\nfalse false false\n", "main.ts"
+        },
+        new object[]
+        {
+            "callable", "console.log(BigInt(42),BigInt(-0),BigInt(true),BigInt(false),BigInt('  -123 '),BigInt(''),BigInt('0xff'),BigInt('0B101'),BigInt('0o17'));",
+            "42n 0n 1n 0n -123n 0n 255n 5n 15n\n", "main.ts"
+        },
+        new object[]
+        {
+            "coercion", "let order='';const a:any={[Symbol.toPrimitive](hint:any){order+=hint;return '23';}};const b:any={valueOf(){order+='v';return {};},toString(){order+='s';return '17';}};console.log(BigInt(a),BigInt(b),order);console.log(BigInt([] as any),BigInt([10n] as any));",
+            "23n 17n numbervs\n0n 10n\n", "main.ts"
+        },
+        new object[]
+        {
+            "conversion_errors", "const inputs:any[]=[1.5,NaN,Infinity,'1.2','0b2',null,undefined,Symbol('x')];for(const x of inputs){try{console.log(BigInt(x));}catch(e:any){console.log(e.name);}}",
+            "RangeError\nRangeError\nRangeError\nSyntaxError\nSyntaxError\nTypeError\nTypeError\nTypeError\n", "main.ts"
+        },
+        new object[]
+        {
+            "static", "console.log(BigInt.asIntN(8,255n),BigInt.asUintN(8,-1n),BigInt.asIntN(0,9n),BigInt.asUintN(NaN,9n));const B:any=BigInt;console.log(B.asIntN(4,'15'),B.asUintN(4,true),B.asIntN===BigInt.asIntN);",
+            "-1n 255n 0n 0n\n-1n 1n true\n", "main.ts"
+        },
+        new object[]
+        {
+            "static_order", "let order='';const bits:any={valueOf(){order+='b';return 0;}};const value:any={[Symbol.toPrimitive](hint:any){order+=hint;return 3n;}};console.log(BigInt.asIntN(bits,value),order);try{BigInt.asIntN(0,3 as any);}catch(e:any){console.log(e.name);}try{BigInt.asUintN(-1,3n);}catch(e:any){console.log(e.name);}",
+            "0n bnumber\nTypeError\nRangeError\n", "main.ts"
+        },
+        new object[]
+        {
+            "rounding", "console.log(Number(9007199254740993n)===9007199254740992,Number(9007199254740995n)===9007199254740996,Number(-9007199254740995n)===-9007199254740996);console.log(Number((1n<<1024n)-1n)===Infinity,Number(-((1n<<1024n)-1n))===-Infinity,Number(0n),Number(-1n));",
+            "true true true\ntrue true 0 -1\n", "main.ts"
+        },
+        new object[]
+        {
+            "radix", "console.log((255n).toString(2),(255n).toString(8),(255n).toString(16),(255n).toString(36),(-255n).toString(16),(0n).toString());console.log((123456789012345678901234567890n).toString(16));try{console.log((10n).toString(1));}catch(e:any){console.log(e.name);}",
+            "11111111 377 ff 73 -ff 0\n18ee90ff6c373e0ee4e3f0ad2\nRangeError\n", "main.ts"
+        },
+        new object[]
+        {
+            "prototype", "const p:any=BigInt.prototype;const boxed:any=Object(42n);console.log(p.valueOf.call(boxed),p.toString.call(boxed,16),Object.getPrototypeOf(boxed)===p,p.constructor===BigInt);console.log(Object.prototype.toString.call(boxed));",
+            "42n 2a true true\n[object BigInt]\n", "main.ts"
+        },
+        new object[]
+        {
+            "descriptor", "const p:any=BigInt.prototype;const d:any=Object.getOwnPropertyDescriptor(p,'valueOf');console.log(d.value===p.valueOf,d.writable,d.enumerable,d.configurable,Object.keys(p).length);const tag:any=Object.getOwnPropertyDescriptor(p,Symbol.toStringTag);console.log(tag.value,tag.writable,tag.enumerable,tag.configurable);",
+            "true true false true 0\nBigInt false false true\n", "main.ts"
+        },
+        new object[]
+        {
+            "brand", "const p:any=BigInt.prototype;try{p.valueOf.call(42);}catch(e:any){console.log(e.name);}try{p.toString.call('42');}catch(e:any){console.log(e.name);}console.log(p.valueOf.call(-7n));",
+            "TypeError\nTypeError\n-7n\n", "main.ts"
+        },
+        new object[]
+        {
+            "prototype_override", "const p:any=BigInt.prototype;p.extra=9;const boxed:any=Object(1n);console.log(boxed.extra,Object.keys(p).join(','));delete p.extra;console.log(boxed.extra);",
+            "9 extra\nundefined\n", "main.ts"
+        },
+        new object[]
+        {
+            "dataview", "const view=new DataView(new ArrayBuffer(16));view.setBigInt64(0,-123n,true);view.setBigUint64(8,18446744073709551615n,false);console.log(view.getBigInt64(0,true),view.getBigUint64(8,false));const v:any=view;v.setBigInt64(0,'17',true);console.log(v.getBigInt64(0,true));try{v.setBigInt64(0,2,true);}catch(e:any){console.log(e.name);}",
+            "-123n 18446744073709551615n\n17n\nTypeError\n", "main.ts"
+        },
+        new object[]
+        {
+            "dataview_only", "const view=new DataView(new ArrayBuffer(8));view.setInt32(0,42,true);console.log(view.getInt32(0,true));",
+            "42\n", "main.ts"
+        },
+        // Preserve the existing compatibility limitation while changing metadata ownership.
+        new object[]
+        {
+            "typedarray", "const buffer=new ArrayBuffer(16);const view=new DataView(buffer);view.setBigInt64(0,-1n,true);view.setBigInt64(8,123n,true);const a=new BigInt64Array(buffer);const b=new BigUint64Array(buffer);console.log(a[0],a[1],a.length,b[0],b[1]);const value:any=a;try{value[0]=1n;}catch(e:any){console.log('assignment failed');}",
+            "-1n 123n 2 18446744073709551615n 123n\nassignment failed\n", "main.ts"
+        },
+        new object[]
+        {
+            "string_boolean", "console.log(String(42n),`${-7n}`,''+5n);console.log(Boolean(0n),Boolean(-1n),typeof 2n);",
+            "42 -7 5\nfalse true bigint\n", "main.ts"
+        },
+        new object[]
+        {
+            "clone", "const value:any={n:12345678901234567890n};const copy:any=structuredClone(value);console.log(copy.n,copy!==value,copy.n===value.n);",
+            "12345678901234567890n true true\n", "main.ts"
+        },
+        new object[]
+        {
+            "async", "async function run(){const n=await Promise.resolve(7);console.log(BigInt(n));}run().catch((e:any)=>console.log(e.name,e.message));",
+            "7n\n", "main.ts"
+        },
+        new object[]
+        {
+            "generator", "function* values():Generator<bigint,void,any>{yield BigInt('7');yield BigInt('9');}for(const n of values()){console.log(n);}",
+            "7n\n9n\n", "main.ts"
+        },
+        // Preserve the existing compatibility limitation while changing metadata ownership.
+        new object[]
+        {
+            "cjs", "const B=BigInt;console.log(BigInt('123'),B('123'),B.asUintN(8,-1n),(255n).toString(16));",
+            "123n null 255n ff\n", "main.cjs"
+        },
+        new object[]
+        {
+            "minimal", "const value=1;",
+            "", "main.ts"
+        },
+        // Preserve the existing compatibility limitation while changing metadata ownership.
+        new object[]
+        {
+            "async_static", "async function run(){const n=await Promise.resolve(7n);console.log(BigInt.asIntN(3,n),n+2n);}run().catch((e:any)=>console.log(e.name,e.message));",
+            "ReferenceError Undefined variable 'BigInt'.\n", "main.ts"
+        },
+        // Preserve the existing compatibility limitation while changing metadata ownership.
+        new object[]
+        {
+            "generator_literal", "function* values():Generator<bigint,void,any>{yield 7n;yield 9n;}try{for(const n of values()){console.log(n*2n);}}catch(e:any){console.log('literal generator failed');}",
+            "literal generator failed\n", "main.ts"
+        },
+    ];
+
+    [Theory]
+    [MemberData(nameof(BigIntMetadataPrograms))]
+    public void Isolated_BigIntMetadata_PreservesConversionsOperatorsAndPrototypeBehavior(string name, string source, string expected, string entryPoint)
+    {
+        using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        tempDir.CreateFile(entryPoint, source);
+        var dllPath = tempDir.GetPath($"bigint_{name}.dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --noLib --compile \"{tempDir.GetPath(entryPoint)}\" -o \"{dllPath}\" --verify --standalone", tempDir.Path);
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(dllPath));
+        Assert.False(File.Exists(tempDir.GetPath("SharpTS.dll")));
+        Assert.Equal(expected, ExecuteCompiledDllIsolated(dllPath, timeoutMs: 30000,
+            verifyStandardError: error => Assert.Empty(error)));
+    }
+
     public static IEnumerable<object[]> BroadcastChannelMetadataPrograms =>
     [
         new object[]

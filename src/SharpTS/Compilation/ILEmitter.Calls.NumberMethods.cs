@@ -55,7 +55,7 @@ public partial class ILEmitter
             case "toLocaleString":
                 // No Intl options — plain decimal (radix 10).
                 IL.Emit(OpCodes.Ldc_R8, 10.0);
-                IL.Emit(OpCodes.Call, _ctx.Runtime!.BigIntToStringRadix);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.BigInt.RequireImplementation().ToStringRadix);
                 SetStackType(StackType.String);
                 break;
 
@@ -64,7 +64,7 @@ public partial class ILEmitter
                     EmitExpressionAsDouble(arguments[0]);
                 else
                     IL.Emit(OpCodes.Ldc_R8, 10.0);
-                IL.Emit(OpCodes.Call, _ctx.Runtime!.BigIntToStringRadix);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.BigInt.RequireImplementation().ToStringRadix);
                 SetStackType(StackType.String);
                 break;
         }

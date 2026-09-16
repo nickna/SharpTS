@@ -610,7 +610,7 @@ public partial class ILEmitter
                     // BigInt negation
                     EmitExpression(u.Right);
                     EmitBoxIfNeeded(u.Right);
-                    EmitCallUnknown(_ctx.Runtime!.BigIntNegate);
+                    EmitCallUnknown(_ctx.Runtime!.BigInt.RequireImplementation().Negate);
                 }
                 else
                 {
@@ -701,7 +701,7 @@ public partial class ILEmitter
                     // BigInt bitwise not
                     EmitExpression(u.Right);
                     EmitBoxIfNeeded(u.Right);
-                    EmitCallUnknown(_ctx.Runtime!.BigIntBitwiseNot);
+                    EmitCallUnknown(_ctx.Runtime!.BigInt.RequireImplementation().BitwiseNot);
                 }
                 else
                 {
@@ -2133,8 +2133,8 @@ public partial class ILEmitter
                 IL.Emit(OpCodes.Call, _ctx.Types.GetProperty(_ctx.Types.BigInteger, "One")!.GetGetMethod()!);
                 IL.Emit(OpCodes.Box, _ctx.Types.BigInteger);
                 IL.Emit(OpCodes.Call, pi.Operator.Type == TokenType.PLUS_PLUS
-                    ? _ctx.Runtime!.BigIntAdd
-                    : _ctx.Runtime!.BigIntSubtract);
+                    ? _ctx.Runtime!.BigInt.RequireImplementation().Add
+                    : _ctx.Runtime!.BigInt.RequireImplementation().Subtract);
                 IL.Emit(OpCodes.Dup);
                 EmitStoreIncrementedVariable(v.Name.Lexeme, isTypedDouble: false,
                     resultIsUnboxedDouble: false);
@@ -2334,8 +2334,8 @@ public partial class ILEmitter
                 IL.Emit(OpCodes.Call, _ctx.Types.GetProperty(_ctx.Types.BigInteger, "One")!.GetGetMethod()!);
                 IL.Emit(OpCodes.Box, _ctx.Types.BigInteger);
                 IL.Emit(OpCodes.Call, pi.Operator.Type == TokenType.PLUS_PLUS
-                    ? _ctx.Runtime!.BigIntAdd
-                    : _ctx.Runtime!.BigIntSubtract);
+                    ? _ctx.Runtime!.BigInt.RequireImplementation().Add
+                    : _ctx.Runtime!.BigInt.RequireImplementation().Subtract);
                 EmitStoreIncrementedVariable(v.Name.Lexeme, isTypedDouble: false,
                     resultIsUnboxedDouble: false);
                 return;
@@ -3568,7 +3568,7 @@ public partial class ILEmitter
                 IL.Emit(OpCodes.Call, _ctx.Runtime!.BoxedPrimitives.UnwrapIfBoxed);
                 IL.Emit(OpCodes.Ldloc, right);
                 IL.Emit(OpCodes.Call, _ctx.Runtime.BoxedPrimitives.UnwrapIfBoxed);
-                IL.Emit(OpCodes.Call, _ctx.Runtime!.BigIntLooseEquals);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.BigInt.RequireImplementation().LooseEquals);
                 if (op == TokenType.BANG_EQUAL)
                 {
                     IL.Emit(OpCodes.Ldc_I4_0);
@@ -3592,7 +3592,7 @@ public partial class ILEmitter
         EmitBoxIfNeeded(b.Right);
 
         // Use centralized helper to get the runtime method and result type
-        var (method, resultType) = BigIntOperatorHelper.GetRuntimeMethod(b.Operator.Type, _ctx.Runtime!);
+        var (method, resultType) = BigIntOperatorHelper.GetRuntimeMethod(b.Operator.Type, _ctx.Runtime!.BigInt);
 
         if (method == null || resultType == BigIntResultType.Unsupported)
         {

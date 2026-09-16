@@ -6,14 +6,34 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
-    private void EmitBigIntStaticMethods(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private readonly record struct BigIntPrimitiveInputs(
+        MethodInfo GetIndex,
+        MethodInfo GetProperty,
+        MethodInfo InvokeMethodValue,
+        FieldInfo SymbolToPrimitive,
+        Type SymbolType,
+        MethodInfo TypeOf,
+        Type UndefinedType,
+        MethodInfo CreateException,
+        ConstructorInfo TypeErrorCtor);
+
+    private readonly record struct BigIntConversionInputs(
+        BigIntPrimitiveInputs Primitive,
+        Type ObjectType,
+        MethodInfo ToJsString,
+        ConstructorInfo RangeErrorCtor,
+        ConstructorInfo SyntaxErrorCtor);
+
+    private void EmitBigIntStaticMethods(TypeBuilder typeBuilder, EmittedBigIntImplementation bigInt,
+        MethodInfo toNumber, MethodInfo createException, ConstructorInfo rangeErrorCtor)
     {
-        runtime.BigIntAsIntN = EmitBigIntTruncate(typeBuilder, runtime, "BigIntAsIntN", signed: true);
-        runtime.BigIntAsUintN = EmitBigIntTruncate(typeBuilder, runtime, "BigIntAsUintN", signed: false);
+        bigInt.AsIntN = EmitBigIntTruncate(typeBuilder, bigInt, toNumber, createException, rangeErrorCtor, "BigIntAsIntN", signed: true);
+        bigInt.AsUintN = EmitBigIntTruncate(typeBuilder, bigInt, toNumber, createException, rangeErrorCtor, "BigIntAsUintN", signed: false);
     }
 
     private MethodBuilder EmitBigIntTruncate(
-        TypeBuilder typeBuilder, EmittedRuntime runtime, string name, bool signed)
+        TypeBuilder typeBuilder, EmittedBigIntImplementation bigInt,
+        MethodInfo toNumber, MethodInfo createException, ConstructorInfo rangeErrorCtor, string name, bool signed)
     {
         var method = typeBuilder.DefineMethod(
             name,
@@ -31,7 +51,7 @@ public partial class RuntimeEmitter
         // ToIndex(bits): NaN => +0; otherwise truncate and reject negative,
         // infinite, or widths outside the emitted implementation's int range.
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.ToNumber);
+        il.Emit(OpCodes.Call, toNumber);
         il.Emit(OpCodes.Stloc, bitsNumber);
         var notNaN = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, bitsNumber);
@@ -56,7 +76,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_R8, (double)int.MaxValue);
         il.Emit(OpCodes.Ble, validBits);
         il.MarkLabel(invalidBits);
-        GuestErrorEmitter.ThrowError(il, runtime, runtime.TSRangeErrorCtor,
+        GuestErrorEmitter.ThrowError(il, createException, rangeErrorCtor,
             "BigInt bit width is outside the supported index range");
         il.MarkLabel(validBits);
         il.Emit(OpCodes.Ldloc, bitsNumber);
@@ -65,7 +85,7 @@ public partial class RuntimeEmitter
 
         // ToBigInt(value), including observable object-to-primitive coercion.
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.ToBigInt);
+        il.Emit(OpCodes.Call, bigInt.ToBigInt);
         il.Emit(OpCodes.Unbox_Any, _types.BigInteger);
         il.Emit(OpCodes.Stloc, value);
 
@@ -126,14 +146,14 @@ public partial class RuntimeEmitter
     /// round-to-nearest, ties-to-even rule, so the rounding is performed while
     /// the integer is still exact and only the 53-bit significand is cast.
     /// </summary>
-    private void EmitBigIntToNumber(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitBigIntToNumber(TypeBuilder typeBuilder, EmittedBigIntRuntime bigInt)
     {
         var method = typeBuilder.DefineMethod(
             "BigIntToNumber",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Double,
             [_types.BigInteger]);
-        runtime.BigIntToNumber = method;
+        bigInt.ToNumber = method;
 
         var il = method.GetILGenerator();
         var magnitude = il.DeclareLocal(_types.BigInteger);
@@ -270,7 +290,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitCreateBigInt(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitCreateBigInt(TypeBuilder typeBuilder, EmittedBigIntImplementation bigInt,
+        BigIntConversionInputs peers)
     {
         // CreateBigInt: object -> BigInteger (boxed)
         var method = typeBuilder.DefineMethod(
@@ -279,12 +300,12 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object]
         );
-        runtime.CreateBigInt = method;
+        bigInt.Create = method;
 
         // Both BigInt(value) and ToBigInt(value) use ToPrimitive(value,
         // number). Keep it separate because their Number handling differs:
         // BigInt(1) accepts an integral Number while ToBigInt(1) rejects it.
-        var toPrimitive = EmitBigIntToPrimitive(typeBuilder, runtime);
+        var toPrimitive = EmitBigIntToPrimitive(typeBuilder, peers.Primitive);
 
         var il = method.GetILGenerator();
         var bigIntType = _types.BigInteger;
@@ -340,7 +361,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ceq);
         il.Emit(OpCodes.Brtrue, validNumber);
         il.MarkLabel(invalidNumber);
-        GuestErrorEmitter.ThrowError(il, runtime, runtime.TSRangeErrorCtor,
+        GuestErrorEmitter.ThrowError(il, peers.Primitive.CreateException, peers.RangeErrorCtor,
             "The number cannot be converted to a BigInt because it is not an integer");
         il.MarkLabel(validNumber);
         il.Emit(OpCodes.Ldloc, numberLocal);
@@ -388,7 +409,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Callvirt, _types.GetPropertyGetter(_types.String, "Length"));
             il.Emit(OpCodes.Ldc_I4_2);
             il.Emit(OpCodes.Bgt, hasDigits);
-            GuestErrorEmitter.ThrowError(il, runtime, runtime.TSSyntaxErrorCtor,
+            GuestErrorEmitter.ThrowError(il, peers.Primitive.CreateException, peers.SyntaxErrorCtor,
                 "Cannot convert string to BigInt");
             il.MarkLabel(hasDigits);
 
@@ -418,7 +439,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldc_I4, radix);
             il.Emit(OpCodes.Blt, validDigit);
             il.MarkLabel(invalidDigit);
-            GuestErrorEmitter.ThrowError(il, runtime, runtime.TSSyntaxErrorCtor,
+            GuestErrorEmitter.ThrowError(il, peers.Primitive.CreateException, peers.SyntaxErrorCtor,
                 "Cannot convert string to BigInt");
             il.MarkLabel(validDigit);
             il.Emit(OpCodes.Ldloc, resultLocal);
@@ -470,7 +491,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Leave, parsedHex);
         il.BeginCatchBlock(_types.Resolve("System.FormatException"));
         il.Emit(OpCodes.Pop);
-        GuestErrorEmitter.ThrowError(il, runtime, runtime.TSSyntaxErrorCtor,
+        GuestErrorEmitter.ThrowError(il, peers.Primitive.CreateException, peers.SyntaxErrorCtor,
             "Cannot convert string to BigInt");
         il.EndExceptionBlock();
         il.MarkLabel(parsedHex);
@@ -488,7 +509,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Leave, parsedDecimal);
         il.BeginCatchBlock(_types.Resolve("System.FormatException"));
         il.Emit(OpCodes.Pop);
-        GuestErrorEmitter.ThrowError(il, runtime, runtime.TSSyntaxErrorCtor,
+        GuestErrorEmitter.ThrowError(il, peers.Primitive.CreateException, peers.SyntaxErrorCtor,
             "Cannot convert string to BigInt");
         il.EndExceptionBlock();
         il.MarkLabel(parsedDecimal);
@@ -505,7 +526,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, _types.IListOfObject);
         il.Emit(OpCodes.Brfalse, notArrayLikeLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
+        il.Emit(OpCodes.Call, peers.ToJsString);
         il.Emit(OpCodes.Call, method);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notArrayLikeLabel);
@@ -515,12 +536,12 @@ public partial class RuntimeEmitter
         var primitiveLocal = il.DeclareLocal(_types.Object);
         var objectLike = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSObjectType);
+        il.Emit(OpCodes.Isinst, peers.ObjectType);
         il.Emit(OpCodes.Brtrue, objectLike);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
         il.Emit(OpCodes.Brtrue, objectLike);
-        GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot convert value to BigInt");
+        GuestErrorEmitter.ThrowError(il, peers.Primitive.CreateException, peers.Primitive.TypeErrorCtor, "Cannot convert value to BigInt");
         il.MarkLabel(objectLike);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Call, toPrimitive);
@@ -529,10 +550,10 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, method);
         il.Emit(OpCodes.Ret);
 
-        EmitStrictToBigInt(typeBuilder, runtime, toPrimitive);
+        EmitStrictToBigInt(typeBuilder, bigInt, peers.ObjectType, peers.Primitive.CreateException, peers.Primitive.TypeErrorCtor, toPrimitive);
     }
 
-    private MethodBuilder EmitBigIntToPrimitive(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private MethodBuilder EmitBigIntToPrimitive(TypeBuilder typeBuilder, BigIntPrimitiveInputs peers)
     {
         var method = typeBuilder.DefineMethod(
             "BigIntToPrimitive",
@@ -564,8 +585,8 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Brfalse, returnValue);
             foreach (var primitiveType in new[]
                      {
-                         runtime.UndefinedType, _types.String, _types.Double,
-                         _types.Boolean, _types.BigInteger, runtime.TSSymbolType
+                         peers.UndefinedType, _types.String, _types.Double,
+                         _types.Boolean, _types.BigInteger, peers.SymbolType
                      })
             {
                 il.Emit(OpCodes.Ldloc, value);
@@ -582,30 +603,30 @@ public partial class RuntimeEmitter
 
         // ExoticToPrim: GetMethod(input, @@toPrimitive).
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldsfld, runtime.SymbolToPrimitive);
-        il.Emit(OpCodes.Call, runtime.GetIndex);
+        il.Emit(OpCodes.Ldsfld, peers.SymbolToPrimitive);
+        il.Emit(OpCodes.Call, peers.GetIndex);
         il.Emit(OpCodes.Stloc, candidate);
         var ordinary = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, candidate);
         il.Emit(OpCodes.Brfalse, ordinary);
         il.Emit(OpCodes.Ldloc, candidate);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, peers.UndefinedType);
         il.Emit(OpCodes.Brtrue, ordinary);
         il.Emit(OpCodes.Ldloc, candidate);
-        il.Emit(OpCodes.Call, runtime.TypeOf);
+        il.Emit(OpCodes.Call, peers.TypeOf);
         il.Emit(OpCodes.Ldstr, "function");
         il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
         var exoticCallable = il.DefineLabel();
         il.Emit(OpCodes.Brtrue, exoticCallable);
-        GuestErrorEmitter.ThrowTypeError(il, runtime, "Symbol.toPrimitive is not callable");
+        GuestErrorEmitter.ThrowError(il, peers.CreateException, peers.TypeErrorCtor, "Symbol.toPrimitive is not callable");
         il.MarkLabel(exoticCallable);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, candidate);
         il.Emit(OpCodes.Ldloc, hintArgs);
-        il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+        il.Emit(OpCodes.Call, peers.InvokeMethodValue);
         il.Emit(OpCodes.Stloc, result);
         EmitReturnIfPrimitive(result);
-        GuestErrorEmitter.ThrowTypeError(il, runtime, "Symbol.toPrimitive must return a primitive value");
+        GuestErrorEmitter.ThrowError(il, peers.CreateException, peers.TypeErrorCtor, "Symbol.toPrimitive must return a primitive value");
 
         il.MarkLabel(ordinary);
         foreach (var name in new[] { "valueOf", "toString" })
@@ -613,40 +634,41 @@ public partial class RuntimeEmitter
             var nextMethod = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldstr, name);
-            il.Emit(OpCodes.Call, runtime.GetProperty);
+            il.Emit(OpCodes.Call, peers.GetProperty);
             il.Emit(OpCodes.Stloc, candidate);
             il.Emit(OpCodes.Ldloc, candidate);
-            il.Emit(OpCodes.Call, runtime.TypeOf);
+            il.Emit(OpCodes.Call, peers.TypeOf);
             il.Emit(OpCodes.Ldstr, "function");
             il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
             il.Emit(OpCodes.Brfalse, nextMethod);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldloc, candidate);
             il.Emit(OpCodes.Ldloc, emptyArgs);
-            il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+            il.Emit(OpCodes.Call, peers.InvokeMethodValue);
             il.Emit(OpCodes.Stloc, result);
             EmitReturnIfPrimitive(result);
             il.MarkLabel(nextMethod);
         }
-        GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot convert object to primitive value");
+        GuestErrorEmitter.ThrowError(il, peers.CreateException, peers.TypeErrorCtor, "Cannot convert object to primitive value");
         return method;
     }
 
     private void EmitStrictToBigInt(
-        TypeBuilder typeBuilder, EmittedRuntime runtime, MethodBuilder toPrimitive)
+        TypeBuilder typeBuilder, EmittedBigIntImplementation bigInt,
+        Type objectType, MethodInfo createException, ConstructorInfo typeErrorCtor, MethodBuilder toPrimitive)
     {
-        var method = runtime.ToBigInt;
+        var method = bigInt.ToBigInt;
         var il = method.GetILGenerator();
         var notNumber = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, _types.Double);
         il.Emit(OpCodes.Brfalse, notNumber);
-        GuestErrorEmitter.ThrowTypeError(il, runtime, "BigInt value is required");
+        GuestErrorEmitter.ThrowError(il, createException, typeErrorCtor, "BigInt value is required");
         il.MarkLabel(notNumber);
 
         var convertPrimitive = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSObjectType);
+        il.Emit(OpCodes.Isinst, objectType);
         il.Emit(OpCodes.Brtrue, convertPrimitive);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
@@ -659,11 +681,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
         il.MarkLabel(direct);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.CreateBigInt);
+        il.Emit(OpCodes.Call, bigInt.Create);
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitBigIntArithmetic(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitBigIntArithmetic(TypeBuilder typeBuilder, EmittedBigIntImplementation bigInt)
     {
         var bigIntType = _types.BigInteger;
 
@@ -676,11 +698,11 @@ public partial class RuntimeEmitter
                 _types.Object,
                 [_types.Object, _types.Object]
             );
-            if (name == "BigIntAdd") runtime.BigIntAdd = method;
-            else if (name == "BigIntSubtract") runtime.BigIntSubtract = method;
-            else if (name == "BigIntMultiply") runtime.BigIntMultiply = method;
-            else if (name == "BigIntDivide") runtime.BigIntDivide = method;
-            else if (name == "BigIntRemainder") runtime.BigIntRemainder = method;
+            if (name == "BigIntAdd") bigInt.Add = method;
+            else if (name == "BigIntSubtract") bigInt.Subtract = method;
+            else if (name == "BigIntMultiply") bigInt.Multiply = method;
+            else if (name == "BigIntDivide") bigInt.Divide = method;
+            else if (name == "BigIntRemainder") bigInt.Remainder = method;
 
             var il = method.GetILGenerator();
             il.Emit(OpCodes.Ldarg_0);
@@ -706,7 +728,7 @@ public partial class RuntimeEmitter
                 _types.Object,
                 [_types.Object, _types.Object]
             );
-            runtime.BigIntPow = method;
+            bigInt.Pow = method;
 
             var il = method.GetILGenerator();
             // Use explicit int cast - find the method that returns int
@@ -733,7 +755,7 @@ public partial class RuntimeEmitter
                 _types.Object,
                 [_types.Object]
             );
-            runtime.BigIntNegate = method;
+            bigInt.Negate = method;
 
             var il = method.GetILGenerator();
             il.Emit(OpCodes.Ldarg_0);
@@ -744,7 +766,8 @@ public partial class RuntimeEmitter
         }
     }
 
-    private void EmitBigIntComparison(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitBigIntComparison(TypeBuilder typeBuilder, EmittedBigIntImplementation bigInt,
+        MethodInfo createException, ConstructorInfo rangeErrorCtor)
     {
         var bigIntType = _types.BigInteger;
 
@@ -756,11 +779,11 @@ public partial class RuntimeEmitter
                 _types.Boolean,
                 [_types.Object, _types.Object]
             );
-            if (name == "BigIntEquals") runtime.BigIntEquals = method;
-            else if (name == "BigIntLessThan") runtime.BigIntLessThan = method;
-            else if (name == "BigIntLessThanOrEqual") runtime.BigIntLessThanOrEqual = method;
-            else if (name == "BigIntGreaterThan") runtime.BigIntGreaterThan = method;
-            else if (name == "BigIntGreaterThanOrEqual") runtime.BigIntGreaterThanOrEqual = method;
+            if (name == "BigIntEquals") bigInt.Equals = method;
+            else if (name == "BigIntLessThan") bigInt.LessThan = method;
+            else if (name == "BigIntLessThanOrEqual") bigInt.LessThanOrEqual = method;
+            else if (name == "BigIntGreaterThan") bigInt.GreaterThan = method;
+            else if (name == "BigIntGreaterThanOrEqual") bigInt.GreaterThanOrEqual = method;
 
             var il = method.GetILGenerator();
             il.Emit(OpCodes.Ldarg_0);
@@ -777,8 +800,8 @@ public partial class RuntimeEmitter
         EmitCompare("BigIntGreaterThan", "op_GreaterThan", null!);
         EmitCompare("BigIntGreaterThanOrEqual", "op_GreaterThanOrEqual", null!);
 
-        EmitBigIntLooseEquals(typeBuilder, runtime);
-        EmitBigIntToStringRadix(typeBuilder, runtime);
+        EmitBigIntLooseEquals(typeBuilder, bigInt);
+        EmitBigIntToStringRadix(typeBuilder, bigInt, createException, rangeErrorCtor);
     }
 
     /// <summary>
@@ -790,7 +813,8 @@ public partial class RuntimeEmitter
     /// method independent of the $Runtime method-emission order. Mirrors the
     /// interpreter's BigIntBuiltIns.ToStringWithRadix.
     /// </summary>
-    private void EmitBigIntToStringRadix(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitBigIntToStringRadix(TypeBuilder typeBuilder, EmittedBigIntImplementation bigInt,
+        MethodInfo createException, ConstructorInfo rangeErrorCtor)
     {
         var bi = _types.BigInteger;
         var method = typeBuilder.DefineMethod(
@@ -799,7 +823,7 @@ public partial class RuntimeEmitter
             _types.String,
             [_types.Object, _types.Double]
         );
-        runtime.BigIntToStringRadix = method;
+        bigInt.ToStringRadix = method;
 
         var il = method.GetILGenerator();
         var explicitToInt = _types.GetMethods(bi).First(m =>
@@ -907,7 +931,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(throwRange);
-        GuestErrorEmitter.ThrowError(il, runtime, runtime.TSRangeErrorCtor,
+        GuestErrorEmitter.ThrowError(il, createException, rangeErrorCtor,
             "toString() radix must be between 2 and 36");
     }
 
@@ -921,7 +945,7 @@ public partial class RuntimeEmitter
     /// (BCL-only) so the output DLL stays standalone. Mirrors the interpreter's
     /// Interpreter.LooseEqualsBigInt / TryStringToBigInt.
     /// </summary>
-    private void EmitBigIntLooseEquals(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitBigIntLooseEquals(TypeBuilder typeBuilder, EmittedBigIntImplementation bigInt)
     {
         var bi = _types.BigInteger;
         var method = typeBuilder.DefineMethod(
@@ -930,7 +954,7 @@ public partial class RuntimeEmitter
             _types.Boolean,
             [_types.Object, _types.Object]
         );
-        runtime.BigIntLooseEquals = method;
+        bigInt.LooseEquals = method;
 
         var il = method.GetILGenerator();
         var opEquality = _types.GetMethod(bi, "op_Equality", bi, bi);
@@ -1061,7 +1085,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitBigIntBitwise(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitBigIntBitwise(TypeBuilder typeBuilder, EmittedBigIntImplementation bigInt)
     {
         var bigIntType = _types.BigInteger;
 
@@ -1073,9 +1097,9 @@ public partial class RuntimeEmitter
                 _types.Object,
                 [_types.Object, _types.Object]
             );
-            if (name == "BigIntBitwiseAnd") runtime.BigIntBitwiseAnd = method;
-            else if (name == "BigIntBitwiseOr") runtime.BigIntBitwiseOr = method;
-            else if (name == "BigIntBitwiseXor") runtime.BigIntBitwiseXor = method;
+            if (name == "BigIntBitwiseAnd") bigInt.BitwiseAnd = method;
+            else if (name == "BigIntBitwiseOr") bigInt.BitwiseOr = method;
+            else if (name == "BigIntBitwiseXor") bigInt.BitwiseXor = method;
 
             var il = method.GetILGenerator();
             il.Emit(OpCodes.Ldarg_0);
@@ -1099,7 +1123,7 @@ public partial class RuntimeEmitter
                 _types.Object,
                 [_types.Object]
             );
-            runtime.BigIntBitwiseNot = method;
+            bigInt.BitwiseNot = method;
 
             var il = method.GetILGenerator();
             il.Emit(OpCodes.Ldarg_0);
@@ -1122,7 +1146,7 @@ public partial class RuntimeEmitter
                 _types.Object,
                 [_types.Object, _types.Object]
             );
-            runtime.BigIntLeftShift = method;
+            bigInt.LeftShift = method;
 
             var il = method.GetILGenerator();
             // Stack after setup: [value, shiftAmount]
@@ -1146,7 +1170,7 @@ public partial class RuntimeEmitter
                 _types.Object,
                 [_types.Object, _types.Object]
             );
-            runtime.BigIntRightShift = method;
+            bigInt.RightShift = method;
 
             var il = method.GetILGenerator();
             il.Emit(OpCodes.Ldarg_0);

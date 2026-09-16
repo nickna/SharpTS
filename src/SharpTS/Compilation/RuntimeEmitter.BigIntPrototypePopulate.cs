@@ -5,71 +5,90 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
-    private void DefineBigIntPrototypePopulateShell(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private readonly record struct BigIntPrototypeInputs(
+        PrototypeDescriptorInputs Descriptors,
+        Type DescriptorType,
+        MethodInfo WritableSetter,
+        MethodInfo ConfigurableSetter,
+        MethodInfo FunctionGetOrCreate,
+        MethodInfo GetSymbolDictionary,
+        FieldInfo SymbolToStringTag,
+        FieldInfo ObjectPrototype,
+        MethodInfo SetPrototype,
+        Type ObjectType,
+        MethodInfo ObjectFieldsGetter,
+        MethodInfo ToNumber,
+        Type UndefinedType,
+        MethodInfo CreateException,
+        ConstructorInfo TypeErrorCtor);
+
+    private void DefineBigIntPrototypePopulateShell(TypeBuilder typeBuilder, EmittedBigIntRuntime bigInt)
     {
-        runtime.BigIntPrototypePopulateMethod = typeBuilder.DefineMethod(
+        bigInt.PrototypePopulateMethod = typeBuilder.DefineMethod(
             "_BigIntPrototypePopulate",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Void,
             Type.EmptyTypes);
     }
 
-    private void EmitBigIntPrototypePopulate(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitBigIntPrototypePopulate(TypeBuilder typeBuilder, EmittedBigIntRuntime bigInt,
+        MethodInfo toStringRadix, BigIntPrototypeInputs peers)
     {
-        var valueOfHelper = EmitBigIntValueOfHelper(typeBuilder, runtime);
-        var toStringHelper = EmitBigIntPrototypeToStringHelper(typeBuilder, runtime, valueOfHelper);
+        var valueOfHelper = EmitBigIntValueOfHelper(typeBuilder, peers.ObjectType, peers.ObjectFieldsGetter, peers.CreateException, peers.TypeErrorCtor);
+        var toStringHelper = EmitBigIntPrototypeToStringHelper(typeBuilder, toStringRadix, peers.ToNumber, peers.UndefinedType, valueOfHelper);
 
-        var method = runtime.BigIntPrototypePopulateMethod;
+        var method = bigInt.PrototypePopulateMethod;
         var il = method.GetILGenerator();
         var setItem = _types.GetMethod(_types.DictionaryStringObject, "set_Item",
             _types.String, _types.Object);
 
-        EmitPrototypePopulateGuard(il, runtime.BigIntPrototypeField);
-        var descLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+        EmitPrototypePopulateGuard(il, bigInt.PrototypeField);
+        var descLocal = il.DeclareLocal(peers.DescriptorType);
 
-        EmitInstallConstructor(il, runtime, runtime.BigIntPrototypeField, descLocal, setItem, () =>
+        EmitInstallConstructorDescriptor(il, peers.Descriptors, bigInt.PrototypeField, descLocal, setItem, () =>
         {
             il.Emit(OpCodes.Ldtoken, _types.BigInteger);
             il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
         });
 
-        EmitWirePrototypeMethod(il, runtime, runtime.BigIntPrototypeField, descLocal,
+        EmitWirePrototypeMethodDescriptor(il, peers.Descriptors, peers.FunctionGetOrCreate, bigInt.PrototypeField, descLocal,
             setItem, "toString", toStringHelper, 0);
-        EmitWirePrototypeMethod(il, runtime, runtime.BigIntPrototypeField, descLocal,
+        EmitWirePrototypeMethodDescriptor(il, peers.Descriptors, peers.FunctionGetOrCreate, bigInt.PrototypeField, descLocal,
             setItem, "valueOf", valueOfHelper, 0);
 
         // %BigInt.prototype% owns @@toStringTag = "BigInt" with the standard
         // { writable:false, enumerable:false, configurable:true } attributes.
         // Store the descriptor in the shared symbol dictionary so user
         // defineProperty/delete operations participate in ordinary lookup.
-        il.Emit(OpCodes.Newobj, runtime.CompiledPropertyDescriptorCtor);
+        il.Emit(OpCodes.Newobj, peers.Descriptors.Ctor);
         il.Emit(OpCodes.Stloc, descLocal);
         il.Emit(OpCodes.Ldloc, descLocal);
         il.Emit(OpCodes.Ldstr, "BigInt");
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorValue.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, peers.Descriptors.ValueSetter);
         il.Emit(OpCodes.Ldloc, descLocal);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorWritable.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, peers.WritableSetter);
         il.Emit(OpCodes.Ldloc, descLocal);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorEnumerable.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, peers.Descriptors.EnumerableSetter);
         il.Emit(OpCodes.Ldloc, descLocal);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorConfigurable.GetSetMethod()!);
-        il.Emit(OpCodes.Ldsfld, runtime.BigIntPrototypeField);
-        il.Emit(OpCodes.Call, runtime.GetSymbolDictMethod);
-        il.Emit(OpCodes.Ldsfld, runtime.SymbolToStringTag);
+        il.Emit(OpCodes.Callvirt, peers.ConfigurableSetter);
+        il.Emit(OpCodes.Ldsfld, bigInt.PrototypeField);
+        il.Emit(OpCodes.Call, peers.GetSymbolDictionary);
+        il.Emit(OpCodes.Ldsfld, peers.SymbolToStringTag);
         il.Emit(OpCodes.Ldloc, descLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(
             _types.DictionaryObjectObject, "set_Item", _types.Object, _types.Object));
 
-        il.Emit(OpCodes.Ldsfld, runtime.BigIntPrototypeField);
-        il.Emit(OpCodes.Ldsfld, runtime.ObjectPrototypeField);
-        il.Emit(OpCodes.Call, runtime.PDSSetPrototype);
+        il.Emit(OpCodes.Ldsfld, bigInt.PrototypeField);
+        il.Emit(OpCodes.Ldsfld, peers.ObjectPrototype);
+        il.Emit(OpCodes.Call, peers.SetPrototype);
         il.Emit(OpCodes.Ret);
     }
 
-    private MethodBuilder EmitBigIntValueOfHelper(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private MethodBuilder EmitBigIntValueOfHelper(TypeBuilder typeBuilder, Type objectType,
+        MethodInfo objectFieldsGetter, MethodInfo createException, ConstructorInfo typeErrorCtor)
     {
         var method = typeBuilder.DefineMethod(
             "BigIntValueOf",
@@ -88,12 +107,12 @@ public partial class RuntimeEmitter
         il.MarkLabel(notPrimitive);
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSObjectType);
+        il.Emit(OpCodes.Isinst, objectType);
         il.Emit(OpCodes.Brfalse, throwTypeError);
         var primitiveLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSObjectType);
-        il.Emit(OpCodes.Callvirt, runtime.TSObjectFieldsGetter);
+        il.Emit(OpCodes.Castclass, objectType);
+        il.Emit(OpCodes.Callvirt, objectFieldsGetter);
         il.Emit(OpCodes.Ldstr, "__primitiveValue");
         il.Emit(OpCodes.Ldloca, primitiveLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "TryGetValue",
@@ -106,13 +125,14 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(throwTypeError);
-        GuestErrorEmitter.ThrowTypeError(il, runtime,
+        GuestErrorEmitter.ThrowError(il, createException, typeErrorCtor,
             "BigInt.prototype.valueOf requires that 'this' be a BigInt");
         return method;
     }
 
     private MethodBuilder EmitBigIntPrototypeToStringHelper(
-        TypeBuilder typeBuilder, EmittedRuntime runtime, MethodBuilder valueOfHelper)
+        TypeBuilder typeBuilder, MethodInfo toStringRadix,
+        MethodInfo toNumber, Type undefinedType, MethodBuilder valueOfHelper)
     {
         var method = typeBuilder.DefineMethod(
             "BigIntPrototypeToString",
@@ -132,12 +152,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldelem_Ref);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, undefinedType);
         il.Emit(OpCodes.Brtrue, useDefault);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldelem_Ref);
-        il.Emit(OpCodes.Call, runtime.ToNumber);
+        il.Emit(OpCodes.Call, toNumber);
         il.Emit(OpCodes.Stloc, radixLocal);
         il.Emit(OpCodes.Br, radixReady);
         il.MarkLabel(useDefault);
@@ -148,7 +168,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Call, valueOfHelper);
         il.Emit(OpCodes.Ldloc, radixLocal);
-        il.Emit(OpCodes.Call, runtime.BigIntToStringRadix);
+        il.Emit(OpCodes.Call, toStringRadix);
         il.Emit(OpCodes.Ret);
         return method;
     }

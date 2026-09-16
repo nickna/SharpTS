@@ -863,8 +863,8 @@ take the component and narrow dependencies; method and prototype orchestration u
 scoped peer inputs and the shared descriptor-installation helpers. The exact fixed formatter's
 BigInteger fallback and prototype valueOf builder remain local to their callers. Cached delegate
 initialization, native signatures, optimization flags, parsing/rounding behavior and prototype
-identity remain unchanged. General numeric coercion, Math, BigInt and Boolean metadata retain
-their own later migration boundaries, and scoped BCL/descriptor inputs remain in the final audit.
+identity remain unchanged. General numeric coercion and Boolean metadata retain their own later
+migration boundaries, and scoped BCL/descriptor inputs remain in the final audit.
 
 During emission, each handle becomes readable as soon as its declaration is assigned, so forward
 references do not require a method body to exist yet. An early read names the missing declaration.
@@ -882,6 +882,18 @@ The early descriptor fallback keeps its historical absent sumPrecise target; pop
 descriptors contain the actual late-declared method. Random's private field, exact-unit helper
 builders and BCL/Half metadata remain local construction values. Numeric algorithms, coercion
 order, cached function identity, descriptors and initialization order remain unchanged.
+
+BigInt has a required `EmittedBigIntRuntime` owner for its prototype field/population shell and
+binary64 conversion helper, plus an optional `EmittedBigIntImplementation` with 24 declarations.
+Implementation availability follows UsesBigInt and is established before the early strict ToBigInt
+declaration used by DataView. Callable conversion and strict-conversion bodies retain their later
+stage; prototype population remains feature-gated. Completion checks the required declarations
+before validating and freezing the enabled implementation. Fifteen family emission boundaries
+take these owners and explicit primitive-conversion, error, descriptor and prototype inputs.
+ToPrimitive, prototype helpers and BCL metadata stay local to construction. DataView adapters and
+static dispatch use explicit implementation availability. Binary64 rounding, width/value coercion
+order, callable versus strict conversion, prototype descriptors, function identity and declaration
+order remain unchanged. These components own compiler metadata; guest prototypes remain mutable.
 
 Follow this pattern for subsequent families: explicit optional availability, checked declarations,
 one completion boundary, and no retained flat aliases. Pass the component to helpers that only
