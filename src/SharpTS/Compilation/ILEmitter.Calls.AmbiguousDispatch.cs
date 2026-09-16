@@ -34,7 +34,7 @@ public partial class ILEmitter
         builder.Emit_Brtrue(isStringLabel);
         IL.Emit(OpCodes.Ldloc, objLocal);
         IL.Emit(OpCodes.Ldstr, "String");
-        IL.Emit(OpCodes.Call, _ctx.Runtime!.IsBoxedPrimitiveOfTypeMethod);
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.BoxedPrimitives.IsOfType);
         builder.Emit_Brtrue(isStringLabel);
 
         // List<object> → list path. Otherwise (Dictionary, $Object, etc.)
@@ -53,7 +53,7 @@ public partial class ILEmitter
         // emitter.
         builder.MarkLabel(isStringLabel);
         IL.Emit(OpCodes.Ldloc, objLocal);
-        IL.Emit(OpCodes.Call, _ctx.Runtime!.UnwrapStringReceiverMethod);
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.BoxedPrimitives.UnwrapStringReceiver);
 
         switch (methodName)
         {

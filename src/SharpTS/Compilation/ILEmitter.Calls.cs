@@ -241,7 +241,7 @@ public partial class ILEmitter
                     // undefined → empty $Object; everything else → arg unchanged.
                     EmitExpression(c.Arguments[0]);
                     EmitBoxIfNeeded(c.Arguments[0]);
-                    IL.Emit(OpCodes.Call, _ctx.Runtime!.ToObjectMethod);
+                    IL.Emit(OpCodes.Call, _ctx.Runtime!.BoxedPrimitives.ToObject);
                     SetStackUnknown();
                     return;
             }
@@ -265,7 +265,7 @@ public partial class ILEmitter
             {
                 EmitExpression(c.Arguments[0]);
                 EmitBoxIfNeeded(c.Arguments[0]);
-                IL.Emit(OpCodes.Call, _ctx.Runtime!.ToObjectMethod);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.BoxedPrimitives.ToObject);
                 SetStackUnknown();
                 return;
             }
@@ -678,7 +678,7 @@ public partial class ILEmitter
         // Materialization below keeps using the raw receiver, observationally
         // identical to O for every shape this path supports. (#454)
         IL.Emit(OpCodes.Ldloc, receiverLocal);
-        IL.Emit(OpCodes.Call, runtime.ToObjectMethod);
+        IL.Emit(OpCodes.Call, runtime.BoxedPrimitives.ToObject);
         IL.Emit(OpCodes.Stsfld, runtime.ArrayOperations.CurrentReceiverField);
 
         var methodArgs = c.Arguments.Skip(1).ToList();

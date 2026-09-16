@@ -5,6 +5,41 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
+    // Construction-scoped dependencies; peer declarations remain with their owning families.
+    private readonly record struct BoxedPrimitiveInputs(
+        Type ObjectType,
+        ConstructorInfo ObjectCtor,
+        Type DescriptorType,
+        ConstructorInfo DescriptorCtor,
+        MethodInfo DescriptorSetValue,
+        MethodInfo DescriptorSetWritable,
+        MethodInfo DescriptorSetEnumerable,
+        MethodInfo DescriptorSetConfigurable,
+        MethodInfo DefineProperty,
+        MethodInfo SetPrototype,
+        FieldBuilder BooleanPrototype,
+        MethodBuilder PopulateBooleanPrototype,
+        FieldBuilder NumberPrototype,
+        MethodBuilder PopulateNumberPrototype,
+        FieldBuilder SymbolPrototype,
+        MethodBuilder PopulateSymbolPrototype);
+
+    private readonly record struct UnwrapPrimitiveInputs(
+        Type ObjectType,
+        FieldInfo SymbolToPrimitive,
+        MethodInfo GetIndex,
+        Type UndefinedType,
+        MethodInfo TypeOf,
+        MethodInfo InvokeMethodValue,
+        MethodInfo ObjectGetProperty,
+        MethodInfo HasOwnProperty,
+        MethodInfo GetProperty,
+        MethodInfo CreateException,
+        ConstructorInfo TypeErrorCtor);
+
+    private readonly record struct BoxedBigIntPrototype(FieldBuilder Field, MethodBuilder Populate);
+    private readonly record struct BoxedDateInputs(Type Type, MethodInfo ToStringMethod);
+
     /// <summary>
     /// Emits <c>$Runtime.NewBoxedPrimitive(string typeTag, object value) -&gt; $Object</c>:
     /// builds a fresh <c>$Object</c> wrapping a primitive (boolean/number/string)
@@ -18,18 +53,21 @@ public partial class RuntimeEmitter
     /// Plus methods like <c>valueOf</c> are available via the prototype chain.
     /// Used by <c>TryEmitBuiltInConstructor</c> for Boolean/Number/String.
     /// </summary>
-    private void EmitNewBoxedPrimitive(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitNewBoxedPrimitive(TypeBuilder typeBuilder, EmittedBoxedPrimitiveRuntime boxed,
+        EmittedStringRuntime strings,
+        BoxedPrimitiveInputs peers,
+        BoxedBigIntPrototype? bigIntPrototype)
     {
         var method = typeBuilder.DefineMethod(
             "NewBoxedPrimitive",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.String, _types.Object]);
-        runtime.NewBoxedPrimitiveMethod = method;
+        boxed.New = method;
 
         var il = method.GetILGenerator();
         var dictLocal = il.DeclareLocal(_types.DictionaryStringObject);
-        var objLocal = il.DeclareLocal(runtime.TSObjectType);
+        var objLocal = il.DeclareLocal(peers.ObjectType);
         var typeTagLocal = il.DeclareLocal(_types.String);
         var setItem = _types.GetMethod(_types.DictionaryStringObject, "set_Item",
             _types.String, _types.Object);
@@ -122,7 +160,7 @@ public partial class RuntimeEmitter
 
         // obj = new $Object(dict)
         il.Emit(OpCodes.Ldloc, dictLocal);
-        il.Emit(OpCodes.Newobj, runtime.TSObjectCtor);
+        il.Emit(OpCodes.Newobj, peers.ObjectCtor);
         il.Emit(OpCodes.Stloc, objLocal);
 
         // String exotic own properties have fixed descriptors: length is
@@ -136,27 +174,27 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
         il.Emit(OpCodes.Brfalse, skipStringDescriptors);
 
-        var descriptorLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
-        il.Emit(OpCodes.Newobj, runtime.CompiledPropertyDescriptorCtor);
+        var descriptorLocal = il.DeclareLocal(peers.DescriptorType);
+        il.Emit(OpCodes.Newobj, peers.DescriptorCtor);
         il.Emit(OpCodes.Stloc, descriptorLocal);
         il.Emit(OpCodes.Ldloc, descriptorLocal);
         il.Emit(OpCodes.Ldloc, lenLocal);
         il.Emit(OpCodes.Conv_R8);
         il.Emit(OpCodes.Box, _types.Double);
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorValue.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, peers.DescriptorSetValue);
         il.Emit(OpCodes.Ldloc, descriptorLocal);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorWritable.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, peers.DescriptorSetWritable);
         il.Emit(OpCodes.Ldloc, descriptorLocal);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorEnumerable.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, peers.DescriptorSetEnumerable);
         il.Emit(OpCodes.Ldloc, descriptorLocal);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorConfigurable.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, peers.DescriptorSetConfigurable);
         il.Emit(OpCodes.Ldloc, objLocal);
         il.Emit(OpCodes.Ldstr, "length");
         il.Emit(OpCodes.Ldloc, descriptorLocal);
-        il.Emit(OpCodes.Call, runtime.PDSDefineProperty);
+        il.Emit(OpCodes.Call, peers.DefineProperty);
         il.Emit(OpCodes.Pop);
 
         var descriptorLoop = il.DefineLabel();
@@ -167,28 +205,28 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, idxLocal);
         il.Emit(OpCodes.Ldloc, lenLocal);
         il.Emit(OpCodes.Bge, descriptorLoopEnd);
-        il.Emit(OpCodes.Newobj, runtime.CompiledPropertyDescriptorCtor);
+        il.Emit(OpCodes.Newobj, peers.DescriptorCtor);
         il.Emit(OpCodes.Stloc, descriptorLocal);
         il.Emit(OpCodes.Ldloc, descriptorLocal);
         il.Emit(OpCodes.Ldloc, dictLocal);
         il.Emit(OpCodes.Ldloca, idxLocal);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Int32, "ToString", Type.EmptyTypes)!);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "get_Item", _types.String));
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorValue.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, peers.DescriptorSetValue);
         il.Emit(OpCodes.Ldloc, descriptorLocal);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorEnumerable.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, peers.DescriptorSetEnumerable);
         il.Emit(OpCodes.Ldloc, descriptorLocal);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorWritable.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, peers.DescriptorSetWritable);
         il.Emit(OpCodes.Ldloc, descriptorLocal);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorConfigurable.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, peers.DescriptorSetConfigurable);
         il.Emit(OpCodes.Ldloc, objLocal);
         il.Emit(OpCodes.Ldloca, idxLocal);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Int32, "ToString", Type.EmptyTypes)!);
         il.Emit(OpCodes.Ldloc, descriptorLocal);
-        il.Emit(OpCodes.Call, runtime.PDSDefineProperty);
+        il.Emit(OpCodes.Call, peers.DefineProperty);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Ldloc, idxLocal);
         il.Emit(OpCodes.Ldc_I4_1);
@@ -212,15 +250,15 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Call, populate);
             il.Emit(OpCodes.Ldloc, objLocal);
             il.Emit(OpCodes.Ldsfld, protoField);
-            il.Emit(OpCodes.Call, runtime.PDSSetPrototype);
+            il.Emit(OpCodes.Call, peers.SetPrototype);
             il.MarkLabel(skip);
         }
-        LinkProto("Boolean", runtime.BooleanPrototypeField, runtime.BooleanPrototypePopulateMethod);
-        LinkProto("Number",  runtime.NumberPrototypeField,  runtime.NumberPrototypePopulateMethod);
-        LinkProto("String",  runtime.Strings.PrototypeField,  runtime.Strings.PrototypePopulateMethod);
-        if (_features.UsesBigInt)
-            LinkProto("BigInt", runtime.BigIntPrototypeField, runtime.BigIntPrototypePopulateMethod);
-        LinkProto("Symbol", runtime.SymbolPrototypeField, runtime.SymbolPrototypePopulateMethod);
+        LinkProto("Boolean", peers.BooleanPrototype, peers.PopulateBooleanPrototype);
+        LinkProto("Number",  peers.NumberPrototype,  peers.PopulateNumberPrototype);
+        LinkProto("String",  strings.PrototypeField,  strings.PrototypePopulateMethod);
+        if (bigIntPrototype is not null)
+            LinkProto("BigInt", bigIntPrototype.Value.Field, bigIntPrototype.Value.Populate);
+        LinkProto("Symbol", peers.SymbolPrototype, peers.PopulateSymbolPrototype);
 
         il.Emit(OpCodes.Ldloc, objLocal);
         il.Emit(OpCodes.Ret);
@@ -245,14 +283,17 @@ public partial class RuntimeEmitter
     /// through unchanged, keeping this off the hot path for compiled-origin values.
     /// (Test262 language/expressions/new/S11.2.2_A1.1 / A1.2.)
     /// </summary>
-    private void EmitNormalizeForeignEvalValue(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitNormalizeForeignEvalValue(TypeBuilder typeBuilder, EmittedBoxedPrimitiveRuntime boxed,
+        Type objectType,
+        FieldInfo undefinedInstance,
+        MethodInfo getProperty)
     {
         var method = typeBuilder.DefineMethod(
             "NormalizeForeignEvalValue",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.Object]);
-        runtime.NormalizeForeignEvalValueMethod = method;
+        boxed.NormalizeForeignEvalValue = method;
 
         var il = method.GetILGenerator();
         var passthrough = il.DefineLabel();
@@ -275,13 +316,13 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, "SharpTS.Runtime.Types.SharpTSUndefined");
         il.Emit(OpCodes.Call, strEq);
         il.Emit(OpCodes.Brfalse, notForeignUndefined);
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, undefinedInstance);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notForeignUndefined);
 
         // Already a native $Object (the common compiled-origin case) → passthrough.
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSObjectType);
+        il.Emit(OpCodes.Isinst, objectType);
         il.Emit(OpCodes.Brtrue, passthrough);
 
         // Plain Dictionary object literal → passthrough (not a boxed wrapper).
@@ -293,7 +334,7 @@ public partial class RuntimeEmitter
         // objects via the general property dispatch; null when absent/non-string).
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "__primitiveType");
-        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, getProperty);
         il.Emit(OpCodes.Isinst, _types.String);
         il.Emit(OpCodes.Stloc, ptLocal);
         il.Emit(OpCodes.Ldloc, ptLocal);
@@ -318,8 +359,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, ptLocal);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "__primitiveValue");
-        il.Emit(OpCodes.Call, runtime.GetProperty);
-        il.Emit(OpCodes.Call, runtime.NewBoxedPrimitiveMethod);
+        il.Emit(OpCodes.Call, getProperty);
+        il.Emit(OpCodes.Call, boxed.New);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(passthrough);
@@ -330,15 +371,17 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits <c>$Runtime.ToObject(object value) -&gt; object</c>: ECMA-262
     /// 7.1.18 ToObject coercion. <c>null</c>/<c>undefined</c> → empty
-    /// <c>$Object</c>; <c>bool</c>/<c>double</c> → boxed wrapper via
-    /// <c>NewBoxedPrimitive</c>; everything else (including <c>string</c>)
-    /// passes through unchanged. Used by <c>new Object(v)</c> in compiled mode.
-    /// String is intentionally not boxed — see Stage 4z19 carve-out.
+    /// <c>$Object</c>; Boolean/Number/String/BigInt/Symbol primitives → boxed
+    /// wrapper via <c>NewBoxedPrimitive</c>; object inputs preserve identity.
+    /// Used by <c>new Object(v)</c> in compiled mode.
     /// </summary>
-    private void EmitToObject(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitToObject(TypeBuilder typeBuilder, EmittedBoxedPrimitiveRuntime boxed,
+        ConstructorInfo objectCtor,
+        Type undefinedType,
+        Type? symbolType)
     {
         // Body fill: method signature forward-declared by DefineRuntimeClassPhase1.
-        var method = runtime.ToObjectMethod;
+        var method = boxed.ToObject;
         var il = method.GetILGenerator();
 
         // null → empty $Object
@@ -346,17 +389,17 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Brtrue, notNullLabel);
         il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.DictionaryStringObject));
-        il.Emit(OpCodes.Newobj, runtime.TSObjectCtor);
+        il.Emit(OpCodes.Newobj, objectCtor);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notNullLabel);
 
         // undefined → empty $Object
         var notUndefLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, undefinedType);
         il.Emit(OpCodes.Brfalse, notUndefLabel);
         il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.DictionaryStringObject));
-        il.Emit(OpCodes.Newobj, runtime.TSObjectCtor);
+        il.Emit(OpCodes.Newobj, objectCtor);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notUndefLabel);
 
@@ -367,7 +410,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, notBoolLabel);
         il.Emit(OpCodes.Ldstr, "Boolean");
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.NewBoxedPrimitiveMethod);
+        il.Emit(OpCodes.Call, boxed.New);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notBoolLabel);
 
@@ -378,7 +421,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, notNumLabel);
         il.Emit(OpCodes.Ldstr, "Number");
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.NewBoxedPrimitiveMethod);
+        il.Emit(OpCodes.Call, boxed.New);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notNumLabel);
 
@@ -389,7 +432,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, notBigIntLabel);
         il.Emit(OpCodes.Ldstr, "BigInt");
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.NewBoxedPrimitiveMethod);
+        il.Emit(OpCodes.Call, boxed.New);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notBigIntLabel);
 
@@ -397,15 +440,15 @@ public partial class RuntimeEmitter
         // ToObject on a Symbol returns a fresh wrapper whose [[SymbolData]]
         // holds the original primitive. test262's `Object(sym) !== sym`
         // identity check verifies the wrapper is distinct.
-        if (runtime.TSSymbolType != null)
+        if (symbolType != null)
         {
             var notSymLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.TSSymbolType);
+            il.Emit(OpCodes.Isinst, symbolType);
             il.Emit(OpCodes.Brfalse, notSymLabel);
             il.Emit(OpCodes.Ldstr, "Symbol");
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Call, runtime.NewBoxedPrimitiveMethod);
+            il.Emit(OpCodes.Call, boxed.New);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(notSymLabel);
         }
@@ -424,7 +467,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, notStrLabel);
         il.Emit(OpCodes.Ldstr, "String");
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.NewBoxedPrimitiveMethod);
+        il.Emit(OpCodes.Call, boxed.New);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notStrLabel);
 
@@ -433,9 +476,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void DefineIsBoxedPrimitiveOfTypeShell(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void DefineIsBoxedPrimitiveOfTypeShell(TypeBuilder typeBuilder, EmittedBoxedPrimitiveRuntime boxed)
     {
-        runtime.IsBoxedPrimitiveOfTypeMethod = typeBuilder.DefineMethod(
+        boxed.IsOfType = typeBuilder.DefineMethod(
             "IsBoxedPrimitiveOfType",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Boolean,
@@ -450,14 +493,17 @@ public partial class RuntimeEmitter
     /// otherwise falls back to <c>ToJsString</c> (which handles bool/double/etc.
     /// per the JS spec ToString protocol).
     /// </summary>
-    private void EmitUnwrapStringReceiver(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitUnwrapStringReceiver(TypeBuilder typeBuilder, EmittedBoxedPrimitiveRuntime boxed,
+        Type objectType,
+        MethodInfo getProperty,
+        EmittedStringCoercionRuntime stringCoercion)
     {
         var method = typeBuilder.DefineMethod(
             "UnwrapStringReceiver",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.String,
             [_types.Object]);
-        runtime.UnwrapStringReceiverMethod = method;
+        boxed.UnwrapStringReceiver = method;
 
         var il = method.GetILGenerator();
 
@@ -474,12 +520,12 @@ public partial class RuntimeEmitter
         // $Object wrapper unwrap: __primitiveValue (string only)
         var notWrapperLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSObjectType);
+        il.Emit(OpCodes.Isinst, objectType);
         il.Emit(OpCodes.Brfalse, notWrapperLabel);
         var primValLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "__primitiveValue");
-        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, getProperty);
         il.Emit(OpCodes.Stloc, primValLocal);
         il.Emit(OpCodes.Ldloc, primValLocal);
         il.Emit(OpCodes.Isinst, _types.String);
@@ -496,7 +542,7 @@ public partial class RuntimeEmitter
         // dispatch flows through CoercePrimitiveArgs.RequireObjectCoercibleThis
         // which is the spec gate.
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
+        il.Emit(OpCodes.Call, stringCoercion.ToJsString);
         il.Emit(OpCodes.Ret);
     }
 
@@ -506,9 +552,11 @@ public partial class RuntimeEmitter
     /// <c>__primitiveType</c> field equals <paramref name="typeTag"/>. Used by
     /// the <c>instanceof</c> emitter to recognize boxed Boolean/Number/String.
     /// </summary>
-    private void EmitIsBoxedPrimitiveOfType(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitIsBoxedPrimitiveOfType(TypeBuilder typeBuilder, EmittedBoxedPrimitiveRuntime boxed,
+        Type objectType,
+        MethodInfo objectGetProperty)
     {
-        var method = runtime.IsBoxedPrimitiveOfTypeMethod;
+        var method = boxed.IsOfType;
         var il = method.GetILGenerator();
         var falseLabel = il.DefineLabel();
 
@@ -518,16 +566,16 @@ public partial class RuntimeEmitter
 
         // Must be $Object
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSObjectType);
+        il.Emit(OpCodes.Isinst, objectType);
         il.Emit(OpCodes.Brfalse, falseLabel);
 
         // Use HasOwnPropertyHelper-style lookup via TSObject.HasProperty +
         // GetProperty for "__primitiveType". Read via the public getter.
         var typeValueLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSObjectType);
+        il.Emit(OpCodes.Castclass, objectType);
         il.Emit(OpCodes.Ldstr, "__primitiveType");
-        il.Emit(OpCodes.Callvirt, runtime.TSObjectGetProperty);
+        il.Emit(OpCodes.Callvirt, objectGetProperty);
         il.Emit(OpCodes.Stloc, typeValueLocal);
 
         // Compare with typeTag string.
@@ -561,18 +609,20 @@ public partial class RuntimeEmitter
     /// later, once <c>GetProperty</c>/<c>InvokeMethodValue</c>/<c>HasOwnPropertyHelper</c>
     /// (which it calls for the #574 own-conversion dispatch) have been emitted.
     /// </summary>
-    private void DeclareUnwrapIfBoxed(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void DeclareUnwrapIfBoxed(TypeBuilder typeBuilder, EmittedBoxedPrimitiveRuntime boxed)
     {
-        runtime.UnwrapIfBoxedMethod = typeBuilder.DefineMethod(
+        boxed.UnwrapIfBoxed = typeBuilder.DefineMethod(
             "UnwrapIfBoxed",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.Object]);
     }
 
-    private void EmitUnwrapIfBoxedBody(EmittedRuntime runtime)
+    private void EmitUnwrapIfBoxedBody(EmittedBoxedPrimitiveRuntime boxed,
+        UnwrapPrimitiveInputs peers,
+        BoxedDateInputs? date)
     {
-        var method = (MethodBuilder)runtime.UnwrapIfBoxedMethod;
+        var method = (MethodBuilder)boxed.UnwrapIfBoxed;
         var il = method.GetILGenerator();
         var passThruLabel = il.DefineLabel();
 
@@ -581,12 +631,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, passThruLabel);
         var objectLikeLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSObjectType);
+        il.Emit(OpCodes.Isinst, peers.ObjectType);
         il.Emit(OpCodes.Brtrue, objectLikeLabel);
-        if (_features.UsesDate)
+        if (date is not null)
         {
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.TSDateType);
+            il.Emit(OpCodes.Isinst, date.Value.Type);
             il.Emit(OpCodes.Brtrue, objectLikeLabel);
         }
         il.Emit(OpCodes.Ldarg_0);
@@ -603,23 +653,23 @@ public partial class RuntimeEmitter
         var ordinaryToPrimitiveLabel = il.DefineLabel();
         var toPrimitiveFn = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldsfld, runtime.SymbolToPrimitive);
-        il.Emit(OpCodes.Call, runtime.GetIndex);
+        il.Emit(OpCodes.Ldsfld, peers.SymbolToPrimitive);
+        il.Emit(OpCodes.Call, peers.GetIndex);
         il.Emit(OpCodes.Stloc, toPrimitiveFn);
         il.Emit(OpCodes.Ldloc, toPrimitiveFn);
         il.Emit(OpCodes.Brfalse, ordinaryToPrimitiveLabel);
         il.Emit(OpCodes.Ldloc, toPrimitiveFn);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, peers.UndefinedType);
         il.Emit(OpCodes.Brtrue, ordinaryToPrimitiveLabel);
 
         il.Emit(OpCodes.Ldloc, toPrimitiveFn);
-        il.Emit(OpCodes.Call, runtime.TypeOf);
+        il.Emit(OpCodes.Call, peers.TypeOf);
         il.Emit(OpCodes.Ldstr, "function");
         il.Emit(OpCodes.Call, _types.GetMethod(
             _types.String, "op_Equality", _types.String, _types.String));
         var callableToPrimitiveLabel = il.DefineLabel();
         il.Emit(OpCodes.Brtrue, callableToPrimitiveLabel);
-        GuestErrorEmitter.ThrowTypeError(il, runtime, "Symbol.toPrimitive is not callable");
+        GuestErrorEmitter.ThrowError(il, peers.CreateException, peers.TypeErrorCtor, "Symbol.toPrimitive is not callable");
         il.MarkLabel(callableToPrimitiveLabel);
 
         var defaultHintArgs = il.DeclareLocal(_types.ObjectArray);
@@ -634,12 +684,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, toPrimitiveFn);
         il.Emit(OpCodes.Ldloc, defaultHintArgs);
-        il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+        il.Emit(OpCodes.Call, peers.InvokeMethodValue);
         il.Emit(OpCodes.Stloc, exoticResult);
 
         // Any object or callable result violates the ToPrimitive contract.
         il.Emit(OpCodes.Ldloc, exoticResult);
-        il.Emit(OpCodes.Call, runtime.TypeOf);
+        il.Emit(OpCodes.Call, peers.TypeOf);
         var exoticType = il.DeclareLocal(_types.String);
         il.Emit(OpCodes.Stloc, exoticType);
         var exoticResultIsPrimitive = il.DefineLabel();
@@ -655,7 +705,7 @@ public partial class RuntimeEmitter
             _types.String, "op_Equality", _types.String, _types.String));
         il.Emit(OpCodes.Brfalse, exoticResultIsPrimitive);
         il.MarkLabel(exoticResultInvalid);
-        GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot convert object to primitive value");
+        GuestErrorEmitter.ThrowError(il, peers.CreateException, peers.TypeErrorCtor, "Cannot convert object to primitive value");
         il.MarkLabel(exoticResultIsPrimitive);
         il.Emit(OpCodes.Ldloc, exoticResult);
         il.Emit(OpCodes.Ret);
@@ -665,14 +715,14 @@ public partial class RuntimeEmitter
         // Date is the sole built-in whose absent/default hint behaves as the
         // string hint.  An explicit @@toPrimitive above still wins; otherwise
         // use Date.prototype.toString before the number-hint ordinary path.
-        if (_features.UsesDate)
+        if (date is not null)
         {
             var notDateLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.TSDateType);
+            il.Emit(OpCodes.Isinst, date.Value.Type);
             il.Emit(OpCodes.Brfalse, notDateLabel);
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Call, runtime.DateToString);
+            il.Emit(OpCodes.Call, date.Value.ToStringMethod);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(notDateLabel);
         }
@@ -686,12 +736,12 @@ public partial class RuntimeEmitter
         var afterMarkerProbeLabel = il.DefineLabel();
         var typeMarkerLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSObjectType);
+        il.Emit(OpCodes.Isinst, peers.ObjectType);
         il.Emit(OpCodes.Brfalse, afterMarkerProbeLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSObjectType);
+        il.Emit(OpCodes.Castclass, peers.ObjectType);
         il.Emit(OpCodes.Ldstr, "__primitiveType");
-        il.Emit(OpCodes.Callvirt, runtime.TSObjectGetProperty);
+        il.Emit(OpCodes.Callvirt, peers.ObjectGetProperty);
         il.Emit(OpCodes.Stloc, typeMarkerLocal);
         il.Emit(OpCodes.Ldloc, typeMarkerLocal);
         il.Emit(OpCodes.Isinst, _types.String);
@@ -699,9 +749,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Stloc, isBoxedLocal);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSObjectType);
+        il.Emit(OpCodes.Castclass, peers.ObjectType);
         il.Emit(OpCodes.Ldstr, "__primitiveValue");
-        il.Emit(OpCodes.Callvirt, runtime.TSObjectGetProperty);
+        il.Emit(OpCodes.Callvirt, peers.ObjectGetProperty);
         il.Emit(OpCodes.Stloc, primitiveValueLocal);
         il.MarkLabel(afterMarkerProbeLabel);
 
@@ -714,7 +764,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, continueValueOfLookup);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "valueOf");
-        il.Emit(OpCodes.Call, runtime.HasOwnPropertyHelperMethod);
+        il.Emit(OpCodes.Call, peers.HasOwnProperty);
         il.Emit(OpCodes.Brtrue, continueValueOfLookup);
         il.Emit(OpCodes.Ldloc, primitiveValueLocal);
         il.Emit(OpCodes.Ret);
@@ -742,10 +792,10 @@ public partial class RuntimeEmitter
         var fnLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "valueOf");
-        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, peers.GetProperty);
         il.Emit(OpCodes.Stloc, fnLocal);
         il.Emit(OpCodes.Ldloc, fnLocal);
-        il.Emit(OpCodes.Call, runtime.TypeOf);
+        il.Emit(OpCodes.Call, peers.TypeOf);
         il.Emit(OpCodes.Ldstr, "function");
         il.Emit(OpCodes.Call, _types.GetMethod(
             _types.String, "op_Equality", _types.String, _types.String));
@@ -756,11 +806,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, fnLocal);
         il.Emit(OpCodes.Ldloc, emptyArgs);
-        il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+        il.Emit(OpCodes.Call, peers.InvokeMethodValue);
         il.Emit(OpCodes.Stloc, resLocal);
         // An object result is not a primitive → fall back to the slot.
         il.Emit(OpCodes.Ldloc, resLocal);
-        il.Emit(OpCodes.Isinst, runtime.TSObjectType);
+        il.Emit(OpCodes.Isinst, peers.ObjectType);
         il.Emit(OpCodes.Brtrue, useStringFallback);
         il.Emit(OpCodes.Ldloc, resLocal);
         il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
@@ -785,25 +835,25 @@ public partial class RuntimeEmitter
         var toStringFn = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "toString");
-        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, peers.GetProperty);
         il.Emit(OpCodes.Stloc, toStringFn);
         il.Emit(OpCodes.Ldloc, toStringFn);
-        il.Emit(OpCodes.Call, runtime.TypeOf);
+        il.Emit(OpCodes.Call, peers.TypeOf);
         il.Emit(OpCodes.Ldstr, "function");
         il.Emit(OpCodes.Call, _types.StringOpEquality);
         var callableToString = il.DefineLabel();
         il.Emit(OpCodes.Brtrue, callableToString);
-        GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot convert object to primitive value");
+        GuestErrorEmitter.ThrowError(il, peers.CreateException, peers.TypeErrorCtor, "Cannot convert object to primitive value");
         il.MarkLabel(callableToString);
 
         var toStringResult = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, toStringFn);
         il.Emit(OpCodes.Ldloc, emptyArgs);
-        il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+        il.Emit(OpCodes.Call, peers.InvokeMethodValue);
         il.Emit(OpCodes.Stloc, toStringResult);
         il.Emit(OpCodes.Ldloc, toStringResult);
-        il.Emit(OpCodes.Call, runtime.TypeOf);
+        il.Emit(OpCodes.Call, peers.TypeOf);
         var toStringType = il.DeclareLocal(_types.String);
         il.Emit(OpCodes.Stloc, toStringType);
         var returnToStringPrimitive = il.DefineLabel();
@@ -811,7 +861,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, "object");
         il.Emit(OpCodes.Call, _types.StringOpEquality);
         il.Emit(OpCodes.Brfalse, returnToStringPrimitive);
-        GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot convert object to primitive value");
+        GuestErrorEmitter.ThrowError(il, peers.CreateException, peers.TypeErrorCtor, "Cannot convert object to primitive value");
         il.MarkLabel(returnToStringPrimitive);
         il.Emit(OpCodes.Ldloc, toStringResult);
         il.Emit(OpCodes.Ret);

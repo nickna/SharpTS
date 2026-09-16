@@ -1409,7 +1409,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, runtime.TSObjectType);
         il.Emit(OpCodes.Brfalse, notBoxedNumberLabel);
         il.Emit(OpCodes.Ldloc, argLocal);
-        il.Emit(OpCodes.Call, runtime.UnwrapIfBoxedMethod);
+        il.Emit(OpCodes.Call, runtime.BoxedPrimitives.UnwrapIfBoxed);
         il.Emit(OpCodes.Stloc, argLocal);
         il.MarkLabel(notBoxedNumberLabel);
 

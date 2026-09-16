@@ -1628,7 +1628,7 @@ public partial class RuntimeEmitter
         // object when it is not spreadable.
         var receiverObjectLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.ToObjectMethod);
+        il.Emit(OpCodes.Call, runtime.BoxedPrimitives.ToObject);
         il.Emit(OpCodes.Stloc, receiverObjectLocal);
 
         // A = ArraySpeciesCreate(O, 0) currently lowers to the runtime's fresh

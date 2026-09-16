@@ -734,7 +734,7 @@ public partial class RuntimeEmitter
             // classType is the primitive wrapper type — true iff boxed marker matches.
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldstr, typeTag);
-            il.Emit(OpCodes.Call, runtime.IsBoxedPrimitiveOfTypeMethod);
+            il.Emit(OpCodes.Call, runtime.BoxedPrimitives.IsOfType);
             il.Emit(OpCodes.Brtrue, trueLabel);
             il.Emit(OpCodes.Br, falseLabel);
             il.MarkLabel(skip);
@@ -1162,10 +1162,10 @@ public partial class RuntimeEmitter
         var leftLocal = il.DeclareLocal(_types.Object);
         var rightLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.UnwrapIfBoxedMethod);
+        il.Emit(OpCodes.Call, runtime.BoxedPrimitives.UnwrapIfBoxed);
         il.Emit(OpCodes.Stloc, leftLocal);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.UnwrapIfBoxedMethod);
+        il.Emit(OpCodes.Call, runtime.BoxedPrimitives.UnwrapIfBoxed);
         il.Emit(OpCodes.Stloc, rightLocal);
 
         // if (left is string || right is string) string concat
@@ -1387,7 +1387,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, leftObjectLike);
         il.Emit(OpCodes.Brfalse, checkRightObjectLikeLabel);
         il.Emit(OpCodes.Ldloc, leftLocal);
-        il.Emit(OpCodes.Call, runtime.UnwrapIfBoxedMethod);
+        il.Emit(OpCodes.Call, runtime.BoxedPrimitives.UnwrapIfBoxed);
         il.Emit(OpCodes.Stloc, leftLocal);
         il.Emit(OpCodes.Br, operandsReadyLabel);
 
@@ -1395,7 +1395,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, rightObjectLike);
         il.Emit(OpCodes.Brfalse, operandsReadyLabel);
         il.Emit(OpCodes.Ldloc, rightLocal);
-        il.Emit(OpCodes.Call, runtime.UnwrapIfBoxedMethod);
+        il.Emit(OpCodes.Call, runtime.BoxedPrimitives.UnwrapIfBoxed);
         il.Emit(OpCodes.Stloc, rightLocal);
         il.MarkLabel(operandsReadyLabel);
 

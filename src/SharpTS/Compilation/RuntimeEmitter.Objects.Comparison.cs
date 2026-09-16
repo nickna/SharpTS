@@ -260,7 +260,7 @@ public partial class RuntimeEmitter
         GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot convert undefined or null to object");
         il.MarkLabel(targetReady);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.ToObjectMethod);
+        il.Emit(OpCodes.Call, runtime.BoxedPrimitives.ToObject);
         il.Emit(OpCodes.Stloc, target);
 
         // 2. Process sources in argument order. Snapshot the complete mixed

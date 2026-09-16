@@ -572,7 +572,7 @@ public partial class ILEmitter
         {
             IL.Emit(OpCodes.Ldstr, "");
         }
-        IL.Emit(OpCodes.Call, _ctx.Runtime!.NewBoxedPrimitiveMethod);
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.BoxedPrimitives.New);
         IL.Emit(OpCodes.Br, constructionDone);
         IL.MarkLabel(notStringType);
 

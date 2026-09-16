@@ -844,6 +844,17 @@ remain construction-local, with unchanged guest thread-static storage and optimi
 Display formatting, language conversion, Symbol errors and String(value)'s Symbol exception keep
 their distinct behavior, including live prototype and coercion-hook lookups.
 
+Primitive-wrapper metadata lives in required `EmittedBoxedPrimitiveRuntime`. Its six declarations
+cover wrapper creation, foreign-eval normalization, ToObject, brand checks, string receiver
+unwrapping, and default-hint primitive conversion. ToObject, UnwrapIfBoxed and the brand-check
+shell retain their separate early declaration stages. Eight emitters accept the component and
+explicit dependencies; object/descriptor/prototype peers remain immutable construction-scoped
+inputs. BigInt prototype and Date conversion inputs are supplied only under their existing feature
+gates. String exotic descriptors, prototype population order, foreign undefined recognition,
+wrapper identity, coercion hooks and guest errors remain unchanged. No peer input or BCL handle is
+retained as duplicate emitter state. The remaining peer families and these scoped boundaries stay
+in the final metadata-ownership audit.
+
 During emission, each handle becomes readable as soon as its declaration is assigned, so forward
 references do not require a method body to exist yet. An early read names the missing declaration.
 Completion is an orchestration boundary, not an IL verifier: body emission and type finalization
