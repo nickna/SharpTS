@@ -318,10 +318,6 @@ public class EmittedRuntime
     public FieldBuilder CurrentArgumentsField { get; set; } = null!;
 
 
-    // ordinary extensible object — user code can assign `Math.length = 1;
-    // Math[0] = 1` and then iterate via `Array.prototype.X.call(Math, cb)`.
-    // Pre-fix, bare `Math` in compiled mode evaluated to null, so writes
-    // silently vanished.
     /// <summary>
     /// globalThis/global singleton — a sentinel object referenced from value
     /// position (`var root = globalThis`) so root/context detection in packages
