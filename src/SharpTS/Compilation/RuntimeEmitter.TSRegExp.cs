@@ -4104,7 +4104,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, rx);
         il.Emit(OpCodes.Ldstr, "global");
         il.Emit(OpCodes.Call, runtime.GetProperty);
-        il.Emit(OpCodes.Call, runtime.IsTruthy);
+        il.Emit(OpCodes.Call, runtime.Booleans.IsTruthy);
         il.Emit(OpCodes.Stloc, global);
 
         var afterUnicode = il.DefineLabel();
@@ -4113,7 +4113,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, rx);
         il.Emit(OpCodes.Ldstr, "unicode");
         il.Emit(OpCodes.Call, runtime.GetProperty);
-        il.Emit(OpCodes.Call, runtime.IsTruthy);
+        il.Emit(OpCodes.Call, runtime.Booleans.IsTruthy);
         il.Emit(OpCodes.Stloc, unicode);
         EmitStrictWritableCheck(il, runtime, rx, "lastIndex");
         il.Emit(OpCodes.Ldloc, rx);
@@ -4884,7 +4884,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldstr, name);
             il.Emit(OpCodes.Call, runtime.GetProperty);
-            il.Emit(OpCodes.Call, runtime.IsTruthy);
+            il.Emit(OpCodes.Call, runtime.Booleans.IsTruthy);
             il.Emit(OpCodes.Brfalse, skip);
             il.Emit(OpCodes.Ldloc, sbLocal);
             il.Emit(OpCodes.Ldc_I4, (int)ch);

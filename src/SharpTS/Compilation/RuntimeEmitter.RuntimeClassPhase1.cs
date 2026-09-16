@@ -236,7 +236,7 @@ public partial class RuntimeEmitter
         // — supports the coerce-global / coerce-sticky / coerce-unicode tests
         // where the user overrides those properties on a $RegExp instance.
         // EmitIsTruthy later fills the body.
-        runtime.IsTruthy = typeBuilder.DefineMethod(
+        runtime.Booleans.IsTruthy = typeBuilder.DefineMethod(
             "IsTruthy",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Boolean,

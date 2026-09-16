@@ -390,7 +390,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, nameLocal);
 
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.IsTruthy);
+        il.Emit(OpCodes.Call, runtime.Booleans.IsTruthy);
         il.Emit(OpCodes.Stloc, extLocal);
 
         // AES-GCM / AES-CBC
@@ -695,7 +695,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, nameLocal);
 
         il.Emit(OpCodes.Ldarg_3);
-        il.Emit(OpCodes.Call, runtime.IsTruthy);
+        il.Emit(OpCodes.Call, runtime.Booleans.IsTruthy);
         il.Emit(OpCodes.Stloc, extLocal);
 
         // Secret-key family

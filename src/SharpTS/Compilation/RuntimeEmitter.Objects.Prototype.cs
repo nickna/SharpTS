@@ -887,7 +887,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, _types.Boolean);
         il.Emit(OpCodes.Brfalse, notBoolForProtoLabel);
-        il.Emit(OpCodes.Ldsfld, runtime.BooleanPrototypeField);
+        il.Emit(OpCodes.Ldsfld, runtime.Booleans.PrototypeField);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notBoolForProtoLabel);
         var notStrForProtoLabel = il.DefineLabel();

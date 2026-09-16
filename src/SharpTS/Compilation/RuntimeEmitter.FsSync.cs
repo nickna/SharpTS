@@ -383,7 +383,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Ldstr, "recursive");
             il.Emit(OpCodes.Call, runtime.GetProperty);
-            il.Emit(OpCodes.Call, runtime.IsTruthy);
+            il.Emit(OpCodes.Call, runtime.Booleans.IsTruthy);
             il.Emit(OpCodes.Brfalse, nonRecursive);
 
             // Directory.Delete(path, true)
@@ -444,7 +444,7 @@ public partial class RuntimeEmitter
 
         // Check if value is truthy
         il.Emit(OpCodes.Ldloc, wftValueLocal);
-        il.Emit(OpCodes.Call, runtime.IsTruthy);
+        il.Emit(OpCodes.Call, runtime.Booleans.IsTruthy);
         il.Emit(OpCodes.Stloc, withFileTypesLocal);
 
         // Check if options has recursive property
@@ -456,7 +456,7 @@ public partial class RuntimeEmitter
 
         // Check if value is truthy
         il.Emit(OpCodes.Ldloc, recValueLocal);
-        il.Emit(OpCodes.Call, runtime.IsTruthy);
+        il.Emit(OpCodes.Call, runtime.Booleans.IsTruthy);
         il.Emit(OpCodes.Stloc, recursiveLocal);
         il.Emit(OpCodes.Br, afterRecursiveLabel);
 

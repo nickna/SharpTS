@@ -1016,7 +1016,7 @@ public partial class RuntimeEmitter
                     il.Emit(OpCodes.Ldarg_0);
                     il.Emit(OpCodes.Ldstr, propName);
                     il.Emit(OpCodes.Call, method);
-                    il.Emit(OpCodes.Call, runtime.IsTruthy);
+                    il.Emit(OpCodes.Call, runtime.Booleans.IsTruthy);
                     il.Emit(OpCodes.Brfalse, skipLabel);
                     il.Emit(OpCodes.Ldloc, sbLocal);
                     il.Emit(OpCodes.Ldc_I4, (int)ch);

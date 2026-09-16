@@ -231,7 +231,7 @@ public partial class ILEmitter
                 case "Boolean":
                     EmitExpression(c.Arguments[0]);
                     EmitBoxIfNeeded(c.Arguments[0]);
-                    IL.Emit(OpCodes.Call, _ctx.Runtime!.IsTruthy);
+                    IL.Emit(OpCodes.Call, _ctx.Runtime!.Booleans.IsTruthy);
                     IL.Emit(OpCodes.Box, _ctx.Types.Boolean);
                     SetStackUnknown();
                     return;

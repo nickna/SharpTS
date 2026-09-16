@@ -412,7 +412,7 @@ public partial class RuntimeEmitter
 
         // Check if condition is truthy using IsTruthy helper
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.IsTruthy);
+        il.Emit(OpCodes.Call, runtime.Booleans.IsTruthy);
         il.Emit(OpCodes.Brtrue, isTruthyLabel);
 
         // Condition is falsy - print "Assertion failed"
@@ -443,7 +443,7 @@ public partial class RuntimeEmitter
 
         // Check if condition is truthy
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.IsTruthy);
+        il.Emit(OpCodes.Call, runtime.Booleans.IsTruthy);
         il.Emit(OpCodes.Brtrue, isTruthyLabel);
 
         // Condition is falsy - print "Assertion failed: {message}"

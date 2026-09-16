@@ -212,7 +212,7 @@ public partial class RuntimeEmitter
             gen.Emit(OpCodes.Callvirt, ListItemGetter);
             gen.Emit(OpCodes.Stelem_Ref);
         });
-        il.Emit(OpCodes.Call, runtime.IsTruthy);
+        il.Emit(OpCodes.Call, runtime.Booleans.IsTruthy);
 
         // Every short-circuits on a FALSE result; Some/Find short-circuit on a TRUE result.
         if (kind == "Every")

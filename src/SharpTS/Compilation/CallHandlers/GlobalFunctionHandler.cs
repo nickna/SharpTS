@@ -313,7 +313,7 @@ public class GlobalFunctionHandler : ICallHandler
         {
             emitter.EmitExpression(call.Arguments[0]);
             emitter.EmitBoxIfNeeded(call.Arguments[0]);
-            il.Emit(System.Reflection.Emit.OpCodes.Call, ctx.Runtime!.IsTruthy);
+            il.Emit(System.Reflection.Emit.OpCodes.Call, ctx.Runtime!.Booleans.IsTruthy);
         }
         emitter.SetStackType(StackType.Boolean);
         return true;

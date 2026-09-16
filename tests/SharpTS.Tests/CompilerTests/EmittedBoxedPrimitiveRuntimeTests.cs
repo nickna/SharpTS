@@ -125,7 +125,7 @@ public class EmittedBoxedPrimitiveRuntimeTests
             runtime.CompiledPropertyDescriptorEnumerable.GetSetMethod()!,
             runtime.CompiledPropertyDescriptorConfigurable.GetSetMethod()!,
             runtime.PDSDefineProperty, runtime.PDSSetPrototype,
-            runtime.BooleanPrototypeField, runtime.BooleanPrototypePopulateMethod,
+            runtime.Booleans.PrototypeField, runtime.Booleans.PrototypePopulateMethod,
             runtime.Numbers.PrototypeField, runtime.Numbers.PrototypePopulateMethod,
             runtime.SymbolPrototypeField, runtime.SymbolPrototypePopulateMethod);
         var prototype = includePrototype

@@ -22,7 +22,7 @@ public sealed class EmittedNumberRuntime
     }
 
     private FieldBuilder? _prototypeField;
-    /// <summary>Number.prototype singleton; mirror of <see cref="EmittedRuntime.BooleanPrototypeField"/> for primitive doubles.</summary>
+    /// <summary>Number.prototype singleton; mirror of <see cref="EmittedBooleanRuntime.PrototypeField"/> for primitive doubles.</summary>
     public FieldBuilder PrototypeField
     {
         get => Require(_prototypeField);

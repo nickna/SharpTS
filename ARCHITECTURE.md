@@ -863,8 +863,8 @@ take the component and narrow dependencies; method and prototype orchestration u
 scoped peer inputs and the shared descriptor-installation helpers. The exact fixed formatter's
 BigInteger fallback and prototype valueOf builder remain local to their callers. Cached delegate
 initialization, native signatures, optimization flags, parsing/rounding behavior and prototype
-identity remain unchanged. General numeric coercion and Boolean metadata retain their own later
-migration boundaries, and scoped BCL/descriptor inputs remain in the final audit.
+identity remain unchanged. General numeric coercion retains its own later migration boundary,
+and scoped BCL/descriptor inputs remain in the final audit.
 
 During emission, each handle becomes readable as soon as its declaration is assigned, so forward
 references do not require a method body to exist yet. An early read names the missing declaration.
@@ -894,6 +894,16 @@ ToPrimitive, prototype helpers and BCL metadata stay local to construction. Data
 static dispatch use explicit implementation availability. Binary64 rounding, width/value coercion
 order, callable versus strict conversion, prototype descriptors, function identity and declaration
 order remain unchanged. These components own compiler metadata; guest prototypes remain mutable.
+
+Truthiness and Boolean prototype metadata live in required `EmittedBooleanRuntime`. Its three
+checked declarations retain the early IsTruthy signature used by RegExp, later truthiness body,
+prototype field/population shell and late prototype helpers. Completion validates the declarations
+and freezes metadata assignments. Five family emitters receive the owner or exact declarations
+with explicit Undefined, receiver, guest-error and immutable descriptor/prototype inputs. The
+truthiness helper uses BCL BigInteger metadata without requiring optional BigInt operations and
+does not invoke object conversion hooks. Local toString/valueOf builders remain local; prototype
+descriptors, function identity, receiver branding and mutable guest prototype state are unchanged.
+General numeric conversion and the broader construction/shared-infrastructure audit remain separate.
 
 Follow this pattern for subsequent families: explicit optional availability, checked declarations,
 one completion boundary, and no retained flat aliases. Pass the component to helpers that only

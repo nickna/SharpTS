@@ -396,7 +396,7 @@ public abstract partial class ExpressionEmitterBase
                 {
                     EmitExpression(arguments[0]);
                     EnsureBoxed();
-                    IL.Emit(OpCodes.Call, Ctx.Runtime!.IsTruthy);
+                    IL.Emit(OpCodes.Call, Ctx.Runtime!.Booleans.IsTruthy);
                     IL.Emit(OpCodes.Box, Ctx.Types.Boolean);
                 }
                 IL.Emit(OpCodes.Call, Ctx.Runtime!.BoxedPrimitives.New);

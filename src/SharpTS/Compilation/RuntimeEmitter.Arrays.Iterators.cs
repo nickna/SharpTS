@@ -649,7 +649,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloc, elementLocal);
         il.Emit(OpCodes.Callvirt, funcInvoke);
-        il.Emit(OpCodes.Call, runtime.IsTruthy);
+        il.Emit(OpCodes.Call, runtime.Booleans.IsTruthy);
         il.Emit(OpCodes.Brfalse, skipAdd);
 
         // result.Add(element)
@@ -859,7 +859,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloc, elementLocal);
         il.Emit(OpCodes.Callvirt, funcInvoke);
-        il.Emit(OpCodes.Call, runtime.IsTruthy);
+        il.Emit(OpCodes.Call, runtime.Booleans.IsTruthy);
         il.Emit(OpCodes.Brfalse, notFound);
         // Return the unholed element (already substituted above)
         il.Emit(OpCodes.Ldloc, elementLocal);
@@ -992,7 +992,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloc, elementLocal);
         il.Emit(OpCodes.Callvirt, funcInvoke);
-        il.Emit(OpCodes.Call, runtime.IsTruthy);
+        il.Emit(OpCodes.Call, runtime.Booleans.IsTruthy);
         il.Emit(OpCodes.Brfalse, notFound);
         il.Emit(OpCodes.Ldloc, indexLocal);
         il.Emit(OpCodes.Conv_R8);
@@ -1231,7 +1231,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloc, elementLocal);
         il.Emit(OpCodes.Callvirt, funcInvoke);
-        il.Emit(OpCodes.Call, runtime.IsTruthy);
+        il.Emit(OpCodes.Call, runtime.Booleans.IsTruthy);
         // For some: brtrue → return true. For every: brfalse → return false.
         il.Emit(shortCircuitOnTruthy ? OpCodes.Brfalse : OpCodes.Brtrue, advance);
         il.Emit(shortCircuitOnTruthy ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
@@ -1308,7 +1308,7 @@ public partial class RuntimeEmitter
         EmitCallbackArgsAndInvoke(il, indexLocal, runtime, isLazyLocal, argsLocal, skipIndexBoxLocal);
 
         // Call IsTruthy
-        il.Emit(OpCodes.Call, runtime.IsTruthy);
+        il.Emit(OpCodes.Call, runtime.Booleans.IsTruthy);
 
         // if (!truthy) skip add
         il.Emit(OpCodes.Brfalse, skipAdd);
@@ -1432,7 +1432,7 @@ public partial class RuntimeEmitter
 
         // if (IsTruthy(result)) return list[i] (unholed — spec: find returns
         // `undefined` when the matched slot is a hole, not the sentinel).
-        il.Emit(OpCodes.Call, runtime.IsTruthy);
+        il.Emit(OpCodes.Call, runtime.Booleans.IsTruthy);
         il.Emit(OpCodes.Brfalse, notFound);
         EmitLoadElementUnholed(il, indexLocal, runtime, isLazyLocal);
         il.Emit(OpCodes.Ret);
@@ -1488,7 +1488,7 @@ public partial class RuntimeEmitter
         var notFound = il.DefineLabel();
         var truthyReturnIndexLabel = il.DefineLabel();
         EmitCallbackArgsAndInvoke(il, indexLocal, runtime, isLazyLocal, argsLocal, skipIndexBoxLocal);
-        il.Emit(OpCodes.Call, runtime.IsTruthy);
+        il.Emit(OpCodes.Call, runtime.Booleans.IsTruthy);
 
         il.Emit(OpCodes.Brfalse, notFound);
         il.MarkLabel(truthyReturnIndexLabel);
@@ -1548,7 +1548,7 @@ public partial class RuntimeEmitter
         EmitSkipIfHole(il, indexLocal, advance, runtime, isLazyLocal);
 
         EmitCallbackArgsAndInvoke(il, indexLocal, runtime, isLazyLocal, argsLocal, skipIndexBoxLocal);
-        il.Emit(OpCodes.Call, runtime.IsTruthy);
+        il.Emit(OpCodes.Call, runtime.Booleans.IsTruthy);
 
         il.Emit(OpCodes.Brfalse, advance);
         il.Emit(OpCodes.Ldc_I4_1); // return true
@@ -1611,7 +1611,7 @@ public partial class RuntimeEmitter
         EmitSkipIfHole(il, indexLocal, continueLoop, runtime, isLazyLocal);
 
         EmitCallbackArgsAndInvoke(il, indexLocal, runtime, isLazyLocal, argsLocal, skipIndexBoxLocal);
-        il.Emit(OpCodes.Call, runtime.IsTruthy);
+        il.Emit(OpCodes.Call, runtime.Booleans.IsTruthy);
 
         il.Emit(OpCodes.Brtrue, continueLoop);
         il.Emit(OpCodes.Ldc_I4_0); // return false
@@ -1668,7 +1668,7 @@ public partial class RuntimeEmitter
         EmitCallbackArgsAndInvoke(il, indexLocal, runtime, isLazyLocal, argsLocal, skipIndexBoxLocal);
 
         // if (IsTruthy(result)) return list[i] (unholed).
-        il.Emit(OpCodes.Call, runtime.IsTruthy);
+        il.Emit(OpCodes.Call, runtime.Booleans.IsTruthy);
         var notFound = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, notFound);
         EmitLoadElementUnholed(il, indexLocal, runtime, isLazyLocal);
@@ -1723,7 +1723,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Blt, loopEnd);
 
         EmitCallbackArgsAndInvoke(il, indexLocal, runtime, isLazyLocal, argsLocal, skipIndexBoxLocal);
-        il.Emit(OpCodes.Call, runtime.IsTruthy);
+        il.Emit(OpCodes.Call, runtime.Booleans.IsTruthy);
 
         var notFound = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, notFound);

@@ -79,7 +79,7 @@ public partial class RuntimeEmitter
             var okLabel = il.DefineLabel();
             // if (arg0 truthy) throw
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Call, runtime.IsTruthy);
+            il.Emit(OpCodes.Call, runtime.Booleans.IsTruthy);
             il.Emit(OpCodes.Brfalse, okLabel);
             il.Emit(OpCodes.Ldstr, "Cannot set FIPS mode in a non-FIPS build.");
             il.Emit(OpCodes.Newobj, typeof(Exception).GetConstructor([_types.String])!);

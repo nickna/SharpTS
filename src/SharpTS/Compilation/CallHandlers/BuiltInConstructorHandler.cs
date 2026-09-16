@@ -191,7 +191,7 @@ public class BuiltInConstructorHandler : ICallHandler
             il.Emit(OpCodes.Ldloc, patternLocal);
             il.Emit(OpCodes.Ldsfld, runtime.SymbolMatch);
             il.Emit(OpCodes.Call, runtime.GetIndex);
-            il.Emit(OpCodes.Call, runtime.IsTruthy);
+            il.Emit(OpCodes.Call, runtime.Booleans.IsTruthy);
             il.Emit(OpCodes.Brfalse, doFromArgs);
             // pattern.constructor === %RegExp% (the $RegExp Type token)
             il.Emit(OpCodes.Ldloc, patternLocal);
