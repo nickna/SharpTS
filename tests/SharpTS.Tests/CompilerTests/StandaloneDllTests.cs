@@ -1411,6 +1411,100 @@ public class StandaloneDllTests
             verifyStandardError: error => Assert.Empty(error), standardInput: ""));
     }
 
+    public static IEnumerable<object[]> ClusterMetadataPrograms =>
+    [
+        new object[]
+        {
+            """
+            import {isPrimary,isWorker,isMaster,SCHED_NONE,SCHED_RR} from 'cluster';console.log(isPrimary,isWorker,isMaster,SCHED_NONE,SCHED_RR);
+            """,
+            "true false true 1 2\n", "main.ts", true
+        },
+        new object[]
+        {
+            """
+            import * as cluster from 'node:cluster';
+            cluster.setupMaster({exec:'worker.ts',args:['one']});console.log(cluster.settings.exec,cluster.settings.args[0]);
+            console.log(cluster.schedulingPolicy=cluster.SCHED_NONE);console.log(cluster.schedulingPolicy);
+            cluster.schedulingPolicy=cluster.SCHED_RR;console.log(cluster.schedulingPolicy,Object.keys(cluster.workers).length,cluster.worker===undefined);
+            """,
+            "worker.ts one\n1\n1\n2 0 false\n", "main.ts", false
+        },
+        new object[]
+        {
+            """
+            import * as cluster from 'cluster';
+            function listener(value:any){console.log('event',value);}
+            cluster.on('sample',listener);cluster.once('sample',(value:any)=>console.log('once',value));
+            console.log(cluster.listenerCount('sample'));console.log(cluster.emit('sample',3));
+            console.log(cluster.listenerCount('sample'));cluster.off('sample',listener);console.log(cluster.emit('sample',4));
+            cluster.removeAllListeners();console.log(cluster.eventNames().length);
+            """,
+            "2\nevent 3\nonce 3\ntrue\n1\nfalse\n0\n", "main.ts", false
+        },
+        new object[]
+        {
+            """
+            import {setupPrimary as setup,settings as state} from 'cluster';setup({exec:'alias.ts'});console.log(state.exec);
+            """,
+            "alias.ts\n", "main.ts", false
+        },
+        new object[]
+        {
+            """
+            import {fork} from 'cluster';try{fork();}catch(error){console.log(error.message);}
+            """,
+            "cluster requires the SharpTS runtime (SharpTS.dll) to be present. Compile without --standalone so it is co-located with the output.\n", "main.ts", true
+        },
+        new object[]
+        {
+            """
+            import * as cluster from 'cluster';
+            if(cluster.isPrimary){const worker=cluster.fork();worker.on('message',(message:any)=>console.log('worker',message));worker.on('exit',(code:any)=>console.log('exit',code));}
+            else{process.send(cluster.isWorker);}
+            """,
+            "worker true\nexit 0\n", "main.ts", false
+        },
+        new object[]
+        {
+            """
+            import {listenerCount} from 'cluster';async function run(){await new Promise<void>(resolve=>setTimeout(resolve,1));console.log(listenerCount('missing'));}run();
+            """,
+            "0\n", "main.ts", false
+        },
+        new object[]
+        {
+            """
+            import {listenerCount} from 'cluster';function* values():Generator<number,void,any>{yield listenerCount('missing');yield listenerCount('missing');}const iterator=values();console.log(iterator.next().value,iterator.next().value);
+            """,
+            "0 0\n", "main.ts", false
+        },
+        new object[]
+        {
+            """
+            const cluster=require('node:cluster');console.log(cluster.isPrimary,cluster.isWorker,cluster.setupPrimary===null,cluster.fork===null);
+            """,
+            "true false true true\n", "main.cjs", false
+        }
+    ];
+
+    [Theory]
+    [MemberData(nameof(ClusterMetadataPrograms))]
+    public void Isolated_ClusterMetadata_PreservesBridgeStateWorkerLifecycleAndDependencies(string source, string expected, string entryPoint, bool standalone)
+    {
+        using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        tempDir.CreateFile(entryPoint, source);
+        var dllPath = tempDir.GetPath("cluster_metadata.dll");
+        var deployment = standalone ? " --standalone" : "";
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{tempDir.GetPath(entryPoint)}\" -o \"{dllPath}\" --verify{deployment}", tempDir.Path);
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(dllPath));
+        Assert.Equal(!standalone, File.Exists(tempDir.GetPath("SharpTS.dll")));
+        Assert.Equal(expected, ExecuteCompiledDllIsolated(dllPath, timeoutMs: 15000,
+            verifyStandardError: error => Assert.Empty(error)));
+    }
+
     public static IEnumerable<object[]> AtomicsMetadataPrograms =>
     [
         new object[]

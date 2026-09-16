@@ -35,10 +35,11 @@ public partial class RuntimeEmitter
     /// Emits $Runtime.ClusterFork / $Runtime.ClusterInvoke.
     /// Called from RuntimeEmitter.RuntimeClass.cs when the program uses cluster.
     /// </summary>
-    internal void EmitClusterHelpers(TypeBuilder runtimeType, EmittedRuntime runtime)
+    internal void EmitClusterHelpers(
+        TypeBuilder runtimeType, EmittedClusterRuntime cluster, EmittedEventLoopRuntime eventLoop, string? entryModulePath)
     {
-        EmitClusterForkHelper(runtimeType, runtime);
-        EmitClusterInvokeHelper(runtimeType, runtime);
+        EmitClusterForkHelper(runtimeType, cluster, eventLoop, entryModulePath);
+        EmitClusterInvokeHelper(runtimeType, cluster);
     }
 
     /// <summary>
@@ -47,7 +48,8 @@ public partial class RuntimeEmitter
     /// The $EventLoop delegates keep the compiled loop alive while workers run and
     /// marshal worker events onto it.
     /// </summary>
-    private void EmitClusterForkHelper(TypeBuilder runtimeType, EmittedRuntime runtime)
+    private void EmitClusterForkHelper(
+        TypeBuilder runtimeType, EmittedClusterRuntime cluster, EmittedEventLoopRuntime eventLoop, string? entryModulePath)
     {
         var method = runtimeType.DefineMethod(
             "ClusterFork",
@@ -58,7 +60,7 @@ public partial class RuntimeEmitter
         var il = method.GetILGenerator();
 
         var typeLocal = il.DeclareLocal(_types.Type);
-        var loopLocal = il.DeclareLocal(runtime.EventLoop.Type);
+        var loopLocal = il.DeclareLocal(eventLoop.Type);
         var argsLocal = il.DeclareLocal(_types.ObjectArray);
         var actionCtor = typeof(Action).GetConstructor([_types.Object, typeof(IntPtr)])!;
         var actionOfActionCtor = typeof(Action<Action>).GetConstructor([_types.Object, typeof(IntPtr)])!;
@@ -66,7 +68,7 @@ public partial class RuntimeEmitter
         EmitLoadBridgeTypeOrThrow(il, typeLocal);
 
         // var loop = $EventLoop.GetInstance();
-        il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
+        il.Emit(OpCodes.Call, eventLoop.GetInstance);
         il.Emit(OpCodes.Stloc, loopLocal);
 
         // object[] args = { entryPath, env, loop.Ref, loop.Unref, loop.Schedule };
@@ -76,8 +78,8 @@ public partial class RuntimeEmitter
 
         il.Emit(OpCodes.Ldloc, argsLocal);
         il.Emit(OpCodes.Ldc_I4_0);
-        if (EntryModulePath != null)
-            il.Emit(OpCodes.Ldstr, EntryModulePath);
+        if (entryModulePath != null)
+            il.Emit(OpCodes.Ldstr, entryModulePath);
         else
             il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Stelem_Ref);
@@ -90,21 +92,21 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, argsLocal);
         il.Emit(OpCodes.Ldc_I4_2);
         il.Emit(OpCodes.Ldloc, loopLocal);
-        il.Emit(OpCodes.Ldftn, runtime.EventLoop.Ref);
+        il.Emit(OpCodes.Ldftn, eventLoop.Ref);
         il.Emit(OpCodes.Newobj, actionCtor);
         il.Emit(OpCodes.Stelem_Ref);
 
         il.Emit(OpCodes.Ldloc, argsLocal);
         il.Emit(OpCodes.Ldc_I4_3);
         il.Emit(OpCodes.Ldloc, loopLocal);
-        il.Emit(OpCodes.Ldftn, runtime.EventLoop.Unref);
+        il.Emit(OpCodes.Ldftn, eventLoop.Unref);
         il.Emit(OpCodes.Newobj, actionCtor);
         il.Emit(OpCodes.Stelem_Ref);
 
         il.Emit(OpCodes.Ldloc, argsLocal);
         il.Emit(OpCodes.Ldc_I4_4);
         il.Emit(OpCodes.Ldloc, loopLocal);
-        il.Emit(OpCodes.Ldftn, runtime.EventLoop.Schedule);
+        il.Emit(OpCodes.Ldftn, eventLoop.Schedule);
         il.Emit(OpCodes.Newobj, actionOfActionCtor);
         il.Emit(OpCodes.Stelem_Ref);
 
@@ -117,7 +119,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.MethodInfo, "Invoke", _types.Object, _types.ObjectArray));
         il.Emit(OpCodes.Ret);
 
-        runtime.ClusterFork = method;
+        cluster.Fork = method;
     }
 
     /// <summary>
@@ -126,7 +128,7 @@ public partial class RuntimeEmitter
     /// Single dispatch point for the non-fork cluster surface (events, settings,
     /// workers, scheduling policy).
     /// </summary>
-    private void EmitClusterInvokeHelper(TypeBuilder runtimeType, EmittedRuntime runtime)
+    private void EmitClusterInvokeHelper(TypeBuilder runtimeType, EmittedClusterRuntime cluster)
     {
         var method = runtimeType.DefineMethod(
             "ClusterInvoke",
@@ -165,7 +167,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.MethodInfo, "Invoke", _types.Object, _types.ObjectArray));
         il.Emit(OpCodes.Ret);
 
-        runtime.ClusterInvoke = method;
+        cluster.Invoke = method;
     }
 
     /// <summary>

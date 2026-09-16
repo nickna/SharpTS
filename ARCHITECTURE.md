@@ -754,6 +754,15 @@ entry points. Emitted order, inlining, numeric coercion, bounds and pause errors
 current wait/notify behavior, and standalone dependencies are unchanged. No flat aliases or private
 Atomics method copies remain on the emitter; BCL/Unsafe references and body locals retain their scope.
 
+Cluster has an optional `EmittedClusterRuntime`, selected by the existing `UsesCluster`
+gate. It owns the `Fork` and `Invoke` declarations; all three module call sites use its checked
+accessor. The three helper boundaries take the cluster owner, event-loop metadata, and entry-script
+configuration only where needed. `RuntimeEmitter.EntryModulePath` remains compiler configuration,
+passed explicitly when emitting the fork body. Both handles are recorded after body emission and
+validated at completion. Late-bound bridge dispatch, worker event-loop delegates, live scheduling
+policy, namespace method values, emitted IL, and runtime deployment are unchanged. BCL reflection
+references and body locals remain scoped; no flat cluster aliases remain.
+
 During emission, each handle becomes readable as soon as its declaration is assigned, so forward
 references do not require a method body to exist yet. An early read names the missing declaration.
 Completion is an orchestration boundary, not an IL verifier: body emission and type finalization
