@@ -719,7 +719,7 @@ public partial class RuntimeEmitter
     private void EmitTSObjectGetBranch(ILGenerator il, EmittedRuntime runtime, MethodBuilder method, Label notMatch)
     {
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSObjectType);
+        il.Emit(OpCodes.Isinst, runtime.ObjectStorage.Type);
         il.Emit(OpCodes.Brfalse, notMatch);
 
         // Object.prototype method short-circuits (Stage 4z15 follow-on):
@@ -741,19 +741,19 @@ public partial class RuntimeEmitter
         EmitTSObjProtoCheck("hasOwnProperty", runtime.HasOwnPropertyHelperMethod);
         EmitTSObjProtoCheck("isPrototypeOf",  runtime.IsPrototypeOfHelperMethod);
 
-        var tsObjectInstanceLocal = il.DeclareLocal(runtime.TSObjectType);
+        var tsObjectInstanceLocal = il.DeclareLocal(runtime.ObjectStorage.Type);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSObjectType);
+        il.Emit(OpCodes.Castclass, runtime.ObjectStorage.Type);
         il.Emit(OpCodes.Stloc, tsObjectInstanceLocal);
         // if (obj.HasProperty(name)) return obj.GetProperty(name)
         il.Emit(OpCodes.Ldloc, tsObjectInstanceLocal);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, runtime.TSObjectHasProperty);
+        il.Emit(OpCodes.Callvirt, runtime.ObjectStorage.HasProperty);
         var tsObjectCheckPDS = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, tsObjectCheckPDS);
         il.Emit(OpCodes.Ldloc, tsObjectInstanceLocal);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, runtime.TSObjectGetProperty);
+        il.Emit(OpCodes.Callvirt, runtime.ObjectStorage.GetProperty);
         il.Emit(OpCodes.Ret);
         // Check PDS for own data descriptor / accessor before walking chain
         il.MarkLabel(tsObjectCheckPDS);
@@ -807,7 +807,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, notBoxedSymbolDescription);
         il.Emit(OpCodes.Ldloc, tsObjectInstanceLocal);
         il.Emit(OpCodes.Ldstr, "__primitiveType");
-        il.Emit(OpCodes.Callvirt, runtime.TSObjectGetProperty);
+        il.Emit(OpCodes.Callvirt, runtime.ObjectStorage.GetProperty);
         il.Emit(OpCodes.Ldstr, "Symbol");
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Object, "Equals", _types.Object, _types.Object));
         il.Emit(OpCodes.Brfalse, notBoxedSymbolDescription);
@@ -823,13 +823,13 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, notBoxedSymbolToString);
         il.Emit(OpCodes.Ldloc, tsObjectInstanceLocal);
         il.Emit(OpCodes.Ldstr, "__primitiveType");
-        il.Emit(OpCodes.Callvirt, runtime.TSObjectGetProperty);
+        il.Emit(OpCodes.Callvirt, runtime.ObjectStorage.GetProperty);
         il.Emit(OpCodes.Ldstr, "Symbol");
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Object, "Equals", _types.Object, _types.Object));
         il.Emit(OpCodes.Brfalse, notBoxedSymbolToString);
         il.Emit(OpCodes.Ldloc, tsObjectInstanceLocal);
         il.Emit(OpCodes.Ldstr, "__primitiveValue");
-        il.Emit(OpCodes.Callvirt, runtime.TSObjectGetProperty);
+        il.Emit(OpCodes.Callvirt, runtime.ObjectStorage.GetProperty);
         _types.EmitLoadMethodInfo(il, runtime.SymbolToStringMethod);
         il.Emit(OpCodes.Newobj, runtime.TSFunctionCtor);
         il.Emit(OpCodes.Ret);

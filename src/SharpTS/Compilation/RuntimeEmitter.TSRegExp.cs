@@ -3186,7 +3186,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, returnNullLabel);
 
         il.Emit(OpCodes.Ldloc, dictLocal);
-        il.Emit(OpCodes.Newobj, runtime.TSObjectCtor!);
+        il.Emit(OpCodes.Newobj, runtime.ObjectStorage.Constructor!);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(returnNullLabel);
@@ -4577,18 +4577,18 @@ public partial class RuntimeEmitter
         // Mirror that here before the PDS check fires.
         var notTSObjectLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, rxObjLocal);
-        il.Emit(OpCodes.Isinst, runtime.TSObjectType);
+        il.Emit(OpCodes.Isinst, runtime.ObjectStorage.Type);
         il.Emit(OpCodes.Brfalse, notTSObjectLabel);
         il.Emit(OpCodes.Ldloc, rxObjLocal);
-        il.Emit(OpCodes.Castclass, runtime.TSObjectType);
+        il.Emit(OpCodes.Castclass, runtime.ObjectStorage.Type);
         il.Emit(OpCodes.Ldstr, propName);
-        il.Emit(OpCodes.Callvirt, runtime.TSObjectHasGetter);
+        il.Emit(OpCodes.Callvirt, runtime.ObjectStorage.HasGetter);
         il.Emit(OpCodes.Brfalse, notTSObjectLabel);
         // Has getter — throw unless a setter is also present.
         il.Emit(OpCodes.Ldloc, rxObjLocal);
-        il.Emit(OpCodes.Castclass, runtime.TSObjectType);
+        il.Emit(OpCodes.Castclass, runtime.ObjectStorage.Type);
         il.Emit(OpCodes.Ldstr, propName);
-        il.Emit(OpCodes.Callvirt, runtime.TSObjectHasSetter);
+        il.Emit(OpCodes.Callvirt, runtime.ObjectStorage.HasSetter);
         il.Emit(OpCodes.Brtrue, skipLabel);
         il.Emit(OpCodes.Br, throwLabel);
         il.MarkLabel(notTSObjectLabel);

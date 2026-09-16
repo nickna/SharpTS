@@ -118,7 +118,7 @@ public class EmittedBoxedPrimitiveRuntimeTests
         var (runtime, helper, emitter) = CreateExplicitDependencyFixture(includePrototype);
         var boxed = new EmittedBoxedPrimitiveRuntime();
         var peers = CreateInputs("BoxedPrimitiveInputs",
-            runtime.TSObjectType, runtime.TSObjectCtor,
+            runtime.ObjectStorage.Type, runtime.ObjectStorage.Constructor,
             runtime.CompiledPropertyDescriptorType, runtime.CompiledPropertyDescriptorCtor,
             runtime.CompiledPropertyDescriptorValue.GetSetMethod()!,
             runtime.CompiledPropertyDescriptorWritable.GetSetMethod()!,
@@ -161,8 +161,8 @@ public class EmittedBoxedPrimitiveRuntimeTests
         var boxed = new EmittedBoxedPrimitiveRuntime();
         InvokeEmitter("DeclareUnwrapIfBoxed", emitter, helper, boxed);
         var peers = CreateInputs("UnwrapPrimitiveInputs",
-            runtime.TSObjectType, runtime.SymbolToPrimitive, runtime.GetIndex, runtime.UndefinedType,
-            runtime.TypeOf, runtime.InvokeMethodValue, runtime.TSObjectGetProperty,
+            runtime.ObjectStorage.Type, runtime.SymbolToPrimitive, runtime.GetIndex, runtime.UndefinedType,
+            runtime.TypeOf, runtime.InvokeMethodValue, runtime.ObjectStorage.GetProperty,
             runtime.HasOwnPropertyHelperMethod, runtime.GetProperty, runtime.CreateException, runtime.TSTypeErrorCtor);
         var dateInputs = includeDate ? CreateInputs("BoxedDateInputs", runtime.TSDateType, runtime.DateToString) : null;
         InvokeEmitter("EmitUnwrapIfBoxedBody", emitter, boxed, peers, dateInputs);
@@ -233,7 +233,7 @@ public class EmittedBoxedPrimitiveRuntimeTests
         Assert.NotNull(first);
         Assert.NotNull(second);
         Assert.NotSame(first, second);
-        Assert.Equal(runtime.TSObjectType.Name, first.GetType().Name);
+        Assert.Equal(runtime.ObjectStorage.Type.Name, first.GetType().Name);
         var dictionary = new Dictionary<string, object>();
         var array = new List<object>();
         Assert.Same(dictionary, Call(type, boxed.ToObject, dictionary));
@@ -260,7 +260,7 @@ public class EmittedBoxedPrimitiveRuntimeTests
         var boxed = runtime.BoxedPrimitives;
         var native = Call(type, boxed.NormalizeForeignEvalValue, foreign);
         Assert.NotSame(foreign, native);
-        Assert.Equal(runtime.TSObjectType.Name, native!.GetType().Name);
+        Assert.Equal(runtime.ObjectStorage.Type.Name, native!.GetType().Name);
         Assert.Equal(true, Call(type, boxed.IsOfType, native, tag));
         Assert.Equal(value, Call(type, boxed.UnwrapIfBoxed, native));
     }

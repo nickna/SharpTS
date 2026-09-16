@@ -82,12 +82,12 @@ public partial class RuntimeEmitter
         il.MarkLabel(tryFieldsLabel);
         var notTSObjectLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSObjectType);
+        il.Emit(OpCodes.Isinst, runtime.ObjectStorage.Type);
         il.Emit(OpCodes.Brfalse, notTSObjectLabel);
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSObjectType);
-        il.Emit(OpCodes.Callvirt, runtime.TSObjectFieldsGetter);
+        il.Emit(OpCodes.Castclass, runtime.ObjectStorage.Type);
+        il.Emit(OpCodes.Callvirt, runtime.ObjectStorage.FieldsGetter);
         il.Emit(OpCodes.Stloc, dictLocal);
         il.Emit(OpCodes.Ldloc, dictLocal);
         il.Emit(OpCodes.Brfalse, endLabel);
@@ -444,12 +444,12 @@ public partial class RuntimeEmitter
 
         var notTSObjectLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSObjectType);
+        il.Emit(OpCodes.Isinst, runtime.ObjectStorage.Type);
         il.Emit(OpCodes.Brfalse, notTSObjectLabel);
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSObjectType);
-        il.Emit(OpCodes.Callvirt, runtime.TSObjectFieldsGetter);
+        il.Emit(OpCodes.Castclass, runtime.ObjectStorage.Type);
+        il.Emit(OpCodes.Callvirt, runtime.ObjectStorage.FieldsGetter);
         il.Emit(OpCodes.Stloc, dictLocal);
         il.Emit(OpCodes.Ldloc, dictLocal);
         il.Emit(OpCodes.Brfalse, endLabel);
@@ -770,7 +770,7 @@ public partial class RuntimeEmitter
 
         // $Object (with setter support) - call obj.SetProperty(name, value)
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSObjectType);
+        il.Emit(OpCodes.Isinst, runtime.ObjectStorage.Type);
         il.Emit(OpCodes.Brtrue, tsObjectLabel);
 
         // $Array — special-case `arr.length = N` (route through $Array.SetLength
@@ -1391,10 +1391,10 @@ public partial class RuntimeEmitter
             il.MarkLabel(tsObjRawStoreLabel);
         }
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSObjectType);
+        il.Emit(OpCodes.Castclass, runtime.ObjectStorage.Type);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Callvirt, runtime.TSObjectSetProperty);
+        il.Emit(OpCodes.Callvirt, runtime.ObjectStorage.SetProperty);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(nullLabel);
@@ -1739,7 +1739,7 @@ public partial class RuntimeEmitter
         // Check if $Object
         var sharpTSObjectLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSObjectType);
+        il.Emit(OpCodes.Isinst, runtime.ObjectStorage.Type);
         il.Emit(OpCodes.Brtrue, sharpTSObjectLabel);
 
         // Dictionary
@@ -2013,9 +2013,9 @@ public partial class RuntimeEmitter
         // delegate before the receiver-wide PDSIsWritable integrity check.
         var sharpDelegateToObjectLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSObjectType);
+        il.Emit(OpCodes.Castclass, runtime.ObjectStorage.Type);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, runtime.TSObjectHasSetter);
+        il.Emit(OpCodes.Callvirt, runtime.ObjectStorage.HasSetter);
         il.Emit(OpCodes.Brtrue, sharpDelegateToObjectLabel);
 
         var sharpWritableLabel = il.DefineLabel();
@@ -2029,11 +2029,11 @@ public partial class RuntimeEmitter
         il.MarkLabel(sharpWritableLabel);
         il.MarkLabel(sharpDelegateToObjectLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSObjectType);
+        il.Emit(OpCodes.Castclass, runtime.ObjectStorage.Type);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Ldarg_3); // strictMode
-        il.Emit(OpCodes.Callvirt, runtime.TSObjectSetPropertyStrict);
+        il.Emit(OpCodes.Callvirt, runtime.ObjectStorage.SetPropertyStrict);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(nullLabel);

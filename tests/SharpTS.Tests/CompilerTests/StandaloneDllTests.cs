@@ -3320,6 +3320,120 @@ public class StandaloneDllTests
             verifyStandardError: error => Assert.Empty(error)));
     }
 
+    public static IEnumerable<object[]> ObjectStorageMetadataPrograms =>
+    [
+        new object[]
+        {
+            "properties", "const value:any={a:1};value.b=2;console.log(value.a,value.b,value.missing);delete value.a;console.log('a' in value,'b' in value);",
+            "1 2 undefined\nfalse true\n", true
+        },
+        new object[]
+        {
+            "accessors", "let trace='';const value:any={_value:1,get value(){trace+='g';return this._value;},set value(v:number){trace+='s';this._value=v;}};value.value=7;console.log(value.value,value._value,trace);",
+            "7 7 sg\n", true
+        },
+        new object[]
+        {
+            "keys", "const value:any={a:1,get b(){return 2;},set c(v:number){}};console.log(Object.keys(value).join(','),Object.getOwnPropertyNames(value).join(','));",
+            "a,b,c a,b,c\n", true
+        },
+        new object[]
+        {
+            "descriptor", "const value:any={a:1};Object.defineProperty(value,'b',{value:2,writable:false,enumerable:false,configurable:true});const d=Object.getOwnPropertyDescriptor(value,'b')!;console.log(value.b,d.value,d.writable,d.enumerable,d.configurable,Object.keys(value).join(','));",
+            "2 2 false false true a\n", true
+        },
+        new object[]
+        {
+            "strict_set", "function run(){'use strict';const value:any={};Object.defineProperty(value,'a',{value:1,writable:false});try{value.a=2;}catch(e:any){console.log(e.name);}console.log(value.a);}run();",
+            "TypeError\n1\n", true
+        },
+        new object[]
+        {
+            "strict_delete", "function run(){'use strict';const value:any={};Object.defineProperty(value,'a',{value:1,configurable:false});try{delete value.a;}catch(e:any){console.log(e.name);}console.log(value.a);}run();",
+            "TypeError\n1\n", true
+        },
+        new object[]
+        {
+            "freeze", "function run(){'use strict';const value:any={a:1};Object.freeze(value);console.log(Object.isFrozen(value),Object.isSealed(value),Object.isExtensible(value));try{value.a=2;}catch(e:any){console.log(e.name);}console.log(value.a);}run();",
+            "true true false\nTypeError\n1\n", true
+        },
+        new object[]
+        {
+            "seal", "function run(){'use strict';const value:any={a:1};Object.seal(value);value.a=2;console.log(value.a,Object.isSealed(value),Object.isFrozen(value),Object.isExtensible(value));try{value.b=3;}catch(e:any){console.log(e.name);}}run();",
+            "2 true false false\nTypeError\n", true
+        },
+        new object[]
+        {
+            "prevent_extensions", "function run(){'use strict';const value:any={a:1};Object.preventExtensions(value);value.a=2;console.log(value.a,Object.isExtensible(value),Object.isSealed(value));try{value.b=3;}catch(e:any){console.log(e.name);}}run();",
+            "2 false false\nTypeError\n", true
+        },
+        // Preserve the existing inherited-accessor limitation while changing storage ownership.
+        new object[]
+        {
+            "prototype", "const proto:any={base:3,get value(){return (this as any).own+this.base;}};const value:any=Object.create(proto);value.own=4;console.log(value.value,'base' in value,Object.hasOwn(value,'base'),Object.getPrototypeOf(value)===proto);",
+            "NaN true false true\n", true
+        },
+        // Preserve the existing inherited-accessor limitation while changing storage ownership.
+        new object[]
+        {
+            "inherited_setter", "const proto:any={set value(v:number){(this as any).own=v;}};const value:any=Object.create(proto);value.value=9;console.log(value.own,Object.hasOwn(value,'own'),Object.hasOwn(proto,'own'));",
+            "undefined false false\n", true
+        },
+        new object[]
+        {
+            "array_truncation", "const value:any[]=[1,2,3];Object.defineProperty(value,'2',{value:9,configurable:true});value.length=1;console.log(value.length,Object.getOwnPropertyDescriptor(value,'2')===undefined,Object.keys(value).join(','));",
+            "1 true 0\n", true
+        },
+        new object[]
+        {
+            "compact", "interface Point{x:number;y:number;}function make(x:number):Point{return {x:x,y:2};}const p=make(3);const copy={...p,z:4};console.log(copy.x,copy.y,copy.z,Object.keys(copy).join(','));",
+            "3 2 4 x,y,z\n", true
+        },
+        new object[]
+        {
+            "symbols", "const key=Symbol('key');const value:any={a:1,[key]:2};console.log(value[key],Object.keys(value).join(','),Object.getOwnPropertySymbols(value)[0]===key);",
+            "2 a true\n", true
+        },
+        // Proxy invocation uses the existing managed runtime deployment.
+        new object[]
+        {
+            "proxy", "const target:any={a:1};let trace='';const value:any=new Proxy(target,{get(t:any,k:any){trace+='g';return t[k];},set(t:any,k:any,v:any){trace+='s';t[k]=v;return true;}});value.a=2;console.log(value.a,target.a,trace);",
+            "2 2 sg\n", false
+        },
+        new object[]
+        {
+            "async", "async function run(){const value:any=await Promise.resolve({_value:4,get value(){return this._value;}});console.log(value.value);}run();",
+            "4\n", true
+        },
+        new object[]
+        {
+            "generator", "function* values():Generator<any,void,any>{yield {_value:5,get value(){return this._value;}};}for(const value of values())console.log(value.value);",
+            "5\n", true
+        },
+        new object[]
+        {
+            "minimal", "const value=1;",
+            "", true
+        },
+    ];
+
+    [Theory]
+    [MemberData(nameof(ObjectStorageMetadataPrograms))]
+    public void Isolated_ObjectStorageMetadata_PreservesPropertiesAccessorsAndRestrictions(string name, string source, string expected, bool standalone)
+    {
+        using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var sourcePath = tempDir.CreateFile("main.ts", source);
+        var dllPath = tempDir.GetPath($"object-storage_{name}.dll");
+        var deployment = standalone ? " --standalone" : "";
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --noLib --compile \"{sourcePath}\" -o \"{dllPath}\" --verify{deployment}", tempDir.Path);
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(dllPath));
+        Assert.Equal(!standalone, File.Exists(tempDir.GetPath("SharpTS.dll")));
+        Assert.Equal(expected, ExecuteCompiledDllIsolated(dllPath, timeoutMs: 30000,
+            verifyStandardError: error => Assert.Empty(error)));
+    }
+
     public static IEnumerable<object[]> BroadcastChannelMetadataPrograms =>
     [
         new object[]

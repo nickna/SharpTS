@@ -257,7 +257,7 @@ public partial class ILEmitter
             if (c.Arguments.Count == 0)
             {
                 IL.Emit(OpCodes.Newobj, _ctx.Types.GetDefaultConstructor(_ctx.Types.DictionaryStringObject));
-                IL.Emit(OpCodes.Newobj, _ctx.Runtime!.TSObjectCtor);
+                IL.Emit(OpCodes.Newobj, _ctx.Runtime!.ObjectStorage.Constructor);
                 SetStackUnknown();
                 return;
             }

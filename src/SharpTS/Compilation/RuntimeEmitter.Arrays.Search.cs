@@ -442,7 +442,7 @@ public partial class RuntimeEmitter
         // obj = new Con(); obj[i] = …; Array.prototype.X.call(obj, …)`).
         var notTSObject = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSObjectType);
+        il.Emit(OpCodes.Isinst, runtime.ObjectStorage.Type);
         il.Emit(OpCodes.Brfalse, notTSObject);
         EmitMaterializeViaGetProperty(il, runtime);
         il.Emit(OpCodes.Ret);
@@ -903,7 +903,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
         il.Emit(OpCodes.Brtrue, doToPrimLen);
         il.Emit(OpCodes.Ldloc, lenValLocal);
-        il.Emit(OpCodes.Isinst, runtime.TSObjectType);
+        il.Emit(OpCodes.Isinst, runtime.ObjectStorage.Type);
         il.Emit(OpCodes.Brfalse, notObjLen);
         il.MarkLabel(doToPrimLen);
         EmitLengthToPrimitive(il, runtime, lenValLocal);
@@ -1083,7 +1083,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
             il.Emit(OpCodes.Brtrue, afterLabel);
             il.Emit(OpCodes.Ldloc, resultLocal);
-            il.Emit(OpCodes.Isinst, runtime.TSObjectType);
+            il.Emit(OpCodes.Isinst, runtime.ObjectStorage.Type);
             il.Emit(OpCodes.Brtrue, afterLabel);
             il.Emit(OpCodes.Ldloc, resultLocal);
             il.Emit(OpCodes.Stloc, lenValLocal);
@@ -1100,7 +1100,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
         il.Emit(OpCodes.Brtrue, stillObjForToString);
         il.Emit(OpCodes.Ldloc, lenValLocal);
-        il.Emit(OpCodes.Isinst, runtime.TSObjectType);
+        il.Emit(OpCodes.Isinst, runtime.ObjectStorage.Type);
         il.Emit(OpCodes.Brfalse, afterToString);
         il.MarkLabel(stillObjForToString);
         TryInvoke("toString", afterToString);
@@ -1114,7 +1114,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
         il.Emit(OpCodes.Brtrue, stillObjForThrow);
         il.Emit(OpCodes.Ldloc, lenValLocal);
-        il.Emit(OpCodes.Isinst, runtime.TSObjectType);
+        il.Emit(OpCodes.Isinst, runtime.ObjectStorage.Type);
         il.Emit(OpCodes.Brfalse, afterTypeErrorCheck);
         il.MarkLabel(stillObjForThrow);
         GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot convert object to primitive value");
@@ -1919,7 +1919,7 @@ public partial class RuntimeEmitter
         // descriptor side effects (issue #90) propagate.
         var notTSObject = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSObjectType);
+        il.Emit(OpCodes.Isinst, runtime.ObjectStorage.Type);
         il.Emit(OpCodes.Brfalse, notTSObject);
         EmitLazyMaterializePath(il, runtime, holeAware: false);
         il.Emit(OpCodes.Ret);
@@ -1975,7 +1975,7 @@ public partial class RuntimeEmitter
 
         var notTSObject = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSObjectType);
+        il.Emit(OpCodes.Isinst, runtime.ObjectStorage.Type);
         il.Emit(OpCodes.Brfalse, notTSObject);
         EmitLazyMaterializePath(il, runtime, holeAware: false, rejectOverArrayLength: true);
         il.Emit(OpCodes.Ret);
@@ -2388,7 +2388,7 @@ public partial class RuntimeEmitter
         // truly absent slots.
         var notTSObject = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, rcvrLocal);
-        il.Emit(OpCodes.Isinst, runtime.TSObjectType);
+        il.Emit(OpCodes.Isinst, runtime.ObjectStorage.Type);
         il.Emit(OpCodes.Brfalse, notTSObject);
         var tsoKeyStrLocal = il.DeclareLocal(_types.String);
         il.Emit(OpCodes.Ldarga_S, (byte)1);
@@ -2524,12 +2524,12 @@ public partial class RuntimeEmitter
         // $Object branch: TSObjectHasProperty for own check, then chain walk.
         var notTSObjectLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, currentLocal);
-        il.Emit(OpCodes.Isinst, runtime.TSObjectType);
+        il.Emit(OpCodes.Isinst, runtime.ObjectStorage.Type);
         il.Emit(OpCodes.Brfalse, notTSObjectLabel);
         il.Emit(OpCodes.Ldloc, currentLocal);
-        il.Emit(OpCodes.Castclass, runtime.TSObjectType);
+        il.Emit(OpCodes.Castclass, runtime.ObjectStorage.Type);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, runtime.TSObjectHasProperty);
+        il.Emit(OpCodes.Callvirt, runtime.ObjectStorage.HasProperty);
         il.Emit(OpCodes.Brtrue, trueLabel);
         // PDS check on TSObject too — defineProperty on a $Object lands in PDS.
         il.Emit(OpCodes.Ldloc, currentLocal);

@@ -601,7 +601,7 @@ public partial class RuntimeEmitter
 
         // Create a SharpTSObject from the dictionary
         il.Emit(OpCodes.Ldloc, dictLocal);
-        il.Emit(OpCodes.Newobj, runtime.TSObjectCtor);
+        il.Emit(OpCodes.Newobj, runtime.ObjectStorage.Constructor);
 
         il.Emit(OpCodes.Ret);
     }

@@ -59,7 +59,7 @@ public partial class RuntimeEmitter
         // Returns the underlying string for both primitive strings and Stage-4z19
         // boxed wrappers; throws TypeError on non-string-like receivers (per spec).
         runtime.Strings.ProtoToStringHelper = EmitStringProtoToStringHelper(typeBuilder, runtime.Strings, runtime.CreateException,
-            runtime.TSObjectFieldsGetter, runtime.TSObjectType, runtime.TSTypeErrorCtor);
+            runtime.ObjectStorage.FieldsGetter, runtime.ObjectStorage.Type, runtime.TSTypeErrorCtor);
 
         // ECMA-262 19.1.3.6 Object.prototype.toString — returns "[object X]"
         // brand based on receiver type. Wired into the Object.prototype slot
@@ -400,12 +400,12 @@ public partial class RuntimeEmitter
         // the primitive type so `(new Number()).toString.call(obj) === "[object Number]"`.
         var notBoxedTSObjectLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSObjectType);
+        il.Emit(OpCodes.Isinst, runtime.ObjectStorage.Type);
         il.Emit(OpCodes.Brfalse, notBoxedTSObjectLabel);
         var boxedTypeLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSObjectType);
-        il.Emit(OpCodes.Callvirt, runtime.TSObjectFieldsGetter);
+        il.Emit(OpCodes.Castclass, runtime.ObjectStorage.Type);
+        il.Emit(OpCodes.Callvirt, runtime.ObjectStorage.FieldsGetter);
         il.Emit(OpCodes.Ldstr, "__primitiveType");
         il.Emit(OpCodes.Ldloca, boxedTypeLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "TryGetValue",

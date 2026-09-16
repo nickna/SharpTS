@@ -248,7 +248,7 @@ public partial class RuntimeEmitter
         // Check if $TSObject
         var sharpTSObjectLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSObjectType);
+        il.Emit(OpCodes.Isinst, runtime.ObjectStorage.Type);
         il.Emit(OpCodes.Brtrue, sharpTSObjectLabel);
 
         // $TSFunction — `delete fn.name` records in the per-instance set so
@@ -772,12 +772,12 @@ public partial class RuntimeEmitter
             il.MarkLabel(tsObjectDescriptorConfigurable);
         }
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSObjectType);
+        il.Emit(OpCodes.Castclass, runtime.ObjectStorage.Type);
         il.Emit(OpCodes.Ldarg_1);
         if (strict)
         {
             il.Emit(OpCodes.Ldarg_2); // strictMode
-            il.Emit(OpCodes.Callvirt, runtime.TSObjectDeletePropertyStrict);
+            il.Emit(OpCodes.Callvirt, runtime.ObjectStorage.DeletePropertyStrict);
             il.Emit(OpCodes.Pop);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_1);
@@ -808,9 +808,9 @@ public partial class RuntimeEmitter
             EmitDeleteFail("' of object");
             il.MarkLabel(tsObjectDescriptorConfigurable);
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Castclass, runtime.TSObjectType);
+            il.Emit(OpCodes.Castclass, runtime.ObjectStorage.Type);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Callvirt, runtime.TSObjectDeleteProperty);
+            il.Emit(OpCodes.Callvirt, runtime.ObjectStorage.DeleteProperty);
             il.Emit(OpCodes.Pop);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_1);

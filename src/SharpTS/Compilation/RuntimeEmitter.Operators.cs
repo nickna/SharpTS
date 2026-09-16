@@ -920,16 +920,16 @@ public partial class RuntimeEmitter
         // String key path
         // Check if obj is $TSObject
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, runtime.TSObjectType);
+        il.Emit(OpCodes.Isinst, runtime.ObjectStorage.Type);
         var notTSObjectLabel = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, notTSObjectLabel);
 
         // $TSObject - call HasProperty(string)
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Castclass, runtime.TSObjectType);
+        il.Emit(OpCodes.Castclass, runtime.ObjectStorage.Type);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Object, "ToString"));
-        il.Emit(OpCodes.Callvirt, runtime.TSObjectHasProperty);
+        il.Emit(OpCodes.Callvirt, runtime.ObjectStorage.HasProperty);
         il.Emit(OpCodes.Ret);
 
         // Check if obj is Dictionary<string, object>
@@ -1420,7 +1420,7 @@ public partial class RuntimeEmitter
         var leftIsDictLabel = il.DefineLabel();
         il.Emit(OpCodes.Brtrue, leftIsDictLabel);
         il.Emit(OpCodes.Ldloc, leftLocal);
-        il.Emit(OpCodes.Isinst, runtime.TSObjectType);
+        il.Emit(OpCodes.Isinst, runtime.ObjectStorage.Type);
         il.Emit(OpCodes.Brfalse, notLeftCoercibleLabel);
         il.MarkLabel(leftIsDictLabel);
         // Right is String → ToJsString(LEFT) and string-compare.
@@ -1460,7 +1460,7 @@ public partial class RuntimeEmitter
         var rightIsDictLabel = il.DefineLabel();
         il.Emit(OpCodes.Brtrue, rightIsDictLabel);
         il.Emit(OpCodes.Ldloc, rightLocal);
-        il.Emit(OpCodes.Isinst, runtime.TSObjectType);
+        il.Emit(OpCodes.Isinst, runtime.ObjectStorage.Type);
         il.Emit(OpCodes.Brfalse, notRightCoercibleLabel);
         il.MarkLabel(rightIsDictLabel);
         // Left is String → ToJsString(RIGHT) and string-compare.

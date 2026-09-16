@@ -47,11 +47,11 @@ public partial class RuntimeEmitter
         // and that's the common path for tests that freeze user objects.
         var notTSObjectLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSObjectType);
+        il.Emit(OpCodes.Isinst, runtime.ObjectStorage.Type);
         il.Emit(OpCodes.Brfalse, notTSObjectLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSObjectType);
-        il.Emit(OpCodes.Callvirt, runtime.TSObjectFreeze);
+        il.Emit(OpCodes.Castclass, runtime.ObjectStorage.Type);
+        il.Emit(OpCodes.Callvirt, runtime.ObjectStorage.Freeze);
         il.MarkLabel(notTSObjectLabel);
 
         // Call $PropertyDescriptorStore.Freeze(obj) - fully standalone, no reflection
@@ -141,11 +141,11 @@ public partial class RuntimeEmitter
         // TSObjectSetProperty's instance-method gate honors sealing.
         var notTSObjectSealLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSObjectType);
+        il.Emit(OpCodes.Isinst, runtime.ObjectStorage.Type);
         il.Emit(OpCodes.Brfalse, notTSObjectSealLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSObjectType);
-        il.Emit(OpCodes.Callvirt, runtime.TSObjectSeal);
+        il.Emit(OpCodes.Castclass, runtime.ObjectStorage.Type);
+        il.Emit(OpCodes.Callvirt, runtime.ObjectStorage.Seal);
         il.MarkLabel(notTSObjectSealLabel);
 
         // number[] unboxing: mark a $Array non-extensible so the unboxed PushDouble fast path refuses to

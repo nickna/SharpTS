@@ -493,10 +493,10 @@ public partial class ILEmitter
     {
         // Create $Object: new $Object(new Dictionary<string, object?>())
         IL.Emit(OpCodes.Newobj, _ctx.Types.GetConstructor(_ctx.Types.DictionaryStringObject));
-        IL.Emit(OpCodes.Newobj, _ctx.Runtime!.TSObjectCtor);
+        IL.Emit(OpCodes.Newobj, _ctx.Runtime!.ObjectStorage.Constructor);
 
         // Store in local for repeated use
-        var objLocal = IL.DeclareLocal(_ctx.Runtime!.TSObjectType);
+        var objLocal = IL.DeclareLocal(_ctx.Runtime!.ObjectStorage.Type);
         IL.Emit(OpCodes.Stloc, objLocal);
 
         foreach (var prop in o.Properties)
@@ -539,7 +539,7 @@ public partial class ILEmitter
                         IL.Emit(OpCodes.Ldstr, propKey);
                         EmitExpression(prop.Value); // Emits the getter function (arrow function)
                         EmitBoxIfNeeded(prop.Value);
-                        IL.Emit(OpCodes.Callvirt, _ctx.Runtime!.TSObjectDefineGetter);
+                        IL.Emit(OpCodes.Callvirt, _ctx.Runtime!.ObjectStorage.DefineGetter);
                     }
                     break;
 
@@ -561,7 +561,7 @@ public partial class ILEmitter
                         IL.Emit(OpCodes.Ldstr, propKey);
                         EmitExpression(prop.Value); // Emits the setter function (arrow function)
                         EmitBoxIfNeeded(prop.Value);
-                        IL.Emit(OpCodes.Callvirt, _ctx.Runtime!.TSObjectDefineSetter);
+                        IL.Emit(OpCodes.Callvirt, _ctx.Runtime!.ObjectStorage.DefineSetter);
                     }
                     break;
 
@@ -586,7 +586,7 @@ public partial class ILEmitter
                         IL.Emit(OpCodes.Ldstr, propKey);
                         EmitExpression(prop.Value);
                         EmitBoxIfNeeded(prop.Value);
-                        IL.Emit(OpCodes.Callvirt, _ctx.Runtime!.TSObjectSetProperty);
+                        IL.Emit(OpCodes.Callvirt, _ctx.Runtime!.ObjectStorage.SetProperty);
                     }
                     break;
             }

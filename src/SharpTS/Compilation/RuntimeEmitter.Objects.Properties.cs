@@ -374,12 +374,12 @@ public partial class RuntimeEmitter
         // (since $Object subclasses may have typed properties with backing fields)
         var notTSObjectLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSObjectType);
+        il.Emit(OpCodes.Isinst, runtime.ObjectStorage.Type);
         il.Emit(OpCodes.Brfalse, notTSObjectLabel);
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSObjectType);
-        il.Emit(OpCodes.Callvirt, runtime.TSObjectFieldsGetter);
+        il.Emit(OpCodes.Castclass, runtime.ObjectStorage.Type);
+        il.Emit(OpCodes.Callvirt, runtime.ObjectStorage.FieldsGetter);
         il.Emit(OpCodes.Stloc, objectFieldsLocal);
 
         il.Emit(OpCodes.Ldloc, objectFieldsLocal);
@@ -418,11 +418,11 @@ public partial class RuntimeEmitter
         // $IHasFields dispatch below.
         var notPlainTSObjectLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSObjectType);
+        il.Emit(OpCodes.Isinst, runtime.ObjectStorage.Type);
         il.Emit(OpCodes.Brfalse, notPlainTSObjectLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Object, "GetType"));
-        il.Emit(OpCodes.Ldtoken, runtime.TSObjectType);
+        il.Emit(OpCodes.Ldtoken, runtime.ObjectStorage.Type);
         il.Emit(OpCodes.Call, _types.GetMethod(
             _types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
         il.Emit(OpCodes.Beq, errorPrototypeLookupLabel);

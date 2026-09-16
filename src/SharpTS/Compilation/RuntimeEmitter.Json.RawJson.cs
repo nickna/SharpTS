@@ -10,7 +10,7 @@ public partial class RuntimeEmitter
         var type = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$RawJSON",
             TypeAttributes.Public | TypeAttributes.Class | TypeAttributes.Sealed,
-            runtime.TSObjectType);
+            runtime.ObjectStorage.Type);
         runtime.TSRawJsonType = type;
 
         var textField = type.DefineField("_rawText", _types.String,
@@ -28,7 +28,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject,
             "set_Item", _types.String, _types.Object));
-        il.Emit(OpCodes.Call, runtime.TSObjectCtor);
+        il.Emit(OpCodes.Call, runtime.ObjectStorage.Constructor);
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
@@ -39,7 +39,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Call, runtime.PDSSetPrototype);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Callvirt, runtime.TSObjectFreeze);
+        il.Emit(OpCodes.Callvirt, runtime.ObjectStorage.Freeze);
         il.Emit(OpCodes.Ret);
 
         var getter = type.DefineMethod("get_RawText",
@@ -94,7 +94,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, _types.ListOfObject);
         il.Emit(OpCodes.Brtrue, invalidBoundary);
         il.Emit(OpCodes.Ldloc, parsed);
-        il.Emit(OpCodes.Isinst, runtime.TSObjectType);
+        il.Emit(OpCodes.Isinst, runtime.ObjectStorage.Type);
         il.Emit(OpCodes.Brfalse, primitive);
         GuestErrorEmitter.ThrowSyntaxError(il, runtime, "Raw JSON text must be a primitive value");
         il.MarkLabel(primitive);

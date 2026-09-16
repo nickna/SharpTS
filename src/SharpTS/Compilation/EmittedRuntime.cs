@@ -20,6 +20,9 @@ public class EmittedRuntime
     /// <summary>Required array storage metadata, emitted for every compilation.</summary>
     public EmittedArrayStorageRuntime ArrayStorage { get; } = new();
 
+    /// <summary>Required object storage metadata, emitted for every compilation.</summary>
+    public EmittedObjectStorageRuntime ObjectStorage { get; } = new();
+
     /// <summary>Required array operation metadata, emitted for every compilation.</summary>
     public EmittedArrayOperationsRuntime ArrayOperations { get; } = new();
 
@@ -1038,27 +1041,6 @@ public class EmittedRuntime
     public MethodInfo IHasFieldsSetProperty { get; set; } = null!;
     public MethodInfo IHasFieldsHasProperty { get; set; } = null!;
     public MethodInfo IHasFieldsFieldsGetter { get; set; } = null!;
-
-    // $Object type - emitted for standalone assemblies
-    // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSObject
-    public Type TSObjectType { get; set; } = null!;
-    public ConstructorBuilder TSObjectCtor { get; set; } = null!;
-    public MethodBuilder TSObjectFieldsGetter { get; set; } = null!;
-    public MethodBuilder TSObjectFreeze { get; set; } = null!;
-    public MethodBuilder TSObjectSeal { get; set; } = null!;
-    public MethodBuilder TSObjectPreventExtensions { get; set; } = null!;
-    public MethodBuilder TSObjectGetProperty { get; set; } = null!;
-    public MethodBuilder TSObjectSetProperty { get; set; } = null!;
-    public MethodBuilder TSObjectSetPropertyStrict { get; set; } = null!;
-    public MethodBuilder TSObjectHasProperty { get; set; } = null!;
-    public MethodBuilder TSObjectDeleteProperty { get; set; } = null!;
-    public MethodBuilder TSObjectDeletePropertyStrict { get; set; } = null!;
-    public MethodBuilder TSObjectDefineGetter { get; set; } = null!;
-    public MethodBuilder TSObjectDefineSetter { get; set; } = null!;
-    public MethodBuilder TSObjectHasGetter { get; set; } = null!;
-    public MethodBuilder TSObjectHasSetter { get; set; } = null!;
-    public MethodBuilder TSObjectGetGettersDict { get; set; } = null!;
-    public MethodBuilder TSObjectGetSettersDict { get; set; } = null!;
 
     // Iterator wrapper type (implements IEnumerator<object?> for custom iterables)
     public TypeBuilder IteratorWrapperType { get; set; } = null!;

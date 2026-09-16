@@ -173,7 +173,7 @@ public partial class RuntimeEmitter
         // the backing dictionary directly so an inherited Object.prototype
         // setter for "" is not invoked.
         var rootHolderFieldsLocal = il.DeclareLocal(_types.DictionaryStringObject);
-        var rootHolderLocal = il.DeclareLocal(runtime.TSObjectType);
+        var rootHolderLocal = il.DeclareLocal(runtime.ObjectStorage.Type);
         il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.DictionaryStringObject));
         il.Emit(OpCodes.Stloc, rootHolderFieldsLocal);
         il.Emit(OpCodes.Ldloc, rootHolderFieldsLocal);
@@ -182,7 +182,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, _types.GetMethod(
             _types.DictionaryStringObject, "Add", _types.String, _types.Object));
         il.Emit(OpCodes.Ldloc, rootHolderFieldsLocal);
-        il.Emit(OpCodes.Newobj, runtime.TSObjectCtor);
+        il.Emit(OpCodes.Newobj, runtime.ObjectStorage.Constructor);
         il.Emit(OpCodes.Stloc, rootHolderLocal);
         il.Emit(OpCodes.Call, runtime.ObjectPrototypePopulateMethod);
         il.Emit(OpCodes.Ldloc, rootHolderLocal);
@@ -346,7 +346,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(notDoubleLabel);
         var checkTagLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, elemLocal);
-        il.Emit(OpCodes.Isinst, runtime.TSObjectType);
+        il.Emit(OpCodes.Isinst, runtime.ObjectStorage.Type);
         il.Emit(OpCodes.Brtrue, checkTagLabel);
         il.Emit(OpCodes.Ldloc, elemLocal);
         il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);

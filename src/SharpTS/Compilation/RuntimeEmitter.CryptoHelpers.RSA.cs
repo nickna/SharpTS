@@ -46,15 +46,15 @@ public partial class RuntimeEmitter
         // Standalone-only: require emitted $Object for object key extraction.
         var notTsObjectLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, keyLocal);
-        il.Emit(OpCodes.Isinst, runtime.TSObjectType);
+        il.Emit(OpCodes.Isinst, runtime.ObjectStorage.Type);
         il.Emit(OpCodes.Brfalse, notTsObjectLabel);
 
         // var keyValue = (($Object)key).GetProperty("key");
         var keyValueLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldloc, keyLocal);
-        il.Emit(OpCodes.Castclass, runtime.TSObjectType);
+        il.Emit(OpCodes.Castclass, runtime.ObjectStorage.Type);
         il.Emit(OpCodes.Ldstr, "key");
-        il.Emit(OpCodes.Callvirt, runtime.TSObjectGetProperty);
+        il.Emit(OpCodes.Callvirt, runtime.ObjectStorage.GetProperty);
         il.Emit(OpCodes.Stloc, keyValueLocal);
 
         // if (keyValue is string keyStr) return keyStr;

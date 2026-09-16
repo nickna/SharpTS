@@ -1018,7 +1018,7 @@ public partial class RuntimeEmitter
         EmitToJsString(typeBuilder, runtime.StringCoercion, runtime.ArrayStorage, runtime.ArrayOperations,
             new StringCoercionInputs(
                 runtime.UndefinedType, runtime.TSSymbolType, runtime.GlobalThisSingletonField, runtime.GlobalThisGetProperty,
-                runtime.TypeOf, runtime.InvokeMethodValue, runtime.ArgumentsType, runtime.GetProperty, runtime.TSObjectType,
+                runtime.TypeOf, runtime.InvokeMethodValue, runtime.ArgumentsType, runtime.GetProperty, runtime.ObjectStorage.Type,
                 runtime.TSFunctionType, runtime.BoundAnyFunctionType, runtime.HasOwnPropertyHelperMethod, runtime.IHasFieldsInterface,
                 runtime.GetSymbolDictMethod, runtime.SymbolToPrimitive, runtime.CompiledPropertyDescriptorType,
                 runtime.CompiledPropertyDescriptorGetter.GetGetMethod()!,
@@ -1032,7 +1032,7 @@ public partial class RuntimeEmitter
         // §7.1.17 Symbol TypeError; the body needs TSSymbolType/TSTypeErrorCtor,
         // both bound by this point (ToJsString's Symbol arm uses them too).
         EmitStringifyCoerce(runtime.StringCoercion,
-            runtime.TSSymbolType, runtime.TSObjectType, runtime.IHasFieldsInterface, runtime.CreateException, runtime.TSTypeErrorCtor);
+            runtime.TSSymbolType, runtime.ObjectStorage.Type, runtime.IHasFieldsInterface, runtime.CreateException, runtime.TSTypeErrorCtor);
         // Equals body — must come after ToJsString since the Object-vs-String
         // branch calls runtime.StringCoercion.ToJsString.
         EmitEquals(typeBuilder, runtime);
@@ -1040,7 +1040,7 @@ public partial class RuntimeEmitter
         // so their ToPrimitive(value, "number") on Dictionary/$Object args can
         // call those helpers.
         EmitToNumber(typeBuilder, runtime.NumericCoercion,
-            new AbstractNumberInputs(runtime.UndefinedType, runtime.TSSymbolType, runtime.TSObjectType,
+            new AbstractNumberInputs(runtime.UndefinedType, runtime.TSSymbolType, runtime.ObjectStorage.Type,
                 runtime.TSFunctionType, runtime.BoundAnyFunctionType, runtime.IHasFieldsInterface,
                 runtime.CompiledPropertyDescriptorType, runtime.CompiledPropertyDescriptorGetter.GetGetMethod()!,
                 runtime.CompiledPropertyDescriptorSetter.GetGetMethod()!, runtime.CompiledPropertyDescriptorValue.GetGetMethod()!,
@@ -1048,7 +1048,7 @@ public partial class RuntimeEmitter
                 runtime.TypeOf, runtime.StringCoercion.ToJsString, runtime.BoxedPrimitives.UnwrapIfBoxed,
                 runtime.CreateException, runtime.TSTypeErrorCtor));
         EmitConvertToNumber(typeBuilder, runtime.NumericCoercion,
-            new ExplicitNumberInputs(runtime.UndefinedType, runtime.TSSymbolType, runtime.TSObjectType,
+            new ExplicitNumberInputs(runtime.UndefinedType, runtime.TSSymbolType, runtime.ObjectStorage.Type,
                 runtime.GetProperty, runtime.InvokeMethodValue, runtime.StringCoercion.ToJsString,
                 runtime.BigInt.ToNumber, runtime.CreateException, runtime.TSTypeErrorCtor));
         // String.raw lives here so its body can read `template.raw` via
@@ -1243,7 +1243,7 @@ public partial class RuntimeEmitter
         EmitArrayReduceRight(typeBuilder, runtime);
         // Search helpers use ToIntegerOrInfinity for spec-compliant fromIndex clamping.
         EmitToIntegerOrInfinityHelper(typeBuilder, runtime.NumericCoercion,
-            new IntegerOrInfinityInputs(runtime.UndefinedType, runtime.TSObjectType, runtime.IHasFieldsInterface,
+            new IntegerOrInfinityInputs(runtime.UndefinedType, runtime.ObjectStorage.Type, runtime.IHasFieldsInterface,
                 runtime.SymbolToPrimitive, runtime.GetSymbolDictMethod, runtime.GetProperty, runtime.InvokeMethodValue,
                 runtime.TypeOf, runtime.BoxedPrimitives.IsOfType, runtime.CreateException, runtime.TSTypeErrorCtor));
         EmitArrayIncludes(typeBuilder, runtime);
@@ -1314,8 +1314,8 @@ public partial class RuntimeEmitter
         // BooleanPrototypePopulateMethod / Number / String / Object are non-null.
         EmitNewBoxedPrimitive(typeBuilder, runtime.BoxedPrimitives,
             runtime.Strings, new BoxedPrimitiveInputs(
-                runtime.TSObjectType,
-                runtime.TSObjectCtor,
+                runtime.ObjectStorage.Type,
+                runtime.ObjectStorage.Constructor,
                 runtime.CompiledPropertyDescriptorType,
                 runtime.CompiledPropertyDescriptorCtor,
                 runtime.CompiledPropertyDescriptorValue.GetSetMethod()!,
@@ -1332,13 +1332,13 @@ public partial class RuntimeEmitter
                 runtime.SymbolPrototypePopulateMethod),
             _features.UsesBigInt ? new BoxedBigIntPrototype(runtime.BigInt.PrototypeField, runtime.BigInt.PrototypePopulateMethod) : null);
         EmitNormalizeForeignEvalValue(typeBuilder, runtime.BoxedPrimitives,
-            runtime.TSObjectType, runtime.UndefinedInstance, runtime.GetProperty);
+            runtime.ObjectStorage.Type, runtime.UndefinedInstance, runtime.GetProperty);
         EmitToObject(typeBuilder, runtime.BoxedPrimitives,
-            runtime.TSObjectCtor, runtime.UndefinedType, runtime.TSSymbolType);
+            runtime.ObjectStorage.Constructor, runtime.UndefinedType, runtime.TSSymbolType);
         EmitIsBoxedPrimitiveOfType(typeBuilder, runtime.BoxedPrimitives,
-            runtime.TSObjectType, runtime.TSObjectGetProperty);
+            runtime.ObjectStorage.Type, runtime.ObjectStorage.GetProperty);
         EmitUnwrapStringReceiver(typeBuilder, runtime.BoxedPrimitives,
-            runtime.TSObjectType, runtime.GetProperty, runtime.StringCoercion);
+            runtime.ObjectStorage.Type, runtime.GetProperty, runtime.StringCoercion);
         // EmitUnwrapIfBoxed moved earlier — see comment above EmitStringify.
         // String methods
         EmitStringCharAt(typeBuilder, runtime.Strings, runtime.NumericCoercion.ToNumber);
@@ -1403,7 +1403,7 @@ public partial class RuntimeEmitter
                     runtime.PDSDefineProperty),
                 runtime.CompiledPropertyDescriptorType, runtime.TSFunctionGetOrCreate,
                 runtime.ObjectPrototypeField, runtime.PDSSetPrototype,
-                new BooleanReceiverInputs(runtime.TSObjectType, runtime.TSObjectFieldsGetter,
+                new BooleanReceiverInputs(runtime.ObjectStorage.Type, runtime.ObjectStorage.FieldsGetter,
                     runtime.CreateException, runtime.TSTypeErrorCtor)));
         // Number.prototype populate is wired after EmitNumberMethods below.
         // Object utilities
@@ -1458,7 +1458,7 @@ public partial class RuntimeEmitter
                     new BigIntPrimitiveInputs(runtime.GetIndex, runtime.GetProperty, runtime.InvokeMethodValue,
                         runtime.SymbolToPrimitive, runtime.TSSymbolType, runtime.TypeOf, runtime.UndefinedType,
                         runtime.CreateException, runtime.TSTypeErrorCtor),
-                    runtime.TSObjectType, runtime.StringCoercion.ToJsString, runtime.TSRangeErrorCtor, runtime.TSSyntaxErrorCtor));
+                    runtime.ObjectStorage.Type, runtime.StringCoercion.ToJsString, runtime.TSRangeErrorCtor, runtime.TSSyntaxErrorCtor));
             EmitBigIntStaticMethods(typeBuilder, bigInt, runtime.NumericCoercion.ToNumber, runtime.CreateException, runtime.TSRangeErrorCtor);
             EmitBigIntArithmetic(typeBuilder, bigInt);
             EmitBigIntComparison(typeBuilder, bigInt, runtime.CreateException, runtime.TSRangeErrorCtor);
@@ -1472,7 +1472,7 @@ public partial class RuntimeEmitter
                     runtime.CompiledPropertyDescriptorWritable.GetSetMethod()!, runtime.CompiledPropertyDescriptorConfigurable.GetSetMethod()!,
                     runtime.TSFunctionGetOrCreate, runtime.GetSymbolDictMethod, runtime.SymbolToStringTag,
                     runtime.ObjectPrototypeField, runtime.PDSSetPrototype,
-                    runtime.TSObjectType, runtime.TSObjectFieldsGetter, runtime.NumericCoercion.ToNumber, runtime.UndefinedType,
+                    runtime.ObjectStorage.Type, runtime.ObjectStorage.FieldsGetter, runtime.NumericCoercion.ToNumber, runtime.UndefinedType,
                     runtime.CreateException, runtime.TSTypeErrorCtor));
         }
         // Promise methods moved earlier (before GetProperty, which needs PromiseThen for typeof p.then)
@@ -1482,7 +1482,7 @@ public partial class RuntimeEmitter
                 runtime.GetProperty,
                 runtime.UndefinedType,
                 runtime.NumericCoercion.ToIntegerOrInfinity,
-                runtime.TSObjectType,
+                runtime.ObjectStorage.Type,
                 runtime.TSSymbolType,
                 runtime.CreateException,
                 runtime.TSTypeErrorCtor,
@@ -1498,7 +1498,7 @@ public partial class RuntimeEmitter
                 runtime.TSFunctionGetOrCreate,
                 runtime.ObjectPrototypeField,
                 runtime.PDSSetPrototype,
-                runtime.TSObjectType,
+                runtime.ObjectStorage.Type,
                 runtime.GetProperty,
                 runtime.CreateException,
                 runtime.TSTypeErrorCtor));
@@ -1518,13 +1518,13 @@ public partial class RuntimeEmitter
         // bound, including DateToString for Date's special default hint.
         EmitUnwrapIfBoxedBody(runtime.BoxedPrimitives,
             new UnwrapPrimitiveInputs(
-                runtime.TSObjectType,
+                runtime.ObjectStorage.Type,
                 runtime.SymbolToPrimitive,
                 runtime.GetIndex,
                 runtime.UndefinedType,
                 runtime.TypeOf,
                 runtime.InvokeMethodValue,
-                runtime.TSObjectGetProperty,
+                runtime.ObjectStorage.GetProperty,
                 runtime.HasOwnPropertyHelperMethod,
                 runtime.GetProperty,
                 runtime.CreateException,

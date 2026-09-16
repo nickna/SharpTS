@@ -93,7 +93,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
         il.Emit(OpCodes.Brtrue, receiverIsSynthableLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSObjectType);
+        il.Emit(OpCodes.Isinst, runtime.ObjectStorage.Type);
         il.Emit(OpCodes.Brtrue, receiverIsSynthableLabel);
         // Compact records and other emitted ordinary-object carriers keep
         // their live own slots behind $IHasFields.  A partial descriptor such
@@ -544,11 +544,11 @@ public partial class RuntimeEmitter
 
         var accessorCleanupNotTSObject = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSObjectType);
+        il.Emit(OpCodes.Isinst, runtime.ObjectStorage.Type);
         il.Emit(OpCodes.Brfalse, accessorCleanupNotTSObject);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSObjectType);
-        il.Emit(OpCodes.Callvirt, runtime.TSObjectFieldsGetter);
+        il.Emit(OpCodes.Castclass, runtime.ObjectStorage.Type);
+        il.Emit(OpCodes.Callvirt, runtime.ObjectStorage.FieldsGetter);
         il.Emit(OpCodes.Ldloc, propNameLocal);
         il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(
@@ -984,13 +984,13 @@ public partial class RuntimeEmitter
         // Also write the value to $Object._fields when target is $Object.
         // Same generic-skip semantics as the dict path.
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSObjectType);
+        il.Emit(OpCodes.Isinst, runtime.ObjectStorage.Type);
         il.Emit(OpCodes.Brfalse, skipValueSetLabel);
 
         var tsObjFieldsLocal = il.DeclareLocal(_types.DictionaryStringObject);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSObjectType);
-        il.Emit(OpCodes.Callvirt, runtime.TSObjectFieldsGetter);
+        il.Emit(OpCodes.Castclass, runtime.ObjectStorage.Type);
+        il.Emit(OpCodes.Callvirt, runtime.ObjectStorage.FieldsGetter);
         il.Emit(OpCodes.Stloc, tsObjFieldsLocal);
 
         var tsObjDoWriteLabel = il.DefineLabel();

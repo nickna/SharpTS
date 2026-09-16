@@ -218,11 +218,11 @@ public partial class RuntimeEmitter
         // properties. The PDS/CWT bookkeeping below is the cross-type record.
         var notTSObjectLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSObjectType);
+        il.Emit(OpCodes.Isinst, runtime.ObjectStorage.Type);
         il.Emit(OpCodes.Brfalse, notTSObjectLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSObjectType);
-        il.Emit(OpCodes.Callvirt, runtime.TSObjectPreventExtensions);
+        il.Emit(OpCodes.Castclass, runtime.ObjectStorage.Type);
+        il.Emit(OpCodes.Callvirt, runtime.ObjectStorage.PreventExtensions);
         il.MarkLabel(notTSObjectLabel);
 
         // number[] unboxing: mark a $Array non-extensible so the unboxed PushDouble fast path refuses to
@@ -655,7 +655,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notDictForProtoLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSObjectType);
+        il.Emit(OpCodes.Isinst, runtime.ObjectStorage.Type);
         il.Emit(OpCodes.Brfalse, notTSObjForProtoLabel);
         il.Emit(OpCodes.Ldsfld, runtime.ObjectPrototypeField);
         il.Emit(OpCodes.Ret);
@@ -1099,7 +1099,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Brtrue, notClassInstanceLabel);
         }
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSObjectType);
+        il.Emit(OpCodes.Isinst, runtime.ObjectStorage.Type);
         il.Emit(OpCodes.Brtrue, notClassInstanceLabel);
         // It's a class instance - throw TypeError
         GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot set prototype of class instance");

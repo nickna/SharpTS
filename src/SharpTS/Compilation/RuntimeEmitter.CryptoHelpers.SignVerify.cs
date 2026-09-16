@@ -49,12 +49,12 @@ public partial class RuntimeEmitter
         // $Object with a "key" field → recurse on that field
         il.MarkLabel(notObjLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSObjectType);
+        il.Emit(OpCodes.Isinst, runtime.ObjectStorage.Type);
         il.Emit(OpCodes.Brfalse, notBufferLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSObjectType);
+        il.Emit(OpCodes.Castclass, runtime.ObjectStorage.Type);
         il.Emit(OpCodes.Ldstr, "key");
-        il.Emit(OpCodes.Callvirt, runtime.TSObjectGetProperty);
+        il.Emit(OpCodes.Callvirt, runtime.ObjectStorage.GetProperty);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, method); // recurse
         il.Emit(OpCodes.Ret);

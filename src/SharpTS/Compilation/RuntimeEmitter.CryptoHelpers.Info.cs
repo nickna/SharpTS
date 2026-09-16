@@ -23,8 +23,8 @@ public partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
         il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.DictionaryStringObject));
-        il.Emit(OpCodes.Newobj, runtime.TSObjectCtor);
-        var objLocal = il.DeclareLocal(runtime.TSObjectType);
+        il.Emit(OpCodes.Newobj, runtime.ObjectStorage.Constructor);
+        var objLocal = il.DeclareLocal(runtime.ObjectStorage.Type);
         il.Emit(OpCodes.Stloc, objLocal);
 
         foreach (var (name, value) in CryptoInfoTables.NumericConstants)
@@ -33,14 +33,14 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldstr, name);
             il.Emit(OpCodes.Ldc_R8, value);
             il.Emit(OpCodes.Box, _types.Double);
-            il.Emit(OpCodes.Callvirt, runtime.TSObjectSetProperty);
+            il.Emit(OpCodes.Callvirt, runtime.ObjectStorage.SetProperty);
         }
         foreach (var (name, value) in CryptoInfoTables.StringConstants)
         {
             il.Emit(OpCodes.Ldloc, objLocal);
             il.Emit(OpCodes.Ldstr, name);
             il.Emit(OpCodes.Ldstr, value);
-            il.Emit(OpCodes.Callvirt, runtime.TSObjectSetProperty);
+            il.Emit(OpCodes.Callvirt, runtime.ObjectStorage.SetProperty);
         }
 
         il.Emit(OpCodes.Ldloc, objLocal);
@@ -127,8 +127,8 @@ public partial class RuntimeEmitter
 
             // Build result object
             il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.DictionaryStringObject));
-            il.Emit(OpCodes.Newobj, runtime.TSObjectCtor);
-            var resLocal = il.DeclareLocal(runtime.TSObjectType);
+            il.Emit(OpCodes.Newobj, runtime.ObjectStorage.Constructor);
+            var resLocal = il.DeclareLocal(runtime.ObjectStorage.Type);
             il.Emit(OpCodes.Stloc, resLocal);
 
             void SetStr(string k, string v)
@@ -136,7 +136,7 @@ public partial class RuntimeEmitter
                 il.Emit(OpCodes.Ldloc, resLocal);
                 il.Emit(OpCodes.Ldstr, k);
                 il.Emit(OpCodes.Ldstr, v);
-                il.Emit(OpCodes.Callvirt, runtime.TSObjectSetProperty);
+                il.Emit(OpCodes.Callvirt, runtime.ObjectStorage.SetProperty);
             }
             void SetNum(string k, int v)
             {
@@ -144,7 +144,7 @@ public partial class RuntimeEmitter
                 il.Emit(OpCodes.Ldstr, k);
                 il.Emit(OpCodes.Ldc_R8, (double)v);
                 il.Emit(OpCodes.Box, _types.Double);
-                il.Emit(OpCodes.Callvirt, runtime.TSObjectSetProperty);
+                il.Emit(OpCodes.Callvirt, runtime.ObjectStorage.SetProperty);
             }
             SetStr("name", info.Name);
             SetNum("nid", info.Nid);
@@ -173,13 +173,13 @@ public partial class RuntimeEmitter
 
         // if (options is not $Object) skip
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, runtime.TSObjectType);
+        il.Emit(OpCodes.Isinst, runtime.ObjectStorage.Type);
         il.Emit(OpCodes.Brfalse, skipLabel);
 
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Castclass, runtime.TSObjectType);
+        il.Emit(OpCodes.Castclass, runtime.ObjectStorage.Type);
         il.Emit(OpCodes.Ldstr, key);
-        il.Emit(OpCodes.Callvirt, runtime.TSObjectGetProperty);
+        il.Emit(OpCodes.Callvirt, runtime.ObjectStorage.GetProperty);
         il.Emit(OpCodes.Stloc, valLocal);
 
         // if (val is not double) skip

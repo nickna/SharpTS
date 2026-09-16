@@ -698,12 +698,12 @@ public partial class RuntimeEmitter
         // to read the dict; iterate keys; add unless already in result.
         var notTSObjectForGetters = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSObjectType);
+        il.Emit(OpCodes.Isinst, runtime.ObjectStorage.Type);
         il.Emit(OpCodes.Brfalse, notTSObjectForGetters);
         var tsoGettersDict = il.DeclareLocal(dictType);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSObjectType);
-        il.Emit(OpCodes.Callvirt, runtime.TSObjectGetGettersDict);
+        il.Emit(OpCodes.Castclass, runtime.ObjectStorage.Type);
+        il.Emit(OpCodes.Callvirt, runtime.ObjectStorage.GetGettersDictionary);
         il.Emit(OpCodes.Stloc, tsoGettersDict);
         var skipGettersIter = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, tsoGettersDict);
@@ -754,8 +754,8 @@ public partial class RuntimeEmitter
         // Symmetric iteration of _setters for setter-only literal accessors.
         var tsoSettersDict = il.DeclareLocal(dictType);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSObjectType);
-        il.Emit(OpCodes.Callvirt, runtime.TSObjectGetSettersDict);
+        il.Emit(OpCodes.Castclass, runtime.ObjectStorage.Type);
+        il.Emit(OpCodes.Callvirt, runtime.ObjectStorage.GetSettersDictionary);
         il.Emit(OpCodes.Stloc, tsoSettersDict);
         var skipSettersIter = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, tsoSettersDict);
@@ -1426,10 +1426,10 @@ public partial class RuntimeEmitter
             var accessorLoopEndLabel = il.DefineLabel();
 
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.TSObjectType);
+            il.Emit(OpCodes.Isinst, runtime.ObjectStorage.Type);
             il.Emit(OpCodes.Brfalse, doneLabel);
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Castclass, runtime.TSObjectType);
+            il.Emit(OpCodes.Castclass, runtime.ObjectStorage.Type);
             il.Emit(OpCodes.Callvirt, accessorMapGetter);
             il.Emit(OpCodes.Stloc, accessorDictLocal);
             il.Emit(OpCodes.Ldloc, accessorDictLocal);
@@ -1465,8 +1465,8 @@ public partial class RuntimeEmitter
             il.MarkLabel(doneLabel);
         }
 
-        EmitLiteralAccessorNames(runtime.TSObjectGetGettersDict);
-        EmitLiteralAccessorNames(runtime.TSObjectGetSettersDict);
+        EmitLiteralAccessorNames(runtime.ObjectStorage.GetGettersDictionary);
+        EmitLiteralAccessorNames(runtime.ObjectStorage.GetSettersDictionary);
 
         // Append PDS extras (accessor-only own props + non-enumerable own
         // props installed via Object.defineProperty). Mirrors the dict path

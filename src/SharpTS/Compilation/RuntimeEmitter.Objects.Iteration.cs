@@ -653,12 +653,12 @@ public partial class RuntimeEmitter
         // accessors misses the getter-backed values.
         var notTSObjForVal = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSObjectType);
+        il.Emit(OpCodes.Isinst, runtime.ObjectStorage.Type);
         il.Emit(OpCodes.Brfalse, notTSObjForVal);
         var tsoValGettersDict = il.DeclareLocal(dictType);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSObjectType);
-        il.Emit(OpCodes.Callvirt, runtime.TSObjectGetGettersDict);
+        il.Emit(OpCodes.Castclass, runtime.ObjectStorage.Type);
+        il.Emit(OpCodes.Callvirt, runtime.ObjectStorage.GetGettersDictionary);
         il.Emit(OpCodes.Stloc, tsoValGettersDict);
         var skipValGetters = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, tsoValGettersDict);
@@ -708,8 +708,8 @@ public partial class RuntimeEmitter
         // Symmetric iteration of _setters for setter-only literal accessors.
         var tsoValSettersDict = il.DeclareLocal(dictType);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSObjectType);
-        il.Emit(OpCodes.Callvirt, runtime.TSObjectGetSettersDict);
+        il.Emit(OpCodes.Castclass, runtime.ObjectStorage.Type);
+        il.Emit(OpCodes.Callvirt, runtime.ObjectStorage.GetSettersDictionary);
         il.Emit(OpCodes.Stloc, tsoValSettersDict);
         var skipValSetters = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, tsoValSettersDict);
@@ -1269,12 +1269,12 @@ public partial class RuntimeEmitter
         // getter). Mirrors GetKeys/GetValues' recent extensions.
         var notTSObjForEnt = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSObjectType);
+        il.Emit(OpCodes.Isinst, runtime.ObjectStorage.Type);
         il.Emit(OpCodes.Brfalse, notTSObjForEnt);
         var tsoEntGettersDict = il.DeclareLocal(dictType);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSObjectType);
-        il.Emit(OpCodes.Callvirt, runtime.TSObjectGetGettersDict);
+        il.Emit(OpCodes.Castclass, runtime.ObjectStorage.Type);
+        il.Emit(OpCodes.Callvirt, runtime.ObjectStorage.GetGettersDictionary);
         il.Emit(OpCodes.Stloc, tsoEntGettersDict);
         var skipEntGetters = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, tsoEntGettersDict);
@@ -1332,8 +1332,8 @@ public partial class RuntimeEmitter
         // Symmetric iteration of _setters for setter-only literal accessors.
         var tsoEntSettersDict = il.DeclareLocal(dictType);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSObjectType);
-        il.Emit(OpCodes.Callvirt, runtime.TSObjectGetSettersDict);
+        il.Emit(OpCodes.Castclass, runtime.ObjectStorage.Type);
+        il.Emit(OpCodes.Callvirt, runtime.ObjectStorage.GetSettersDictionary);
         il.Emit(OpCodes.Stloc, tsoEntSettersDict);
         var skipEntSetters = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, tsoEntSettersDict);
