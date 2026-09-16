@@ -50,6 +50,7 @@ public class EmittedStringCoercionRuntimeTests
         var assembly = new PersistedAssemblyBuilder(new AssemblyName("coercion_staged"), typeof(object).Assembly);
         var module = assembly.DefineDynamicModule("main");
         var runtime = new EmittedRuntime();
+        runtime.BigInt.BeginImplementationEmission();
         typeof(RuntimeEmitter).GetMethod("DefineRuntimeClassPhase1", BindingFlags.NonPublic | BindingFlags.Instance)!
             .Invoke(new RuntimeEmitter(TypeProvider.Runtime), [module, runtime]);
         var coercion = runtime.StringCoercion;

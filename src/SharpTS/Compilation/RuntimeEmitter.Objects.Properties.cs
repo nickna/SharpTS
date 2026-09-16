@@ -1639,12 +1639,12 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Isinst, _types.BigInteger);
             il.Emit(OpCodes.Brfalse, notBigIntPrimLabel);
-            il.Emit(OpCodes.Call, runtime.BigIntPrototypePopulateMethod);
+            il.Emit(OpCodes.Call, runtime.BigInt.PrototypePopulateMethod);
 
             var bigIntProtoDescLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
             var bigIntProtoGetterLocal = il.DeclareLocal(_types.Object);
             var bigIntProtoOrdinaryLookupLabel = il.DefineLabel();
-            il.Emit(OpCodes.Ldsfld, runtime.BigIntPrototypeField);
+            il.Emit(OpCodes.Ldsfld, runtime.BigInt.PrototypeField);
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
             il.Emit(OpCodes.Stloc, bigIntProtoDescLocal);
@@ -1666,7 +1666,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ret);
 
             il.MarkLabel(bigIntProtoOrdinaryLookupLabel);
-            il.Emit(OpCodes.Ldsfld, runtime.BigIntPrototypeField);
+            il.Emit(OpCodes.Ldsfld, runtime.BigInt.PrototypeField);
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Call, method);
             il.Emit(OpCodes.Ret);
@@ -1828,8 +1828,8 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
             il.Emit(OpCodes.Bne_Un, notBigIntLabel);
             if (_features.UsesBigInt)
-                il.Emit(OpCodes.Call, runtime.BigIntPrototypePopulateMethod);
-            il.Emit(OpCodes.Ldsfld, runtime.BigIntPrototypeField);
+                il.Emit(OpCodes.Call, runtime.BigInt.PrototypePopulateMethod);
+            il.Emit(OpCodes.Ldsfld, runtime.BigInt.PrototypeField);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(notBigIntLabel);
             var notSymbolLabel = il.DefineLabel();

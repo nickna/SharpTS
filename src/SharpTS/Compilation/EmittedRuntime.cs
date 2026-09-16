@@ -343,8 +343,6 @@ public class EmittedRuntime
     /// or monkey-patching. Null-backed when the program never mentions Date.
     /// </summary>
     public FieldBuilder DatePrototypeField { get; set; } = null!;
-    /// <summary>BigInt.prototype singleton used by value-position BigInt and primitive BigInteger symbol lookup.</summary>
-    public FieldBuilder BigIntPrototypeField { get; set; } = null!;
     /// <summary>Symbol.prototype singleton used by value-position Symbol prototype access.</summary>
     public FieldBuilder SymbolPrototypeField { get; set; } = null!;
     public MethodBuilder SymbolPrototypePopulateMethod { get; set; } = null!;
@@ -367,8 +365,6 @@ public class EmittedRuntime
     /// </summary>
     public Dictionary<string, MethodBuilder> ReflectValueFormMethods { get; } =
         new(StringComparer.Ordinal);
-    /// <summary>Populates <see cref="BigIntPrototypeField"/> with $TSFunction wrappers; idempotent.</summary>
-    public MethodBuilder BigIntPrototypePopulateMethod { get; set; } = null!;
     /// <summary>$Runtime.StringReplaceWithFunction(str, pattern, fn, replaceAll) — handles functional replacement for replace/replaceAll and stringifies each callback result.</summary>
     public MethodBuilder StringReplaceWithFunction { get; set; } = null!;
     /// <summary>$Runtime.ObjectProtoToString(this) — ECMA-262 19.1.3.6 toString returns "[object X]" branded by receiver type. Wired into Object.prototype.toString slot for borrowed-method dispatch (`obj.toString = Object.prototype.toString; obj.toString()`).</summary>
@@ -599,6 +595,9 @@ public class EmittedRuntime
     /// <summary>Required Math singleton, numeric adapters and exact summation declarations.</summary>
     public EmittedMathRuntime Math { get; } = new();
 
+    /// <summary>Required BigInt prototype/numeric metadata with optional BigInt operations.</summary>
+    public EmittedBigIntRuntime BigInt { get; } = new();
+
     public MethodBuilder ObjectRest { get; set; } = null!;
     public MethodBuilder ArrayDestructureSource { get; set; } = null!;  // #685: normalize array binding-pattern source via the iterator protocol
 
@@ -677,36 +676,7 @@ public class EmittedRuntime
     public MethodBuilder TryGetSymbolDictMethod { get; set; } = null!;
     public MethodBuilder IsSymbolMethod { get; set; } = null!;
 
-    // BigInt support
-    public MethodBuilder CreateBigInt { get; set; } = null!;
-    public MethodBuilder BigIntAsIntN { get; set; } = null!;
-    public MethodBuilder BigIntAsUintN { get; set; } = null!;
-    /// <summary>$Runtime.ToBigInt(object) -> boxed BigInteger — strict ECMA-262 ToBigInt (unlike the callable BigInt conversion, Number primitives are rejected).</summary>
-    public MethodBuilder ToBigInt { get; set; } = null!;
-    /// <summary>$Runtime.BigIntToNumber(BigInteger) -> double — ECMA-262 NumberFromBigInt with ties-to-even binary64 rounding.</summary>
-    public MethodBuilder BigIntToNumber { get; set; } = null!;
-    public MethodBuilder BigIntAdd { get; set; } = null!;
-    public MethodBuilder BigIntSubtract { get; set; } = null!;
-    public MethodBuilder BigIntMultiply { get; set; } = null!;
-    public MethodBuilder BigIntDivide { get; set; } = null!;
-    public MethodBuilder BigIntRemainder { get; set; } = null!;
-    public MethodBuilder BigIntPow { get; set; } = null!;
-    public MethodBuilder BigIntNegate { get; set; } = null!;
-    public MethodBuilder BigIntBitwiseAnd { get; set; } = null!;
-    public MethodBuilder BigIntBitwiseOr { get; set; } = null!;
-    public MethodBuilder BigIntBitwiseXor { get; set; } = null!;
-    public MethodBuilder BigIntBitwiseNot { get; set; } = null!;
-    public MethodBuilder BigIntLeftShift { get; set; } = null!;
-    public MethodBuilder BigIntRightShift { get; set; } = null!;
-    public MethodBuilder BigIntEquals { get; set; } = null!;
-    /// <summary>$Runtime.BigIntLooseEquals(object, object) -> bool — ECMA-262 7.2.15 loose equality for a bigint vs a non-bigint (number/string/boolean); used by the compiled `10n == 10` / `10n == "10"` paths so a Double/String operand is coerced instead of cast-crashing.</summary>
-    public MethodBuilder BigIntLooseEquals { get; set; } = null!;
-    /// <summary>$Runtime.BigIntToStringRadix(object value, object radix) -> string — BigInt.prototype.toString([radix]); radix 2–36 with lowercase digits (radix 10 = bare decimal). Backs compiled `(255n).toString(16)`.</summary>
-    public MethodBuilder BigIntToStringRadix { get; set; } = null!;
-    public MethodBuilder BigIntLessThan { get; set; } = null!;
-    public MethodBuilder BigIntLessThanOrEqual { get; set; } = null!;
-    public MethodBuilder BigIntGreaterThan { get; set; } = null!;
-    public MethodBuilder BigIntGreaterThanOrEqual { get; set; } = null!;
+    // Numeric increment/decrement.
     public MethodBuilder UpdateNumeric { get; set; } = null!;
 
     /// <summary>Promise metadata, or null when Promise support is tree-shaken.</summary>

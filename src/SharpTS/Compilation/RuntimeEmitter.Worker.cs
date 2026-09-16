@@ -598,8 +598,8 @@ public partial class RuntimeEmitter
             // BigInt helpers are feature-gated. A DataView-only program still
             // emits these adapters, so preserve the raw value when the BigInt
             // conversion helper is absent (the methods are unreachable there).
-            if (runtime.ToBigInt is not null)
-                il.Emit(OpCodes.Call, runtime.ToBigInt);
+            if (runtime.BigInt.Implementation is { } bigInt)
+                il.Emit(OpCodes.Call, bigInt.ToBigInt);
         }
         else
         {

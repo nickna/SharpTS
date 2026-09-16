@@ -31,38 +31,38 @@ public static class BigIntOperatorHelper
     /// Gets the runtime method and result type for a BigInt binary operator.
     /// </summary>
     /// <param name="op">The operator token type.</param>
-    /// <param name="runtime">The emitted runtime containing BigInt methods.</param>
+    /// <param name="bigInt">The BigInt metadata for this compilation.</param>
     /// <returns>A tuple of (method, resultType). Method is null for unsupported operators.</returns>
-    public static (MethodInfo? Method, BigIntResultType ResultType) GetRuntimeMethod(TokenType op, EmittedRuntime runtime)
+    public static (MethodInfo? Method, BigIntResultType ResultType) GetRuntimeMethod(TokenType op, EmittedBigIntRuntime bigInt)
     {
         return op switch
         {
             // Arithmetic - return BigInt value
-            TokenType.PLUS => (runtime.BigIntAdd, BigIntResultType.Value),
-            TokenType.MINUS => (runtime.BigIntSubtract, BigIntResultType.Value),
-            TokenType.STAR => (runtime.BigIntMultiply, BigIntResultType.Value),
-            TokenType.SLASH => (runtime.BigIntDivide, BigIntResultType.Value),
-            TokenType.PERCENT => (runtime.BigIntRemainder, BigIntResultType.Value),
-            TokenType.STAR_STAR => (runtime.BigIntPow, BigIntResultType.Value),
+            TokenType.PLUS => (bigInt.RequireImplementation().Add, BigIntResultType.Value),
+            TokenType.MINUS => (bigInt.RequireImplementation().Subtract, BigIntResultType.Value),
+            TokenType.STAR => (bigInt.RequireImplementation().Multiply, BigIntResultType.Value),
+            TokenType.SLASH => (bigInt.RequireImplementation().Divide, BigIntResultType.Value),
+            TokenType.PERCENT => (bigInt.RequireImplementation().Remainder, BigIntResultType.Value),
+            TokenType.STAR_STAR => (bigInt.RequireImplementation().Pow, BigIntResultType.Value),
 
             // Comparison - return boolean
-            TokenType.LESS => (runtime.BigIntLessThan, BigIntResultType.Boolean),
-            TokenType.LESS_EQUAL => (runtime.BigIntLessThanOrEqual, BigIntResultType.Boolean),
-            TokenType.GREATER => (runtime.BigIntGreaterThan, BigIntResultType.Boolean),
-            TokenType.GREATER_EQUAL => (runtime.BigIntGreaterThanOrEqual, BigIntResultType.Boolean),
+            TokenType.LESS => (bigInt.RequireImplementation().LessThan, BigIntResultType.Boolean),
+            TokenType.LESS_EQUAL => (bigInt.RequireImplementation().LessThanOrEqual, BigIntResultType.Boolean),
+            TokenType.GREATER => (bigInt.RequireImplementation().GreaterThan, BigIntResultType.Boolean),
+            TokenType.GREATER_EQUAL => (bigInt.RequireImplementation().GreaterThanOrEqual, BigIntResultType.Boolean),
 
             // Equality - return boolean
-            TokenType.EQUAL_EQUAL or TokenType.EQUAL_EQUAL_EQUAL => (runtime.BigIntEquals, BigIntResultType.Boolean),
+            TokenType.EQUAL_EQUAL or TokenType.EQUAL_EQUAL_EQUAL => (bigInt.RequireImplementation().Equals, BigIntResultType.Boolean),
 
             // Inequality - return negated boolean
-            TokenType.BANG_EQUAL or TokenType.BANG_EQUAL_EQUAL => (runtime.BigIntEquals, BigIntResultType.NegatedBoolean),
+            TokenType.BANG_EQUAL or TokenType.BANG_EQUAL_EQUAL => (bigInt.RequireImplementation().Equals, BigIntResultType.NegatedBoolean),
 
             // Bitwise - return BigInt value
-            TokenType.AMPERSAND => (runtime.BigIntBitwiseAnd, BigIntResultType.Value),
-            TokenType.PIPE => (runtime.BigIntBitwiseOr, BigIntResultType.Value),
-            TokenType.CARET => (runtime.BigIntBitwiseXor, BigIntResultType.Value),
-            TokenType.LESS_LESS => (runtime.BigIntLeftShift, BigIntResultType.Value),
-            TokenType.GREATER_GREATER => (runtime.BigIntRightShift, BigIntResultType.Value),
+            TokenType.AMPERSAND => (bigInt.RequireImplementation().BitwiseAnd, BigIntResultType.Value),
+            TokenType.PIPE => (bigInt.RequireImplementation().BitwiseOr, BigIntResultType.Value),
+            TokenType.CARET => (bigInt.RequireImplementation().BitwiseXor, BigIntResultType.Value),
+            TokenType.LESS_LESS => (bigInt.RequireImplementation().LeftShift, BigIntResultType.Value),
+            TokenType.GREATER_GREATER => (bigInt.RequireImplementation().RightShift, BigIntResultType.Value),
 
             // Unsigned right shift not supported
             TokenType.GREATER_GREATER_GREATER => (null, BigIntResultType.Unsupported),

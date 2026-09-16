@@ -49,6 +49,7 @@ public class EmittedNumberRuntimeTests
         var assembly = new PersistedAssemblyBuilder(new AssemblyName("number_staged"), typeof(object).Assembly);
         var module = assembly.DefineDynamicModule("main");
         var runtime = new EmittedRuntime();
+        runtime.BigInt.BeginImplementationEmission();
         var emitter = new RuntimeEmitter(TypeProvider.Runtime);
         InvokeEmitter("DefineRuntimeClassPhase1", emitter, module, runtime);
         var numbers = runtime.Numbers;

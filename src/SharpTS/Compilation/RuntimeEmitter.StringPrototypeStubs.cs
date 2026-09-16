@@ -353,8 +353,8 @@ public partial class RuntimeEmitter
             // non-string replacements are ignored and fall back to "Object".
             var tagLocal = il.DeclareLocal(_types.String);
             var nonStringTagLabel = il.DefineLabel();
-            il.Emit(OpCodes.Call, runtime.BigIntPrototypePopulateMethod);
-            il.Emit(OpCodes.Ldsfld, runtime.BigIntPrototypeField);
+            il.Emit(OpCodes.Call, runtime.BigInt.PrototypePopulateMethod);
+            il.Emit(OpCodes.Ldsfld, runtime.BigInt.PrototypeField);
             il.Emit(OpCodes.Ldsfld, runtime.SymbolToStringTag);
             il.Emit(OpCodes.Call, runtime.GetIndex);
             il.Emit(OpCodes.Isinst, _types.String);

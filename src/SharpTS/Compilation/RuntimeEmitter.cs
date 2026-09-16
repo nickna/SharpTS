@@ -40,6 +40,8 @@ public partial class RuntimeEmitter
         if (_emitHosted)
             _features.UsesPromise = true;
         var runtime = new EmittedRuntime();
+        if (features.UsesBigInt)
+            runtime.BigInt.BeginImplementationEmission();
         if (features.UsesCjsRequire)
             runtime.Modules.BeginCommonJsEmission();
         if (features.UsesDynamicImport)
@@ -705,6 +707,7 @@ public partial class RuntimeEmitter
         runtime.BoxedPrimitives.CompleteEmission();
         runtime.Numbers.CompleteEmission();
         runtime.Math.CompleteEmission();
+        runtime.BigInt.CompleteEmission();
         runtime.BroadcastChannel?.CompleteEmission();
         runtime.EventEmitter.CompleteEmission();
         runtime.NodeStreams?.CompleteEmission();

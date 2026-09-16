@@ -176,10 +176,10 @@ public partial class RuntimeEmitter
 
         // BigInt.asIntN/asUintN — BigInt resolves to System.Numerics.BigInteger
         // in emitted value form; the BCL type has no JavaScript truncation APIs.
-        if (runtime.BigIntAsIntN != null)
+        if (runtime.BigInt.Implementation is { } bigInt)
         {
-            EmitLookup(_types.BigInteger, "asIntN", runtime.BigIntAsIntN, 2);
-            EmitLookup(_types.BigInteger, "asUintN", runtime.BigIntAsUintN, 2);
+            EmitLookup(_types.BigInteger, "asIntN", bigInt.AsIntN, 2);
+            EmitLookup(_types.BigInteger, "asUintN", bigInt.AsUintN, 2);
         }
 
         // Promise.* and Error.isError are emitted on $Runtime rather than as

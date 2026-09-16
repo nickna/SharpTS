@@ -2005,7 +2005,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, notBigIntConvLabel);
         il.Emit(OpCodes.Ldloc, argLocal);
         il.Emit(OpCodes.Unbox_Any, _types.BigInteger);
-        il.Emit(OpCodes.Call, runtime.BigIntToNumber);
+        il.Emit(OpCodes.Call, runtime.BigInt.ToNumber);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notBigIntConvLabel);
 

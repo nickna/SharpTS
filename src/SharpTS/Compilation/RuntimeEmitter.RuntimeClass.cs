@@ -139,7 +139,7 @@ public partial class RuntimeEmitter
             "_bigIntPrototype",
             _types.DictionaryStringObject,
             FieldAttributes.Public | FieldAttributes.Static);
-        runtime.BigIntPrototypeField = bigIntPrototypeField;
+        runtime.BigInt.PrototypeField = bigIntPrototypeField;
         var symbolPrototypeField = typeBuilder.DefineField(
             "_symbolPrototype",
             _types.DictionaryStringObject,
@@ -527,7 +527,7 @@ public partial class RuntimeEmitter
             DefineReflectSingletonPopulateShell(typeBuilder, runtime);
         DefineStringPrototypePopulateShell(typeBuilder, runtime.Strings);
         DefineNumberPrototypePopulateShell(typeBuilder, runtime.Numbers);
-        DefineBigIntPrototypePopulateShell(typeBuilder, runtime);
+        DefineBigIntPrototypePopulateShell(typeBuilder, runtime.BigInt);
         DefineSymbolPrototypePopulateShell(typeBuilder, runtime);
         DefineBooleanPrototypePopulateShell(typeBuilder, runtime);
         DefineDatePrototypePopulateShell(typeBuilder, runtime);
@@ -742,7 +742,7 @@ public partial class RuntimeEmitter
         cctorIL.Emit(OpCodes.Call, runtime.ArrayOperations.PrototypePopulateMethod);
         cctorIL.Emit(OpCodes.Call, runtime.Numbers.PrototypePopulateMethod);
         if (_features.UsesBigInt)
-            cctorIL.Emit(OpCodes.Call, runtime.BigIntPrototypePopulateMethod);
+            cctorIL.Emit(OpCodes.Call, runtime.BigInt.PrototypePopulateMethod);
         cctorIL.Emit(OpCodes.Call, runtime.SymbolPrototypePopulateMethod);
         cctorIL.Emit(OpCodes.Call, runtime.BooleanPrototypePopulateMethod);
         cctorIL.Emit(OpCodes.Call, runtime.DatePrototypePopulateMethod);
@@ -808,7 +808,7 @@ public partial class RuntimeEmitter
         DeclareConvertToNumber(typeBuilder, runtime);
         // ConvertToNumber's explicit Number(BigInt) branch needs the exact
         // binary64-rounding helper before its body is filled later below.
-        EmitBigIntToNumber(typeBuilder, runtime);
+        EmitBigIntToNumber(typeBuilder, runtime.BigInt);
         EmitJsToInt32(typeBuilder, runtime);
         EmitJsLessThan(typeBuilder, runtime);
         EmitJsLessOrEqual(typeBuilder, runtime);
@@ -1317,7 +1317,7 @@ public partial class RuntimeEmitter
                 runtime.Numbers.PrototypePopulateMethod,
                 runtime.SymbolPrototypeField,
                 runtime.SymbolPrototypePopulateMethod),
-            _features.UsesBigInt ? new BoxedBigIntPrototype(runtime.BigIntPrototypeField, runtime.BigIntPrototypePopulateMethod) : null);
+            _features.UsesBigInt ? new BoxedBigIntPrototype(runtime.BigInt.PrototypeField, runtime.BigInt.PrototypePopulateMethod) : null);
         EmitNormalizeForeignEvalValue(typeBuilder, runtime.BoxedPrimitives,
             runtime.TSObjectType, runtime.UndefinedInstance, runtime.GetProperty);
         EmitToObject(typeBuilder, runtime.BoxedPrimitives,
@@ -1432,12 +1432,28 @@ public partial class RuntimeEmitter
         // naturally aligned with this gate.
         if (_features.UsesBigInt)
         {
-            EmitCreateBigInt(typeBuilder, runtime);
-            EmitBigIntStaticMethods(typeBuilder, runtime);
-            EmitBigIntArithmetic(typeBuilder, runtime);
-            EmitBigIntComparison(typeBuilder, runtime);
-            EmitBigIntBitwise(typeBuilder, runtime);
-            EmitBigIntPrototypePopulate(typeBuilder, runtime);
+            var bigInt = runtime.BigInt.RequireImplementation();
+            EmitCreateBigInt(typeBuilder, bigInt,
+                new BigIntConversionInputs(
+                    new BigIntPrimitiveInputs(runtime.GetIndex, runtime.GetProperty, runtime.InvokeMethodValue,
+                        runtime.SymbolToPrimitive, runtime.TSSymbolType, runtime.TypeOf, runtime.UndefinedType,
+                        runtime.CreateException, runtime.TSTypeErrorCtor),
+                    runtime.TSObjectType, runtime.StringCoercion.ToJsString, runtime.TSRangeErrorCtor, runtime.TSSyntaxErrorCtor));
+            EmitBigIntStaticMethods(typeBuilder, bigInt, runtime.ToNumber, runtime.CreateException, runtime.TSRangeErrorCtor);
+            EmitBigIntArithmetic(typeBuilder, bigInt);
+            EmitBigIntComparison(typeBuilder, bigInt, runtime.CreateException, runtime.TSRangeErrorCtor);
+            EmitBigIntBitwise(typeBuilder, bigInt);
+            EmitBigIntPrototypePopulate(typeBuilder, runtime.BigInt, bigInt.ToStringRadix,
+                new BigIntPrototypeInputs(
+                    new PrototypeDescriptorInputs(runtime.CompiledPropertyDescriptorCtor,
+                        runtime.CompiledPropertyDescriptorValue.GetSetMethod()!, runtime.CompiledPropertyDescriptorEnumerable.GetSetMethod()!,
+                        runtime.PDSDefineProperty),
+                    runtime.CompiledPropertyDescriptorType,
+                    runtime.CompiledPropertyDescriptorWritable.GetSetMethod()!, runtime.CompiledPropertyDescriptorConfigurable.GetSetMethod()!,
+                    runtime.TSFunctionGetOrCreate, runtime.GetSymbolDictMethod, runtime.SymbolToStringTag,
+                    runtime.ObjectPrototypeField, runtime.PDSSetPrototype,
+                    runtime.TSObjectType, runtime.TSObjectFieldsGetter, runtime.ToNumber, runtime.UndefinedType,
+                    runtime.CreateException, runtime.TSTypeErrorCtor));
         }
         // Promise methods moved earlier (before GetProperty, which needs PromiseThen for typeof p.then)
         // Number methods

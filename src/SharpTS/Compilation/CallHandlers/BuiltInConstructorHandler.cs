@@ -78,7 +78,7 @@ public class BuiltInConstructorHandler : ICallHandler
 
         emitter.EmitExpression(call.Arguments[0]);
         emitter.EmitBoxIfNeeded(call.Arguments[0]);
-        il.Emit(OpCodes.Call, ctx.Runtime!.CreateBigInt);
+        il.Emit(OpCodes.Call, ctx.Runtime!.BigInt.RequireImplementation().Create);
         emitter.SetStackUnknown();
         return true;
     }
