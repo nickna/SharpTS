@@ -5,8 +5,19 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
+    private readonly record struct NumberPrototypeInputs(
+        PrototypeDescriptorInputs Descriptors,
+        Type DescriptorType,
+        MethodInfo FunctionGetOrCreate,
+        FieldInfo ObjectPrototype,
+        MethodInfo SetPrototype,
+        Type ObjectType,
+        MethodInfo GetProperty,
+        MethodInfo CreateException,
+        ConstructorInfo TypeErrorCtor);
+
     /// <summary>
-    /// Populates <see cref="EmittedRuntime.NumberPrototypeField"/> with
+    /// Populates <see cref="EmittedNumberRuntime.PrototypeField"/> with
     /// <c>$TSFunction</c> wrappers for the Number prototype methods we
     /// have helpers for. Mirrors <see cref="EmitArrayPrototypePopulate"/>.
     /// Only toFixed/toPrecision/toExponential have direct runtime helpers;
@@ -14,33 +25,34 @@ public partial class RuntimeEmitter
     /// as placeholders — they're typeof-probed but not invoked by the
     /// not-a-constructor.js tests, so the placeholder is sufficient.
     /// </summary>
-    private void DefineNumberPrototypePopulateShell(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void DefineNumberPrototypePopulateShell(TypeBuilder typeBuilder, EmittedNumberRuntime numbers)
     {
-        runtime.NumberPrototypePopulateMethod = typeBuilder.DefineMethod(
+        numbers.PrototypePopulateMethod = typeBuilder.DefineMethod(
             "_NumberPrototypePopulate",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Void,
             Type.EmptyTypes);
     }
 
-    private void EmitNumberPrototypePopulate(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitNumberPrototypePopulate(TypeBuilder typeBuilder, EmittedNumberRuntime numbers,
+        NumberPrototypeInputs peers)
     {
         // Emit valueOf helper before the populate body that wires it up.
-        var numberValueOfHelper = EmitNumberValueOfHelper(typeBuilder, runtime);
+        var numberValueOfHelper = EmitNumberValueOfHelper(typeBuilder, numbers, peers.ObjectType, peers.GetProperty, peers.CreateException, peers.TypeErrorCtor);
 
-        var method = runtime.NumberPrototypePopulateMethod;
+        var method = numbers.PrototypePopulateMethod;
         var il = method.GetILGenerator();
         var setItem = _types.GetMethod(_types.DictionaryStringObject, "set_Item",
             _types.String, _types.Object);
 
-        EmitPrototypePopulateGuard(il, runtime.NumberPrototypeField);
+        EmitPrototypePopulateGuard(il, numbers.PrototypeField);
 
-        var numDescLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+        var numDescLocal = il.DeclareLocal(peers.DescriptorType);
 
         // ECMA-262 21.1.3 Number.prototype.constructor === Number. Compiled
         // bare `Number` resolves to typeof(double) (per ILEmitter.Expressions
         // and InstanceOf semantics).
-        EmitInstallConstructor(il, runtime, runtime.NumberPrototypeField, numDescLocal, setItem, () =>
+        EmitInstallConstructorDescriptor(il, peers.Descriptors, numbers.PrototypeField, numDescLocal, setItem, () =>
         {
             il.Emit(OpCodes.Ldtoken, _types.Double);
             il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
@@ -53,23 +65,23 @@ public partial class RuntimeEmitter
         // 1000 to value (the first arg) and lose the receiver.
         // Built-in §17 attrs: W:T, E:F, C:T. Install a PDS data descriptor.
         void Wire(string jsName, MethodBuilder? helper, int jsLength)
-            => EmitWirePrototypeMethod(il, runtime, runtime.NumberPrototypeField, numDescLocal,
+            => EmitWirePrototypeMethodDescriptor(il, peers.Descriptors, peers.FunctionGetOrCreate, numbers.PrototypeField, numDescLocal,
                 setItem, jsName, helper, jsLength);
 
-        Wire("toFixed",        runtime.NumberToFixed,         1);
-        Wire("toPrecision",    runtime.NumberToPrecision,     1);
-        Wire("toExponential",  runtime.NumberToExponential,   1);
+        Wire("toFixed",        numbers.ToFixed,         1);
+        Wire("toPrecision",    numbers.ToPrecision,     1);
+        Wire("toExponential",  numbers.ToExponential,   1);
         // Stub these with NumberToStringRadix so typeof + IsConstructor work.
         // Not actually invoked by user code in the not-a-constructor.js path.
-        Wire("toString",       runtime.NumberToStringRadix,   1);
-        Wire("toLocaleString", runtime.NumberToStringRadix,   0);
+        Wire("toString",       numbers.ToStringRadix,   1);
+        Wire("toLocaleString", numbers.ToStringRadix,   0);
         Wire("valueOf",        numberValueOfHelper,           0);
 
         // PDSSetPrototype(NumberPrototypeField, ObjectPrototypeField).
         // Per ECMA-262 §21.1.3 Number.prototype's [[Prototype]] is %Object.prototype%.
-        il.Emit(OpCodes.Ldsfld, runtime.NumberPrototypeField);
-        il.Emit(OpCodes.Ldsfld, runtime.ObjectPrototypeField);
-        il.Emit(OpCodes.Call, runtime.PDSSetPrototype);
+        il.Emit(OpCodes.Ldsfld, numbers.PrototypeField);
+        il.Emit(OpCodes.Ldsfld, peers.ObjectPrototype);
+        il.Emit(OpCodes.Call, peers.SetPrototype);
 
         il.Emit(OpCodes.Ret);
     }
@@ -82,7 +94,11 @@ public partial class RuntimeEmitter
     /// receivers (String wrappers, plain objects, etc.) throw TypeError —
     /// matches Test262's `Number.prototype.valueOf.call(non-Number)` checks.
     /// </summary>
-    private MethodBuilder EmitNumberValueOfHelper(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private MethodBuilder EmitNumberValueOfHelper(TypeBuilder typeBuilder, EmittedNumberRuntime numbers,
+        Type objectType,
+        MethodInfo getProperty,
+        MethodInfo createException,
+        ConstructorInfo typeErrorCtor)
     {
         var method = typeBuilder.DefineMethod(
             "NumberValueOf",
@@ -103,7 +119,7 @@ public partial class RuntimeEmitter
         // ECMA-262 §21.1.3: Number.prototype's [[NumberData]] is +0.
         var notNumberPrototypeLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldsfld, runtime.NumberPrototypeField);
+        il.Emit(OpCodes.Ldsfld, numbers.PrototypeField);
         il.Emit(OpCodes.Bne_Un, notNumberPrototypeLabel);
         il.Emit(OpCodes.Ldc_R8, 0.0);
         il.Emit(OpCodes.Box, _types.Double);
@@ -116,11 +132,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Brfalse, throwTypeErrorLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSObjectType);
+        il.Emit(OpCodes.Isinst, objectType);
         il.Emit(OpCodes.Brfalse, throwTypeErrorLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "__primitiveValue");
-        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, getProperty);
         il.Emit(OpCodes.Stloc, primValLocal);
         il.Emit(OpCodes.Ldloc, primValLocal);
         il.Emit(OpCodes.Isinst, _types.Double);
@@ -129,7 +145,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(throwTypeErrorLabel);
-        GuestErrorEmitter.ThrowTypeError(il, runtime, "Number.prototype.valueOf requires that 'this' be a Number");
+        GuestErrorEmitter.ThrowError(il, createException, typeErrorCtor, "Number.prototype.valueOf requires that 'this' be a Number");
 
         return method;
     }

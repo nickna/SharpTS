@@ -183,8 +183,9 @@ jobs:
       # Run them on demand locally: dotnet test --filter "Category=npm"
       - name: Test core
         run: dotnet test tests/SharpTS.Tests/SharpTS.Tests.csproj --no-build --configuration Release --verbosity normal --filter "Category!=LiveNetwork&Category!=LoadSensitive&Category!=npm"
-        # The full core suite can exceed ten minutes on hosted runners.
-        timeout-minutes: 15
+        # The 21,000+ case core suite can exceed fifteen minutes on hosted runners.
+        # Individual test deadlines and the 30-minute job limit remain separate.
+        timeout-minutes: 20
 
       - name: Test GUI conformance
         run: dotnet test tests/gui-conformance/SharpTS.Gui.Conformance.Tests/SharpTS.Gui.Conformance.Tests.csproj --no-build --configuration Release --verbosity normal --filter "Category!=LiveNetwork&Category!=LoadSensitive&Category!=npm"

@@ -162,10 +162,6 @@ public class EmittedRuntime
     /// <summary>Required primitive-wrapper and default-hint conversion declarations.</summary>
     public EmittedBoxedPrimitiveRuntime BoxedPrimitives { get; } = new();
 
-    /// <summary>$Runtime.FormatNumber(double) -> string — ECMA-262 7.1.12.1 Number::toString(10).
-    /// Byte-for-byte equivalent of SharpTS.Compilation.RuntimeTypes.FormatNumber so interpreted
-    /// and compiled output match. Emitted in RuntimeEmitter.NumberFormat.cs.</summary>
-    public MethodBuilder FormatNumber { get; set; } = null!;
     public MethodBuilder ToNumber { get; set; } = null!;
     public MethodBuilder ConvertToNumber { get; set; } = null!;
     /// <summary>$Runtime.JsNumberToInt32(double) - allocation-free ECMA-262 ToInt32 for statically numeric operands.</summary>
@@ -343,8 +339,6 @@ public class EmittedRuntime
     /// branch and by the array-like materializer for primitive bool receivers.
     /// </summary>
     public FieldBuilder BooleanPrototypeField { get; set; } = null!;
-    /// <summary>Number.prototype singleton; mirror of <see cref="BooleanPrototypeField"/> for primitive doubles.</summary>
-    public FieldBuilder NumberPrototypeField { get; set; } = null!;
     /// <summary>
     /// Date.prototype singleton — a Dictionary&lt;string, object&gt; carrying $TSFunction
     /// wrappers around the <c>$Runtime.Date*</c> helpers. Instance calls (<c>d.getTime()</c>)
@@ -384,8 +378,6 @@ public class EmittedRuntime
     /// </summary>
     public Dictionary<string, MethodBuilder> ReflectValueFormMethods { get; } =
         new(StringComparer.Ordinal);
-    /// <summary>Populates <see cref="NumberPrototypeField"/> with $TSFunction wrappers; idempotent.</summary>
-    public MethodBuilder NumberPrototypePopulateMethod { get; set; } = null!;
     /// <summary>Populates <see cref="BigIntPrototypeField"/> with $TSFunction wrappers; idempotent.</summary>
     public MethodBuilder BigIntPrototypePopulateMethod { get; set; } = null!;
     /// <summary>$Runtime.StringReplaceWithFunction(str, pattern, fn, replaceAll) — handles functional replacement for replace/replaceAll and stringifies each callback result.</summary>
@@ -804,34 +796,11 @@ public class EmittedRuntime
         ?? throw new InvalidOperationException("Timer promise runtime was not enabled for this compilation.");
 
     // Number methods
-    public MethodBuilder NumberParseInt { get; set; } = null!;
-    /// <summary>Typed intrinsic parse path: already-coerced string plus native radix.</summary>
-    public MethodBuilder NumberParseIntString { get; set; } = null!;
-    /// <summary>Allocation-free decimal parser for a stable string and literal radix 10.</summary>
-    public MethodBuilder NumberParseIntDecimalString { get; set; } = null!;
-    public MethodBuilder NumberParseFloat { get; set; } = null!;
-    public MethodBuilder NumberIsNaN { get; set; } = null!;
-    public MethodBuilder NumberIsFinite { get; set; } = null!;
-    public MethodBuilder NumberIsInteger { get; set; } = null!;
-    public MethodBuilder NumberIsSafeInteger { get; set; } = null!;
-    public MethodBuilder GlobalIsNaN { get; set; } = null!;
-    public MethodBuilder GlobalIsFinite { get; set; } = null!;
+    /// <summary>Required Number parsing, formatting and prototype declarations.</summary>
+    public EmittedNumberRuntime Numbers { get; } = new();
+
     public MethodBuilder GlobalEncodeURIComponent { get; set; } = null!;
     public MethodBuilder GlobalDecodeURIComponent { get; set; } = null!;
-    public MethodBuilder NumberToFixed { get; set; } = null!;
-    /// <summary>Typed intrinsic exact fixed formatter: native receiver and digits.</summary>
-    public MethodBuilder NumberToFixedDouble { get; set; } = null!;
-    public FieldBuilder NumberFixedUInt64FormatterField { get; set; } = null!;
-    public MethodBuilder NumberFixedUInt64FormatterCallback { get; set; } = null!;
-    public MethodBuilder NumberToPrecision { get; set; } = null!;
-    public MethodBuilder NumberToExponential { get; set; } = null!;
-    public MethodBuilder NumberToStringRadix { get; set; } = null!;
-
-    // Number helper methods (for standalone execution)
-    public MethodBuilder ParseIntHelper { get; set; } = null!;
-    public MethodBuilder GetDigitValue { get; set; } = null!;
-    public MethodBuilder ConvertIntToRadix { get; set; } = null!;
-    public MethodBuilder GetValidFloatPart { get; set; } = null!;
 
     // Map support
     public MethodBuilder NormalizeMapKey { get; set; } = null!;

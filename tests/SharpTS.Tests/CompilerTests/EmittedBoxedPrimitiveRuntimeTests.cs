@@ -125,7 +125,7 @@ public class EmittedBoxedPrimitiveRuntimeTests
             runtime.CompiledPropertyDescriptorConfigurable.GetSetMethod()!,
             runtime.PDSDefineProperty, runtime.PDSSetPrototype,
             runtime.BooleanPrototypeField, runtime.BooleanPrototypePopulateMethod,
-            runtime.NumberPrototypeField, runtime.NumberPrototypePopulateMethod,
+            runtime.Numbers.PrototypeField, runtime.Numbers.PrototypePopulateMethod,
             runtime.SymbolPrototypeField, runtime.SymbolPrototypePopulateMethod);
         var prototype = includePrototype
             ? CreateInputs("BoxedBigIntPrototype", runtime.BigIntPrototypeField, runtime.BigIntPrototypePopulateMethod)

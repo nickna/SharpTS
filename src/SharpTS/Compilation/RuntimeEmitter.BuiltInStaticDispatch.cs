@@ -98,10 +98,10 @@ public partial class RuntimeEmitter
 
         // Number.* — bare `Number` identifier now resolves to typeof(double)
         // via issue #62, so the value-form path lands here.
-        EmitLookup(_types.Double, "isNaN",         runtime.NumberIsNaN, 1);
-        EmitLookup(_types.Double, "isFinite",      runtime.NumberIsFinite, 1);
-        EmitLookup(_types.Double, "isInteger",     runtime.NumberIsInteger, 1);
-        EmitLookup(_types.Double, "isSafeInteger", runtime.NumberIsSafeInteger, 1);
+        EmitLookup(_types.Double, "isNaN",         runtime.Numbers.IsNaN, 1);
+        EmitLookup(_types.Double, "isFinite",      runtime.Numbers.IsFinite, 1);
+        EmitLookup(_types.Double, "isInteger",     runtime.Numbers.IsInteger, 1);
+        EmitLookup(_types.Double, "isSafeInteger", runtime.Numbers.IsSafeInteger, 1);
 
         // String.* — bare `String` identifier resolves to typeof(string).
         EmitLookup(_types.String, "fromCharCode",  runtime.Strings.FromCharCode, 1);

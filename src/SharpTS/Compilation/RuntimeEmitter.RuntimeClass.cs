@@ -122,7 +122,7 @@ public partial class RuntimeEmitter
             "_numberPrototype",
             _types.DictionaryStringObject,
             FieldAttributes.Public | FieldAttributes.Static);
-        runtime.NumberPrototypeField = numberPrototypeField;
+        runtime.Numbers.PrototypeField = numberPrototypeField;
         // Date.prototype — addressable as a value so reflection over it works
         // (`Object.getOwnPropertyDescriptor(Date.prototype, "getTime")`).
         // Instance calls are emitted inline by DateEmitter and never read this.
@@ -526,7 +526,7 @@ public partial class RuntimeEmitter
         if (_features.UsesReflect)
             DefineReflectSingletonPopulateShell(typeBuilder, runtime);
         DefineStringPrototypePopulateShell(typeBuilder, runtime.Strings);
-        DefineNumberPrototypePopulateShell(typeBuilder, runtime);
+        DefineNumberPrototypePopulateShell(typeBuilder, runtime.Numbers);
         DefineBigIntPrototypePopulateShell(typeBuilder, runtime);
         DefineSymbolPrototypePopulateShell(typeBuilder, runtime);
         DefineBooleanPrototypePopulateShell(typeBuilder, runtime);
@@ -541,7 +541,7 @@ public partial class RuntimeEmitter
         // The exact toFixed fast path writes straight into the result string.
         // Predeclare its cached callback before emitting the type initializer so
         // hot calls do not allocate a delegate alongside every result string.
-        DefineNumberFixedFormattingInfrastructure(typeBuilder, runtime);
+        DefineNumberFixedFormattingInfrastructure(typeBuilder, runtime.Numbers);
 
         // Static constructor to initialize Random and symbol storage
         var cctorBuilder = typeBuilder.DefineConstructor(
@@ -558,10 +558,10 @@ public partial class RuntimeEmitter
         Type fixedFormatterType = EmitGenerics.MakeGenericType(typeof(SpanAction<,>),
             typeof(char), fixedStateType);
         cctorIL.Emit(OpCodes.Ldnull);
-        cctorIL.Emit(OpCodes.Ldftn, runtime.NumberFixedUInt64FormatterCallback);
+        cctorIL.Emit(OpCodes.Ldftn, runtime.Numbers.FixedUInt64FormatterCallback);
         cctorIL.Emit(OpCodes.Newobj, _types.GetConstructor(
             fixedFormatterType, _types.Object, typeof(IntPtr)));
-        cctorIL.Emit(OpCodes.Stsfld, runtime.NumberFixedUInt64FormatterField);
+        cctorIL.Emit(OpCodes.Stsfld, runtime.Numbers.FixedUInt64FormatterField);
 
         // Initialize _random = new Random()
         cctorIL.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.Random));
@@ -740,7 +740,7 @@ public partial class RuntimeEmitter
         // Each populate is idempotent (early-returns if Count > 0).
         cctorIL.Emit(OpCodes.Call, runtime.ObjectPrototypePopulateMethod);
         cctorIL.Emit(OpCodes.Call, runtime.ArrayOperations.PrototypePopulateMethod);
-        cctorIL.Emit(OpCodes.Call, runtime.NumberPrototypePopulateMethod);
+        cctorIL.Emit(OpCodes.Call, runtime.Numbers.PrototypePopulateMethod);
         if (_features.UsesBigInt)
             cctorIL.Emit(OpCodes.Call, runtime.BigIntPrototypePopulateMethod);
         cctorIL.Emit(OpCodes.Call, runtime.SymbolPrototypePopulateMethod);
@@ -771,10 +771,10 @@ public partial class RuntimeEmitter
         // conversion dispatch calls GetProperty/InvokeMethodValue/HasOwnPropertyHelper.
         DeclareUnwrapIfBoxed(typeBuilder, runtime.BoxedPrimitives);
 
-        EmitFormatNumberMethod(typeBuilder, runtime);
+        EmitFormatNumberMethod(typeBuilder, runtime.Numbers);
         EmitConcatStringInt64Method(typeBuilder, runtime.StringCoercion);
         EmitStringify(typeBuilder, runtime.StringCoercion,
-            runtime.ArrayStorage, runtime.UndefinedType, runtime.FormatNumber, runtime.TSFunctionType, runtime.TSFunctionInvokeWithThis);
+            runtime.ArrayStorage, runtime.UndefinedType, runtime.Numbers.Format, runtime.TSFunctionType, runtime.TSFunctionInvokeWithThis);
         // EmitStringRaw is moved later in this method (after ToJsString/
         // ToNumber/GetProperty are emitted) so the spec-form String.raw can
         // resolve template.raw properties + ToString-coerce substitutions.
@@ -1313,8 +1313,8 @@ public partial class RuntimeEmitter
                 runtime.PDSSetPrototype,
                 runtime.BooleanPrototypeField,
                 runtime.BooleanPrototypePopulateMethod,
-                runtime.NumberPrototypeField,
-                runtime.NumberPrototypePopulateMethod,
+                runtime.Numbers.PrototypeField,
+                runtime.Numbers.PrototypePopulateMethod,
                 runtime.SymbolPrototypeField,
                 runtime.SymbolPrototypePopulateMethod),
             _features.UsesBigInt ? new BoxedBigIntPrototype(runtime.BigIntPrototypeField, runtime.BigIntPrototypePopulateMethod) : null);
@@ -1440,10 +1440,31 @@ public partial class RuntimeEmitter
         }
         // Promise methods moved earlier (before GetProperty, which needs PromiseThen for typeof p.then)
         // Number methods
-        EmitNumberMethods(typeBuilder, runtime);
+        EmitNumberMethods(typeBuilder, runtime.Numbers, runtime.StringCoercion,
+            new NumberMethodInputs(
+                runtime.GetProperty,
+                runtime.UndefinedType,
+                runtime.ToIntegerOrInfinity,
+                runtime.TSObjectType,
+                runtime.TSSymbolType,
+                runtime.CreateException,
+                runtime.TSTypeErrorCtor,
+                runtime.TSRangeErrorCtor));
         // Number.prototype populate body — must come AFTER EmitNumberMethods so
         // NumberToFixed/etc. MethodBuilders are non-null.
-        EmitNumberPrototypePopulate(typeBuilder, runtime);
+        EmitNumberPrototypePopulate(typeBuilder, runtime.Numbers,
+            new NumberPrototypeInputs(
+                new PrototypeDescriptorInputs(runtime.CompiledPropertyDescriptorCtor,
+                    runtime.CompiledPropertyDescriptorValue.GetSetMethod()!, runtime.CompiledPropertyDescriptorEnumerable.GetSetMethod()!,
+                    runtime.PDSDefineProperty),
+                runtime.CompiledPropertyDescriptorType,
+                runtime.TSFunctionGetOrCreate,
+                runtime.ObjectPrototypeField,
+                runtime.PDSSetPrototype,
+                runtime.TSObjectType,
+                runtime.GetProperty,
+                runtime.CreateException,
+                runtime.TSTypeErrorCtor));
         // Fill in the symbol-keyed accessor registry helper bodies (#266).
         EmitSymbolAccessorRegistryBodies(runtime);
         // Microtask method (queueMicrotask) - must come before timer infrastructure so ProcessMicrotasks is available

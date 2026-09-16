@@ -31,25 +31,25 @@ public sealed class GlobalThisStaticEmitter : IStaticTypeEmitterStrategy
             case "parseInt":
                 if (arguments.Count > 0) { emitter.EmitExpression(arguments[0]); emitter.EmitBoxIfNeeded(arguments[0]); } else { il.Emit(OpCodes.Ldnull); }
                 if (arguments.Count > 1) { emitter.EmitExpression(arguments[1]); emitter.EmitBoxIfNeeded(arguments[1]); } else { il.Emit(OpCodes.Ldc_I4, 10); il.Emit(OpCodes.Box, ctx.Types.Int32); }
-                il.Emit(OpCodes.Call, ctx.Runtime!.NumberParseInt);
+                il.Emit(OpCodes.Call, ctx.Runtime!.Numbers.ParseInt);
                 il.Emit(OpCodes.Box, ctx.Types.Double);
                 return true;
 
             case "parseFloat":
                 if (arguments.Count > 0) { emitter.EmitExpression(arguments[0]); emitter.EmitBoxIfNeeded(arguments[0]); } else { il.Emit(OpCodes.Ldnull); }
-                il.Emit(OpCodes.Call, ctx.Runtime!.NumberParseFloat);
+                il.Emit(OpCodes.Call, ctx.Runtime!.Numbers.ParseFloat);
                 il.Emit(OpCodes.Box, ctx.Types.Double);
                 return true;
 
             case "isNaN":
                 if (arguments.Count > 0) { emitter.EmitExpression(arguments[0]); emitter.EmitBoxIfNeeded(arguments[0]); } else { il.Emit(OpCodes.Ldnull); }
-                il.Emit(OpCodes.Call, ctx.Runtime!.GlobalIsNaN);
+                il.Emit(OpCodes.Call, ctx.Runtime!.Numbers.GlobalIsNaN);
                 il.Emit(OpCodes.Box, ctx.Types.Boolean);
                 return true;
 
             case "isFinite":
                 if (arguments.Count > 0) { emitter.EmitExpression(arguments[0]); emitter.EmitBoxIfNeeded(arguments[0]); } else { il.Emit(OpCodes.Ldnull); }
-                il.Emit(OpCodes.Call, ctx.Runtime!.GlobalIsFinite);
+                il.Emit(OpCodes.Call, ctx.Runtime!.Numbers.GlobalIsFinite);
                 il.Emit(OpCodes.Box, ctx.Types.Boolean);
                 return true;
 

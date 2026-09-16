@@ -3263,7 +3263,7 @@ public partial class ILEmitter
             IL.Emit(OpCodes.Brfalse, fallback);
             if (stringFirst) IL.Emit(OpCodes.Ldloc, text);
             IL.Emit(OpCodes.Ldloc, number);
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.FormatNumber);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.Numbers.Format);
             if (numberFirst) IL.Emit(OpCodes.Ldloc, text);
             IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(_ctx.Types.String, "Concat",
                 _ctx.Types.String, _ctx.Types.String));

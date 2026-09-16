@@ -32,23 +32,23 @@ public sealed class NumberStaticEmitter : IStaticTypeEmitterStrategy
             case "isNaN":
                 // Number.isNaN is stricter than global isNaN - only returns true for actual NaN
                 EmitSingleArgMethod(emitter, arguments);
-                il.Emit(OpCodes.Call, ctx.Runtime!.NumberIsNaN);
+                il.Emit(OpCodes.Call, ctx.Runtime!.Numbers.IsNaN);
                 il.Emit(OpCodes.Box, ctx.Types.Boolean);
                 return true;
             case "isFinite":
                 // Number.isFinite is stricter than global isFinite
                 EmitSingleArgMethod(emitter, arguments);
-                il.Emit(OpCodes.Call, ctx.Runtime!.NumberIsFinite);
+                il.Emit(OpCodes.Call, ctx.Runtime!.Numbers.IsFinite);
                 il.Emit(OpCodes.Box, ctx.Types.Boolean);
                 return true;
             case "isInteger":
                 EmitSingleArgMethod(emitter, arguments);
-                il.Emit(OpCodes.Call, ctx.Runtime!.NumberIsInteger);
+                il.Emit(OpCodes.Call, ctx.Runtime!.Numbers.IsInteger);
                 il.Emit(OpCodes.Box, ctx.Types.Boolean);
                 return true;
             case "isSafeInteger":
                 EmitSingleArgMethod(emitter, arguments);
-                il.Emit(OpCodes.Call, ctx.Runtime!.NumberIsSafeInteger);
+                il.Emit(OpCodes.Call, ctx.Runtime!.Numbers.IsSafeInteger);
                 il.Emit(OpCodes.Box, ctx.Types.Boolean);
                 return true;
             default:
@@ -70,8 +70,8 @@ public sealed class NumberStaticEmitter : IStaticTypeEmitterStrategy
         // `not-a-constructor.js` probes.
         if (propertyName == "prototype")
         {
-            il.Emit(OpCodes.Call, ctx.Runtime!.NumberPrototypePopulateMethod);
-            il.Emit(OpCodes.Ldsfld, ctx.Runtime!.NumberPrototypeField);
+            il.Emit(OpCodes.Call, ctx.Runtime!.Numbers.PrototypePopulateMethod);
+            il.Emit(OpCodes.Ldsfld, ctx.Runtime!.Numbers.PrototypeField);
             return true;
         }
 
@@ -125,15 +125,15 @@ public sealed class NumberStaticEmitter : IStaticTypeEmitterStrategy
         var runtime = ctx.Runtime!;
         MethodInfo? method = propertyName switch
         {
-            "isNaN"         => runtime.NumberIsNaN,
-            "isFinite"      => runtime.NumberIsFinite,
-            "isInteger"     => runtime.NumberIsInteger,
-            "isSafeInteger" => runtime.NumberIsSafeInteger,
+            "isNaN"         => runtime.Numbers.IsNaN,
+            "isFinite"      => runtime.Numbers.IsFinite,
+            "isInteger"     => runtime.Numbers.IsInteger,
+            "isSafeInteger" => runtime.Numbers.IsSafeInteger,
             // Stage 4y: parseInt/parseFloat exposed as values too. The runtime
             // helpers already exist (used by the static-call path); just wrap
             // them as $TSFunction so `let p = Number.parseInt; p("42")` works.
-            "parseInt"      => runtime.NumberParseInt,
-            "parseFloat"    => runtime.NumberParseFloat,
+            "parseInt"      => runtime.Numbers.ParseInt,
+            "parseFloat"    => runtime.Numbers.ParseFloat,
             _ => null
         };
         if (method == null) return false;
@@ -207,7 +207,7 @@ public sealed class NumberStaticEmitter : IStaticTypeEmitterStrategy
 
             emitter.EmitExpression(arguments[0]);
             il.Emit(OpCodes.Castclass, ctx.Types.String);
-            il.Emit(OpCodes.Call, ctx.Runtime!.NumberParseIntDecimalString);
+            il.Emit(OpCodes.Call, ctx.Runtime!.Numbers.ParseIntDecimalString);
             return;
         }
 
@@ -234,7 +234,7 @@ public sealed class NumberStaticEmitter : IStaticTypeEmitterStrategy
             il.Emit(OpCodes.Box, ctx.Types.Int32);
         }
 
-        il.Emit(OpCodes.Call, ctx.Runtime!.NumberParseInt);
+        il.Emit(OpCodes.Call, ctx.Runtime!.Numbers.ParseInt);
         il.Emit(OpCodes.Box, ctx.Types.Double);
     }
 
@@ -253,7 +253,7 @@ public sealed class NumberStaticEmitter : IStaticTypeEmitterStrategy
             il.Emit(OpCodes.Ldnull);
         }
 
-        il.Emit(OpCodes.Call, ctx.Runtime!.NumberParseFloat);
+        il.Emit(OpCodes.Call, ctx.Runtime!.Numbers.ParseFloat);
         il.Emit(OpCodes.Box, ctx.Types.Double);
     }
 

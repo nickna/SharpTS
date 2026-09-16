@@ -703,6 +703,7 @@ public partial class RuntimeEmitter
         runtime.Templates.CompleteEmission();
         runtime.StringCoercion.CompleteEmission();
         runtime.BoxedPrimitives.CompleteEmission();
+        runtime.Numbers.CompleteEmission();
         runtime.BroadcastChannel?.CompleteEmission();
         runtime.EventEmitter.CompleteEmission();
         runtime.NodeStreams?.CompleteEmission();

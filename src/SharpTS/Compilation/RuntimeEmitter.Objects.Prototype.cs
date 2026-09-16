@@ -873,14 +873,14 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, _types.Double);
         il.Emit(OpCodes.Brfalse, notDoubleForProtoLabel);
-        il.Emit(OpCodes.Ldsfld, runtime.NumberPrototypeField);
+        il.Emit(OpCodes.Ldsfld, runtime.Numbers.PrototypeField);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notDoubleForProtoLabel);
         var notInt32ForProtoLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, _types.Int32);
         il.Emit(OpCodes.Brfalse, notInt32ForProtoLabel);
-        il.Emit(OpCodes.Ldsfld, runtime.NumberPrototypeField);
+        il.Emit(OpCodes.Ldsfld, runtime.Numbers.PrototypeField);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notInt32ForProtoLabel);
         var notBoolForProtoLabel = il.DefineLabel();

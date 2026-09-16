@@ -38,7 +38,7 @@ public partial class RuntimeEmitter
 
         // Reserve FormatNumber(double) → string. EmitFormatNumberMethod fills the
         // body later; Stringify's double case calls it.
-        runtime.FormatNumber = typeBuilder.DefineMethod(
+        runtime.Numbers.Format = typeBuilder.DefineMethod(
             "FormatNumber",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.String,

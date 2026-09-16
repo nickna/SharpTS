@@ -112,9 +112,9 @@ public partial class RuntimeEmitter
     /// Keep in sync with RuntimeTypes.FormatNumber — both implement the same algorithm so
     /// interpreted and compiled output match.
     /// </summary>
-    private void EmitFormatNumberMethod(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitFormatNumberMethod(TypeBuilder typeBuilder, EmittedNumberRuntime numbers)
     {
-        var method = (MethodBuilder)runtime.FormatNumber;
+        var method = (MethodBuilder)numbers.Format;
         var il = method.GetILGenerator();
 
         // BCL tokens (all standalone-safe — System.* only).

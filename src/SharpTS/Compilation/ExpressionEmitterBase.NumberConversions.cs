@@ -36,7 +36,7 @@ public abstract partial class ExpressionEmitterBase
                     return true;
 
                 EmitExpressionAsDouble(methodGet.Object);
-                IL.Emit(OpCodes.Call, Ctx.Runtime!.FormatNumber);
+                IL.Emit(OpCodes.Call, Ctx.Runtime!.Numbers.Format);
                 SetStackType(StackType.String);
                 return true;
 
@@ -59,7 +59,7 @@ public abstract partial class ExpressionEmitterBase
 
                 EmitExpressionAsDouble(methodGet.Object);
                 IL.Emit(OpCodes.Ldc_I4, digits);
-                IL.Emit(OpCodes.Call, Ctx.Runtime!.NumberToFixedDouble);
+                IL.Emit(OpCodes.Call, Ctx.Runtime!.Numbers.ToFixedDouble);
                 SetStackType(StackType.String);
                 return true;
         }
