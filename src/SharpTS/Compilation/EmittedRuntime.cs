@@ -1630,13 +1630,31 @@ public class EmittedRuntime
     public MethodBuilder NodeErrorSyscallGetter { get; set; } = null!;
     public MethodBuilder NodeErrorPathGetter { get; set; } = null!;
 
-    // TTY module methods
-    public MethodBuilder TtyIsatty { get; set; } = null!;
+    /// <summary>TTY primitive metadata, or null when the feature is omitted.</summary>
+    public EmittedTtyRuntime? Tty { get; private set; }
 
-    // primitive:perf — only a single now() method is host-tied; the rest of
-    // perf_hooks (mark/measure/entries/observer) is pure TypeScript in
-    // stdlib/node/perf_hooks.ts. Backing fields initialize lazily on first call.
-    public MethodBuilder PerfPrimitiveNow { get; set; } = null!;
+    internal void BeginTtyEmission()
+    {
+        if (Tty is not null)
+            throw new InvalidOperationException("TTY metadata emission has already started.");
+        Tty = new EmittedTtyRuntime();
+    }
+
+    public EmittedTtyRuntime RequireTty() => Tty
+        ?? throw new InvalidOperationException("TTY runtime was not enabled for this compilation.");
+
+    /// <summary>Performance primitive metadata, or null when the feature is omitted.</summary>
+    public EmittedPerformanceRuntime? Performance { get; private set; }
+
+    internal void BeginPerformanceEmission()
+    {
+        if (Performance is not null)
+            throw new InvalidOperationException("Performance metadata emission has already started.");
+        Performance = new EmittedPerformanceRuntime();
+    }
+
+    public EmittedPerformanceRuntime RequirePerformance() => Performance
+        ?? throw new InvalidOperationException("Performance runtime was not enabled for this compilation.");
 
     /// <summary>Node stream metadata, or null when Node streams are tree-shaken.</summary>
     public EmittedNodeStreamRuntime? NodeStreams { get; private set; }

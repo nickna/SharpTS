@@ -1508,7 +1508,7 @@ public partial class RuntimeEmitter
         // primitive:tty — just isatty; user-facing tty is stdlib/node/tty.ts.
         // Gated on UsesTty (set by `import 'tty'` or any `.isTTY` access).
         if (_features.UsesTty)
-            EmitTtyPrimitiveMethods(typeBuilder, runtime);
+            EmitTtyPrimitiveMethods(typeBuilder, runtime.RequireTty(), runtime.ToNumber);
         // URL module — migrated to stdlib/node/url.ts; no runtime helpers emitted.
         // HTTP module methods (fetch, http.createServer, etc.) - must be before globalThis
         if (_features.UsesHttp)
@@ -1589,7 +1589,7 @@ public partial class RuntimeEmitter
         // is pure TypeScript in stdlib/node/perf_hooks.ts. Gated on UsesPerf
         // (set by `import 'perf_hooks'` or bare `performance` reference).
         if (_features.UsesPerf)
-            EmitPerfPrimitiveMethods(typeBuilder, runtime);
+            EmitPerfPrimitiveMethods(typeBuilder, runtime.RequirePerformance());
         // string_decoder module migrated to stdlib/node/string_decoder.ts.
 
         // Intl support (Intl.NumberFormat / DateTimeFormat / Collator) — gated.

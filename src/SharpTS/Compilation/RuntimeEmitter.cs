@@ -68,6 +68,10 @@ public partial class RuntimeEmitter
             runtime.BeginPromiseEmission();
             runtime.BeginTimerPromiseEmission();
         }
+        if (features.UsesTty)
+            runtime.BeginTtyEmission();
+        if (features.UsesPerf)
+            runtime.BeginPerformanceEmission();
         if (features.UsesIntl)
             runtime.BeginIntlEmission();
         if (features.UsesAsyncLocalStorage)
@@ -693,6 +697,8 @@ public partial class RuntimeEmitter
         runtime.Microtasks.CompleteEmission();
         runtime.TimerPromises?.CompleteEmission();
         runtime.Modules.CompleteEmission();
+        runtime.Tty?.CompleteEmission();
+        runtime.Performance?.CompleteEmission();
         runtime.Intl?.CompleteEmission();
         runtime.AsyncLocalStorage?.CompleteEmission();
         runtime.Abort?.CompleteEmission();
