@@ -344,7 +344,7 @@ public partial class RuntimeEmitter
             il.MarkLabel(notThisName);
         }
         EmitSingletonBranch("Math", runtime.Math.SingletonField);
-        EmitSingletonBranch("JSON", runtime.JsonSingletonField);
+        EmitSingletonBranch("JSON", runtime.Json.SingletonField);
         if (runtime.Reflect.Namespace is not null)
             EmitSingletonBranch("Reflect", runtime.Reflect.RequireNamespace().SingletonField);
 

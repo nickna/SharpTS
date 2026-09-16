@@ -8,6 +8,12 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
+    private readonly record struct JsonAssociatedParseHelperInputs(
+        IReadOnlyDictionary<string, ConstructorBuilder> JsonTypedScalarRecordCtors,
+        IReadOnlyDictionary<string, FieldBuilder> JsonTypedScalarRecordShapeFields,
+        IReadOnlyDictionary<string, JsonSerializationShape.Record> JsonScalarRecordShapes
+    );
+
     /// <summary>
     /// Emits a UTF-16 parser for the exact immutable string instances produced
     /// by the guarded closed-shape serializer. The association is an identity
@@ -17,15 +23,15 @@ public partial class RuntimeEmitter
     /// </summary>
     private MethodBuilder EmitJsonAssociatedParseHelper(
         TypeBuilder typeBuilder,
-        EmittedRuntime runtime)
+        JsonAssociatedParseHelperInputs inputs)
     {
         var consumeLiteral = EmitJsonAssociatedConsumeLiteral(typeBuilder);
         var readNumber = EmitJsonAssociatedReadNumber(typeBuilder);
         var readString = EmitJsonAssociatedReadString(typeBuilder);
 
-        var supportedShapes = _features.JsonScalarRecordShapes
+        var supportedShapes = inputs.JsonScalarRecordShapes
             .OrderBy(pair => pair.Key, StringComparer.Ordinal)
-            .Where(pair => runtime.JsonTypedScalarRecordCtors.ContainsKey(pair.Key))
+            .Where(pair => inputs.JsonTypedScalarRecordCtors.ContainsKey(pair.Key))
             .Where(pair => IsDirectlyParseable(pair.Value))
             .Select((pair, ordinal) => (
                 Fingerprint: pair.Key,
@@ -81,7 +87,7 @@ public partial class RuntimeEmitter
             var next = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Ldsfld,
-                runtime.JsonTypedScalarRecordShapeFields[parser.Fingerprint]);
+                inputs.JsonTypedScalarRecordShapeFields[parser.Fingerprint]);
             il.Emit(OpCodes.Bne_Un, next);
 
             il.Emit(OpCodes.Ldarg_0);
@@ -165,7 +171,7 @@ public partial class RuntimeEmitter
             foreach (var fieldLocal in fieldLocals)
                 parserIl.Emit(OpCodes.Ldloc, fieldLocal);
             parserIl.Emit(OpCodes.Newobj,
-                runtime.JsonTypedScalarRecordCtors[fingerprint]);
+                inputs.JsonTypedScalarRecordCtors[fingerprint]);
             parserIl.Emit(OpCodes.Ret);
 
             void EmitConsume(ILGenerator target, string literal)

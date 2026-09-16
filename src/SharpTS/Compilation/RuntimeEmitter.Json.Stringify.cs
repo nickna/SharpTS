@@ -7,18 +7,123 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
+    private readonly record struct JsonGetDictionaryPropertyHelperInputs(
+        EmittedDescriptorStorageRuntime DescriptorStorage,
+        MethodBuilder GetProperty
+    );
+
+    private readonly record struct JsonGetDictionaryToJsonHelperInputs(
+        EmittedDescriptorStorageRuntime DescriptorStorage,
+        MethodBuilder GetProperty,
+        FieldBuilder ObjectPrototypeField,
+        MethodBuilder ObjectPrototypePopulateMethod,
+        FieldInfo UndefinedInstance
+    );
+
+    private readonly record struct JsonStringifyInputs(
+        EmittedArrayOperationsRuntime ArrayOperations,
+        EmittedArrayStorageRuntime ArrayStorage,
+        TypeBuilder BoundTSFunctionType,
+        MethodBuilder CreateException,
+        EmittedDescriptorStorageRuntime DescriptorStorage,
+        MethodBuilder GetKeys,
+        MethodBuilder GetProperty,
+        Type IHasFieldsInterface,
+        MethodBuilder InvokeMethodUnwrapped,
+        MethodBuilder InvokeMethodValue,
+        MethodBuilder JsonScalarRecordGetValue,
+        MethodBuilder JsonScalarRecordIsMaterializedGetter,
+        MethodBuilder JsonScalarRecordShapeGetter,
+        TypeBuilder JsonScalarRecordType,
+        IReadOnlyDictionary<string, FieldBuilder> JsonTypedScalarRecordShapeFields,
+        IReadOnlyDictionary<string, TypeBuilder> JsonTypedScalarRecordTypes,
+        IReadOnlyDictionary<(string Fingerprint, int Index), FieldBuilder> JsonTypedScalarRecordValueFields,
+        EmittedNumberRuntime Numbers,
+        EmittedNumericCoercionRuntime NumericCoercion,
+        FieldBuilder ObjectPrototypeField,
+        MethodBuilder ObjectPrototypePopulateMethod,
+        EmittedObjectStorageRuntime ObjectStorage,
+        EmittedStringCoercionRuntime StringCoercion,
+        TypeBuilder TSFunctionType,
+        MethodBuilder TSObjectMergeEnumerable,
+        Type? TSRegExpType,
+        TypeBuilder TSSymbolType,
+        ConstructorBuilder TSTypeErrorCtor,
+        MethodBuilder TypeOf,
+        FieldInfo UndefinedInstance,
+        Type UndefinedType,
+        IReadOnlyDictionary<string, JsonSerializationShape.Record> JsonScalarRecordShapes,
+        bool PotentiallyMaterializesUnknownCompactObjectRecordShape,
+        bool UsesArrayPrototypeMutation,
+        bool UsesClassPrototypeMutation,
+        bool UsesDynamicPropertyDescriptors,
+        bool UsesObjectIntegrityMutation
+    );
+
+    private readonly record struct JsonStringifyHelperInputs(
+        EmittedArrayStorageRuntime ArrayStorage,
+        TypeBuilder BoundTSFunctionType,
+        MethodBuilder CreateException,
+        EmittedDescriptorStorageRuntime DescriptorStorage,
+        MethodBuilder GetKeys,
+        MethodBuilder GetProperty,
+        Type IHasFieldsInterface,
+        MethodBuilder InvokeMethodUnwrapped,
+        MethodBuilder InvokeMethodValue,
+        EmittedNumberRuntime Numbers,
+        EmittedNumericCoercionRuntime NumericCoercion,
+        EmittedObjectStorageRuntime ObjectStorage,
+        EmittedStringCoercionRuntime StringCoercion,
+        TypeBuilder TSFunctionType,
+        MethodBuilder TSObjectMergeEnumerable,
+        Type? TSRegExpType,
+        TypeBuilder TSSymbolType,
+        ConstructorBuilder TSTypeErrorCtor,
+        MethodBuilder TypeOf,
+        Type UndefinedType
+    );
+
+    private readonly record struct BigIntCheckInputs(
+        MethodBuilder CreateException,
+        ConstructorBuilder TSTypeErrorCtor
+    );
+
+    private readonly record struct FunctionSkipCheckInputs(
+        TypeBuilder BoundTSFunctionType,
+        TypeBuilder TSFunctionType,
+        TypeBuilder TSSymbolType
+    );
+
+    private readonly record struct ToJsonCheckInputs(
+        MethodBuilder GetProperty,
+        MethodBuilder InvokeMethodValue,
+        TypeBuilder TSSymbolType,
+        MethodBuilder TypeOf,
+        Type UndefinedType
+    );
+
+    private readonly record struct IsClassInstanceCheckInputs(Type IHasFieldsInterface);
+
+    private readonly record struct FormatNumberInputs(EmittedNumberRuntime Numbers);
+
+    private readonly record struct StringifyArrayInputs(EmittedArrayStorageRuntime ArrayStorage);
+
+    private readonly record struct StringifyObjectInputs(
+        EmittedDescriptorStorageRuntime DescriptorStorage,
+        MethodBuilder GetKeys
+    );
+
+    private readonly record struct BoxedPrimitiveJsonCoerceInputs(
+        MethodBuilder GetProperty,
+        EmittedNumericCoercionRuntime NumericCoercion,
+        EmittedObjectStorageRuntime ObjectStorage,
+        EmittedStringCoercionRuntime StringCoercion
+    );
+
     private delegate int JsonIndexOfAnyDelegate(
         ReadOnlySpan<char> span,
         SearchValues<char> values);
 
-    private MethodBuilder? _escapeJsonStringMethod;
-    private MethodBuilder? _appendEscapedJsonStringMethod;
-    private MethodBuilder? _jsonGetDictionaryPropertyMethod;
-    private MethodBuilder? _jsonGetDictionaryToJsonMethod;
-    private MethodBuilder? _jsonTryRentDictionaryKeysMethod;
-    private MethodBuilder? _jsonReturnDictionaryKeysMethod;
-    private MethodBuilder? _jsonRentStringBuilderMethod;
-    private MethodBuilder? _jsonReturnStringBuilderMethod;
 
     /// <summary>
     /// Emits a JSON-only thread-local pool for ordinary dictionary key
@@ -26,9 +131,9 @@ public partial class RuntimeEmitter
     /// objects get distinct lists and getter/toJSON mutations cannot alter the
     /// current object's captured key set.
     /// </summary>
-    private void EmitJsonDictionaryKeyPool(TypeBuilder typeBuilder)
+    private void EmitJsonDictionaryKeyPool(TypeBuilder typeBuilder, EmittedJsonImplementation json)
     {
-        if (_jsonTryRentDictionaryKeysMethod is not null)
+        if (json.IsTryRentDictionaryKeysDeclared)
             return;
 
         Type stackType = _types.MakeGenericType(typeof(Stack<>), _types.ListOfObject);
@@ -44,14 +149,14 @@ public partial class RuntimeEmitter
             MethodAttributes.Private | MethodAttributes.Static,
             _types.Void,
             [_types.ListOfObject]);
-        _jsonReturnDictionaryKeysMethod = returnMethod;
+        json.ReturnDictionaryKeys = returnMethod;
 
         var tryRentMethod = typeBuilder.DefineMethod(
             "TryRentJsonDictionaryKeys",
             MethodAttributes.Private | MethodAttributes.Static,
             _types.ListOfObject,
             [_types.DictionaryStringObject]);
-        _jsonTryRentDictionaryKeysMethod = tryRentMethod;
+        json.TryRentDictionaryKeys = tryRentMethod;
 
         // ReturnJsonDictionaryKeys(list): clear references and make the list
         // available to the next non-overlapping object on this thread.
@@ -201,9 +306,9 @@ public partial class RuntimeEmitter
     /// array and object serialization. Builders remain rented across nested
     /// calls, and unusually large buffers are discarded when returned.
     /// </summary>
-    private void EmitJsonStringBuilderPool(TypeBuilder typeBuilder)
+    private void EmitJsonStringBuilderPool(TypeBuilder typeBuilder, EmittedJsonImplementation json)
     {
-        if (_jsonRentStringBuilderMethod is not null)
+        if (json.IsRentStringBuilderDeclared)
             return;
 
         Type stackType = _types.MakeGenericType(typeof(Stack<>), _types.StringBuilder);
@@ -219,14 +324,14 @@ public partial class RuntimeEmitter
             MethodAttributes.Private | MethodAttributes.Static,
             _types.Void,
             [_types.StringBuilder]);
-        _jsonReturnStringBuilderMethod = returnMethod;
+        json.ReturnStringBuilder = returnMethod;
 
         var rentMethod = typeBuilder.DefineMethod(
             "RentJsonStringBuilder",
             MethodAttributes.Private | MethodAttributes.Static,
             _types.StringBuilder,
             Type.EmptyTypes);
-        _jsonRentStringBuilderMethod = rentMethod;
+        json.RentStringBuilder = rentMethod;
 
         {
             var il = returnMethod.GetILGenerator();
@@ -293,10 +398,10 @@ public partial class RuntimeEmitter
     /// </summary>
     private MethodBuilder EmitJsonGetDictionaryPropertyHelper(
         TypeBuilder typeBuilder,
-        EmittedRuntime runtime)
+        EmittedJsonImplementation json, JsonGetDictionaryPropertyHelperInputs inputs)
     {
-        if (_jsonGetDictionaryPropertyMethod is not null)
-            return _jsonGetDictionaryPropertyMethod;
+        if (json.IsGetDictionaryPropertyDeclared)
+            return json.GetDictionaryProperty;
 
         var method = typeBuilder.DefineMethod(
             "JsonGetDictionaryProperty",
@@ -309,7 +414,7 @@ public partial class RuntimeEmitter
         var fallback = il.DefineLabel();
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.DescriptorStorage.HasPropertyDescriptors);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.HasPropertyDescriptors);
         il.Emit(OpCodes.Brtrue, fallback);
 
         il.Emit(OpCodes.Ldarg_0);
@@ -326,10 +431,10 @@ public partial class RuntimeEmitter
         il.MarkLabel(fallback);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, inputs.GetProperty);
         il.Emit(OpCodes.Ret);
 
-        _jsonGetDictionaryPropertyMethod = method;
+        json.GetDictionaryProperty = method;
         return method;
     }
 
@@ -340,10 +445,10 @@ public partial class RuntimeEmitter
     /// </summary>
     private MethodBuilder EmitJsonGetDictionaryToJsonHelper(
         TypeBuilder typeBuilder,
-        EmittedRuntime runtime)
+        EmittedJsonImplementation json, JsonGetDictionaryToJsonHelperInputs inputs)
     {
-        if (_jsonGetDictionaryToJsonMethod is not null)
-            return _jsonGetDictionaryToJsonMethod;
+        if (json.IsGetDictionaryToJsonDeclared)
+            return json.GetDictionaryToJson;
 
         var method = typeBuilder.DefineMethod(
             "JsonGetDictionaryToJson",
@@ -359,7 +464,7 @@ public partial class RuntimeEmitter
         var returnValue = il.DefineLabel();
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.DescriptorStorage.HasPropertyDescriptors);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.HasPropertyDescriptors);
         il.Emit(OpCodes.Brtrue, fullLookup);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "toJSON");
@@ -374,10 +479,10 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(implicitPrototype);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.DescriptorStorage.HasPrototypeEntry);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.HasPrototypeEntry);
         il.Emit(OpCodes.Brtrue, fullLookup);
-        il.Emit(OpCodes.Call, runtime.ObjectPrototypePopulateMethod);
-        il.Emit(OpCodes.Ldsfld, runtime.ObjectPrototypeField);
+        il.Emit(OpCodes.Call, inputs.ObjectPrototypePopulateMethod);
+        il.Emit(OpCodes.Ldsfld, inputs.ObjectPrototypeField);
         il.Emit(OpCodes.Ldstr, "toJSON");
         il.Emit(OpCodes.Ldloca, valueLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(
@@ -390,11 +495,11 @@ public partial class RuntimeEmitter
         // placeholder to preserve property order. Only that unusual sentinel
         // case needs a descriptor probe; an absent toJSON remains CWT-free.
         il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, inputs.UndefinedInstance);
         il.Emit(OpCodes.Bne_Un, returnValue);
-        il.Emit(OpCodes.Ldsfld, runtime.ObjectPrototypeField);
+        il.Emit(OpCodes.Ldsfld, inputs.ObjectPrototypeField);
         il.Emit(OpCodes.Ldstr, "toJSON");
-        il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetPropertyDescriptor);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.GetPropertyDescriptor);
         il.Emit(OpCodes.Brtrue, fullLookup);
 
         il.MarkLabel(returnValue);
@@ -402,16 +507,16 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(miss);
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, inputs.UndefinedInstance);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(fullLookup);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "toJSON");
-        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, inputs.GetProperty);
         il.Emit(OpCodes.Ret);
 
-        _jsonGetDictionaryToJsonMethod = method;
+        json.GetDictionaryToJson = method;
         return method;
     }
 
@@ -419,10 +524,10 @@ public partial class RuntimeEmitter
     /// Emits a helper method that escapes a string for JSON output.
     /// This replaces dependency on System.Text.Json.JsonSerializer.
     /// </summary>
-    private MethodBuilder EmitEscapeJsonStringHelper(TypeBuilder typeBuilder)
+    private MethodBuilder EmitEscapeJsonStringHelper(TypeBuilder typeBuilder, EmittedJsonImplementation json)
     {
-        if (_escapeJsonStringMethod != null)
-            return _escapeJsonStringMethod;
+        if (json.IsEscapeStringDeclared)
+            return json.EscapeString;
 
         var method = typeBuilder.DefineMethod(
             "EscapeJsonString",
@@ -728,7 +833,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Object, "ToString"));
         il.Emit(OpCodes.Ret);
 
-        _escapeJsonStringMethod = method;
+        json.EscapeString = method;
         return method;
     }
 
@@ -737,10 +842,10 @@ public partial class RuntimeEmitter
     /// common escape-free path avoids creating an intermediate quoted string;
     /// special characters delegate to the complete escaping helper above.
     /// </summary>
-    private MethodBuilder EmitAppendEscapedJsonStringHelper(TypeBuilder typeBuilder)
+    private MethodBuilder EmitAppendEscapedJsonStringHelper(TypeBuilder typeBuilder, EmittedJsonImplementation json)
     {
-        if (_appendEscapedJsonStringMethod is not null)
-            return _appendEscapedJsonStringMethod;
+        if (json.IsAppendEscapedStringDeclared)
+            return json.AppendEscapedString;
 
         var method = typeBuilder.DefineMethod(
             "AppendEscapedJsonString",
@@ -819,28 +924,92 @@ public partial class RuntimeEmitter
         il.MarkLabel(slow);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, _escapeJsonStringMethod!);
+        il.Emit(OpCodes.Call, json.EscapeString!);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StringBuilder, "Append", [_types.String]));
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Ret);
 
-        _appendEscapedJsonStringMethod = method;
+        json.AppendEscapedString = method;
         return method;
     }
 
-    private void EmitJsonStringify(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitJsonStringify(TypeBuilder typeBuilder, EmittedJsonImplementation json, JsonStringifyInputs inputs)
     {
         // First emit the escape helper (needed by stringify)
-        EmitEscapeJsonStringHelper(typeBuilder);
-        EmitAppendEscapedJsonStringHelper(typeBuilder);
-        EmitJsonGetDictionaryPropertyHelper(typeBuilder, runtime);
-        EmitJsonGetDictionaryToJsonHelper(typeBuilder, runtime);
-        EmitJsonDictionaryKeyPool(typeBuilder);
-        EmitJsonStringBuilderPool(typeBuilder);
+        EmitEscapeJsonStringHelper(typeBuilder, json);
+        EmitAppendEscapedJsonStringHelper(typeBuilder, json);
+        EmitJsonGetDictionaryPropertyHelper(
+            typeBuilder,
+            json,
+            new JsonGetDictionaryPropertyHelperInputs(inputs.DescriptorStorage, inputs.GetProperty)
+        );
+        EmitJsonGetDictionaryToJsonHelper(
+            typeBuilder,
+            json,
+            new JsonGetDictionaryToJsonHelperInputs(
+                inputs.DescriptorStorage,
+                inputs.GetProperty,
+                inputs.ObjectPrototypeField,
+                inputs.ObjectPrototypePopulateMethod,
+                inputs.UndefinedInstance
+            )
+        );
+        EmitJsonDictionaryKeyPool(typeBuilder, json);
+        EmitJsonStringBuilderPool(typeBuilder, json);
 
         // Then emit the main stringify helper
-        _ = EmitJsonStringifyHelper(typeBuilder, runtime);
-        var appendValue = EmitAppendJsonValueHelper(typeBuilder, runtime);
+        _ = EmitJsonStringifyHelper(
+            typeBuilder,
+            json,
+            new JsonStringifyHelperInputs(
+                inputs.ArrayStorage,
+                inputs.BoundTSFunctionType,
+                inputs.CreateException,
+                inputs.DescriptorStorage,
+                inputs.GetKeys,
+                inputs.GetProperty,
+                inputs.IHasFieldsInterface,
+                inputs.InvokeMethodUnwrapped,
+                inputs.InvokeMethodValue,
+                inputs.Numbers,
+                inputs.NumericCoercion,
+                inputs.ObjectStorage,
+                inputs.StringCoercion,
+                inputs.TSFunctionType,
+                inputs.TSObjectMergeEnumerable,
+                inputs.TSRegExpType,
+                inputs.TSSymbolType,
+                inputs.TSTypeErrorCtor,
+                inputs.TypeOf,
+                inputs.UndefinedType
+            )
+        );
+        var appendValue = EmitAppendJsonValueHelper(
+            typeBuilder,
+            json,
+            new AppendJsonValueHelperInputs(
+                inputs.ArrayStorage,
+                inputs.BoundTSFunctionType,
+                inputs.CreateException,
+                inputs.DescriptorStorage,
+                inputs.GetKeys,
+                inputs.GetProperty,
+                inputs.IHasFieldsInterface,
+                inputs.InvokeMethodUnwrapped,
+                inputs.InvokeMethodValue,
+                inputs.Numbers,
+                inputs.NumericCoercion,
+                inputs.ObjectStorage,
+                inputs.StringCoercion,
+                inputs.TSFunctionType,
+                inputs.TSObjectMergeEnumerable,
+                inputs.TSRegExpType,
+                inputs.TSSymbolType,
+                inputs.TSTypeErrorCtor,
+                inputs.TypeOf,
+                inputs.UndefinedType
+            )
+        );
 
         var method = typeBuilder.DefineMethod(
             "JsonStringify",
@@ -848,7 +1017,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object]
         );
-        runtime.JsonStringify = method;
+        json.Stringify = method;
 
         var il = method.GetILGenerator();
 
@@ -859,7 +1028,7 @@ public partial class RuntimeEmitter
         var resultRootLocal = il.DeclareLocal(_types.Object);
         var undefinedRoot = il.DefineLabel();
         var cleanupDone = il.DefineLabel();
-        il.Emit(OpCodes.Call, _jsonRentStringBuilderMethod!);
+        il.Emit(OpCodes.Call, json.RentStringBuilder!);
         il.Emit(OpCodes.Stloc, builderLocal);
         il.BeginExceptionBlock();
         il.Emit(OpCodes.Ldloc, builderLocal);
@@ -878,23 +1047,49 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Leave, cleanupDone);
 
         il.MarkLabel(undefinedRoot);
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, inputs.UndefinedInstance);
         il.Emit(OpCodes.Stloc, resultRootLocal);
         il.Emit(OpCodes.Leave, cleanupDone);
 
         il.BeginFinallyBlock();
         il.Emit(OpCodes.Ldloc, builderLocal);
-        il.Emit(OpCodes.Call, _jsonReturnStringBuilderMethod!);
+        il.Emit(OpCodes.Call, json.ReturnStringBuilder!);
         il.EndExceptionBlock();
 
         il.MarkLabel(cleanupDone);
         il.Emit(OpCodes.Ldloc, resultRootLocal);
         il.Emit(OpCodes.Ret);
 
-        EmitJsonStringifyShapedMethod(typeBuilder, runtime, appendValue);
+        EmitJsonStringifyShapedMethod(
+            typeBuilder,
+            json,
+            new JsonStringifyShapedMethodInputs(
+                inputs.ArrayOperations,
+                inputs.ArrayStorage,
+                inputs.DescriptorStorage,
+                inputs.JsonScalarRecordGetValue,
+                inputs.JsonScalarRecordIsMaterializedGetter,
+                inputs.JsonScalarRecordShapeGetter,
+                inputs.JsonScalarRecordType,
+                inputs.JsonTypedScalarRecordShapeFields,
+                inputs.JsonTypedScalarRecordTypes,
+                inputs.JsonTypedScalarRecordValueFields,
+                inputs.Numbers,
+                inputs.ObjectPrototypeField,
+                inputs.ObjectPrototypePopulateMethod,
+                inputs.UndefinedInstance,
+                inputs.JsonScalarRecordShapes,
+                inputs.PotentiallyMaterializesUnknownCompactObjectRecordShape,
+                inputs.UsesArrayPrototypeMutation,
+                inputs.UsesClassPrototypeMutation,
+                inputs.UsesDynamicPropertyDescriptors,
+                inputs.UsesObjectIntegrityMutation
+            ),
+            appendValue
+        );
     }
 
-    private MethodBuilder EmitJsonStringifyHelper(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private MethodBuilder EmitJsonStringifyHelper(TypeBuilder typeBuilder, EmittedJsonImplementation json, JsonStringifyHelperInputs inputs)
     {
         var method = typeBuilder.DefineMethod(
             "StringifyValue",
@@ -923,7 +1118,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Ldc_I4, 512);
         il.Emit(OpCodes.Blt, depthOkLabel);
-        GuestErrorEmitter.ThrowTypeError(il, runtime, "Converting circular structure to JSON");
+        GuestErrorEmitter.ThrowError(il, inputs.CreateException, inputs.TSTypeErrorCtor, "Converting circular structure to JSON");
         il.MarkLabel(depthOkLabel);
 
         // Store value in local (we may modify it via toJSON)
@@ -937,7 +1132,7 @@ public partial class RuntimeEmitter
         // skips the key on null. So return C# null here for $Undefined.
         var undefRetNullLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
         il.Emit(OpCodes.Brfalse, undefRetNullLabel);
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ret);
@@ -951,7 +1146,19 @@ public partial class RuntimeEmitter
         // step 2.b.i requires toJSON's first arg to be the property key — read
         // it from arg 3 (the helper's key parameter, threaded by all recursive
         // callers).
-        EmitToJsonCheck(il, valueLocal, runtime, keyArgIndex: 3);
+        EmitToJsonCheck(
+            il,
+            valueLocal,
+            json,
+            new ToJsonCheckInputs(
+                inputs.GetProperty,
+                inputs.InvokeMethodValue,
+                inputs.TSSymbolType,
+                inputs.TypeOf,
+                inputs.UndefinedType
+            ),
+            keyArgIndex: 3
+        );
 
         // toJSON may have returned $Undefined — re-check and return C# null
         // so the caller treats it as JSON-undefined (root: returns undefined,
@@ -960,7 +1167,7 @@ public partial class RuntimeEmitter
         // literal string "null" — wrong for all three cases.
         var afterToJsonUndefLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
         il.Emit(OpCodes.Brfalse, afterToJsonUndefLabel);
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ret);
@@ -979,16 +1186,20 @@ public partial class RuntimeEmitter
         // type. Serialize it verbatim after the toJSON step.
         var notRawJsonLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Isinst, runtime.TSRawJsonType);
+        il.Emit(OpCodes.Isinst, json.RawJsonType);
         il.Emit(OpCodes.Brfalse, notRawJsonLabel);
         il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Castclass, runtime.TSRawJsonType);
-        il.Emit(OpCodes.Callvirt, runtime.TSRawJsonTextGetter);
+        il.Emit(OpCodes.Castclass, json.RawJsonType);
+        il.Emit(OpCodes.Callvirt, json.RawJsonTextGetter);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notRawJsonLabel);
 
         // ECMA-262 25.5.2.3 step 9: skip callable values (return undefined).
-        EmitFunctionSkipCheck(il, valueLocal, runtime);
+        EmitFunctionSkipCheck(
+            il,
+            valueLocal,
+            new FunctionSkipCheckInputs(inputs.BoundTSFunctionType, inputs.TSFunctionType, inputs.TSSymbolType)
+        );
 
         // Boxed-primitive unwrap (ECMA-262 25.5.2.3 step 4.a-c). $Object and
         // Dictionary<string,object> instances created via `new Number(x)`,
@@ -997,16 +1208,30 @@ public partial class RuntimeEmitter
         // primitive — without this, JSON.stringify(new Boolean(true)) returns
         // the marker dict instead of "true". Check both $Object and Dictionary
         // since either may be the receiver shape.
-        EmitBoxedPrimitiveJsonCoerce(il, valueLocal, runtime);
+        EmitBoxedPrimitiveJsonCoerce(
+            il,
+            valueLocal,
+            new BoxedPrimitiveJsonCoerceInputs(
+                inputs.GetProperty,
+                inputs.NumericCoercion,
+                inputs.ObjectStorage,
+                inputs.StringCoercion
+            )
+        );
 
         // BigInt rejection occurs after toJSON and boxed-primitive unwrapping.
-        EmitBigIntCheck(il, valueLocal, runtime);
+        EmitBigIntCheck(il, valueLocal, new BigIntCheckInputs(inputs.CreateException, inputs.TSTypeErrorCtor));
 
         // Proxy materialization (#92): if value is SharpTSProxy, dispatch its
         // [[OwnPropertyKeys]] / [[Get]] traps and substitute a Dictionary so the
         // existing dict path serializes the proxied view.
         var notProxyLabelSimple = il.DefineLabel();
-        EmitProxyMaterializeForJson(il, valueLocal, notProxyLabelSimple, runtime);
+        EmitProxyMaterializeForJson(
+            il,
+            valueLocal,
+            notProxyLabelSimple,
+            new ProxyMaterializeForJsonInputs(inputs.InvokeMethodUnwrapped)
+        );
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Stloc, allowPooledDictionaryKeysLocal);
         il.Emit(OpCodes.Br, dictLabel);
@@ -1040,11 +1265,11 @@ public partial class RuntimeEmitter
         // ECMA-262 25.5.2.3: $RegExp has no own enumerable properties → "{}".
         // Skip the check when UsesRegExp is gated off — no RegExp values can
         // exist at runtime in that build.
-        if (_features.UsesRegExp)
+        if (inputs.TSRegExpType is not null)
         {
             var notRegExpLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldloc, valueLocal);
-            il.Emit(OpCodes.Isinst, runtime.TSRegExpType);
+            il.Emit(OpCodes.Isinst, inputs.TSRegExpType);
             il.Emit(OpCodes.Brfalse, notRegExpLabel);
             il.Emit(OpCodes.Ldstr, "{}");
             il.Emit(OpCodes.Ret);
@@ -1052,7 +1277,12 @@ public partial class RuntimeEmitter
         }
 
         // Check if it's an emitted $Object instance
-        EmitIsClassInstanceCheck(il, valueLocal, classInstanceLabel, runtime);
+        EmitIsClassInstanceCheck(
+            il,
+            valueLocal,
+            classInstanceLabel,
+            new IsClassInstanceCheckInputs(inputs.IHasFieldsInterface)
+        );
 
         // Default: return "null"
         il.MarkLabel(nullLabel);
@@ -1073,23 +1303,29 @@ public partial class RuntimeEmitter
 
         // double
         il.MarkLabel(doubleLabel);
-        EmitFormatNumber(il, valueLocal, runtime);
+        EmitFormatNumber(il, valueLocal, new FormatNumberInputs(inputs.Numbers));
 
         // string - escape for JSON
         il.MarkLabel(stringLabel);
         il.Emit(OpCodes.Ldloc, valueLocal);
         il.Emit(OpCodes.Castclass, _types.String);
-        il.Emit(OpCodes.Call, _escapeJsonStringMethod!);
+        il.Emit(OpCodes.Call, json.EscapeString!);
         il.Emit(OpCodes.Ret);
 
         // List<object> - stringify array
         il.MarkLabel(listLabel);
-        EmitStringifyArray(il, method, valueLocal, runtime);
+        EmitStringifyArray(il, method, valueLocal, json, new StringifyArrayInputs(inputs.ArrayStorage));
 
         // Dictionary<string, object> - stringify object
         il.MarkLabel(dictLabel);
         EmitStringifyObject(
-            il, method, valueLocal, runtime, allowPooledDictionaryKeysLocal);
+            il,
+            method,
+            valueLocal,
+            json,
+            new StringifyObjectInputs(inputs.DescriptorStorage, inputs.GetKeys),
+            allowPooledDictionaryKeysLocal
+        );
 
         // Class instance - stringify via $IHasFields fields dictionary.
         // Use TSObjectMergeEnumerable to also include accessor (getter)
@@ -1099,14 +1335,21 @@ public partial class RuntimeEmitter
         var noClassFieldsLabel = il.DefineLabel();
 
         il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Call, runtime.TSObjectMergeEnumerable);
+        il.Emit(OpCodes.Call, inputs.TSObjectMergeEnumerable);
         il.Emit(OpCodes.Stloc, classFieldsLocal);
 
         il.Emit(OpCodes.Ldloc, classFieldsLocal);
         il.Emit(OpCodes.Brfalse, noClassFieldsLabel);
         il.Emit(OpCodes.Ldloc, classFieldsLocal);
         il.Emit(OpCodes.Stloc, valueLocal);
-        EmitStringifyObject(il, method, valueLocal, runtime, null);
+        EmitStringifyObject(
+            il,
+            method,
+            valueLocal,
+            json,
+            new StringifyObjectInputs(inputs.DescriptorStorage, inputs.GetKeys),
+            null
+        );
 
         il.MarkLabel(noClassFieldsLabel);
         il.Emit(OpCodes.Ldstr, "{}");
@@ -1115,7 +1358,7 @@ public partial class RuntimeEmitter
         return method;
     }
 
-    private void EmitBigIntCheck(ILGenerator il, LocalBuilder valueLocal, EmittedRuntime runtime)
+    private void EmitBigIntCheck(ILGenerator il, LocalBuilder valueLocal, BigIntCheckInputs inputs)
     {
         var notBigIntLabel = il.DefineLabel();
         var typeLocal = il.DeclareLocal(_types.Type);
@@ -1144,7 +1387,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, notBigIntLabel);
 
         il.MarkLabel(throwLabel);
-        GuestErrorEmitter.ThrowTypeError(il, runtime, "BigInt value can't be serialized in JSON");
+        GuestErrorEmitter.ThrowError(il, inputs.CreateException, inputs.TSTypeErrorCtor, "BigInt value can't be serialized in JSON");
 
         il.MarkLabel(notBigIntLabel);
     }
@@ -1157,23 +1400,23 @@ public partial class RuntimeEmitter
     /// Functions/bound functions/arrow functions all isinst $TSFunction or
     /// $BoundTSFunction (the only callable shapes the compiler emits for JS).
     /// </summary>
-    private void EmitFunctionSkipCheck(ILGenerator il, LocalBuilder valueLocal, EmittedRuntime runtime)
+    private void EmitFunctionSkipCheck(ILGenerator il, LocalBuilder valueLocal, FunctionSkipCheckInputs inputs)
     {
         var skipLabel = il.DefineLabel();
         var notSkippedLabel = il.DefineLabel();
 
         // Symbols (ECMA-262 25.5.2.3 step 3) are ignored as values.
         il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Isinst, runtime.TSSymbolType);
+        il.Emit(OpCodes.Isinst, inputs.TSSymbolType);
         il.Emit(OpCodes.Brtrue, skipLabel);
 
         // Functions / bound functions (ECMA-262 25.5.2.3 step 9) → undefined.
         il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Isinst, inputs.TSFunctionType);
         il.Emit(OpCodes.Brtrue, skipLabel);
 
         il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Isinst, runtime.BoundTSFunctionType);
+        il.Emit(OpCodes.Isinst, inputs.BoundTSFunctionType);
         il.Emit(OpCodes.Brfalse, notSkippedLabel);
 
         il.MarkLabel(skipLabel);
@@ -1182,7 +1425,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(notSkippedLabel);
     }
 
-    private void EmitToJsonCheck(ILGenerator il, LocalBuilder valueLocal, EmittedRuntime runtime,
+    private void EmitToJsonCheck(ILGenerator il, LocalBuilder valueLocal, EmittedJsonImplementation json, ToJsonCheckInputs inputs,
         string? key = null, int? keyArgIndex = null, LocalBuilder? keyLocal = null,
         int? keyIndexArgIndex = null, int? keyIsIndexArgIndex = null)
     {
@@ -1199,10 +1442,10 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Brtrue, doneLabel);
         }
         il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Isinst, runtime.TSSymbolType);
+        il.Emit(OpCodes.Isinst, inputs.TSSymbolType);
         il.Emit(OpCodes.Brtrue, doneLabel);
         il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
         il.Emit(OpCodes.Brtrue, doneLabel);
 
         var toJsonLocal = il.DeclareLocal(_types.Object);
@@ -1215,18 +1458,18 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, toJsonDictLocal);
         il.Emit(OpCodes.Brfalse, genericToJsonLookup);
         il.Emit(OpCodes.Ldloc, toJsonDictLocal);
-        il.Emit(OpCodes.Call, _jsonGetDictionaryToJsonMethod!);
+        il.Emit(OpCodes.Call, json.GetDictionaryToJson!);
         il.Emit(OpCodes.Br, toJsonLookupDone);
         il.MarkLabel(genericToJsonLookup);
         il.Emit(OpCodes.Ldloc, valueLocal);
         il.Emit(OpCodes.Ldstr, "toJSON");
-        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, inputs.GetProperty);
         il.MarkLabel(toJsonLookupDone);
         il.Emit(OpCodes.Stloc, toJsonLocal);
 
         // IsCallable(toJSON)
         il.Emit(OpCodes.Ldloc, toJsonLocal);
-        il.Emit(OpCodes.Call, runtime.TypeOf);
+        il.Emit(OpCodes.Call, inputs.TypeOf);
         il.Emit(OpCodes.Ldstr, "function");
         il.Emit(OpCodes.Call, _types.GetMethod(
             _types.String, "op_Equality", _types.String, _types.String));
@@ -1262,20 +1505,20 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, valueLocal);
         il.Emit(OpCodes.Ldloc, toJsonLocal);
         il.Emit(OpCodes.Ldloc, argsLocal);
-        il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+        il.Emit(OpCodes.Call, inputs.InvokeMethodValue);
         il.Emit(OpCodes.Stloc, valueLocal);
 
         il.MarkLabel(doneLabel);
     }
 
-    private void EmitIsClassInstanceCheck(ILGenerator il, LocalBuilder valueLocal, Label classInstanceLabel, EmittedRuntime runtime)
+    private void EmitIsClassInstanceCheck(ILGenerator il, LocalBuilder valueLocal, Label classInstanceLabel, IsClassInstanceCheckInputs inputs)
     {
         il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Isinst, runtime.IHasFieldsInterface);
+        il.Emit(OpCodes.Isinst, inputs.IHasFieldsInterface);
         il.Emit(OpCodes.Brtrue, classInstanceLabel);
     }
 
-    private void EmitFormatNumber(ILGenerator il, LocalBuilder valueLocal, EmittedRuntime runtime)
+    private void EmitFormatNumber(ILGenerator il, LocalBuilder valueLocal, FormatNumberInputs inputs)
     {
         var local = il.DeclareLocal(_types.Double);
         var nullLabel = il.DefineLabel();
@@ -1294,7 +1537,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, nullLabel);
 
         il.Emit(OpCodes.Ldloc, local);
-        il.Emit(OpCodes.Call, runtime.Numbers.Format);
+        il.Emit(OpCodes.Call, inputs.Numbers.Format);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(nullLabel);
@@ -1302,7 +1545,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitStringifyArray(ILGenerator il, MethodBuilder stringifyMethod, LocalBuilder valueLocal, EmittedRuntime runtime)
+    private void EmitStringifyArray(ILGenerator il, MethodBuilder stringifyMethod, LocalBuilder valueLocal, EmittedJsonImplementation json, StringifyArrayInputs inputs)
     {
         var sbLocal = il.DeclareLocal(_types.StringBuilder);
         var arrLocal = il.DeclareLocal(_types.ListOfObject);
@@ -1313,7 +1556,7 @@ public partial class RuntimeEmitter
         var loopEnd = il.DefineLabel();
 
         // number[] unboxing: materialize a numeric-mode $Array before reading its base list.
-        EmitDeoptIfNumericArray(il, runtime, () => il.Emit(OpCodes.Ldloc, valueLocal));
+        EmitDeoptIfNumericArrayStorage(il, inputs.ArrayStorage, () => il.Emit(OpCodes.Ldloc, valueLocal));
         il.Emit(OpCodes.Ldloc, valueLocal);
         il.Emit(OpCodes.Castclass, _types.ListOfObject);
         il.Emit(OpCodes.Stloc, arrLocal);
@@ -1330,7 +1573,7 @@ public partial class RuntimeEmitter
 
         // Rent the buffer for the whole array walk. Recursive containers rent
         // distinct builders until their parent finishes.
-        il.Emit(OpCodes.Call, _jsonRentStringBuilderMethod!);
+        il.Emit(OpCodes.Call, json.RentStringBuilder!);
         il.Emit(OpCodes.Stloc, sbLocal);
         var cleanupDone = il.DefineLabel();
         il.BeginExceptionBlock();
@@ -1370,7 +1613,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, arrLocal);
         il.Emit(OpCodes.Ldloc, iLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "get_Item", [_types.Int32]));
-        il.Emit(OpCodes.Isinst, runtime.ArrayStorage.HoleType);
+        il.Emit(OpCodes.Isinst, inputs.ArrayStorage.HoleType);
         il.Emit(OpCodes.Brfalse, notHoleLabel);
         // Hole: append "null" and skip.
         il.Emit(OpCodes.Ldloc, sbLocal);
@@ -1432,7 +1675,7 @@ public partial class RuntimeEmitter
 
         il.BeginFinallyBlock();
         il.Emit(OpCodes.Ldloc, sbLocal);
-        il.Emit(OpCodes.Call, _jsonReturnStringBuilderMethod!);
+        il.Emit(OpCodes.Call, json.ReturnStringBuilder!);
         il.EndExceptionBlock();
 
         il.MarkLabel(cleanupDone);
@@ -1444,7 +1687,7 @@ public partial class RuntimeEmitter
         ILGenerator il,
         MethodBuilder stringifyMethod,
         LocalBuilder valueLocal,
-        EmittedRuntime runtime,
+        EmittedJsonImplementation json, StringifyObjectInputs inputs,
         LocalBuilder? allowPooledDictionaryKeysLocal)
     {
         var sbLocal = il.DeclareLocal(_types.StringBuilder);
@@ -1474,10 +1717,10 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldloc, allowPooledDictionaryKeysLocal);
             il.Emit(OpCodes.Brfalse, fallbackSnapshot);
             il.Emit(OpCodes.Ldloc, dictLocal);
-            il.Emit(OpCodes.Call, runtime.DescriptorStorage.HasPropertyDescriptors);
+            il.Emit(OpCodes.Call, inputs.DescriptorStorage.HasPropertyDescriptors);
             il.Emit(OpCodes.Brtrue, fallbackSnapshot);
             il.Emit(OpCodes.Ldloc, dictLocal);
-            il.Emit(OpCodes.Call, _jsonTryRentDictionaryKeysMethod!);
+            il.Emit(OpCodes.Call, json.TryRentDictionaryKeys!);
             il.Emit(OpCodes.Stloc, keysLocal);
             il.Emit(OpCodes.Ldloc, keysLocal);
             il.Emit(OpCodes.Brfalse, fallbackSnapshot);
@@ -1488,7 +1731,7 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(fallbackSnapshot);
         il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Call, runtime.GetKeys);
+        il.Emit(OpCodes.Call, inputs.GetKeys);
         il.Emit(OpCodes.Stloc, keysLocal);
         il.MarkLabel(snapshotReady);
 
@@ -1508,7 +1751,7 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(notEmpty);
 
-        il.Emit(OpCodes.Call, _jsonRentStringBuilderMethod!);
+        il.Emit(OpCodes.Call, json.RentStringBuilder!);
         il.Emit(OpCodes.Stloc, sbLocal);
         il.Emit(OpCodes.Ldloc, sbLocal);
         il.Emit(OpCodes.Ldstr, "{");
@@ -1562,7 +1805,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(generalRead);
         il.Emit(OpCodes.Ldloc, dictLocal);
         il.Emit(OpCodes.Ldloc, keyLocal);
-        il.Emit(OpCodes.Call, _jsonGetDictionaryPropertyMethod!);
+        il.Emit(OpCodes.Call, json.GetDictionaryProperty!);
         il.Emit(OpCodes.Stloc, dictValueLocal);
         il.MarkLabel(valueReady);
         il.Emit(OpCodes.Ldloc, dictValueLocal);
@@ -1591,7 +1834,7 @@ public partial class RuntimeEmitter
         // sb.Append(EscapeJsonString(key));
         il.Emit(OpCodes.Ldloc, sbLocal);
         il.Emit(OpCodes.Ldloc, keyLocal);
-        il.Emit(OpCodes.Call, _appendEscapedJsonStringMethod!);
+        il.Emit(OpCodes.Call, json.AppendEscapedString!);
 
         // sb.Append(":");
         il.Emit(OpCodes.Ldloc, sbLocal);
@@ -1625,13 +1868,13 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, rentedKeysLocal);
         il.Emit(OpCodes.Brfalse, skipReturn);
         il.Emit(OpCodes.Ldloc, keysLocal);
-        il.Emit(OpCodes.Call, _jsonReturnDictionaryKeysMethod!);
+        il.Emit(OpCodes.Call, json.ReturnDictionaryKeys!);
         il.MarkLabel(skipReturn);
         var skipBuilderReturn = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, sbLocal);
         il.Emit(OpCodes.Brfalse, skipBuilderReturn);
         il.Emit(OpCodes.Ldloc, sbLocal);
-        il.Emit(OpCodes.Call, _jsonReturnStringBuilderMethod!);
+        il.Emit(OpCodes.Call, json.ReturnStringBuilder!);
         il.MarkLabel(skipBuilderReturn);
         il.EndExceptionBlock();
 
@@ -1653,7 +1896,7 @@ public partial class RuntimeEmitter
     /// full (replacer/space) stringify helpers, and for a boxed Number/String
     /// <c>space</c> argument.
     /// </summary>
-    private void EmitBoxedPrimitiveJsonCoerce(ILGenerator il, LocalBuilder valueLocal, EmittedRuntime runtime)
+    private void EmitBoxedPrimitiveJsonCoerce(ILGenerator il, LocalBuilder valueLocal, BoxedPrimitiveJsonCoerceInputs inputs)
     {
         var notBoxed = il.DefineLabel();
         var readTsObjectTag = il.DefineLabel();
@@ -1665,7 +1908,7 @@ public partial class RuntimeEmitter
         // The wrapper brand is represented by an own internal marker. Read it
         // directly: inherited/accessor properties are not [[PrimitiveData]].
         il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Isinst, runtime.ObjectStorage.Type);
+        il.Emit(OpCodes.Isinst, inputs.ObjectStorage.Type);
         il.Emit(OpCodes.Brtrue, readTsObjectTag);
         il.Emit(OpCodes.Ldloc, valueLocal);
         il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
@@ -1684,9 +1927,9 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(readTsObjectTag);
         il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Castclass, runtime.ObjectStorage.Type);
+        il.Emit(OpCodes.Castclass, inputs.ObjectStorage.Type);
         il.Emit(OpCodes.Ldstr, "__primitiveType");
-        il.Emit(OpCodes.Callvirt, runtime.ObjectStorage.GetProperty);
+        il.Emit(OpCodes.Callvirt, inputs.ObjectStorage.GetProperty);
         il.Emit(OpCodes.Stloc, tagValue);
 
         il.MarkLabel(tagRead);
@@ -1726,14 +1969,14 @@ public partial class RuntimeEmitter
         // String tag → ToString (string-hint ToPrimitive → toString first).
         il.MarkLabel(stringCase);
         il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
+        il.Emit(OpCodes.Call, inputs.StringCoercion.ToJsString);
         il.Emit(OpCodes.Stloc, valueLocal);
         il.Emit(OpCodes.Br, done);
 
         // Number tag → ToNumber (number-hint ToPrimitive → valueOf first).
         il.MarkLabel(numberCase);
         il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Call, runtime.NumericCoercion.ToNumber);
+        il.Emit(OpCodes.Call, inputs.NumericCoercion.ToNumber);
         il.Emit(OpCodes.Box, _types.Double);
         il.Emit(OpCodes.Stloc, valueLocal);
         il.Emit(OpCodes.Br, done);
@@ -1742,7 +1985,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(booleanCase);
         il.Emit(OpCodes.Ldloc, valueLocal);
         il.Emit(OpCodes.Ldstr, "__primitiveValue");
-        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, inputs.GetProperty);
         il.Emit(OpCodes.Stloc, valueLocal);
         il.Emit(OpCodes.Br, done);
 
@@ -1751,7 +1994,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(bigintCase);
         il.Emit(OpCodes.Ldloc, valueLocal);
         il.Emit(OpCodes.Ldstr, "__primitiveValue");
-        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, inputs.GetProperty);
         il.Emit(OpCodes.Stloc, valueLocal);
 
         il.MarkLabel(notBoxed);

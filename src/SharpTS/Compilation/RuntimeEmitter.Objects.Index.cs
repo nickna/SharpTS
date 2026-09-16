@@ -2262,7 +2262,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldsfld, runtime.Math.SingletonField);
         il.Emit(OpCodes.Beq, didxMarkDelLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldsfld, runtime.JsonSingletonField);
+        il.Emit(OpCodes.Ldsfld, runtime.Json.SingletonField);
         il.Emit(OpCodes.Beq, didxMarkDelLabel);
         il.Emit(OpCodes.Br, didxAfterMarkLabel);
         il.MarkLabel(didxMarkDelLabel);

@@ -133,7 +133,7 @@ public partial class ILEmitter
             // `typeof JSON === "object"` per ECMA-262 24.5. Compile-time
             // static dispatch (JSON.parse / JSON.stringify) intercepts before
             // this bare-reference path so behavior is preserved.
-            IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.JsonSingletonField);
+            IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.Json.SingletonField);
             SetStackUnknown();
             return;
         }

@@ -3708,6 +3708,198 @@ public class StandaloneDllTests
             verifyStandardError: error => Assert.Empty(error)));
     }
 
+    public static IEnumerable<object[]> JsonMetadataPrograms =>
+    [
+        new object[]
+        {
+            "parse_reviver",
+            "let result: any = JSON.parse('{\"a\":1,\"b\":2}', (key: any, value: any): any => {\n    if (typeof value === \"number\") {\n        return value * 2;\n    }\n    return value;\n});\nconsole.log(result.a);\nconsole.log(result.b);",
+            "2\n4\n",
+            true,
+            ""
+        },
+        new object[]
+        {
+            "shape_mutations",
+            "const hidden: { a: number; b: number } = { a: 1, b: 2 };\nObject.defineProperty(hidden, \"a\", {\n    value: 9, enumerable: false, configurable: true\n});\nconsole.log(JSON.stringify(hidden));\n\nconst inherited: { a: number } = { a: 4 };\nObject.setPrototypeOf(inherited, {\n    toJSON: function (): any { return { hooked: this.a + 1 }; }\n});\nconsole.log(JSON.stringify(inherited));\n\nconst extended: { a: number } = { a: 1 };\n(extended as any).z = 3;\nconsole.log(JSON.stringify(extended));\n\nconst reordered: { a: number; b: number } = { a: 1, b: 2 };\nconst dynamic: any = reordered;\ndelete dynamic.a;\ndynamic.a = 7;\nconsole.log(JSON.stringify(reordered));\n\nconst ownHook: { a: number } = { a: 6 };\n(ownHook as any).toJSON = function (): any {\n    return { custom: this.a };\n};\nconsole.log(JSON.stringify(ownHook));",
+            "{\"b\":2}\n{\"hooked\":5}\n{\"a\":1,\"z\":3}\n{\"b\":2,\"a\":7}\n{\"custom\":6}\n",
+            true,
+            ""
+        },
+        new object[]
+        {
+            "shaped_roundtrip",
+            "const payload: {\n    items: { id: number; label: string; active: boolean; note: null }[]\n} = {\n    items: [\n        { id: 1, label: \"a\", active: true, note: null },\n        { id: 2, label: \"b\", active: false, note: null }\n    ]\n};\nconst json: string = JSON.stringify(payload);\nconst shaped: any = JSON.parse(json);\nconst copied: string = (\" \" + json).slice(1);\nconst generic: any = JSON.parse(copied);\nconsole.log(shaped.items[0].id, shaped.items[1].label,\n    shaped.items[0].note === null);\nconsole.log(generic.items[0].id, generic.items[1].label,\n    generic.items[1].note === null);\nshaped.items[0].id = 9;\nObject.defineProperty(shaped.items[1], \"extra\", {\n    value: 3, enumerable: true, configurable: true\n});\nconsole.log(JSON.stringify(shaped));",
+            "1 b true\n1 b true\n{\"items\":[{\"id\":9,\"label\":\"a\",\"active\":true,\"note\":null},{\"id\":2,\"label\":\"b\",\"active\":false,\"note\":null,\"extra\":3}]}\n",
+            true,
+            ""
+        },
+        new object[]
+        {
+            "compact_semantics",
+            "const record: { a: number; b: string; c: boolean; d: null } = {\n    a: 1, b: \"x\", c: true, d: null\n};\nconsole.log(record.a, record.b, record.c, record.d === null);\nrecord.a = 8;\nconst dynamic: any = record;\ndelete dynamic.b;\nObject.defineProperty(dynamic, \"e\", {\n    value: 5, enumerable: true, configurable: true\n});\nconsole.log(Object.keys(record).join(\",\"));\nconsole.log(JSON.stringify(record));",
+            "1 x true true\na,c,d,e\n{\"a\":8,\"c\":true,\"d\":null,\"e\":5}\n",
+            true,
+            ""
+        },
+        new object[]
+        {
+            "snapshot_tojson",
+            "const obj: any = {};\nobj.a = {\n    toJSON: function (): number {\n        delete obj.b;\n        obj.c = 3;\n        return 1;\n    }\n};\nobj.b = 2;\nconsole.log(JSON.stringify(obj));",
+            "{\"a\":1}\n",
+            true,
+            ""
+        },
+        new object[]
+        {
+            "snapshot_getter",
+            "const obj: any = {};\nObject.defineProperty(obj, \"a\", {\n    enumerable: true,\n    configurable: true,\n    get: function (): number {\n        delete obj.b;\n        obj.c = 3;\n        return 1;\n    }\n});\nobj.b = 2;\nconsole.log(JSON.stringify(obj));",
+            "{\"a\":1}\n",
+            true,
+            ""
+        },
+        new object[]
+        {
+            "escaping",
+            "const key: string = \"a\\\"\\\\\\n\";\nconst value: string = \"x\\t\" + String.fromCharCode(0xd800);\nconst obj: any = {};\nobj[key] = value;\nconsole.log(JSON.stringify(obj));",
+            "{\"a\\\"\\\\\\n\":\"x\\t\\ud800\"}\n",
+            true,
+            ""
+        },
+        new object[]
+        {
+            "parse_names",
+            "const parsed: any[] = JSON.parse(\n    '[{\"id\":1,\"label\":\"a\"},{\"\\\\u0069d\":2,\"label\":\"b\"},{\"id\":3,\"id\":4}]');\nconsole.log(parsed[0].id, parsed[1].id, parsed[2].id);\nconsole.log(Object.keys(parsed[1]).join(\",\"));\nconsole.log(Object.keys(parsed[2]).join(\",\"));",
+            "1 2 4\nid,label\nid\n",
+            true,
+            ""
+        },
+        new object[]
+        {
+            "namespace",
+            "const json: any = JSON;\nconst parse = json.parse;\nconst descriptor = Object.getOwnPropertyDescriptor(json, \"parse\")!;\nconsole.log(Object.hasOwn(json, \"parse\"), parse.length);\nconsole.log(descriptor.writable, descriptor.enumerable, descriptor.configurable);\nconsole.log(delete json.parse, json.parse === undefined);\nObject.defineProperty(json, \"parse\", {\n    value: parse,\n    writable: true,\n    enumerable: false,\n    configurable: true\n});\nconsole.log(json.parse(\"1\"), json.stringify.length);",
+            "true 2\ntrue false true\ntrue true\n1 3\n",
+            true,
+            ""
+        },
+        new object[]
+        {
+            "tojson_keys",
+            "let obj: any = {\n    a: { toJSON: function(k: string): string { return \"k=\" + k; } },\n    b: [\n        { toJSON: function(k: string): string { return \"i=\" + k; } },\n        { toJSON: function(k: string): string { return \"i=\" + k; } }\n    ]\n};\nconsole.log(JSON.stringify(obj));",
+            "{\"a\":\"k=a\",\"b\":[\"i=0\",\"i=1\"]}\n",
+            true,
+            ""
+        },
+        new object[]
+        {
+            "replacer_keys",
+            "let obj: any = { x: 1, y: [10, 20] };\nlet keys: string[] = [];\nlet result: string = JSON.stringify(obj, function(k: string, v: any): any {\n    keys.push(k);\n    return v;\n});\nconsole.log(keys.join(\"|\"));\nconsole.log(result);",
+            "|x|y|0|1\n{\"x\":1,\"y\":[10,20]}\n",
+            true,
+            ""
+        },
+        new object[]
+        {
+            "bigint",
+            "try {\n    let result: string = JSON.stringify(123n);\n    console.log(\"should not reach here\");\n} catch (e) {\n    console.log(\"caught error\");\n}",
+            "caught error\n",
+            true,
+            ""
+        },
+        new object[]
+        {
+            "indent",
+            "let obj: { a: number } = { a: 1 };\nlet result: string = JSON.stringify(obj, null, \"\\t\");\nconsole.log(result);",
+            "{\n\t\"a\": 1\n}\n",
+            true,
+            ""
+        },
+        new object[]
+        {
+            "nested_class",
+            "class Inner {\n    value: number;\n    constructor(v: number) {\n        this.value = v;\n    }\n}\nclass Outer {\n    inner: Inner;\n    constructor(i: Inner) {\n        this.inner = i;\n    }\n}\nlet o: Outer = new Outer(new Inner(42));\nlet result: string = JSON.stringify(o);\nconsole.log(result);",
+            "{\"inner\":{\"value\":42}}\n",
+            true,
+            ""
+        },
+        new object[]
+        {
+            "proxy_get",
+            "let target: any = { a: 1, b: 2 };\nlet proxy: any = new Proxy(target, {\n    get: function(t: any, p: string): any { return t[p] * 10; }\n});\nconsole.log(JSON.stringify(proxy));",
+            "{\"a\":10,\"b\":20}\n",
+            false,
+            ""
+        },
+        new object[]
+        {
+            "proxy_reviver",
+            "let trapLog: string = \"\";\nJSON.parse('{\"a\":1,\"replaceMe\":2}', function (this: any, k: string, v: any): any {\n    if (k === \"a\") {\n        let target: any = { x: 100, y: 200 };\n        let proxy: any = new Proxy(target, {\n            get: function(t: any, p: string): any {\n                trapLog += \"get:\" + p + \";\";\n                return t[p];\n            },\n            ownKeys: function(t: any): string[] {\n                trapLog += \"ownKeys;\";\n                return Object.keys(t);\n            },\n            defineProperty: function(t: any, p: string, desc: any): boolean {\n                trapLog += \"define:\" + p + \"=\" + desc.value + \";\";\n                Object.defineProperty(t, p, desc);\n                return true;\n            }\n        });\n        this[\"replaceMe\"] = proxy;\n    }\n    return v;\n});\nconsole.log(trapLog.includes(\"ownKeys;\"));\nconsole.log(trapLog.includes(\"get:x;\"));\nconsole.log(trapLog.includes(\"get:y;\"));\nconsole.log(trapLog.includes(\"define:x=100;\"));\nconsole.log(trapLog.includes(\"define:y=200;\"));",
+            "true\ntrue\ntrue\ntrue\ntrue\n",
+            false,
+            ""
+        },
+        new object[]
+        {
+            "typed_records",
+            "type Item = { id: number; name: string; value: number };\ntype Payload = { items: Item[] };\n\nfunction roundTrip(n: number): number {\n    const items: Item[] = [];\n    for (let i: number = 0; i < n; i++) {\n        items.push({ id: i, name: \"item-\" + i, value: i * 3 - 1 });\n    }\n    const payload: Payload = { items: items };\n    const json: string = JSON.stringify(payload);\n    const parsed: any = JSON.parse(json);\n    const back: Item[] = parsed.items;\n    let sum: number = 0;\n    for (let i: number = 0; i < back.length; i++) {\n        sum = sum + back[i].value;\n    }\n    return sum;\n}\n\nconsole.log(roundTrip(4));",
+            "14\n",
+            true,
+            ""
+        },
+        new object[]
+        {
+            "raw",
+            "const value:any=JSON.rawJSON('123');console.log(JSON.isRawJSON(value),JSON.isRawJSON({rawJSON:'123'}));console.log(JSON.stringify({value:value}));let count=0;for(const s of ['', ' 1', '{}', '[]']){try{JSON.rawJSON(s);}catch(e){count++;}}console.log(count);",
+            "true false\n{\"value\":123}\n3\n",
+            true,
+            ""
+        },
+        new object[]
+        {
+            "compact_only",
+            "type Record={x:number;y:string};const r:Record={x:2,y:'a'};console.log(r.x,r.y);r.x=5;console.log(r.x);",
+            "2 a\n5\n",
+            true,
+            ""
+        },
+        new object[]
+        {
+            "http_implied",
+            "import * as http from 'http';console.log(typeof http.createServer);",
+            "function\n",
+            true,
+            ""
+        },
+        new object[]
+        {
+            "minimal",
+            "const value=1;",
+            "",
+            true,
+            ""
+        },
+    ];
+
+    [Theory]
+    [MemberData(nameof(JsonMetadataPrograms))]
+    public void Isolated_JsonMetadata_PreservesSerializationShapesAndDeployment(
+        string name, string source, string expected, bool standalone, string options)
+    {
+        // The rawJSON baseline retains its existing object-input limitation.
+        // This suite verifies ownership parity, including mutable shapes and Proxy deployment.
+        using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var sourcePath = tempDir.CreateFile("main.ts", source);
+        var dllPath = tempDir.GetPath($"json-metadata_{name}.dll");
+        var deployment = standalone ? " --standalone" : "";
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --noLib --compile \"{sourcePath}\" -o \"{dllPath}\" --verify {options}{deployment}", tempDir.Path);
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        if (standalone) Assert.DoesNotContain("SharpTS", GetAssemblyReferences(dllPath));
+        Assert.Equal(!standalone, File.Exists(tempDir.GetPath("SharpTS.dll")));
+        Assert.Equal(expected, ExecuteCompiledDllIsolated(dllPath, timeoutMs: 30000,
+            verifyStandardError: error => Assert.Empty(error)));
+    }
+
     public static IEnumerable<object[]> BroadcastChannelMetadataPrograms =>
     [
         new object[]

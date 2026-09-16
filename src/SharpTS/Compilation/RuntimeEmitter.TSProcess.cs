@@ -1207,7 +1207,7 @@ public partial class RuntimeEmitter
                 // JsonStringify returns object (JSON.stringify may yield
                 // undefined for other inputs); a dictionary always yields a
                 // string — narrow for WriteAllText.
-                il.Emit(OpCodes.Call, runtime.JsonStringify);
+                il.Emit(OpCodes.Call, runtime.Json.RequireImplementation().Stringify);
                 il.Emit(OpCodes.Castclass, _types.String);
             }
             else

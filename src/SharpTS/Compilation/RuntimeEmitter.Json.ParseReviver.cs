@@ -5,6 +5,52 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
+    private readonly record struct JsonParseWithReviverInputs(
+        MethodBuilder DeleteProperty,
+        EmittedDescriptorStorageRuntime DescriptorStorage,
+        MethodBuilder InvokeMethodUnwrapped,
+        MethodBuilder NormalizeOwnPropertyKeys,
+        EmittedNumericCoercionRuntime NumericCoercion,
+        MethodBuilder ObjectDefineProperty,
+        MethodBuilder TSFunctionInvokeWithThis,
+        TypeBuilder TSFunctionType,
+        Type UndefinedType
+    );
+
+    private readonly record struct ApplyReviverHelperInputs(
+        MethodBuilder DeleteProperty,
+        EmittedDescriptorStorageRuntime DescriptorStorage,
+        MethodBuilder InvokeMethodUnwrapped,
+        MethodBuilder NormalizeOwnPropertyKeys,
+        EmittedNumericCoercionRuntime NumericCoercion,
+        MethodBuilder ObjectDefineProperty,
+        MethodBuilder TSFunctionInvokeWithThis,
+        TypeBuilder TSFunctionType,
+        Type UndefinedType
+    );
+
+    private readonly record struct ReviverProxyBranchInputs(
+        MethodBuilder InvokeMethodUnwrapped,
+        EmittedNumericCoercionRuntime NumericCoercion,
+        MethodBuilder ObjectDefineProperty,
+        Type UndefinedType
+    );
+
+    private readonly record struct ReviverListBranchInputs(
+        MethodBuilder DeleteProperty,
+        EmittedDescriptorStorageRuntime DescriptorStorage,
+        Type UndefinedType
+    );
+
+    private readonly record struct ReviverDictBranchInputs(
+        MethodBuilder DeleteProperty,
+        EmittedDescriptorStorageRuntime DescriptorStorage,
+        MethodBuilder NormalizeOwnPropertyKeys,
+        Type UndefinedType
+    );
+
+    private readonly record struct HolderGetInputs(MethodBuilder InvokeMethodUnwrapped);
+
     /// <summary>
     /// Emits JsonParseWithReviver(text, reviver). Implements ECMA-262 25.5.1.1
     /// JSON.parse(reviver) by parsing into a tree of <c>Dictionary&lt;string,
@@ -19,9 +65,22 @@ public partial class RuntimeEmitter
     /// <c>this</c> rather than <c>null</c>. This also means user revivers can
     /// inspect the wrapper at <c>this[""]</c>.</para>
     /// </summary>
-    private void EmitJsonParseWithReviver(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitJsonParseWithReviver(TypeBuilder typeBuilder, EmittedJsonImplementation json, JsonParseWithReviverInputs inputs)
     {
-        var applyReviver = EmitApplyReviverHelper(typeBuilder, runtime);
+        var applyReviver = EmitApplyReviverHelper(
+            typeBuilder,
+            new ApplyReviverHelperInputs(
+                inputs.DeleteProperty,
+                inputs.DescriptorStorage,
+                inputs.InvokeMethodUnwrapped,
+                inputs.NormalizeOwnPropertyKeys,
+                inputs.NumericCoercion,
+                inputs.ObjectDefineProperty,
+                inputs.TSFunctionInvokeWithThis,
+                inputs.TSFunctionType,
+                inputs.UndefinedType
+            )
+        );
 
         var method = typeBuilder.DefineMethod(
             "JsonParseWithReviver",
@@ -29,7 +88,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object, _types.Object]
         );
-        runtime.JsonParseWithReviver = method;
+        json.ParseWithReviver = method;
 
         var il = method.GetILGenerator();
         var noReviverLabel = il.DefineLabel();
@@ -53,13 +112,13 @@ public partial class RuntimeEmitter
             _types.GetMethod(_types.String, "ToCharArray", Type.EmptyTypes));
         il.Emit(OpCodes.Newobj,
             _types.GetConstructor(_types.String, _types.MakeArrayType(_types.Char)));
-        il.Emit(OpCodes.Call, runtime.JsonParse);
+        il.Emit(OpCodes.Call, json.Parse);
         il.Emit(OpCodes.Stloc, parsedLocal);
         il.Emit(OpCodes.Br, parsedReadyLabel);
 
         il.MarkLabel(parseNormallyLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.JsonParse);
+        il.Emit(OpCodes.Call, json.Parse);
         il.Emit(OpCodes.Stloc, parsedLocal);
         il.MarkLabel(parsedReadyLabel);
 
@@ -82,7 +141,7 @@ public partial class RuntimeEmitter
         // No reviver - just parse
         il.MarkLabel(noReviverLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.JsonParse);
+        il.Emit(OpCodes.Call, json.Parse);
 
         il.MarkLabel(endLabel);
         il.Emit(OpCodes.Ret);
@@ -102,7 +161,7 @@ public partial class RuntimeEmitter
     /// reflection on the proxy's runtime type — no compile-time SharpTS.dll
     /// reference is embedded in the emitted assembly.
     /// </summary>
-    private MethodBuilder EmitApplyReviverHelper(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private MethodBuilder EmitApplyReviverHelper(TypeBuilder typeBuilder, ApplyReviverHelperInputs inputs)
     {
         var method = typeBuilder.DefineMethod(
             "ApplyReviver",
@@ -115,7 +174,12 @@ public partial class RuntimeEmitter
 
         // val = HolderGet(holder, key)
         var valLocal = il.DeclareLocal(_types.Object);
-        EmitHolderGet(il, runtime, ldHolder: () => il.Emit(OpCodes.Ldarg_0), ldKey: () => il.Emit(OpCodes.Ldarg_1));
+        EmitHolderGet(
+            il,
+            new HolderGetInputs(inputs.InvokeMethodUnwrapped),
+            ldHolder: () => il.Emit(OpCodes.Ldarg_0),
+            ldKey: () => il.Emit(OpCodes.Ldarg_1)
+        );
         il.Emit(OpCodes.Stloc, valLocal);
 
         var afterIterLabel = il.DefineLabel();
@@ -125,9 +189,37 @@ public partial class RuntimeEmitter
         // List/Dictionary. We do Proxy first because a Proxy value-shaped
         // wrapper around a List/Dict would otherwise route to the iteration
         // path and lose trap dispatch.
-        EmitReviverProxyBranch(il, runtime, method, valLocal, afterIterLabel);
-        EmitReviverListBranch(il, runtime, method, valLocal, afterIterLabel);
-        EmitReviverDictBranch(il, runtime, method, valLocal, afterIterLabel);
+        EmitReviverProxyBranch(
+            il,
+            new ReviverProxyBranchInputs(
+                inputs.InvokeMethodUnwrapped,
+                inputs.NumericCoercion,
+                inputs.ObjectDefineProperty,
+                inputs.UndefinedType
+            ),
+            method,
+            valLocal,
+            afterIterLabel
+        );
+        EmitReviverListBranch(
+            il,
+            new ReviverListBranchInputs(inputs.DeleteProperty, inputs.DescriptorStorage, inputs.UndefinedType),
+            method,
+            valLocal,
+            afterIterLabel
+        );
+        EmitReviverDictBranch(
+            il,
+            new ReviverDictBranchInputs(
+                inputs.DeleteProperty,
+                inputs.DescriptorStorage,
+                inputs.NormalizeOwnPropertyKeys,
+                inputs.UndefinedType
+            ),
+            method,
+            valLocal,
+            afterIterLabel
+        );
 
         il.MarkLabel(afterIterLabel);
 
@@ -137,7 +229,7 @@ public partial class RuntimeEmitter
         // handles the prepend correctly (see SharpTSProxy.InvokeTrap and
         // $TSFunction.InvokeWithThis for the parameter-name detection).
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Castclass, runtime.TSFunctionType);
+        il.Emit(OpCodes.Castclass, inputs.TSFunctionType);
         il.Emit(OpCodes.Ldarg_0);   // thisArg = holder
         il.Emit(OpCodes.Ldc_I4_2);
         il.Emit(OpCodes.Newarr, _types.Object);
@@ -149,7 +241,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Ldloc, valLocal);
         il.Emit(OpCodes.Stelem_Ref);
-        il.Emit(OpCodes.Callvirt, runtime.TSFunctionInvokeWithThis);
+        il.Emit(OpCodes.Callvirt, inputs.TSFunctionInvokeWithThis);
         il.Emit(OpCodes.Ret);
 
         return method;
@@ -161,7 +253,7 @@ public partial class RuntimeEmitter
     /// TrapSet (kept) or TrapDeleteProperty (newElement is null/undefined).
     /// Falls through to the next branch if val is not a proxy.
     /// </summary>
-    private void EmitReviverProxyBranch(ILGenerator il, EmittedRuntime runtime, MethodBuilder applyReviverMethod, LocalBuilder valLocal, Label afterIterLabel)
+    private void EmitReviverProxyBranch(ILGenerator il, ReviverProxyBranchInputs inputs, MethodBuilder applyReviverMethod, LocalBuilder valLocal, Label afterIterLabel)
     {
         var notProxyLabel = il.DefineLabel();
         var proxyLabel = il.DefineLabel();
@@ -194,18 +286,21 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, valLocal);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Newarr, _types.Object);
-        il.Emit(OpCodes.Call, runtime.InvokeMethodUnwrapped);
+        il.Emit(OpCodes.Call, inputs.InvokeMethodUnwrapped);
         il.Emit(OpCodes.Unbox_Any, _types.Boolean);
         il.Emit(OpCodes.Brfalse, ordinaryProxyLabel);
 
         // len = ToLength(Get(proxy, "length")). This must go through [[Get]]:
         // a proxy get trap can observe or abruptly complete the length read.
         var proxyArrayLength = il.DeclareLocal(_types.Int32);
-        EmitHolderGet(il, runtime,
+        EmitHolderGet(
+            il,
+            new HolderGetInputs(inputs.InvokeMethodUnwrapped),
             ldHolder: () => il.Emit(OpCodes.Ldloc, valLocal),
-            ldKey: () => il.Emit(OpCodes.Ldstr, "length"));
+            ldKey: () => il.Emit(OpCodes.Ldstr, "length")
+        );
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Call, runtime.NumericCoercion.ToIntegerOrInfinity);
+        il.Emit(OpCodes.Call, inputs.NumericCoercion.ToIntegerOrInfinity);
         il.Emit(OpCodes.Stloc, proxyArrayLength);
 
         var arrayDeleteMethod = il.DeclareLocal(_types.MethodInfo);
@@ -239,7 +334,7 @@ public partial class RuntimeEmitter
         var arrayDeleteLabel = il.DefineLabel();
         var arrayElementDone = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, arrayElement);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
         il.Emit(OpCodes.Brtrue, arrayDeleteLabel);
 
         var arrayDescriptor = il.DeclareLocal(_types.DictionaryStringObject);
@@ -265,7 +360,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, valLocal);
         il.Emit(OpCodes.Ldloc, arrayProp);
         il.Emit(OpCodes.Ldloc, arrayDescriptor);
-        il.Emit(OpCodes.Call, runtime.ObjectDefineProperty);
+        il.Emit(OpCodes.Call, inputs.ObjectDefineProperty);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Br, arrayElementDone);
 
@@ -278,7 +373,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldloc, arrayProp);
         il.Emit(OpCodes.Stelem_Ref);
-        il.Emit(OpCodes.Call, runtime.InvokeMethodUnwrapped);
+        il.Emit(OpCodes.Call, inputs.InvokeMethodUnwrapped);
         il.Emit(OpCodes.Pop);
 
         il.MarkLabel(arrayElementDone);
@@ -300,7 +395,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, valLocal);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Newarr, _types.Object);
-        il.Emit(OpCodes.Call, runtime.InvokeMethodUnwrapped);
+        il.Emit(OpCodes.Call, inputs.InvokeMethodUnwrapped);
         il.Emit(OpCodes.Castclass, _types.ListOfString);
         il.Emit(OpCodes.Stloc, keysLocal);
 
@@ -348,7 +443,7 @@ public partial class RuntimeEmitter
         var setLabel = il.DefineLabel();
         var endIfLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, newElemLocal);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
         il.Emit(OpCodes.Brtrue, deleteLabel);
         il.Emit(OpCodes.Br, setLabel);
 
@@ -379,7 +474,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, valLocal);
         il.Emit(OpCodes.Ldloc, propLocal);
         il.Emit(OpCodes.Ldloc, createDescLocal);
-        il.Emit(OpCodes.Call, runtime.ObjectDefineProperty);
+        il.Emit(OpCodes.Call, inputs.ObjectDefineProperty);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Br, endIfLabel);
 
@@ -394,7 +489,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, propLocal);
         il.Emit(OpCodes.Stelem_Ref);
         // [1] = null (Interpreter)
-        il.Emit(OpCodes.Call, runtime.InvokeMethodUnwrapped);
+        il.Emit(OpCodes.Call, inputs.InvokeMethodUnwrapped);
         il.Emit(OpCodes.Pop);
 
         il.MarkLabel(endIfLabel);
@@ -417,7 +512,7 @@ public partial class RuntimeEmitter
     /// with val as the new holder, then CreateDataProperty or Delete according
     /// to the reviver result. Falls through if val is not a List&lt;object?&gt;.
     /// </summary>
-    private void EmitReviverListBranch(ILGenerator il, EmittedRuntime runtime, MethodBuilder applyReviverMethod, LocalBuilder valLocal, Label afterIterLabel)
+    private void EmitReviverListBranch(ILGenerator il, ReviverListBranchInputs inputs, MethodBuilder applyReviverMethod, LocalBuilder valLocal, Label afterIterLabel)
     {
         var notListLabel = il.DefineLabel();
 
@@ -467,25 +562,25 @@ public partial class RuntimeEmitter
         var doSetLabel = il.DefineLabel();
         var afterSetLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, newElemLocal);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
         il.Emit(OpCodes.Brfalse, doSetLabel);
         il.Emit(OpCodes.Ldloc, valLocal);
         il.Emit(OpCodes.Ldloc, propLocal);
-        il.Emit(OpCodes.Call, runtime.DeleteProperty);
+        il.Emit(OpCodes.Call, inputs.DeleteProperty);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Br, afterSetLabel);
 
         il.MarkLabel(doSetLabel);
-        var descLocal = il.DeclareLocal(runtime.DescriptorStorage.DescriptorType);
+        var descLocal = il.DeclareLocal(inputs.DescriptorStorage.DescriptorType);
         il.Emit(OpCodes.Ldloc, valLocal);
         il.Emit(OpCodes.Ldloc, propLocal);
-        il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetPropertyDescriptor);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.GetPropertyDescriptor);
         il.Emit(OpCodes.Stloc, descLocal);
         il.Emit(OpCodes.Ldloc, descLocal);
         var writeElementLabel = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, writeElementLabel);
         il.Emit(OpCodes.Ldloc, descLocal);
-        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorConfigurable.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorConfigurable.GetGetMethod()!);
         il.Emit(OpCodes.Brtrue, writeElementLabel);
         // Non-configurable: skip set, fall through to the increment.
         il.Emit(OpCodes.Br, afterSetLabel);
@@ -518,7 +613,7 @@ public partial class RuntimeEmitter
     /// according to the reviver result. Falls through if val is not a
     /// Dictionary&lt;string, object?&gt;.
     /// </summary>
-    private void EmitReviverDictBranch(ILGenerator il, EmittedRuntime runtime, MethodBuilder applyReviverMethod, LocalBuilder valLocal, Label afterIterLabel)
+    private void EmitReviverDictBranch(ILGenerator il, ReviverDictBranchInputs inputs, MethodBuilder applyReviverMethod, LocalBuilder valLocal, Label afterIterLabel)
     {
         var notDictLabel = il.DefineLabel();
 
@@ -569,7 +664,7 @@ public partial class RuntimeEmitter
         // keys in creation order. Reuse the shared normalizer used by
         // Object.keys/ownKeys consumers.
         il.Emit(OpCodes.Ldloc, keysLocal);
-        il.Emit(OpCodes.Call, runtime.NormalizeOwnPropertyKeys);
+        il.Emit(OpCodes.Call, inputs.NormalizeOwnPropertyKeys);
         il.Emit(OpCodes.Stloc, keysLocal);
 
         // for (int i = 0; i < keys.Count; i++)
@@ -606,23 +701,23 @@ public partial class RuntimeEmitter
         var deleteLabel = il.DefineLabel();
         var endIfLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, newElemLocal);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
         il.Emit(OpCodes.Brtrue, deleteLabel);
         il.Emit(OpCodes.Br, setLabel);
 
         il.MarkLabel(setLabel);
         // CreateDataProperty cannot replace a non-configurable own property.
         // Its false result is ignored by InternalizeJSONProperty.
-        var dictDescLocal = il.DeclareLocal(runtime.DescriptorStorage.DescriptorType);
+        var dictDescLocal = il.DeclareLocal(inputs.DescriptorStorage.DescriptorType);
         var writeDictLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, valLocal);
         il.Emit(OpCodes.Ldloc, propLocal);
-        il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetPropertyDescriptor);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.GetPropertyDescriptor);
         il.Emit(OpCodes.Stloc, dictDescLocal);
         il.Emit(OpCodes.Ldloc, dictDescLocal);
         il.Emit(OpCodes.Brfalse, writeDictLabel);
         il.Emit(OpCodes.Ldloc, dictDescLocal);
-        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorConfigurable.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorConfigurable.GetGetMethod()!);
         il.Emit(OpCodes.Brfalse, endIfLabel);
         il.MarkLabel(writeDictLabel);
         // dict[prop] = newElement
@@ -637,7 +732,7 @@ public partial class RuntimeEmitter
         // returns false without throwing in this non-strict algorithm.
         il.Emit(OpCodes.Ldloc, valLocal);
         il.Emit(OpCodes.Ldloc, propLocal);
-        il.Emit(OpCodes.Call, runtime.DeleteProperty);
+        il.Emit(OpCodes.Call, inputs.DeleteProperty);
         il.Emit(OpCodes.Pop);
 
         il.MarkLabel(endIfLabel);
@@ -665,7 +760,7 @@ public partial class RuntimeEmitter
     /// </list>
     /// Pushes the resulting object? on the stack.
     /// </summary>
-    private void EmitHolderGet(ILGenerator il, EmittedRuntime runtime, Action ldHolder, Action ldKey)
+    private void EmitHolderGet(ILGenerator il, HolderGetInputs inputs, Action ldHolder, Action ldKey)
     {
         // Cache holder/key in temporaries so the multiple branches don't
         // re-evaluate ldHolder/ldKey (which may have side effects in
@@ -710,7 +805,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(keyStrEndLabel);
         il.Emit(OpCodes.Stelem_Ref);
         // [1] = null (Interpreter) — already null from Newarr
-        il.Emit(OpCodes.Call, runtime.InvokeMethodUnwrapped);
+        il.Emit(OpCodes.Call, inputs.InvokeMethodUnwrapped);
         il.Emit(OpCodes.Stloc, resultLocal);
         il.Emit(OpCodes.Br, doneLabel);
 

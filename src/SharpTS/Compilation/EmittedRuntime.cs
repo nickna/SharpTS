@@ -29,6 +29,9 @@ public class EmittedRuntime
     /// <summary>Required Reflect reads and independently selected assignment, namespace and metadata capabilities.</summary>
     public EmittedReflectRuntime Reflect { get; } = new();
 
+    /// <summary>Required JSON namespace and optional parse/stringify/raw-value metadata.</summary>
+    public EmittedJsonRuntime Json { get; } = new();
+
     /// <summary>Required array operation metadata, emitted for every compilation.</summary>
     public EmittedArrayOperationsRuntime ArrayOperations { get; } = new();
 
@@ -335,14 +338,6 @@ public class EmittedRuntime
     /// <summary>Symbol.prototype singleton used by value-position Symbol prototype access.</summary>
     public FieldBuilder SymbolPrototypeField { get; set; } = null!;
     public MethodBuilder SymbolPrototypePopulateMethod { get; set; } = null!;
-    /// <summary>JSON singleton — `typeof JSON === "object"` per ECMA-262.</summary>
-    public FieldBuilder JsonSingletonField { get; set; } = null!;
-    /// <summary>
-    /// Populates <see cref="JsonSingletonField"/> with $TSFunction wrappers for
-    /// JSON.parse / JSON.stringify so value-form access
-    /// (<c>const j = JSON; j.stringify(x)</c>) resolves. Idempotent. See issue #276.
-    /// </summary>
-    public MethodBuilder JsonSingletonPopulateMethod { get; set; } = null!;
     /// <summary>$Runtime.StringReplaceWithFunction(str, pattern, fn, replaceAll) — handles functional replacement for replace/replaceAll and stringifies each callback result.</summary>
     public MethodBuilder StringReplaceWithFunction { get; set; } = null!;
     /// <summary>$Runtime.ObjectProtoToString(this) — ECMA-262 19.1.3.6 toString returns "[object X]" branded by receiver type. Wired into Object.prototype.toString slot for borrowed-method dispatch (`obj.toString = Object.prototype.toString; obj.toString()`).</summary>
@@ -566,11 +561,6 @@ public class EmittedRuntime
     public MethodBuilder ArrayDestructureSource { get; set; } = null!;  // #685: normalize array binding-pattern source via the iterator protocol
 
     // JSON methods
-    public MethodBuilder JsonParse { get; set; } = null!;
-    public MethodBuilder JsonParseWithReviver { get; set; } = null!;
-    public MethodBuilder JsonStringify { get; set; } = null!;
-    public MethodBuilder JsonStringifyShaped { get; set; } = null!;
-    public MethodBuilder JsonStringifyFull { get; set; } = null!;
     /// <summary>
     /// Lazily initialized immutable shape descriptors used by statically typed
     /// no-replacer JSON.stringify call sites. They live on $Program so every
@@ -596,11 +586,6 @@ public class EmittedRuntime
     public MethodBuilder JsonScalarRecordShapeGetter { get; set; } = null!;
     public MethodBuilder JsonScalarRecordGetValue { get; set; } = null!;
     public MethodBuilder JsonScalarRecordIsMaterializedGetter { get; set; } = null!;
-    public TypeBuilder TSRawJsonType { get; set; } = null!;
-    public ConstructorBuilder TSRawJsonCtor { get; set; } = null!;
-    public MethodBuilder TSRawJsonTextGetter { get; set; } = null!;
-    public MethodBuilder JsonRawJson { get; set; } = null!;
-    public MethodBuilder JsonIsRawJson { get; set; } = null!;
     public MethodBuilder InvokeMethodUnwrapped { get; set; } = null!;
 
     // Symbol support

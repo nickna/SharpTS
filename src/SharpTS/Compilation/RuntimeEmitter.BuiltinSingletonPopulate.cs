@@ -39,9 +39,9 @@ public partial class RuntimeEmitter
             Type.EmptyTypes);
     }
 
-    private void DefineJsonSingletonPopulateShell(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void DefineJsonSingletonPopulateShell(TypeBuilder typeBuilder, EmittedJsonRuntime json)
     {
-        runtime.JsonSingletonPopulateMethod = typeBuilder.DefineMethod(
+        json.SingletonPopulateMethod = typeBuilder.DefineMethod(
             "_JsonSingletonPopulate",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Void,
@@ -65,12 +65,12 @@ public partial class RuntimeEmitter
             MathStaticEmitter.EnumerateValueFormMethods(math),
             "Math");
 
-    private void EmitJsonSingletonPopulate(EmittedRuntime runtime) =>
+    private void EmitJsonSingletonPopulate(EmittedJsonRuntime json, BuiltinSingletonInputs inputs) =>
         EmitBuiltinSingletonPopulate(
-            runtime.JsonSingletonPopulateMethod,
-            runtime.JsonSingletonField,
-            GetBuiltinSingletonInputs(runtime),
-            JSONStaticEmitter.EnumerateValueFormMethods(runtime),
+            json.SingletonPopulateMethod,
+            json.SingletonField,
+            inputs,
+            JSONStaticEmitter.EnumerateValueFormMethods(json.Implementation),
             "JSON");
 
     private void EmitReflectSingletonPopulate(EmittedReflectNamespace reflectNamespace, BuiltinSingletonInputs inputs) =>

@@ -447,7 +447,7 @@ public partial class RuntimeEmitter
         // JSON singleton
         var notJsonLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldsfld, runtime.JsonSingletonField);
+        il.Emit(OpCodes.Ldsfld, runtime.Json.SingletonField);
         il.Emit(OpCodes.Bne_Un, notJsonLabel);
         EmitTag("[object JSON]");
         il.MarkLabel(notJsonLabel);

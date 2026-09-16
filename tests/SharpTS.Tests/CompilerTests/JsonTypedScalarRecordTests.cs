@@ -117,10 +117,22 @@ public sealed class JsonTypedScalarRecordTests
 
         var members = ReadMembers(arrayAppender).ToArray();
         Assert.Contains(members, member => member.Member == recordAppender);
-        Assert.DoesNotContain(members, member =>
-            member.Member?.Name == "AppendJsonShapedValue" ||
-            member.Member?.Name == "PDSHasPropertyDescriptors" ||
-            member.Member?.Name == "PDSHasPrototypeEntry");
+        Assert.DoesNotContain(members, member => member.Member?.Name == "AppendJsonShapedValue");
+        Type descriptorStore = assembly.GetType("$PropertyDescriptorStore")!;
+        bool IsDescriptorOrPrototypeGuard(MemberInfo? member) =>
+            member is MethodInfo method && method.DeclaringType == descriptorStore &&
+            method.Name is "HasPropertyDescriptors" or "HasPrototypeEntry";
+        Assert.DoesNotContain(members, member => IsDescriptorOrPrototypeGuard(member.Member));
+
+        // Exercise the same predicate against real fallback IL. Compiler-holder
+        // property names cannot silently make the negative assertion vacuous.
+        MethodInfo shapeFallback = runtime.GetMethod(
+            "CanUseJsonShape", BindingFlags.NonPublic | BindingFlags.Static)!;
+        Assert.Equal(["HasPropertyDescriptors", "HasPrototypeEntry"],
+            ReadMembers(shapeFallback)
+                .Where(member => IsDescriptorOrPrototypeGuard(member.Member))
+                .Select(member => member.Member!.Name)
+                .Distinct().Order(StringComparer.Ordinal));
         Assert.DoesNotContain(members, member =>
             member.Member?.DeclaringType == typeof(string) &&
             member.Member.Name == "op_Equality");

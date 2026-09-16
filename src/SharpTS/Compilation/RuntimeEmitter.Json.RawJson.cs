@@ -5,19 +5,32 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
-    private void EmitTSRawJsonClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private readonly record struct TSRawJsonClassInputs(
+        EmittedDescriptorStorageRuntime DescriptorStorage,
+        EmittedObjectStorageRuntime ObjectStorage
+    );
+
+    private readonly record struct JsonRawJsonMethodsInputs(
+        EmittedArrayStorageRuntime ArrayStorage,
+        MethodBuilder CreateException,
+        EmittedObjectStorageRuntime ObjectStorage,
+        EmittedStringCoercionRuntime StringCoercion,
+        ConstructorBuilder TSSyntaxErrorCtor
+    );
+
+    private void EmitTSRawJsonClass(ModuleBuilder moduleBuilder, EmittedJsonImplementation json, TSRawJsonClassInputs inputs)
     {
         var type = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$RawJSON",
             TypeAttributes.Public | TypeAttributes.Class | TypeAttributes.Sealed,
-            runtime.ObjectStorage.Type);
-        runtime.TSRawJsonType = type;
+            inputs.ObjectStorage.Type);
+        json.RawJsonType = type;
 
         var textField = type.DefineField("_rawText", _types.String,
             FieldAttributes.Private | FieldAttributes.InitOnly);
         var ctor = type.DefineConstructor(MethodAttributes.Public,
             CallingConventions.Standard, [_types.String]);
-        runtime.TSRawJsonCtor = ctor;
+        json.RawJsonConstructor = ctor;
         var il = ctor.GetILGenerator();
 
         // base(new Dictionary { ["rawJSON"] = text })
@@ -28,7 +41,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject,
             "set_Item", _types.String, _types.Object));
-        il.Emit(OpCodes.Call, runtime.ObjectStorage.Constructor);
+        il.Emit(OpCodes.Call, inputs.ObjectStorage.Constructor);
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
@@ -37,15 +50,15 @@ public partial class RuntimeEmitter
         // Raw JSON objects have a null prototype and are frozen.
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Call, runtime.DescriptorStorage.SetPrototype);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.SetPrototype);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Callvirt, runtime.ObjectStorage.Freeze);
+        il.Emit(OpCodes.Callvirt, inputs.ObjectStorage.Freeze);
         il.Emit(OpCodes.Ret);
 
         var getter = type.DefineMethod("get_RawText",
             MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.HideBySig,
             _types.String, Type.EmptyTypes);
-        runtime.TSRawJsonTextGetter = getter;
+        json.RawJsonTextGetter = getter;
         var getterIl = getter.GetILGenerator();
         getterIl.Emit(OpCodes.Ldarg_0);
         getterIl.Emit(OpCodes.Ldfld, textField);
@@ -53,17 +66,17 @@ public partial class RuntimeEmitter
         type.CreateType();
     }
 
-    private void EmitJsonRawJsonMethods(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitJsonRawJsonMethods(TypeBuilder typeBuilder, EmittedJsonImplementation json, JsonRawJsonMethodsInputs inputs)
     {
         var raw = typeBuilder.DefineMethod("JsonRawJSON",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object, [_types.Object]);
-        runtime.JsonRawJson = raw;
+        json.RawJson = raw;
         var il = raw.GetILGenerator();
         var text = il.DeclareLocal(_types.String);
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
+        il.Emit(OpCodes.Call, inputs.StringCoercion.ToJsString);
         il.Emit(OpCodes.Stloc, text);
 
         var invalidBoundary = il.DefineLabel();
@@ -77,39 +90,39 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
         il.Emit(OpCodes.Brtrue, boundaryOk);
         il.MarkLabel(invalidBoundary);
-        GuestErrorEmitter.ThrowSyntaxError(il, runtime, "Invalid raw JSON text");
+        GuestErrorEmitter.ThrowError(il, inputs.CreateException, inputs.TSSyntaxErrorCtor, "Invalid raw JSON text");
         il.MarkLabel(boundaryOk);
 
         // Reuse the real JSON parser for grammar validation. Raw JSON may only
         // contain a primitive JSON value, never an object or array.
         var parsed = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldloc, text);
-        il.Emit(OpCodes.Call, runtime.JsonParse);
+        il.Emit(OpCodes.Call, json.Parse);
         il.Emit(OpCodes.Stloc, parsed);
         var primitive = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, parsed);
-        il.Emit(OpCodes.Isinst, runtime.ArrayStorage.Type);
+        il.Emit(OpCodes.Isinst, inputs.ArrayStorage.Type);
         il.Emit(OpCodes.Brtrue, invalidBoundary);
         il.Emit(OpCodes.Ldloc, parsed);
         il.Emit(OpCodes.Isinst, _types.ListOfObject);
         il.Emit(OpCodes.Brtrue, invalidBoundary);
         il.Emit(OpCodes.Ldloc, parsed);
-        il.Emit(OpCodes.Isinst, runtime.ObjectStorage.Type);
+        il.Emit(OpCodes.Isinst, inputs.ObjectStorage.Type);
         il.Emit(OpCodes.Brfalse, primitive);
-        GuestErrorEmitter.ThrowSyntaxError(il, runtime, "Raw JSON text must be a primitive value");
+        GuestErrorEmitter.ThrowError(il, inputs.CreateException, inputs.TSSyntaxErrorCtor, "Raw JSON text must be a primitive value");
         il.MarkLabel(primitive);
 
         il.Emit(OpCodes.Ldloc, text);
-        il.Emit(OpCodes.Newobj, runtime.TSRawJsonCtor);
+        il.Emit(OpCodes.Newobj, json.RawJsonConstructor);
         il.Emit(OpCodes.Ret);
 
         var isRaw = typeBuilder.DefineMethod("JsonIsRawJSON",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object, [_types.Object]);
-        runtime.JsonIsRawJson = isRaw;
+        json.IsRawJson = isRaw;
         il = isRaw.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSRawJsonType);
+        il.Emit(OpCodes.Isinst, json.RawJsonType);
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Cgt_Un);
         il.Emit(OpCodes.Box, _types.Boolean);

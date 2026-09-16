@@ -5,19 +5,71 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
-    private MethodBuilder? _canUseJsonShapeMethod;
-    private MethodBuilder? _jsonShapePrototypesSafeMethod;
-    private MethodBuilder? _appendJsonShapedValueMethod;
-    private FieldBuilder? _jsonShapeTableField;
-    private MethodBuilder? _getJsonShapeTableMethod;
-    private MethodBuilder? _registerJsonShapeMethod;
-    private MethodBuilder? _tryGetJsonShapeMethod;
+    private readonly record struct JsonShapePrototypesSafeHelperInputs(
+        EmittedArrayOperationsRuntime ArrayOperations,
+        EmittedDescriptorStorageRuntime DescriptorStorage,
+        FieldBuilder ObjectPrototypeField,
+        MethodBuilder ObjectPrototypePopulateMethod
+    );
+
+    private readonly record struct PrototypeHasNoJsonHookInputs(
+        EmittedDescriptorStorageRuntime DescriptorStorage,
+        FieldBuilder ObjectPrototypeField
+    );
+
+    private readonly record struct CanUseJsonShapeHelperInputs(
+        EmittedArrayStorageRuntime ArrayStorage,
+        EmittedDescriptorStorageRuntime DescriptorStorage
+    );
+
+    private readonly record struct AppendJsonShapedValueHelperInputs(
+        EmittedArrayStorageRuntime ArrayStorage,
+        EmittedDescriptorStorageRuntime DescriptorStorage,
+        MethodBuilder JsonScalarRecordGetValue,
+        MethodBuilder JsonScalarRecordIsMaterializedGetter,
+        MethodBuilder JsonScalarRecordShapeGetter,
+        TypeBuilder JsonScalarRecordType,
+        IReadOnlyDictionary<string, FieldBuilder> JsonTypedScalarRecordShapeFields,
+        IReadOnlyDictionary<string, TypeBuilder> JsonTypedScalarRecordTypes,
+        IReadOnlyDictionary<(string Fingerprint, int Index), FieldBuilder> JsonTypedScalarRecordValueFields,
+        EmittedNumberRuntime Numbers,
+        IReadOnlyDictionary<string, JsonSerializationShape.Record> JsonScalarRecordShapes,
+        bool PotentiallyMaterializesUnknownCompactObjectRecordShape,
+        bool UsesArrayPrototypeMutation,
+        bool UsesClassPrototypeMutation,
+        bool UsesDynamicPropertyDescriptors,
+        bool UsesObjectIntegrityMutation
+    );
+
+    private readonly record struct JsonStringifyShapedMethodInputs(
+        EmittedArrayOperationsRuntime ArrayOperations,
+        EmittedArrayStorageRuntime ArrayStorage,
+        EmittedDescriptorStorageRuntime DescriptorStorage,
+        MethodBuilder JsonScalarRecordGetValue,
+        MethodBuilder JsonScalarRecordIsMaterializedGetter,
+        MethodBuilder JsonScalarRecordShapeGetter,
+        TypeBuilder JsonScalarRecordType,
+        IReadOnlyDictionary<string, FieldBuilder> JsonTypedScalarRecordShapeFields,
+        IReadOnlyDictionary<string, TypeBuilder> JsonTypedScalarRecordTypes,
+        IReadOnlyDictionary<(string Fingerprint, int Index), FieldBuilder> JsonTypedScalarRecordValueFields,
+        EmittedNumberRuntime Numbers,
+        FieldBuilder ObjectPrototypeField,
+        MethodBuilder ObjectPrototypePopulateMethod,
+        FieldInfo UndefinedInstance,
+        IReadOnlyDictionary<string, JsonSerializationShape.Record> JsonScalarRecordShapes,
+        bool PotentiallyMaterializesUnknownCompactObjectRecordShape,
+        bool UsesArrayPrototypeMutation,
+        bool UsesClassPrototypeMutation,
+        bool UsesDynamicPropertyDescriptors,
+        bool UsesObjectIntegrityMutation
+    );
+
 
     private (MethodBuilder Register, MethodBuilder TryGet) EmitJsonShapeAssociationHelpers(
-        TypeBuilder typeBuilder)
+        TypeBuilder typeBuilder, EmittedJsonImplementation json)
     {
-        if (_registerJsonShapeMethod is not null && _tryGetJsonShapeMethod is not null)
-            return (_registerJsonShapeMethod, _tryGetJsonShapeMethod);
+        if (json.IsRegisterShapeDeclared && json.IsTryGetShapeDeclared)
+            return (json.RegisterShape, json.TryGetShape);
 
         var tableOpenType = typeof(System.Runtime.CompilerServices.ConditionalWeakTable<,>);
         var tableOpenArguments = tableOpenType.GetGenericArguments();
@@ -39,7 +91,7 @@ public partial class RuntimeEmitter
             tableOpenType.GetMethod(
                 "TryGetValue",
                 [tableOpenArguments[0], tableOpenArguments[1].MakeByRefType()])!);
-        _jsonShapeTableField = typeBuilder.DefineField(
+        var jsonShapeTableField = typeBuilder.DefineField(
             "_jsonShapes", tableType, FieldAttributes.Private | FieldAttributes.Static);
 
         var getTable = typeBuilder.DefineMethod(
@@ -47,14 +99,13 @@ public partial class RuntimeEmitter
             MethodAttributes.Private | MethodAttributes.Static,
             tableType,
             Type.EmptyTypes);
-        _getJsonShapeTableMethod = getTable;
         var getIl = getTable.GetILGenerator();
         var ready = getIl.DefineLabel();
-        getIl.Emit(OpCodes.Ldsfld, _jsonShapeTableField);
+        getIl.Emit(OpCodes.Ldsfld, jsonShapeTableField);
         getIl.Emit(OpCodes.Dup);
         getIl.Emit(OpCodes.Brtrue, ready);
         getIl.Emit(OpCodes.Pop);
-        getIl.Emit(OpCodes.Ldsflda, _jsonShapeTableField);
+        getIl.Emit(OpCodes.Ldsflda, jsonShapeTableField);
         getIl.Emit(OpCodes.Newobj, tableConstructor);
         getIl.Emit(OpCodes.Ldnull);
         var compareExchangeDefinition = typeof(System.Threading.Interlocked).GetMethods()
@@ -65,7 +116,7 @@ public partial class RuntimeEmitter
             compareExchangeDefinition, tableType);
         getIl.Emit(OpCodes.Call, compareExchange);
         getIl.Emit(OpCodes.Pop);
-        getIl.Emit(OpCodes.Ldsfld, _jsonShapeTableField);
+        getIl.Emit(OpCodes.Ldsfld, jsonShapeTableField);
         getIl.MarkLabel(ready);
         getIl.Emit(OpCodes.Ret);
 
@@ -74,7 +125,7 @@ public partial class RuntimeEmitter
             MethodAttributes.Private | MethodAttributes.Static,
             _types.Void,
             [_types.String, _types.Object]);
-        _registerJsonShapeMethod = register;
+        json.RegisterShape = register;
         var registerIl = register.GetILGenerator();
         var tableLocal = registerIl.DeclareLocal(tableType);
         registerIl.Emit(OpCodes.Call, getTable);
@@ -94,7 +145,7 @@ public partial class RuntimeEmitter
             MethodAttributes.Private | MethodAttributes.Static,
             _types.Boolean,
             [_types.Object, _types.Object.MakeByRefType()]);
-        _tryGetJsonShapeMethod = tryGet;
+        json.TryGetShape = tryGet;
         var tryIl = tryGet.GetILGenerator();
         var stringLocal = tryIl.DeclareLocal(_types.String);
         var miss = tryIl.DefineLabel();
@@ -104,7 +155,7 @@ public partial class RuntimeEmitter
         tryIl.Emit(OpCodes.Stloc, stringLocal);
         tryIl.Emit(OpCodes.Ldloc, stringLocal);
         tryIl.Emit(OpCodes.Brfalse, miss);
-        tryIl.Emit(OpCodes.Ldsfld, _jsonShapeTableField);
+        tryIl.Emit(OpCodes.Ldsfld, jsonShapeTableField);
         tryIl.Emit(OpCodes.Dup);
         tryIl.Emit(OpCodes.Brfalse, missWithResidual);
         tryIl.Emit(OpCodes.Ldloc, stringLocal);
@@ -129,30 +180,40 @@ public partial class RuntimeEmitter
     /// </summary>
     private MethodBuilder EmitJsonShapePrototypesSafeHelper(
         TypeBuilder typeBuilder,
-        EmittedRuntime runtime)
+        EmittedJsonImplementation json, JsonShapePrototypesSafeHelperInputs inputs)
     {
-        if (_jsonShapePrototypesSafeMethod is not null)
-            return _jsonShapePrototypesSafeMethod;
+        if (json.IsShapePrototypesSafeDeclared)
+            return json.ShapePrototypesSafe;
 
         var method = typeBuilder.DefineMethod(
             "JsonShapePrototypesSafe",
             MethodAttributes.Private | MethodAttributes.Static,
             _types.Boolean,
             Type.EmptyTypes);
-        _jsonShapePrototypesSafeMethod = method;
+        json.ShapePrototypesSafe = method;
 
         var il = method.GetILGenerator();
         var scratch = il.DeclareLocal(_types.Object);
         var unsafeLabel = il.DefineLabel();
 
-        il.Emit(OpCodes.Call, runtime.ObjectPrototypePopulateMethod);
+        il.Emit(OpCodes.Call, inputs.ObjectPrototypePopulateMethod);
         EmitPrototypeHasNoJsonHook(
-            il, runtime.ObjectPrototypeField, scratch, unsafeLabel, runtime,
-            expectsObjectPrototype: false);
-        il.Emit(OpCodes.Call, runtime.ArrayOperations.PrototypePopulateMethod);
+            il,
+            inputs.ObjectPrototypeField,
+            scratch,
+            unsafeLabel,
+            new PrototypeHasNoJsonHookInputs(inputs.DescriptorStorage, inputs.ObjectPrototypeField),
+            expectsObjectPrototype: false
+        );
+        il.Emit(OpCodes.Call, inputs.ArrayOperations.PrototypePopulateMethod);
         EmitPrototypeHasNoJsonHook(
-            il, runtime.ArrayOperations.PrototypeField, scratch, unsafeLabel, runtime,
-            expectsObjectPrototype: true);
+            il,
+            inputs.ArrayOperations.PrototypeField,
+            scratch,
+            unsafeLabel,
+            new PrototypeHasNoJsonHookInputs(inputs.DescriptorStorage, inputs.ObjectPrototypeField),
+            expectsObjectPrototype: true
+        );
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Ret);
 
@@ -167,14 +228,14 @@ public partial class RuntimeEmitter
         FieldBuilder prototypeField,
         LocalBuilder scratch,
         Label unsafeLabel,
-        EmittedRuntime runtime,
+        PrototypeHasNoJsonHookInputs inputs,
         bool expectsObjectPrototype)
     {
         il.Emit(OpCodes.Ldsfld, prototypeField);
-        il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetPrototype);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.GetPrototype);
         if (expectsObjectPrototype)
         {
-            il.Emit(OpCodes.Ldsfld, runtime.ObjectPrototypeField);
+            il.Emit(OpCodes.Ldsfld, inputs.ObjectPrototypeField);
             il.Emit(OpCodes.Bne_Un, unsafeLabel);
         }
         else
@@ -184,7 +245,7 @@ public partial class RuntimeEmitter
 
         il.Emit(OpCodes.Ldsfld, prototypeField);
         il.Emit(OpCodes.Ldstr, "toJSON");
-        il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetPropertyDescriptor);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.GetPropertyDescriptor);
         il.Emit(OpCodes.Brtrue, unsafeLabel);
 
         il.Emit(OpCodes.Ldsfld, prototypeField);
@@ -205,17 +266,17 @@ public partial class RuntimeEmitter
     /// </summary>
     private MethodBuilder EmitCanUseJsonShapeHelper(
         TypeBuilder typeBuilder,
-        EmittedRuntime runtime)
+        EmittedJsonImplementation json, CanUseJsonShapeHelperInputs inputs)
     {
-        if (_canUseJsonShapeMethod is not null)
-            return _canUseJsonShapeMethod;
+        if (json.IsCanUseShapeDeclared)
+            return json.CanUseShape;
 
         var method = typeBuilder.DefineMethod(
             "CanUseJsonShape",
             MethodAttributes.Private | MethodAttributes.Static,
             _types.Boolean,
             [_types.Object, _types.Object, _types.Int32]);
-        _canUseJsonShapeMethod = method;
+        json.CanUseShape = method;
 
         var il = method.GetILGenerator();
         var tagLocal = il.DeclareLocal(_types.String);
@@ -309,10 +370,10 @@ public partial class RuntimeEmitter
         il.MarkLabel(arrayNode);
         EmitExactRuntimeTypeCheck(il, 0, _types.ListOfObject, falseLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.DescriptorStorage.HasPropertyDescriptors);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.HasPropertyDescriptors);
         il.Emit(OpCodes.Brtrue, falseLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.DescriptorStorage.HasPrototypeEntry);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.HasPrototypeEntry);
         il.Emit(OpCodes.Brtrue, falseLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, _types.ListOfObject);
@@ -332,7 +393,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "get_Item", [_types.Int32])!);
         il.Emit(OpCodes.Stloc, valueLocal);
         il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Isinst, runtime.ArrayStorage.HoleType);
+        il.Emit(OpCodes.Isinst, inputs.ArrayStorage.HoleType);
         il.Emit(OpCodes.Brtrue, falseLabel);
         il.Emit(OpCodes.Ldloc, valueLocal);
         il.Emit(OpCodes.Ldloc, shapeLocal);
@@ -355,10 +416,10 @@ public partial class RuntimeEmitter
         il.MarkLabel(objectNode);
         EmitExactRuntimeTypeCheck(il, 0, _types.DictionaryStringObject, falseLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.DescriptorStorage.HasPropertyDescriptors);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.HasPropertyDescriptors);
         il.Emit(OpCodes.Brtrue, falseLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.DescriptorStorage.HasPrototypeEntry);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.HasPrototypeEntry);
         il.Emit(OpCodes.Brtrue, falseLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, _types.DictionaryStringObject);
@@ -470,13 +531,13 @@ public partial class RuntimeEmitter
 
     private MethodBuilder EmitAppendJsonShapedValueHelper(
         TypeBuilder typeBuilder,
-        EmittedRuntime runtime,
+        EmittedJsonImplementation json, AppendJsonShapedValueHelperInputs inputs,
         MethodBuilder appendValue)
     {
-        if (_appendJsonShapedValueMethod is not null)
-            return _appendJsonShapedValueMethod;
+        if (json.IsAppendShapedValueDeclared)
+            return json.AppendShapedValue;
 
-        var appendNumber = EmitAppendJsonNumberHelper(typeBuilder, runtime);
+        var appendNumber = EmitAppendJsonNumberHelper(typeBuilder, json, new AppendJsonNumberHelperInputs(inputs.Numbers));
         var method = typeBuilder.DefineMethod(
             "AppendJsonShapedValue",
             MethodAttributes.Private | MethodAttributes.Static,
@@ -493,14 +554,14 @@ public partial class RuntimeEmitter
                 _types.Boolean
             ]);
         method.SetImplementationFlags(MethodImplAttributes.AggressiveOptimization);
-        _appendJsonShapedValueMethod = method;
+        json.AppendShapedValue = method;
 
-        var typedRecordAppenders = _features.JsonScalarRecordShapes
+        var typedRecordAppenders = inputs.JsonScalarRecordShapes
             .OrderBy(pair => pair.Key, StringComparer.Ordinal)
-            .Where(pair => runtime.JsonTypedScalarRecordTypes.ContainsKey(pair.Key))
+            .Where(pair => inputs.JsonTypedScalarRecordTypes.ContainsKey(pair.Key))
             .Select((pair, ordinal) =>
             {
-                TypeBuilder exactType = runtime.JsonTypedScalarRecordTypes[pair.Key];
+                TypeBuilder exactType = inputs.JsonTypedScalarRecordTypes[pair.Key];
                 return (
                     Fingerprint: pair.Key,
                     Shape: pair.Value,
@@ -539,7 +600,7 @@ public partial class RuntimeEmitter
         var childShapeLocal = il.DeclareLocal(_types.ObjectArray);
         var listLocal = il.DeclareLocal(_types.ListOfObject);
         var dictLocal = il.DeclareLocal(_types.DictionaryStringObject);
-        var scalarLocal = il.DeclareLocal(runtime.JsonScalarRecordType);
+        var scalarLocal = il.DeclareLocal(inputs.JsonScalarRecordType);
         var valueLocal = il.DeclareLocal(_types.Object);
         var keyLocal = il.DeclareLocal(_types.String);
         var indexLocal = il.DeclareLocal(_types.Int32);
@@ -595,7 +656,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Isinst, _types.Double);
         il.Emit(OpCodes.Brfalse, invalidShape);
-        EmitAppendShapedPropertyPrefix(il);
+        EmitAppendShapedPropertyPrefix(il, json);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Unbox_Any, _types.Double);
@@ -606,18 +667,18 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Isinst, _types.String);
         il.Emit(OpCodes.Brfalse, invalidShape);
-        EmitAppendShapedPropertyPrefix(il);
+        EmitAppendShapedPropertyPrefix(il, json);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Castclass, _types.String);
-        il.Emit(OpCodes.Call, _appendEscapedJsonStringMethod!);
+        il.Emit(OpCodes.Call, json.AppendEscapedString!);
         EmitTrueReturn(il);
 
         il.MarkLabel(boolTag);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Isinst, _types.Boolean);
         il.Emit(OpCodes.Brfalse, invalidShape);
-        EmitAppendShapedPropertyPrefix(il);
+        EmitAppendShapedPropertyPrefix(il, json);
         var appendFalse = il.DefineLabel();
         var boolDone = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_1);
@@ -661,24 +722,24 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, arrayGuarded);
         var arrayTypeAccepted = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, runtime.ArrayStorage.Type);
+        il.Emit(OpCodes.Isinst, inputs.ArrayStorage.Type);
         il.Emit(OpCodes.Brtrue, arrayTypeAccepted);
         EmitExactRuntimeTypeCheck(il, 1, _types.ListOfObject, invalidShape);
         il.MarkLabel(arrayTypeAccepted);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.DescriptorStorage.HasPropertyDescriptors);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.HasPropertyDescriptors);
         il.Emit(OpCodes.Brtrue, invalidShape);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.DescriptorStorage.HasPrototypeEntry);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.HasPrototypeEntry);
         il.Emit(OpCodes.Brtrue, invalidShape);
         il.MarkLabel(arrayGuarded);
         var arrayNotTsArray = il.DefineLabel();
         var arrayBoxed = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, runtime.ArrayStorage.Type);
+        il.Emit(OpCodes.Isinst, inputs.ArrayStorage.Type);
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Brfalse, arrayNotTsArray);
-        il.Emit(OpCodes.Callvirt, runtime.ArrayStorage.EnsureBoxed);
+        il.Emit(OpCodes.Callvirt, inputs.ArrayStorage.EnsureBoxed);
         il.Emit(OpCodes.Br, arrayBoxed);
         il.MarkLabel(arrayNotTsArray);
         il.Emit(OpCodes.Pop);
@@ -706,10 +767,10 @@ public partial class RuntimeEmitter
         {
             var nextArrayAppender = il.DefineLabel();
             il.Emit(OpCodes.Ldsfld,
-                runtime.JsonTypedScalarRecordShapeFields[appender.Fingerprint]);
+                inputs.JsonTypedScalarRecordShapeFields[appender.Fingerprint]);
             il.Emit(OpCodes.Ldloc, childShapeLocal);
             il.Emit(OpCodes.Bne_Un, nextArrayAppender);
-            EmitAppendShapedPropertyPrefix(il);
+            EmitAppendShapedPropertyPrefix(il, json);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldloc, listLocal);
             il.Emit(OpCodes.Ldloc, childShapeLocal);
@@ -720,7 +781,7 @@ public partial class RuntimeEmitter
             il.MarkLabel(nextArrayAppender);
         }
         il.MarkLabel(genericArrayPath);
-        EmitAppendShapedPropertyPrefix(il);
+        EmitAppendShapedPropertyPrefix(il, json);
         EmitAppendChar(il, '[');
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Stloc, indexLocal);
@@ -777,7 +838,7 @@ public partial class RuntimeEmitter
             _types.String, "op_Equality", [_types.String, _types.String])!);
         il.Emit(OpCodes.Stloc, closedLocal);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, runtime.JsonScalarRecordType);
+        il.Emit(OpCodes.Isinst, inputs.JsonScalarRecordType);
         il.Emit(OpCodes.Stloc, scalarLocal);
         var dictionaryObject = il.DefineLabel();
         var objectStorageReady = il.DefineLabel();
@@ -786,21 +847,21 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, closedLocal);
         il.Emit(OpCodes.Brfalse, invalidShape);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.DescriptorStorage.HasPropertyDescriptors);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.HasPropertyDescriptors);
         il.Emit(OpCodes.Brtrue, invalidShape);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.DescriptorStorage.HasPrototypeEntry);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.HasPrototypeEntry);
         il.Emit(OpCodes.Brtrue, invalidShape);
         il.Emit(OpCodes.Ldloc, scalarLocal);
-        il.Emit(OpCodes.Callvirt, runtime.JsonScalarRecordIsMaterializedGetter);
+        il.Emit(OpCodes.Callvirt, inputs.JsonScalarRecordIsMaterializedGetter);
         il.Emit(OpCodes.Brtrue, invalidShape);
         il.Emit(OpCodes.Ldloc, scalarLocal);
-        il.Emit(OpCodes.Callvirt, runtime.JsonScalarRecordShapeGetter);
+        il.Emit(OpCodes.Callvirt, inputs.JsonScalarRecordShapeGetter);
         il.Emit(OpCodes.Ldloc, shapeLocal);
         il.Emit(OpCodes.Bne_Un, invalidShape);
         foreach (var appender in typedRecordAppenders)
         {
-            var exactType = runtime.JsonTypedScalarRecordTypes[appender.Fingerprint];
+            var exactType = inputs.JsonTypedScalarRecordTypes[appender.Fingerprint];
             var exactLocal = il.DeclareLocal(exactType);
             var nextAppender = il.DefineLabel();
             il.Emit(OpCodes.Ldloc, scalarLocal);
@@ -808,7 +869,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Stloc, exactLocal);
             il.Emit(OpCodes.Ldloc, exactLocal);
             il.Emit(OpCodes.Brfalse, nextAppender);
-            EmitAppendShapedPropertyPrefix(il);
+            EmitAppendShapedPropertyPrefix(il, json);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldloc, exactLocal);
             il.Emit(OpCodes.Ldloc, shapeLocal);
@@ -825,10 +886,10 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, objectGuarded);
         EmitExactRuntimeTypeCheck(il, 1, _types.DictionaryStringObject, invalidShape);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.DescriptorStorage.HasPropertyDescriptors);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.HasPropertyDescriptors);
         il.Emit(OpCodes.Brtrue, invalidShape);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.DescriptorStorage.HasPrototypeEntry);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.HasPrototypeEntry);
         il.Emit(OpCodes.Brtrue, invalidShape);
         il.MarkLabel(objectGuarded);
         il.Emit(OpCodes.Ldarg_1);
@@ -853,7 +914,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, enumeratorLocal);
         il.MarkLabel(objectCountReady);
         il.MarkLabel(objectStorageReady);
-        EmitAppendShapedPropertyPrefix(il);
+        EmitAppendShapedPropertyPrefix(il, json);
         EmitAppendChar(il, '{');
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Stloc, firstLocal);
@@ -884,7 +945,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Sub);
         il.Emit(OpCodes.Ldc_I4_2);
         il.Emit(OpCodes.Div);
-        il.Emit(OpCodes.Callvirt, runtime.JsonScalarRecordGetValue);
+        il.Emit(OpCodes.Callvirt, inputs.JsonScalarRecordGetValue);
         il.Emit(OpCodes.Stloc, valueLocal);
         il.Emit(OpCodes.Br, objectValueReady);
         il.MarkLabel(openObjectRead);
@@ -983,7 +1044,7 @@ public partial class RuntimeEmitter
                 EmitStringBuilderAppendString(appenderIl);
 
                 FieldBuilder valueField =
-                    runtime.JsonTypedScalarRecordValueFields[(fingerprint, index)];
+                    inputs.JsonTypedScalarRecordValueFields[(fingerprint, index)];
                 switch (shape.Fields[index].Value)
                 {
                     case JsonSerializationShape.Number:
@@ -996,7 +1057,7 @@ public partial class RuntimeEmitter
                         appenderIl.Emit(OpCodes.Ldarg_0);
                         appenderIl.Emit(OpCodes.Ldarg_1);
                         appenderIl.Emit(OpCodes.Ldfld, valueField);
-                        appenderIl.Emit(OpCodes.Call, _appendEscapedJsonStringMethod!);
+                        appenderIl.Emit(OpCodes.Call, json.AppendEscapedString!);
                         break;
                     case JsonSerializationShape.Boolean:
                     {
@@ -1052,16 +1113,16 @@ public partial class RuntimeEmitter
             MethodBuilder recordAppender,
             MethodBuilder arrayAppender)
         {
-            TypeBuilder exactType = runtime.JsonTypedScalarRecordTypes[fingerprint];
+            TypeBuilder exactType = inputs.JsonTypedScalarRecordTypes[fingerprint];
             bool mayHaveDescriptors =
-                _features.UsesDynamicPropertyDescriptors ||
-                _features.UsesObjectIntegrityMutation ||
-                _features.PotentiallyMaterializesUnknownCompactObjectRecordShape;
+                inputs.UsesDynamicPropertyDescriptors ||
+                inputs.UsesObjectIntegrityMutation ||
+                inputs.PotentiallyMaterializesUnknownCompactObjectRecordShape;
             bool mayHavePrototypeEntry =
-                _features.UsesArrayPrototypeMutation ||
-                _features.UsesClassPrototypeMutation ||
-                _features.UsesObjectIntegrityMutation ||
-                _features.PotentiallyMaterializesUnknownCompactObjectRecordShape;
+                inputs.UsesArrayPrototypeMutation ||
+                inputs.UsesClassPrototypeMutation ||
+                inputs.UsesObjectIntegrityMutation ||
+                inputs.PotentiallyMaterializesUnknownCompactObjectRecordShape;
 
             var appenderIl = arrayAppender.GetILGenerator();
             var index = appenderIl.DeclareLocal(_types.Int32);
@@ -1097,22 +1158,22 @@ public partial class RuntimeEmitter
             if (mayHaveDescriptors)
             {
                 appenderIl.Emit(OpCodes.Ldloc, exact);
-                appenderIl.Emit(OpCodes.Call, runtime.DescriptorStorage.HasPropertyDescriptors);
+                appenderIl.Emit(OpCodes.Call, inputs.DescriptorStorage.HasPropertyDescriptors);
                 appenderIl.Emit(OpCodes.Brtrue, failed);
             }
             if (mayHavePrototypeEntry)
             {
                 appenderIl.Emit(OpCodes.Ldloc, exact);
-                appenderIl.Emit(OpCodes.Call, runtime.DescriptorStorage.HasPrototypeEntry);
+                appenderIl.Emit(OpCodes.Call, inputs.DescriptorStorage.HasPrototypeEntry);
                 appenderIl.Emit(OpCodes.Brtrue, failed);
             }
 
             appenderIl.Emit(OpCodes.Ldloc, exact);
             appenderIl.Emit(OpCodes.Callvirt,
-                runtime.JsonScalarRecordIsMaterializedGetter);
+                inputs.JsonScalarRecordIsMaterializedGetter);
             appenderIl.Emit(OpCodes.Brtrue, failed);
             appenderIl.Emit(OpCodes.Ldloc, exact);
-            appenderIl.Emit(OpCodes.Callvirt, runtime.JsonScalarRecordShapeGetter);
+            appenderIl.Emit(OpCodes.Callvirt, inputs.JsonScalarRecordShapeGetter);
             appenderIl.Emit(OpCodes.Ldarg_2);
             appenderIl.Emit(OpCodes.Bne_Un, failed);
 
@@ -1141,7 +1202,7 @@ public partial class RuntimeEmitter
         }
     }
 
-    private void EmitAppendShapedPropertyPrefix(ILGenerator il)
+    private void EmitAppendShapedPropertyPrefix(ILGenerator il, EmittedJsonImplementation json)
     {
         var noPrefix = il.DefineLabel();
         var noComma = il.DefineLabel();
@@ -1153,7 +1214,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(noComma);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg, 4);
-        il.Emit(OpCodes.Call, _appendEscapedJsonStringMethod!);
+        il.Emit(OpCodes.Call, json.AppendEscapedString!);
         EmitAppendChar(il, ':');
         il.MarkLabel(noPrefix);
     }
@@ -1169,20 +1230,55 @@ public partial class RuntimeEmitter
 
     private void EmitJsonStringifyShapedMethod(
         TypeBuilder typeBuilder,
-        EmittedRuntime runtime,
+        EmittedJsonImplementation json, JsonStringifyShapedMethodInputs inputs,
         MethodBuilder appendValue)
     {
-        var (registerShape, _) = EmitJsonShapeAssociationHelpers(typeBuilder);
-        var prototypesSafe = EmitJsonShapePrototypesSafeHelper(typeBuilder, runtime);
-        var canUseShape = EmitCanUseJsonShapeHelper(typeBuilder, runtime);
-        var appendShaped = EmitAppendJsonShapedValueHelper(typeBuilder, runtime, appendValue);
+        var (registerShape, _) = EmitJsonShapeAssociationHelpers(typeBuilder, json);
+        var prototypesSafe = EmitJsonShapePrototypesSafeHelper(
+            typeBuilder,
+            json,
+            new JsonShapePrototypesSafeHelperInputs(
+                inputs.ArrayOperations,
+                inputs.DescriptorStorage,
+                inputs.ObjectPrototypeField,
+                inputs.ObjectPrototypePopulateMethod
+            )
+        );
+        var canUseShape = EmitCanUseJsonShapeHelper(
+            typeBuilder,
+            json,
+            new CanUseJsonShapeHelperInputs(inputs.ArrayStorage, inputs.DescriptorStorage)
+        );
+        var appendShaped = EmitAppendJsonShapedValueHelper(
+            typeBuilder,
+            json,
+            new AppendJsonShapedValueHelperInputs(
+                inputs.ArrayStorage,
+                inputs.DescriptorStorage,
+                inputs.JsonScalarRecordGetValue,
+                inputs.JsonScalarRecordIsMaterializedGetter,
+                inputs.JsonScalarRecordShapeGetter,
+                inputs.JsonScalarRecordType,
+                inputs.JsonTypedScalarRecordShapeFields,
+                inputs.JsonTypedScalarRecordTypes,
+                inputs.JsonTypedScalarRecordValueFields,
+                inputs.Numbers,
+                inputs.JsonScalarRecordShapes,
+                inputs.PotentiallyMaterializesUnknownCompactObjectRecordShape,
+                inputs.UsesArrayPrototypeMutation,
+                inputs.UsesClassPrototypeMutation,
+                inputs.UsesDynamicPropertyDescriptors,
+                inputs.UsesObjectIntegrityMutation
+            ),
+            appendValue
+        );
         var method = typeBuilder.DefineMethod(
             "JsonStringifyShaped",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.Object, _types.Object, _types.Boolean]);
         method.SetImplementationFlags(MethodImplAttributes.AggressiveOptimization);
-        runtime.JsonStringifyShaped = method;
+        json.StringifyShaped = method;
 
         var il = method.GetILGenerator();
         var fallback = il.DefineLabel();
@@ -1204,7 +1300,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, fallback);
         il.MarkLabel(shapeReady);
 
-        il.Emit(OpCodes.Call, _jsonRentStringBuilderMethod!);
+        il.Emit(OpCodes.Call, json.RentStringBuilder!);
         il.Emit(OpCodes.Stloc, builderLocal);
         il.BeginExceptionBlock();
         il.Emit(OpCodes.Ldloc, builderLocal);
@@ -1239,13 +1335,13 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, fallbackLocal);
         il.Emit(OpCodes.Leave, cleanupDone);
         il.MarkLabel(storeUndefined);
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, inputs.UndefinedInstance);
         il.Emit(OpCodes.Stloc, resultLocal);
         il.Emit(OpCodes.Leave, cleanupDone);
 
         il.BeginFinallyBlock();
         il.Emit(OpCodes.Ldloc, builderLocal);
-        il.Emit(OpCodes.Call, _jsonReturnStringBuilderMethod!);
+        il.Emit(OpCodes.Call, json.ReturnStringBuilder!);
         il.EndExceptionBlock();
         il.MarkLabel(cleanupDone);
         il.Emit(OpCodes.Ldloc, fallbackLocal);
@@ -1255,7 +1351,7 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(fallback);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.JsonStringify);
+        il.Emit(OpCodes.Call, json.Stringify);
         il.Emit(OpCodes.Ret);
     }
 }

@@ -5,7 +5,42 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
-    private void EmitJsonParse(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private readonly record struct JsonParseInputs(
+        MethodBuilder CreateException,
+        ConstructorBuilder JsonScalarRecordCtor,
+        IReadOnlyDictionary<int, ConstructorBuilder> JsonScalarRecordInlineCtors,
+        IReadOnlyDictionary<string, ConstructorBuilder> JsonTypedScalarRecordCtors,
+        IReadOnlyDictionary<string, FieldBuilder> JsonTypedScalarRecordShapeFields,
+        ConstructorBuilder TSSyntaxErrorCtor,
+        Type ThrownValueExceptionType,
+        IReadOnlyDictionary<string, JsonSerializationShape.Record> JsonScalarRecordShapes
+    );
+
+    private readonly record struct JsonParseHelperInputs(
+        ConstructorBuilder JsonScalarRecordCtor,
+        IReadOnlyDictionary<int, ConstructorBuilder> JsonScalarRecordInlineCtors,
+        IReadOnlyDictionary<string, ConstructorBuilder> JsonTypedScalarRecordCtors,
+        IReadOnlyDictionary<string, FieldBuilder> JsonTypedScalarRecordShapeFields,
+        IReadOnlyDictionary<string, JsonSerializationShape.Record> JsonScalarRecordShapes
+    );
+
+    private readonly record struct JsonParseStaticHelperInputs(
+        ConstructorBuilder JsonScalarRecordCtor,
+        IReadOnlyDictionary<int, ConstructorBuilder> JsonScalarRecordInlineCtors,
+        IReadOnlyDictionary<string, ConstructorBuilder> JsonTypedScalarRecordCtors,
+        IReadOnlyDictionary<string, FieldBuilder> JsonTypedScalarRecordShapeFields,
+        IReadOnlyDictionary<string, JsonSerializationShape.Record> JsonScalarRecordShapes
+    );
+
+    private readonly record struct ParseValueFromReaderHelperInputs(
+        ConstructorBuilder JsonScalarRecordCtor,
+        IReadOnlyDictionary<int, ConstructorBuilder> JsonScalarRecordInlineCtors,
+        IReadOnlyDictionary<string, ConstructorBuilder> JsonTypedScalarRecordCtors,
+        IReadOnlyDictionary<string, FieldBuilder> JsonTypedScalarRecordShapeFields,
+        IReadOnlyDictionary<string, JsonSerializationShape.Record> JsonScalarRecordShapes
+    );
+
+    private void EmitJsonParse(TypeBuilder typeBuilder, EmittedJsonImplementation json, JsonParseInputs inputs)
     {
         var method = typeBuilder.DefineMethod(
             "JsonParse",
@@ -13,7 +48,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object]
         );
-        runtime.JsonParse = method;
+        json.Parse = method;
 
         var il = method.GetILGenerator();
         var resultLocal = il.DeclareLocal(_types.Object);
@@ -26,7 +61,17 @@ public partial class RuntimeEmitter
         // }
         il.BeginExceptionBlock();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, EmitJsonParseHelper(typeBuilder, runtime));
+        il.Emit(OpCodes.Call, EmitJsonParseHelper(
+            typeBuilder,
+            json,
+            new JsonParseHelperInputs(
+                inputs.JsonScalarRecordCtor,
+                inputs.JsonScalarRecordInlineCtors,
+                inputs.JsonTypedScalarRecordCtors,
+                inputs.JsonTypedScalarRecordShapeFields,
+                inputs.JsonScalarRecordShapes
+            )
+        ));
         il.Emit(OpCodes.Stloc, resultLocal);
         il.Emit(OpCodes.Leave, endLabel);
 
@@ -36,7 +81,7 @@ public partial class RuntimeEmitter
         var rethrowLabel = il.DefineLabel();
         var checkMetadataLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, exLocal);
-        il.Emit(OpCodes.Isinst, runtime.ThrownValueExceptionType);
+        il.Emit(OpCodes.Isinst, inputs.ThrownValueExceptionType);
         il.Emit(OpCodes.Brfalse, checkMetadataLabel);
         il.Emit(OpCodes.Br, rethrowLabel);
 
@@ -49,7 +94,7 @@ public partial class RuntimeEmitter
 
         il.Emit(OpCodes.Ldloc, exLocal);
         il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Exception, "Message").GetGetMethod()!);
-        GuestErrorEmitter.ThrowErrorFromStack(il, runtime, runtime.TSSyntaxErrorCtor);
+        GuestErrorEmitter.ThrowErrorFromStack(il, inputs.CreateException, inputs.TSSyntaxErrorCtor);
 
         il.MarkLabel(rethrowLabel);
         il.Emit(OpCodes.Rethrow);
@@ -60,7 +105,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private MethodBuilder EmitJsonParseHelper(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private MethodBuilder EmitJsonParseHelper(TypeBuilder typeBuilder, EmittedJsonImplementation json, JsonParseHelperInputs inputs)
     {
         // Parse JSON using RuntimeTypes helper
         var method = typeBuilder.DefineMethod(
@@ -72,7 +117,7 @@ public partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
         var shapeLocal = il.DeclareLocal(_types.Object);
-        var (_, tryGetShape) = EmitJsonShapeAssociationHelpers(typeBuilder);
+        var (_, tryGetShape) = EmitJsonShapeAssociationHelpers(typeBuilder, json);
 
         // Carry a weakly associated closed shape only when the exact string
         // instance came from the guarded shaped serializer.
@@ -82,17 +127,42 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, shapeLocal);
-        il.Emit(OpCodes.Call, EmitJsonParseStaticHelper(typeBuilder, runtime));
+        il.Emit(OpCodes.Call, EmitJsonParseStaticHelper(
+            typeBuilder,
+            new JsonParseStaticHelperInputs(
+                inputs.JsonScalarRecordCtor,
+                inputs.JsonScalarRecordInlineCtors,
+                inputs.JsonTypedScalarRecordCtors,
+                inputs.JsonTypedScalarRecordShapeFields,
+                inputs.JsonScalarRecordShapes
+            )
+        ));
         il.Emit(OpCodes.Ret);
 
         return method;
     }
 
-    private MethodBuilder EmitJsonParseStaticHelper(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private MethodBuilder EmitJsonParseStaticHelper(TypeBuilder typeBuilder, JsonParseStaticHelperInputs inputs)
     {
         var validateControlChars = EmitJsonValidateControlChars(typeBuilder);
-        var parseValue = EmitParseValueFromReaderHelper(typeBuilder, runtime);
-        var tryParseAssociated = EmitJsonAssociatedParseHelper(typeBuilder, runtime);
+        var parseValue = EmitParseValueFromReaderHelper(
+            typeBuilder,
+            new ParseValueFromReaderHelperInputs(
+                inputs.JsonScalarRecordCtor,
+                inputs.JsonScalarRecordInlineCtors,
+                inputs.JsonTypedScalarRecordCtors,
+                inputs.JsonTypedScalarRecordShapeFields,
+                inputs.JsonScalarRecordShapes
+            )
+        );
+        var tryParseAssociated = EmitJsonAssociatedParseHelper(
+            typeBuilder,
+            new JsonAssociatedParseHelperInputs(
+                inputs.JsonTypedScalarRecordCtors,
+                inputs.JsonTypedScalarRecordShapeFields,
+                inputs.JsonScalarRecordShapes
+            )
+        );
 
         var method = typeBuilder.DefineMethod(
             "ParseJsonValue",
@@ -423,7 +493,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private MethodBuilder EmitParseValueFromReaderHelper(
         TypeBuilder typeBuilder,
-        EmittedRuntime runtime)
+        ParseValueFromReaderHelperInputs inputs)
     {
         var readerType = typeof(System.Text.Json.Utf8JsonReader);
         var propertyNamesType = typeof(List<string>);
@@ -441,9 +511,9 @@ public partial class RuntimeEmitter
         );
         method.SetImplementationFlags(MethodImplAttributes.AggressiveOptimization);
 
-        var typedRecordParsers = _features.JsonScalarRecordShapes
+        var typedRecordParsers = inputs.JsonScalarRecordShapes
             .OrderBy(pair => pair.Key, StringComparer.Ordinal)
-            .Where(pair => runtime.JsonTypedScalarRecordCtors.ContainsKey(pair.Key))
+            .Where(pair => inputs.JsonTypedScalarRecordCtors.ContainsKey(pair.Key))
             .Select((pair, ordinal) => (
                 Fingerprint: pair.Key,
                 Shape: pair.Value,
@@ -576,7 +646,7 @@ public partial class RuntimeEmitter
             var nextParser = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_2);
             il.Emit(OpCodes.Ldsfld,
-                runtime.JsonTypedScalarRecordShapeFields[parser.Fingerprint]);
+                inputs.JsonTypedScalarRecordShapeFields[parser.Fingerprint]);
             il.Emit(OpCodes.Bne_Un, nextParser);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_1);
@@ -690,13 +760,13 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldloc, shapeLocal);
             for (int index = 0; index < arity; index++)
                 il.Emit(OpCodes.Ldloc, valueLocals[index]);
-            il.Emit(OpCodes.Newobj, runtime.JsonScalarRecordInlineCtors[arity]);
+            il.Emit(OpCodes.Newobj, inputs.JsonScalarRecordInlineCtors[arity]);
             il.Emit(OpCodes.Ret);
         }
         il.MarkLabel(overflowConstruct);
         il.Emit(OpCodes.Ldloc, shapeLocal);
         il.Emit(OpCodes.Ldloc, overflowValuesLocal);
-        il.Emit(OpCodes.Newobj, runtime.JsonScalarRecordCtor);
+        il.Emit(OpCodes.Newobj, inputs.JsonScalarRecordCtor);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(shapedMismatch);
@@ -954,7 +1024,7 @@ public partial class RuntimeEmitter
             foreach (var fieldLocal in fieldLocals)
                 parserIl.Emit(OpCodes.Ldloc, fieldLocal);
             parserIl.Emit(OpCodes.Newobj,
-                runtime.JsonTypedScalarRecordCtors[fingerprint]);
+                inputs.JsonTypedScalarRecordCtors[fingerprint]);
             parserIl.Emit(OpCodes.Ret);
 
             parserIl.MarkLabel(mismatch);
