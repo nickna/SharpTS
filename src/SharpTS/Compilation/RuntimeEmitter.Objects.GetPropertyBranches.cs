@@ -1386,7 +1386,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, protoLocal);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.ReflectGet);
+        il.Emit(OpCodes.Call, runtime.Reflect.Get);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(returnUndefinedLabel);

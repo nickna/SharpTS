@@ -345,8 +345,8 @@ public partial class RuntimeEmitter
         }
         EmitSingletonBranch("Math", runtime.Math.SingletonField);
         EmitSingletonBranch("JSON", runtime.JsonSingletonField);
-        if (runtime.ReflectSingletonField is not null)
-            EmitSingletonBranch("Reflect", runtime.ReflectSingletonField);
+        if (runtime.Reflect.Namespace is not null)
+            EmitSingletonBranch("Reflect", runtime.Reflect.RequireNamespace().SingletonField);
 
         // globalThis.process → the live $Process singleton (epic #1078), same
         // object as the bare `process` identifier and the module facade's

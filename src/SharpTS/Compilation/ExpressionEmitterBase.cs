@@ -2192,10 +2192,10 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
             return true;
         }
 
-        if (name == "Reflect" && Ctx.Runtime!.ReflectSingletonPopulateMethod != null)
+        if (name == "Reflect" && Ctx.Runtime!.Reflect.Namespace is not null)
         {
-            IL.Emit(OpCodes.Call, Ctx.Runtime.ReflectSingletonPopulateMethod);
-            IL.Emit(OpCodes.Ldsfld, Ctx.Runtime.ReflectSingletonField!);
+            IL.Emit(OpCodes.Call, Ctx.Runtime.Reflect.RequireNamespace().SingletonPopulateMethod);
+            IL.Emit(OpCodes.Ldsfld, Ctx.Runtime.Reflect.RequireNamespace().SingletonField!);
             SetStackUnknown();
             return true;
         }

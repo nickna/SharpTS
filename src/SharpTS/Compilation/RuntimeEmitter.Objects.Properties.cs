@@ -364,7 +364,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldsfld, runtime.DatePrototypeField);
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Call, runtime.ReflectGet);
+            il.Emit(OpCodes.Call, runtime.Reflect.Get);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(notDateLabel);
         }
@@ -850,7 +850,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, prototypeLocal);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.ReflectGet);
+        il.Emit(OpCodes.Call, runtime.Reflect.Get);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(noPrototypeLabel);

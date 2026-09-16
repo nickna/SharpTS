@@ -26,6 +26,9 @@ public class EmittedRuntime
     /// <summary>Required descriptor storage metadata, emitted for every compilation.</summary>
     public EmittedDescriptorStorageRuntime DescriptorStorage { get; } = new();
 
+    /// <summary>Required Reflect reads and independently selected assignment, namespace and metadata capabilities.</summary>
+    public EmittedReflectRuntime Reflect { get; } = new();
+
     /// <summary>Required array operation metadata, emitted for every compilation.</summary>
     public EmittedArrayOperationsRuntime ArrayOperations { get; } = new();
 
@@ -178,15 +181,6 @@ public class EmittedRuntime
     public MethodBuilder HasIn { get; set; } = null!;
     public MethodBuilder ProxyOrdinaryHas { get; set; } = null!;
 
-    // Reflect metadata API
-    public MethodBuilder ReflectDefineMetadata { get; set; } = null!;
-    public MethodBuilder ReflectGetMetadata { get; set; } = null!;
-    // $ReflectMetadataDecorator closure class for Reflect.metadata(key, value) → decorator factory
-    public ConstructorBuilder? ReflectMetadataDecoratorCtor { get; set; }
-    public MethodBuilder? ReflectMetadataDecoratorInvoke { get; set; }
-    public MethodBuilder ReflectHasMetadata { get; set; } = null!;
-    public MethodBuilder ReflectGetMetadataKeys { get; set; } = null!;
-    public MethodBuilder ReflectDeleteMetadata { get; set; } = null!;
 
     // Operator methods
     public MethodBuilder Add { get; set; } = null!;
@@ -343,23 +337,12 @@ public class EmittedRuntime
     public MethodBuilder SymbolPrototypePopulateMethod { get; set; } = null!;
     /// <summary>JSON singleton — `typeof JSON === "object"` per ECMA-262.</summary>
     public FieldBuilder JsonSingletonField { get; set; } = null!;
-    /// <summary>Reflect singleton — the value-form ES namespace object.</summary>
-    public FieldBuilder? ReflectSingletonField { get; set; }
     /// <summary>
     /// Populates <see cref="JsonSingletonField"/> with $TSFunction wrappers for
     /// JSON.parse / JSON.stringify so value-form access
     /// (<c>const j = JSON; j.stringify(x)</c>) resolves. Idempotent. See issue #276.
     /// </summary>
     public MethodBuilder JsonSingletonPopulateMethod { get; set; } = null!;
-    /// <summary>Populates <see cref="ReflectSingletonField"/> with the standard Reflect methods.</summary>
-    public MethodBuilder? ReflectSingletonPopulateMethod { get; set; }
-    /// <summary>
-    /// Value-form Reflect wrappers keyed by their JavaScript method names. Each
-    /// wrapper accepts an object[] rest argument so it can preserve optional
-    /// argument presence while still exposing the spec-defined function length.
-    /// </summary>
-    public Dictionary<string, MethodBuilder> ReflectValueFormMethods { get; } =
-        new(StringComparer.Ordinal);
     /// <summary>$Runtime.StringReplaceWithFunction(str, pattern, fn, replaceAll) — handles functional replacement for replace/replaceAll and stringifies each callback result.</summary>
     public MethodBuilder StringReplaceWithFunction { get; set; } = null!;
     /// <summary>$Runtime.ObjectProtoToString(this) — ECMA-262 19.1.3.6 toString returns "[object X]" branded by receiver type. Wired into Object.prototype.toString slot for borrowed-method dispatch (`obj.toString = Object.prototype.toString; obj.toString()`).</summary>
@@ -477,17 +460,6 @@ public class EmittedRuntime
     /// <summary>$Runtime.IsBuiltinDeleted(object obj, string name) — true iff <paramref name="name"/> was deleted on <paramref name="obj"/>.</summary>
     public MethodBuilder IsBuiltinDeletedMethod { get; set; } = null!;
 
-    // Reflect API helpers
-    public MethodBuilder ReflectOwnKeys { get; set; } = null!;
-    public MethodBuilder ReflectSetPrototypeOf { get; set; } = null!;
-    public MethodBuilder ReflectDefineProperty { get; set; } = null!;
-    public MethodBuilder ReflectDefinePropertyObjectAdapter { get; set; } = null!;
-    public MethodBuilder ReflectApply { get; set; } = null!;
-    public MethodBuilder ReflectConstruct { get; set; } = null!;
-    public MethodBuilder ReflectSet { get; set; } = null!;
-    public MethodBuilder ReflectGet { get; set; } = null!;
-    public MethodBuilder ReflectDeleteProperty { get; set; } = null!;
-    public MethodBuilder ReflectPreventExtensions { get; set; } = null!;
     public MethodBuilder IsConstructorMethod { get; set; } = null!;
 
     // Resource disposal for using declarations
