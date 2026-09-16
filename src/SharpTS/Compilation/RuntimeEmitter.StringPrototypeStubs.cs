@@ -389,7 +389,7 @@ public partial class RuntimeEmitter
         // Math singleton
         var notMathLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldsfld, runtime.MathSingletonField);
+        il.Emit(OpCodes.Ldsfld, runtime.Math.SingletonField);
         il.Emit(OpCodes.Bne_Un, notMathLabel);
         EmitTag("[object Math]");
         il.MarkLabel(notMathLabel);

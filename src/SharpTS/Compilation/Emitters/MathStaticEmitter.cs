@@ -38,7 +38,7 @@ public sealed class MathStaticEmitter : IStaticTypeEmitterStrategy
 
         if (methodName == "random")
         {
-            il.Emit(OpCodes.Call, ctx.Runtime!.Random);
+            il.Emit(OpCodes.Call, ctx.Runtime!.Math.Random);
             il.Emit(OpCodes.Box, ctx.Types.Double);
             return true;
         }
@@ -67,8 +67,8 @@ public sealed class MathStaticEmitter : IStaticTypeEmitterStrategy
             {
                 emitter.EmitArgsArrayWithSpread(arguments);
                 il.Emit(OpCodes.Call, methodName == "min"
-                    ? ctx.Runtime!.MathMinAdapter
-                    : ctx.Runtime!.MathMaxAdapter);
+                    ? ctx.Runtime!.Math.MinAdapter
+                    : ctx.Runtime!.Math.MaxAdapter);
                 return true;
             }
 
@@ -123,7 +123,7 @@ public sealed class MathStaticEmitter : IStaticTypeEmitterStrategy
                 il.Emit(OpCodes.Pop);
             }
             il.Emit(OpCodes.Ldloc, input);
-            il.Emit(OpCodes.Call, ctx.Runtime!.MathSumPrecise);
+            il.Emit(OpCodes.Call, ctx.Runtime!.Math.SumPrecise);
             return true;
         }
 
@@ -136,7 +136,7 @@ public sealed class MathStaticEmitter : IStaticTypeEmitterStrategy
         if (methodName == "hypot" && arguments.Any(a => a is Expr.Spread))
         {
             emitter.EmitArgsArrayWithSpread(arguments);
-            il.Emit(OpCodes.Call, ctx.Runtime!.MathHypotAdapter);
+            il.Emit(OpCodes.Call, ctx.Runtime!.Math.HypotAdapter);
             return true;
         }
 
@@ -155,7 +155,7 @@ public sealed class MathStaticEmitter : IStaticTypeEmitterStrategy
         if (methodName == "round")
         {
             il.Emit(OpCodes.Box, ctx.Types.Double);
-            il.Emit(OpCodes.Call, ctx.Runtime!.MathRoundAdapter);
+            il.Emit(OpCodes.Call, ctx.Runtime!.Math.RoundAdapter);
             return true;
         }
 
@@ -547,7 +547,7 @@ public sealed class MathStaticEmitter : IStaticTypeEmitterStrategy
         // Stage 4z5: tuple of (adapter, jsName, jsLength) so .name reports
         // the JS-spec name (lowercase) instead of the .NET adapter method
         // name (e.g. "MathFloorAdapter") and .length reports the spec length.
-        (MethodInfo? adapter, int len) info = ResolveValueFormMethod(runtime, propertyName);
+        (MethodInfo? adapter, int len) info = ResolveValueFormMethod(runtime.Math, propertyName);
         if (info.adapter == null) return false;
 
         // $TSFunction.GetOrCreate(MethodInfo, name, length) — cached identity
@@ -569,54 +569,54 @@ public sealed class MathStaticEmitter : IStaticTypeEmitterStrategy
     /// (<c>const m = Math; m.floor(x)</c>, issue #276). Single source of truth so
     /// the two paths can never drift on names/lengths.
     /// </summary>
-    internal static IEnumerable<(string Name, MethodInfo? Adapter, int Length)> EnumerateValueFormMethods(EmittedRuntime runtime)
+    internal static IEnumerable<(string Name, MethodInfo? Adapter, int Length)> EnumerateValueFormMethods(EmittedMathRuntime math)
     {
-        yield return ("floor",  runtime.MathFloorAdapter, 1);
-        yield return ("ceil",   runtime.MathCeilAdapter, 1);
-        yield return ("abs",    runtime.MathAbsAdapter, 1);
-        yield return ("sqrt",   runtime.MathSqrtAdapter, 1);
-        yield return ("round",  runtime.MathRoundAdapter, 1);
-        yield return ("trunc",  runtime.MathTruncAdapter, 1);
-        yield return ("sign",   runtime.MathSignAdapter, 1);
-        yield return ("sin",    runtime.MathSinAdapter, 1);
-        yield return ("cos",    runtime.MathCosAdapter, 1);
-        yield return ("tan",    runtime.MathTanAdapter, 1);
-        yield return ("log",    runtime.MathLogAdapter, 1);
-        yield return ("exp",    runtime.MathExpAdapter, 1);
-        yield return ("pow",    runtime.MathPowAdapter, 2);
-        yield return ("max",    runtime.MathMaxAdapter, 2);
-        yield return ("min",    runtime.MathMinAdapter, 2);
-        yield return ("random", runtime.Random, 0);
-        yield return ("asin",   runtime.MathAsinAdapter, 1);
-        yield return ("acos",   runtime.MathAcosAdapter, 1);
-        yield return ("atan",   runtime.MathAtanAdapter, 1);
-        yield return ("atan2",  runtime.MathAtan2Adapter, 2);
-        yield return ("sinh",   runtime.MathSinhAdapter, 1);
-        yield return ("cosh",   runtime.MathCoshAdapter, 1);
-        yield return ("tanh",   runtime.MathTanhAdapter, 1);
-        yield return ("asinh",  runtime.MathAsinhAdapter, 1);
-        yield return ("acosh",  runtime.MathAcoshAdapter, 1);
-        yield return ("atanh",  runtime.MathAtanhAdapter, 1);
-        yield return ("cbrt",   runtime.MathCbrtAdapter, 1);
-        yield return ("log10",  runtime.MathLog10Adapter, 1);
-        yield return ("log2",   runtime.MathLog2Adapter, 1);
-        yield return ("log1p",  runtime.MathLog1pAdapter, 1);
-        yield return ("expm1",  runtime.MathExpm1Adapter, 1);
-        yield return ("fround", runtime.MathFroundAdapter, 1);
-        yield return ("f16round", runtime.MathF16RoundAdapter, 1);
-        yield return ("sumPrecise", runtime.MathSumPrecise, 1);
-        yield return ("clz32",  runtime.MathClz32Adapter, 1);
-        yield return ("imul",   runtime.MathImulAdapter, 2);
-        yield return ("hypot",  runtime.MathHypotAdapter, 2);
+        yield return ("floor",  math.FloorAdapter, 1);
+        yield return ("ceil",   math.CeilAdapter, 1);
+        yield return ("abs",    math.AbsAdapter, 1);
+        yield return ("sqrt",   math.SqrtAdapter, 1);
+        yield return ("round",  math.RoundAdapter, 1);
+        yield return ("trunc",  math.TruncAdapter, 1);
+        yield return ("sign",   math.SignAdapter, 1);
+        yield return ("sin",    math.SinAdapter, 1);
+        yield return ("cos",    math.CosAdapter, 1);
+        yield return ("tan",    math.TanAdapter, 1);
+        yield return ("log",    math.LogAdapter, 1);
+        yield return ("exp",    math.ExpAdapter, 1);
+        yield return ("pow",    math.PowAdapter, 2);
+        yield return ("max",    math.MaxAdapter, 2);
+        yield return ("min",    math.MinAdapter, 2);
+        yield return ("random", math.Random, 0);
+        yield return ("asin",   math.AsinAdapter, 1);
+        yield return ("acos",   math.AcosAdapter, 1);
+        yield return ("atan",   math.AtanAdapter, 1);
+        yield return ("atan2",  math.Atan2Adapter, 2);
+        yield return ("sinh",   math.SinhAdapter, 1);
+        yield return ("cosh",   math.CoshAdapter, 1);
+        yield return ("tanh",   math.TanhAdapter, 1);
+        yield return ("asinh",  math.AsinhAdapter, 1);
+        yield return ("acosh",  math.AcoshAdapter, 1);
+        yield return ("atanh",  math.AtanhAdapter, 1);
+        yield return ("cbrt",   math.CbrtAdapter, 1);
+        yield return ("log10",  math.Log10Adapter, 1);
+        yield return ("log2",   math.Log2Adapter, 1);
+        yield return ("log1p",  math.Log1pAdapter, 1);
+        yield return ("expm1",  math.Expm1Adapter, 1);
+        yield return ("fround", math.FroundAdapter, 1);
+        yield return ("f16round", math.F16RoundAdapter, 1);
+        yield return ("sumPrecise", math.SumPrecise, 1);
+        yield return ("clz32",  math.Clz32Adapter, 1);
+        yield return ("imul",   math.ImulAdapter, 2);
+        yield return ("hypot",  math.HypotAdapter, 2);
     }
 
     /// <summary>
     /// Looks up a single value-form Math method by name. Returns
     /// <c>(null, 0)</c> if the name is not a value-form method.
     /// </summary>
-    internal static (MethodInfo? adapter, int len) ResolveValueFormMethod(EmittedRuntime runtime, string propertyName)
+    internal static (MethodInfo? adapter, int len) ResolveValueFormMethod(EmittedMathRuntime math, string propertyName)
     {
-        foreach (var (name, adapter, len) in EnumerateValueFormMethods(runtime))
+        foreach (var (name, adapter, len) in EnumerateValueFormMethods(math))
         {
             if (name == propertyName) return (adapter, len);
         }

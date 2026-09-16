@@ -93,19 +93,23 @@ public class ProcessLifecycleTests
         Assert.Equal("fired: false\n", output);
     }
 
-    [Theory, ModeData]
-    public void Process_UnhandledRejection_And_RejectionHandled(ExecutionMode mode)
+    [Theory]
+    [InlineData(ExecutionMode.Interpreted, 1)]
+    [InlineData(ExecutionMode.Compiled, 1)]
+    [InlineData(ExecutionMode.Interpreted, 200)]
+    [InlineData(ExecutionMode.Compiled, 200)]
+    public void Process_UnhandledRejection_And_RejectionHandled(ExecutionMode mode, int rejectionDelayMs)
     {
-        var source = """
-            let captured: any = null;
+        // Attach the late handler after the rejection event, rather than assuming
+        // a busy host reports it before an independently scheduled timer fires.
+        var source = $$"""
             process.on('unhandledRejection', (reason: any, promise: any) => {
                 console.log('unhandled:', reason);
-                captured = promise;
+                setTimeout(() => { promise.catch(() => {}); }, 0);
             });
             process.on('rejectionHandled', () => { console.log('handled'); });
-            setTimeout(async () => { throw 'boom'; }, 1);
-            setTimeout(() => { if (captured) { captured.catch(() => {}); } }, 60);
-            setTimeout(() => { console.log('end'); }, 140);
+            process.on('beforeExit', () => { console.log('end'); });
+            setTimeout(async () => { throw 'boom'; }, {{rejectionDelayMs}});
             """;
 
         var output = TestHarness.Run(source, mode);

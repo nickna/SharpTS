@@ -871,6 +871,18 @@ references do not require a method body to exist yet. An early read names the mi
 Completion is an orchestration boundary, not an IL verifier: body emission and type finalization
 must finish before that boundary. Preserve existing emission order when migrating a family.
 
+Math metadata lives in required `EmittedMathRuntime`: singleton storage/population, Random,
+exact summation and 35 numeric adapters. Its 39 declarations retain their original early
+singleton, adapter/Random and late exact-sum stages before completion validates and freezes
+them. Adapters receive only their numeric conversion dependency; exact summation uses
+immutable iterator, symbol, invocation and error inputs. Shared Math/JSON/Reflect singleton
+installation takes immutable descriptor/function/symbol inputs, using the existing descriptor
+installation helper. Canonical Math method enumeration and lookup receive the Math component.
+The early descriptor fallback keeps its historical absent sumPrecise target; populated PDS
+descriptors contain the actual late-declared method. Random's private field, exact-unit helper
+builders and BCL/Half metadata remain local construction values. Numeric algorithms, coercion
+order, cached function identity, descriptors and initialization order remain unchanged.
+
 Follow this pattern for subsequent families: explicit optional availability, checked declarations,
 one completion boundary, and no retained flat aliases. Pass the component to helpers that only
 need that family's metadata (for example, DNS resolver declaration); retain `EmittedRuntime` where

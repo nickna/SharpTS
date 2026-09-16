@@ -17,54 +17,54 @@ namespace SharpTS.Compilation;
 /// </summary>
 public partial class RuntimeEmitter
 {
-    private void EmitMathAdapters(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitMathAdapters(TypeBuilder typeBuilder, EmittedMathRuntime math, MethodInfo toNumber, MethodInfo jsToInt32)
     {
-        runtime.MathFloorAdapter = EmitUnaryMathAdapter(typeBuilder, runtime, "MathFloorAdapter", "Floor");
-        runtime.MathCeilAdapter = EmitUnaryMathAdapter(typeBuilder, runtime, "MathCeilAdapter", "Ceiling");
-        runtime.MathAbsAdapter = EmitUnaryMathAdapter(typeBuilder, runtime, "MathAbsAdapter", "Abs");
-        runtime.MathSqrtAdapter = EmitUnaryMathAdapter(typeBuilder, runtime, "MathSqrtAdapter", "Sqrt");
-        runtime.MathTruncAdapter = EmitUnaryMathAdapter(typeBuilder, runtime, "MathTruncAdapter", "Truncate");
-        runtime.MathSinAdapter = EmitUnaryMathAdapter(typeBuilder, runtime, "MathSinAdapter", "Sin");
-        runtime.MathCosAdapter = EmitUnaryMathAdapter(typeBuilder, runtime, "MathCosAdapter", "Cos");
-        runtime.MathTanAdapter = EmitUnaryMathAdapter(typeBuilder, runtime, "MathTanAdapter", "Tan");
-        runtime.MathLogAdapter = EmitUnaryMathAdapter(typeBuilder, runtime, "MathLogAdapter", "Log");
-        runtime.MathExpAdapter = EmitUnaryMathAdapter(typeBuilder, runtime, "MathExpAdapter", "Exp");
+        math.FloorAdapter = EmitUnaryMathAdapter(typeBuilder, toNumber, "MathFloorAdapter", "Floor");
+        math.CeilAdapter = EmitUnaryMathAdapter(typeBuilder, toNumber, "MathCeilAdapter", "Ceiling");
+        math.AbsAdapter = EmitUnaryMathAdapter(typeBuilder, toNumber, "MathAbsAdapter", "Abs");
+        math.SqrtAdapter = EmitUnaryMathAdapter(typeBuilder, toNumber, "MathSqrtAdapter", "Sqrt");
+        math.TruncAdapter = EmitUnaryMathAdapter(typeBuilder, toNumber, "MathTruncAdapter", "Truncate");
+        math.SinAdapter = EmitUnaryMathAdapter(typeBuilder, toNumber, "MathSinAdapter", "Sin");
+        math.CosAdapter = EmitUnaryMathAdapter(typeBuilder, toNumber, "MathCosAdapter", "Cos");
+        math.TanAdapter = EmitUnaryMathAdapter(typeBuilder, toNumber, "MathTanAdapter", "Tan");
+        math.LogAdapter = EmitUnaryMathAdapter(typeBuilder, toNumber, "MathLogAdapter", "Log");
+        math.ExpAdapter = EmitUnaryMathAdapter(typeBuilder, toNumber, "MathExpAdapter", "Exp");
 
-        runtime.MathRoundAdapter = EmitMathRoundAdapter(typeBuilder, runtime);
-        runtime.MathSignAdapter = EmitMathSignAdapter(typeBuilder, runtime);
-        runtime.MathPowAdapter = EmitMathPowAdapter(typeBuilder, runtime);
-        runtime.MathMaxAdapter = EmitMathMinMaxAdapter(typeBuilder, runtime, "MathMaxAdapter", isMax: true);
-        runtime.MathMinAdapter = EmitMathMinMaxAdapter(typeBuilder, runtime, "MathMinAdapter", isMax: false);
+        math.RoundAdapter = EmitMathRoundAdapter(typeBuilder, toNumber);
+        math.SignAdapter = EmitMathSignAdapter(typeBuilder, toNumber);
+        math.PowAdapter = EmitMathPowAdapter(typeBuilder, toNumber);
+        math.MaxAdapter = EmitMathMinMaxAdapter(typeBuilder, toNumber, "MathMaxAdapter", isMax: true);
+        math.MinAdapter = EmitMathMinMaxAdapter(typeBuilder, toNumber, "MathMinAdapter", isMax: false);
 
         // Stage 4y: ES2015+ Math.* exposed as values. Each adapter routes
         // arg(s) through ToNumber for spec coercion, then dispatches to the
         // matching System.Math method.
-        runtime.MathAsinAdapter = EmitUnaryMathAdapter(typeBuilder, runtime, "MathAsinAdapter", "Asin");
-        runtime.MathAcosAdapter = EmitUnaryMathAdapter(typeBuilder, runtime, "MathAcosAdapter", "Acos");
-        runtime.MathAtanAdapter = EmitUnaryMathAdapter(typeBuilder, runtime, "MathAtanAdapter", "Atan");
-        runtime.MathAtan2Adapter = EmitBinaryMathAdapter(typeBuilder, runtime, "MathAtan2Adapter", "Atan2");
-        runtime.MathSinhAdapter = EmitUnaryMathAdapter(typeBuilder, runtime, "MathSinhAdapter", "Sinh");
-        runtime.MathCoshAdapter = EmitUnaryMathAdapter(typeBuilder, runtime, "MathCoshAdapter", "Cosh");
-        runtime.MathTanhAdapter = EmitUnaryMathAdapter(typeBuilder, runtime, "MathTanhAdapter", "Tanh");
-        runtime.MathAsinhAdapter = EmitUnaryMathAdapter(typeBuilder, runtime, "MathAsinhAdapter", "Asinh");
-        runtime.MathAcoshAdapter = EmitUnaryMathAdapter(typeBuilder, runtime, "MathAcoshAdapter", "Acosh");
-        runtime.MathAtanhAdapter = EmitUnaryMathAdapter(typeBuilder, runtime, "MathAtanhAdapter", "Atanh");
-        runtime.MathCbrtAdapter = EmitUnaryMathAdapter(typeBuilder, runtime, "MathCbrtAdapter", "Cbrt");
-        runtime.MathLog10Adapter = EmitUnaryMathAdapter(typeBuilder, runtime, "MathLog10Adapter", "Log10");
-        runtime.MathLog2Adapter = EmitUnaryMathAdapter(typeBuilder, runtime, "MathLog2Adapter", "Log2");
-        runtime.MathLog1pAdapter = EmitMathLog1pAdapter(typeBuilder, runtime);
-        runtime.MathExpm1Adapter = EmitMathExpm1Adapter(typeBuilder, runtime);
-        runtime.MathFroundAdapter = EmitMathFroundAdapter(typeBuilder, runtime);
-        runtime.MathF16RoundAdapter = EmitMathF16RoundAdapter(typeBuilder, runtime);
-        runtime.MathClz32Adapter = EmitMathClz32Adapter(typeBuilder, runtime);
-        runtime.MathImulAdapter = EmitMathImulAdapter(typeBuilder, runtime);
-        runtime.MathHypotAdapter = EmitMathHypotAdapter(typeBuilder, runtime);
+        math.AsinAdapter = EmitUnaryMathAdapter(typeBuilder, toNumber, "MathAsinAdapter", "Asin");
+        math.AcosAdapter = EmitUnaryMathAdapter(typeBuilder, toNumber, "MathAcosAdapter", "Acos");
+        math.AtanAdapter = EmitUnaryMathAdapter(typeBuilder, toNumber, "MathAtanAdapter", "Atan");
+        math.Atan2Adapter = EmitBinaryMathAdapter(typeBuilder, toNumber, "MathAtan2Adapter", "Atan2");
+        math.SinhAdapter = EmitUnaryMathAdapter(typeBuilder, toNumber, "MathSinhAdapter", "Sinh");
+        math.CoshAdapter = EmitUnaryMathAdapter(typeBuilder, toNumber, "MathCoshAdapter", "Cosh");
+        math.TanhAdapter = EmitUnaryMathAdapter(typeBuilder, toNumber, "MathTanhAdapter", "Tanh");
+        math.AsinhAdapter = EmitUnaryMathAdapter(typeBuilder, toNumber, "MathAsinhAdapter", "Asinh");
+        math.AcoshAdapter = EmitUnaryMathAdapter(typeBuilder, toNumber, "MathAcoshAdapter", "Acosh");
+        math.AtanhAdapter = EmitUnaryMathAdapter(typeBuilder, toNumber, "MathAtanhAdapter", "Atanh");
+        math.CbrtAdapter = EmitUnaryMathAdapter(typeBuilder, toNumber, "MathCbrtAdapter", "Cbrt");
+        math.Log10Adapter = EmitUnaryMathAdapter(typeBuilder, toNumber, "MathLog10Adapter", "Log10");
+        math.Log2Adapter = EmitUnaryMathAdapter(typeBuilder, toNumber, "MathLog2Adapter", "Log2");
+        math.Log1pAdapter = EmitMathLog1pAdapter(typeBuilder, toNumber);
+        math.Expm1Adapter = EmitMathExpm1Adapter(typeBuilder, toNumber);
+        math.FroundAdapter = EmitMathFroundAdapter(typeBuilder, toNumber);
+        math.F16RoundAdapter = EmitMathF16RoundAdapter(typeBuilder, toNumber);
+        math.Clz32Adapter = EmitMathClz32Adapter(typeBuilder, jsToInt32);
+        math.ImulAdapter = EmitMathImulAdapter(typeBuilder, jsToInt32);
+        math.HypotAdapter = EmitMathHypotAdapter(typeBuilder, toNumber);
     }
 
     /// <summary>
     /// Emits <c>public static object {name}(object a, object b) =&gt; Math.{systemMethod}(ToNumber(a), ToNumber(b))</c>.
     /// </summary>
-    private MethodBuilder EmitBinaryMathAdapter(TypeBuilder typeBuilder, EmittedRuntime runtime, string name, string systemMathMethod)
+    private MethodBuilder EmitBinaryMathAdapter(TypeBuilder typeBuilder, MethodInfo toNumber, string name, string systemMathMethod)
     {
         var method = typeBuilder.DefineMethod(
             name,
@@ -74,9 +74,9 @@ public partial class RuntimeEmitter
         );
         var il = method.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.ToNumber);
+        il.Emit(OpCodes.Call, toNumber);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.ToNumber);
+        il.Emit(OpCodes.Call, toNumber);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Math, systemMathMethod, _types.Double, _types.Double));
         il.Emit(OpCodes.Box, _types.Double);
         il.Emit(OpCodes.Ret);
@@ -84,13 +84,13 @@ public partial class RuntimeEmitter
     }
 
     /// <summary>Math.log1p(x) → Math.Log(x + 1) after ToNumber coercion.</summary>
-    private MethodBuilder EmitMathLog1pAdapter(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private MethodBuilder EmitMathLog1pAdapter(TypeBuilder typeBuilder, MethodInfo toNumber)
     {
         var method = typeBuilder.DefineMethod("MathLog1pAdapter",
             MethodAttributes.Public | MethodAttributes.Static, _types.Object, [_types.Object]);
         var il = method.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.ToNumber);
+        il.Emit(OpCodes.Call, toNumber);
         il.Emit(OpCodes.Ldc_R8, 1.0);
         il.Emit(OpCodes.Add);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Math, "Log", _types.Double));
@@ -100,13 +100,13 @@ public partial class RuntimeEmitter
     }
 
     /// <summary>Math.expm1(x) → Math.Exp(x) - 1 after ToNumber coercion.</summary>
-    private MethodBuilder EmitMathExpm1Adapter(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private MethodBuilder EmitMathExpm1Adapter(TypeBuilder typeBuilder, MethodInfo toNumber)
     {
         var method = typeBuilder.DefineMethod("MathExpm1Adapter",
             MethodAttributes.Public | MethodAttributes.Static, _types.Object, [_types.Object]);
         var il = method.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.ToNumber);
+        il.Emit(OpCodes.Call, toNumber);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Math, "Exp", _types.Double));
         il.Emit(OpCodes.Ldc_R8, 1.0);
         il.Emit(OpCodes.Sub);
@@ -116,13 +116,13 @@ public partial class RuntimeEmitter
     }
 
     /// <summary>Math.fround(x) — round to float32 then back to double.</summary>
-    private MethodBuilder EmitMathFroundAdapter(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private MethodBuilder EmitMathFroundAdapter(TypeBuilder typeBuilder, MethodInfo toNumber)
     {
         var method = typeBuilder.DefineMethod("MathFroundAdapter",
             MethodAttributes.Public | MethodAttributes.Static, _types.Object, [_types.Object]);
         var il = method.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.ToNumber);
+        il.Emit(OpCodes.Call, toNumber);
         il.Emit(OpCodes.Conv_R4);
         il.Emit(OpCodes.Conv_R8);
         il.Emit(OpCodes.Box, _types.Double);
@@ -131,7 +131,7 @@ public partial class RuntimeEmitter
     }
 
     /// <summary>Math.f16round(x) — round to binary16 then back to double.</summary>
-    private MethodBuilder EmitMathF16RoundAdapter(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private MethodBuilder EmitMathF16RoundAdapter(TypeBuilder typeBuilder, MethodInfo toNumber)
     {
         var method = typeBuilder.DefineMethod("MathF16RoundAdapter",
             MethodAttributes.Public | MethodAttributes.Static, _types.Object, [_types.Object]);
@@ -145,7 +145,7 @@ public partial class RuntimeEmitter
                 && m.GetParameters().Length == 1
                 && m.GetParameters()[0].ParameterType == typeof(Half));
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.ToNumber);
+        il.Emit(OpCodes.Call, toNumber);
         il.Emit(OpCodes.Call, halfFromDouble);
         il.Emit(OpCodes.Call, doubleFromHalf);
         il.Emit(OpCodes.Box, _types.Double);
@@ -154,7 +154,7 @@ public partial class RuntimeEmitter
     }
 
     /// <summary>Math.clz32(x) — leading zero count of ToUint32(x); 32 when x is 0.</summary>
-    private MethodBuilder EmitMathClz32Adapter(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private MethodBuilder EmitMathClz32Adapter(TypeBuilder typeBuilder, MethodInfo jsToInt32)
     {
         var method = typeBuilder.DefineMethod("MathClz32Adapter",
             MethodAttributes.Public | MethodAttributes.Static, _types.Object, [_types.Object]);
@@ -163,7 +163,7 @@ public partial class RuntimeEmitter
         // Conv_U4 from double has undefined behavior for values outside [0, 2^32);
         // JsToInt32 handles NaN/Infinity → 0 + modular reduction.
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.JsToInt32);
+        il.Emit(OpCodes.Call, jsToInt32);
         il.Emit(OpCodes.Call, typeof(System.Numerics.BitOperations).GetMethod("LeadingZeroCount", [typeof(uint)])!);
         il.Emit(OpCodes.Conv_R8);
         il.Emit(OpCodes.Box, _types.Double);
@@ -172,7 +172,7 @@ public partial class RuntimeEmitter
     }
 
     /// <summary>Math.imul(a, b) — int32 multiplication after ToNumber.</summary>
-    private MethodBuilder EmitMathImulAdapter(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private MethodBuilder EmitMathImulAdapter(TypeBuilder typeBuilder, MethodInfo jsToInt32)
     {
         var method = typeBuilder.DefineMethod("MathImulAdapter",
             MethodAttributes.Public | MethodAttributes.Static, _types.Object, [_types.Object, _types.Object]);
@@ -184,10 +184,10 @@ public partial class RuntimeEmitter
         // and values outside int32 range by modular reduction (Conv_I4 from double
         // is undefined behavior outside [-2^31, 2^31)).
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.JsToInt32);
+        il.Emit(OpCodes.Call, jsToInt32);
         il.Emit(OpCodes.Stloc, aLocal);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.JsToInt32);
+        il.Emit(OpCodes.Call, jsToInt32);
         il.Emit(OpCodes.Stloc, bLocal);
         // (a * b) wraps via Mul. Result fits in int32 by construction (mod 2^32).
         il.Emit(OpCodes.Ldloc, aLocal);
@@ -203,7 +203,7 @@ public partial class RuntimeEmitter
     /// Math.hypot(...args) — sqrt(sum(arg_i^2)) after ToNumber on each. Variadic
     /// via object[]; matches the inline emitter's local-stash strategy.
     /// </summary>
-    private MethodBuilder EmitMathHypotAdapter(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private MethodBuilder EmitMathHypotAdapter(TypeBuilder typeBuilder, MethodInfo toNumber)
     {
         var method = typeBuilder.DefineMethod("MathHypotAdapter",
             MethodAttributes.Public | MethodAttributes.Static, _types.Object, [_types.ObjectArray]);
@@ -230,7 +230,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, iLocal);
         il.Emit(OpCodes.Ldelem_Ref);
-        il.Emit(OpCodes.Call, runtime.ToNumber);
+        il.Emit(OpCodes.Call, toNumber);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Double, "IsInfinity", _types.Double));
         il.Emit(OpCodes.Brfalse, notInfArg);
         il.Emit(OpCodes.Ldc_R8, double.PositiveInfinity);
@@ -263,7 +263,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, iLocal);
         il.Emit(OpCodes.Ldelem_Ref);
-        il.Emit(OpCodes.Call, runtime.ToNumber);
+        il.Emit(OpCodes.Call, toNumber);
         il.Emit(OpCodes.Stloc, argLocal);
         il.Emit(OpCodes.Ldloc, sumLocal);
         il.Emit(OpCodes.Ldloc, argLocal);
@@ -289,7 +289,7 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits <c>public static object {name}(object arg) =&gt; Math.{systemMethod}(ToNumber(arg))</c>.
     /// </summary>
-    private MethodBuilder EmitUnaryMathAdapter(TypeBuilder typeBuilder, EmittedRuntime runtime, string name, string systemMathMethod)
+    private MethodBuilder EmitUnaryMathAdapter(TypeBuilder typeBuilder, MethodInfo toNumber, string name, string systemMathMethod)
     {
         var method = typeBuilder.DefineMethod(
             name,
@@ -300,7 +300,7 @@ public partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.ToNumber);
+        il.Emit(OpCodes.Call, toNumber);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Math, systemMathMethod, _types.Double));
         il.Emit(OpCodes.Box, _types.Double);
         il.Emit(OpCodes.Ret);
@@ -311,7 +311,7 @@ public partial class RuntimeEmitter
     /// Emits Math.round without adding 0.5 to the input. That shortcut loses
     /// the sign of -0 and rounds already-integral large doubles incorrectly.
     /// </summary>
-    private MethodBuilder EmitMathRoundAdapter(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private MethodBuilder EmitMathRoundAdapter(TypeBuilder typeBuilder, MethodInfo toNumber)
     {
         var method = typeBuilder.DefineMethod(
             "MathRoundAdapter",
@@ -334,7 +334,7 @@ public partial class RuntimeEmitter
         var unchangedResult = il.DefineLabel();
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.ToNumber);
+        il.Emit(OpCodes.Call, toNumber);
         il.Emit(OpCodes.Stloc, value);
 
         // NaN, infinities, and signed zero return unchanged.
@@ -414,7 +414,7 @@ public partial class RuntimeEmitter
     /// JS returns NaN for NaN input. Handle NaN explicitly, convert int result
     /// to double for boxing consistency.
     /// </summary>
-    private MethodBuilder EmitMathSignAdapter(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private MethodBuilder EmitMathSignAdapter(TypeBuilder typeBuilder, MethodInfo toNumber)
     {
         var method = typeBuilder.DefineMethod(
             "MathSignAdapter",
@@ -427,7 +427,7 @@ public partial class RuntimeEmitter
         var vLocal = il.DeclareLocal(_types.Double);
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.ToNumber);
+        il.Emit(OpCodes.Call, toNumber);
         il.Emit(OpCodes.Stloc, vLocal);
 
         // if (double.IsNaN(v)) return NaN (boxed)
@@ -451,7 +451,7 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits <c>MathPowAdapter(object base, object exponent)</c>.
     /// </summary>
-    private MethodBuilder EmitMathPowAdapter(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private MethodBuilder EmitMathPowAdapter(TypeBuilder typeBuilder, MethodInfo toNumber)
     {
         var method = typeBuilder.DefineMethod(
             "MathPowAdapter",
@@ -462,9 +462,9 @@ public partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.ToNumber);
+        il.Emit(OpCodes.Call, toNumber);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.ToNumber);
+        il.Emit(OpCodes.Call, toNumber);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Math, "Pow", _types.Double, _types.Double));
         il.Emit(OpCodes.Box, _types.Double);
         il.Emit(OpCodes.Ret);
@@ -478,7 +478,7 @@ public partial class RuntimeEmitter
     /// handling). Spec behavior: empty args returns ±∞; any NaN in the input
     /// short-circuits to NaN.
     /// </summary>
-    private MethodBuilder EmitMathMinMaxAdapter(TypeBuilder typeBuilder, EmittedRuntime runtime, string name, bool isMax)
+    private MethodBuilder EmitMathMinMaxAdapter(TypeBuilder typeBuilder, MethodInfo toNumber, string name, bool isMax)
     {
         var method = typeBuilder.DefineMethod(
             name,
@@ -510,7 +510,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldelem_Ref);
-        il.Emit(OpCodes.Call, runtime.ToNumber);
+        il.Emit(OpCodes.Call, toNumber);
         il.Emit(OpCodes.Stloc, resultLocal);
 
         // for (i = 1; i < args.Length; i++)
@@ -530,7 +530,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, iLocal);
         il.Emit(OpCodes.Ldelem_Ref);
-        il.Emit(OpCodes.Call, runtime.ToNumber);
+        il.Emit(OpCodes.Call, toNumber);
         il.Emit(OpCodes.Stloc, nextLocal);
 
         // if (double.IsNaN(next) || double.IsNaN(result)) return NaN;
