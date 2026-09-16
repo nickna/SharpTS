@@ -2191,11 +2191,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitIsTruthy(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitIsTruthy(TypeBuilder typeBuilder, EmittedBooleanRuntime booleans, Type undefinedType)
     {
         // Signature forward-declared by DefineRuntimeClassPhase1 so $RegExp
         // (which emits before $Runtime's body) can call it; reuse that slot.
-        var method = (MethodBuilder)runtime.IsTruthy;
+        var method = (MethodBuilder)booleans.IsTruthy;
 
         var il = method.GetILGenerator();
         var falseLabel = il.DefineLabel();
@@ -2211,7 +2211,7 @@ public partial class RuntimeEmitter
 
         // undefined => false
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, undefinedType);
         il.Emit(OpCodes.Brtrue, falseLabel);
 
         // bool => return value

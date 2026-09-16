@@ -80,8 +80,9 @@ jobs:
     needs: workflow-policy
     if: needs.workflow-policy.outputs.mode == 'full'
     runs-on: ${{ matrix.os }}
-    # Leave room for the full test suites plus build and final packaging gates.
-    timeout-minutes: 30
+    # Leave room for the 20-minute core and 10-minute GUI suites plus build
+    # and final packaging gates; a passing core run can exhaust a 30-minute job.
+    timeout-minutes: 40
     strategy:
       # Don't let one platform's failure cancel the others — we want to see each
       # platform's real result independently (a flake on one shouldn't hide the rest).
@@ -184,7 +185,7 @@ jobs:
       - name: Test core
         run: dotnet test tests/SharpTS.Tests/SharpTS.Tests.csproj --no-build --configuration Release --verbosity normal --filter "Category!=LiveNetwork&Category!=LoadSensitive&Category!=npm"
         # The 21,000+ case core suite can exceed fifteen minutes on hosted runners.
-        # Individual test deadlines and the 30-minute job limit remain separate.
+        # Individual test deadlines and the overall job limit remain separate.
         timeout-minutes: 20
 
       - name: Test GUI conformance

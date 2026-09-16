@@ -335,7 +335,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, targetDescriptorLocal);
         il.Emit(OpCodes.Ldstr, "writable");
         il.Emit(OpCodes.Call, runtime.GetProperty);
-        il.Emit(OpCodes.Call, runtime.IsTruthy);
+        il.Emit(OpCodes.Call, runtime.Booleans.IsTruthy);
         il.Emit(OpCodes.Brtrue, ordinaryDataSetLabel);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ret);

@@ -383,9 +383,9 @@ public partial class ILEmitter
 
     protected override void EmitTruthyCheck()
     {
-        if (_ctx.Runtime?.IsTruthy != null)
+        if (_ctx.Runtime?.Booleans.IsTruthy != null)
         {
-            IL.Emit(OpCodes.Call, _ctx.Runtime.IsTruthy);
+            IL.Emit(OpCodes.Call, _ctx.Runtime.Booleans.IsTruthy);
             return;
         }
 

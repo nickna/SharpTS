@@ -137,7 +137,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, descriptorLocal);
         il.Emit(OpCodes.Ldstr, "enumerable");
         il.Emit(OpCodes.Call, runtime.GetProperty);
-        il.Emit(OpCodes.Call, runtime.IsTruthy);
+        il.Emit(OpCodes.Call, runtime.Booleans.IsTruthy);
         il.Emit(OpCodes.Brfalse, nextKey);
         il.Emit(OpCodes.Br, enumerableCheckDone);
 

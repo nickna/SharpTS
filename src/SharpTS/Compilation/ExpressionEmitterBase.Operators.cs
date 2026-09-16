@@ -20,11 +20,11 @@ public abstract partial class ExpressionEmitterBase
         switch (operatorType)
         {
             case TokenType.AND_AND_EQUAL:
-                IL.Emit(OpCodes.Call, Ctx.Runtime!.IsTruthy);
+                IL.Emit(OpCodes.Call, Ctx.Runtime!.Booleans.IsTruthy);
                 IL.Emit(OpCodes.Brfalse, skipLabel);
                 break;
             case TokenType.OR_OR_EQUAL:
-                IL.Emit(OpCodes.Call, Ctx.Runtime!.IsTruthy);
+                IL.Emit(OpCodes.Call, Ctx.Runtime!.Booleans.IsTruthy);
                 IL.Emit(OpCodes.Brtrue, skipLabel);
                 break;
             case TokenType.QUESTION_QUESTION_EQUAL:

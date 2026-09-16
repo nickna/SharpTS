@@ -169,7 +169,6 @@ public class EmittedRuntime
     public MethodBuilder JsToInt32 { get; set; } = null!;
     public MethodBuilder JsLessThan { get; set; } = null!;
     public MethodBuilder JsLessOrEqual { get; set; } = null!;
-    public MethodBuilder IsTruthy { get; set; } = null!;
     public MethodBuilder TypeOf { get; set; } = null!;
     public MethodBuilder InstanceOf { get; set; } = null!;
     public MethodBuilder HasIn { get; set; } = null!;
@@ -328,13 +327,6 @@ public class EmittedRuntime
     /// </summary>
     public FieldBuilder GlobalThisSingletonField { get; set; } = null!;
     /// <summary>
-    /// Boolean.prototype singleton — a Dictionary&lt;string, object&gt; that surfaces
-    /// when user code does <c>Boolean.prototype[0] = …</c> or
-    /// <c>Boolean.prototype.length = …</c>. Read by GetProperty's Type-receiver
-    /// branch and by the array-like materializer for primitive bool receivers.
-    /// </summary>
-    public FieldBuilder BooleanPrototypeField { get; set; } = null!;
-    /// <summary>
     /// Date.prototype singleton — a Dictionary&lt;string, object&gt; carrying $TSFunction
     /// wrappers around the <c>$Runtime.Date*</c> helpers. Instance calls (<c>d.getTime()</c>)
     /// are emitted inline by DateEmitter and never route through here; this object exists so
@@ -377,8 +369,6 @@ public class EmittedRuntime
     public MethodBuilder PDSGetEnumerableExtraKeys { get; set; } = null!;
     /// <summary>$PropertyDescriptorStore.GetAllExtraKeys(obj, dict) — like the Enumerable variant but does NOT filter by the Enumerable bit. Used by Object.getOwnPropertyNames (ECMA-262 §20.1.2.10) which returns both enumerable AND non-enumerable own string-keyed properties.</summary>
     public MethodBuilder PDSGetAllExtraKeys { get; set; } = null!;
-    /// <summary>Populates <see cref="BooleanPrototypeField"/> with $TSFunction wrappers for toString/valueOf; idempotent.</summary>
-    public MethodBuilder BooleanPrototypePopulateMethod { get; set; } = null!;
     /// <summary>Populates <see cref="DatePrototypeField"/> with $TSFunction wrappers for the Date.prototype methods; idempotent.</summary>
     public MethodBuilder DatePrototypePopulateMethod { get; set; } = null!;
     /// <summary>$Runtime.HasOwnPropertyHelper(obj, name) — backs <c>obj.hasOwnProperty(name)</c> for $TSFunction / $Object / Dictionary / List receivers.</summary>
@@ -597,6 +587,9 @@ public class EmittedRuntime
 
     /// <summary>Required BigInt prototype/numeric metadata with optional BigInt operations.</summary>
     public EmittedBigIntRuntime BigInt { get; } = new();
+
+    /// <summary>Required truthiness and Boolean prototype declarations.</summary>
+    public EmittedBooleanRuntime Booleans { get; } = new();
 
     public MethodBuilder ObjectRest { get; set; } = null!;
     public MethodBuilder ArrayDestructureSource { get; set; } = null!;  // #685: normalize array binding-pattern source via the iterator protocol

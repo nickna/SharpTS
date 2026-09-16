@@ -240,7 +240,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, ordinaryDeleteDescriptorLocal);
         il.Emit(OpCodes.Ldstr, "configurable");
         il.Emit(OpCodes.Call, runtime.GetProperty);
-        il.Emit(OpCodes.Call, runtime.IsTruthy);
+        il.Emit(OpCodes.Call, runtime.Booleans.IsTruthy);
         il.Emit(OpCodes.Brtrue, ordinaryDeleteDescriptorAllowedLabel);
         EmitDeleteFail("' of object");
         il.MarkLabel(ordinaryDeleteDescriptorAllowedLabel);

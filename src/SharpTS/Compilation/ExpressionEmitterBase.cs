@@ -2593,7 +2593,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
             isAnd,
             () => { EmitExpression(l.Left); EnsureBoxed(); },
             () => { EmitExpression(l.Right); EnsureBoxed(); },
-            Ctx.Runtime!.IsTruthy);
+            Ctx.Runtime!.Booleans.IsTruthy);
     }
 
     /// <summary>
@@ -2610,7 +2610,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
                 _helpers.EmitUnaryPlus(() => EmitExpression(u.Right));
                 break;
             case TokenType.BANG:
-                _helpers.EmitUnaryNot(() => EmitExpression(u.Right), Ctx.Runtime!.IsTruthy);
+                _helpers.EmitUnaryNot(() => EmitExpression(u.Right), Ctx.Runtime!.Booleans.IsTruthy);
                 break;
             case TokenType.TYPEOF:
                 // typeof never throws on undeclared variables - returns "undefined"
@@ -2716,7 +2716,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
             () => { EmitExpression(t.Condition); EnsureBoxed(); },
             () => { EmitExpression(t.ThenBranch); EnsureBoxed(); },
             () => { EmitExpression(t.ElseBranch); EnsureBoxed(); },
-            Ctx.Runtime!.IsTruthy);
+            Ctx.Runtime!.Booleans.IsTruthy);
     }
 
     /// <summary>

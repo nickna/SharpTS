@@ -23,8 +23,8 @@ public sealed class BooleanStaticEmitter : IStaticTypeEmitterStrategy
         // valueOf wrappers (Stage 4z9 pattern, populated for Number/String/Array).
         if (propertyName == "prototype")
         {
-            il.Emit(OpCodes.Call, ctx.Runtime!.BooleanPrototypePopulateMethod);
-            il.Emit(OpCodes.Ldsfld, ctx.Runtime!.BooleanPrototypeField);
+            il.Emit(OpCodes.Call, ctx.Runtime!.Booleans.PrototypePopulateMethod);
+            il.Emit(OpCodes.Ldsfld, ctx.Runtime!.Booleans.PrototypeField);
             return true;
         }
 

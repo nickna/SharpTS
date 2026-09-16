@@ -708,6 +708,7 @@ public partial class RuntimeEmitter
         runtime.Numbers.CompleteEmission();
         runtime.Math.CompleteEmission();
         runtime.BigInt.CompleteEmission();
+        runtime.Booleans.CompleteEmission();
         runtime.BroadcastChannel?.CompleteEmission();
         runtime.EventEmitter.CompleteEmission();
         runtime.NodeStreams?.CompleteEmission();

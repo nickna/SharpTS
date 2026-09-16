@@ -5,43 +5,53 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
+    private readonly record struct BooleanReceiverInputs(
+        Type ObjectType,
+        MethodInfo FieldsGetter,
+        MethodInfo CreateException,
+        ConstructorInfo TypeErrorCtor);
+
+    private readonly record struct BooleanPrototypeInputs(
+        PrototypeDescriptorInputs Descriptors,
+        Type DescriptorType,
+        MethodInfo FunctionGetOrCreate,
+        FieldInfo ObjectPrototype,
+        MethodInfo SetPrototype,
+        BooleanReceiverInputs Receiver);
+
     /// <summary>
-    /// Populates <see cref="EmittedRuntime.BooleanPrototypeField"/> with
-    /// <c>$TSFunction</c> wrappers for toString/valueOf. No dedicated
-    /// $Runtime helpers exist for these (compiled mode handles
-    /// <c>Boolean.toString()</c> via the inline String-conversion path),
-    /// so the wrappers point at <see cref="EmittedStringRuntime.PrototypeGenericStub"/>
-    /// — sufficient for typeof + IsConstructor probes from
-    /// Test262 not-a-constructor.js tests.
+    /// Declares the population method for <see cref="EmittedBooleanRuntime.PrototypeField"/>.
+    /// Its later body installs cached toString/valueOf wrappers around dedicated helpers.
     /// </summary>
-    private void DefineBooleanPrototypePopulateShell(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void DefineBooleanPrototypePopulateShell(TypeBuilder typeBuilder, EmittedBooleanRuntime booleans)
     {
-        runtime.BooleanPrototypePopulateMethod = typeBuilder.DefineMethod(
+        booleans.PrototypePopulateMethod = typeBuilder.DefineMethod(
             "_BooleanPrototypePopulate",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Void,
             Type.EmptyTypes);
     }
 
-    private void EmitBooleanPrototypePopulate(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitBooleanPrototypePopulate(TypeBuilder typeBuilder, EmittedBooleanRuntime booleans,
+        BooleanPrototypeInputs peers)
     {
         // Emit toString / valueOf helpers before the populate body that wires
         // them up (Stage Path-A: spec-correct thisBooleanValue extraction).
-        var booleanToStringHelper = EmitBooleanToStringHelper(typeBuilder, runtime);
-        var booleanValueOfHelper = EmitBooleanValueOfHelper(typeBuilder, runtime);
+        var booleanToStringHelper = EmitBooleanToStringHelper(typeBuilder, booleans.PrototypeField, peers.Receiver);
+        var booleanValueOfHelper = EmitBooleanValueOfHelper(typeBuilder, booleans.PrototypeField, peers.Receiver);
 
-        var method = runtime.BooleanPrototypePopulateMethod;
+        var method = booleans.PrototypePopulateMethod;
         var il = method.GetILGenerator();
         var setItem = _types.GetMethod(_types.DictionaryStringObject, "set_Item",
             _types.String, _types.Object);
 
-        EmitPrototypePopulateGuard(il, runtime.BooleanPrototypeField);
+        EmitPrototypePopulateGuard(il, booleans.PrototypeField);
 
-        var boolDescLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+        var boolDescLocal = il.DeclareLocal(peers.DescriptorType);
 
         // ECMA-262 20.3.3 Boolean.prototype.constructor === Boolean. Compiled
         // bare `Boolean` resolves to typeof(bool).
-        EmitInstallConstructor(il, runtime, runtime.BooleanPrototypeField, boolDescLocal, setItem, () =>
+        EmitInstallConstructorDescriptor(il, peers.Descriptors, booleans.PrototypeField, boolDescLocal, setItem, () =>
         {
             il.Emit(OpCodes.Ldtoken, _types.Boolean);
             il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
@@ -51,17 +61,17 @@ public partial class RuntimeEmitter
         // Boolean.prototype.{toString,valueOf} take (thisBooleanValue) — name
         // first param "__this" so $TSFunction.InvokeWithThis prepends the receiver.
         // Built-in §17 attrs: W:T, E:F, C:T. Install a PDS data descriptor.
-        void Wire(string jsName, MethodBuilder? helper, int jsLength)
-            => EmitWirePrototypeMethod(il, runtime, runtime.BooleanPrototypeField, boolDescLocal,
+        void Wire(string jsName, MethodBuilder helper, int jsLength)
+            => EmitWirePrototypeMethodDescriptor(il, peers.Descriptors, peers.FunctionGetOrCreate, booleans.PrototypeField, boolDescLocal,
                 setItem, jsName, helper, jsLength);
 
         Wire("toString", booleanToStringHelper, 0);
         Wire("valueOf",  booleanValueOfHelper,  0);
 
         // Per ECMA-262 §20.3.3 Boolean.prototype's [[Prototype]] is %Object.prototype%.
-        il.Emit(OpCodes.Ldsfld, runtime.BooleanPrototypeField);
-        il.Emit(OpCodes.Ldsfld, runtime.ObjectPrototypeField);
-        il.Emit(OpCodes.Call, runtime.PDSSetPrototype);
+        il.Emit(OpCodes.Ldsfld, booleans.PrototypeField);
+        il.Emit(OpCodes.Ldsfld, peers.ObjectPrototype);
+        il.Emit(OpCodes.Call, peers.SetPrototype);
 
         il.Emit(OpCodes.Ret);
     }
@@ -72,12 +82,12 @@ public partial class RuntimeEmitter
     ///   - bool primitive → format directly
     ///   - $Object with __primitiveValue: bool → format the unwrapped value
     ///   - Boolean.prototype itself → "false" (its [[BooleanData]] is +false)
-    ///   - else → "false" (lenient: spec throws TypeError, but compiled mode's
-    ///     looser behavior matches what the not-a-constructor probes need).
+    ///   - other receivers → throw TypeError.
     /// Avoids $Runtime.GetProperty for the prototype-singleton case to dodge
     /// the prototype-chain recursion that walks back into BooleanPrototype.
     /// </summary>
-    private MethodBuilder EmitBooleanToStringHelper(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private MethodBuilder EmitBooleanToStringHelper(TypeBuilder typeBuilder, FieldInfo prototype,
+        BooleanReceiverInputs peers)
     {
         var method = typeBuilder.DefineMethod(
             "BooleanToString",
@@ -105,12 +115,12 @@ public partial class RuntimeEmitter
         // dict directly to avoid recursing through GetProperty's prototype-
         // chain walk (which would loop back to BooleanPrototype).
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSObjectType);
+        il.Emit(OpCodes.Isinst, peers.ObjectType);
         il.Emit(OpCodes.Brfalse, notBoxedLabel);
         var primValLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSObjectType);
-        il.Emit(OpCodes.Callvirt, runtime.TSObjectFieldsGetter);
+        il.Emit(OpCodes.Castclass, peers.ObjectType);
+        il.Emit(OpCodes.Callvirt, peers.FieldsGetter);
         il.Emit(OpCodes.Ldstr, "__primitiveValue");
         il.Emit(OpCodes.Ldloca, primValLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "TryGetValue",
@@ -127,14 +137,14 @@ public partial class RuntimeEmitter
 
         // Boolean.prototype itself: [[BooleanData]] is +false → "false".
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldsfld, runtime.BooleanPrototypeField);
+        il.Emit(OpCodes.Ldsfld, prototype);
         il.Emit(OpCodes.Beq, falseLabel);
 
         // Other receivers (e.g. new String() with __primitiveType="String", or a
         // plain Object): per ECMA-262 §20.3.3.2 throw TypeError. The borrowed-
         // method tests `s1.toString = Boolean.prototype.toString; s1.toString()`
         // rely on this throw.
-        GuestErrorEmitter.ThrowTypeError(il, runtime, "Boolean.prototype.toString requires a Boolean this value");
+        GuestErrorEmitter.ThrowError(il, peers.CreateException, peers.TypeErrorCtor, "Boolean.prototype.toString requires a Boolean this value");
 
         il.MarkLabel(falseLabel);
         il.Emit(OpCodes.Ldstr, "false");
@@ -151,10 +161,10 @@ public partial class RuntimeEmitter
     /// Emits Boolean.prototype.valueOf helper (ECMA-262 20.3.3.3). Returns the
     /// boolean primitive via thisBooleanValue extraction, with the same
     /// receiver shape recognition as <see cref="EmitBooleanToStringHelper"/>.
-    /// Default for unrecognized receivers: false (matches Boolean.prototype's
-    /// own [[BooleanData]]).
+    /// Boolean.prototype itself yields false; unrecognized receivers throw TypeError.
     /// </summary>
-    private MethodBuilder EmitBooleanValueOfHelper(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private MethodBuilder EmitBooleanValueOfHelper(TypeBuilder typeBuilder, FieldInfo prototype,
+        BooleanReceiverInputs peers)
     {
         var method = typeBuilder.DefineMethod(
             "BooleanValueOf",
@@ -176,12 +186,12 @@ public partial class RuntimeEmitter
 
         // $TSObject → unwrap __primitiveValue if it's a bool
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSObjectType);
+        il.Emit(OpCodes.Isinst, peers.ObjectType);
         il.Emit(OpCodes.Brfalse, notBoxedLabel);
         var primValLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSObjectType);
-        il.Emit(OpCodes.Callvirt, runtime.TSObjectFieldsGetter);
+        il.Emit(OpCodes.Castclass, peers.ObjectType);
+        il.Emit(OpCodes.Callvirt, peers.FieldsGetter);
         il.Emit(OpCodes.Ldstr, "__primitiveValue");
         il.Emit(OpCodes.Ldloca, primValLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "TryGetValue",
@@ -196,7 +206,7 @@ public partial class RuntimeEmitter
 
         // Boolean.prototype itself: [[BooleanData]] is +false.
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldsfld, runtime.BooleanPrototypeField);
+        il.Emit(OpCodes.Ldsfld, prototype);
         var notBoolPrototypeLabel = il.DefineLabel();
         il.Emit(OpCodes.Bne_Un, notBoolPrototypeLabel);
         il.Emit(OpCodes.Ldc_I4_0);
@@ -205,7 +215,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(notBoolPrototypeLabel);
 
         // Other receivers: throw TypeError per ECMA-262 §20.3.3.3.
-        GuestErrorEmitter.ThrowTypeError(il, runtime, "Boolean.prototype.valueOf requires a Boolean this value");
+        GuestErrorEmitter.ThrowError(il, peers.CreateException, peers.TypeErrorCtor, "Boolean.prototype.valueOf requires a Boolean this value");
 
         // Unreachable but balances stack:
         il.Emit(OpCodes.Ldc_I4_0);

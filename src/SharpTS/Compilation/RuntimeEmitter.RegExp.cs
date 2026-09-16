@@ -447,7 +447,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);                                // receiver
         il.Emit(OpCodes.Ldsfld, runtime.SymbolMatch);            // Symbol.match (symbol object)
         il.Emit(OpCodes.Call, runtime.GetIndex);                 // pattern[Symbol.match]
-        il.Emit(OpCodes.Call, runtime.IsTruthy);
+        il.Emit(OpCodes.Call, runtime.Booleans.IsTruthy);
         il.Emit(OpCodes.Brfalse, skipRegexLike);
         // src = ToJsString(Get(pattern, "source"))
         il.Emit(OpCodes.Ldarg_0);
@@ -1109,7 +1109,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, runtime.UndefinedType);
         il.Emit(OpCodes.Brtrue, useNativeBrand);
         il.Emit(OpCodes.Ldloc, matcherLocal);
-        il.Emit(OpCodes.Call, runtime.IsTruthy);
+        il.Emit(OpCodes.Call, runtime.Booleans.IsTruthy);
         il.Emit(OpCodes.Stloc, patternIsRegExpLocal);
         il.Emit(OpCodes.Br, isRegExpReady);
         il.MarkLabel(useNativeBrand);

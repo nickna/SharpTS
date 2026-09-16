@@ -3092,6 +3092,122 @@ public class StandaloneDllTests
             verifyStandardError: error => Assert.Empty(error)));
     }
 
+    public static IEnumerable<object[]> BooleanMetadataPrograms =>
+    [
+        new object[]
+        {
+            "falsy", "console.log(Boolean(null),Boolean(undefined),Boolean(false),Boolean(0),Boolean(-0),Boolean(NaN),Boolean(''));",
+            "false false false false false false false\n", "main.ts"
+        },
+        new object[]
+        {
+            "truthy", "console.log(Boolean(true),Boolean(1),Boolean(-1),Boolean(Infinity),Boolean(-Infinity),Boolean('0'),Boolean([]),Boolean({}),Boolean(()=>0));",
+            "true true true true true true true true true\n", "main.ts"
+        },
+        new object[]
+        {
+            "bigint", "console.log(Boolean(0n),Boolean(1n),Boolean(-1n));console.log(!0n,!1n);",
+            "false true true\ntrue false\n", "main.ts"
+        },
+        new object[]
+        {
+            "no_hooks", "let calls=0;const value:any={[Symbol.toPrimitive](){calls++;return false;},valueOf(){calls++;return false;},toString(){calls++;return '';}};console.log(Boolean(value),!value);if(value)console.log('yes');console.log(calls);",
+            "true false\nyes\n0\n", "main.ts"
+        },
+        new object[]
+        {
+            "dynamic", "const values:any[]=[false,0,-0,NaN,'',null,undefined,true,1,'x',[],{}];for(const value of values)console.log(Boolean(value),!value);",
+            "false true\nfalse true\nfalse true\nfalse true\nfalse true\nfalse true\nfalse true\ntrue false\ntrue false\ntrue false\ntrue false\ntrue false\n", "main.ts"
+        },
+        new object[]
+        {
+            "control_flow", "let yes=true;let no=false;console.log(yes&&3,no||4,!yes,!no,yes?'yes':'no');let count=0;while(count<2){count++;}console.log(count);",
+            "3 4 false true yes\n2\n", "main.ts"
+        },
+        new object[]
+        {
+            "short_circuit", "let trace='';function mark(label:string,value:any):any{trace+=label;return value;}console.log(mark('a',0)&&mark('b',1),mark('c','')||mark('d','x'),trace);",
+            "0 x acd\n", "main.ts"
+        },
+        new object[]
+        {
+            "prototype", "const p:any=Boolean.prototype;console.log(p.valueOf(),p.toString(),p.constructor===Boolean,Object.getPrototypeOf(p)===Object.prototype);",
+            "false false true true\n", "main.ts"
+        },
+        new object[]
+        {
+            "boxed", "const p:any=Boolean.prototype;const value:any=new Boolean(false);console.log(Boolean(value),p.valueOf.call(value),p.toString.call(value),Object.getPrototypeOf(value)===p);console.log(Object.prototype.toString.call(value));",
+            "true false false true\n[object Boolean]\n", "main.ts"
+        },
+        new object[]
+        {
+            "descriptor", "const p:any=Boolean.prototype;const d:any=Object.getOwnPropertyDescriptor(p,'valueOf');console.log(d.value===p.valueOf,d.writable,d.enumerable,d.configurable,Object.keys(p).length);console.log(p.valueOf.name,p.valueOf.length,p.toString.name,p.toString.length);",
+            "true true false true 0\nvalueOf 0 toString 0\n", "main.ts"
+        },
+        new object[]
+        {
+            "brand", "const p:any=Boolean.prototype;for(const value of [1,'',null,Symbol('x')] as any[]){try{console.log(p.valueOf.call(value));}catch(e:any){console.log(e.name);}}console.log(p.toString.call(true),p.valueOf.call(false));",
+            "TypeError\nTypeError\nTypeError\nTypeError\ntrue false\n", "main.ts"
+        },
+        new object[]
+        {
+            "mutation", "const p:any=Boolean.prototype;p.extra=9;const value:any=Object(false);console.log(value.extra,Object.keys(p).join(','));delete p.extra;console.log(value.extra);",
+            "9 extra\nundefined\n", "main.ts"
+        },
+        new object[]
+        {
+            "descriptor_flags", "const value:any={};Object.defineProperty(value,'x',{value:1,writable:'yes' as any,enumerable:0 as any,configurable:[] as any});const d:any=Object.getOwnPropertyDescriptor(value,'x');console.log(d.writable,d.enumerable,d.configurable);",
+            "true false true\n", "main.ts"
+        },
+        new object[]
+        {
+            "regexp", "console.log(/a/.test('cat'),/a/.test('dog'),Boolean(/x/));console.log('aba'.replace(/a/g,'x'));",
+            "true false true\nxbx\n", "main.ts"
+        },
+        new object[]
+        {
+            "array_callbacks", "const a=[0,1,2];console.log(a.filter((x:number):any=>x).length,a.filter((x:number):any=>({})).length,a.find((x:number):any=>x),a.some((x:number):any=>x),a.every((x:number):any=>x));",
+            "2 3 1 true false\n", "main.ts"
+        },
+        new object[]
+        {
+            "async", "async function run(){const value=await Promise.resolve(0);console.log(!!value,Boolean(value));}run();",
+            "false false\n", "main.ts"
+        },
+        new object[]
+        {
+            "generator", "function* values():Generator<boolean,void,any>{yield true;yield false;}for(const value of values())console.log(Boolean(value),!value);",
+            "true false\nfalse true\n", "main.ts"
+        },
+        // Preserve the existing compatibility limitation while changing metadata ownership.
+        new object[]
+        {
+            "cjs", "const B=Boolean;console.log(Boolean(0),Boolean('x'),B(0),B('x'),B===Boolean);",
+            "false true null null true\n", "main.cjs"
+        },
+        new object[]
+        {
+            "minimal", "const value=1;",
+            "", "main.ts"
+        },
+    ];
+
+    [Theory]
+    [MemberData(nameof(BooleanMetadataPrograms))]
+    public void Isolated_BooleanMetadata_PreservesTruthinessAndPrototypeBehavior(string name, string source, string expected, string entryPoint)
+    {
+        using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        tempDir.CreateFile(entryPoint, source);
+        var dllPath = tempDir.GetPath($"boolean_{name}.dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --noLib --compile \"{tempDir.GetPath(entryPoint)}\" -o \"{dllPath}\" --verify --standalone", tempDir.Path);
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(dllPath));
+        Assert.False(File.Exists(tempDir.GetPath("SharpTS.dll")));
+        Assert.Equal(expected, ExecuteCompiledDllIsolated(dllPath, timeoutMs: 30000,
+            verifyStandardError: error => Assert.Empty(error)));
+    }
+
     public static IEnumerable<object[]> BroadcastChannelMetadataPrograms =>
     [
         new object[]

@@ -117,7 +117,7 @@ public partial class RuntimeEmitter
             "_booleanPrototype",
             _types.DictionaryStringObject,
             FieldAttributes.Public | FieldAttributes.Static);
-        runtime.BooleanPrototypeField = booleanPrototypeField;
+        runtime.Booleans.PrototypeField = booleanPrototypeField;
         var numberPrototypeField = typeBuilder.DefineField(
             "_numberPrototype",
             _types.DictionaryStringObject,
@@ -529,7 +529,7 @@ public partial class RuntimeEmitter
         DefineNumberPrototypePopulateShell(typeBuilder, runtime.Numbers);
         DefineBigIntPrototypePopulateShell(typeBuilder, runtime.BigInt);
         DefineSymbolPrototypePopulateShell(typeBuilder, runtime);
-        DefineBooleanPrototypePopulateShell(typeBuilder, runtime);
+        DefineBooleanPrototypePopulateShell(typeBuilder, runtime.Booleans);
         DefineDatePrototypePopulateShell(typeBuilder, runtime);
         DefineErrorPrototypePopulateShell(typeBuilder, runtime);
         DefineNativeErrorPrototypePopulateShells(typeBuilder, runtime);
@@ -744,7 +744,7 @@ public partial class RuntimeEmitter
         if (_features.UsesBigInt)
             cctorIL.Emit(OpCodes.Call, runtime.BigInt.PrototypePopulateMethod);
         cctorIL.Emit(OpCodes.Call, runtime.SymbolPrototypePopulateMethod);
-        cctorIL.Emit(OpCodes.Call, runtime.BooleanPrototypePopulateMethod);
+        cctorIL.Emit(OpCodes.Call, runtime.Booleans.PrototypePopulateMethod);
         cctorIL.Emit(OpCodes.Call, runtime.DatePrototypePopulateMethod);
         cctorIL.Emit(OpCodes.Call, runtime.Strings.PrototypePopulateMethod);
         cctorIL.Emit(OpCodes.Call, runtime.ErrorPrototypePopulateMethod);
@@ -813,7 +813,7 @@ public partial class RuntimeEmitter
         EmitJsLessThan(typeBuilder, runtime);
         EmitJsLessOrEqual(typeBuilder, runtime);
         EmitUpdateNumeric(typeBuilder, runtime);
-        EmitIsTruthy(typeBuilder, runtime);
+        EmitIsTruthy(typeBuilder, runtime.Booleans, runtime.UndefinedType);
         // Promise resolving callbacks need these adoption tokens before their
         // bodies are filled by the resolve-value and capability emitters.
         if (_features.UsesPromise)
@@ -1311,8 +1311,8 @@ public partial class RuntimeEmitter
                 runtime.CompiledPropertyDescriptorConfigurable.GetSetMethod()!,
                 runtime.PDSDefineProperty,
                 runtime.PDSSetPrototype,
-                runtime.BooleanPrototypeField,
-                runtime.BooleanPrototypePopulateMethod,
+                runtime.Booleans.PrototypeField,
+                runtime.Booleans.PrototypePopulateMethod,
                 runtime.Numbers.PrototypeField,
                 runtime.Numbers.PrototypePopulateMethod,
                 runtime.SymbolPrototypeField,
@@ -1337,11 +1337,11 @@ public partial class RuntimeEmitter
         EmitPrimitiveStringIntrinsics(typeBuilder, runtime.Strings);
         EmitStringReplace(typeBuilder, runtime.Strings);
         EmitStringIncludes(typeBuilder, runtime.Strings, new StringSearchInputs(runtime.TSRegExpType, runtime.UndefinedType, runtime.SymbolMatch,
-                runtime.GetIndex, runtime.IsTruthy, runtime.ToIntegerOrInfinity, runtime.StringCoercion.ToJsString, runtime.CreateException, runtime.TSTypeErrorCtor));
+                runtime.GetIndex, runtime.Booleans.IsTruthy, runtime.ToIntegerOrInfinity, runtime.StringCoercion.ToJsString, runtime.CreateException, runtime.TSTypeErrorCtor));
         EmitStringStartsWith(typeBuilder, runtime.Strings, new StringSearchInputs(runtime.TSRegExpType, runtime.UndefinedType, runtime.SymbolMatch,
-                runtime.GetIndex, runtime.IsTruthy, runtime.ToIntegerOrInfinity, runtime.StringCoercion.ToJsString, runtime.CreateException, runtime.TSTypeErrorCtor));
+                runtime.GetIndex, runtime.Booleans.IsTruthy, runtime.ToIntegerOrInfinity, runtime.StringCoercion.ToJsString, runtime.CreateException, runtime.TSTypeErrorCtor));
         EmitStringEndsWith(typeBuilder, runtime.Strings, new StringSearchInputs(runtime.TSRegExpType, runtime.UndefinedType, runtime.SymbolMatch,
-                runtime.GetIndex, runtime.IsTruthy, runtime.ToIntegerOrInfinity, runtime.StringCoercion.ToJsString, runtime.CreateException, runtime.TSTypeErrorCtor));
+                runtime.GetIndex, runtime.Booleans.IsTruthy, runtime.ToIntegerOrInfinity, runtime.StringCoercion.ToJsString, runtime.CreateException, runtime.TSTypeErrorCtor));
         EmitStringSlice(typeBuilder, runtime.Strings, runtime.CreateException, runtime.TSTypeErrorCtor, runtime.ToIntegerOrInfinity,
             runtime.StringCoercion.ToJsString, runtime.UndefinedInstance, runtime.UndefinedType);
         EmitStringRepeat(typeBuilder, runtime.Strings, runtime.CreateException, runtime.TSRangeErrorCtor, runtime.ToNumber);
@@ -1382,9 +1382,16 @@ public partial class RuntimeEmitter
                 runtime.SymbolIterator, runtime.ObjectPrototypeField, runtime.PDSSetPrototype),
             _features.UsesRegExp ? new StringPrototypeRegExpInputs(runtime.StringMatchRegExp, runtime.StringMatchAllRegExp,
                 runtime.StringSearchRegExp, runtime.StringReplaceAllRegExp, runtime.StringSplitProto) : null);
-        // Boolean.prototype populate — uses the StringPrototypeGenericStub
-        // for both toString and valueOf (no dedicated Boolean helpers).
-        EmitBooleanPrototypePopulate(typeBuilder, runtime);
+        // Boolean.prototype population wires dedicated toString and valueOf helpers.
+        EmitBooleanPrototypePopulate(typeBuilder, runtime.Booleans,
+            new BooleanPrototypeInputs(
+                new PrototypeDescriptorInputs(runtime.CompiledPropertyDescriptorCtor,
+                    runtime.CompiledPropertyDescriptorValue.GetSetMethod()!, runtime.CompiledPropertyDescriptorEnumerable.GetSetMethod()!,
+                    runtime.PDSDefineProperty),
+                runtime.CompiledPropertyDescriptorType, runtime.TSFunctionGetOrCreate,
+                runtime.ObjectPrototypeField, runtime.PDSSetPrototype,
+                new BooleanReceiverInputs(runtime.TSObjectType, runtime.TSObjectFieldsGetter,
+                    runtime.CreateException, runtime.TSTypeErrorCtor)));
         // Number.prototype populate is wired after EmitNumberMethods below.
         // Object utilities
         EmitGetSuperMethod(typeBuilder, runtime);

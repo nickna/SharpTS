@@ -198,7 +198,7 @@ public abstract class StatementEmitterBase : ExpressionEmitterBase
     /// </summary>
     protected virtual void EmitTruthyCheck()
     {
-        _helpers.EmitTruthyCheck(Ctx.Runtime!.IsTruthy);
+        _helpers.EmitTruthyCheck(Ctx.Runtime!.Booleans.IsTruthy);
     }
 
     #endregion
@@ -1386,7 +1386,7 @@ public abstract class StatementEmitterBase : ExpressionEmitterBase
             il.Emit(OpCodes.Call, runtime.GetProperty);
 
             // Convert to bool and check - natural done exits directly (no cleanup needed)
-            il.Emit(OpCodes.Call, runtime.IsTruthy);
+            il.Emit(OpCodes.Call, runtime.Booleans.IsTruthy);
             il.Emit(OpCodes.Brtrue, genEndLabel);
 
             // Assign to loop variable (value via GetProperty(result, "value"))

@@ -469,7 +469,7 @@ public partial class RuntimeEmitter
 
         var notBoolProtoLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldsfld, runtime.BooleanPrototypeField);
+        il.Emit(OpCodes.Ldsfld, runtime.Booleans.PrototypeField);
         il.Emit(OpCodes.Bne_Un, notBoolProtoLabel);
         EmitTag("[object Boolean]");
         il.MarkLabel(notBoolProtoLabel);

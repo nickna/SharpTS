@@ -582,7 +582,7 @@ public partial class RuntimeEmitter
         if (filterMode)
         {
             // if (!IsTruthy(result)) goto loopStart (skip this element)
-            il.Emit(OpCodes.Call, runtime.IsTruthy);
+            il.Emit(OpCodes.Call, runtime.Booleans.IsTruthy);
             il.Emit(OpCodes.Brfalse, loopStartLabel);
 
             // Passed filter: _current = source.Current (not the callback result)
@@ -1021,7 +1021,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloc, argsLocal);
         il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
-        il.Emit(OpCodes.Call, runtime.IsTruthy);
+        il.Emit(OpCodes.Call, runtime.Booleans.IsTruthy);
 
         if (trueOnMatch)
         {
@@ -1103,7 +1103,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloc, argsLocal);
         il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
-        il.Emit(OpCodes.Call, runtime.IsTruthy);
+        il.Emit(OpCodes.Call, runtime.Booleans.IsTruthy);
         il.Emit(OpCodes.Brtrue, foundLabel);
         il.Emit(OpCodes.Br, loopLabel);
 

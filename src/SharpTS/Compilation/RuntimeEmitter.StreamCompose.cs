@@ -385,7 +385,7 @@ public partial class RuntimeEmitter
             var il = get.GetILGenerator();
             var byteLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Call, runtime.IsTruthy);
+            il.Emit(OpCodes.Call, runtime.Booleans.IsTruthy);
             il.Emit(OpCodes.Brfalse, byteLabel);
             il.Emit(OpCodes.Ldsfld, objField);
             il.Emit(OpCodes.Conv_R8);
@@ -406,7 +406,7 @@ public partial class RuntimeEmitter
             var byteLabel = il.DefineLabel();
             var done = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Call, runtime.IsTruthy);
+            il.Emit(OpCodes.Call, runtime.Booleans.IsTruthy);
             il.Emit(OpCodes.Brfalse, byteLabel);
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Call, runtime.ToNumber);

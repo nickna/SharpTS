@@ -459,7 +459,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, _types.Boolean);
         il.Emit(OpCodes.Brfalse, notBool);
-        il.Emit(OpCodes.Ldsfld, runtime.BooleanPrototypeField);
+        il.Emit(OpCodes.Ldsfld, runtime.Booleans.PrototypeField);
         EmitMaterializeFromPrototypeDict(il, runtime);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notBool);
@@ -1704,7 +1704,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, runtime.UndefinedType);
         il.Emit(OpCodes.Brtrue, defaultSpreadabilityLabel);
         il.Emit(OpCodes.Ldloc, spreadValueLocal);
-        il.Emit(OpCodes.Call, runtime.IsTruthy);
+        il.Emit(OpCodes.Call, runtime.Booleans.IsTruthy);
         il.Emit(OpCodes.Stloc, spreadableLocal);
         il.Emit(OpCodes.Br, spreadabilityKnownLabel);
 
@@ -2676,7 +2676,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, currentLocal);
         il.Emit(OpCodes.Isinst, _types.Boolean);
         il.Emit(OpCodes.Brfalse, notBooleanPrimitive);
-        il.Emit(OpCodes.Ldsfld, runtime.BooleanPrototypeField);
+        il.Emit(OpCodes.Ldsfld, runtime.Booleans.PrototypeField);
         il.Emit(OpCodes.Stloc, currentLocal);
         il.Emit(OpCodes.Br, loopStart);
         il.MarkLabel(notBooleanPrimitive);

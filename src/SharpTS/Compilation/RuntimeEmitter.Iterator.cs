@@ -914,7 +914,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, runtime.GetProperty);
 
         // Call IsTruthy on the result
-        il.Emit(OpCodes.Call, runtime.IsTruthy);
+        il.Emit(OpCodes.Call, runtime.Booleans.IsTruthy);
         il.Emit(OpCodes.Ret);
     }
 

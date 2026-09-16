@@ -1583,7 +1583,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, _types.Boolean);
         il.Emit(OpCodes.Brfalse, notBoolPrimLabel);
-        il.Emit(OpCodes.Call, runtime.BooleanPrototypePopulateMethod);
+        il.Emit(OpCodes.Call, runtime.Booleans.PrototypePopulateMethod);
         // Preserve the original primitive as the receiver of an accessor
         // installed on Boolean.prototype. Recursing through GetProperty on the
         // prototype dictionary would invoke the getter with that dictionary as
@@ -1591,7 +1591,7 @@ public partial class RuntimeEmitter
         var boolProtoDescLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
         var boolProtoGetterLocal = il.DeclareLocal(_types.Object);
         var boolProtoOrdinaryLookupLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldsfld, runtime.BooleanPrototypeField);
+        il.Emit(OpCodes.Ldsfld, runtime.Booleans.PrototypeField);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
         il.Emit(OpCodes.Stloc, boolProtoDescLocal);
@@ -1612,7 +1612,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(boolProtoOrdinaryLookupLabel);
-        il.Emit(OpCodes.Ldsfld, runtime.BooleanPrototypeField);
+        il.Emit(OpCodes.Ldsfld, runtime.Booleans.PrototypeField);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, method);  // recursive GetProperty lookup on the dict
         il.Emit(OpCodes.Ret);
@@ -1808,8 +1808,8 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
             il.Emit(OpCodes.Bne_Un, notBoolLabel);
             // Lazy-populate Boolean.prototype with $TSFunction wrappers on first read.
-            il.Emit(OpCodes.Call, runtime.BooleanPrototypePopulateMethod);
-            il.Emit(OpCodes.Ldsfld, runtime.BooleanPrototypeField);
+            il.Emit(OpCodes.Call, runtime.Booleans.PrototypePopulateMethod);
+            il.Emit(OpCodes.Ldsfld, runtime.Booleans.PrototypeField);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(notBoolLabel);
             var notDoubleLabel = il.DefineLabel();

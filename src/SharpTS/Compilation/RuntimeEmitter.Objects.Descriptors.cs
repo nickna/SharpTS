@@ -793,7 +793,7 @@ public partial class RuntimeEmitter
         // Convert to bool and set
         il.Emit(OpCodes.Ldloc, descriptorLocal);
         il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Call, runtime.IsTruthy);  // Convert to bool
+        il.Emit(OpCodes.Call, runtime.Booleans.IsTruthy);  // Convert to bool
         il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorWritable.GetSetMethod()!);
         il.MarkLabel(noWritableLabel);
 
@@ -876,7 +876,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, noEnumerableLabel);
         il.Emit(OpCodes.Ldloc, descriptorLocal);
         il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Call, runtime.IsTruthy);
+        il.Emit(OpCodes.Call, runtime.Booleans.IsTruthy);
         il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorEnumerable.GetSetMethod()!);
         il.MarkLabel(noEnumerableLabel);
 
@@ -889,7 +889,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, noConfigurableLabel);
         il.Emit(OpCodes.Ldloc, descriptorLocal);
         il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Call, runtime.IsTruthy);
+        il.Emit(OpCodes.Call, runtime.Booleans.IsTruthy);
         il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorConfigurable.GetSetMethod()!);
         il.MarkLabel(noConfigurableLabel);
     }
@@ -929,7 +929,7 @@ public partial class RuntimeEmitter
         var checkEnumerableLabel = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, checkEnumerableLabel);
         il.Emit(OpCodes.Ldloc, configKeyLocal);
-        il.Emit(OpCodes.Call, runtime.IsTruthy);
+        il.Emit(OpCodes.Call, runtime.Booleans.IsTruthy);
         il.Emit(OpCodes.Brtrue, throwRedefineLabel);
         il.MarkLabel(checkEnumerableLabel);
 
@@ -942,7 +942,7 @@ public partial class RuntimeEmitter
         var checkTypeLabel = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, checkTypeLabel);
         il.Emit(OpCodes.Ldloc, enumKeyLocal);
-        il.Emit(OpCodes.Call, runtime.IsTruthy);
+        il.Emit(OpCodes.Call, runtime.Booleans.IsTruthy);
         il.Emit(OpCodes.Ldloc, existingDescLocal);
         il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorEnumerable.GetGetMethod()!);
         il.Emit(OpCodes.Bne_Un, throwRedefineLabel);
@@ -1102,7 +1102,7 @@ public partial class RuntimeEmitter
         var checkValueChange = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, checkValueChange);
         il.Emit(OpCodes.Ldloc, writableKeyLocal);
-        il.Emit(OpCodes.Call, runtime.IsTruthy);
+        il.Emit(OpCodes.Call, runtime.Booleans.IsTruthy);
         il.Emit(OpCodes.Brtrue, throwRedefineLabel);
         il.MarkLabel(checkValueChange);
         // New specifies value != existing.value → throw (data with writable=false).
