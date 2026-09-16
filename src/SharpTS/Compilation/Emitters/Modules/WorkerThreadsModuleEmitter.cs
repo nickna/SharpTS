@@ -72,7 +72,7 @@ public sealed class WorkerThreadsModuleEmitter : IBuiltInModuleEmitter
         var ctx = emitter.Context;
         var il = ctx.IL;
 
-        il.Emit(OpCodes.Call, ctx.Runtime!.WorkerThreadsIsMainThread);
+        il.Emit(OpCodes.Call, ctx.Runtime!.Workers.IsMainThread);
         il.Emit(OpCodes.Box, ctx.Types.Boolean);
         return true;
     }
@@ -82,7 +82,7 @@ public sealed class WorkerThreadsModuleEmitter : IBuiltInModuleEmitter
         var ctx = emitter.Context;
         var il = ctx.IL;
 
-        il.Emit(OpCodes.Call, ctx.Runtime!.WorkerThreadsThreadId);
+        il.Emit(OpCodes.Call, ctx.Runtime!.Workers.ThreadId);
         il.Emit(OpCodes.Box, ctx.Types.Double);
         return true;
     }
@@ -94,7 +94,7 @@ public sealed class WorkerThreadsModuleEmitter : IBuiltInModuleEmitter
 
         // The host configures this realm's emitted $Runtime before invoking a compiled
         // worker entry point. Main-thread assemblies retain the default null value.
-        il.Emit(OpCodes.Call, ctx.Runtime!.WorkerThreadsWorkerData);
+        il.Emit(OpCodes.Call, ctx.Runtime!.Workers.WorkerData);
         return true;
     }
 
@@ -105,7 +105,7 @@ public sealed class WorkerThreadsModuleEmitter : IBuiltInModuleEmitter
 
         // Compiled worker realms receive a host-backed parentPort during bootstrap.
         // Main-thread assemblies are never configured and therefore return null.
-        il.Emit(OpCodes.Call, ctx.Runtime!.WorkerThreadsParentPort);
+        il.Emit(OpCodes.Call, ctx.Runtime!.Workers.ParentPort);
         return true;
     }
 
@@ -118,7 +118,7 @@ public sealed class WorkerThreadsModuleEmitter : IBuiltInModuleEmitter
         // This is used for: const Worker = require('worker_threads').Worker
         // Then: new Worker(...)
         // We return a special marker that the new expression handler recognizes
-        il.Emit(OpCodes.Ldtoken, ctx.Runtime!.TSWorkerType);
+        il.Emit(OpCodes.Ldtoken, ctx.Types.Object);
         il.Emit(OpCodes.Call, ctx.Types.GetMethod(ctx.Types.Type, "GetTypeFromHandle", ctx.Types.RuntimeTypeHandle));
         return true;
     }
@@ -153,7 +153,7 @@ public sealed class WorkerThreadsModuleEmitter : IBuiltInModuleEmitter
 
         emitter.EmitExpression(arguments[0]);
         emitter.EmitBoxIfNeeded(arguments[0]);
-        il.Emit(OpCodes.Call, ctx.Runtime!.WorkerThreadsReceiveMessageOnPort);
+        il.Emit(OpCodes.Call, ctx.Runtime!.Workers.ReceiveMessageOnPort);
         return true;
     }
 
@@ -174,7 +174,7 @@ public sealed class WorkerThreadsModuleEmitter : IBuiltInModuleEmitter
         {
             il.Emit(OpCodes.Ldnull);
         }
-        il.Emit(OpCodes.Call, ctx.Runtime!.WorkerThreadsGetEnvironmentData);
+        il.Emit(OpCodes.Call, ctx.Runtime!.Workers.GetEnvironmentData);
 
         // Map absent (CLR null) to JS undefined — stored values are never null (a null/undefined
         // set deletes the key), so null here means "not present".
@@ -219,7 +219,7 @@ public sealed class WorkerThreadsModuleEmitter : IBuiltInModuleEmitter
         {
             il.Emit(OpCodes.Ldnull);
         }
-        il.Emit(OpCodes.Call, ctx.Runtime!.WorkerThreadsSetEnvironmentData);
+        il.Emit(OpCodes.Call, ctx.Runtime!.Workers.SetEnvironmentData);
 
         // setEnvironmentData returns undefined.
         il.Emit(OpCodes.Ldsfld, ctx.Runtime!.UndefinedInstance);
@@ -243,7 +243,7 @@ public sealed class WorkerThreadsModuleEmitter : IBuiltInModuleEmitter
         {
             il.Emit(OpCodes.Ldnull);
         }
-        il.Emit(OpCodes.Call, ctx.Runtime!.WorkerThreadsMarkAsUntransferable);
+        il.Emit(OpCodes.Call, ctx.Runtime!.Workers.MarkAsUntransferable);
 
         // markAsUntransferable returns undefined.
         il.Emit(OpCodes.Ldsfld, ctx.Runtime!.UndefinedInstance);

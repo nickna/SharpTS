@@ -1544,6 +1544,165 @@ public class StandaloneDllTests
         }
     ];
 
+    public static IEnumerable<object[]> WorkerMetadataPrograms =>
+    [
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = """
+                import {isMainThread,threadId,workerData,parentPort} from 'worker_threads';console.log(isMainThread,threadId,workerData===null,parentPort===null);
+                """,
+            },
+            "true 0 true true\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = """
+                import * as workers from 'node:worker_threads';console.log(workers.isMainThread,workers.threadId,workers.workerData===null,workers.parentPort===null,typeof workers.Worker);
+                """,
+            },
+            "true 0 true true function\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = """
+                import {Worker,isMainThread,threadId} from 'worker_threads';console.log(isMainThread,threadId);const worker=new Worker(__dirname+'/worker.ts',{workerData:{value:7}});worker.on('message',(value:any)=>console.log(value));
+                """,
+                ["worker.ts"] = """
+                import {isMainThread,threadId,workerData,parentPort} from 'worker_threads';parentPort!.postMessage('worker:'+isMainThread+':'+(threadId>0)+':'+workerData.value);
+                """,
+            },
+            "true 0\nworker:false:true:7\n", "main.ts", false
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = """
+                import {getEnvironmentData,setEnvironmentData} from 'worker_threads';console.log(getEnvironmentData('missing')===undefined);const value:any={id:3,nested:[4]};console.log(setEnvironmentData('key',value)===undefined);value.id=9;value.nested[0]=8;const result:any=getEnvironmentData('key');console.log(result.id,result.nested[0]);setEnvironmentData('key',null);console.log(getEnvironmentData('key')===undefined);
+                """,
+            },
+            "true\ntrue\n3 4\ntrue\n", "main.ts", false
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = """
+                import {Worker,setEnvironmentData} from 'worker_threads';setEnvironmentData('worker-phase',17);const worker=new Worker(__dirname+'/worker.ts');worker.on('message',(value:any)=>console.log(value));
+                """,
+                ["worker.ts"] = """
+                import {parentPort,getEnvironmentData} from 'worker_threads';parentPort!.postMessage(getEnvironmentData('worker-phase'));
+                """,
+            },
+            "17\n", "main.ts", false
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = """
+                import {Worker,markAsUntransferable} from 'worker_threads';const buffer=new ArrayBuffer(8);console.log(markAsUntransferable(buffer)===undefined);const worker=new Worker(__dirname+'/worker.ts',{workerData:'go',transferList:[buffer]});console.log(buffer.byteLength);worker.on('message',(value:any)=>console.log(value));
+                """,
+                ["worker.ts"] = """
+                postMessage('ok');
+                """,
+            },
+            "true\n8\nok\n", "main.ts", false
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = """
+                import {Worker} from 'worker_threads';try{new Worker('missing.ts');}catch(error:any){console.log(error.message);}
+                """,
+            },
+            "Worker requires the SharpTS runtime (SharpTS.dll) to be present. Compile without --standalone so it is co-located with the output.\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = """
+                import {MessageChannel,receiveMessageOnPort} from 'worker_threads';const channel:any=new MessageChannel();
+                console.log(receiveMessageOnPort(channel.port2)===undefined,receiveMessageOnPort(null)===undefined,receiveMessageOnPort({})===undefined);
+                channel.port1.postMessage({value:7});const item:any=receiveMessageOnPort(channel.port2);console.log(item.message.value,receiveMessageOnPort(channel.port2)===undefined);
+                channel.port1.postMessage(()=>{});const error:any=receiveMessageOnPort(channel.port2);console.log(error.message===undefined);
+                channel.port1.postMessage(8);channel.port2.close();console.log(receiveMessageOnPort(channel.port2)===undefined);channel.port1.close();
+                """,
+            },
+            "true true true\n7 true\ntrue\ntrue\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = """
+                import {Worker,MessageChannel} from 'worker_threads';const {port1,port2}=new MessageChannel();
+                const worker=new Worker(__dirname+'/worker.ts',{workerData:{port:port1},transferList:[port1]});
+                port2.on('message',(value:any)=>{console.log(value);port2.close();});port2.postMessage('ping');
+                """,
+                ["worker.ts"] = """
+                import {workerData,receiveMessageOnPort} from 'worker_threads';const port:any=workerData.port;const timer=setInterval(()=>{const item:any=receiveMessageOnPort(port);if(item){port.postMessage('reply:'+item.message);clearInterval(timer);port.close();}},10);
+                """,
+            },
+            "reply:ping\n", "main.ts", false
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = """
+                import {isMainThread,threadId,receiveMessageOnPort} from 'worker_threads';async function run(){await new Promise<void>(resolve=>setTimeout(resolve,1));console.log(isMainThread,threadId,receiveMessageOnPort(null)===undefined);}run();
+                """,
+            },
+            "true 0 true\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.ts"] = """
+                import {isMainThread,threadId,receiveMessageOnPort} from 'worker_threads';function* values():Generator<any,void,any>{yield isMainThread;yield threadId;yield receiveMessageOnPort(null)===undefined;}for(const value of values())console.log(value);
+                """,
+            },
+            "true\n0\ntrue\n", "main.ts", true
+        },
+        new object[]
+        {
+            new Dictionary<string, string>
+            {
+                ["main.cjs"] = """
+                const workers=require('node:worker_threads');console.log(workers.isMainThread,workers.threadId,workers.workerData===null,workers.parentPort===null,typeof workers.Worker);
+                """,
+            },
+            "true 0 true true function\n", "main.cjs", true
+        }
+    ];
+
+    [Theory]
+    [MemberData(nameof(WorkerMetadataPrograms))]
+    public void Isolated_WorkerMetadata_PreservesContextEnvironmentAndBridgeDeployment(Dictionary<string, string> files, string expected, string entryPoint, bool standalone)
+    {
+        using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        foreach (var (path, source) in files) tempDir.CreateFile(path, source);
+        var dllPath = tempDir.GetPath("worker_metadata.dll");
+        var deployment = standalone ? " --standalone" : "";
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{tempDir.GetPath(entryPoint)}\" -o \"{dllPath}\" --verify{deployment}", tempDir.Path);
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(dllPath));
+        Assert.Equal(!standalone, File.Exists(tempDir.GetPath("SharpTS.dll")));
+        Assert.Equal(expected, ExecuteCompiledDllIsolated(dllPath, timeoutMs: 30000,
+            verifyStandardError: error => Assert.Empty(error)));
+    }
+
     [Theory]
     [MemberData(nameof(MessageChannelMetadataPrograms))]
     public void Isolated_MessageChannelMetadata_PreservesCloningQueueDeliveryAndWorkerTransfers(Dictionary<string, string> files, string expected, string entryPoint, bool standalone)

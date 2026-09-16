@@ -585,7 +585,7 @@ public partial class RuntimeEmitter
         // receiveMessageOnPort's body reads $MessagePort's _pending/_closed/_cloneError, so it
         // must be filled now that EmitMessageChannelTypes has created the type (#1077). Still
         // before EmitRuntimeClassFinalize, which closes the $Runtime type this method lives on.
-        EmitWorkerThreadsReceiveMessageOnPortBody(runtime.MessageChannels.Port, runtime.UndefinedInstance);
+        EmitWorkerThreadsReceiveMessageOnPortBody(runtime.Workers, runtime.MessageChannels.Port, runtime.UndefinedInstance);
 
         // Web Streams — gated on UsesWebStreams. The only external references are
         // user-code `new ReadableStream(...)`/`new WritableStream(...)`/`new TransformStream(...)`
@@ -693,6 +693,7 @@ public partial class RuntimeEmitter
         runtime.Atomics?.CompleteEmission();
         runtime.Cluster?.CompleteEmission();
         runtime.MessageChannels.CompleteEmission();
+        runtime.Workers.CompleteEmission();
         runtime.EventEmitter.CompleteEmission();
         runtime.NodeStreams?.CompleteEmission();
         runtime.WebStreams?.CompleteEmission();

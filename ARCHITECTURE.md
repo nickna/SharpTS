@@ -767,12 +767,23 @@ Message channels have required `EmittedMessageChannelRuntime` and `EmittedMessag
 owners for seventeen distinct declarations, replacing three flat properties and fifteen emitter
 fields. Thirteen emission helpers receive explicit family, event-emitter, event-loop, clone, and
 runtime-type dependencies as needed. The deferred worker receive body takes the port owner and
-undefined instance explicitly; its own declaration and reflection-cache state remain in the worker
-phase. Port declarations are readable before body/type completion, while channel declarations keep
+undefined instance explicitly; its own declaration and reflection-cache state belong to the worker
+owner. Port declarations are readable before body/type completion, while channel declarations keep
 their existing later publication. Completion validates both owners before freezing either. Peer-field
 visibility, clone-error sentinel, reflected worker bridge ABI, queue ordering, volatile notification,
 cross-thread keep-alive behavior, and standalone deployment remain unchanged. Channel property
 backing fields/getters and BCL reflection references remain scoped construction values.
+
+Workers have a required `EmittedWorkerRuntime` owner for nine method declarations and two
+foreign-receive cache fields. Four emission helpers take explicit worker, event-loop, port, and
+undefined dependencies. The receive method remains forward-declared before MessagePort emission,
+with its body filled before RuntimeClass finalization. The former `TSWorkerType` was a BCL Object
+alias, so its sole consumer now uses `TypeProvider.Object`; no generated worker type is introduced.
+`ConfigureWorkerContext`/`ClearWorkerContext` and their four realm-local fields stay scoped to
+module emission. Reflected bridge names, hit/miss caching, worker factory delegates, managed
+dependency deployment, and environment/undefined behavior retain their existing contracts.
+The mixed worker helper orchestrator still coordinates buffer, typed-array, Atomics, and structured
+clone emission; remaining structured-clone metadata is part of the subsequent phase and final audit.
 
 During emission, each handle becomes readable as soon as its declaration is assigned, so forward
 references do not require a method body to exist yet. An early read names the missing declaration.

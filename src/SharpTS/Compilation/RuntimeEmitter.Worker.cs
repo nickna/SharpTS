@@ -36,13 +36,13 @@ public partial class RuntimeEmitter
         // $Runtime.StructuredClone (#222).
 
         // Worker constructor helper
-        EmitWorkerHelper(runtimeType, runtime);
+        EmitWorkerHelper(runtimeType, runtime.Workers, runtime.EventLoop);
 
         // StructuredClone helper
         EmitStructuredCloneHelper(runtimeType, runtime);
 
         // worker_threads module helpers
-        EmitWorkerThreadsModuleHelpers(runtimeType, runtime);
+        EmitWorkerThreadsModuleHelpers(runtimeType, runtime.Workers);
     }
 
     /// <summary>
@@ -1356,7 +1356,7 @@ public partial class RuntimeEmitter
     /// Emits Worker constructor helper.
     /// Uses direct constructor invocation.
     /// </summary>
-    private void EmitWorkerHelper(TypeBuilder runtimeType, EmittedRuntime runtime)
+    private void EmitWorkerHelper(TypeBuilder runtimeType, EmittedWorkerRuntime workers, EmittedEventLoopRuntime eventLoop)
     {
         // CreateWorker(string filename, object? options, object? parentInterpreter)
         //
@@ -1378,7 +1378,7 @@ public partial class RuntimeEmitter
         var il = method.GetILGenerator();
 
         var typeLocal = il.DeclareLocal(_types.Type);
-        var loopLocal = il.DeclareLocal(runtime.EventLoop.Type);
+        var loopLocal = il.DeclareLocal(eventLoop.Type);
         var refLocal = il.DeclareLocal(typeof(Action));
         var unrefLocal = il.DeclareLocal(typeof(Action));
         var scheduleLocal = il.DeclareLocal(typeof(Action<Action>));
@@ -1402,24 +1402,24 @@ public partial class RuntimeEmitter
         il.MarkLabel(typeOk);
 
         // var loop = $EventLoop.GetInstance();
-        il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
+        il.Emit(OpCodes.Call, eventLoop.GetInstance);
         il.Emit(OpCodes.Stloc, loopLocal);
 
         // Action ref = new Action(loop, $EventLoop.Ref);
         il.Emit(OpCodes.Ldloc, loopLocal);
-        il.Emit(OpCodes.Ldftn, runtime.EventLoop.Ref);
+        il.Emit(OpCodes.Ldftn, eventLoop.Ref);
         il.Emit(OpCodes.Newobj, actionCtor);
         il.Emit(OpCodes.Stloc, refLocal);
 
         // Action unref = new Action(loop, $EventLoop.Unref);
         il.Emit(OpCodes.Ldloc, loopLocal);
-        il.Emit(OpCodes.Ldftn, runtime.EventLoop.Unref);
+        il.Emit(OpCodes.Ldftn, eventLoop.Unref);
         il.Emit(OpCodes.Newobj, actionCtor);
         il.Emit(OpCodes.Stloc, unrefLocal);
 
         // Action<Action> schedule = new Action<Action>(loop, $EventLoop.Schedule);
         il.Emit(OpCodes.Ldloc, loopLocal);
-        il.Emit(OpCodes.Ldftn, runtime.EventLoop.Schedule);
+        il.Emit(OpCodes.Ldftn, eventLoop.Schedule);
         il.Emit(OpCodes.Newobj, actionOfActionCtor);
         il.Emit(OpCodes.Stloc, scheduleLocal);
 
@@ -1458,8 +1458,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.MethodInfo, "Invoke", _types.Object, _types.ObjectArray));
         il.Emit(OpCodes.Ret);
 
-        runtime.TSWorkerType = _types.Object;
-        runtime.TSWorkerCtor = method;
+        workers.Create = method;
     }
 
     /// <summary>
@@ -2063,17 +2062,11 @@ public partial class RuntimeEmitter
         runtime.StructuredCloneClone = method;
     }
 
-    // WorkerThreadsReceiveMessageOnPort: defined during EmitWorkerThreadsModuleHelpers, body
-    // emitted later by EmitWorkerThreadsReceiveMessageOnPortBody once $MessagePort exists (#1077).
-    private MethodBuilder _receiveMessageOnPortMethod = null!;
-    private FieldBuilder _receiveMessageOnPortForeignTypeField = null!;
-    private FieldBuilder _receiveMessageOnPortForeignMethodField = null!;
-
     /// <summary>
     /// Emits worker_threads module helper methods.
     /// Uses direct calls.
     /// </summary>
-    private void EmitWorkerThreadsModuleHelpers(TypeBuilder runtimeType, EmittedRuntime runtime)
+    private void EmitWorkerThreadsModuleHelpers(TypeBuilder runtimeType, EmittedWorkerRuntime workers)
     {
         // Every compiled worker is loaded into its own AssemblyLoadContext. These static
         // fields are therefore realm-local even though the emitted runtime uses statics for
@@ -2136,7 +2129,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ceq);
         il.Emit(OpCodes.Ret);
-        runtime.WorkerThreadsIsMainThread = isMainThreadMethod;
+        workers.IsMainThread = isMainThreadMethod;
 
         // threadId getter
         var threadIdMethod = runtimeType.DefineMethod(
@@ -2155,7 +2148,7 @@ public partial class RuntimeEmitter
         il2.MarkLabel(hasWorkerContext);
         il2.Emit(OpCodes.Ldsfld, workerThreadIdField);
         il2.Emit(OpCodes.Ret);
-        runtime.WorkerThreadsThreadId = threadIdMethod;
+        workers.ThreadId = threadIdMethod;
 
         var workerDataMethod = runtimeType.DefineMethod(
             "WorkerThreadsWorkerData",
@@ -2165,7 +2158,7 @@ public partial class RuntimeEmitter
         var wdil = workerDataMethod.GetILGenerator();
         wdil.Emit(OpCodes.Ldsfld, workerDataField);
         wdil.Emit(OpCodes.Ret);
-        runtime.WorkerThreadsWorkerData = workerDataMethod;
+        workers.WorkerData = workerDataMethod;
 
         var parentPortMethod = runtimeType.DefineMethod(
             "WorkerThreadsParentPort",
@@ -2175,26 +2168,25 @@ public partial class RuntimeEmitter
         var ppil = parentPortMethod.GetILGenerator();
         ppil.Emit(OpCodes.Ldsfld, parentPortField);
         ppil.Emit(OpCodes.Ret);
-        runtime.WorkerThreadsParentPort = parentPortMethod;
+        workers.ParentPort = parentPortMethod;
 
         // receiveMessageOnPort — synchronous main-thread drain (#1077). The method is DEFINED
-        // here (so callers can bind runtime.WorkerThreadsReceiveMessageOnPort) but its body is
+        // here (so callers can bind workers.ReceiveMessageOnPort) but its body is
         // emitted later by EmitWorkerThreadsReceiveMessageOnPortBody, after EmitMessageChannelTypes
         // has created the $MessagePort type — this helper reads that type's _pending queue and
         // _closed/_cloneError fields, which don't exist at this point in emission. The $Runtime
         // type isn't finalized until EmitRuntimeClassFinalize, so filling the body afterward is safe.
-        _receiveMessageOnPortMethod = runtimeType.DefineMethod(
+        workers.ReceiveMessageOnPort = runtimeType.DefineMethod(
             "WorkerThreadsReceiveMessageOnPort",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.Object]
         );
-        runtime.WorkerThreadsReceiveMessageOnPort = _receiveMessageOnPortMethod;
-        _receiveMessageOnPortForeignTypeField = runtimeType.DefineField(
+        workers.ForeignReceiveType = runtimeType.DefineField(
             "_receiveMessageOnPortForeignType",
             _types.Type,
             FieldAttributes.Private | FieldAttributes.Static);
-        _receiveMessageOnPortForeignMethodField = runtimeType.DefineField(
+        workers.ForeignReceiveMethod = runtimeType.DefineField(
             "_receiveMessageOnPortForeignMethod",
             _types.MethodInfo,
             FieldAttributes.Private | FieldAttributes.Static);
@@ -2203,7 +2195,7 @@ public partial class RuntimeEmitter
         // WorkerEnvironmentData store via reflection (worker programs co-locate SharpTS.dll;
         // RequireSharpTSRuntime is recorded at the call sites in WorkerThreadsModuleEmitter so
         // a program that never calls these stays standalone). #1000.
-        EmitWorkerThreadsEnvironmentData(runtimeType, runtime);
+        EmitWorkerThreadsEnvironmentData(runtimeType, workers);
     }
 
     /// <summary>
@@ -2217,9 +2209,10 @@ public partial class RuntimeEmitter
     /// queued, or <c>undefined</c> when the argument is not a port, the port is closed, or the
     /// queue is empty. A clone-failure sentinel dequeues as <c>{ message: undefined }</c>.
     /// </summary>
-    private void EmitWorkerThreadsReceiveMessageOnPortBody(EmittedMessagePortRuntime port, FieldInfo undefinedInstance)
+    private void EmitWorkerThreadsReceiveMessageOnPortBody(
+        EmittedWorkerRuntime workers, EmittedMessagePortRuntime port, FieldInfo undefinedInstance)
     {
-        var il = _receiveMessageOnPortMethod.GetILGenerator();
+        var il = workers.ReceiveMessageOnPort.GetILGenerator();
         var portLocal = il.DeclareLocal(port.Type);
         var msgLocal = il.DeclareLocal(_types.Object);
         var valueLocal = il.DeclareLocal(_types.Object);
@@ -2249,7 +2242,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "GetType"));
         il.Emit(OpCodes.Stloc, foreignPortTypeLocal);
-        il.Emit(OpCodes.Ldsfld, _receiveMessageOnPortForeignTypeField);
+        il.Emit(OpCodes.Ldsfld, workers.ForeignReceiveType);
         il.Emit(OpCodes.Ldloc, foreignPortTypeLocal);
         il.Emit(OpCodes.Beq, foreignMethodCachedLabel);
 
@@ -2260,13 +2253,13 @@ public partial class RuntimeEmitter
             _types.Type, "GetMethod", _types.String, typeof(BindingFlags)));
         il.Emit(OpCodes.Stloc, foreignReceiveMethodLocal);
         il.Emit(OpCodes.Ldloc, foreignReceiveMethodLocal);
-        il.Emit(OpCodes.Stsfld, _receiveMessageOnPortForeignMethodField);
+        il.Emit(OpCodes.Stsfld, workers.ForeignReceiveMethod);
         il.Emit(OpCodes.Ldloc, foreignPortTypeLocal);
-        il.Emit(OpCodes.Stsfld, _receiveMessageOnPortForeignTypeField);
+        il.Emit(OpCodes.Stsfld, workers.ForeignReceiveType);
         il.Emit(OpCodes.Br, foreignMethodReadyLabel);
 
         il.MarkLabel(foreignMethodCachedLabel);
-        il.Emit(OpCodes.Ldsfld, _receiveMessageOnPortForeignMethodField);
+        il.Emit(OpCodes.Ldsfld, workers.ForeignReceiveMethod);
         il.Emit(OpCodes.Stloc, foreignReceiveMethodLocal);
 
         il.MarkLabel(foreignMethodReadyLabel);
@@ -2327,7 +2320,7 @@ public partial class RuntimeEmitter
     /// Emits the getEnvironmentData/setEnvironmentData runtime helpers that reflectively call
     /// <c>SharpTS.Runtime.Types.WorkerEnvironmentData</c>.
     /// </summary>
-    private void EmitWorkerThreadsEnvironmentData(TypeBuilder runtimeType, EmittedRuntime runtime)
+    private void EmitWorkerThreadsEnvironmentData(TypeBuilder runtimeType, EmittedWorkerRuntime workers)
     {
         const string storeType = "SharpTS.Runtime.Types.WorkerEnvironmentData, SharpTS";
 
@@ -2353,7 +2346,7 @@ public partial class RuntimeEmitter
         gil.Emit(OpCodes.Stelem_Ref);
         gil.Emit(OpCodes.Callvirt, _types.GetMethod(_types.MethodBase, "Invoke", _types.Object, _types.ObjectArray));
         gil.Emit(OpCodes.Ret);
-        runtime.WorkerThreadsGetEnvironmentData = getMethod;
+        workers.GetEnvironmentData = getMethod;
 
         // public static void WorkerThreadsSetEnvironmentData(object key, object value)
         //   => WorkerEnvironmentData.Set(key, value)
@@ -2382,7 +2375,7 @@ public partial class RuntimeEmitter
         sil.Emit(OpCodes.Callvirt, _types.GetMethod(_types.MethodBase, "Invoke", _types.Object, _types.ObjectArray));
         sil.Emit(OpCodes.Pop); // discard Invoke result (Set returns void → null)
         sil.Emit(OpCodes.Ret);
-        runtime.WorkerThreadsSetEnvironmentData = setMethod;
+        workers.SetEnvironmentData = setMethod;
 
         // public static void WorkerThreadsMarkAsUntransferable(object value)
         //   => StructuredClone.MarkUntransferable(value)   (#1002)
@@ -2407,6 +2400,6 @@ public partial class RuntimeEmitter
         mil.Emit(OpCodes.Callvirt, _types.GetMethod(_types.MethodBase, "Invoke", _types.Object, _types.ObjectArray));
         mil.Emit(OpCodes.Pop); // discard Invoke result (MarkUntransferable returns void → null)
         mil.Emit(OpCodes.Ret);
-        runtime.WorkerThreadsMarkAsUntransferable = markMethod;
+        workers.MarkAsUntransferable = markMethod;
     }
 }
