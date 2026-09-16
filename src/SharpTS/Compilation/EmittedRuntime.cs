@@ -1409,9 +1409,6 @@ public class EmittedRuntime
     public EmittedFileSystemAsyncRuntime RequireFileSystemAsync() => FileSystemAsync
         ?? throw new InvalidOperationException("Filesystem async runtime was not enabled for this compilation.");
 
-    // NodeError conversion helpers
-    public MethodBuilder ThrowNodeError { get; set; } = null!;
-
     /// <summary>Required process metadata, with explicit optional stream and hosted declarations.</summary>
     public EmittedProcessRuntime Process { get; } = new();
 
@@ -1622,13 +1619,8 @@ public class EmittedRuntime
     public EmittedIntlRuntime RequireIntl() => Intl
         ?? throw new InvalidOperationException("Intl runtime was not enabled for this compilation.");
 
-    // FS module - emitted $NodeError type for standalone assemblies
-    // NOTE: Must stay in sync with NodeError in Runtime/BuiltIns/Modules/NodeError.cs
-    public Type NodeErrorType { get; set; } = null!;
-    public ConstructorBuilder NodeErrorCtor { get; set; } = null!;
-    public MethodBuilder NodeErrorCodeGetter { get; set; } = null!;
-    public MethodBuilder NodeErrorSyscallGetter { get; set; } = null!;
-    public MethodBuilder NodeErrorPathGetter { get; set; } = null!;
+    /// <summary>Required NodeError declarations shared by filesystem and process emission.</summary>
+    public EmittedNodeErrorRuntime NodeErrors { get; } = new();
 
     /// <summary>TTY primitive metadata, or null when the feature is omitted.</summary>
     public EmittedTtyRuntime? Tty { get; private set; }

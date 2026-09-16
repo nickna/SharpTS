@@ -18,7 +18,7 @@ public partial class RuntimeEmitter
     /// - Close(fd) -> void
     /// - IsValid(fd) -> bool
     /// </remarks>
-    private void EmitFileDescriptorTableType(ModuleBuilder module, EmittedRuntime runtime)
+    private void EmitFileDescriptorTableType(ModuleBuilder module, EmittedFileSystemRuntime fileSystem, EmittedNodeErrorRuntime nodeErrors)
     {
         var typeBuilder = EmitTypeDefinitions.DefineType(module,
             "$FileDescriptorTable",
@@ -47,7 +47,7 @@ public partial class RuntimeEmitter
             typeBuilder,
             FieldAttributes.Public | FieldAttributes.Static | FieldAttributes.InitOnly
         );
-        runtime.RequireFileSystem().FileDescriptorTableInstance = instanceField;
+        fileSystem.FileDescriptorTableInstance = instanceField;
 
         // Constructor
         var ctor = typeBuilder.DefineConstructor(
@@ -86,16 +86,16 @@ public partial class RuntimeEmitter
         cctorIl.Emit(OpCodes.Ret);
 
         // Open method
-        EmitFileDescriptorTableOpen(typeBuilder, runtime.RequireFileSystem(), nextFdField, streamsField, streamsType);
+        EmitFileDescriptorTableOpen(typeBuilder, fileSystem, nextFdField, streamsField, streamsType);
 
         // Get method
-        EmitFileDescriptorTableGet(typeBuilder, runtime, streamsField, streamsType);
+        EmitFileDescriptorTableGet(typeBuilder, fileSystem, nodeErrors, streamsField, streamsType);
 
         // Close method
-        EmitFileDescriptorTableClose(typeBuilder, runtime, streamsField, streamsType);
+        EmitFileDescriptorTableClose(typeBuilder, fileSystem, nodeErrors, streamsField, streamsType);
 
         // IsValid method
-        EmitFileDescriptorTableIsValid(typeBuilder, runtime, streamsField, streamsType);
+        EmitFileDescriptorTableIsValid(typeBuilder, streamsField, streamsType);
 
         // Finalize the type
         typeBuilder.CreateType();
@@ -163,7 +163,8 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitFileDescriptorTableGet(
         TypeBuilder typeBuilder,
-        EmittedRuntime runtime,
+        EmittedFileSystemRuntime fileSystem,
+        EmittedNodeErrorRuntime nodeErrors,
         FieldBuilder streamsField,
         Type streamsType)
     {
@@ -173,7 +174,7 @@ public partial class RuntimeEmitter
             typeof(FileStream),
             [_types.Int32]
         );
-        runtime.RequireFileSystem().FileDescriptorTableGet = method;
+        fileSystem.FileDescriptorTableGet = method;
 
         var il = method.GetILGenerator();
         var streamLocal = il.DeclareLocal(typeof(FileStream));
@@ -200,7 +201,7 @@ public partial class RuntimeEmitter
         var nullableCtor = _types.GetConstructor(nullableInt, [_types.Int32])!;
         il.Emit(OpCodes.Call, nullableCtor);
         il.Emit(OpCodes.Ldloc, errnoLocal);
-        il.Emit(OpCodes.Newobj, runtime.NodeErrorCtor);
+        il.Emit(OpCodes.Newobj, nodeErrors.Ctor);
         il.Emit(OpCodes.Throw);
 
         il.MarkLabel(successLabel);
@@ -214,7 +215,8 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitFileDescriptorTableClose(
         TypeBuilder typeBuilder,
-        EmittedRuntime runtime,
+        EmittedFileSystemRuntime fileSystem,
+        EmittedNodeErrorRuntime nodeErrors,
         FieldBuilder streamsField,
         Type streamsType)
     {
@@ -224,7 +226,7 @@ public partial class RuntimeEmitter
             _types.Void,
             [_types.Int32]
         );
-        runtime.RequireFileSystem().FileDescriptorTableClose = method;
+        fileSystem.FileDescriptorTableClose = method;
 
         var il = method.GetILGenerator();
         var streamLocal = il.DeclareLocal(typeof(FileStream));
@@ -251,7 +253,7 @@ public partial class RuntimeEmitter
         var nullableCtor = _types.GetConstructor(nullableInt, [_types.Int32])!;
         il.Emit(OpCodes.Call, nullableCtor);
         il.Emit(OpCodes.Ldloc, errnoLocal);
-        il.Emit(OpCodes.Newobj, runtime.NodeErrorCtor);
+        il.Emit(OpCodes.Newobj, nodeErrors.Ctor);
         il.Emit(OpCodes.Throw);
 
         il.MarkLabel(successLabel);
@@ -267,7 +269,6 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitFileDescriptorTableIsValid(
         TypeBuilder typeBuilder,
-        EmittedRuntime runtime,
         FieldBuilder streamsField,
         Type streamsType)
     {

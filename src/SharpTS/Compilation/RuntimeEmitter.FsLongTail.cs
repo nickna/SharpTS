@@ -39,7 +39,7 @@ public partial class RuntimeEmitter
         var pathLocal = il.DeclareLocal(_types.String);
         il.Emit(OpCodes.Stloc, pathLocal);
 
-        EmitWithFsErrorHandling(il, runtime, pathLocal, "fsync", afterTry =>
+        EmitWithFsErrorHandling(il, runtime.NodeErrors, pathLocal, "fsync", afterTry =>
         {
             var flushMethod = typeof(FileStream).GetMethod("Flush", [typeof(bool)])!;
 
@@ -74,7 +74,7 @@ public partial class RuntimeEmitter
         var pathLocal = il.DeclareLocal(_types.String);
         il.Emit(OpCodes.Stloc, pathLocal);
 
-        EmitWithFsErrorHandling(il, runtime, pathLocal, "fstat", afterTry =>
+        EmitWithFsErrorHandling(il, runtime.NodeErrors, pathLocal, "fstat", afterTry =>
         {
             var nameGetter = typeof(FileStream).GetProperty("Name")!.GetMethod!;
 

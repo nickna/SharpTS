@@ -11,12 +11,12 @@ public partial class RuntimeEmitter
     /// Uses the emitted $NodeError type for standalone DLL support.
     /// </summary>
     /// <param name="il">The IL generator.</param>
-    /// <param name="runtime">The emitted runtime containing NodeErrorCtor.</param>
+    /// <param name="nodeErrors">The shared NodeError declarations.</param>
     /// <param name="code">Error code (e.g., "ENOSYS", "EINVAL").</param>
     /// <param name="message">Error message.</param>
     /// <param name="syscall">System call name.</param>
     /// <param name="pathLocal">Local variable containing the path string.</param>
-    private void EmitNodeErrorThrow(ILGenerator il, EmittedRuntime runtime, string code, string message, string syscall, LocalBuilder pathLocal)
+    private void EmitNodeErrorThrow(ILGenerator il, EmittedNodeErrorRuntime nodeErrors, string code, string message, string syscall, LocalBuilder pathLocal)
     {
         // Load constructor arguments: code, message, syscall, path, errno (null)
         il.Emit(OpCodes.Ldstr, code);
@@ -32,7 +32,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, errnoLocal);
 
         // new $NodeError(code, message, syscall, path, errno)
-        il.Emit(OpCodes.Newobj, runtime.NodeErrorCtor);
+        il.Emit(OpCodes.Newobj, nodeErrors.Ctor);
         il.Emit(OpCodes.Throw);
     }
 
@@ -117,7 +117,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitWithFsErrorHandling(
         ILGenerator il,
-        EmittedRuntime runtime,
+        EmittedNodeErrorRuntime nodeErrors,
         LocalBuilder pathLocal,
         string syscall,
         Action<Label> emitTryBody)
@@ -133,7 +133,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, caughtExLocal);
         il.Emit(OpCodes.Ldstr, syscall);
         il.Emit(OpCodes.Ldloc, pathLocal);
-        il.Emit(OpCodes.Call, runtime.ThrowNodeError);
+        il.Emit(OpCodes.Call, nodeErrors.Throw);
         il.Emit(OpCodes.Rethrow);
 
         il.EndExceptionBlock();

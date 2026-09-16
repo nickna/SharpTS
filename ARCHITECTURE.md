@@ -733,6 +733,15 @@ body emission. Clock initialization, descriptor coercion/redirection checks, emi
 standalone deployment, and the TypeScript facades are unchanged. No flat aliases or emitter-held
 copies remain; BCL references and body locals retain their scope.
 
+Node-style errors are shared by filesystem and process emission through the required
+`EmittedNodeErrorRuntime`. Its six checked declarations cover the created error type, constructor,
+three getters, and the later conversion helper. Fifteen helpers take this owner and explicit
+filesystem or exception-creation dependencies. The four error fields and errno getter remain
+scoped to class construction. Completion validates the class and conversion stages before freezing.
+Constructor formatting, exception-data markers, errno behavior, descriptor lifetimes, process
+error paths, declaration order, and standalone dependencies are unchanged. No flat aliases or
+emitter-held error fields remain; BCL references retain their original scope.
+
 During emission, each handle becomes readable as soon as its declaration is assigned, so forward
 references do not require a method body to exist yet. An early read names the missing declaration.
 Completion is an orchestration boundary, not an IL verifier: body emission and type finalization

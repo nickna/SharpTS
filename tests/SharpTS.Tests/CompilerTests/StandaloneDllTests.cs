@@ -1411,6 +1411,102 @@ public class StandaloneDllTests
             verifyStandardError: error => Assert.Empty(error), standardInput: ""));
     }
 
+    public static IEnumerable<object[]> NodeErrorMetadataPrograms =>
+    [
+        new object[]
+        {
+            """
+            import * as fs from 'fs';
+            try{fs.readFileSync('missing-node-error.txt','utf8');}catch(e){console.log(e.code,e.syscall,e.path.endsWith('missing-node-error.txt'),typeof e.message);}
+            """,
+            "ENOENT open true string\n", "main.ts"
+        },
+        new object[]
+        {
+            """
+            import * as fs from 'node:fs';
+            try{fs.readdirSync('missing-node-error-directory');}catch(e){console.log(e.code,e.syscall,e.path.endsWith('missing-node-error-directory'));}
+            """,
+            "ENOENT readdir true\n", "main.ts"
+        },
+        new object[]
+        {
+            """
+            import * as fs from 'fs';
+            try{fs.fstatSync(99999);}catch(e){console.log(e.code,e.syscall,e.message.includes('bad file descriptor'));}
+            try{fs.readSync(99999,Buffer.alloc(1),0,1,null);}catch(e){console.log(e.code,e.syscall);}
+            """,
+            "EBADF fstat true\nEBADF fstat\n", "main.ts"
+        },
+        new object[]
+        {
+            """
+            import * as fs from 'fs';
+            try{fs.closeSync(99999);}catch(e){console.log(e.code,e.syscall,e.message.includes('bad file descriptor'));}
+            """,
+            "EBADF close true\n", "main.ts"
+        },
+        new object[]
+        {
+            """
+            import * as fs from 'fs';
+            const path='node-error-data.txt';fs.writeFileSync(path,'ok');
+            try{const fd=fs.openSync(path,'r');console.log(fs.fstatSync(fd).size);fs.closeSync(fd);try{fs.closeSync(fd);}catch(e){console.log(e.code,e.syscall);}console.log(fs.readFileSync(path,'utf8'));}finally{fs.unlinkSync(path);}
+            """,
+            "2\nEBADF close\nok\n", "main.ts"
+        },
+        new object[]
+        {
+            """
+            import {readFile} from 'fs/promises';
+            async function run(){try{await readFile('missing-node-error-async.txt','utf8');}catch(e){console.log(e.code,e.syscall,e.path.endsWith('missing-node-error-async.txt'));}}run();
+            """,
+            "ENOENT open true\n", "main.ts"
+        },
+        new object[]
+        {
+            """
+            const fs=require('fs');
+            try{fs.closeSync(99999);}catch(e){console.log(e.code,e.syscall);}
+            """,
+            "EBADF close\n", "main.cjs"
+        },
+        new object[]
+        {
+            """
+            import * as fs from 'fs';
+            function* failures():Generator<string,void,any>{try{fs.closeSync(99999);}catch(e){yield e.code;yield e.syscall;}}
+            const iterator=failures();console.log(iterator.next().value,iterator.next().value);
+            """,
+            "EBADF close\n", "main.ts"
+        },
+        new object[]
+        {
+            """
+            import {statSync as stat,closeSync as close} from 'node:fs';
+            try{stat('missing-node-error-alias.txt');}catch(e){console.log(e.code,e.syscall);}
+            try{close(99999);}catch(e){console.log(e.code,e.syscall);}
+            """,
+            "ENOENT stat\nEBADF close\n", "main.ts"
+        }
+    ];
+
+    [Theory]
+    [MemberData(nameof(NodeErrorMetadataPrograms))]
+    public void Isolated_NodeErrorMetadata_PreservesSharedErrorsAndDescriptorLifetime(string source, string expected, string entryPoint)
+    {
+        using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        tempDir.CreateFile(entryPoint, source);
+        var dllPath = tempDir.GetPath("node_error_metadata.dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{tempDir.GetPath(entryPoint)}\" -o \"{dllPath}\" --verify --standalone", tempDir.Path);
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(dllPath));
+        Assert.False(File.Exists(tempDir.GetPath("SharpTS.dll")));
+        Assert.Equal(expected, ExecuteCompiledDllIsolated(dllPath, timeoutMs: 15000,
+            verifyStandardError: error => Assert.Empty(error)));
+    }
+
     public static IEnumerable<object[]> IntlMetadataPrograms =>
     [
         new object[]

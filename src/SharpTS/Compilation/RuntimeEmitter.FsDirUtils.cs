@@ -34,7 +34,7 @@ public partial class RuntimeEmitter
         var pathLocal = il.DeclareLocal(_types.String);
         il.Emit(OpCodes.Stloc, pathLocal);
 
-        EmitWithFsErrorHandling(il, runtime, pathLocal, "mkdtemp", afterTry =>
+        EmitWithFsErrorHandling(il, runtime.NodeErrors, pathLocal, "mkdtemp", afterTry =>
         {
             // random = Path.GetRandomFileName().Replace(".", "")
             il.Emit(OpCodes.Call, _types.GetMethod(_types.Path, "GetRandomFileName"));
@@ -94,7 +94,7 @@ public partial class RuntimeEmitter
         var pathLocal = il.DeclareLocal(_types.String);
         il.Emit(OpCodes.Stloc, pathLocal);
 
-        EmitWithFsErrorHandling(il, runtime, pathLocal, "opendir", afterTry =>
+        EmitWithFsErrorHandling(il, runtime.NodeErrors, pathLocal, "opendir", afterTry =>
         {
             // Check if directory exists
             var existsLabel = il.DefineLabel();
@@ -149,7 +149,7 @@ public partial class RuntimeEmitter
         var newPathLocal = il.DeclareLocal(_types.String);
         il.Emit(OpCodes.Stloc, newPathLocal);
 
-        EmitWithFsErrorHandling(il, runtime, newPathLocal, "link", afterTry =>
+        EmitWithFsErrorHandling(il, runtime.NodeErrors, newPathLocal, "link", afterTry =>
         {
             // Check if source exists
             var existsLabel = il.DefineLabel();

@@ -158,7 +158,7 @@ public partial class RuntimeEmitter
         var pathLocal = il.DeclareLocal(_types.String);
         il.Emit(OpCodes.Stloc, pathLocal);
 
-        EmitWithFsErrorHandling(il, runtime, pathLocal, "open", afterTry =>
+        EmitWithFsErrorHandling(il, runtime.NodeErrors, pathLocal, "open", afterTry =>
         {
             // bytes = File.ReadAllBytes(path)
             il.Emit(OpCodes.Ldloc, pathLocal);
@@ -225,7 +225,7 @@ public partial class RuntimeEmitter
         var bytesLocal = il.DeclareLocal(_types.MakeArrayType(_types.Byte));
         il.Emit(OpCodes.Stloc, bytesLocal);
 
-        EmitWithFsErrorHandling(il, runtime, pathLocal, "open", afterTry =>
+        EmitWithFsErrorHandling(il, runtime.NodeErrors, pathLocal, "open", afterTry =>
         {
             // File.WriteAllBytes(path, bytes)
             il.Emit(OpCodes.Ldloc, pathLocal);
@@ -264,7 +264,7 @@ public partial class RuntimeEmitter
         var bytesLocal = il.DeclareLocal(_types.MakeArrayType(_types.Byte));
         il.Emit(OpCodes.Stloc, bytesLocal);
 
-        EmitWithFsErrorHandling(il, runtime, pathLocal, "open", afterTry =>
+        EmitWithFsErrorHandling(il, runtime.NodeErrors, pathLocal, "open", afterTry =>
         {
             // File.AppendAllBytes(path, bytes)
             il.Emit(OpCodes.Ldloc, pathLocal);
@@ -296,7 +296,7 @@ public partial class RuntimeEmitter
         var pathLocal = il.DeclareLocal(_types.String);
         il.Emit(OpCodes.Stloc, pathLocal);
 
-        EmitWithFsErrorHandling(il, runtime, pathLocal, "unlink", afterTry =>
+        EmitWithFsErrorHandling(il, runtime.NodeErrors, pathLocal, "unlink", afterTry =>
         {
             // Check if file exists first (File.Delete is a no-op if file doesn't exist)
             var existsLabel = il.DefineLabel();
@@ -340,7 +340,7 @@ public partial class RuntimeEmitter
         var pathLocal = il.DeclareLocal(_types.String);
         il.Emit(OpCodes.Stloc, pathLocal);
 
-        EmitWithFsErrorHandling(il, runtime, pathLocal, "mkdir", afterTry =>
+        EmitWithFsErrorHandling(il, runtime.NodeErrors, pathLocal, "mkdir", afterTry =>
         {
             // Directory.CreateDirectory(path)
             il.Emit(OpCodes.Ldloc, pathLocal);
@@ -372,7 +372,7 @@ public partial class RuntimeEmitter
         var pathLocal = il.DeclareLocal(_types.String);
         il.Emit(OpCodes.Stloc, pathLocal);
 
-        EmitWithFsErrorHandling(il, runtime, pathLocal, "rmdir", afterTry =>
+        EmitWithFsErrorHandling(il, runtime.NodeErrors, pathLocal, "rmdir", afterTry =>
         {
             // Check if options.recursive is set
             var nonRecursive = il.DefineLabel();
@@ -468,7 +468,7 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(afterRecursiveLabel);
 
-        EmitWithFsErrorHandling(il, runtime, pathLocal, "readdir", afterTry =>
+        EmitWithFsErrorHandling(il, runtime.NodeErrors, pathLocal, "readdir", afterTry =>
         {
             // Get entries based on recursive option
             // Directory.GetFileSystemEntries(path, "*", SearchOption)
@@ -607,7 +607,7 @@ public partial class RuntimeEmitter
         var pathLocal = il.DeclareLocal(_types.String);
         il.Emit(OpCodes.Stloc, pathLocal);
 
-        EmitWithFsErrorHandling(il, runtime, pathLocal, "stat", afterTry =>
+        EmitWithFsErrorHandling(il, runtime.NodeErrors, pathLocal, "stat", afterTry =>
         {
             // Locals for $Stats constructor arguments
             var isFileLocal = il.DeclareLocal(_types.Boolean);
@@ -713,7 +713,7 @@ public partial class RuntimeEmitter
         var newPathLocal = il.DeclareLocal(_types.String);
         il.Emit(OpCodes.Stloc, newPathLocal);
 
-        EmitWithFsErrorHandling(il, runtime, oldPathLocal, "rename", afterTry =>
+        EmitWithFsErrorHandling(il, runtime.NodeErrors, oldPathLocal, "rename", afterTry =>
         {
             // Check if it's a directory
             var isFileLabel = il.DefineLabel();
@@ -763,7 +763,7 @@ public partial class RuntimeEmitter
         var destLocal = il.DeclareLocal(_types.String);
         il.Emit(OpCodes.Stloc, destLocal);
 
-        EmitWithFsErrorHandling(il, runtime, srcLocal, "copyfile", afterTry =>
+        EmitWithFsErrorHandling(il, runtime.NodeErrors, srcLocal, "copyfile", afterTry =>
         {
             // File.Copy(src, dest, overwrite: true)
             il.Emit(OpCodes.Ldloc, srcLocal);
@@ -816,7 +816,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, modeLocal);
         il.MarkLabel(modeDone);
 
-        EmitWithFsErrorHandling(il, runtime, pathLocal, "access", afterTry =>
+        EmitWithFsErrorHandling(il, runtime.NodeErrors, pathLocal, "access", afterTry =>
         {
             // Check if exists (File.Exists || Directory.Exists)
             var existsLabel = il.DefineLabel();
@@ -889,7 +889,7 @@ public partial class RuntimeEmitter
         var pathLocal = il.DeclareLocal(_types.String);
         il.Emit(OpCodes.Stloc, pathLocal);
 
-        EmitWithFsErrorHandling(il, runtime, pathLocal, "lstat", afterTry =>
+        EmitWithFsErrorHandling(il, runtime.NodeErrors, pathLocal, "lstat", afterTry =>
         {
             // Locals for $Stats constructor arguments
             var isFileLocal = il.DeclareLocal(_types.Boolean);
@@ -1021,7 +1021,7 @@ public partial class RuntimeEmitter
         var modeLocal = il.DeclareLocal(_types.Int32);
         il.Emit(OpCodes.Stloc, modeLocal);
 
-        EmitWithFsErrorHandling(il, runtime, pathLocal, "chmod", afterTry =>
+        EmitWithFsErrorHandling(il, runtime.NodeErrors, pathLocal, "chmod", afterTry =>
         {
             // Check if file/directory exists
             var existsLabel = il.DefineLabel();
@@ -1111,7 +1111,7 @@ public partial class RuntimeEmitter
         var gidLocal = il.DeclareLocal(_types.Int32);
         il.Emit(OpCodes.Stloc, gidLocal);
 
-        EmitWithFsErrorHandling(il, runtime, pathLocal, "chown", afterTry =>
+        EmitWithFsErrorHandling(il, runtime.NodeErrors, pathLocal, "chown", afterTry =>
         {
             // Check if on Windows - throw ENOSYS
             var runtimeInfoType = typeof(RuntimeInformation);
@@ -1125,7 +1125,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Brfalse, notWindowsLabel);
 
             // Throw ENOSYS on Windows - use emitted $NodeError type for standalone DLL
-            EmitNodeErrorThrow(il, runtime, "ENOSYS", "function not implemented", "chown", pathLocal);
+            EmitNodeErrorThrow(il, runtime.NodeErrors, "ENOSYS", "function not implemented", "chown", pathLocal);
 
             il.MarkLabel(notWindowsLabel);
 
@@ -1193,7 +1193,7 @@ public partial class RuntimeEmitter
         var gidLocal = il.DeclareLocal(_types.Int32);
         il.Emit(OpCodes.Stloc, gidLocal);
 
-        EmitWithFsErrorHandling(il, runtime, pathLocal, "lchown", afterTry =>
+        EmitWithFsErrorHandling(il, runtime.NodeErrors, pathLocal, "lchown", afterTry =>
         {
             // Check if on Windows - throw ENOSYS
             var runtimeInfoType = typeof(RuntimeInformation);
@@ -1207,7 +1207,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Brfalse, notWindowsLabel);
 
             // Throw ENOSYS on Windows - use emitted $NodeError type for standalone DLL
-            EmitNodeErrorThrow(il, runtime, "ENOSYS", "function not implemented", "lchown", pathLocal);
+            EmitNodeErrorThrow(il, runtime.NodeErrors, "ENOSYS", "function not implemented", "lchown", pathLocal);
 
             il.MarkLabel(notWindowsLabel);
 
@@ -1277,7 +1277,7 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(hasLenLabel);
 
-        EmitWithFsErrorHandling(il, runtime, pathLocal, "truncate", afterTry =>
+        EmitWithFsErrorHandling(il, runtime.NodeErrors, pathLocal, "truncate", afterTry =>
         {
             // using var fs = new FileStream(path, FileMode.Open, FileAccess.Write);
             // fs.SetLength(len);
@@ -1364,7 +1364,7 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(afterTypeLabel);
 
-        EmitWithFsErrorHandling(il, runtime, linkPathLocal, "symlink", afterTry =>
+        EmitWithFsErrorHandling(il, runtime.NodeErrors, linkPathLocal, "symlink", afterTry =>
         {
             // Check if target is a directory or type is "dir" or "junction"
             var createFileSymlink = il.DefineLabel();
@@ -1433,7 +1433,7 @@ public partial class RuntimeEmitter
         var pathLocal = il.DeclareLocal(_types.String);
         il.Emit(OpCodes.Stloc, pathLocal);
 
-        EmitWithFsErrorHandling(il, runtime, pathLocal, "readlink", afterTry =>
+        EmitWithFsErrorHandling(il, runtime.NodeErrors, pathLocal, "readlink", afterTry =>
         {
             var linkTargetLocal = il.DeclareLocal(_types.String);
             var checkDirLabel = il.DefineLabel();
@@ -1479,7 +1479,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Brtrue, validLabel);
 
             // Not a symlink - throw EINVAL - use emitted $NodeError type for standalone DLL
-            EmitNodeErrorThrow(il, runtime, "EINVAL", "invalid argument", "readlink", pathLocal);
+            EmitNodeErrorThrow(il, runtime.NodeErrors, "EINVAL", "invalid argument", "readlink", pathLocal);
 
             il.MarkLabel(validLabel);
             il.Emit(OpCodes.Ldloc, linkTargetLocal);
@@ -1513,7 +1513,7 @@ public partial class RuntimeEmitter
         var pathLocal = il.DeclareLocal(_types.String);
         il.Emit(OpCodes.Stloc, pathLocal);
 
-        EmitWithFsErrorHandling(il, runtime, pathLocal, "realpath", afterTry =>
+        EmitWithFsErrorHandling(il, runtime.NodeErrors, pathLocal, "realpath", afterTry =>
         {
             // Check if file/directory exists
             var existsLabel = il.DefineLabel();
@@ -1648,7 +1648,7 @@ public partial class RuntimeEmitter
         var mtimeLocal = il.DeclareLocal(_types.DateTime);
         il.Emit(OpCodes.Stloc, mtimeLocal);
 
-        EmitWithFsErrorHandling(il, runtime, pathLocal, "utimes", afterTry =>
+        EmitWithFsErrorHandling(il, runtime.NodeErrors, pathLocal, "utimes", afterTry =>
         {
             // Check if file/directory exists
             var existsLabel = il.DefineLabel();
