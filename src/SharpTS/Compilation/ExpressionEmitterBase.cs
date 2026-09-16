@@ -2420,20 +2420,20 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
         }
 
         // Inherited field: probe for a runtime own-shadow on the subclass (or a nearer ancestor) first.
-        var shadowLocal = IL.DeclareLocal(Ctx.Runtime!.CompiledPropertyDescriptorType);
+        var shadowLocal = IL.DeclareLocal(Ctx.Runtime!.DescriptorStorage.DescriptorType);
         var noShadowLabel = IL.DefineLabel();
         var doneLabel = IL.DefineLabel();
 
         IL.Emit(OpCodes.Ldtoken, classBuilder);
         IL.Emit(OpCodes.Call, Types.TypeGetTypeFromHandle);
         IL.Emit(OpCodes.Ldstr, fieldName);
-        IL.Emit(OpCodes.Call, Ctx.Runtime!.PDSGetStaticShadow);
+        IL.Emit(OpCodes.Call, Ctx.Runtime!.DescriptorStorage.GetStaticShadow);
         IL.Emit(OpCodes.Stloc, shadowLocal);
 
         IL.Emit(OpCodes.Ldloc, shadowLocal);
         IL.Emit(OpCodes.Brfalse, noShadowLabel);
         IL.Emit(OpCodes.Ldloc, shadowLocal);
-        IL.Emit(OpCodes.Callvirt, Ctx.Runtime!.CompiledPropertyDescriptorValue.GetGetMethod()!);
+        IL.Emit(OpCodes.Callvirt, Ctx.Runtime!.DescriptorStorage.DescriptorValue.GetGetMethod()!);
         IL.Emit(OpCodes.Br, doneLabel);
 
         IL.MarkLabel(noShadowLabel);

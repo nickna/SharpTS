@@ -364,7 +364,7 @@ public partial class RuntimeEmitter
 
         // Check if target is frozen
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.PDSIsFrozen);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.IsFrozen);
         var notFrozenLabel = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, notFrozenLabel);
         il.Emit(OpCodes.Ldc_I4_0);

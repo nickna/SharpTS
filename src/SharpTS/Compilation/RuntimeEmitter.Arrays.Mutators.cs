@@ -21,17 +21,17 @@ public partial class RuntimeEmitter
     private void EmitRequireWritableArrayLength(
         ILGenerator il, EmittedRuntime runtime, LocalBuilder receiver)
     {
-        var descriptor = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+        var descriptor = il.DeclareLocal(runtime.DescriptorStorage.DescriptorType);
         var writable = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, receiver);
         il.Emit(OpCodes.Ldstr, "length");
-        il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetPropertyDescriptor);
         il.Emit(OpCodes.Stloc, descriptor);
         il.Emit(OpCodes.Ldloc, descriptor);
         il.Emit(OpCodes.Brfalse, writable);
         il.Emit(OpCodes.Ldloc, descriptor);
         il.Emit(OpCodes.Callvirt,
-            runtime.CompiledPropertyDescriptorWritable.GetGetMethod()!);
+            runtime.DescriptorStorage.DescriptorWritable.GetGetMethod()!);
         il.Emit(OpCodes.Brtrue, writable);
         GuestErrorEmitter.ThrowTypeError(il, runtime,
             "Cannot assign to read only array length");
@@ -77,7 +77,7 @@ public partial class RuntimeEmitter
             // Check extensibility via $PropertyDescriptorStore.IsExtensible - fully standalone, no reflection
             // If NOT extensible, branch to return
             il.Emit(OpCodes.Ldarg_0);  // obj
-            il.Emit(OpCodes.Call, runtime.PDSIsExtensible);
+            il.Emit(OpCodes.Call, runtime.DescriptorStorage.IsExtensible);
             il.Emit(OpCodes.Brfalse, returnLabel);
         }
     }
@@ -319,16 +319,16 @@ public partial class RuntimeEmitter
 
         // A non-writable length rejects the final Set even when deletion of the
         // element succeeded.
-        var lengthDescriptor = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+        var lengthDescriptor = il.DeclareLocal(runtime.DescriptorStorage.DescriptorType);
         var lengthWritable = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "length");
-        il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetPropertyDescriptor);
         il.Emit(OpCodes.Stloc, lengthDescriptor);
         il.Emit(OpCodes.Ldloc, lengthDescriptor);
         il.Emit(OpCodes.Brfalse, lengthWritable);
         il.Emit(OpCodes.Ldloc, lengthDescriptor);
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorWritable.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorWritable.GetGetMethod()!);
         il.Emit(OpCodes.Brfalse, frozenLabel);
         il.MarkLabel(lengthWritable);
 
@@ -354,16 +354,16 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(emptyLabel);
-        var emptyLengthDescriptor = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+        var emptyLengthDescriptor = il.DeclareLocal(runtime.DescriptorStorage.DescriptorType);
         var emptyLengthWritable = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "length");
-        il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetPropertyDescriptor);
         il.Emit(OpCodes.Stloc, emptyLengthDescriptor);
         il.Emit(OpCodes.Ldloc, emptyLengthDescriptor);
         il.Emit(OpCodes.Brfalse, emptyLengthWritable);
         il.Emit(OpCodes.Ldloc, emptyLengthDescriptor);
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorWritable.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorWritable.GetGetMethod()!);
         il.Emit(OpCodes.Brfalse, frozenLabel);
         il.MarkLabel(emptyLengthWritable);
         // ECMA-262 23.1.3.20 Array.prototype.pop: returns undefined for empty
@@ -2117,14 +2117,14 @@ public partial class RuntimeEmitter
         // Explicit prototypes, relevant own descriptors, or a frozen receiver
         // require the strict property-operation path.
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.PDSHasPrototypeEntry);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.HasPrototypeEntry);
         il.Emit(OpCodes.Brtrue, returnFalse);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.PDSIsFrozen);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.IsFrozen);
         il.Emit(OpCodes.Brtrue, returnFalse);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.PDSHasIndexedOwnProperty);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.HasIndexedOwnProperty);
         il.Emit(OpCodes.Brtrue, returnFalse);
 
         // The raw backing must still represent every snapshotted index. A
@@ -2170,19 +2170,19 @@ public partial class RuntimeEmitter
         // which must still inherit directly from Object.prototype. Relevant
         // indexed properties anywhere on that standard chain force bailout.
         il.Emit(OpCodes.Ldsfld, runtime.ArrayOperations.PrototypeField);
-        il.Emit(OpCodes.Call, runtime.PDSGetPrototype);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetPrototype);
         il.Emit(OpCodes.Ldsfld, runtime.ObjectPrototypeField);
         il.Emit(OpCodes.Bne_Un, returnFalse);
         il.Emit(OpCodes.Ldsfld, runtime.ObjectPrototypeField);
-        il.Emit(OpCodes.Call, runtime.PDSHasPrototypeEntry);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.HasPrototypeEntry);
         il.Emit(OpCodes.Brtrue, returnFalse);
         il.Emit(OpCodes.Ldsfld, runtime.ArrayOperations.PrototypeField);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.PDSHasIndexedOwnProperty);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.HasIndexedOwnProperty);
         il.Emit(OpCodes.Brtrue, returnFalse);
         il.Emit(OpCodes.Ldsfld, runtime.ObjectPrototypeField);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.PDSHasIndexedOwnProperty);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.HasIndexedOwnProperty);
         il.Emit(OpCodes.Brtrue, returnFalse);
 
         il.Emit(OpCodes.Ldc_I4_1);

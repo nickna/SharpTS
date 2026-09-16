@@ -393,7 +393,7 @@ public partial class RuntimeEmitter
 
         var dictLoopStart = il.DefineLabel();
         var dictLoopEnd = il.DefineLabel();
-        var valDescLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+        var valDescLocal = il.DeclareLocal(runtime.DescriptorStorage.DescriptorType);
         il.MarkLabel(dictLoopStart);
         il.Emit(OpCodes.Ldloca, enumeratorLocal);
         il.Emit(OpCodes.Call, _types.GetMethod(enumeratorType, "MoveNext")!);
@@ -413,12 +413,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, dictLocal);
         il.Emit(OpCodes.Ldloca, currentLocal);
         il.Emit(OpCodes.Call, _types.GetProperty(kvpType, "Key")!.GetGetMethod()!);
-        il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetPropertyDescriptor);
         il.Emit(OpCodes.Stloc, valDescLocal);
         il.Emit(OpCodes.Ldloc, valDescLocal);
         il.Emit(OpCodes.Brfalse, valIncludeLabel);  // no descriptor → enumerable by default
         il.Emit(OpCodes.Ldloc, valDescLocal);
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorEnumerable.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorEnumerable.GetGetMethod()!);
         il.Emit(OpCodes.Brfalse, dictLoopStart);  // non-enumerable → skip
         il.MarkLabel(valIncludeLabel);
 
@@ -440,7 +440,7 @@ public partial class RuntimeEmitter
         var pdsKeysListV = il.DeclareLocal(listType);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, dictLocal);
-        il.Emit(OpCodes.Call, runtime.PDSGetEnumerableExtraKeys);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetEnumerableExtraKeys);
         il.Emit(OpCodes.Stloc, pdsKeysListV);
         var pdsLoopStartV = il.DefineLabel();
         var pdsLoopEndV = il.DefineLabel();
@@ -531,7 +531,7 @@ public partial class RuntimeEmitter
         var valPdsKeysLocal = il.DeclareLocal(listType);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Call, runtime.PDSGetEnumerableExtraKeys);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetEnumerableExtraKeys);
         il.Emit(OpCodes.Stloc, valPdsKeysLocal);
         {
             var iLocal3 = il.DeclareLocal(_types.Int32);
@@ -576,7 +576,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, resultLocal);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Call, runtime.PDSGetEnumerableExtraKeys);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetEnumerableExtraKeys);
         var fnValsKeysLocal = il.DeclareLocal(listType);
         il.Emit(OpCodes.Stloc, fnValsKeysLocal);
         {
@@ -681,16 +681,16 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, _types.GetProperty(keysEnumType, "Current")!.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, valGettersKey);
         // PDS enum check
-        var valGetterDescLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+        var valGetterDescLocal = il.DeclareLocal(runtime.DescriptorStorage.DescriptorType);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, valGettersKey);
-        il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetPropertyDescriptor);
         il.Emit(OpCodes.Stloc, valGetterDescLocal);
         var valGetterAddLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, valGetterDescLocal);
         il.Emit(OpCodes.Brfalse, valGetterAddLabel);
         il.Emit(OpCodes.Ldloc, valGetterDescLocal);
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorEnumerable.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorEnumerable.GetGetMethod()!);
         il.Emit(OpCodes.Brfalse, valGettersStart);
         il.MarkLabel(valGetterAddLabel);
         // result.Add(GetProperty(obj, key))
@@ -739,16 +739,16 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, valSettersStart);
         il.MarkLabel(skipPairCheck);
         // PDS enum check
-        var valSetterDescLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+        var valSetterDescLocal = il.DeclareLocal(runtime.DescriptorStorage.DescriptorType);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, valSettersKey);
-        il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetPropertyDescriptor);
         il.Emit(OpCodes.Stloc, valSetterDescLocal);
         var valSetterAddLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, valSetterDescLocal);
         il.Emit(OpCodes.Brfalse, valSetterAddLabel);
         il.Emit(OpCodes.Ldloc, valSetterDescLocal);
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorEnumerable.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorEnumerable.GetGetMethod()!);
         il.Emit(OpCodes.Brfalse, valSettersStart);
         il.MarkLabel(valSetterAddLabel);
         il.Emit(OpCodes.Ldloc, resultLocal);
@@ -968,17 +968,17 @@ public partial class RuntimeEmitter
         // descriptor is non-enumerable, mirroring the GetKeys/GetValues filter so
         // Object.entries stays consistent with Object.keys (the Math/JSON
         // singleton built-ins carry Enumerable=false).
-        var entDescLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+        var entDescLocal = il.DeclareLocal(runtime.DescriptorStorage.DescriptorType);
         var entIncludeLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, dictLocal);
         il.Emit(OpCodes.Ldloca, currentLocal);
         il.Emit(OpCodes.Call, _types.GetProperty(kvpType, "Key")!.GetGetMethod()!);
-        il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetPropertyDescriptor);
         il.Emit(OpCodes.Stloc, entDescLocal);
         il.Emit(OpCodes.Ldloc, entDescLocal);
         il.Emit(OpCodes.Brfalse, entIncludeLabel);  // no descriptor → enumerable by default
         il.Emit(OpCodes.Ldloc, entDescLocal);
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorEnumerable.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorEnumerable.GetGetMethod()!);
         il.Emit(OpCodes.Brfalse, dictLoopStart);  // non-enumerable → skip
         il.MarkLabel(entIncludeLabel);
 
@@ -1009,7 +1009,7 @@ public partial class RuntimeEmitter
         var pdsKeysListE = il.DeclareLocal(listType);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, dictLocal);
-        il.Emit(OpCodes.Call, runtime.PDSGetEnumerableExtraKeys);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetEnumerableExtraKeys);
         il.Emit(OpCodes.Stloc, pdsKeysListE);
         var pdsLoopStartE = il.DefineLabel();
         var pdsLoopEndE = il.DefineLabel();
@@ -1120,7 +1120,7 @@ public partial class RuntimeEmitter
         var entPdsKeysLocal = il.DeclareLocal(listType);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Call, runtime.PDSGetEnumerableExtraKeys);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetEnumerableExtraKeys);
         il.Emit(OpCodes.Stloc, entPdsKeysLocal);
         {
             var iLocal4 = il.DeclareLocal(_types.Int32);
@@ -1174,7 +1174,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, resultLocal);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Call, runtime.PDSGetEnumerableExtraKeys);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetEnumerableExtraKeys);
         var fnEntKeysLocal = il.DeclareLocal(listType);
         il.Emit(OpCodes.Stloc, fnEntKeysLocal);
         {
@@ -1297,16 +1297,16 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, _types.GetProperty(entKeysEnumType, "Current")!.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, entGettersKey);
         // PDS enum check
-        var entGetterDescLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+        var entGetterDescLocal = il.DeclareLocal(runtime.DescriptorStorage.DescriptorType);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, entGettersKey);
-        il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetPropertyDescriptor);
         il.Emit(OpCodes.Stloc, entGetterDescLocal);
         var entGetterAddLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, entGetterDescLocal);
         il.Emit(OpCodes.Brfalse, entGetterAddLabel);
         il.Emit(OpCodes.Ldloc, entGetterDescLocal);
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorEnumerable.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorEnumerable.GetGetMethod()!);
         il.Emit(OpCodes.Brfalse, entGettersStart);
         il.MarkLabel(entGetterAddLabel);
         // entry = [key, GetProperty(obj, key)]
@@ -1363,16 +1363,16 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, entSettersStart);
         il.MarkLabel(entSkipPairCheck);
         // PDS enum check
-        var entSetterDescLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+        var entSetterDescLocal = il.DeclareLocal(runtime.DescriptorStorage.DescriptorType);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, entSettersKey);
-        il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetPropertyDescriptor);
         il.Emit(OpCodes.Stloc, entSetterDescLocal);
         var entSetterAddLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, entSetterDescLocal);
         il.Emit(OpCodes.Brfalse, entSetterAddLabel);
         il.Emit(OpCodes.Ldloc, entSetterDescLocal);
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorEnumerable.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorEnumerable.GetGetMethod()!);
         il.Emit(OpCodes.Brfalse, entSettersStart);
         il.MarkLabel(entSetterAddLabel);
         il.Emit(OpCodes.Newobj, _types.GetConstructor(listType, Type.EmptyTypes)!);

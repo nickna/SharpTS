@@ -10,25 +10,28 @@ namespace SharpTS.Compilation;
 /// </summary>
 public partial class RuntimeEmitter
 {
+    private readonly record struct DescriptorKeyInputs(Type FunctionType, MethodInfo GetMethodInfo);
+
     /// <summary>
     /// Emits all property descriptor types: $FrozenSealedState, $PrototypeInfo,
     /// $CompiledPropertyDescriptor, and $PropertyDescriptorStore.
     /// </summary>
-    private void EmitPropertyDescriptorTypes(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private void EmitPropertyDescriptorTypes(ModuleBuilder moduleBuilder, EmittedDescriptorStorageRuntime storage,
+        DescriptorKeyInputs keys, Type undefinedType)
     {
         // Phase 1: Define all types first (for cross-references)
-        EmitFrozenSealedStateClass(moduleBuilder, runtime);
-        EmitPrototypeInfoClass(moduleBuilder, runtime);
-        EmitCompiledPropertyDescriptorClass(moduleBuilder, runtime);
+        EmitFrozenSealedStateClass(moduleBuilder, storage);
+        EmitPrototypeInfoClass(moduleBuilder, storage);
+        EmitCompiledPropertyDescriptorClass(moduleBuilder, storage);
 
         // Phase 2: Define $PropertyDescriptorStore (references the above types)
-        EmitPropertyDescriptorStoreClass(moduleBuilder, runtime);
+        EmitPropertyDescriptorStoreClass(moduleBuilder, storage, keys, undefinedType);
     }
 
     /// <summary>
     /// Emits: internal class $FrozenSealedState { bool IsFrozen, IsSealed, IsExtensible = true }
     /// </summary>
-    private void EmitFrozenSealedStateClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private void EmitFrozenSealedStateClass(ModuleBuilder moduleBuilder, EmittedDescriptorStorageRuntime storage)
     {
         var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$FrozenSealedState",
@@ -65,17 +68,17 @@ public partial class RuntimeEmitter
         EmitAutoProperty(typeBuilder, "IsExtensible", _types.Boolean, isExtensibleField);
 
         var type = typeBuilder.CreateType()!;
-        runtime.FrozenSealedStateType = type;
+        storage.StateType = type;
         _ = ctor;
-        runtime.FrozenSealedStateIsFrozen = type.GetProperty("IsFrozen")!;
-        runtime.FrozenSealedStateIsSealed = type.GetProperty("IsSealed")!;
-        runtime.FrozenSealedStateIsExtensible = type.GetProperty("IsExtensible")!;
+        storage.StateIsFrozen = type.GetProperty("IsFrozen")!;
+        storage.StateIsSealed = type.GetProperty("IsSealed")!;
+        storage.StateIsExtensible = type.GetProperty("IsExtensible")!;
     }
 
     /// <summary>
     /// Emits: internal class $PrototypeInfo { object? Prototype }
     /// </summary>
-    private void EmitPrototypeInfoClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private void EmitPrototypeInfoClass(ModuleBuilder moduleBuilder, EmittedDescriptorStorageRuntime storage)
     {
         var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$PrototypeInfo",
@@ -101,15 +104,16 @@ public partial class RuntimeEmitter
         EmitAutoProperty(typeBuilder, "Prototype", _types.Object, prototypeField);
 
         var type = typeBuilder.CreateType()!;
-        runtime.PrototypeInfoType = type;
+        storage.PrototypeInfoType = type;
         _ = ctor;
-        runtime.PrototypeInfoPrototype = type.GetProperty("Prototype")!;
+        storage.PrototypeValue = type.GetProperty("Prototype")!;
     }
 
     /// <summary>
     /// Emits: public class $CompiledPropertyDescriptor { Value, Getter, Setter, Writable, Enumerable, Configurable }
     /// </summary>
-    private void EmitCompiledPropertyDescriptorClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private void EmitCompiledPropertyDescriptorClass(ModuleBuilder moduleBuilder,
+        EmittedDescriptorStorageRuntime storage)
     {
         var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$CompiledPropertyDescriptor",
@@ -157,21 +161,22 @@ public partial class RuntimeEmitter
         EmitAutoProperty(typeBuilder, "Configurable", _types.Boolean, configurableField);
 
         var type = typeBuilder.CreateType()!;
-        runtime.CompiledPropertyDescriptorType = type;
-        runtime.CompiledPropertyDescriptorCtor = ctor;
-        runtime.CompiledPropertyDescriptorValue = type.GetProperty("Value")!;
-        runtime.CompiledPropertyDescriptorGetter = type.GetProperty("Getter")!;
-        runtime.CompiledPropertyDescriptorSetter = type.GetProperty("Setter")!;
-        runtime.CompiledPropertyDescriptorWritable = type.GetProperty("Writable")!;
-        runtime.CompiledPropertyDescriptorEnumerable = type.GetProperty("Enumerable")!;
-        runtime.CompiledPropertyDescriptorConfigurable = type.GetProperty("Configurable")!;
+        storage.DescriptorType = type;
+        storage.DescriptorConstructor = ctor;
+        storage.DescriptorValue = type.GetProperty("Value")!;
+        storage.DescriptorGetter = type.GetProperty("Getter")!;
+        storage.DescriptorSetter = type.GetProperty("Setter")!;
+        storage.DescriptorWritable = type.GetProperty("Writable")!;
+        storage.DescriptorEnumerable = type.GetProperty("Enumerable")!;
+        storage.DescriptorConfigurable = type.GetProperty("Configurable")!;
     }
 
     /// <summary>
     /// Emits: public static class $PropertyDescriptorStore
     /// with ConditionalWeakTable fields and all methods.
     /// </summary>
-    private void EmitPropertyDescriptorStoreClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private void EmitPropertyDescriptorStoreClass(ModuleBuilder moduleBuilder, EmittedDescriptorStorageRuntime storage,
+        DescriptorKeyInputs keys, Type undefinedType)
     {
         var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$PropertyDescriptorStore",
@@ -182,14 +187,14 @@ public partial class RuntimeEmitter
         // Get ConditionalWeakTable types
         var cwtDescriptors = _types.MakeGenericType(typeof(ConditionalWeakTable<,>),
             _types.Object,
-            _types.MakeGenericType(typeof(Dictionary<,>), _types.String, runtime.CompiledPropertyDescriptorType)
+            _types.MakeGenericType(typeof(Dictionary<,>), _types.String, storage.DescriptorType)
         );
-        var cwtFrozenSealed = _types.MakeGenericType(typeof(ConditionalWeakTable<,>), _types.Object, runtime.FrozenSealedStateType);
+        var cwtFrozenSealed = _types.MakeGenericType(typeof(ConditionalWeakTable<,>), _types.Object, storage.StateType);
         var cwtSymbols = _types.MakeGenericType(typeof(ConditionalWeakTable<,>),
             _types.Object,
             _types.MakeGenericType(typeof(Dictionary<,>), _types.Object, _types.Object)
         );
-        var cwtPrototype = _types.MakeGenericType(typeof(ConditionalWeakTable<,>), _types.Object, runtime.PrototypeInfoType);
+        var cwtPrototype = _types.MakeGenericType(typeof(ConditionalWeakTable<,>), _types.Object, storage.PrototypeInfoType);
 
         // Static fields
         var descriptorsField = typeBuilder.DefineField(
@@ -259,7 +264,7 @@ public partial class RuntimeEmitter
 
         // Get Dictionary<string, CompiledPropertyDescriptor> type and methods
         // Must use TypeBuilder.GetMethod since CompiledPropertyDescriptorType is TypeBuilder-created
-        var descriptorsDictType = _types.MakeGenericType(typeof(Dictionary<,>), _types.String, runtime.CompiledPropertyDescriptorType);
+        var descriptorsDictType = _types.MakeGenericType(typeof(Dictionary<,>), _types.String, storage.DescriptorType);
         var dictOpenType = typeof(Dictionary<,>);
         var dictOpenContainsKey = dictOpenType.GetMethod("ContainsKey")!;
         var dictOpenTryGetValue = dictOpenType.GetMethod("TryGetValue")!;
@@ -272,27 +277,27 @@ public partial class RuntimeEmitter
         var descriptorsGetOrCreate = EmitterTypeHelpers.ResolveMethod(cwtDescriptors, cwtGetOrCreateValue);
 
         // Emit all methods
-        EmitPDSFreeze(typeBuilder, runtime, frozenSealedField, frozenSealedGetOrCreate);
-        EmitPDSSeal(typeBuilder, runtime, frozenSealedField, frozenSealedGetOrCreate);
-        EmitPDSPreventExtensions(typeBuilder, runtime, frozenSealedField, frozenSealedGetOrCreate);
-        EmitPDSIsExtensible(typeBuilder, runtime, frozenSealedField, frozenSealedTryGet);
-        EmitPDSIsFrozen(typeBuilder, runtime, frozenSealedField, frozenSealedTryGet);
-        EmitPDSIsSealed(typeBuilder, runtime, frozenSealedField, frozenSealedTryGet);
-        EmitPDSCanAddProperty(typeBuilder, runtime, frozenSealedField, frozenSealedTryGet, descriptorsField, descriptorsTryGet, descriptorsDictType, descriptorsDictContainsKey, descriptorsDictTryGetValue);
-        EmitPDSTryGetGetter(typeBuilder, runtime, descriptorsField, descriptorsTryGet, descriptorsDictType, descriptorsDictTryGetValue);
-        EmitPDSTryGetSetter(typeBuilder, runtime, descriptorsField, descriptorsTryGet, descriptorsDictType, descriptorsDictTryGetValue);
-        EmitPDSIsWritable(typeBuilder, runtime, frozenSealedField, frozenSealedTryGet, descriptorsField, descriptorsTryGet, descriptorsDictType, descriptorsDictTryGetValue);
-        EmitPDSSetPrototype(typeBuilder, runtime, prototypeStoreField, prototypeGetOrCreate);
-        EmitPDSGetPrototype(typeBuilder, runtime, prototypeStoreField, prototypeTryGet);
-        EmitPDSHasPrototypeEntry(typeBuilder, runtime, prototypeStoreField, prototypeTryGet);
-        EmitPDSDefineProperty(typeBuilder, runtime, descriptorsField, descriptorsGetOrCreate, descriptorsDictType, descriptorsDictSetItem);
-        EmitPDSDeleteProperty(typeBuilder, runtime, descriptorsField, descriptorsTryGet, descriptorsDictType, descriptorsDictContainsKey);
-        EmitPDSGetPropertyDescriptor(typeBuilder, runtime, descriptorsField, descriptorsTryGet, descriptorsDictType, descriptorsDictTryGetValue);
-        EmitPDSHasPropertyDescriptors(typeBuilder, runtime, descriptorsField, descriptorsTryGet, descriptorsDictType);
-        EmitPDSHasIndexedOwnProperty(typeBuilder, runtime, descriptorsField, descriptorsTryGet, descriptorsDictType);
-        EmitPDSGetStaticShadow(typeBuilder, runtime);
-        EmitPDSGetEnumerableExtraKeys(typeBuilder, runtime, descriptorsField, descriptorsTryGet, descriptorsDictType, descriptorsDictTryGetValue);
-        EmitPDSGetAllExtraKeys(typeBuilder, runtime, descriptorsField, descriptorsTryGet, descriptorsDictType, descriptorsDictTryGetValue);
+        EmitPDSFreeze(typeBuilder, storage, frozenSealedField, frozenSealedGetOrCreate);
+        EmitPDSSeal(typeBuilder, storage, frozenSealedField, frozenSealedGetOrCreate);
+        EmitPDSPreventExtensions(typeBuilder, storage, frozenSealedField, frozenSealedGetOrCreate);
+        EmitPDSIsExtensible(typeBuilder, storage, frozenSealedField, frozenSealedTryGet);
+        EmitPDSIsFrozen(typeBuilder, storage, frozenSealedField, frozenSealedTryGet);
+        EmitPDSIsSealed(typeBuilder, storage, frozenSealedField, frozenSealedTryGet);
+        EmitPDSCanAddProperty(typeBuilder, storage, frozenSealedField, frozenSealedTryGet, descriptorsField, descriptorsTryGet, descriptorsDictType, descriptorsDictContainsKey, descriptorsDictTryGetValue);
+        EmitPDSTryGetGetter(typeBuilder, storage, descriptorsField, descriptorsTryGet, descriptorsDictType, descriptorsDictTryGetValue, keys, undefinedType);
+        EmitPDSTryGetSetter(typeBuilder, storage, descriptorsField, descriptorsTryGet, descriptorsDictType, descriptorsDictTryGetValue, keys);
+        EmitPDSIsWritable(typeBuilder, storage, frozenSealedField, frozenSealedTryGet, descriptorsField, descriptorsTryGet, descriptorsDictType, descriptorsDictTryGetValue, keys);
+        EmitPDSSetPrototype(typeBuilder, storage, prototypeStoreField, prototypeGetOrCreate);
+        EmitPDSGetPrototype(typeBuilder, storage, prototypeStoreField, prototypeTryGet);
+        EmitPDSHasPrototypeEntry(typeBuilder, storage, prototypeStoreField, prototypeTryGet);
+        EmitPDSDefineProperty(typeBuilder, storage, descriptorsField, descriptorsGetOrCreate, descriptorsDictType, descriptorsDictSetItem, keys);
+        EmitPDSDeleteProperty(typeBuilder, storage, descriptorsField, descriptorsTryGet, descriptorsDictType, descriptorsDictContainsKey, keys);
+        EmitPDSGetPropertyDescriptor(typeBuilder, storage, descriptorsField, descriptorsTryGet, descriptorsDictType, descriptorsDictTryGetValue, keys);
+        EmitPDSHasPropertyDescriptors(typeBuilder, storage, descriptorsField, descriptorsTryGet, descriptorsDictType, keys);
+        EmitPDSHasIndexedOwnProperty(typeBuilder, storage, descriptorsField, descriptorsTryGet, descriptorsDictType, keys);
+        EmitPDSGetStaticShadow(typeBuilder, storage);
+        EmitPDSGetEnumerableExtraKeys(typeBuilder, storage, descriptorsField, descriptorsTryGet, descriptorsDictType, descriptorsDictTryGetValue, keys);
+        EmitPDSGetAllExtraKeys(typeBuilder, storage, descriptorsField, descriptorsTryGet, descriptorsDictType, descriptorsDictTryGetValue, keys);
 
         var type = typeBuilder.CreateType()!;
         _ = type;
@@ -301,7 +306,8 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits: public static void Freeze(object obj)
     /// </summary>
-    private void EmitPDSFreeze(TypeBuilder typeBuilder, EmittedRuntime runtime, FieldBuilder frozenSealedField, MethodInfo getOrCreateValue)
+    private void EmitPDSFreeze(TypeBuilder typeBuilder, EmittedDescriptorStorageRuntime storage,
+        FieldBuilder frozenSealedField, MethodInfo getOrCreateValue)
     {
         var method = typeBuilder.DefineMethod(
             "Freeze",
@@ -309,10 +315,10 @@ public partial class RuntimeEmitter
             _types.Void,
             [_types.Object]
         );
-        runtime.PDSFreeze = method;
+        storage.Freeze = method;
 
         var il = method.GetILGenerator();
-        var stateLocal = il.DeclareLocal(runtime.FrozenSealedStateType);
+        var stateLocal = il.DeclareLocal(storage.StateType);
 
         // var state = _frozenSealedState.GetOrCreateValue(obj);
         il.Emit(OpCodes.Ldsfld, frozenSealedField);
@@ -323,17 +329,17 @@ public partial class RuntimeEmitter
         // state.IsFrozen = true
         il.Emit(OpCodes.Ldloc, stateLocal);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Callvirt, runtime.FrozenSealedStateIsFrozen.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, storage.StateIsFrozen.GetSetMethod()!);
 
         // state.IsSealed = true
         il.Emit(OpCodes.Ldloc, stateLocal);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Callvirt, runtime.FrozenSealedStateIsSealed.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, storage.StateIsSealed.GetSetMethod()!);
 
         // state.IsExtensible = false
         il.Emit(OpCodes.Ldloc, stateLocal);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Callvirt, runtime.FrozenSealedStateIsExtensible.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, storage.StateIsExtensible.GetSetMethod()!);
 
         il.Emit(OpCodes.Ret);
     }
@@ -341,7 +347,8 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits: public static void Seal(object obj)
     /// </summary>
-    private void EmitPDSSeal(TypeBuilder typeBuilder, EmittedRuntime runtime, FieldBuilder frozenSealedField, MethodInfo getOrCreateValue)
+    private void EmitPDSSeal(TypeBuilder typeBuilder, EmittedDescriptorStorageRuntime storage,
+        FieldBuilder frozenSealedField, MethodInfo getOrCreateValue)
     {
         var method = typeBuilder.DefineMethod(
             "Seal",
@@ -349,10 +356,10 @@ public partial class RuntimeEmitter
             _types.Void,
             [_types.Object]
         );
-        runtime.PDSSeal = method;
+        storage.Seal = method;
 
         var il = method.GetILGenerator();
-        var stateLocal = il.DeclareLocal(runtime.FrozenSealedStateType);
+        var stateLocal = il.DeclareLocal(storage.StateType);
 
         // var state = _frozenSealedState.GetOrCreateValue(obj);
         il.Emit(OpCodes.Ldsfld, frozenSealedField);
@@ -363,12 +370,12 @@ public partial class RuntimeEmitter
         // state.IsSealed = true
         il.Emit(OpCodes.Ldloc, stateLocal);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Callvirt, runtime.FrozenSealedStateIsSealed.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, storage.StateIsSealed.GetSetMethod()!);
 
         // state.IsExtensible = false
         il.Emit(OpCodes.Ldloc, stateLocal);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Callvirt, runtime.FrozenSealedStateIsExtensible.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, storage.StateIsExtensible.GetSetMethod()!);
 
         il.Emit(OpCodes.Ret);
     }
@@ -376,7 +383,8 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits: public static void PreventExtensions(object obj)
     /// </summary>
-    private void EmitPDSPreventExtensions(TypeBuilder typeBuilder, EmittedRuntime runtime, FieldBuilder frozenSealedField, MethodInfo getOrCreateValue)
+    private void EmitPDSPreventExtensions(TypeBuilder typeBuilder, EmittedDescriptorStorageRuntime storage,
+        FieldBuilder frozenSealedField, MethodInfo getOrCreateValue)
     {
         var method = typeBuilder.DefineMethod(
             "PreventExtensions",
@@ -384,10 +392,10 @@ public partial class RuntimeEmitter
             _types.Void,
             [_types.Object]
         );
-        runtime.PDSPreventExtensions = method;
+        storage.PreventExtensions = method;
 
         var il = method.GetILGenerator();
-        var stateLocal = il.DeclareLocal(runtime.FrozenSealedStateType);
+        var stateLocal = il.DeclareLocal(storage.StateType);
 
         // var state = _frozenSealedState.GetOrCreateValue(obj);
         il.Emit(OpCodes.Ldsfld, frozenSealedField);
@@ -398,7 +406,7 @@ public partial class RuntimeEmitter
         // state.IsExtensible = false
         il.Emit(OpCodes.Ldloc, stateLocal);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Callvirt, runtime.FrozenSealedStateIsExtensible.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, storage.StateIsExtensible.GetSetMethod()!);
 
         il.Emit(OpCodes.Ret);
     }
@@ -406,7 +414,8 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits: public static bool IsExtensible(object obj)
     /// </summary>
-    private void EmitPDSIsExtensible(TypeBuilder typeBuilder, EmittedRuntime runtime, FieldBuilder frozenSealedField, MethodInfo tryGetValue)
+    private void EmitPDSIsExtensible(TypeBuilder typeBuilder, EmittedDescriptorStorageRuntime storage,
+        FieldBuilder frozenSealedField, MethodInfo tryGetValue)
     {
         var method = typeBuilder.DefineMethod(
             "IsExtensible",
@@ -414,10 +423,10 @@ public partial class RuntimeEmitter
             _types.Boolean,
             [_types.Object]
         );
-        runtime.PDSIsExtensible = method;
+        storage.IsExtensible = method;
 
         var il = method.GetILGenerator();
-        var stateLocal = il.DeclareLocal(runtime.FrozenSealedStateType);
+        var stateLocal = il.DeclareLocal(storage.StateType);
         var returnTrueLabel = il.DefineLabel();
 
         // if (_frozenSealedState.TryGetValue(obj, out var state))
@@ -429,7 +438,7 @@ public partial class RuntimeEmitter
 
         // return state.IsExtensible
         il.Emit(OpCodes.Ldloc, stateLocal);
-        il.Emit(OpCodes.Callvirt, runtime.FrozenSealedStateIsExtensible.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, storage.StateIsExtensible.GetGetMethod()!);
         il.Emit(OpCodes.Ret);
 
         // return true (default)
@@ -441,7 +450,8 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits: public static bool IsFrozen(object obj)
     /// </summary>
-    private void EmitPDSIsFrozen(TypeBuilder typeBuilder, EmittedRuntime runtime, FieldBuilder frozenSealedField, MethodInfo tryGetValue)
+    private void EmitPDSIsFrozen(TypeBuilder typeBuilder, EmittedDescriptorStorageRuntime storage,
+        FieldBuilder frozenSealedField, MethodInfo tryGetValue)
     {
         var method = typeBuilder.DefineMethod(
             "IsFrozen",
@@ -449,10 +459,10 @@ public partial class RuntimeEmitter
             _types.Boolean,
             [_types.Object]
         );
-        runtime.PDSIsFrozen = method;
+        storage.IsFrozen = method;
 
         var il = method.GetILGenerator();
-        var stateLocal = il.DeclareLocal(runtime.FrozenSealedStateType);
+        var stateLocal = il.DeclareLocal(storage.StateType);
         var returnFalseLabel = il.DefineLabel();
 
         // if (_frozenSealedState.TryGetValue(obj, out var state) && state.IsFrozen)
@@ -463,7 +473,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, returnFalseLabel);
 
         il.Emit(OpCodes.Ldloc, stateLocal);
-        il.Emit(OpCodes.Callvirt, runtime.FrozenSealedStateIsFrozen.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, storage.StateIsFrozen.GetGetMethod()!);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(returnFalseLabel);
@@ -474,7 +484,8 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits: public static bool IsSealed(object obj)
     /// </summary>
-    private void EmitPDSIsSealed(TypeBuilder typeBuilder, EmittedRuntime runtime, FieldBuilder frozenSealedField, MethodInfo tryGetValue)
+    private void EmitPDSIsSealed(TypeBuilder typeBuilder, EmittedDescriptorStorageRuntime storage,
+        FieldBuilder frozenSealedField, MethodInfo tryGetValue)
     {
         var method = typeBuilder.DefineMethod(
             "IsSealed",
@@ -482,10 +493,10 @@ public partial class RuntimeEmitter
             _types.Boolean,
             [_types.Object]
         );
-        runtime.PDSIsSealed = method;
+        storage.IsSealed = method;
 
         var il = method.GetILGenerator();
-        var stateLocal = il.DeclareLocal(runtime.FrozenSealedStateType);
+        var stateLocal = il.DeclareLocal(storage.StateType);
         var returnFalseLabel = il.DefineLabel();
 
         // if (_frozenSealedState.TryGetValue(obj, out var state) && state.IsSealed)
@@ -496,7 +507,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, returnFalseLabel);
 
         il.Emit(OpCodes.Ldloc, stateLocal);
-        il.Emit(OpCodes.Callvirt, runtime.FrozenSealedStateIsSealed.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, storage.StateIsSealed.GetGetMethod()!);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(returnFalseLabel);
@@ -507,10 +518,10 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits: public static bool CanAddProperty(object obj, string propertyKey)
     /// </summary>
-    private void EmitPDSCanAddProperty(TypeBuilder typeBuilder, EmittedRuntime runtime,
-        FieldBuilder frozenSealedField, MethodInfo frozenSealedTryGet,
-        FieldBuilder descriptorsField, MethodInfo descriptorsTryGet,
-        Type descriptorsDictType, MethodInfo descriptorsDictContainsKey, MethodInfo descriptorsDictTryGetValue)
+    private void EmitPDSCanAddProperty(TypeBuilder typeBuilder, EmittedDescriptorStorageRuntime storage,
+        FieldBuilder frozenSealedField, MethodInfo frozenSealedTryGet, FieldBuilder descriptorsField,
+        MethodInfo descriptorsTryGet, Type descriptorsDictType, MethodInfo descriptorsDictContainsKey,
+        MethodInfo descriptorsDictTryGetValue)
     {
         var method = typeBuilder.DefineMethod(
             "CanAddProperty",
@@ -518,10 +529,10 @@ public partial class RuntimeEmitter
             _types.Boolean,
             [_types.Object, _types.String]
         );
-        runtime.PDSCanAddProperty = method;
+        storage.CanAddProperty = method;
 
         var il = method.GetILGenerator();
-        var stateLocal = il.DeclareLocal(runtime.FrozenSealedStateType);
+        var stateLocal = il.DeclareLocal(storage.StateType);
         var returnTrueLabel = il.DefineLabel();
         var checkListLabel = il.DefineLabel();
         var checkDescriptorsLabel = il.DefineLabel();
@@ -536,7 +547,7 @@ public partial class RuntimeEmitter
 
         // if (state.IsExtensible) return true
         il.Emit(OpCodes.Ldloc, stateLocal);
-        il.Emit(OpCodes.Callvirt, runtime.FrozenSealedStateIsExtensible.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, storage.StateIsExtensible.GetGetMethod()!);
         il.Emit(OpCodes.Brtrue, returnTrueLabel);
 
         // Not extensible - check if property already exists
@@ -609,9 +620,9 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits: public static bool TryGetGetter(object obj, string propertyKey, out object? getter)
     /// </summary>
-    private void EmitPDSTryGetGetter(TypeBuilder typeBuilder, EmittedRuntime runtime,
-        FieldBuilder descriptorsField, MethodInfo descriptorsTryGet,
-        Type descriptorsDictType, MethodInfo descriptorsDictTryGetValue)
+    private void EmitPDSTryGetGetter(TypeBuilder typeBuilder, EmittedDescriptorStorageRuntime storage,
+        FieldBuilder descriptorsField, MethodInfo descriptorsTryGet, Type descriptorsDictType,
+        MethodInfo descriptorsDictTryGetValue, DescriptorKeyInputs keys, Type undefinedType)
     {
         var method = typeBuilder.DefineMethod(
             "TryGetGetter",
@@ -619,14 +630,14 @@ public partial class RuntimeEmitter
             _types.Boolean,
             [_types.Object, _types.String, _types.Object.MakeByRefType()]
         );
-        runtime.PDSTryGetGetter = method;
+        storage.TryGetGetter = method;
 
         var il = method.GetILGenerator();
         var descriptorsDictLocal = il.DeclareLocal(descriptorsDictType);
-        var descriptorLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+        var descriptorLocal = il.DeclareLocal(storage.DescriptorType);
         var returnFalseLabel = il.DefineLabel();
         var keyLocal = il.DeclareLocal(_types.Object);
-        EmitNormalizePDSKey(il, runtime, keyLocal);
+        EmitNormalizePDSKey(il, keys, keyLocal);
 
         // if (!_descriptors.TryGetValue(key, out var descriptors)) goto returnFalse
         il.Emit(OpCodes.Ldsfld, descriptorsField);
@@ -644,7 +655,7 @@ public partial class RuntimeEmitter
 
         // if (descriptor.Getter == null) goto returnFalse
         il.Emit(OpCodes.Ldloc, descriptorLocal);
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorGetter.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, storage.DescriptorGetter.GetGetMethod()!);
         il.Emit(OpCodes.Brfalse, returnFalseLabel);
 
         // A getter slot holding JS-undefined marks an accessor descriptor whose
@@ -656,14 +667,14 @@ public partial class RuntimeEmitter
         // instead of throwing "undefined is not a function".
         // (Test262 Object.{defineProperty,defineProperties,create} 15.2.3.6-3-215..217 et al.)
         il.Emit(OpCodes.Ldloc, descriptorLocal);
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorGetter.GetGetMethod()!);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Callvirt, storage.DescriptorGetter.GetGetMethod()!);
+        il.Emit(OpCodes.Isinst, undefinedType);
         il.Emit(OpCodes.Brtrue, returnFalseLabel);
 
         // getter = descriptor.Getter; return true
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Ldloc, descriptorLocal);
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorGetter.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, storage.DescriptorGetter.GetGetMethod()!);
         il.Emit(OpCodes.Stind_Ref);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Ret);
@@ -680,9 +691,9 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits: public static bool TryGetSetter(object obj, string propertyKey, out object? setter)
     /// </summary>
-    private void EmitPDSTryGetSetter(TypeBuilder typeBuilder, EmittedRuntime runtime,
-        FieldBuilder descriptorsField, MethodInfo descriptorsTryGet,
-        Type descriptorsDictType, MethodInfo descriptorsDictTryGetValue)
+    private void EmitPDSTryGetSetter(TypeBuilder typeBuilder, EmittedDescriptorStorageRuntime storage,
+        FieldBuilder descriptorsField, MethodInfo descriptorsTryGet, Type descriptorsDictType,
+        MethodInfo descriptorsDictTryGetValue, DescriptorKeyInputs keys)
     {
         var method = typeBuilder.DefineMethod(
             "TryGetSetter",
@@ -690,14 +701,14 @@ public partial class RuntimeEmitter
             _types.Boolean,
             [_types.Object, _types.String, _types.Object.MakeByRefType()]
         );
-        runtime.PDSTryGetSetter = method;
+        storage.TryGetSetter = method;
 
         var il = method.GetILGenerator();
         var descriptorsDictLocal = il.DeclareLocal(descriptorsDictType);
-        var descriptorLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+        var descriptorLocal = il.DeclareLocal(storage.DescriptorType);
         var returnFalseLabel = il.DefineLabel();
         var keyLocal = il.DeclareLocal(_types.Object);
-        EmitNormalizePDSKey(il, runtime, keyLocal);
+        EmitNormalizePDSKey(il, keys, keyLocal);
 
         // if (!_descriptors.TryGetValue(key, out var descriptors)) goto returnFalse
         il.Emit(OpCodes.Ldsfld, descriptorsField);
@@ -715,13 +726,13 @@ public partial class RuntimeEmitter
 
         // if (descriptor.Setter == null) goto returnFalse
         il.Emit(OpCodes.Ldloc, descriptorLocal);
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorSetter.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, storage.DescriptorSetter.GetGetMethod()!);
         il.Emit(OpCodes.Brfalse, returnFalseLabel);
 
         // setter = descriptor.Setter; return true
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Ldloc, descriptorLocal);
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorSetter.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, storage.DescriptorSetter.GetGetMethod()!);
         il.Emit(OpCodes.Stind_Ref);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Ret);
@@ -738,10 +749,10 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits: public static bool IsWritable(object obj, string propertyKey)
     /// </summary>
-    private void EmitPDSIsWritable(TypeBuilder typeBuilder, EmittedRuntime runtime,
-        FieldBuilder frozenSealedField, MethodInfo frozenSealedTryGet,
-        FieldBuilder descriptorsField, MethodInfo descriptorsTryGet,
-        Type descriptorsDictType, MethodInfo descriptorsDictTryGetValue)
+    private void EmitPDSIsWritable(TypeBuilder typeBuilder, EmittedDescriptorStorageRuntime storage,
+        FieldBuilder frozenSealedField, MethodInfo frozenSealedTryGet, FieldBuilder descriptorsField,
+        MethodInfo descriptorsTryGet, Type descriptorsDictType, MethodInfo descriptorsDictTryGetValue,
+        DescriptorKeyInputs keys)
     {
         var method = typeBuilder.DefineMethod(
             "IsWritable",
@@ -749,12 +760,12 @@ public partial class RuntimeEmitter
             _types.Boolean,
             [_types.Object, _types.String]
         );
-        runtime.PDSIsWritable = method;
+        storage.IsWritable = method;
 
         var il = method.GetILGenerator();
-        var stateLocal = il.DeclareLocal(runtime.FrozenSealedStateType);
+        var stateLocal = il.DeclareLocal(storage.StateType);
         var descriptorsDictLocal = il.DeclareLocal(descriptorsDictType);
-        var descriptorLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+        var descriptorLocal = il.DeclareLocal(storage.DescriptorType);
         var returnTrueLabel = il.DefineLabel();
         var returnFalseLabel = il.DefineLabel();
         var checkDescriptorsLabel = il.DefineLabel();
@@ -767,13 +778,13 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, checkDescriptorsLabel);
 
         il.Emit(OpCodes.Ldloc, stateLocal);
-        il.Emit(OpCodes.Callvirt, runtime.FrozenSealedStateIsFrozen.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, storage.StateIsFrozen.GetGetMethod()!);
         il.Emit(OpCodes.Brtrue, returnFalseLabel);
 
         // Check descriptors
         il.MarkLabel(checkDescriptorsLabel);
         var keyLocal = il.DeclareLocal(_types.Object);
-        EmitNormalizePDSKey(il, runtime, keyLocal);
+        EmitNormalizePDSKey(il, keys, keyLocal);
         il.Emit(OpCodes.Ldsfld, descriptorsField);
         il.Emit(OpCodes.Ldloc, keyLocal);
         il.Emit(OpCodes.Ldloca, descriptorsDictLocal);
@@ -788,7 +799,7 @@ public partial class RuntimeEmitter
 
         // return descriptor.Writable
         il.Emit(OpCodes.Ldloc, descriptorLocal);
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorWritable.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, storage.DescriptorWritable.GetGetMethod()!);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(returnFalseLabel);
@@ -803,7 +814,7 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits: public static void SetPrototype(object obj, object? proto)
     /// </summary>
-    private void EmitPDSSetPrototype(TypeBuilder typeBuilder, EmittedRuntime runtime,
+    private void EmitPDSSetPrototype(TypeBuilder typeBuilder, EmittedDescriptorStorageRuntime storage,
         FieldBuilder prototypeStoreField, MethodInfo getOrCreateValue)
     {
         var method = typeBuilder.DefineMethod(
@@ -812,10 +823,10 @@ public partial class RuntimeEmitter
             _types.Void,
             [_types.Object, _types.Object]
         );
-        runtime.PDSSetPrototype = method;
+        storage.SetPrototype = method;
 
         var il = method.GetILGenerator();
-        var infoLocal = il.DeclareLocal(runtime.PrototypeInfoType);
+        var infoLocal = il.DeclareLocal(storage.PrototypeInfoType);
 
         // var info = _prototypeStore.GetOrCreateValue(obj);
         il.Emit(OpCodes.Ldsfld, prototypeStoreField);
@@ -826,7 +837,7 @@ public partial class RuntimeEmitter
         // info.Prototype = proto;
         il.Emit(OpCodes.Ldloc, infoLocal);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, runtime.PrototypeInfoPrototype.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, storage.PrototypeValue.GetSetMethod()!);
 
         il.Emit(OpCodes.Ret);
     }
@@ -834,7 +845,7 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits: public static object? GetPrototype(object obj)
     /// </summary>
-    private void EmitPDSGetPrototype(TypeBuilder typeBuilder, EmittedRuntime runtime,
+    private void EmitPDSGetPrototype(TypeBuilder typeBuilder, EmittedDescriptorStorageRuntime storage,
         FieldBuilder prototypeStoreField, MethodInfo tryGetValue)
     {
         var method = typeBuilder.DefineMethod(
@@ -843,10 +854,10 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object]
         );
-        runtime.PDSGetPrototype = method;
+        storage.GetPrototype = method;
 
         var il = method.GetILGenerator();
-        var infoLocal = il.DeclareLocal(runtime.PrototypeInfoType);
+        var infoLocal = il.DeclareLocal(storage.PrototypeInfoType);
         var returnNullLabel = il.DefineLabel();
 
         // if (!_prototypeStore.TryGetValue(obj, out var info)) return null
@@ -858,7 +869,7 @@ public partial class RuntimeEmitter
 
         // return info.Prototype
         il.Emit(OpCodes.Ldloc, infoLocal);
-        il.Emit(OpCodes.Callvirt, runtime.PrototypeInfoPrototype.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, storage.PrototypeValue.GetGetMethod()!);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(returnNullLabel);
@@ -874,7 +885,7 @@ public partial class RuntimeEmitter
     /// prototype fallback) from "entry exists with null value" (e.g.
     /// Object.create(null) — must return null, not Object.prototype).
     /// </summary>
-    private void EmitPDSHasPrototypeEntry(TypeBuilder typeBuilder, EmittedRuntime runtime,
+    private void EmitPDSHasPrototypeEntry(TypeBuilder typeBuilder, EmittedDescriptorStorageRuntime storage,
         FieldBuilder prototypeStoreField, MethodInfo tryGetValue)
     {
         var method = typeBuilder.DefineMethod(
@@ -883,10 +894,10 @@ public partial class RuntimeEmitter
             _types.Boolean,
             [_types.Object]
         );
-        runtime.PDSHasPrototypeEntry = method;
+        storage.HasPrototypeEntry = method;
 
         var il = method.GetILGenerator();
-        var infoLocal = il.DeclareLocal(runtime.PrototypeInfoType);
+        var infoLocal = il.DeclareLocal(storage.PrototypeInfoType);
 
         il.Emit(OpCodes.Ldsfld, prototypeStoreField);
         il.Emit(OpCodes.Ldarg_0);
@@ -899,29 +910,29 @@ public partial class RuntimeEmitter
     /// Emits: public static bool DefineProperty(object obj, string propertyKey, $CompiledPropertyDescriptor descriptor)
     /// Returns true if property was defined successfully, false if object is not extensible and property doesn't exist.
     /// </summary>
-    private void EmitPDSDefineProperty(TypeBuilder typeBuilder, EmittedRuntime runtime,
-        FieldBuilder descriptorsField, MethodInfo descriptorsGetOrCreate,
-        Type descriptorsDictType, MethodInfo descriptorsDictSetItem)
+    private void EmitPDSDefineProperty(TypeBuilder typeBuilder, EmittedDescriptorStorageRuntime storage,
+        FieldBuilder descriptorsField, MethodInfo descriptorsGetOrCreate, Type descriptorsDictType,
+        MethodInfo descriptorsDictSetItem, DescriptorKeyInputs keys)
     {
         var method = typeBuilder.DefineMethod(
             "DefineProperty",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Boolean,
-            [_types.Object, _types.String, runtime.CompiledPropertyDescriptorType]
+            [_types.Object, _types.String, storage.DescriptorType]
         );
-        runtime.PDSDefineProperty = method;
+        storage.DefineProperty = method;
 
         var il = method.GetILGenerator();
         var dictLocal = il.DeclareLocal(descriptorsDictType);
         var keyLocal = il.DeclareLocal(_types.Object);
-        EmitNormalizePDSKey(il, runtime, keyLocal);
+        EmitNormalizePDSKey(il, keys, keyLocal);
 
         // OrdinaryDefineOwnProperty cannot create a new property on a
         // non-extensible receiver. Existing backing or descriptor properties
         // remain redefinable and are recognized by CanAddProperty.
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.PDSCanAddProperty);
+        il.Emit(OpCodes.Call, storage.CanAddProperty);
         var canDefinePropertyLabel = il.DefineLabel();
         il.Emit(OpCodes.Brtrue, canDefinePropertyLabel);
         il.Emit(OpCodes.Ldc_I4_0);
@@ -954,9 +965,9 @@ public partial class RuntimeEmitter
     /// configurability separately from the descriptor itself, so the caller
     /// reads the descriptor first via GetPropertyDescriptor for that check.
     /// </summary>
-    private void EmitPDSDeleteProperty(TypeBuilder typeBuilder, EmittedRuntime runtime,
-        FieldBuilder descriptorsField, MethodInfo descriptorsTryGet,
-        Type descriptorsDictType, MethodInfo descriptorsDictContainsKey)
+    private void EmitPDSDeleteProperty(TypeBuilder typeBuilder, EmittedDescriptorStorageRuntime storage,
+        FieldBuilder descriptorsField, MethodInfo descriptorsTryGet, Type descriptorsDictType,
+        MethodInfo descriptorsDictContainsKey, DescriptorKeyInputs keys)
     {
         var method = typeBuilder.DefineMethod(
             "DeleteProperty",
@@ -964,12 +975,12 @@ public partial class RuntimeEmitter
             _types.Boolean,
             [_types.Object, _types.String]
         );
-        runtime.PDSDeleteProperty = method;
+        storage.DeleteProperty = method;
 
         var il = method.GetILGenerator();
         var dictLocal = il.DeclareLocal(descriptorsDictType);
         var keyLocal = il.DeclareLocal(_types.Object);
-        EmitNormalizePDSKey(il, runtime, keyLocal);
+        EmitNormalizePDSKey(il, keys, keyLocal);
 
         // if (!_descriptors.TryGetValue(key, out dict)) return true (nothing to delete)
         il.Emit(OpCodes.Ldsfld, descriptorsField);
@@ -999,24 +1010,24 @@ public partial class RuntimeEmitter
     /// Emits: public static $CompiledPropertyDescriptor? GetPropertyDescriptor(object obj, string propertyKey)
     /// Returns the property descriptor if found, null otherwise.
     /// </summary>
-    private void EmitPDSGetPropertyDescriptor(TypeBuilder typeBuilder, EmittedRuntime runtime,
-        FieldBuilder descriptorsField, MethodInfo descriptorsTryGet,
-        Type descriptorsDictType, MethodInfo descriptorsDictTryGetValue)
+    private void EmitPDSGetPropertyDescriptor(TypeBuilder typeBuilder, EmittedDescriptorStorageRuntime storage,
+        FieldBuilder descriptorsField, MethodInfo descriptorsTryGet, Type descriptorsDictType,
+        MethodInfo descriptorsDictTryGetValue, DescriptorKeyInputs keys)
     {
         var method = typeBuilder.DefineMethod(
             "GetPropertyDescriptor",
             MethodAttributes.Public | MethodAttributes.Static,
-            runtime.CompiledPropertyDescriptorType,
+            storage.DescriptorType,
             [_types.Object, _types.String]
         );
-        runtime.PDSGetPropertyDescriptor = method;
+        storage.GetPropertyDescriptor = method;
 
         var il = method.GetILGenerator();
         var descriptorsDictLocal = il.DeclareLocal(descriptorsDictType);
-        var descriptorLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+        var descriptorLocal = il.DeclareLocal(storage.DescriptorType);
         var returnNullLabel = il.DefineLabel();
         var keyLocal = il.DeclareLocal(_types.Object);
-        EmitNormalizePDSKey(il, runtime, keyLocal);
+        EmitNormalizePDSKey(il, keys, keyLocal);
 
         // if (!_descriptors.TryGetValue(key, out var descriptors)) return null
         il.Emit(OpCodes.Ldsfld, descriptorsField);
@@ -1048,24 +1059,21 @@ public partial class RuntimeEmitter
     /// until defineProperty/accessor metadata is actually attached to an object.
     /// A stale empty descriptor table is conservatively reported as present.
     /// </summary>
-    private void EmitPDSHasPropertyDescriptors(
-        TypeBuilder typeBuilder,
-        EmittedRuntime runtime,
-        FieldBuilder descriptorsField,
-        MethodInfo descriptorsTryGet,
-        Type descriptorsDictType)
+    private void EmitPDSHasPropertyDescriptors(TypeBuilder typeBuilder, EmittedDescriptorStorageRuntime storage,
+        FieldBuilder descriptorsField, MethodInfo descriptorsTryGet, Type descriptorsDictType,
+        DescriptorKeyInputs keys)
     {
         var method = typeBuilder.DefineMethod(
             "HasPropertyDescriptors",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Boolean,
             [_types.Object]);
-        runtime.PDSHasPropertyDescriptors = method;
+        storage.HasPropertyDescriptors = method;
 
         var il = method.GetILGenerator();
         var descriptorsLocal = il.DeclareLocal(descriptorsDictType);
         var keyLocal = il.DeclareLocal(_types.Object);
-        EmitNormalizePDSKey(il, runtime, keyLocal);
+        EmitNormalizePDSKey(il, keys, keyLocal);
 
         il.Emit(OpCodes.Ldsfld, descriptorsField);
         il.Emit(OpCodes.Ldloc, keyLocal);
@@ -1079,19 +1087,16 @@ public partial class RuntimeEmitter
     /// Checks descriptor keys and ordinary dictionary keys without invoking any
     /// getter. This is the cheap shape query used by guarded dense-array paths.
     /// </summary>
-    private void EmitPDSHasIndexedOwnProperty(
-        TypeBuilder typeBuilder,
-        EmittedRuntime runtime,
-        FieldBuilder descriptorsField,
-        MethodInfo descriptorsTryGet,
-        Type descriptorsDictType)
+    private void EmitPDSHasIndexedOwnProperty(TypeBuilder typeBuilder, EmittedDescriptorStorageRuntime storage,
+        FieldBuilder descriptorsField, MethodInfo descriptorsTryGet, Type descriptorsDictType,
+        DescriptorKeyInputs keys)
     {
         var method = typeBuilder.DefineMethod(
             "HasIndexedOwnProperty",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Boolean,
             [_types.Object, _types.Int32]);
-        runtime.PDSHasIndexedOwnProperty = method;
+        storage.HasIndexedOwnProperty = method;
 
         var il = method.GetILGenerator();
         var returnFalse = il.DefineLabel();
@@ -1103,7 +1108,7 @@ public partial class RuntimeEmitter
             nameof(uint.TryParse), [typeof(string), typeof(uint).MakeByRefType()])!;
         var parsedIndex = il.DeclareLocal(_types.UInt32);
         var keyLocal = il.DeclareLocal(_types.Object);
-        EmitNormalizePDSKey(il, runtime, keyLocal);
+        EmitNormalizePDSKey(il, keys, keyLocal);
 
         // First scan explicitly-defined descriptor keys for the receiver.
         var descriptorsLocal = il.DeclareLocal(descriptorsDictType);
@@ -1115,9 +1120,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, scanOrdinaryDictionary);
 
         var descriptorKvpType = _types.MakeGenericType(
-            typeof(KeyValuePair<,>), _types.String, runtime.CompiledPropertyDescriptorType);
+            typeof(KeyValuePair<,>), _types.String, storage.DescriptorType);
         var descriptorEnumeratorType = _types.MakeGenericType(
-            typeof(Dictionary<,>.Enumerator), _types.String, runtime.CompiledPropertyDescriptorType);
+            typeof(Dictionary<,>.Enumerator), _types.String, storage.DescriptorType);
         var descriptorGetEnumerator = EmitterTypeHelpers.ResolveMethod(
             descriptorsDictType, typeof(Dictionary<,>).GetMethod("GetEnumerator")!);
         var descriptorMoveNext = EmitterTypeHelpers.ResolveMethod(
@@ -1240,19 +1245,19 @@ public partial class RuntimeEmitter
     /// base's field so JS own-shadow semantics hold in compiled mode (issue #339). Mirrors the inline
     /// ancestor walk already used by the dynamic type-property reader (#265).
     /// </summary>
-    private void EmitPDSGetStaticShadow(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitPDSGetStaticShadow(TypeBuilder typeBuilder, EmittedDescriptorStorageRuntime storage)
     {
         var method = typeBuilder.DefineMethod(
             "GetStaticShadow",
             MethodAttributes.Public | MethodAttributes.Static,
-            runtime.CompiledPropertyDescriptorType,
+            storage.DescriptorType,
             [_types.Object, _types.String]
         );
-        runtime.PDSGetStaticShadow = method;
+        storage.GetStaticShadow = method;
 
         var il = method.GetILGenerator();
         var walkTypeLocal = il.DeclareLocal(_types.Type);
-        var descLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+        var descLocal = il.DeclareLocal(storage.DescriptorType);
 
         // Type walkType = typeObj as Type;  (null when the receiver isn't a constructor → return null)
         il.Emit(OpCodes.Ldarg_0);
@@ -1270,7 +1275,7 @@ public partial class RuntimeEmitter
         // desc = GetPropertyDescriptor(walkType, propertyKey);
         il.Emit(OpCodes.Ldloc, walkTypeLocal);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+        il.Emit(OpCodes.Call, storage.GetPropertyDescriptor);
         il.Emit(OpCodes.Stloc, descLocal);
 
         // if (desc != null) return desc;
@@ -1299,9 +1304,9 @@ public partial class RuntimeEmitter
     /// properties (created via Object.defineProperty without backing-dict
     /// writes) in ECMA-262 §10.1.11.1 OrdinaryOwnPropertyKeys order.
     /// </summary>
-    private void EmitPDSGetEnumerableExtraKeys(TypeBuilder typeBuilder, EmittedRuntime runtime,
-        FieldBuilder descriptorsField, MethodInfo descriptorsTryGet,
-        Type descriptorsDictType, MethodInfo descriptorsDictTryGetValue)
+    private void EmitPDSGetEnumerableExtraKeys(TypeBuilder typeBuilder, EmittedDescriptorStorageRuntime storage,
+        FieldBuilder descriptorsField, MethodInfo descriptorsTryGet, Type descriptorsDictType,
+        MethodInfo descriptorsDictTryGetValue, DescriptorKeyInputs keys)
     {
         var method = typeBuilder.DefineMethod(
             "GetEnumerableExtraKeys",
@@ -1309,13 +1314,13 @@ public partial class RuntimeEmitter
             _types.ListOfObject,
             [_types.Object, _types.DictionaryStringObject]
         );
-        runtime.PDSGetEnumerableExtraKeys = method;
+        storage.GetEnumerableExtraKeys = method;
 
         var il = method.GetILGenerator();
         var resultLocal = il.DeclareLocal(_types.ListOfObject);
         var pdsDictLocal = il.DeclareLocal(descriptorsDictType);
         var keyLocal = il.DeclareLocal(_types.Object);
-        EmitNormalizePDSKey(il, runtime, keyLocal);
+        EmitNormalizePDSKey(il, keys, keyLocal);
 
         il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.ListOfObject));
         il.Emit(OpCodes.Stloc, resultLocal);
@@ -1332,8 +1337,8 @@ public partial class RuntimeEmitter
         // Use the dict's GetEnumerator → MoveNext → Current pattern via the
         // ResolveMethod-resolved methods (descriptorsDictType is a TypeBuilder
         // generic instantiation; direct GetMethod doesn't work).
-        var kvpType = _types.MakeGenericType(typeof(KeyValuePair<,>), _types.String, runtime.CompiledPropertyDescriptorType);
-        var enumeratorType = _types.MakeGenericType(typeof(Dictionary<,>.Enumerator), _types.String, runtime.CompiledPropertyDescriptorType);
+        var kvpType = _types.MakeGenericType(typeof(KeyValuePair<,>), _types.String, storage.DescriptorType);
+        var enumeratorType = _types.MakeGenericType(typeof(Dictionary<,>.Enumerator), _types.String, storage.DescriptorType);
 
         var dictOpenType = typeof(Dictionary<,>);
         var dictOpenGetEnumerator = dictOpenType.GetMethod("GetEnumerator")!;
@@ -1385,7 +1390,7 @@ public partial class RuntimeEmitter
         // Skip if descriptor.Enumerable is false.
         il.Emit(OpCodes.Ldloca, kvpLocal);
         il.Emit(OpCodes.Call, resolvedKvpValue);
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorEnumerable.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, storage.DescriptorEnumerable.GetGetMethod()!);
         il.Emit(OpCodes.Brfalse, loopStart);
         // result.Add(currentKey)
         il.Emit(OpCodes.Ldloc, resultLocal);
@@ -1407,9 +1412,9 @@ public partial class RuntimeEmitter
     /// (ECMA-262 §20.1.2.10), which returns the union of own enumerable AND
     /// non-enumerable string-keyed properties.
     /// </summary>
-    private void EmitPDSGetAllExtraKeys(TypeBuilder typeBuilder, EmittedRuntime runtime,
-        FieldBuilder descriptorsField, MethodInfo descriptorsTryGet,
-        Type descriptorsDictType, MethodInfo descriptorsDictTryGetValue)
+    private void EmitPDSGetAllExtraKeys(TypeBuilder typeBuilder, EmittedDescriptorStorageRuntime storage,
+        FieldBuilder descriptorsField, MethodInfo descriptorsTryGet, Type descriptorsDictType,
+        MethodInfo descriptorsDictTryGetValue, DescriptorKeyInputs keys)
     {
         var method = typeBuilder.DefineMethod(
             "GetAllExtraKeys",
@@ -1417,13 +1422,13 @@ public partial class RuntimeEmitter
             _types.ListOfObject,
             [_types.Object, _types.DictionaryStringObject]
         );
-        runtime.PDSGetAllExtraKeys = method;
+        storage.GetAllExtraKeys = method;
 
         var il = method.GetILGenerator();
         var resultLocal = il.DeclareLocal(_types.ListOfObject);
         var pdsDictLocal = il.DeclareLocal(descriptorsDictType);
         var keyLocal = il.DeclareLocal(_types.Object);
-        EmitNormalizePDSKey(il, runtime, keyLocal);
+        EmitNormalizePDSKey(il, keys, keyLocal);
 
         il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.ListOfObject));
         il.Emit(OpCodes.Stloc, resultLocal);
@@ -1435,8 +1440,8 @@ public partial class RuntimeEmitter
         var returnResultLabel = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, returnResultLabel);
 
-        var kvpType = _types.MakeGenericType(typeof(KeyValuePair<,>), _types.String, runtime.CompiledPropertyDescriptorType);
-        var enumeratorType = _types.MakeGenericType(typeof(Dictionary<,>.Enumerator), _types.String, runtime.CompiledPropertyDescriptorType);
+        var kvpType = _types.MakeGenericType(typeof(KeyValuePair<,>), _types.String, storage.DescriptorType);
+        var enumeratorType = _types.MakeGenericType(typeof(Dictionary<,>.Enumerator), _types.String, storage.DescriptorType);
         var dictOpenType = typeof(Dictionary<,>);
         var descriptorsDictGetEnumerator = EmitterTypeHelpers.ResolveMethod(descriptorsDictType, dictOpenType.GetMethod("GetEnumerator")!);
         var enumOpenType = typeof(Dictionary<,>.Enumerator);
@@ -1499,7 +1504,7 @@ public partial class RuntimeEmitter
     /// at the IL emit sites). MethodInfo is identity-stable across reflection
     /// reads, so it makes a reliable canonical key for ConditionalWeakTable.
     /// </summary>
-    private void EmitNormalizePDSKey(ILGenerator il, EmittedRuntime runtime, LocalBuilder keyLocal)
+    private void EmitNormalizePDSKey(ILGenerator il, DescriptorKeyInputs keys, LocalBuilder keyLocal)
     {
         // var key = arg0;
         il.Emit(OpCodes.Ldarg_0);
@@ -1507,9 +1512,9 @@ public partial class RuntimeEmitter
 
         // if (arg0 is $TSFunction f) key = f.GetMethodInfo() ?? arg0;
         var afterLabel = il.DefineLabel();
-        var fLocal = il.DeclareLocal(runtime.TSFunctionType);
+        var fLocal = il.DeclareLocal(keys.FunctionType);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Isinst, keys.FunctionType);
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Stloc, fLocal);
         il.Emit(OpCodes.Brfalse, afterLabel);
@@ -1517,7 +1522,7 @@ public partial class RuntimeEmitter
         // mi = f.GetMethodInfo()
         var miLocal = il.DeclareLocal(_types.MethodInfo);
         il.Emit(OpCodes.Ldloc, fLocal);
-        il.Emit(OpCodes.Callvirt, runtime.TSFunctionGetMethodInfo);
+        il.Emit(OpCodes.Callvirt, keys.GetMethodInfo);
         il.Emit(OpCodes.Stloc, miLocal);
 
         // if (mi != null) key = mi

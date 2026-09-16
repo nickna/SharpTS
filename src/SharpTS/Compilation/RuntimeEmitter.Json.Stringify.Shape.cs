@@ -171,7 +171,7 @@ public partial class RuntimeEmitter
         bool expectsObjectPrototype)
     {
         il.Emit(OpCodes.Ldsfld, prototypeField);
-        il.Emit(OpCodes.Call, runtime.PDSGetPrototype);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetPrototype);
         if (expectsObjectPrototype)
         {
             il.Emit(OpCodes.Ldsfld, runtime.ObjectPrototypeField);
@@ -184,7 +184,7 @@ public partial class RuntimeEmitter
 
         il.Emit(OpCodes.Ldsfld, prototypeField);
         il.Emit(OpCodes.Ldstr, "toJSON");
-        il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetPropertyDescriptor);
         il.Emit(OpCodes.Brtrue, unsafeLabel);
 
         il.Emit(OpCodes.Ldsfld, prototypeField);
@@ -309,10 +309,10 @@ public partial class RuntimeEmitter
         il.MarkLabel(arrayNode);
         EmitExactRuntimeTypeCheck(il, 0, _types.ListOfObject, falseLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.PDSHasPropertyDescriptors);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.HasPropertyDescriptors);
         il.Emit(OpCodes.Brtrue, falseLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.PDSHasPrototypeEntry);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.HasPrototypeEntry);
         il.Emit(OpCodes.Brtrue, falseLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, _types.ListOfObject);
@@ -355,10 +355,10 @@ public partial class RuntimeEmitter
         il.MarkLabel(objectNode);
         EmitExactRuntimeTypeCheck(il, 0, _types.DictionaryStringObject, falseLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.PDSHasPropertyDescriptors);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.HasPropertyDescriptors);
         il.Emit(OpCodes.Brtrue, falseLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.PDSHasPrototypeEntry);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.HasPrototypeEntry);
         il.Emit(OpCodes.Brtrue, falseLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, _types.DictionaryStringObject);
@@ -666,10 +666,10 @@ public partial class RuntimeEmitter
         EmitExactRuntimeTypeCheck(il, 1, _types.ListOfObject, invalidShape);
         il.MarkLabel(arrayTypeAccepted);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.PDSHasPropertyDescriptors);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.HasPropertyDescriptors);
         il.Emit(OpCodes.Brtrue, invalidShape);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.PDSHasPrototypeEntry);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.HasPrototypeEntry);
         il.Emit(OpCodes.Brtrue, invalidShape);
         il.MarkLabel(arrayGuarded);
         var arrayNotTsArray = il.DefineLabel();
@@ -786,10 +786,10 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, closedLocal);
         il.Emit(OpCodes.Brfalse, invalidShape);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.PDSHasPropertyDescriptors);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.HasPropertyDescriptors);
         il.Emit(OpCodes.Brtrue, invalidShape);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.PDSHasPrototypeEntry);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.HasPrototypeEntry);
         il.Emit(OpCodes.Brtrue, invalidShape);
         il.Emit(OpCodes.Ldloc, scalarLocal);
         il.Emit(OpCodes.Callvirt, runtime.JsonScalarRecordIsMaterializedGetter);
@@ -825,10 +825,10 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, objectGuarded);
         EmitExactRuntimeTypeCheck(il, 1, _types.DictionaryStringObject, invalidShape);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.PDSHasPropertyDescriptors);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.HasPropertyDescriptors);
         il.Emit(OpCodes.Brtrue, invalidShape);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.PDSHasPrototypeEntry);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.HasPrototypeEntry);
         il.Emit(OpCodes.Brtrue, invalidShape);
         il.MarkLabel(objectGuarded);
         il.Emit(OpCodes.Ldarg_1);
@@ -1097,13 +1097,13 @@ public partial class RuntimeEmitter
             if (mayHaveDescriptors)
             {
                 appenderIl.Emit(OpCodes.Ldloc, exact);
-                appenderIl.Emit(OpCodes.Call, runtime.PDSHasPropertyDescriptors);
+                appenderIl.Emit(OpCodes.Call, runtime.DescriptorStorage.HasPropertyDescriptors);
                 appenderIl.Emit(OpCodes.Brtrue, failed);
             }
             if (mayHavePrototypeEntry)
             {
                 appenderIl.Emit(OpCodes.Ldloc, exact);
-                appenderIl.Emit(OpCodes.Call, runtime.PDSHasPrototypeEntry);
+                appenderIl.Emit(OpCodes.Call, runtime.DescriptorStorage.HasPrototypeEntry);
                 appenderIl.Emit(OpCodes.Brtrue, failed);
             }
 

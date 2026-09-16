@@ -48,7 +48,7 @@ public partial class RuntimeEmitter
         // ECMA-262 §22.2.6 RegExp.prototype.constructor === RegExp.
         // Plant in dict for fast-read + install a non-enumerable PDS descriptor
         // so Object.keys / for-in skip it per spec (§17 built-in attrs).
-        var ctorDescLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+        var ctorDescLocal = il.DeclareLocal(runtime.DescriptorStorage.DescriptorType);
         EmitInstallConstructor(il, runtime, runtime.RegExpPrototypeField, ctorDescLocal, setItem, () =>
         {
             il.Emit(OpCodes.Ldtoken, runtime.TSRegExpType);
@@ -72,7 +72,7 @@ public partial class RuntimeEmitter
             // Store a real descriptor so gOPD/propertyIsEnumerable observe the
             // ECMA-262 §17 attributes. Symbol-index Get unwraps descriptor.Value.
             var fnLocal = il.DeclareLocal(_types.Object);
-            var descLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+            var descLocal = il.DeclareLocal(runtime.DescriptorStorage.DescriptorType);
             il.Emit(OpCodes.Ldnull);
             _types.EmitLoadMethodInfo(il, helper);
             il.Emit(OpCodes.Ldstr, jsName);
@@ -80,14 +80,14 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Newobj, runtime.TSFunctionCtorWithCache);
             il.Emit(OpCodes.Stloc, fnLocal);
 
-            il.Emit(OpCodes.Newobj, runtime.CompiledPropertyDescriptorCtor);
+            il.Emit(OpCodes.Newobj, runtime.DescriptorStorage.DescriptorConstructor);
             il.Emit(OpCodes.Stloc, descLocal);
             il.Emit(OpCodes.Ldloc, descLocal);
             il.Emit(OpCodes.Ldloc, fnLocal);
-            il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorValue.GetSetMethod()!);
+            il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorValue.GetSetMethod()!);
             il.Emit(OpCodes.Ldloc, descLocal);
             il.Emit(OpCodes.Ldc_I4_0);
-            il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorEnumerable.GetSetMethod()!);
+            il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorEnumerable.GetSetMethod()!);
 
             il.Emit(OpCodes.Ldloc, symbolDictLocal);
             il.Emit(OpCodes.Ldsfld, symbolField);
@@ -110,7 +110,7 @@ public partial class RuntimeEmitter
         // `this`. test262's prototype/<flag>/this-val-non-obj.js and
         // this-val-regexp-prototype.js depend on these being real
         // descriptors retrievable via Object.getOwnPropertyDescriptor.
-        var protoDescLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+        var protoDescLocal = il.DeclareLocal(runtime.DescriptorStorage.DescriptorType);
 
         void InstallAccessor(string jsName, MethodBuilder helper, int jsLength)
         {
@@ -123,22 +123,22 @@ public partial class RuntimeEmitter
             // descriptor = new $CompiledPropertyDescriptor { Getter = fn };
             var fnLocal = il.DeclareLocal(_types.Object);
             il.Emit(OpCodes.Stloc, fnLocal);
-            il.Emit(OpCodes.Newobj, runtime.CompiledPropertyDescriptorCtor);
+            il.Emit(OpCodes.Newobj, runtime.DescriptorStorage.DescriptorConstructor);
             il.Emit(OpCodes.Stloc, protoDescLocal);
             il.Emit(OpCodes.Ldloc, protoDescLocal);
             il.Emit(OpCodes.Ldloc, fnLocal);
-            il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorGetter.GetSetMethod()!);
+            il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorGetter.GetSetMethod()!);
             // ECMA-262 §22.2.6 accessor descriptors are { enumerable:false,
             // configurable:true } — $CompiledPropertyDescriptor's ctor defaults
             // Enumerable=true so override it. prop-desc.js tests verify both.
             il.Emit(OpCodes.Ldloc, protoDescLocal);
             il.Emit(OpCodes.Ldc_I4_0);
-            il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorEnumerable.GetSetMethod()!);
+            il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorEnumerable.GetSetMethod()!);
             // PDSDefineProperty(RegExp.prototype, jsName, descriptor);
             il.Emit(OpCodes.Ldsfld, runtime.RegExpPrototypeField);
             il.Emit(OpCodes.Ldstr, jsName);
             il.Emit(OpCodes.Ldloc, protoDescLocal);
-            il.Emit(OpCodes.Call, runtime.PDSDefineProperty);
+            il.Emit(OpCodes.Call, runtime.DescriptorStorage.DefineProperty);
             il.Emit(OpCodes.Pop);
         }
 
@@ -158,7 +158,7 @@ public partial class RuntimeEmitter
         // S15.10.6.2_A2_*.js patterns set RegExp.prototype.exec onto a
         // plain object and verify the resulting call throws.
         var dataMethodFnLocal = il.DeclareLocal(_types.Object);
-        var dataMethodDescLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+        var dataMethodDescLocal = il.DeclareLocal(runtime.DescriptorStorage.DescriptorType);
 
         void InstallDataMethod(string jsName, MethodBuilder helper, int jsLength)
         {
@@ -177,15 +177,15 @@ public partial class RuntimeEmitter
             // PDS lookup (which runs BEFORE the auto-create branch) returns
             // undefined and prototype/exec/S15.10.6.2_A6.js's
             // `RegExp.prototype.exec.prototype === undefined` holds.
-            il.Emit(OpCodes.Newobj, runtime.CompiledPropertyDescriptorCtor);
+            il.Emit(OpCodes.Newobj, runtime.DescriptorStorage.DescriptorConstructor);
             il.Emit(OpCodes.Stloc, dataMethodDescLocal);
             il.Emit(OpCodes.Ldloc, dataMethodDescLocal);
             il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
-            il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorValue.GetSetMethod()!);
+            il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorValue.GetSetMethod()!);
             il.Emit(OpCodes.Ldloc, dataMethodFnLocal);
             il.Emit(OpCodes.Ldstr, "prototype");
             il.Emit(OpCodes.Ldloc, dataMethodDescLocal);
-            il.Emit(OpCodes.Call, runtime.PDSDefineProperty);
+            il.Emit(OpCodes.Call, runtime.DescriptorStorage.DefineProperty);
             il.Emit(OpCodes.Pop);
 
             // dict[jsName] = fn (covers the property-read fast path)
@@ -200,19 +200,19 @@ public partial class RuntimeEmitter
             // entry handles property reads (fast path); the PDS descriptor
             // gates Object.keys / for-in / propertyIsEnumerable / gOPD so
             // those report enumerable=false per spec.
-            il.Emit(OpCodes.Newobj, runtime.CompiledPropertyDescriptorCtor);
+            il.Emit(OpCodes.Newobj, runtime.DescriptorStorage.DescriptorConstructor);
             il.Emit(OpCodes.Stloc, dataMethodDescLocal);
             il.Emit(OpCodes.Ldloc, dataMethodDescLocal);
             il.Emit(OpCodes.Ldloc, dataMethodFnLocal);
-            il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorValue.GetSetMethod()!);
+            il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorValue.GetSetMethod()!);
             il.Emit(OpCodes.Ldloc, dataMethodDescLocal);
             il.Emit(OpCodes.Ldc_I4_0);
-            il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorEnumerable.GetSetMethod()!);
+            il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorEnumerable.GetSetMethod()!);
             // writable & configurable already true via ctor defaults.
             il.Emit(OpCodes.Ldsfld, runtime.RegExpPrototypeField);
             il.Emit(OpCodes.Ldstr, jsName);
             il.Emit(OpCodes.Ldloc, dataMethodDescLocal);
-            il.Emit(OpCodes.Call, runtime.PDSDefineProperty);
+            il.Emit(OpCodes.Call, runtime.DescriptorStorage.DefineProperty);
             il.Emit(OpCodes.Pop);
         }
 
@@ -224,7 +224,7 @@ public partial class RuntimeEmitter
         // ECMA-262 §22.2.6.
         il.Emit(OpCodes.Ldsfld, runtime.RegExpPrototypeField);
         il.Emit(OpCodes.Ldsfld, runtime.ObjectPrototypeField);
-        il.Emit(OpCodes.Call, runtime.PDSSetPrototype);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.SetPrototype);
 
         il.Emit(OpCodes.Ret);
     }

@@ -94,7 +94,7 @@ public partial class RuntimeEmitter
         // take precedence over the synthesized intrinsic descriptors below.
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, propNameLocal);
-        il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetPropertyDescriptor);
         il.Emit(OpCodes.Stloc, descriptorLocal);
         il.Emit(OpCodes.Ldloc, descriptorLocal);
         il.Emit(OpCodes.Brtrue, hasDescriptorLabel);
@@ -182,7 +182,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, "writable");
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "length");
-        il.Emit(OpCodes.Call, runtime.PDSIsWritable);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.IsWritable);
         il.Emit(OpCodes.Box, _types.Boolean);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item"));
         EmitDescriptorBoolField(il, resultDictLocal, "enumerable", false);
@@ -1240,10 +1240,10 @@ public partial class RuntimeEmitter
         var dictIsFrozenLocal = il.DeclareLocal(_types.Boolean);
         var dictIsSealedLocal = il.DeclareLocal(_types.Boolean);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.PDSIsFrozen);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.IsFrozen);
         il.Emit(OpCodes.Stloc, dictIsFrozenLocal);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.PDSIsSealed);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.IsSealed);
         il.Emit(OpCodes.Stloc, dictIsSealedLocal);
 
         il.Emit(OpCodes.Newobj, _types.DictionaryStringObjectCtor);
@@ -1394,7 +1394,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, resultDictLocal);
         il.Emit(OpCodes.Ldstr, "configurable");
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.PDSIsSealed);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.IsSealed);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ceq);
         il.Emit(OpCodes.Box, _types.Boolean);
@@ -1442,10 +1442,10 @@ public partial class RuntimeEmitter
         var hfIsFrozenLocal = il.DeclareLocal(_types.Boolean);
         var hfIsSealedLocal = il.DeclareLocal(_types.Boolean);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.PDSIsFrozen);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.IsFrozen);
         il.Emit(OpCodes.Stloc, hfIsFrozenLocal);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.PDSIsSealed);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.IsSealed);
         il.Emit(OpCodes.Stloc, hfIsSealedLocal);
 
         il.Emit(OpCodes.Newobj, _types.DictionaryStringObjectCtor);

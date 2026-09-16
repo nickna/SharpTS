@@ -309,7 +309,7 @@ public partial class RuntimeEmitter
         var fallback = il.DefineLabel();
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.PDSHasPropertyDescriptors);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.HasPropertyDescriptors);
         il.Emit(OpCodes.Brtrue, fallback);
 
         il.Emit(OpCodes.Ldarg_0);
@@ -359,7 +359,7 @@ public partial class RuntimeEmitter
         var returnValue = il.DefineLabel();
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.PDSHasPropertyDescriptors);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.HasPropertyDescriptors);
         il.Emit(OpCodes.Brtrue, fullLookup);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "toJSON");
@@ -374,7 +374,7 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(implicitPrototype);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.PDSHasPrototypeEntry);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.HasPrototypeEntry);
         il.Emit(OpCodes.Brtrue, fullLookup);
         il.Emit(OpCodes.Call, runtime.ObjectPrototypePopulateMethod);
         il.Emit(OpCodes.Ldsfld, runtime.ObjectPrototypeField);
@@ -394,7 +394,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Bne_Un, returnValue);
         il.Emit(OpCodes.Ldsfld, runtime.ObjectPrototypeField);
         il.Emit(OpCodes.Ldstr, "toJSON");
-        il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetPropertyDescriptor);
         il.Emit(OpCodes.Brtrue, fullLookup);
 
         il.MarkLabel(returnValue);
@@ -1474,7 +1474,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldloc, allowPooledDictionaryKeysLocal);
             il.Emit(OpCodes.Brfalse, fallbackSnapshot);
             il.Emit(OpCodes.Ldloc, dictLocal);
-            il.Emit(OpCodes.Call, runtime.PDSHasPropertyDescriptors);
+            il.Emit(OpCodes.Call, runtime.DescriptorStorage.HasPropertyDescriptors);
             il.Emit(OpCodes.Brtrue, fallbackSnapshot);
             il.Emit(OpCodes.Ldloc, dictLocal);
             il.Emit(OpCodes.Call, _jsonTryRentDictionaryKeysMethod!);

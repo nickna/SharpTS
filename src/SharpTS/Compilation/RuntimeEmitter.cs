@@ -245,7 +245,9 @@ public partial class RuntimeEmitter
         // $Array: array length truncation must remove indexed descriptors as
         // well as dense/sparse storage. The descriptor store itself depends
         // only on helper types emitted above.
-        EmitPropertyDescriptorTypes(moduleBuilder, runtime);
+        EmitPropertyDescriptorTypes(moduleBuilder, runtime.DescriptorStorage,
+            new DescriptorKeyInputs(runtime.TSFunctionType, runtime.TSFunctionGetMethodInfo),
+            runtime.UndefinedType);
 
         // Emit $Array class for standalone array support
         // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSArray
@@ -260,9 +262,9 @@ public partial class RuntimeEmitter
         // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSObject
         EmitTSObjectClass(moduleBuilder, runtime.ObjectStorage,
             new ObjectStorageInputs(runtime.IHasFieldsInterface,
-                new ObjectReadInputs(runtime.CompiledPropertyDescriptorType, runtime.PDSTryGetGetter,
-                    runtime.PDSGetPropertyDescriptor, runtime.CompiledPropertyDescriptorSetter.GetGetMethod()!,
-                    runtime.CompiledPropertyDescriptorValue.GetGetMethod()!, runtime.TSFunctionType,
+                new ObjectReadInputs(runtime.DescriptorStorage.DescriptorType, runtime.DescriptorStorage.TryGetGetter,
+                    runtime.DescriptorStorage.GetPropertyDescriptor, runtime.DescriptorStorage.DescriptorSetter.GetGetMethod()!,
+                    runtime.DescriptorStorage.DescriptorValue.GetGetMethod()!, runtime.TSFunctionType,
                     runtime.TSFunctionInvokeWithThis, runtime.UndefinedInstance),
                 new ObjectInvokeInputs(runtime.TSFunctionType, runtime.TSFunctionInvokeWithThis),
                 runtime.TSTypeErrorCtor));
@@ -718,6 +720,7 @@ public partial class RuntimeEmitter
         runtime.Booleans.CompleteEmission();
         runtime.NumericCoercion.CompleteEmission();
         runtime.ObjectStorage.CompleteEmission();
+        runtime.DescriptorStorage.CompleteEmission();
         runtime.BroadcastChannel?.CompleteEmission();
         runtime.EventEmitter.CompleteEmission();
         runtime.NodeStreams?.CompleteEmission();

@@ -239,8 +239,21 @@ undefined, interface, and error-constructor dependencies. The six generated stor
 local construction inputs rather than state retained on `RuntimeEmitter`. Early strict-mode
 errors still wrap the guest TypeError in a CLR exception before `$Runtime.CreateException` exists.
 `EmitAll` validates and freezes the metadata after runtime finalization; this does not freeze guest
-objects or their original mutable field dictionaries. Descriptor storage, generic object operations,
-Reflect, and shared interfaces remain separate residual work under #1599.
+objects or their original mutable field dictionaries. Generic object operations, Reflect, and shared
+interfaces remain separate residual work under #1599.
+
+Descriptor, prototype and extensibility storage uses required `EmittedDescriptorStorageRuntime`
+for 35 declarations, exposed through the get-only `DescriptorStorage` component. The three support
+types and their ten reflected properties publish after type finalization; the descriptor constructor
+retains its original builder through its `ConstructorInfo` slot. These early declarations remain
+usable before the 21 storage methods exist. Checked access reports missing declarations, failed
+completion permits repair, and successful `EmitAll` completion freezes metadata assignments.
+The family helpers take the owner and exact function-key or undefined inputs where needed.
+Function wrappers still normalize to their MethodInfo when available; methodless wrappers keep
+their own identity. Four ConditionalWeakTable fields and closed BCL construction references stay
+local to emission, and each saved output owns fresh mutable descriptor/prototype/extensibility
+and symbol tables. Generic Object/Reflect operations, JSON helper lifetime, and the shared
+auto-property emitter remain separate ownership and infrastructure work under #1599.
 
 Array operations use the required `ArrayOperations` component for 108 declarations: construction
 and static helpers, ordinary and specialized operations, prototype population, bound-method

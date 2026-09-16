@@ -116,7 +116,7 @@ public partial class RuntimeEmitter
         var il = method.GetILGenerator();
         var keyLocal = il.DeclareLocal(_types.String);
         var oLocal = il.DeclareLocal(_types.Object);
-        var descLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+        var descLocal = il.DeclareLocal(runtime.DescriptorStorage.DescriptorType);
 
         var returnUndefinedLabel = il.DefineLabel();
         var throwThisLabel = il.DefineLabel();
@@ -147,7 +147,7 @@ public partial class RuntimeEmitter
         // desc = PDSGetPropertyDescriptor(O, key)
         il.Emit(OpCodes.Ldloc, oLocal);
         il.Emit(OpCodes.Ldloc, keyLocal);
-        il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetPropertyDescriptor);
         il.Emit(OpCodes.Stloc, descLocal);
 
         var noDescLabel = il.DefineLabel();
@@ -155,7 +155,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, noDescLabel);
 
         // PDS desc found. If isGetter: return desc.Getter ?? undefined. Else Setter.
-        var slot = isGetter ? runtime.CompiledPropertyDescriptorGetter : runtime.CompiledPropertyDescriptorSetter;
+        var slot = isGetter ? runtime.DescriptorStorage.DescriptorGetter : runtime.DescriptorStorage.DescriptorSetter;
         il.Emit(OpCodes.Ldloc, descLocal);
         il.Emit(OpCodes.Callvirt, slot.GetGetMethod()!);
         il.Emit(OpCodes.Dup);

@@ -98,25 +98,25 @@ public partial class RuntimeEmitter
         runtime.ErrorDefineMessageProperty = method;
 
         var il = method.GetILGenerator();
-        var descriptorLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
-        il.Emit(OpCodes.Newobj, runtime.CompiledPropertyDescriptorCtor);
+        var descriptorLocal = il.DeclareLocal(runtime.DescriptorStorage.DescriptorType);
+        il.Emit(OpCodes.Newobj, runtime.DescriptorStorage.DescriptorConstructor);
         il.Emit(OpCodes.Stloc, descriptorLocal);
         il.Emit(OpCodes.Ldloc, descriptorLocal);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorValue.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorValue.GetSetMethod()!);
         il.Emit(OpCodes.Ldloc, descriptorLocal);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorWritable.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorWritable.GetSetMethod()!);
         il.Emit(OpCodes.Ldloc, descriptorLocal);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorEnumerable.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorEnumerable.GetSetMethod()!);
         il.Emit(OpCodes.Ldloc, descriptorLocal);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorConfigurable.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorConfigurable.GetSetMethod()!);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "message");
         il.Emit(OpCodes.Ldloc, descriptorLocal);
-        il.Emit(OpCodes.Call, runtime.PDSDefineProperty);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.DefineProperty);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Ret);
     }
@@ -400,25 +400,25 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, presentLocal);
         il.Emit(OpCodes.Brfalse, skipLabel);
 
-        var descriptorLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
-        il.Emit(OpCodes.Newobj, runtime.CompiledPropertyDescriptorCtor);
+        var descriptorLocal = il.DeclareLocal(runtime.DescriptorStorage.DescriptorType);
+        il.Emit(OpCodes.Newobj, runtime.DescriptorStorage.DescriptorConstructor);
         il.Emit(OpCodes.Stloc, descriptorLocal);
         il.Emit(OpCodes.Ldloc, descriptorLocal);
         il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorValue.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorValue.GetSetMethod()!);
         il.Emit(OpCodes.Ldloc, descriptorLocal);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorWritable.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorWritable.GetSetMethod()!);
         il.Emit(OpCodes.Ldloc, descriptorLocal);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorEnumerable.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorEnumerable.GetSetMethod()!);
         il.Emit(OpCodes.Ldloc, descriptorLocal);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorConfigurable.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorConfigurable.GetSetMethod()!);
         il.Emit(OpCodes.Ldloc, errorLocal);
         il.Emit(OpCodes.Ldstr, propertyName);
         il.Emit(OpCodes.Ldloc, descriptorLocal);
-        il.Emit(OpCodes.Call, runtime.PDSDefineProperty);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.DefineProperty);
         il.Emit(OpCodes.Pop);
 
         il.MarkLabel(skipLabel);
@@ -523,25 +523,25 @@ public partial class RuntimeEmitter
         // (ECMA-262 §20.5.8.1 step 1.b → CreateNonEnumerableDataPropertyOrThrow:
         // writable:true, enumerable:false, configurable:true). Unlocks
         // built-ins/Error/cause_property + verifyProperty patterns.
-        var causeDescLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
-        il.Emit(OpCodes.Newobj, runtime.CompiledPropertyDescriptorCtor);
+        var causeDescLocal = il.DeclareLocal(runtime.DescriptorStorage.DescriptorType);
+        il.Emit(OpCodes.Newobj, runtime.DescriptorStorage.DescriptorConstructor);
         il.Emit(OpCodes.Stloc, causeDescLocal);
         il.Emit(OpCodes.Ldloc, causeDescLocal);
         il.Emit(OpCodes.Ldloc, causeLocal);
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorValue.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorValue.GetSetMethod()!);
         il.Emit(OpCodes.Ldloc, causeDescLocal);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorWritable.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorWritable.GetSetMethod()!);
         il.Emit(OpCodes.Ldloc, causeDescLocal);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorEnumerable.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorEnumerable.GetSetMethod()!);
         il.Emit(OpCodes.Ldloc, causeDescLocal);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorConfigurable.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorConfigurable.GetSetMethod()!);
         il.Emit(OpCodes.Ldloc, errorLocal);
         il.Emit(OpCodes.Ldstr, "cause");
         il.Emit(OpCodes.Ldloc, causeDescLocal);
-        il.Emit(OpCodes.Call, runtime.PDSDefineProperty);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.DefineProperty);
         il.Emit(OpCodes.Pop);
 
         il.MarkLabel(skipLabel);

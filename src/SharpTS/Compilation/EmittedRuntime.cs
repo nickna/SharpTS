@@ -23,6 +23,9 @@ public class EmittedRuntime
     /// <summary>Required object storage metadata, emitted for every compilation.</summary>
     public EmittedObjectStorageRuntime ObjectStorage { get; } = new();
 
+    /// <summary>Required descriptor storage metadata, emitted for every compilation.</summary>
+    public EmittedDescriptorStorageRuntime DescriptorStorage { get; } = new();
+
     /// <summary>Required array operation metadata, emitted for every compilation.</summary>
     public EmittedArrayOperationsRuntime ArrayOperations { get; } = new();
 
@@ -365,10 +368,6 @@ public class EmittedRuntime
     public MethodBuilder ObjectProtoValueOfHelper { get; set; } = null!;
     /// <summary>$Runtime.ObjectProtoToLocaleString(this) — ECMA-262 20.1.3.5. Wraps ObjectProtoToString with the null/undef TypeError throw mandated by ToObject(this); other receivers delegate to ObjectProtoToString.</summary>
     public MethodBuilder ObjectProtoToLocaleStringHelper { get; set; } = null!;
-    /// <summary>$PropertyDescriptorStore.GetEnumerableExtraKeys(obj, dict) — returns enumerable PDS keys NOT already in dict (i.e. accessor-only own properties created via Object.defineProperty). Used by GetKeys/GetValues/GetEntries to surface §10.1.11.1 OrdinaryOwnPropertyKeys-correct results.</summary>
-    public MethodBuilder PDSGetEnumerableExtraKeys { get; set; } = null!;
-    /// <summary>$PropertyDescriptorStore.GetAllExtraKeys(obj, dict) — like the Enumerable variant but does NOT filter by the Enumerable bit. Used by Object.getOwnPropertyNames (ECMA-262 §20.1.2.10) which returns both enumerable AND non-enumerable own string-keyed properties.</summary>
-    public MethodBuilder PDSGetAllExtraKeys { get; set; } = null!;
     /// <summary>Populates <see cref="DatePrototypeField"/> with $TSFunction wrappers for the Date.prototype methods; idempotent.</summary>
     public MethodBuilder DatePrototypePopulateMethod { get; set; } = null!;
     /// <summary>$Runtime.HasOwnPropertyHelper(obj, name) — backs <c>obj.hasOwnProperty(name)</c> for $TSFunction / $Object / Dictionary / List receivers.</summary>
@@ -1543,47 +1542,6 @@ public class EmittedRuntime
 
     public EmittedDnsRuntime RequireDns() => Dns
         ?? throw new InvalidOperationException("DNS runtime was not enabled for this compilation.");
-
-    // $FrozenSealedState - tracks frozen/sealed/extensible state for objects
-    public Type FrozenSealedStateType { get; set; } = null!;
-    public PropertyInfo FrozenSealedStateIsFrozen { get; set; } = null!;
-    public PropertyInfo FrozenSealedStateIsSealed { get; set; } = null!;
-    public PropertyInfo FrozenSealedStateIsExtensible { get; set; } = null!;
-
-    // $PrototypeInfo - holds prototype reference for objects
-    public Type PrototypeInfoType { get; set; } = null!;
-    public PropertyInfo PrototypeInfoPrototype { get; set; } = null!;
-
-    // $CompiledPropertyDescriptor - property descriptor for compiled objects
-    public Type CompiledPropertyDescriptorType { get; set; } = null!;
-    public ConstructorInfo CompiledPropertyDescriptorCtor { get; set; } = null!;
-    public PropertyInfo CompiledPropertyDescriptorValue { get; set; } = null!;
-    public PropertyInfo CompiledPropertyDescriptorGetter { get; set; } = null!;
-    public PropertyInfo CompiledPropertyDescriptorSetter { get; set; } = null!;
-    public PropertyInfo CompiledPropertyDescriptorWritable { get; set; } = null!;
-    public PropertyInfo CompiledPropertyDescriptorEnumerable { get; set; } = null!;
-    public PropertyInfo CompiledPropertyDescriptorConfigurable { get; set; } = null!;
-
-    // $PropertyDescriptorStore - stores property descriptors for compiled objects
-    public MethodBuilder PDSFreeze { get; set; } = null!;
-    public MethodBuilder PDSSeal { get; set; } = null!;
-    public MethodBuilder PDSPreventExtensions { get; set; } = null!;
-    public MethodBuilder PDSIsExtensible { get; set; } = null!;
-    public MethodBuilder PDSIsFrozen { get; set; } = null!;
-    public MethodBuilder PDSIsSealed { get; set; } = null!;
-    public MethodBuilder PDSCanAddProperty { get; set; } = null!;
-    public MethodBuilder PDSTryGetGetter { get; set; } = null!;
-    public MethodBuilder PDSTryGetSetter { get; set; } = null!;
-    public MethodBuilder PDSIsWritable { get; set; } = null!;
-    public MethodBuilder PDSSetPrototype { get; set; } = null!;
-    public MethodBuilder PDSGetPrototype { get; set; } = null!;
-    public MethodBuilder PDSHasPrototypeEntry { get; set; } = null!;
-    public MethodBuilder PDSDefineProperty { get; set; } = null!;
-    public MethodBuilder PDSDeleteProperty { get; set; } = null!;
-    public MethodBuilder PDSGetPropertyDescriptor { get; set; } = null!;
-    public MethodBuilder PDSHasPropertyDescriptors { get; set; } = null!;
-    public MethodBuilder PDSHasIndexedOwnProperty { get; set; } = null!;
-    public MethodBuilder PDSGetStaticShadow { get; set; } = null!;
 
     // cluster module — late-bound bridge into SharpTS.dll (#1171). Workers run the
     // entry script interpreted in-process (the worker_threads pattern), so the whole

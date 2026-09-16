@@ -29,7 +29,7 @@ public partial class RuntimeEmitter
             if (_features.UsesDynamicPropertyDescriptors)
             {
                 il.Emit(OpCodes.Ldloc, exact);
-                il.Emit(OpCodes.Call, runtime.PDSHasPropertyDescriptors);
+                il.Emit(OpCodes.Call, runtime.DescriptorStorage.HasPropertyDescriptors);
                 il.Emit(OpCodes.Brtrue, fallback);
             }
             il.Emit(OpCodes.Ldloc, exact);

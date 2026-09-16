@@ -95,7 +95,7 @@ public partial class RuntimeEmitter
 
         EmitPrototypePopulateGuard(il, runtime.DatePrototypeField);
 
-        var descLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+        var descLocal = il.DeclareLocal(runtime.DescriptorStorage.DescriptorType);
 
         // ECMA-262 §21.4.4.1: Date.prototype.constructor is %Date%. Compiled bare `Date`
         // resolves to the emitted $TSDate type, matching GlobalThisStaticEmitter.
@@ -114,7 +114,7 @@ public partial class RuntimeEmitter
         // §21.4.4: Date.prototype's [[Prototype]] is %Object.prototype%.
         il.Emit(OpCodes.Ldsfld, runtime.DatePrototypeField);
         il.Emit(OpCodes.Ldsfld, runtime.ObjectPrototypeField);
-        il.Emit(OpCodes.Call, runtime.PDSSetPrototype);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.SetPrototype);
 
         il.Emit(OpCodes.Ret);
     }

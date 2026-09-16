@@ -142,7 +142,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, skipProtoLabel);
         il.Emit(OpCodes.Ldloc, newObjLocal);
         il.Emit(OpCodes.Ldloc, fnProtoLocal);
-        il.Emit(OpCodes.Call, runtime.PDSSetPrototype);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.SetPrototype);
 
         il.MarkLabel(skipProtoLabel);
 

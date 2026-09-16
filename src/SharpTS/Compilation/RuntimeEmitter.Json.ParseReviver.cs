@@ -476,16 +476,16 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, afterSetLabel);
 
         il.MarkLabel(doSetLabel);
-        var descLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+        var descLocal = il.DeclareLocal(runtime.DescriptorStorage.DescriptorType);
         il.Emit(OpCodes.Ldloc, valLocal);
         il.Emit(OpCodes.Ldloc, propLocal);
-        il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetPropertyDescriptor);
         il.Emit(OpCodes.Stloc, descLocal);
         il.Emit(OpCodes.Ldloc, descLocal);
         var writeElementLabel = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, writeElementLabel);
         il.Emit(OpCodes.Ldloc, descLocal);
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorConfigurable.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorConfigurable.GetGetMethod()!);
         il.Emit(OpCodes.Brtrue, writeElementLabel);
         // Non-configurable: skip set, fall through to the increment.
         il.Emit(OpCodes.Br, afterSetLabel);
@@ -613,16 +613,16 @@ public partial class RuntimeEmitter
         il.MarkLabel(setLabel);
         // CreateDataProperty cannot replace a non-configurable own property.
         // Its false result is ignored by InternalizeJSONProperty.
-        var dictDescLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+        var dictDescLocal = il.DeclareLocal(runtime.DescriptorStorage.DescriptorType);
         var writeDictLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, valLocal);
         il.Emit(OpCodes.Ldloc, propLocal);
-        il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetPropertyDescriptor);
         il.Emit(OpCodes.Stloc, dictDescLocal);
         il.Emit(OpCodes.Ldloc, dictDescLocal);
         il.Emit(OpCodes.Brfalse, writeDictLabel);
         il.Emit(OpCodes.Ldloc, dictDescLocal);
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorConfigurable.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorConfigurable.GetGetMethod()!);
         il.Emit(OpCodes.Brfalse, endIfLabel);
         il.MarkLabel(writeDictLabel);
         // dict[prop] = newElement

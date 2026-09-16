@@ -118,7 +118,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Bne_Un, notGlobalObject);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, nameLocal);
-        il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetPropertyDescriptor);
         il.Emit(OpCodes.Brtrue, trueLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, nameLocal);
@@ -207,7 +207,7 @@ public partial class RuntimeEmitter
         // Otherwise check PDS for own descriptor
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, nameLocal);
-        il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetPropertyDescriptor);
         il.Emit(OpCodes.Brtrue, trueLabel);
         il.Emit(OpCodes.Br, falseLabel);
         il.MarkLabel(notTSFunction);
@@ -228,7 +228,7 @@ public partial class RuntimeEmitter
         // returns false even though Object.keys finds the key (via PDS extras).
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, nameLocal);
-        il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetPropertyDescriptor);
         il.Emit(OpCodes.Brtrue, trueLabel);
         il.Emit(OpCodes.Br, falseLabel);
         il.MarkLabel(notTSObject);
@@ -248,7 +248,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Brtrue, trueLabel);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldloc, nameLocal);
-            il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+            il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetPropertyDescriptor);
             il.Emit(OpCodes.Brtrue, trueLabel);
             il.Emit(OpCodes.Br, falseLabel);
             il.MarkLabel(notRegExp);
@@ -275,7 +275,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, trueLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, nameLocal);
-        il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetPropertyDescriptor);
         il.Emit(OpCodes.Brtrue, trueLabel);
         il.Emit(OpCodes.Br, falseLabel);
         il.MarkLabel(notIHasFieldsLabel);
@@ -343,7 +343,7 @@ public partial class RuntimeEmitter
         // Fall through to PDS check on dict-keyed property descriptors.
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, nameLocal);
-        il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetPropertyDescriptor);
         il.Emit(OpCodes.Brtrue, trueLabel);
         il.Emit(OpCodes.Br, falseLabel);
         il.MarkLabel(notDict);
@@ -430,7 +430,7 @@ public partial class RuntimeEmitter
         // PDS fallback for named properties stored via the $TSArray set path.
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, nameLocal);
-        il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetPropertyDescriptor);
         il.Emit(OpCodes.Brtrue, trueLabel);
         il.Emit(OpCodes.Br, falseLabel);
         il.MarkLabel(notList);
@@ -577,7 +577,7 @@ public partial class RuntimeEmitter
         // returns false because the bracket set didn't surface.
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, nameLocal);
-        il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetPropertyDescriptor);
         il.Emit(OpCodes.Brtrue, trueLabel);
         il.Emit(OpCodes.Br, falseLabel);
         il.MarkLabel(notTypeLabel);
@@ -585,7 +585,7 @@ public partial class RuntimeEmitter
         // Default: PDS check (might find user-set descriptor)
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, nameLocal);
-        il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetPropertyDescriptor);
         il.Emit(OpCodes.Brtrue, trueLabel);
 
         il.MarkLabel(falseLabel);
@@ -624,7 +624,7 @@ public partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
         var nameLocal = il.DeclareLocal(_types.String);
-        var descLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+        var descLocal = il.DeclareLocal(runtime.DescriptorStorage.DescriptorType);
         var falseLabel = il.DefineLabel();
 
         // ECMA-262 §20.1.3.4 step 1: Let O be ? ToObject(this value). ToObject
@@ -657,7 +657,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, runtime.IsSymbolMethod);
         il.Emit(OpCodes.Brfalse, pieNotSymbolLabel);
         var pieSymbolValueLocal = il.DeclareLocal(_types.Object);
-        var pieSymbolDescriptorLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+        var pieSymbolDescriptorLocal = il.DeclareLocal(runtime.DescriptorStorage.DescriptorType);
         var pieSymbolPresentLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Call, runtime.GetSymbolDictMethod);
@@ -669,13 +669,13 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
         il.MarkLabel(pieSymbolPresentLabel);
         il.Emit(OpCodes.Ldloc, pieSymbolValueLocal);
-        il.Emit(OpCodes.Isinst, runtime.CompiledPropertyDescriptorType);
+        il.Emit(OpCodes.Isinst, runtime.DescriptorStorage.DescriptorType);
         il.Emit(OpCodes.Stloc, pieSymbolDescriptorLocal);
         var piePlainSymbolLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, pieSymbolDescriptorLocal);
         il.Emit(OpCodes.Brfalse, piePlainSymbolLabel);
         il.Emit(OpCodes.Ldloc, pieSymbolDescriptorLocal);
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorEnumerable.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorEnumerable.GetGetMethod()!);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(piePlainSymbolLabel);
         il.Emit(OpCodes.Ldc_I4_1);
@@ -729,13 +729,13 @@ public partial class RuntimeEmitter
         // for this name we already have the spec-correct Enumerable bit.
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, nameLocal);
-        il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetPropertyDescriptor);
         il.Emit(OpCodes.Stloc, descLocal);
         var noPdsLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, descLocal);
         il.Emit(OpCodes.Brfalse, noPdsLabel);
         il.Emit(OpCodes.Ldloc, descLocal);
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorEnumerable.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorEnumerable.GetGetMethod()!);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(noPdsLabel);
 

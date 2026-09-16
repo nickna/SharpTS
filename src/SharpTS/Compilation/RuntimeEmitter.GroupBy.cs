@@ -182,7 +182,7 @@ public partial class RuntimeEmitter
         // fallback that can mask the explicit null PDS entry.
         il.Emit(OpCodes.Ldloc, dictLocal);
         il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Call, runtime.PDSSetPrototype);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.SetPrototype);
         il.Emit(OpCodes.Ldloc, dictLocal);
         il.Emit(OpCodes.Ret);
     }

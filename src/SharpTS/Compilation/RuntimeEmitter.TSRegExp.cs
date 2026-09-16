@@ -1620,14 +1620,14 @@ public partial class RuntimeEmitter
         _tsRegExpSetLastIndexStrictMethod = method;
 
         var il = method.GetILGenerator();
-        var pdsLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+        var pdsLocal = il.DeclareLocal(runtime.DescriptorStorage.DescriptorType);
         var doWriteLabel = il.DefineLabel();
         var throwLabel = il.DefineLabel();
 
         // pds = PDSGetPropertyDescriptor(this, "lastIndex")
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "lastIndex");
-        il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetPropertyDescriptor);
         il.Emit(OpCodes.Stloc, pdsLocal);
         il.Emit(OpCodes.Ldloc, pdsLocal);
         il.Emit(OpCodes.Brfalse, doWriteLabel);
@@ -1637,16 +1637,16 @@ public partial class RuntimeEmitter
         // bypass user accessor entirely, which is no worse than today.
         var notAccessorLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, pdsLocal);
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorGetter.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorGetter.GetGetMethod()!);
         il.Emit(OpCodes.Brtrue, doWriteLabel);
         il.Emit(OpCodes.Ldloc, pdsLocal);
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorSetter.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorSetter.GetGetMethod()!);
         il.Emit(OpCodes.Brtrue, doWriteLabel);
         il.MarkLabel(notAccessorLabel);
 
         // Data descriptor — writable=false → throw TypeError.
         il.Emit(OpCodes.Ldloc, pdsLocal);
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorWritable.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorWritable.GetGetMethod()!);
         il.Emit(OpCodes.Brtrue, doWriteLabel);
 
         il.MarkLabel(throwLabel);
@@ -1968,20 +1968,20 @@ public partial class RuntimeEmitter
         // Attach index/input/groups via PropertyDescriptorStore. Helper closure:
         // descriptor = new $CompiledPropertyDescriptor { Value = <stack top> };
         // PropertyDescriptorStore.DefineProperty(result, name, descriptor);
-        var pdsDescLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+        var pdsDescLocal = il.DeclareLocal(runtime.DescriptorStorage.DescriptorType);
         void DefineMetadataProperty(string name, Action emitValue)
         {
-            il.Emit(OpCodes.Newobj, runtime.CompiledPropertyDescriptorCtor);
+            il.Emit(OpCodes.Newobj, runtime.DescriptorStorage.DescriptorConstructor);
             il.Emit(OpCodes.Stloc, pdsDescLocal);
             // descriptor.Value = <value>
             il.Emit(OpCodes.Ldloc, pdsDescLocal);
             emitValue();
-            il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorValue.GetSetMethod()!);
+            il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorValue.GetSetMethod()!);
             // PropertyDescriptorStore.DefineProperty(result, name, descriptor)
             il.Emit(OpCodes.Ldloc, resultLocal);
             il.Emit(OpCodes.Ldstr, name);
             il.Emit(OpCodes.Ldloc, pdsDescLocal);
-            il.Emit(OpCodes.Call, runtime.PDSDefineProperty);
+            il.Emit(OpCodes.Call, runtime.DescriptorStorage.DefineProperty);
             il.Emit(OpCodes.Pop); // discard bool return
         }
 
@@ -4023,32 +4023,32 @@ public partial class RuntimeEmitter
         Label intrinsicLabel,
         Label fallbackLabel)
     {
-        var descriptorLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+        var descriptorLocal = il.DeclareLocal(runtime.DescriptorStorage.DescriptorType);
         var functionLocal = il.DeclareLocal(runtime.TSFunctionType);
 
         il.Emit(OpCodes.Ldloc, regexLocal);
         il.Emit(OpCodes.Ldstr, "exec");
-        il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetPropertyDescriptor);
         il.Emit(OpCodes.Brtrue, fallbackLabel);
 
         il.Emit(OpCodes.Call, runtime.RegExpPrototypePopulateMethod);
         il.Emit(OpCodes.Ldsfld, runtime.RegExpPrototypeField);
         il.Emit(OpCodes.Ldstr, "exec");
-        il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetPropertyDescriptor);
         il.Emit(OpCodes.Stloc, descriptorLocal);
         il.Emit(OpCodes.Ldloc, descriptorLocal);
         il.Emit(OpCodes.Brfalse, fallbackLabel);
         il.Emit(OpCodes.Ldloc, descriptorLocal);
         il.Emit(OpCodes.Callvirt,
-            runtime.CompiledPropertyDescriptorGetter.GetGetMethod()!);
+            runtime.DescriptorStorage.DescriptorGetter.GetGetMethod()!);
         il.Emit(OpCodes.Brtrue, fallbackLabel);
         il.Emit(OpCodes.Ldloc, descriptorLocal);
         il.Emit(OpCodes.Callvirt,
-            runtime.CompiledPropertyDescriptorSetter.GetGetMethod()!);
+            runtime.DescriptorStorage.DescriptorSetter.GetGetMethod()!);
         il.Emit(OpCodes.Brtrue, fallbackLabel);
         il.Emit(OpCodes.Ldloc, descriptorLocal);
         il.Emit(OpCodes.Callvirt,
-            runtime.CompiledPropertyDescriptorValue.GetGetMethod()!);
+            runtime.DescriptorStorage.DescriptorValue.GetGetMethod()!);
         il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
         il.Emit(OpCodes.Stloc, functionLocal);
         il.Emit(OpCodes.Ldloc, functionLocal);
@@ -4566,7 +4566,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitStrictWritableCheck(ILGenerator il, EmittedRuntime runtime, LocalBuilder rxObjLocal, string propName)
     {
-        var pdsLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+        var pdsLocal = il.DeclareLocal(runtime.DescriptorStorage.DescriptorType);
         var skipLabel = il.DefineLabel();
         var throwLabel = il.DefineLabel();
 
@@ -4595,7 +4595,7 @@ public partial class RuntimeEmitter
 
         il.Emit(OpCodes.Ldloc, rxObjLocal);
         il.Emit(OpCodes.Ldstr, propName);
-        il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetPropertyDescriptor);
         il.Emit(OpCodes.Stloc, pdsLocal);
         il.Emit(OpCodes.Ldloc, pdsLocal);
         il.Emit(OpCodes.Brfalse, skipLabel);
@@ -4606,17 +4606,17 @@ public partial class RuntimeEmitter
         // may itself throw).
         var notAccessorLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, pdsLocal);
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorGetter.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorGetter.GetGetMethod()!);
         var hasGetterLabel = il.DefineLabel();
         il.Emit(OpCodes.Brtrue, hasGetterLabel);
         il.Emit(OpCodes.Ldloc, pdsLocal);
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorSetter.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorSetter.GetGetMethod()!);
         il.Emit(OpCodes.Brfalse, notAccessorLabel);
         // Has setter, no getter — accessor: let SetProperty fire the setter.
         il.Emit(OpCodes.Br, skipLabel);
         il.MarkLabel(hasGetterLabel);
         il.Emit(OpCodes.Ldloc, pdsLocal);
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorSetter.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorSetter.GetGetMethod()!);
         il.Emit(OpCodes.Brtrue, skipLabel);
         // Getter present, no setter → throw.
         il.Emit(OpCodes.Br, throwLabel);
@@ -4624,7 +4624,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(notAccessorLabel);
         // Data descriptor — check writable.
         il.Emit(OpCodes.Ldloc, pdsLocal);
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorWritable.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorWritable.GetGetMethod()!);
         il.Emit(OpCodes.Brtrue, skipLabel);
 
         // writable=false (data) OR getter-only (accessor) → throw TypeError.

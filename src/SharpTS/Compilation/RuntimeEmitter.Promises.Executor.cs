@@ -64,7 +64,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "constructor");
         il.Emit(OpCodes.Ldloca, getterLocal);
-        il.Emit(OpCodes.Call, runtime.PDSTryGetGetter);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.TryGetGetter);
         il.Emit(OpCodes.Brfalse, doneLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, getterLocal);
@@ -241,7 +241,7 @@ public partial class RuntimeEmitter
         var resolvedElementLocal = il.DeclareLocal(_types.Object);
         var resolveFunctionLocal = il.DeclareLocal(_types.Object);
         var thenFunctionLocal = il.DeclareLocal(_types.Object);
-        var resolveDescriptorLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+        var resolveDescriptorLocal = il.DeclareLocal(runtime.DescriptorStorage.DescriptorType);
         var invokeResolveLocal = il.DeclareLocal(_types.Boolean);
         var constructorTypeLocal = il.DeclareLocal(_types.Type);
         var iteratorFunctionLocal = il.DeclareLocal(_types.Object);
@@ -258,7 +258,7 @@ public partial class RuntimeEmitter
         // are invoked per element.
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldstr, "resolve");
-        il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetPropertyDescriptor);
         il.Emit(OpCodes.Stloc, resolveDescriptorLocal);
         var captureResolveLabel = il.DefineLabel();
         var resolveCaptureDoneLabel = il.DefineLabel();
@@ -380,7 +380,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, fastTaskScanStoreLabel);
         il.Emit(OpCodes.Ldloc, elementLocal);
         il.Emit(OpCodes.Ldstr, "then");
-        il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetPropertyDescriptor);
         il.Emit(OpCodes.Brtrue, ordinaryListNormalizationLabel);
         il.Emit(OpCodes.Br, fastTaskScanStoreLabel);
 
@@ -395,7 +395,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, stableTSPromiseTaskLabel);
         il.Emit(OpCodes.Ldloc, elementLocal);
         il.Emit(OpCodes.Ldstr, "then");
-        il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetPropertyDescriptor);
         il.Emit(OpCodes.Brtrue, ordinaryListNormalizationLabel);
         il.MarkLabel(stableTSPromiseTaskLabel);
         il.Emit(OpCodes.Ldloc, resolvedElementLocal);
@@ -757,7 +757,7 @@ public partial class RuntimeEmitter
             targetIl.Emit(OpCodes.Brfalse, checkNativePromiseObjectLabel);
             targetIl.Emit(OpCodes.Ldloc, resolvedElementLocal);
             targetIl.Emit(OpCodes.Ldstr, "then");
-            targetIl.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+            targetIl.Emit(OpCodes.Call, runtime.DescriptorStorage.GetPropertyDescriptor);
             targetIl.Emit(OpCodes.Brtrue, invokeObservableThenLabel);
             targetIl.Emit(OpCodes.Br, useOrdinaryCoercionLabel);
 
@@ -767,14 +767,14 @@ public partial class RuntimeEmitter
             targetIl.Emit(OpCodes.Brfalse, ordinaryResolutionLabel);
             targetIl.Emit(OpCodes.Ldloc, resolvedElementLocal);
             targetIl.Emit(OpCodes.Ldstr, "then");
-            targetIl.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+            targetIl.Emit(OpCodes.Call, runtime.DescriptorStorage.GetPropertyDescriptor);
             targetIl.Emit(OpCodes.Brtrue, invokeObservableThenLabel);
             targetIl.Emit(OpCodes.Br, useOrdinaryCoercionLabel);
 
             targetIl.MarkLabel(ordinaryResolutionLabel);
             targetIl.Emit(OpCodes.Ldloc, resolvedElementLocal);
             targetIl.Emit(OpCodes.Ldstr, "then");
-            targetIl.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+            targetIl.Emit(OpCodes.Call, runtime.DescriptorStorage.GetPropertyDescriptor);
             targetIl.Emit(OpCodes.Brfalse, useOrdinaryCoercionLabel);
             targetIl.Emit(OpCodes.Ldloc, resolvedElementLocal);
             targetIl.Emit(OpCodes.Call, runtime.RequirePromise().ResolveValueMethod);
@@ -1169,16 +1169,16 @@ public partial class RuntimeEmitter
         // support is emitted before GetIndex, so unwrap its Value directly at
         // this early dependency boundary.
         var expandoDescriptorLocal = il.DeclareLocal(
-            runtime.CompiledPropertyDescriptorType);
+            runtime.DescriptorStorage.DescriptorType);
         var expandoValueReadyLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, expandoValLocal);
-        il.Emit(OpCodes.Isinst, runtime.CompiledPropertyDescriptorType);
+        il.Emit(OpCodes.Isinst, runtime.DescriptorStorage.DescriptorType);
         il.Emit(OpCodes.Stloc, expandoDescriptorLocal);
         il.Emit(OpCodes.Ldloc, expandoDescriptorLocal);
         il.Emit(OpCodes.Brfalse, expandoValueReadyLabel);
         il.Emit(OpCodes.Ldloc, expandoDescriptorLocal);
         il.Emit(OpCodes.Callvirt,
-            runtime.CompiledPropertyDescriptorValue.GetGetMethod()!);
+            runtime.DescriptorStorage.DescriptorValue.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, expandoValLocal);
         il.MarkLabel(expandoValueReadyLabel);
         // speciesVal = expandoVal; speciesType = expandoVal as Type;

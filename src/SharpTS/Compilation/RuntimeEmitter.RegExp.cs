@@ -1019,7 +1019,7 @@ public partial class RuntimeEmitter
         var matcherArgsLocal = il.DeclareLocal(_types.ObjectArray);
         var symbolDictLocal = il.DeclareLocal(_types.DictionaryObjectObject);
         var symbolRawLocal = il.DeclareLocal(_types.Object);
-        var symbolDescriptorLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+        var symbolDescriptorLocal = il.DeclareLocal(runtime.DescriptorStorage.DescriptorType);
         var symbolGetterLocal = il.DeclareLocal(_types.Object);
         var sourceLocal = il.DeclareLocal(_types.String);
         var flagsLocal = il.DeclareLocal(_types.String);
@@ -1137,18 +1137,18 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, flagsOverrideDone);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldstr, "flags");
-        il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetPropertyDescriptor);
         il.Emit(OpCodes.Brtrue, flagsOverrideDone);
 
         il.Emit(OpCodes.Call, runtime.RegExpPrototypePopulateMethod);
         il.Emit(OpCodes.Ldsfld, runtime.RegExpPrototypeField);
         il.Emit(OpCodes.Ldstr, "flags");
-        il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetPropertyDescriptor);
         il.Emit(OpCodes.Stloc, symbolDescriptorLocal);
         il.Emit(OpCodes.Ldloc, symbolDescriptorLocal);
         il.Emit(OpCodes.Brfalse, flagsOverrideDone);
         il.Emit(OpCodes.Ldloc, symbolDescriptorLocal);
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorGetter.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorGetter.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, symbolGetterLocal);
         var flagsDataDescriptor = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, symbolGetterLocal);
@@ -1179,14 +1179,14 @@ public partial class RuntimeEmitter
         il.MarkLabel(flagsDataDescriptor);
         var flagsDataValue = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, symbolDescriptorLocal);
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorSetter.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorSetter.GetGetMethod()!);
         il.Emit(OpCodes.Brfalse, flagsDataValue);
         il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
         il.Emit(OpCodes.Stloc, flagsValueLocal);
         il.Emit(OpCodes.Br, flagsOverrideDone);
         il.MarkLabel(flagsDataValue);
         il.Emit(OpCodes.Ldloc, symbolDescriptorLocal);
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorValue.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorValue.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, flagsValueLocal);
         il.MarkLabel(flagsOverrideDone);
 
@@ -1376,13 +1376,13 @@ public partial class RuntimeEmitter
 
             il.MarkLabel(foundLabel);
             il.Emit(OpCodes.Ldloc, symbolRawLocal);
-            il.Emit(OpCodes.Isinst, runtime.CompiledPropertyDescriptorType);
+            il.Emit(OpCodes.Isinst, runtime.DescriptorStorage.DescriptorType);
             il.Emit(OpCodes.Stloc, symbolDescriptorLocal);
             var rawValueLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldloc, symbolDescriptorLocal);
             il.Emit(OpCodes.Brfalse, rawValueLabel);
             il.Emit(OpCodes.Ldloc, symbolDescriptorLocal);
-            il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorGetter.GetGetMethod()!);
+            il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorGetter.GetGetMethod()!);
             il.Emit(OpCodes.Stloc, symbolGetterLocal);
             var dataDescriptorLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldloc, symbolGetterLocal);
@@ -1398,14 +1398,14 @@ public partial class RuntimeEmitter
             il.MarkLabel(dataDescriptorLabel);
             var descriptorValueLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldloc, symbolDescriptorLocal);
-            il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorSetter.GetGetMethod()!);
+            il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorSetter.GetGetMethod()!);
             il.Emit(OpCodes.Brfalse, descriptorValueLabel);
             il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
             il.Emit(OpCodes.Stloc, matcherLocal);
             il.Emit(OpCodes.Br, doneLabel);
             il.MarkLabel(descriptorValueLabel);
             il.Emit(OpCodes.Ldloc, symbolDescriptorLocal);
-            il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorValue.GetGetMethod()!);
+            il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorValue.GetGetMethod()!);
             il.Emit(OpCodes.Stloc, matcherLocal);
             il.Emit(OpCodes.Br, doneLabel);
 

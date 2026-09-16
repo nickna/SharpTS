@@ -381,7 +381,7 @@ public partial class RuntimeEmitter
         // user-then path (preserves spec-compliant `Invoke(this, "then", ...)`).
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "then");
-        il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetPropertyDescriptor);
         il.Emit(OpCodes.Brtrue, userThenPathLabel);
         // No user override → extract Task and use fast path.
         il.Emit(OpCodes.Ldarg_0);
@@ -401,7 +401,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, userThenPathLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "then");
-        il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetPropertyDescriptor);
         il.Emit(OpCodes.Brtrue, userThenPathLabel);
         il.Emit(OpCodes.Br, fastPathLabel);
 
@@ -533,7 +533,7 @@ public partial class RuntimeEmitter
 
         EmitPrototypePopulateGuard(il, runtime.RequirePromise().PrototypeField);
 
-        var descLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+        var descLocal = il.DeclareLocal(runtime.DescriptorStorage.DescriptorType);
 
         // Promise.prototype.constructor === Promise (= typeof(Task<object>)).
         EmitInstallConstructor(il, runtime, runtime.RequirePromise().PrototypeField, descLocal, setItem, () =>

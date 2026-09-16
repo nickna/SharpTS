@@ -185,7 +185,7 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Brfalse, fallback);
         IL.MarkLabel(dictionaryReady);
         IL.Emit(OpCodes.Ldloc, receiver);
-        IL.Emit(OpCodes.Call, runtime.PDSHasPropertyDescriptors);
+        IL.Emit(OpCodes.Call, runtime.DescriptorStorage.HasPropertyDescriptors);
         IL.Emit(OpCodes.Brtrue, fallback);
 
         var boxed = IL.DeclareLocal(_ctx.Types.Object);

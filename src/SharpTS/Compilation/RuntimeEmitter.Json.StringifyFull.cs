@@ -187,7 +187,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, runtime.ObjectPrototypePopulateMethod);
         il.Emit(OpCodes.Ldloc, rootHolderLocal);
         il.Emit(OpCodes.Ldsfld, runtime.ObjectPrototypeField);
-        il.Emit(OpCodes.Call, runtime.PDSSetPrototype);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.SetPrototype);
 
         // Per ECMA-262 25.5.2.3 SerializeJSONProperty step 2: toJSON runs
         // BEFORE step 3 (replacer). At the root, key = "" — the synthetic
@@ -1054,7 +1054,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldloc, allowPooledDictionaryKeysLocal);
             il.Emit(OpCodes.Brfalse, fallbackSnapshot);
             il.Emit(OpCodes.Ldloc, dictLocal);
-            il.Emit(OpCodes.Call, runtime.PDSHasPropertyDescriptors);
+            il.Emit(OpCodes.Call, runtime.DescriptorStorage.HasPropertyDescriptors);
             il.Emit(OpCodes.Brtrue, fallbackSnapshot);
             il.Emit(OpCodes.Ldloc, dictLocal);
             il.Emit(OpCodes.Call, _jsonTryRentDictionaryKeysMethod!);

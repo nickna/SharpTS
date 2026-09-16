@@ -56,7 +56,7 @@ public partial class RuntimeEmitter
 
         // Call $PropertyDescriptorStore.Freeze(obj) - fully standalone, no reflection
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.PDSFreeze);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.Freeze);
 
         // Also add to legacy frozen objects table for backward compatibility
         il.Emit(OpCodes.Ldsfld, frozenObjectsField);
@@ -162,7 +162,7 @@ public partial class RuntimeEmitter
 
         // Call $PropertyDescriptorStore.Seal(obj) - fully standalone, no reflection
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.PDSSeal);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.Seal);
 
         // Also add to legacy sealed objects table for backward compatibility
         il.Emit(OpCodes.Ldsfld, sealedObjectsField);

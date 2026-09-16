@@ -52,7 +52,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Box, _types.Double);
         il.Emit(OpCodes.Callvirt, setItem);
 
-        var arrDescLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+        var arrDescLocal = il.DeclareLocal(runtime.DescriptorStorage.DescriptorType);
 
         // ECMA-262 23.1.3 Array.prototype.constructor === Array. Compiled
         // bare `Array` resolves to typeof(IList<object>) (per
@@ -141,7 +141,7 @@ public partial class RuntimeEmitter
         // Per ECMA-262 §23.1.3 Array.prototype's [[Prototype]] is %Object.prototype%.
         il.Emit(OpCodes.Ldsfld, runtime.ArrayOperations.PrototypeField);
         il.Emit(OpCodes.Ldsfld, runtime.ObjectPrototypeField);
-        il.Emit(OpCodes.Call, runtime.PDSSetPrototype);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.SetPrototype);
 
         // ECMA-262 §23.1.3.34: Array.prototype[@@iterator] === Array.prototype.values.
         // Symbol-keyed entry pointing to the SAME wrapper that "values" resolves to.
