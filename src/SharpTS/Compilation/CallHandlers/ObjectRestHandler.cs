@@ -31,7 +31,7 @@ public class ObjectRestHandler : ICallHandler
         emitter.EmitBoxIfNeeded(call.Arguments[1]);
         il.Emit(OpCodes.Castclass, ctx.Types.ListOfObject);
 
-        il.Emit(OpCodes.Call, ctx.Runtime!.ObjectRest);
+        il.Emit(OpCodes.Call, ctx.Runtime!.ObjectConstruction.Rest);
         return true;
     }
 }

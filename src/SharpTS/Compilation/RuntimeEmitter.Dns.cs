@@ -438,7 +438,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, addMethod);
 
         // Wrap in TSObject and store in result
-        il.Emit(OpCodes.Call, runtime.CreateObject);
+        il.Emit(OpCodes.Call, runtime.ObjectConstruction.Create);
         il.Emit(OpCodes.Stloc, resultLocal);
 
         // Leave try block
@@ -559,7 +559,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, addMethod);
 
         // Wrap in TSObject and store in result
-        il.Emit(OpCodes.Call, runtime.CreateObject);
+        il.Emit(OpCodes.Call, runtime.ObjectConstruction.Create);
         il.Emit(OpCodes.Stloc, resultLocal);
 
         // Leave try block
@@ -835,7 +835,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, runtime.RequireDns().DoQuery);
         // SOA returns a Dictionary<string, object?> directly, wrap as $Object
         il.Emit(OpCodes.Castclass, _types.DictionaryStringObject);
-        il.Emit(OpCodes.Call, runtime.CreateObject);
+        il.Emit(OpCodes.Call, runtime.ObjectConstruction.Create);
         il.Emit(OpCodes.Stloc, resultLocal);
         il.Emit(OpCodes.Br, returnLabel);
 
@@ -3773,7 +3773,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, outListLocal);
         il.Emit(OpCodes.Ldloc, itemLocal);
         il.Emit(OpCodes.Castclass, _types.DictionaryStringObject);
-        il.Emit(OpCodes.Call, runtime.CreateObject);
+        il.Emit(OpCodes.Call, runtime.ObjectConstruction.Create);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add")!);
         var continueLabel = il.DefineLabel();
         il.Emit(OpCodes.Br, continueLabel);

@@ -772,7 +772,7 @@ public abstract partial class ExpressionEmitterBase
         IL.Emit(OpCodes.Ldstr, dirname);
         IL.Emit(OpCodes.Callvirt, Types.DictionaryStringObjectSetItem);
 
-        IL.Emit(OpCodes.Call, Ctx.Runtime!.CreateObject);
+        IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectConstruction.Create);
         SetStackUnknown();
     }
 }

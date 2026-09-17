@@ -1474,7 +1474,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
                 IL.Emit(OpCodes.Callvirt, Types.DictionaryStringObjectSetItem);
             }
 
-            IL.Emit(OpCodes.Call, Ctx.Runtime!.CreateObject);
+            IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectConstruction.Create);
         }
         else
         {
@@ -1498,7 +1498,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
                 if (prop.IsSpread)
                 {
                     IL.Emit(OpCodes.Ldloc, valueLocals[i]);
-                    IL.Emit(OpCodes.Call, Ctx.Runtime!.MergeIntoObject);
+                    IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectConstruction.MergeIntoDictionary);
                 }
                 else if (prop.Key is Expr.ComputedKey)
                 {
@@ -1514,7 +1514,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
                 }
             }
 
-            IL.Emit(OpCodes.Call, Ctx.Runtime!.CreateObject);
+            IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectConstruction.Create);
         }
         SetStackUnknown();
     }
@@ -1539,7 +1539,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
             {
                 IL.Emit(OpCodes.Ldloc, objLocal);
                 IL.Emit(OpCodes.Ldloc, valueLocal);
-                IL.Emit(OpCodes.Call, Ctx.Runtime!.MergeIntoTSObject);
+                IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectConstruction.MergeIntoObject);
                 continue;
             }
 

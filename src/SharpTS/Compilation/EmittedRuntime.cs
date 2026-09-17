@@ -17,6 +17,10 @@ namespace SharpTS.Compilation;
 /// <seealso cref="ILEmitter"/>
 public class EmittedRuntime
 {
+    /// <summary>Required object construction, spread, enumerable projection and rest helpers for one compilation.</summary>
+    public EmittedObjectConstructionRuntime ObjectConstruction { get; } = new();
+
+
     /// <summary>Required Object value, entry, assignment, comparison and grouping operations for one compilation.</summary>
     public EmittedObjectOperationsRuntime ObjectOperations { get; } = new();
 
@@ -317,7 +321,6 @@ public class EmittedRuntime
     public EmittedStringRuntime Strings { get; } = new();
 
     // Object methods
-    public MethodBuilder CreateObject { get; set; } = null!;
     public MethodBuilder GetProperty { get; set; } = null!;
     public MethodBuilder SetProperty { get; set; } = null!;
     public MethodBuilder SetPropertyStrict { get; set; } = null!;
@@ -335,8 +338,6 @@ public class EmittedRuntime
     public MethodBuilder SetFieldsProperty { get; set; } = null!;
     public MethodBuilder SetFieldsPropertyStrict { get; set; } = null!;
     public MethodBuilder GetListProperty { get; set; } = null!;
-    public MethodBuilder MergeIntoObject { get; set; } = null!;
-    public MethodBuilder MergeIntoTSObject { get; set; } = null!;
     public MethodBuilder ToPascalCase { get; set; } = null!;
     public MethodBuilder SafeGetMethod { get; set; } = null!;
     public MethodBuilder NewOnFunction { get; set; } = null!;
@@ -462,8 +463,6 @@ public class EmittedRuntime
     // Exception methods
 
     // Utility methods
-    public MethodBuilder DefineSymbolAccessor { get; set; } = null!;
-    public MethodBuilder TSObjectMergeEnumerable { get; set; } = null!;
     public MethodBuilder GetEnumMemberName { get; set; } = null!;
 
     /// <summary>Required Math singleton, numeric adapters and exact summation declarations.</summary>
@@ -475,7 +474,6 @@ public class EmittedRuntime
     /// <summary>Required truthiness and Boolean prototype declarations.</summary>
     public EmittedBooleanRuntime Booleans { get; } = new();
 
-    public MethodBuilder ObjectRest { get; set; } = null!;
     public MethodBuilder ArrayDestructureSource { get; set; } = null!;  // #685: normalize array binding-pattern source via the iterator protocol
 
     // General invocation helper

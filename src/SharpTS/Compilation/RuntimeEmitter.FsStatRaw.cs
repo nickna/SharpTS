@@ -122,7 +122,7 @@ public partial class RuntimeEmitter
         AddEntry("blocks", () => il.Emit(OpCodes.Ldloc, blocksL));
 
         il.Emit(OpCodes.Ldloc, dict);
-        il.Emit(OpCodes.Call, runtime.CreateObject);
+        il.Emit(OpCodes.Call, runtime.ObjectConstruction.Create);
         il.Emit(OpCodes.Ret);
     }
 

@@ -260,7 +260,7 @@ public sealed class OsModuleEmitter : IBuiltInModuleEmitter
         il.Emit(OpCodes.Ldc_R8, 0.0);
         il.Emit(OpCodes.Box, ctx.Types.Double);
         il.Emit(OpCodes.Call, addMethod);
-        il.Emit(OpCodes.Call, ctx.Runtime!.CreateObject);
+        il.Emit(OpCodes.Call, ctx.Runtime!.ObjectConstruction.Create);
         il.Emit(OpCodes.Callvirt, ctx.Types.GetMethod(ctx.Types.ListOfObject, "Add", ctx.Types.Object));
 
         // Increment index
@@ -347,7 +347,7 @@ public sealed class OsModuleEmitter : IBuiltInModuleEmitter
         il.Emit(OpCodes.Call, ctx.Types.EnvironmentGetFolderPath);
         il.Emit(OpCodes.Call, addMethod);
 
-        il.Emit(OpCodes.Call, ctx.Runtime!.CreateObject);
+        il.Emit(OpCodes.Call, ctx.Runtime!.ObjectConstruction.Create);
         return true;
     }
 
@@ -377,7 +377,7 @@ public sealed class OsModuleEmitter : IBuiltInModuleEmitter
 
         // Call the emitted OsNetworkInterfaces runtime helper and wrap in TSObject
         il.Emit(OpCodes.Call, ctx.Runtime!.RequireOs().NetworkInterfaces);
-        il.Emit(OpCodes.Call, ctx.Runtime!.CreateObject);
+        il.Emit(OpCodes.Call, ctx.Runtime!.ObjectConstruction.Create);
         return true;
     }
 }

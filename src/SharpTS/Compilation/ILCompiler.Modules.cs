@@ -247,7 +247,7 @@ public partial class ILCompiler
 
         // return $Runtime.CreateObject(dict);
         il.Emit(OpCodes.Ldloc, dictLocal);
-        il.Emit(OpCodes.Call, _runtime.CreateObject);
+        il.Emit(OpCodes.Call, _runtime.ObjectConstruction.Create);
         il.Emit(OpCodes.Ret);
     }
 

@@ -814,6 +814,7 @@ public partial class RuntimeEmitter
         runtime.ObjectKeys.CompleteEmission();
         runtime.ObjectOwnProperties.CompleteEmission();
         runtime.ObjectOperations.CompleteEmission();
+        runtime.ObjectConstruction.CompleteEmission();
         runtime.Reflect.CompleteEmission();
         runtime.Json.CompleteEmission();
         runtime.Records.CompleteEmission();

@@ -206,7 +206,7 @@ public abstract partial class ExpressionEmitterBase
                 IL.Emit(OpCodes.Ldsfld, field);
                 IL.Emit(OpCodes.Callvirt, addMethod);
             }
-            IL.Emit(OpCodes.Call, Ctx.Runtime!.CreateObject);
+            IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectConstruction.Create);
             SetStackUnknown();
             return true;
         }
@@ -261,7 +261,7 @@ public abstract partial class ExpressionEmitterBase
             IL.Emit(OpCodes.Callvirt, addMethod);
         }
 
-        IL.Emit(OpCodes.Call, Ctx.Runtime!.CreateObject);
+        IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectConstruction.Create);
         SetStackUnknown();
     }
 
