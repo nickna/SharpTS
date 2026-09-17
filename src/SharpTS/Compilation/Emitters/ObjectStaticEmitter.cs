@@ -203,7 +203,7 @@ public sealed class ObjectStaticEmitter : IStaticTypeEmitterStrategy
                 {
                     il.Emit(OpCodes.Ldsfld, ctx.Runtime!.UndefinedInstance);
                 }
-                il.Emit(OpCodes.Call, ctx.Runtime!.ObjectCreate);
+                il.Emit(OpCodes.Call, ctx.Runtime!.ObjectPrototypes.Create);
                 return true;
             case "preventExtensions":
                 // Object.preventExtensions(obj) - prevents adding new properties
@@ -220,7 +220,7 @@ public sealed class ObjectStaticEmitter : IStaticTypeEmitterStrategy
                 return true;
             case "getPrototypeOf":
                 // Object.getPrototypeOf(obj) - returns the prototype
-                il.Emit(OpCodes.Call, ctx.Runtime!.ObjectGetPrototypeOf);
+                il.Emit(OpCodes.Call, ctx.Runtime!.ObjectPrototypes.GetPrototypeOf);
                 return true;
             case "setPrototypeOf":
                 // Object.setPrototypeOf(obj, proto) - sets the prototype
@@ -237,7 +237,7 @@ public sealed class ObjectStaticEmitter : IStaticTypeEmitterStrategy
                     // Object.setPrototypeOf({}, undefined) must reject it.
                     il.Emit(OpCodes.Ldsfld, ctx.Runtime!.UndefinedInstance);
                 }
-                il.Emit(OpCodes.Call, ctx.Runtime!.ObjectSetPrototypeOf);
+                il.Emit(OpCodes.Call, ctx.Runtime!.ObjectPrototypes.SetPrototypeOf);
                 return true;
             case "groupBy":
                 // Object.groupBy(iterable, callback) - groups elements by callback return

@@ -654,7 +654,7 @@ public partial class RuntimeEmitter
         }
         EmitProtoMethodCheck("hasOwnProperty",       runtime.HasOwnPropertyHelperMethod);
         EmitProtoMethodCheck("propertyIsEnumerable", runtime.PropertyIsEnumerableHelperMethod);
-        EmitProtoMethodCheck("isPrototypeOf",        runtime.IsPrototypeOfHelperMethod);
+        EmitProtoMethodCheck("isPrototypeOf",        runtime.ObjectPrototypes.IsPrototypeOf);
 
         // Fallback: check for a user-assigned property via PropertyDescriptorStore.
         // JS functions are objects and can carry arbitrary properties (`fn.x = 42`). Compiled

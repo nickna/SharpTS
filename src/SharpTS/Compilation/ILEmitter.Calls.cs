@@ -453,7 +453,7 @@ public partial class ILEmitter
         // the copies drifted (the helper was missing $Arguments, this one was
         // missing the function-classification set, #314) and bloated emitted
         // code. The helper is always emitted, so the call is unconditional.
-        IL.Emit(OpCodes.Call, runtime.ObjectProtoToStringHelper);
+        IL.Emit(OpCodes.Call, runtime.ObjectPrototypes.ToStringMethod);
         SetStackUnknown();
         return true;
     }

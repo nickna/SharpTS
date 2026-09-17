@@ -8,6 +8,51 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
+    private readonly record struct ObjectCreateInputs(
+        EmittedDescriptorStorageRuntime DescriptorStorage,
+        EmittedErrorRuntime Errors,
+        EmittedObjectDescriptorRuntime ObjectDescriptors,
+        EmittedSymbolRuntime Symbols,
+        FieldInfo UndefinedInstance,
+        Type UndefinedType
+    );
+
+    private readonly record struct ObjectGetPrototypeOfInputs(
+        EmittedArrayOperationsRuntime ArrayOperations,
+        EmittedBooleanRuntime Booleans,
+        TypeBuilder BoundTSFunctionType,
+        EmittedDateRuntime Dates,
+        EmittedDescriptorStorageRuntime DescriptorStorage,
+        EmittedErrorRuntime Errors,
+        FieldBuilder FunctionPrototypeField,
+        MethodBuilder FunctionPrototypePopulateMethod,
+        MethodBuilder GetProperty,
+        Type IHasFieldsInterface,
+        MethodBuilder InvokeMethodUnwrapped,
+        EmittedNumberRuntime Numbers,
+        EmittedObjectStateRuntime ObjectState,
+        EmittedObjectStorageRuntime ObjectStorage,
+        EmittedPromiseRuntime? Promise,
+        EmittedRecordStorageRuntime Records,
+        EmittedRegExpRuntime RegExps,
+        EmittedStringRuntime Strings,
+        TypeBuilder TSFunctionType,
+        Type UndefinedType
+    );
+
+    private readonly record struct ObjectSetPrototypeOfInputs(
+        EmittedDescriptorStorageRuntime DescriptorStorage,
+        EmittedErrorRuntime Errors,
+        MethodBuilder GetProperty,
+        Type IHasFieldsInterface,
+        MethodBuilder InvokeMethodUnwrapped,
+        EmittedObjectStateRuntime ObjectState,
+        EmittedObjectStorageRuntime ObjectStorage,
+        EmittedRecordStorageRuntime Records,
+        EmittedSymbolRuntime Symbols,
+        Type UndefinedType
+    );
+
     private readonly record struct ObjectPreventExtensionsInputs(EmittedArrayStorageRuntime ArrayStorage, MethodBuilder CreateException, EmittedDescriptorStorageRuntime DescriptorStorage, MethodBuilder GetProperty, MethodBuilder InvokeMethodUnwrapped, EmittedObjectStorageRuntime ObjectStorage, ConstructorBuilder TSTypeErrorCtor);
     private readonly record struct ObjectIsExtensibleInputs(EmittedDescriptorStorageRuntime DescriptorStorage, MethodBuilder GetProperty, MethodBuilder InvokeMethodUnwrapped);
 
@@ -16,7 +61,11 @@ public partial class RuntimeEmitter
     /// Signature: object ObjectCreate(object proto, object propertiesObject)
     /// Fully standalone - uses emitted $PropertyDescriptorStore for descriptor storage.
     /// </summary>
-    private void EmitObjectCreate(TypeBuilder typeBuilder, EmittedRuntime runtime, FieldBuilder prototypeStoreField)
+    private void EmitObjectCreate(
+        TypeBuilder typeBuilder,
+        EmittedObjectPrototypeRuntime objectPrototypes,
+        ObjectCreateInputs inputs
+    )
     {
         var method = typeBuilder.DefineMethod(
             "ObjectCreate",
@@ -24,7 +73,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object, _types.Object]
         );
-        runtime.ObjectCreate = method;
+        objectPrototypes.Create = method;
 
         var il = method.GetILGenerator();
 
@@ -36,7 +85,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Brfalse, protoOkLabel);  // null permitted
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
         il.Emit(OpCodes.Brtrue, protoThrowLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, _types.Double);
@@ -51,12 +100,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, _types.String);
         il.Emit(OpCodes.Brtrue, protoThrowLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.Symbols.Type);
+        il.Emit(OpCodes.Isinst, inputs.Symbols.Type);
         il.Emit(OpCodes.Brtrue, protoThrowLabel);
         il.Emit(OpCodes.Br, protoOkLabel);
 
         il.MarkLabel(protoThrowLabel);
-        GuestErrorEmitter.ThrowTypeError(il, runtime, "Object prototype may only be an Object or null");
+        GuestErrorEmitter.ThrowError(il, inputs.Errors.CreateException, inputs.Errors.TypeErrorConstructor, "Object prototype may only be an Object or null");
 
         il.MarkLabel(protoOkLabel);
 
@@ -70,7 +119,7 @@ public partial class RuntimeEmitter
         // Set prototype: $PropertyDescriptorStore.SetPrototype(result, proto)
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ldarg_0);  // proto
-        il.Emit(OpCodes.Call, runtime.DescriptorStorage.SetPrototype);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.SetPrototype);
 
         // ECMA-262 §20.1.2.2 step 2: Let obj be OrdinaryObjectCreate(O).
         // OrdinaryObjectCreate creates a FRESH object whose [[Prototype]] is O.
@@ -92,12 +141,12 @@ public partial class RuntimeEmitter
         // dictionary entries directly, so a bag built with
         // `Object.defineProperty(props, k, {get})` silently contributed nothing.
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
         il.Emit(OpCodes.Brtrue, noPropsLabel);
 
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.ObjectDescriptors.DefineProperties);
+        il.Emit(OpCodes.Call, inputs.ObjectDescriptors.DefineProperties);
         il.Emit(OpCodes.Pop);
 
         il.MarkLabel(noPropsLabel);
@@ -106,7 +155,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ret);
 
-        EmitObjectCreateValueForm(typeBuilder, runtime);
+        EmitObjectCreateValueForm(typeBuilder, objectPrototypes, inputs.UndefinedInstance);
     }
 
     /// <summary>
@@ -120,7 +169,11 @@ public partial class RuntimeEmitter
     /// missing arg itself and keeps calling ObjectCreate directly, preserving
     /// the explicit-null throw.
     /// </summary>
-    private void EmitObjectCreateValueForm(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitObjectCreateValueForm(
+        TypeBuilder typeBuilder,
+        EmittedObjectPrototypeRuntime objectPrototypes,
+        FieldInfo undefinedInstance
+    )
     {
         var method = typeBuilder.DefineMethod(
             "ObjectCreateValueForm",
@@ -128,7 +181,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object, _types.Object]
         );
-        runtime.ObjectCreateValueForm = method;
+        objectPrototypes.CreateValueForm = method;
 
         var il = method.GetILGenerator();
         var propsPresentLabel = il.DefineLabel();
@@ -136,14 +189,14 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Brtrue, propsPresentLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
-        il.Emit(OpCodes.Call, runtime.ObjectCreate);
+        il.Emit(OpCodes.Ldsfld, undefinedInstance);
+        il.Emit(OpCodes.Call, objectPrototypes.Create);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(propsPresentLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.ObjectCreate);
+        il.Emit(OpCodes.Call, objectPrototypes.Create);
         il.Emit(OpCodes.Ret);
     }
 
@@ -494,9 +547,9 @@ public partial class RuntimeEmitter
     /// earlier (e.g. IsPrototypeOfHelper) can reference it. Body emitted in
     /// EmitObjectGetPrototypeOf.
     /// </summary>
-    private void DefineObjectGetPrototypeOfShell(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void DefineObjectGetPrototypeOfShell(TypeBuilder typeBuilder, EmittedObjectPrototypeRuntime objectPrototypes)
     {
-        runtime.ObjectGetPrototypeOf = typeBuilder.DefineMethod(
+        objectPrototypes.GetPrototypeOf = typeBuilder.DefineMethod(
             "ObjectGetPrototypeOf",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
@@ -509,9 +562,14 @@ public partial class RuntimeEmitter
     /// Signature: object ObjectGetPrototypeOf(object obj)
     /// Checks PropertyDescriptorStore first, then local table for compatibility.
     /// </summary>
-    private void EmitObjectGetPrototypeOf(TypeBuilder typeBuilder, EmittedRuntime runtime, FieldBuilder prototypeStoreField)
+    private void EmitObjectGetPrototypeOf(
+        EmittedClassPrototypeRuntime classPrototypes,
+        EmittedObjectPrototypeRuntime objectPrototypes,
+        ObjectGetPrototypeOfInputs inputs,
+        FieldBuilder prototypeStoreField
+    )
     {
-        var method = runtime.ObjectGetPrototypeOf;
+        var method = objectPrototypes.GetPrototypeOf;
         var il = method.GetILGenerator();
         var checkLocalTableLabel = il.DefineLabel();
         var foundInLocalLabel = il.DefineLabel();
@@ -525,13 +583,13 @@ public partial class RuntimeEmitter
         var notNullForGpoLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Brtrue, notNullForGpoLabel);
-        GuestErrorEmitter.ThrowTypeError(il, runtime, "Object.getPrototypeOf called on null or undefined");
+        GuestErrorEmitter.ThrowError(il, inputs.Errors.CreateException, inputs.Errors.TypeErrorConstructor, "Object.getPrototypeOf called on null or undefined");
         il.MarkLabel(notNullForGpoLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
         var notUndefForGpoLabel = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, notUndefForGpoLabel);
-        GuestErrorEmitter.ThrowTypeError(il, runtime, "Object.getPrototypeOf called on null or undefined");
+        GuestErrorEmitter.ThrowError(il, inputs.Errors.CreateException, inputs.Errors.TypeErrorConstructor, "Object.getPrototypeOf called on null or undefined");
         il.MarkLabel(notUndefForGpoLabel);
 
         // Proxy [[GetPrototypeOf]] dispatch, including trap abrupt completions
@@ -542,7 +600,7 @@ public partial class RuntimeEmitter
         EmitProxyTypeCheck(
             il, () => il.Emit(OpCodes.Ldarg_0), proxyForGpoLabel, notProxyForGpoLabel);
         il.MarkLabel(proxyForGpoLabel);
-        EmitProxyMethodCallUnwrapped(il, runtime, () => il.Emit(OpCodes.Ldarg_0),
+        EmitProxyMethodCallUnwrapped(il, inputs.InvokeMethodUnwrapped, () => il.Emit(OpCodes.Ldarg_0),
             "TrapGetPrototypeOfCompiled", () =>
             {
                 il.Emit(OpCodes.Ldc_I4_3);
@@ -550,21 +608,21 @@ public partial class RuntimeEmitter
                 il.Emit(OpCodes.Dup);
                 il.Emit(OpCodes.Ldc_I4_0);
                 il.Emit(OpCodes.Ldnull);
-                il.Emit(OpCodes.Ldftn, runtime.ObjectGetPrototypeOf);
+                il.Emit(OpCodes.Ldftn, objectPrototypes.GetPrototypeOf);
                 il.Emit(OpCodes.Newobj, _types.GetConstructor(
                     typeof(Func<object, object?>), _types.Object, _types.IntPtr));
                 il.Emit(OpCodes.Stelem_Ref);
                 il.Emit(OpCodes.Dup);
                 il.Emit(OpCodes.Ldc_I4_1);
                 il.Emit(OpCodes.Ldnull);
-                il.Emit(OpCodes.Ldftn, runtime.ObjectState.IsExtensible);
+                il.Emit(OpCodes.Ldftn, inputs.ObjectState.IsExtensible);
                 il.Emit(OpCodes.Newobj, _types.GetConstructor(
                     typeof(Func<object, bool>), _types.Object, _types.IntPtr));
                 il.Emit(OpCodes.Stelem_Ref);
                 il.Emit(OpCodes.Dup);
                 il.Emit(OpCodes.Ldc_I4_2);
                 il.Emit(OpCodes.Ldnull);
-                il.Emit(OpCodes.Ldftn, runtime.GetProperty);
+                il.Emit(OpCodes.Ldftn, inputs.GetProperty);
                 il.Emit(OpCodes.Newobj, _types.GetConstructor(
                     typeof(Func<object, string, object?>), _types.Object, _types.IntPtr));
                 il.Emit(OpCodes.Stelem_Ref);
@@ -579,10 +637,10 @@ public partial class RuntimeEmitter
         // default-fallback below. HasPrototypeEntry returns the success bit
         // separately; GetPrototype returns the value.
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.DescriptorStorage.HasPrototypeEntry);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.HasPrototypeEntry);
         il.Emit(OpCodes.Brfalse, checkLocalTableLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetPrototype);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.GetPrototype);
         il.Emit(OpCodes.Ret);
 
         // Also check local _prototypeStore table for backward compatibility
@@ -597,13 +655,13 @@ public partial class RuntimeEmitter
         // The compact JSON scalar carrier implements IHasFields for ordinary
         // object operations, but it is not a user class instance. Its default
         // [[Prototype]] is %Object.prototype% just like a dictionary literal.
-        if (runtime.Records.Scalars is not null)
+        if (inputs.Records.Scalars is not null)
         {
             var notScalarRecord = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.Records.MarkerInterface);
+            il.Emit(OpCodes.Isinst, inputs.Records.MarkerInterface);
             il.Emit(OpCodes.Brfalse, notScalarRecord);
-            il.Emit(OpCodes.Ldsfld, runtime.ObjectPrototypeField);
+            il.Emit(OpCodes.Ldsfld, objectPrototypes.Prototype);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(notScalarRecord);
         }
@@ -618,14 +676,14 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "GetType"));
         il.Emit(OpCodes.Stloc, userClassTypeLocal);
-        il.Emit(OpCodes.Ldtoken, runtime.IHasFieldsInterface);
+        il.Emit(OpCodes.Ldtoken, inputs.IHasFieldsInterface);
         il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
         il.Emit(OpCodes.Ldloc, userClassTypeLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(
             _types.Type, "IsAssignableFrom", [_types.Type])!);
         il.Emit(OpCodes.Brfalse, notUserClassInstanceLabel);
         il.Emit(OpCodes.Ldloc, userClassTypeLocal);
-        il.Emit(OpCodes.Call, runtime.GetClassPrototypeMethod);
+        il.Emit(OpCodes.Call, classPrototypes.Get);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notUserClassInstanceLabel);
 
@@ -648,18 +706,18 @@ public partial class RuntimeEmitter
         // infinite-loops without this base case).
         var dictIsNotOpLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldsfld, runtime.ObjectPrototypeField);
+        il.Emit(OpCodes.Ldsfld, objectPrototypes.Prototype);
         il.Emit(OpCodes.Bne_Un, dictIsNotOpLabel);
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(dictIsNotOpLabel);
-        il.Emit(OpCodes.Ldsfld, runtime.ObjectPrototypeField);
+        il.Emit(OpCodes.Ldsfld, objectPrototypes.Prototype);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notDictForProtoLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.ObjectStorage.Type);
+        il.Emit(OpCodes.Isinst, inputs.ObjectStorage.Type);
         il.Emit(OpCodes.Brfalse, notTSObjForProtoLabel);
-        il.Emit(OpCodes.Ldsfld, runtime.ObjectPrototypeField);
+        il.Emit(OpCodes.Ldsfld, objectPrototypes.Prototype);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notTSObjForProtoLabel);
 
@@ -679,47 +737,47 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ret);
             il.MarkLabel(notMatch);
         }
-        EmitErrorInstanceBranch(runtime.Errors.TypeErrorType,      runtime.Errors.TypeErrorPrototypePopulate,      runtime.Errors.TypeErrorPrototype);
-        EmitErrorInstanceBranch(runtime.Errors.RangeErrorType,     runtime.Errors.RangeErrorPrototypePopulate,     runtime.Errors.RangeErrorPrototype);
-        EmitErrorInstanceBranch(runtime.Errors.ReferenceErrorType, runtime.Errors.ReferenceErrorPrototypePopulate, runtime.Errors.ReferenceErrorPrototype);
-        EmitErrorInstanceBranch(runtime.Errors.SyntaxErrorType,    runtime.Errors.SyntaxErrorPrototypePopulate,    runtime.Errors.SyntaxErrorPrototype);
-        EmitErrorInstanceBranch(runtime.Errors.URIErrorType,       runtime.Errors.URIErrorPrototypePopulate,       runtime.Errors.URIErrorPrototype);
-        EmitErrorInstanceBranch(runtime.Errors.EvalErrorType,      runtime.Errors.EvalErrorPrototypePopulate,      runtime.Errors.EvalErrorPrototype);
-        EmitErrorInstanceBranch(runtime.Errors.AggregateErrorType, runtime.Errors.AggregateErrorPrototypePopulate, runtime.Errors.AggregateErrorPrototype);
+        EmitErrorInstanceBranch(inputs.Errors.TypeErrorType,      inputs.Errors.TypeErrorPrototypePopulate,      inputs.Errors.TypeErrorPrototype);
+        EmitErrorInstanceBranch(inputs.Errors.RangeErrorType,     inputs.Errors.RangeErrorPrototypePopulate,     inputs.Errors.RangeErrorPrototype);
+        EmitErrorInstanceBranch(inputs.Errors.ReferenceErrorType, inputs.Errors.ReferenceErrorPrototypePopulate, inputs.Errors.ReferenceErrorPrototype);
+        EmitErrorInstanceBranch(inputs.Errors.SyntaxErrorType,    inputs.Errors.SyntaxErrorPrototypePopulate,    inputs.Errors.SyntaxErrorPrototype);
+        EmitErrorInstanceBranch(inputs.Errors.URIErrorType,       inputs.Errors.URIErrorPrototypePopulate,       inputs.Errors.URIErrorPrototype);
+        EmitErrorInstanceBranch(inputs.Errors.EvalErrorType,      inputs.Errors.EvalErrorPrototypePopulate,      inputs.Errors.EvalErrorPrototype);
+        EmitErrorInstanceBranch(inputs.Errors.AggregateErrorType, inputs.Errors.AggregateErrorPrototypePopulate, inputs.Errors.AggregateErrorPrototype);
 
         // Base $Error instances (plain `new Error(...)`) → Error.prototype.
         var notTSErrForProtoLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.Errors.Type);
+        il.Emit(OpCodes.Isinst, inputs.Errors.Type);
         il.Emit(OpCodes.Brfalse, notTSErrForProtoLabel);
-        il.Emit(OpCodes.Call, runtime.Errors.PrototypePopulate);
-        il.Emit(OpCodes.Ldsfld, runtime.Errors.Prototype);
+        il.Emit(OpCodes.Call, inputs.Errors.PrototypePopulate);
+        il.Emit(OpCodes.Ldsfld, inputs.Errors.Prototype);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notTSErrForProtoLabel);
 
         // Date instances inherit from Date.prototype. They are emitted CLR
         // objects rather than dictionary wrappers, so they need an explicit
         // intrinsic-prototype branch.
-        if (runtime.Dates.Implementation is not null)
+        if (inputs.Dates.Implementation is not null)
         {
             var notTSDateForProtoLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.Dates.RequireImplementation().Type);
+            il.Emit(OpCodes.Isinst, inputs.Dates.RequireImplementation().Type);
             il.Emit(OpCodes.Brfalse, notTSDateForProtoLabel);
-            il.Emit(OpCodes.Call, runtime.Dates.PopulatePrototype);
-            il.Emit(OpCodes.Ldsfld, runtime.Dates.Prototype);
+            il.Emit(OpCodes.Call, inputs.Dates.PopulatePrototype);
+            il.Emit(OpCodes.Ldsfld, inputs.Dates.Prototype);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(notTSDateForProtoLabel);
         }
 
         // $RegExp instances → RegExp.prototype per ECMA-262 §22.2.3.
-        if (runtime.RegExps.Implementation is not null)
+        if (inputs.RegExps.Implementation is not null)
         {
             var notTSRegExpForProtoLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.RegExps.RequireImplementation().Type);
+            il.Emit(OpCodes.Isinst, inputs.RegExps.RequireImplementation().Type);
             il.Emit(OpCodes.Brfalse, notTSRegExpForProtoLabel);
-            il.Emit(OpCodes.Ldsfld, runtime.RegExps.Prototype);
+            il.Emit(OpCodes.Ldsfld, inputs.RegExps.Prototype);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(notTSRegExpForProtoLabel);
         }
@@ -727,25 +785,25 @@ public partial class RuntimeEmitter
         // Promise instances ($TSPromise + raw Task<object>) → Promise.prototype
         // per ECMA-262 §27.2.5. Without this, Object.getPrototypeOf(promise)
         // returns null and `Promise.prototype.isPrototypeOf(p)` fails.
-        if (runtime.Promise is not null)
+        if (inputs.Promise is not null)
         {
             var notTSPromiseForProtoLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.RequirePromise().Type);
+            il.Emit(OpCodes.Isinst, inputs.Promise!.Type);
             il.Emit(OpCodes.Brfalse, notTSPromiseForProtoLabel);
-            il.Emit(OpCodes.Call, runtime.RequirePromise().PrototypePopulateMethod);
-            il.Emit(OpCodes.Ldsfld, runtime.RequirePromise().PrototypeField);
+            il.Emit(OpCodes.Call, inputs.Promise!.PrototypePopulateMethod);
+            il.Emit(OpCodes.Ldsfld, inputs.Promise!.PrototypeField);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(notTSPromiseForProtoLabel);
         }
-        if (_features.UsesPromise)
+        if (inputs.Promise is not null)
         {
             var notTaskForProtoLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Isinst, _types.TaskOfObject);
             il.Emit(OpCodes.Brfalse, notTaskForProtoLabel);
-            il.Emit(OpCodes.Call, runtime.RequirePromise().PrototypePopulateMethod);
-            il.Emit(OpCodes.Ldsfld, runtime.RequirePromise().PrototypeField);
+            il.Emit(OpCodes.Call, inputs.Promise!.PrototypePopulateMethod);
+            il.Emit(OpCodes.Ldsfld, inputs.Promise!.PrototypeField);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(notTaskForProtoLabel);
         }
@@ -753,7 +811,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, _types.ListOfObject);
         il.Emit(OpCodes.Brfalse, notListForProtoLabel);
-        il.Emit(OpCodes.Ldsfld, runtime.ArrayOperations.PrototypeField);
+        il.Emit(OpCodes.Ldsfld, inputs.ArrayOperations.PrototypeField);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notListForProtoLabel);
 
@@ -766,33 +824,33 @@ public partial class RuntimeEmitter
         // wrong (should be A) but no worse than the previous null.
         var notTSFnForProtoLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Isinst, inputs.TSFunctionType);
         il.Emit(OpCodes.Brfalse, notTSFnForProtoLabel);
-        il.Emit(OpCodes.Ldsfld, runtime.FunctionPrototypeField);
+        il.Emit(OpCodes.Ldsfld, inputs.FunctionPrototypeField);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notTSFnForProtoLabel);
         var notBoundTSFnForProtoLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.BoundTSFunctionType);
+        il.Emit(OpCodes.Isinst, inputs.BoundTSFunctionType);
         il.Emit(OpCodes.Brfalse, notBoundTSFnForProtoLabel);
-        il.Emit(OpCodes.Call, runtime.FunctionPrototypePopulateMethod);
-        il.Emit(OpCodes.Ldsfld, runtime.FunctionPrototypeField);
+        il.Emit(OpCodes.Call, inputs.FunctionPrototypePopulateMethod);
+        il.Emit(OpCodes.Ldsfld, inputs.FunctionPrototypeField);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notBoundTSFnForProtoLabel);
-        if (_features.UsesPromise)
+        if (inputs.Promise is not null)
         {
             var notResolveCallbackForProtoLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.RequirePromise().ResolveCallbackType);
+            il.Emit(OpCodes.Isinst, inputs.Promise!.ResolveCallbackType);
             il.Emit(OpCodes.Brfalse, notResolveCallbackForProtoLabel);
-            il.Emit(OpCodes.Ldsfld, runtime.FunctionPrototypeField);
+            il.Emit(OpCodes.Ldsfld, inputs.FunctionPrototypeField);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(notResolveCallbackForProtoLabel);
             var notRejectCallbackForProtoLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.RequirePromise().RejectCallbackType);
+            il.Emit(OpCodes.Isinst, inputs.Promise!.RejectCallbackType);
             il.Emit(OpCodes.Brfalse, notRejectCallbackForProtoLabel);
-            il.Emit(OpCodes.Ldsfld, runtime.FunctionPrototypeField);
+            il.Emit(OpCodes.Ldsfld, inputs.FunctionPrototypeField);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(notRejectCallbackForProtoLabel);
         }
@@ -800,7 +858,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, _types.Delegate);
         il.Emit(OpCodes.Brfalse, notDelegateForProtoLabel);
-        il.Emit(OpCodes.Ldsfld, runtime.FunctionPrototypeField);
+        il.Emit(OpCodes.Ldsfld, inputs.FunctionPrototypeField);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notDelegateForProtoLabel);
 
@@ -816,7 +874,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, userClassCtorTypeLocal);
         il.Emit(OpCodes.Ldloc, userClassCtorTypeLocal);
         il.Emit(OpCodes.Brfalse, notUserClassCtorForProtoLabel);
-        il.Emit(OpCodes.Ldtoken, runtime.IHasFieldsInterface);
+        il.Emit(OpCodes.Ldtoken, inputs.IHasFieldsInterface);
         il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
         il.Emit(OpCodes.Ldloc, userClassCtorTypeLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(
@@ -845,13 +903,13 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, errorCtorTypeLocal);
         il.Emit(OpCodes.Ldloc, errorCtorTypeLocal);
         il.Emit(OpCodes.Brfalse, notDerivedErrorCtorForProtoLabel);
-        il.Emit(OpCodes.Ldtoken, runtime.Errors.Type);
+        il.Emit(OpCodes.Ldtoken, inputs.Errors.Type);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
         il.Emit(OpCodes.Ldloc, errorCtorTypeLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "IsAssignableFrom", _types.Type));
         il.Emit(OpCodes.Brfalse, notDerivedErrorCtorForProtoLabel);
         il.Emit(OpCodes.Ldloc, errorCtorTypeLocal);
-        il.Emit(OpCodes.Ldtoken, runtime.Errors.Type);
+        il.Emit(OpCodes.Ldtoken, inputs.Errors.Type);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
         il.Emit(OpCodes.Beq, notDerivedErrorCtorForProtoLabel);
         il.Emit(OpCodes.Ldloc, errorCtorTypeLocal);
@@ -863,7 +921,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, _types.Type);
         il.Emit(OpCodes.Brfalse, notTypeForProtoLabel);
-        il.Emit(OpCodes.Ldsfld, runtime.FunctionPrototypeField);
+        il.Emit(OpCodes.Ldsfld, inputs.FunctionPrototypeField);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notTypeForProtoLabel);
 
@@ -875,28 +933,28 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, _types.Double);
         il.Emit(OpCodes.Brfalse, notDoubleForProtoLabel);
-        il.Emit(OpCodes.Ldsfld, runtime.Numbers.PrototypeField);
+        il.Emit(OpCodes.Ldsfld, inputs.Numbers.PrototypeField);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notDoubleForProtoLabel);
         var notInt32ForProtoLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, _types.Int32);
         il.Emit(OpCodes.Brfalse, notInt32ForProtoLabel);
-        il.Emit(OpCodes.Ldsfld, runtime.Numbers.PrototypeField);
+        il.Emit(OpCodes.Ldsfld, inputs.Numbers.PrototypeField);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notInt32ForProtoLabel);
         var notBoolForProtoLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, _types.Boolean);
         il.Emit(OpCodes.Brfalse, notBoolForProtoLabel);
-        il.Emit(OpCodes.Ldsfld, runtime.Booleans.PrototypeField);
+        il.Emit(OpCodes.Ldsfld, inputs.Booleans.PrototypeField);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notBoolForProtoLabel);
         var notStrForProtoLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, _types.String);
         il.Emit(OpCodes.Brfalse, notStrForProtoLabel);
-        il.Emit(OpCodes.Ldsfld, runtime.Strings.PrototypeField);
+        il.Emit(OpCodes.Ldsfld, inputs.Strings.PrototypeField);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notStrForProtoLabel);
 
@@ -908,6 +966,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(foundInLocalLabel);
         il.Emit(OpCodes.Ldloc, tempLocal);
         il.Emit(OpCodes.Ret);
+        objectPrototypes.MarkGetPrototypeOfBodyEmitted();
     }
 
     /// <summary>
@@ -915,8 +974,12 @@ public partial class RuntimeEmitter
     /// Signature: object ObjectSetPrototypeOf(object obj, object proto)
     /// Stores in the local prototype table for standalone checks.
     /// </summary>
-    private void EmitObjectSetPrototypeOf(TypeBuilder typeBuilder, EmittedRuntime runtime,
-        FieldBuilder prototypeStoreField, FieldBuilder nonExtensibleObjectsField)
+    private void EmitObjectSetPrototypeOf(
+        TypeBuilder typeBuilder,
+        EmittedObjectPrototypeRuntime objectPrototypes,
+        ObjectSetPrototypeOfInputs inputs,
+        FieldBuilder prototypeStoreField
+    )
     {
         var method = typeBuilder.DefineMethod(
             "ObjectSetPrototypeOf",
@@ -924,7 +987,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object, _types.Object]
         );
-        runtime.ObjectSetPrototypeOf = method;
+        objectPrototypes.SetPrototypeOf = method;
 
         var il = method.GetILGenerator();
 
@@ -936,12 +999,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Brfalse, rocThrowLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
         il.Emit(OpCodes.Brtrue, rocThrowLabel);
         var afterRocLabel = il.DefineLabel();
         il.Emit(OpCodes.Br, afterRocLabel);
         il.MarkLabel(rocThrowLabel);
-        GuestErrorEmitter.ThrowTypeError(il, runtime, "Object.setPrototypeOf called on null or undefined");
+        GuestErrorEmitter.ThrowError(il, inputs.Errors.CreateException, inputs.Errors.TypeErrorConstructor, "Object.setPrototypeOf called on null or undefined");
         il.MarkLabel(afterRocLabel);
 
         // ECMA-262 §20.1.2.21 step 3: throw TypeError if Type(proto) is
@@ -954,7 +1017,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Brfalse, protoOkLabel);  // null → OK
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
         il.Emit(OpCodes.Brtrue, protoThrowLabel);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Isinst, _types.Boolean);
@@ -968,10 +1031,10 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Isinst, _types.String);
         il.Emit(OpCodes.Brtrue, protoThrowLabel);
-        if (runtime.Symbols.Type != null)
+        if (inputs.Symbols.Type != null)
         {
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Isinst, runtime.Symbols.Type);
+            il.Emit(OpCodes.Isinst, inputs.Symbols.Type);
             il.Emit(OpCodes.Brtrue, protoThrowLabel);
         }
         il.Emit(OpCodes.Ldarg_1);
@@ -979,7 +1042,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, protoThrowLabel);
         il.Emit(OpCodes.Br, protoOkLabel);
         il.MarkLabel(protoThrowLabel);
-        GuestErrorEmitter.ThrowTypeError(il, runtime, "Object prototype may only be an Object or null");
+        GuestErrorEmitter.ThrowError(il, inputs.Errors.CreateException, inputs.Errors.TypeErrorConstructor, "Object prototype may only be an Object or null");
         il.MarkLabel(protoOkLabel);
 
         // Primitive targets are returned unchanged after prototype validation.
@@ -1000,7 +1063,7 @@ public partial class RuntimeEmitter
         ReturnPrimitiveTarget(_types.Double);
         ReturnPrimitiveTarget(_types.Int32);
         ReturnPrimitiveTarget(_types.String);
-        ReturnPrimitiveTarget(runtime.Symbols.Type!);
+        ReturnPrimitiveTarget(inputs.Symbols.Type!);
         ReturnPrimitiveTarget(_types.BigInteger);
         il.Emit(OpCodes.Br, objectTargetLabel);
         il.MarkLabel(objectTargetLabel);
@@ -1012,7 +1075,7 @@ public partial class RuntimeEmitter
         EmitProxyTypeCheck(
             il, () => il.Emit(OpCodes.Ldarg_0), proxyForSpoLabel, notProxyForSpoLabel);
         il.MarkLabel(proxyForSpoLabel);
-        EmitProxyMethodCallUnwrapped(il, runtime, () => il.Emit(OpCodes.Ldarg_0),
+        EmitProxyMethodCallUnwrapped(il, inputs.InvokeMethodUnwrapped, () => il.Emit(OpCodes.Ldarg_0),
             "TrapSetPrototypeOfCompiled", () =>
             {
                 il.Emit(OpCodes.Ldc_I4_5);
@@ -1024,28 +1087,28 @@ public partial class RuntimeEmitter
                 il.Emit(OpCodes.Dup);
                 il.Emit(OpCodes.Ldc_I4_1);
                 il.Emit(OpCodes.Ldnull);
-                il.Emit(OpCodes.Ldftn, runtime.ObjectSetPrototypeOf);
+                il.Emit(OpCodes.Ldftn, objectPrototypes.SetPrototypeOf);
                 il.Emit(OpCodes.Newobj, _types.GetConstructor(
                     typeof(Func<object, object?, object?>), _types.Object, _types.IntPtr));
                 il.Emit(OpCodes.Stelem_Ref);
                 il.Emit(OpCodes.Dup);
                 il.Emit(OpCodes.Ldc_I4_2);
                 il.Emit(OpCodes.Ldnull);
-                il.Emit(OpCodes.Ldftn, runtime.ObjectState.IsExtensible);
+                il.Emit(OpCodes.Ldftn, inputs.ObjectState.IsExtensible);
                 il.Emit(OpCodes.Newobj, _types.GetConstructor(
                     typeof(Func<object, bool>), _types.Object, _types.IntPtr));
                 il.Emit(OpCodes.Stelem_Ref);
                 il.Emit(OpCodes.Dup);
                 il.Emit(OpCodes.Ldc_I4_3);
                 il.Emit(OpCodes.Ldnull);
-                il.Emit(OpCodes.Ldftn, runtime.ObjectGetPrototypeOf);
+                il.Emit(OpCodes.Ldftn, objectPrototypes.GetPrototypeOf);
                 il.Emit(OpCodes.Newobj, _types.GetConstructor(
                     typeof(Func<object, object?>), _types.Object, _types.IntPtr));
                 il.Emit(OpCodes.Stelem_Ref);
                 il.Emit(OpCodes.Dup);
                 il.Emit(OpCodes.Ldc_I4_4);
                 il.Emit(OpCodes.Ldnull);
-                il.Emit(OpCodes.Ldftn, runtime.GetProperty);
+                il.Emit(OpCodes.Ldftn, inputs.GetProperty);
                 il.Emit(OpCodes.Newobj, _types.GetConstructor(
                     typeof(Func<object, string, object?>), _types.Object, _types.IntPtr));
                 il.Emit(OpCodes.Stelem_Ref);
@@ -1053,7 +1116,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Unbox_Any, _types.Boolean);
         var proxySetSucceeded = il.DefineLabel();
         il.Emit(OpCodes.Brtrue, proxySetSucceeded);
-        GuestErrorEmitter.ThrowTypeError(il, runtime,
+        GuestErrorEmitter.ThrowError(il, inputs.Errors.CreateException, inputs.Errors.TypeErrorConstructor,
             "Proxy setPrototypeOf trap returned false");
         il.MarkLabel(proxySetSucceeded);
         il.Emit(OpCodes.Ldarg_0);
@@ -1063,7 +1126,7 @@ public partial class RuntimeEmitter
         // SameValue(proto, current) succeeds even for non-extensible targets.
         var currentPrototypeLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.ObjectGetPrototypeOf);
+        il.Emit(OpCodes.Call, objectPrototypes.GetPrototypeOf);
         il.Emit(OpCodes.Stloc, currentPrototypeLocal);
         var prototypeDiffers = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, currentPrototypeLocal);
@@ -1076,9 +1139,9 @@ public partial class RuntimeEmitter
         // %Object.prototype% is an immutable-prototype exotic object.
         var mutablePrototypeTarget = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldsfld, runtime.ObjectPrototypeField);
+        il.Emit(OpCodes.Ldsfld, objectPrototypes.Prototype);
         il.Emit(OpCodes.Bne_Un, mutablePrototypeTarget);
-        GuestErrorEmitter.ThrowTypeError(il, runtime,
+        GuestErrorEmitter.ThrowError(il, inputs.Errors.CreateException, inputs.Errors.TypeErrorConstructor,
             "Immutable prototype object cannot change its prototype");
         il.MarkLabel(mutablePrototypeTarget);
 
@@ -1092,28 +1155,28 @@ public partial class RuntimeEmitter
         // Check if object is a class instance (IHasFields but not $Object) - throw TypeError
         var notClassInstanceLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.IHasFieldsInterface);
+        il.Emit(OpCodes.Isinst, inputs.IHasFieldsInterface);
         il.Emit(OpCodes.Brfalse, notClassInstanceLabel);
-        if (runtime.Records.Scalars is not null)
+        if (inputs.Records.Scalars is not null)
         {
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.Records.MarkerInterface);
+            il.Emit(OpCodes.Isinst, inputs.Records.MarkerInterface);
             il.Emit(OpCodes.Brtrue, notClassInstanceLabel);
         }
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.ObjectStorage.Type);
+        il.Emit(OpCodes.Isinst, inputs.ObjectStorage.Type);
         il.Emit(OpCodes.Brtrue, notClassInstanceLabel);
         // It's a class instance - throw TypeError
-        GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot set prototype of class instance");
+        GuestErrorEmitter.ThrowError(il, inputs.Errors.CreateException, inputs.Errors.TypeErrorConstructor, "Cannot set prototype of class instance");
         il.MarkLabel(notClassInstanceLabel);
 
         // Check if object is extensible - if not, throw TypeError
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.ObjectState.IsExtensible);
+        il.Emit(OpCodes.Call, inputs.ObjectState.IsExtensible);
         il.Emit(OpCodes.Brtrue, nullCheckDoneLabel);  // Object is extensible, proceed
 
         // Object is not extensible - throw TypeError
-        GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot set prototype of non-extensible object");
+        GuestErrorEmitter.ThrowError(il, inputs.Errors.CreateException, inputs.Errors.TypeErrorConstructor, "Cannot set prototype of non-extensible object");
 
         il.MarkLabel(nullCheckDoneLabel);
 
@@ -1132,7 +1195,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         var noCycleAtCursor = il.DefineLabel();
         il.Emit(OpCodes.Bne_Un, noCycleAtCursor);
-        GuestErrorEmitter.ThrowTypeError(il, runtime,
+        GuestErrorEmitter.ThrowError(il, inputs.Errors.CreateException, inputs.Errors.TypeErrorConstructor,
             "Cyclic prototype value");
         il.MarkLabel(noCycleAtCursor);
         // OrdinarySetPrototypeOf's cycle walk stops when the next object does
@@ -1150,7 +1213,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, cycleDone);
         il.MarkLabel(cycleCursorNotProxy);
         il.Emit(OpCodes.Ldloc, cycleCursor);
-        il.Emit(OpCodes.Call, runtime.ObjectGetPrototypeOf);
+        il.Emit(OpCodes.Call, objectPrototypes.GetPrototypeOf);
         il.Emit(OpCodes.Stloc, cycleCursor);
         il.Emit(OpCodes.Br, cycleLoop);
         il.MarkLabel(cycleDone);
@@ -1163,7 +1226,7 @@ public partial class RuntimeEmitter
         // Call $PropertyDescriptorStore.SetPrototype(obj, proto)
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.DescriptorStorage.SetPrototype);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.SetPrototype);
 
         // Also store in local prototype table for backward compatibility
         il.Emit(OpCodes.Ldsfld, prototypeStoreField);

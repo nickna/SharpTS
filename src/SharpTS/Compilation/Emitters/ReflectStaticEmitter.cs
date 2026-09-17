@@ -168,7 +168,7 @@ public sealed class ReflectStaticEmitter : IStaticTypeEmitterStrategy
                 else
                     il.Emit(OpCodes.Ldnull);
 
-                il.Emit(OpCodes.Call, ctx.Runtime!.ObjectGetPrototypeOf);
+                il.Emit(OpCodes.Call, ctx.Runtime!.ObjectPrototypes.GetPrototypeOf);
                 return true;
             }
 

@@ -3708,6 +3708,375 @@ public class StandaloneDllTests
             verifyStandardError: error => Assert.Empty(error)));
     }
 
+    public static IEnumerable<object[]> ObjectPrototypeMetadataPrograms =>
+    [
+        new object[]
+        {
+            "minimal",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "console.log(1);" },
+            "1\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "get_created",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let proto = { x: 1 };\nlet obj = Object.create(proto);\nconsole.log(Object.getPrototypeOf(obj) === proto);" },
+            "true\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "get_null",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let obj = Object.create(null);\nconsole.log(Object.getPrototypeOf(obj) === null);" },
+            "true\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "set_changed",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let proto1 = { x: 1 };\nlet proto2 = { y: 2 };\nlet obj = Object.create(proto1);\nObject.setPrototypeOf(obj, proto2);\nconsole.log(Object.getPrototypeOf(obj) === proto2);" },
+            "true\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "set_identity",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let obj = Object.create(null);\nlet result = Object.setPrototypeOf(obj, { x: 1 });\nconsole.log(result === obj);" },
+            "true\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "set_inherited",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let proto = { x: 42, y: 100 };\nlet obj = Object.create(null);\nObject.setPrototypeOf(obj, proto);\nconsole.log(obj.x);\nconsole.log(obj.y);" },
+            "42\n100\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "set_null",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let proto = { x: 1 };\nlet obj = Object.create(proto);\nObject.setPrototypeOf(obj, null);\nconsole.log(Object.getPrototypeOf(obj) === null);" },
+            "true\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "nonextensible",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let obj = Object.create(null);\nObject.preventExtensions(obj);\nlet threw = false;\ntry {\n    Object.setPrototypeOf(obj, { x: 1 });\n} catch (e) {\n    threw = true;\n}\nconsole.log(threw);" },
+            "true\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "class_set",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "class MyClass {\n    x: number = 1;\n}\nlet obj = new MyClass();\nlet threw = false;\ntry {\n    Object.setPrototypeOf(obj, { y: 2 });\n} catch (e) {\n    threw = true;\n}\nconsole.log(threw);" },
+            "true\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "chain",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "function Base() {}\nconst b = new Base();\nconst d = Object.create(b);\nconst g = Object.create(d);\nconsole.log(b.isPrototypeOf(d));   // direct proto\nconsole.log(b.isPrototypeOf(g));    // transitive\nconsole.log(d.isPrototypeOf(b));    // reverse — false\nconsole.log(({}).isPrototypeOf(d)); // unrelated — false\nconsole.log(b.isPrototypeOf(5 as any)); // non-object arg — false" },
+            "true\ntrue\nfalse\nfalse\nfalse\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "proxy_cycle",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let probed = false;\nconst prototype = new Proxy({}, {\n    getPrototypeOf() {\n        probed = true;\n        throw new Error(\"unexpected prototype probe\");\n    }\n});\nconst object = {};\nObject.setPrototypeOf(object, prototype);\nconsole.log(probed);\nconsole.log(Object.getPrototypeOf(object) === prototype);" },
+            "false\ntrue\n",
+            false,
+            false
+        },
+        new object[]
+        {
+            "create_properties",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let obj = Object.create(null, {\n    x: { value: 42, writable: true, enumerable: true, configurable: true },\n    y: { value: 100, writable: true, enumerable: true, configurable: true }\n});\nconsole.log(obj.x);\nconsole.log(obj.y);" },
+            "42\n100\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "create_nonwritable",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let obj = Object.create(null, {\n    readonly: { value: 42, writable: false, enumerable: true, configurable: true }\n});\nconsole.log(obj.readonly);\nobj.readonly = 100;\nconsole.log(obj.readonly);" },
+            "42\n42\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "create_accessors",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let obj = Object.create(null, {\n    _value: { value: 10, writable: true, enumerable: true, configurable: true },\n    value: {\n        get: function() { return this._value; },\n        set: function(v: number) { this._value = v; },\n        enumerable: true,\n        configurable: true\n    }\n});\nconsole.log(obj.value);\nobj.value = 50;\nconsole.log(obj.value);" },
+            "10\n50\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "create_nested",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let proto = { nested: { value: 42 } };\nlet obj = Object.create(proto);\nconsole.log(obj.nested.value);" },
+            "42\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "create_class",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "class Point {\n    x: number;\n    y: number;\n    constructor(x: number, y: number) {\n        this.x = x;\n        this.y = y;\n    }\n}\nlet proto = new Point(10, 20);\nlet obj = Object.create(proto);\nconsole.log(obj.x);\nconsole.log(obj.y);" },
+            "10\n20\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "create_keys",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let proto = { a: 1, b: 2 };\nlet obj = Object.create(proto);\n// ECMA-262 §20.1.2.16 Object.keys: own enumerable keys only.\n// Object.create(proto) returns a FRESH empty object with [[Prototype]]\n// = proto. proto's keys are reached via the prototype chain at\n// property-access time — they are NOT own keys of the created obj.\nlet keys = Object.keys(obj);\nconsole.log(keys.length);\n// Inherited access still works through the prototype chain.\nconsole.log(obj.a);\nconsole.log(obj.b);" },
+            "0\n1\n2\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "create_invalid",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "function attempt(label: string, fn: () => void) {\n    try { fn(); console.log(label, \"no throw\"); }\n    catch (e: any) { console.log(label, e instanceof TypeError); }\n}\nattempt(\"undefined\", () => Object.create(undefined as any));\nattempt(\"number\", () => Object.create(5 as any));\nattempt(\"string\", () => Object.create(\"x\" as any));\nattempt(\"bool\", () => Object.create(true as any));\n// null and objects are valid prototypes — must NOT throw.\nconsole.log(\"null\", typeof Object.create(null));\nconsole.log(\"obj\", typeof Object.create({}));" },
+            "undefined true\nnumber true\nstring true\nbool true\nnull object\nobj object\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "create_value_form",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "var oc: any = Object.create;\nvar p = { x: 1 };\nvar o = oc(p);\nconsole.log(o.x);" },
+            "1\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "class_methods",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "class C {\n  method() { return \"plain\"; }\n  async asyncMethod() { return \"async\"; }\n  *generatorMethod() { yield \"generator\"; }\n}\nconst first: any = C.prototype;\nconst second: any = C.prototype;\nconsole.log(first === second);\nconsole.log(first.method());\nfirst.asyncMethod().then((value: any) => console.log(value));\nconsole.log(first.generatorMethod().next().value);" },
+            "true\nplain\ngenerator\nasync\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "class_constructor",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let calls = 0;\nclass Base { base() { return \"base\"; } }\nclass Derived extends Base {\n  constructor() { super(); calls++; }\n  own() { return \"own\"; }\n}\nconst prototype: any = Derived.prototype;\nconsole.log(calls);\nconsole.log(prototype.own());\nconsole.log(prototype.base());\nconsole.log(Object.getPrototypeOf(prototype) === Base.prototype);" },
+            "0\nown\nbase\ntrue\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "class_fields",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let effects = 0;\nclass Base {\n  field: number = effects++;\n  constructor() { effects += 10; }\n  base() { return \"base\"; }\n}\nclass Derived extends Base {\n  derivedField: number = effects++;\n  constructor() { super(); effects += 100; }\n  own() { return \"own\"; }\n}\nconst prototype: any = Derived.prototype;\nconsole.log(effects);\nconsole.log(prototype.base(), prototype.own());" },
+            "0\nbase own\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "class_static",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let constructorCalls = 0;\nclass C {\n  static observed: any = C.prototype.method();\n  constructor() { constructorCalls++; }\n  method() { return \"prototype\"; }\n}\nconsole.log(C.observed);\nconsole.log(constructorCalls);" },
+            "prototype\n0\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "class_expression",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let constructorCalls = 0;\nconst C: any = class {\n  value: string = \"instance\";\n  constructor() { constructorCalls++; }\n  method() { return \"prototype\"; }\n};\nconsole.log(C.prototype.method());\nconsole.log(constructorCalls);" },
+            "prototype\n0\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "reflect_current",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const object: any = {};\nObject.preventExtensions(object);\nconsole.log(Reflect.setPrototypeOf(object, Object.prototype));\ntry {\n    Reflect.setPrototypeOf({}, 1 as any);\n} catch (error) {\n    console.log(error instanceof TypeError);\n}" },
+            "true\ntrue\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "proxy_callable_brand",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "function fn() { return 1; } const proxy: any = new Proxy(fn, {}); console.log(Object.prototype.toString.call(proxy));" },
+            "[object Function]\n",
+            false,
+            false
+        },
+        new object[]
+        {
+            "locale_value",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const target: any = {toString() { return 'live'; }};\nconsole.log(Object.prototype.toLocaleString.call(target)); console.log(Object.prototype.valueOf.call(target) === target);\nfor (const method of [Object.prototype.valueOf, Object.prototype.toLocaleString]) {\n for (const value of [null, undefined]) { try { method.call(value); } catch (e: any) { console.log(e instanceof TypeError); } }\n}" },
+            "live\ntrue\ntrue\ntrue\ntrue\ntrue\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "promise_prototypes",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const p: any = Promise.resolve(1); console.log(Object.getPrototypeOf(p) === Promise.prototype);\nnew Promise((resolve: any, reject: any) => { console.log(Object.getPrototypeOf(resolve) === Function.prototype, Object.getPrototypeOf(reject) === Function.prototype); resolve(1); });" },
+            "true\ntrue true\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "create_null_properties",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "try { Object.create({}, null); } catch (e: any) { console.log(e instanceof TypeError); }\nconst make: any = Object.create; const prototype = {x: 2}; const value = make(prototype);\nconsole.log(Object.getPrototypeOf(value) === prototype, value.x, Object.keys(value).length);" },
+            "true\ntrue 2 0\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "esm",
+            "main.ts",
+            new string[] { "dep.ts", "main.ts" },
+            new string[] { "export let calls = 0; export class Base { value() { return 'base'; } } export class Derived extends Base { constructor() { super(); calls++; } }", "import {Base, Derived, calls} from './dep'; const p: any = Derived.prototype; console.log(calls, Object.getPrototypeOf(p) === Base.prototype, p.value());" },
+            "0 true base\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "commonjs",
+            "main.cjs",
+            new string[] { "dep.cjs", "main.cjs" },
+            new string[] { "exports.prototype = {x: 3}; exports.value = Object.create(exports.prototype);", "const dep = require('./dep.cjs'); console.log(Object.getPrototypeOf(dep.value) === dep.prototype, dep.value.x);" },
+            "true 3\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "hosted_prototypes",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "export class Base { value() { return 2; } } export class Derived extends Base {} export function prototype() { return Object.getPrototypeOf(Derived.prototype); }" },
+            "",
+            true,
+            true
+        },
+        new object[]
+        {
+            "hosted_minimal",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "export const value = 1;" },
+            "",
+            true,
+            true
+        },
+        new object[]
+        {
+            "builtin_brands",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const brand: any = Object.prototype.toString;\nfor (const value of [null, undefined, true, 2, 's', [], {}, new Date(0), /x/, new Error('x'), Promise.resolve(1), JSON, Math]) console.log(brand.call(value));\n" },
+            "[object Null]\n[object Undefined]\n[object Boolean]\n[object Number]\n[object String]\n[object Array]\n[object Object]\n[object Date]\n[object RegExp]\n[object Error]\n[object Promise]\n[object JSON]\n[object Math]\n",
+            false,
+            true
+        },
+    ];
+
+    [Theory]
+    [MemberData(nameof(ObjectPrototypeMetadataPrograms))]
+    public void Isolated_ObjectPrototypeMetadata_PreservesPrototypesAndDeployment(
+        string name, string entry, string[] paths, string[] sources, string expected, bool hosted, bool standalone)
+    {
+        using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        for (int i = 0; i < paths.Length; i++) tempDir.CreateFile(paths[i], sources[i]);
+        var sourcePath = tempDir.GetPath(entry);
+        var dllPath = tempDir.GetPath($"object-prototype-metadata_{name}.dll");
+        var deployment = standalone ? " --standalone" : "";
+        var hosting = hosted ? " --target dll --hosted" : "";
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --noLib --compile \"{sourcePath}\" -o \"{dllPath}\" --verify{deployment}{hosting}", tempDir.Path);
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        var references = GetAssemblyReferences(dllPath);
+        Assert.DoesNotContain("SharpTS", references);
+        Assert.Equal(hosted, references.Contains("SharpTS.Hosting.Abstractions"));
+        Assert.Equal(!standalone, File.Exists(tempDir.GetPath("SharpTS.dll")));
+        if (!hosted)
+            Assert.Equal(expected, ExecuteCompiledDllIsolated(dllPath, timeoutMs: 30000,
+                verifyStandardError: error => Assert.Empty(error)));
+    }
+
+
     public static IEnumerable<object[]> ObjectDescriptorMetadataPrograms =>
     [
         new object[]

@@ -827,7 +827,7 @@ public partial class RuntimeEmitter
         }
         EmitInheritedObjectMethod("hasOwnProperty", runtime.HasOwnPropertyHelperMethod);
         EmitInheritedObjectMethod("propertyIsEnumerable", runtime.PropertyIsEnumerableHelperMethod);
-        EmitInheritedObjectMethod("isPrototypeOf", runtime.IsPrototypeOfHelperMethod);
+        EmitInheritedObjectMethod("isPrototypeOf", runtime.ObjectPrototypes.IsPrototypeOf);
 
         var noPrototypeLabel = il.DefineLabel();
         var prototypeLocal = il.DeclareLocal(_types.Object);
@@ -839,7 +839,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, runtime.UndefinedType);
         il.Emit(OpCodes.Brtrue, noPrototypeLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.ObjectGetPrototypeOf);
+        il.Emit(OpCodes.Call, runtime.ObjectPrototypes.GetPrototypeOf);
         il.Emit(OpCodes.Stloc, prototypeLocal);
         il.Emit(OpCodes.Ldloc, prototypeLocal);
         il.Emit(OpCodes.Brfalse, noPrototypeLabel);
@@ -1006,8 +1006,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
         il.MarkLabel(arrayProtoFallbackLabel);
         // Walk to Object.prototype for shared methods like hasOwnProperty.
-        il.Emit(OpCodes.Call, runtime.ObjectPrototypePopulateMethod);
-        il.Emit(OpCodes.Ldsfld, runtime.ObjectPrototypeField);
+        il.Emit(OpCodes.Call, runtime.ObjectPrototypes.Populate);
+        il.Emit(OpCodes.Ldsfld, runtime.ObjectPrototypes.Prototype);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloca, arrayProtoValLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "TryGetValue",
@@ -1227,7 +1227,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, notProtoNameTopLabel);
         il.MarkLabel(noOwnProtoLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.ObjectGetPrototypeOf);
+        il.Emit(OpCodes.Call, runtime.ObjectPrototypes.GetPrototypeOf);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notProtoNameTopLabel);
 
@@ -1797,8 +1797,8 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldtoken, _types.Object);
             il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
             il.Emit(OpCodes.Bne_Un, notObjectLabel);
-            il.Emit(OpCodes.Call, runtime.ObjectPrototypePopulateMethod);
-            il.Emit(OpCodes.Ldsfld, runtime.ObjectPrototypeField);
+            il.Emit(OpCodes.Call, runtime.ObjectPrototypes.Populate);
+            il.Emit(OpCodes.Ldsfld, runtime.ObjectPrototypes.Prototype);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(notObjectLabel);
             // typeof Boolean
@@ -1939,7 +1939,7 @@ public partial class RuntimeEmitter
                 _types.Type, "IsAssignableFrom", [_types.Type])!);
             il.Emit(OpCodes.Brfalse, notUserClassPrototypeLabel);
             il.Emit(OpCodes.Ldloc, prototypeClassTypeLocal);
-            il.Emit(OpCodes.Call, runtime.GetClassPrototypeMethod);
+            il.Emit(OpCodes.Call, runtime.ClassPrototypes.Get);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(notUserClassPrototypeLabel);
             il.MarkLabel(notProtoNameLabel);

@@ -181,7 +181,7 @@ public partial class RuntimeEmitter
             "_objectPrototype",
             _types.DictionaryStringObject,
             FieldAttributes.Public | FieldAttributes.Static);
-        runtime.ObjectPrototypeField = objectPrototypeField;
+        runtime.ObjectPrototypes.Prototype = objectPrototypeField;
 
         // Error.prototype singleton — populated with toString/constructor.
         // Returned by GetProperty's Type-receiver branch when receiver is
@@ -251,7 +251,13 @@ public partial class RuntimeEmitter
             "_classPrototypeCache",
             classPrototypeCacheType,
             FieldAttributes.Private | FieldAttributes.Static | FieldAttributes.InitOnly);
-        EmitClassPrototypeSupport(typeBuilder, runtime, classPrototypeCacheField);
+        EmitClassPrototypeSupport(
+            typeBuilder,
+            runtime.ClassPrototypes,
+            runtime.ObjectPrototypes,
+            runtime.DescriptorStorage,
+            classPrototypeCacheField
+        );
 
         // CheckCancellation(): if (_cancelRequested) throw new
         //   OperationCanceledException("Compiled execution cancelled.");
@@ -519,7 +525,7 @@ public partial class RuntimeEmitter
         // n.toString` walks the chain and finds an empty Object.prototype dict
         // because populate is only invoked when Object.prototype is explicitly
         // referenced. Idempotent — populate methods early-return if Count > 0.
-        DefineObjectPrototypePopulateShell(typeBuilder, runtime);
+        DefineObjectPrototypePopulateShell(typeBuilder, runtime.ObjectPrototypes);
         DefineArrayPrototypePopulateShell(typeBuilder, runtime.ArrayOperations);
         DefineMathSingletonPopulateShell(typeBuilder, runtime.Math);
         DefineJsonSingletonPopulateShell(typeBuilder, runtime.Json);
@@ -738,7 +744,7 @@ public partial class RuntimeEmitter
         // walks (e.g. `delete Number.prototype.toString; n.toString` should
         // fall through to Object.prototype.toString) hit populated dicts.
         // Each populate is idempotent (early-returns if Count > 0).
-        cctorIL.Emit(OpCodes.Call, runtime.ObjectPrototypePopulateMethod);
+        cctorIL.Emit(OpCodes.Call, runtime.ObjectPrototypes.Populate);
         cctorIL.Emit(OpCodes.Call, runtime.ArrayOperations.PrototypePopulateMethod);
         cctorIL.Emit(OpCodes.Call, runtime.Numbers.PrototypePopulateMethod);
         if (_features.UsesBigInt)
@@ -896,8 +902,12 @@ public partial class RuntimeEmitter
         // Shell ObjectGetPrototypeOf early so IsPrototypeOfHelper can call it
         // and pick up the default-fallback to Object.prototype / Array.prototype
         // for plain Dict/List receivers without explicit PDS entries.
-        DefineObjectGetPrototypeOfShell(typeBuilder, runtime);
-        EmitIsPrototypeOfHelper(typeBuilder, runtime);
+        DefineObjectGetPrototypeOfShell(typeBuilder, runtime.ObjectPrototypes);
+        EmitIsPrototypeOfHelper(
+            typeBuilder,
+            runtime.ObjectPrototypes,
+            new IsPrototypeOfHelperInputs(runtime.Errors, runtime.Symbols, runtime.UndefinedType)
+        );
         // ObjectPrototypePopulate / ArrayPrototypePopulate shells already
         // defined above (before cctor) so the cctor can call them eagerly.
         EmitGetFunctionMethod(typeBuilder, runtime);  // For bind/call/apply on functions
@@ -1014,7 +1024,7 @@ public partial class RuntimeEmitter
             new SymbolPrototypePopulateInputs(
                 runtime.Errors.CreateException,
                 runtime.DescriptorStorage,
-                runtime.ObjectPrototypeField,
+                runtime.ObjectPrototypes.Prototype,
                 runtime.ObjectStorage,
                 runtime.TSFunctionGetOrCreate,
                 runtime.Errors.TypeErrorConstructor
@@ -1263,14 +1273,67 @@ public partial class RuntimeEmitter
                 runtime.UndefinedType
             )
         );
-        EmitObjectCreate(typeBuilder, runtime, prototypeStoreField);
+        EmitObjectCreate(
+            typeBuilder,
+            runtime.ObjectPrototypes,
+            new ObjectCreateInputs(
+                runtime.DescriptorStorage,
+                runtime.Errors,
+                runtime.ObjectDescriptors,
+                runtime.Symbols,
+                runtime.UndefinedInstance,
+                runtime.UndefinedType
+            )
+        );
         // Promise keyed-combinator shells are declared with Promise methods,
         // but their implementation needs all of the object-model helpers above.
         if (_features.UsesPromise)
             EmitPromiseKeyedMethodBodies(runtime);
         EmitObjectPreventExtensions(typeBuilder, runtime.ObjectState, new ObjectPreventExtensionsInputs(runtime.ArrayStorage, runtime.Errors.CreateException, runtime.DescriptorStorage, runtime.GetProperty, runtime.InvokeMethodUnwrapped, runtime.ObjectStorage, runtime.Errors.TypeErrorConstructor));
-        EmitObjectGetPrototypeOf(typeBuilder, runtime, prototypeStoreField);
-        EmitObjectSetPrototypeOf(typeBuilder, runtime, prototypeStoreField, nonExtensibleObjectsField);
+        EmitObjectGetPrototypeOf(
+            runtime.ClassPrototypes,
+            runtime.ObjectPrototypes,
+            new ObjectGetPrototypeOfInputs(
+                runtime.ArrayOperations,
+                runtime.Booleans,
+                runtime.BoundTSFunctionType,
+                runtime.Dates,
+                runtime.DescriptorStorage,
+                runtime.Errors,
+                runtime.FunctionPrototypeField,
+                runtime.FunctionPrototypePopulateMethod,
+                runtime.GetProperty,
+                runtime.IHasFieldsInterface,
+                runtime.InvokeMethodUnwrapped,
+                runtime.Numbers,
+                runtime.ObjectState,
+                runtime.ObjectStorage,
+                runtime.Promise,
+                runtime.Records,
+                runtime.RegExps,
+                runtime.Strings,
+                runtime.TSFunctionType,
+                runtime.UndefinedType
+            ),
+            prototypeStoreField
+        );
+        EmitObjectSetPrototypeOf(
+            typeBuilder,
+            runtime.ObjectPrototypes,
+            new ObjectSetPrototypeOfInputs(
+                runtime.DescriptorStorage,
+                runtime.Errors,
+                runtime.GetProperty,
+                runtime.IHasFieldsInterface,
+                runtime.InvokeMethodUnwrapped,
+                runtime.ObjectState,
+                runtime.ObjectStorage,
+                runtime.Records,
+                runtime.Symbols,
+                runtime.UndefinedType
+            ),
+            prototypeStoreField
+        );
         // __lookupGetter__ / __lookupSetter__ helpers (ECMA-262 §B.2.2.4/5).
         // Depends on PDSGetPropertyDescriptor, HasOwnPropertyHelperMethod,
         // ObjectGetPrototypeOf, ToJsString — all emitted earlier.
@@ -1316,7 +1379,7 @@ public partial class RuntimeEmitter
                     runtime.DescriptorStorage.IsFrozen,
                     runtime.HasOwnPropertyHelperMethod,
                     runtime.StringCoercion.ToJsString,
-                    runtime.ObjectGetPrototypeOf,
+                    runtime.ObjectPrototypes.GetPrototypeOf,
                     runtime.Booleans.IsTruthy,
                     runtime.InvokeMethodValue,
                     runtime.UndefinedType,
@@ -1372,8 +1435,8 @@ public partial class RuntimeEmitter
                     runtime.Errors.CreateException,
                     runtime.Errors.TypeErrorConstructor,
                     runtime.InvokeMethodUnwrapped,
-                    runtime.ObjectGetPrototypeOf,
-                    runtime.ObjectSetPrototypeOf,
+                    runtime.ObjectPrototypes.GetPrototypeOf,
+                    runtime.ObjectPrototypes.SetPrototypeOf,
                     runtime.ObjectState.IsExtensible,
                     runtime.UndefinedType,
                     runtime.Symbols.Type,
@@ -1433,7 +1496,7 @@ public partial class RuntimeEmitter
                     runtime.Reflect.RequireAssignment().DefineProperty,
                     runtime.ObjectDescriptors.GetOwnPropertyDescriptor,
                     runtime.StringCoercion.ToJsString,
-                    runtime.ObjectGetPrototypeOf,
+                    runtime.ObjectPrototypes.GetPrototypeOf,
                     runtime.ObjectState.IsExtensible,
                     runtime.HasIn
                 )
@@ -1557,7 +1620,25 @@ public partial class RuntimeEmitter
         EmitArrayPrototypePopulate(typeBuilder, runtime);
         // Object.prototype populate body — uses HasOwnPropertyHelper +
         // IsPrototypeOfHelper which are emitted before GetFunctionMethod above.
-        EmitObjectPrototypePopulate(typeBuilder, runtime);
+        EmitObjectPrototypePopulate(
+            runtime.ObjectPrototypes,
+            new ObjectPrototypePopulateInputs(
+                runtime.DefineGetterHelperMethod,
+                runtime.DefineSetterHelperMethod,
+                runtime.DescriptorStorage,
+                runtime.HasOwnPropertyHelperMethod,
+                runtime.LookupGetterHelperMethod,
+                runtime.LookupSetterHelperMethod,
+                runtime.PropertyIsEnumerableHelperMethod,
+                new PrototypeDescriptorInputs(
+                    runtime.DescriptorStorage.DescriptorConstructor,
+                    runtime.DescriptorStorage.DescriptorValue.GetSetMethod()!,
+                    runtime.DescriptorStorage.DescriptorEnumerable.GetSetMethod()!,
+                    runtime.DescriptorStorage.DefineProperty
+                ),
+                runtime.TSFunctionGetOrCreate
+            )
+        );
         // Boxed primitive helpers — must come AFTER prototype populates so
         // BooleanPrototypePopulateMethod / Number / String / Object are non-null.
         EmitNewBoxedPrimitive(typeBuilder, runtime.BoxedPrimitives,
@@ -1666,7 +1747,7 @@ public partial class RuntimeEmitter
                 new PrototypeDescriptorInputs(runtime.DescriptorStorage.DescriptorConstructor, runtime.DescriptorStorage.DescriptorValue.GetSetMethod()!,
                     runtime.DescriptorStorage.DescriptorEnumerable.GetSetMethod()!, runtime.DescriptorStorage.DefineProperty),
                 runtime.TSFunctionGetOrCreate, runtime.TSFunctionCtorWithCache, runtime.Symbols.GetStorage,
-                runtime.Symbols.Iterator, runtime.ObjectPrototypeField, runtime.DescriptorStorage.SetPrototype),
+                runtime.Symbols.Iterator, runtime.ObjectPrototypes.Prototype, runtime.DescriptorStorage.SetPrototype),
             runtime.RegExps.Implementation is not null ? new StringPrototypeRegExpInputs(runtime.RegExps.RequireImplementation().StringMatch, runtime.RegExps.RequireImplementation().StringMatchAll,
                 runtime.RegExps.RequireImplementation().StringSearch, runtime.RegExps.RequireImplementation().StringReplaceAll, runtime.RegExps.RequireImplementation().StringSplitProto) : null);
         // Boolean.prototype population wires dedicated toString and valueOf helpers.
@@ -1676,7 +1757,7 @@ public partial class RuntimeEmitter
                     runtime.DescriptorStorage.DescriptorValue.GetSetMethod()!, runtime.DescriptorStorage.DescriptorEnumerable.GetSetMethod()!,
                     runtime.DescriptorStorage.DefineProperty),
                 runtime.DescriptorStorage.DescriptorType, runtime.TSFunctionGetOrCreate,
-                runtime.ObjectPrototypeField, runtime.DescriptorStorage.SetPrototype,
+                runtime.ObjectPrototypes.Prototype, runtime.DescriptorStorage.SetPrototype,
                 new BooleanReceiverInputs(runtime.ObjectStorage.Type, runtime.ObjectStorage.FieldsGetter,
                     runtime.Errors.CreateException, runtime.Errors.TypeErrorConstructor)));
         // Number.prototype populate is wired after EmitNumberMethods below.
@@ -1758,8 +1839,8 @@ public partial class RuntimeEmitter
                     runtime.Records.TypedScalarValueFields,
                     runtime.Numbers,
                     runtime.NumericCoercion,
-                    runtime.ObjectPrototypeField,
-                    runtime.ObjectPrototypePopulateMethod,
+                    runtime.ObjectPrototypes.Prototype,
+                    runtime.ObjectPrototypes.Populate,
                     runtime.ObjectStorage,
                     runtime.StringCoercion,
                     runtime.TSFunctionType,
@@ -1795,8 +1876,8 @@ public partial class RuntimeEmitter
                     runtime.InvokeValue,
                     runtime.Numbers,
                     runtime.NumericCoercion,
-                    runtime.ObjectPrototypeField,
-                    runtime.ObjectPrototypePopulateMethod,
+                    runtime.ObjectPrototypes.Prototype,
+                    runtime.ObjectPrototypes.Populate,
                     runtime.ObjectStorage,
                     runtime.StringCoercion,
                     runtime.TSFunctionInvokeWithThis,
@@ -1855,7 +1936,7 @@ public partial class RuntimeEmitter
                     runtime.DescriptorStorage.DescriptorType,
                     runtime.DescriptorStorage.DescriptorWritable.GetSetMethod()!, runtime.DescriptorStorage.DescriptorConfigurable.GetSetMethod()!,
                     runtime.TSFunctionGetOrCreate, runtime.Symbols.GetStorage, runtime.Symbols.ToStringTag,
-                    runtime.ObjectPrototypeField, runtime.DescriptorStorage.SetPrototype,
+                    runtime.ObjectPrototypes.Prototype, runtime.DescriptorStorage.SetPrototype,
                     runtime.ObjectStorage.Type, runtime.ObjectStorage.FieldsGetter, runtime.NumericCoercion.ToNumber, runtime.UndefinedType,
                     runtime.Errors.CreateException, runtime.Errors.TypeErrorConstructor));
         }
@@ -1880,7 +1961,7 @@ public partial class RuntimeEmitter
                     runtime.DescriptorStorage.DefineProperty),
                 runtime.DescriptorStorage.DescriptorType,
                 runtime.TSFunctionGetOrCreate,
-                runtime.ObjectPrototypeField,
+                runtime.ObjectPrototypes.Prototype,
                 runtime.DescriptorStorage.SetPrototype,
                 runtime.ObjectStorage.Type,
                 runtime.GetProperty,
@@ -1906,7 +1987,7 @@ public partial class RuntimeEmitter
             runtime.Dates,
             new DatePrototypePopulateInputs(
                 runtime.DescriptorStorage,
-                runtime.ObjectPrototypeField,
+                runtime.ObjectPrototypes.Prototype,
                 runtime.TSFunctionGetOrCreate
             )
         );
@@ -1964,7 +2045,7 @@ public partial class RuntimeEmitter
             new ErrorPrototypePopulateInputs(
                 runtime.DescriptorStorage,
                 runtime.GetProperty,
-                runtime.ObjectPrototypeField,
+                runtime.ObjectPrototypes.Prototype,
                 runtime.StringCoercion,
                 runtime.Symbols,
                 runtime.TSFunctionCtorWithCache,
@@ -1990,7 +2071,7 @@ public partial class RuntimeEmitter
                 runtime.RegExps,
                 new RegExpPrototypePopulateInputs(
                     runtime.DescriptorStorage,
-                    runtime.ObjectPrototypeField,
+                    runtime.ObjectPrototypes.Prototype,
                     runtime.Symbols,
                     runtime.TSFunctionCtorWithCache,
                     runtime.UndefinedInstance

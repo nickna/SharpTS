@@ -10,16 +10,14 @@ public partial class RuntimeEmitter
     /// constructors. No instance is ever created; prototype constructors receive
     /// null for this parameter.
     /// </summary>
-    private void EmitClassPrototypeMarkerInterface(
-        ModuleBuilder moduleBuilder,
-        EmittedRuntime runtime)
+    private void EmitClassPrototypeMarkerInterface(ModuleBuilder moduleBuilder, EmittedClassPrototypeRuntime classPrototypes)
     {
         var typeBuilder = moduleBuilder.DefineType(
             "$IClassPrototypeMarker",
             TypeAttributes.Public | TypeAttributes.Interface | TypeAttributes.Abstract,
             null);
 
-        runtime.ClassPrototypeMarkerType = typeBuilder.CreateType()!;
+        classPrototypes.MarkerType = typeBuilder.CreateType()!;
     }
 
     /// <summary>

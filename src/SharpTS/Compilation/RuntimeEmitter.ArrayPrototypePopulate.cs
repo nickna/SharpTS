@@ -140,7 +140,7 @@ public partial class RuntimeEmitter
 
         // Per ECMA-262 §23.1.3 Array.prototype's [[Prototype]] is %Object.prototype%.
         il.Emit(OpCodes.Ldsfld, runtime.ArrayOperations.PrototypeField);
-        il.Emit(OpCodes.Ldsfld, runtime.ObjectPrototypeField);
+        il.Emit(OpCodes.Ldsfld, runtime.ObjectPrototypes.Prototype);
         il.Emit(OpCodes.Call, runtime.DescriptorStorage.SetPrototype);
 
         // ECMA-262 §23.1.3.34: Array.prototype[@@iterator] === Array.prototype.values.

@@ -79,7 +79,7 @@ public partial class RuntimeEmitter
         // Function.prototype's [[Prototype]] is %Object.prototype% per
         // ECMA-262 §20.2.3.
         il.Emit(OpCodes.Ldsfld, runtime.FunctionPrototypeField);
-        il.Emit(OpCodes.Ldsfld, runtime.ObjectPrototypeField);
+        il.Emit(OpCodes.Ldsfld, runtime.ObjectPrototypes.Prototype);
         il.Emit(OpCodes.Call, runtime.DescriptorStorage.SetPrototype);
 
         il.Emit(OpCodes.Ret);

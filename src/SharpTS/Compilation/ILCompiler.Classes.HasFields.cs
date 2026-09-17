@@ -928,8 +928,8 @@ public partial class ILCompiler
         // Every ordinary class ultimately inherits Object.prototype. Return
         // its shared methods (hasOwnProperty, toString, valueOf, ...) when no
         // emitted base-class stub claimed the property.
-        il.Emit(OpCodes.Call, _runtime.ObjectPrototypePopulateMethod);
-        il.Emit(OpCodes.Ldsfld, _runtime.ObjectPrototypeField);
+        il.Emit(OpCodes.Call, _runtime.ObjectPrototypes.Populate);
+        il.Emit(OpCodes.Ldsfld, _runtime.ObjectPrototypes.Prototype);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, _runtime.GetProperty);
         il.Emit(OpCodes.Ret);
@@ -950,7 +950,7 @@ public partial class ILCompiler
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "GetType"));
-        il.Emit(OpCodes.Call, _runtime.GetClassPrototypeMethod);
+        il.Emit(OpCodes.Call, _runtime.ClassPrototypes.Get);
         il.Emit(OpCodes.Stloc, prototypeLocal);
 
         il.Emit(OpCodes.Ldarg_0);

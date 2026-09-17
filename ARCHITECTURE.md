@@ -330,6 +330,20 @@ carrier; the strict SyntaxError helper retains its existing CLR exception repres
 Exception wrapping follows supplied optional Promise metadata. Error-cause Proxy handling
 receives six explicit invocation/delegate handles through the shared reflection bridge.
 
+Object prototypes use required `ObjectPrototypes` ownership for the singleton, its
+population helper, `toString`/`valueOf`/`toLocaleString`, `isPrototypeOf`, object creation
+and prototype get/set operations. `ClassPrototypes` separately owns the early class marker
+and the stable class-prototype lookup/registration declarations. Both components reject
+missing, null, duplicate and post-completion metadata writes. The two early Object lookup
+and population tokens require explicit later-body completion; the class marker retains its
+original declaration position. Thirteen helper signatures receive scoped owners and exact
+dependencies. Raw Task and Promise callback branches follow supplied optional Promise
+metadata; callable Proxy branding receives its fine-grained selection explicitly. Prototype
+installation uses the existing scoped descriptor helpers. The per-output class cache and
+legacy prototype table remain local construction inputs. Constructor-free class prototype
+creation, registration order, stable guest identities, mutable prototype state, generated
+member order and deployment behavior are preserved.
+
 Object descriptor APIs use required `ObjectDescriptors` ownership for `defineProperty`,
 `getOwnPropertyDescriptor`, `defineProperties` and `getOwnPropertyDescriptors`. The lookup
 token stays available at its early declaration point; its later body is required explicitly
