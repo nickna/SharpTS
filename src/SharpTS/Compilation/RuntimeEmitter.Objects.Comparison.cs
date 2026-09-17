@@ -6,6 +6,22 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
+    private readonly record struct ObjectAssignInputs(
+        EmittedBooleanRuntime Booleans,
+        EmittedBoxedPrimitiveRuntime BoxedPrimitives,
+        EmittedErrorRuntime Errors,
+        MethodBuilder GetIndex,
+        MethodBuilder GetProperty,
+        EmittedObjectDescriptorRuntime ObjectDescriptors,
+        EmittedObjectKeysRuntime ObjectKeys,
+        EmittedObjectOwnPropertiesRuntime ObjectOwnProperties,
+        ProxyOwnKeysCallInputs ProxyOwnKeys,
+        MethodBuilder SetIndexStrict,
+        MethodBuilder SetPropertyStrict,
+        EmittedSymbolRuntime Symbols,
+        Type UndefinedType
+    );
+
     private readonly record struct ObjectHasOwnInputs(EmittedErrorRuntime Errors, Type UndefinedType);
 
     /// <summary>
@@ -58,7 +74,7 @@ public partial class RuntimeEmitter
     /// - Object.is(-0, +0) returns false
     /// Signature: bool ObjectIs(object value1, object value2)
     /// </summary>
-    private void EmitObjectIs(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitObjectIs(TypeBuilder typeBuilder, EmittedObjectOperationsRuntime objectOperations)
     {
         var method = typeBuilder.DefineMethod(
             "ObjectIs",
@@ -66,7 +82,7 @@ public partial class RuntimeEmitter
             _types.Boolean,
             [_types.Object, _types.Object]
         );
-        runtime.ObjectIs = method;
+        objectOperations.Is = method;
 
         var il = method.GetILGenerator();
 
@@ -217,14 +233,18 @@ public partial class RuntimeEmitter
     /// Emits Object.assign(target, sources) - copies properties from sources to target.
     /// Signature: object ObjectAssign(object target, List&lt;object&gt; sources)
     /// </summary>
-    private void EmitObjectAssign(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitObjectAssign(
+        TypeBuilder typeBuilder,
+        EmittedObjectOperationsRuntime objectOperations,
+        ObjectAssignInputs inputs
+    )
     {
         var method = typeBuilder.DefineMethod(
             "ObjectAssign",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.Object, _types.ListOfObject]);
-        runtime.ObjectAssign = method;
+        objectOperations.Assign = method;
 
         var il = method.GetILGenerator();
         var listType = _types.ListOfObject;
@@ -260,13 +280,13 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Brfalse, throwTarget);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
         il.Emit(OpCodes.Brfalse, targetReady);
         il.MarkLabel(throwTarget);
-        GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot convert undefined or null to object");
+        GuestErrorEmitter.ThrowError(il, inputs.Errors.CreateException, inputs.Errors.TypeErrorConstructor, "Cannot convert undefined or null to object");
         il.MarkLabel(targetReady);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.BoxedPrimitives.ToObject);
+        il.Emit(OpCodes.Call, inputs.BoxedPrimitives.ToObject);
         il.Emit(OpCodes.Stloc, target);
 
         // 2. Process sources in argument order. Snapshot the complete mixed
@@ -286,7 +306,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, source);
         il.Emit(OpCodes.Brfalse, nextSource);
         il.Emit(OpCodes.Ldloc, source);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
         il.Emit(OpCodes.Brfalse, sourcePresent);
         il.Emit(OpCodes.Br, nextSource);
 
@@ -298,7 +318,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Stloc, sourceIsProxy);
         EmitProxyOwnKeysCompiledCall(
-            il, runtime, () => il.Emit(OpCodes.Ldloc, source));
+            il, inputs.ProxyOwnKeys, () => il.Emit(OpCodes.Ldloc, source));
         il.Emit(OpCodes.Stloc, keys);
         il.Emit(OpCodes.Br, keysReady);
         il.MarkLabel(ordinarySource);
@@ -307,10 +327,10 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, source);
         // Preserve GetKeys' mature ordinary-object descriptor handling for
         // enumerable strings, then append all Symbols for per-key filtering.
-        il.Emit(OpCodes.Call, runtime.ObjectKeys.Keys);
+        il.Emit(OpCodes.Call, inputs.ObjectKeys.Keys);
         il.Emit(OpCodes.Stloc, keys);
         il.Emit(OpCodes.Ldloc, source);
-        il.Emit(OpCodes.Call, runtime.ObjectKeys.Symbols);
+        il.Emit(OpCodes.Call, inputs.ObjectKeys.Symbols);
         il.Emit(OpCodes.Castclass, listType);
         il.Emit(OpCodes.Stloc, symbolKeys);
         il.Emit(OpCodes.Ldloc, keys);
@@ -340,17 +360,17 @@ public partial class RuntimeEmitter
         // snapshotted key disappeared.
         il.Emit(OpCodes.Ldloc, source);
         il.Emit(OpCodes.Ldloc, key);
-        il.Emit(OpCodes.Call, runtime.ObjectDescriptors.GetOwnPropertyDescriptor);
+        il.Emit(OpCodes.Call, inputs.ObjectDescriptors.GetOwnPropertyDescriptor);
         il.Emit(OpCodes.Stloc, descriptor);
         il.Emit(OpCodes.Ldloc, descriptor);
         il.Emit(OpCodes.Brfalse, nextKey);
         il.Emit(OpCodes.Ldloc, descriptor);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
         il.Emit(OpCodes.Brtrue, nextKey);
         il.Emit(OpCodes.Ldloc, descriptor);
         il.Emit(OpCodes.Ldstr, "enumerable");
-        il.Emit(OpCodes.Call, runtime.GetProperty);
-        il.Emit(OpCodes.Call, runtime.Booleans.IsTruthy);
+        il.Emit(OpCodes.Call, inputs.GetProperty);
+        il.Emit(OpCodes.Call, inputs.Booleans.IsTruthy);
         il.Emit(OpCodes.Brfalse, nextKey);
         il.Emit(OpCodes.Br, enumerableCheckDone);
 
@@ -359,26 +379,26 @@ public partial class RuntimeEmitter
         // GetKeys, including accessor placeholders and array indices.
         il.MarkLabel(ordinaryEnumerableCheck);
         il.Emit(OpCodes.Ldloc, key);
-        il.Emit(OpCodes.Call, runtime.Symbols.IsSymbol);
+        il.Emit(OpCodes.Call, inputs.Symbols.IsSymbol);
         il.Emit(OpCodes.Brfalse, ordinaryStringEnumerable);
         il.Emit(OpCodes.Ldloc, source);
         il.Emit(OpCodes.Ldloc, key);
-        il.Emit(OpCodes.Call, runtime.ObjectOwnProperties.IsEnumerable);
+        il.Emit(OpCodes.Call, inputs.ObjectOwnProperties.IsEnumerable);
         il.Emit(OpCodes.Brfalse, nextKey);
         il.MarkLabel(ordinaryStringEnumerable);
         il.MarkLabel(enumerableCheckDone);
 
         il.Emit(OpCodes.Ldloc, key);
-        il.Emit(OpCodes.Call, runtime.Symbols.IsSymbol);
+        il.Emit(OpCodes.Call, inputs.Symbols.IsSymbol);
         il.Emit(OpCodes.Brtrue, symbolSet);
         il.Emit(OpCodes.Ldloc, target);
         il.Emit(OpCodes.Ldloc, key);
         il.Emit(OpCodes.Castclass, _types.String);
         il.Emit(OpCodes.Ldloc, source);
         il.Emit(OpCodes.Ldloc, key);
-        il.Emit(OpCodes.Call, runtime.GetIndex);
+        il.Emit(OpCodes.Call, inputs.GetIndex);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Call, runtime.SetPropertyStrict);
+        il.Emit(OpCodes.Call, inputs.SetPropertyStrict);
         il.Emit(OpCodes.Br, keySetDone);
 
         il.MarkLabel(symbolSet);
@@ -386,9 +406,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, key);
         il.Emit(OpCodes.Ldloc, source);
         il.Emit(OpCodes.Ldloc, key);
-        il.Emit(OpCodes.Call, runtime.GetIndex);
+        il.Emit(OpCodes.Call, inputs.GetIndex);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Call, runtime.SetIndexStrict);
+        il.Emit(OpCodes.Call, inputs.SetIndexStrict);
         il.MarkLabel(keySetDone);
 
         il.MarkLabel(nextKey);

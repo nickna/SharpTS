@@ -17,6 +17,10 @@ namespace SharpTS.Compilation;
 /// <seealso cref="ILEmitter"/>
 public class EmittedRuntime
 {
+    /// <summary>Required Object value, entry, assignment, comparison and grouping operations for one compilation.</summary>
+    public EmittedObjectOperationsRuntime ObjectOperations { get; } = new();
+
+
     /// <summary>Required own-property predicates and legacy accessor helpers for one compilation.</summary>
     public EmittedObjectOwnPropertiesRuntime ObjectOwnProperties { get; } = new();
 
@@ -242,8 +246,6 @@ public class EmittedRuntime
 
     public MethodBuilder GetLength { get; set; } = null!;
     public MethodBuilder GetElement { get; set; } = null!;
-    public MethodBuilder GetValues { get; set; } = null!;
-    public MethodBuilder GetEntries { get; set; } = null!;
     // Runtime dispatcher for built-in static member access on stored Type
     // tokens (issue #63). Returns a $TSFunction wrapper matching what the
     // compile-time ArrayStaticEmitter / NumberStaticEmitter / etc. would emit.
@@ -385,9 +387,6 @@ public class EmittedRuntime
     public MethodBuilder DeleteIndex { get; set; } = null!;
     public MethodBuilder DeleteIndexStrict { get; set; } = null!;
     public MethodBuilder WarnSloppyDeleteVariable { get; set; } = null!;
-    public MethodBuilder ObjectFromEntries { get; set; } = null!;
-    public MethodBuilder ObjectIs { get; set; } = null!;
-    public MethodBuilder ObjectAssign { get; set; } = null!;
 
     // @DotNetType event subscription registry (compiled mode — see
     // RuntimeEmitter.EventSubscriptions.cs).
@@ -586,7 +585,6 @@ public class EmittedRuntime
     public MethodBuilder StringTryInvokeSymbolMethod { get; set; } = null!;
 
     // groupBy support
-    public MethodBuilder ObjectGroupBy { get; set; } = null!;
 
     // Error support - emitted types for standalone assemblies
     // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSError and subclasses

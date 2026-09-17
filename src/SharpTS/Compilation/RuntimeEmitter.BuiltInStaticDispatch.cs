@@ -139,9 +139,9 @@ public partial class RuntimeEmitter
         }
 
         EmitObjectMethodLookup("keys",                    runtime.ObjectKeys.Keys, 1);
-        EmitObjectMethodLookup("values",                  runtime.GetValues, 1);
-        EmitObjectMethodLookup("entries",                 runtime.GetEntries, 1);
-        EmitObjectMethodLookup("fromEntries",             runtime.ObjectFromEntries, 1);
+        EmitObjectMethodLookup("values",                  runtime.ObjectOperations.Values, 1);
+        EmitObjectMethodLookup("entries",                 runtime.ObjectOperations.Entries, 1);
+        EmitObjectMethodLookup("fromEntries",             runtime.ObjectOperations.FromEntries, 1);
         EmitObjectMethodLookup("freeze",                  runtime.ObjectState.Freeze, 1);
         EmitObjectMethodLookup("seal",                    runtime.ObjectState.Seal, 1);
         EmitObjectMethodLookup("preventExtensions",       runtime.ObjectState.PreventExtensions, 1);
@@ -157,10 +157,10 @@ public partial class RuntimeEmitter
         // pads the missing props arg with null, which raw ObjectCreate must
         // treat as the explicit-null TypeError case.
         EmitObjectMethodLookup("create",                  runtime.ObjectPrototypes.CreateValueForm, 2);
-        EmitObjectMethodLookup("assign",                  runtime.ObjectAssign, 2);
-        EmitObjectMethodLookup("is",                      runtime.ObjectIs, 2);
+        EmitObjectMethodLookup("assign",                  runtime.ObjectOperations.Assign, 2);
+        EmitObjectMethodLookup("is",                      runtime.ObjectOperations.Is, 2);
         EmitObjectMethodLookup("hasOwn",                  runtime.ObjectOwnProperties.HasOwn, 2);
-        EmitObjectMethodLookup("groupBy",                 runtime.ObjectGroupBy, 2);
+        EmitObjectMethodLookup("groupBy",                 runtime.ObjectOperations.GroupBy, 2);
         EmitObjectMethodLookup("isExtensible",            runtime.ObjectState.IsExtensible, 1);
         EmitObjectMethodLookup("isFrozen",                runtime.ObjectState.IsFrozen, 1);
         EmitObjectMethodLookup("isSealed",                runtime.ObjectState.IsSealed, 1);

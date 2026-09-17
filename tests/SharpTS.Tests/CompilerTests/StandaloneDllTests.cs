@@ -3708,6 +3708,365 @@ public class StandaloneDllTests
             verifyStandardError: error => Assert.Empty(error)));
     }
 
+    public static IEnumerable<object[]> ObjectOperationsMetadataPrograms =>
+    [
+        new object[]
+        {
+            "minimal",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "console.log(1);" },
+            "1\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "values",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let obj: { a: number, b: number, c: number } = { a: 1, b: 2, c: 3 };\nlet values: any[] = Object.values(obj);\nconsole.log(values.length);\nconsole.log(values[0]);\nconsole.log(values[1]);\nconsole.log(values[2]);" },
+            "3\n1\n2\n3\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "mixed",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let obj: { name: string, age: number, active: boolean } = { name: \"Alice\", age: 30, active: true };\nlet values: any[] = Object.values(obj);\nconsole.log(values.length);" },
+            "3\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "entries",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let obj: { a: number, b: number } = { a: 1, b: 2 };\nlet entries: any[] = Object.entries(obj);\nconsole.log(entries.length);\nconsole.log(entries[0][0]);\nconsole.log(entries[0][1]);\nconsole.log(entries[1][0]);\nconsole.log(entries[1][1]);" },
+            "2\na\n1\nb\n2\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "class_values",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "class Person {\n    name: string;\n    age: number;\n    constructor(n: string, a: number) {\n        this.name = n;\n        this.age = a;\n    }\n}\nlet p = new Person(\"Alice\", 30);\nlet values: any[] = Object.values(p);\nconsole.log(values.length);" },
+            "2\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "class_entries",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "class Person {\n    name: string;\n    age: number;\n    constructor(n: string, a: number) {\n        this.name = n;\n        this.age = a;\n    }\n}\nlet p = new Person(\"Alice\", 30);\nlet entries: any[] = Object.entries(p);\nconsole.log(entries.length);" },
+            "2\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "from_entries",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let entries: any[] = [[\"a\", 1], [\"b\", 2], [\"c\", 3]];\nlet obj = Object.fromEntries(entries);\nconsole.log(obj.a);\nconsole.log(obj.b);\nconsole.log(obj.c);" },
+            "1\n2\n3\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "duplicate_keys",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let entries: any[] = [[\"a\", 1], [\"a\", 2], [\"a\", 3]];\nlet obj = Object.fromEntries(entries);\nconsole.log(obj.a);" },
+            "3\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "round_trip",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let original: { x: number, y: number, z: number } = { x: 1, y: 2, z: 3 };\nlet entries: any[] = Object.entries(original);\nlet restored = Object.fromEntries(entries);\nconsole.log(restored.x);\nconsole.log(restored.y);\nconsole.log(restored.z);" },
+            "1\n2\n3\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "map_entries",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let map = new Map<string, number>();\nmap.set(\"x\", 10);\nmap.set(\"y\", 20);\nlet obj = Object.fromEntries(map.entries());\nconsole.log(obj.x);\nconsole.log(obj.y);" },
+            "10\n20\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "assign",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let target: { a: number, b?: number } = { a: 1 };\nlet source: { b: number } = { b: 2 };\nlet result = Object.assign(target, source);\nconsole.log(result.a);\nconsole.log(result.b);" },
+            "1\n2\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "assign_identity",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let target: { a: number } = { a: 1 };\nlet result = Object.assign(target, { b: 2 });\nconsole.log(result === target);" },
+            "true\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "assign_nested",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let target: any = { a: 1 };\nObject.assign(target, { nested: { x: 10 } });\nconsole.log(target.a);\nconsole.log(target.nested.x);" },
+            "1\n10\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "nan",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "console.log(Object.is(NaN, NaN));\nconsole.log(Object.is(NaN, 0));\nconsole.log(Object.is(NaN, \"NaN\"));" },
+            "true\nfalse\nfalse\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "signed_zero",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "console.log(Object.is(0, -0));\nconsole.log(Object.is(-0, 0));\nconsole.log(0 === -0);" },
+            "false\nfalse\ntrue\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "reference",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let obj1: { x: number } = { x: 1 };\nlet obj2: { x: number } = { x: 1 };\nlet obj3 = obj1;\nconsole.log(Object.is(obj1, obj1));\nconsole.log(Object.is(obj1, obj2));\nconsole.log(Object.is(obj1, obj3));" },
+            "true\nfalse\ntrue\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "infinity",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "console.log(Object.is(Infinity, Infinity));\nconsole.log(Object.is(-Infinity, -Infinity));\nconsole.log(Object.is(Infinity, -Infinity));" },
+            "true\ntrue\nfalse\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "group",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const inventory = [\n    { name: \"asparagus\", type: \"vegetables\" },\n    { name: \"bananas\", type: \"fruit\" },\n    { name: \"goat\", type: \"meat\" },\n    { name: \"cherries\", type: \"fruit\" },\n    { name: \"fish\", type: \"meat\" }\n];\nconst result: any = Object.groupBy(inventory, (item: any) => item.type);\nconsole.log(Object.keys(result).length);\nconsole.log(result.vegetables.length);\nconsole.log(result.fruit.length);\nconsole.log(result.meat.length);\nconsole.log(result.fruit[0].name);\nconsole.log(result.fruit[1].name);" },
+            "3\n1\n2\n2\nbananas\ncherries\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "group_empty",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const result: any = Object.groupBy([], (_: any) => \"key\");\nconsole.log(Object.keys(result).length);" },
+            "0\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "group_numeric",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const nums = [1, 2, 3, 4, 5, 6];\nconst result: any = Object.groupBy(nums, (n: any) => n % 2 === 0 ? \"even\" : \"odd\");\nconsole.log(result.odd.length);\nconsole.log(result.even.length);" },
+            "3\n3\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "group_index",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const arr = [\"a\", \"b\", \"c\", \"d\"];\nconst result: any = Object.groupBy(arr, (_: any, i: number) => i < 2 ? \"first\" : \"second\");\nconsole.log(result.first.length);\nconsole.log(result.second.length);\nconsole.log(result.first[0]);\nconsole.log(result.second[0]);" },
+            "2\n2\na\nc\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "descriptors",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const o: any = {a:1}; Object.defineProperty(o,'hidden',{value:2}); Object.defineProperty(o,'last',{get:()=>3,enumerable:true}); console.log(Object.values(o).join(',')); console.log(Object.entries(o).map((v:any)=>v.join(':')).join(','));" },
+            "1,3\na:1,last:3\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "symbol_assign",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const s=Symbol('s'); const source: any = {a:1}; source[s]=7; const target: any = Object.assign({},source); console.log(target[s],Object.values(target).join(','),Object.getOwnPropertySymbols(target).length);" },
+            "7 1 1\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "getter_order",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let trace=''; const source: any = {}; Object.defineProperty(source,'a',{get(){trace+='a';return 1;},enumerable:true}); Object.defineProperty(source,'b',{get(){trace+='b';return 2;},enumerable:true}); const target: any = {}; Object.defineProperty(target,'a',{set(v:any){trace+='s'+v;},configurable:true}); Object.assign(target,source); console.log(trace,target.b);" },
+            "as1b 2\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "array_holes",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const a: any = [1,2,3]; delete a[1]; console.log(Object.values(a).join(',')); console.log(Object.entries(a).map((v:any)=>v.join(':')).join(','));" },
+            "1,3\n0:1,2:3\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "nullish",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "for (const v of [null,undefined]) { try { Object.fromEntries(v); } catch(e:any) { console.log(e instanceof TypeError); } try { Object.assign(v,{a:1}); } catch(e:any) { console.log(e instanceof TypeError); } }" },
+            "true\ntrue\ntrue\ntrue\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "promise_values",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "new Promise((resolve:any,reject:any)=>{ console.log(Object.values(resolve).length,Object.entries(reject).length); resolve(1); });" },
+            "0 0\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "proxy_values",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let trace=''; const p:any=new Proxy({x:1,y:2},{ownKeys(){trace+='k';return ['y','x'];},getOwnPropertyDescriptor(t:any,k:any){trace+='d'+k;return {value:t[k],enumerable:true,configurable:true};},get(t:any,k:any){trace+='g'+k;return t[k];}}); console.log(Object.values(p).join(',')); console.log(trace);" },
+            "2,1\nkdygydxgx\n",
+            false,
+            false
+        },
+        new object[]
+        {
+            "proxy_assign",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let trace=''; const p:any=new Proxy({x:1},{ownKeys(){trace+='k';return ['x'];},getOwnPropertyDescriptor(t:any,k:any){trace+='d';return {value:1,enumerable:true,configurable:true};},get(t:any,k:any){trace+='g';return t[k];}}); const target:any=Object.assign({},p); console.log(target.x,trace);" },
+            "1 kdg\n",
+            false,
+            false
+        },
+        new object[]
+        {
+            "esm",
+            "main.ts",
+            new string[] { "dep.ts", "main.ts" },
+            new string[] { "export const value = {b:2,a:1};", "import {value} from './dep'; console.log(Object.values(value).join(','));" },
+            "2,1\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "commonjs",
+            "main.cjs",
+            new string[] { "dep.cjs", "main.cjs" },
+            new string[] { "exports.value={a:1};", "const dep=require('./dep.cjs'); console.log(Object.entries(dep.value).map(v=>v.join(':')).join(','));" },
+            "a:1\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "hosted_operations",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "export function values(value:any){return Object.values(value);} export function assign(target:any,source:any){return Object.assign(target,source);}" },
+            "",
+            true,
+            true
+        },
+        new object[]
+        {
+            "hosted_minimal",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "export const value=1;" },
+            "",
+            true,
+            true
+        },
+    ];
+
+    [Theory]
+    [MemberData(nameof(ObjectOperationsMetadataPrograms))]
+    public void Isolated_ObjectOperationsMetadata_PreservesOperationsAndDeployment(
+        string name, string entry, string[] paths, string[] sources, string expected, bool hosted, bool standalone)
+    {
+        using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        for (int i = 0; i < paths.Length; i++) tempDir.CreateFile(paths[i], sources[i]);
+        var sourcePath = tempDir.GetPath(entry);
+        var dllPath = tempDir.GetPath($"object-operations-metadata_{name}.dll");
+        var deployment = standalone ? " --standalone" : "";
+        var hosting = hosted ? " --target dll --hosted" : "";
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --noLib --compile \"{sourcePath}\" -o \"{dllPath}\" --verify{deployment}{hosting}", tempDir.Path);
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        var references = GetAssemblyReferences(dllPath);
+        Assert.DoesNotContain("SharpTS", references);
+        Assert.Equal(hosted, references.Contains("SharpTS.Hosting.Abstractions"));
+        Assert.Equal(!standalone, File.Exists(tempDir.GetPath("SharpTS.dll")));
+        if (!hosted)
+            Assert.Equal(expected, ExecuteCompiledDllIsolated(dllPath, timeoutMs: 30000,
+                verifyStandardError: error => Assert.Empty(error)));
+    }
+
+
     public static IEnumerable<object[]> ObjectOwnPropertiesMetadataPrograms =>
     [
         new object[]

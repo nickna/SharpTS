@@ -1280,16 +1280,78 @@ public partial class RuntimeEmitter
         // MergeIntoObject implements CopyDataProperties through GetKeys and
         // GetProperty, so its body must be emitted after GetKeys is available.
         EmitMergeIntoObject(typeBuilder, runtime);
-        EmitGetValues(typeBuilder, runtime);
-        EmitGetEntries(typeBuilder, runtime);
-        EmitObjectFromEntries(typeBuilder, runtime);
+        EmitGetValues(
+            typeBuilder,
+            runtime.ObjectOperations,
+            new GetValuesInputs(
+                runtime.ArrayStorage,
+                runtime.Booleans,
+                runtime.DescriptorStorage,
+                runtime.Errors,
+                runtime.GetProperty,
+                runtime.IHasFieldsFieldsGetter,
+                runtime.IHasFieldsInterface,
+                runtime.ObjectKeys,
+                runtime.ObjectStorage,
+                runtime.TSFunctionType,
+                runtime.UndefinedType
+            )
+        );
+        EmitGetEntries(
+            typeBuilder,
+            runtime.ObjectOperations,
+            new GetEntriesInputs(
+                runtime.ArrayStorage,
+                runtime.Booleans,
+                runtime.DescriptorStorage,
+                runtime.Errors,
+                runtime.GetProperty,
+                runtime.IHasFieldsFieldsGetter,
+                runtime.IHasFieldsInterface,
+                runtime.ObjectKeys,
+                runtime.ObjectStorage,
+                runtime.TSFunctionType,
+                runtime.UndefinedType
+            )
+        );
+        EmitObjectFromEntries(
+            typeBuilder,
+            runtime.ObjectOperations,
+            new ObjectFromEntriesInputs(runtime.Errors, runtime.IterateToList, runtime.Symbols, runtime.UndefinedType)
+        );
         EmitObjectHasOwn(
             typeBuilder,
             runtime.ObjectOwnProperties,
             new ObjectHasOwnInputs(runtime.Errors, runtime.UndefinedType)
         );
-        EmitObjectIs(typeBuilder, runtime);
-        EmitObjectAssign(typeBuilder, runtime);
+        EmitObjectIs(typeBuilder, runtime.ObjectOperations);
+        EmitObjectAssign(
+            typeBuilder,
+            runtime.ObjectOperations,
+            new ObjectAssignInputs(
+                runtime.Booleans,
+                runtime.BoxedPrimitives,
+                runtime.Errors,
+                runtime.GetIndex,
+                runtime.GetProperty,
+                runtime.ObjectDescriptors,
+                runtime.ObjectKeys,
+                runtime.ObjectOwnProperties,
+                new ProxyOwnKeysCallInputs(
+                    runtime.ObjectKeys.Ordinary,
+                    runtime.ObjectKeys.CreateProxyList,
+                    runtime.ObjectDescriptors.GetOwnPropertyDescriptor,
+                    runtime.ObjectState.IsExtensible,
+                    runtime.Symbols.IsSymbol,
+                    runtime.GetProperty,
+                    runtime.InvokeMethodUnwrapped
+                ),
+                runtime.SetIndexStrict,
+                runtime.SetPropertyStrict,
+                runtime.Symbols,
+                runtime.UndefinedType
+            )
+        );
         EmitObjectFreeze(typeBuilder, runtime.ObjectState, new ObjectIntegrityInputs(runtime.ArrayStorage, runtime.DescriptorStorage, runtime.ObjectStorage));
         EmitObjectSeal(typeBuilder, runtime.ObjectState, new ObjectIntegrityInputs(runtime.ArrayStorage, runtime.DescriptorStorage, runtime.ObjectStorage));
         EmitObjectIsFrozen(typeBuilder, runtime.ObjectState);
@@ -1310,7 +1372,7 @@ public partial class RuntimeEmitter
                 runtime.IHasFieldsInterface,
                 runtime.InvokeMethodUnwrapped,
                 runtime.NumericCoercion,
-                runtime.ObjectIs,
+                runtime.ObjectOperations.Is,
                 runtime.ObjectState,
                 runtime.ObjectStorage,
                 runtime.Records,
@@ -1343,7 +1405,7 @@ public partial class RuntimeEmitter
                 runtime.ArrayStorage,
                 runtime.Dates,
                 runtime.DescriptorStorage,
-                runtime.GetEntries,
+                runtime.ObjectOperations.Entries,
                 runtime.ObjectKeys.Keys,
                 runtime.ObjectKeys.Names,
                 runtime.GetProperty,
@@ -1354,10 +1416,10 @@ public partial class RuntimeEmitter
                 runtime.Json,
                 runtime.LookupBuiltInStaticMember,
                 runtime.Math,
-                runtime.ObjectAssign,
-                runtime.ObjectFromEntries,
+                runtime.ObjectOperations.Assign,
+                runtime.ObjectOperations.FromEntries,
                 runtime.ObjectOwnProperties.HasOwn,
-                runtime.ObjectIs,
+                runtime.ObjectOperations.Is,
                 runtime.ObjectState,
                 runtime.ObjectStorage,
                 runtime.Promise,
@@ -1486,7 +1548,22 @@ public partial class RuntimeEmitter
                 runtime.UndefinedType
             )
         );
-        EmitObjectGroupBy(typeBuilder, runtime);
+        EmitObjectGroupBy(
+            typeBuilder,
+            runtime.ObjectOperations,
+            new ObjectGroupByInputs(
+                runtime.ArrayStorage,
+                runtime.DescriptorStorage,
+                runtime.Errors,
+                runtime.GetIteratorFunction,
+                runtime.InvokeValue,
+                runtime.IterateToList,
+                runtime.RuntimeType,
+                runtime.Symbols,
+                runtime.TSFunctionType,
+                runtime.UndefinedType
+            )
+        );
         // Reflect.set / setPrototypeOf / defineProperty / ownKeys / apply /
         // construct — gated on UsesReflect. (Reflect.metadata uses
         // UsesReflectMetadata, gated separately at line 848.)

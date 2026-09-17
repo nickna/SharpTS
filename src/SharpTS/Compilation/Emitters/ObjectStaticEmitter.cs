@@ -53,17 +53,17 @@ public sealed class ObjectStaticEmitter : IStaticTypeEmitterStrategy
                 il.Emit(OpCodes.Call, ctx.Runtime!.ObjectKeys.Keys);
                 return true;
             case "values":
-                il.Emit(OpCodes.Call, ctx.Runtime!.GetValues);
+                il.Emit(OpCodes.Call, ctx.Runtime!.ObjectOperations.Values);
                 return true;
             case "entries":
-                il.Emit(OpCodes.Call, ctx.Runtime!.GetEntries);
+                il.Emit(OpCodes.Call, ctx.Runtime!.ObjectOperations.Entries);
                 return true;
             case "fromEntries":
                 // Load Symbol.iterator and runtime type for IterateToList
                 il.Emit(OpCodes.Ldsfld, ctx.Runtime!.Symbols.Iterator);
                 il.Emit(OpCodes.Ldtoken, ctx.Runtime!.RuntimeType);
                 il.Emit(OpCodes.Call, ctx.Types.TypeGetTypeFromHandle);
-                il.Emit(OpCodes.Call, ctx.Runtime!.ObjectFromEntries);
+                il.Emit(OpCodes.Call, ctx.Runtime!.ObjectOperations.FromEntries);
                 return true;
             case "hasOwn":
                 // hasOwn takes 2 arguments: obj and key
@@ -95,7 +95,7 @@ public sealed class ObjectStaticEmitter : IStaticTypeEmitterStrategy
                 {
                     il.Emit(OpCodes.Ldsfld, ctx.Runtime!.UndefinedInstance);
                 }
-                il.Emit(OpCodes.Call, ctx.Runtime!.ObjectIs);
+                il.Emit(OpCodes.Call, ctx.Runtime!.ObjectOperations.Is);
                 // Box the bool result for consistency with other methods
                 il.Emit(OpCodes.Box, typeof(bool));
                 return true;
@@ -119,7 +119,7 @@ public sealed class ObjectStaticEmitter : IStaticTypeEmitterStrategy
                     il.Emit(OpCodes.Callvirt, listAdd);
                 }
 
-                il.Emit(OpCodes.Call, ctx.Runtime!.ObjectAssign);
+                il.Emit(OpCodes.Call, ctx.Runtime!.ObjectOperations.Assign);
                 return true;
             case "freeze":
                 // Object.freeze(obj) - freezes the object and returns it
@@ -251,7 +251,7 @@ public sealed class ObjectStaticEmitter : IStaticTypeEmitterStrategy
                 {
                     il.Emit(OpCodes.Ldnull);
                 }
-                il.Emit(OpCodes.Call, ctx.Runtime!.ObjectGroupBy);
+                il.Emit(OpCodes.Call, ctx.Runtime!.ObjectOperations.GroupBy);
                 return true;
             case "defineProperties":
                 // Object.defineProperties(obj, props) - defines multiple properties

@@ -5,6 +5,12 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
+    private readonly record struct ProxyEnumerableOwnPropertiesCheckInputs(
+        EmittedBooleanRuntime Booleans,
+        MethodBuilder GetProperty,
+        Type UndefinedType
+    );
+
     private readonly record struct ProxyOwnKeysHelperBodiesInputs(MethodBuilder GetProperty, EmittedNumericCoercionRuntime NumericCoercion);
 
     private readonly record struct ProxyOwnKeysCheckInputs(
@@ -760,12 +766,13 @@ public partial class RuntimeEmitter
     /// in the same per-key loop, matching the observable specification order.
     /// Non-proxy receivers branch to <paramref name="notProxyLabel"/>.
     /// </summary>
-    internal void EmitProxyEnumerableOwnPropertiesCheck(
+    private void EmitProxyEnumerableOwnPropertiesCheck(
         ILGenerator il,
-        EmittedRuntime runtime,
+        ProxyEnumerableOwnPropertiesCheckInputs inputs,
         Action emitLoadObj,
         Label notProxyLabel,
-        bool entries)
+        bool entries
+    )
     {
         var proxyLabel = il.DefineLabel();
         EmitProxyTypeCheck(il, emitLoadObj, proxyLabel, notProxyLabel);
@@ -816,17 +823,17 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, descriptorLocal);
         il.Emit(OpCodes.Brfalse, advance);
         il.Emit(OpCodes.Ldloc, descriptorLocal);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
         il.Emit(OpCodes.Brtrue, advance);
         il.Emit(OpCodes.Ldloc, descriptorLocal);
         il.Emit(OpCodes.Ldstr, "enumerable");
-        il.Emit(OpCodes.Call, runtime.GetProperty);
-        il.Emit(OpCodes.Call, runtime.Booleans.IsTruthy);
+        il.Emit(OpCodes.Call, inputs.GetProperty);
+        il.Emit(OpCodes.Call, inputs.Booleans.IsTruthy);
         il.Emit(OpCodes.Brfalse, advance);
 
         emitLoadObj();
         il.Emit(OpCodes.Ldloc, keyLocal);
-        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, inputs.GetProperty);
         il.Emit(OpCodes.Stloc, valueLocal);
         if (entries)
         {
