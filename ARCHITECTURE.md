@@ -330,6 +330,14 @@ carrier; the strict SyntaxError helper retains its existing CLR exception repres
 Exception wrapping follows supplied optional Promise metadata. Error-cause Proxy handling
 receives six explicit invocation/delegate handles through the shared reflection bridge.
 
+Property and index deletion use required `ObjectDeletion` ownership for five
+declarations. Checked access rejects missing, null, duplicate and post-completion
+writes. Ten helpers receive scoped owners and exact dependencies, including shared
+strict TypeError and Proxy callbacks. Index deletion selects Promise callback
+receivers from supplied optional metadata. Named strict arguments, declaration and
+body order, dictionary compaction, strict/sloppy failures, descriptor and Symbol
+rules, array holes, guest mutation and deployment remain unchanged.
+
 Object construction, spread, enumerable projection and rest use required
 `ObjectConstruction` ownership for six checked declarations. The owner rejects
 missing, null, duplicate and post-completion writes. Seven helpers receive their

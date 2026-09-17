@@ -5,6 +5,13 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
+    private readonly record struct ProxyDeleteCheckInputs(
+        MethodBuilder GetProperty,
+        MethodBuilder InvokeMethodUnwrapped,
+        EmittedObjectDescriptorRuntime ObjectDescriptors,
+        EmittedObjectStateRuntime ObjectState
+    );
+
     private readonly record struct ProxyEnumerableOwnPropertiesCheckInputs(
         EmittedBooleanRuntime Booleans,
         MethodBuilder GetProperty,
@@ -398,16 +405,21 @@ public partial class RuntimeEmitter
     /// Emits a proxy-aware delete check: checks if obj is a proxy and calls TrapDeleteProperty(name, null).
     /// Returns bool result.
     /// </summary>
-    internal void EmitProxyDeleteCheck(
-        ILGenerator il, EmittedRuntime runtime, Action emitLoadObj,
-        Action emitLoadName, Label notProxyLabel)
+    private void EmitProxyDeleteCheck(
+        ILGenerator il,
+        EmittedObjectDeletionRuntime objectDeletion,
+        ProxyDeleteCheckInputs inputs,
+        Action emitLoadObj,
+        Action emitLoadName,
+        Label notProxyLabel
+    )
     {
         var proxyLabel = il.DefineLabel();
         EmitProxyTypeCheck(il, emitLoadObj, proxyLabel, notProxyLabel);
 
         il.MarkLabel(proxyLabel);
         EmitProxyMethodCallUnwrapped(
-            il, runtime, emitLoadObj, "TrapDeletePropertyCompiled", () =>
+            il, inputs.InvokeMethodUnwrapped, emitLoadObj, "TrapDeletePropertyCompiled", () =>
         {
             il.Emit(OpCodes.Ldc_I4_5);
             il.Emit(OpCodes.Newarr, _types.Object);
@@ -415,13 +427,13 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldc_I4_0);
             emitLoadName();
             il.Emit(OpCodes.Stelem_Ref);
-            EmitDelegateArgument(1, runtime.DeleteProperty,
+            EmitDelegateArgument(1, objectDeletion.Property,
                 typeof(Func<object, string, bool>));
-            EmitDelegateArgument(2, runtime.ObjectDescriptors.GetOwnPropertyDescriptor,
+            EmitDelegateArgument(2, inputs.ObjectDescriptors.GetOwnPropertyDescriptor,
                 typeof(Func<object, object, object?>));
-            EmitDelegateArgument(3, runtime.ObjectState.IsExtensible,
+            EmitDelegateArgument(3, inputs.ObjectState.IsExtensible,
                 typeof(Func<object, bool>));
-            EmitDelegateArgument(4, runtime.GetProperty,
+            EmitDelegateArgument(4, inputs.GetProperty,
                 typeof(Func<object, string, object?>));
 
             void EmitDelegateArgument(int slot, MethodInfo target, Type delegateType)

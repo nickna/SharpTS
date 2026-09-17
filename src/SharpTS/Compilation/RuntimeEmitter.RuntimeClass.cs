@@ -1123,8 +1123,50 @@ public partial class RuntimeEmitter
             runtime.UndefinedType, runtime.GetProperty, runtime.NumericCoercion.ToNumber, runtime.StringCoercion.ToJsString, runtime.Errors.CreateException, runtime.Errors.TypeErrorConstructor);
         EmitSetProperty(typeBuilder, runtime);
         EmitSetPropertyStrict(typeBuilder, runtime);
-        EmitDeleteProperty(typeBuilder, runtime);
-        EmitDeletePropertyStrict(typeBuilder, runtime);
+        EmitDeleteProperty(
+            typeBuilder,
+            runtime.ObjectDeletion,
+            new DeletePropertyInputs(
+                runtime.ArrayStorage,
+                runtime.Booleans,
+                runtime.DescriptorStorage,
+                runtime.Errors,
+                runtime.GetProperty,
+                runtime.GlobalThisProperties,
+                runtime.GlobalThisSingletonField,
+                runtime.IHasFieldsFieldsGetter,
+                runtime.IHasFieldsInterface,
+                runtime.InvokeMethodUnwrapped,
+                runtime.ObjectDescriptors,
+                runtime.ObjectState,
+                runtime.ObjectStorage,
+                runtime.Records,
+                runtime.TSFunctionType,
+                runtime.UndefinedType
+            )
+        );
+        EmitDeletePropertyStrict(
+            typeBuilder,
+            runtime.ObjectDeletion,
+            new DeletePropertyStrictInputs(
+                runtime.ArrayStorage,
+                runtime.Booleans,
+                runtime.DescriptorStorage,
+                runtime.Errors,
+                runtime.GetProperty,
+                runtime.GlobalThisProperties,
+                runtime.GlobalThisSingletonField,
+                runtime.IHasFieldsFieldsGetter,
+                runtime.IHasFieldsInterface,
+                runtime.InvokeMethodUnwrapped,
+                runtime.ObjectDescriptors,
+                runtime.ObjectState,
+                runtime.ObjectStorage,
+                runtime.Records,
+                runtime.TSFunctionType,
+                runtime.UndefinedType
+            )
+        );
         EmitMergeIntoTSObject(
             typeBuilder,
             runtime.ObjectConstruction,
@@ -1151,8 +1193,38 @@ public partial class RuntimeEmitter
         EmitDisposeResource(typeBuilder, runtime);
         EmitSetIndex(typeBuilder, runtime);
         EmitSetIndexStrict(typeBuilder, runtime);
-        EmitDeleteIndex(typeBuilder, runtime);
-        EmitDeleteIndexStrict(typeBuilder, runtime);
+        EmitDeleteIndex(
+            typeBuilder,
+            runtime.ObjectDeletion,
+            new DeleteIndexInputs(
+                runtime.ArrayStorage,
+                runtime.DescriptorStorage,
+                runtime.Errors,
+                runtime.Json,
+                runtime.Math,
+                runtime.ObjectState,
+                runtime.Promise,
+                runtime.StringCoercion,
+                runtime.Symbols,
+                runtime.TSFunctionType
+            )
+        );
+        EmitDeleteIndexStrict(
+            typeBuilder,
+            runtime.ObjectDeletion,
+            new DeleteIndexStrictInputs(
+                runtime.ArrayStorage,
+                runtime.DescriptorStorage,
+                runtime.Errors,
+                runtime.Json,
+                runtime.Math,
+                runtime.ObjectState,
+                runtime.Promise,
+                runtime.StringCoercion,
+                runtime.Symbols,
+                runtime.TSFunctionType
+            )
+        );
         EmitStrictModeHelpers(typeBuilder, runtime);
         // Basic iterator protocol methods - must come AFTER object methods (need GetProperty, InvokeMethodValue)
         EmitIteratorMethodsBasic(typeBuilder, runtime);
@@ -1669,7 +1741,7 @@ public partial class RuntimeEmitter
                     runtime.ObjectDescriptors.GetOwnPropertyDescriptor,
                     runtime.StringCoercion.ToJsString,
                     runtime.ObjectState.IsExtensible,
-                    runtime.DeleteProperty,
+                    runtime.ObjectDeletion.Property,
                     runtime.UndefinedType,
                     runtime.GetProperty
                 )
@@ -2088,7 +2160,7 @@ public partial class RuntimeEmitter
                 typeBuilder,
                 runtime.Json.RequireImplementation(),
                 new JsonParseWithReviverInputs(
-                    runtime.DeleteProperty,
+                    runtime.ObjectDeletion.Property,
                     runtime.DescriptorStorage,
                     runtime.InvokeMethodUnwrapped,
                     runtime.ObjectKeys.Normalize,

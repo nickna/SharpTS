@@ -3708,6 +3708,335 @@ public class StandaloneDllTests
             verifyStandardError: error => Assert.Empty(error)));
     }
 
+    public static IEnumerable<object[]> ObjectDeletionMetadataPrograms =>
+    [
+        new object[]
+        {
+            "minimal",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "console.log(1);" },
+            "1\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "named",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let obj: { name?: string } = { name: \"test\" };\nlet result: boolean = delete obj.name;\nconsole.log(result);\nconsole.log(obj.name === null || obj.name === undefined);" },
+            "true\ntrue\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "computed",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let obj: { [key: string]: any } = { key: \"value\" };\nlet result: boolean = delete obj[\"key\"];\nconsole.log(result);\nconsole.log(obj[\"key\"] === null || obj[\"key\"] === undefined);" },
+            "true\ntrue\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "existing",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let obj: { foo?: string } = { foo: \"bar\" };\nconsole.log(obj.foo);\nlet result: boolean = delete obj.foo;\nconsole.log(result);\nconsole.log(obj.foo === null || obj.foo === undefined);" },
+            "bar\ntrue\ntrue\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "frozen",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let obj = { name: \"test\" };\nObject.freeze(obj);\nlet result: boolean = delete obj.name;\nconsole.log(result);\nconsole.log(obj.name);" },
+            "false\ntest\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "sealed",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let obj = { name: \"test\" };\nObject.seal(obj);\nlet result: boolean = delete obj.name;\nconsole.log(result);\nconsole.log(obj.name);" },
+            "false\ntest\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "canonical_array",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const aliases: string[] = [\"01\", \"+1\", \" 1 \"];\nconst values: any = [\"zero\", \"one\"];\nfor (const key of aliases) {\n    Object.defineProperty(values, key, {\n        value: key,\n        writable: true,\n        enumerable: true,\n        configurable: true\n    });\n}\n\nconsole.log(values[1]);\nfor (const key of aliases) {\n    const descriptor = Object.getOwnPropertyDescriptor(values, key)!;\n    console.log(values[key] === key,\n        descriptor.value === key,\n        descriptor.enumerable,\n        descriptor.configurable);\n}\n\nconst sealed: any = [\"zero\", \"one\"];\nObject.seal(sealed);\nfor (const key of aliases) {\n    console.log(\n        Object.getOwnPropertyDescriptor(sealed, key) === undefined,\n        delete sealed[key],\n        sealed[1]);\n}" },
+            "one\ntrue true true true\ntrue true true true\ntrue true true true\ntrue true one\ntrue true one\ntrue true one\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "multiple",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let obj: any = { a: 1, b: 2, c: 3 };\ndelete obj.a;\ndelete obj.c;\nconsole.log(obj.a === null || obj.a === undefined);\nconsole.log(obj.b);\nconsole.log(obj.c === null || obj.c === undefined);" },
+            "true\n2\ntrue\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "expression",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let obj: { prop?: string } = { prop: \"value\" };\nif (delete obj.prop) {\n    console.log(\"deleted\");\n}" },
+            "deleted\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "symbol",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let sym = Symbol(\"key\");\nlet obj: { [key: symbol]: string } = {};\nobj[sym] = \"value\";\nconsole.log(obj[sym]);\ndelete obj[sym];\nconsole.log(obj[sym]);" },
+            "value\nundefined\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "proxy_delete",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const target: any = { x: 1, y: 2 };\nlet deletedProp = \"\";\nconst handler = {\n    deleteProperty(target: any, prop: string) {\n        deletedProp = prop;\n        delete target[prop];\n        return true;\n    }\n};\nconst p: any = new Proxy(target, handler);\ndelete p.x;\nconsole.log(deletedProp);\nconsole.log(target.x);" },
+            "x\nundefined\n",
+            false,
+            false
+        },
+        new object[]
+        {
+            "proxy_forward",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const target: any = { attr: 1 };\nconst proxy: any = new Proxy(target, {});\nproxy.attr = \"changed\";\nconsole.log(proxy.attr);\nconsole.log(target.attr);\nproxy.attr = 1;\nconsole.log(delete proxy.attr);\nconsole.log(proxy.hasOwnProperty(\"attr\"));\nconsole.log(target.hasOwnProperty(\"attr\"));" },
+            "changed\nchanged\ntrue\nfalse\nfalse\n",
+            false,
+            false
+        },
+        new object[]
+        {
+            "reflect",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let obj: any = { x: 1, y: 2 };\nlet result: boolean = Reflect.deleteProperty(obj, \"x\");\nconsole.log(result);\nconsole.log(Reflect.has(obj, \"x\"));" },
+            "true\nfalse\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "reflect_missing",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let obj: any = { x: 1 };\nlet result: boolean = Reflect.deleteProperty(obj, \"missing\");\nconsole.log(result);" },
+            "true\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "reflect_frozen",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let obj: any = { x: 1 };\nObject.freeze(obj);\nconsole.log(Reflect.deleteProperty(obj, \"x\"));\nconsole.log(obj.x);" },
+            "false\n1\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "packed",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const a: any[] = [];\na[0] = 1; a[1] = 2; a[2] = 3;\ndelete a[1];\na.length = 2;\na.length = 4;\nconsole.log([a[0], 1 in a, a[1], 2 in a, 3 in a, a.length].join(\"|\"));" },
+            "1|false||false|false|4\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "spread",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "function retain(value: any): any { return value; }\nfunction work(n: number): void {\n    const removed = { a: n, b: n + 1 };\n    delete removed.a;\n    const deletedResult = { ...removed };\n    console.log(Object.keys(retain(deletedResult)).join(\",\"));\n    const incremented = { a: n };\n    console.log(incremented.a++);\n    const postResult = { ...incremented };\n    console.log(retain(postResult).a);\n    console.log(++incremented.a);\n    const preResult = { ...incremented };\n    console.log(retain(preResult).a);\n}\nwork(1);" },
+            "b\n1\n2\n3\n3\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "getter_snapshot",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const proto: any = { b: 9 };\nconst obj: any = Object.create(proto);\nobj.a = {\n    toJSON: function (): number {\n        delete obj.b;\n        return 1;\n    }\n};\nobj.b = 2;\nconsole.log(JSON.stringify(obj));" },
+            "{\"a\":1,\"b\":9}\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "builtin",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const prototypes: any[] = [Object.prototype, Array.prototype, String.prototype,\n    Number.prototype, Boolean.prototype, BigInt.prototype, Symbol.prototype,\n    Function.prototype, Error.prototype, Promise.prototype];\nconst names = [\"valueOf\", \"map\", \"trim\", \"toFixed\", \"valueOf\", \"valueOf\",\n    \"valueOf\", \"bind\", \"toString\", \"then\"];\nfor (let i = 0; i < prototypes.length; i++) {\n    const p: any = prototypes[i];\n    const name = names[i];\n    console.log(delete p[name]);\n    console.log(Object.prototype.hasOwnProperty.call(p, name));\n    Object.defineProperty(p, name, {\n        value: 17, writable: true, enumerable: false, configurable: true\n    });\n    console.log(p[name]);\n    console.log(delete p[name]);\n    console.log(Object.prototype.hasOwnProperty.call(p, name));\n    p[name] = 23;\n    console.log(p[name]);\n    Object.defineProperty(p, name, { value: 23, writable: false, configurable: false });\n    console.log(delete p[name]);\n    let rejected = false;\n    try { Object.defineProperty(p, name, { value: 99 }); }\n    catch (e) { rejected = true; }\n    console.log(rejected);\n    console.log(p[name]);\n}" },
+            "true\nfalse\n17\ntrue\nfalse\n23\nfalse\ntrue\n23\ntrue\nfalse\n17\ntrue\nfalse\n23\nfalse\ntrue\n23\ntrue\nfalse\n17\ntrue\nfalse\n23\nfalse\ntrue\n23\ntrue\nfalse\n17\ntrue\nfalse\n23\nfalse\ntrue\n23\ntrue\nfalse\n17\ntrue\nfalse\n23\nfalse\ntrue\n23\ntrue\nfalse\n17\ntrue\nfalse\n23\nfalse\ntrue\n23\ntrue\nfalse\n17\ntrue\nfalse\n23\nfalse\ntrue\n23\ntrue\nfalse\n17\ntrue\nfalse\n23\nfalse\ntrue\n23\ntrue\nfalse\n17\ntrue\nfalse\n23\nfalse\ntrue\n23\ntrue\nfalse\n17\ntrue\nfalse\n23\nfalse\ntrue\n23\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "reinsert",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const o:any={a:1,b:2,c:3}; console.log(delete o.b); o.d=4; o.b=5; console.log(Object.keys(o).join(','),o.b);" },
+            "true\na,c,d,b 5\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "promise_callbacks",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "new Promise((resolve:any,reject:any)=>{for(const f of [resolve,reject]){console.log(delete f['name'],Object.hasOwn(f,'name'));console.log(delete f['length'],Object.hasOwn(f,'length'));} resolve(1);});" },
+            "true false\ntrue false\ntrue false\ntrue false\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "esm",
+            "main.ts",
+            new string[] { "dep.ts", "main.ts" },
+            new string[] { "export const value:any={a:1,b:2};", "import {value} from './dep'; console.log(delete value.a,Object.keys(value).join(','));" },
+            "true b\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "commonjs",
+            "main.cjs",
+            new string[] { "dep.cjs", "main.cjs" },
+            new string[] { "exports.value={a:1,b:2};", "const dep=require('./dep.cjs'); console.log(delete dep.value.a,Object.keys(dep.value).join(','));" },
+            "true b\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "hosted_deletion",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "export function remove(value:any,key:any){return delete value[key];} export function strict(value:any){'use strict';return delete value.x;}" },
+            "",
+            true,
+            true
+        },
+        new object[]
+        {
+            "hosted_minimal",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "export const value=1;" },
+            "",
+            true,
+            true
+        },
+        new object[]
+        {
+            "accessor_delete",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let calls=0; const o:any={}; Object.defineProperty(o,'x',{get(){calls++;return 1;},configurable:true,enumerable:true}); console.log(delete o.x,Object.hasOwn(o,'x'),calls);" },
+            "true false 0\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "strict_frozen_function",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "function check(){'use strict'; const o:any=Object.freeze({x:1}); try {delete o.x;} catch(e:any) {console.log(e instanceof TypeError,e.message.includes('Cannot delete property'));} console.log(o.x);} check();" },
+            "true true\n1\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "strict_index_function",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "function check(){'use strict'; const o:any=Object.freeze({x:1}); const k:any='x'; try {delete o[k];} catch(e:any) {console.log(e instanceof TypeError,e.message.includes('Cannot delete property'));} console.log(o.x);} check();" },
+            "true true\n1\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "strict_set_function",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "function check(){'use strict'; const o:any=Object.freeze({x:1}); try {o.x=2;} catch(e:any) {console.log(e instanceof TypeError,e.message.includes('Cannot assign to read only property'));} console.log(o.x);} check();" },
+            "true true\n1\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "strict_extend_function",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "function check(){'use strict'; const o:any=Object.seal({x:1}); try {o.y=2;} catch(e:any) {console.log(e instanceof TypeError,e.message.includes('Cannot add property'));} console.log(o.x);} check();" },
+            "true true\n1\n",
+            false,
+            true
+        },
+    ];
+
+    [Theory]
+    [MemberData(nameof(ObjectDeletionMetadataPrograms))]
+    public void Isolated_ObjectDeletionMetadata_PreservesDeletionAndDeployment(
+        string name, string entry, string[] paths, string[] sources, string expected, bool hosted, bool standalone)
+    {
+        using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        for (int i = 0; i < paths.Length; i++) tempDir.CreateFile(paths[i], sources[i]);
+        var sourcePath = tempDir.GetPath(entry);
+        var dllPath = tempDir.GetPath($"object-deletion-metadata_{name}.dll");
+        var deployment = standalone ? " --standalone" : "";
+        var hosting = hosted ? " --target dll --hosted" : "";
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --noLib --compile \"{sourcePath}\" -o \"{dllPath}\" --verify{deployment}{hosting}", tempDir.Path);
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        var references = GetAssemblyReferences(dllPath);
+        Assert.DoesNotContain("SharpTS", references);
+        Assert.Equal(hosted, references.Contains("SharpTS.Hosting.Abstractions"));
+        Assert.Equal(!standalone, File.Exists(tempDir.GetPath("SharpTS.dll")));
+        if (!hosted)
+            Assert.Equal(expected, ExecuteCompiledDllIsolated(dllPath, timeoutMs: 30000,
+                verifyStandardError: error => Assert.Empty(error)));
+    }
+
+
     public static IEnumerable<object[]> ObjectConstructionMetadataPrograms =>
     [
         new object[]

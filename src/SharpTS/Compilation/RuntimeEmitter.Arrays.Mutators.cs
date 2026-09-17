@@ -314,7 +314,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, lastIndexLocal);
         il.Emit(OpCodes.Box, _types.Int32);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Call, runtime.DeleteIndexStrict);
+        il.Emit(OpCodes.Call, runtime.ObjectDeletion.IndexStrict);
         il.Emit(OpCodes.Brfalse, frozenLabel);
 
         // A non-writable length rejects the final Set even when deletion of the
@@ -428,7 +428,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, receiver);
         il.Emit(OpCodes.Ldloc, key);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Call, runtime.DeletePropertyStrict);
+        il.Emit(OpCodes.Call, runtime.ObjectDeletion.PropertyStrict);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Ldloc, receiver);
         il.Emit(OpCodes.Ldstr, "length");
@@ -611,7 +611,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, receiver);
         il.Emit(OpCodes.Ldloc, toKey);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Call, runtime.DeletePropertyStrict);
+        il.Emit(OpCodes.Call, runtime.ObjectDeletion.PropertyStrict);
         il.Emit(OpCodes.Pop);
         il.MarkLabel(next);
         il.Emit(OpCodes.Ldloc, k);
@@ -631,7 +631,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Box, _types.Double);
         il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Call, runtime.DeletePropertyStrict);
+        il.Emit(OpCodes.Call, runtime.ObjectDeletion.PropertyStrict);
         il.Emit(OpCodes.Pop);
         EmitRequireWritableArrayLength(il, runtime, receiver);
         il.Emit(OpCodes.Ldloc, receiver);
@@ -1209,7 +1209,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, receiver);
         il.Emit(OpCodes.Ldloc, toKey);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Call, runtime.DeletePropertyStrict);
+        il.Emit(OpCodes.Call, runtime.ObjectDeletion.PropertyStrict);
         il.Emit(OpCodes.Pop);
         il.MarkLabel(shiftNext);
         il.Emit(OpCodes.Ldloc, k);
@@ -1524,7 +1524,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, receiver);
         il.Emit(OpCodes.Ldloc, lowerKey);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Call, runtime.DeletePropertyStrict);
+        il.Emit(OpCodes.Call, runtime.ObjectDeletion.PropertyStrict);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Ldloc, receiver);
         il.Emit(OpCodes.Ldloc, upperKey);
@@ -1544,7 +1544,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, receiver);
         il.Emit(OpCodes.Ldloc, upperKey);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Call, runtime.DeletePropertyStrict);
+        il.Emit(OpCodes.Call, runtime.ObjectDeletion.PropertyStrict);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Br, next);
 
@@ -3086,7 +3086,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Conv_R8);
             il.Emit(OpCodes.Box, _types.Double);
             il.Emit(OpCodes.Ldc_I4_1);
-            il.Emit(OpCodes.Call, runtime.DeleteIndexStrict);
+            il.Emit(OpCodes.Call, runtime.ObjectDeletion.IndexStrict);
             il.Emit(OpCodes.Pop);
             il.Emit(OpCodes.Ldloc, writeIndexLocal);
             il.Emit(OpCodes.Ldc_I4_1);
@@ -3796,7 +3796,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, receiver);
         il.Emit(OpCodes.Ldloc, toKey);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Call, runtime.DeletePropertyStrict);
+        il.Emit(OpCodes.Call, runtime.ObjectDeletion.PropertyStrict);
         il.Emit(OpCodes.Pop);
         il.MarkLabel(leftNext);
         il.Emit(OpCodes.Ldloc, k);
@@ -3826,7 +3826,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, receiver);
         il.Emit(OpCodes.Ldloc, toKey);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Call, runtime.DeletePropertyStrict);
+        il.Emit(OpCodes.Call, runtime.ObjectDeletion.PropertyStrict);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Br, trimLoop);
         il.MarkLabel(trimDone);
@@ -3879,7 +3879,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, receiver);
         il.Emit(OpCodes.Ldloc, toKey);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Call, runtime.DeletePropertyStrict);
+        il.Emit(OpCodes.Call, runtime.ObjectDeletion.PropertyStrict);
         il.Emit(OpCodes.Pop);
         il.MarkLabel(rightNext);
         il.Emit(OpCodes.Ldloc, k);
@@ -5173,7 +5173,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, toKeyLocal);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Call, runtime.DeletePropertyStrict);
+        il.Emit(OpCodes.Call, runtime.ObjectDeletion.PropertyStrict);
         il.Emit(OpCodes.Pop);
         il.MarkLabel(backwardNext);
 
@@ -5239,7 +5239,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, toKeyLocal);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Call, runtime.DeletePropertyStrict);
+        il.Emit(OpCodes.Call, runtime.ObjectDeletion.PropertyStrict);
         il.Emit(OpCodes.Pop);
         il.MarkLabel(forwardNext);
 
@@ -5424,7 +5424,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, receiver);
         il.Emit(OpCodes.Ldloc, toKey);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Call, runtime.DeletePropertyStrict);
+        il.Emit(OpCodes.Call, runtime.ObjectDeletion.PropertyStrict);
         il.Emit(OpCodes.Pop);
         il.MarkLabel(next);
         il.Emit(OpCodes.Ldloc, from);

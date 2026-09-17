@@ -8,25 +8,108 @@ namespace SharpTS.Compilation;
 // Split out of RuntimeEmitter.Objects.Properties.cs (#1141): the delete-property emitters (sloppy + strict).
 public partial class RuntimeEmitter
 {
+    private readonly record struct DeletePropertyInputs(
+        EmittedArrayStorageRuntime ArrayStorage,
+        EmittedBooleanRuntime Booleans,
+        EmittedDescriptorStorageRuntime DescriptorStorage,
+        EmittedErrorRuntime Errors,
+        MethodBuilder GetProperty,
+        FieldBuilder GlobalThisProperties,
+        FieldBuilder GlobalThisSingletonField,
+        MethodInfo IHasFieldsFieldsGetter,
+        Type IHasFieldsInterface,
+        MethodBuilder InvokeMethodUnwrapped,
+        EmittedObjectDescriptorRuntime ObjectDescriptors,
+        EmittedObjectStateRuntime ObjectState,
+        EmittedObjectStorageRuntime ObjectStorage,
+        EmittedRecordStorageRuntime Records,
+        TypeBuilder TSFunctionType,
+        Type UndefinedType
+    );
+
+    private readonly record struct DeletePropertyCoreInputs(
+        EmittedArrayStorageRuntime ArrayStorage,
+        EmittedBooleanRuntime Booleans,
+        EmittedDescriptorStorageRuntime DescriptorStorage,
+        EmittedErrorRuntime Errors,
+        MethodBuilder GetProperty,
+        FieldBuilder GlobalThisProperties,
+        FieldBuilder GlobalThisSingletonField,
+        MethodInfo IHasFieldsFieldsGetter,
+        Type IHasFieldsInterface,
+        MethodBuilder InvokeMethodUnwrapped,
+        EmittedObjectDescriptorRuntime ObjectDescriptors,
+        EmittedObjectStateRuntime ObjectState,
+        EmittedObjectStorageRuntime ObjectStorage,
+        EmittedRecordStorageRuntime Records,
+        TypeBuilder TSFunctionType,
+        Type UndefinedType
+    );
+
+    private readonly record struct DeletePropertyStrictInputs(
+        EmittedArrayStorageRuntime ArrayStorage,
+        EmittedBooleanRuntime Booleans,
+        EmittedDescriptorStorageRuntime DescriptorStorage,
+        EmittedErrorRuntime Errors,
+        MethodBuilder GetProperty,
+        FieldBuilder GlobalThisProperties,
+        FieldBuilder GlobalThisSingletonField,
+        MethodInfo IHasFieldsFieldsGetter,
+        Type IHasFieldsInterface,
+        MethodBuilder InvokeMethodUnwrapped,
+        EmittedObjectDescriptorRuntime ObjectDescriptors,
+        EmittedObjectStateRuntime ObjectState,
+        EmittedObjectStorageRuntime ObjectStorage,
+        EmittedRecordStorageRuntime Records,
+        TypeBuilder TSFunctionType,
+        Type UndefinedType
+    );
+
     /// <summary>
     /// Emits DeleteProperty(object obj, string name) -> bool
     /// Removes a property from an object and returns true if successful.
     /// Returns false for frozen/sealed objects or if the object doesn't support deletion.
     /// </summary>
-    private void EmitDeleteProperty(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitDeleteProperty(
+        TypeBuilder typeBuilder,
+        EmittedObjectDeletionRuntime objectDeletion,
+        DeletePropertyInputs inputs
+    )
     {
-        EmitCompactDictionaryOrder(typeBuilder, runtime);
-        EmitDeletePropertyCore(typeBuilder, runtime, strict: false);
+        EmitCompactDictionaryOrder(typeBuilder, objectDeletion);
+        EmitDeletePropertyCore(
+            typeBuilder,
+            objectDeletion,
+            new DeletePropertyCoreInputs(
+                inputs.ArrayStorage,
+                inputs.Booleans,
+                inputs.DescriptorStorage,
+                inputs.Errors,
+                inputs.GetProperty,
+                inputs.GlobalThisProperties,
+                inputs.GlobalThisSingletonField,
+                inputs.IHasFieldsFieldsGetter,
+                inputs.IHasFieldsInterface,
+                inputs.InvokeMethodUnwrapped,
+                inputs.ObjectDescriptors,
+                inputs.ObjectState,
+                inputs.ObjectStorage,
+                inputs.Records,
+                inputs.TSFunctionType,
+                inputs.UndefinedType
+            ),
+            strict: false
+        );
     }
 
-    private void EmitCompactDictionaryOrder(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitCompactDictionaryOrder(TypeBuilder typeBuilder, EmittedObjectDeletionRuntime objectDeletion)
     {
         var method = typeBuilder.DefineMethod(
             "CompactDictionaryOrder",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Void,
             [_types.DictionaryStringObject]);
-        runtime.CompactDictionaryOrder = method;
+        objectDeletion.CompactDictionaryOrder = method;
         var il = method.GetILGenerator();
         var keysLocal = il.DeclareLocal(_types.ListOfString);
         var valuesLocal = il.DeclareLocal(_types.ListOfObject);
@@ -102,7 +185,12 @@ public partial class RuntimeEmitter
     /// configurability checks — preserved as-is from before the #1131 merge
     /// (behavior-preserving refactor; see the epic notes for the drift list).
     /// </summary>
-    private void EmitDeletePropertyCore(TypeBuilder typeBuilder, EmittedRuntime runtime, bool strict)
+    private void EmitDeletePropertyCore(
+        TypeBuilder typeBuilder,
+        EmittedObjectDeletionRuntime objectDeletion,
+        DeletePropertyCoreInputs inputs,
+        bool strict
+    )
     {
         var method = typeBuilder.DefineMethod(
             strict ? "DeletePropertyStrict" : "DeleteProperty",
@@ -111,9 +199,9 @@ public partial class RuntimeEmitter
             strict ? [_types.Object, _types.String, _types.Boolean] : [_types.Object, _types.String]
         );
         if (strict)
-            runtime.DeletePropertyStrict = method;
+            objectDeletion.PropertyStrict = method;
         else
-            runtime.DeleteProperty = method;
+            objectDeletion.Property = method;
 
         var il = method.GetILGenerator();
         var nullLabel = il.DefineLabel();
@@ -131,7 +219,7 @@ public partial class RuntimeEmitter
                 var sloppyLabel = il.DefineLabel();
                 il.Emit(OpCodes.Ldarg_2);
                 il.Emit(OpCodes.Brfalse, sloppyLabel);
-                EmitThrowTypeErrorWithName(il, runtime, "Cannot delete property '", suffix);
+                EmitThrowTypeErrorWithName(il, inputs.Errors, "Cannot delete property '", suffix);
                 il.MarkLabel(sloppyLabel);
             }
             il.Emit(OpCodes.Ldc_I4_0);
@@ -145,10 +233,18 @@ public partial class RuntimeEmitter
         // Proxy check: uses obj.GetType().FullName comparison (no SharpTS.dll dependency)
         var notProxyLabel = il.DefineLabel();
         EmitProxyDeleteCheck(
-            il, runtime,
+            il,
+            objectDeletion,
+            new ProxyDeleteCheckInputs(
+                inputs.GetProperty,
+                inputs.InvokeMethodUnwrapped,
+                inputs.ObjectDescriptors,
+                inputs.ObjectState
+            ),
             () => il.Emit(OpCodes.Ldarg_0),
             () => il.Emit(OpCodes.Ldarg_1),
-            notProxyLabel);
+            notProxyLabel
+        );
         if (strict)
         {
             // The proxy [[Delete]] boolean is subject to the surrounding
@@ -169,7 +265,7 @@ public partial class RuntimeEmitter
         // same per-object ledger used by configurable built-ins.
         var notGlobalObjectLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldsfld, runtime.GlobalThisSingletonField);
+        il.Emit(OpCodes.Ldsfld, inputs.GlobalThisSingletonField);
         il.Emit(OpCodes.Bne_Un, notGlobalObjectLabel);
 
         // undefined, NaN, and Infinity are non-configurable.
@@ -187,29 +283,29 @@ public partial class RuntimeEmitter
 
         // User-defined descriptors decide configurability for arbitrary global
         // names. Synthesized globals not listed above are configurable.
-        var globalDescriptorLocal = il.DeclareLocal(runtime.DescriptorStorage.DescriptorType);
+        var globalDescriptorLocal = il.DeclareLocal(inputs.DescriptorStorage.DescriptorType);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetPropertyDescriptor);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.GetPropertyDescriptor);
         il.Emit(OpCodes.Stloc, globalDescriptorLocal);
         var globalDescriptorConfigurableLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, globalDescriptorLocal);
         il.Emit(OpCodes.Brfalse, globalDescriptorConfigurableLabel);
         il.Emit(OpCodes.Ldloc, globalDescriptorLocal);
-        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorConfigurable.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorConfigurable.GetGetMethod()!);
         il.Emit(OpCodes.Brtrue, globalDescriptorConfigurableLabel);
         EmitDeleteFail(" from global object");
         il.MarkLabel(globalDescriptorConfigurableLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.DescriptorStorage.DeleteProperty);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.DeleteProperty);
         il.Emit(OpCodes.Pop);
         // The value-form global object also keeps assignment values in a
         // dictionary; remove that backing entry so deletion is observable.
         var noGlobalDictionaryLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldsfld, runtime.GlobalThisProperties);
+        il.Emit(OpCodes.Ldsfld, inputs.GlobalThisProperties);
         il.Emit(OpCodes.Brfalse, noGlobalDictionaryLabel);
-        il.Emit(OpCodes.Ldsfld, runtime.GlobalThisProperties);
+        il.Emit(OpCodes.Ldsfld, inputs.GlobalThisProperties);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(
             _types.DictionaryStringObject, "Remove", _types.String));
@@ -217,7 +313,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(noGlobalDictionaryLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.ObjectState.MarkBuiltinDeleted);
+        il.Emit(OpCodes.Call, inputs.ObjectState.MarkBuiltinDeleted);
         il.Emit(OpCodes.Br, trueLabel);
         il.MarkLabel(notGlobalObjectLabel);
 
@@ -230,17 +326,17 @@ public partial class RuntimeEmitter
         var ordinaryDeleteDescriptorAllowedLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.ObjectDescriptors.GetOwnPropertyDescriptor);
+        il.Emit(OpCodes.Call, inputs.ObjectDescriptors.GetOwnPropertyDescriptor);
         il.Emit(OpCodes.Stloc, ordinaryDeleteDescriptorLocal);
         il.Emit(OpCodes.Ldloc, ordinaryDeleteDescriptorLocal);
         il.Emit(OpCodes.Brfalse, ordinaryDeleteDescriptorAllowedLabel);
         il.Emit(OpCodes.Ldloc, ordinaryDeleteDescriptorLocal);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
         il.Emit(OpCodes.Brtrue, ordinaryDeleteDescriptorAllowedLabel);
         il.Emit(OpCodes.Ldloc, ordinaryDeleteDescriptorLocal);
         il.Emit(OpCodes.Ldstr, "configurable");
-        il.Emit(OpCodes.Call, runtime.GetProperty);
-        il.Emit(OpCodes.Call, runtime.Booleans.IsTruthy);
+        il.Emit(OpCodes.Call, inputs.GetProperty);
+        il.Emit(OpCodes.Call, inputs.Booleans.IsTruthy);
         il.Emit(OpCodes.Brtrue, ordinaryDeleteDescriptorAllowedLabel);
         EmitDeleteFail("' of object");
         il.MarkLabel(ordinaryDeleteDescriptorAllowedLabel);
@@ -248,7 +344,7 @@ public partial class RuntimeEmitter
         // Check if $TSObject
         var sharpTSObjectLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.ObjectStorage.Type);
+        il.Emit(OpCodes.Isinst, inputs.ObjectStorage.Type);
         il.Emit(OpCodes.Brtrue, sharpTSObjectLabel);
 
         // $TSFunction — `delete fn.name` records in the per-instance set so
@@ -257,7 +353,7 @@ public partial class RuntimeEmitter
         // recording, so verifyProperty's isConfigurable failed.
         var tsFunctionDelLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Isinst, inputs.TSFunctionType);
         il.Emit(OpCodes.Brtrue, tsFunctionDelLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, _types.FuncObjectArrayToObject);
@@ -270,13 +366,13 @@ public partial class RuntimeEmitter
         // and converts a false result into the required TypeError.
         var tsArrayDelLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.ArrayStorage.Type);
+        il.Emit(OpCodes.Isinst, inputs.ArrayStorage.Type);
         il.Emit(OpCodes.Brtrue, tsArrayDelLabel);
 
-        if (runtime.Records.Scalars is not null)
+        if (inputs.Records.Scalars is not null)
         {
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.Records.MarkerInterface);
+            il.Emit(OpCodes.Isinst, inputs.Records.MarkerInterface);
             il.Emit(OpCodes.Brtrue, scalarRecordDelLabel);
         }
 
@@ -299,16 +395,16 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Isinst, _types.Type);
             il.Emit(OpCodes.Brfalse, notTypeForDelLabel);
-            var typeDelDescLocal = il.DeclareLocal(runtime.DescriptorStorage.DescriptorType);
+            var typeDelDescLocal = il.DeclareLocal(inputs.DescriptorStorage.DescriptorType);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetPropertyDescriptor);
+            il.Emit(OpCodes.Call, inputs.DescriptorStorage.GetPropertyDescriptor);
             il.Emit(OpCodes.Stloc, typeDelDescLocal);
             var typeNoPdsDescLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldloc, typeDelDescLocal);
             il.Emit(OpCodes.Brfalse, typeNoPdsDescLabel);
             il.Emit(OpCodes.Ldloc, typeDelDescLocal);
-            il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorConfigurable.GetGetMethod()!);
+            il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorConfigurable.GetGetMethod()!);
             var typeConfigurableLabel = il.DefineLabel();
             il.Emit(OpCodes.Brtrue, typeConfigurableLabel);
             il.Emit(OpCodes.Ldc_I4_0);
@@ -316,13 +412,13 @@ public partial class RuntimeEmitter
             il.MarkLabel(typeConfigurableLabel);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Call, runtime.DescriptorStorage.DeleteProperty);
+            il.Emit(OpCodes.Call, inputs.DescriptorStorage.DeleteProperty);
             il.Emit(OpCodes.Pop);
             // Also mark in the per-Type deletion tracker so the static-names list
             // check in HasOwnPropertyHelper / gOPD doesn't resurrect this name.
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Call, runtime.ObjectState.MarkBuiltinDeleted);
+            il.Emit(OpCodes.Call, inputs.ObjectState.MarkBuiltinDeleted);
             il.Emit(OpCodes.Ldc_I4_1);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(typeNoPdsDescLabel);
@@ -347,7 +443,7 @@ public partial class RuntimeEmitter
                 il.Emit(OpCodes.Brfalse, nextKey);
                 il.Emit(OpCodes.Ldarg_0);
                 il.Emit(OpCodes.Ldarg_1);
-                il.Emit(OpCodes.Call, runtime.ObjectState.MarkBuiltinDeleted);
+                il.Emit(OpCodes.Call, inputs.ObjectState.MarkBuiltinDeleted);
                 il.Emit(OpCodes.Ldc_I4_1);
                 il.Emit(OpCodes.Ret);
                 il.MarkLabel(nextKey);
@@ -398,7 +494,7 @@ public partial class RuntimeEmitter
                 il.Emit(OpCodes.Brfalse, skipLabel);
                 il.Emit(OpCodes.Ldarg_0);
                 il.Emit(OpCodes.Ldarg_1);
-                il.Emit(OpCodes.Call, runtime.ObjectState.MarkBuiltinDeleted);
+                il.Emit(OpCodes.Call, inputs.ObjectState.MarkBuiltinDeleted);
                 il.Emit(OpCodes.Ldc_I4_1);
                 il.Emit(OpCodes.Ret);
                 il.MarkLabel(skipLabel);
@@ -433,7 +529,7 @@ public partial class RuntimeEmitter
 
             var errorTypeDelLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldtoken, runtime.Errors.Type);
+            il.Emit(OpCodes.Ldtoken, inputs.Errors.Type);
             il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle")!);
             il.Emit(OpCodes.Bne_Un, errorTypeDelLabel);
             EmitObjectMethodDelCheck("isError");
@@ -474,13 +570,13 @@ public partial class RuntimeEmitter
         il.MarkLabel(scalarRecordDelLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.DescriptorStorage.DeleteProperty);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.DeleteProperty);
         il.Emit(OpCodes.Pop);
         var scalarDeleteFields =
             il.DeclareLocal(_types.DictionaryStringObject);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.IHasFieldsInterface);
-        il.Emit(OpCodes.Callvirt, runtime.IHasFieldsFieldsGetter);
+        il.Emit(OpCodes.Castclass, inputs.IHasFieldsInterface);
+        il.Emit(OpCodes.Callvirt, inputs.IHasFieldsFieldsGetter);
         il.Emit(OpCodes.Stloc, scalarDeleteFields);
         il.Emit(OpCodes.Ldloc, scalarDeleteFields);
         il.Emit(OpCodes.Ldarg_1);
@@ -488,7 +584,7 @@ public partial class RuntimeEmitter
             _types.DictionaryStringObject, "Remove", _types.String));
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Ldloc, scalarDeleteFields);
-        il.Emit(OpCodes.Call, runtime.CompactDictionaryOrder);
+        il.Emit(OpCodes.Call, objectDeletion.CompactDictionaryOrder);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(afterScalarRecordDelLabel);
@@ -499,10 +595,10 @@ public partial class RuntimeEmitter
         // Previously these objects fell straight through to true without
         // changing observable state, so verifyProperty incorrectly classified
         // configurable Error cause/message slots as non-configurable.
-        var fallbackDescriptorLocal = il.DeclareLocal(runtime.DescriptorStorage.DescriptorType);
+        var fallbackDescriptorLocal = il.DeclareLocal(inputs.DescriptorStorage.DescriptorType);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetPropertyDescriptor);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.GetPropertyDescriptor);
         il.Emit(OpCodes.Stloc, fallbackDescriptorLocal);
         il.Emit(OpCodes.Ldloc, fallbackDescriptorLocal);
         il.Emit(OpCodes.Brfalse, trueLabel);
@@ -510,20 +606,20 @@ public partial class RuntimeEmitter
         // non-configurable even though the stable stored descriptor retains
         // its original bit. Match gOPD's effective-configurability view.
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.DescriptorStorage.IsSealed);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.IsSealed);
         var fallbackNotSealedLabel = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, fallbackNotSealedLabel);
         EmitDeleteFail("' of a sealed object");
         il.MarkLabel(fallbackNotSealedLabel);
         il.Emit(OpCodes.Ldloc, fallbackDescriptorLocal);
-        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorConfigurable.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorConfigurable.GetGetMethod()!);
         var fallbackConfigurableLabel = il.DefineLabel();
         il.Emit(OpCodes.Brtrue, fallbackConfigurableLabel);
         EmitDeleteFail("' of object");
         il.MarkLabel(fallbackConfigurableLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.DescriptorStorage.DeleteProperty);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.DeleteProperty);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Br, trueLabel);
 
@@ -536,7 +632,7 @@ public partial class RuntimeEmitter
             // handler performs (preserved pre-#1131 behavior).
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Call, runtime.ObjectState.MarkBuiltinDeleted);
+            il.Emit(OpCodes.Call, inputs.ObjectState.MarkBuiltinDeleted);
             il.Emit(OpCodes.Ldc_I4_1);
             il.Emit(OpCodes.Ret);
         }
@@ -551,7 +647,7 @@ public partial class RuntimeEmitter
             //      property lookups return undefined.
             // Frozen check.
             var tsFnDelTmp = il.DeclareLocal(_types.Object);
-            il.Emit(OpCodes.Ldsfld, runtime.ObjectState.FrozenObjects);
+            il.Emit(OpCodes.Ldsfld, inputs.ObjectState.FrozenObjects);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldloca, tsFnDelTmp);
             il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ConditionalWeakTable, "TryGetValue", _types.Object, _types.Object.MakeByRefType()));
@@ -562,7 +658,7 @@ public partial class RuntimeEmitter
 
             // Sealed check.
             il.MarkLabel(tsFnNotFrozenLabel);
-            il.Emit(OpCodes.Ldsfld, runtime.ObjectState.SealedObjects);
+            il.Emit(OpCodes.Ldsfld, inputs.ObjectState.SealedObjects);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldloca, tsFnDelTmp);
             il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ConditionalWeakTable, "TryGetValue", _types.Object, _types.Object.MakeByRefType()));
@@ -573,16 +669,16 @@ public partial class RuntimeEmitter
 
             // PDS configurable check.
             il.MarkLabel(tsFnNotSealedLabel);
-            var tsFnDelDescLocal = il.DeclareLocal(runtime.DescriptorStorage.DescriptorType);
+            var tsFnDelDescLocal = il.DeclareLocal(inputs.DescriptorStorage.DescriptorType);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetPropertyDescriptor);
+            il.Emit(OpCodes.Call, inputs.DescriptorStorage.GetPropertyDescriptor);
             il.Emit(OpCodes.Stloc, tsFnDelDescLocal);
             var tsFnNoPdsLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldloc, tsFnDelDescLocal);
             il.Emit(OpCodes.Brfalse, tsFnNoPdsLabel);
             il.Emit(OpCodes.Ldloc, tsFnDelDescLocal);
-            il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorConfigurable.GetGetMethod()!);
+            il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorConfigurable.GetGetMethod()!);
             var tsFnDelConfigurableLabel = il.DefineLabel();
             il.Emit(OpCodes.Brtrue, tsFnDelConfigurableLabel);
             il.Emit(OpCodes.Ldc_I4_0);
@@ -590,7 +686,7 @@ public partial class RuntimeEmitter
             il.MarkLabel(tsFnDelConfigurableLabel);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Call, runtime.DescriptorStorage.DeleteProperty);
+            il.Emit(OpCodes.Call, inputs.DescriptorStorage.DeleteProperty);
             il.Emit(OpCodes.Pop);
             il.MarkLabel(tsFnNoPdsLabel);
 
@@ -598,7 +694,7 @@ public partial class RuntimeEmitter
             // name/length and any other descriptor-less data entry).
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Call, runtime.ObjectState.MarkBuiltinDeleted);
+            il.Emit(OpCodes.Call, inputs.ObjectState.MarkBuiltinDeleted);
             il.Emit(OpCodes.Ldc_I4_1);
             il.Emit(OpCodes.Ret);
         }
@@ -613,7 +709,7 @@ public partial class RuntimeEmitter
         {
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Call, runtime.DeleteProperty);
+            il.Emit(OpCodes.Call, objectDeletion.Property);
             il.Emit(OpCodes.Brtrue, trueLabel);
             EmitDeleteFail("' of array");
         }
@@ -639,11 +735,11 @@ public partial class RuntimeEmitter
             // A write routed through Proxy/Reflect can install attributes for
             // an indexed element in PDS. Delete both representations so a
             // later [[GetOwnProperty]] cannot resurrect the removed index.
-            var tsArrIndexDescLocal = il.DeclareLocal(runtime.DescriptorStorage.DescriptorType);
+            var tsArrIndexDescLocal = il.DeclareLocal(inputs.DescriptorStorage.DescriptorType);
             var tsArrIndexDescriptorConfigurableLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetPropertyDescriptor);
+            il.Emit(OpCodes.Call, inputs.DescriptorStorage.GetPropertyDescriptor);
             il.Emit(OpCodes.Stloc, tsArrIndexDescLocal);
 
             // Sealing makes every existing own indexed property non-configurable,
@@ -652,15 +748,15 @@ public partial class RuntimeEmitter
             var tsArrIndexNotSealedLabel = il.DefineLabel();
             var tsArrIndexSealedPropertyLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Call, runtime.DescriptorStorage.IsSealed);
+            il.Emit(OpCodes.Call, inputs.DescriptorStorage.IsSealed);
             il.Emit(OpCodes.Brfalse, tsArrIndexNotSealedLabel);
             il.Emit(OpCodes.Ldloc, tsArrIndexDescLocal);
             il.Emit(OpCodes.Brtrue, tsArrIndexSealedPropertyLabel);
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Castclass, runtime.ArrayStorage.Type);
+            il.Emit(OpCodes.Castclass, inputs.ArrayStorage.Type);
             il.Emit(OpCodes.Ldloc, tsArrDelIndexLocal);
             il.Emit(OpCodes.Conv_U8);
-            il.Emit(OpCodes.Callvirt, runtime.ArrayStorage.HasIndex);
+            il.Emit(OpCodes.Callvirt, inputs.ArrayStorage.HasIndex);
             il.Emit(OpCodes.Brfalse, tsArrIndexNotSealedLabel);
             il.MarkLabel(tsArrIndexSealedPropertyLabel);
             il.Emit(OpCodes.Ldc_I4_0);
@@ -671,21 +767,21 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Brfalse, tsArrIndexDescriptorConfigurableLabel);
             il.Emit(OpCodes.Ldloc, tsArrIndexDescLocal);
             il.Emit(OpCodes.Callvirt,
-                runtime.DescriptorStorage.DescriptorConfigurable.GetGetMethod()!);
+                inputs.DescriptorStorage.DescriptorConfigurable.GetGetMethod()!);
             il.Emit(OpCodes.Brtrue, tsArrIndexDescriptorConfigurableLabel);
             EmitDeleteFail("' of array");
             il.MarkLabel(tsArrIndexDescriptorConfigurableLabel);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Call, runtime.DescriptorStorage.DeleteProperty);
+            il.Emit(OpCodes.Call, inputs.DescriptorStorage.DeleteProperty);
             il.Emit(OpCodes.Pop);
 
             // arr.DeleteAt(idx); return true;
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Castclass, runtime.ArrayStorage.Type);
+            il.Emit(OpCodes.Castclass, inputs.ArrayStorage.Type);
             il.Emit(OpCodes.Ldloc, tsArrDelIndexLocal);
             il.Emit(OpCodes.Conv_U8);
-            il.Emit(OpCodes.Callvirt, runtime.ArrayStorage.DeleteAt);
+            il.Emit(OpCodes.Callvirt, inputs.ArrayStorage.DeleteAt);
             il.Emit(OpCodes.Ldc_I4_1);
             il.Emit(OpCodes.Ret);
 
@@ -696,10 +792,10 @@ public partial class RuntimeEmitter
             // Pre-fix returned true unconditionally, allowing `delete arr.foo`
             // to silently succeed even when `Object.freeze(arr)` made the
             // property non-configurable.
-            var tsArrDelDescLocal = il.DeclareLocal(runtime.DescriptorStorage.DescriptorType);
+            var tsArrDelDescLocal = il.DeclareLocal(inputs.DescriptorStorage.DescriptorType);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetPropertyDescriptor);
+            il.Emit(OpCodes.Call, inputs.DescriptorStorage.GetPropertyDescriptor);
             il.Emit(OpCodes.Stloc, tsArrDelDescLocal);
             var tsArrDelNoDescLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldloc, tsArrDelDescLocal);
@@ -707,21 +803,21 @@ public partial class RuntimeEmitter
 
             var tsArrDelFrozenLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Call, runtime.DescriptorStorage.IsFrozen);
+            il.Emit(OpCodes.Call, inputs.DescriptorStorage.IsFrozen);
             il.Emit(OpCodes.Brfalse, tsArrDelFrozenLabel);
             il.Emit(OpCodes.Ldc_I4_0);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(tsArrDelFrozenLabel);
             var tsArrDelSealedLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Call, runtime.DescriptorStorage.IsSealed);
+            il.Emit(OpCodes.Call, inputs.DescriptorStorage.IsSealed);
             il.Emit(OpCodes.Brfalse, tsArrDelSealedLabel);
             il.Emit(OpCodes.Ldc_I4_0);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(tsArrDelSealedLabel);
             // Check PDS descriptor configurable.
             il.Emit(OpCodes.Ldloc, tsArrDelDescLocal);
-            il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorConfigurable.GetGetMethod()!);
+            il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorConfigurable.GetGetMethod()!);
             var tsArrDelConfigurableLabel = il.DefineLabel();
             il.Emit(OpCodes.Brtrue, tsArrDelConfigurableLabel);
             il.Emit(OpCodes.Ldc_I4_0);
@@ -730,7 +826,7 @@ public partial class RuntimeEmitter
             // Configurable — PDS remove + return true.
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Call, runtime.DescriptorStorage.DeleteProperty);
+            il.Emit(OpCodes.Call, inputs.DescriptorStorage.DeleteProperty);
             il.Emit(OpCodes.Pop);
             il.MarkLabel(tsArrDelNoDescLabel);
             il.Emit(OpCodes.Ldc_I4_1);
@@ -746,7 +842,7 @@ public partial class RuntimeEmitter
         // sloppy or strict deletion path. This mirrors the dictionary/array
         // branches and keeps accessor-backed constructor instances intact.
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.DescriptorStorage.IsSealed);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.IsSealed);
         var tsObjectNotSealedLabel = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, tsObjectNotSealedLabel);
         EmitDeleteFail("' of a sealed object");
@@ -757,31 +853,31 @@ public partial class RuntimeEmitter
             // Indexed/named writes on $Object may have both a live _fields entry
             // and descriptor metadata. DeletePropertyStrict must remove both;
             // otherwise the stale PDS entry remains observable as a null value.
-            var tsObjectDeleteDesc = il.DeclareLocal(runtime.DescriptorStorage.DescriptorType);
+            var tsObjectDeleteDesc = il.DeclareLocal(inputs.DescriptorStorage.DescriptorType);
             var tsObjectDescriptorConfigurable = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetPropertyDescriptor);
+            il.Emit(OpCodes.Call, inputs.DescriptorStorage.GetPropertyDescriptor);
             il.Emit(OpCodes.Stloc, tsObjectDeleteDesc);
             il.Emit(OpCodes.Ldloc, tsObjectDeleteDesc);
             il.Emit(OpCodes.Brfalse, tsObjectDescriptorConfigurable);
             il.Emit(OpCodes.Ldloc, tsObjectDeleteDesc);
-            il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorConfigurable.GetGetMethod()!);
+            il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorConfigurable.GetGetMethod()!);
             il.Emit(OpCodes.Brtrue, tsObjectDescriptorConfigurable);
             EmitDeleteFail("' of object");
             il.MarkLabel(tsObjectDescriptorConfigurable);
         }
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.ObjectStorage.Type);
+        il.Emit(OpCodes.Castclass, inputs.ObjectStorage.Type);
         il.Emit(OpCodes.Ldarg_1);
         if (strict)
         {
             il.Emit(OpCodes.Ldarg_2); // strictMode
-            il.Emit(OpCodes.Callvirt, runtime.ObjectStorage.DeletePropertyStrict);
+            il.Emit(OpCodes.Callvirt, inputs.ObjectStorage.DeletePropertyStrict);
             il.Emit(OpCodes.Pop);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Call, runtime.DescriptorStorage.DeleteProperty);
+            il.Emit(OpCodes.Call, inputs.DescriptorStorage.DeleteProperty);
             il.Emit(OpCodes.Pop);
             il.Emit(OpCodes.Ldc_I4_1);
         }
@@ -792,29 +888,29 @@ public partial class RuntimeEmitter
             // remove both representations. Previously the sloppy path removed
             // only _fields, leaving configurable PDS properties observable and
             // allowing non-configurable properties to appear deleted briefly.
-            var tsObjectDeleteDesc = il.DeclareLocal(runtime.DescriptorStorage.DescriptorType);
+            var tsObjectDeleteDesc = il.DeclareLocal(inputs.DescriptorStorage.DescriptorType);
             var tsObjectDescriptorConfigurable = il.DefineLabel();
             il.Emit(OpCodes.Pop); // discard receiver/name loaded for the old direct call
             il.Emit(OpCodes.Pop);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetPropertyDescriptor);
+            il.Emit(OpCodes.Call, inputs.DescriptorStorage.GetPropertyDescriptor);
             il.Emit(OpCodes.Stloc, tsObjectDeleteDesc);
             il.Emit(OpCodes.Ldloc, tsObjectDeleteDesc);
             il.Emit(OpCodes.Brfalse, tsObjectDescriptorConfigurable);
             il.Emit(OpCodes.Ldloc, tsObjectDeleteDesc);
-            il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorConfigurable.GetGetMethod()!);
+            il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorConfigurable.GetGetMethod()!);
             il.Emit(OpCodes.Brtrue, tsObjectDescriptorConfigurable);
             EmitDeleteFail("' of object");
             il.MarkLabel(tsObjectDescriptorConfigurable);
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Castclass, runtime.ObjectStorage.Type);
+            il.Emit(OpCodes.Castclass, inputs.ObjectStorage.Type);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Callvirt, runtime.ObjectStorage.DeleteProperty);
+            il.Emit(OpCodes.Callvirt, inputs.ObjectStorage.DeleteProperty);
             il.Emit(OpCodes.Pop);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Call, runtime.DescriptorStorage.DeleteProperty);
+            il.Emit(OpCodes.Call, inputs.DescriptorStorage.DeleteProperty);
             il.Emit(OpCodes.Pop);
             il.Emit(OpCodes.Ldc_I4_1);
         }
@@ -825,7 +921,7 @@ public partial class RuntimeEmitter
         var valueLocal = il.DeclareLocal(_types.Object);
 
         // Check if frozen
-        il.Emit(OpCodes.Ldsfld, runtime.ObjectState.FrozenObjects);
+        il.Emit(OpCodes.Ldsfld, inputs.ObjectState.FrozenObjects);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloca, valueLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ConditionalWeakTable, "TryGetValue", _types.Object, _types.Object.MakeByRefType()));
@@ -837,7 +933,7 @@ public partial class RuntimeEmitter
 
         // Check if sealed
         il.MarkLabel(notFrozenLabel);
-        il.Emit(OpCodes.Ldsfld, runtime.ObjectState.SealedObjects);
+        il.Emit(OpCodes.Ldsfld, inputs.ObjectState.SealedObjects);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloca, valueLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ConditionalWeakTable, "TryGetValue", _types.Object, _types.Object.MakeByRefType()));
@@ -853,17 +949,17 @@ public partial class RuntimeEmitter
         // ECMA-262 §10.1.10 without removing: strict throws TypeError
         // (§13.5.1.2), sloppy returns false.
         il.MarkLabel(notSealedLabel);
-        var descLocalDel = il.DeclareLocal(runtime.DescriptorStorage.DescriptorType);
+        var descLocalDel = il.DeclareLocal(inputs.DescriptorStorage.DescriptorType);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetPropertyDescriptor);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.GetPropertyDescriptor);
         il.Emit(OpCodes.Stloc, descLocalDel);
         var noPdsForDelLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, descLocalDel);
         il.Emit(OpCodes.Brfalse, noPdsForDelLabel);
         // Descriptor present — check Configurable.
         il.Emit(OpCodes.Ldloc, descLocalDel);
-        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorConfigurable.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorConfigurable.GetGetMethod()!);
         var configurableLabel = il.DefineLabel();
         il.Emit(OpCodes.Brtrue, configurableLabel);
         // Non-configurable — fail without removing.
@@ -872,7 +968,7 @@ public partial class RuntimeEmitter
         // Configurable — remove PDS entry.
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.DescriptorStorage.DeleteProperty);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.DeleteProperty);
         il.Emit(OpCodes.Pop);
         il.MarkLabel(noPdsForDelLabel);
 
@@ -889,7 +985,7 @@ public partial class RuntimeEmitter
         // delete so a recreated property is appended after all surviving keys.
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, _types.DictionaryStringObject);
-        il.Emit(OpCodes.Call, runtime.CompactDictionaryOrder);
+        il.Emit(OpCodes.Call, objectDeletion.CompactDictionaryOrder);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Ret);
 
@@ -902,6 +998,32 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Ret);
     }
-    private void EmitDeletePropertyStrict(TypeBuilder typeBuilder, EmittedRuntime runtime)
-        => EmitDeletePropertyCore(typeBuilder, runtime, strict: true);
+    private void EmitDeletePropertyStrict(
+        TypeBuilder typeBuilder,
+        EmittedObjectDeletionRuntime objectDeletion,
+        DeletePropertyStrictInputs inputs
+    )
+        => EmitDeletePropertyCore(
+            typeBuilder,
+            objectDeletion,
+            new DeletePropertyCoreInputs(
+                inputs.ArrayStorage,
+                inputs.Booleans,
+                inputs.DescriptorStorage,
+                inputs.Errors,
+                inputs.GetProperty,
+                inputs.GlobalThisProperties,
+                inputs.GlobalThisSingletonField,
+                inputs.IHasFieldsFieldsGetter,
+                inputs.IHasFieldsInterface,
+                inputs.InvokeMethodUnwrapped,
+                inputs.ObjectDescriptors,
+                inputs.ObjectState,
+                inputs.ObjectStorage,
+                inputs.Records,
+                inputs.TSFunctionType,
+                inputs.UndefinedType
+            ),
+            strict: true
+        );
 }

@@ -1924,11 +1924,11 @@ public abstract class StatementEmitterBase : ExpressionEmitterBase
                 if (Ctx.IsStrictMode)
                 {
                     IL.Emit(OpCodes.Ldc_I4_1); // true for strict mode
-                    IL.Emit(OpCodes.Call, Ctx.Runtime!.DeletePropertyStrict);
+                    IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectDeletion.PropertyStrict);
                 }
                 else
                 {
-                    IL.Emit(OpCodes.Call, Ctx.Runtime!.DeleteProperty);
+                    IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectDeletion.Property);
                 }
                 SetStackType(StackType.Boolean);
                 break;
@@ -1942,11 +1942,11 @@ public abstract class StatementEmitterBase : ExpressionEmitterBase
                 if (Ctx.IsStrictMode)
                 {
                     IL.Emit(OpCodes.Ldc_I4_1); // true for strict mode
-                    IL.Emit(OpCodes.Call, Ctx.Runtime!.DeleteIndexStrict);
+                    IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectDeletion.IndexStrict);
                 }
                 else
                 {
-                    IL.Emit(OpCodes.Call, Ctx.Runtime!.DeleteIndex);
+                    IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectDeletion.Index);
                 }
                 SetStackType(StackType.Boolean);
                 break;
