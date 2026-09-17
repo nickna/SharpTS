@@ -468,11 +468,11 @@ public partial class RuntimeEmitter
 
         var checkMetadata = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, innerLocal);
-        il.Emit(OpCodes.Isinst, runtime.ThrownValueExceptionType);
+        il.Emit(OpCodes.Isinst, runtime.Errors.ThrownValueType);
         il.Emit(OpCodes.Brfalse, checkMetadata);
         il.Emit(OpCodes.Ldloc, innerLocal);
-        il.Emit(OpCodes.Castclass, runtime.ThrownValueExceptionType);
-        il.Emit(OpCodes.Call, runtime.ThrownValueExceptionValueGetter);
+        il.Emit(OpCodes.Castclass, runtime.Errors.ThrownValueType);
+        il.Emit(OpCodes.Call, runtime.Errors.ThrownValueValueGetter);
         il.Emit(OpCodes.Stloc, reasonLocal);
         il.Emit(OpCodes.Br, haveReason);
         il.MarkLabel(checkMetadata);
@@ -749,7 +749,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(useDefaultReason);
         il.Emit(OpCodes.Ldstr, "Unhandled 'error' event");
         il.MarkLabel(reasonReady);
-        il.Emit(OpCodes.Call, runtime.CreateException);
+        il.Emit(OpCodes.Call, runtime.Errors.CreateException);
         il.Emit(OpCodes.Throw);
         il.MarkLabel(skipThrow);
         il.Emit(OpCodes.Ldc_I4_0);

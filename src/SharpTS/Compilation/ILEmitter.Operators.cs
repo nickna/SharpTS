@@ -978,7 +978,7 @@ public partial class ILEmitter
         if (!IsKnownVariable(la.Name.Lexeme))
         {
             IL.Emit(OpCodes.Ldstr, la.Name.Lexeme);
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.ThrowUndefinedVariable);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.Errors.ThrowUndefinedVariable);
             EmitNullConstant(); // unreachable expression result
             return;
         }

@@ -40,7 +40,7 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(rejectInput);
         il.Emit(OpCodes.Ldstr, "Promise keyed combinator requires an object argument");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
+        il.Emit(OpCodes.Newobj, runtime.Errors.TypeErrorConstructor);
         il.Emit(OpCodes.Call, runtime.RequirePromise().Reject);
         il.Emit(OpCodes.Ret);
 

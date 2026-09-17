@@ -10,36 +10,27 @@ namespace SharpTS.Compilation;
 public partial class RuntimeEmitter
 {
     // Base error class fields
-    private FieldBuilder _tsErrorNameField = null!;
-    private FieldBuilder _tsErrorMessageField = null!;
-    private FieldBuilder _tsErrorStackField = null!;
-    private FieldBuilder _tsErrorCapturedStackField = null!;
-    private FieldBuilder _tsErrorCauseField = null!;
-    private FieldBuilder _tsErrorHasCauseField = null!;
-    private FieldBuilder _tsErrorCodeField = null!;
-    private FieldBuilder _tsErrorSyscallField = null!;
 
     // AggregateError errors field
-    private FieldBuilder _tsAggregateErrorErrorsField = null!;
 
-    private void EmitTSErrorClasses(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private void EmitTSErrorClasses(ModuleBuilder moduleBuilder, EmittedErrorRuntime errors)
     {
         // Emit base $Error class first
-        EmitTSErrorBaseClass(moduleBuilder, runtime);
+        EmitTSErrorBaseClass(moduleBuilder, errors);
 
         // Emit error subclasses
-        EmitTSTypeErrorClass(moduleBuilder, runtime);
-        EmitTSRangeErrorClass(moduleBuilder, runtime);
-        EmitTSReferenceErrorClass(moduleBuilder, runtime);
-        EmitTSSyntaxErrorClass(moduleBuilder, runtime);
-        EmitTSURIErrorClass(moduleBuilder, runtime);
-        EmitTSEvalErrorClass(moduleBuilder, runtime);
+        EmitTSTypeErrorClass(moduleBuilder, errors);
+        EmitTSRangeErrorClass(moduleBuilder, errors);
+        EmitTSReferenceErrorClass(moduleBuilder, errors);
+        EmitTSSyntaxErrorClass(moduleBuilder, errors);
+        EmitTSURIErrorClass(moduleBuilder, errors);
+        EmitTSEvalErrorClass(moduleBuilder, errors);
 
         // Emit $AggregateError (extends $Error, has Errors property)
-        EmitTSAggregateErrorClass(moduleBuilder, runtime);
+        EmitTSAggregateErrorClass(moduleBuilder, errors);
     }
 
-    private void EmitTSErrorBaseClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private void EmitTSErrorBaseClass(ModuleBuilder moduleBuilder, EmittedErrorRuntime errors)
     {
         // Define class: public class $Error
         var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
@@ -47,42 +38,42 @@ public partial class RuntimeEmitter
             TypeAttributes.Public | TypeAttributes.Class | TypeAttributes.BeforeFieldInit,
             _types.Object
         );
-        runtime.TSErrorType = typeBuilder;
+        errors.Type = typeBuilder;
 
         // Fields
-        _tsErrorNameField = typeBuilder.DefineField("_name", _types.String, FieldAttributes.Private);
-        _tsErrorMessageField = typeBuilder.DefineField("_message", _types.String, FieldAttributes.Private);
-        _tsErrorStackField = typeBuilder.DefineField("_stack", _types.String, FieldAttributes.Private);
-        _tsErrorCapturedStackField = typeBuilder.DefineField(
+        var errorNameField = typeBuilder.DefineField("_name", _types.String, FieldAttributes.Private);
+        var errorMessageField = typeBuilder.DefineField("_message", _types.String, FieldAttributes.Private);
+        var errorStackField = typeBuilder.DefineField("_stack", _types.String, FieldAttributes.Private);
+        var errorCapturedStackField = typeBuilder.DefineField(
             "_capturedStack", _types.String, FieldAttributes.Private);
-        _tsErrorCauseField = typeBuilder.DefineField("_cause", _types.Object, FieldAttributes.Private);
-        _tsErrorHasCauseField = typeBuilder.DefineField("_hasCause", _types.Boolean, FieldAttributes.Private);
-        _tsErrorCodeField = typeBuilder.DefineField("_code", _types.String, FieldAttributes.Private);
-        _tsErrorSyscallField = typeBuilder.DefineField("_syscall", _types.String, FieldAttributes.Private);
+        var errorCauseField = typeBuilder.DefineField("_cause", _types.Object, FieldAttributes.Private);
+        var errorHasCauseField = typeBuilder.DefineField("_hasCause", _types.Boolean, FieldAttributes.Private);
+        var errorCodeField = typeBuilder.DefineField("_code", _types.String, FieldAttributes.Private);
+        var errorSyscallField = typeBuilder.DefineField("_syscall", _types.String, FieldAttributes.Private);
 
         // Protected constructor: protected $Error(string name, string? message)
         // Must be emitted before message constructor since it calls this one
-        EmitTSErrorCtorNameMessage(typeBuilder, runtime);
+        EmitTSErrorCtorNameMessage(typeBuilder, errors, errorCapturedStackField, errorMessageField, errorNameField);
 
         // Constructor: public $Error(string? message) : this("Error", message)
-        EmitTSErrorCtorMessage(typeBuilder, runtime);
+        EmitTSErrorCtorMessage(typeBuilder, errors);
 
         // Properties: Name, Message, Stack, Cause (get/set)
-        EmitTSErrorNameProperty(typeBuilder, runtime);
-        EmitTSErrorMessageProperty(typeBuilder, runtime);
-        EmitTSErrorStackProperty(typeBuilder, runtime);
-        EmitTSErrorCapturedStackSetter(typeBuilder, runtime);
-        EmitTSErrorCauseProperty(typeBuilder, runtime);
-        EmitTSErrorCodeProperty(typeBuilder, runtime);
-        EmitTSErrorSyscallProperty(typeBuilder, runtime);
+        EmitTSErrorNameProperty(typeBuilder, errors, errorNameField);
+        EmitTSErrorMessageProperty(typeBuilder, errors, errorMessageField);
+        EmitTSErrorStackProperty(typeBuilder, errors, errorCapturedStackField, errorStackField);
+        EmitTSErrorCapturedStackSetter(typeBuilder, errors, errorCapturedStackField, errorStackField);
+        EmitTSErrorCauseProperty(typeBuilder, errors, errorCauseField, errorHasCauseField);
+        EmitTSErrorCodeProperty(typeBuilder, errors, errorCodeField);
+        EmitTSErrorSyscallProperty(typeBuilder, errors, errorSyscallField);
 
         // ToString override
-        EmitTSErrorToStringMethod(typeBuilder, runtime);
+        EmitTSErrorToStringMethod(typeBuilder, errorMessageField, errorNameField);
 
         typeBuilder.CreateType();
     }
 
-    private void EmitTSErrorCtorMessage(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSErrorCtorMessage(TypeBuilder typeBuilder, EmittedErrorRuntime errors)
     {
         // public $Error(string? message)
         var ctor = typeBuilder.DefineConstructor(
@@ -90,7 +81,7 @@ public partial class RuntimeEmitter
             CallingConventions.Standard,
             [_types.String]
         );
-        runtime.TSErrorCtorMessage = ctor;
+        errors.MessageConstructor = ctor;
 
         var il = ctor.GetILGenerator();
 
@@ -98,11 +89,17 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "Error");
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.TSErrorCtorNameMessage);
+        il.Emit(OpCodes.Call, errors.NameMessageConstructor);
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitTSErrorCtorNameMessage(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSErrorCtorNameMessage(
+        TypeBuilder typeBuilder,
+        EmittedErrorRuntime errors,
+        FieldBuilder errorCapturedStackField,
+        FieldBuilder errorMessageField,
+        FieldBuilder errorNameField
+    )
     {
         // protected $Error(string name, string? message)
         var ctor = typeBuilder.DefineConstructor(
@@ -110,7 +107,7 @@ public partial class RuntimeEmitter
             CallingConventions.Standard,
             [_types.String, _types.String]
         );
-        runtime.TSErrorCtorNameMessage = ctor;
+        errors.NameMessageConstructor = ctor;
 
         var il = ctor.GetILGenerator();
 
@@ -121,7 +118,7 @@ public partial class RuntimeEmitter
         // _name = name
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Stfld, _tsErrorNameField);
+        il.Emit(OpCodes.Stfld, errorNameField);
 
         // _message = message ?? ""
         var hasMessage = il.DefineLabel();
@@ -133,18 +130,18 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Ldstr, "");
         il.MarkLabel(hasMessage);
-        il.Emit(OpCodes.Stfld, _tsErrorMessageField);
+        il.Emit(OpCodes.Stfld, errorMessageField);
 
         // Runtime-created errors get a stable marker. Direct guest construction
         // replaces it with the emitting method's interned creation-site token.
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "<runtime>");
-        il.Emit(OpCodes.Stfld, _tsErrorCapturedStackField);
+        il.Emit(OpCodes.Stfld, errorCapturedStackField);
 
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitTSErrorNameProperty(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSErrorNameProperty(TypeBuilder typeBuilder, EmittedErrorRuntime errors, FieldBuilder errorNameField)
     {
         // public string Name { get; set; }
         var prop = typeBuilder.DefineProperty(
@@ -161,10 +158,10 @@ public partial class RuntimeEmitter
             _types.String,
             Type.EmptyTypes
         );
-        runtime.TSErrorNameGetter = getter;
+        errors.NameGetter = getter;
         var getIL = getter.GetILGenerator();
         getIL.Emit(OpCodes.Ldarg_0);
-        getIL.Emit(OpCodes.Ldfld, _tsErrorNameField);
+        getIL.Emit(OpCodes.Ldfld, errorNameField);
         getIL.Emit(OpCodes.Ret);
         prop.SetGetMethod(getter);
 
@@ -175,16 +172,16 @@ public partial class RuntimeEmitter
             _types.Void,
             [_types.String]
         );
-        runtime.TSErrorNameSetter = setter;
+        errors.NameSetter = setter;
         var setIL = setter.GetILGenerator();
         setIL.Emit(OpCodes.Ldarg_0);
         setIL.Emit(OpCodes.Ldarg_1);
-        setIL.Emit(OpCodes.Stfld, _tsErrorNameField);
+        setIL.Emit(OpCodes.Stfld, errorNameField);
         setIL.Emit(OpCodes.Ret);
         prop.SetSetMethod(setter);
     }
 
-    private void EmitTSErrorMessageProperty(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSErrorMessageProperty(TypeBuilder typeBuilder, EmittedErrorRuntime errors, FieldBuilder errorMessageField)
     {
         // public string Message { get; set; }
         var prop = typeBuilder.DefineProperty(
@@ -201,10 +198,10 @@ public partial class RuntimeEmitter
             _types.String,
             Type.EmptyTypes
         );
-        runtime.TSErrorMessageGetter = getter;
+        errors.MessageGetter = getter;
         var getIL = getter.GetILGenerator();
         getIL.Emit(OpCodes.Ldarg_0);
-        getIL.Emit(OpCodes.Ldfld, _tsErrorMessageField);
+        getIL.Emit(OpCodes.Ldfld, errorMessageField);
         getIL.Emit(OpCodes.Ret);
         prop.SetGetMethod(getter);
 
@@ -215,16 +212,21 @@ public partial class RuntimeEmitter
             _types.Void,
             [_types.String]
         );
-        runtime.TSErrorMessageSetter = setter;
+        errors.MessageSetter = setter;
         var setIL = setter.GetILGenerator();
         setIL.Emit(OpCodes.Ldarg_0);
         setIL.Emit(OpCodes.Ldarg_1);
-        setIL.Emit(OpCodes.Stfld, _tsErrorMessageField);
+        setIL.Emit(OpCodes.Stfld, errorMessageField);
         setIL.Emit(OpCodes.Ret);
         prop.SetSetMethod(setter);
     }
 
-    private void EmitTSErrorStackProperty(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSErrorStackProperty(
+        TypeBuilder typeBuilder,
+        EmittedErrorRuntime errors,
+        FieldBuilder errorCapturedStackField,
+        FieldBuilder errorStackField
+    )
     {
         // public string Stack { get; set; }
         var prop = typeBuilder.DefineProperty(
@@ -241,13 +243,13 @@ public partial class RuntimeEmitter
             _types.String,
             Type.EmptyTypes
         );
-        runtime.TSErrorStackGetter = getter;
+        errors.StackGetter = getter;
         var getIL = getter.GetILGenerator();
         var formatCapture = getIL.DefineLabel();
 
         // Return an explicitly assigned or already-formatted value.
         getIL.Emit(OpCodes.Ldarg_0);
-        getIL.Emit(OpCodes.Ldfld, _tsErrorStackField);
+        getIL.Emit(OpCodes.Ldfld, errorStackField);
         getIL.Emit(OpCodes.Dup);
         getIL.Emit(OpCodes.Brtrue, formatCapture);
         getIL.Emit(OpCodes.Pop);
@@ -257,7 +259,7 @@ public partial class RuntimeEmitter
         var captured = getIL.DeclareLocal(_types.String);
         var hasCapture = getIL.DefineLabel();
         getIL.Emit(OpCodes.Ldarg_0);
-        getIL.Emit(OpCodes.Ldfld, _tsErrorCapturedStackField);
+        getIL.Emit(OpCodes.Ldfld, errorCapturedStackField);
         getIL.Emit(OpCodes.Stloc, captured);
         getIL.Emit(OpCodes.Ldloc, captured);
         getIL.Emit(OpCodes.Brtrue, hasCapture);
@@ -274,10 +276,10 @@ public partial class RuntimeEmitter
         getIL.Emit(OpCodes.Stloc, formatted);
         getIL.Emit(OpCodes.Ldarg_0);
         getIL.Emit(OpCodes.Ldloc, formatted);
-        getIL.Emit(OpCodes.Stfld, _tsErrorStackField);
+        getIL.Emit(OpCodes.Stfld, errorStackField);
         getIL.Emit(OpCodes.Ldarg_0);
         getIL.Emit(OpCodes.Ldnull);
-        getIL.Emit(OpCodes.Stfld, _tsErrorCapturedStackField);
+        getIL.Emit(OpCodes.Stfld, errorCapturedStackField);
         getIL.Emit(OpCodes.Ldloc, formatted);
         getIL.Emit(OpCodes.Ret);
 
@@ -292,39 +294,48 @@ public partial class RuntimeEmitter
             _types.Void,
             [_types.String]
         );
-        runtime.TSErrorStackSetter = setter;
+        errors.StackSetter = setter;
         var setIL = setter.GetILGenerator();
         setIL.Emit(OpCodes.Ldarg_0);
         setIL.Emit(OpCodes.Ldarg_1);
-        setIL.Emit(OpCodes.Stfld, _tsErrorStackField);
+        setIL.Emit(OpCodes.Stfld, errorStackField);
         setIL.Emit(OpCodes.Ldarg_0);
         setIL.Emit(OpCodes.Ldnull);
-        setIL.Emit(OpCodes.Stfld, _tsErrorCapturedStackField);
+        setIL.Emit(OpCodes.Stfld, errorCapturedStackField);
         setIL.Emit(OpCodes.Ret);
         prop.SetSetMethod(setter);
     }
 
     private void EmitTSErrorCapturedStackSetter(
-        TypeBuilder typeBuilder, EmittedRuntime runtime)
+        TypeBuilder typeBuilder,
+        EmittedErrorRuntime errors,
+        FieldBuilder errorCapturedStackField,
+        FieldBuilder errorStackField
+    )
     {
         var method = typeBuilder.DefineMethod(
             "SetCapturedStackFrame",
             MethodAttributes.Public | MethodAttributes.HideBySig,
             _types.Void,
             [_types.String]);
-        runtime.TSErrorCapturedStackSetter = method;
+        errors.CapturedStackSetter = method;
 
         var il = method.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Stfld, _tsErrorStackField);
+        il.Emit(OpCodes.Stfld, errorStackField);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Stfld, _tsErrorCapturedStackField);
+        il.Emit(OpCodes.Stfld, errorCapturedStackField);
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitTSErrorCauseProperty(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSErrorCauseProperty(
+        TypeBuilder typeBuilder,
+        EmittedErrorRuntime errors,
+        FieldBuilder errorCauseField,
+        FieldBuilder errorHasCauseField
+    )
     {
         // public object? Cause { get; set; }
         var prop = typeBuilder.DefineProperty(
@@ -341,10 +352,10 @@ public partial class RuntimeEmitter
             _types.Object,
             Type.EmptyTypes
         );
-        runtime.TSErrorCauseGetter = getter;
+        errors.CauseGetter = getter;
         var getIL = getter.GetILGenerator();
         getIL.Emit(OpCodes.Ldarg_0);
-        getIL.Emit(OpCodes.Ldfld, _tsErrorCauseField);
+        getIL.Emit(OpCodes.Ldfld, errorCauseField);
         getIL.Emit(OpCodes.Ret);
         prop.SetGetMethod(getter);
 
@@ -355,15 +366,15 @@ public partial class RuntimeEmitter
             _types.Void,
             [_types.Object]
         );
-        runtime.TSErrorCauseSetter = setter;
+        errors.CauseSetter = setter;
         var setIL = setter.GetILGenerator();
         setIL.Emit(OpCodes.Ldarg_0);
         setIL.Emit(OpCodes.Ldarg_1);
-        setIL.Emit(OpCodes.Stfld, _tsErrorCauseField);
+        setIL.Emit(OpCodes.Stfld, errorCauseField);
         // Also set _hasCause = true
         setIL.Emit(OpCodes.Ldarg_0);
         setIL.Emit(OpCodes.Ldc_I4_1);
-        setIL.Emit(OpCodes.Stfld, _tsErrorHasCauseField);
+        setIL.Emit(OpCodes.Stfld, errorHasCauseField);
         setIL.Emit(OpCodes.Ret);
         prop.SetSetMethod(setter);
 
@@ -374,14 +385,14 @@ public partial class RuntimeEmitter
             _types.Boolean,
             Type.EmptyTypes
         );
-        runtime.TSErrorHasCauseGetter = hasCauseGetter;
+        errors.HasCauseGetter = hasCauseGetter;
         var hcIL = hasCauseGetter.GetILGenerator();
         hcIL.Emit(OpCodes.Ldarg_0);
-        hcIL.Emit(OpCodes.Ldfld, _tsErrorHasCauseField);
+        hcIL.Emit(OpCodes.Ldfld, errorHasCauseField);
         hcIL.Emit(OpCodes.Ret);
     }
 
-    private void EmitTSErrorCodeProperty(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSErrorCodeProperty(TypeBuilder typeBuilder, EmittedErrorRuntime errors, FieldBuilder errorCodeField)
     {
         // public string? Code { get; set; }
         var prop = typeBuilder.DefineProperty("Code", PropertyAttributes.None, _types.String, null);
@@ -392,10 +403,10 @@ public partial class RuntimeEmitter
             _types.String,
             Type.EmptyTypes
         );
-        runtime.TSErrorCodeGetter = getter;
+        errors.CodeGetter = getter;
         var getIL = getter.GetILGenerator();
         getIL.Emit(OpCodes.Ldarg_0);
-        getIL.Emit(OpCodes.Ldfld, _tsErrorCodeField);
+        getIL.Emit(OpCodes.Ldfld, errorCodeField);
         getIL.Emit(OpCodes.Ret);
         prop.SetGetMethod(getter);
 
@@ -405,16 +416,16 @@ public partial class RuntimeEmitter
             _types.Void,
             [_types.String]
         );
-        runtime.TSErrorCodeSetter = setter;
+        errors.CodeSetter = setter;
         var setIL = setter.GetILGenerator();
         setIL.Emit(OpCodes.Ldarg_0);
         setIL.Emit(OpCodes.Ldarg_1);
-        setIL.Emit(OpCodes.Stfld, _tsErrorCodeField);
+        setIL.Emit(OpCodes.Stfld, errorCodeField);
         setIL.Emit(OpCodes.Ret);
         prop.SetSetMethod(setter);
     }
 
-    private void EmitTSErrorSyscallProperty(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSErrorSyscallProperty(TypeBuilder typeBuilder, EmittedErrorRuntime errors, FieldBuilder errorSyscallField)
     {
         // public string? Syscall { get; set; }
         var prop = typeBuilder.DefineProperty("Syscall", PropertyAttributes.None, _types.String, null);
@@ -425,10 +436,10 @@ public partial class RuntimeEmitter
             _types.String,
             Type.EmptyTypes
         );
-        runtime.TSErrorSyscallGetter = getter;
+        errors.SyscallGetter = getter;
         var getIL = getter.GetILGenerator();
         getIL.Emit(OpCodes.Ldarg_0);
-        getIL.Emit(OpCodes.Ldfld, _tsErrorSyscallField);
+        getIL.Emit(OpCodes.Ldfld, errorSyscallField);
         getIL.Emit(OpCodes.Ret);
         prop.SetGetMethod(getter);
 
@@ -438,16 +449,16 @@ public partial class RuntimeEmitter
             _types.Void,
             [_types.String]
         );
-        runtime.TSErrorSyscallSetter = setter;
+        errors.SyscallSetter = setter;
         var setIL = setter.GetILGenerator();
         setIL.Emit(OpCodes.Ldarg_0);
         setIL.Emit(OpCodes.Ldarg_1);
-        setIL.Emit(OpCodes.Stfld, _tsErrorSyscallField);
+        setIL.Emit(OpCodes.Stfld, errorSyscallField);
         setIL.Emit(OpCodes.Ret);
         prop.SetSetMethod(setter);
     }
 
-    private void EmitTSErrorToStringMethod(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSErrorToStringMethod(TypeBuilder typeBuilder, FieldBuilder errorMessageField, FieldBuilder errorNameField)
     {
         var method = typeBuilder.DefineMethod(
             "ToString",
@@ -462,38 +473,40 @@ public partial class RuntimeEmitter
 
         // if (string.IsNullOrEmpty(_message))
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsErrorMessageField);
+        il.Emit(OpCodes.Ldfld, errorMessageField);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "IsNullOrEmpty")!);
         il.Emit(OpCodes.Brfalse, hasMessageLabel);
 
         // return _name;
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsErrorNameField);
+        il.Emit(OpCodes.Ldfld, errorNameField);
         il.Emit(OpCodes.Ret);
 
         // return _name + ": " + _message;
         il.MarkLabel(hasMessageLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsErrorNameField);
+        il.Emit(OpCodes.Ldfld, errorNameField);
         il.Emit(OpCodes.Ldstr, ": ");
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsErrorMessageField);
+        il.Emit(OpCodes.Ldfld, errorMessageField);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", [_types.String, _types.String, _types.String])!);
         il.Emit(OpCodes.Ret);
     }
 
     private void EmitSimpleErrorSubclass(
         ModuleBuilder moduleBuilder,
-        EmittedRuntime runtime,
+        EmittedErrorRuntime errors,
         string className,
         string errorName,
-        Action<TypeBuilder, ConstructorBuilder> setOnRuntime)
+        Action<TypeBuilder,
+        ConstructorBuilder> setOnRuntime
+    )
     {
         // Define class that extends $Error
         var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             className,
             TypeAttributes.Public | TypeAttributes.Class | TypeAttributes.BeforeFieldInit,
-            runtime.TSErrorType
+            errors.Type
         );
 
         // Constructor: public $XxxError(string? message) : base("XxxError", message)
@@ -507,79 +520,115 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, errorName);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.TSErrorCtorNameMessage);
+        il.Emit(OpCodes.Call, errors.NameMessageConstructor);
         il.Emit(OpCodes.Ret);
 
         setOnRuntime(typeBuilder, ctor);
         typeBuilder.CreateType();
     }
 
-    private void EmitTSTypeErrorClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private void EmitTSTypeErrorClass(ModuleBuilder moduleBuilder, EmittedErrorRuntime errors)
     {
-        EmitSimpleErrorSubclass(moduleBuilder, runtime, "$TypeError", "TypeError", (type, ctor) =>
+        EmitSimpleErrorSubclass(
+            moduleBuilder,
+            errors,
+            "$TypeError",
+            "TypeError",
+            (type, ctor) =>
         {
-            runtime.TSTypeErrorType = type;
-            runtime.TSTypeErrorCtor = ctor;
-        });
+            errors.TypeErrorType = type;
+            errors.TypeErrorConstructor = ctor;
+        }
+        );
     }
 
-    private void EmitTSRangeErrorClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private void EmitTSRangeErrorClass(ModuleBuilder moduleBuilder, EmittedErrorRuntime errors)
     {
-        EmitSimpleErrorSubclass(moduleBuilder, runtime, "$RangeError", "RangeError", (type, ctor) =>
+        EmitSimpleErrorSubclass(
+            moduleBuilder,
+            errors,
+            "$RangeError",
+            "RangeError",
+            (type, ctor) =>
         {
-            runtime.TSRangeErrorType = type;
-            runtime.TSRangeErrorCtor = ctor;
-        });
+            errors.RangeErrorType = type;
+            errors.RangeErrorConstructor = ctor;
+        }
+        );
     }
 
-    private void EmitTSReferenceErrorClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private void EmitTSReferenceErrorClass(ModuleBuilder moduleBuilder, EmittedErrorRuntime errors)
     {
-        EmitSimpleErrorSubclass(moduleBuilder, runtime, "$ReferenceError", "ReferenceError", (type, ctor) =>
+        EmitSimpleErrorSubclass(
+            moduleBuilder,
+            errors,
+            "$ReferenceError",
+            "ReferenceError",
+            (type, ctor) =>
         {
-            runtime.TSReferenceErrorType = type;
-            runtime.TSReferenceErrorCtor = ctor;
-        });
+            errors.ReferenceErrorType = type;
+            errors.ReferenceErrorConstructor = ctor;
+        }
+        );
     }
 
-    private void EmitTSSyntaxErrorClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private void EmitTSSyntaxErrorClass(ModuleBuilder moduleBuilder, EmittedErrorRuntime errors)
     {
-        EmitSimpleErrorSubclass(moduleBuilder, runtime, "$SyntaxError", "SyntaxError", (type, ctor) =>
+        EmitSimpleErrorSubclass(
+            moduleBuilder,
+            errors,
+            "$SyntaxError",
+            "SyntaxError",
+            (type, ctor) =>
         {
-            runtime.TSSyntaxErrorType = type;
-            runtime.TSSyntaxErrorCtor = ctor;
-        });
+            errors.SyntaxErrorType = type;
+            errors.SyntaxErrorConstructor = ctor;
+        }
+        );
     }
 
-    private void EmitTSURIErrorClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private void EmitTSURIErrorClass(ModuleBuilder moduleBuilder, EmittedErrorRuntime errors)
     {
-        EmitSimpleErrorSubclass(moduleBuilder, runtime, "$URIError", "URIError", (type, ctor) =>
+        EmitSimpleErrorSubclass(
+            moduleBuilder,
+            errors,
+            "$URIError",
+            "URIError",
+            (type, ctor) =>
         {
-            runtime.TSURIErrorType = type;
-            runtime.TSURIErrorCtor = ctor;
-        });
+            errors.URIErrorType = type;
+            errors.URIErrorConstructor = ctor;
+        }
+        );
     }
 
-    private void EmitTSEvalErrorClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private void EmitTSEvalErrorClass(ModuleBuilder moduleBuilder, EmittedErrorRuntime errors)
     {
-        EmitSimpleErrorSubclass(moduleBuilder, runtime, "$EvalError", "EvalError", (type, ctor) =>
+        EmitSimpleErrorSubclass(
+            moduleBuilder,
+            errors,
+            "$EvalError",
+            "EvalError",
+            (type, ctor) =>
         {
-            runtime.TSEvalErrorType = type;
-            runtime.TSEvalErrorCtor = ctor;
-        });
+            errors.EvalErrorType = type;
+            errors.EvalErrorConstructor = ctor;
+        }
+        );
     }
 
-    private void EmitTSAggregateErrorClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private void EmitTSAggregateErrorClass(ModuleBuilder moduleBuilder, EmittedErrorRuntime errors)
     {
         // Define class that extends $Error
         var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$AggregateError",
             TypeAttributes.Public | TypeAttributes.Class | TypeAttributes.BeforeFieldInit,
-            runtime.TSErrorType
+            errors.Type
         );
-        runtime.TSAggregateErrorType = typeBuilder;
+        errors.AggregateErrorType = typeBuilder;
 
         // Field: private readonly List<object?> _errors
-        _tsAggregateErrorErrorsField = typeBuilder.DefineField(
+        var aggregateErrorErrorsField = typeBuilder.DefineField(
             "_errors",
             _types.ListOfObject,
             FieldAttributes.Private
@@ -592,7 +641,7 @@ public partial class RuntimeEmitter
             CallingConventions.Standard,
             [_types.Object, _types.String]
         );
-        runtime.TSAggregateErrorCtor = ctor;
+        errors.AggregateErrorConstructor = ctor;
 
         var il = ctor.GetILGenerator();
 
@@ -608,12 +657,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Ldstr, "");
         il.MarkLabel(hasMessageLabel);
-        il.Emit(OpCodes.Call, runtime.TSErrorCtorNameMessage);
+        il.Emit(OpCodes.Call, errors.NameMessageConstructor);
 
         // _errors = new List<object?>()
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject));
-        il.Emit(OpCodes.Stfld, _tsAggregateErrorErrorsField);
+        il.Emit(OpCodes.Stfld, aggregateErrorErrorsField);
 
         // If errors (arg1) is List<object?>, copy elements
         var notListLabel = il.DefineLabel();
@@ -630,7 +679,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, errorsListLocal);
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsAggregateErrorErrorsField);
+        il.Emit(OpCodes.Ldfld, aggregateErrorErrorsField);
         il.Emit(OpCodes.Ldloc, errorsListLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "AddRange", [typeof(IEnumerable<object?>)])!);
         il.Emit(OpCodes.Br, endCtorLabel);
@@ -642,7 +691,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, errorsNullLabel);
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsAggregateErrorErrorsField);
+        il.Emit(OpCodes.Ldfld, aggregateErrorErrorsField);
         il.Emit(OpCodes.Ldarg_1);  // errors
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", [_types.Object])!);
 
@@ -664,11 +713,11 @@ public partial class RuntimeEmitter
             _types.ListOfObject,
             Type.EmptyTypes
         );
-        runtime.TSAggregateErrorErrorsGetter = getter;
+        errors.AggregateErrorErrorsGetter = getter;
 
         var getIL = getter.GetILGenerator();
         getIL.Emit(OpCodes.Ldarg_0);
-        getIL.Emit(OpCodes.Ldfld, _tsAggregateErrorErrorsField);
+        getIL.Emit(OpCodes.Ldfld, aggregateErrorErrorsField);
         getIL.Emit(OpCodes.Ret);
         prop.SetGetMethod(getter);
 

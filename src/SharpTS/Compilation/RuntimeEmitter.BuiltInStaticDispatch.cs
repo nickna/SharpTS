@@ -206,7 +206,7 @@ public partial class RuntimeEmitter
             EmitLookup(runtime.RequirePromise().Type, "allSettledKeyed", runtime.RequirePromise().AllSettledKeyedStatic, 1);
             EmitLookup(runtime.RequirePromise().Type, "any", runtime.RequirePromise().AnyStatic, 1);
         }
-        EmitLookup(runtime.TSErrorType, "isError", runtime.ErrorIsError, 1);
+        EmitLookup(runtime.Errors.Type, "isError", runtime.Errors.IsError, 1);
 
         // Date.* — bare `Date` resolves to the $TSDate Type token. The static
         // is .NET-cased ("Now"), so the case-sensitive static-method probe in

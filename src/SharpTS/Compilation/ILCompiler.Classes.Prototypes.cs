@@ -60,7 +60,7 @@ public partial class ILCompiler
             case "$AggregateError":
                 il.Emit(OpCodes.Ldnull);
                 il.Emit(OpCodes.Ldnull);
-                il.Emit(OpCodes.Call, _runtime.TSAggregateErrorCtor);
+                il.Emit(OpCodes.Call, _runtime.Errors.AggregateErrorConstructor);
                 return;
 
             case "$Error":

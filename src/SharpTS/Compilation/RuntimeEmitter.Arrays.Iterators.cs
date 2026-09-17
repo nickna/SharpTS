@@ -167,7 +167,7 @@ public partial class RuntimeEmitter
         // important because test262 harness's `assert.throws(TypeError, fn)` checks
         // `e instanceof TypeError`, and only $TypeError instances satisfy that.
         il.Emit(OpCodes.Ldstr, methodName + " callback is not callable");
-        GuestErrorEmitter.ThrowErrorFromStack(il, runtime, runtime.TSTypeErrorCtor);
+        GuestErrorEmitter.ThrowErrorFromStack(il, runtime, runtime.Errors.TypeErrorConstructor);
 
         il.MarkLabel(okLabel);
     }

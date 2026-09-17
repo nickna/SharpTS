@@ -131,7 +131,7 @@ public partial class RuntimeEmitter
         // return new $Error(err);
         il.MarkLabel(hasErr);
         il.Emit(OpCodes.Ldloc, errLocal);
-        il.Emit(OpCodes.Newobj, runtime.TSErrorCtorMessage);
+        il.Emit(OpCodes.Newobj, runtime.Errors.MessageConstructor);
         il.Emit(OpCodes.Ret);
     }
 

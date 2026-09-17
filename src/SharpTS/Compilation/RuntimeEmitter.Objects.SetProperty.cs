@@ -164,7 +164,7 @@ public partial class RuntimeEmitter
         // Check $Error - handle name, message, stack properties
         var notErrorLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSErrorType);
+        il.Emit(OpCodes.Isinst, runtime.Errors.Type);
         il.Emit(OpCodes.Brfalse, notErrorLabel);
 
         // Check "name"
@@ -229,10 +229,10 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
         il.Emit(OpCodes.Brfalse, notErrorCodeSetLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSErrorType);
+        il.Emit(OpCodes.Castclass, runtime.Errors.Type);
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Castclass, _types.String);
-        il.Emit(OpCodes.Callvirt, runtime.TSErrorCodeSetter);
+        il.Emit(OpCodes.Callvirt, runtime.Errors.CodeSetter);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notErrorCodeSetLabel);
 
@@ -243,10 +243,10 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
         il.Emit(OpCodes.Brfalse, notErrorSyscallSetLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSErrorType);
+        il.Emit(OpCodes.Castclass, runtime.Errors.Type);
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Castclass, _types.String);
-        il.Emit(OpCodes.Callvirt, runtime.TSErrorSyscallSetter);
+        il.Emit(OpCodes.Callvirt, runtime.Errors.SyscallSetter);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notErrorSyscallSetLabel);
 
@@ -287,7 +287,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Brtrue, pdsStoreLabel);
         }
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSErrorType);
+        il.Emit(OpCodes.Isinst, runtime.Errors.Type);
         il.Emit(OpCodes.Brtrue, pdsStoreLabel);
         il.Emit(OpCodes.Br, afterPdsStoreLabel);
 
@@ -498,7 +498,7 @@ public partial class RuntimeEmitter
         // Check $Error - handle name, message, stack properties
         var notErrorLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSErrorType);
+        il.Emit(OpCodes.Isinst, runtime.Errors.Type);
         il.Emit(OpCodes.Brfalse, notErrorLabel);
 
         var notErrorNameLabel = il.DefineLabel();
@@ -507,10 +507,10 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
         il.Emit(OpCodes.Brfalse, notErrorNameLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSErrorType);
+        il.Emit(OpCodes.Castclass, runtime.Errors.Type);
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Castclass, _types.String);
-        il.Emit(OpCodes.Callvirt, runtime.TSErrorNameSetter);
+        il.Emit(OpCodes.Callvirt, runtime.Errors.NameSetter);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notErrorNameLabel);
 
@@ -544,10 +544,10 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
         il.MarkLabel(noStrictErrorMessageDescriptorLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSErrorType);
+        il.Emit(OpCodes.Castclass, runtime.Errors.Type);
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Castclass, _types.String);
-        il.Emit(OpCodes.Callvirt, runtime.TSErrorMessageSetter);
+        il.Emit(OpCodes.Callvirt, runtime.Errors.MessageSetter);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notErrorMessageLabel);
 
@@ -557,10 +557,10 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
         il.Emit(OpCodes.Brfalse, notErrorStackLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSErrorType);
+        il.Emit(OpCodes.Castclass, runtime.Errors.Type);
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Castclass, _types.String);
-        il.Emit(OpCodes.Callvirt, runtime.TSErrorStackSetter);
+        il.Emit(OpCodes.Callvirt, runtime.Errors.StackSetter);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notErrorStackLabel);
 
@@ -598,7 +598,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Brtrue, fieldsPdsStoreLabel);
         }
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSErrorType);
+        il.Emit(OpCodes.Isinst, runtime.Errors.Type);
         il.Emit(OpCodes.Brtrue, fieldsPdsStoreLabel);
         il.Emit(OpCodes.Br, afterFieldsPdsStoreLabel);
 

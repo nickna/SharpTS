@@ -584,7 +584,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, sm.OnRejectedField);
         il.Emit(OpCodes.Ldloc, exceptionLocal);
-        il.Emit(OpCodes.Call, runtime.WrapException);
+        il.Emit(OpCodes.Call, runtime.Errors.WrapException);
         il.Emit(OpCodes.Call, runtime.RequirePromise().InvokeCallback);
         il.Emit(OpCodes.Stloc, resultLocal);
         il.Emit(OpCodes.Leave, handlerInvokeDoneLabel);
@@ -1082,7 +1082,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, sm.OnRejectedField!);
         il.Emit(OpCodes.Ldloc, sourceExceptionLocal);
-        il.Emit(OpCodes.Call, runtime.WrapException);
+        il.Emit(OpCodes.Call, runtime.Errors.WrapException);
         il.Emit(OpCodes.Callvirt,
             typeof(Func<object, double>).GetMethod(nameof(Func<object, double>.Invoke))!);
 

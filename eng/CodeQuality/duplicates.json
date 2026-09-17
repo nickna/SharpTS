@@ -24,20 +24,20 @@
     "Reason": "Existing independent loop eligibility proofs share this conservative expression whitelist; defer shared proof-policy extraction to a focused optimization change."
   },
   {
+    "Hash": "06abd8c592af4a9b68347d2028e9b95c1cbf626e03e283f43ff3f09f30c64aad",
+    "Members": [
+      "src/SharpTS/Compilation/AsyncGeneratorMoveNextEmitter.Statements.TryCatch.cs::AsyncGeneratorMoveNextEmitter.RegisterThrowTerminal()",
+      "src/SharpTS/Compilation/GeneratorMoveNextEmitter.Statements.TryCatch.cs::GeneratorMoveNextEmitter.RegisterThrowTerminal()"
+    ],
+    "Reason": "Sync and async generators have distinct builders and exit-routing state; retain matching terminal throw IL until those state contracts can be shared."
+  },
+  {
     "Hash": "092210f2d7b3ea0eda41f26e096ed7621372b0580f4bc3ee3c6cfc9f85b10885",
     "Members": [
       "src/SharpTS/Compilation/NestedFunctionLifter.cs::NestedFunctionLifter.ProcessClass(Stmt.Class cls)",
       "src/SharpTS/Compilation/NestedFunctionLifter.cs::NestedFunctionLifter.ProcessClassExpression(Expr.ClassExpr cls)"
     ],
     "Reason": "Statement and expression class records require typed with-expressions; preserve identity-sensitive rewriting for both AST forms."
-  },
-  {
-    "Hash": "10fe44cd909319c6e1b817baaa3766dd0109a05c432bb9b92a5692bc23f14d51",
-    "Members": [
-      "src/SharpTS/Compilation/AsyncGeneratorMoveNextEmitter.Statements.TryCatch.cs::AsyncGeneratorMoveNextEmitter.EmitSyncSegmentInTry(List<Stmt> statements, LocalBuilder caughtExceptionLocal, LocalBuilder exceptionPresentLocal)",
-      "src/SharpTS/Compilation/GeneratorMoveNextEmitter.Statements.TryCatch.cs::GeneratorMoveNextEmitter.EmitSyncSegmentInTry(List<Stmt> statements, LocalBuilder caughtExceptionLocal, LocalBuilder exceptionPresentLocal)"
-    ],
-    "Reason": "Sync and async generator emitters own separate protected-region and suspension state; retain paired exception-segment emission until a shared state contract is designed."
   },
   {
     "Hash": "13c1f1a2a93172e6390a0d1cd7f1a83872779713f39848dc22825ef987838810",
@@ -102,14 +102,6 @@
       "src/SharpTS/Compilation/PerIterationCellAnalyzer.cs::PerIterationCellAnalyzer.CollectLoopBindingNames(Stmt? initializer)"
     ],
     "Reason": "Closure capture and per-iteration cell analysis share lexical binding collection; retain existing implementations pending a focused capture-analysis refactor."
-  },
-  {
-    "Hash": "724261631d8f4ef03a75a5e80178cf425506d2c31d971dec6f75a0a5e109b93b",
-    "Members": [
-      "src/SharpTS/Compilation/AsyncGeneratorMoveNextEmitter.Statements.TryCatch.cs::AsyncGeneratorMoveNextEmitter.RegisterThrowTerminal()",
-      "src/SharpTS/Compilation/GeneratorMoveNextEmitter.Statements.TryCatch.cs::GeneratorMoveNextEmitter.RegisterThrowTerminal()"
-    ],
-    "Reason": "Sync and async generators have distinct builders and exit-routing state; retain matching terminal throw IL until those state contracts can be shared."
   },
   {
     "Hash": "7aaf195ad96dd203691e9620fc518ebb5fbd02ea22cc5420336ce9194ebcb616",
@@ -222,5 +214,13 @@
       "src/SharpTS/Runtime/Types/SharpTSBigInt.cs::SharpTSBigInt.ParseRadix(ReadOnlySpan<char> digits, int radix)"
     ],
     "Reason": "Existing BigInt construction and runtime wrapper parsing share radix accumulation; defer shared parsing extraction to a BigInt-focused change."
+  },
+  {
+    "Hash": "f754e2cdb5135ae5ac6825963a9a8942ac1d29b079eec8dbf22e029711b0e3d9",
+    "Members": [
+      "src/SharpTS/Compilation/AsyncGeneratorMoveNextEmitter.Statements.TryCatch.cs::AsyncGeneratorMoveNextEmitter.EmitSyncSegmentInTry(List<Stmt> statements, LocalBuilder caughtExceptionLocal, LocalBuilder exceptionPresentLocal)",
+      "src/SharpTS/Compilation/GeneratorMoveNextEmitter.Statements.TryCatch.cs::GeneratorMoveNextEmitter.EmitSyncSegmentInTry(List<Stmt> statements, LocalBuilder caughtExceptionLocal, LocalBuilder exceptionPresentLocal)"
+    ],
+    "Reason": "Sync and async generator emitters own separate protected-region and suspension state; retain paired exception-segment emission until a shared state contract is designed."
   }
 ]

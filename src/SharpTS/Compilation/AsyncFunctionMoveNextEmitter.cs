@@ -66,7 +66,7 @@ public abstract partial class AsyncFunctionMoveNextEmitter : StateMachineExitRou
             IL.Emit(OpCodes.Stloc, resultTemp);
             IL.Emit(OpCodes.Leave, getResultDoneLabel);
             IL.BeginCatchBlock(typeof(Exception));
-            IL.Emit(OpCodes.Call, Ctx.Runtime!.WrapException);
+            IL.Emit(OpCodes.Call, Ctx.Runtime!.Errors.WrapException);
             IL.Emit(OpCodes.Stloc, _currentTryCatchExceptionLocal);
             IL.Emit(OpCodes.Ldnull);
             IL.Emit(OpCodes.Stloc, resultTemp);

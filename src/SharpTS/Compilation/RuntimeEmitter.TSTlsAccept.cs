@@ -167,10 +167,10 @@ public partial class RuntimeEmitter
         _tlsAcceptErrorClosureRun = run;
         var il = run.GetILGenerator();
 
-        var errLocal = il.DeclareLocal(runtime.TSErrorType);
+        var errLocal = il.DeclareLocal(runtime.Errors.Type);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, msgField);
-        il.Emit(OpCodes.Newobj, runtime.TSErrorCtorMessage);
+        il.Emit(OpCodes.Newobj, runtime.Errors.MessageConstructor);
         il.Emit(OpCodes.Stloc, errLocal);
 
         il.Emit(OpCodes.Ldarg_0);
@@ -272,10 +272,10 @@ public partial class RuntimeEmitter
         var il = run.GetILGenerator();
 
         // var err = new $Error(_msg)
-        var errLocal = il.DeclareLocal(runtime.TSErrorType);
+        var errLocal = il.DeclareLocal(runtime.Errors.Type);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, msgField);
-        il.Emit(OpCodes.Newobj, runtime.TSErrorCtorMessage);
+        il.Emit(OpCodes.Newobj, runtime.Errors.MessageConstructor);
         il.Emit(OpCodes.Stloc, errLocal);
 
         // _socket.Emit("error", [err])

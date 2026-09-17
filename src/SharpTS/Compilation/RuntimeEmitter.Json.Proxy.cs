@@ -81,8 +81,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, foreignThrowValue);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.PropertyInfo, "GetValue", _types.Object));
         il.Emit(OpCodes.Castclass, _types.String);
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
+        il.Emit(OpCodes.Newobj, runtime.Errors.TypeErrorConstructor);
+        il.Emit(OpCodes.Call, runtime.Errors.CreateException);
         il.Emit(OpCodes.Throw);
 
         il.MarkLabel(rethrowInnerException);

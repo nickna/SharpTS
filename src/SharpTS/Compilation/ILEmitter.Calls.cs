@@ -292,7 +292,7 @@ public partial class ILEmitter
                 && _ctx.Functions.TryGetValue(_ctx.ResolveFunctionName(name), out _) == false)
             {
                 IL.Emit(OpCodes.Ldstr, name + " is not a function");
-                GuestErrorEmitter.ThrowErrorFromStack(IL, _ctx.Runtime!, _ctx.Runtime!.TSTypeErrorCtor);
+                GuestErrorEmitter.ThrowErrorFromStack(IL, _ctx.Runtime!, _ctx.Runtime!.Errors.TypeErrorConstructor);
                 IL.Emit(OpCodes.Ldnull);  // unreachable, balance stack
                 SetStackUnknown();
                 return;

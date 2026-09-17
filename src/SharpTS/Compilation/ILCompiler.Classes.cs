@@ -651,15 +651,15 @@ public partial class ILCompiler
     /// </summary>
     private Type GetEmittedErrorType(string errorTypeName) => errorTypeName switch
     {
-        "Error" => _runtime.TSErrorType,
-        "TypeError" => _runtime.TSTypeErrorType,
-        "RangeError" => _runtime.TSRangeErrorType,
-        "ReferenceError" => _runtime.TSReferenceErrorType,
-        "SyntaxError" => _runtime.TSSyntaxErrorType,
-        "URIError" => _runtime.TSURIErrorType,
-        "EvalError" => _runtime.TSEvalErrorType,
-        "AggregateError" => _runtime.TSAggregateErrorType,
-        _ => _runtime.TSErrorType
+        "Error" => _runtime.Errors.Type,
+        "TypeError" => _runtime.Errors.TypeErrorType,
+        "RangeError" => _runtime.Errors.RangeErrorType,
+        "ReferenceError" => _runtime.Errors.ReferenceErrorType,
+        "SyntaxError" => _runtime.Errors.SyntaxErrorType,
+        "URIError" => _runtime.Errors.URIErrorType,
+        "EvalError" => _runtime.Errors.EvalErrorType,
+        "AggregateError" => _runtime.Errors.AggregateErrorType,
+        _ => _runtime.Errors.Type
     };
 
     /// <summary>
@@ -667,15 +667,15 @@ public partial class ILCompiler
     /// </summary>
     private ConstructorBuilder GetEmittedErrorConstructor(string errorTypeName) => errorTypeName switch
     {
-        "Error" => _runtime.TSErrorCtorMessage,
-        "TypeError" => _runtime.TSTypeErrorCtor,
-        "RangeError" => _runtime.TSRangeErrorCtor,
-        "ReferenceError" => _runtime.TSReferenceErrorCtor,
-        "SyntaxError" => _runtime.TSSyntaxErrorCtor,
-        "URIError" => _runtime.TSURIErrorCtor,
-        "EvalError" => _runtime.TSEvalErrorCtor,
-        "AggregateError" => _runtime.TSAggregateErrorCtor,
-        _ => _runtime.TSErrorCtorMessage
+        "Error" => _runtime.Errors.MessageConstructor,
+        "TypeError" => _runtime.Errors.TypeErrorConstructor,
+        "RangeError" => _runtime.Errors.RangeErrorConstructor,
+        "ReferenceError" => _runtime.Errors.ReferenceErrorConstructor,
+        "SyntaxError" => _runtime.Errors.SyntaxErrorConstructor,
+        "URIError" => _runtime.Errors.URIErrorConstructor,
+        "EvalError" => _runtime.Errors.EvalErrorConstructor,
+        "AggregateError" => _runtime.Errors.AggregateErrorConstructor,
+        _ => _runtime.Errors.MessageConstructor
     };
 
     /// <summary>

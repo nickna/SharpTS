@@ -4526,7 +4526,7 @@ public partial class ILEmitter
         builder.BeginCatchBlock(_ctx.Types.Exception);
         if (t.CatchParam != null)
         {
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.WrapException);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.Errors.WrapException);
             IL.Emit(OpCodes.Stloc, catchValue);
         }
         else
@@ -4609,7 +4609,7 @@ public partial class ILEmitter
                 if (t.CatchParam != null)
                 {
                     var exLocal = _ctx.Locals.DeclareLocal(t.CatchParam.Lexeme, _ctx.Types.Object);
-                    IL.Emit(OpCodes.Call, _ctx.Runtime!.WrapException);
+                    IL.Emit(OpCodes.Call, _ctx.Runtime!.Errors.WrapException);
                     IL.Emit(OpCodes.Stloc, exLocal);
                 }
                 else
@@ -4711,7 +4711,7 @@ public partial class ILEmitter
 
         EmitExpression(t.Value);
         EmitBoxIfNeeded(t.Value);
-        IL.Emit(OpCodes.Call, _ctx.Runtime!.CreateException);
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.Errors.CreateException);
         IL.Emit(OpCodes.Throw);
     }
 

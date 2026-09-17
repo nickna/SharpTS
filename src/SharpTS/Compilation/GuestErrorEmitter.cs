@@ -15,7 +15,7 @@ internal static class GuestErrorEmitter
 {
     /// <summary>Emits <c>throw CreateException(new errorCtor(message))</c>.</summary>
     public static void ThrowError(ILGenerator il, EmittedRuntime runtime, ConstructorInfo errorCtor, string message) =>
-        ThrowError(il, runtime.CreateException, errorCtor, message);
+        ThrowError(il, runtime.Errors.CreateException, errorCtor, message);
 
     /// <summary>Emits a guest error using explicit constructor and exception-wrapper declarations.</summary>
     public static void ThrowError(ILGenerator il, MethodInfo createException, ConstructorInfo errorCtor, string message)
@@ -29,7 +29,7 @@ internal static class GuestErrorEmitter
     /// already on the evaluation stack (for computed messages).
     /// </summary>
     public static void ThrowErrorFromStack(ILGenerator il, EmittedRuntime runtime, ConstructorInfo errorCtor) =>
-        ThrowErrorFromStack(il, runtime.CreateException, errorCtor);
+        ThrowErrorFromStack(il, runtime.Errors.CreateException, errorCtor);
 
     /// <summary>Raises the message on the stack using explicit error and exception-wrapper declarations.</summary>
     public static void ThrowErrorFromStack(ILGenerator il, MethodInfo createException, ConstructorInfo errorCtor)
@@ -40,11 +40,11 @@ internal static class GuestErrorEmitter
     }
 
     public static void ThrowTypeError(ILGenerator il, EmittedRuntime runtime, string message) =>
-        ThrowError(il, runtime, runtime.TSTypeErrorCtor, message);
+        ThrowError(il, runtime, runtime.Errors.TypeErrorConstructor, message);
 
     public static void ThrowRangeError(ILGenerator il, EmittedRuntime runtime, string message) =>
-        ThrowError(il, runtime, runtime.TSRangeErrorCtor, message);
+        ThrowError(il, runtime, runtime.Errors.RangeErrorConstructor, message);
 
     public static void ThrowSyntaxError(ILGenerator il, EmittedRuntime runtime, string message) =>
-        ThrowError(il, runtime, runtime.TSSyntaxErrorCtor, message);
+        ThrowError(il, runtime, runtime.Errors.SyntaxErrorConstructor, message);
 }

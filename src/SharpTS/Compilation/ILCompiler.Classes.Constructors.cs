@@ -206,7 +206,7 @@ public partial class ILCompiler
             il.Emit(OpCodes.Brfalse, skipMessageDescriptorLabel);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldloc, errorMessageLocal);
-            il.Emit(OpCodes.Call, _runtime.ErrorDefineMessageProperty);
+            il.Emit(OpCodes.Call, _runtime.Errors.DefineMessageProperty);
             il.MarkLabel(skipMessageDescriptorLabel);
         }
         else if (constructor == null && qualifiedSuperclass != null && _classes.Constructors.TryGetValue(qualifiedSuperclass, out var parentCtor))

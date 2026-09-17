@@ -66,24 +66,24 @@ public sealed class ErrorEmitter : ITypeEmitterStrategy
         switch (propertyName)
         {
             case "name":
-                il.Emit(OpCodes.Call, ctx.Runtime!.ErrorGetName);
+                il.Emit(OpCodes.Call, ctx.Runtime!.Errors.GetName);
                 return true;
 
             case "message":
-                il.Emit(OpCodes.Call, ctx.Runtime!.ErrorGetMessage);
+                il.Emit(OpCodes.Call, ctx.Runtime!.Errors.GetMessage);
                 return true;
 
             case "stack":
-                il.Emit(OpCodes.Call, ctx.Runtime!.ErrorGetStack);
+                il.Emit(OpCodes.Call, ctx.Runtime!.Errors.GetStack);
                 return true;
 
             case "cause":
-                il.Emit(OpCodes.Call, ctx.Runtime!.ErrorGetCause);
+                il.Emit(OpCodes.Call, ctx.Runtime!.Errors.GetCause);
                 return true;
 
             case "errors":
                 // For AggregateError, get the errors array
-                il.Emit(OpCodes.Call, ctx.Runtime!.AggregateErrorGetErrors);
+                il.Emit(OpCodes.Call, ctx.Runtime!.Errors.AggregateErrorGetErrors);
                 return true;
 
             default:
@@ -120,7 +120,7 @@ public sealed class ErrorEmitter : ITypeEmitterStrategy
         if (propertyName == "cause")
         {
             // cause takes object? directly, no string conversion
-            il.Emit(OpCodes.Call, ctx.Runtime!.ErrorSetCause);
+            il.Emit(OpCodes.Call, ctx.Runtime!.Errors.SetCause);
         }
         else
         {
@@ -131,13 +131,13 @@ public sealed class ErrorEmitter : ITypeEmitterStrategy
             switch (propertyName)
             {
                 case "name":
-                    il.Emit(OpCodes.Call, ctx.Runtime!.ErrorSetName);
+                    il.Emit(OpCodes.Call, ctx.Runtime!.Errors.SetName);
                     break;
                 case "message":
-                    il.Emit(OpCodes.Call, ctx.Runtime!.ErrorSetMessage);
+                    il.Emit(OpCodes.Call, ctx.Runtime!.Errors.SetMessage);
                     break;
                 case "stack":
-                    il.Emit(OpCodes.Call, ctx.Runtime!.ErrorSetStack);
+                    il.Emit(OpCodes.Call, ctx.Runtime!.Errors.SetStack);
                     break;
             }
         }

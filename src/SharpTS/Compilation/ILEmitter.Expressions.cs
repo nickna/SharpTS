@@ -61,7 +61,7 @@ public partial class ILEmitter
         if (_ctx.LexicalInitializerTdzName == name)
         {
             IL.Emit(OpCodes.Ldstr, name);
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.ThrowUndefinedVariable);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.Errors.ThrowUndefinedVariable);
             EmitNullConstant();
             return;
         }
@@ -79,7 +79,7 @@ public partial class ILEmitter
             IL.Emit(OpCodes.Brfalse, initializedLabel);
             IL.Emit(OpCodes.Pop);
             IL.Emit(OpCodes.Ldstr, name);
-            IL.Emit(OpCodes.Call, _ctx.Runtime.ThrowUndefinedVariable);
+            IL.Emit(OpCodes.Call, _ctx.Runtime.Errors.ThrowUndefinedVariable);
             IL.Emit(OpCodes.Ldnull);
             IL.MarkLabel(initializedLabel);
             SetStackUnknown();
@@ -380,7 +380,7 @@ public partial class ILEmitter
 
         // Unknown variable - throw ReferenceError at runtime
         IL.Emit(OpCodes.Ldstr, name);
-        IL.Emit(OpCodes.Call, _ctx.Runtime!.ThrowUndefinedVariable);
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.Errors.ThrowUndefinedVariable);
         // Emit unreachable null to satisfy IL verification (method never returns but stack must balance)
         EmitNullConstant();
     }
@@ -450,7 +450,7 @@ public partial class ILEmitter
             EmitBoxIfNeeded(a.Value);
             IL.Emit(OpCodes.Pop);
             IL.Emit(OpCodes.Ldstr, a.Name.Lexeme);
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.ThrowUndefinedVariable);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.Errors.ThrowUndefinedVariable);
             EmitNullConstant();
             return;
         }
@@ -755,7 +755,7 @@ public partial class ILEmitter
             {
                 IL.Emit(OpCodes.Pop);
                 IL.Emit(OpCodes.Ldstr, a.Name.Lexeme);
-                IL.Emit(OpCodes.Call, _ctx.Runtime!.ThrowUndefinedVariable);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.Errors.ThrowUndefinedVariable);
                 IL.Emit(OpCodes.Ldsfld, _ctx.Runtime.UndefinedInstance);
             }
             else
@@ -1194,7 +1194,7 @@ public partial class ILEmitter
                 {
                     // Strict mode: throw SyntaxError
                     IL.Emit(OpCodes.Ldstr, $"Delete of unqualified identifier '{v.Name.Lexeme}' in strict mode");
-                    EmitCallUnknown(_ctx.Runtime!.ThrowStrictSyntaxError);
+                    EmitCallUnknown(_ctx.Runtime!.Errors.ThrowStrictSyntaxError);
                     // ThrowStrictSyntaxError throws, but we need a value on stack for IL verification
                     EmitBoolConstant(false);
                 }

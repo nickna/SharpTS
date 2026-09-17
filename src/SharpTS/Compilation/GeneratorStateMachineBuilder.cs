@@ -679,7 +679,7 @@ public class GeneratorStateMachineBuilder : StateMachineBuilderBase, IIteratorSt
         // Not an exception - use CreateException to carry the exact guest value.
         throwIL.Emit(OpCodes.Pop);
         throwIL.Emit(OpCodes.Ldarg_1);
-        throwIL.Emit(OpCodes.Call, _runtime!.CreateException);
+        throwIL.Emit(OpCodes.Call, _runtime!.Errors.CreateException);
         throwIL.Emit(OpCodes.Throw);
 
         // Already an exception - rethrow it

@@ -19,8 +19,8 @@ public partial class RuntimeEmitter
 
         // Throw TypeError: Cannot define property on frozen object
         il.Emit(OpCodes.Ldstr, "Cannot define property: object is not extensible");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);  // Wrap in .NET exception
+        il.Emit(OpCodes.Newobj, runtime.Errors.TypeErrorConstructor);
+        il.Emit(OpCodes.Call, runtime.Errors.CreateException);  // Wrap in .NET exception
         il.Emit(OpCodes.Throw);
 
         il.MarkLabel(notFrozenLabel);
@@ -38,8 +38,8 @@ public partial class RuntimeEmitter
 
         // Can't add - throw TypeError
         il.Emit(OpCodes.Ldstr, "Cannot define property: object is not extensible");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);  // Wrap in .NET exception
+        il.Emit(OpCodes.Newobj, runtime.Errors.TypeErrorConstructor);
+        il.Emit(OpCodes.Call, runtime.Errors.CreateException);  // Wrap in .NET exception
         il.Emit(OpCodes.Throw);
 
         il.MarkLabel(canAddLabel);

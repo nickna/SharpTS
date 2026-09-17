@@ -701,11 +701,11 @@ public abstract partial class ExpressionEmitterBase
 
         IL.MarkLabel(undefinedLabel);
         IL.Emit(OpCodes.Ldstr, $"Cannot {action} properties of undefined ({actionIng} '{methodName}')");
-        GuestErrorEmitter.ThrowErrorFromStack(IL, Ctx.Runtime!, Ctx.Runtime!.TSTypeErrorCtor);
+        GuestErrorEmitter.ThrowErrorFromStack(IL, Ctx.Runtime!, Ctx.Runtime!.Errors.TypeErrorConstructor);
 
         IL.MarkLabel(nullLabel);
         IL.Emit(OpCodes.Ldstr, $"Cannot {action} properties of null ({actionIng} '{methodName}')");
-        GuestErrorEmitter.ThrowErrorFromStack(IL, Ctx.Runtime!, Ctx.Runtime!.TSTypeErrorCtor);
+        GuestErrorEmitter.ThrowErrorFromStack(IL, Ctx.Runtime!, Ctx.Runtime!.Errors.TypeErrorConstructor);
 
         IL.MarkLabel(okLabel);
     }
@@ -741,12 +741,12 @@ public abstract partial class ExpressionEmitterBase
         IL.MarkLabel(undefinedLabel);
         IL.Emit(OpCodes.Pop);                             // discard receiver
         IL.Emit(OpCodes.Ldstr, $"Cannot read properties of undefined (reading '{propertyName}')");
-        GuestErrorEmitter.ThrowErrorFromStack(IL, Ctx.Runtime!, Ctx.Runtime!.TSTypeErrorCtor);
+        GuestErrorEmitter.ThrowErrorFromStack(IL, Ctx.Runtime!, Ctx.Runtime!.Errors.TypeErrorConstructor);
 
         IL.MarkLabel(nullLabel);
         IL.Emit(OpCodes.Pop);                             // discard receiver
         IL.Emit(OpCodes.Ldstr, $"Cannot read properties of null (reading '{propertyName}')");
-        GuestErrorEmitter.ThrowErrorFromStack(IL, Ctx.Runtime!, Ctx.Runtime!.TSTypeErrorCtor);
+        GuestErrorEmitter.ThrowErrorFromStack(IL, Ctx.Runtime!, Ctx.Runtime!.Errors.TypeErrorConstructor);
 
         IL.MarkLabel(okLabel);
     }
@@ -789,7 +789,7 @@ public abstract partial class ExpressionEmitterBase
         IL.Emit(OpCodes.Call, Types.StringConcatObjectObject);
         IL.Emit(OpCodes.Ldstr, "')");
         IL.Emit(OpCodes.Call, Types.StringConcat2);
-        GuestErrorEmitter.ThrowErrorFromStack(IL, Ctx.Runtime!, Ctx.Runtime!.TSTypeErrorCtor);
+        GuestErrorEmitter.ThrowErrorFromStack(IL, Ctx.Runtime!, Ctx.Runtime!.Errors.TypeErrorConstructor);
 
         IL.MarkLabel(nullLabel);
         IL.Emit(OpCodes.Ldstr, prefixNull);
@@ -797,7 +797,7 @@ public abstract partial class ExpressionEmitterBase
         IL.Emit(OpCodes.Call, Types.StringConcatObjectObject);
         IL.Emit(OpCodes.Ldstr, "')");
         IL.Emit(OpCodes.Call, Types.StringConcat2);
-        GuestErrorEmitter.ThrowErrorFromStack(IL, Ctx.Runtime!, Ctx.Runtime!.TSTypeErrorCtor);
+        GuestErrorEmitter.ThrowErrorFromStack(IL, Ctx.Runtime!, Ctx.Runtime!.Errors.TypeErrorConstructor);
 
         IL.MarkLabel(okLabel);
     }

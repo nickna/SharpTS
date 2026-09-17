@@ -482,7 +482,7 @@ public partial class GeneratorMoveNextEmitter
         emit();
         _il.Emit(OpCodes.Leave, completed);
         _il.BeginCatchBlock(typeof(Exception));
-        _il.Emit(OpCodes.Call, _ctx!.Runtime!.WrapException);
+        _il.Emit(OpCodes.Call, _ctx!.Runtime!.Errors.WrapException);
         _il.Emit(OpCodes.Stloc, target.CaughtException);
         _il.Emit(OpCodes.Ldc_I4_1);
         _il.Emit(OpCodes.Stloc, target.ExceptionPresent);
@@ -601,7 +601,7 @@ public partial class GeneratorMoveNextEmitter
             _il.Emit(OpCodes.Callvirt, _ctx!.Runtime!.GeneratorThrowMethod);
             _il.Emit(OpCodes.Stloc, genResultLocal);
             _il.BeginCatchBlock(typeof(Exception));
-            _il.Emit(OpCodes.Call, _ctx.Runtime.WrapException);
+            _il.Emit(OpCodes.Call, _ctx.Runtime.Errors.WrapException);
             _il.Emit(OpCodes.Stloc, caughtLocal);
             _il.EndExceptionBlock();
 

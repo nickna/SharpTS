@@ -3708,6 +3708,305 @@ public class StandaloneDllTests
             verifyStandardError: error => Assert.Empty(error)));
     }
 
+    public static IEnumerable<object[]> ErrorMetadataPrograms =>
+    [
+        new object[]
+        {
+            "minimal",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "console.log(1);" },
+            "1\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "empty",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let e = new Error();\nconsole.log(e.name);\nconsole.log(e.message);" },
+            "Error\n\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "call",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let e = Error('Without new');\nconsole.log(e.name);\nconsole.log(e.message);" },
+            "Error\nWithout new\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "coercion",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let e = new TypeError('boom');\nconsole.log(String(e));\nconsole.log(`${e}`);\nconsole.log('' + e);" },
+            "TypeError: boom\nTypeError: boom\nTypeError: boom\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "aggregate",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let errors = [new Error('First'), new Error('Second')];\nlet e = new AggregateError(errors, 'Multiple errors');\nconsole.log(e.name);\nconsole.log(e.message);\nconsole.log(e.errors.length);" },
+            "AggregateError\nMultiple errors\n2\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "mutable_name",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let e = new Error('Test');\ne.name = 'CustomError';\nconsole.log(e.name);" },
+            "CustomError\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "mutable_message",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let e = new Error('Original');\ne.message = 'Modified';\nconsole.log(e.message);" },
+            "Modified\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "rethrow",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "try {\n    try {\n        throw new RangeError('Inner error');\n    } catch (inner) {\n        inner.message = 'Modified in inner';\n        throw inner;\n    }\n} catch (outer) {\n    console.log(outer.name);\n    console.log(outer.message);\n}" },
+            "RangeError\nModified in inner\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "cause_order",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const sequence: string[] = [];\nconst error = new Error(\n    ({ toString() { sequence.push(\"message\"); return \"converted\"; } } as any),\n    { get cause() { sequence.push(\"cause\"); return 42; } }\n);\nconsole.log(sequence.join(\",\"));\nconsole.log(error.message, error.cause);" },
+            "message,cause\nconverted 42\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "symbol_message",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "try {\n    Error(Symbol() as any);\n    console.log(\"no error\");\n} catch (error) {\n    console.log(error instanceof TypeError);\n}" },
+            "true\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "prototype_descriptor",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const descriptor = Object.getOwnPropertyDescriptor(Error, \"prototype\")!;\nconsole.log(descriptor.writable, descriptor.enumerable, descriptor.configurable);\nconsole.log(delete (Error as any).prototype);\nconsole.log(Error.prototype === descriptor.value);" },
+            "false false false\nfalse\ntrue\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "prototype_inherited",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const constructed = new Error(\"constructed\");\nconst called = Error(\"called\");\nconsole.log(Error.prototype.isPrototypeOf(constructed));\nconsole.log(Error.prototype.isPrototypeOf(called));\nconsole.log(Error.prototype.hasOwnProperty(\"message\"));" },
+            "true\ntrue\ntrue\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "unbound",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "Object.defineProperty(globalThis, \"name\", {\n    get() { throw new Error(\"name getter called\"); }\n});\nconst toString = Error.prototype.toString;\ntry {\n    toString();\n    console.log(\"no error\");\n} catch (error) {\n    console.log(error instanceof TypeError);\n}" },
+            "true\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "cause",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const root = new Error('root');\nconst mid = new Error('middle', { cause: root });\nconst top = new Error('top', { cause: mid });\nconsole.log(top.message);\nconsole.log(top.cause.message);\nconsole.log(top.cause.cause.message);" },
+            "top\nmiddle\nroot\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "subclass",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "class CustomTypeError extends TypeError {\n    constructor(msg) {\n        super(msg);\n        this.name = 'CustomTypeError';\n    }\n}\nconst e = new CustomTypeError('bad type');\nconsole.log(e.name);\nconsole.log(e.message);\nconsole.log(e instanceof CustomTypeError);\nconsole.log(e instanceof TypeError);\nconsole.log(e instanceof Error);" },
+            "CustomTypeError\nbad type\ntrue\ntrue\ntrue\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "multi_subclass",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "class AppError extends Error {\n    code: number;\n    constructor(msg, code) {\n        super(msg);\n        this.name = 'AppError';\n        this.code = code;\n    }\n}\nclass HttpError extends AppError {\n    constructor(msg) {\n        super(msg, 500);\n    }\n}\nconst e = new HttpError('server error');\nconsole.log(e.name);\nconsole.log(e.message);\nconsole.log(e.code);\nconsole.log(e instanceof HttpError);\nconsole.log(e instanceof AppError);\nconsole.log(e instanceof Error);" },
+            "AppError\nserver error\n500\ntrue\ntrue\ntrue\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "class_expression",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const Custom = class extends TypeError {};\nconst error: any = new Custom();\nconsole.log(error instanceof Custom, error instanceof TypeError, error instanceof Error);" },
+            "true true true\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "guest_identity",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const original = new RangeError('mine');\ntry { throw original; } catch (e: any) { console.log(e === original, e instanceof RangeError); }\ntry { throw 'plain string'; } catch (e: any) { console.log(typeof e, e); }" },
+            "true true\nstring plain string\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "shaped_string",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "try { throw \"RangeError: hand-rolled, not a real error\"; }\ncatch (e: any) {\n  console.log(typeof e);\n  console.log(e);\n  console.log(e instanceof Error);\n}" },
+            "string\nRangeError: hand-rolled, not a real error\nfalse\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "generator",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "function* g() {\n  const o: any = undefined;\n  try { yield 0; o.foo(); } catch (e: any) { console.log((e instanceof TypeError) + \" \" + e.name); }\n  yield 1;\n}\nconst it = g(); it.next(); it.next();" },
+            "true TypeError\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "native_types",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const kinds: any[] = [Error, TypeError, RangeError, ReferenceError, SyntaxError, URIError, EvalError];\nfor (const Kind of kinds) { const e: any = new Kind('msg', {cause: 3}); console.log(e.name, e.message, e.cause, e instanceof Kind, e instanceof Error); }" },
+            "Error msg 3 true true\nTypeError msg 3 true true\nRangeError msg 3 true true\nReferenceError msg 3 true true\nSyntaxError msg 3 true true\nURIError msg 3 true true\nEvalError msg 3 true true\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "promise",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const e = new RangeError('reject');\nPromise.reject(e).catch((x: any) => console.log(x === e, x instanceof RangeError, x.message));" },
+            "true true reject\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "proxy_options",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let trace = ''; const cause = {};\nconst options = new Proxy({}, { has(target: any, key: any) { trace += 'h'; return key === 'cause'; }, get(target: any, key: any) { trace += 'g'; return cause; }});\nconst error: any = new Error('proxy', options);\nconsole.log(trace, error.cause === cause);" },
+            "hg true\n",
+            false,
+            false
+        },
+        new object[]
+        {
+            "esm",
+            "main.ts",
+            new string[] { "dep.ts", "main.ts" },
+            new string[] { "export const value = new TypeError(\"module\");", "import {value} from \"./dep\"; console.log(value instanceof TypeError, value.message);" },
+            "true module\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "commonjs",
+            "main.cjs",
+            new string[] { "dep.cjs", "main.cjs" },
+            new string[] { "exports.value = new TypeError(\"module\");", "const dep = require(\"./dep.cjs\"); console.log(dep.value instanceof TypeError, dep.value.message);" },
+            "true module\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "hosted_error",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "export function value(input: string) { try { throw new TypeError(input); } catch (e: any) { return e.message; } }" },
+            "",
+            true,
+            true
+        },
+        new object[]
+        {
+            "hosted_minimal",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "export const value = 1;" },
+            "",
+            true,
+            true
+        },
+    ];
+
+    [Theory]
+    [MemberData(nameof(ErrorMetadataPrograms))]
+    public void Isolated_ErrorMetadata_PreservesErrorsAndDeployment(
+        string name, string entry, string[] paths, string[] sources, string expected, bool hosted, bool standalone)
+    {
+        using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        for (int i = 0; i < paths.Length; i++) tempDir.CreateFile(paths[i], sources[i]);
+        var sourcePath = tempDir.GetPath(entry);
+        var dllPath = tempDir.GetPath($"error-metadata_{name}.dll");
+        var deployment = standalone ? " --standalone" : "";
+        var hosting = hosted ? " --target dll --hosted" : "";
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --noLib --compile \"{sourcePath}\" -o \"{dllPath}\" --verify{deployment}{hosting}", tempDir.Path);
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        var references = GetAssemblyReferences(dllPath);
+        Assert.DoesNotContain("SharpTS", references);
+        Assert.Equal(hosted, references.Contains("SharpTS.Hosting.Abstractions"));
+        Assert.Equal(!standalone, File.Exists(tempDir.GetPath("SharpTS.dll")));
+        if (!hosted)
+            Assert.Equal(expected, ExecuteCompiledDllIsolated(dllPath, timeoutMs: 30000,
+                verifyStandardError: error => Assert.Empty(error)));
+    }
+
+
     public static IEnumerable<object[]> ObjectStateMetadataPrograms =>
     [
         new object[]

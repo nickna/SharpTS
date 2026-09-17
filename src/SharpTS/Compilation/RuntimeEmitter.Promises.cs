@@ -951,7 +951,7 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(throwLabel);
         il.Emit(OpCodes.Ldstr, message);
-        GuestErrorEmitter.ThrowErrorFromStack(il, runtime, runtime.TSTypeErrorCtor);
+        GuestErrorEmitter.ThrowErrorFromStack(il, runtime, runtime.Errors.TypeErrorConstructor);
         il.MarkLabel(okLabel);
     }
 

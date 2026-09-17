@@ -46,7 +46,7 @@ public partial class RuntimeEmitter
 
         // Reserve CreateException(object) → Exception. EmitCreateException
         // similarly fills the body later.
-        runtime.CreateException = typeBuilder.DefineMethod(
+        runtime.Errors.CreateException = typeBuilder.DefineMethod(
             "CreateException",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Exception,
@@ -128,7 +128,7 @@ public partial class RuntimeEmitter
         // Reserve the native-error Type-token adapter before Reflect.construct
         // is emitted. EmitErrorMethods fills its body later, after CreateError
         // and descriptor support are available.
-        runtime.CreateErrorFromTypeOrNull = typeBuilder.DefineMethod(
+        runtime.Errors.CreateErrorFromTypeOrNull = typeBuilder.DefineMethod(
             "CreateErrorFromTypeOrNull",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,

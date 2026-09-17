@@ -526,7 +526,7 @@ public partial class RuntimeEmitter
 
         var notErrorConsLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldtoken, runtime.TSErrorType);
+        il.Emit(OpCodes.Ldtoken, runtime.Errors.Type);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle")!);
         il.Emit(OpCodes.Bne_Un, notErrorConsLabel);
         NameEq("isError");

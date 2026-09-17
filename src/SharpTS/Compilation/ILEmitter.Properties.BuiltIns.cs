@@ -129,31 +129,31 @@ public partial class ILEmitter
             case "name":
                 EmitExpression(g.Object);
                 EmitBoxIfNeeded(g.Object);
-                IL.Emit(OpCodes.Call, _ctx.Runtime!.ErrorGetName);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.Errors.GetName);
                 SetStackType(StackType.String);
                 return true;
             case "message":
                 EmitExpression(g.Object);
                 EmitBoxIfNeeded(g.Object);
-                IL.Emit(OpCodes.Call, _ctx.Runtime!.ErrorGetMessage);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.Errors.GetMessage);
                 SetStackType(StackType.String);
                 return true;
             case "stack":
                 EmitExpression(g.Object);
                 EmitBoxIfNeeded(g.Object);
-                IL.Emit(OpCodes.Call, _ctx.Runtime!.ErrorGetStack);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.Errors.GetStack);
                 SetStackType(StackType.String);
                 return true;
             case "cause":
                 EmitExpression(g.Object);
                 EmitBoxIfNeeded(g.Object);
-                IL.Emit(OpCodes.Call, _ctx.Runtime!.ErrorGetCause);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.Errors.GetCause);
                 SetStackUnknown();
                 return true;
             case "errors":
                 EmitExpression(g.Object);
                 EmitBoxIfNeeded(g.Object);
-                IL.Emit(OpCodes.Call, _ctx.Runtime!.AggregateErrorGetErrors);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.Errors.AggregateErrorGetErrors);
                 SetStackUnknown();
                 return true;
             default:

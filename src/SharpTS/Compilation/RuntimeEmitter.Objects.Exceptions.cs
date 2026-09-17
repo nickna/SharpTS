@@ -5,19 +5,22 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
-    private void EmitCreateException(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private readonly record struct WrapExceptionInputs(EmittedPromiseRuntime? Promise, EmittedStructuredCloneRuntime StructuredClone);
+
+    private void EmitCreateException(EmittedErrorRuntime errors)
     {
         // Signature forward-declared by DefineRuntimeClassPhase1; just
         // emit the body on the existing MethodBuilder.
-        var method = (MethodBuilder)runtime.CreateException;
+        var method = (MethodBuilder)errors.CreateException;
 
         var il = method.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Newobj, runtime.ThrownValueExceptionCtor);
+        il.Emit(OpCodes.Newobj, errors.ThrownValueConstructor);
         il.Emit(OpCodes.Ret);
+        errors.MarkCreateExceptionBodyEmitted();
     }
 
-    private void EmitWrapException(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitWrapException(TypeBuilder typeBuilder, EmittedErrorRuntime errors, WrapExceptionInputs inputs)
     {
         var method = typeBuilder.DefineMethod(
             "WrapException",
@@ -25,7 +28,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Exception]
         );
-        runtime.WrapException = method;
+        errors.WrapException = method;
 
         var il = method.GetILGenerator();
         var fallbackLabel = il.DefineLabel();
@@ -65,11 +68,11 @@ public partial class RuntimeEmitter
         // exception. Check it before touching Exception.Data so a local catch
         // never creates or probes the dictionary-backed metadata store.
         il.Emit(OpCodes.Ldloc, exLocal);
-        il.Emit(OpCodes.Isinst, runtime.ThrownValueExceptionType);
+        il.Emit(OpCodes.Isinst, errors.ThrownValueType);
         il.Emit(OpCodes.Brfalse, checkMetadataLabel);
         il.Emit(OpCodes.Ldloc, exLocal);
-        il.Emit(OpCodes.Castclass, runtime.ThrownValueExceptionType);
-        il.Emit(OpCodes.Call, runtime.ThrownValueExceptionValueGetter);
+        il.Emit(OpCodes.Castclass, errors.ThrownValueType);
+        il.Emit(OpCodes.Call, errors.ThrownValueValueGetter);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(checkMetadataLabel);
@@ -93,16 +96,16 @@ public partial class RuntimeEmitter
         var checkDataCloneErrorLabel = il.DefineLabel();
         var checkNodeErrorLabel = il.DefineLabel();
 
-        if (_features.UsesPromise)
+        if (inputs.Promise is not null)
         {
             il.Emit(OpCodes.Ldloc, exLocal);
-            il.Emit(OpCodes.Isinst, runtime.RequirePromise().RejectedExceptionType);
+            il.Emit(OpCodes.Isinst, inputs.Promise.RejectedExceptionType);
             il.Emit(OpCodes.Brfalse, checkDataCloneErrorLabel);
 
             // It's a $PromiseRejectedException - return its Reason property
             il.Emit(OpCodes.Ldloc, exLocal);
-            il.Emit(OpCodes.Castclass, runtime.RequirePromise().RejectedExceptionType);
-            il.Emit(OpCodes.Call, runtime.RequirePromise().RejectedExceptionReasonGetter);
+            il.Emit(OpCodes.Castclass, inputs.Promise.RejectedExceptionType);
+            il.Emit(OpCodes.Call, inputs.Promise.RejectedExceptionReasonGetter);
             il.Emit(OpCodes.Ret);
         }
 
@@ -112,7 +115,7 @@ public partial class RuntimeEmitter
         // Statements.cs: `ex is ThrowException tex ? tex.Value : ex.Message`).
         il.MarkLabel(checkDataCloneErrorLabel);
         il.Emit(OpCodes.Ldloc, exLocal);
-        il.Emit(OpCodes.Isinst, runtime.StructuredClone.ErrorType);
+        il.Emit(OpCodes.Isinst, inputs.StructuredClone.ErrorType);
         il.Emit(OpCodes.Brfalse, checkNodeErrorLabel);
 
         il.Emit(OpCodes.Ldloc, exLocal);
@@ -216,15 +219,15 @@ public partial class RuntimeEmitter
             il.MarkLabel(next);
         }
 
-        EmitGuestError("TypeError", runtime.TSTypeErrorCtor);
-        EmitGuestError("RangeError", runtime.TSRangeErrorCtor);
-        EmitGuestError("ReferenceError", runtime.TSReferenceErrorCtor);
-        EmitGuestError("SyntaxError", runtime.TSSyntaxErrorCtor);
-        EmitGuestError("URIError", runtime.TSURIErrorCtor);
-        EmitGuestError("EvalError", runtime.TSEvalErrorCtor);
+        EmitGuestError("TypeError", errors.TypeErrorConstructor);
+        EmitGuestError("RangeError", errors.RangeErrorConstructor);
+        EmitGuestError("ReferenceError", errors.ReferenceErrorConstructor);
+        EmitGuestError("SyntaxError", errors.SyntaxErrorConstructor);
+        EmitGuestError("URIError", errors.URIErrorConstructor);
+        EmitGuestError("EvalError", errors.EvalErrorConstructor);
 
         il.Emit(OpCodes.Ldloc, messageLocal);
-        il.Emit(OpCodes.Newobj, runtime.TSErrorCtorMessage);
+        il.Emit(OpCodes.Newobj, errors.MessageConstructor);
         il.Emit(OpCodes.Ret);
     }
 
@@ -232,7 +235,7 @@ public partial class RuntimeEmitter
     /// Emits a helper method that throws a ReferenceError for undefined variables.
     /// This is called when accessing a variable that is out of scope (e.g., after a for-loop exits).
     /// </summary>
-    private void EmitThrowUndefinedVariable(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitThrowUndefinedVariable(TypeBuilder typeBuilder, EmittedErrorRuntime errors)
     {
         // public static void ThrowUndefinedVariable(string name)
         var method = typeBuilder.DefineMethod(
@@ -241,7 +244,7 @@ public partial class RuntimeEmitter
             _types.Void,
             [_types.String]
         );
-        runtime.ThrowUndefinedVariable = method;
+        errors.ThrowUndefinedVariable = method;
 
         var il = method.GetILGenerator();
 
@@ -252,10 +255,10 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", _types.String, _types.String, _types.String));
 
         // Create new $ReferenceError(message)
-        il.Emit(OpCodes.Newobj, runtime.TSReferenceErrorCtor);
+        il.Emit(OpCodes.Newobj, errors.ReferenceErrorConstructor);
 
         // Wrap as System.Exception using the dedicated guest-value carrier.
-        il.Emit(OpCodes.Call, runtime.CreateException);
+        il.Emit(OpCodes.Call, errors.CreateException);
         il.Emit(OpCodes.Throw);
     }
 }

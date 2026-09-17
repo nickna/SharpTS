@@ -190,7 +190,7 @@ public class SuperConstructorHandler : ICallHandler
         il.Emit(OpCodes.Brfalse, skipMessageDescriptorLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, messageLocal);
-        il.Emit(OpCodes.Call, ctx.Runtime!.ErrorDefineMessageProperty);
+        il.Emit(OpCodes.Call, ctx.Runtime!.Errors.DefineMessageProperty);
         il.MarkLabel(skipMessageDescriptorLabel);
 
         il.Emit(OpCodes.Ldnull); // super() returns undefined

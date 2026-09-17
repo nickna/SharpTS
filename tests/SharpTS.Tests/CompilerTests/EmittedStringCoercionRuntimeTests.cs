@@ -149,7 +149,7 @@ public class EmittedStringCoercionRuntimeTests
             getSymbols, runtime.Symbols.ToPrimitive, runtime.DescriptorStorage.DescriptorType,
             runtime.DescriptorStorage.DescriptorGetter.GetGetMethod()!, runtime.DescriptorStorage.DescriptorSetter.GetGetMethod()!,
             runtime.DescriptorStorage.DescriptorValue.GetGetMethod()!, runtime.DescriptorStorage.HasPrototypeEntry, runtime.DescriptorStorage.GetPrototype,
-            runtime.CreateException, runtime.TSTypeErrorCtor
+            runtime.Errors.CreateException, runtime.Errors.TypeErrorConstructor
         ]);
         typeof(RuntimeEmitter).GetMethod("EmitToJsString", privateInstance)!.Invoke(emitter,
             [helper, coercion, runtime.ArrayStorage, runtime.ArrayOperations, peers, includeRegExp ? runtime.RegExps.RequireImplementation().Type : null]);

@@ -149,7 +149,7 @@ public abstract partial class ExpressionEmitterBase
             case "Blob":
             case "File":
                 IL.Emit(OpCodes.Ldstr, className + " is not yet supported in compiled mode (interpreter only); see SharpTS #1159");
-                GuestErrorEmitter.ThrowErrorFromStack(IL, Ctx.Runtime!, Ctx.Runtime!.TSTypeErrorCtor);
+                GuestErrorEmitter.ThrowErrorFromStack(IL, Ctx.Runtime!, Ctx.Runtime!.Errors.TypeErrorConstructor);
                 IL.Emit(OpCodes.Ldnull); // unreachable; balances the expression's result slot
                 SetStackUnknown();
                 return true;
@@ -821,13 +821,13 @@ public abstract partial class ExpressionEmitterBase
             EnsureBoxed();
             IL.Emit(OpCodes.Stelem_Ref);
         }
-        IL.Emit(OpCodes.Call, Ctx.Runtime!.CreateError);
+        IL.Emit(OpCodes.Call, Ctx.Runtime!.Errors.CreateError);
         var createdError = IL.DeclareLocal(Ctx.Types.Object);
         IL.Emit(OpCodes.Stloc, createdError);
         IL.Emit(OpCodes.Ldloc, createdError);
-        IL.Emit(OpCodes.Castclass, Ctx.Runtime.TSErrorType);
+        IL.Emit(OpCodes.Castclass, Ctx.Runtime.Errors.Type);
         IL.Emit(OpCodes.Ldstr, Ctx.CurrentMethod?.Name ?? "Main");
-        IL.Emit(OpCodes.Callvirt, Ctx.Runtime.TSErrorCapturedStackSetter);
+        IL.Emit(OpCodes.Callvirt, Ctx.Runtime.Errors.CapturedStackSetter);
         IL.Emit(OpCodes.Ldloc, createdError);
         SetStackUnknown();
     }

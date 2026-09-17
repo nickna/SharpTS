@@ -146,7 +146,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, dictLocal);
         il.Emit(OpCodes.Ldstr, "reason");
         il.Emit(OpCodes.Ldloc, exceptionLocal);
-        il.Emit(OpCodes.Call, runtime.WrapException);
+        il.Emit(OpCodes.Call, runtime.Errors.WrapException);
         il.Emit(OpCodes.Callvirt, dictType.GetMethod("set_Item")!);
 
         il.Emit(OpCodes.Ldloc, dictLocal);

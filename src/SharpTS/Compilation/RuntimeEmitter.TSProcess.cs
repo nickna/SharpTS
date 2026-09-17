@@ -324,7 +324,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, count);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Bge, success);
-        EmitProcessPosixError(il, runtime.NodeErrors, runtime.CreateException, "getgroups");
+        EmitProcessPosixError(il, runtime.NodeErrors, runtime.Errors.CreateException, "getgroups");
 
         il.MarkLabel(success);
         il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.ListOfObject));
@@ -378,7 +378,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Conv_U4);
         il.Emit(OpCodes.Call, native);
         il.Emit(OpCodes.Brfalse, success);
-        EmitProcessPosixError(il, runtime.NodeErrors, runtime.CreateException, syscall);
+        EmitProcessPosixError(il, runtime.NodeErrors, runtime.Errors.CreateException, syscall);
         il.MarkLabel(success);
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ret);
@@ -2007,11 +2007,11 @@ public partial class RuntimeEmitter
         void ThrowGuestError(string message, string code)
         {
             il.Emit(OpCodes.Ldstr, message);
-            il.Emit(OpCodes.Newobj, runtime.TSErrorCtorMessage);
+            il.Emit(OpCodes.Newobj, runtime.Errors.MessageConstructor);
             il.Emit(OpCodes.Dup);
             il.Emit(OpCodes.Ldstr, code);
-            il.Emit(OpCodes.Callvirt, runtime.TSErrorCodeSetter);
-            il.Emit(OpCodes.Call, runtime.CreateException);
+            il.Emit(OpCodes.Callvirt, runtime.Errors.CodeSetter);
+            il.Emit(OpCodes.Call, runtime.Errors.CreateException);
             il.Emit(OpCodes.Throw);
         }
 
@@ -2293,8 +2293,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldsfld, runtime.Process.ThrowDeprecationField);
         il.Emit(OpCodes.Brfalse, notThrow);
         il.Emit(OpCodes.Ldloc, messageLocal);
-        il.Emit(OpCodes.Newobj, runtime.TSErrorCtorMessage);
-        il.Emit(OpCodes.Call, runtime.CreateException);
+        il.Emit(OpCodes.Newobj, runtime.Errors.MessageConstructor);
+        il.Emit(OpCodes.Call, runtime.Errors.CreateException);
         il.Emit(OpCodes.Throw);
         il.MarkLabel(notThrow);
         il.MarkLabel(notDeprecation);

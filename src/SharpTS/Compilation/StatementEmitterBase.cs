@@ -1752,7 +1752,7 @@ public abstract class StatementEmitterBase : ExpressionEmitterBase
     {
         EmitExpression(t.Value);
         EnsureBoxed();
-        IL.Emit(OpCodes.Call, Ctx.Runtime!.CreateException);
+        IL.Emit(OpCodes.Call, Ctx.Runtime!.Errors.CreateException);
         IL.Emit(OpCodes.Throw);
     }
 
@@ -1956,7 +1956,7 @@ public abstract class StatementEmitterBase : ExpressionEmitterBase
                 {
                     // Strict mode: throw SyntaxError
                     IL.Emit(OpCodes.Ldstr, $"Delete of unqualified identifier '{v.Name.Lexeme}' in strict mode");
-                    IL.Emit(OpCodes.Call, Ctx.Runtime!.ThrowStrictSyntaxError);
+                    IL.Emit(OpCodes.Call, Ctx.Runtime!.Errors.ThrowStrictSyntaxError);
                     // ThrowStrictSyntaxError throws, but we need a value on stack for IL verification
                     EmitBoolConstant(false);
                 }

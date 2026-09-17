@@ -4068,7 +4068,7 @@ public partial class RuntimeEmitter
         var withErr = il.DeclareLocal(_types.Object);
         var withEx = il.DeclareLocal(_types.Exception);
         il.Emit(OpCodes.Ldstr, "Invalid index for with()");
-        il.Emit(OpCodes.Newobj, runtime.TSRangeErrorCtor);
+        il.Emit(OpCodes.Newobj, runtime.Errors.RangeErrorConstructor);
         il.Emit(OpCodes.Stloc, withErr);
         il.Emit(OpCodes.Ldstr, "Invalid index for with()");
         il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.Exception, _types.String));

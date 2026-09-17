@@ -860,7 +860,7 @@ public partial class RuntimeEmitter
             il.MarkLabel(haveInnerLabel);
 
             il.MarkLabel(invokeRejectLabel);
-            il.Emit(OpCodes.Call, runtime.WrapException);
+            il.Emit(OpCodes.Call, runtime.Errors.WrapException);
             var reasonLocal = il.DeclareLocal(_types.Object);
             il.Emit(OpCodes.Stloc, reasonLocal);
             il.Emit(OpCodes.Ldloc, callbacksLocal);
@@ -1525,8 +1525,8 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Bne_Un, notSelfResolutionLabel);
             il.Emit(OpCodes.Ldloc, tcsLocal);
             il.Emit(OpCodes.Ldstr, "Chaining cycle detected for promise");
-            il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-            il.Emit(OpCodes.Call, runtime.CreateException);
+            il.Emit(OpCodes.Newobj, runtime.Errors.TypeErrorConstructor);
+            il.Emit(OpCodes.Call, runtime.Errors.CreateException);
             il.Emit(OpCodes.Callvirt, typeof(TaskCompletionSource<object?>).GetMethod(
                 "TrySetException", [_types.Exception])!);
             il.Emit(OpCodes.Pop);
@@ -1814,7 +1814,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldloc, exLocal);
-        il.Emit(OpCodes.Call, runtime.WrapException);
+        il.Emit(OpCodes.Call, runtime.Errors.WrapException);
         il.Emit(OpCodes.Stelem_Ref);
         il.Emit(OpCodes.Callvirt, runtime.RequirePromise().RejectCallbackInvoke);
         il.Emit(OpCodes.Pop);
@@ -1904,7 +1904,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldloc, exLocal);
-        il.Emit(OpCodes.Call, runtime.WrapException);
+        il.Emit(OpCodes.Call, runtime.Errors.WrapException);
         il.Emit(OpCodes.Stelem_Ref);
         il.Emit(OpCodes.Callvirt, runtime.RequirePromise().RejectCallbackInvoke);
         il.Emit(OpCodes.Pop);

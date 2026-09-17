@@ -580,7 +580,7 @@ public partial class RuntimeEmitter
         var errLocal = il.DeclareLocal(_types.Object);
         var exLocal = il.DeclareLocal(_types.Exception);
         il.Emit(OpCodes.Ldstr, "Invalid array length");
-        il.Emit(OpCodes.Newobj, runtime.TSRangeErrorCtor);
+        il.Emit(OpCodes.Newobj, runtime.Errors.RangeErrorConstructor);
         il.Emit(OpCodes.Stloc, errLocal);
         il.Emit(OpCodes.Ldstr, "Invalid array length");
         il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.Exception, _types.String));

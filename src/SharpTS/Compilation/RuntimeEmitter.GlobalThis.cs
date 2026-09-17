@@ -320,14 +320,14 @@ public partial class RuntimeEmitter
         // their .NET Type tokens so value-form `root.Error` / `root.TypeError`
         // resolve to the real constructors (lodash's runInContext reads
         // `context.Error` and `context.TypeError`). #271.
-        EmitTypeBranch("Error", runtime.TSErrorType);
-        EmitTypeBranch("TypeError", runtime.TSTypeErrorType);
-        EmitTypeBranch("RangeError", runtime.TSRangeErrorType);
-        EmitTypeBranch("ReferenceError", runtime.TSReferenceErrorType);
-        EmitTypeBranch("SyntaxError", runtime.TSSyntaxErrorType);
-        EmitTypeBranch("URIError", runtime.TSURIErrorType);
-        EmitTypeBranch("EvalError", runtime.TSEvalErrorType);
-        EmitTypeBranch("AggregateError", runtime.TSAggregateErrorType);
+        EmitTypeBranch("Error", runtime.Errors.Type);
+        EmitTypeBranch("TypeError", runtime.Errors.TypeErrorType);
+        EmitTypeBranch("RangeError", runtime.Errors.RangeErrorType);
+        EmitTypeBranch("ReferenceError", runtime.Errors.ReferenceErrorType);
+        EmitTypeBranch("SyntaxError", runtime.Errors.SyntaxErrorType);
+        EmitTypeBranch("URIError", runtime.Errors.URIErrorType);
+        EmitTypeBranch("EvalError", runtime.Errors.EvalErrorType);
+        EmitTypeBranch("AggregateError", runtime.Errors.AggregateErrorType);
 
         // Math / JSON are extensible singleton objects in the runtime — return the
         // real Dictionary singletons so `root.Math`/`root.JSON` are usable values

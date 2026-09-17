@@ -13,7 +13,9 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitThrownValueExceptionType(
         ModuleBuilder moduleBuilder,
-        EmittedRuntime runtime)
+        EmittedErrorRuntime errors,
+        EmittedStringCoercionRuntime stringCoercion
+    )
     {
         var typeBuilder = EmitTypeDefinitions.DefineType(
             moduleBuilder,
@@ -21,7 +23,7 @@ public partial class RuntimeEmitter
             TypeAttributes.Public | TypeAttributes.Class | TypeAttributes.Sealed |
                 TypeAttributes.BeforeFieldInit,
             _types.Exception);
-        runtime.ThrownValueExceptionType = typeBuilder;
+        errors.ThrownValueType = typeBuilder;
 
         var valueField = typeBuilder.DefineField(
             "_value",
@@ -32,7 +34,7 @@ public partial class RuntimeEmitter
             MethodAttributes.Public,
             CallingConventions.Standard,
             [_types.Object]);
-        runtime.ThrownValueExceptionCtor = ctor;
+        errors.ThrownValueConstructor = ctor;
 
         var ctorIl = ctor.GetILGenerator();
         ctorIl.Emit(OpCodes.Ldarg_0);
@@ -53,7 +55,7 @@ public partial class RuntimeEmitter
                 MethodAttributes.HideBySig,
             _types.Object,
             Type.EmptyTypes);
-        runtime.ThrownValueExceptionValueGetter = valueGetter;
+        errors.ThrownValueValueGetter = valueGetter;
 
         var valueIl = valueGetter.GetILGenerator();
         valueIl.Emit(OpCodes.Ldarg_0);
@@ -76,7 +78,7 @@ public partial class RuntimeEmitter
         var messageIl = messageGetter.GetILGenerator();
         messageIl.Emit(OpCodes.Ldarg_0);
         messageIl.Emit(OpCodes.Ldfld, valueField);
-        messageIl.Emit(OpCodes.Call, runtime.StringCoercion.Stringify);
+        messageIl.Emit(OpCodes.Call, stringCoercion.Stringify);
         messageIl.Emit(OpCodes.Ret);
         messageProperty.SetGetMethod(messageGetter);
         typeBuilder.DefineMethodOverride(

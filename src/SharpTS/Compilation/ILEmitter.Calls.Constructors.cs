@@ -611,7 +611,7 @@ public partial class ILEmitter
             IL.Emit(OpCodes.Ldloc, argTemps[i]);
             IL.Emit(OpCodes.Stelem_Ref);
         }
-        IL.Emit(OpCodes.Call, _ctx.Runtime.CreateErrorFromTypeOrNull);
+        IL.Emit(OpCodes.Call, _ctx.Runtime.Errors.CreateErrorFromTypeOrNull);
         IL.Emit(OpCodes.Dup);
         IL.Emit(OpCodes.Brtrue, constructionDone);
         IL.Emit(OpCodes.Pop);

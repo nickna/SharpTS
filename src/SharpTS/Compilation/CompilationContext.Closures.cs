@@ -123,7 +123,7 @@ public partial class CompilationContext
         var initialized = il.DefineLabel();
         il.Emit(OpCodes.Brtrue, initialized);
         il.Emit(OpCodes.Ldstr, name);
-        il.Emit(OpCodes.Call, Runtime!.ThrowUndefinedVariable);
+        il.Emit(OpCodes.Call, Runtime!.Errors.ThrowUndefinedVariable);
         il.MarkLabel(initialized);
         return true;
     }
@@ -196,7 +196,7 @@ public partial class CompilationContext
         il.Emit(OpCodes.Brfalse, initialized);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Ldstr, name);
-        il.Emit(OpCodes.Call, Runtime.ThrowUndefinedVariable);
+        il.Emit(OpCodes.Call, Runtime.Errors.ThrowUndefinedVariable);
         // Unreachable verifier value for the initialized join.
         il.Emit(OpCodes.Ldsfld, Runtime.UndefinedInstance);
         il.MarkLabel(initialized);

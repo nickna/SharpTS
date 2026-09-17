@@ -174,7 +174,7 @@ public partial class RuntimeEmitter
         // Guest throws use a dedicated exception carrying the original value.
         // Define it immediately after the phase-1 runtime signatures because its
         // lazy Message getter calls the forward-declared Stringify helper.
-        EmitThrownValueExceptionType(moduleBuilder, runtime);
+        EmitThrownValueExceptionType(moduleBuilder, runtime.Errors, runtime.StringCoercion);
 
         // Emit IUnionType marker interface first (union types need to implement this)
         EmitIUnionTypeInterface(moduleBuilder, runtime);
@@ -241,7 +241,7 @@ public partial class RuntimeEmitter
 
         // Emit $Error class hierarchy for standalone error support
         // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSError and subclasses
-        EmitTSErrorClasses(moduleBuilder, runtime);
+        EmitTSErrorClasses(moduleBuilder, runtime.Errors);
 
         // Emit $DataCloneError exception type — thrown by StructuredCloneCore (#1255).
         // Unconditional: StructuredCloneCore itself is always emitted (EmitWorkerHelpers
@@ -291,7 +291,7 @@ public partial class RuntimeEmitter
                     runtime.DescriptorStorage.DescriptorValue.GetGetMethod()!, runtime.TSFunctionType,
                     runtime.TSFunctionInvokeWithThis, runtime.UndefinedInstance),
                 new ObjectInvokeInputs(runtime.TSFunctionType, runtime.TSFunctionInvokeWithThis),
-                runtime.TSTypeErrorCtor));
+                runtime.Errors.TypeErrorConstructor));
 
         if (features.UsesJSON || features.UsesCompactObjectRecords)
         {
@@ -322,7 +322,7 @@ public partial class RuntimeEmitter
                 new TSRegExpClassInputs(
                     runtime.ArrayStorage,
                     runtime.Booleans,
-                    runtime.CreateException,
+                    runtime.Errors.CreateException,
                     runtime.DescriptorStorage,
                     runtime.GetProperty,
                     runtime.NumericCoercion,
@@ -334,8 +334,8 @@ public partial class RuntimeEmitter
                     runtime.TSFunctionGetMethodInfo,
                     runtime.TSFunctionInvokeWithThis,
                     runtime.TSFunctionType,
-                    runtime.TSSyntaxErrorCtor,
-                    runtime.TSTypeErrorCtor,
+                    runtime.Errors.SyntaxErrorConstructor,
+                    runtime.Errors.TypeErrorConstructor,
                     runtime.UndefinedInstance,
                     runtime.UndefinedType
                 )
@@ -618,14 +618,14 @@ public partial class RuntimeEmitter
                 new RegExpSymbolSplitProtocolInputs(
                     runtime.ArrayStorage,
                     runtime.ConstructDynamicValue,
-                    runtime.CreateException,
+                    runtime.Errors.CreateException,
                     runtime.GetIndex,
                     runtime.GetProperty,
                     runtime.NumericCoercion,
                     runtime.SetProperty,
                     runtime.StringCoercion,
                     runtime.Symbols,
-                    runtime.TSTypeErrorCtor,
+                    runtime.Errors.TypeErrorConstructor,
                     runtime.UndefinedType
                 )
             );
@@ -633,14 +633,14 @@ public partial class RuntimeEmitter
                 runtime.RegExps.RequireImplementation(),
                 new RegExpSymbolMatchAllProtocolInputs(
                     runtime.ConstructDynamicValue,
-                    runtime.CreateException,
+                    runtime.Errors.CreateException,
                     runtime.GetIndex,
                     runtime.GetProperty,
                     runtime.NumericCoercion,
                     runtime.SetProperty,
                     runtime.StringCoercion,
                     runtime.Symbols,
-                    runtime.TSTypeErrorCtor,
+                    runtime.Errors.TypeErrorConstructor,
                     runtime.UndefinedType
                 )
             );
@@ -807,6 +807,7 @@ public partial class RuntimeEmitter
         runtime.ObjectStorage.CompleteEmission();
         runtime.DescriptorStorage.CompleteEmission();
         runtime.ObjectState.CompleteEmission();
+        runtime.Errors.CompleteEmission();
         runtime.Reflect.CompleteEmission();
         runtime.Json.CompleteEmission();
         runtime.Records.CompleteEmission();

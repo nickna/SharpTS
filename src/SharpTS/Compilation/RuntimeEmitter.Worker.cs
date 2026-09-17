@@ -28,7 +28,7 @@ public partial class RuntimeEmitter
             EmitTypedArrayHelpers(runtimeType, runtime);
             // Atomics static methods (pure-IL with reflection fallback for SharpTS types)
             EmitAtomicsHelpersPure(runtimeType, runtime.RequireAtomics(), runtime.TypedArrays.RequireImplementation(),
-                runtime.UndefinedType, runtime.UndefinedInstance, runtime.TSTypeErrorCtor, runtime.CreateException, runtime.TSRangeErrorCtor);
+                runtime.UndefinedType, runtime.UndefinedInstance, runtime.Errors.TypeErrorConstructor, runtime.Errors.CreateException, runtime.Errors.RangeErrorConstructor);
         }
 
         // MessageChannel/MessagePort moved to RuntimeEmitter.MessageChannel.cs —
@@ -41,10 +41,10 @@ public partial class RuntimeEmitter
         // StructuredClone helper
         EmitStructuredCloneHelper(runtimeType, runtime.StructuredClone, runtime.ArrayStorage, runtime.UndefinedType,
             new StructuredCloneObjectInputs(runtime.ObjectStorage.Type, runtime.ObjectStorage.Constructor, runtime.ObjectStorage.FieldsGetter),
-            new StructuredCloneErrorInputs(runtime.TSErrorType, runtime.IHasFieldsInterface,
-                runtime.TSErrorNameGetter, runtime.TSErrorMessageGetter, runtime.TSErrorStackGetter, runtime.TSErrorStackSetter,
-                runtime.TSErrorCtorMessage, runtime.TSTypeErrorCtor, runtime.TSRangeErrorCtor, runtime.TSReferenceErrorCtor,
-                runtime.TSSyntaxErrorCtor, runtime.TSURIErrorCtor, runtime.TSEvalErrorCtor),
+            new StructuredCloneErrorInputs(runtime.Errors.Type, runtime.IHasFieldsInterface,
+                runtime.Errors.NameGetter, runtime.Errors.MessageGetter, runtime.Errors.StackGetter, runtime.Errors.StackSetter,
+                runtime.Errors.MessageConstructor, runtime.Errors.TypeErrorConstructor, runtime.Errors.RangeErrorConstructor, runtime.Errors.ReferenceErrorConstructor,
+                runtime.Errors.SyntaxErrorConstructor, runtime.Errors.URIErrorConstructor, runtime.Errors.EvalErrorConstructor),
             _features.HasAnyTypedArray ? new StructuredCloneBinaryInputs(runtime.RequireArrayBuffer(),
                 runtime.RequireSharedArrayBuffer(), runtime.TypedArrays.RequireImplementation()) : null,
             runtime.Dates.Implementation is not null ? new StructuredCloneDateInputs(runtime.Dates.RequireImplementation().Type, runtime.Dates.RequireImplementation().MillisecondsConstructor, runtime.Dates.RequireImplementation().GetInstanceMethod("GetTime")) : null,

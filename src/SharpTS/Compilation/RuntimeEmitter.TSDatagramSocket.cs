@@ -1521,11 +1521,11 @@ public partial class RuntimeEmitter
     private void EmitDgramThrowCoded(ILGenerator il, EmittedRuntime runtime, string code, string message)
     {
         il.Emit(OpCodes.Ldstr, message);
-        il.Emit(OpCodes.Newobj, runtime.TSErrorCtorMessage);
+        il.Emit(OpCodes.Newobj, runtime.Errors.MessageConstructor);
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Ldstr, code);
-        il.Emit(OpCodes.Callvirt, runtime.TSErrorCodeSetter);
-        il.Emit(OpCodes.Call, runtime.CreateException);
+        il.Emit(OpCodes.Callvirt, runtime.Errors.CodeSetter);
+        il.Emit(OpCodes.Call, runtime.Errors.CreateException);
         il.Emit(OpCodes.Throw);
     }
 
