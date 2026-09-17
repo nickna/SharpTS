@@ -77,7 +77,7 @@ public sealed class ObjectStaticEmitter : IStaticTypeEmitterStrategy
                 {
                     il.Emit(OpCodes.Ldnull);
                 }
-                il.Emit(OpCodes.Call, ctx.Runtime!.ObjectHasOwn);
+                il.Emit(OpCodes.Call, ctx.Runtime!.ObjectOwnProperties.HasOwn);
                 // Box the bool result for consistency with other methods
                 il.Emit(OpCodes.Box, typeof(bool));
                 return true;

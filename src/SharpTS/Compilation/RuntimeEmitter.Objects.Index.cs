@@ -1091,7 +1091,7 @@ public partial class RuntimeEmitter
         var noInheritedProxyLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.HasOwnPropertyHelperMethod);
+        il.Emit(OpCodes.Call, runtime.ObjectOwnProperties.HasOwnProperty);
         il.Emit(OpCodes.Brtrue, noInheritedProxyLabel);
         var indexPrototypeLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldarg_0);

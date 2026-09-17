@@ -738,7 +738,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ret);
             il.MarkLabel(skip);
         }
-        EmitTSObjProtoCheck("hasOwnProperty", runtime.HasOwnPropertyHelperMethod);
+        EmitTSObjProtoCheck("hasOwnProperty", runtime.ObjectOwnProperties.HasOwnProperty);
         EmitTSObjProtoCheck("isPrototypeOf",  runtime.ObjectPrototypes.IsPrototypeOf);
 
         var tsObjectInstanceLocal = il.DeclareLocal(runtime.ObjectStorage.Type);
@@ -1203,7 +1203,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ret);
             il.MarkLabel(skip);
         }
-        EmitObjProtoMethodCheck("hasOwnProperty", runtime.HasOwnPropertyHelperMethod, 1);
+        EmitObjProtoMethodCheck("hasOwnProperty", runtime.ObjectOwnProperties.HasOwnProperty, 1);
         EmitObjProtoMethodCheck("isPrototypeOf",  runtime.ObjectPrototypes.IsPrototypeOf, 1);
 
         // Retrieve the descriptor once: querying TryGetGetter first repeated the

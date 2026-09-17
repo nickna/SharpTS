@@ -825,8 +825,8 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ret);
             il.MarkLabel(notThisMethodLabel);
         }
-        EmitInheritedObjectMethod("hasOwnProperty", runtime.HasOwnPropertyHelperMethod);
-        EmitInheritedObjectMethod("propertyIsEnumerable", runtime.PropertyIsEnumerableHelperMethod);
+        EmitInheritedObjectMethod("hasOwnProperty", runtime.ObjectOwnProperties.HasOwnProperty);
+        EmitInheritedObjectMethod("propertyIsEnumerable", runtime.ObjectOwnProperties.IsEnumerable);
         EmitInheritedObjectMethod("isPrototypeOf", runtime.ObjectPrototypes.IsPrototypeOf);
 
         var noPrototypeLabel = il.DefineLabel();
@@ -2080,7 +2080,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
             il.Emit(OpCodes.Brfalse, notHasOwnLabel);
             il.Emit(OpCodes.Ldarg_0);
-            _types.EmitLoadMethodInfo(il, runtime.HasOwnPropertyHelperMethod);
+            _types.EmitLoadMethodInfo(il, runtime.ObjectOwnProperties.HasOwnProperty);
             il.Emit(OpCodes.Newobj, runtime.TSFunctionCtor);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(notHasOwnLabel);

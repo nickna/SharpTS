@@ -5,6 +5,36 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
+    private readonly record struct HasOwnPropertyHelperInputs(
+        EmittedArrayStorageRuntime ArrayStorage,
+        EmittedDescriptorStorageRuntime DescriptorStorage,
+        EmittedErrorRuntime Errors,
+        MethodBuilder GetProperty,
+        FieldBuilder GlobalThisSingletonField,
+        MethodInfo IHasFieldsHasProperty,
+        Type IHasFieldsInterface,
+        EmittedJsonRuntime Json,
+        MethodBuilder LookupBuiltInStaticMember,
+        EmittedMathRuntime Math,
+        EmittedObjectStateRuntime ObjectState,
+        EmittedObjectStorageRuntime ObjectStorage,
+        EmittedPromiseRuntime? Promise,
+        ProxyDescriptorCallInputs ProxyDescriptor,
+        EmittedRegExpRuntime RegExps,
+        EmittedSymbolRuntime Symbols,
+        TypeBuilder TSFunctionType,
+        Type UndefinedType
+    );
+
+    private readonly record struct PropertyIsEnumerableHelperInputs(
+        EmittedDescriptorStorageRuntime DescriptorStorage,
+        EmittedErrorRuntime Errors,
+        EmittedRegExpRuntime RegExps,
+        EmittedSymbolRuntime Symbols,
+        TypeBuilder TSFunctionType,
+        Type UndefinedType
+    );
+
     /// <summary>
     /// Emits <c>$Runtime.HasOwnPropertyHelper(object obj, object name) -&gt; bool</c>.
     /// Used to back <c>obj.hasOwnProperty(name)</c> for $TSFunction wrappers
@@ -26,14 +56,18 @@ public partial class RuntimeEmitter
     /// - Otherwise: false.
     /// Symbols / non-string names are coerced via ToString.
     /// </remarks>
-    private void EmitHasOwnPropertyHelper(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitHasOwnPropertyHelper(
+        TypeBuilder typeBuilder,
+        EmittedObjectOwnPropertiesRuntime objectOwnProperties,
+        HasOwnPropertyHelperInputs inputs
+    )
     {
         var method = typeBuilder.DefineMethod(
             "HasOwnPropertyHelper",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Boolean,
             [_types.Object, _types.Object]);
-        runtime.HasOwnPropertyHelperMethod = method;
+        objectOwnProperties.HasOwnProperty = method;
 
         // Name parameter 0 as "__this" so the wrapping $TSFunction sets
         // _expectsThis. That routes `.call(receiver, name)` through
@@ -62,7 +96,7 @@ public partial class RuntimeEmitter
             il, () => il.Emit(OpCodes.Ldarg_0), proxyLabel, notProxyLabel);
         il.MarkLabel(proxyLabel);
         EmitProxyGetOwnPropertyDescriptorCompiledCall(
-            il, runtime, () => il.Emit(OpCodes.Ldarg_0),
+            il, inputs.ProxyDescriptor, () => il.Emit(OpCodes.Ldarg_0),
             () => il.Emit(OpCodes.Ldarg_1));
         var proxyDescriptorLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Stloc, proxyDescriptorLocal);
@@ -72,7 +106,7 @@ public partial class RuntimeEmitter
         // the SharpTS.dll-side invariant code may return SharpTSUndefined.
         // Both represent an absent descriptor.
         il.Emit(OpCodes.Ldloc, proxyDescriptorLocal);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
         il.Emit(OpCodes.Brtrue, falseLabel);
         il.Emit(OpCodes.Ldloc, proxyDescriptorLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Object, "GetType"));
@@ -92,11 +126,11 @@ public partial class RuntimeEmitter
         // helpers below.
         var notSymbolKeyLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.Symbols.IsSymbol);
+        il.Emit(OpCodes.Call, inputs.Symbols.IsSymbol);
         il.Emit(OpCodes.Brfalse, notSymbolKeyLabel);
         // GetSymbolDict(obj).ContainsKey(symbol)
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.Symbols.GetStorage);
+        il.Emit(OpCodes.Call, inputs.Symbols.GetStorage);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryObjectObject, "ContainsKey", _types.Object));
         il.Emit(OpCodes.Ret);
@@ -114,15 +148,15 @@ public partial class RuntimeEmitter
         // than storing every intrinsic in the user-property dictionary.
         var notGlobalObject = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldsfld, runtime.GlobalThisSingletonField);
+        il.Emit(OpCodes.Ldsfld, inputs.GlobalThisSingletonField);
         il.Emit(OpCodes.Bne_Un, notGlobalObject);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, nameLocal);
-        il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetPropertyDescriptor);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.GetPropertyDescriptor);
         il.Emit(OpCodes.Brtrue, trueLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, nameLocal);
-        il.Emit(OpCodes.Call, runtime.ObjectState.IsBuiltinDeleted);
+        il.Emit(OpCodes.Call, inputs.ObjectState.IsBuiltinDeleted);
         il.Emit(OpCodes.Brtrue, falseLabel);
         foreach (var globalName in new[]
         {
@@ -149,21 +183,21 @@ public partial class RuntimeEmitter
         var notTSFunction = il.DefineLabel();
         var functionOwnPropertyCheck = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Isinst, inputs.TSFunctionType);
         il.Emit(OpCodes.Brtrue, functionOwnPropertyCheck);
-        if (_features.UsesPromise)
+        if (inputs.Promise is not null)
         {
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.RequirePromise().ResolveCallbackType);
+            il.Emit(OpCodes.Isinst, inputs.Promise!.ResolveCallbackType);
             il.Emit(OpCodes.Brtrue, functionOwnPropertyCheck);
         }
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, _types.FuncObjectArrayToObject);
         il.Emit(OpCodes.Brtrue, functionOwnPropertyCheck);
-        if (_features.UsesPromise)
+        if (inputs.Promise is not null)
         {
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.RequirePromise().RejectCallbackType);
+            il.Emit(OpCodes.Isinst, inputs.Promise!.RejectCallbackType);
             il.Emit(OpCodes.Brfalse, notTSFunction);
         }
         else
@@ -175,7 +209,7 @@ public partial class RuntimeEmitter
         // no longer own — report false. Per ECMA-262 §17, both are configurable.
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, nameLocal);
-        il.Emit(OpCodes.Call, runtime.ObjectState.IsBuiltinDeleted);
+        il.Emit(OpCodes.Call, inputs.ObjectState.IsBuiltinDeleted);
         il.Emit(OpCodes.Brtrue, falseLabel);
         // True for "name" or "length"
         il.Emit(OpCodes.Ldloc, nameLocal);
@@ -196,18 +230,18 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
         il.Emit(OpCodes.Brfalse, notFunctionPrototype);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Isinst, inputs.TSFunctionType);
         il.Emit(OpCodes.Brfalse, notFunctionPrototype);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "prototype");
-        il.Emit(OpCodes.Call, runtime.GetProperty);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Call, inputs.GetProperty);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
         il.Emit(OpCodes.Brfalse, trueLabel);
         il.MarkLabel(notFunctionPrototype);
         // Otherwise check PDS for own descriptor
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, nameLocal);
-        il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetPropertyDescriptor);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.GetPropertyDescriptor);
         il.Emit(OpCodes.Brtrue, trueLabel);
         il.Emit(OpCodes.Br, falseLabel);
         il.MarkLabel(notTSFunction);
@@ -215,20 +249,20 @@ public partial class RuntimeEmitter
         // $Object branch
         var notTSObject = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.ObjectStorage.Type);
+        il.Emit(OpCodes.Isinst, inputs.ObjectStorage.Type);
         il.Emit(OpCodes.Brfalse, notTSObject);
         // First: HasProperty (checks _fields + _getters + _setters).
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.ObjectStorage.Type);
+        il.Emit(OpCodes.Castclass, inputs.ObjectStorage.Type);
         il.Emit(OpCodes.Ldloc, nameLocal);
-        il.Emit(OpCodes.Callvirt, runtime.ObjectStorage.HasProperty);
+        il.Emit(OpCodes.Callvirt, inputs.ObjectStorage.HasProperty);
         il.Emit(OpCodes.Brtrue, trueLabel);
         // Fallback: PDS check (defineProperty-installed accessors on $TSObject
         // sit in PDS, not in TSObject._getters/_setters). Without this, hasOwn
         // returns false even though Object.keys finds the key (via PDS extras).
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, nameLocal);
-        il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetPropertyDescriptor);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.GetPropertyDescriptor);
         il.Emit(OpCodes.Brtrue, trueLabel);
         il.Emit(OpCodes.Br, falseLabel);
         il.MarkLabel(notTSObject);
@@ -236,11 +270,11 @@ public partial class RuntimeEmitter
         // RegExp instances have an intrinsic own lastIndex data property even
         // though its live value is stored in typed fields rather than a user
         // dictionary. Other own properties may still be installed through PDS.
-        if (runtime.RegExps.Implementation is not null)
+        if (inputs.RegExps.Implementation is not null)
         {
             var notRegExp = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.RegExps.RequireImplementation().Type);
+            il.Emit(OpCodes.Isinst, inputs.RegExps.RequireImplementation().Type);
             il.Emit(OpCodes.Brfalse, notRegExp);
             il.Emit(OpCodes.Ldloc, nameLocal);
             il.Emit(OpCodes.Ldstr, "lastIndex");
@@ -248,7 +282,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Brtrue, trueLabel);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldloc, nameLocal);
-            il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetPropertyDescriptor);
+            il.Emit(OpCodes.Call, inputs.DescriptorStorage.GetPropertyDescriptor);
             il.Emit(OpCodes.Brtrue, trueLabel);
             il.Emit(OpCodes.Br, falseLabel);
             il.MarkLabel(notRegExp);
@@ -266,16 +300,16 @@ public partial class RuntimeEmitter
         // ordering here documents the precedence).
         var notIHasFieldsLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.IHasFieldsInterface);
+        il.Emit(OpCodes.Isinst, inputs.IHasFieldsInterface);
         il.Emit(OpCodes.Brfalse, notIHasFieldsLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.IHasFieldsInterface);
+        il.Emit(OpCodes.Castclass, inputs.IHasFieldsInterface);
         il.Emit(OpCodes.Ldloc, nameLocal);
-        il.Emit(OpCodes.Callvirt, runtime.IHasFieldsHasProperty);
+        il.Emit(OpCodes.Callvirt, inputs.IHasFieldsHasProperty);
         il.Emit(OpCodes.Brtrue, trueLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, nameLocal);
-        il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetPropertyDescriptor);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.GetPropertyDescriptor);
         il.Emit(OpCodes.Brtrue, trueLabel);
         il.Emit(OpCodes.Br, falseLabel);
         il.MarkLabel(notIHasFieldsLabel);
@@ -307,12 +341,12 @@ public partial class RuntimeEmitter
         // hasOwn(Math, "abs") === true.
         var notMathForHasOwnLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldsfld, runtime.Math.SingletonField);
+        il.Emit(OpCodes.Ldsfld, inputs.Math.SingletonField);
         il.Emit(OpCodes.Bne_Un, notMathForHasOwnLabel);
         // First skip if marked deleted in tracker.
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, nameLocal);
-        il.Emit(OpCodes.Call, runtime.ObjectState.IsBuiltinDeleted);
+        il.Emit(OpCodes.Call, inputs.ObjectState.IsBuiltinDeleted);
         il.Emit(OpCodes.Brtrue, falseLabel);
         foreach (var m in new[] { "abs", "acos", "acosh", "asin", "asinh", "atan", "atan2",
             "atanh", "cbrt", "ceil", "clz32", "cos", "cosh", "exp", "expm1", "floor",
@@ -326,11 +360,11 @@ public partial class RuntimeEmitter
         // JSON singleton — same pattern.
         var notJsonForHasOwnLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldsfld, runtime.Json.SingletonField);
+        il.Emit(OpCodes.Ldsfld, inputs.Json.SingletonField);
         il.Emit(OpCodes.Bne_Un, notJsonForHasOwnLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, nameLocal);
-        il.Emit(OpCodes.Call, runtime.ObjectState.IsBuiltinDeleted);
+        il.Emit(OpCodes.Call, inputs.ObjectState.IsBuiltinDeleted);
         il.Emit(OpCodes.Brtrue, falseLabel);
         DictNameEq("parse"); DictNameEq("stringify"); DictNameEq("isRawJSON"); DictNameEq("rawJSON");
         il.MarkLabel(notJsonForHasOwnLabel);
@@ -343,7 +377,7 @@ public partial class RuntimeEmitter
         // Fall through to PDS check on dict-keyed property descriptors.
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, nameLocal);
-        il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetPropertyDescriptor);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.GetPropertyDescriptor);
         il.Emit(OpCodes.Brtrue, trueLabel);
         il.Emit(OpCodes.Br, falseLabel);
         il.MarkLabel(notDict);
@@ -404,13 +438,13 @@ public partial class RuntimeEmitter
         // it as own.
         var listReceiverIsPlain = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.ArrayStorage.Type);
+        il.Emit(OpCodes.Isinst, inputs.ArrayStorage.Type);
         il.Emit(OpCodes.Brfalse, listReceiverIsPlain);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.ArrayStorage.Type);
+        il.Emit(OpCodes.Castclass, inputs.ArrayStorage.Type);
         il.Emit(OpCodes.Ldloc, listIdxLocal);
         il.Emit(OpCodes.Conv_I8);
-        il.Emit(OpCodes.Callvirt, runtime.ArrayStorage.HasIndex);
+        il.Emit(OpCodes.Callvirt, inputs.ArrayStorage.HasIndex);
         il.Emit(OpCodes.Brtrue, trueLabel);
         il.Emit(OpCodes.Br, listNotIndexLabel);
         il.MarkLabel(listReceiverIsPlain);
@@ -423,14 +457,14 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Castclass, _types.ListOfObject);
         il.Emit(OpCodes.Ldloc, listIdxLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "get_Item", _types.Int32));
-        il.Emit(OpCodes.Isinst, runtime.ArrayStorage.HoleType);
+        il.Emit(OpCodes.Isinst, inputs.ArrayStorage.HoleType);
         il.Emit(OpCodes.Brtrue, listNotIndexLabel);
         il.Emit(OpCodes.Br, trueLabel);
         il.MarkLabel(listNotIndexLabel);
         // PDS fallback for named properties stored via the $TSArray set path.
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, nameLocal);
-        il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetPropertyDescriptor);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.GetPropertyDescriptor);
         il.Emit(OpCodes.Brtrue, trueLabel);
         il.Emit(OpCodes.Br, falseLabel);
         il.MarkLabel(notList);
@@ -446,7 +480,7 @@ public partial class RuntimeEmitter
         // (e.g. `delete Object.assign` marks Object Type + "assign" as deleted).
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, nameLocal);
-        il.Emit(OpCodes.Call, runtime.ObjectState.IsBuiltinDeleted);
+        il.Emit(OpCodes.Call, inputs.ObjectState.IsBuiltinDeleted);
         il.Emit(OpCodes.Brtrue, falseLabel);
         // "prototype" / "name" / "length" → true for any Type
         void NameEq(string n)
@@ -526,17 +560,17 @@ public partial class RuntimeEmitter
 
         var notErrorConsLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldtoken, runtime.Errors.Type);
+        il.Emit(OpCodes.Ldtoken, inputs.Errors.Type);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle")!);
         il.Emit(OpCodes.Bne_Un, notErrorConsLabel);
         NameEq("isError");
         il.MarkLabel(notErrorConsLabel);
 
-        if (runtime.RegExps.Implementation is not null)
+        if (inputs.RegExps.Implementation is not null)
         {
             var notRegExpConsLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldtoken, runtime.RegExps.RequireImplementation().Type);
+            il.Emit(OpCodes.Ldtoken, inputs.RegExps.RequireImplementation().Type);
             il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle")!);
             il.Emit(OpCodes.Bne_Un, notRegExpConsLabel);
             NameEq("escape");
@@ -550,7 +584,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, _types.Type);
         il.Emit(OpCodes.Ldloc, nameLocal);
-        il.Emit(OpCodes.Call, runtime.LookupBuiltInStaticMember);
+        il.Emit(OpCodes.Call, inputs.LookupBuiltInStaticMember);
         il.Emit(OpCodes.Brtrue, trueLabel);
 
         // Reflection: type.GetField(name, Public|Static) ?? type.GetMethod(name, Public|Static)
@@ -577,7 +611,7 @@ public partial class RuntimeEmitter
         // returns false because the bracket set didn't surface.
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, nameLocal);
-        il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetPropertyDescriptor);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.GetPropertyDescriptor);
         il.Emit(OpCodes.Brtrue, trueLabel);
         il.Emit(OpCodes.Br, falseLabel);
         il.MarkLabel(notTypeLabel);
@@ -585,7 +619,7 @@ public partial class RuntimeEmitter
         // Default: PDS check (might find user-set descriptor)
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, nameLocal);
-        il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetPropertyDescriptor);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.GetPropertyDescriptor);
         il.Emit(OpCodes.Brtrue, trueLabel);
 
         il.MarkLabel(falseLabel);
@@ -611,20 +645,24 @@ public partial class RuntimeEmitter
     /// assertion (in propertyHelper.js) flunked every RegExp.prototype
     /// accessor's prop-desc.js as a result.
     /// </remarks>
-    private void EmitPropertyIsEnumerableHelper(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitPropertyIsEnumerableHelper(
+        TypeBuilder typeBuilder,
+        EmittedObjectOwnPropertiesRuntime objectOwnProperties,
+        PropertyIsEnumerableHelperInputs inputs
+    )
     {
         var method = typeBuilder.DefineMethod(
             "PropertyIsEnumerableHelper",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Boolean,
             [_types.Object, _types.Object]);
-        runtime.PropertyIsEnumerableHelperMethod = method;
+        objectOwnProperties.IsEnumerable = method;
         method.DefineParameter(1, ParameterAttributes.None, "__this");
         method.DefineParameter(2, ParameterAttributes.None, "name");
 
         var il = method.GetILGenerator();
         var nameLocal = il.DeclareLocal(_types.String);
-        var descLocal = il.DeclareLocal(runtime.DescriptorStorage.DescriptorType);
+        var descLocal = il.DeclareLocal(inputs.DescriptorStorage.DescriptorType);
         var falseLabel = il.DefineLabel();
 
         // ECMA-262 §20.1.3.4 step 1: Let O be ? ToObject(this value). ToObject
@@ -638,12 +676,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Brfalse, pieNullThrowLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
         il.Emit(OpCodes.Brtrue, pieNullThrowLabel);
         var pieAfterNullLabel = il.DefineLabel();
         il.Emit(OpCodes.Br, pieAfterNullLabel);
         il.MarkLabel(pieNullThrowLabel);
-        GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot convert undefined or null to object");
+        GuestErrorEmitter.ThrowError(il, inputs.Errors.CreateException, inputs.Errors.TypeErrorConstructor, "Cannot convert undefined or null to object");
         il.MarkLabel(pieAfterNullLabel);
 
         // Symbol-keyed lookup. PDSGetPropertyDescriptor's name parameter is
@@ -654,13 +692,13 @@ public partial class RuntimeEmitter
         // Enumerable bit must be observed directly.
         var pieNotSymbolLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.Symbols.IsSymbol);
+        il.Emit(OpCodes.Call, inputs.Symbols.IsSymbol);
         il.Emit(OpCodes.Brfalse, pieNotSymbolLabel);
         var pieSymbolValueLocal = il.DeclareLocal(_types.Object);
-        var pieSymbolDescriptorLocal = il.DeclareLocal(runtime.DescriptorStorage.DescriptorType);
+        var pieSymbolDescriptorLocal = il.DeclareLocal(inputs.DescriptorStorage.DescriptorType);
         var pieSymbolPresentLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.Symbols.GetStorage);
+        il.Emit(OpCodes.Call, inputs.Symbols.GetStorage);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloca, pieSymbolValueLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryObjectObject, "TryGetValue"));
@@ -669,13 +707,13 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
         il.MarkLabel(pieSymbolPresentLabel);
         il.Emit(OpCodes.Ldloc, pieSymbolValueLocal);
-        il.Emit(OpCodes.Isinst, runtime.DescriptorStorage.DescriptorType);
+        il.Emit(OpCodes.Isinst, inputs.DescriptorStorage.DescriptorType);
         il.Emit(OpCodes.Stloc, pieSymbolDescriptorLocal);
         var piePlainSymbolLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, pieSymbolDescriptorLocal);
         il.Emit(OpCodes.Brfalse, piePlainSymbolLabel);
         il.Emit(OpCodes.Ldloc, pieSymbolDescriptorLocal);
-        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorEnumerable.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorEnumerable.GetGetMethod()!);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(piePlainSymbolLabel);
         il.Emit(OpCodes.Ldc_I4_1);
@@ -692,11 +730,11 @@ public partial class RuntimeEmitter
 
         // RegExp lastIndex is an intrinsic own non-enumerable property. It is
         // not placed in PDS until user code redefines its attributes.
-        if (runtime.RegExps.Implementation is not null)
+        if (inputs.RegExps.Implementation is not null)
         {
             var pieNotRegExpLastIndex = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.RegExps.RequireImplementation().Type);
+            il.Emit(OpCodes.Isinst, inputs.RegExps.RequireImplementation().Type);
             il.Emit(OpCodes.Brfalse, pieNotRegExpLastIndex);
             il.Emit(OpCodes.Ldloc, nameLocal);
             il.Emit(OpCodes.Ldstr, "lastIndex");
@@ -713,7 +751,7 @@ public partial class RuntimeEmitter
         // would mistakenly inherit that as enumerable=true.
         var notFunctionBuiltinLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Isinst, inputs.TSFunctionType);
         il.Emit(OpCodes.Brfalse, notFunctionBuiltinLabel);
         il.Emit(OpCodes.Ldloc, nameLocal);
         il.Emit(OpCodes.Ldstr, "name");
@@ -729,13 +767,13 @@ public partial class RuntimeEmitter
         // for this name we already have the spec-correct Enumerable bit.
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, nameLocal);
-        il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetPropertyDescriptor);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.GetPropertyDescriptor);
         il.Emit(OpCodes.Stloc, descLocal);
         var noPdsLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, descLocal);
         il.Emit(OpCodes.Brfalse, noPdsLabel);
         il.Emit(OpCodes.Ldloc, descLocal);
-        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorEnumerable.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorEnumerable.GetGetMethod()!);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(noPdsLabel);
 
@@ -755,7 +793,7 @@ public partial class RuntimeEmitter
         // exactly what HasOwn returns when found.
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.HasOwnPropertyHelperMethod);
+        il.Emit(OpCodes.Call, objectOwnProperties.HasOwnProperty);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(falseLabel);

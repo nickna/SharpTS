@@ -159,7 +159,7 @@ public partial class RuntimeEmitter
         EmitObjectMethodLookup("create",                  runtime.ObjectPrototypes.CreateValueForm, 2);
         EmitObjectMethodLookup("assign",                  runtime.ObjectAssign, 2);
         EmitObjectMethodLookup("is",                      runtime.ObjectIs, 2);
-        EmitObjectMethodLookup("hasOwn",                  runtime.ObjectHasOwn, 2);
+        EmitObjectMethodLookup("hasOwn",                  runtime.ObjectOwnProperties.HasOwn, 2);
         EmitObjectMethodLookup("groupBy",                 runtime.ObjectGroupBy, 2);
         EmitObjectMethodLookup("isExtensible",            runtime.ObjectState.IsExtensible, 1);
         EmitObjectMethodLookup("isFrozen",                runtime.ObjectState.IsFrozen, 1);
