@@ -1159,7 +1159,7 @@ public abstract class StatementEmitterBase : ExpressionEmitterBase
         var afterLoopLabel = il.DefineLabel();
 
         il.Emit(OpCodes.Ldloc, iterableLocal);
-        il.Emit(OpCodes.Ldsfld, runtime.SymbolAsyncIterator);
+        il.Emit(OpCodes.Ldsfld, runtime.Symbols.AsyncIterator);
         il.Emit(OpCodes.Call, runtime.GetIteratorFunction);
         il.Emit(OpCodes.Stloc, asyncIteratorFnLocal);
 

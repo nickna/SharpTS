@@ -406,7 +406,7 @@ public partial class RuntimeEmitter
 
         // TSSymbol => "symbol"
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSSymbolType);
+        il.Emit(OpCodes.Isinst, runtime.Symbols.Type);
         il.Emit(OpCodes.Brtrue, symbolLabel);
 
         // TSFunction => "function"
@@ -710,7 +710,7 @@ public partial class RuntimeEmitter
         PrimitiveToFalse(_types.Double);
         PrimitiveToFalse(_types.String);
         PrimitiveToFalse(_types.BigInteger);
-        PrimitiveToFalse(runtime.TSSymbolType);
+        PrimitiveToFalse(runtime.Symbols.Type);
         PrimitiveToFalse(runtime.UndefinedType);
         il.Emit(OpCodes.Br, trueLabel);
         il.MarkLabel(notObjectClassLabel);
@@ -747,7 +747,7 @@ public partial class RuntimeEmitter
         // otherwise reach the IsAssignableFrom($TSSymbol, $TSSymbol) fallback and
         // wrongly match. Terminal like the wrappers above: true iff `instance` is
         // a boxed Symbol wrapper (`Object(sym)`), false for a bare symbol (#449).
-        CheckBoxed(runtime.TSSymbolType, "Symbol");
+        CheckBoxed(runtime.Symbols.Type, "Symbol");
 
         // `x instanceof Promise`: the Promise identifier resolves to
         // typeof(Task<object?>), but $Promise instances (and #242 Promise
@@ -881,7 +881,7 @@ public partial class RuntimeEmitter
 
         // Check if key is a symbol
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.IsSymbolMethod);
+        il.Emit(OpCodes.Call, runtime.Symbols.IsSymbol);
         il.Emit(OpCodes.Brtrue, symbolKeyLabel);
 
         // Ask [[GetOwnProperty]] before representation-specific fallbacks.
@@ -1105,7 +1105,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(symbolKeyLabel);
         var symbolNotOwnLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.GetSymbolDictMethod);
+        il.Emit(OpCodes.Call, runtime.Symbols.GetStorage);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryObjectObject, "ContainsKey", _types.Object));
         il.Emit(OpCodes.Brfalse, symbolNotOwnLabel);

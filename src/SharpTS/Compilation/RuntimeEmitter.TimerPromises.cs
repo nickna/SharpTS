@@ -703,8 +703,8 @@ public partial class RuntimeEmitter
         // Set Symbol.asyncIterator on dict → TSFunction that returns dict itself
         // GetSymbolDict(dict)[Symbol.asyncIterator] = new $TSFunction(closure, closure.GetSelf, "[Symbol.asyncIterator]", 0);
         il.Emit(OpCodes.Ldloc, dictLocal);
-        il.Emit(OpCodes.Call, runtime.GetSymbolDictMethod);
-        il.Emit(OpCodes.Ldsfld, runtime.SymbolAsyncIterator);
+        il.Emit(OpCodes.Call, runtime.Symbols.GetStorage);
+        il.Emit(OpCodes.Ldsfld, runtime.Symbols.AsyncIterator);
         il.Emit(OpCodes.Ldloc, closureLocal);         // target
         _types.EmitLoadMethodInfoViaHandle(il, timerPromises.AsyncIntervalClosureGetSelf);
         il.Emit(OpCodes.Ldstr, "[Symbol.asyncIterator]");
@@ -819,8 +819,8 @@ public partial class RuntimeEmitter
 
         // GetSymbolDict(dict)[Symbol.asyncIterator] = closure.GetSelf
         il.Emit(OpCodes.Ldloc, dictLocal);
-        il.Emit(OpCodes.Call, runtime.GetSymbolDictMethod);
-        il.Emit(OpCodes.Ldsfld, runtime.SymbolAsyncIterator);
+        il.Emit(OpCodes.Call, runtime.Symbols.GetStorage);
+        il.Emit(OpCodes.Ldsfld, runtime.Symbols.AsyncIterator);
         il.Emit(OpCodes.Ldloc, closureLocal);
         _types.EmitLoadMethodInfoViaHandle(il, timerPromises.AsyncIntervalClosureGetSelf);
         il.Emit(OpCodes.Ldstr, "[Symbol.asyncIterator]");

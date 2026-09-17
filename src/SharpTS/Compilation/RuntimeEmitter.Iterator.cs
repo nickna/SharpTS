@@ -888,11 +888,11 @@ public partial class RuntimeEmitter
             "IterateToList",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.ListOfObject,
-            [_types.Object, runtime.TSSymbolType, _types.Type]
+            [_types.Object, runtime.Symbols.Type, _types.Type]
         );
         runtime.IterateIntoList = typeBuilder.DefineMethod(
             "IterateIntoList", MethodAttributes.Public | MethodAttributes.Static,
-            _types.ListOfObject, [_types.Object, runtime.TSSymbolType, _types.Type, _types.ListOfObject]);
+            _types.ListOfObject, [_types.Object, runtime.Symbols.Type, _types.Type, _types.ListOfObject]);
     }
 
     /// <summary>
@@ -1057,7 +1057,7 @@ public partial class RuntimeEmitter
             "GetIteratorFunction",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
-            [_types.Object, runtime.TSSymbolType]
+            [_types.Object, runtime.Symbols.Type]
         );
         runtime.GetIteratorFunction = method;
 
@@ -1074,7 +1074,7 @@ public partial class RuntimeEmitter
         // the generator receiver and the method returns that receiver unchanged.
         var notGeneratorIterator = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Ldsfld, runtime.SymbolIterator);
+        il.Emit(OpCodes.Ldsfld, runtime.Symbols.Iterator);
         il.Emit(OpCodes.Bne_Un, notGeneratorIterator);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, runtime.GeneratorInterfaceType);
@@ -1090,7 +1090,7 @@ public partial class RuntimeEmitter
         {
             var notReadableAsyncIter = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Ldsfld, runtime.SymbolAsyncIterator);
+            il.Emit(OpCodes.Ldsfld, runtime.Symbols.AsyncIterator);
             il.Emit(OpCodes.Bne_Un, notReadableAsyncIter);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Isinst, nodeStreams.ReadableType);
@@ -1112,7 +1112,7 @@ public partial class RuntimeEmitter
         // through the runtime symbol dictionary, so retain that lookup before
         // consulting the class-method registry.
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.GetSymbolDictMethod);
+        il.Emit(OpCodes.Call, runtime.Symbols.GetStorage);
         il.Emit(OpCodes.Stloc, dictLocal);
         il.Emit(OpCodes.Ldloc, dictLocal);
         il.Emit(OpCodes.Brfalse, tryRegistryLabel);
@@ -1142,7 +1142,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(tryRegistryLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.FindSymbolMethod);
+        il.Emit(OpCodes.Call, runtime.SymbolAccessors.FindMethod);
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Brtrue, registryValueLabel);
         il.Emit(OpCodes.Pop);

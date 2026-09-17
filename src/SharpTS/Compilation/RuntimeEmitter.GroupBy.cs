@@ -80,7 +80,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, groupByMaterializeLabel);
         var groupByIteratorLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldsfld, runtime.SymbolIterator);
+        il.Emit(OpCodes.Ldsfld, runtime.Symbols.Iterator);
         il.Emit(OpCodes.Call, runtime.GetIteratorFunction);
         il.Emit(OpCodes.Stloc, groupByIteratorLocal);
         var groupByHasIteratorLabel = il.DefineLabel();
@@ -97,7 +97,7 @@ public partial class RuntimeEmitter
         // this handles custom iterables and produces the spec TypeError for a
         // nullish/non-callable Symbol.iterator instead of a CLR cast error.
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldsfld, runtime.SymbolIterator);
+        il.Emit(OpCodes.Ldsfld, runtime.Symbols.Iterator);
         il.Emit(OpCodes.Ldtoken, runtime.RuntimeType);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle")!);
         il.Emit(OpCodes.Call, runtime.IterateToList);

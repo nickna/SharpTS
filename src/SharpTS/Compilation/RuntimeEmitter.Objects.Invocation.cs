@@ -296,7 +296,7 @@ public partial class RuntimeEmitter
         var symbolNoDescLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, _types.Type);
-        il.Emit(OpCodes.Ldtoken, runtime.TSSymbolType);
+        il.Emit(OpCodes.Ldtoken, runtime.Symbols.Type);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", [_types.RuntimeTypeHandle])!);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "op_Equality", [_types.Type, _types.Type])!);
         il.Emit(OpCodes.Brfalse, notSymbolTypeLabel);
@@ -319,11 +319,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, symbolDescriptionLocal);
         il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.MarkLabel(symbolDescriptionReadyLabel);
-        il.Emit(OpCodes.Newobj, runtime.TSSymbolCtor);
+        il.Emit(OpCodes.Newobj, runtime.Symbols.Constructor);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(symbolNoDescLabel);
         il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Newobj, runtime.TSSymbolCtor);
+        il.Emit(OpCodes.Newobj, runtime.Symbols.Constructor);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notSymbolTypeLabel);
 

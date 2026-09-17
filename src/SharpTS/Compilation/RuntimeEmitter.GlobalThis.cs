@@ -314,7 +314,7 @@ public partial class RuntimeEmitter
         // "function", `globalThis.Symbol === Symbol` holds, and aliased
         // member access resolves the well-known-symbol static fields via
         // GetProperty's Type branch.
-        EmitTypeBranch("Symbol", runtime.TSSymbolType);
+        EmitTypeBranch("Symbol", runtime.Symbols.Type);
 
         // Error and the native-error subclasses are constructor functions; expose
         // their .NET Type tokens so value-form `root.Error` / `root.TypeError`

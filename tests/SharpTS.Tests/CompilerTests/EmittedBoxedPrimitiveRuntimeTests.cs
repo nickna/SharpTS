@@ -127,7 +127,7 @@ public class EmittedBoxedPrimitiveRuntimeTests
             runtime.DescriptorStorage.DefineProperty, runtime.DescriptorStorage.SetPrototype,
             runtime.Booleans.PrototypeField, runtime.Booleans.PrototypePopulateMethod,
             runtime.Numbers.PrototypeField, runtime.Numbers.PrototypePopulateMethod,
-            runtime.SymbolPrototypeField, runtime.SymbolPrototypePopulateMethod);
+            runtime.Symbols.Prototype, runtime.Symbols.PopulatePrototype);
         var prototype = includePrototype
             ? CreateInputs("BoxedBigIntPrototype", runtime.BigInt.PrototypeField, runtime.BigInt.PrototypePopulateMethod)
             : null;
@@ -161,7 +161,7 @@ public class EmittedBoxedPrimitiveRuntimeTests
         var boxed = new EmittedBoxedPrimitiveRuntime();
         InvokeEmitter("DeclareUnwrapIfBoxed", emitter, helper, boxed);
         var peers = CreateInputs("UnwrapPrimitiveInputs",
-            runtime.ObjectStorage.Type, runtime.SymbolToPrimitive, runtime.GetIndex, runtime.UndefinedType,
+            runtime.ObjectStorage.Type, runtime.Symbols.ToPrimitive, runtime.GetIndex, runtime.UndefinedType,
             runtime.TypeOf, runtime.InvokeMethodValue, runtime.ObjectStorage.GetProperty,
             runtime.HasOwnPropertyHelperMethod, runtime.GetProperty, runtime.CreateException, runtime.TSTypeErrorCtor);
         var dateInputs = includeDate ? CreateInputs("BoxedDateInputs", runtime.TSDateType, runtime.DateToString) : null;
@@ -212,7 +212,7 @@ public class EmittedBoxedPrimitiveRuntimeTests
         var bigInt = Call(type, boxed.ToObject, new BigInteger(42));
         Assert.Equal(true, Call(type, boxed.IsOfType, bigInt, "BigInt"));
         Assert.Equal(new BigInteger(42), Call(type, boxed.UnwrapIfBoxed, bigInt));
-        var symbol = Activator.CreateInstance(assembly.GetType(runtime.TSSymbolType.Name)!, ["x"]);
+        var symbol = Activator.CreateInstance(assembly.GetType(runtime.Symbols.Type.Name)!, ["x"]);
         var symbolBox = Call(type, boxed.ToObject, symbol);
         Assert.NotSame(symbol, symbolBox);
         Assert.Equal(true, Call(type, boxed.IsOfType, symbolBox, "Symbol"));

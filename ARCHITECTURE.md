@@ -304,6 +304,20 @@ collections, iterator behavior and per-output comparer/sentinel identity remain 
 isolated as before. General iteration and the full residual audit remain separate work
 under #1599.
 
+Symbols use two required owners. `Symbols` owns 27 primitive, well-known, storage and
+prototype declarations, and `SymbolAccessors` owns the nine class-accessor registry
+declarations. The primitive class is emitted before comparer/iterator consumers; runtime
+storage and prototype bodies arrive later. Class-accessor signatures are available before
+generic index dispatch, the runtime initializer creates the registry, and late body emission
+completes its helpers. Accessor completion checks both emitted phases as well as all handles;
+failed completion remains repairable. Family helpers take the owners and explicit undefined,
+storage, descriptor, function-cache, string-conversion and error dependencies. The prototype
+toString/valueOf helper builders stay local instead of duplicating metadata on the root.
+Completion freezes compiler metadata only: guest Symbol.for registries, symbol-keyed object
+storage and the six-slot class registry remain mutable and isolated per output. Guest class
+initializers can register methods and accessors after runtime emission. Generic owner/method
+closing, inherited lookup, foreign-symbol recognition and generated method order are unchanged.
+
 WeakMap, WeakSet and WeakRef have independent optional components selected once by
 orchestration. Their six, five and three declarations include the validation helpers.
 `FinalizationRegistry` always owns the per-output poke table; its optional implementation

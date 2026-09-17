@@ -2311,7 +2311,7 @@ public partial class ILEmitter
         var indexBasedLabel = builder.DefineLabel("forof_index_based");
 
         IL.Emit(OpCodes.Ldloc, iterableLocal);
-        IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.SymbolIterator);
+        IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.Symbols.Iterator);
         IL.Emit(OpCodes.Call, _ctx.Runtime!.GetIteratorFunction);
         IL.Emit(OpCodes.Stloc, iteratorFnLocal);
 
@@ -2433,7 +2433,7 @@ public partial class ILEmitter
             // Normalize iterable to List<object> via IterateToList so IEnumerable types
             // (e.g. Intl.Segments) are properly materialized before index-based iteration
             IL.Emit(OpCodes.Ldloc, iterableLocal);
-            IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.SymbolIterator);
+            IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.Symbols.Iterator);
             IL.Emit(OpCodes.Ldtoken, _ctx.Runtime!.RuntimeType);
             IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(_ctx.Types.Type, "GetTypeFromHandle"));
             IL.Emit(OpCodes.Call, _ctx.Runtime!.IterateToList);
@@ -2602,7 +2602,7 @@ public partial class ILEmitter
 
         // GetIteratorFromMethod, once: preserve observable iterator acquisition and this binding.
         IL.Emit(OpCodes.Ldloc, iterableLocal);
-        IL.Emit(OpCodes.Ldsfld, _ctx.Runtime.SymbolIterator);
+        IL.Emit(OpCodes.Ldsfld, _ctx.Runtime.Symbols.Iterator);
         IL.Emit(OpCodes.Call, _ctx.Runtime.GetIteratorFunction);
         var iteratorFunction = IL.DeclareLocal(_ctx.Types.Object);
         IL.Emit(OpCodes.Stloc, iteratorFunction);
@@ -2762,7 +2762,7 @@ public partial class ILEmitter
             IL.Emit(OpCodes.Brtrue, loopHeadLabel);
             // Last resort: route through IterateToList to materialize.
             IL.Emit(OpCodes.Ldloc, iterableLocal);
-            IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.SymbolIterator);
+            IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.Symbols.Iterator);
             IL.Emit(OpCodes.Ldtoken, _ctx.Runtime!.RuntimeType);
             IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(_ctx.Types.Type, "GetTypeFromHandle"));
             IL.Emit(OpCodes.Call, _ctx.Runtime!.IterateToList);
@@ -3414,7 +3414,7 @@ public partial class ILEmitter
             IL.Emit(OpCodes.Ldloc, resourceLocal);
 
             // Load Symbol.dispose
-            IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.SymbolDispose);
+            IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.Symbols.Dispose);
 
             // Call $Runtime.DisposeResource(resource, Symbol.dispose)
             IL.Emit(OpCodes.Call, _ctx.Runtime!.DisposeResource);

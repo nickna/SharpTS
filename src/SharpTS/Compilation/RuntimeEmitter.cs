@@ -215,10 +215,10 @@ public partial class RuntimeEmitter
         EmitTSNamespaceClass(moduleBuilder, runtime);
 
         // Emit TSSymbol class for symbol support
-        EmitTSSymbolClass(moduleBuilder, runtime);
+        EmitTSSymbolClass(moduleBuilder, runtime.Symbols, runtime.UndefinedInstance);
 
         // Emit ReferenceEqualityComparer for Map/Set key equality
-        EmitReferenceEqualityComparerClass(moduleBuilder, runtime.CollectionKeys, runtime.TSSymbolType);
+        EmitReferenceEqualityComparerClass(moduleBuilder, runtime.CollectionKeys, runtime.Symbols.Type);
 
         // Emit $IGenerator interface for generator return/throw support
         EmitGeneratorInterface(moduleBuilder, runtime);
@@ -760,6 +760,8 @@ public partial class RuntimeEmitter
         runtime.WeakSet?.CompleteEmission();
         runtime.WeakRef?.CompleteEmission();
         runtime.FinalizationRegistry.CompleteEmission();
+        runtime.Symbols.CompleteEmission();
+        runtime.SymbolAccessors.CompleteEmission();
         runtime.BroadcastChannel?.CompleteEmission();
         runtime.EventEmitter.CompleteEmission();
         runtime.NodeStreams?.CompleteEmission();

@@ -144,7 +144,7 @@ public partial class RuntimeEmitter
         // Symbol-keyed class accessor registry (#266). GetIndex/SetIndex (emitted
         // during EmitRuntimeClass) call FindSymbol{Getter,Setter}For, and class
         // .cctors (emitted later still) call RegisterSymbolAccessor.
-        DefineSymbolAccessorRegistry(typeBuilder, runtime);
+        DefineSymbolAccessorRegistry(typeBuilder, runtime.SymbolAccessors);
 
         // Reserve ToNumber(object) → double. Used by $RegExp's Symbol.split
         // to coerce `limit` per ECMA-262 §22.2.5.13 step 7 (and to throw

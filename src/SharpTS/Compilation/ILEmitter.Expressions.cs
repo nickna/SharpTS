@@ -175,7 +175,7 @@ public partial class ILEmitter
             // dispatches via InvokeValue's Type-callee branch. Direct
             // `Symbol.iterator` / `Symbol(...)` sites still compile through
             // SymbolStaticEmitter / BuiltInConstructorHandler first.
-            IL.Emit(OpCodes.Ldtoken, _ctx.Runtime!.TSSymbolType);
+            IL.Emit(OpCodes.Ldtoken, _ctx.Runtime!.Symbols.Type);
             IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(_ctx.Types.Type, "GetTypeFromHandle", _ctx.Types.RuntimeTypeHandle));
             SetStackUnknown();
             return;

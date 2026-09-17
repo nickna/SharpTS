@@ -220,7 +220,7 @@ public partial class GeneratorMoveNextEmitter
         EmitTryBodyOperation(() =>
         {
             _il.Emit(OpCodes.Ldloc, iterableLocal);
-            _il.Emit(OpCodes.Ldsfld, _ctx!.Runtime!.SymbolIterator);
+            _il.Emit(OpCodes.Ldsfld, _ctx!.Runtime!.Symbols.Iterator);
             _il.Emit(OpCodes.Call, _ctx.Runtime.GetIteratorFunction);
             _il.Emit(OpCodes.Stloc, iterFnLocal);
         });

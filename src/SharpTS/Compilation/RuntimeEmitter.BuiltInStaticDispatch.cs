@@ -171,8 +171,8 @@ public partial class RuntimeEmitter
         // them before this table is consulted. Only the static methods need
         // entries: their .NET names are For/KeyFor, which the case-sensitive
         // static-method probe misses.
-        EmitLookup(runtime.TSSymbolType, "for", runtime.SymbolFor, 1);
-        EmitLookup(runtime.TSSymbolType, "keyFor", runtime.SymbolKeyFor, 1);
+        EmitLookup(runtime.Symbols.Type, "for", runtime.Symbols.For, 1);
+        EmitLookup(runtime.Symbols.Type, "keyFor", runtime.Symbols.KeyFor, 1);
 
         // BigInt.asIntN/asUintN — BigInt resolves to System.Numerics.BigInteger
         // in emitted value form; the BCL type has no JavaScript truncation APIs.

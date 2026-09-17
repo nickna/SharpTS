@@ -17,7 +17,7 @@ public partial class RuntimeEmitter
             "StringTryInvokeSymbolMethod",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
-            [_types.Object, runtime.TSSymbolType, _types.ObjectArray, _types.Boolean.MakeByRefType(), _types.Boolean.MakeByRefType()]);
+            [_types.Object, runtime.Symbols.Type, _types.ObjectArray, _types.Boolean.MakeByRefType(), _types.Boolean.MakeByRefType()]);
         runtime.StringTryInvokeSymbolMethod = method;
 
         var il = method.GetILGenerator();
@@ -73,7 +73,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Isinst, runtime.TSRegExpType);
             il.Emit(OpCodes.Brfalse, notNativeRegExpLabel);
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Call, runtime.GetSymbolDictMethod);
+            il.Emit(OpCodes.Call, runtime.Symbols.GetStorage);
             il.Emit(OpCodes.Stloc, ownSymbolsLocal);
             il.Emit(OpCodes.Ldloc, ownSymbolsLocal);
             il.Emit(OpCodes.Ldarg_1);

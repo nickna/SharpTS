@@ -23,38 +23,38 @@ public partial class RuntimeEmitter
     /// FindSymbol* methods, and class .cctors (emitted after all runtime methods)
     /// call RegisterSymbolAccessor, so the signatures must exist up front.
     /// </summary>
-    private void DefineSymbolAccessorRegistry(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void DefineSymbolAccessorRegistry(TypeBuilder typeBuilder, EmittedSymbolAccessorRuntime symbolAccessors)
     {
-        runtime.SymbolAccessorRegistryField = typeBuilder.DefineField(
+        symbolAccessors.Registry = typeBuilder.DefineField(
             "_symbolAccessors", SymOuterDictType,
             FieldAttributes.Public | FieldAttributes.Static);
 
-        runtime.RegisterSymbolAccessor = typeBuilder.DefineMethod(
+        symbolAccessors.RegisterAccessor = typeBuilder.DefineMethod(
             "RegisterSymbolAccessor",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Void,
             [_types.Type, _types.Object, _types.Object, _types.Object, _types.Boolean]);
 
-        runtime.FindSymbolGetter = typeBuilder.DefineMethod(
+        symbolAccessors.FindGetter = typeBuilder.DefineMethod(
             "FindSymbolGetterFor",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.Object, _types.Object]);
 
-        runtime.FindSymbolSetter = typeBuilder.DefineMethod(
+        symbolAccessors.FindSetter = typeBuilder.DefineMethod(
             "FindSymbolSetterFor",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.Object, _types.Object]);
 
         // #647 computed symbol-keyed methods.
-        runtime.RegisterSymbolMethod = typeBuilder.DefineMethod(
+        symbolAccessors.RegisterMethod = typeBuilder.DefineMethod(
             "RegisterSymbolMethod",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Void,
             [_types.Type, _types.Object, _types.Object, _types.Boolean]);
 
-        runtime.FindSymbolMethod = typeBuilder.DefineMethod(
+        symbolAccessors.FindMethod = typeBuilder.DefineMethod(
             "FindSymbolMethodFor",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
@@ -62,19 +62,19 @@ public partial class RuntimeEmitter
 
         // #351 generic-class helpers (forward-declared; bodies filled alongside
         // the Find* bodies). FindSymbol* calls them in its base-chain walk.
-        runtime.SymbolRegistryKey = typeBuilder.DefineMethod(
+        symbolAccessors.RegistryKey = typeBuilder.DefineMethod(
             "SymbolRegistryKey",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Type,
             [_types.Type]);
 
-        runtime.SymbolClosedOwner = typeBuilder.DefineMethod(
+        symbolAccessors.ClosedOwner = typeBuilder.DefineMethod(
             "SymbolClosedOwner",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Type,
             [_types.Type]);
 
-        runtime.CloseSymbolAccessor = typeBuilder.DefineMethod(
+        symbolAccessors.CloseAccessor = typeBuilder.DefineMethod(
             "CloseSymbolAccessor",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
@@ -82,18 +82,23 @@ public partial class RuntimeEmitter
     }
 
     /// <summary>Emits the registry field initialization into the $Runtime cctor.</summary>
-    private void InitSymbolAccessorRegistry(ILGenerator cctorIL, EmittedRuntime runtime)
+    private void InitSymbolAccessorRegistry(ILGenerator cctorIL, EmittedSymbolAccessorRuntime symbolAccessors)
     {
         cctorIL.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(SymOuterDictType));
-        cctorIL.Emit(OpCodes.Stsfld, runtime.SymbolAccessorRegistryField);
+        cctorIL.Emit(OpCodes.Stsfld, symbolAccessors.Registry);
+        symbolAccessors.MarkInitializerEmitted();
     }
 
     /// <summary>Fills the bodies of Register/FindGetter/FindSetter (#266).</summary>
-    private void EmitSymbolAccessorRegistryBodies(EmittedRuntime runtime)
+    private void EmitSymbolAccessorRegistryBodies(
+        EmittedSymbolAccessorRuntime symbolAccessors,
+        EmittedSymbolRuntime symbols,
+        EmittedStringCoercionRuntime stringCoercion
+    )
     {
         var outer = SymOuterDictType;
         var inner = SymInnerDictType;
-        var field = runtime.SymbolAccessorRegistryField;
+        var field = symbolAccessors.Registry;
 
         var outerTryGetValue = _types.GetMethod(outer, "TryGetValue", [_types.Type, inner.MakeByRefType()])!;
         var outerSetItem = _types.GetMethod(outer, "set_Item", [_types.Type, inner])!;
@@ -102,16 +107,65 @@ public partial class RuntimeEmitter
         var getBaseType = _types.GetProperty(_types.Type, "BaseType").GetGetMethod()!;
         var getType = _types.GetMethod(_types.Object, "GetType");
 
-        EmitRegisterSymbolAccessorBody(runtime, inner, outerTryGetValue, outerSetItem, innerTryGetValue, innerSetItem);
-        EmitRegisterSymbolMethodBody(runtime, inner, outerTryGetValue, outerSetItem, innerTryGetValue, innerSetItem);
-        EmitSymbolGenericHelperBodies(runtime);
-        EmitFindSymbolAccessorBody(runtime, runtime.FindSymbolGetter, field, inner,
-            SymGetterInstanceSlot, SymGetterStaticSlot, outerTryGetValue, innerTryGetValue, getBaseType, getType);
-        EmitFindSymbolAccessorBody(runtime, runtime.FindSymbolSetter, field, inner,
-            SymSetterInstanceSlot, SymSetterStaticSlot, outerTryGetValue, innerTryGetValue, getBaseType, getType);
+        EmitRegisterSymbolAccessorBody(
+            symbolAccessors,
+            symbols,
+            stringCoercion,
+            inner,
+            outerTryGetValue,
+            outerSetItem,
+            innerTryGetValue,
+            innerSetItem
+        );
+        EmitRegisterSymbolMethodBody(
+            symbolAccessors,
+            symbols,
+            stringCoercion,
+            inner,
+            outerTryGetValue,
+            outerSetItem,
+            innerTryGetValue,
+            innerSetItem
+        );
+        EmitSymbolGenericHelperBodies(symbolAccessors);
+        EmitFindSymbolAccessorBody(
+            symbolAccessors,
+            symbolAccessors.FindGetter,
+            field,
+            inner,
+            SymGetterInstanceSlot,
+            SymGetterStaticSlot,
+            outerTryGetValue,
+            innerTryGetValue,
+            getBaseType,
+            getType
+        );
+        EmitFindSymbolAccessorBody(
+            symbolAccessors,
+            symbolAccessors.FindSetter,
+            field,
+            inner,
+            SymSetterInstanceSlot,
+            SymSetterStaticSlot,
+            outerTryGetValue,
+            innerTryGetValue,
+            getBaseType,
+            getType
+        );
         // #647: methods reuse the same base-chain walk, reading the method slots.
-        EmitFindSymbolAccessorBody(runtime, runtime.FindSymbolMethod, field, inner,
-            SymMethodInstanceSlot, SymMethodStaticSlot, outerTryGetValue, innerTryGetValue, getBaseType, getType);
+        EmitFindSymbolAccessorBody(
+            symbolAccessors,
+            symbolAccessors.FindMethod,
+            field,
+            inner,
+            SymMethodInstanceSlot,
+            SymMethodStaticSlot,
+            outerTryGetValue,
+            innerTryGetValue,
+            getBaseType,
+            getType
+        );
+        symbolAccessors.MarkBodiesEmitted();
     }
 
     /// <summary>
@@ -121,12 +175,18 @@ public partial class RuntimeEmitter
     /// the inner dictionary and slot array (sized <see cref="SymSlotCount"/>).
     /// </summary>
     private void EmitRegisterSymbolMethodBody(
-        EmittedRuntime runtime, Type inner,
-        MethodInfo outerTryGetValue, MethodInfo outerSetItem,
-        MethodInfo innerTryGetValue, MethodInfo innerSetItem)
+        EmittedSymbolAccessorRuntime symbolAccessors,
+        EmittedSymbolRuntime symbols,
+        EmittedStringCoercionRuntime stringCoercion,
+        Type inner,
+        MethodInfo outerTryGetValue,
+        MethodInfo outerSetItem,
+        MethodInfo innerTryGetValue,
+        MethodInfo innerSetItem
+    )
     {
-        var il = runtime.RegisterSymbolMethod.GetILGenerator();
-        var field = runtime.SymbolAccessorRegistryField;
+        var il = symbolAccessors.RegisterMethod.GetILGenerator();
+        var field = symbolAccessors.Registry;
         var innerLocal = il.DeclareLocal(inner);
         var slotLocal = il.DeclareLocal(_types.ObjectArray);
 
@@ -144,10 +204,10 @@ public partial class RuntimeEmitter
         // Symbols pass through unchanged so symbol-keyed methods/accessors still share their slot.
         var keyNormalizedLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.IsSymbolMethod);
+        il.Emit(OpCodes.Call, symbols.IsSymbol);
         il.Emit(OpCodes.Brtrue, keyNormalizedLabel);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
+        il.Emit(OpCodes.Call, stringCoercion.ToJsString);
         il.Emit(OpCodes.Starg_S, (byte)1);
         il.MarkLabel(keyNormalizedLabel);
 
@@ -197,7 +257,7 @@ public partial class RuntimeEmitter
     /// two so the base-chain walk both finds the slot and produces an invokable
     /// (closed) accessor MethodInfo.
     /// </summary>
-    private void EmitSymbolGenericHelperBodies(EmittedRuntime runtime)
+    private void EmitSymbolGenericHelperBodies(EmittedSymbolAccessorRuntime symbolAccessors)
     {
         var isConstructedGeneric = _types.GetProperty(_types.Type, "IsConstructedGenericType")!.GetGetMethod()!;
         var isGenericTypeDef = _types.GetProperty(_types.Type, "IsGenericTypeDefinition")!.GetGetMethod()!;
@@ -214,7 +274,7 @@ public partial class RuntimeEmitter
         // ---- SymbolRegistryKey(Type owner) ----
         // return owner.IsConstructedGenericType ? owner.GetGenericTypeDefinition() : owner;
         {
-            var il = runtime.SymbolRegistryKey.GetILGenerator();
+            var il = symbolAccessors.RegistryKey.GetILGenerator();
             var notConstructed = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Callvirt, isConstructedGeneric);
@@ -233,7 +293,7 @@ public partial class RuntimeEmitter
         // can drive cctor execution and reflective Invoke. Closed/non-generic
         // owners pass through.
         {
-            var il = runtime.SymbolClosedOwner.GetILGenerator();
+            var il = symbolAccessors.ClosedOwner.GetILGenerator();
             var notOpenDef = il.DefineLabel();
             var argsLocal = il.DeclareLocal(_types.MakeArrayType(_types.Type));
             var iLocal = il.DeclareLocal(_types.Int32);
@@ -287,7 +347,7 @@ public partial class RuntimeEmitter
         //     return MethodBase.GetMethodFromHandle(m.MethodHandle, closedOwner.TypeHandle);
         // return mi;
         {
-            var il = runtime.CloseSymbolAccessor.GetILGenerator();
+            var il = symbolAccessors.CloseAccessor.GetILGenerator();
             var passThrough = il.DefineLabel();
             var mLocal = il.DeclareLocal(_types.MethodInfo);
             var dtLocal = il.DeclareLocal(_types.Type);
@@ -325,13 +385,19 @@ public partial class RuntimeEmitter
     }
 
     private void EmitRegisterSymbolAccessorBody(
-        EmittedRuntime runtime, Type inner,
-        MethodInfo outerTryGetValue, MethodInfo outerSetItem,
-        MethodInfo innerTryGetValue, MethodInfo innerSetItem)
+        EmittedSymbolAccessorRuntime symbolAccessors,
+        EmittedSymbolRuntime symbols,
+        EmittedStringCoercionRuntime stringCoercion,
+        Type inner,
+        MethodInfo outerTryGetValue,
+        MethodInfo outerSetItem,
+        MethodInfo innerTryGetValue,
+        MethodInfo innerSetItem
+    )
     {
         // RegisterSymbolAccessor(Type owner, object symbol, object getter, object setter, bool isStatic)
-        var il = runtime.RegisterSymbolAccessor.GetILGenerator();
-        var field = runtime.SymbolAccessorRegistryField;
+        var il = symbolAccessors.RegisterAccessor.GetILGenerator();
+        var field = symbolAccessors.Registry;
         var innerLocal = il.DeclareLocal(inner);
         var slotLocal = il.DeclareLocal(_types.ObjectArray);
 
@@ -352,10 +418,10 @@ public partial class RuntimeEmitter
         // keys and an earlier literal accessor could incorrectly remain visible.
         var keyNormalizedLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.IsSymbolMethod);
+        il.Emit(OpCodes.Call, symbols.IsSymbol);
         il.Emit(OpCodes.Brtrue, keyNormalizedLabel);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
+        il.Emit(OpCodes.Call, stringCoercion.ToJsString);
         il.Emit(OpCodes.Starg_S, (byte)1);
         il.MarkLabel(keyNormalizedLabel);
 
@@ -430,10 +496,17 @@ public partial class RuntimeEmitter
     //   }
     //   return null;
     private void EmitFindSymbolAccessorBody(
-        EmittedRuntime runtime,
-        MethodBuilder method, FieldBuilder field, Type inner,
-        int instanceSlot, int staticSlot,
-        MethodInfo outerTryGetValue, MethodInfo innerTryGetValue, MethodInfo getBaseType, MethodInfo getType)
+        EmittedSymbolAccessorRuntime symbolAccessors,
+        MethodBuilder method,
+        FieldBuilder field,
+        Type inner,
+        int instanceSlot,
+        int staticSlot,
+        MethodInfo outerTryGetValue,
+        MethodInfo innerTryGetValue,
+        MethodInfo getBaseType,
+        MethodInfo getType
+    )
     {
         var il = method.GetILGenerator();
         var ownerLocal = il.DeclareLocal(_types.Type);
@@ -485,7 +558,7 @@ public partial class RuntimeEmitter
         // both cctor execution and reflective Invoke; closed/non-generic owners
         // pass through unchanged.
         il.Emit(OpCodes.Ldloc, ownerLocal);
-        il.Emit(OpCodes.Call, runtime.SymbolClosedOwner);
+        il.Emit(OpCodes.Call, symbolAccessors.ClosedOwner);
         il.Emit(OpCodes.Stloc, closedOwnerLocal);
         // Static-side accessors are registered in the owner class's .cctor, which
         // the CLR runs lazily — merely using the class as a Type value (typeof) does
@@ -506,7 +579,7 @@ public partial class RuntimeEmitter
         // if (!reg.TryGetValue(SymbolRegistryKey(owner), out inner)) goto nextBase;
         il.Emit(OpCodes.Ldsfld, field);
         il.Emit(OpCodes.Ldloc, ownerLocal);
-        il.Emit(OpCodes.Call, runtime.SymbolRegistryKey);
+        il.Emit(OpCodes.Call, symbolAccessors.RegistryKey);
         il.Emit(OpCodes.Ldloca, innerLocal);
         il.Emit(OpCodes.Callvirt, outerTryGetValue);
         il.Emit(OpCodes.Brfalse, nextBase);
@@ -532,7 +605,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(retIt);
         // stack: [v]  →  CloseSymbolAccessor(v, closed)
         il.Emit(OpCodes.Ldloc, closedOwnerLocal);
-        il.Emit(OpCodes.Call, runtime.CloseSymbolAccessor);
+        il.Emit(OpCodes.Call, symbolAccessors.CloseAccessor);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(retNull);
         il.Emit(OpCodes.Ldnull);

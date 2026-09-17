@@ -1525,7 +1525,7 @@ public partial class RuntimeEmitter
             "ConcatArrays",
             MethodAttributes.Public | MethodAttributes.Static,
             runtime.ArrayStorage.Type,
-            [_types.ObjectArray, runtime.TSSymbolType, _types.Type]  // Added iteratorSymbol and runtimeType
+            [_types.ObjectArray, runtime.Symbols.Type, _types.Type]  // Added iteratorSymbol and runtimeType
         );
         runtime.ArrayOperations.ConcatSources = method;
 
@@ -1590,7 +1590,7 @@ public partial class RuntimeEmitter
             "ExpandCallArgs",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.ObjectArray,
-            [_types.ObjectArray, _types.BoolArray, runtime.TSSymbolType, _types.Type]  // Added iteratorSymbol and runtimeType
+            [_types.ObjectArray, _types.BoolArray, runtime.Symbols.Type, _types.Type]  // Added iteratorSymbol and runtimeType
         );
         runtime.ExpandCallArgs = method;
 

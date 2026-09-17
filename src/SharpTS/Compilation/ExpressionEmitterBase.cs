@@ -1437,7 +1437,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
                 IL.Emit(OpCodes.Stelem_Ref);
             }
 
-            IL.Emit(OpCodes.Ldsfld, Ctx.Runtime!.SymbolIterator);
+            IL.Emit(OpCodes.Ldsfld, Ctx.Runtime!.Symbols.Iterator);
             IL.Emit(OpCodes.Ldtoken, Ctx.Runtime!.RuntimeType);
             IL.Emit(OpCodes.Call, Types.TypeGetTypeFromHandle);
             IL.Emit(OpCodes.Call, Ctx.Runtime!.ArrayOperations.ConcatSources);
@@ -2261,7 +2261,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
             // Symbol (#234): the value-form $TSSymbol token. ILEmitter handles
             // bare Symbol in its own pseudo-variable arm; this entry covers the
             // state-machine emitters that resolve through this base path.
-            "Symbol" => Ctx.Runtime!.TSSymbolType,
+            "Symbol" => Ctx.Runtime!.Symbols.Type,
             // Omitted Web stream constructors fall through to ThrowUndefinedVariable.
             "ReadableStream" => Ctx.Runtime!.WebStreams?.ReadableType,
             "WritableStream" => Ctx.Runtime!.WebStreams?.WritableType,
@@ -2742,28 +2742,28 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
         switch (g.Name.Lexeme)
         {
             case "iterator":
-                IL.Emit(OpCodes.Ldsfld, Ctx.Runtime!.SymbolIterator);
+                IL.Emit(OpCodes.Ldsfld, Ctx.Runtime!.Symbols.Iterator);
                 break;
             case "asyncIterator":
-                IL.Emit(OpCodes.Ldsfld, Ctx.Runtime!.SymbolAsyncIterator);
+                IL.Emit(OpCodes.Ldsfld, Ctx.Runtime!.Symbols.AsyncIterator);
                 break;
             case "toStringTag":
-                IL.Emit(OpCodes.Ldsfld, Ctx.Runtime!.SymbolToStringTag);
+                IL.Emit(OpCodes.Ldsfld, Ctx.Runtime!.Symbols.ToStringTag);
                 break;
             case "hasInstance":
-                IL.Emit(OpCodes.Ldsfld, Ctx.Runtime!.SymbolHasInstance);
+                IL.Emit(OpCodes.Ldsfld, Ctx.Runtime!.Symbols.HasInstance);
                 break;
             case "isConcatSpreadable":
-                IL.Emit(OpCodes.Ldsfld, Ctx.Runtime!.SymbolIsConcatSpreadable);
+                IL.Emit(OpCodes.Ldsfld, Ctx.Runtime!.Symbols.IsConcatSpreadable);
                 break;
             case "toPrimitive":
-                IL.Emit(OpCodes.Ldsfld, Ctx.Runtime!.SymbolToPrimitive);
+                IL.Emit(OpCodes.Ldsfld, Ctx.Runtime!.Symbols.ToPrimitive);
                 break;
             case "species":
-                IL.Emit(OpCodes.Ldsfld, Ctx.Runtime!.SymbolSpecies);
+                IL.Emit(OpCodes.Ldsfld, Ctx.Runtime!.Symbols.Species);
                 break;
             case "unscopables":
-                IL.Emit(OpCodes.Ldsfld, Ctx.Runtime!.SymbolUnscopables);
+                IL.Emit(OpCodes.Ldsfld, Ctx.Runtime!.Symbols.Unscopables);
                 break;
             default:
                 return false;

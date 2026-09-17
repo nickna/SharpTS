@@ -57,7 +57,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, _types.String);
         il.Emit(OpCodes.Brtrue, falseLabel);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, runtime.TSSymbolType);
+        il.Emit(OpCodes.Isinst, runtime.Symbols.Type);
         il.Emit(OpCodes.Brtrue, falseLabel);
         // Step 2 reached (V is Object): ToObject(this) on null/undefined throws.
         // Pre-fix returned false silently, failing null-this-and-object-arg-

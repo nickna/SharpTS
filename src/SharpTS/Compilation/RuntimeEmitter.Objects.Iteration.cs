@@ -28,7 +28,7 @@ public partial class RuntimeEmitter
             "ArrayDestructureSource",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
-            [_types.Object, runtime.TSSymbolType, _types.Type]
+            [_types.Object, runtime.Symbols.Type, _types.Type]
         );
         runtime.ArrayDestructureSource = method;
 
@@ -1500,7 +1500,7 @@ public partial class RuntimeEmitter
             "ObjectFromEntries",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.DictionaryStringObject,
-            [_types.Object, runtime.TSSymbolType, _types.Type]
+            [_types.Object, runtime.Symbols.Type, _types.Type]
         );
         runtime.ObjectFromEntries = method;
 

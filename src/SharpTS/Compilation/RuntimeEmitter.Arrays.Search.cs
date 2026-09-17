@@ -541,7 +541,7 @@ public partial class RuntimeEmitter
         // does this implicitly via "Let S = ? ToString(O)". Catches the
         // `return-abrupt-from-this-as-symbol.js` cluster (~6 tests).
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSSymbolType);
+        il.Emit(OpCodes.Isinst, runtime.Symbols.Type);
         il.Emit(OpCodes.Brfalse, passThroughLabel);
         GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot convert a Symbol value to a string");
 
@@ -1695,7 +1695,7 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(readSpreadabilityLabel);
         il.Emit(OpCodes.Ldloc, elementLocal);
-        il.Emit(OpCodes.Ldsfld, runtime.SymbolIsConcatSpreadable);
+        il.Emit(OpCodes.Ldsfld, runtime.Symbols.IsConcatSpreadable);
         il.Emit(OpCodes.Call, runtime.GetIndex);
         il.Emit(OpCodes.Stloc, spreadValueLocal);
 

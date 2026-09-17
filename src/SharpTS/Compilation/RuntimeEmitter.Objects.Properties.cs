@@ -1554,7 +1554,7 @@ public partial class RuntimeEmitter
         // wrappers retain non-constructor semantics.
         var notSymbolPrimitiveLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSSymbolType);
+        il.Emit(OpCodes.Isinst, runtime.Symbols.Type);
         il.Emit(OpCodes.Brfalse, notSymbolPrimitiveLabel);
         var notSymbolDescriptionLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_1);
@@ -1562,11 +1562,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
         il.Emit(OpCodes.Brfalse, notSymbolDescriptionLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.SymbolPrototypeDescription);
+        il.Emit(OpCodes.Call, runtime.Symbols.PrototypeDescription);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notSymbolDescriptionLabel);
-        il.Emit(OpCodes.Call, runtime.SymbolPrototypePopulateMethod);
-        il.Emit(OpCodes.Ldsfld, runtime.SymbolPrototypeField);
+        il.Emit(OpCodes.Call, runtime.Symbols.PopulatePrototype);
+        il.Emit(OpCodes.Ldsfld, runtime.Symbols.Prototype);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, method);
         il.Emit(OpCodes.Ret);
@@ -1834,11 +1834,11 @@ public partial class RuntimeEmitter
             il.MarkLabel(notBigIntLabel);
             var notSymbolLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldtoken, runtime.TSSymbolType);
+            il.Emit(OpCodes.Ldtoken, runtime.Symbols.Type);
             il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
             il.Emit(OpCodes.Bne_Un, notSymbolLabel);
-            il.Emit(OpCodes.Call, runtime.SymbolPrototypePopulateMethod);
-            il.Emit(OpCodes.Ldsfld, runtime.SymbolPrototypeField);
+            il.Emit(OpCodes.Call, runtime.Symbols.PopulatePrototype);
+            il.Emit(OpCodes.Ldsfld, runtime.Symbols.Prototype);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(notSymbolLabel);
             var notStringLabel = il.DefineLabel();
@@ -1982,7 +1982,7 @@ public partial class RuntimeEmitter
             var computedStaticMethodLocal = il.DeclareLocal(_types.Object);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Call, runtime.FindSymbolMethod);
+            il.Emit(OpCodes.Call, runtime.SymbolAccessors.FindMethod);
             il.Emit(OpCodes.Stloc, computedStaticMethodLocal);
             il.Emit(OpCodes.Ldloc, computedStaticMethodLocal);
             il.Emit(OpCodes.Brfalse, noComputedStaticMethodLabel);

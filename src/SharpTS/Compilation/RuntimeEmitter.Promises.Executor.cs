@@ -329,7 +329,7 @@ public partial class RuntimeEmitter
         // Materialize through the shared iterator-protocol bridge. Lists retain
         // their fast path and strings expand to their code-unit elements.
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldsfld, runtime.SymbolIterator);
+        il.Emit(OpCodes.Ldsfld, runtime.Symbols.Iterator);
         il.Emit(OpCodes.Ldtoken, runtime.RuntimeType);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
         il.Emit(OpCodes.Call, runtime.IterateToList);
@@ -476,7 +476,7 @@ public partial class RuntimeEmitter
         // IteratorClose before the combinator rejects.
         il.MarkLabel(customIteratorLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldsfld, runtime.SymbolIterator);
+        il.Emit(OpCodes.Ldsfld, runtime.Symbols.Iterator);
         il.Emit(OpCodes.Call, runtime.GetIteratorFunction);
         il.Emit(OpCodes.Stloc, iteratorFunctionLocal);
 
@@ -1091,8 +1091,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, speciesTypeLocal); // speciesType = recvType (default)
         // var getter = FindSymbolGetter(recvType, Symbol.species);  // static-slot lookup
         il.Emit(OpCodes.Ldloc, typeLocal);
-        il.Emit(OpCodes.Ldsfld, runtime.SymbolSpecies);
-        il.Emit(OpCodes.Call, runtime.FindSymbolGetter);
+        il.Emit(OpCodes.Ldsfld, runtime.Symbols.Species);
+        il.Emit(OpCodes.Call, runtime.SymbolAccessors.FindGetter);
         il.Emit(OpCodes.Stloc, getterLocal);
         // if (getter == null) consult the dynamically-assigned static @@species
         // expando before defaulting (#349).
@@ -1150,11 +1150,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, haveSpeciesLabel);
         // if (GetSymbolDict(SymbolRegistryKey(owner)).TryGetValue(Symbol.species, out expandoVal)) goto haveExpando;
         il.Emit(OpCodes.Ldloc, expandoOwnerLocal);
-        il.Emit(OpCodes.Call, runtime.SymbolRegistryKey);
-        il.Emit(OpCodes.Call, runtime.GetSymbolDictMethod);
+        il.Emit(OpCodes.Call, runtime.SymbolAccessors.RegistryKey);
+        il.Emit(OpCodes.Call, runtime.Symbols.GetStorage);
         il.Emit(OpCodes.Stloc, expandoDictLocal);
         il.Emit(OpCodes.Ldloc, expandoDictLocal);
-        il.Emit(OpCodes.Ldsfld, runtime.SymbolSpecies);
+        il.Emit(OpCodes.Ldsfld, runtime.Symbols.Species);
         il.Emit(OpCodes.Ldloca, expandoValLocal);
         il.Emit(OpCodes.Callvirt, dictTryGetValue);
         il.Emit(OpCodes.Brtrue, haveExpandoLabel);
@@ -1200,7 +1200,7 @@ public partial class RuntimeEmitter
         // non-generic species (incl. the default species = receiver's closed type)
         // pass through unchanged.
         il.Emit(OpCodes.Ldloc, speciesTypeLocal);
-        il.Emit(OpCodes.Call, runtime.SymbolClosedOwner);
+        il.Emit(OpCodes.Call, runtime.SymbolAccessors.ClosedOwner);
         il.Emit(OpCodes.Stloc, speciesTypeLocal);
         // if (speciesType == typeof(Task<object?>)) return result;  // %Promise%
         il.Emit(OpCodes.Ldloc, speciesTypeLocal);

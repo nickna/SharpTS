@@ -526,7 +526,7 @@ public partial class RuntimeEmitter
                 runtime.CreateProxyOwnKeysList,
                 runtime.ObjectGetOwnPropertyDescriptor,
                 runtime.ObjectIsExtensible,
-                runtime.IsSymbolMethod,
+                runtime.Symbols.IsSymbol,
                 runtime.GetProperty,
                 runtime.InvokeMethodUnwrapped
             ),
@@ -658,7 +658,7 @@ public partial class RuntimeEmitter
         if (symbolsOnly)
         {
             il.Emit(OpCodes.Ldloc, currentKeyLocal);
-            il.Emit(OpCodes.Call, runtime.IsSymbolMethod);
+            il.Emit(OpCodes.Call, runtime.Symbols.IsSymbol);
             il.Emit(OpCodes.Brfalse, advanceLabel);
         }
         else
@@ -934,7 +934,7 @@ public partial class RuntimeEmitter
             _types.Byte, _types.SByte, _types.Int16, _types.UInt16,
             _types.Int32, _types.UInt32, _types.Int64, _types.UInt64,
             _types.Single, _types.Double, _types.Decimal, _types.BigInteger,
-            runtime.TSSymbolType,
+            runtime.Symbols.Type,
         ];
         foreach (Type primitiveType in primitiveTypes)
         {

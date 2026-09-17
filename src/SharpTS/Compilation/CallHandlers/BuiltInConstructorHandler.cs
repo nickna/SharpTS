@@ -64,7 +64,7 @@ public class BuiltInConstructorHandler : ICallHandler
             il.MarkLabel(ready);
         }
         // Create new $TSSymbol instance
-        il.Emit(OpCodes.Newobj, ctx.Runtime!.TSSymbolCtor);
+        il.Emit(OpCodes.Newobj, ctx.Runtime!.Symbols.Constructor);
         return true;
     }
 
@@ -189,7 +189,7 @@ public class BuiltInConstructorHandler : ICallHandler
             il.Emit(OpCodes.Brtrue, doFromArgs);
             // IsRegExp: pattern[Symbol.match] truthy
             il.Emit(OpCodes.Ldloc, patternLocal);
-            il.Emit(OpCodes.Ldsfld, runtime.SymbolMatch);
+            il.Emit(OpCodes.Ldsfld, runtime.Symbols.Match);
             il.Emit(OpCodes.Call, runtime.GetIndex);
             il.Emit(OpCodes.Call, runtime.Booleans.IsTruthy);
             il.Emit(OpCodes.Brfalse, doFromArgs);

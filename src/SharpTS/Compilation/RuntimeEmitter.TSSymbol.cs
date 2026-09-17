@@ -5,7 +5,7 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
-    private void EmitTSSymbolClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private void EmitTSSymbolClass(ModuleBuilder moduleBuilder, EmittedSymbolRuntime symbols, FieldInfo undefinedInstance)
     {
         // Define class: public sealed class $TSSymbol
         var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
@@ -13,7 +13,7 @@ public partial class RuntimeEmitter
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object
         );
-        runtime.TSSymbolType = typeBuilder;
+        symbols.Type = typeBuilder;
 
         // Static field for next ID
         var nextIdField = typeBuilder.DefineField("_nextId", _types.Int32, FieldAttributes.Private | FieldAttributes.Static);
@@ -47,7 +47,7 @@ public partial class RuntimeEmitter
             CallingConventions.Standard,
             [_types.String]
         );
-        runtime.TSSymbolCtor = ctorBuilder;
+        symbols.Constructor = ctorBuilder;
 
         var ctorIL = ctorBuilder.GetILGenerator();
         // Call base constructor
@@ -66,35 +66,35 @@ public partial class RuntimeEmitter
 
         // Well-known symbol static fields
         var iteratorField = typeBuilder.DefineField("iterator", typeBuilder, FieldAttributes.Public | FieldAttributes.Static | FieldAttributes.InitOnly);
-        runtime.SymbolIterator = iteratorField;
+        symbols.Iterator = iteratorField;
         var asyncIteratorField = typeBuilder.DefineField("asyncIterator", typeBuilder, FieldAttributes.Public | FieldAttributes.Static | FieldAttributes.InitOnly);
-        runtime.SymbolAsyncIterator = asyncIteratorField;
+        symbols.AsyncIterator = asyncIteratorField;
         var toStringTagField = typeBuilder.DefineField("toStringTag", typeBuilder, FieldAttributes.Public | FieldAttributes.Static | FieldAttributes.InitOnly);
-        runtime.SymbolToStringTag = toStringTagField;
+        symbols.ToStringTag = toStringTagField;
         var hasInstanceField = typeBuilder.DefineField("hasInstance", typeBuilder, FieldAttributes.Public | FieldAttributes.Static | FieldAttributes.InitOnly);
-        runtime.SymbolHasInstance = hasInstanceField;
+        symbols.HasInstance = hasInstanceField;
         var isConcatSpreadableField = typeBuilder.DefineField("isConcatSpreadable", typeBuilder, FieldAttributes.Public | FieldAttributes.Static | FieldAttributes.InitOnly);
-        runtime.SymbolIsConcatSpreadable = isConcatSpreadableField;
+        symbols.IsConcatSpreadable = isConcatSpreadableField;
         var toPrimitiveField = typeBuilder.DefineField("toPrimitive", typeBuilder, FieldAttributes.Public | FieldAttributes.Static | FieldAttributes.InitOnly);
-        runtime.SymbolToPrimitive = toPrimitiveField;
+        symbols.ToPrimitive = toPrimitiveField;
         var speciesField = typeBuilder.DefineField("species", typeBuilder, FieldAttributes.Public | FieldAttributes.Static | FieldAttributes.InitOnly);
-        runtime.SymbolSpecies = speciesField;
+        symbols.Species = speciesField;
         var unscopablesField = typeBuilder.DefineField("unscopables", typeBuilder, FieldAttributes.Public | FieldAttributes.Static | FieldAttributes.InitOnly);
-        runtime.SymbolUnscopables = unscopablesField;
+        symbols.Unscopables = unscopablesField;
         var disposeField = typeBuilder.DefineField("dispose", typeBuilder, FieldAttributes.Public | FieldAttributes.Static | FieldAttributes.InitOnly);
-        runtime.SymbolDispose = disposeField;
+        symbols.Dispose = disposeField;
         var asyncDisposeField = typeBuilder.DefineField("asyncDispose", typeBuilder, FieldAttributes.Public | FieldAttributes.Static | FieldAttributes.InitOnly);
-        runtime.SymbolAsyncDispose = asyncDisposeField;
+        symbols.AsyncDispose = asyncDisposeField;
         var matchField = typeBuilder.DefineField("match", typeBuilder, FieldAttributes.Public | FieldAttributes.Static | FieldAttributes.InitOnly);
-        runtime.SymbolMatch = matchField;
+        symbols.Match = matchField;
         var matchAllField = typeBuilder.DefineField("matchAll", typeBuilder, FieldAttributes.Public | FieldAttributes.Static | FieldAttributes.InitOnly);
-        runtime.SymbolMatchAll = matchAllField;
+        symbols.MatchAll = matchAllField;
         var replaceField = typeBuilder.DefineField("replace", typeBuilder, FieldAttributes.Public | FieldAttributes.Static | FieldAttributes.InitOnly);
-        runtime.SymbolReplace = replaceField;
+        symbols.Replace = replaceField;
         var searchField = typeBuilder.DefineField("search", typeBuilder, FieldAttributes.Public | FieldAttributes.Static | FieldAttributes.InitOnly);
-        runtime.SymbolSearch = searchField;
+        symbols.Search = searchField;
         var splitField = typeBuilder.DefineField("split", typeBuilder, FieldAttributes.Public | FieldAttributes.Static | FieldAttributes.InitOnly);
-        runtime.SymbolSplit = splitField;
+        symbols.Split = splitField;
 
         // ============================================================
         // Symbol.For(string key) - static method
@@ -105,7 +105,7 @@ public partial class RuntimeEmitter
             typeBuilder,
             [_types.String]
         );
-        runtime.SymbolFor = forMethod;
+        symbols.For = forMethod;
         var forIL = forMethod.GetILGenerator();
 
         // Emit: lock (_registryLock) { ... }
@@ -188,7 +188,7 @@ public partial class RuntimeEmitter
             _types.String,
             [typeBuilder]
         );
-        runtime.SymbolKeyFor = keyForMethod;
+        symbols.KeyFor = keyForMethod;
         var keyForIL = keyForMethod.GetILGenerator();
 
         var keyForResult = keyForIL.DeclareLocal(_types.String);  // local 0: result
@@ -378,7 +378,7 @@ public partial class RuntimeEmitter
             _types.String,
             Type.EmptyTypes
         );
-        runtime.SymbolToStringMethod = toStringBuilder;
+        symbols.ToStringMethod = toStringBuilder;
         var toStringIL = toStringBuilder.GetILGenerator();
         var hasDescription = toStringIL.DefineLabel();
         var doneToString = toStringIL.DefineLabel();
@@ -423,7 +423,7 @@ public partial class RuntimeEmitter
             _types.Object,
             Type.EmptyTypes
         );
-        runtime.SymbolDescriptionGetter = descriptionGetter;
+        symbols.DescriptionGetter = descriptionGetter;
 
         var descriptionIL = descriptionGetter.GetILGenerator();
         var hasDesc = descriptionIL.DefineLabel();
@@ -437,7 +437,7 @@ public partial class RuntimeEmitter
 
         // null case: pop null, return undefined
         descriptionIL.Emit(OpCodes.Pop);
-        descriptionIL.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        descriptionIL.Emit(OpCodes.Ldsfld, undefinedInstance);
         descriptionIL.Emit(OpCodes.Br, doneDesc);
 
         // not null case: description is on stack

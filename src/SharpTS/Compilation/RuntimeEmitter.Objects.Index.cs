@@ -40,7 +40,7 @@ public partial class RuntimeEmitter
 
         // Check if index is a symbol first (symbols work on any object type)
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.IsSymbolMethod);
+        il.Emit(OpCodes.Call, runtime.Symbols.IsSymbol);
         il.Emit(OpCodes.Brtrue, symbolKeyLabel);
 
         // globalThis/global sentinel (#271): `root[stringKey]` resolves through
@@ -165,7 +165,7 @@ public partial class RuntimeEmitter
         var symbolValueLocal = il.DeclareLocal(_types.Object);
         // var symbolDict = GetSymbolDict(obj);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.GetSymbolDictMethod);
+        il.Emit(OpCodes.Call, runtime.Symbols.GetStorage);
         il.Emit(OpCodes.Stloc, symbolDictLocal);
         // if (symbolDict.TryGetValue(index, out value)) return value;
         il.Emit(OpCodes.Ldloc, symbolDictLocal);
@@ -184,7 +184,7 @@ public partial class RuntimeEmitter
             var symGetterLocal = il.DeclareLocal(_types.Object);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Call, runtime.FindSymbolGetter);
+            il.Emit(OpCodes.Call, runtime.SymbolAccessors.FindGetter);
             il.Emit(OpCodes.Stloc, symGetterLocal);
             il.Emit(OpCodes.Ldloc, symGetterLocal);
             il.Emit(OpCodes.Brfalse, noSymGetterLabel);
@@ -210,7 +210,7 @@ public partial class RuntimeEmitter
             var symMethodLocal = il.DeclareLocal(_types.Object);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Call, runtime.FindSymbolMethod);
+            il.Emit(OpCodes.Call, runtime.SymbolAccessors.FindMethod);
             il.Emit(OpCodes.Stloc, symMethodLocal);
             il.Emit(OpCodes.Ldloc, symMethodLocal);
             il.Emit(OpCodes.Brfalse, noSymMethodLabel);
@@ -241,7 +241,7 @@ public partial class RuntimeEmitter
             // standard methods when no replacement exists.
             il.Emit(OpCodes.Call, runtime.RegExpPrototypePopulateMethod);
             il.Emit(OpCodes.Ldsfld, runtime.RegExpPrototypeField);
-            il.Emit(OpCodes.Call, runtime.GetSymbolDictMethod);
+            il.Emit(OpCodes.Call, runtime.Symbols.GetStorage);
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Ldloca, symbolValueLocal);
             il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryObjectObject, "TryGetValue"));
@@ -278,7 +278,7 @@ public partial class RuntimeEmitter
             var protoSymDict = il.DeclareLocal(_types.DictionaryObjectObject);
             var protoSymVal = il.DeclareLocal(_types.Object);
             il.Emit(OpCodes.Ldsfld, protoField);
-            il.Emit(OpCodes.Call, runtime.GetSymbolDictMethod);
+            il.Emit(OpCodes.Call, runtime.Symbols.GetStorage);
             il.Emit(OpCodes.Stloc, protoSymDict);
             il.Emit(OpCodes.Ldloc, protoSymDict);
             il.Emit(OpCodes.Ldarg_1);
@@ -317,7 +317,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldloc, symbolProtoLocal);
             il.Emit(OpCodes.Brfalse, symbolProtoDoneLabel);
             il.Emit(OpCodes.Ldloc, symbolProtoLocal);
-            il.Emit(OpCodes.Call, runtime.GetSymbolDictMethod);
+            il.Emit(OpCodes.Call, runtime.Symbols.GetStorage);
             il.Emit(OpCodes.Stloc, symbolProtoDictLocal);
             il.Emit(OpCodes.Ldloc, symbolProtoDictLocal);
             il.Emit(OpCodes.Ldarg_1);
@@ -357,7 +357,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Brfalse, notTypeForSymbolLabel);
             // if (GetSymbolDict(symWalkType).TryGetValue(index, out val)) return val;
             il.Emit(OpCodes.Ldloc, symWalkType);
-            il.Emit(OpCodes.Call, runtime.GetSymbolDictMethod);
+            il.Emit(OpCodes.Call, runtime.Symbols.GetStorage);
             il.Emit(OpCodes.Stloc, symWalkDict);
             il.Emit(OpCodes.Ldloc, symWalkDict);
             il.Emit(OpCodes.Ldarg_1);
@@ -1082,7 +1082,7 @@ public partial class RuntimeEmitter
 
         // Check if index is a symbol first (symbols work on any object type)
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.IsSymbolMethod);
+        il.Emit(OpCodes.Call, runtime.Symbols.IsSymbol);
         il.Emit(OpCodes.Brtrue, symbolKeyLabel);
 
         // A missing indexed own property may resolve to an inherited Proxy.
@@ -1263,7 +1263,7 @@ public partial class RuntimeEmitter
             var symSetterLocal = il.DeclareLocal(_types.Object);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Call, runtime.FindSymbolSetter);
+            il.Emit(OpCodes.Call, runtime.SymbolAccessors.FindSetter);
             il.Emit(OpCodes.Stloc, symSetterLocal);
             il.Emit(OpCodes.Ldloc, symSetterLocal);
             il.Emit(OpCodes.Brfalse, noSymSetterLabel);
@@ -1286,7 +1286,7 @@ public partial class RuntimeEmitter
             var symExistingValueLocal = il.DeclareLocal(_types.Object);
             var symExistingDescriptorLocal = il.DeclareLocal(runtime.DescriptorStorage.DescriptorType);
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Call, runtime.GetSymbolDictMethod);
+            il.Emit(OpCodes.Call, runtime.Symbols.GetStorage);
             il.Emit(OpCodes.Stloc, symDictLocal);
 
             // Frozen objects reject writes to existing symbol properties too.
@@ -1841,7 +1841,7 @@ public partial class RuntimeEmitter
 
         // Check if index is a symbol first
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.IsSymbolMethod);
+        il.Emit(OpCodes.Call, runtime.Symbols.IsSymbol);
         il.Emit(OpCodes.Brtrue, symbolKeyLabel);
 
         // Function-like runtime wrappers — `delete fn.name` / `delete
@@ -2131,7 +2131,7 @@ public partial class RuntimeEmitter
         var symDeleteDescriptorLocal = il.DeclareLocal(runtime.DescriptorStorage.DescriptorType);
         var symDeleteAllowedLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.GetSymbolDictMethod);
+        il.Emit(OpCodes.Call, runtime.Symbols.GetStorage);
         il.Emit(OpCodes.Stloc, symDeleteDictLocal);
         il.Emit(OpCodes.Ldloc, symDeleteDictLocal);
         il.Emit(OpCodes.Ldarg_1);
@@ -2298,11 +2298,11 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitRegExpSymbolDispatch(ILGenerator il, EmittedRuntime runtime)
     {
-        EmitRegExpSymbolCase(il, runtime, runtime.SymbolMatch, runtime.TSRegExpSymMatchHelper);
-        EmitRegExpSymbolCase(il, runtime, runtime.SymbolMatchAll, runtime.TSRegExpSymMatchAllHelper);
-        EmitRegExpSymbolCase(il, runtime, runtime.SymbolReplace, runtime.TSRegExpSymReplaceHelper);
-        EmitRegExpSymbolCase(il, runtime, runtime.SymbolSearch, runtime.TSRegExpSymSearchHelper);
-        EmitRegExpSymbolCase(il, runtime, runtime.SymbolSplit, runtime.TSRegExpSymSplitHelper);
+        EmitRegExpSymbolCase(il, runtime, runtime.Symbols.Match, runtime.TSRegExpSymMatchHelper);
+        EmitRegExpSymbolCase(il, runtime, runtime.Symbols.MatchAll, runtime.TSRegExpSymMatchAllHelper);
+        EmitRegExpSymbolCase(il, runtime, runtime.Symbols.Replace, runtime.TSRegExpSymReplaceHelper);
+        EmitRegExpSymbolCase(il, runtime, runtime.Symbols.Search, runtime.TSRegExpSymSearchHelper);
+        EmitRegExpSymbolCase(il, runtime, runtime.Symbols.Split, runtime.TSRegExpSymSplitHelper);
     }
 
     /// <summary>

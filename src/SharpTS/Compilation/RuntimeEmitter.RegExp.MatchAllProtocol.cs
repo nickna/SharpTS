@@ -43,7 +43,7 @@ public partial class RuntimeEmitter
         EmitRejectPrimitive(il, runtime, constructor,
             "RegExp constructor property must be an object");
         il.Emit(OpCodes.Ldloc, constructor);
-        il.Emit(OpCodes.Ldsfld, runtime.SymbolSpecies);
+        il.Emit(OpCodes.Ldsfld, runtime.Symbols.Species);
         il.Emit(OpCodes.Call, runtime.GetIndex);
         il.Emit(OpCodes.Stloc, species);
         il.Emit(OpCodes.Ldloc, species);

@@ -517,7 +517,7 @@ public partial class ILCompiler
             var strMethodLocal = il.DeclareLocal(_types.Object);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Call, _runtime.FindSymbolMethod);
+            il.Emit(OpCodes.Call, _runtime.SymbolAccessors.FindMethod);
             il.Emit(OpCodes.Stloc, strMethodLocal);
             il.Emit(OpCodes.Ldloc, strMethodLocal);
             il.Emit(OpCodes.Brfalse, noStrMethodLabel);
@@ -876,7 +876,7 @@ public partial class ILCompiler
             var computedMethodLocal = il.DeclareLocal(_types.Object);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Call, _runtime.FindSymbolMethod);
+            il.Emit(OpCodes.Call, _runtime.SymbolAccessors.FindMethod);
             il.Emit(OpCodes.Stloc, computedMethodLocal);
             il.Emit(OpCodes.Ldloc, computedMethodLocal);
             il.Emit(OpCodes.Brfalse, noComputedMethodLabel);

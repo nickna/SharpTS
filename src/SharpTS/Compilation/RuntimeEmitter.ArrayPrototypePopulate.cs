@@ -157,8 +157,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, valuesGet); // shouldn't happen — values was just installed
         // GetSymbolDict(ArrayPrototype)[SymbolIterator] = valuesFn
         il.Emit(OpCodes.Ldsfld, runtime.ArrayOperations.PrototypeField);
-        il.Emit(OpCodes.Call, runtime.GetSymbolDictMethod);
-        il.Emit(OpCodes.Ldsfld, runtime.SymbolIterator);
+        il.Emit(OpCodes.Call, runtime.Symbols.GetStorage);
+        il.Emit(OpCodes.Ldsfld, runtime.Symbols.Iterator);
         il.Emit(OpCodes.Ldloc, iterFnLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryObjectObject, "set_Item",
             _types.Object, _types.Object));

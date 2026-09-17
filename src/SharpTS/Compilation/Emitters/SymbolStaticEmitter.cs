@@ -36,7 +36,7 @@ public sealed class SymbolStaticEmitter : IStaticTypeEmitterStrategy
                     // Convert to string if needed (call ToString on object)
                     il.Emit(OpCodes.Callvirt, ctx.Types.GetMethod(ctx.Types.Object, "ToString", Type.EmptyTypes)!);
                 }
-                il.Emit(OpCodes.Call, ctx.Runtime!.SymbolFor);
+                il.Emit(OpCodes.Call, ctx.Runtime!.Symbols.For);
                 return true;
 
             case "keyFor":
@@ -48,8 +48,8 @@ public sealed class SymbolStaticEmitter : IStaticTypeEmitterStrategy
                 // Emit the symbol argument
                 emitter.EmitExpression(arguments[0]);
                 // Cast to $TSSymbol type
-                il.Emit(OpCodes.Castclass, ctx.Runtime!.TSSymbolType);
-                il.Emit(OpCodes.Call, ctx.Runtime!.SymbolKeyFor);
+                il.Emit(OpCodes.Castclass, ctx.Runtime!.Symbols.Type);
+                il.Emit(OpCodes.Call, ctx.Runtime!.Symbols.KeyFor);
                 // Result is string or null. Convert null to undefined.
                 // Stack has: string (or null)
                 il.Emit(OpCodes.Dup);  // Stack: string, string
@@ -81,53 +81,53 @@ public sealed class SymbolStaticEmitter : IStaticTypeEmitterStrategy
         switch (propertyName)
         {
             case "prototype":
-                il.Emit(OpCodes.Call, ctx.Runtime!.SymbolPrototypePopulateMethod);
-                il.Emit(OpCodes.Ldsfld, ctx.Runtime.SymbolPrototypeField);
+                il.Emit(OpCodes.Call, ctx.Runtime!.Symbols.PopulatePrototype);
+                il.Emit(OpCodes.Ldsfld, ctx.Runtime.Symbols.Prototype);
                 return true;
             case "iterator":
-                il.Emit(OpCodes.Ldsfld, ctx.Runtime!.SymbolIterator);
+                il.Emit(OpCodes.Ldsfld, ctx.Runtime!.Symbols.Iterator);
                 return true;
             case "asyncIterator":
-                il.Emit(OpCodes.Ldsfld, ctx.Runtime!.SymbolAsyncIterator);
+                il.Emit(OpCodes.Ldsfld, ctx.Runtime!.Symbols.AsyncIterator);
                 return true;
             case "toStringTag":
-                il.Emit(OpCodes.Ldsfld, ctx.Runtime!.SymbolToStringTag);
+                il.Emit(OpCodes.Ldsfld, ctx.Runtime!.Symbols.ToStringTag);
                 return true;
             case "hasInstance":
-                il.Emit(OpCodes.Ldsfld, ctx.Runtime!.SymbolHasInstance);
+                il.Emit(OpCodes.Ldsfld, ctx.Runtime!.Symbols.HasInstance);
                 return true;
             case "isConcatSpreadable":
-                il.Emit(OpCodes.Ldsfld, ctx.Runtime!.SymbolIsConcatSpreadable);
+                il.Emit(OpCodes.Ldsfld, ctx.Runtime!.Symbols.IsConcatSpreadable);
                 return true;
             case "toPrimitive":
-                il.Emit(OpCodes.Ldsfld, ctx.Runtime!.SymbolToPrimitive);
+                il.Emit(OpCodes.Ldsfld, ctx.Runtime!.Symbols.ToPrimitive);
                 return true;
             case "species":
-                il.Emit(OpCodes.Ldsfld, ctx.Runtime!.SymbolSpecies);
+                il.Emit(OpCodes.Ldsfld, ctx.Runtime!.Symbols.Species);
                 return true;
             case "unscopables":
-                il.Emit(OpCodes.Ldsfld, ctx.Runtime!.SymbolUnscopables);
+                il.Emit(OpCodes.Ldsfld, ctx.Runtime!.Symbols.Unscopables);
                 return true;
             case "dispose":
-                il.Emit(OpCodes.Ldsfld, ctx.Runtime!.SymbolDispose);
+                il.Emit(OpCodes.Ldsfld, ctx.Runtime!.Symbols.Dispose);
                 return true;
             case "asyncDispose":
-                il.Emit(OpCodes.Ldsfld, ctx.Runtime!.SymbolAsyncDispose);
+                il.Emit(OpCodes.Ldsfld, ctx.Runtime!.Symbols.AsyncDispose);
                 return true;
             case "match":
-                il.Emit(OpCodes.Ldsfld, ctx.Runtime!.SymbolMatch);
+                il.Emit(OpCodes.Ldsfld, ctx.Runtime!.Symbols.Match);
                 return true;
             case "matchAll":
-                il.Emit(OpCodes.Ldsfld, ctx.Runtime!.SymbolMatchAll);
+                il.Emit(OpCodes.Ldsfld, ctx.Runtime!.Symbols.MatchAll);
                 return true;
             case "replace":
-                il.Emit(OpCodes.Ldsfld, ctx.Runtime!.SymbolReplace);
+                il.Emit(OpCodes.Ldsfld, ctx.Runtime!.Symbols.Replace);
                 return true;
             case "search":
-                il.Emit(OpCodes.Ldsfld, ctx.Runtime!.SymbolSearch);
+                il.Emit(OpCodes.Ldsfld, ctx.Runtime!.Symbols.Search);
                 return true;
             case "split":
-                il.Emit(OpCodes.Ldsfld, ctx.Runtime!.SymbolSplit);
+                il.Emit(OpCodes.Ldsfld, ctx.Runtime!.Symbols.Split);
                 return true;
             // Stage 4y: Symbol.for / Symbol.keyFor as values so test262's
             // isConstructor harness sees `typeof Symbol.for === "function"`.
@@ -135,7 +135,7 @@ public sealed class SymbolStaticEmitter : IStaticTypeEmitterStrategy
             {
                 // Symbol.for(key) — spec length 1. Identity via GetOrCreate.
                 var runtime = ctx.Runtime!;
-                ctx.Types.EmitLoadMethodInfo(il, runtime.SymbolFor);
+                ctx.Types.EmitLoadMethodInfo(il, runtime.Symbols.For);
                 il.Emit(OpCodes.Ldstr, "for");
                 il.Emit(OpCodes.Ldc_I4_1);
                 il.Emit(OpCodes.Call, runtime.TSFunctionGetOrCreate);
@@ -145,7 +145,7 @@ public sealed class SymbolStaticEmitter : IStaticTypeEmitterStrategy
             {
                 // Symbol.keyFor(sym) — spec length 1.
                 var runtime = ctx.Runtime!;
-                ctx.Types.EmitLoadMethodInfo(il, runtime.SymbolKeyFor);
+                ctx.Types.EmitLoadMethodInfo(il, runtime.Symbols.KeyFor);
                 il.Emit(OpCodes.Ldstr, "keyFor");
                 il.Emit(OpCodes.Ldc_I4_1);
                 il.Emit(OpCodes.Call, runtime.TSFunctionGetOrCreate);

@@ -141,10 +141,10 @@ public partial class RuntimeEmitter
         // primitives including Symbol; the dispatch above only catches the
         // common five. invalid-receiver.js iterates Symbol() alongside the
         // others.
-        if (runtime.TSSymbolType != null)
+        if (runtime.Symbols.Type != null)
         {
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.TSSymbolType);
+            il.Emit(OpCodes.Isinst, runtime.Symbols.Type);
             il.Emit(OpCodes.Brtrue, throwLabel);
         }
 

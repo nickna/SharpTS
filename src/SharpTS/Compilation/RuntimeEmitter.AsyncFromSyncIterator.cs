@@ -562,7 +562,7 @@ public partial class RuntimeEmitter
         // return/throw protocol for early-close behavior.
         il.MarkLabel(trySyncProtocol);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldsfld, runtime.SymbolIterator);
+        il.Emit(OpCodes.Ldsfld, runtime.Symbols.Iterator);
         il.Emit(OpCodes.Call, runtime.GetIteratorFunction);
         il.Emit(OpCodes.Stloc, iteratorFnLocal);
         il.Emit(OpCodes.Ldloc, iteratorFnLocal);
@@ -601,7 +601,7 @@ public partial class RuntimeEmitter
         // resulting dense object list.
         il.MarkLabel(materialize);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldsfld, runtime.SymbolIterator);
+        il.Emit(OpCodes.Ldsfld, runtime.Symbols.Iterator);
         il.Emit(OpCodes.Ldtoken, runtime.RuntimeType);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle"));
         il.Emit(OpCodes.Call, runtime.IterateToList);

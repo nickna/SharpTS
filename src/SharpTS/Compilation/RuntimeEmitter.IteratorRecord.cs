@@ -50,7 +50,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Brfalse, invalid);
         foreach (var primitive in new Type[] { runtime.UndefinedType, _types.Double,
-            _types.Boolean, _types.String, _types.BigInteger, runtime.TSSymbolType })
+            _types.Boolean, _types.String, _types.BigInteger, runtime.Symbols.Type })
         {
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Isinst, primitive);

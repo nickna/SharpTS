@@ -362,9 +362,6 @@ public class EmittedRuntime
     /// or monkey-patching. Null-backed when the program never mentions Date.
     /// </summary>
     public FieldBuilder DatePrototypeField { get; set; } = null!;
-    /// <summary>Symbol.prototype singleton used by value-position Symbol prototype access.</summary>
-    public FieldBuilder SymbolPrototypeField { get; set; } = null!;
-    public MethodBuilder SymbolPrototypePopulateMethod { get; set; } = null!;
     /// <summary>$Runtime.StringReplaceWithFunction(str, pattern, fn, replaceAll) — handles functional replacement for replace/replaceAll and stringifies each callback result.</summary>
     public MethodBuilder StringReplaceWithFunction { get; set; } = null!;
     /// <summary>$Runtime.ObjectProtoToString(this) — ECMA-262 19.1.3.6 toString returns "[object X]" branded by receiver type. Wired into Object.prototype.toString slot for borrowed-method dispatch (`obj.toString = Object.prototype.toString; obj.toString()`).</summary>
@@ -572,42 +569,8 @@ public class EmittedRuntime
     // General invocation helper
     public MethodBuilder InvokeMethodUnwrapped { get; set; } = null!;
 
-    // Symbol support
-    public TypeBuilder TSSymbolType { get; set; } = null!;
-    public ConstructorBuilder TSSymbolCtor { get; set; } = null!;
-    public MethodBuilder SymbolToStringMethod { get; set; } = null!;
-
-    // Well-known symbols (static fields on $TSSymbol)
-    public FieldBuilder SymbolIterator { get; set; } = null!;
-    public FieldBuilder SymbolAsyncIterator { get; set; } = null!;
-    public FieldBuilder SymbolToStringTag { get; set; } = null!;
-    public FieldBuilder SymbolHasInstance { get; set; } = null!;
-    public FieldBuilder SymbolIsConcatSpreadable { get; set; } = null!;
-    public FieldBuilder SymbolToPrimitive { get; set; } = null!;
-    public FieldBuilder SymbolSpecies { get; set; } = null!;
-    public FieldBuilder SymbolUnscopables { get; set; } = null!;
-    public FieldBuilder SymbolDispose { get; set; } = null!;
-    public FieldBuilder SymbolAsyncDispose { get; set; } = null!;
-    public FieldBuilder SymbolMatch { get; set; } = null!;
-    public FieldBuilder SymbolMatchAll { get; set; } = null!;
-    public FieldBuilder SymbolReplace { get; set; } = null!;
-    public FieldBuilder SymbolSearch { get; set; } = null!;
-    public FieldBuilder SymbolSplit { get; set; } = null!;
-
-    // Symbol.for() and Symbol.keyFor() global registry support
-    public MethodBuilder SymbolFor { get; set; } = null!;
-    public MethodBuilder SymbolKeyFor { get; set; } = null!;
-
-    // Symbol.description instance property getter
-    public MethodBuilder SymbolDescriptionGetter { get; set; } = null!;
-    public MethodBuilder SymbolPrototypeDescription { get; set; } = null!;
-    public MethodBuilder SymbolPrototypeToString { get; set; } = null!;
-    public MethodBuilder SymbolPrototypeValueOf { get; set; } = null!;
-
-    // Symbol storage for compiled objects (symbol as object key)
-    public MethodBuilder GetSymbolDictMethod { get; set; } = null!;
-    public MethodBuilder TryGetSymbolDictMethod { get; set; } = null!;
-    public MethodBuilder IsSymbolMethod { get; set; } = null!;
+    /// <summary>Required Symbol primitive, identity, storage and prototype metadata for this compilation.</summary>
+    public EmittedSymbolRuntime Symbols { get; } = new();
 
     // Numeric increment/decrement.
     public MethodBuilder UpdateNumeric { get; set; } = null!;
@@ -1115,26 +1078,9 @@ public class EmittedRuntime
     public MethodBuilder GlobalThisSetProperty { get; set; } = null!;
     public MethodBuilder EvalIndirect { get; set; } = null!;
 
-    // Symbol-keyed class accessor registry (#266, #647). The field holds
-    // Dictionary<Type, Dictionary<object, object[]>>; each object[6] slot is
-    // {instanceGetter, instanceSetter, staticGetter, staticSetter, instanceMethod,
-    // staticMethod} MethodInfos. The method slots (#647) back computed symbol-keyed
-    // class methods (`[Symbol.iterator]() {…}`).
-    public FieldBuilder SymbolAccessorRegistryField { get; set; } = null!;
-    public MethodBuilder RegisterSymbolAccessor { get; set; } = null!;
-    public MethodBuilder FindSymbolGetter { get; set; } = null!;
-    public MethodBuilder FindSymbolSetter { get; set; } = null!;
-    // #647 computed symbol-keyed methods: register a method MethodInfo and look it up
-    // (base-chain walk), reusing the accessor registry's slot array with method slots.
-    public MethodBuilder RegisterSymbolMethod { get; set; } = null!;
-    public MethodBuilder FindSymbolMethod { get; set; } = null!;
-    // #351 generic-class support helpers: map a (possibly generic) owner type to
-    // its registry key (the open generic definition) and to a closed type usable
-    // for cctor + reflective Invoke, and close an accessor MethodInfo declared on
-    // an open generic definition onto that closed type.
-    public MethodBuilder SymbolRegistryKey { get; set; } = null!;
-    public MethodBuilder SymbolClosedOwner { get; set; } = null!;
-    public MethodBuilder CloseSymbolAccessor { get; set; } = null!;
+    /// <summary>Required class accessor/method registry declarations, with early shells and later bodies.</summary>
+    public EmittedSymbolAccessorRuntime SymbolAccessors { get; } = new();
+
     public FieldBuilder GlobalThisProperties { get; set; } = null!;
 
     /// <summary>Node crypto metadata, or null when crypto is tree-shaken from this compilation.</summary>

@@ -257,7 +257,7 @@ public partial class ILCompiler
             // isStatic
             il.Emit(accessor.IsStatic ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
 
-            il.Emit(OpCodes.Call, _runtime.RegisterSymbolAccessor);
+            il.Emit(OpCodes.Call, _runtime.SymbolAccessors.RegisterAccessor);
         }
     }
 
@@ -291,7 +291,7 @@ public partial class ILCompiler
             // isStatic
             il.Emit(method.IsStatic ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
 
-            il.Emit(OpCodes.Call, _runtime.RegisterSymbolMethod);
+            il.Emit(OpCodes.Call, _runtime.SymbolAccessors.RegisterMethod);
         }
     }
 
@@ -322,7 +322,7 @@ public partial class ILCompiler
             il.Emit(OpCodes.Ldelem_Ref);
             EmitMethodInfoLiteral(il, builder, typeBuilder);
             il.Emit(method.IsStatic ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
-            il.Emit(OpCodes.Call, _runtime.RegisterSymbolMethod);
+            il.Emit(OpCodes.Call, _runtime.SymbolAccessors.RegisterMethod);
         }
 
         il.Emit(OpCodes.Ret);
@@ -357,7 +357,7 @@ public partial class ILCompiler
         il.Emit(OpCodes.Stloc, keyLocal);
 
         il.Emit(OpCodes.Ldloc, keyLocal);
-        il.Emit(OpCodes.Isinst, _runtime.TSSymbolType);
+        il.Emit(OpCodes.Isinst, _runtime.Symbols.Type);
         il.Emit(OpCodes.Brtrue, isSymbol);
         il.Emit(OpCodes.Ldloc, keyLocal);
         il.Emit(OpCodes.Call, _runtime.StringCoercion.ToJsString);

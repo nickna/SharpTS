@@ -559,8 +559,8 @@ public partial class RuntimeEmitter
         // Attributes per spec: writable:false, enumerable:false, configurable:true.
         // GetSymbolDict(PromisePrototype)[SymbolToStringTag] = "Promise".
         il.Emit(OpCodes.Ldsfld, runtime.RequirePromise().PrototypeField);
-        il.Emit(OpCodes.Call, runtime.GetSymbolDictMethod);
-        il.Emit(OpCodes.Ldsfld, runtime.SymbolToStringTag);
+        il.Emit(OpCodes.Call, runtime.Symbols.GetStorage);
+        il.Emit(OpCodes.Ldsfld, runtime.Symbols.ToStringTag);
         il.Emit(OpCodes.Ldstr, "Promise");
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryObjectObject, "set_Item",
             _types.Object, _types.Object));
