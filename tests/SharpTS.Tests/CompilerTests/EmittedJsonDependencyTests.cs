@@ -33,6 +33,7 @@ public class EmittedJsonDependencyTests
         object?[] arguments = constructor.GetParameters().Select(parameter =>
         {
             if (parameter.Name == "TSRegExpType") return supplied ? runtime.TSRegExpType : null;
+            if (parameter.Name == "TSSymbolType") return runtime.Symbols.Type;
             var property = typeof(EmittedRuntime).GetProperty(parameter.Name!);
             return property is not null ? property.GetValue(runtime)
                 : typeof(RuntimeFeatureSet).GetProperty(parameter.Name!)!.GetValue(features);

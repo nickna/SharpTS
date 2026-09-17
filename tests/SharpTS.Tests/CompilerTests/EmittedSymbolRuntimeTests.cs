@@ -217,6 +217,49 @@ public sealed class EmittedSymbolRuntimeTests
         Assert.Equal(false, Call(runtime, "IsSymbol", (object?)null));
     }
 
+    [Theory]
+    [InlineData("ObjectFreeze")]
+    [InlineData("ObjectSeal")]
+    [InlineData("ObjectPreventExtensions")]
+    public void RejectedStrictSymbolWritesDoNotCreateStorage(string restrict)
+    {
+        var builder = NewAssembly();
+        new RuntimeEmitter(TypeProvider.Runtime).EmitAll(builder.DefineDynamicModule("main"), Detect("const value=Symbol('key');"));
+        var assembly = SaveVerifyLoad(builder);
+        var runtime = assembly.GetType("$Runtime")!;
+        var symbol = Activator.CreateInstance(assembly.GetType("$TSSymbol")!, ["key"])!;
+        var absent = new object();
+        Assert.Null(Call(runtime, "TryGetSymbolDict", absent));
+        Call(runtime, restrict, absent);
+        Assert.Null(Call(runtime, "TryGetSymbolDict", absent));
+        var rejected = Assert.Throws<TargetInvocationException>(() => Call(runtime, "SetIndexStrict", absent, symbol, 1d, true));
+        Assert.Contains("Cannot assign to a read-only or non-extensible property", rejected.InnerException!.Message);
+        Assert.Null(Call(runtime, "TryGetSymbolDict", absent));
+
+        // A successful first write must still create storage. Integrity checks
+        // then preserve existing values on frozen objects and allow updates on
+        // sealed/non-extensible objects without replacing their storage.
+        var existing = new object();
+        Call(runtime, "SetIndexStrict", existing, symbol, 2d, true);
+        var storage = Assert.IsAssignableFrom<IDictionary>(Call(runtime, "TryGetSymbolDict", existing));
+        Assert.Equal(2d, Call(runtime, "GetIndex", existing, symbol));
+        Call(runtime, restrict, existing);
+        if (restrict == "ObjectFreeze")
+        {
+            Assert.Throws<TargetInvocationException>(() => Call(runtime, "SetIndexStrict", existing, symbol, 3d, true));
+            Assert.Equal(2d, Call(runtime, "GetIndex", existing, symbol));
+        }
+        else
+        {
+            Call(runtime, "SetIndexStrict", existing, symbol, 3d, true);
+            Assert.Equal(3d, Call(runtime, "GetIndex", existing, symbol));
+        }
+        var missing = Activator.CreateInstance(assembly.GetType("$TSSymbol")!, ["missing"])!;
+        Assert.Throws<TargetInvocationException>(() => Call(runtime, "SetIndexStrict", existing, missing, 4d, true));
+        Assert.False(storage.Contains(missing));
+        Assert.Same(storage, Call(runtime, "TryGetSymbolDict", existing));
+    }
+
     private static void CheckAccessorRegistry(Type runtime, IDictionary registry, object symbol)
     {
         var getter = new object(); var setter = new object();

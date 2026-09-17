@@ -2222,8 +2222,10 @@ public partial class RuntimeEmitter
         var strictSymDescriptorLocal = il.DeclareLocal(runtime.DescriptorStorage.DescriptorType);
         var strictSymSetterLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.Symbols.GetStorage);
+        il.Emit(OpCodes.Call, runtime.Symbols.TryGetStorage);
         il.Emit(OpCodes.Stloc, strictSymDictLocal);
+        il.Emit(OpCodes.Ldloc, strictSymDictLocal);
+        il.Emit(OpCodes.Brfalse, symCheckObjectStateLabel);
         il.Emit(OpCodes.Ldloc, strictSymDictLocal);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloca, strictSymValueLocal);
@@ -2286,7 +2288,7 @@ public partial class RuntimeEmitter
         // sealed/non-ext: present symbol → allow update (route); absent → throw.
         var symDictLocal = il.DeclareLocal(_types.DictionaryObjectObject);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.Symbols.GetStorage);
+        il.Emit(OpCodes.Call, runtime.Symbols.TryGetStorage);
         il.Emit(OpCodes.Stloc, symDictLocal);
         il.Emit(OpCodes.Ldloc, symDictLocal);
         il.Emit(OpCodes.Brfalse, symThrowLabel); // no symbol dict → key absent → throw
