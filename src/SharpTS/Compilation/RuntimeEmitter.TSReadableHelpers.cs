@@ -73,7 +73,7 @@ public partial class RuntimeEmitter
     {
         il.Emit(OpCodes.Ldloc, fnLocal);
         loadArgsArray(il);
-        il.Emit(OpCodes.Callvirt, runtime.TSFunctionInvoke);
+        il.Emit(OpCodes.Callvirt, runtime.FunctionValues.Invoke);
     }
 
     /// <summary>public object Reduce(object fn, object initial)</summary>
@@ -82,14 +82,14 @@ public partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod("Reduce", MethodAttributes.Public, _types.Object, [_types.Object, _types.Object]);
         var il = method.GetILGenerator();
 
-        var fnLocal = il.DeclareLocal(runtime.TSFunctionType);
+        var fnLocal = il.DeclareLocal(runtime.FunctionValues.Type);
         var itemsLocal = il.DeclareLocal(_types.ListOfObject);
         var accLocal = il.DeclareLocal(_types.Object);
         var iLocal = il.DeclareLocal(_types.Int32);
         var countLocal = il.DeclareLocal(_types.Int32);
 
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Castclass, runtime.TSFunctionType);
+        il.Emit(OpCodes.Castclass, runtime.FunctionValues.Type);
         il.Emit(OpCodes.Stloc, fnLocal);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Call, runtime.RequireNodeStreams().ReadableDrainToList);
@@ -173,13 +173,13 @@ public partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(kind, MethodAttributes.Public, _types.Object, [_types.Object]);
         var il = method.GetILGenerator();
 
-        var fnLocal = il.DeclareLocal(runtime.TSFunctionType);
+        var fnLocal = il.DeclareLocal(runtime.FunctionValues.Type);
         var itemsLocal = il.DeclareLocal(_types.ListOfObject);
         var iLocal = il.DeclareLocal(_types.Int32);
         var countLocal = il.DeclareLocal(_types.Int32);
 
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Castclass, runtime.TSFunctionType);
+        il.Emit(OpCodes.Castclass, runtime.FunctionValues.Type);
         il.Emit(OpCodes.Stloc, fnLocal);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Call, runtime.RequireNodeStreams().ReadableDrainToList);
@@ -345,7 +345,7 @@ public partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod("FlatMap", MethodAttributes.Public, _types.Object, [_types.Object]);
         var il = method.GetILGenerator();
 
-        var fnLocal = il.DeclareLocal(runtime.TSFunctionType);
+        var fnLocal = il.DeclareLocal(runtime.FunctionValues.Type);
         var itemsLocal = il.DeclareLocal(_types.ListOfObject);
         var rLocal = il.DeclareLocal(runtime.RequireNodeStreams().ReadableType);
         var iLocal = il.DeclareLocal(_types.Int32);
@@ -353,7 +353,7 @@ public partial class RuntimeEmitter
         var mappedLocal = il.DeclareLocal(_types.Object);
 
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Castclass, runtime.TSFunctionType);
+        il.Emit(OpCodes.Castclass, runtime.FunctionValues.Type);
         il.Emit(OpCodes.Stloc, fnLocal);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Call, runtime.RequireNodeStreams().ReadableDrainToList);

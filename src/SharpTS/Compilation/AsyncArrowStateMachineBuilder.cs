@@ -444,7 +444,7 @@ public class AsyncArrowStateMachineBuilder : AsyncBuilderBase
         if (IsStandalone && Arrow.HasOwnThis && runtime != null && OwnThisField != null)
         {
             il.Emit(OpCodes.Ldloca, smLocal);
-            il.Emit(OpCodes.Ldsfld, runtime.CurrentFunctionThisField);
+            il.Emit(OpCodes.Ldsfld, runtime.FunctionValues.CurrentThisField);
             var thisNotNull = il.DefineLabel();
             il.Emit(OpCodes.Dup);
             il.Emit(OpCodes.Brtrue, thisNotNull);

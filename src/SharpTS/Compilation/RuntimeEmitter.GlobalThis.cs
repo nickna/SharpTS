@@ -289,7 +289,7 @@ public partial class RuntimeEmitter
         EmitTypeBranch("Promise", _types.TaskOfObject);
         if (_features.UsesBuffer)
             EmitTypeBranch("Buffer", runtime.RequireBuffer().Type);
-        EmitTypeBranch("Function", runtime.TSFunctionType);
+        EmitTypeBranch("Function", runtime.FunctionValues.Type);
         if (_features.UsesTextEncoding)
         {
             EmitTypeBranch("TextEncoder", runtime.RequireTextEncoding().EncoderType);

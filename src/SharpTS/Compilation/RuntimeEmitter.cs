@@ -184,7 +184,7 @@ public partial class RuntimeEmitter
         // values beyond declared arity. Lives on its own type — adding it to
         // $TSFunction regressed Intl's formatRangeToParts test in opaque ways tied to
         // that type's field layout; isolating keeps $TSFunction's layout unchanged.
-        EmitArgumentsContextClass(moduleBuilder, runtime);
+        EmitArgumentsContextClass(moduleBuilder, runtime.Arguments);
 
         // Marker attribute for "this method's body reads JS `arguments`".
         // Must be defined+created before EmitTSFunctionClass so its ctor IL can
@@ -213,7 +213,19 @@ public partial class RuntimeEmitter
             EmitStableNumberIteratorResult(moduleBuilder, runtime);
 
         // Emit TSFunction class first (other methods depend on it)
-        EmitTSFunctionClass(moduleBuilder, runtime);
+        EmitTSFunctionClass(
+            moduleBuilder,
+            runtime.FunctionValues,
+            runtime.FunctionConstruction,
+            new TSFunctionClassInputs(
+                runtime.Arguments,
+                runtime.FunctionAttributes,
+                runtime.GlobalThisSingletonField,
+                runtime.UndefinedInstance,
+                runtime.UndefinedType
+            )
+        );
+        runtime.FunctionValues.CompleteEmission();
         runtime.FunctionConstruction.CompleteEmission();
 
         // Emit TSNamespace class for namespace support
@@ -272,7 +284,7 @@ public partial class RuntimeEmitter
         // well as dense/sparse storage. The descriptor store itself depends
         // only on helper types emitted above.
         EmitPropertyDescriptorTypes(moduleBuilder, runtime.DescriptorStorage,
-            new DescriptorKeyInputs(runtime.TSFunctionType, runtime.TSFunctionGetMethodInfo),
+            new DescriptorKeyInputs(runtime.FunctionValues.Type, runtime.FunctionValues.GetMethodInfo),
             runtime.UndefinedType);
 
         // Emit $Array class for standalone array support
@@ -290,9 +302,9 @@ public partial class RuntimeEmitter
             new ObjectStorageInputs(runtime.IHasFieldsInterface,
                 new ObjectReadInputs(runtime.DescriptorStorage.DescriptorType, runtime.DescriptorStorage.TryGetGetter,
                     runtime.DescriptorStorage.GetPropertyDescriptor, runtime.DescriptorStorage.DescriptorSetter.GetGetMethod()!,
-                    runtime.DescriptorStorage.DescriptorValue.GetGetMethod()!, runtime.TSFunctionType,
-                    runtime.TSFunctionInvokeWithThis, runtime.UndefinedInstance),
-                new ObjectInvokeInputs(runtime.TSFunctionType, runtime.TSFunctionInvokeWithThis),
+                    runtime.DescriptorStorage.DescriptorValue.GetGetMethod()!, runtime.FunctionValues.Type,
+                    runtime.FunctionValues.InvokeWithThis, runtime.UndefinedInstance),
+                new ObjectInvokeInputs(runtime.FunctionValues.Type, runtime.FunctionValues.InvokeWithThis),
                 runtime.Errors.TypeErrorConstructor));
 
         if (features.UsesJSON || features.UsesCompactObjectRecords)
@@ -333,9 +345,9 @@ public partial class RuntimeEmitter
                     runtime.ObjectWrite.Property,
                     runtime.StringCoercion,
                     runtime.Symbols,
-                    runtime.TSFunctionGetMethodInfo,
-                    runtime.TSFunctionInvokeWithThis,
-                    runtime.TSFunctionType,
+                    runtime.FunctionValues.GetMethodInfo,
+                    runtime.FunctionValues.InvokeWithThis,
+                    runtime.FunctionValues.Type,
                     runtime.Errors.SyntaxErrorConstructor,
                     runtime.Errors.TypeErrorConstructor,
                     runtime.UndefinedInstance,
@@ -401,12 +413,12 @@ public partial class RuntimeEmitter
 
         // Emit $BoundTSFunction class for bound functions
         // Must come after TSFunction (uses TSFunctionType, TSFunctionInvokeWithThis)
-        EmitBoundTSFunctionClass(moduleBuilder, runtime);
+        EmitBoundTSFunctionClass(moduleBuilder, runtime.FunctionBindings, runtime.FunctionValues);
 
         // Emit $AsyncLocalStorage class for async context propagation
         // Must come after TSFunction (Run/Exit invoke callbacks via TSFunctionInvoke)
         if (features.UsesAsyncLocalStorage)
-            EmitAsyncLocalStorageClass(moduleBuilder, runtime.RequireAsyncLocalStorage(), runtime.TSFunctionType, runtime.TSFunctionInvoke);
+            EmitAsyncLocalStorageClass(moduleBuilder, runtime.RequireAsyncLocalStorage(), runtime.FunctionValues.Type, runtime.FunctionValues.Invoke);
 
         // Emit $EventEmitter class for standalone event emitter support
         // NOTE: Must come after BoundTSFunction (uses TSFunctionType, BoundTSFunctionType)
@@ -517,7 +529,8 @@ public partial class RuntimeEmitter
         // Emit $Arguments : List<object> marker subclass. Must come before
         // any IL that constructs `arguments` (ILCompiler.Functions.cs uses
         // runtime.ArgumentsDefaultCtor / ArgumentsEnumerableCtor).
-        EmitArgumentsTypeDefinition(moduleBuilder, runtime);
+        EmitArgumentsTypeDefinition(moduleBuilder, runtime.Arguments);
+        runtime.Arguments.CompleteEmission();
 
         // Emit $BoundArrayMethod type and constructor (Phase 1)
         // Must come before EmitRuntimeClass so GetListProperty can use the constructor
@@ -536,10 +549,45 @@ public partial class RuntimeEmitter
         // Bound*Method TypeBuilders above, so they MUST come after Phase 1 of those.
         // They come before EmitRuntimeClass so GetFunctionMethod (inside EmitRuntimeClass)
         // can use their constructors.
-        EmitBoundAnyFunctionClass(moduleBuilder, runtime);
-        EmitFunctionBindWrapperClass(moduleBuilder, runtime);
-        EmitFunctionCallWrapperClass(moduleBuilder, runtime);
-        EmitFunctionApplyWrapperClass(moduleBuilder, runtime);
+        EmitBoundAnyFunctionClass(
+            moduleBuilder,
+            runtime.FunctionBindings,
+            new BoundAnyFunctionClassInputs(runtime.FunctionValues, runtime.ArrayOperations, runtime.Map, runtime.Set)
+        );
+        EmitFunctionBindWrapperClass(
+            moduleBuilder,
+            runtime.FunctionBindings,
+            new FunctionBindWrapperClassInputs(
+                runtime.FunctionValues,
+                runtime.ArrayOperations,
+                runtime.Map,
+                runtime.Set,
+                runtime.UndefinedInstance,
+                runtime.Errors
+            )
+        );
+        EmitFunctionCallWrapperClass(
+            moduleBuilder,
+            runtime.FunctionBindings,
+            new FunctionCallWrapperClassInputs(
+                runtime.FunctionValues,
+                runtime.ArrayOperations,
+                runtime.Map,
+                runtime.Set
+            )
+        );
+        EmitFunctionApplyWrapperClass(
+            moduleBuilder,
+            runtime.FunctionBindings,
+            new FunctionApplyWrapperClassInputs(
+                runtime.FunctionValues,
+                runtime.ArrayOperations,
+                runtime.Map,
+                runtime.Set,
+                runtime.ArrayStorage
+            )
+        );
+        runtime.FunctionBindings.CompleteEmission();
 
         // Emit $MethodCallable type and constructor (Phase 1)
         // Must come before EmitRuntimeClass so GetFieldsProperty can wrap GetMember results
@@ -673,7 +721,7 @@ public partial class RuntimeEmitter
         // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSBroadcastChannel
         if (features.UsesBroadcastChannel)
             EmitBroadcastChannelClass(moduleBuilder, runtime.RequireBroadcastChannel(), runtime.EventEmitter,
-                runtime.EventLoop, runtime.TSFunctionType, runtime.TSFunctionInvoke,
+                runtime.EventLoop, runtime.FunctionValues.Type, runtime.FunctionValues.Invoke,
                 runtime.StructuredClone.Clone, runtime.StructuredClone.ErrorType);
 
         // Emit $MessagePort/$MessageChannel — same constraints as

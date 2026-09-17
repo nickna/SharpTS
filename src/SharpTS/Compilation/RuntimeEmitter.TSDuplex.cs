@@ -149,12 +149,12 @@ public partial class RuntimeEmitter
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, runtime.RequireNodeStreams().DuplexWriteCallbackField);
-        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Isinst, runtime.FunctionValues.Type);
         il.Emit(OpCodes.Brfalse, noCallbackLabel);
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, runtime.RequireNodeStreams().DuplexWriteCallbackField);
-        il.Emit(OpCodes.Castclass, runtime.TSFunctionType);
+        il.Emit(OpCodes.Castclass, runtime.FunctionValues.Type);
 
         // Load 'this' for InvokeWithThis
         il.Emit(OpCodes.Ldarg_0);
@@ -189,7 +189,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stelem_Ref);
 
         // Call InvokeWithThis(this, args)
-        il.Emit(OpCodes.Callvirt, runtime.TSFunctionInvokeWithThis);
+        il.Emit(OpCodes.Callvirt, runtime.FunctionValues.InvokeWithThis);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Ret);
@@ -199,13 +199,13 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_3);
         il.Emit(OpCodes.Brfalse, callCallbackLabel);
         il.Emit(OpCodes.Ldarg_3);
-        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Isinst, runtime.FunctionValues.Type);
         il.Emit(OpCodes.Brfalse, callCallbackLabel);
         il.Emit(OpCodes.Ldarg_3);
-        il.Emit(OpCodes.Castclass, runtime.TSFunctionType);
+        il.Emit(OpCodes.Castclass, runtime.FunctionValues.Type);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Newarr, _types.Object);
-        il.Emit(OpCodes.Callvirt, runtime.TSFunctionInvoke);
+        il.Emit(OpCodes.Callvirt, runtime.FunctionValues.Invoke);
         il.Emit(OpCodes.Pop);
 
         il.MarkLabel(callCallbackLabel);

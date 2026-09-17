@@ -41,16 +41,16 @@ public partial class ILEmitter
         var done = IL.DefineLabel();
         if (native)
         {
-            var wrapper = IL.DeclareLocal(_ctx.Runtime!.TSFunctionType);
+            var wrapper = IL.DeclareLocal(_ctx.Runtime!.FunctionValues.Type);
             var entryType = typeof(Func<double, double, double, double, double>);
             var entry = IL.DeclareLocal(entryType);
             IL.Emit(OpCodes.Ldloc, callee);
-            IL.Emit(OpCodes.Isinst, _ctx.Runtime.TSFunctionType);
+            IL.Emit(OpCodes.Isinst, _ctx.Runtime.FunctionValues.Type);
             IL.Emit(OpCodes.Stloc, wrapper);
             IL.Emit(OpCodes.Ldloc, wrapper);
             IL.Emit(OpCodes.Brfalse, fallback);
             IL.Emit(OpCodes.Ldloc, wrapper);
-            IL.Emit(OpCodes.Ldfld, _ctx.Runtime.TSFunctionNumericRest4Field);
+            IL.Emit(OpCodes.Ldfld, _ctx.Runtime.FunctionValues.NumericRest4Field);
             IL.Emit(OpCodes.Stloc, entry);
             IL.Emit(OpCodes.Ldloc, entry);
             IL.Emit(OpCodes.Brfalse, fallback);

@@ -3708,6 +3708,136 @@ public class StandaloneDllTests
             verifyStandardError: error => Assert.Empty(error)));
     }
 
+    public static IEnumerable<object[]> FunctionInvocationPrograms =>
+    [
+        new object[]
+        {
+            "nested_arguments",
+            "function inner(x:number){console.log(arguments.length,arguments[1]);}function outer(a:number){const saved=()=>arguments[2];const i:any=inner;i(8,9);console.log(arguments.length,arguments[0],saved());}const f:any=outer;f(1,2,3);\n",
+            "2 9\n3 1 3\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "arguments_brand_length",
+            "function f(a:number){console.log(Array.isArray(arguments),Object.prototype.toString.call(arguments),arguments.length);arguments[4]=9;console.log(arguments.length,arguments[4]);}const g:any=f;g(1,2);\n",
+            "false [object Arguments] 2\n2 9\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "arguments_throw",
+            "function bad(a:number){throw new Error(\"bad\");}function outer(a:number){try{const b:any=bad;b(8,9);}catch(e){console.log(arguments.length,arguments[1]);}}const f:any=outer;f(1,2,3);\n",
+            "3 2\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "receiver_nested_throw",
+            "function inner(this:any){console.log(this.name);throw new Error(\"bad\");}function outer(this:any){try{inner.call({name:\"inner\"});}catch(e){}console.log(this.name);}outer.call({name:\"outer\"});\n",
+            "inner\nouter\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "strict_sloppy",
+            "function strict(this:any){\"use strict\";return this;}function sloppy(this:any){return this;}const a:any=strict;const b:any=sloppy;console.log(a.call(null)===null,a.call(undefined)===undefined,b.call(null)===globalThis,b.call(undefined)===globalThis);\n",
+            "true true true true\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "zero_receiver",
+            "const f:any=function(this:any){return this.x;};const x:any={x:7,f:f};console.log(x.f(),f.call({x:9}),f.bind({x:11})());\n",
+            "7 9 11\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "zero_arguments_capture",
+            "const f:any=function(this:any){return arguments.length+this.x;};const x:any={x:7,f:f};console.log(x.f(),x.f(1,2),f.call({x:8}));\n",
+            "7 9 8\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "bound_receiver_chain",
+            "function f(this:any,a:number,b:number,c:number){return this.x+a+b+c;}const a:any=f.bind({x:10},1);const b:any=a.bind({x:99},2);console.log(b(3),b.call({x:100},4),b.apply({x:101},[5]),b.length);\n",
+            "16 17 18 1\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "bound_array",
+            "const a:number[]=[];const push:any=a.push;push.call(a,1);push.apply(a,[2,3]);const b:any=push.bind(a,4);console.log(b(5),a.join(\",\"),typeof b);\n",
+            "5 1,2,3,4,5 function\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "bound_map",
+            "const m=new Map<string,number>();m.set(\"a\",1);m.set(\"b\",2);const g:any=m.get;const b:any=g.bind(m,\"b\");console.log(g.call(m,\"a\"),g.apply(m,[\"b\"]),b());\n",
+            "1 2 2\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "bound_set",
+            "const s=new Set<number>();const add:any=s.add.bind(s);add(1);add(2);const h:any=s.has;console.log(h.call(s,1),h.apply(s,[9]),h.bind(s,2)(),s.size);\n",
+            "true false true 2\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "bind_noncallable",
+            "const value:any=Object.create(Function.prototype);try{value.bind();console.log(false);}catch(error){console.log(error instanceof TypeError);}\n",
+            "true\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "hosted_bound",
+            "export function run(x:number){function f(this:any,a:number){return this.x+a;}const b:any=f.bind({x:x},2);return b();}\n",
+            "",
+            true,
+            "",
+        },
+    ];
+
+    [Theory]
+    [MemberData(nameof(FunctionInvocationPrograms))]
+    public void Isolated_FunctionInvocation_PreservesArgumentsBindingAndDeployment(
+        string name, string source, string expected, bool hosted, string extraArguments)
+    {
+        using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var sourcePath = tempDir.CreateFile("main.ts", source);
+        var dllPath = tempDir.GetPath($"function_invocation_{name}.dll");
+        var hosting = hosted ? " --target dll --hosted" : "";
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{sourcePath}\" -o \"{dllPath}\" --verify --standalone{hosting} {extraArguments}", tempDir.Path);
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        var references = GetAssemblyReferences(dllPath);
+        Assert.DoesNotContain("SharpTS", references);
+        Assert.Equal(hosted, references.Contains("SharpTS.Hosting.Abstractions"));
+        Assert.False(File.Exists(tempDir.GetPath("SharpTS.dll")));
+        if (!hosted)
+            Assert.Equal(expected, ExecuteCompiledDllIsolated(dllPath, timeoutMs: 30000,
+                verifyStandardError: error => Assert.Empty(error)));
+    }
+
     public static IEnumerable<object[]> FunctionConstructionPrograms =>
     [
         new object[]

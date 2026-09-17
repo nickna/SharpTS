@@ -328,7 +328,7 @@ public abstract partial class ExpressionEmitterBase
                     // Done *before* loading args onto the stack so we don't disturb
                     // the evaluation order for the call itself.
                     if (Ctx.FunctionsCapturingArguments?.Contains(resolvedFuncName) == true &&
-                        Ctx.Runtime?.CurrentArgumentsField != null)
+                        Ctx.Runtime?.Arguments.CurrentField != null)
                     {
                         int publishCount = c.Arguments.Count;
                         IL.Emit(OpCodes.Ldc_I4, publishCount);
@@ -344,7 +344,7 @@ public abstract partial class ExpressionEmitterBase
                                 IL.Emit(OpCodes.Box, callArgTemps[i].ParamType);
                             IL.Emit(OpCodes.Stelem_Ref);
                         }
-                        IL.Emit(OpCodes.Stsfld, Ctx.Runtime.CurrentArgumentsField);
+                        IL.Emit(OpCodes.Stsfld, Ctx.Runtime.Arguments.CurrentField);
                     }
 
                     // Load args back onto stack for the call — but only up to the
@@ -1086,7 +1086,7 @@ public abstract partial class ExpressionEmitterBase
 
         bool publishesArguments =
             Ctx.MethodsCapturingArguments?.Contains(targetMethod) == true &&
-            Ctx.Runtime?.CurrentArgumentsField != null;
+            Ctx.Runtime?.Arguments.CurrentField != null;
 
         // A spread can change both the number and the positions of the runtime arguments, so it
         // cannot be lowered as one CLR argument per source expression. Expand through the shared
@@ -1102,7 +1102,7 @@ public abstract partial class ExpressionEmitterBase
             if (publishesArguments)
             {
                 IL.Emit(OpCodes.Ldloc, expandedArguments);
-                IL.Emit(OpCodes.Stsfld, Ctx.Runtime!.CurrentArgumentsField);
+                IL.Emit(OpCodes.Stsfld, Ctx.Runtime!.Arguments.CurrentField);
             }
 
             for (int i = 0; i < paramCount; i++)
@@ -1149,7 +1149,7 @@ public abstract partial class ExpressionEmitterBase
                 IL.Emit(OpCodes.Ldloc, argumentTemps[i]);
                 IL.Emit(OpCodes.Stelem_Ref);
             }
-            IL.Emit(OpCodes.Stsfld, Ctx.Runtime!.CurrentArgumentsField);
+            IL.Emit(OpCodes.Stsfld, Ctx.Runtime!.Arguments.CurrentField);
 
             for (int i = 0; i < Math.Min(arguments.Count, paramCount); i++)
             {
@@ -1170,7 +1170,7 @@ public abstract partial class ExpressionEmitterBase
             EmitArgsArrayWithSpread(arguments);
             IL.Emit(OpCodes.Stloc, rawArguments);
             IL.Emit(OpCodes.Ldloc, rawArguments);
-            IL.Emit(OpCodes.Stsfld, Ctx.Runtime!.CurrentArgumentsField);
+            IL.Emit(OpCodes.Stsfld, Ctx.Runtime!.Arguments.CurrentField);
 
             for (int i = 0; i < paramCount; i++)
             {
@@ -1511,11 +1511,11 @@ public abstract partial class ExpressionEmitterBase
             // path from a value call whose receiver is a Proxy or another object.
             // Preserve the enclosing dynamic receiver for nested calls.
             var previousThis = IL.DeclareLocal(Types.Object);
-            IL.Emit(OpCodes.Ldsfld, Ctx.Runtime!.CurrentFunctionThisField);
+            IL.Emit(OpCodes.Ldsfld, Ctx.Runtime!.FunctionValues.CurrentThisField);
             IL.Emit(OpCodes.Stloc, previousThis);
             IL.Emit(OpCodes.Ldtoken, classBuilder);
             IL.Emit(OpCodes.Call, Types.TypeGetTypeFromHandle);
-            IL.Emit(OpCodes.Stsfld, Ctx.Runtime.CurrentFunctionThisField);
+            IL.Emit(OpCodes.Stsfld, Ctx.Runtime.FunctionValues.CurrentThisField);
 
             IL.Emit(OpCodes.Call, targetMethod);
 
@@ -1526,7 +1526,7 @@ public abstract partial class ExpressionEmitterBase
                 IL.Emit(OpCodes.Stloc, result);
             }
             IL.Emit(OpCodes.Ldloc, previousThis);
-            IL.Emit(OpCodes.Stsfld, Ctx.Runtime.CurrentFunctionThisField);
+            IL.Emit(OpCodes.Stsfld, Ctx.Runtime.FunctionValues.CurrentThisField);
             if (result != null)
                 IL.Emit(OpCodes.Ldloc, result);
 

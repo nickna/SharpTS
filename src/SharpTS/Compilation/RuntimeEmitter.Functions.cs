@@ -9,10 +9,52 @@ namespace SharpTS.Compilation;
 /// </summary>
 public partial class RuntimeEmitter
 {
+    private readonly record struct BoundAnyFunctionClassInputs(
+        EmittedFunctionValueRuntime FunctionValues,
+        EmittedArrayOperationsRuntime ArrayOperations,
+        EmittedMapRuntime? Map,
+        EmittedSetRuntime? Set
+    );
+
+    private readonly record struct FunctionBindWrapperClassInputs(
+        EmittedFunctionValueRuntime FunctionValues,
+        EmittedArrayOperationsRuntime ArrayOperations,
+        EmittedMapRuntime? Map,
+        EmittedSetRuntime? Set,
+        FieldInfo UndefinedInstance,
+        EmittedErrorRuntime Errors
+    );
+
+    private readonly record struct FunctionCallWrapperClassInputs(
+        EmittedFunctionValueRuntime FunctionValues,
+        EmittedArrayOperationsRuntime ArrayOperations,
+        EmittedMapRuntime? Map,
+        EmittedSetRuntime? Set
+    );
+
+    private readonly record struct FunctionApplyWrapperClassInputs(
+        EmittedFunctionValueRuntime FunctionValues,
+        EmittedArrayOperationsRuntime ArrayOperations,
+        EmittedMapRuntime? Map,
+        EmittedSetRuntime? Set,
+        EmittedArrayStorageRuntime ArrayStorage
+    );
+
+    private readonly record struct DispatchToTargetInputs(
+        EmittedFunctionValueRuntime FunctionValues,
+        EmittedArrayOperationsRuntime ArrayOperations,
+        EmittedMapRuntime? Map,
+        EmittedSetRuntime? Set
+    );
+
     /// <summary>
     /// Emits the $BoundTSFunction class for handling bound functions.
     /// </summary>
-    private void EmitBoundTSFunctionClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private void EmitBoundTSFunctionClass(
+        ModuleBuilder moduleBuilder,
+        EmittedFunctionBindingRuntime functionBindings,
+        EmittedFunctionValueRuntime functionValues
+    )
     {
         // Define class: public sealed class $BoundTSFunction
         var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
@@ -20,22 +62,22 @@ public partial class RuntimeEmitter
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object
         );
-        runtime.BoundTSFunctionType = typeBuilder;
+        functionBindings.BoundType = typeBuilder;
 
         // Fields - _target is Assembly since it needs to be accessed by GetFunctionMethod
-        var targetField = typeBuilder.DefineField("_target", runtime.TSFunctionType, FieldAttributes.Assembly);
-        runtime.BoundTSFunctionTargetField = targetField;
+        var targetField = typeBuilder.DefineField("_target", functionValues.Type, FieldAttributes.Assembly);
+        functionBindings.BoundTargetField = targetField;
         var thisArgField = typeBuilder.DefineField("_thisArg", _types.Object, FieldAttributes.Private);
         var boundArgsField = typeBuilder.DefineField("_boundArgs", _types.ObjectArray, FieldAttributes.Assembly);
-        runtime.BoundTSFunctionBoundArgsField = boundArgsField;
+        functionBindings.BoundArgumentsField = boundArgsField;
 
         // Constructor: public $BoundTSFunction($TSFunction target, object thisArg, object[] boundArgs)
         var ctorBuilder = typeBuilder.DefineConstructor(
             MethodAttributes.Public,
             CallingConventions.Standard,
-            [runtime.TSFunctionType, _types.Object, _types.ObjectArray]
+            [functionValues.Type, _types.Object, _types.ObjectArray]
         );
-        runtime.BoundTSFunctionCtor = ctorBuilder;
+        functionBindings.BoundCtor = ctorBuilder;
 
         var ctorIL = ctorBuilder.GetILGenerator();
         // Call base constructor
@@ -62,7 +104,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.ObjectArray]
         );
-        runtime.BoundTSFunctionInvoke = invokeBuilder;
+        functionBindings.BoundInvoke = invokeBuilder;
 
         var invokeIL = invokeBuilder.GetILGenerator();
         var combinedArgsLocal = invokeIL.DeclareLocal(_types.ObjectArray);
@@ -141,7 +183,7 @@ public partial class RuntimeEmitter
         invokeIL.Emit(OpCodes.Ldarg_0);
         invokeIL.Emit(OpCodes.Ldfld, thisArgField);
         invokeIL.Emit(OpCodes.Ldloc, combinedArgsLocal);
-        invokeIL.Emit(OpCodes.Callvirt, runtime.TSFunctionInvokeWithThis);
+        invokeIL.Emit(OpCodes.Callvirt, functionValues.InvokeWithThis);
         invokeIL.Emit(OpCodes.Ret);
 
         // InvokeWithThis method: public object InvokeWithThis(object thisArg, object[] args)
@@ -152,7 +194,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object, _types.ObjectArray]
         );
-        runtime.BoundTSFunctionInvokeWithThis = invokeWithThisBuilder;
+        functionBindings.BoundInvokeWithThis = invokeWithThisBuilder;
 
         var iwtIL = invokeWithThisBuilder.GetILGenerator();
         // Just call Invoke(args) - the bound this is already set
@@ -192,19 +234,23 @@ public partial class RuntimeEmitter
     /// MethodBuilders directly — there is no <c>InvokeValue</c> yet at this point in
     /// the emission pipeline.
     /// </remarks>
-    private void EmitBoundAnyFunctionClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private void EmitBoundAnyFunctionClass(
+        ModuleBuilder moduleBuilder,
+        EmittedFunctionBindingRuntime functionBindings,
+        BoundAnyFunctionClassInputs inputs
+    )
     {
         var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$BoundAnyFunction",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object
         );
-        runtime.BoundAnyFunctionType = typeBuilder;
+        functionBindings.AnyType = typeBuilder;
 
         var targetField = typeBuilder.DefineField("_target", _types.Object, FieldAttributes.Assembly);
-        runtime.BoundAnyFunctionTargetField = targetField;
+        functionBindings.AnyTargetField = targetField;
         var boundArgsField = typeBuilder.DefineField("_boundArgs", _types.ObjectArray, FieldAttributes.Assembly);
-        runtime.BoundAnyFunctionBoundArgsField = boundArgsField;
+        functionBindings.AnyArgumentsField = boundArgsField;
 
         // ctor(object target, object[] boundArgs)
         var ctorBuilder = typeBuilder.DefineConstructor(
@@ -212,7 +258,7 @@ public partial class RuntimeEmitter
             CallingConventions.Standard,
             [_types.Object, _types.ObjectArray]
         );
-        runtime.BoundAnyFunctionCtor = ctorBuilder;
+        functionBindings.AnyCtor = ctorBuilder;
 
         var ctorIL = ctorBuilder.GetILGenerator();
         ctorIL.Emit(OpCodes.Ldarg_0);
@@ -232,7 +278,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.ObjectArray]
         );
-        runtime.BoundAnyFunctionInvoke = invokeBuilder;
+        functionBindings.AnyInvoke = invokeBuilder;
 
         var il = invokeBuilder.GetILGenerator();
         var combinedLocal = il.DeclareLocal(_types.ObjectArray);
@@ -306,7 +352,13 @@ public partial class RuntimeEmitter
         il.MarkLabel(skipArgsCopyLabel);
 
         // Dispatch chain: isinst target against known callables, Callvirt each one's Invoke
-        EmitDispatchToTarget(il, runtime, targetField, combinedLocal);
+        EmitDispatchToTarget(
+            il,
+            functionBindings,
+            new DispatchToTargetInputs(inputs.FunctionValues, inputs.ArrayOperations, inputs.Map, inputs.Set),
+            targetField,
+            combinedLocal
+        );
 
         // Fall-through: unknown target type → return null
         il.Emit(OpCodes.Ldnull);
@@ -345,22 +397,24 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitDispatchToTarget(
         ILGenerator il,
-        EmittedRuntime runtime,
+        EmittedFunctionBindingRuntime functionBindings,
+        DispatchToTargetInputs inputs,
         FieldBuilder targetField,
         LocalBuilder argsLocal,
-        LocalBuilder? thisArgLocal = null)
+        LocalBuilder? thisArgLocal = null
+    )
     {
         // $TSFunction → target.Invoke(args)
         var notTSFunctionLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, targetField);
-        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Isinst, inputs.FunctionValues.Type);
         il.Emit(OpCodes.Brfalse, notTSFunctionLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, targetField);
-        il.Emit(OpCodes.Castclass, runtime.TSFunctionType);
+        il.Emit(OpCodes.Castclass, inputs.FunctionValues.Type);
         il.Emit(OpCodes.Ldloc, argsLocal);
-        il.Emit(OpCodes.Callvirt, runtime.TSFunctionInvoke);
+        il.Emit(OpCodes.Callvirt, inputs.FunctionValues.Invoke);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notTSFunctionLabel);
 
@@ -368,13 +422,13 @@ public partial class RuntimeEmitter
         var notBoundTSFunctionLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, targetField);
-        il.Emit(OpCodes.Isinst, runtime.BoundTSFunctionType);
+        il.Emit(OpCodes.Isinst, functionBindings.BoundType);
         il.Emit(OpCodes.Brfalse, notBoundTSFunctionLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, targetField);
-        il.Emit(OpCodes.Castclass, runtime.BoundTSFunctionType);
+        il.Emit(OpCodes.Castclass, functionBindings.BoundType);
         il.Emit(OpCodes.Ldloc, argsLocal);
-        il.Emit(OpCodes.Callvirt, runtime.BoundTSFunctionInvoke);
+        il.Emit(OpCodes.Callvirt, functionBindings.BoundInvoke);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notBoundTSFunctionLabel);
 
@@ -382,47 +436,47 @@ public partial class RuntimeEmitter
         var notBAMLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, targetField);
-        il.Emit(OpCodes.Isinst, runtime.ArrayOperations.BoundMethodType);
+        il.Emit(OpCodes.Isinst, inputs.ArrayOperations.BoundMethodType);
         il.Emit(OpCodes.Brfalse, notBAMLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, targetField);
-        il.Emit(OpCodes.Castclass, runtime.ArrayOperations.BoundMethodType);
+        il.Emit(OpCodes.Castclass, inputs.ArrayOperations.BoundMethodType);
         il.Emit(OpCodes.Ldloc, argsLocal);
-        il.Emit(OpCodes.Callvirt, runtime.ArrayOperations.BoundMethodInvoke);
+        il.Emit(OpCodes.Callvirt, inputs.ArrayOperations.BoundMethodInvoke);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notBAMLabel);
 
         // $BoundMapMethod → target.Invoke(args). Gated on UsesMap (the wrapper
         // type only exists when EmitBoundMapMethod{TypeDefinition,Finalize} run).
         var notBMMLabel = il.DefineLabel();
-        if (runtime.Map is not null)
+        if (inputs.Map is not null)
         {
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldfld, targetField);
-            il.Emit(OpCodes.Isinst, runtime.RequireMap().BoundMethodType);
+            il.Emit(OpCodes.Isinst, inputs.Map!.BoundMethodType);
             il.Emit(OpCodes.Brfalse, notBMMLabel);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldfld, targetField);
-            il.Emit(OpCodes.Castclass, runtime.RequireMap().BoundMethodType);
+            il.Emit(OpCodes.Castclass, inputs.Map!.BoundMethodType);
             il.Emit(OpCodes.Ldloc, argsLocal);
-            il.Emit(OpCodes.Callvirt, runtime.RequireMap().BoundMethodInvoke);
+            il.Emit(OpCodes.Callvirt, inputs.Map!.BoundMethodInvoke);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(notBMMLabel);
         }
 
         // $BoundSetMethod → target.Invoke(args). Gated on UsesSet.
         var notBSMLabel = il.DefineLabel();
-        if (runtime.Set is not null)
+        if (inputs.Set is not null)
         {
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldfld, targetField);
-            il.Emit(OpCodes.Isinst, runtime.RequireSet().BoundMethodType);
+            il.Emit(OpCodes.Isinst, inputs.Set!.BoundMethodType);
             il.Emit(OpCodes.Brfalse, notBSMLabel);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldfld, targetField);
-            il.Emit(OpCodes.Castclass, runtime.RequireSet().BoundMethodType);
+            il.Emit(OpCodes.Castclass, inputs.Set!.BoundMethodType);
             il.Emit(OpCodes.Ldloc, argsLocal);
-            il.Emit(OpCodes.Callvirt, runtime.RequireSet().BoundMethodInvoke);
+            il.Emit(OpCodes.Callvirt, inputs.Set!.BoundMethodInvoke);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(notBSMLabel);
         }
@@ -431,13 +485,13 @@ public partial class RuntimeEmitter
         var notBAFLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, targetField);
-        il.Emit(OpCodes.Isinst, runtime.BoundAnyFunctionType);
+        il.Emit(OpCodes.Isinst, functionBindings.AnyType);
         il.Emit(OpCodes.Brfalse, notBAFLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, targetField);
-        il.Emit(OpCodes.Castclass, runtime.BoundAnyFunctionType);
+        il.Emit(OpCodes.Castclass, functionBindings.AnyType);
         il.Emit(OpCodes.Ldloc, argsLocal);
-        il.Emit(OpCodes.Callvirt, runtime.BoundAnyFunctionInvoke);
+        il.Emit(OpCodes.Callvirt, functionBindings.AnyInvoke);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notBAFLabel);
 
@@ -571,21 +625,21 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, ownUndefinedAccessor);
         var ownGetterIsBound = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, ownGetter);
-        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Isinst, runtime.FunctionValues.Type);
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Brfalse, ownGetterIsBound);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Newarr, _types.Object);
-        il.Emit(OpCodes.Callvirt, runtime.TSFunctionInvokeWithThis);
+        il.Emit(OpCodes.Callvirt, runtime.FunctionValues.InvokeWithThis);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(ownGetterIsBound);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Ldloc, ownGetter);
-        il.Emit(OpCodes.Castclass, runtime.BoundAnyFunctionType);
+        il.Emit(OpCodes.Castclass, runtime.FunctionBindings.AnyType);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Newarr, _types.Object);
-        il.Emit(OpCodes.Callvirt, runtime.BoundAnyFunctionInvoke);
+        il.Emit(OpCodes.Callvirt, runtime.FunctionBindings.AnyInvoke);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(ownData);
@@ -688,21 +742,21 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, functionPdsUndefinedAccessorLabel);
         var functionPdsBoundGetterLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, functionPdsGetterLocal);
-        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Isinst, runtime.FunctionValues.Type);
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Brfalse, functionPdsBoundGetterLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Newarr, _types.Object);
-        il.Emit(OpCodes.Callvirt, runtime.TSFunctionInvokeWithThis);
+        il.Emit(OpCodes.Callvirt, runtime.FunctionValues.InvokeWithThis);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(functionPdsBoundGetterLabel);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Ldloc, functionPdsGetterLocal);
-        il.Emit(OpCodes.Castclass, runtime.BoundAnyFunctionType);
+        il.Emit(OpCodes.Castclass, runtime.FunctionBindings.AnyType);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Newarr, _types.Object);
-        il.Emit(OpCodes.Callvirt, runtime.BoundAnyFunctionInvoke);
+        il.Emit(OpCodes.Callvirt, runtime.FunctionBindings.AnyInvoke);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(functionPdsDataLabel);
@@ -761,9 +815,9 @@ public partial class RuntimeEmitter
         // Only auto-create for actual $TSFunction callees (has an inner _method
         // field). Other callable shapes ($BoundArrayMethod, $FunctionCallWrapper,
         // etc.) don't have a meaningful prototype and fall through to null.
-        var tsfuncLocal = il.DeclareLocal(runtime.TSFunctionType);
+        var tsfuncLocal = il.DeclareLocal(runtime.FunctionValues.Type);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Isinst, runtime.FunctionValues.Type);
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Stloc, tsfuncLocal);
         il.Emit(OpCodes.Brfalse, missLabel);
@@ -771,7 +825,7 @@ public partial class RuntimeEmitter
         // methodKey = tsfuncLocal.GetMethodInfo()  (public getter — avoids
         // field-access violation from accessing private _method across
         // TypeBuilder boundaries at JIT time).
-        var prototypeCacheType = runtime.TSFunctionPrototypeCacheField.FieldType;
+        var prototypeCacheType = runtime.FunctionValues.PrototypeCacheField.FieldType;
         var tryGetValueM = _types.GetMethod(prototypeCacheType, "TryGetValue", [_types.MethodInfo, _types.Object.MakeByRefType()])!;
         var prototypeCacheGetOrAdd = _types.GetMethods(prototypeCacheType)
             .First(m => m.Name == "GetOrAdd"
@@ -782,7 +836,7 @@ public partial class RuntimeEmitter
         var newProto = il.DeclareLocal(runtime.ObjectStorage.Type);
         var methodKeyLocal = il.DeclareLocal(_types.MethodInfo);
         il.Emit(OpCodes.Ldloc, tsfuncLocal);
-        il.Emit(OpCodes.Callvirt, runtime.TSFunctionGetMethodInfo);
+        il.Emit(OpCodes.Callvirt, runtime.FunctionValues.GetMethodInfo);
         il.Emit(OpCodes.Stloc, methodKeyLocal);
 
         // Arrow and async methods carry $NonConstructible. They do not
@@ -828,7 +882,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(notRuntimeMethodLabel);
 
         // if (_prototypeCache.TryGetValue(methodKey, out cached)) return cached
-        il.Emit(OpCodes.Ldsfld, runtime.TSFunctionPrototypeCacheField);
+        il.Emit(OpCodes.Ldsfld, runtime.FunctionValues.PrototypeCacheField);
         il.Emit(OpCodes.Ldloc, methodKeyLocal);
         il.Emit(OpCodes.Ldloca, cachedProto);
         il.Emit(OpCodes.Callvirt, tryGetValueM);
@@ -902,7 +956,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, runtime.DescriptorStorage.DefineProperty);
         il.Emit(OpCodes.Pop);
 
-        il.Emit(OpCodes.Ldsfld, runtime.TSFunctionPrototypeCacheField);
+        il.Emit(OpCodes.Ldsfld, runtime.FunctionValues.PrototypeCacheField);
         il.Emit(OpCodes.Ldloc, methodKeyLocal);
         il.Emit(OpCodes.Ldloc, newProto);
         il.Emit(OpCodes.Callvirt, prototypeCacheGetOrAdd);
@@ -911,19 +965,19 @@ public partial class RuntimeEmitter
         // bind: return new $FunctionBindWrapper(func)
         il.MarkLabel(bindLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Newobj, runtime.FunctionBindWrapperCtor);
+        il.Emit(OpCodes.Newobj, runtime.FunctionBindings.BindCtor);
         il.Emit(OpCodes.Ret);
 
         // call: return new $FunctionCallWrapper(func)
         il.MarkLabel(callLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Newobj, runtime.FunctionCallWrapperCtor);
+        il.Emit(OpCodes.Newobj, runtime.FunctionBindings.CallCtor);
         il.Emit(OpCodes.Ret);
 
         // apply: return new $FunctionApplyWrapper(func)
         il.MarkLabel(applyLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Newobj, runtime.FunctionApplyWrapperCtor);
+        il.Emit(OpCodes.Newobj, runtime.FunctionBindings.ApplyCtor);
         il.Emit(OpCodes.Ret);
 
         // length: ordinary functions expose their declared arity; bound
@@ -932,7 +986,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(lengthLabel);
         var lengthNotTSFunctionLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Isinst, runtime.FunctionValues.Type);
         il.Emit(OpCodes.Brfalse, lengthNotTSFunctionLabel);
         // If `length` was deleted on this $TSFunction, return undefined
         // instead of the cached spec value (ECMA-262 §17 configurable).
@@ -946,8 +1000,8 @@ public partial class RuntimeEmitter
         il.MarkLabel(lengthDeletedSkipLabel);
         // It's a $TSFunction - call get_Length()
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSFunctionType);
-        il.Emit(OpCodes.Call, runtime.TSFunctionLengthGetter);
+        il.Emit(OpCodes.Castclass, runtime.FunctionValues.Type);
+        il.Emit(OpCodes.Call, runtime.FunctionValues.LengthGetter);
         il.Emit(OpCodes.Conv_R8);
         il.Emit(OpCodes.Box, _types.Double);
         il.Emit(OpCodes.Ret);
@@ -955,15 +1009,15 @@ public partial class RuntimeEmitter
         il.MarkLabel(lengthNotTSFunctionLabel);
         var lengthNotBoundTSFunctionLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.BoundTSFunctionType);
+        il.Emit(OpCodes.Isinst, runtime.FunctionBindings.BoundType);
         il.Emit(OpCodes.Brfalse, lengthNotBoundTSFunctionLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.BoundTSFunctionType);
-        il.Emit(OpCodes.Ldfld, runtime.BoundTSFunctionTargetField);
-        il.Emit(OpCodes.Call, runtime.TSFunctionLengthGetter);
+        il.Emit(OpCodes.Castclass, runtime.FunctionBindings.BoundType);
+        il.Emit(OpCodes.Ldfld, runtime.FunctionBindings.BoundTargetField);
+        il.Emit(OpCodes.Call, runtime.FunctionValues.LengthGetter);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.BoundTSFunctionType);
-        il.Emit(OpCodes.Ldfld, runtime.BoundTSFunctionBoundArgsField);
+        il.Emit(OpCodes.Castclass, runtime.FunctionBindings.BoundType);
+        il.Emit(OpCodes.Ldfld, runtime.FunctionBindings.BoundArgumentsField);
         il.Emit(OpCodes.Ldlen);
         il.Emit(OpCodes.Conv_I4);
         il.Emit(OpCodes.Sub);
@@ -981,17 +1035,17 @@ public partial class RuntimeEmitter
         il.MarkLabel(lengthNotBoundTSFunctionLabel);
         var lengthNotBoundAnyFunctionLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.BoundAnyFunctionType);
+        il.Emit(OpCodes.Isinst, runtime.FunctionBindings.AnyType);
         il.Emit(OpCodes.Brfalse, lengthNotBoundAnyFunctionLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.BoundAnyFunctionType);
-        il.Emit(OpCodes.Ldfld, runtime.BoundAnyFunctionTargetField);
+        il.Emit(OpCodes.Castclass, runtime.FunctionBindings.AnyType);
+        il.Emit(OpCodes.Ldfld, runtime.FunctionBindings.AnyTargetField);
         il.Emit(OpCodes.Ldstr, "length");
         il.Emit(OpCodes.Call, method);
         il.Emit(OpCodes.Unbox_Any, _types.Double);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.BoundAnyFunctionType);
-        il.Emit(OpCodes.Ldfld, runtime.BoundAnyFunctionBoundArgsField);
+        il.Emit(OpCodes.Castclass, runtime.FunctionBindings.AnyType);
+        il.Emit(OpCodes.Ldfld, runtime.FunctionBindings.AnyArgumentsField);
         il.Emit(OpCodes.Ldlen);
         il.Emit(OpCodes.Conv_R8);
         il.Emit(OpCodes.Sub);
@@ -1008,7 +1062,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(lengthNotBoundAnyFunctionLabel);
         var lengthNotApplyWrapperLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.FunctionApplyWrapperType);
+        il.Emit(OpCodes.Isinst, runtime.FunctionBindings.ApplyType);
         il.Emit(OpCodes.Brfalse, lengthNotApplyWrapperLabel);
         il.Emit(OpCodes.Ldc_R8, 2.0);
         il.Emit(OpCodes.Box, _types.Double);
@@ -1017,10 +1071,10 @@ public partial class RuntimeEmitter
 
         var lengthIsOneLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.FunctionBindWrapperType);
+        il.Emit(OpCodes.Isinst, runtime.FunctionBindings.BindType);
         il.Emit(OpCodes.Brtrue, lengthIsOneLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.FunctionCallWrapperType);
+        il.Emit(OpCodes.Isinst, runtime.FunctionBindings.CallType);
         var lengthUnknownLabel = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, lengthUnknownLabel);
         il.MarkLabel(lengthIsOneLabel);
@@ -1041,12 +1095,12 @@ public partial class RuntimeEmitter
 
         // Check for $TSFunction
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Isinst, runtime.FunctionValues.Type);
         il.Emit(OpCodes.Brtrue, nameIsTSFunctionLabel);
 
         // Check for $BoundTSFunction
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.BoundTSFunctionType);
+        il.Emit(OpCodes.Isinst, runtime.FunctionBindings.BoundType);
         il.Emit(OpCodes.Brtrue, nameIsBoundLabel);
 
         // Unknown - return ""
@@ -1065,8 +1119,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
         il.MarkLabel(nameDeletedSkipLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSFunctionType);
-        il.Emit(OpCodes.Call, runtime.TSFunctionNameGetter);
+        il.Emit(OpCodes.Castclass, runtime.FunctionValues.Type);
+        il.Emit(OpCodes.Call, runtime.FunctionValues.NameGetter);
         il.Emit(OpCodes.Br, nameEndLabel);
 
         // It's a $BoundTSFunction - get "bound " + target.Name
@@ -1075,9 +1129,9 @@ public partial class RuntimeEmitter
         il.MarkLabel(nameIsBoundLabel);
         il.Emit(OpCodes.Ldstr, "bound ");
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.BoundTSFunctionType);
-        il.Emit(OpCodes.Ldfld, runtime.BoundTSFunctionTargetField);
-        il.Emit(OpCodes.Call, runtime.TSFunctionNameGetter);
+        il.Emit(OpCodes.Castclass, runtime.FunctionBindings.BoundType);
+        il.Emit(OpCodes.Ldfld, runtime.FunctionBindings.BoundTargetField);
+        il.Emit(OpCodes.Call, runtime.FunctionValues.NameGetter);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", _types.String, _types.String));
 
         il.MarkLabel(nameEndLabel);
@@ -1114,21 +1168,21 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, functionPrototypeUndefinedLabel);
         var functionPrototypeBoundGetterLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, functionPrototypeGetterLocal);
-        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Isinst, runtime.FunctionValues.Type);
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Brfalse, functionPrototypeBoundGetterLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Newarr, _types.Object);
-        il.Emit(OpCodes.Callvirt, runtime.TSFunctionInvokeWithThis);
+        il.Emit(OpCodes.Callvirt, runtime.FunctionValues.InvokeWithThis);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(functionPrototypeBoundGetterLabel);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Ldloc, functionPrototypeGetterLocal);
-        il.Emit(OpCodes.Castclass, runtime.BoundAnyFunctionType);
+        il.Emit(OpCodes.Castclass, runtime.FunctionBindings.AnyType);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Newarr, _types.Object);
-        il.Emit(OpCodes.Callvirt, runtime.BoundAnyFunctionInvoke);
+        il.Emit(OpCodes.Callvirt, runtime.FunctionBindings.AnyInvoke);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(functionPrototypeDataLabel);
         il.Emit(OpCodes.Ldloc, functionPrototypeDescriptorLocal);
@@ -1168,14 +1222,18 @@ public partial class RuntimeEmitter
     /// Emits the $FunctionBindWrapper class.
     /// When invoked, creates a $BoundTSFunction.
     /// </summary>
-    private void EmitFunctionBindWrapperClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private void EmitFunctionBindWrapperClass(
+        ModuleBuilder moduleBuilder,
+        EmittedFunctionBindingRuntime functionBindings,
+        FunctionBindWrapperClassInputs inputs
+    )
     {
         var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$FunctionBindWrapper",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object
         );
-        runtime.FunctionBindWrapperType = typeBuilder;
+        functionBindings.BindType = typeBuilder;
 
         var targetField = typeBuilder.DefineField("_target", _types.Object, FieldAttributes.Private);
 
@@ -1185,7 +1243,7 @@ public partial class RuntimeEmitter
             CallingConventions.Standard,
             [_types.Object]
         );
-        runtime.FunctionBindWrapperCtor = ctorBuilder;
+        functionBindings.BindCtor = ctorBuilder;
 
         var ctorIL = ctorBuilder.GetILGenerator();
         ctorIL.Emit(OpCodes.Ldarg_0);
@@ -1203,7 +1261,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.ObjectArray]
         );
-        runtime.FunctionBindWrapperInvoke = invokeBuilder;
+        functionBindings.BindInvoke = invokeBuilder;
 
         var il = invokeBuilder.GetILGenerator();
         var thisArgLocal = il.DeclareLocal(_types.Object);
@@ -1237,7 +1295,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, thisArgLocal);
         il.Emit(OpCodes.Br, afterThisLabel);
         il.MarkLabel(noThisLabel);
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, inputs.UndefinedInstance);
         il.Emit(OpCodes.Stloc, thisArgLocal);
         il.MarkLabel(afterThisLabel);
 
@@ -1282,17 +1340,17 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Isinst, callableType);
             il.Emit(OpCodes.Brtrue, callableTargetLabel);
         }
-        AcceptCallable(runtime.TSFunctionType);
-        AcceptCallable(runtime.BoundTSFunctionType);
-        AcceptCallable(runtime.BoundAnyFunctionType);
-        AcceptCallable(runtime.ArrayOperations.BoundMethodType);
-        if (runtime.Map is not null)
-            AcceptCallable(runtime.RequireMap().BoundMethodType);
-        if (runtime.Set is not null)
-            AcceptCallable(runtime.RequireSet().BoundMethodType);
+        AcceptCallable(inputs.FunctionValues.Type);
+        AcceptCallable(functionBindings.BoundType);
+        AcceptCallable(functionBindings.AnyType);
+        AcceptCallable(inputs.ArrayOperations.BoundMethodType);
+        if (inputs.Map is not null)
+            AcceptCallable(inputs.Map!.BoundMethodType);
+        if (inputs.Set is not null)
+            AcceptCallable(inputs.Set!.BoundMethodType);
         AcceptCallable(_types.Type);
         AcceptCallable(_types.FuncObjectArrayToObject);
-        GuestErrorEmitter.ThrowTypeError(il, runtime, "Function.prototype.bind called on incompatible receiver");
+        GuestErrorEmitter.ThrowError(il, inputs.Errors.CreateException, inputs.Errors.TypeErrorConstructor, "Function.prototype.bind called on incompatible receiver");
         il.MarkLabel(callableTargetLabel);
 
         // Dispatch based on target type:
@@ -1308,12 +1366,12 @@ public partial class RuntimeEmitter
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, targetField);
-        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Isinst, inputs.FunctionValues.Type);
         il.Emit(OpCodes.Brtrue, isTSFunctionLabel);
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, targetField);
-        il.Emit(OpCodes.Isinst, runtime.ArrayOperations.BoundMethodType);
+        il.Emit(OpCodes.Isinst, inputs.ArrayOperations.BoundMethodType);
         il.Emit(OpCodes.Brfalse, otherCallableLabel);
         il.Emit(OpCodes.Ldloc, thisArgLocal);
         il.Emit(OpCodes.Isinst, _types.ListOfObject);
@@ -1324,7 +1382,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, targetField);
         il.Emit(OpCodes.Ldloc, boundArgsLocal);
-        il.Emit(OpCodes.Newobj, runtime.BoundAnyFunctionCtor);
+        il.Emit(OpCodes.Newobj, functionBindings.AnyCtor);
         il.Emit(OpCodes.Ret);
 
         // Recreate the implementation wrapper with the explicit bound receiver,
@@ -1334,21 +1392,21 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Castclass, _types.ListOfObject);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, targetField);
-        il.Emit(OpCodes.Castclass, runtime.ArrayOperations.BoundMethodType);
-        il.Emit(OpCodes.Ldfld, runtime.ArrayOperations.BoundMethodNameField);
-        il.Emit(OpCodes.Newobj, runtime.ArrayOperations.BoundMethodCtor);
+        il.Emit(OpCodes.Castclass, inputs.ArrayOperations.BoundMethodType);
+        il.Emit(OpCodes.Ldfld, inputs.ArrayOperations.BoundMethodNameField);
+        il.Emit(OpCodes.Newobj, inputs.ArrayOperations.BoundMethodCtor);
         il.Emit(OpCodes.Ldloc, boundArgsLocal);
-        il.Emit(OpCodes.Newobj, runtime.BoundAnyFunctionCtor);
+        il.Emit(OpCodes.Newobj, functionBindings.AnyCtor);
         il.Emit(OpCodes.Ret);
 
         // return new $BoundTSFunction(($TSFunction)_target, thisArg, boundArgs)
         il.MarkLabel(isTSFunctionLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, targetField);
-        il.Emit(OpCodes.Castclass, runtime.TSFunctionType);
+        il.Emit(OpCodes.Castclass, inputs.FunctionValues.Type);
         il.Emit(OpCodes.Ldloc, thisArgLocal);
         il.Emit(OpCodes.Ldloc, boundArgsLocal);
-        il.Emit(OpCodes.Newobj, runtime.BoundTSFunctionCtor);
+        il.Emit(OpCodes.Newobj, functionBindings.BoundCtor);
         il.Emit(OpCodes.Ret);
 
         // InvokeWithThis (not used but needed for consistency)
@@ -1372,14 +1430,18 @@ public partial class RuntimeEmitter
     /// Emits the $FunctionCallWrapper class.
     /// When invoked, calls the target function with the specified this and args.
     /// </summary>
-    private void EmitFunctionCallWrapperClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private void EmitFunctionCallWrapperClass(
+        ModuleBuilder moduleBuilder,
+        EmittedFunctionBindingRuntime functionBindings,
+        FunctionCallWrapperClassInputs inputs
+    )
     {
         var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$FunctionCallWrapper",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object
         );
-        runtime.FunctionCallWrapperType = typeBuilder;
+        functionBindings.CallType = typeBuilder;
 
         var targetField = typeBuilder.DefineField("_target", _types.Object, FieldAttributes.Private);
 
@@ -1389,7 +1451,7 @@ public partial class RuntimeEmitter
             CallingConventions.Standard,
             [_types.Object]
         );
-        runtime.FunctionCallWrapperCtor = ctorBuilder;
+        functionBindings.CallCtor = ctorBuilder;
 
         var ctorIL = ctorBuilder.GetILGenerator();
         ctorIL.Emit(OpCodes.Ldarg_0);
@@ -1407,7 +1469,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.ObjectArray]
         );
-        runtime.FunctionCallWrapperInvoke = invokeBuilder;
+        functionBindings.CallInvoke = invokeBuilder;
 
         var il = invokeBuilder.GetILGenerator();
         var thisArgLocal = il.DeclareLocal(_types.Object);
@@ -1485,17 +1547,17 @@ public partial class RuntimeEmitter
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, targetField);
-        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Isinst, inputs.FunctionValues.Type);
         il.Emit(OpCodes.Brtrue, isTSFunctionLabel);
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, targetField);
-        il.Emit(OpCodes.Isinst, runtime.BoundTSFunctionType);
+        il.Emit(OpCodes.Isinst, functionBindings.BoundType);
         il.Emit(OpCodes.Brtrue, isBoundTSFunctionLabel);
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, targetField);
-        il.Emit(OpCodes.Isinst, runtime.ArrayOperations.BoundMethodType);
+        il.Emit(OpCodes.Isinst, inputs.ArrayOperations.BoundMethodType);
         var notBoundArrayMethodLabel = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, notBoundArrayMethodLabel);
         il.Emit(OpCodes.Ldloc, thisArgLocal);
@@ -1503,11 +1565,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, isBoundArrayMethodLabel);
         il.MarkLabel(notBoundArrayMethodLabel);
 
-        if (runtime.Map is not null)
+        if (inputs.Map is not null)
         {
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldfld, targetField);
-            il.Emit(OpCodes.Isinst, runtime.RequireMap().BoundMethodType);
+            il.Emit(OpCodes.Isinst, inputs.Map!.BoundMethodType);
             var notBoundMapMethodLabel = il.DefineLabel();
             il.Emit(OpCodes.Brfalse, notBoundMapMethodLabel);
             il.Emit(OpCodes.Ldloc, thisArgLocal);
@@ -1516,11 +1578,11 @@ public partial class RuntimeEmitter
             il.MarkLabel(notBoundMapMethodLabel);
         }
 
-        if (runtime.Set is not null)
+        if (inputs.Set is not null)
         {
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldfld, targetField);
-            il.Emit(OpCodes.Isinst, runtime.RequireSet().BoundMethodType);
+            il.Emit(OpCodes.Isinst, inputs.Set!.BoundMethodType);
             var notBoundSetMethodLabel = il.DefineLabel();
             il.Emit(OpCodes.Brfalse, notBoundSetMethodLabel);
             il.Emit(OpCodes.Ldloc, thisArgLocal);
@@ -1532,7 +1594,13 @@ public partial class RuntimeEmitter
         // Remaining non-TSFunction callables, including proxies, retain the
         // explicit thisArg through the shared dispatch fallback.
         EmitDispatchToTarget(
-            il, runtime, targetField, callArgsLocal, thisArgLocal);
+            il,
+            functionBindings,
+            new DispatchToTargetInputs(inputs.FunctionValues, inputs.ArrayOperations, inputs.Map, inputs.Set),
+            targetField,
+            callArgsLocal,
+            thisArgLocal
+        );
 
         // Fall-through: unknown target type → return null
         il.Emit(OpCodes.Ldnull);
@@ -1542,20 +1610,20 @@ public partial class RuntimeEmitter
         il.MarkLabel(isTSFunctionLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, targetField);
-        il.Emit(OpCodes.Castclass, runtime.TSFunctionType);
+        il.Emit(OpCodes.Castclass, inputs.FunctionValues.Type);
         il.Emit(OpCodes.Ldloc, thisArgLocal);
         il.Emit(OpCodes.Ldloc, callArgsLocal);
-        il.Emit(OpCodes.Callvirt, runtime.TSFunctionInvokeWithThis);
+        il.Emit(OpCodes.Callvirt, inputs.FunctionValues.InvokeWithThis);
         il.Emit(OpCodes.Ret);
 
         // return (($BoundTSFunction)_target).InvokeWithThis(thisArg, callArgs)
         il.MarkLabel(isBoundTSFunctionLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, targetField);
-        il.Emit(OpCodes.Castclass, runtime.BoundTSFunctionType);
+        il.Emit(OpCodes.Castclass, functionBindings.BoundType);
         il.Emit(OpCodes.Ldloc, thisArgLocal);
         il.Emit(OpCodes.Ldloc, callArgsLocal);
-        il.Emit(OpCodes.Callvirt, runtime.BoundTSFunctionInvokeWithThis);
+        il.Emit(OpCodes.Callvirt, functionBindings.BoundInvokeWithThis);
         il.Emit(OpCodes.Ret);
 
         // Recreate the lightweight method wrapper with call's explicit
@@ -1565,40 +1633,40 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Castclass, _types.ListOfObject);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, targetField);
-        il.Emit(OpCodes.Castclass, runtime.ArrayOperations.BoundMethodType);
-        il.Emit(OpCodes.Ldfld, runtime.ArrayOperations.BoundMethodNameField);
-        il.Emit(OpCodes.Newobj, runtime.ArrayOperations.BoundMethodCtor);
+        il.Emit(OpCodes.Castclass, inputs.ArrayOperations.BoundMethodType);
+        il.Emit(OpCodes.Ldfld, inputs.ArrayOperations.BoundMethodNameField);
+        il.Emit(OpCodes.Newobj, inputs.ArrayOperations.BoundMethodCtor);
         il.Emit(OpCodes.Ldloc, callArgsLocal);
-        il.Emit(OpCodes.Callvirt, runtime.ArrayOperations.BoundMethodInvoke);
+        il.Emit(OpCodes.Callvirt, inputs.ArrayOperations.BoundMethodInvoke);
         il.Emit(OpCodes.Ret);
 
-        if (runtime.Map is not null)
+        if (inputs.Map is not null)
         {
             il.MarkLabel(isBoundMapMethodLabel);
             il.Emit(OpCodes.Ldloc, thisArgLocal);
             il.Emit(OpCodes.Castclass, _types.DictionaryObjectObject);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldfld, targetField);
-            il.Emit(OpCodes.Castclass, runtime.RequireMap().BoundMethodType);
-            il.Emit(OpCodes.Ldfld, runtime.RequireMap().BoundNameField);
-            il.Emit(OpCodes.Newobj, runtime.RequireMap().BoundMethodConstructor);
+            il.Emit(OpCodes.Castclass, inputs.Map!.BoundMethodType);
+            il.Emit(OpCodes.Ldfld, inputs.Map!.BoundNameField);
+            il.Emit(OpCodes.Newobj, inputs.Map!.BoundMethodConstructor);
             il.Emit(OpCodes.Ldloc, callArgsLocal);
-            il.Emit(OpCodes.Callvirt, runtime.RequireMap().BoundMethodInvoke);
+            il.Emit(OpCodes.Callvirt, inputs.Map!.BoundMethodInvoke);
             il.Emit(OpCodes.Ret);
         }
 
-        if (runtime.Set is not null)
+        if (inputs.Set is not null)
         {
             il.MarkLabel(isBoundSetMethodLabel);
             il.Emit(OpCodes.Ldloc, thisArgLocal);
             il.Emit(OpCodes.Castclass, _types.HashSetOfObject);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldfld, targetField);
-            il.Emit(OpCodes.Castclass, runtime.RequireSet().BoundMethodType);
-            il.Emit(OpCodes.Ldfld, runtime.RequireSet().BoundNameField);
-            il.Emit(OpCodes.Newobj, runtime.RequireSet().BoundMethodConstructor);
+            il.Emit(OpCodes.Castclass, inputs.Set!.BoundMethodType);
+            il.Emit(OpCodes.Ldfld, inputs.Set!.BoundNameField);
+            il.Emit(OpCodes.Newobj, inputs.Set!.BoundMethodConstructor);
             il.Emit(OpCodes.Ldloc, callArgsLocal);
-            il.Emit(OpCodes.Callvirt, runtime.RequireSet().BoundMethodInvoke);
+            il.Emit(OpCodes.Callvirt, inputs.Set!.BoundMethodInvoke);
             il.Emit(OpCodes.Ret);
         }
 
@@ -1623,14 +1691,18 @@ public partial class RuntimeEmitter
     /// Emits the $FunctionApplyWrapper class.
     /// When invoked, calls the target function with thisArg and spread argsArray.
     /// </summary>
-    private void EmitFunctionApplyWrapperClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private void EmitFunctionApplyWrapperClass(
+        ModuleBuilder moduleBuilder,
+        EmittedFunctionBindingRuntime functionBindings,
+        FunctionApplyWrapperClassInputs inputs
+    )
     {
         var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$FunctionApplyWrapper",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object
         );
-        runtime.FunctionApplyWrapperType = typeBuilder;
+        functionBindings.ApplyType = typeBuilder;
 
         var targetField = typeBuilder.DefineField("_target", _types.Object, FieldAttributes.Private);
 
@@ -1640,7 +1712,7 @@ public partial class RuntimeEmitter
             CallingConventions.Standard,
             [_types.Object]
         );
-        runtime.FunctionApplyWrapperCtor = ctorBuilder;
+        functionBindings.ApplyCtor = ctorBuilder;
 
         var ctorIL = ctorBuilder.GetILGenerator();
         ctorIL.Emit(OpCodes.Ldarg_0);
@@ -1658,7 +1730,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.ObjectArray]
         );
-        runtime.FunctionApplyWrapperInvoke = invokeBuilder;
+        functionBindings.ApplyInvoke = invokeBuilder;
 
         var il = invokeBuilder.GetILGenerator();
         var thisArgLocal = il.DeclareLocal(_types.Object);
@@ -1736,7 +1808,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, isArrayLabel);
 
         il.Emit(OpCodes.Ldloc, argsArrayLocal);
-        il.Emit(OpCodes.Isinst, runtime.ArrayStorage.Type);
+        il.Emit(OpCodes.Isinst, inputs.ArrayStorage.Type);
         il.Emit(OpCodes.Brtrue, isTSArrayLabel);
 
         // Unknown type - empty array
@@ -1759,8 +1831,8 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(isTSArrayLabel);
         il.Emit(OpCodes.Ldloc, argsArrayLocal);
-        il.Emit(OpCodes.Castclass, runtime.ArrayStorage.Type);
-        il.Emit(OpCodes.Callvirt, runtime.ArrayStorage.ElementsGetter);
+        il.Emit(OpCodes.Castclass, inputs.ArrayStorage.Type);
+        il.Emit(OpCodes.Callvirt, inputs.ArrayStorage.ElementsGetter);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObjectNullable, "ToArray")!);
         il.Emit(OpCodes.Stloc, callArgsLocal);
         il.Emit(OpCodes.Br, afterConvertLabel);
@@ -1779,17 +1851,23 @@ public partial class RuntimeEmitter
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, targetField);
-        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Isinst, inputs.FunctionValues.Type);
         il.Emit(OpCodes.Brtrue, isTSFunctionLabel);
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, targetField);
-        il.Emit(OpCodes.Isinst, runtime.BoundTSFunctionType);
+        il.Emit(OpCodes.Isinst, functionBindings.BoundType);
         il.Emit(OpCodes.Brtrue, isBoundTSFunctionLabel);
 
         // Non-TSFunction callables, including proxies, retain thisArg.
         EmitDispatchToTarget(
-            il, runtime, targetField, callArgsLocal, thisArgLocal);
+            il,
+            functionBindings,
+            new DispatchToTargetInputs(inputs.FunctionValues, inputs.ArrayOperations, inputs.Map, inputs.Set),
+            targetField,
+            callArgsLocal,
+            thisArgLocal
+        );
 
         // Fall-through: unknown target type → return null
         il.Emit(OpCodes.Ldnull);
@@ -1798,18 +1876,18 @@ public partial class RuntimeEmitter
         il.MarkLabel(isTSFunctionLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, targetField);
-        il.Emit(OpCodes.Castclass, runtime.TSFunctionType);
+        il.Emit(OpCodes.Castclass, inputs.FunctionValues.Type);
         il.Emit(OpCodes.Ldloc, thisArgLocal);
         il.Emit(OpCodes.Ldloc, callArgsLocal);
-        il.Emit(OpCodes.Callvirt, runtime.TSFunctionInvokeWithThis);
+        il.Emit(OpCodes.Callvirt, inputs.FunctionValues.InvokeWithThis);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(isBoundTSFunctionLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, targetField);
-        il.Emit(OpCodes.Castclass, runtime.BoundTSFunctionType);
+        il.Emit(OpCodes.Castclass, functionBindings.BoundType);
         il.Emit(OpCodes.Ldloc, callArgsLocal);
-        il.Emit(OpCodes.Callvirt, runtime.BoundTSFunctionInvoke);
+        il.Emit(OpCodes.Callvirt, functionBindings.BoundInvoke);
         il.Emit(OpCodes.Ret);
 
         // InvokeWithThis

@@ -174,7 +174,7 @@ public sealed class GlobalThisStaticEmitter : IStaticTypeEmitterStrategy
             "WeakSet" => ctx.Types.ConditionalWeakTableObjectObject,
             "Promise" => ctx.Types.TaskOfObject,
             "Buffer" => ctx.Runtime!.Buffer?.Type,
-            "Function" => ctx.Runtime!.TSFunctionType,
+            "Function" => ctx.Runtime!.FunctionValues.Type,
             "TextEncoder" => ctx.Runtime!.RequireTextEncoding().EncoderType,
             "TextDecoder" => ctx.Runtime!.RequireTextEncoding().DecoderType,
             _ => null

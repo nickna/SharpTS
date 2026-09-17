@@ -769,13 +769,13 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg, idx);
             il.Emit(OpCodes.Brfalse, next);
             il.Emit(OpCodes.Ldarg, idx);
-            il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+            il.Emit(OpCodes.Isinst, runtime.FunctionValues.Type);
             il.Emit(OpCodes.Brfalse, next);
             il.Emit(OpCodes.Ldarg, idx);
-            il.Emit(OpCodes.Castclass, runtime.TSFunctionType);
+            il.Emit(OpCodes.Castclass, runtime.FunctionValues.Type);
             il.Emit(OpCodes.Ldc_I4_0);
             il.Emit(OpCodes.Newarr, _types.Object);
-            il.Emit(OpCodes.Callvirt, runtime.TSFunctionInvoke);
+            il.Emit(OpCodes.Callvirt, runtime.FunctionValues.Invoke);
             il.Emit(OpCodes.Pop);
             il.Emit(OpCodes.Br, done);
             il.MarkLabel(next);

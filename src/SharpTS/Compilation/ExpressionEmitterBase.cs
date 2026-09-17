@@ -1818,7 +1818,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
         IReadOnlyList<LocalBuilder> argumentTemps)
     {
         if (Ctx.MethodsCapturingArguments?.Contains(constructor) != true
-            || Ctx.Runtime?.CurrentArgumentsField == null)
+            || Ctx.Runtime?.Arguments.CurrentField == null)
         {
             return;
         }
@@ -1832,7 +1832,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
             IL.Emit(OpCodes.Ldloc, argumentTemps[i]);
             IL.Emit(OpCodes.Stelem_Ref);
         }
-        IL.Emit(OpCodes.Stsfld, Ctx.Runtime.CurrentArgumentsField);
+        IL.Emit(OpCodes.Stsfld, Ctx.Runtime.Arguments.CurrentField);
     }
 
     /// <summary>
@@ -2257,7 +2257,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
             "WeakRef" => Types.WeakReferenceObject,
             "FinalizationRegistry" => Types.ObjectArray,
             "Promise" => Types.TaskOfObject,
-            "Function" => Ctx.Runtime!.TSFunctionType,
+            "Function" => Ctx.Runtime!.FunctionValues.Type,
             // Symbol (#234): the value-form $TSSymbol token. ILEmitter handles
             // bare Symbol in its own pseudo-variable arm; this entry covers the
             // state-machine emitters that resolve through this base path.
