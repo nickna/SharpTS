@@ -45,7 +45,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, runtime.UndefinedType);
         il.Emit(OpCodes.Brtrue, noMethodLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.TypeOf);
+        il.Emit(OpCodes.Call, runtime.Operators.TypeOf);
         il.Emit(OpCodes.Stloc, typeOfLocal);
         il.Emit(OpCodes.Ldloc, typeOfLocal);
         il.Emit(OpCodes.Ldstr, "object");

@@ -818,6 +818,7 @@ public partial class RuntimeEmitter
         runtime.ObjectDeletion.CompleteEmission();
         runtime.ObjectRead.CompleteEmission();
         runtime.ObjectWrite.CompleteEmission();
+        runtime.Operators.CompleteEmission();
         runtime.Reflect.CompleteEmission();
         runtime.Json.CompleteEmission();
         runtime.Records.CompleteEmission();

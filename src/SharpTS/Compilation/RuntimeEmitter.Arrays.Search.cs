@@ -247,7 +247,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(ordinaryCompare);
         il.Emit(OpCodes.Ldloc, elementLocal);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.StrictEquals);
+        il.Emit(OpCodes.Call, runtime.Operators.StrictEquals);
 
         var notMatch = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, notMatch);
@@ -1464,7 +1464,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, runtime.ObjectRead.Index);
         il.MarkLabel(elementReady);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.StrictEquals);
+        il.Emit(OpCodes.Call, runtime.Operators.StrictEquals);
         il.Emit(OpCodes.Brfalse, advance);
         il.Emit(OpCodes.Ldloc, indexLocal);
         il.Emit(OpCodes.Ret);
@@ -2484,7 +2484,15 @@ public partial class RuntimeEmitter
             () => il.Emit(OpCodes.Ldloc, currentLocal),
             () => il.Emit(OpCodes.Ldarg_1),
             notProxyLabel,
-            runtime);
+            runtime.Operators,
+            new ProxyHasCheckInputs(
+                runtime.Booleans,
+                runtime.InvokeMethodUnwrapped,
+                runtime.ObjectDescriptors,
+                runtime.ObjectRead,
+                runtime.ObjectState
+            )
+        );
         il.MarkLabel(notProxyLabel);
 
         // Date/Error/function/built-in singleton receivers store expando

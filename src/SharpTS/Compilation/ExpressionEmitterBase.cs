@@ -442,18 +442,18 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
         switch (b.Operator.Type)
         {
             case TokenType.IN:
-                IL.Emit(OpCodes.Call, Ctx.Runtime!.HasIn);
+                IL.Emit(OpCodes.Call, Ctx.Runtime!.Operators.HasIn);
                 IL.Emit(OpCodes.Box, typeof(bool));
                 SetStackUnknown();
                 return;
             case TokenType.INSTANCEOF:
-                IL.Emit(OpCodes.Call, Ctx.Runtime!.InstanceOf);
+                IL.Emit(OpCodes.Call, Ctx.Runtime!.Operators.InstanceOf);
                 IL.Emit(OpCodes.Box, typeof(bool));
                 SetStackUnknown();
                 return;
         }
 
-        if (!_helpers.TryEmitBinaryOperator(b.Operator.Type, Ctx.Runtime!.Add, Ctx.Runtime!.Equals))
+        if (!_helpers.TryEmitBinaryOperator(b.Operator.Type, Ctx.Runtime!.Operators.Add, Ctx.Runtime!.Operators.LooseEquals))
         {
             // Unsupported operator: pop both operands (stack must stay balanced for the verifier)
             // and push a placeholder. Leaving one operand on the stack corrupts state-machine
@@ -2640,7 +2640,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
                 }
                 else
                 {
-                    _helpers.EmitUnaryTypeOf(() => EmitExpression(u.Right), Ctx.Runtime!.TypeOf);
+                    _helpers.EmitUnaryTypeOf(() => EmitExpression(u.Right), Ctx.Runtime!.Operators.TypeOf);
                 }
                 break;
             case TokenType.TILDE:

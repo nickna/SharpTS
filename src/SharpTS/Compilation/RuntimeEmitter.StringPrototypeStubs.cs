@@ -148,7 +148,7 @@ public partial class RuntimeEmitter
                 runtime.ObjectRead.Property,
                 runtime.InvokeMethodValue,
                 runtime.StringCoercion,
-                runtime.TypeOf,
+                runtime.Operators.TypeOf,
                 runtime.UndefinedType
             )
         );
@@ -290,7 +290,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
         il.Emit(OpCodes.Stloc, methodLocal);
         il.Emit(OpCodes.Ldloc, methodLocal);
-        il.Emit(OpCodes.Call, runtime.TypeOf);
+        il.Emit(OpCodes.Call, runtime.Operators.TypeOf);
         il.Emit(OpCodes.Ldstr, "function");
         il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
         var callableLabel = il.DefineLabel();

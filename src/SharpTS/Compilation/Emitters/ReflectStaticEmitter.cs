@@ -48,7 +48,7 @@ public sealed class ReflectStaticEmitter : IStaticTypeEmitterStrategy
                 il.Emit(OpCodes.Stloc, targetLocal);
                 il.Emit(OpCodes.Ldloc, keyLocal);
                 il.Emit(OpCodes.Ldloc, targetLocal);
-                il.Emit(OpCodes.Call, ctx.Runtime!.HasIn);
+                il.Emit(OpCodes.Call, ctx.Runtime!.Operators.HasIn);
                 il.Emit(OpCodes.Box, typeof(bool));
                 return true;
             }

@@ -37,7 +37,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
         il.Emit(OpCodes.Stloc, thenLocal);
         il.Emit(OpCodes.Ldloc, thenLocal);
-        il.Emit(OpCodes.Call, runtime.TypeOf);
+        il.Emit(OpCodes.Call, runtime.Operators.TypeOf);
         il.Emit(OpCodes.Ldstr, "function");
         il.Emit(OpCodes.Call, _types.StringOpEquality);
         il.Emit(OpCodes.Brtrue, thenCallableLabel);

@@ -34,6 +34,7 @@ public class EmittedJsonDependencyTests
         {
             if (parameter.Name == "TSRegExpType") return supplied ? runtime.RegExps.RequireImplementation().Type : null;
             if (parameter.Name == "TSSymbolType") return runtime.Symbols.Type;
+            if (parameter.Name == "TypeOf") return runtime.Operators.TypeOf;
             if (parameter.Name == "GetProperty") return runtime.ObjectRead.Property;
             if (parameter.Name == "GetIndex") return runtime.ObjectRead.Index;
             if (parameter.Name == "GetKeys") return runtime.ObjectKeys.Keys;

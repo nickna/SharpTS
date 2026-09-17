@@ -939,7 +939,7 @@ public class StateMachineEmitHelpers
     /// </summary>
     public void EmitNumericComparison(OpCode compareOp)
     {
-        if (_runtime?.JsLessThan != null)
+        if (_runtime?.Operators.LessThan != null)
         {
             // For Clt: JsLessThan(left, right). For Cgt: JsLessThan(right, left).
             if (compareOp == OpCodes.Cgt)
@@ -952,7 +952,7 @@ public class StateMachineEmitHelpers
                 _il.Emit(OpCodes.Ldloc, tmp);
                 _il.Emit(OpCodes.Ldloc, leftLocal);
             }
-            _il.Emit(OpCodes.Call, _runtime.JsLessThan);
+            _il.Emit(OpCodes.Call, _runtime.Operators.LessThan);
             _stackType = StackType.Boolean;
             return;
         }
@@ -972,9 +972,9 @@ public class StateMachineEmitHelpers
     /// </summary>
     public void EmitNumericComparisonLe()
     {
-        if (_runtime?.JsLessOrEqual != null)
+        if (_runtime?.Operators.LessThanOrEqual != null)
         {
-            _il.Emit(OpCodes.Call, _runtime.JsLessOrEqual);
+            _il.Emit(OpCodes.Call, _runtime.Operators.LessThanOrEqual);
             _stackType = StackType.Boolean;
             return;
         }
@@ -995,7 +995,7 @@ public class StateMachineEmitHelpers
     /// </summary>
     public void EmitNumericComparisonGe()
     {
-        if (_runtime?.JsLessOrEqual != null)
+        if (_runtime?.Operators.LessThanOrEqual != null)
         {
             // Swap operands: [left, right] → [right, left] so JsLessOrEqual(right, left) returns true iff a >= b.
             var rightLocal = _il.DeclareLocal(_types.Object);
@@ -1004,7 +1004,7 @@ public class StateMachineEmitHelpers
             _il.Emit(OpCodes.Stloc, leftLocal);
             _il.Emit(OpCodes.Ldloc, rightLocal);
             _il.Emit(OpCodes.Ldloc, leftLocal);
-            _il.Emit(OpCodes.Call, _runtime.JsLessOrEqual);
+            _il.Emit(OpCodes.Call, _runtime.Operators.LessThanOrEqual);
             _stackType = StackType.Boolean;
             return;
         }

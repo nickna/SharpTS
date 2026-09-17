@@ -201,7 +201,7 @@ public partial class RuntimeEmitter
             closeIl.Emit(OpCodes.Brtrue, noReturnMethodLabel);
 
             closeIl.Emit(OpCodes.Ldloc, returnMethodLocal);
-            closeIl.Emit(OpCodes.Call, runtime.TypeOf);
+            closeIl.Emit(OpCodes.Call, runtime.Operators.TypeOf);
             closeIl.Emit(OpCodes.Ldstr, "function");
             closeIl.Emit(OpCodes.Call, _types.GetMethod(
                 _types.String, "op_Equality", _types.String, _types.String));
@@ -302,7 +302,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, invokeResolveLocal);
         il.Emit(OpCodes.Brfalse, resolveCheckedLabel);
         il.Emit(OpCodes.Ldloc, resolveFunctionLocal);
-        il.Emit(OpCodes.Call, runtime.TypeOf);
+        il.Emit(OpCodes.Call, runtime.Operators.TypeOf);
         il.Emit(OpCodes.Ldstr, "function");
         il.Emit(OpCodes.Call, _types.GetMethod(
             _types.String, "op_Equality", _types.String, _types.String));
@@ -505,7 +505,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, runtime.UndefinedType);
         il.Emit(OpCodes.Brtrue, iteratorTypeErrorLabel);
         il.Emit(OpCodes.Ldloc, iteratorLocal);
-        il.Emit(OpCodes.Call, runtime.TypeOf);
+        il.Emit(OpCodes.Call, runtime.Operators.TypeOf);
         il.Emit(OpCodes.Stloc, iteratorTypeLocal);
         il.Emit(OpCodes.Ldloc, iteratorTypeLocal);
         il.Emit(OpCodes.Ldstr, "object");
@@ -646,7 +646,7 @@ public partial class RuntimeEmitter
             targetIl.Emit(OpCodes.Call, runtime.ObjectRead.Property);
             targetIl.Emit(OpCodes.Stloc, thenFunctionLocal);
             targetIl.Emit(OpCodes.Ldloc, thenFunctionLocal);
-            targetIl.Emit(OpCodes.Call, runtime.TypeOf);
+            targetIl.Emit(OpCodes.Call, runtime.Operators.TypeOf);
             targetIl.Emit(OpCodes.Ldstr, "function");
             targetIl.Emit(OpCodes.Call, _types.StringOpEquality);
             var anyThenCallableLabel = targetIl.DefineLabel();
@@ -677,7 +677,7 @@ public partial class RuntimeEmitter
             targetIl.Emit(OpCodes.Call, runtime.ObjectRead.Property);
             targetIl.Emit(OpCodes.Stloc, thenFunctionLocal);
             targetIl.Emit(OpCodes.Ldloc, thenFunctionLocal);
-            targetIl.Emit(OpCodes.Call, runtime.TypeOf);
+            targetIl.Emit(OpCodes.Call, runtime.Operators.TypeOf);
             targetIl.Emit(OpCodes.Ldstr, "function");
             targetIl.Emit(OpCodes.Call, _types.StringOpEquality);
             var allThenCallableLabel = targetIl.DefineLabel();
@@ -701,7 +701,7 @@ public partial class RuntimeEmitter
             targetIl.Emit(OpCodes.Call, runtime.ObjectRead.Property);
             targetIl.Emit(OpCodes.Stloc, thenFunctionLocal);
             targetIl.Emit(OpCodes.Ldloc, thenFunctionLocal);
-            targetIl.Emit(OpCodes.Call, runtime.TypeOf);
+            targetIl.Emit(OpCodes.Call, runtime.Operators.TypeOf);
             targetIl.Emit(OpCodes.Ldstr, "function");
             targetIl.Emit(OpCodes.Call, _types.StringOpEquality);
             var directThenCallableLabel = targetIl.DefineLabel();
@@ -790,7 +790,7 @@ public partial class RuntimeEmitter
             targetIl.Emit(OpCodes.Call, runtime.ObjectRead.Property);
             targetIl.Emit(OpCodes.Stloc, thenFunctionLocal);
             targetIl.Emit(OpCodes.Ldloc, thenFunctionLocal);
-            targetIl.Emit(OpCodes.Call, runtime.TypeOf);
+            targetIl.Emit(OpCodes.Call, runtime.Operators.TypeOf);
             targetIl.Emit(OpCodes.Ldstr, "function");
             targetIl.Emit(OpCodes.Call, _types.StringOpEquality);
             var observableThenCallableLabel = targetIl.DefineLabel();
