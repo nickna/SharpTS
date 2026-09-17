@@ -55,9 +55,9 @@ public partial class RuntimeEmitter
 
             // Value calls must turn an omitted argument into JS undefined, not
             // CLR null, before applying the URI function's ToString coercion.
-            if (runtime.PadUndefinedAttrCtor is not null)
+            if (runtime.FunctionAttributes.PadUndefinedCtor is not null)
                 method.SetCustomAttribute(
-                    runtime.PadUndefinedAttrCtor, CustomAttributeEncoder.EmptyBlob);
+                    runtime.FunctionAttributes.PadUndefinedCtor, CustomAttributeEncoder.EmptyBlob);
 
             var il = method.GetILGenerator();
             il.Emit(OpCodes.Ldarg_0);

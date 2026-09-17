@@ -330,6 +330,14 @@ carrier; the strict SyntaxError helper retains its existing CLR exception repres
 Exception wrapping follows supplied optional Promise metadata. Error-cause Proxy handling
 receives six explicit invocation/delegate handles through the shared reflection bridge.
 
+Function attribute metadata uses required `FunctionAttributes` ownership for the
+seventeen handles of seven attribute classes. Each class is created in its original
+order, and the owner completes before function-wrapper emission. Attribute emitters
+and wrapper-cache readers take that owner directly. Compiler marker paths preserve
+their absent-runtime behavior and require declared attributes when a runtime exists.
+Saved-output, marker payload, numeric-rest allocation, reuse and reference-assembly
+tests cover this boundary; invocation and per-output function caches remain separate.
+
 Readline helper emission relies on its supplied required declarations; feature
 selection remains at the orchestration boundary. AbortSignal.any receives its
 fine deployment selection explicitly through the Abort helper group. Ordinary

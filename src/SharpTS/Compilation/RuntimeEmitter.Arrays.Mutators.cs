@@ -1887,7 +1887,7 @@ public partial class RuntimeEmitter
             [_types.ListOfObject, _types.Object]
         );
         method.SetCustomAttribute(
-            runtime.PadUndefinedAttrCtor, CustomAttributeEncoder.EmptyBlob);
+            runtime.FunctionAttributes.PadUndefinedCtor, CustomAttributeEncoder.EmptyBlob);
         runtime.ArrayOperations.Sort = method;
 
         var il = method.GetILGenerator();
@@ -2205,7 +2205,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object, _types.Object]);
         method.SetCustomAttribute(
-            runtime.PadUndefinedAttrCtor, CustomAttributeEncoder.EmptyBlob);
+            runtime.FunctionAttributes.PadUndefinedCtor, CustomAttributeEncoder.EmptyBlob);
         runtime.ArrayOperations.SortProto = method;
 
         var il = method.GetILGenerator();
@@ -2266,7 +2266,7 @@ public partial class RuntimeEmitter
             [_types.ListOfObject, _types.Object]
         );
         method.SetCustomAttribute(
-            runtime.PadUndefinedAttrCtor, CustomAttributeEncoder.EmptyBlob);
+            runtime.FunctionAttributes.PadUndefinedCtor, CustomAttributeEncoder.EmptyBlob);
         runtime.ArrayOperations.ToSorted = method;
 
         var il = method.GetILGenerator();

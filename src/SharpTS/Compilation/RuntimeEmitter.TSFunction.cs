@@ -38,7 +38,7 @@ public partial class RuntimeEmitter
     /// <c>$TSFunction</c> construction. Lives in the output assembly so the
     /// compiled DLL stays standalone.
     /// </summary>
-    private void EmitCapturesArgumentsAttribute(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private void EmitCapturesArgumentsAttribute(ModuleBuilder moduleBuilder, EmittedFunctionAttributesRuntime attributes)
     {
         var typeBuilder = moduleBuilder.DefineType(
             "$CapturesArguments",
@@ -51,8 +51,8 @@ public partial class RuntimeEmitter
         ctorIl.Emit(OpCodes.Call, typeof(System.Attribute).GetConstructor(
             BindingFlags.Instance | BindingFlags.NonPublic, null, Type.EmptyTypes, null)!);
         ctorIl.Emit(OpCodes.Ret);
-        runtime.CapturesArgumentsAttrCtor = ctor;
-        runtime.CapturesArgumentsAttrType = typeBuilder;
+        attributes.CapturesArgumentsCtor = ctor;
+        attributes.CapturesArgumentsType = typeBuilder;
         typeBuilder.CreateType();
     }
 
@@ -65,7 +65,7 @@ public partial class RuntimeEmitter
     /// trailing arguments with the <c>undefined</c> sentinel rather than CLR null (#640).
     /// Lives in the output assembly so the compiled DLL stays standalone.
     /// </summary>
-    private void EmitPadUndefinedAttribute(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private void EmitPadUndefinedAttribute(ModuleBuilder moduleBuilder, EmittedFunctionAttributesRuntime attributes)
     {
         var typeBuilder = moduleBuilder.DefineType(
             "$PadUndefined",
@@ -78,8 +78,8 @@ public partial class RuntimeEmitter
         ctorIl.Emit(OpCodes.Call, typeof(System.Attribute).GetConstructor(
             BindingFlags.Instance | BindingFlags.NonPublic, null, Type.EmptyTypes, null)!);
         ctorIl.Emit(OpCodes.Ret);
-        runtime.PadUndefinedAttrCtor = ctor;
-        runtime.PadUndefinedAttrType = typeBuilder;
+        attributes.PadUndefinedCtor = ctor;
+        attributes.PadUndefinedType = typeBuilder;
         typeBuilder.CreateType();
     }
 
@@ -88,7 +88,7 @@ public partial class RuntimeEmitter
     /// <c>Function.length</c>. CLR parameter metadata does not retain where a JavaScript default
     /// initializer first appeared, so class methods surfaced through reflection need this value.
     /// </summary>
-    private void EmitFunctionLengthAttribute(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private void EmitFunctionLengthAttribute(ModuleBuilder moduleBuilder, EmittedFunctionAttributesRuntime attributes)
     {
         var typeBuilder = moduleBuilder.DefineType(
             "$FunctionLength",
@@ -106,13 +106,13 @@ public partial class RuntimeEmitter
         ctorIl.Emit(OpCodes.Ldarg_1);
         ctorIl.Emit(OpCodes.Stfld, valueField);
         ctorIl.Emit(OpCodes.Ret);
-        runtime.FunctionLengthAttrType = typeBuilder;
-        runtime.FunctionLengthAttrCtor = ctor;
-        runtime.FunctionLengthAttrValueField = valueField;
+        attributes.FunctionLengthType = typeBuilder;
+        attributes.FunctionLengthCtor = ctor;
+        attributes.FunctionLengthValueField = valueField;
         typeBuilder.CreateType();
     }
 
-    private void EmitFunctionNameAttribute(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private void EmitFunctionNameAttribute(ModuleBuilder moduleBuilder, EmittedFunctionAttributesRuntime attributes)
     {
         var typeBuilder = moduleBuilder.DefineType(
             "$FunctionName",
@@ -130,9 +130,9 @@ public partial class RuntimeEmitter
         ctorIl.Emit(OpCodes.Ldarg_1);
         ctorIl.Emit(OpCodes.Stfld, valueField);
         ctorIl.Emit(OpCodes.Ret);
-        runtime.FunctionNameAttrType = typeBuilder;
-        runtime.FunctionNameAttrCtor = ctor;
-        runtime.FunctionNameAttrValueField = valueField;
+        attributes.FunctionNameType = typeBuilder;
+        attributes.FunctionNameCtor = ctor;
+        attributes.FunctionNameValueField = valueField;
         typeBuilder.CreateType();
     }
 
@@ -141,7 +141,7 @@ public partial class RuntimeEmitter
     /// Arrow, async, and generator functions therefore have no own `prototype`
     /// property and reject construction even though they share $TSFunction.
     /// </summary>
-    private void EmitNonConstructibleAttribute(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private void EmitNonConstructibleAttribute(ModuleBuilder moduleBuilder, EmittedFunctionAttributesRuntime attributes)
     {
         var typeBuilder = moduleBuilder.DefineType(
             "$NonConstructible",
@@ -154,8 +154,8 @@ public partial class RuntimeEmitter
         ctorIl.Emit(OpCodes.Call, typeof(System.Attribute).GetConstructor(
             BindingFlags.Instance | BindingFlags.NonPublic, null, Type.EmptyTypes, null)!);
         ctorIl.Emit(OpCodes.Ret);
-        runtime.NonConstructibleAttrCtor = ctor;
-        runtime.NonConstructibleAttrType = typeBuilder;
+        attributes.NonConstructibleCtor = ctor;
+        attributes.NonConstructibleType = typeBuilder;
         typeBuilder.CreateType();
     }
 
@@ -170,7 +170,7 @@ public partial class RuntimeEmitter
     /// <see cref="System.Reflection.MemberInfo.IsDefined(Type, bool)"/> restores correct detection.
     /// Lives in the output assembly so the compiled DLL stays standalone. (#738)
     /// </summary>
-    private void EmitExpectsThisAttribute(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private void EmitExpectsThisAttribute(ModuleBuilder moduleBuilder, EmittedFunctionAttributesRuntime attributes)
     {
         var typeBuilder = moduleBuilder.DefineType(
             "$ExpectsThis",
@@ -183,8 +183,8 @@ public partial class RuntimeEmitter
         ctorIl.Emit(OpCodes.Call, typeof(System.Attribute).GetConstructor(
             BindingFlags.Instance | BindingFlags.NonPublic, null, Type.EmptyTypes, null)!);
         ctorIl.Emit(OpCodes.Ret);
-        runtime.ExpectsThisAttrCtor = ctor;
-        runtime.ExpectsThisAttrType = typeBuilder;
+        attributes.ExpectsThisCtor = ctor;
+        attributes.ExpectsThisType = typeBuilder;
         typeBuilder.CreateType();
     }
 
@@ -395,20 +395,20 @@ public partial class RuntimeEmitter
         ctorIL.Emit(OpCodes.Brfalse, noMethodLabel);
         // User methods carry their ECMAScript arity explicitly because reflection cannot
         // recover the "stop at the first default initializer" rule.
-        EmitComputeFunctionLength(ctorIL, cachedLengthField, runtime, methodArgIndex: 2);
-        EmitComputeFunctionName(ctorIL, cachedNameField, runtime, methodArgIndex: 2);
+        EmitComputeFunctionLength(ctorIL, cachedLengthField, runtime.FunctionAttributes, methodArgIndex: 2);
+        EmitComputeFunctionName(ctorIL, cachedNameField, runtime.FunctionAttributes, methodArgIndex: 2);
         // this._expectsThis = (method.GetParameters().Length > 0 && params[0].Name == "__this")
-        EmitComputeExpectsThis(ctorIL, expectsThisField, runtime, methodArgIndex: 2);
+        EmitComputeExpectsThis(ctorIL, expectsThisField, runtime.FunctionAttributes, methodArgIndex: 2);
         // this._capturesArguments = method.IsDefined($CapturesArguments)
-        EmitComputeCapturesArguments(ctorIL, capturesArgumentsField, runtime, methodArgIndex: 2);
+        EmitComputeCapturesArguments(ctorIL, capturesArgumentsField, runtime.FunctionAttributes, methodArgIndex: 2);
         // this._padUndefinedMask = $PadUndefined ? (object-param bits) : 0
-        EmitComputePadUndefinedMask(ctorIL, padUndefinedMaskField, runtime, methodArgIndex: 2);
+        EmitComputePadUndefinedMask(ctorIL, padUndefinedMaskField, runtime.FunctionAttributes, methodArgIndex: 2);
         // this._paramCount, _hasListRest, _hasArrayRest: cached by AdjustArgs.
         EmitComputeAdjustArgsCache(ctorIL, paramCountField, hasListRestField, hasArrayRestField, methodArgIndex: 2);
         EmitComputeNeedsArgConversion(ctorIL, needsArgConversionField, conversionParametersField, hasListRestField, methodArgIndex: 2);
         // this._invoker = LookupOrAdd(_invokerCache, method)  [pseudocode]
         EmitLookupOrCreateInvoker(ctorIL, invokerField, invokerCacheField, invokerCacheType, methodArgIndex: 2);
-        EmitComputeNumericRest4(ctorIL, numericRest4Field, runtime);
+        EmitComputeNumericRest4(ctorIL, numericRest4Field, runtime.FunctionAttributes);
         ctorIL.MarkLabel(noMethodLabel);
         ctorIL.Emit(OpCodes.Ret);
 
@@ -445,14 +445,14 @@ public partial class RuntimeEmitter
         ctorCacheIL.Emit(OpCodes.Ldarg_2);
         ctorCacheIL.Emit(OpCodes.Brfalse, noCachedMethodLabel);
         // this._expectsThis = (method.GetParameters().Length > 0 && params[0].Name == "__this")
-        EmitComputeExpectsThis(ctorCacheIL, expectsThisField, runtime, methodArgIndex: 2);
-        EmitComputeCapturesArguments(ctorCacheIL, capturesArgumentsField, runtime, methodArgIndex: 2);
-        EmitComputePadUndefinedMask(ctorCacheIL, padUndefinedMaskField, runtime, methodArgIndex: 2);
+        EmitComputeExpectsThis(ctorCacheIL, expectsThisField, runtime.FunctionAttributes, methodArgIndex: 2);
+        EmitComputeCapturesArguments(ctorCacheIL, capturesArgumentsField, runtime.FunctionAttributes, methodArgIndex: 2);
+        EmitComputePadUndefinedMask(ctorCacheIL, padUndefinedMaskField, runtime.FunctionAttributes, methodArgIndex: 2);
         EmitComputeAdjustArgsCache(ctorCacheIL, paramCountField, hasListRestField, hasArrayRestField, methodArgIndex: 2);
         EmitComputeNeedsArgConversion(ctorCacheIL, needsArgConversionField, conversionParametersField, hasListRestField, methodArgIndex: 2);
         // this._invoker = LookupOrAdd(_invokerCache, method)
         EmitLookupOrCreateInvoker(ctorCacheIL, invokerField, invokerCacheField, invokerCacheType, methodArgIndex: 2);
-        EmitComputeNumericRest4(ctorCacheIL, numericRest4Field, runtime);
+        EmitComputeNumericRest4(ctorCacheIL, numericRest4Field, runtime.FunctionAttributes);
         ctorCacheIL.MarkLabel(noCachedMethodLabel);
         ctorCacheIL.Emit(OpCodes.Ret);
 
@@ -1470,7 +1470,7 @@ public partial class RuntimeEmitter
     /// names (so the name check fails there, otherwise shifting a value-call's arguments). Caller
     /// provides the field and the constructor argument index of the <c>MethodInfo</c> param. (#738)
     /// </summary>
-    private void EmitComputeExpectsThis(ILGenerator il, FieldBuilder expectsThisField, EmittedRuntime runtime, int methodArgIndex)
+    private void EmitComputeExpectsThis(ILGenerator il, FieldBuilder expectsThisField, EmittedFunctionAttributesRuntime attributes, int methodArgIndex)
     {
         var paramsLocal = il.DeclareLocal(_types.MakeArrayType(_types.ParameterInfo));
         var resultLocal = il.DeclareLocal(_types.Boolean);
@@ -1503,7 +1503,7 @@ public partial class RuntimeEmitter
         // parameter-name strip the name check above does not.
         il.MarkLabel(checkAttr);
         il.Emit(OpCodes.Ldarg, methodArgIndex);
-        il.Emit(OpCodes.Ldtoken, runtime.ExpectsThisAttrType);
+        il.Emit(OpCodes.Ldtoken, attributes.ExpectsThisType);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.MethodInfo, "IsDefined", _types.Type, _types.Boolean));
@@ -1520,12 +1520,12 @@ public partial class RuntimeEmitter
     /// True for function-declaration methods whose body reads JS <c>arguments</c>;
     /// see <see cref="EmitCapturesArgumentsAttribute"/>.
     /// </summary>
-    private void EmitComputeCapturesArguments(ILGenerator il, FieldBuilder capturesArgumentsField, EmittedRuntime runtime, int methodArgIndex)
+    private void EmitComputeCapturesArguments(ILGenerator il, FieldBuilder capturesArgumentsField, EmittedFunctionAttributesRuntime attributes, int methodArgIndex)
     {
         // this._capturesArguments = method.IsDefined(attrType, false)
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg, methodArgIndex);
-        il.Emit(OpCodes.Ldtoken, runtime.CapturesArgumentsAttrType);
+        il.Emit(OpCodes.Ldtoken, attributes.CapturesArgumentsType);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
         il.Emit(OpCodes.Ldc_I4_0);
         // MemberInfo.IsDefined(Type, bool) — looked up via MethodInfo (inherited).
@@ -1537,12 +1537,12 @@ public partial class RuntimeEmitter
     /// Replaces the <c>-1</c> reflection fallback in <c>_cachedLength</c> when the wrapped method
     /// carries <c>$FunctionLength</c>. Built-ins remain unmarked and retain reflection behavior.
     /// </summary>
-    private void EmitComputeFunctionLength(ILGenerator il, FieldBuilder cachedLengthField, EmittedRuntime runtime, int methodArgIndex)
+    private void EmitComputeFunctionLength(ILGenerator il, FieldBuilder cachedLengthField, EmittedFunctionAttributesRuntime attributes, int methodArgIndex)
     {
         var done = il.DefineLabel();
 
         il.Emit(OpCodes.Ldarg, methodArgIndex);
-        il.Emit(OpCodes.Ldtoken, runtime.FunctionLengthAttrType);
+        il.Emit(OpCodes.Ldtoken, attributes.FunctionLengthType);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.MethodInfo, "IsDefined", _types.Type, _types.Boolean));
@@ -1550,39 +1550,39 @@ public partial class RuntimeEmitter
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg, methodArgIndex);
-        il.Emit(OpCodes.Ldtoken, runtime.FunctionLengthAttrType);
+        il.Emit(OpCodes.Ldtoken, attributes.FunctionLengthType);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(
             _types.MethodInfo, "GetCustomAttributes", _types.Type, _types.Boolean));
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldelem_Ref);
-        il.Emit(OpCodes.Castclass, runtime.FunctionLengthAttrType);
-        il.Emit(OpCodes.Ldfld, runtime.FunctionLengthAttrValueField);
+        il.Emit(OpCodes.Castclass, attributes.FunctionLengthType);
+        il.Emit(OpCodes.Ldfld, attributes.FunctionLengthValueField);
         il.Emit(OpCodes.Stfld, cachedLengthField);
 
         il.MarkLabel(done);
     }
 
-    private void EmitComputeFunctionName(ILGenerator il, FieldBuilder cachedNameField, EmittedRuntime runtime, int methodArgIndex)
+    private void EmitComputeFunctionName(ILGenerator il, FieldBuilder cachedNameField, EmittedFunctionAttributesRuntime attributes, int methodArgIndex)
     {
         var done = il.DefineLabel();
         il.Emit(OpCodes.Ldarg, methodArgIndex);
-        il.Emit(OpCodes.Ldtoken, runtime.FunctionNameAttrType);
+        il.Emit(OpCodes.Ldtoken, attributes.FunctionNameType);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.MethodInfo, "IsDefined", _types.Type, _types.Boolean));
         il.Emit(OpCodes.Brfalse, done);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg, methodArgIndex);
-        il.Emit(OpCodes.Ldtoken, runtime.FunctionNameAttrType);
+        il.Emit(OpCodes.Ldtoken, attributes.FunctionNameType);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.MethodInfo, "GetCustomAttributes", _types.Type, _types.Boolean));
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldelem_Ref);
-        il.Emit(OpCodes.Castclass, runtime.FunctionNameAttrType);
-        il.Emit(OpCodes.Ldfld, runtime.FunctionNameAttrValueField);
+        il.Emit(OpCodes.Castclass, attributes.FunctionNameType);
+        il.Emit(OpCodes.Ldfld, attributes.FunctionNameValueField);
         il.Emit(OpCodes.Stfld, cachedNameField);
         il.MarkLabel(done);
     }
@@ -1594,13 +1594,13 @@ public partial class RuntimeEmitter
     /// those positions with the <c>undefined</c> sentinel; typed slots and built-ins keep null
     /// padding. See <see cref="EmitPadUndefinedAttribute"/>. (#640)
     /// </summary>
-    private void EmitComputePadUndefinedMask(ILGenerator il, FieldBuilder padUndefinedMaskField, EmittedRuntime runtime, int methodArgIndex)
+    private void EmitComputePadUndefinedMask(ILGenerator il, FieldBuilder padUndefinedMaskField, EmittedFunctionAttributesRuntime attributes, int methodArgIndex)
     {
         var done = il.DefineLabel();
 
         // if (!method.IsDefined($PadUndefined, false)) leave mask at its zero-init value.
         il.Emit(OpCodes.Ldarg, methodArgIndex);
-        il.Emit(OpCodes.Ldtoken, runtime.PadUndefinedAttrType);
+        il.Emit(OpCodes.Ldtoken, attributes.PadUndefinedType);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.MethodInfo, "IsDefined", _types.Type, _types.Boolean));

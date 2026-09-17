@@ -1491,7 +1491,7 @@ public partial class RuntimeEmitter
         // an explicit null separator (ToString(null) => "null") when invoked
         // through a $TSFunction prototype wrapper.
         method.SetCustomAttribute(
-            runtime.PadUndefinedAttrCtor, CustomAttributeEncoder.EmptyBlob);
+            runtime.FunctionAttributes.PadUndefinedCtor, CustomAttributeEncoder.EmptyBlob);
         runtime.ArrayOperations.Join = method;
 
         var il = method.GetILGenerator();

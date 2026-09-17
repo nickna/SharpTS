@@ -2404,7 +2404,7 @@ public partial class RuntimeEmitter
                     runtime.InvokeMethodValue,
                     runtime.NormalizeToEnumerator,
                     runtime.NumericCoercion,
-                    runtime.PadUndefinedAttrCtor,
+                    runtime.FunctionAttributes.PadUndefinedCtor,
                     runtime.ObjectWrite.Property,
                     runtime.StringCoercion,
                     runtime.StringTryInvokeSymbolMethod,
@@ -2681,7 +2681,7 @@ public partial class RuntimeEmitter
             EmitDateMethods(
                 typeBuilder,
                 runtime.Dates.RequireImplementation(),
-                new DateMethodsInputs(runtime.NonConstructibleAttrCtor, runtime.Timers)
+                new DateMethodsInputs(runtime.FunctionAttributes.NonConstructibleCtor, runtime.Timers)
             );
         // Date.prototype populate — must come AFTER EmitDateMethods, which is what
         // assigns the runtime.Date* helper builders the wiring below references.
