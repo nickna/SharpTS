@@ -214,6 +214,7 @@ public partial class RuntimeEmitter
 
         // Emit TSFunction class first (other methods depend on it)
         EmitTSFunctionClass(moduleBuilder, runtime);
+        runtime.FunctionConstruction.CompleteEmission();
 
         // Emit TSNamespace class for namespace support
         // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSNamespace
@@ -663,7 +664,7 @@ public partial class RuntimeEmitter
         // AbortSignal / Intl value-position singletons (#224). Must follow
         // EmitRuntimeClass — they wrap the AbortSignal*/CreateIntl* helpers
         // emitted there.
-        EmitNamespaceSingletons(_runtimeTypeBuilder!, runtime.Abort, runtime.Intl, runtime.TSFunctionGetOrCreate);
+        EmitNamespaceSingletons(_runtimeTypeBuilder!, runtime.Abort, runtime.Intl, runtime.FunctionConstruction.GetOrCreate);
 
         // Emit $BroadcastChannel — extends $EventEmitter, dispatches via $EventLoop,
         // and clones messages via $Runtime.StructuredClone (populated during EmitRuntimeClass

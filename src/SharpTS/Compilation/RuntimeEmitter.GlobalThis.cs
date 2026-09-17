@@ -440,7 +440,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Castclass, _types.MethodInfo);
             il.Emit(OpCodes.Ldstr, jsName);
             il.Emit(OpCodes.Ldc_I4, jsLength);
-            il.Emit(OpCodes.Call, runtime.TSFunctionGetOrCreate);
+            il.Emit(OpCodes.Call, runtime.FunctionConstruction.GetOrCreate);
         }
         il.MarkLabel(parseIntLabel);
         EmitGetOrCreateTSFn(runtime.Numbers.ParseInt, "parseInt", 2);
@@ -551,7 +551,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldtoken, wrappedMethod);
         il.Emit(OpCodes.Call, _types.MethodBaseGetMethodFromHandle);
         il.Emit(OpCodes.Castclass, _types.MethodInfo);
-        il.Emit(OpCodes.Newobj, runtime.TSFunctionCtor);
+        il.Emit(OpCodes.Newobj, runtime.FunctionConstruction.Constructor);
         il.Emit(OpCodes.Stsfld, cachedField);
         il.MarkLabel(alreadyCachedLabel);
         il.Emit(OpCodes.Ldsfld, cachedField);

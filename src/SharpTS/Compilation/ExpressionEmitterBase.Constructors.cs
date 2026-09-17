@@ -16,7 +16,7 @@ public abstract partial class ExpressionEmitterBase
     private void EmitFunctionConstructor(List<Expr> arguments)
     {
         EmitArgsArrayWithSpread(arguments);
-        IL.Emit(OpCodes.Call, Ctx.Runtime!.FunctionConstructor);
+        IL.Emit(OpCodes.Call, Ctx.Runtime!.FunctionConstruction.Construct);
         SetStackUnknown();
     }
 

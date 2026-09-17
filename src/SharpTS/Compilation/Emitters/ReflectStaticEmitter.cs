@@ -482,7 +482,7 @@ public sealed class ReflectStaticEmitter : IStaticTypeEmitterStrategy
                 il.Emit(OpCodes.Stloc, closureLocal);
                 il.Emit(OpCodes.Ldloc, closureLocal); // target for TSFunction ctor
                 ctx.Types.EmitLoadMethodInfoViaHandle(il, ctx.Runtime!.Reflect.RequireMetadata().DecoratorInvoke);
-                il.Emit(OpCodes.Newobj, ctx.Runtime!.TSFunctionCtor);
+                il.Emit(OpCodes.Newobj, ctx.Runtime!.FunctionConstruction.Constructor);
 
                 return true;
             }

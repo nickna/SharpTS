@@ -744,7 +744,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldtoken, writeImpl);
             il.Emit(OpCodes.Call, _types.MethodBaseGetMethodFromHandle);
             il.Emit(OpCodes.Castclass, _types.MethodInfo);
-            il.Emit(OpCodes.Newobj, runtime.TSFunctionCtor);
+            il.Emit(OpCodes.Newobj, runtime.FunctionConstruction.Constructor);
 
             // Call stream.SetWriteCallback(tsFunction)
             il.Emit(OpCodes.Callvirt, runtime.RequireNodeStreams().WritableSetWriteCallback);
@@ -885,7 +885,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldtoken, implMethod);
         il.Emit(OpCodes.Call, _types.MethodBaseGetMethodFromHandle);
         il.Emit(OpCodes.Castclass, _types.MethodInfo);
-        il.Emit(OpCodes.Newobj, runtime.TSFunctionCtor);
+        il.Emit(OpCodes.Newobj, runtime.FunctionConstruction.Constructor);
         il.Emit(OpCodes.Ret);
     }
 

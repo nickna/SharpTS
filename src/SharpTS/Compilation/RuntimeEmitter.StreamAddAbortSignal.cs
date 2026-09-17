@@ -98,7 +98,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Newobj, runtime.RequireNodeStreams().AbortCallbackCtor);
         EmitInstanceMethodInfoLiteral(il, runtime.RequireNodeStreams().AbortCallbackOnAbort, runtime.RequireNodeStreams().AbortCallbackType);
-        il.Emit(OpCodes.Newobj, runtime.TSFunctionCtor);
+        il.Emit(OpCodes.Newobj, runtime.FunctionConstruction.Constructor);
         il.Emit(OpCodes.Call, runtime.RequireAbort().SignalAddEventListener);
         il.Emit(OpCodes.Pop);
 

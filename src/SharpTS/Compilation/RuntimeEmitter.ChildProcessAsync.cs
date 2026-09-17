@@ -1862,6 +1862,6 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldtoken, method);
         il.Emit(OpCodes.Call, runtime.RequireChildProcess().GetMethodFromHandle);
         il.Emit(OpCodes.Castclass, typeof(MethodInfo));
-        il.Emit(OpCodes.Newobj, runtime.TSFunctionCtor);
+        il.Emit(OpCodes.Newobj, runtime.FunctionConstruction.Constructor);
     }
 }

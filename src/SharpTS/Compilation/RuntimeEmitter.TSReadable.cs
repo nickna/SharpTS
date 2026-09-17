@@ -1432,7 +1432,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "GetType"));
         il.Emit(OpCodes.Ldstr, "Invoke");
         il.Emit(OpCodes.Callvirt, _types.GetMethod(typeof(Type), "GetMethod", _types.String)!);
-        il.Emit(OpCodes.Newobj, runtime.TSFunctionCtor);
+        il.Emit(OpCodes.Newobj, runtime.FunctionConstruction.Constructor);
         il.Emit(OpCodes.Callvirt, runtime.RequireNodeStreams().TransformSetTransformCallback);
 
         // this.Pipe(transform)
@@ -1486,7 +1486,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "GetType"));
         il.Emit(OpCodes.Ldstr, "Invoke");
         il.Emit(OpCodes.Callvirt, _types.GetMethod(typeof(Type), "GetMethod", _types.String)!);
-        il.Emit(OpCodes.Newobj, runtime.TSFunctionCtor);
+        il.Emit(OpCodes.Newobj, runtime.FunctionConstruction.Constructor);
         il.Emit(OpCodes.Callvirt, runtime.RequireNodeStreams().TransformSetTransformCallback);
 
         // this.Pipe(transform)

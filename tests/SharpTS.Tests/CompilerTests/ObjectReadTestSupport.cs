@@ -32,7 +32,7 @@ internal static class ObjectReadTestSupport
         {
             if (overrides is not null && overrides.TryGetValue(parameter.Name!, out var value)) return value;
             if (parameter.Name == "CommonJs") return runtime.Modules.CommonJs;
-            return typeof(EmittedRuntime).GetProperty(parameter.Name!)!.GetValue(runtime);
+            return (parameter.Name switch { "TSFunctionCtor" => runtime.FunctionConstruction.Constructor, "TSFunctionCtorWithCache" => runtime.FunctionConstruction.CachedConstructor, "TSFunctionGetOrCreate" => runtime.FunctionConstruction.GetOrCreate, _ => typeof(EmittedRuntime).GetProperty(parameter.Name!)!.GetValue(runtime) });
         }).ToArray());
     }
 }

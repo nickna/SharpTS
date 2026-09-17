@@ -17,6 +17,10 @@ namespace SharpTS.Compilation;
 /// <seealso cref="ILEmitter"/>
 public class EmittedRuntime
 {
+    /// <summary>Required function constructors, cached wrapper factory and dynamic construction declarations.</summary>
+    public EmittedFunctionConstructionRuntime FunctionConstruction { get; } = new();
+
+
     /// <summary>Required function attributes, created before function wrapper emission.</summary>
     public EmittedFunctionAttributesRuntime FunctionAttributes { get; } = new();
 
@@ -150,13 +154,6 @@ public class EmittedRuntime
 
     // The emitted TSFunction class
     public TypeBuilder TSFunctionType { get; set; } = null!;
-    public ConstructorBuilder TSFunctionCtor { get; set; } = null!;
-    /// <summary>
-    /// Alternative constructor with cached name/length: $TSFunction(object target, MethodInfo method, string name, int length).
-    /// Use when MethodInfo might not support GetParameters() (e.g., MethodBuilder tokens in persisted assemblies).
-    /// </summary>
-    public ConstructorBuilder TSFunctionCtorWithCache { get; set; } = null!;
-    public MethodBuilder FunctionConstructor { get; set; } = null!;
     public MethodBuilder TSFunctionInvoke { get; set; } = null!;
     public MethodBuilder TSFunctionInvokeWithThis { get; set; } = null!;
     public MethodBuilder TSFunctionGetTarget { get; set; } = null!;
@@ -271,7 +268,6 @@ public class EmittedRuntime
 
     // $TSFunction static factory + instance cache: stable identity for
     // function-declaration references (see RuntimeEmitter.TSFunction.cs).
-    public MethodBuilder TSFunctionGetOrCreate { get; set; } = null!;
     public FieldBuilder TSFunctionPrototypeCacheField { get; set; } = null!;
     public MethodBuilder TSFunctionGetMethodInfo { get; set; } = null!;
     // Exposed for iterator helpers' "skip index box for unary arrows" fast

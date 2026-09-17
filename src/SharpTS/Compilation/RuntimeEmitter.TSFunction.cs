@@ -363,7 +363,7 @@ public partial class RuntimeEmitter
             CallingConventions.Standard,
             [_types.Object, _types.MethodInfo]
         );
-        runtime.TSFunctionCtor = ctorBuilder;
+        runtime.FunctionConstruction.Constructor = ctorBuilder;
 
         var ctorIL = ctorBuilder.GetILGenerator();
         // Call base constructor
@@ -419,7 +419,7 @@ public partial class RuntimeEmitter
             CallingConventions.Standard,
             [_types.Object, _types.MethodInfo, _types.String, _types.Int32]
         );
-        runtime.TSFunctionCtorWithCache = ctorWithCacheBuilder;
+        runtime.FunctionConstruction.CachedConstructor = ctorWithCacheBuilder;
 
         var ctorCacheIL = ctorWithCacheBuilder.GetILGenerator();
         // Call base constructor
@@ -456,7 +456,15 @@ public partial class RuntimeEmitter
         ctorCacheIL.MarkLabel(noCachedMethodLabel);
         ctorCacheIL.Emit(OpCodes.Ret);
 
-        EmitFunctionConstructor(typeBuilder, runtime);
+        EmitFunctionConstructor(
+            typeBuilder,
+            runtime.FunctionConstruction,
+            new FunctionConstructorInputs(
+                runtime.GlobalThisSingletonField,
+                runtime.UndefinedInstance,
+                runtime.UndefinedType
+            )
+        );
 
         // Static factory: public static $TSFunction GetOrCreate(MethodInfo method, string name, int length).
         // Returns a cached $TSFunction for the given method + JS metadata, creating one if
@@ -470,7 +478,7 @@ public partial class RuntimeEmitter
             typeBuilder,
             [_types.MethodInfo, _types.String, _types.Int32]
         );
-        runtime.TSFunctionGetOrCreate = getOrCreateBuilder;
+        runtime.FunctionConstruction.GetOrCreate = getOrCreateBuilder;
         var gocIL = getOrCreateBuilder.GetILGenerator();
 
         var cacheKeyLocal = gocIL.DeclareLocal(instanceCacheKeyType);

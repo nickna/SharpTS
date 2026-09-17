@@ -501,7 +501,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Castclass, typeof(System.Reflection.MethodInfo));
             il.Emit(OpCodes.Ldstr, "resolve");
             il.Emit(OpCodes.Ldc_I4_1);
-            il.Emit(OpCodes.Newobj, runtime.TSFunctionCtorWithCache);
+            il.Emit(OpCodes.Newobj, runtime.FunctionConstruction.CachedConstructor);
             il.Emit(OpCodes.Stloc, resolveFuncLocal);
 
             // var rejectFunc = new $TSFunction(closure, rejectMethod, "reject", 1)
@@ -513,7 +513,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Castclass, typeof(System.Reflection.MethodInfo));
             il.Emit(OpCodes.Ldstr, "reject");
             il.Emit(OpCodes.Ldc_I4_1);
-            il.Emit(OpCodes.Newobj, runtime.TSFunctionCtorWithCache);
+            il.Emit(OpCodes.Newobj, runtime.FunctionConstruction.CachedConstructor);
             il.Emit(OpCodes.Stloc, rejectFuncLocal);
 
             // Build result object: { promise, resolve, reject }

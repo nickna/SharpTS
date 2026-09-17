@@ -1097,7 +1097,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Brfalse, notReadableAsyncIter);
             il.Emit(OpCodes.Ldarg_0); // target
             EmitInstanceMethodInfoLiteral(il, nodeStreams.ReadableGetAsyncIterator, nodeStreams.ReadableType);
-            il.Emit(OpCodes.Newobj, runtime.TSFunctionCtor);
+            il.Emit(OpCodes.Newobj, runtime.FunctionConstruction.Constructor);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(notReadableAsyncIter);
         }

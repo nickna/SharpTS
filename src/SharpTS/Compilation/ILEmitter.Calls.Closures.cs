@@ -148,7 +148,7 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Castclass, _ctx.Types.MethodInfo);
 
         // Create TSFunction
-        IL.Emit(OpCodes.Newobj, _ctx.Runtime!.TSFunctionCtor);
+        IL.Emit(OpCodes.Newobj, _ctx.Runtime!.FunctionConstruction.Constructor);
     }
 
     private void EmitNonCapturingArrowFunction(Expr.ArrowFunction af, MethodBuilder method)
@@ -171,7 +171,7 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Castclass, _ctx.Types.MethodInfo);
 
         // Call $TSFunction constructor
-        IL.Emit(OpCodes.Newobj, _ctx.Runtime!.TSFunctionCtor);
+        IL.Emit(OpCodes.Newobj, _ctx.Runtime!.FunctionConstruction.Constructor);
     }
 
     /// <summary>
@@ -514,7 +514,7 @@ public partial class ILEmitter
                 int arity = _ctx.GetFunctionLength(capturedFuncMethod);
                 IL.Emit(OpCodes.Ldstr, _ctx.GetFunctionName(capturedFuncMethod, capturedVar));
                 IL.Emit(OpCodes.Ldc_I4, arity);
-                IL.Emit(OpCodes.Call, _ctx.Runtime!.TSFunctionGetOrCreate);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.FunctionConstruction.GetOrCreate);
             }
             else
             {
@@ -611,7 +611,7 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Ldtoken, displayClass);
         IL.Emit(OpCodes.Call, _ctx.Types.MethodBaseGetMethodFromHandleWithType);
         IL.Emit(OpCodes.Castclass, _ctx.Types.MethodInfo);
-        IL.Emit(OpCodes.Newobj, _ctx.Runtime!.TSFunctionCtor);
+        IL.Emit(OpCodes.Newobj, _ctx.Runtime!.FunctionConstruction.Constructor);
 
         if (selfRefField != null && displayClassLocal != null)
         {

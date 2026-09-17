@@ -16,7 +16,7 @@ public partial class RuntimeEmitter
         new PrototypeDescriptorInputs(runtime.DescriptorStorage.DescriptorConstructor,
             runtime.DescriptorStorage.DescriptorValue.GetSetMethod()!, runtime.DescriptorStorage.DescriptorEnumerable.GetSetMethod()!,
             runtime.DescriptorStorage.DefineProperty),
-        runtime.DescriptorStorage.DescriptorWritable.GetSetMethod()!, runtime.TSFunctionGetOrCreate,
+        runtime.DescriptorStorage.DescriptorWritable.GetSetMethod()!, runtime.FunctionConstruction.GetOrCreate,
         runtime.Symbols.GetStorage, runtime.Symbols.ToStringTag);
 
     // Math.* / JSON.* are normally intercepted at compile time by the dedicated

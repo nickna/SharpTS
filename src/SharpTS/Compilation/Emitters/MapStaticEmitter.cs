@@ -50,7 +50,7 @@ public sealed class MapStaticEmitter : IStaticTypeEmitterStrategy
         ctx.Types.EmitLoadMethodInfo(ctx.IL, ctx.Runtime!.RequireMap().GroupBy);
         ctx.IL.Emit(OpCodes.Ldstr, "groupBy");
         ctx.IL.Emit(OpCodes.Ldc_I4_2);
-        ctx.IL.Emit(OpCodes.Call, ctx.Runtime.TSFunctionGetOrCreate);
+        ctx.IL.Emit(OpCodes.Call, ctx.Runtime.FunctionConstruction.GetOrCreate);
         return true;
     }
 }
