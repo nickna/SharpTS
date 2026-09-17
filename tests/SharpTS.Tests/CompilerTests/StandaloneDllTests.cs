@@ -3708,6 +3708,60 @@ public class StandaloneDllTests
             verifyStandardError: error => Assert.Empty(error)));
     }
 
+    public static IEnumerable<object[]> ScopedFeatureGatePrograms =>
+    [
+        new object[]
+        {
+            "combined_standalone",
+            "import {createInterface} from \"readline\";const rl=createInterface({prompt:\"gate> \"});const c=new AbortController();c.abort(\"plain\");console.log(rl.getPrompt(),c.signal.aborted,c.signal.reason);rl.close();",
+            "gate>  true plain\n",
+            "",
+            false,
+            true
+        },
+        new object[]
+        {
+            "combined_any_input",
+            "import {questionSync,createInterface} from \"readline\";const c=new AbortController();const s=AbortSignal.any([c.signal]);console.log(questionSync(\"input> \"));const rl=createInterface({prompt:\"both> \"});c.abort(\"combined\");console.log(rl.getPrompt(),s.aborted,s.reason);rl.close();",
+            "input> supplied\nboth>  true combined\n",
+            "supplied\n",
+            false,
+            false
+        },
+        new object[]
+        {
+            "hosted_combined",
+            "import {createInterface} from \"readline\";export function inspect(){const r=createInterface({prompt:\"host> \"});const c=new AbortController();const s=AbortSignal.any([c.signal]);c.abort(\"hosted\");r.close();return [r.getPrompt(),s.aborted,s.reason];}",
+            "",
+            "",
+            true,
+            false
+        },
+    ];
+
+    [Theory]
+    [MemberData(nameof(ScopedFeatureGatePrograms))]
+    public void Isolated_ScopedFeatureGates_PreserveCombinedInputAndDeployment(
+        string name, string source, string expected, string input, bool hosted, bool standalone)
+    {
+        using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var sourcePath = tempDir.CreateFile("main.ts", source);
+        var dllPath = tempDir.GetPath($"scoped-feature-gates_{name}.dll");
+        var deployment = standalone ? " --standalone" : "";
+        var hosting = hosted ? " --target dll --hosted" : "";
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{sourcePath}\" -o \"{dllPath}\" --verify{deployment}{hosting}", tempDir.Path);
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        var references = GetAssemblyReferences(dllPath);
+        Assert.DoesNotContain("SharpTS", references);
+        Assert.Equal(hosted, references.Contains("SharpTS.Hosting.Abstractions"));
+        Assert.Equal(!standalone, File.Exists(tempDir.GetPath("SharpTS.dll")));
+        if (!hosted)
+            Assert.Equal(expected, ExecuteCompiledDllIsolated(dllPath, timeoutMs: 30000,
+                verifyStandardError: error => Assert.Empty(error), standardInput: input));
+    }
+
     public static IEnumerable<object[]> OperatorMetadataPrograms =>
     [
         new object[]

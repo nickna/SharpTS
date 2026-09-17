@@ -330,6 +330,13 @@ carrier; the strict SyntaxError helper retains its existing CLR exception repres
 Exception wrapping follows supplied optional Promise metadata. Error-cause Proxy handling
 receives six explicit invocation/delegate handles through the shared reflection bridge.
 
+Readline helper emission relies on its supplied required declarations; feature
+selection remains at the orchestration boundary. AbortSignal.any receives its
+fine deployment selection explicitly through the Abort helper group. Ordinary
+controller use remains standalone, and selecting any records its soft runtime
+dependency at the original point before the helper declaration. Opposite-input,
+repeated-emitter, hosted and isolated console-input checks cover these contracts.
+
 Operators use required `Operators` ownership for eleven declarations, including
 numeric updates, comparison, classification, membership, addition and equality.
 Equality keeps its early declaration and validated late body. Completion checks

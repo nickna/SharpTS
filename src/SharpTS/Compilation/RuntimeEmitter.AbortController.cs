@@ -21,7 +21,7 @@ public partial class RuntimeEmitter
     ///   "_cts" → CancellationTokenSource
     ///   "_signal" → object (the $AbortSignal dict)
     /// </summary>
-    private void EmitAbortControllerMethods(TypeBuilder typeBuilder, EmittedAbortRuntime abort, Action<string> requireRuntime)
+    private void EmitAbortControllerMethods(TypeBuilder typeBuilder, EmittedAbortRuntime abort, Action<string> requireRuntime, bool requiresAnyRuntime)
     {
         EmitCreateAbortController(typeBuilder, abort);
         EmitAbortControllerAbort(typeBuilder, abort);
@@ -36,7 +36,7 @@ public partial class RuntimeEmitter
         EmitAbortSignalThisWrappers(typeBuilder, abort);
         EmitAbortSignalStaticAbort(typeBuilder, abort);
         EmitAbortSignalStaticTimeout(typeBuilder, abort);
-        EmitAbortSignalStaticAny(typeBuilder, abort, requireRuntime);
+        EmitAbortSignalStaticAny(typeBuilder, abort, requireRuntime, requiresAnyRuntime);
     }
 
     /// <summary>
@@ -765,7 +765,7 @@ public partial class RuntimeEmitter
     /// Delegates to RuntimeTypes.AbortSignalAnyCompiled via reflection for proper
     /// CancellationToken linking between input signals and composite signal.
     /// </summary>
-    private void EmitAbortSignalStaticAny(TypeBuilder typeBuilder, EmittedAbortRuntime abort, Action<string> requireRuntime)
+    private void EmitAbortSignalStaticAny(TypeBuilder typeBuilder, EmittedAbortRuntime abort, Action<string> requireRuntime, bool requiresAnyRuntime)
     {
         // The body below late-binds to RuntimeTypes.AbortSignalAnyCompiled via
         // Type.GetType("…, SharpTS"); its normal execution needs SharpTS.dll present.
@@ -773,7 +773,7 @@ public partial class RuntimeEmitter
         // AbortSignal.any — the coarse UsesAbortController flag (set by ordinary
         // AbortController / fetch-with-signal usage that is pure IL) would otherwise
         // force an unnecessary SharpTS.dll copy for the common case (#116).
-        if (_features.UsesAbortSignalAny)
+        if (requiresAnyRuntime)
             requireRuntime("AbortSignal.any");
 
         var method = typeBuilder.DefineMethod(

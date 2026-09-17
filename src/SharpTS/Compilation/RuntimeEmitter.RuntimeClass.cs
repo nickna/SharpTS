@@ -1150,7 +1150,7 @@ public partial class RuntimeEmitter
             EmitFireAbortEvent(typeBuilder, runtime.RequireAbort(), runtime.TSFunctionType,
                 runtime.TSFunctionInvoke, runtime.BoundTSFunctionType, runtime.BoundTSFunctionInvoke);
             EmitAbortControllerMethods(typeBuilder, runtime.RequireAbort(),
-                reason => runtime.RequireSharpTSRuntime(reason));
+                reason => runtime.RequireSharpTSRuntime(reason), _features.UsesAbortSignalAny);
             // stream.addAbortSignal destroy-on-abort wiring (#1027) — needs the AbortSignal
             // helpers above + the $StreamAbortCallback closure emitted in the stream block.
             if (_features.UsesNodeStreams)
