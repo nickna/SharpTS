@@ -101,7 +101,7 @@ public class EmittedAbortRuntimeTests
             runtime.RequireSharpTSRuntime(reason);
             requirements.Add(reason);
         };
-        Emit("EmitAbortControllerMethods", type, abort, requireRuntime);
+        Emit("EmitAbortControllerMethods", type, abort, requireRuntime, usesAny);
         Assert.Equal(usesAny ? 1 : 0, requirements.Count);
         Assert.Equal(usesAny, runtime.RequiredSharpTSRuntimeReasons.Contains("AbortSignal.any"));
         Assert.Throws<InvalidOperationException>(abort.CompleteEmission);
