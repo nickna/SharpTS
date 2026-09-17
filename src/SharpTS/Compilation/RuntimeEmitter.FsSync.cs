@@ -1752,7 +1752,7 @@ public partial class RuntimeEmitter
 
         // Wrap in SharpTSObject
         il.Emit(OpCodes.Ldloc, dictLocal);
-        il.Emit(OpCodes.Call, runtime.CreateObject);
+        il.Emit(OpCodes.Call, runtime.ObjectConstruction.Create);
         il.Emit(OpCodes.Ret);
     }
 
@@ -1892,7 +1892,7 @@ public partial class RuntimeEmitter
 
         // Wrap in SharpTSObject
         il.Emit(OpCodes.Ldloc, dictLocal);
-        il.Emit(OpCodes.Call, runtime.CreateObject);
+        il.Emit(OpCodes.Call, runtime.ObjectConstruction.Create);
         il.Emit(OpCodes.Ret);
     }
 }

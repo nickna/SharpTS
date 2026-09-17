@@ -1519,7 +1519,7 @@ public partial class RuntimeEmitter
 
         // return CreateObject(dict)
         il.Emit(OpCodes.Ldloc, dictLocal);
-        il.Emit(OpCodes.Call, runtime.CreateObject);
+        il.Emit(OpCodes.Call, runtime.ObjectConstruction.Create);
     }
 
     /// <summary>
@@ -1589,7 +1589,7 @@ public partial class RuntimeEmitter
         EmitDictSet(runtime.RequireChildProcess(), il, stdinLocal, "writable", () => { il.Emit(OpCodes.Ldc_I4_1); il.Emit(OpCodes.Box, _types.Boolean); });
         EmitDictSet(runtime.RequireChildProcess(), il, stdinLocal, "write", () => EmitTSFunc(il, runtime, () => il.Emit(OpCodes.Ldloc, ctxLocal), runtime.RequireChildProcess().ContextStdinWrite));
         EmitDictSet(runtime.RequireChildProcess(), il, stdinLocal, "end", () => EmitTSFunc(il, runtime, () => il.Emit(OpCodes.Ldloc, ctxLocal), runtime.RequireChildProcess().ContextStdinEnd));
-        EmitDictSet(runtime.RequireChildProcess(), il, dictLocal, "stdin", () => { il.Emit(OpCodes.Ldloc, stdinLocal); il.Emit(OpCodes.Call, runtime.CreateObject); });
+        EmitDictSet(runtime.RequireChildProcess(), il, dictLocal, "stdin", () => { il.Emit(OpCodes.Ldloc, stdinLocal); il.Emit(OpCodes.Call, runtime.ObjectConstruction.Create); });
         il.MarkLabel(stdinDone);
     }
 

@@ -7,6 +7,8 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
+    private readonly record struct ObjectRestInputs(MethodInfo IHasFieldsFieldsGetter, Type IHasFieldsInterface);
+
     private readonly record struct GetValuesInputs(
         EmittedArrayStorageRuntime ArrayStorage,
         EmittedBooleanRuntime Booleans,
@@ -99,7 +101,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitObjectRest(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitObjectRest(
+        TypeBuilder typeBuilder,
+        EmittedObjectConstructionRuntime objectConstruction,
+        ObjectRestInputs inputs
+    )
     {
         // Accept object instead of Dictionary to support both object literals and class instances
         var method = typeBuilder.DefineMethod(
@@ -108,7 +114,7 @@ public partial class RuntimeEmitter
             _types.DictionaryStringObject,
             [_types.Object, _types.ListOfObject]
         );
-        runtime.ObjectRest = method;
+        objectConstruction.Rest = method;
 
         var il = method.GetILGenerator();
 
@@ -126,7 +132,7 @@ public partial class RuntimeEmitter
 
         // Check if arg0 is $IHasFields (covers $Object and class instances)
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.IHasFieldsInterface);
+        il.Emit(OpCodes.Isinst, inputs.IHasFieldsInterface);
         il.Emit(OpCodes.Brtrue, tsObjectLabel);
 
         // Primitive wrappers other than String have no enumerable own properties, so their
@@ -145,8 +151,8 @@ public partial class RuntimeEmitter
         // $IHasFields path: use Fields getter
         il.MarkLabel(tsObjectLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.IHasFieldsInterface);
-        il.Emit(OpCodes.Callvirt, runtime.IHasFieldsFieldsGetter);
+        il.Emit(OpCodes.Castclass, inputs.IHasFieldsInterface);
+        il.Emit(OpCodes.Callvirt, inputs.IHasFieldsFieldsGetter);
         il.Emit(OpCodes.Stloc, sourceDictLocal);
         il.Emit(OpCodes.Br, processLabel);
 

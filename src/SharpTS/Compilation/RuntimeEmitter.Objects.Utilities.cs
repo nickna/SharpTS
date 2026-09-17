@@ -6,6 +6,46 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
+    private readonly record struct MergeIntoObjectInputs(
+        EmittedBooleanRuntime Booleans,
+        EmittedDescriptorStorageRuntime DescriptorStorage,
+        MethodBuilder GetIndex,
+        MethodBuilder GetProperty,
+        EmittedObjectDescriptorRuntime ObjectDescriptors,
+        EmittedObjectKeysRuntime ObjectKeys,
+        EmittedObjectOwnPropertiesRuntime ObjectOwnProperties,
+        ProxyOwnKeysCallInputs ProxyOwnKeys,
+        bool ProxySelected,
+        MethodBuilder SetIndex,
+        EmittedSymbolRuntime Symbols,
+        Type UndefinedType
+    );
+
+    private readonly record struct PlainDataSpreadCopyInputs(EmittedDescriptorStorageRuntime DescriptorStorage, EmittedSymbolRuntime Symbols);
+
+    private readonly record struct MergeIntoTSObjectInputs(
+        MethodInfo IHasFieldsFieldsGetter,
+        Type IHasFieldsInterface,
+        EmittedObjectStorageRuntime ObjectStorage
+    );
+
+    private readonly record struct TSObjectMergeEnumerableInputs(
+        EmittedDescriptorStorageRuntime DescriptorStorage,
+        MethodBuilder GetProperty,
+        MethodInfo IHasFieldsFieldsGetter,
+        Type IHasFieldsInterface,
+        MethodBuilder InvokeMethodValue,
+        EmittedObjectKeysRuntime ObjectKeys,
+        EmittedObjectStorageRuntime ObjectStorage
+    );
+
+    private readonly record struct SymbolAccessorInputs(
+        EmittedDescriptorStorageRuntime DescriptorStorage,
+        EmittedObjectStorageRuntime ObjectStorage,
+        EmittedStringCoercionRuntime StringCoercion,
+        EmittedSymbolRuntime Symbols
+    );
+
     // Scoped exact-sum construction inputs; peer declarations stay with their own families.
     private readonly record struct MathSumInputs(
         MethodInfo GetSymbolDict,
@@ -21,7 +61,7 @@ public partial class RuntimeEmitter
         MethodInfo CreateException,
         ConstructorInfo TypeErrorCtor);
 
-    private void EmitCreateObject(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitCreateObject(TypeBuilder typeBuilder, EmittedObjectConstructionRuntime objectConstruction)
     {
         var method = typeBuilder.DefineMethod(
             "CreateObject",
@@ -29,7 +69,7 @@ public partial class RuntimeEmitter
             _types.DictionaryStringObject,
             [_types.DictionaryStringObject]
         );
-        runtime.CreateObject = method;
+        objectConstruction.Create = method;
 
         var il = method.GetILGenerator();
         // Just return the dictionary as-is (it's already created)
@@ -37,7 +77,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitMergeIntoObject(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitMergeIntoObject(
+        TypeBuilder typeBuilder,
+        EmittedObjectConstructionRuntime objectConstruction,
+        MergeIntoObjectInputs inputs
+    )
     {
         var method = typeBuilder.DefineMethod(
             "MergeIntoObject",
@@ -45,7 +89,7 @@ public partial class RuntimeEmitter
             _types.Void,
             [_types.DictionaryStringObject, _types.Object]
         );
-        runtime.MergeIntoObject = method;
+        objectConstruction.MergeIntoDictionary = method;
 
         var il = method.GetILGenerator();
         var listType = _types.ListOfObject;
@@ -68,24 +112,29 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Brfalse, returnLabel);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
         il.Emit(OpCodes.Brtrue, returnLabel);
 
         var generalCopy = il.DefineLabel();
-        EmitPlainDataSpreadCopy(il, runtime, generalCopy, returnLabel);
+        EmitPlainDataSpreadCopy(
+            il,
+            new PlainDataSpreadCopyInputs(inputs.DescriptorStorage, inputs.Symbols),
+            generalCopy,
+            returnLabel
+        );
         il.MarkLabel(generalCopy);
 
         // Snapshot the complete mixed [[OwnPropertyKeys]] list once. Proxy ownKeys must be invoked
         // exactly once; ordinary carriers reuse GetKeys' mature enumerable-string ordering and append
         // Symbols for per-key descriptor filtering.
-        if (_features.UsesProxy)
+        if (inputs.ProxySelected)
         {
             EmitProxyTypeCheck(
                 il, () => il.Emit(OpCodes.Ldarg_1), proxySource, ordinarySource);
             il.MarkLabel(proxySource);
             il.Emit(OpCodes.Ldc_I4_1);
             il.Emit(OpCodes.Stloc, sourceIsProxyLocal);
-            EmitProxyOwnKeysCompiledCall(il, runtime, () => il.Emit(OpCodes.Ldarg_1));
+            EmitProxyOwnKeysCompiledCall(il, inputs.ProxyOwnKeys, () => il.Emit(OpCodes.Ldarg_1));
             il.Emit(OpCodes.Stloc, keysLocal);
             il.Emit(OpCodes.Br, keysReady);
         }
@@ -94,14 +143,14 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Stloc, sourceIsProxyLocal);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.ObjectKeys.Keys);
+        il.Emit(OpCodes.Call, inputs.ObjectKeys.Keys);
         il.Emit(OpCodes.Stloc, keysLocal);
         // No symbols means no temporary symbol list (and no attached symbol storage).
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.Symbols.TryGetStorage);
+        il.Emit(OpCodes.Call, inputs.Symbols.TryGetStorage);
         il.Emit(OpCodes.Brfalse, keysReady);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.ObjectKeys.Symbols);
+        il.Emit(OpCodes.Call, inputs.ObjectKeys.Symbols);
         il.Emit(OpCodes.Castclass, listType);
         il.Emit(OpCodes.Stloc, symbolKeysLocal);
         il.Emit(OpCodes.Ldloc, keysLocal);
@@ -127,28 +176,28 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, ordinaryEnumerableCheck);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloc, keyLocal);
-        il.Emit(OpCodes.Call, runtime.ObjectDescriptors.GetOwnPropertyDescriptor);
+        il.Emit(OpCodes.Call, inputs.ObjectDescriptors.GetOwnPropertyDescriptor);
         il.Emit(OpCodes.Stloc, descriptorLocal);
         il.Emit(OpCodes.Ldloc, descriptorLocal);
         il.Emit(OpCodes.Brfalse, nextKey);
         il.Emit(OpCodes.Ldloc, descriptorLocal);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
         il.Emit(OpCodes.Brtrue, nextKey);
         il.Emit(OpCodes.Ldloc, descriptorLocal);
         il.Emit(OpCodes.Ldstr, "enumerable");
-        il.Emit(OpCodes.Call, runtime.GetProperty);
-        il.Emit(OpCodes.Call, runtime.Booleans.IsTruthy);
+        il.Emit(OpCodes.Call, inputs.GetProperty);
+        il.Emit(OpCodes.Call, inputs.Booleans.IsTruthy);
         il.Emit(OpCodes.Brfalse, nextKey);
         il.Emit(OpCodes.Br, enumerableCheckDone);
 
         // GetKeys already filtered ordinary string keys. Symbols need their descriptor bit checked.
         il.MarkLabel(ordinaryEnumerableCheck);
         il.Emit(OpCodes.Ldloc, keyLocal);
-        il.Emit(OpCodes.Call, runtime.Symbols.IsSymbol);
+        il.Emit(OpCodes.Call, inputs.Symbols.IsSymbol);
         il.Emit(OpCodes.Brfalse, enumerableCheckDone);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloc, keyLocal);
-        il.Emit(OpCodes.Call, runtime.ObjectOwnProperties.IsEnumerable);
+        il.Emit(OpCodes.Call, inputs.ObjectOwnProperties.IsEnumerable);
         il.Emit(OpCodes.Brfalse, nextKey);
         il.MarkLabel(enumerableCheckDone);
 
@@ -156,8 +205,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, keyLocal);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloc, keyLocal);
-        il.Emit(OpCodes.Call, runtime.GetIndex);
-        il.Emit(OpCodes.Call, runtime.SetIndex);
+        il.Emit(OpCodes.Call, inputs.GetIndex);
+        il.Emit(OpCodes.Call, inputs.SetIndex);
 
         il.MarkLabel(nextKey);
         il.Emit(OpCodes.Ldloc, indexLocal);
@@ -175,8 +224,7 @@ public partial class RuntimeEmitter
     /// Neither key enumeration nor value reads can run guest code here. Validate every key
     /// before writing so the fallback retains complete CopyDataProperties ordering.
     /// </summary>
-    private void EmitPlainDataSpreadCopy(
-        ILGenerator il, EmittedRuntime runtime, Label fallback, Label done)
+    private void EmitPlainDataSpreadCopy(ILGenerator il, PlainDataSpreadCopyInputs inputs, Label fallback, Label done)
     {
         var dictType = _types.DictionaryStringObject;
         var source = il.DeclareLocal(dictType);
@@ -199,10 +247,10 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, source);
         il.Emit(OpCodes.Brfalse, fallback);
         il.Emit(OpCodes.Ldloc, source);
-        il.Emit(OpCodes.Call, runtime.DescriptorStorage.HasPropertyDescriptors);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.HasPropertyDescriptors);
         il.Emit(OpCodes.Brtrue, fallback);
         il.Emit(OpCodes.Ldloc, source);
-        il.Emit(OpCodes.Call, runtime.Symbols.TryGetStorage);
+        il.Emit(OpCodes.Call, inputs.Symbols.TryGetStorage);
         il.Emit(OpCodes.Stloc, symbols);
         il.Emit(OpCodes.Ldloc, symbols);
         il.Emit(OpCodes.Brfalse, noSymbols);
@@ -262,7 +310,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, copyNext);
     }
 
-    private void EmitMergeIntoTSObject(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitMergeIntoTSObject(
+        TypeBuilder typeBuilder,
+        EmittedObjectConstructionRuntime objectConstruction,
+        MergeIntoTSObjectInputs inputs
+    )
     {
         // public static void MergeIntoTSObject($Object target, object? source)
         // Merges properties from source (Dictionary or $Object) into target $Object
@@ -270,9 +322,9 @@ public partial class RuntimeEmitter
             "MergeIntoTSObject",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Void,
-            [runtime.ObjectStorage.Type, _types.Object]
+            [inputs.ObjectStorage.Type, _types.Object]
         );
-        runtime.MergeIntoTSObject = method;
+        objectConstruction.MergeIntoObject = method;
 
         var il = method.GetILGenerator();
         var dictLabel = il.DefineLabel();
@@ -286,7 +338,7 @@ public partial class RuntimeEmitter
 
         // Check if source is $IHasFields (covers $Object and class instances)
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, runtime.IHasFieldsInterface);
+        il.Emit(OpCodes.Isinst, inputs.IHasFieldsInterface);
         il.Emit(OpCodes.Brtrue, tsObjectLabel);
 
         // Not a dict or $IHasFields - do nothing
@@ -323,7 +375,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Call, _types.GetProperty(keyValuePairType, "Key")!.GetGetMethod()!);
             il.Emit(OpCodes.Ldloca, kvpLocal);
             il.Emit(OpCodes.Call, _types.GetProperty(keyValuePairType, "Value")!.GetGetMethod()!);
-            il.Emit(OpCodes.Callvirt, runtime.ObjectStorage.SetProperty);
+            il.Emit(OpCodes.Callvirt, inputs.ObjectStorage.SetProperty);
 
             il.Emit(OpCodes.Br, loopStart);
 
@@ -344,8 +396,8 @@ public partial class RuntimeEmitter
 
             // Get Fields dictionary from source
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Castclass, runtime.IHasFieldsInterface);
-            il.Emit(OpCodes.Callvirt, runtime.IHasFieldsFieldsGetter);
+            il.Emit(OpCodes.Castclass, inputs.IHasFieldsInterface);
+            il.Emit(OpCodes.Callvirt, inputs.IHasFieldsFieldsGetter);
             il.Emit(OpCodes.Stloc, fieldsDictLocal);
 
             // If null, skip
@@ -372,7 +424,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Call, _types.GetProperty(kvpType, "Key")!.GetGetMethod()!);
             il.Emit(OpCodes.Ldloca, kvpLocal);
             il.Emit(OpCodes.Call, _types.GetProperty(kvpType, "Value")!.GetGetMethod()!);
-            il.Emit(OpCodes.Callvirt, runtime.ObjectStorage.SetProperty);
+            il.Emit(OpCodes.Callvirt, inputs.ObjectStorage.SetProperty);
 
             il.Emit(OpCodes.Br, loopStart);
 
@@ -411,7 +463,11 @@ public partial class RuntimeEmitter
     /// ECMA-262 25.5.2.4 spec rule that EnumerableOwnPropertyNames covers both
     /// data and accessor properties.
     /// </summary>
-    private void EmitTSObjectMergeEnumerable(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSObjectMergeEnumerable(
+        TypeBuilder typeBuilder,
+        EmittedObjectConstructionRuntime objectConstruction,
+        TSObjectMergeEnumerableInputs inputs
+    )
     {
         var method = typeBuilder.DefineMethod(
             "TSObjectMergeEnumerable",
@@ -419,7 +475,7 @@ public partial class RuntimeEmitter
             _types.DictionaryStringObject,
             [_types.Object]
         );
-        runtime.TSObjectMergeEnumerable = method;
+        objectConstruction.GetEnumerableFields = method;
 
         var il = method.GetILGenerator();
         var fallbackLabel = il.DefineLabel();
@@ -427,7 +483,7 @@ public partial class RuntimeEmitter
 
         // If receiver is not $Object, fall back to the IHasFields path.
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.ObjectStorage.Type);
+        il.Emit(OpCodes.Isinst, inputs.ObjectStorage.Type);
         il.Emit(OpCodes.Brfalse, fallbackLabel);
 
         // result = new Dictionary<string, object>()
@@ -438,8 +494,8 @@ public partial class RuntimeEmitter
         // Copy _fields entries.
         var fieldsLocal = il.DeclareLocal(_types.DictionaryStringObject);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.IHasFieldsInterface);
-        il.Emit(OpCodes.Callvirt, runtime.IHasFieldsFieldsGetter);
+        il.Emit(OpCodes.Castclass, inputs.IHasFieldsInterface);
+        il.Emit(OpCodes.Callvirt, inputs.IHasFieldsFieldsGetter);
         il.Emit(OpCodes.Stloc, fieldsLocal);
 
         var noFieldsLabel = il.DefineLabel();
@@ -474,8 +530,8 @@ public partial class RuntimeEmitter
         // Iterate _getters (if any). For each getter, invoke and store result.
         var gettersLocal = il.DeclareLocal(_types.DictionaryStringObject);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.ObjectStorage.Type);
-        il.Emit(OpCodes.Callvirt, runtime.ObjectStorage.GetGettersDictionary);
+        il.Emit(OpCodes.Castclass, inputs.ObjectStorage.Type);
+        il.Emit(OpCodes.Callvirt, inputs.ObjectStorage.GetGettersDictionary);
         il.Emit(OpCodes.Stloc, gettersLocal);
 
         var noGettersLabel = il.DefineLabel();
@@ -509,7 +565,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloca, gkvLocal);
         il.Emit(OpCodes.Call, _types.GetProperty(_types.KeyValuePairStringObject, "Value").GetGetMethod()!);
         il.Emit(OpCodes.Ldloc, emptyArgsLocal);
-        il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+        il.Emit(OpCodes.Call, inputs.InvokeMethodValue);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item", _types.String, _types.Object));
         il.Emit(OpCodes.Br, gLoopStart);
         il.MarkLabel(gLoopEnd);
@@ -521,7 +577,7 @@ public partial class RuntimeEmitter
         // Fallback: receiver isn't $Object — return the IHasFields dict directly.
         il.MarkLabel(fallbackLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.IHasFieldsInterface);
+        il.Emit(OpCodes.Isinst, inputs.IHasFieldsInterface);
         var nullReturnLabel = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, nullReturnLabel);
 
@@ -530,7 +586,7 @@ public partial class RuntimeEmitter
         // hidden properties are filtered and accessors are invoked.
         var directFieldsLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.DescriptorStorage.HasPropertyDescriptors);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.HasPropertyDescriptors);
         il.Emit(OpCodes.Brfalse, directFieldsLabel);
 
         var descriptorResultLocal = il.DeclareLocal(_types.DictionaryStringObject);
@@ -540,7 +596,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.DictionaryStringObject));
         il.Emit(OpCodes.Stloc, descriptorResultLocal);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.ObjectKeys.Keys);
+        il.Emit(OpCodes.Call, inputs.ObjectKeys.Keys);
         il.Emit(OpCodes.Stloc, descriptorKeysLocal);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Stloc, descriptorIndexLocal);
@@ -563,7 +619,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, descriptorKeyLocal);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, descriptorKeyLocal);
-        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, inputs.GetProperty);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(
             _types.DictionaryStringObject, "set_Item", _types.String, _types.Object));
         il.Emit(OpCodes.Ldloc, descriptorIndexLocal);
@@ -578,8 +634,8 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(directFieldsLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.IHasFieldsInterface);
-        il.Emit(OpCodes.Callvirt, runtime.IHasFieldsFieldsGetter);
+        il.Emit(OpCodes.Castclass, inputs.IHasFieldsInterface);
+        il.Emit(OpCodes.Callvirt, inputs.IHasFieldsFieldsGetter);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(nullReturnLabel);
         il.Emit(OpCodes.Ldnull);
@@ -594,7 +650,11 @@ public partial class RuntimeEmitter
     /// descriptor via Isinst and invoke the Getter via InvokeMethodValue.
     /// String keys fall through to $Object.DefineGetter/DefineSetter.
     /// </summary>
-    private void EmitDefineSymbolAccessor(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitDefineSymbolAccessor(
+        TypeBuilder typeBuilder,
+        EmittedObjectConstructionRuntime objectConstruction,
+        SymbolAccessorInputs inputs
+    )
     {
         var method = typeBuilder.DefineMethod(
             "DefineSymbolAccessor",
@@ -602,7 +662,7 @@ public partial class RuntimeEmitter
             _types.Void,
             [_types.Object, _types.Object, _types.Object, _types.Object]
         );
-        runtime.DefineSymbolAccessor = method;
+        objectConstruction.DefineSymbolAccessor = method;
 
         var il = method.GetILGenerator();
         var symKeyLabel = il.DefineLabel();
@@ -611,25 +671,25 @@ public partial class RuntimeEmitter
 
         // If key is a Symbol → symbol-dict path. Else → $Object accessor path.
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.Symbols.IsSymbol);
+        il.Emit(OpCodes.Call, inputs.Symbols.IsSymbol);
         il.Emit(OpCodes.Brfalse, stringKeyLabel);
 
         // Symbol path: build $CompiledPropertyDescriptor and store in symbol-dict.
         il.MarkLabel(symKeyLabel);
-        var descLocal = il.DeclareLocal(runtime.DescriptorStorage.DescriptorType);
-        il.Emit(OpCodes.Newobj, runtime.DescriptorStorage.DescriptorConstructor);
+        var descLocal = il.DeclareLocal(inputs.DescriptorStorage.DescriptorType);
+        il.Emit(OpCodes.Newobj, inputs.DescriptorStorage.DescriptorConstructor);
         il.Emit(OpCodes.Stloc, descLocal);
         // desc.Getter = arg2
         il.Emit(OpCodes.Ldloc, descLocal);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorGetter.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorGetter.GetSetMethod()!);
         // desc.Setter = arg3
         il.Emit(OpCodes.Ldloc, descLocal);
         il.Emit(OpCodes.Ldarg_3);
-        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorSetter.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorSetter.GetSetMethod()!);
         // GetSymbolDict(obj)[key] = desc
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.Symbols.GetStorage);
+        il.Emit(OpCodes.Call, inputs.Symbols.GetStorage);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloc, descLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryObjectObject, "set_Item", _types.Object, _types.Object));
@@ -640,34 +700,34 @@ public partial class RuntimeEmitter
         il.MarkLabel(stringKeyLabel);
         var notTSObjLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.ObjectStorage.Type);
+        il.Emit(OpCodes.Isinst, inputs.ObjectStorage.Type);
         il.Emit(OpCodes.Brfalse, notTSObjLabel);
         // keyStr = ToPropertyKey(key).  The Symbol case was handled above;
         // ToJsString supplies the required string-hint ToPrimitive semantics
         // for object keys and canonical ECMAScript number formatting.
         var keyStrLocal = il.DeclareLocal(_types.String);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
+        il.Emit(OpCodes.Call, inputs.StringCoercion.ToJsString);
         il.Emit(OpCodes.Stloc, keyStrLocal);
         // if (getter != null) obj.DefineGetter(keyStr, getter)
         var skipGetterLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Brfalse, skipGetterLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.ObjectStorage.Type);
+        il.Emit(OpCodes.Castclass, inputs.ObjectStorage.Type);
         il.Emit(OpCodes.Ldloc, keyStrLocal);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Callvirt, runtime.ObjectStorage.DefineGetter);
+        il.Emit(OpCodes.Callvirt, inputs.ObjectStorage.DefineGetter);
         il.MarkLabel(skipGetterLabel);
         // if (setter != null) obj.DefineSetter(keyStr, setter)
         var skipSetterLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_3);
         il.Emit(OpCodes.Brfalse, skipSetterLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.ObjectStorage.Type);
+        il.Emit(OpCodes.Castclass, inputs.ObjectStorage.Type);
         il.Emit(OpCodes.Ldloc, keyStrLocal);
         il.Emit(OpCodes.Ldarg_3);
-        il.Emit(OpCodes.Callvirt, runtime.ObjectStorage.DefineSetter);
+        il.Emit(OpCodes.Callvirt, inputs.ObjectStorage.DefineSetter);
         il.MarkLabel(skipSetterLabel);
         il.MarkLabel(notTSObjLabel);
 

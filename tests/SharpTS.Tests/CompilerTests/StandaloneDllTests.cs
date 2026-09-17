@@ -3708,6 +3708,335 @@ public class StandaloneDllTests
             verifyStandardError: error => Assert.Empty(error)));
     }
 
+    public static IEnumerable<object[]> ObjectConstructionMetadataPrograms =>
+    [
+        new object[]
+        {
+            "minimal",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "console.log(1);" },
+            "1\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "plain",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "function copy(first: any, second: any): any {\n    return { before: 0, ...first, b: 8, ...second, after: 9 };\n}\nconst first: any = { a: 1, b: 2, \"\": 3 };\nconst second: any = { b: 4, c: 5 };\nconst result: any = copy(first, second);\nconsole.log(Object.keys(result).join(\"|\"));\nconsole.log(result.a + result.b + result.c + result[\"\"]);\nresult.a = 10;\nfirst.b = 20;\nconsole.log(first.a);\nconsole.log(result.b);\nconsole.log(result === first);" },
+            "before|a|b||c|after\n13\n1\n4\nfalse\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "numeric",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "function copy(value: any): any { return { prefix: 0, ...value, suffix: 1 }; }\nconst value: any = { a: 1, \"10\": 10, \"2\": 2, \"01\": 1, \"4294967295\": 5 };\nconst result: any = copy(value);\nconsole.log(Object.keys(result).join(\",\"));\nconsole.log(result[\"10\"] + result[\"2\"] + result[\"01\"]);" },
+            "2,10,prefix,a,01,4294967295,suffix\n13\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "descriptor",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "function copy(value: any): any { return { ...value }; }\nconst value: any = { a: 1, b: 2 };\nlet calls: number = 0;\nObject.defineProperty(value, \"a\", {\n    enumerable: true,\n    get: function(): number {\n        calls = calls + 1;\n        value.b = 20;\n        value.late = 30;\n        return 10;\n    }\n});\nObject.defineProperty(value, \"hidden\", { value: 99, enumerable: false });\nconst result: any = copy(value);\nconsole.log(Object.keys(result).join(\",\"));\nconsole.log(result.a + result.b);\nconsole.log(calls);\nconsole.log(result.late === undefined);\nconsole.log(result.hidden === undefined);\nresult.a = 40;\nconsole.log(result.a);" },
+            "a,b\n30\n1\ntrue\ntrue\n40\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "symbols",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "function copy(value: any): any { return { ...value }; }\nconst value: any = { a: 1 };\nconst before: any = Object.getOwnPropertySymbols(value);\nconst again: any = Object.getOwnPropertySymbols(value);\nconsole.log(before === again);\nconsole.log(Object.keys(copy(value)).join(\",\"));\nconst visible: symbol = Symbol(\"visible\");\nconst hidden: symbol = Symbol(\"hidden\");\nvalue[visible] = 7;\nObject.defineProperty(value, hidden, { value: 8, enumerable: false });\nconst result: any = copy(value);\nconsole.log(before.length);\nconsole.log(Object.getOwnPropertySymbols(value).length);\nconsole.log(Object.getOwnPropertySymbols(result).length);\nconsole.log(result[visible]);\nconsole.log(result[hidden] === undefined);" },
+            "false\na\n0\n2\n1\n7\ntrue\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "wide",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "function copy(value: { a: number, b: number, c: number }): any {\n    return { ...value, d: 4 };\n}\nconst wider = { a: 1, b: 2, c: 3, extra: 5 };\nconst result: any = copy(wider);\nconsole.log(Object.keys(result).join(\",\"));\nconsole.log(result.extra);" },
+            "a,b,c,extra,d\n5\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "mutation",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "function mutate(value: any): number { value.a = 7; value.c = 8; return 9; }\nfunction copy(value: any): any { return { ...value, middle: mutate(value), ...value }; }\nconst value: any = { a: 1, b: 2 };\nconst result: any = copy(value);\nconsole.log(Object.keys(result).join(\",\"));\nconsole.log(result.a + result.b + result.middle + result.c);" },
+            "a,b,middle,c\n26\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "getter",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let base = { a: 1, b: 2 };\nlet obj = {\n    ...base,\n    _val: 10,\n    get doubled(): number {\n        return this._val * 2;\n    }\n};\nconsole.log(obj.a);\nconsole.log(obj.b);\nconsole.log(obj.doubled);" },
+            "1\n2\n20\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "setter",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let base = { x: 100, y: 200 };\nlet obj = {\n    ...base,\n    _offset: 10,\n    get adjusted(): number {\n        return this.x + this._offset;\n    },\n    set offset(v: number) {\n        this._offset = v;\n    }\n};\nconsole.log(obj.x);\nconsole.log(obj.y);\nconsole.log(obj.adjusted);\nobj.offset = 50;\nconsole.log(obj.adjusted);" },
+            "100\n200\n110\n150\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "object_fields",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let source = {\n    data: 42,\n    get computed(): number {\n        return this.data * 2;\n    }\n};\nlet target = {\n    ...source,\n    get tripled(): number {\n        return this.data * 3;\n    }\n};\nconsole.log(target.data);\nconsole.log(target.tripled);" },
+            "42\n126\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "symbol_snapshot",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const removed = Symbol(\"removed\");\nconst watched = Symbol(\"watched\");\nconst hidden = Symbol(\"hidden\");\nconst added = Symbol(\"added\");\nconst events: string[] = [];\nconst source: any = {\n    get first(): number {\n        events.push(\"string\");\n        delete source[removed];\n        source[added] = 3;\n        return 1;\n    }\n};\nsource[removed] = 0;\nObject.defineProperty(source, watched, {\n    get(): number {\n        events.push(\"symbol\");\n        return 2;\n    },\n    enumerable: true,\n    configurable: true\n});\nObject.defineProperty(source, hidden, {\n    value: 4,\n    enumerable: false,\n    configurable: true\n});\n\nconst copy: any = { ...source };\nconsole.log(events.join(\",\"));\nconsole.log(copy.first, copy[watched], copy[hidden]);\nconsole.log(\n    Object.prototype.hasOwnProperty.call(copy, removed),\n    Object.prototype.hasOwnProperty.call(copy, added),\n    Object.prototype.hasOwnProperty.call(copy, watched),\n    Object.prototype.hasOwnProperty.call(copy, hidden));" },
+            "string,symbol\n1 2 undefined\nfalse false true false\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "rest",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let obj: { x: number, y: number, z: number } = { x: 1, y: 2, z: 3 };\nlet { x, ...rest }: { x: number, y: number, z: number } = obj;\nconsole.log(x);\nconsole.log(rest.y);\nconsole.log(rest.z);" },
+            "1\n2\n3\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "rest_multiple",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let data: { id: number, name: string, age: number, city: string } = { id: 1, name: \"Alice\", age: 30, city: \"NYC\" };\nlet { id, name, ...others }: { id: number, name: string, age: number, city: string } = data;\nconsole.log(id);\nconsole.log(name);\nconsole.log(others.age);\nconsole.log(others.city);" },
+            "1\nAlice\n30\nNYC\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "computed",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let key: string = \"added\";\nlet base: { x: number } = { x: 1 };\nlet obj: any = { ...base, [key]: 2 };\nconsole.log(obj.x);\nconsole.log(obj[\"added\"]);" },
+            "1\n2\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "rest_assignment",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let pa: number, pb: number, rr: any;\n({ a: pa, b: pb, ...rr } = { a: 1, b: 2, z: 9 });\nconsole.log(pa, pb, JSON.stringify(rr));\nconst src: any = { p: 3 };\nlet ox, oy;\n({ p: ox, q: oy = 4 } = src);\nconsole.log(ox, oy);" },
+            "1 2 {\"z\":9}\n3 4\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "proxy_snapshot",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const target: any = { a: 1, b: 2 };\nlet ownKeysCount: number = 0;\nlet descriptorCount: number = 0;\nlet getCount: number = 0;\nconst proxy: any = new Proxy(target, {\n    ownKeys(inner: any): any[] {\n        ownKeysCount = ownKeysCount + 1;\n        return Reflect.ownKeys(inner);\n    },\n    getOwnPropertyDescriptor(inner: any, key: any): any {\n        descriptorCount = descriptorCount + 1;\n        return Reflect.getOwnPropertyDescriptor(inner, key);\n    },\n    get(inner: any, key: any): any {\n        getCount = getCount + 1;\n        return inner[key];\n    }\n});\nconst result: any = { ...proxy };\nconsole.log(result.a);\nconsole.log(result.b);\nconsole.log(ownKeysCount);\nconsole.log(descriptorCount);\nconsole.log(getCount);" },
+            "1\n2\n1\n2\n2\n",
+            false,
+            false
+        },
+        new object[]
+        {
+            "json_class",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "class Person {\n    name: string;\n    age: number;\n    constructor(name: string, age: number) {\n        this.name = name;\n        this.age = age;\n    }\n}\nlet p: Person = new Person(\"Bob\", 25);\nlet result: string = JSON.stringify(p);\nconsole.log(result);" },
+            "{\"name\":\"Bob\",\"age\":25}\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "json_descriptors",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const obj: any = { first: 1 };\nObject.defineProperty(obj, \"hidden\", {\n    value: 2,\n    enumerable: false,\n    configurable: true\n});\nObject.defineProperty(obj, \"computed\", {\n    get: function (): number { return 3; },\n    enumerable: true,\n    configurable: true\n});\nObject.defineProperty(obj, \"setterOnly\", {\n    set: function (_value: any): void {},\n    enumerable: true,\n    configurable: true\n});\nobj.last = 4;\nconsole.log(JSON.stringify(obj));" },
+            "{\"first\":1,\"computed\":3,\"last\":4}\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "json_record",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const record: { a: number; b: string; c: boolean; d: null } = {\n    a: 1, b: \"x\", c: true, d: null\n};\nconsole.log(record.a, record.b, record.c, record.d === null);\nrecord.a = 8;\nconst dynamic: any = record;\ndelete dynamic.b;\nObject.defineProperty(dynamic, \"e\", {\n    value: 5, enumerable: true, configurable: true\n});\nconsole.log(Object.keys(record).join(\",\"));\nconsole.log(JSON.stringify(record));" },
+            "1 x true true\na,c,d,e\n{\"a\":8,\"c\":true,\"d\":null,\"e\":5}\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "nullish",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "function copy(v:any){return {...v};} console.log(Object.keys(copy(null)).length,Object.keys(copy(undefined)).length);" },
+            "0 0\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "rest_class",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "class Item {a=1;b=2;c=3;} const item:any=new Item(); const {a,...rest}=item; console.log(a,Object.keys(rest).join(','),rest.b+rest.c); rest.b=9; console.log(item.b);" },
+            "1 b,c 5\n2\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "rest_primitive",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const n:any=3; const {...rest}=n; console.log(Object.keys(rest).length);" },
+            "0\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "json_getter",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let calls=0; const o:any={a:1,get b(){calls++;return 2;}}; console.log(JSON.stringify(o)); console.log(calls);" },
+            "{\"a\":1,\"b\":2}\n1\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "proxy_order",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let trace=''; const p:any=new Proxy({x:1,y:2},{ownKeys(){trace+='k';return ['y','x'];},getOwnPropertyDescriptor(t:any,k:any){trace+='d'+k;return {value:t[k],enumerable:true,configurable:true};},get(t:any,k:any){trace+='g'+k;return t[k];}}); function copy(v:any){return {...v};} const r:any=copy(p); console.log(Object.keys(r).join(','),r.y,r.x,trace);" },
+            "y,x 2 1 kdygydxgx\n",
+            false,
+            false
+        },
+        new object[]
+        {
+            "esm",
+            "main.ts",
+            new string[] { "dep.ts", "main.ts" },
+            new string[] { "export const value={a:1,b:2};", "import {value} from './dep'; const copy:any={...value}; const {a,...rest}=copy; console.log(a,Object.keys(rest).join(','),rest.b);" },
+            "1 b 2\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "commonjs",
+            "main.cjs",
+            new string[] { "dep.cjs", "main.cjs" },
+            new string[] { "exports.value={a:1,b:2};", "const dep=require('./dep.cjs'); const copy={...dep.value}; console.log(copy.a,copy.b);" },
+            "1 2\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "hosted_construction",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "export function copy(v:any){return {...v};} export function rest(v:any){const {a,...r}=v;return r;} export function text(v:any){return JSON.stringify(v);}" },
+            "",
+            true,
+            true
+        },
+        new object[]
+        {
+            "hosted_minimal",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "export const value=1;" },
+            "",
+            true,
+            true
+        },
+        new object[]
+        {
+            "symbol_getter",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const s=Symbol('s'); let value=3; const o:any={get [s](){return value;}}; console.log(o[s]); value=8; console.log(o[s]);" },
+            "3\n8\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "symbol_setter",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const s=Symbol('s'); let value=3; const o:any={set [s](v:any){value=v;}}; o[s]=8; console.log(value);" },
+            "8\n",
+            false,
+            true
+        },
+    ];
+
+    [Theory]
+    [MemberData(nameof(ObjectConstructionMetadataPrograms))]
+    public void Isolated_ObjectConstructionMetadata_PreservesConstructionAndDeployment(
+        string name, string entry, string[] paths, string[] sources, string expected, bool hosted, bool standalone)
+    {
+        using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        for (int i = 0; i < paths.Length; i++) tempDir.CreateFile(paths[i], sources[i]);
+        var sourcePath = tempDir.GetPath(entry);
+        var dllPath = tempDir.GetPath($"object-construction-metadata_{name}.dll");
+        var deployment = standalone ? " --standalone" : "";
+        var hosting = hosted ? " --target dll --hosted" : "";
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --noLib --compile \"{sourcePath}\" -o \"{dllPath}\" --verify{deployment}{hosting}", tempDir.Path);
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        var references = GetAssemblyReferences(dllPath);
+        Assert.DoesNotContain("SharpTS", references);
+        Assert.Equal(hosted, references.Contains("SharpTS.Hosting.Abstractions"));
+        Assert.Equal(!standalone, File.Exists(tempDir.GetPath("SharpTS.dll")));
+        if (!hosted)
+            Assert.Equal(expected, ExecuteCompiledDllIsolated(dllPath, timeoutMs: 30000,
+                verifyStandardError: error => Assert.Empty(error)));
+    }
+
+
     public static IEnumerable<object[]> ObjectOperationsMetadataPrograms =>
     [
         new object[]

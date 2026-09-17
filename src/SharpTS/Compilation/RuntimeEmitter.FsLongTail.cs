@@ -192,7 +192,7 @@ public partial class RuntimeEmitter
         AddEntry("ffree", () => il.Emit(OpCodes.Ldc_R8, 0.0));
 
         il.Emit(OpCodes.Ldloc, dict);
-        il.Emit(OpCodes.Call, runtime.CreateObject);
+        il.Emit(OpCodes.Call, runtime.ObjectConstruction.Create);
         il.Emit(OpCodes.Ret);
     }
 }

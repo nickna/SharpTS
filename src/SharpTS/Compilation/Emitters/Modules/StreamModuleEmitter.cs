@@ -124,7 +124,7 @@ public sealed class StreamModuleEmitter : IBuiltInModuleEmitter
         il.Emit(OpCodes.Call, addMethod);
 
         // Wrap in SharpTSObject
-        il.Emit(OpCodes.Call, ctx.Runtime!.CreateObject);
+        il.Emit(OpCodes.Call, ctx.Runtime!.ObjectConstruction.Create);
     }
 
     private static void EmitFinishedCall(IEmitterContext emitter, List<Expr> arguments)

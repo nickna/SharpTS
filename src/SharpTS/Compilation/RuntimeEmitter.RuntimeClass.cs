@@ -869,7 +869,7 @@ public partial class RuntimeEmitter
         DeclareEquals(typeBuilder, runtime);
         EmitStrictEquals(typeBuilder, runtime);
         // Object methods - must come BEFORE iterator methods since GetProperty, InvokeMethodValue are needed
-        EmitCreateObject(typeBuilder, runtime);
+        EmitCreateObject(typeBuilder, runtime.ObjectConstruction);
         EmitGetArrayMethod(typeBuilder, runtime);
         // Deleted-builtins tracking — used by HasOwnPropertyHelper /
         // GetFunctionMethod / ObjectGetOwnPropertyDescriptor / DeleteIndex to
@@ -1125,7 +1125,15 @@ public partial class RuntimeEmitter
         EmitSetPropertyStrict(typeBuilder, runtime);
         EmitDeleteProperty(typeBuilder, runtime);
         EmitDeletePropertyStrict(typeBuilder, runtime);
-        EmitMergeIntoTSObject(typeBuilder, runtime);
+        EmitMergeIntoTSObject(
+            typeBuilder,
+            runtime.ObjectConstruction,
+            new MergeIntoTSObjectInputs(
+                runtime.IHasFieldsFieldsGetter,
+                runtime.IHasFieldsInterface,
+                runtime.ObjectStorage
+            )
+        );
         // (Symbol helpers EmitGetSymbolDict + EmitIsSymbol now emitted earlier
         // — before EmitToJsString — so the @@toPrimitive lookup can use them.)
         // HasIn operator depends on IsSymbol and GetSymbolDict
@@ -1279,7 +1287,32 @@ public partial class RuntimeEmitter
         );
         // MergeIntoObject implements CopyDataProperties through GetKeys and
         // GetProperty, so its body must be emitted after GetKeys is available.
-        EmitMergeIntoObject(typeBuilder, runtime);
+        EmitMergeIntoObject(
+            typeBuilder,
+            runtime.ObjectConstruction,
+            new MergeIntoObjectInputs(
+                runtime.Booleans,
+                runtime.DescriptorStorage,
+                runtime.GetIndex,
+                runtime.GetProperty,
+                runtime.ObjectDescriptors,
+                runtime.ObjectKeys,
+                runtime.ObjectOwnProperties,
+                new ProxyOwnKeysCallInputs(
+                    runtime.ObjectKeys.Ordinary,
+                    runtime.ObjectKeys.CreateProxyList,
+                    runtime.ObjectDescriptors.GetOwnPropertyDescriptor,
+                    runtime.ObjectState.IsExtensible,
+                    runtime.Symbols.IsSymbol,
+                    runtime.GetProperty,
+                    runtime.InvokeMethodUnwrapped
+                ),
+                _features.UsesProxy,
+                runtime.SetIndex,
+                runtime.Symbols,
+                runtime.UndefinedType
+            )
+        );
         EmitGetValues(
             typeBuilder,
             runtime.ObjectOperations,
@@ -1994,8 +2027,29 @@ public partial class RuntimeEmitter
         // here is now empty.
         EmitMathSumPrecise(typeBuilder, runtime.Math, new MathSumInputs(
             runtime.Symbols.GetStorage, runtime.Symbols.Iterator, runtime.GetIteratorFunction, runtime.UndefinedType, runtime.InvokeMethodValue, runtime.GetIteratorNextMethod, runtime.InvokeCapturedIteratorNext, runtime.GetIteratorDone, runtime.GetIteratorValue, runtime.GetProperty, runtime.Errors.CreateException, runtime.Errors.TypeErrorConstructor));
-        EmitDefineSymbolAccessor(typeBuilder, runtime);
-        EmitTSObjectMergeEnumerable(typeBuilder, runtime);
+        EmitDefineSymbolAccessor(
+            typeBuilder,
+            runtime.ObjectConstruction,
+            new SymbolAccessorInputs(
+                runtime.DescriptorStorage,
+                runtime.ObjectStorage,
+                runtime.StringCoercion,
+                runtime.Symbols
+            )
+        );
+        EmitTSObjectMergeEnumerable(
+            typeBuilder,
+            runtime.ObjectConstruction,
+            new TSObjectMergeEnumerableInputs(
+                runtime.DescriptorStorage,
+                runtime.GetProperty,
+                runtime.IHasFieldsFieldsGetter,
+                runtime.IHasFieldsInterface,
+                runtime.InvokeMethodValue,
+                runtime.ObjectKeys,
+                runtime.ObjectStorage
+            )
+        );
         // Math.* adapters moved earlier (before EmitObjectGetOwnPropertyDescriptor)
         // so gOPD's Math singleton synth can produce identity-stable
         // `desc.value === Math.X` descriptors.
@@ -2005,7 +2059,11 @@ public partial class RuntimeEmitter
             runtime.ObjectState.Freeze, runtime.InvokeValue, runtime.Errors.CreateException, runtime.Errors.TypeErrorConstructor);
         EmitInvokeTaggedTemplateWithThis(typeBuilder, runtime.Templates,
             runtime.ObjectState.Freeze, runtime.InvokeMethodValue, runtime.Errors.CreateException, runtime.Errors.TypeErrorConstructor);
-        EmitObjectRest(typeBuilder, runtime);
+        EmitObjectRest(
+            typeBuilder,
+            runtime.ObjectConstruction,
+            new ObjectRestInputs(runtime.IHasFieldsFieldsGetter, runtime.IHasFieldsInterface)
+        );
         // #685: array binding-pattern source normalizer — depends on IterateToList /
         // GetIteratorFunction (emitted above via EmitIteratorMethodsAdvanced).
         EmitArrayDestructureSource(typeBuilder, runtime);
@@ -2069,7 +2127,7 @@ public partial class RuntimeEmitter
                     runtime.ObjectStorage,
                     runtime.StringCoercion,
                     runtime.TSFunctionType,
-                    runtime.TSObjectMergeEnumerable,
+                    runtime.ObjectConstruction.GetEnumerableFields,
                     runtime.RegExps.Implementation?.Type,
                     runtime.Symbols.Type,
                     runtime.Errors.TypeErrorConstructor,
@@ -2107,7 +2165,7 @@ public partial class RuntimeEmitter
                     runtime.StringCoercion,
                     runtime.TSFunctionInvokeWithThis,
                     runtime.TSFunctionType,
-                    runtime.TSObjectMergeEnumerable,
+                    runtime.ObjectConstruction.GetEnumerableFields,
                     runtime.RegExps.Implementation?.Type,
                     runtime.Symbols.Type,
                     runtime.Errors.TypeErrorConstructor,

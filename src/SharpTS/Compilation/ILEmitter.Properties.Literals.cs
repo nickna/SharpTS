@@ -308,7 +308,7 @@ public partial class ILEmitter
                     // Spread: merge the object into target
                     EmitExpression(prop.Value);
                     EmitBoxIfNeeded(prop.Value);
-                    IL.Emit(OpCodes.Call, _ctx.Runtime!.MergeIntoObject);
+                    IL.Emit(OpCodes.Call, _ctx.Runtime!.ObjectConstruction.MergeIntoDictionary);
                 }
                 else if (prop.Key is Expr.ComputedKey ck)
                 {
@@ -507,7 +507,7 @@ public partial class ILEmitter
                 IL.Emit(OpCodes.Ldloc, objLocal);
                 EmitExpression(prop.Value);
                 EmitBoxIfNeeded(prop.Value);
-                IL.Emit(OpCodes.Call, _ctx.Runtime!.MergeIntoTSObject);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.ObjectConstruction.MergeIntoObject);
                 continue;
             }
 
@@ -530,7 +530,7 @@ public partial class ILEmitter
                         EmitExpression(prop.Value);
                         EmitBoxIfNeeded(prop.Value);
                         IL.Emit(OpCodes.Ldnull);
-                        IL.Emit(OpCodes.Call, _ctx.Runtime!.DefineSymbolAccessor);
+                        IL.Emit(OpCodes.Call, _ctx.Runtime!.ObjectConstruction.DefineSymbolAccessor);
                     }
                     else
                     {
@@ -552,7 +552,7 @@ public partial class ILEmitter
                         IL.Emit(OpCodes.Ldnull);
                         EmitExpression(prop.Value);
                         EmitBoxIfNeeded(prop.Value);
-                        IL.Emit(OpCodes.Call, _ctx.Runtime!.DefineSymbolAccessor);
+                        IL.Emit(OpCodes.Call, _ctx.Runtime!.ObjectConstruction.DefineSymbolAccessor);
                     }
                     else
                     {

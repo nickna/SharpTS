@@ -122,7 +122,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, dictAdd);
 
         // Wrap in $Object via CreateObject
-        il.Emit(OpCodes.Call, runtime.CreateObject);
+        il.Emit(OpCodes.Call, runtime.ObjectConstruction.Create);
         var rinfoLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Stloc, rinfoLocal);
 

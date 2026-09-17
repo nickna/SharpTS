@@ -103,7 +103,7 @@ public sealed class CryptoModuleEmitter : IBuiltInModuleEmitter
                 il.Emit(OpCodes.Newobj, ctx.Runtime.TSFunctionCtor);
                 il.Emit(OpCodes.Callvirt,
                     ctx.Types.GetMethod(dictType, "Add", ctx.Types.String, ctx.Types.Object));
-                il.Emit(OpCodes.Call, ctx.Runtime.CreateObject);
+                il.Emit(OpCodes.Call, ctx.Runtime.ObjectConstruction.Create);
                 return true;
             // WebCrypto (#1063): crypto.webcrypto and crypto.subtle
             case "webcrypto":

@@ -3202,7 +3202,7 @@ public partial class RuntimeEmitter
             EmitAgentMethods(il, runtime);
 
             // Wrap in $Object
-            il.Emit(OpCodes.Call, runtime.CreateObject);
+            il.Emit(OpCodes.Call, runtime.ObjectConstruction.Create);
             il.Emit(OpCodes.Ret);
         }
 
@@ -3339,7 +3339,7 @@ public partial class RuntimeEmitter
         EmitAgentMethods(il, runtime);
 
         // Wrap in $Object
-        il.Emit(OpCodes.Call, runtime.CreateObject);
+        il.Emit(OpCodes.Call, runtime.ObjectConstruction.Create);
     }
 
     /// <summary>

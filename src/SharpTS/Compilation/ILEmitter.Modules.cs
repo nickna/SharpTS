@@ -177,7 +177,7 @@ public partial class ILEmitter
             }
 
             // Call CreateObject to wrap the dictionary
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.CreateObject);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.ObjectConstruction.Create);
 
             // Store in static field if available, otherwise use local
             if (currentModuleImportFields?.TryGetValue(localName, out var importField) == true)
@@ -293,7 +293,7 @@ public partial class ILEmitter
             }
 
             // Wrap in SharpTSObject
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.CreateObject);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.ObjectConstruction.Create);
         }
 
         // Store in static field if available, otherwise use local
@@ -372,7 +372,7 @@ public partial class ILEmitter
         }
 
         // Wrap dictionary in SharpTSObject
-        IL.Emit(OpCodes.Call, _ctx.Runtime!.CreateObject);
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.ObjectConstruction.Create);
         IL.Emit(OpCodes.Stloc, local);
     }
 
@@ -717,7 +717,7 @@ public partial class ILEmitter
         }
 
         // Wrap in SharpTSObject using the CreateObject helper
-        IL.Emit(OpCodes.Call, _ctx.Runtime!.CreateObject);
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.ObjectConstruction.Create);
     }
 
     /// <summary>
@@ -788,7 +788,7 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Callvirt, _ctx.Types.GetMethod(_ctx.Types.DictionaryStringObject, "set_Item", _ctx.Types.String, _ctx.Types.Object));
 
         // Wrap in SharpTSObject
-        EmitCallUnknown(_ctx.Runtime!.CreateObject);
+        EmitCallUnknown(_ctx.Runtime!.ObjectConstruction.Create);
     }
 
     /// <summary>
@@ -840,7 +840,7 @@ public partial class ILEmitter
             }
 
             // Wrap dictionary in SharpTSObject
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.CreateObject);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.ObjectConstruction.Create);
             IL.Emit(OpCodes.Stloc, local);
         }
 
@@ -914,7 +914,7 @@ public partial class ILEmitter
             }
 
             // Wrap dictionary in SharpTSObject
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.CreateObject);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.ObjectConstruction.Create);
             IL.Emit(OpCodes.Stloc, local);
         }
     }

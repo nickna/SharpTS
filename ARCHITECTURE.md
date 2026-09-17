@@ -330,6 +330,16 @@ carrier; the strict SyntaxError helper retains its existing CLR exception repres
 Exception wrapping follows supplied optional Promise metadata. Error-cause Proxy handling
 receives six explicit invocation/delegate handles through the shared reflection bridge.
 
+Object construction, spread, enumerable projection and rest use required
+`ObjectConstruction` ownership for six checked declarations. The owner rejects
+missing, null, duplicate and post-completion writes. Seven helpers receive their
+owner and scoped dependencies. The dictionary-spread helper receives explicit
+Proxy selection, preserving the orchestration gate without reading emitter feature
+state. Literal identity, dictionary/object spreading, descriptor and Symbol
+filtering, key snapshots, getter effects, JSON projection and rest exclusions stay
+unchanged. The plain-data spread path retains its allocation-free guarded copy.
+Generated member order, mutable guest state and deployment are preserved.
+
 Object value, entry, assignment, comparison and grouping operations use required
 `ObjectOperations` ownership for six declarations. Checked access rejects missing,
 null, duplicate and post-completion writes. Bodies and declarations retain their
