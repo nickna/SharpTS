@@ -17,6 +17,10 @@ namespace SharpTS.Compilation;
 /// <seealso cref="ILEmitter"/>
 public class EmittedRuntime
 {
+    /// <summary>Required function property lookup and constructor-capability declarations.</summary>
+    public EmittedFunctionIntrospectionRuntime FunctionIntrospection { get; } = new();
+
+
     /// <summary>Required Function prototype singleton and staged population declarations.</summary>
     public EmittedFunctionPrototypeRuntime FunctionPrototypes { get; } = new();
 
@@ -341,7 +345,6 @@ public class EmittedRuntime
     public MethodBuilder AddEventSubscription { get; set; } = null!;
     public MethodBuilder RemoveEventSubscription { get; set; } = null!;
 
-    public MethodBuilder IsConstructorMethod { get; set; } = null!;
 
     // Resource disposal for using declarations
     public MethodBuilder DisposeResource { get; set; } = null!;
@@ -359,7 +362,6 @@ public class EmittedRuntime
     public MethodBuilder IteratorProtocolCall { get; set; } = null!;
 
     // Function methods (bind/call/apply)
-    public MethodBuilder GetFunctionMethod { get; set; } = null!;
 
     // $Arguments : List<object> — marker subclass for the JS arguments object.
     // Used to brand sloppy-arguments instances so the brand-tagger returns

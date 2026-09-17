@@ -945,7 +945,7 @@ public partial class RuntimeEmitter
         // that are callable but not constructable (notably eval and built-in
         // method wrappers) must fail synchronously at that step.
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.IsConstructorMethod);
+        il.Emit(OpCodes.Call, runtime.FunctionIntrospection.IsConstructor);
         il.Emit(OpCodes.Brfalse, throwLabel);
         il.Emit(OpCodes.Br, okLabel);
 

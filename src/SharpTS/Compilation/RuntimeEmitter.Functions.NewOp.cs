@@ -91,7 +91,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, runtime.FunctionValues.Type);
         il.Emit(OpCodes.Brfalse, skipConstructorCheckLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.IsConstructorMethod);
+        il.Emit(OpCodes.Call, runtime.FunctionIntrospection.IsConstructor);
         il.Emit(OpCodes.Brtrue, isConstructorOkLabel);
         GuestErrorEmitter.ThrowTypeError(il, runtime, "not a constructor");
         il.MarkLabel(skipConstructorCheckLabel);
@@ -134,7 +134,7 @@ public partial class RuntimeEmitter
         var fnProtoLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "prototype");
-        il.Emit(OpCodes.Call, runtime.GetFunctionMethod);
+        il.Emit(OpCodes.Call, runtime.FunctionIntrospection.GetProperty);
         il.Emit(OpCodes.Stloc, fnProtoLocal);
 
         // PDSSetPrototype(newObj, fnProto) — only when fnProto is non-null.

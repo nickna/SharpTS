@@ -9,6 +9,21 @@ namespace SharpTS.Compilation;
 /// </summary>
 public partial class RuntimeEmitter
 {
+    private readonly record struct GetFunctionMethodInputs(
+        EmittedDescriptorStorageRuntime DescriptorStorage,
+        EmittedFunctionAttributesRuntime FunctionAttributes,
+        EmittedFunctionBindingRuntime FunctionBindings,
+        EmittedFunctionConstructionRuntime FunctionConstruction,
+        EmittedFunctionPrototypeRuntime FunctionPrototypes,
+        EmittedFunctionValueRuntime FunctionValues,
+        EmittedObjectOwnPropertiesRuntime ObjectOwnProperties,
+        EmittedObjectPrototypeRuntime ObjectPrototypes,
+        EmittedObjectStateRuntime ObjectState,
+        EmittedObjectStorageRuntime ObjectStorage,
+        FieldInfo UndefinedInstance,
+        Type UndefinedType
+    );
+
     private readonly record struct BoundAnyFunctionClassInputs(
         EmittedFunctionValueRuntime FunctionValues,
         EmittedArrayOperationsRuntime ArrayOperations,
@@ -568,7 +583,11 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits the GetFunctionMethod helper that returns bind/call/apply wrappers.
     /// </summary>
-    private void EmitGetFunctionMethod(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitGetFunctionMethod(
+        TypeBuilder typeBuilder,
+        EmittedFunctionIntrospectionRuntime functionIntrospection,
+        GetFunctionMethodInputs inputs
+    )
     {
         // GetFunctionMethod(object func, string methodName) -> object
         // Functions/arrows are ordinary objects: a missing property reads as JS
@@ -581,7 +600,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object, _types.String]
         );
-        runtime.GetFunctionMethod = method;
+        functionIntrospection.GetProperty = method;
 
         var il = method.GetILGenerator();
         var missLabel = il.DefineLabel();
@@ -602,10 +621,10 @@ public partial class RuntimeEmitter
         // may replace either one, including through trapless nested Proxies.
         // Checking only in the generic fallback made the synthesized cached
         // metadata win before the replacement descriptor was consulted.
-        var ownShadow = il.DeclareLocal(runtime.DescriptorStorage.DescriptorType);
+        var ownShadow = il.DeclareLocal(inputs.DescriptorStorage.DescriptorType);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetPropertyDescriptor);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.GetPropertyDescriptor);
         il.Emit(OpCodes.Stloc, ownShadow);
         var noOwnShadow = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, ownShadow);
@@ -616,44 +635,44 @@ public partial class RuntimeEmitter
         var ownUndefinedAccessor = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, ownShadow);
         il.Emit(OpCodes.Callvirt,
-            runtime.DescriptorStorage.DescriptorGetter.GetGetMethod()!);
+            inputs.DescriptorStorage.DescriptorGetter.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, ownGetter);
         il.Emit(OpCodes.Ldloc, ownGetter);
         il.Emit(OpCodes.Brfalse, ownData);
         il.Emit(OpCodes.Ldloc, ownGetter);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
         il.Emit(OpCodes.Brtrue, ownUndefinedAccessor);
         var ownGetterIsBound = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, ownGetter);
-        il.Emit(OpCodes.Isinst, runtime.FunctionValues.Type);
+        il.Emit(OpCodes.Isinst, inputs.FunctionValues.Type);
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Brfalse, ownGetterIsBound);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Newarr, _types.Object);
-        il.Emit(OpCodes.Callvirt, runtime.FunctionValues.InvokeWithThis);
+        il.Emit(OpCodes.Callvirt, inputs.FunctionValues.InvokeWithThis);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(ownGetterIsBound);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Ldloc, ownGetter);
-        il.Emit(OpCodes.Castclass, runtime.FunctionBindings.AnyType);
+        il.Emit(OpCodes.Castclass, inputs.FunctionBindings.AnyType);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Newarr, _types.Object);
-        il.Emit(OpCodes.Callvirt, runtime.FunctionBindings.AnyInvoke);
+        il.Emit(OpCodes.Callvirt, inputs.FunctionBindings.AnyInvoke);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(ownData);
         il.Emit(OpCodes.Ldloc, ownShadow);
         il.Emit(OpCodes.Callvirt,
-            runtime.DescriptorStorage.DescriptorSetter.GetGetMethod()!);
+            inputs.DescriptorStorage.DescriptorSetter.GetGetMethod()!);
         il.Emit(OpCodes.Brtrue, ownUndefinedAccessor);
         il.Emit(OpCodes.Ldloc, ownShadow);
         il.Emit(OpCodes.Callvirt,
-            runtime.DescriptorStorage.DescriptorValue.GetGetMethod()!);
+            inputs.DescriptorStorage.DescriptorValue.GetGetMethod()!);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(ownUndefinedAccessor);
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, inputs.UndefinedInstance);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(noOwnShadow);
 
@@ -702,23 +721,23 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Brfalse, skipLabel);
             il.Emit(OpCodes.Ldarg_0);
             _types.EmitLoadMethodInfo(il, helper);
-            il.Emit(OpCodes.Newobj, runtime.FunctionConstruction.Constructor);
+            il.Emit(OpCodes.Newobj, inputs.FunctionConstruction.Constructor);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(skipLabel);
         }
-        EmitProtoMethodCheck("hasOwnProperty",       runtime.ObjectOwnProperties.HasOwnProperty);
-        EmitProtoMethodCheck("propertyIsEnumerable", runtime.ObjectOwnProperties.IsEnumerable);
-        EmitProtoMethodCheck("isPrototypeOf",        runtime.ObjectPrototypes.IsPrototypeOf);
+        EmitProtoMethodCheck("hasOwnProperty",       inputs.ObjectOwnProperties.HasOwnProperty);
+        EmitProtoMethodCheck("propertyIsEnumerable", inputs.ObjectOwnProperties.IsEnumerable);
+        EmitProtoMethodCheck("isPrototypeOf",        inputs.ObjectPrototypes.IsPrototypeOf);
 
         // Fallback: check for a user-assigned property via PropertyDescriptorStore.
         // JS functions are objects and can carry arbitrary properties (`fn.x = 42`). Compiled
         // SetProperty routes $TSFunction writes into PDS as data descriptors; we mirror that
         // here on the read side. Returns descriptor.Value if present, otherwise falls through
         // to null. Enables patterns like `lodash.chunk = fn; lodash.chunk(...)`.
-        var pdsDescLocal = il.DeclareLocal(runtime.DescriptorStorage.DescriptorType);
+        var pdsDescLocal = il.DeclareLocal(inputs.DescriptorStorage.DescriptorType);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetPropertyDescriptor);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.GetPropertyDescriptor);
         il.Emit(OpCodes.Stloc, pdsDescLocal);
         il.Emit(OpCodes.Ldloc, pdsDescLocal);
         var checkProtoLabel = il.DefineLabel();
@@ -733,44 +752,44 @@ public partial class RuntimeEmitter
         var functionPdsDataLabel = il.DefineLabel();
         var functionPdsUndefinedAccessorLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, pdsDescLocal);
-        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorGetter.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorGetter.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, functionPdsGetterLocal);
         il.Emit(OpCodes.Ldloc, functionPdsGetterLocal);
         il.Emit(OpCodes.Brfalse, functionPdsDataLabel);
         il.Emit(OpCodes.Ldloc, functionPdsGetterLocal);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
         il.Emit(OpCodes.Brtrue, functionPdsUndefinedAccessorLabel);
         var functionPdsBoundGetterLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, functionPdsGetterLocal);
-        il.Emit(OpCodes.Isinst, runtime.FunctionValues.Type);
+        il.Emit(OpCodes.Isinst, inputs.FunctionValues.Type);
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Brfalse, functionPdsBoundGetterLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Newarr, _types.Object);
-        il.Emit(OpCodes.Callvirt, runtime.FunctionValues.InvokeWithThis);
+        il.Emit(OpCodes.Callvirt, inputs.FunctionValues.InvokeWithThis);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(functionPdsBoundGetterLabel);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Ldloc, functionPdsGetterLocal);
-        il.Emit(OpCodes.Castclass, runtime.FunctionBindings.AnyType);
+        il.Emit(OpCodes.Castclass, inputs.FunctionBindings.AnyType);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Newarr, _types.Object);
-        il.Emit(OpCodes.Callvirt, runtime.FunctionBindings.AnyInvoke);
+        il.Emit(OpCodes.Callvirt, inputs.FunctionBindings.AnyInvoke);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(functionPdsDataLabel);
         // A setter-only descriptor is still an accessor descriptor; [[Get]]
         // returns undefined rather than the descriptor's unused Value slot.
         il.Emit(OpCodes.Ldloc, pdsDescLocal);
-        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorSetter.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorSetter.GetGetMethod()!);
         il.Emit(OpCodes.Brtrue, functionPdsUndefinedAccessorLabel);
         il.Emit(OpCodes.Ldloc, pdsDescLocal);
-        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorValue.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorValue.GetGetMethod()!);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(functionPdsUndefinedAccessorLabel);
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, inputs.UndefinedInstance);
         il.Emit(OpCodes.Ret);
 
         // PDS lookup failed. Per JS spec every function auto-creates an empty
@@ -794,9 +813,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, "constructor");
         il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
         il.Emit(OpCodes.Brfalse, notConstructorLabel);
-        il.Emit(OpCodes.Call, runtime.FunctionPrototypes.Populate);
+        il.Emit(OpCodes.Call, inputs.FunctionPrototypes.Populate);
         var ctorSlotLocal = il.DeclareLocal(_types.Object);
-        il.Emit(OpCodes.Ldsfld, runtime.FunctionPrototypes.Prototype);
+        il.Emit(OpCodes.Ldsfld, inputs.FunctionPrototypes.Prototype);
         il.Emit(OpCodes.Ldstr, "constructor");
         il.Emit(OpCodes.Ldloca, ctorSlotLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "TryGetValue",
@@ -815,9 +834,9 @@ public partial class RuntimeEmitter
         // Only auto-create for actual $TSFunction callees (has an inner _method
         // field). Other callable shapes ($BoundArrayMethod, $FunctionCallWrapper,
         // etc.) don't have a meaningful prototype and fall through to null.
-        var tsfuncLocal = il.DeclareLocal(runtime.FunctionValues.Type);
+        var tsfuncLocal = il.DeclareLocal(inputs.FunctionValues.Type);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.FunctionValues.Type);
+        il.Emit(OpCodes.Isinst, inputs.FunctionValues.Type);
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Stloc, tsfuncLocal);
         il.Emit(OpCodes.Brfalse, missLabel);
@@ -825,7 +844,7 @@ public partial class RuntimeEmitter
         // methodKey = tsfuncLocal.GetMethodInfo()  (public getter — avoids
         // field-access violation from accessing private _method across
         // TypeBuilder boundaries at JIT time).
-        var prototypeCacheType = runtime.FunctionValues.PrototypeCacheField.FieldType;
+        var prototypeCacheType = inputs.FunctionValues.PrototypeCacheField.FieldType;
         var tryGetValueM = _types.GetMethod(prototypeCacheType, "TryGetValue", [_types.MethodInfo, _types.Object.MakeByRefType()])!;
         var prototypeCacheGetOrAdd = _types.GetMethods(prototypeCacheType)
             .First(m => m.Name == "GetOrAdd"
@@ -833,10 +852,10 @@ public partial class RuntimeEmitter
                  && m.GetParameters()[1].ParameterType == _types.Object);
 
         var cachedProto = il.DeclareLocal(_types.Object);
-        var newProto = il.DeclareLocal(runtime.ObjectStorage.Type);
+        var newProto = il.DeclareLocal(inputs.ObjectStorage.Type);
         var methodKeyLocal = il.DeclareLocal(_types.MethodInfo);
         il.Emit(OpCodes.Ldloc, tsfuncLocal);
-        il.Emit(OpCodes.Callvirt, runtime.FunctionValues.GetMethodInfo);
+        il.Emit(OpCodes.Callvirt, inputs.FunctionValues.GetMethodInfo);
         il.Emit(OpCodes.Stloc, methodKeyLocal);
 
         // Arrow and async methods carry $NonConstructible. They do not
@@ -846,14 +865,14 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, methodKeyLocal);
         il.Emit(OpCodes.Brfalse, constructiblePrototypeLabel);
         il.Emit(OpCodes.Ldloc, methodKeyLocal);
-        il.Emit(OpCodes.Ldtoken, runtime.FunctionAttributes.NonConstructibleType);
+        il.Emit(OpCodes.Ldtoken, inputs.FunctionAttributes.NonConstructibleType);
         il.Emit(OpCodes.Call, _types.GetMethod(
             _types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(
             _types.MethodInfo, "IsDefined", _types.Type, _types.Boolean));
         il.Emit(OpCodes.Brfalse, constructiblePrototypeLabel);
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, inputs.UndefinedInstance);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(constructiblePrototypeLabel);
 
@@ -877,12 +896,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
         il.Emit(OpCodes.Brfalse, notRuntimeMethodLabel);
         // Built-in: return undefined (no auto-created prototype).
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, inputs.UndefinedInstance);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notRuntimeMethodLabel);
 
         // if (_prototypeCache.TryGetValue(methodKey, out cached)) return cached
-        il.Emit(OpCodes.Ldsfld, runtime.FunctionValues.PrototypeCacheField);
+        il.Emit(OpCodes.Ldsfld, inputs.FunctionValues.PrototypeCacheField);
         il.Emit(OpCodes.Ldloc, methodKeyLocal);
         il.Emit(OpCodes.Ldloca, cachedProto);
         il.Emit(OpCodes.Callvirt, tryGetValueM);
@@ -906,57 +925,57 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item", _types.String, _types.Object));
         il.Emit(OpCodes.Ldloc, protoDictLocal);
-        il.Emit(OpCodes.Newobj, runtime.ObjectStorage.Constructor);
+        il.Emit(OpCodes.Newobj, inputs.ObjectStorage.Constructor);
         il.Emit(OpCodes.Stloc, newProto);
 
         // The auto-created prototype object's `constructor` is an own
         // W:true/E:false/C:true data property. Keep the dictionary slot for
         // fast reads, and install the descriptor so enumeration and gOPD see
         // the normative attributes.
-        var constructorDescriptor = il.DeclareLocal(runtime.DescriptorStorage.DescriptorType);
-        il.Emit(OpCodes.Newobj, runtime.DescriptorStorage.DescriptorConstructor);
+        var constructorDescriptor = il.DeclareLocal(inputs.DescriptorStorage.DescriptorType);
+        il.Emit(OpCodes.Newobj, inputs.DescriptorStorage.DescriptorConstructor);
         il.Emit(OpCodes.Stloc, constructorDescriptor);
         il.Emit(OpCodes.Ldloc, constructorDescriptor);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorValue.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorValue.GetSetMethod()!);
         il.Emit(OpCodes.Ldloc, constructorDescriptor);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorEnumerable.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorEnumerable.GetSetMethod()!);
         il.Emit(OpCodes.Ldloc, constructorDescriptor);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorWritable.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorWritable.GetSetMethod()!);
         il.Emit(OpCodes.Ldloc, constructorDescriptor);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorConfigurable.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorConfigurable.GetSetMethod()!);
         il.Emit(OpCodes.Ldloc, newProto);
         il.Emit(OpCodes.Ldstr, "constructor");
         il.Emit(OpCodes.Ldloc, constructorDescriptor);
-        il.Emit(OpCodes.Call, runtime.DescriptorStorage.DefineProperty);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.DefineProperty);
         il.Emit(OpCodes.Pop);
 
         // The function's own `prototype` is W:true/E:false/C:false.
-        var prototypeDescriptor = il.DeclareLocal(runtime.DescriptorStorage.DescriptorType);
-        il.Emit(OpCodes.Newobj, runtime.DescriptorStorage.DescriptorConstructor);
+        var prototypeDescriptor = il.DeclareLocal(inputs.DescriptorStorage.DescriptorType);
+        il.Emit(OpCodes.Newobj, inputs.DescriptorStorage.DescriptorConstructor);
         il.Emit(OpCodes.Stloc, prototypeDescriptor);
         il.Emit(OpCodes.Ldloc, prototypeDescriptor);
         il.Emit(OpCodes.Ldloc, newProto);
-        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorValue.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorValue.GetSetMethod()!);
         il.Emit(OpCodes.Ldloc, prototypeDescriptor);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorWritable.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorWritable.GetSetMethod()!);
         il.Emit(OpCodes.Ldloc, prototypeDescriptor);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorEnumerable.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorEnumerable.GetSetMethod()!);
         il.Emit(OpCodes.Ldloc, prototypeDescriptor);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorConfigurable.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorConfigurable.GetSetMethod()!);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "prototype");
         il.Emit(OpCodes.Ldloc, prototypeDescriptor);
-        il.Emit(OpCodes.Call, runtime.DescriptorStorage.DefineProperty);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.DefineProperty);
         il.Emit(OpCodes.Pop);
 
-        il.Emit(OpCodes.Ldsfld, runtime.FunctionValues.PrototypeCacheField);
+        il.Emit(OpCodes.Ldsfld, inputs.FunctionValues.PrototypeCacheField);
         il.Emit(OpCodes.Ldloc, methodKeyLocal);
         il.Emit(OpCodes.Ldloc, newProto);
         il.Emit(OpCodes.Callvirt, prototypeCacheGetOrAdd);
@@ -965,19 +984,19 @@ public partial class RuntimeEmitter
         // bind: return new $FunctionBindWrapper(func)
         il.MarkLabel(bindLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Newobj, runtime.FunctionBindings.BindCtor);
+        il.Emit(OpCodes.Newobj, inputs.FunctionBindings.BindCtor);
         il.Emit(OpCodes.Ret);
 
         // call: return new $FunctionCallWrapper(func)
         il.MarkLabel(callLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Newobj, runtime.FunctionBindings.CallCtor);
+        il.Emit(OpCodes.Newobj, inputs.FunctionBindings.CallCtor);
         il.Emit(OpCodes.Ret);
 
         // apply: return new $FunctionApplyWrapper(func)
         il.MarkLabel(applyLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Newobj, runtime.FunctionBindings.ApplyCtor);
+        il.Emit(OpCodes.Newobj, inputs.FunctionBindings.ApplyCtor);
         il.Emit(OpCodes.Ret);
 
         // length: ordinary functions expose their declared arity; bound
@@ -986,22 +1005,22 @@ public partial class RuntimeEmitter
         il.MarkLabel(lengthLabel);
         var lengthNotTSFunctionLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.FunctionValues.Type);
+        il.Emit(OpCodes.Isinst, inputs.FunctionValues.Type);
         il.Emit(OpCodes.Brfalse, lengthNotTSFunctionLabel);
         // If `length` was deleted on this $TSFunction, return undefined
         // instead of the cached spec value (ECMA-262 §17 configurable).
         var lengthDeletedSkipLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "length");
-        il.Emit(OpCodes.Call, runtime.ObjectState.IsBuiltinDeleted);
+        il.Emit(OpCodes.Call, inputs.ObjectState.IsBuiltinDeleted);
         il.Emit(OpCodes.Brfalse, lengthDeletedSkipLabel);
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, inputs.UndefinedInstance);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(lengthDeletedSkipLabel);
         // It's a $TSFunction - call get_Length()
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.FunctionValues.Type);
-        il.Emit(OpCodes.Call, runtime.FunctionValues.LengthGetter);
+        il.Emit(OpCodes.Castclass, inputs.FunctionValues.Type);
+        il.Emit(OpCodes.Call, inputs.FunctionValues.LengthGetter);
         il.Emit(OpCodes.Conv_R8);
         il.Emit(OpCodes.Box, _types.Double);
         il.Emit(OpCodes.Ret);
@@ -1009,15 +1028,15 @@ public partial class RuntimeEmitter
         il.MarkLabel(lengthNotTSFunctionLabel);
         var lengthNotBoundTSFunctionLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.FunctionBindings.BoundType);
+        il.Emit(OpCodes.Isinst, inputs.FunctionBindings.BoundType);
         il.Emit(OpCodes.Brfalse, lengthNotBoundTSFunctionLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.FunctionBindings.BoundType);
-        il.Emit(OpCodes.Ldfld, runtime.FunctionBindings.BoundTargetField);
-        il.Emit(OpCodes.Call, runtime.FunctionValues.LengthGetter);
+        il.Emit(OpCodes.Castclass, inputs.FunctionBindings.BoundType);
+        il.Emit(OpCodes.Ldfld, inputs.FunctionBindings.BoundTargetField);
+        il.Emit(OpCodes.Call, inputs.FunctionValues.LengthGetter);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.FunctionBindings.BoundType);
-        il.Emit(OpCodes.Ldfld, runtime.FunctionBindings.BoundArgumentsField);
+        il.Emit(OpCodes.Castclass, inputs.FunctionBindings.BoundType);
+        il.Emit(OpCodes.Ldfld, inputs.FunctionBindings.BoundArgumentsField);
         il.Emit(OpCodes.Ldlen);
         il.Emit(OpCodes.Conv_I4);
         il.Emit(OpCodes.Sub);
@@ -1035,17 +1054,17 @@ public partial class RuntimeEmitter
         il.MarkLabel(lengthNotBoundTSFunctionLabel);
         var lengthNotBoundAnyFunctionLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.FunctionBindings.AnyType);
+        il.Emit(OpCodes.Isinst, inputs.FunctionBindings.AnyType);
         il.Emit(OpCodes.Brfalse, lengthNotBoundAnyFunctionLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.FunctionBindings.AnyType);
-        il.Emit(OpCodes.Ldfld, runtime.FunctionBindings.AnyTargetField);
+        il.Emit(OpCodes.Castclass, inputs.FunctionBindings.AnyType);
+        il.Emit(OpCodes.Ldfld, inputs.FunctionBindings.AnyTargetField);
         il.Emit(OpCodes.Ldstr, "length");
         il.Emit(OpCodes.Call, method);
         il.Emit(OpCodes.Unbox_Any, _types.Double);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.FunctionBindings.AnyType);
-        il.Emit(OpCodes.Ldfld, runtime.FunctionBindings.AnyArgumentsField);
+        il.Emit(OpCodes.Castclass, inputs.FunctionBindings.AnyType);
+        il.Emit(OpCodes.Ldfld, inputs.FunctionBindings.AnyArgumentsField);
         il.Emit(OpCodes.Ldlen);
         il.Emit(OpCodes.Conv_R8);
         il.Emit(OpCodes.Sub);
@@ -1062,7 +1081,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(lengthNotBoundAnyFunctionLabel);
         var lengthNotApplyWrapperLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.FunctionBindings.ApplyType);
+        il.Emit(OpCodes.Isinst, inputs.FunctionBindings.ApplyType);
         il.Emit(OpCodes.Brfalse, lengthNotApplyWrapperLabel);
         il.Emit(OpCodes.Ldc_R8, 2.0);
         il.Emit(OpCodes.Box, _types.Double);
@@ -1071,10 +1090,10 @@ public partial class RuntimeEmitter
 
         var lengthIsOneLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.FunctionBindings.BindType);
+        il.Emit(OpCodes.Isinst, inputs.FunctionBindings.BindType);
         il.Emit(OpCodes.Brtrue, lengthIsOneLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.FunctionBindings.CallType);
+        il.Emit(OpCodes.Isinst, inputs.FunctionBindings.CallType);
         var lengthUnknownLabel = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, lengthUnknownLabel);
         il.MarkLabel(lengthIsOneLabel);
@@ -1095,12 +1114,12 @@ public partial class RuntimeEmitter
 
         // Check for $TSFunction
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.FunctionValues.Type);
+        il.Emit(OpCodes.Isinst, inputs.FunctionValues.Type);
         il.Emit(OpCodes.Brtrue, nameIsTSFunctionLabel);
 
         // Check for $BoundTSFunction
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.FunctionBindings.BoundType);
+        il.Emit(OpCodes.Isinst, inputs.FunctionBindings.BoundType);
         il.Emit(OpCodes.Brtrue, nameIsBoundLabel);
 
         // Unknown - return ""
@@ -1113,14 +1132,14 @@ public partial class RuntimeEmitter
         var nameDeletedSkipLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "name");
-        il.Emit(OpCodes.Call, runtime.ObjectState.IsBuiltinDeleted);
+        il.Emit(OpCodes.Call, inputs.ObjectState.IsBuiltinDeleted);
         il.Emit(OpCodes.Brfalse, nameDeletedSkipLabel);
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, inputs.UndefinedInstance);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(nameDeletedSkipLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.FunctionValues.Type);
-        il.Emit(OpCodes.Call, runtime.FunctionValues.NameGetter);
+        il.Emit(OpCodes.Castclass, inputs.FunctionValues.Type);
+        il.Emit(OpCodes.Call, inputs.FunctionValues.NameGetter);
         il.Emit(OpCodes.Br, nameEndLabel);
 
         // It's a $BoundTSFunction - get "bound " + target.Name
@@ -1129,9 +1148,9 @@ public partial class RuntimeEmitter
         il.MarkLabel(nameIsBoundLabel);
         il.Emit(OpCodes.Ldstr, "bound ");
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.FunctionBindings.BoundType);
-        il.Emit(OpCodes.Ldfld, runtime.FunctionBindings.BoundTargetField);
-        il.Emit(OpCodes.Call, runtime.FunctionValues.NameGetter);
+        il.Emit(OpCodes.Castclass, inputs.FunctionBindings.BoundType);
+        il.Emit(OpCodes.Ldfld, inputs.FunctionBindings.BoundTargetField);
+        il.Emit(OpCodes.Call, inputs.FunctionValues.NameGetter);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", _types.String, _types.String));
 
         il.MarkLabel(nameEndLabel);
@@ -1144,12 +1163,12 @@ public partial class RuntimeEmitter
         // it (and we don't want user-set Function.prototype.prototype to
         // shadow that).
         il.MarkLabel(fnProtoFallbackLabel);
-        il.Emit(OpCodes.Call, runtime.FunctionPrototypes.Populate);
+        il.Emit(OpCodes.Call, inputs.FunctionPrototypes.Populate);
         var functionPrototypeDescriptorLocal = il.DeclareLocal(
-            runtime.DescriptorStorage.DescriptorType);
-        il.Emit(OpCodes.Ldsfld, runtime.FunctionPrototypes.Prototype);
+            inputs.DescriptorStorage.DescriptorType);
+        il.Emit(OpCodes.Ldsfld, inputs.FunctionPrototypes.Prototype);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetPropertyDescriptor);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.GetPropertyDescriptor);
         il.Emit(OpCodes.Stloc, functionPrototypeDescriptorLocal);
         var noFunctionPrototypeDescriptorLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, functionPrototypeDescriptorLocal);
@@ -1157,49 +1176,49 @@ public partial class RuntimeEmitter
         var functionPrototypeGetterLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldloc, functionPrototypeDescriptorLocal);
         il.Emit(OpCodes.Callvirt,
-            runtime.DescriptorStorage.DescriptorGetter.GetGetMethod()!);
+            inputs.DescriptorStorage.DescriptorGetter.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, functionPrototypeGetterLocal);
         var functionPrototypeDataLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, functionPrototypeGetterLocal);
         il.Emit(OpCodes.Brfalse, functionPrototypeDataLabel);
         il.Emit(OpCodes.Ldloc, functionPrototypeGetterLocal);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
         var functionPrototypeUndefinedLabel = il.DefineLabel();
         il.Emit(OpCodes.Brtrue, functionPrototypeUndefinedLabel);
         var functionPrototypeBoundGetterLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, functionPrototypeGetterLocal);
-        il.Emit(OpCodes.Isinst, runtime.FunctionValues.Type);
+        il.Emit(OpCodes.Isinst, inputs.FunctionValues.Type);
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Brfalse, functionPrototypeBoundGetterLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Newarr, _types.Object);
-        il.Emit(OpCodes.Callvirt, runtime.FunctionValues.InvokeWithThis);
+        il.Emit(OpCodes.Callvirt, inputs.FunctionValues.InvokeWithThis);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(functionPrototypeBoundGetterLabel);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Ldloc, functionPrototypeGetterLocal);
-        il.Emit(OpCodes.Castclass, runtime.FunctionBindings.AnyType);
+        il.Emit(OpCodes.Castclass, inputs.FunctionBindings.AnyType);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Newarr, _types.Object);
-        il.Emit(OpCodes.Callvirt, runtime.FunctionBindings.AnyInvoke);
+        il.Emit(OpCodes.Callvirt, inputs.FunctionBindings.AnyInvoke);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(functionPrototypeDataLabel);
         il.Emit(OpCodes.Ldloc, functionPrototypeDescriptorLocal);
         il.Emit(OpCodes.Callvirt,
-            runtime.DescriptorStorage.DescriptorSetter.GetGetMethod()!);
+            inputs.DescriptorStorage.DescriptorSetter.GetGetMethod()!);
         il.Emit(OpCodes.Brtrue, functionPrototypeUndefinedLabel);
         il.Emit(OpCodes.Ldloc, functionPrototypeDescriptorLocal);
         il.Emit(OpCodes.Callvirt,
-            runtime.DescriptorStorage.DescriptorValue.GetGetMethod()!);
+            inputs.DescriptorStorage.DescriptorValue.GetGetMethod()!);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(functionPrototypeUndefinedLabel);
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, inputs.UndefinedInstance);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(noFunctionPrototypeDescriptorLabel);
         var fpSlotLocal = il.DeclareLocal(_types.Object);
-        il.Emit(OpCodes.Ldsfld, runtime.FunctionPrototypes.Prototype);
+        il.Emit(OpCodes.Ldsfld, inputs.FunctionPrototypes.Prototype);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloca, fpSlotLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "TryGetValue",
@@ -1214,7 +1233,7 @@ public partial class RuntimeEmitter
         // prototype-less callable (bound functions / built-in method wrappers),
         // and the defensive null-func guard.
         il.MarkLabel(missLabel);
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, inputs.UndefinedInstance);
         il.Emit(OpCodes.Ret);
     }
 
