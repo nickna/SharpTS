@@ -17,6 +17,10 @@ namespace SharpTS.Compilation;
 /// <seealso cref="ILEmitter"/>
 public class EmittedRuntime
 {
+    /// <summary>Required Function prototype singleton and staged population declarations.</summary>
+    public EmittedFunctionPrototypeRuntime FunctionPrototypes { get; } = new();
+
+
     /// <summary>Required function values, invocation caches and receiver-context declarations.</summary>
     public EmittedFunctionValueRuntime FunctionValues { get; } = new();
 
@@ -330,10 +334,6 @@ public class EmittedRuntime
     public FieldBuilder GlobalThisSingletonField { get; set; } = null!;
 
 
-    /// <summary>Function.prototype singleton dict, populated lazily with $TSFunction wrappers for call/apply/bind/toString/constructor (ECMA-262 §20.2.3).</summary>
-    public FieldBuilder FunctionPrototypeField { get; set; } = null!;
-    /// <summary>Idempotent populate for <see cref="FunctionPrototypeField"/>.</summary>
-    public MethodBuilder FunctionPrototypePopulateMethod { get; set; } = null!;
 
     // @DotNetType event subscription registry (compiled mode — see
     // RuntimeEmitter.EventSubscriptions.cs).

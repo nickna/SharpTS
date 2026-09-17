@@ -41,15 +41,6 @@ public partial class RuntimeEmitter
     /// <c>gOPD(proto, name).enumerable === false</c> per spec.
     /// <paramref name="emitValue"/> pushes the descriptor's value.
     /// </summary>
-    private void EmitInstallNonEnumerable(ILGenerator il, EmittedRuntime runtime,
-        FieldBuilder protoField, LocalBuilder descLocal, string jsName, System.Action emitValue)
-    {
-        EmitInstallNonEnumerableDescriptor(il, new PrototypeDescriptorInputs(runtime.DescriptorStorage.DescriptorConstructor,
-            runtime.DescriptorStorage.DescriptorValue.GetSetMethod()!, runtime.DescriptorStorage.DescriptorEnumerable.GetSetMethod()!,
-            runtime.DescriptorStorage.DefineProperty),
-            protoField, descLocal, jsName, emitValue);
-    }
-
     private void EmitInstallNonEnumerableDescriptor(ILGenerator il, PrototypeDescriptorInputs descriptors,
         FieldBuilder protoField, LocalBuilder descLocal, string jsName, System.Action emitValue)
     {

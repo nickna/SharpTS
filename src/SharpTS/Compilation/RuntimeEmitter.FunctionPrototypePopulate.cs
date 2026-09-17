@@ -5,48 +5,90 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
+    private readonly record struct FunctionPrototypePopulateInputs(
+        EmittedDescriptorStorageRuntime DescriptorStorage,
+        EmittedFunctionValueRuntime FunctionValues,
+        EmittedObjectPrototypeRuntime ObjectPrototypes,
+        EmittedFunctionConstructionRuntime FunctionConstruction,
+        FieldInfo UndefinedInstance,
+        MethodBuilder InvokeMethodValue,
+        Type UndefinedType,
+        EmittedOperatorRuntime Operators,
+        EmittedFunctionBindingRuntime FunctionBindings,
+        EmittedErrorRuntime Errors
+    );
+
+    private readonly record struct FunctionProtoCallHelperInputs(FieldInfo UndefinedInstance, MethodBuilder InvokeMethodValue);
+
+    private readonly record struct FunctionProtoApplyHelperInputs(Type UndefinedType, MethodBuilder InvokeMethodValue);
+
+    private readonly record struct FunctionProtoBindHelperInputs(
+        EmittedFunctionValueRuntime FunctionValues,
+        EmittedFunctionBindingRuntime FunctionBindings,
+        EmittedOperatorRuntime Operators,
+        EmittedErrorRuntime Errors
+    );
+
     /// <summary>
-    /// Populates <see cref="EmittedRuntime.FunctionPrototypeField"/> with
+    /// Populates <see cref="EmittedFunctionPrototypeRuntime.Prototype"/> with
     /// <c>$TSFunction</c> wrappers for ECMA-262 §20.2.3
     /// <c>{call, apply, bind, toString, constructor}</c>. Required so
     /// <c>Function.prototype.call.bind(Object.prototype.hasOwnProperty)</c>
     /// (test262 propertyHelper.js's first line) resolves and returns a real
     /// callable instead of a null prototype slot.
     /// </summary>
-    private void DefineFunctionPrototypePopulateShell(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void DefineFunctionPrototypePopulateShell(TypeBuilder typeBuilder, EmittedFunctionPrototypeRuntime functionPrototypes)
     {
-        runtime.FunctionPrototypePopulateMethod = typeBuilder.DefineMethod(
+        functionPrototypes.Populate = typeBuilder.DefineMethod(
             "_FunctionPrototypePopulate",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Void,
             Type.EmptyTypes);
     }
 
-    private void EmitFunctionPrototypePopulate(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitFunctionPrototypePopulate(
+        TypeBuilder typeBuilder,
+        EmittedFunctionPrototypeRuntime functionPrototypes,
+        FunctionPrototypePopulateInputs inputs
+    )
     {
         // Helpers must be emitted first — the populate body references them
         // when constructing the $TSFunction wrappers.
-        var callHelper = EmitFunctionProtoCallHelper(typeBuilder, runtime);
-        var applyHelper = EmitFunctionProtoApplyHelper(typeBuilder, runtime);
-        var bindHelper = EmitFunctionProtoBindHelper(typeBuilder, runtime);
-        var toStringHelper = EmitFunctionProtoToStringHelper(typeBuilder, runtime);
+        var callHelper = EmitFunctionProtoCallHelper(
+            typeBuilder,
+            new FunctionProtoCallHelperInputs(inputs.UndefinedInstance, inputs.InvokeMethodValue)
+        );
+        var applyHelper = EmitFunctionProtoApplyHelper(
+            typeBuilder,
+            new FunctionProtoApplyHelperInputs(inputs.UndefinedType, inputs.InvokeMethodValue)
+        );
+        var bindHelper = EmitFunctionProtoBindHelper(
+            typeBuilder,
+            new FunctionProtoBindHelperInputs(
+                inputs.FunctionValues,
+                inputs.FunctionBindings,
+                inputs.Operators,
+                inputs.Errors
+            )
+        );
+        var toStringHelper = EmitFunctionProtoToStringHelper(typeBuilder);
         _ = callHelper;
         _ = applyHelper;
         _ = bindHelper;
         _ = toStringHelper;
 
-        var method = runtime.FunctionPrototypePopulateMethod;
+        var method = functionPrototypes.Populate;
         var il = method.GetILGenerator();
         var setItem = _types.GetMethod(_types.DictionaryStringObject, "set_Item",
             _types.String, _types.Object);
 
-        EmitPrototypePopulateGuard(il, runtime.FunctionPrototypeField);
+        EmitPrototypePopulateGuard(il, functionPrototypes.Prototype);
 
         // ECMA-262 §20.2.3 Function.prototype.constructor === Function. Compiled
         // bare `Function` resolves to typeof($TSFunction).
-        il.Emit(OpCodes.Ldsfld, runtime.FunctionPrototypeField);
+        il.Emit(OpCodes.Ldsfld, functionPrototypes.Prototype);
         il.Emit(OpCodes.Ldstr, "constructor");
-        il.Emit(OpCodes.Ldtoken, runtime.FunctionValues.Type);
+        il.Emit(OpCodes.Ldtoken, inputs.FunctionValues.Type);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
         il.Emit(OpCodes.Callvirt, setItem);
         // "constructor" is non-enumerable per ECMA-262 §17. Installed below
@@ -59,9 +101,9 @@ public partial class RuntimeEmitter
         // Object.getOwnPropertyDescriptor reports the spec attrs (built-in
         // methods are W:T, E:F, C:T per ECMA-262 §17). Test262 verifies via
         // verifyProperty(Function.prototype, "bind", {W:T,E:F,C:T}).
-        var fnDescLocal = il.DeclareLocal(runtime.DescriptorStorage.DescriptorType);
+        var fnDescLocal = il.DeclareLocal(inputs.DescriptorStorage.DescriptorType);
         void Wire(string jsName, MethodBuilder helper, int jsLength)
-            => EmitWirePrototypeMethod(il, runtime, runtime.FunctionPrototypeField, fnDescLocal,
+            => EmitWirePrototypeMethodDescriptor(il, new PrototypeDescriptorInputs(inputs.DescriptorStorage.DescriptorConstructor, inputs.DescriptorStorage.DescriptorValue.GetSetMethod()!, inputs.DescriptorStorage.DescriptorEnumerable.GetSetMethod()!, inputs.DescriptorStorage.DefineProperty), inputs.FunctionConstruction.GetOrCreate, functionPrototypes.Prototype, fnDescLocal,
                 setItem, jsName, helper, jsLength);
 
         Wire("call", callHelper, 1);
@@ -70,19 +112,20 @@ public partial class RuntimeEmitter
         Wire("toString", toStringHelper, 0);
 
         // constructor: non-enumerable per ECMA-262 §17.
-        EmitInstallNonEnumerable(il, runtime, runtime.FunctionPrototypeField, fnDescLocal, "constructor", () =>
+        EmitInstallNonEnumerableDescriptor(il, new PrototypeDescriptorInputs(inputs.DescriptorStorage.DescriptorConstructor, inputs.DescriptorStorage.DescriptorValue.GetSetMethod()!, inputs.DescriptorStorage.DescriptorEnumerable.GetSetMethod()!, inputs.DescriptorStorage.DefineProperty), functionPrototypes.Prototype, fnDescLocal, "constructor", () =>
         {
-            il.Emit(OpCodes.Ldtoken, runtime.FunctionValues.Type);
+            il.Emit(OpCodes.Ldtoken, inputs.FunctionValues.Type);
             il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
         });
 
         // Function.prototype's [[Prototype]] is %Object.prototype% per
         // ECMA-262 §20.2.3.
-        il.Emit(OpCodes.Ldsfld, runtime.FunctionPrototypeField);
-        il.Emit(OpCodes.Ldsfld, runtime.ObjectPrototypes.Prototype);
-        il.Emit(OpCodes.Call, runtime.DescriptorStorage.SetPrototype);
+        il.Emit(OpCodes.Ldsfld, functionPrototypes.Prototype);
+        il.Emit(OpCodes.Ldsfld, inputs.ObjectPrototypes.Prototype);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.SetPrototype);
 
         il.Emit(OpCodes.Ret);
+        functionPrototypes.MarkPopulateBodyEmitted();
     }
 
     /// <summary>
@@ -92,7 +135,7 @@ public partial class RuntimeEmitter
     /// <see cref="EmittedRuntime.InvokeMethodValue"/> so all callable shapes
     /// ($TSFunction / $BoundTSFunction / $FunctionBindWrapper / etc.) work.
     /// </summary>
-    private MethodBuilder EmitFunctionProtoCallHelper(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private MethodBuilder EmitFunctionProtoCallHelper(TypeBuilder typeBuilder, FunctionProtoCallHelperInputs inputs)
     {
         var method = typeBuilder.DefineMethod(
             "FunctionProtoCall",
@@ -132,7 +175,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, thisArgLocal);
         il.Emit(OpCodes.Br, afterThisLabel);
         il.MarkLabel(noThisLabel);
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, inputs.UndefinedInstance);
         il.Emit(OpCodes.Stloc, thisArgLocal);
         il.MarkLabel(afterThisLabel);
 
@@ -168,7 +211,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, thisArgLocal);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, callArgsLocal);
-        il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+        il.Emit(OpCodes.Call, inputs.InvokeMethodValue);
         il.Emit(OpCodes.Ret);
 
         return method;
@@ -180,7 +223,7 @@ public partial class RuntimeEmitter
     /// gets spread as the call arguments. Accepts <see cref="List{Object}"/>
     /// or <c>object[]</c> array shapes.
     /// </summary>
-    private MethodBuilder EmitFunctionProtoApplyHelper(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private MethodBuilder EmitFunctionProtoApplyHelper(TypeBuilder typeBuilder, FunctionProtoApplyHelperInputs inputs)
     {
         var method = typeBuilder.DefineMethod(
             "FunctionProtoApply",
@@ -256,7 +299,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, nullOrUndefLabel);
         // $Undefined check
         il.Emit(OpCodes.Ldloc, argsArrayLocal);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
         il.Emit(OpCodes.Brtrue, nullOrUndefLabel);
 
         // object[] direct cast
@@ -295,7 +338,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, thisArgLocal);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, callArgsLocal);
-        il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+        il.Emit(OpCodes.Call, inputs.InvokeMethodValue);
         il.Emit(OpCodes.Ret);
 
         return method;
@@ -310,7 +353,7 @@ public partial class RuntimeEmitter
     /// <c>__this</c> directly — $BoundTSFunction.Invoke routes through
     /// InvokeMethodValue, which knows how to dispatch each callable kind.
     /// </summary>
-    private MethodBuilder EmitFunctionProtoBindHelper(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private MethodBuilder EmitFunctionProtoBindHelper(TypeBuilder typeBuilder, FunctionProtoBindHelperInputs inputs)
     {
         var method = typeBuilder.DefineMethod(
             "FunctionProtoBind",
@@ -384,12 +427,12 @@ public partial class RuntimeEmitter
         // Inheriting from Function.prototype does not grant [[Call]]. Validate
         // the actual receiver before creating a bound wrapper.
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.Operators.TypeOf);
+        il.Emit(OpCodes.Call, inputs.Operators.TypeOf);
         il.Emit(OpCodes.Ldstr, "function");
         il.Emit(OpCodes.Call, _types.StringOpEquality);
         var callableTargetLabel = il.DefineLabel();
         il.Emit(OpCodes.Brtrue, callableTargetLabel);
-        GuestErrorEmitter.ThrowTypeError(il, runtime,
+        GuestErrorEmitter.ThrowError(il, inputs.Errors.CreateException, inputs.Errors.TypeErrorConstructor,
             "Function.prototype.bind called on incompatible receiver");
         il.MarkLabel(callableTargetLabel);
 
@@ -405,15 +448,15 @@ public partial class RuntimeEmitter
         // non-$TSFunction case fall back to InvokeBindGeneric runtime helper.
         var notTSFunctionLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.FunctionValues.Type);
+        il.Emit(OpCodes.Isinst, inputs.FunctionValues.Type);
         il.Emit(OpCodes.Brfalse, notTSFunctionLabel);
 
         // return new $BoundTSFunction((TSFunction)__this, thisArg, boundArgs)
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.FunctionValues.Type);
+        il.Emit(OpCodes.Castclass, inputs.FunctionValues.Type);
         il.Emit(OpCodes.Ldloc, thisArgLocal);
         il.Emit(OpCodes.Ldloc, boundArgsLocal);
-        il.Emit(OpCodes.Newobj, runtime.FunctionBindings.BoundCtor);
+        il.Emit(OpCodes.Newobj, inputs.FunctionBindings.BoundCtor);
         il.Emit(OpCodes.Ret);
 
         // For non-$TSFunction targets (e.g. $FunctionCallWrapper, another
@@ -425,7 +468,7 @@ public partial class RuntimeEmitter
         // args), and the receiver is set via the wrapper's own dispatch.
         il.MarkLabel(notTSFunctionLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Newobj, runtime.FunctionBindings.BindCtor);
+        il.Emit(OpCodes.Newobj, inputs.FunctionBindings.BindCtor);
         il.Emit(OpCodes.Ret);
 
         return method;
@@ -438,7 +481,7 @@ public partial class RuntimeEmitter
     /// own ToString, which is sufficient for the typeof / native-detection
     /// patterns lodash and friends rely on.
     /// </summary>
-    private MethodBuilder EmitFunctionProtoToStringHelper(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private MethodBuilder EmitFunctionProtoToStringHelper(TypeBuilder typeBuilder)
     {
         var method = typeBuilder.DefineMethod(
             "FunctionProtoToString",

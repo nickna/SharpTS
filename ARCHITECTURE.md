@@ -330,6 +330,15 @@ carrier; the strict SyntaxError helper retains its existing CLR exception repres
 Exception wrapping follows supplied optional Promise metadata. Error-cause Proxy handling
 receives six explicit invocation/delegate handles through the shared reflection bridge.
 
+Required `FunctionPrototypes` owns the Function prototype singleton field and
+its early population declaration. The original later body marks population as
+emitted before completion; declaring both handles alone cannot complete the
+owner. Six helpers receive their owner and exact dependencies, using the shared
+scoped descriptor installers and explicit error metadata. Original declaration,
+static initialization and wrapper construction order remain unchanged. Tests
+cover forward declarations, fresh dictionaries/wrappers, idempotent population,
+borrowed call/apply/bind, property descriptors and isolated deployment.
+
 Required `FunctionValues` owns fifteen function-value, invocation-cache and
 receiver-context declarations; `Arguments` owns five early context and later
 branded argument-object declarations. `FunctionBindings` owns twenty bound
