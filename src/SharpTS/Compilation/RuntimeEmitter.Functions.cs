@@ -652,8 +652,8 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ret);
             il.MarkLabel(skipLabel);
         }
-        EmitProtoMethodCheck("hasOwnProperty",       runtime.HasOwnPropertyHelperMethod);
-        EmitProtoMethodCheck("propertyIsEnumerable", runtime.PropertyIsEnumerableHelperMethod);
+        EmitProtoMethodCheck("hasOwnProperty",       runtime.ObjectOwnProperties.HasOwnProperty);
+        EmitProtoMethodCheck("propertyIsEnumerable", runtime.ObjectOwnProperties.IsEnumerable);
         EmitProtoMethodCheck("isPrototypeOf",        runtime.ObjectPrototypes.IsPrototypeOf);
 
         // Fallback: check for a user-assigned property via PropertyDescriptorStore.

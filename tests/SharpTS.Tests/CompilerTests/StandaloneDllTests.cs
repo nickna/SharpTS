@@ -3708,6 +3708,345 @@ public class StandaloneDllTests
             verifyStandardError: error => Assert.Empty(error)));
     }
 
+    public static IEnumerable<object[]> ObjectOwnPropertiesMetadataPrograms =>
+    [
+        new object[]
+        {
+            "minimal",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "console.log(1);" },
+            "1\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "own",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let obj: { a: number, b: number } = { a: 1, b: 2 };\nconsole.log(Object.hasOwn(obj, \"a\"));\nconsole.log(Object.hasOwn(obj, \"b\"));" },
+            "true\ntrue\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "missing",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let obj: { a: number } = { a: 1 };\nconsole.log(Object.hasOwn(obj, \"b\"));\nconsole.log(Object.hasOwn(obj, \"c\"));" },
+            "false\nfalse\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "empty",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let obj: {} = {};\nconsole.log(Object.hasOwn(obj, \"a\"));" },
+            "false\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "class_field",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "class Person {\n    name: string;\n    age: number;\n    constructor(n: string, a: number) {\n        this.name = n;\n        this.age = a;\n    }\n    greet(): string {\n        return \"Hello\";\n    }\n}\nlet p = new Person(\"Alice\", 30);\nconsole.log(Object.hasOwn(p, \"name\"));\nconsole.log(Object.hasOwn(p, \"age\"));" },
+            "true\ntrue\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "class_method",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "class Person {\n    name: string;\n    constructor(n: string) {\n        this.name = n;\n    }\n    greet(): string {\n        return \"Hello\";\n    }\n}\nlet p = new Person(\"Alice\");\nconsole.log(Object.hasOwn(p, \"greet\"));" },
+            "false\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "number_key",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let obj: any = { \"123\": \"value\" };\nconsole.log(Object.hasOwn(obj, \"123\"));" },
+            "true\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "legacy_identity",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const getter = function (): number { return 1; };\nconst setter = function (value: number): void {};\nconst descriptors: any = {\n    get: getter,\n    set: setter,\n    configurable: true\n};\nconst prototype: any = {};\nObject.defineProperty(prototype, 'value', descriptors);\nconst subject: any = Object.create(prototype);\nconsole.log(subject.__lookupGetter__('value') === descriptors.get);\nconsole.log(subject.__lookupSetter__('value') === descriptors.set);" },
+            "true\ntrue\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "getter",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let obj = {\n    _value: 42,\n    get value(): number {\n        return this._value;\n    }\n};\nconsole.log(obj.value);" },
+            "42\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "setter",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let obj = {\n    _value: 0,\n    get value(): number {\n        return this._value;\n    },\n    set value(v: number) {\n        this._value = v;\n    }\n};\nobj.value = 100;\nconsole.log(obj.value);\nconsole.log(obj._value);" },
+            "100\n100\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "getter_this",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let obj = {\n    name: \"test\",\n    get greeting(): string {\n        return \"Hello, \" + this.name;\n    }\n};\nconsole.log(obj.greeting);" },
+            "Hello, test\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "setter_this",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let obj = {\n    _firstName: \"\",\n    _lastName: \"\",\n    set fullName(name: string) {\n        let parts = name.split(\" \");\n        this._firstName = parts[0];\n        this._lastName = parts[1];\n    }\n};\nobj.fullName = \"John Doe\";\nconsole.log(obj._firstName);\nconsole.log(obj._lastName);" },
+            "John\nDoe\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "mixed_accessors",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let obj = {\n    regularProp: \"regular\",\n    _hidden: 0,\n    get accessorProp(): number {\n        return this._hidden * 2;\n    },\n    set accessorProp(v: number) {\n        this._hidden = v;\n    }\n};\nconsole.log(obj.regularProp);\nobj.accessorProp = 5;\nconsole.log(obj.accessorProp);\nconsole.log(obj._hidden);" },
+            "regular\n10\n5\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "builtin_mutation",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const prototypes: any[] = [Object.prototype, Array.prototype, String.prototype,\n    Number.prototype, Boolean.prototype, BigInt.prototype, Symbol.prototype,\n    Function.prototype, Error.prototype, Promise.prototype];\nconst names = [\"valueOf\", \"map\", \"trim\", \"toFixed\", \"valueOf\", \"valueOf\",\n    \"valueOf\", \"bind\", \"toString\", \"then\"];\nfor (let i = 0; i < prototypes.length; i++) {\n    const p: any = prototypes[i];\n    const name = names[i];\n    console.log(delete p[name]);\n    console.log(Object.prototype.hasOwnProperty.call(p, name));\n    Object.defineProperty(p, name, {\n        value: 17, writable: true, enumerable: false, configurable: true\n    });\n    console.log(p[name]);\n    console.log(delete p[name]);\n    console.log(Object.prototype.hasOwnProperty.call(p, name));\n    p[name] = 23;\n    console.log(p[name]);\n    Object.defineProperty(p, name, { value: 23, writable: false, configurable: false });\n    console.log(delete p[name]);\n    let rejected = false;\n    try { Object.defineProperty(p, name, { value: 99 }); }\n    catch (e) { rejected = true; }\n    console.log(rejected);\n    console.log(p[name]);\n}" },
+            "true\nfalse\n17\ntrue\nfalse\n23\nfalse\ntrue\n23\ntrue\nfalse\n17\ntrue\nfalse\n23\nfalse\ntrue\n23\ntrue\nfalse\n17\ntrue\nfalse\n23\nfalse\ntrue\n23\ntrue\nfalse\n17\ntrue\nfalse\n23\nfalse\ntrue\n23\ntrue\nfalse\n17\ntrue\nfalse\n23\nfalse\ntrue\n23\ntrue\nfalse\n17\ntrue\nfalse\n23\nfalse\ntrue\n23\ntrue\nfalse\n17\ntrue\nfalse\n23\nfalse\ntrue\n23\ntrue\nfalse\n17\ntrue\nfalse\n23\nfalse\ntrue\n23\ntrue\nfalse\n17\ntrue\nfalse\n23\nfalse\ntrue\n23\ntrue\nfalse\n17\ntrue\nfalse\n23\nfalse\ntrue\n23\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "extra_descriptors",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "function overlayKeys(p: any): string {\n    const keys: string[] = [];\n    for (const key in p) {\n        if (key === \"2\" || key === \"9\" || key.startsWith(\"overlay\")) keys.push(key);\n    }\n    return keys.join(\",\");\n}\nconst prototypes: any[] = [Array.prototype, String.prototype, Number.prototype,\n    Boolean.prototype, BigInt.prototype, Symbol.prototype, Function.prototype,\n    Error.prototype, Promise.prototype, Object.prototype];\nfor (const p of prototypes) {\n    p.overlayFirst = null;\n    p[9] = 9;\n    p[2] = 2;\n    Object.defineProperty(p, \"overlayHidden\", { value: 1, configurable: true });\n    Object.defineProperty(p, \"overlayEmpty\", {\n        get: undefined, set: undefined, enumerable: true, configurable: true\n    });\n    console.log(Object.getOwnPropertyDescriptor(p, \"overlayFirst\").value === null);\n    console.log(p.overlayEmpty === undefined);\n    console.log(Object.getOwnPropertyDescriptor(p, \"overlayEmpty\") !== undefined);\n    const d = Object.getOwnPropertyDescriptor(p, \"overlayHidden\");\n    console.log(d.writable, d.enumerable, d.configurable);\n    console.log(overlayKeys(p));\n    delete p.overlayFirst;\n    p.overlayFirst = undefined;\n    console.log(overlayKeys(p));\n    delete p.overlayFirst;\n    delete p[9];\n    delete p[2];\n    delete p.overlayHidden;\n    delete p.overlayEmpty;\n}" },
+            "true\ntrue\ntrue\nfalse false true\n2,9,overlayFirst,overlayEmpty\n2,9,overlayEmpty,overlayFirst\ntrue\ntrue\ntrue\nfalse false true\n2,9,overlayFirst,overlayEmpty\n2,9,overlayEmpty,overlayFirst\ntrue\ntrue\ntrue\nfalse false true\n2,9,overlayFirst,overlayEmpty\n2,9,overlayEmpty,overlayFirst\ntrue\ntrue\ntrue\nfalse false true\n2,9,overlayFirst,overlayEmpty\n2,9,overlayEmpty,overlayFirst\ntrue\ntrue\ntrue\nfalse false true\n2,9,overlayFirst,overlayEmpty\n2,9,overlayEmpty,overlayFirst\ntrue\ntrue\ntrue\nfalse false true\n2,9,overlayFirst,overlayEmpty\n2,9,overlayEmpty,overlayFirst\ntrue\ntrue\ntrue\nfalse false true\n2,9,overlayFirst,overlayEmpty\n2,9,overlayEmpty,overlayFirst\ntrue\ntrue\ntrue\nfalse false true\n2,9,overlayFirst,overlayEmpty\n2,9,overlayEmpty,overlayFirst\ntrue\ntrue\ntrue\nfalse false true\n2,9,overlayFirst,overlayEmpty\n2,9,overlayEmpty,overlayFirst\ntrue\ntrue\ntrue\nfalse false true\n2,9,overlayFirst,overlayEmpty\n2,9,overlayEmpty,overlayFirst\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "accessor_identity",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const prototypes: any[] = [Array.prototype, String.prototype, Number.prototype,\n    Boolean.prototype, BigInt.prototype, Symbol.prototype, Function.prototype,\n    Error.prototype, Object.prototype];\nfor (const p of prototypes) {\n    let reads = 0;\n    let writes = 0;\n    const getter = function(this: any): any { reads++; return this; };\n    const setter = function(this: any, value: any): void { writes++; };\n    Object.defineProperty(p, \"overlayAccessor\", {\n        get: getter, set: setter, enumerable: true, configurable: true\n    });\n    const d = Object.getOwnPropertyDescriptor(p, \"overlayAccessor\");\n    console.log(d.get === getter, d.set === setter, reads, writes);\n    delete p.overlayAccessor;\n}" },
+            "true true 0 0\ntrue true 0 0\ntrue true 0 0\ntrue true 0 0\ntrue true 0 0\ntrue true 0 0\ntrue true 0 0\ntrue true 0 0\ntrue true 0 0\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "enumerability",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const o: any = {data:1}; Object.defineProperty(o, 'hidden', {value:2});\nconsole.log(o.hasOwnProperty('data'), o.propertyIsEnumerable('data'));\nconsole.log(o.hasOwnProperty('hidden'), o.propertyIsEnumerable('hidden'));\nconst child: any = Object.create(o); console.log(child.hasOwnProperty('data'), child.propertyIsEnumerable('data'));" },
+            "true true\ntrue false\nfalse false\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "symbols",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const s = Symbol('s'); const o: any = {}; Object.defineProperty(o,s,{value:1,enumerable:true});\nconsole.log(Object.hasOwn(o,s),o.hasOwnProperty(s),o.propertyIsEnumerable(s)); console.log(Object.hasOwn(o,Symbol('s')));" },
+            "true true true\nfalse\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "legacy_define",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const o: any = {}; let state = 2;\nconst getter = function() { return state; }; const setter = function(v: number) { state = v; };\nconsole.log(o.__defineGetter__('value',getter) === undefined); console.log(o.__defineSetter__('value',setter) === undefined);\nconsole.log(o.__lookupGetter__('value') === getter, o.__lookupSetter__('value') === setter);\no.value = 7; console.log(o.value,o.propertyIsEnumerable('value'));" },
+            "true\ntrue\ntrue true\n7 true\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "shadow",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const p: any = {}; const getter = function() {return 3;}; p.__defineGetter__('value',getter);\nconst o: any = Object.create(p); console.log(o.__lookupGetter__('value') === getter, Object.hasOwn(o,'value'));\nObject.defineProperty(o,'value',{value:7}); console.log(o.__lookupGetter__('value') === undefined,o.__lookupSetter__('value') === undefined);" },
+            "true false\ntrue true\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "nullish",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "for (const value of [null,undefined]) {\ntry { Object.hasOwn(value,'x'); } catch (e: any) { console.log(e instanceof TypeError); }\ntry { Object.prototype.__lookupGetter__.call(value,'x'); } catch (e: any) { console.log(e instanceof TypeError); }\n}" },
+            "true\ntrue\ntrue\ntrue\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "noncallable",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const o: any = {}; for (const method of ['__defineGetter__','__defineSetter__']) {\ntry { o[method]('x',7); } catch (e: any) { console.log(e instanceof TypeError); }\n} console.log(Object.hasOwn(o,'x'));" },
+            "true\ntrue\nfalse\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "proxy_descriptor",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let trace = ''; const p: any = new Proxy({x:1}, {getOwnPropertyDescriptor(t: any,k: any) { trace += String(k); return {value:1,enumerable:true,configurable:true}; }});\nconsole.log(Object.hasOwn(p,'x')); console.log(Object.prototype.propertyIsEnumerable.call(p,'x')); console.log(trace);" },
+            "true\ntrue\nxx\n",
+            false,
+            false
+        },
+        new object[]
+        {
+            "proxy_missing",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const p: any = new Proxy({}, {getOwnPropertyDescriptor() { return undefined; }});\nconsole.log(Object.hasOwn(p,'x'),Object.prototype.hasOwnProperty.call(p,'x'),Object.prototype.propertyIsEnumerable.call(p,'x'));" },
+            "false false false\n",
+            false,
+            false
+        },
+        new object[]
+        {
+            "proxy_revoked",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const pair: any = Proxy.revocable({},{}); pair.revoke();\ntry { Object.hasOwn(pair.proxy,'x'); } catch (e: any) { console.log(e instanceof TypeError); }" },
+            "true\n",
+            false,
+            false
+        },
+        new object[]
+        {
+            "esm",
+            "main.ts",
+            new string[] { "dep.ts", "main.ts" },
+            new string[] { "const value: any = {}; value.__defineGetter__('x',function(){return 3;}); export { value };", "import {value} from './dep'; console.log(Object.hasOwn(value,'x'),Object.hasOwn(value,'missing')); console.log(value.x);" },
+            "true false\n3\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "commonjs",
+            "main.cjs",
+            new string[] { "dep.cjs", "main.cjs" },
+            new string[] { "exports.value = {x:1};", "const dep = require('./dep.cjs'); console.log(Object.hasOwn(dep.value,'x'));" },
+            "true\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "hosted_own",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "export function own(value: any,key: any) { return Object.hasOwn(value,key); } export function getter(value: any,key: any) { return value.__lookupGetter__(key); }" },
+            "",
+            true,
+            true
+        },
+        new object[]
+        {
+            "hosted_minimal",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "export const value = 1;" },
+            "",
+            true,
+            true
+        },
+        new object[]
+        {
+            "array_string_own",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const a: any = [1,2]; delete a[1];\nconsole.log(a.hasOwnProperty('length'),a.hasOwnProperty('0'),a.hasOwnProperty('1'));\nconsole.log(Object.prototype.hasOwnProperty.call('ab','0'));" },
+            "true true false\ntrue\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "promise_callback_own",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "new Promise((resolve: any,reject: any) => {\nfor (const fn of [resolve,reject]) { console.log(Object.hasOwn(fn,'name'),Object.hasOwn(fn,'length'),Object.hasOwn(fn,'prototype'));\n} resolve(1);\n});" },
+            "true true false\ntrue true false\n",
+            false,
+            true
+        },
+    ];
+
+    [Theory]
+    [MemberData(nameof(ObjectOwnPropertiesMetadataPrograms))]
+    public void Isolated_ObjectOwnPropertiesMetadata_PreservesPredicatesAccessorsAndDeployment(
+        string name, string entry, string[] paths, string[] sources, string expected, bool hosted, bool standalone)
+    {
+        using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        for (int i = 0; i < paths.Length; i++) tempDir.CreateFile(paths[i], sources[i]);
+        var sourcePath = tempDir.GetPath(entry);
+        var dllPath = tempDir.GetPath($"object-own-properties-metadata_{name}.dll");
+        var deployment = standalone ? " --standalone" : "";
+        var hosting = hosted ? " --target dll --hosted" : "";
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --noLib --compile \"{sourcePath}\" -o \"{dllPath}\" --verify{deployment}{hosting}", tempDir.Path);
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        var references = GetAssemblyReferences(dllPath);
+        Assert.DoesNotContain("SharpTS", references);
+        Assert.Equal(hosted, references.Contains("SharpTS.Hosting.Abstractions"));
+        Assert.Equal(!standalone, File.Exists(tempDir.GetPath("SharpTS.dll")));
+        if (!hosted)
+            Assert.Equal(expected, ExecuteCompiledDllIsolated(dllPath, timeoutMs: 30000,
+                verifyStandardError: error => Assert.Empty(error)));
+    }
+
+
     public static IEnumerable<object[]> OwnKeysMetadataPrograms =>
     [
         new object[]

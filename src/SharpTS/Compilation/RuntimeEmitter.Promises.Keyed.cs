@@ -79,7 +79,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, key);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, key);
-        il.Emit(OpCodes.Call, runtime.PropertyIsEnumerableHelperMethod);
+        il.Emit(OpCodes.Call, runtime.ObjectOwnProperties.IsEnumerable);
         il.Emit(OpCodes.Brfalse, symbolNext);
         il.Emit(OpCodes.Ldloc, keys);
         il.Emit(OpCodes.Ldloc, key);

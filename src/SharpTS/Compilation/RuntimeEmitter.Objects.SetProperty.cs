@@ -710,7 +710,7 @@ public partial class RuntimeEmitter
         var inheritedSetContinueLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.HasOwnPropertyHelperMethod);
+        il.Emit(OpCodes.Call, runtime.ObjectOwnProperties.HasOwnProperty);
         il.Emit(OpCodes.Brtrue, inheritedSetContinueLabel);
         var inheritedSetPrototypeLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldarg_0);

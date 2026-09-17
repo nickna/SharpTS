@@ -330,6 +330,16 @@ carrier; the strict SyntaxError helper retains its existing CLR exception repres
 Exception wrapping follows supplied optional Promise metadata. Error-cause Proxy handling
 receives six explicit invocation/delegate handles through the shared reflection bridge.
 
+Own-property predicates and legacy accessors use required `ObjectOwnProperties`
+ownership for `hasOwnProperty`, `propertyIsEnumerable`, `Object.hasOwn`, and the four
+getter/setter lookup and definition helpers. Seven declarations reject missing, null,
+duplicate and post-completion metadata writes. Their bodies are emitted with their
+declarations in the original order. Six helper signatures receive scoped ownership
+and exact dependencies; both Promise callback receiver branches follow supplied
+optional metadata. Proxy descriptor calls and computed-message errors use existing
+scoped inputs. Descriptor identity, prototype traversal, callable validation, guest
+state, receiver argument names, generated member order and deployment are preserved.
+
 Own-property key enumeration uses required `ObjectKeys` ownership for enumerable keys,
 own names and symbols, key normalization, ordinary mixed keys and Proxy array-like key
 lists. The six declarations reject missing, null, duplicate and post-completion writes.

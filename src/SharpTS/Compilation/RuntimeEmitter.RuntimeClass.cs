@@ -895,10 +895,49 @@ public partial class RuntimeEmitter
             _types.Boolean,
             [_types.Object]);
         DeclareObjectGetOwnPropertyDescriptor(typeBuilder, runtime.ObjectDescriptors);
-        EmitHasOwnPropertyHelper(typeBuilder, runtime);
+        EmitHasOwnPropertyHelper(
+            typeBuilder,
+            runtime.ObjectOwnProperties,
+            new HasOwnPropertyHelperInputs(
+                runtime.ArrayStorage,
+                runtime.DescriptorStorage,
+                runtime.Errors,
+                runtime.GetProperty,
+                runtime.GlobalThisSingletonField,
+                runtime.IHasFieldsHasProperty,
+                runtime.IHasFieldsInterface,
+                runtime.Json,
+                runtime.LookupBuiltInStaticMember,
+                runtime.Math,
+                runtime.ObjectState,
+                runtime.ObjectStorage,
+                runtime.Promise,
+                new ProxyDescriptorCallInputs(
+                    runtime.InvokeMethodUnwrapped,
+                    runtime.ObjectDescriptors.GetOwnPropertyDescriptor,
+                    runtime.ObjectState.IsExtensible,
+                    runtime.GetProperty
+                ),
+                runtime.RegExps,
+                runtime.Symbols,
+                runtime.TSFunctionType,
+                runtime.UndefinedType
+            )
+        );
         // propertyIsEnumerable shares HasOwn's plumbing (PDS lookup + dict
         // fallback) so emit it immediately after.
-        EmitPropertyIsEnumerableHelper(typeBuilder, runtime);
+        EmitPropertyIsEnumerableHelper(
+            typeBuilder,
+            runtime.ObjectOwnProperties,
+            new PropertyIsEnumerableHelperInputs(
+                runtime.DescriptorStorage,
+                runtime.Errors,
+                runtime.RegExps,
+                runtime.Symbols,
+                runtime.TSFunctionType,
+                runtime.UndefinedType
+            )
+        );
         // Shell ObjectGetPrototypeOf early so IsPrototypeOfHelper can call it
         // and pick up the default-fallback to Object.prototype / Array.prototype
         // for plain Dict/List receivers without explicit PDS entries.
@@ -1046,7 +1085,7 @@ public partial class RuntimeEmitter
             new StringCoercionInputs(
                 runtime.UndefinedType, runtime.Symbols.Type, runtime.GlobalThisSingletonField, runtime.GlobalThisGetProperty,
                 runtime.TypeOf, runtime.InvokeMethodValue, runtime.ArgumentsType, runtime.GetProperty, runtime.ObjectStorage.Type,
-                runtime.TSFunctionType, runtime.BoundAnyFunctionType, runtime.HasOwnPropertyHelperMethod, runtime.IHasFieldsInterface,
+                runtime.TSFunctionType, runtime.BoundAnyFunctionType, runtime.ObjectOwnProperties.HasOwnProperty, runtime.IHasFieldsInterface,
                 runtime.Symbols.GetStorage, runtime.Symbols.ToPrimitive, runtime.DescriptorStorage.DescriptorType,
                 runtime.DescriptorStorage.DescriptorGetter.GetGetMethod()!,
                 runtime.DescriptorStorage.DescriptorSetter.GetGetMethod()!, runtime.DescriptorStorage.DescriptorValue.GetGetMethod()!,
@@ -1244,7 +1283,11 @@ public partial class RuntimeEmitter
         EmitGetValues(typeBuilder, runtime);
         EmitGetEntries(typeBuilder, runtime);
         EmitObjectFromEntries(typeBuilder, runtime);
-        EmitObjectHasOwn(typeBuilder, runtime);
+        EmitObjectHasOwn(
+            typeBuilder,
+            runtime.ObjectOwnProperties,
+            new ObjectHasOwnInputs(runtime.Errors, runtime.UndefinedType)
+        );
         EmitObjectIs(typeBuilder, runtime);
         EmitObjectAssign(typeBuilder, runtime);
         EmitObjectFreeze(typeBuilder, runtime.ObjectState, new ObjectIntegrityInputs(runtime.ArrayStorage, runtime.DescriptorStorage, runtime.ObjectStorage));
@@ -1262,7 +1305,7 @@ public partial class RuntimeEmitter
                 runtime.DescriptorStorage,
                 runtime.Errors,
                 runtime.GetProperty,
-                runtime.HasOwnPropertyHelperMethod,
+                runtime.ObjectOwnProperties.HasOwnProperty,
                 runtime.IHasFieldsFieldsGetter,
                 runtime.IHasFieldsInterface,
                 runtime.InvokeMethodUnwrapped,
@@ -1313,7 +1356,7 @@ public partial class RuntimeEmitter
                 runtime.Math,
                 runtime.ObjectAssign,
                 runtime.ObjectFromEntries,
-                runtime.ObjectHasOwn,
+                runtime.ObjectOwnProperties.HasOwn,
                 runtime.ObjectIs,
                 runtime.ObjectState,
                 runtime.ObjectStorage,
@@ -1428,7 +1471,21 @@ public partial class RuntimeEmitter
         // __lookupGetter__ / __lookupSetter__ helpers (ECMA-262 §B.2.2.4/5).
         // Depends on PDSGetPropertyDescriptor, HasOwnPropertyHelperMethod,
         // ObjectGetPrototypeOf, ToJsString — all emitted earlier.
-        EmitLookupAccessorHelpers(typeBuilder, runtime);
+        EmitLookupAccessorHelpers(
+            typeBuilder,
+            runtime.ObjectOwnProperties,
+            new LookupAccessorHelpersInputs(
+                runtime.BoundTSFunctionType,
+                runtime.DescriptorStorage,
+                runtime.Errors,
+                runtime.ObjectDescriptors,
+                runtime.ObjectPrototypes,
+                runtime.StringCoercion,
+                runtime.TSFunctionType,
+                runtime.UndefinedInstance,
+                runtime.UndefinedType
+            )
+        );
         EmitObjectGroupBy(typeBuilder, runtime);
         // Reflect.set / setPrototypeOf / defineProperty / ownKeys / apply /
         // construct — gated on UsesReflect. (Reflect.metadata uses
@@ -1446,7 +1503,7 @@ public partial class RuntimeEmitter
             new ReflectGetInputs(
                 runtime.InvokeMethodUnwrapped,
                 runtime.ObjectDescriptors.GetOwnPropertyDescriptor,
-                runtime.HasOwnPropertyHelperMethod,
+                runtime.ObjectOwnProperties.HasOwnProperty,
                 runtime.GetFunctionMethod,
                 runtime.InvokeMethodValue,
                 runtime.UndefinedInstance,
@@ -1468,7 +1525,7 @@ public partial class RuntimeEmitter
                     ),
                     runtime.ObjectDescriptors.GetOwnPropertyDescriptor,
                     runtime.DescriptorStorage.IsFrozen,
-                    runtime.HasOwnPropertyHelperMethod,
+                    runtime.ObjectOwnProperties.HasOwnProperty,
                     runtime.StringCoercion.ToJsString,
                     runtime.ObjectPrototypes.GetPrototypeOf,
                     runtime.Booleans.IsTruthy,
@@ -1484,7 +1541,7 @@ public partial class RuntimeEmitter
                 new ReflectDefinePropertyInputs(
                     runtime.InvokeMethodUnwrapped,
                     runtime.ObjectDescriptors.GetOwnPropertyDescriptor,
-                    runtime.HasOwnPropertyHelperMethod,
+                    runtime.ObjectOwnProperties.HasOwnProperty,
                     runtime.StringCoercion.ToJsString,
                     runtime.ObjectDescriptors.DefineProperty,
                     runtime.ObjectState.IsExtensible,
@@ -1714,13 +1771,13 @@ public partial class RuntimeEmitter
         EmitObjectPrototypePopulate(
             runtime.ObjectPrototypes,
             new ObjectPrototypePopulateInputs(
-                runtime.DefineGetterHelperMethod,
-                runtime.DefineSetterHelperMethod,
+                runtime.ObjectOwnProperties.DefineGetter,
+                runtime.ObjectOwnProperties.DefineSetter,
                 runtime.DescriptorStorage,
-                runtime.HasOwnPropertyHelperMethod,
-                runtime.LookupGetterHelperMethod,
-                runtime.LookupSetterHelperMethod,
-                runtime.PropertyIsEnumerableHelperMethod,
+                runtime.ObjectOwnProperties.HasOwnProperty,
+                runtime.ObjectOwnProperties.LookupGetter,
+                runtime.ObjectOwnProperties.LookupSetter,
+                runtime.ObjectOwnProperties.IsEnumerable,
                 new PrototypeDescriptorInputs(
                     runtime.DescriptorStorage.DescriptorConstructor,
                     runtime.DescriptorStorage.DescriptorValue.GetSetMethod()!,
@@ -2093,7 +2150,7 @@ public partial class RuntimeEmitter
                 runtime.TypeOf,
                 runtime.InvokeMethodValue,
                 runtime.ObjectStorage.GetProperty,
-                runtime.HasOwnPropertyHelperMethod,
+                runtime.ObjectOwnProperties.HasOwnProperty,
                 runtime.GetProperty,
                 runtime.Errors.CreateException,
                 runtime.Errors.TypeErrorConstructor),

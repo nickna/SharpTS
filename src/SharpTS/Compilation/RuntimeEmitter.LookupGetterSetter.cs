@@ -5,22 +5,99 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
+    private readonly record struct LookupAccessorHelpersInputs(
+        TypeBuilder BoundTSFunctionType,
+        EmittedDescriptorStorageRuntime DescriptorStorage,
+        EmittedErrorRuntime Errors,
+        EmittedObjectDescriptorRuntime ObjectDescriptors,
+        EmittedObjectPrototypeRuntime ObjectPrototypes,
+        EmittedStringCoercionRuntime StringCoercion,
+        TypeBuilder TSFunctionType,
+        FieldInfo UndefinedInstance,
+        Type UndefinedType
+    );
+
+    private readonly record struct AccessorHelperInputs(
+        TypeBuilder BoundTSFunctionType,
+        EmittedErrorRuntime Errors,
+        EmittedObjectDescriptorRuntime ObjectDescriptors,
+        TypeBuilder TSFunctionType,
+        FieldInfo UndefinedInstance
+    );
+
+    private readonly record struct LookupAccessorHelperInputs(
+        EmittedDescriptorStorageRuntime DescriptorStorage,
+        EmittedErrorRuntime Errors,
+        EmittedObjectPrototypeRuntime ObjectPrototypes,
+        EmittedStringCoercionRuntime StringCoercion,
+        FieldInfo UndefinedInstance,
+        Type UndefinedType
+    );
+
     /// <summary>
     /// Emits <c>$Runtime.LookupGetterHelper(object __this, object key)</c> and
     /// <c>$Runtime.LookupSetterHelper(object __this, object key)</c> backing
     /// <c>Object.prototype.__lookupGetter__</c> / <c>__lookupSetter__</c>
     /// (ECMA-262 §B.2.2.4 / §B.2.2.5). Walks the prototype chain calling
-    /// <see cref="EmittedRuntime.PDSGetPropertyDescriptor"/> at each level; returns
+    /// <see cref="EmittedDescriptorStorageRuntime.GetPropertyDescriptor"/> at each level; returns
     /// the descriptor's [[Get]]/[[Set]] slot when an accessor descriptor is found,
     /// undefined when a data descriptor is found, undefined when the chain is
     /// exhausted.
     /// </summary>
-    private void EmitLookupAccessorHelpers(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitLookupAccessorHelpers(
+        TypeBuilder typeBuilder,
+        EmittedObjectOwnPropertiesRuntime objectOwnProperties,
+        LookupAccessorHelpersInputs inputs
+    )
     {
-        runtime.LookupGetterHelperMethod = EmitLookupAccessorHelper(typeBuilder, runtime, isGetter: true);
-        runtime.LookupSetterHelperMethod = EmitLookupAccessorHelper(typeBuilder, runtime, isGetter: false);
-        runtime.DefineGetterHelperMethod = EmitDefineAccessorHelper(typeBuilder, runtime, isGetter: true);
-        runtime.DefineSetterHelperMethod = EmitDefineAccessorHelper(typeBuilder, runtime, isGetter: false);
+        objectOwnProperties.LookupGetter = EmitLookupAccessorHelper(
+            typeBuilder,
+            objectOwnProperties,
+            new LookupAccessorHelperInputs(
+                inputs.DescriptorStorage,
+                inputs.Errors,
+                inputs.ObjectPrototypes,
+                inputs.StringCoercion,
+                inputs.UndefinedInstance,
+                inputs.UndefinedType
+            ),
+            isGetter: true
+        );
+        objectOwnProperties.LookupSetter = EmitLookupAccessorHelper(
+            typeBuilder,
+            objectOwnProperties,
+            new LookupAccessorHelperInputs(
+                inputs.DescriptorStorage,
+                inputs.Errors,
+                inputs.ObjectPrototypes,
+                inputs.StringCoercion,
+                inputs.UndefinedInstance,
+                inputs.UndefinedType
+            ),
+            isGetter: false
+        );
+        objectOwnProperties.DefineGetter = EmitDefineAccessorHelper(
+            typeBuilder,
+            new AccessorHelperInputs(
+                inputs.BoundTSFunctionType,
+                inputs.Errors,
+                inputs.ObjectDescriptors,
+                inputs.TSFunctionType,
+                inputs.UndefinedInstance
+            ),
+            isGetter: true
+        );
+        objectOwnProperties.DefineSetter = EmitDefineAccessorHelper(
+            typeBuilder,
+            new AccessorHelperInputs(
+                inputs.BoundTSFunctionType,
+                inputs.Errors,
+                inputs.ObjectDescriptors,
+                inputs.TSFunctionType,
+                inputs.UndefinedInstance
+            ),
+            isGetter: false
+        );
     }
 
     /// <summary>
@@ -30,7 +107,7 @@ public partial class RuntimeEmitter
     /// builds a configurable+enumerable accessor descriptor, and forwards to
     /// <see cref="EmittedObjectDescriptorRuntime.DefineProperty"/>.
     /// </summary>
-    private MethodBuilder EmitDefineAccessorHelper(TypeBuilder typeBuilder, EmittedRuntime runtime, bool isGetter)
+    private MethodBuilder EmitDefineAccessorHelper(TypeBuilder typeBuilder, AccessorHelperInputs inputs, bool isGetter)
     {
         var name = isGetter ? "DefineGetterHelper" : "DefineSetterHelper";
         var method = typeBuilder.DefineMethod(
@@ -53,10 +130,10 @@ public partial class RuntimeEmitter
         // plain object) triggers the throw.
         var isCallableLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Isinst, inputs.TSFunctionType);
         il.Emit(OpCodes.Brtrue, isCallableLabel);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Isinst, runtime.BoundTSFunctionType);
+        il.Emit(OpCodes.Isinst, inputs.BoundTSFunctionType);
         il.Emit(OpCodes.Brtrue, isCallableLabel);
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Isinst, _types.Type);
@@ -68,7 +145,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, isGetter
             ? "Object.prototype.__defineGetter__: callback must be callable"
             : "Object.prototype.__defineSetter__: callback must be callable");
-        GuestErrorEmitter.ThrowErrorFromStack(il, runtime, runtime.Errors.TypeErrorConstructor);
+        GuestErrorEmitter.ThrowErrorFromStack(il, inputs.Errors.CreateException, inputs.Errors.TypeErrorConstructor);
         il.MarkLabel(isCallableLabel);
 
         // desc = new Dictionary<string, object>();
@@ -94,15 +171,20 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloc, descDictLocal);
-        il.Emit(OpCodes.Call, runtime.ObjectDescriptors.DefineProperty);
+        il.Emit(OpCodes.Call, inputs.ObjectDescriptors.DefineProperty);
         il.Emit(OpCodes.Pop);
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, inputs.UndefinedInstance);
         il.Emit(OpCodes.Ret);
 
         return method;
     }
 
-    private MethodBuilder EmitLookupAccessorHelper(TypeBuilder typeBuilder, EmittedRuntime runtime, bool isGetter)
+    private MethodBuilder EmitLookupAccessorHelper(
+        TypeBuilder typeBuilder,
+        EmittedObjectOwnPropertiesRuntime objectOwnProperties,
+        LookupAccessorHelperInputs inputs,
+        bool isGetter
+    )
     {
         var name = isGetter ? "LookupGetterHelper" : "LookupSetterHelper";
         var method = typeBuilder.DefineMethod(
@@ -116,7 +198,7 @@ public partial class RuntimeEmitter
         var il = method.GetILGenerator();
         var keyLocal = il.DeclareLocal(_types.String);
         var oLocal = il.DeclareLocal(_types.Object);
-        var descLocal = il.DeclareLocal(runtime.DescriptorStorage.DescriptorType);
+        var descLocal = il.DeclareLocal(inputs.DescriptorStorage.DescriptorType);
 
         var returnUndefinedLabel = il.DefineLabel();
         var throwThisLabel = il.DefineLabel();
@@ -127,11 +209,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Brfalse, throwThisLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
         il.Emit(OpCodes.Brtrue, throwThisLabel);
 
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
+        il.Emit(OpCodes.Call, inputs.StringCoercion.ToJsString);
         il.Emit(OpCodes.Stloc, keyLocal);
 
         il.Emit(OpCodes.Ldarg_0);
@@ -141,13 +223,13 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, oLocal);
         il.Emit(OpCodes.Brfalse, returnUndefinedLabel);
         il.Emit(OpCodes.Ldloc, oLocal);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
         il.Emit(OpCodes.Brtrue, returnUndefinedLabel);
 
         // desc = PDSGetPropertyDescriptor(O, key)
         il.Emit(OpCodes.Ldloc, oLocal);
         il.Emit(OpCodes.Ldloc, keyLocal);
-        il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetPropertyDescriptor);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.GetPropertyDescriptor);
         il.Emit(OpCodes.Stloc, descLocal);
 
         var noDescLabel = il.DefineLabel();
@@ -155,14 +237,14 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, noDescLabel);
 
         // PDS desc found. If isGetter: return desc.Getter ?? undefined. Else Setter.
-        var slot = isGetter ? runtime.DescriptorStorage.DescriptorGetter : runtime.DescriptorStorage.DescriptorSetter;
+        var slot = isGetter ? inputs.DescriptorStorage.DescriptorGetter : inputs.DescriptorStorage.DescriptorSetter;
         il.Emit(OpCodes.Ldloc, descLocal);
         il.Emit(OpCodes.Callvirt, slot.GetGetMethod()!);
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Brtrue, hasSlotLabel);
         // null slot — data descriptor on this level, return undefined per spec.
         il.Emit(OpCodes.Pop);
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, inputs.UndefinedInstance);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(hasSlotLabel);
         il.Emit(OpCodes.Ret);
@@ -172,28 +254,28 @@ public partial class RuntimeEmitter
         // level (dict key, etc.), spec says return undefined. Otherwise walk up.
         il.Emit(OpCodes.Ldloc, oLocal);
         il.Emit(OpCodes.Ldloc, keyLocal);
-        il.Emit(OpCodes.Call, runtime.HasOwnPropertyHelperMethod);
+        il.Emit(OpCodes.Call, objectOwnProperties.HasOwnProperty);
         il.Emit(OpCodes.Brfalse, advanceProtoLabel);
         // Has data property at this level → return undefined.
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, inputs.UndefinedInstance);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(advanceProtoLabel);
         // O = ObjectGetPrototypeOf(O). When the dispatch returns null (top of
         // chain), the loop-start null check returns undefined.
         il.Emit(OpCodes.Ldloc, oLocal);
-        il.Emit(OpCodes.Call, runtime.ObjectPrototypes.GetPrototypeOf);
+        il.Emit(OpCodes.Call, inputs.ObjectPrototypes.GetPrototypeOf);
         il.Emit(OpCodes.Stloc, oLocal);
         il.Emit(OpCodes.Br, loopStartLabel);
 
         il.MarkLabel(throwThisLabel);
-        GuestErrorEmitter.ThrowTypeError(il, runtime,
+        GuestErrorEmitter.ThrowError(il, inputs.Errors.CreateException, inputs.Errors.TypeErrorConstructor,
             isGetter
                 ? "Object.prototype.__lookupGetter__ called on null or undefined"
                 : "Object.prototype.__lookupSetter__ called on null or undefined");
 
         il.MarkLabel(returnUndefinedLabel);
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, inputs.UndefinedInstance);
         il.Emit(OpCodes.Ret);
 
         return method;

@@ -6,6 +6,8 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
+    private readonly record struct ObjectHasOwnInputs(EmittedErrorRuntime Errors, Type UndefinedType);
+
     /// <summary>
     /// Emits Object.hasOwn(obj, key) - checks if object has own property.
     /// Per ECMA-262 §20.1.2.13 step 1: ToObject(O) throws on null/undefined.
@@ -13,7 +15,11 @@ public partial class RuntimeEmitter
     /// (Dict, $TSObject, $TSFunction, List, String, System.Type, PDS extras),
     /// keeping the two helpers in sync.
     /// </summary>
-    private void EmitObjectHasOwn(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitObjectHasOwn(
+        TypeBuilder typeBuilder,
+        EmittedObjectOwnPropertiesRuntime objectOwnProperties,
+        ObjectHasOwnInputs inputs
+    )
     {
         var method = typeBuilder.DefineMethod(
             "ObjectHasOwn",
@@ -21,7 +27,7 @@ public partial class RuntimeEmitter
             _types.Boolean,
             [_types.Object, _types.Object]
         );
-        runtime.ObjectHasOwn = method;
+        objectOwnProperties.HasOwn = method;
 
         var il = method.GetILGenerator();
 
@@ -31,17 +37,17 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Brfalse, ohoThrowLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
         il.Emit(OpCodes.Brtrue, ohoThrowLabel);
         il.Emit(OpCodes.Br, ohoOkLabel);
         il.MarkLabel(ohoThrowLabel);
-        GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot convert undefined or null to object");
+        GuestErrorEmitter.ThrowError(il, inputs.Errors.CreateException, inputs.Errors.TypeErrorConstructor, "Cannot convert undefined or null to object");
         il.MarkLabel(ohoOkLabel);
 
         // Delegate to HasOwnPropertyHelper(receiver, name).
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.HasOwnPropertyHelperMethod);
+        il.Emit(OpCodes.Call, objectOwnProperties.HasOwnProperty);
         il.Emit(OpCodes.Ret);
     }
 
@@ -357,7 +363,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, ordinaryStringEnumerable);
         il.Emit(OpCodes.Ldloc, source);
         il.Emit(OpCodes.Ldloc, key);
-        il.Emit(OpCodes.Call, runtime.PropertyIsEnumerableHelperMethod);
+        il.Emit(OpCodes.Call, runtime.ObjectOwnProperties.IsEnumerable);
         il.Emit(OpCodes.Brfalse, nextKey);
         il.MarkLabel(ordinaryStringEnumerable);
         il.MarkLabel(enumerableCheckDone);

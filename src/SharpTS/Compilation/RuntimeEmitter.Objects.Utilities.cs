@@ -148,7 +148,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, enumerableCheckDone);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloc, keyLocal);
-        il.Emit(OpCodes.Call, runtime.PropertyIsEnumerableHelperMethod);
+        il.Emit(OpCodes.Call, runtime.ObjectOwnProperties.IsEnumerable);
         il.Emit(OpCodes.Brfalse, nextKey);
         il.MarkLabel(enumerableCheckDone);
 

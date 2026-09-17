@@ -17,6 +17,10 @@ namespace SharpTS.Compilation;
 /// <seealso cref="ILEmitter"/>
 public class EmittedRuntime
 {
+    /// <summary>Required own-property predicates and legacy accessor helpers for one compilation.</summary>
+    public EmittedObjectOwnPropertiesRuntime ObjectOwnProperties { get; } = new();
+
+
     /// <summary>Required own-property key enumeration and Proxy key callbacks for one compilation.</summary>
     public EmittedObjectKeysRuntime ObjectKeys { get; } = new();
 
@@ -365,18 +369,6 @@ public class EmittedRuntime
     /// path is still intercepted at compile time by GlobalThisStaticEmitter.
     /// </summary>
     public FieldBuilder GlobalThisSingletonField { get; set; } = null!;
-    /// <summary>$Runtime.HasOwnPropertyHelper(obj, name) — backs <c>obj.hasOwnProperty(name)</c> for $TSFunction / $Object / Dictionary / List receivers.</summary>
-    public MethodBuilder HasOwnPropertyHelperMethod { get; set; } = null!;
-    /// <summary>$Runtime.LookupGetterHelper(obj, key) — backs <c>Object.prototype.__lookupGetter__</c> (ECMA-262 §B.2.2.4). Walks prototype chain.</summary>
-    public MethodBuilder LookupGetterHelperMethod { get; set; } = null!;
-    /// <summary>$Runtime.LookupSetterHelper(obj, key) — backs <c>Object.prototype.__lookupSetter__</c> (ECMA-262 §B.2.2.5).</summary>
-    public MethodBuilder LookupSetterHelperMethod { get; set; } = null!;
-    /// <summary>$Runtime.DefineGetterHelper(obj, key, fn) — backs <c>Object.prototype.__defineGetter__</c> (ECMA-262 §B.2.2.2).</summary>
-    public MethodBuilder DefineGetterHelperMethod { get; set; } = null!;
-    /// <summary>$Runtime.DefineSetterHelper(obj, key, fn) — backs <c>Object.prototype.__defineSetter__</c> (ECMA-262 §B.2.2.3).</summary>
-    public MethodBuilder DefineSetterHelperMethod { get; set; } = null!;
-    /// <summary>$Runtime.PropertyIsEnumerableHelper(obj, name) — backs <c>obj.propertyIsEnumerable(name)</c>. Honors PDS descriptor's Enumerable bit; falls back to <c>hasOwn(name)</c> (default-enumerable for plain dict entries).</summary>
-    public MethodBuilder PropertyIsEnumerableHelperMethod { get; set; } = null!;
 
 
     /// <summary>Function.prototype singleton dict, populated lazily with $TSFunction wrappers for call/apply/bind/toString/constructor (ECMA-262 §20.2.3).</summary>
@@ -394,7 +386,6 @@ public class EmittedRuntime
     public MethodBuilder DeleteIndexStrict { get; set; } = null!;
     public MethodBuilder WarnSloppyDeleteVariable { get; set; } = null!;
     public MethodBuilder ObjectFromEntries { get; set; } = null!;
-    public MethodBuilder ObjectHasOwn { get; set; } = null!;
     public MethodBuilder ObjectIs { get; set; } = null!;
     public MethodBuilder ObjectAssign { get; set; } = null!;
 
