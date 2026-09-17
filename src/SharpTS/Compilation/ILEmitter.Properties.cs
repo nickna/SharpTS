@@ -499,18 +499,18 @@ public partial class ILEmitter
         FieldBuilder? compactValueField = null;
         MethodBuilder? compactIsMaterializedGetter = null;
         bool hasJsonCarrier = fieldIndex >= 0 &&
-            runtime.JsonTypedScalarRecordTypes.TryGetValue(
+            runtime.Records.TypedScalarTypes.TryGetValue(
                 fingerprint, out jsonCarrierType) &&
-            runtime.JsonTypedScalarRecordValueFields.TryGetValue(
+            runtime.Records.TypedScalarValueFields.TryGetValue(
                 (fingerprint, fieldIndex), out jsonValueField) &&
             jsonValueField.FieldType == _ctx.Types.Double;
         bool hasCompactCarrier = fieldIndex >= 0 &&
-            runtime.CompactObjectRecordTypes.TryGetValue(
+            runtime.Records.CompactTypes.TryGetValue(
                 fingerprint, out compactCarrierType) &&
-            runtime.CompactObjectRecordValueFields.TryGetValue(
+            runtime.Records.CompactValueFields.TryGetValue(
                 (fingerprint, fieldIndex), out compactValueField) &&
             compactValueField.FieldType == _ctx.Types.Double &&
-            runtime.CompactObjectRecordIsMaterializedGetters.TryGetValue(
+            runtime.Records.CompactIsMaterializedGetters.TryGetValue(
                 fingerprint, out compactIsMaterializedGetter);
         if (!hasJsonCarrier && !hasCompactCarrier)
         {
@@ -535,7 +535,7 @@ public partial class ILEmitter
             IL.Emit(OpCodes.Ldloc, jsonExact);
             IL.Emit(OpCodes.Brfalse, tryCompact);
             IL.Emit(OpCodes.Ldloc, jsonExact);
-            IL.Emit(OpCodes.Callvirt, runtime.JsonScalarRecordIsMaterializedGetter);
+            IL.Emit(OpCodes.Callvirt, runtime.Records.RequireScalars().IsMaterializedGetter);
             IL.Emit(OpCodes.Brtrue, fallback);
             if (_ctx.RuntimeFeatures?.UsesDynamicPropertyDescriptors == true)
             {
@@ -638,9 +638,9 @@ public partial class ILEmitter
 
             string fingerprint = JsonSerializationShapeAnalyzer.Fingerprint(recordShape);
             if (scalarIndex >= 0 &&
-                _ctx.Runtime!.JsonTypedScalarRecordTypes.TryGetValue(
+                _ctx.Runtime!.Records.TypedScalarTypes.TryGetValue(
                     fingerprint, out var jsonExactType) &&
-                _ctx.Runtime.JsonTypedScalarRecordValueFields.TryGetValue(
+                _ctx.Runtime.Records.TypedScalarValueFields.TryGetValue(
                     (fingerprint, scalarIndex), out var jsonExactValueField) &&
                 jsonExactValueField.FieldType == _ctx.Types.Double)
             {
@@ -658,7 +658,7 @@ public partial class ILEmitter
                 IL.Emit(OpCodes.Brfalse, jsonFallback);
                 IL.Emit(OpCodes.Ldloc, jsonExactLocal);
                 IL.Emit(OpCodes.Callvirt,
-                    _ctx.Runtime.JsonScalarRecordIsMaterializedGetter);
+                    _ctx.Runtime.Records.RequireScalars().IsMaterializedGetter);
                 IL.Emit(OpCodes.Brtrue, jsonFallback);
                 if (_ctx.RuntimeFeatures?.UsesDynamicPropertyDescriptors == true)
                 {
@@ -682,11 +682,11 @@ public partial class ILEmitter
                 return;
             }
             else if (scalarIndex >= 0 &&
-                _ctx.Runtime!.CompactObjectRecordTypes.TryGetValue(
+                _ctx.Runtime!.Records.CompactTypes.TryGetValue(
                     fingerprint, out var exactType) &&
-                _ctx.Runtime.CompactObjectRecordValueFields.TryGetValue(
+                _ctx.Runtime.Records.CompactValueFields.TryGetValue(
                     (fingerprint, scalarIndex), out var exactValueField) &&
-                _ctx.Runtime.CompactObjectRecordIsMaterializedGetters.TryGetValue(
+                _ctx.Runtime.Records.CompactIsMaterializedGetters.TryGetValue(
                     fingerprint, out var isMaterializedGetter))
             {
                 exactCarrierSpecialized = true;
@@ -727,9 +727,9 @@ public partial class ILEmitter
                 IL.Emit(OpCodes.Br, endLabel);
             }
             else if (scalarIndex >= 0 &&
-                _ctx.Runtime!.JsonScalarRecordInlineTypes.TryGetValue(
+                _ctx.Runtime!.Records.ScalarInlineTypes.TryGetValue(
                     recordShape.Fields.Count, out var inlineType) &&
-                _ctx.Runtime.JsonScalarRecordInlineGetters.TryGetValue(
+                _ctx.Runtime.Records.ScalarInlineGetters.TryGetValue(
                     (recordShape.Fields.Count, scalarIndex), out var directGetter))
             {
                 var inlineLocal = IL.DeclareLocal(inlineType);
@@ -747,7 +747,7 @@ public partial class ILEmitter
                 IL.Emit(OpCodes.Ldloc, inlineLocal);
                 IL.Emit(OpCodes.Brfalse, dictionaryLabel);
                 IL.Emit(OpCodes.Ldloc, inlineLocal);
-                IL.Emit(OpCodes.Callvirt, _ctx.Runtime.JsonScalarRecordIsMaterializedGetter);
+                IL.Emit(OpCodes.Callvirt, _ctx.Runtime.Records.RequireScalars().IsMaterializedGetter);
                 IL.Emit(OpCodes.Brtrue, fallbackLabel);
                 // A descriptor can replace an own slot with an accessor, so programs
                 // that mention descriptor APIs retain the per-read PDS guard. When
@@ -766,7 +766,7 @@ public partial class ILEmitter
                 if (!carrierTypeIdentifiesShape)
                 {
                     IL.Emit(OpCodes.Ldloc, inlineLocal);
-                    IL.Emit(OpCodes.Callvirt, _ctx.Runtime.JsonScalarRecordShapeGetter);
+                    IL.Emit(OpCodes.Callvirt, _ctx.Runtime.Records.RequireScalars().ShapeGetter);
                     Emitters.JSONStaticEmitter.EmitLazyShapeDescriptor(
                         _ctx, recordShape, shapeField, closed);
                     IL.Emit(OpCodes.Bne_Un, fallbackLabel);
@@ -843,7 +843,7 @@ public partial class ILEmitter
             }
         }
         if (index < 0 ||
-            !_ctx.Runtime!.CompactObjectRecordValueFields.TryGetValue(
+            !_ctx.Runtime!.Records.CompactValueFields.TryGetValue(
                 (hoisted.Fingerprint, index), out var field))
             return false;
 

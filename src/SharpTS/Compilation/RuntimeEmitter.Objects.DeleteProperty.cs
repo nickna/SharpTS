@@ -273,10 +273,10 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, runtime.ArrayStorage.Type);
         il.Emit(OpCodes.Brtrue, tsArrayDelLabel);
 
-        if (runtime.JsonScalarRecordType is not null)
+        if (runtime.Records.Scalars is not null)
         {
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.CompactObjectRecordInterface);
+            il.Emit(OpCodes.Isinst, runtime.Records.MarkerInterface);
             il.Emit(OpCodes.Brtrue, scalarRecordDelLabel);
         }
 

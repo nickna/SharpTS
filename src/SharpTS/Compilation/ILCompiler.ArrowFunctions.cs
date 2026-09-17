@@ -1774,7 +1774,7 @@ public partial class ILCompiler
 
                 string fingerprint = JsonSerializationShapeAnalyzer.Fingerprint(
                     parameterShape);
-                if (!_runtime.CompactObjectRecordTypes.TryGetValue(
+                if (!_runtime.Records.CompactTypes.TryGetValue(
                         fingerprint, out var compactType))
                     continue;
 
@@ -1854,7 +1854,7 @@ public partial class ILCompiler
                             entry.Fingerprint))
                     {
                         il.Emit(OpCodes.Ldsfld,
-                            ctx.Runtime!.CompactObjectRecordAnyMaterializedFields[
+                            ctx.Runtime!.Records.CompactAnyMaterializedFields[
                                 entry.Fingerprint]);
                         il.Emit(OpCodes.Brtrue, fallback);
                     }

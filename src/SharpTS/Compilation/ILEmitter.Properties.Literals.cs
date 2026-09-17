@@ -374,7 +374,7 @@ public partial class ILEmitter
         var shapeField = Emitters.JSONStaticEmitter.GetOrDefineShapeField(_ctx, record);
         Emitters.JSONStaticEmitter.EmitLazyShapeDescriptor(
             _ctx, record, shapeField, closed: true);
-        if (_ctx.Runtime!.JsonTypedScalarRecordCtors.TryGetValue(
+        if (_ctx.Runtime!.Records.TypedScalarCtors.TryGetValue(
                 fingerprint, out var typedCtor))
         {
             for (int index = 0; index < literal.Properties.Count; index++)
@@ -399,7 +399,7 @@ public partial class ILEmitter
             }
             IL.Emit(OpCodes.Newobj, typedCtor);
         }
-        else if (_ctx.Runtime.JsonScalarRecordInlineCtors.TryGetValue(
+        else if (_ctx.Runtime.Records.ScalarInlineCtors.TryGetValue(
             literal.Properties.Count, out var inlineCtor))
         {
             foreach (var property in literal.Properties)
@@ -421,7 +421,7 @@ public partial class ILEmitter
                 EmitBoxIfNeeded(literal.Properties[i].Value);
                 IL.Emit(OpCodes.Stelem_Ref);
             }
-            IL.Emit(OpCodes.Newobj, _ctx.Runtime.JsonScalarRecordCtor);
+            IL.Emit(OpCodes.Newobj, _ctx.Runtime.Records.RequireScalars().ArrayConstructor);
         }
         return true;
     }
@@ -467,7 +467,7 @@ public partial class ILEmitter
             return false;
         }
 
-        if (!_ctx.Runtime!.CompactObjectRecordCtors.TryGetValue(
+        if (!_ctx.Runtime!.Records.CompactCtors.TryGetValue(
                 fingerprint, out var exactCtor))
             return false;
 

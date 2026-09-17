@@ -117,14 +117,14 @@ public partial class ILEmitter
 
         string fingerprint = JsonSerializationShapeAnalyzer.Fingerprint(shape);
         List<FieldBuilder>? fields = null;
-        if (_ctx.Runtime!.CompactObjectRecordTypes.TryGetValue(fingerprint, out var carrier) &&
-            _ctx.Runtime.CompactObjectRecordTryGetMaterializedDictionary.ContainsKey(fingerprint))
+        if (_ctx.Runtime!.Records.CompactTypes.TryGetValue(fingerprint, out var carrier) &&
+            _ctx.Runtime.Records.CompactTryGetMaterializedDictionary.ContainsKey(fingerprint))
         {
             fields = [];
             foreach (string property in properties)
             {
                 int index = shape.Fields.ToList().FindIndex(field => field.Key == property);
-                if (!_ctx.Runtime.CompactObjectRecordValueFields.TryGetValue((fingerprint, index), out var field) ||
+                if (!_ctx.Runtime.Records.CompactValueFields.TryGetValue((fingerprint, index), out var field) ||
                     field.DeclaringType != carrier || field.FieldType != _ctx.Types.Double)
                 {
                     fields = null;
@@ -164,7 +164,7 @@ public partial class ILEmitter
             {
                 IL.Emit(OpCodes.Ldloc, exact);
                 IL.Emit(OpCodes.Ldloca, dictionary);
-                IL.Emit(OpCodes.Call, runtime.CompactObjectRecordTryGetMaterializedDictionary[plan.Fingerprint]);
+                IL.Emit(OpCodes.Call, runtime.Records.CompactTryGetMaterializedDictionary[plan.Fingerprint]);
                 IL.Emit(OpCodes.Brtrue, dictionaryReady);
             }
             // Callers retain the program-wide descriptor restriction for field reads.

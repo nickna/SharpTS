@@ -264,7 +264,7 @@ public partial class RuntimeEmitter
         // Emit $IHasFields interface for unified property access
         // Must come before $Object which implements it
         EmitHasFieldsInterface(moduleBuilder, runtime);
-        EmitCompactObjectRecordInterface(moduleBuilder, runtime);
+        EmitCompactObjectRecordInterface(moduleBuilder, runtime.Records);
 
         // Emit $Object class for standalone object support
         // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSObject
@@ -279,8 +279,13 @@ public partial class RuntimeEmitter
 
         if (features.UsesJSON || features.UsesCompactObjectRecords)
         {
-            EmitJsonScalarRecordClass(moduleBuilder, runtime);
-            EmitCompactObjectRecordClasses(moduleBuilder, runtime);
+            runtime.Records.BeginScalarEmission();
+            var recordContract = new RecordStorageContractInputs(
+                runtime.IHasFieldsInterface, runtime.IHasFieldsFieldsGetter,
+                runtime.IHasFieldsGetProperty, runtime.IHasFieldsSetProperty, runtime.IHasFieldsHasProperty);
+            EmitJsonScalarRecordClass(moduleBuilder, runtime.Records, recordContract, features.JsonScalarRecordShapes);
+            EmitCompactObjectRecordClasses(moduleBuilder, runtime.Records, recordContract,
+                runtime.UndefinedInstance, features.CompactObjectRecordShapes, features.CompactObjectRecordSelfFields);
         }
 
         if (runtime.Json.Implementation is not null)
@@ -735,6 +740,7 @@ public partial class RuntimeEmitter
         runtime.DescriptorStorage.CompleteEmission();
         runtime.Reflect.CompleteEmission();
         runtime.Json.CompleteEmission();
+        runtime.Records.CompleteEmission();
         runtime.BroadcastChannel?.CompleteEmission();
         runtime.EventEmitter.CompleteEmission();
         runtime.NodeStreams?.CompleteEmission();

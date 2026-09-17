@@ -86,9 +86,9 @@ public partial class ILEmitter
             return;
 
         string fingerprint = JsonSerializationShapeAnalyzer.Fingerprint(shape);
-        if (!_ctx.Runtime!.CompactObjectRecordTypes.TryGetValue(
+        if (!_ctx.Runtime!.Records.CompactTypes.TryGetValue(
                 fingerprint, out var carrierType) ||
-            !_ctx.Runtime.CompactObjectRecordIsMaterializedGetters.ContainsKey(fingerprint))
+            !_ctx.Runtime.Records.CompactIsMaterializedGetters.ContainsKey(fingerprint))
             return;
 
         LocalBuilder typedLocal;
@@ -230,7 +230,7 @@ public partial class ILEmitter
         {
             IL.Emit(OpCodes.Ldloc, binding.TypedLocal);
             IL.Emit(OpCodes.Call,
-                _ctx.Runtime!.CompactObjectRecordIsMaterializedGetters[
+                _ctx.Runtime!.Records.CompactIsMaterializedGetters[
                     binding.Fingerprint]);
             IL.Emit(OpCodes.Brtrue, fallback);
         }
@@ -279,7 +279,7 @@ public partial class ILEmitter
         {
             IL.Emit(OpCodes.Ldloc, binding.TypedLocal);
             IL.Emit(OpCodes.Call,
-                _ctx.Runtime!.CompactObjectRecordIsMaterializedGetters[
+                _ctx.Runtime!.Records.CompactIsMaterializedGetters[
                     binding.Fingerprint]);
             IL.Emit(OpCodes.Brtrue, fallback);
         }
@@ -308,7 +308,7 @@ public partial class ILEmitter
         {
             if (binding.Shape.Fields[index].Key != property)
                 continue;
-            return _ctx.Runtime!.CompactObjectRecordValueFields.TryGetValue(
+            return _ctx.Runtime!.Records.CompactValueFields.TryGetValue(
                 (binding.Fingerprint, index), out field!);
         }
 

@@ -432,11 +432,11 @@ public partial class RuntimeEmitter
         // own slots win, but an own miss must continue through its mutable
         // [[Prototype]] chain. General IHasFields instances return immediately
         // because their class lookup is handled by the generated carrier.
-        if (runtime.JsonScalarRecordType is not null)
+        if (runtime.Records.Scalars is not null)
         {
             var notScalarRecordLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.CompactObjectRecordInterface);
+            il.Emit(OpCodes.Isinst, runtime.Records.MarkerInterface);
             il.Emit(OpCodes.Brfalse, notScalarRecordLabel);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Castclass, runtime.IHasFieldsInterface);

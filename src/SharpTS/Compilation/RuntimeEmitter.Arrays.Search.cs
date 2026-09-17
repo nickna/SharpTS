@@ -1931,7 +1931,7 @@ public partial class RuntimeEmitter
         // HasProperty/Get operations for each index.
         var notCompactRecord = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.CompactObjectRecordInterface);
+        il.Emit(OpCodes.Isinst, runtime.Records.MarkerInterface);
         il.Emit(OpCodes.Brfalse, notCompactRecord);
         EmitLazyMaterializePath(il, runtime, holeAware: false);
         il.Emit(OpCodes.Ret);
@@ -2409,7 +2409,7 @@ public partial class RuntimeEmitter
         // and newly added indexed properties remain observable.
         il.MarkLabel(notTSObject);
         il.Emit(OpCodes.Ldloc, rcvrLocal);
-        il.Emit(OpCodes.Isinst, runtime.CompactObjectRecordInterface);
+        il.Emit(OpCodes.Isinst, runtime.Records.MarkerInterface);
         il.Emit(OpCodes.Brfalse, returnListValLabel);
         il.Emit(OpCodes.Ldarga_S, (byte)1);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Int32, "ToString", Type.EmptyTypes)!);

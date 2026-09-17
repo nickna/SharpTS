@@ -56,7 +56,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, runtime.ObjectStorage.Type);
         il.Emit(OpCodes.Brtrue, isLazyTrue);
         il.Emit(OpCodes.Ldloc, rcvrLocal);
-        il.Emit(OpCodes.Isinst, runtime.CompactObjectRecordInterface);
+        il.Emit(OpCodes.Isinst, runtime.Records.MarkerInterface);
         il.Emit(OpCodes.Brtrue, isLazyTrue);
         il.Emit(OpCodes.Ldloc, rcvrLocal);
         il.Emit(OpCodes.Isinst, runtime.ArrayStorage.Type);

@@ -9,7 +9,7 @@ public partial class RuntimeEmitter
     {
         foreach (string fingerprint in _features.CompactObjectRecordIteratorResultShapes.Order(StringComparer.Ordinal))
         {
-            if (!runtime.CompactObjectRecordTypes.TryGetValue(fingerprint, out var type))
+            if (!runtime.Records.CompactTypes.TryGetValue(fingerprint, out var type))
                 continue;
             var shape = _features.CompactObjectRecordShapes[fingerprint];
             int index = shape.Fields.Select((field, slot) => (field, slot))
@@ -24,7 +24,7 @@ public partial class RuntimeEmitter
             // Always guard observable records, regardless of other uses of the
             // same shape. Descriptors can overlay a record without materializing.
             il.Emit(OpCodes.Ldloc, exact);
-            il.Emit(OpCodes.Call, runtime.CompactObjectRecordIsMaterializedGetters[fingerprint]);
+            il.Emit(OpCodes.Call, runtime.Records.CompactIsMaterializedGetters[fingerprint]);
             il.Emit(OpCodes.Brtrue, fallback);
             if (_features.UsesDynamicPropertyDescriptors)
             {
@@ -33,7 +33,7 @@ public partial class RuntimeEmitter
                 il.Emit(OpCodes.Brtrue, fallback);
             }
             il.Emit(OpCodes.Ldloc, exact);
-            il.Emit(OpCodes.Ldfld, runtime.CompactObjectRecordValueFields[(fingerprint, index)]);
+            il.Emit(OpCodes.Ldfld, runtime.Records.CompactValueFields[(fingerprint, index)]);
             if (key == "value") il.Emit(OpCodes.Box, _types.Double);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(fallback);
