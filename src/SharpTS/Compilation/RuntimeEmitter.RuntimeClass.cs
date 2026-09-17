@@ -156,7 +156,7 @@ public partial class RuntimeEmitter
             "_jsonSingleton",
             _types.DictionaryStringObject,
             FieldAttributes.Public | FieldAttributes.Static);
-        runtime.JsonSingletonField = jsonSingletonField;
+        runtime.Json.SingletonField = jsonSingletonField;
         if (runtime.Reflect.Namespace is not null)
         {
             runtime.Reflect.RequireNamespace().SingletonField = typeBuilder.DefineField(
@@ -522,7 +522,7 @@ public partial class RuntimeEmitter
         DefineObjectPrototypePopulateShell(typeBuilder, runtime);
         DefineArrayPrototypePopulateShell(typeBuilder, runtime.ArrayOperations);
         DefineMathSingletonPopulateShell(typeBuilder, runtime.Math);
-        DefineJsonSingletonPopulateShell(typeBuilder, runtime);
+        DefineJsonSingletonPopulateShell(typeBuilder, runtime.Json);
         if (runtime.Reflect.Namespace is not null)
             DefineReflectSingletonPopulateShell(typeBuilder, runtime.Reflect.RequireNamespace());
         DefineStringPrototypePopulateShell(typeBuilder, runtime.Strings);
@@ -754,7 +754,7 @@ public partial class RuntimeEmitter
         // populate is idempotent and skips null backings, so calling the JSON one
         // unconditionally is safe even when the program doesn't use JSON (#276).
         cctorIL.Emit(OpCodes.Call, runtime.Math.SingletonPopulateMethod);
-        cctorIL.Emit(OpCodes.Call, runtime.JsonSingletonPopulateMethod);
+        cctorIL.Emit(OpCodes.Call, runtime.Json.SingletonPopulateMethod);
         if (runtime.Reflect.Namespace is not null)
             cctorIL.Emit(OpCodes.Call, runtime.Reflect.RequireNamespace().SingletonPopulateMethod);
 
@@ -1567,20 +1567,130 @@ public partial class RuntimeEmitter
         // GetIteratorFunction (emitted above via EmitIteratorMethodsAdvanced).
         EmitArrayDestructureSource(typeBuilder, runtime);
         // JSON methods — gated on UsesJSON (also implied by UsesHttp).
-        if (_features.UsesJSON)
+        if (runtime.Json.Implementation is not null)
         {
-            EmitJsonParse(typeBuilder, runtime);
-            EmitJsonParseWithReviver(typeBuilder, runtime);
-            EmitJsonStringify(typeBuilder, runtime);
-            EmitJsonStringifyFull(typeBuilder, runtime);
-            EmitJsonRawJsonMethods(typeBuilder, runtime);
+            EmitJsonParse(
+                typeBuilder,
+                runtime.Json.RequireImplementation(),
+                new JsonParseInputs(
+                    runtime.CreateException,
+                    runtime.JsonScalarRecordCtor,
+                    runtime.JsonScalarRecordInlineCtors,
+                    runtime.JsonTypedScalarRecordCtors,
+                    runtime.JsonTypedScalarRecordShapeFields,
+                    runtime.TSSyntaxErrorCtor,
+                    runtime.ThrownValueExceptionType,
+                    _features.JsonScalarRecordShapes
+                )
+            );
+            EmitJsonParseWithReviver(
+                typeBuilder,
+                runtime.Json.RequireImplementation(),
+                new JsonParseWithReviverInputs(
+                    runtime.DeleteProperty,
+                    runtime.DescriptorStorage,
+                    runtime.InvokeMethodUnwrapped,
+                    runtime.NormalizeOwnPropertyKeys,
+                    runtime.NumericCoercion,
+                    runtime.ObjectDefineProperty,
+                    runtime.TSFunctionInvokeWithThis,
+                    runtime.TSFunctionType,
+                    runtime.UndefinedType
+                )
+            );
+            EmitJsonStringify(
+                typeBuilder,
+                runtime.Json.RequireImplementation(),
+                new JsonStringifyInputs(
+                    runtime.ArrayOperations,
+                    runtime.ArrayStorage,
+                    runtime.BoundTSFunctionType,
+                    runtime.CreateException,
+                    runtime.DescriptorStorage,
+                    runtime.GetKeys,
+                    runtime.GetProperty,
+                    runtime.IHasFieldsInterface,
+                    runtime.InvokeMethodUnwrapped,
+                    runtime.InvokeMethodValue,
+                    runtime.JsonScalarRecordGetValue,
+                    runtime.JsonScalarRecordIsMaterializedGetter,
+                    runtime.JsonScalarRecordShapeGetter,
+                    runtime.JsonScalarRecordType,
+                    runtime.JsonTypedScalarRecordShapeFields,
+                    runtime.JsonTypedScalarRecordTypes,
+                    runtime.JsonTypedScalarRecordValueFields,
+                    runtime.Numbers,
+                    runtime.NumericCoercion,
+                    runtime.ObjectPrototypeField,
+                    runtime.ObjectPrototypePopulateMethod,
+                    runtime.ObjectStorage,
+                    runtime.StringCoercion,
+                    runtime.TSFunctionType,
+                    runtime.TSObjectMergeEnumerable,
+                    runtime.TSRegExpType,
+                    runtime.TSSymbolType,
+                    runtime.TSTypeErrorCtor,
+                    runtime.TypeOf,
+                    runtime.UndefinedInstance,
+                    runtime.UndefinedType,
+                    _features.JsonScalarRecordShapes,
+                    _features.PotentiallyMaterializesUnknownCompactObjectRecordShape,
+                    _features.UsesArrayPrototypeMutation,
+                    _features.UsesClassPrototypeMutation,
+                    _features.UsesDynamicPropertyDescriptors,
+                    _features.UsesObjectIntegrityMutation
+                )
+            );
+            EmitJsonStringifyFull(
+                typeBuilder,
+                runtime.Json.RequireImplementation(),
+                new JsonStringifyFullInputs(
+                    runtime.ArrayStorage,
+                    runtime.BoundTSFunctionInvokeWithThis,
+                    runtime.BoundTSFunctionType,
+                    runtime.CreateException,
+                    runtime.DescriptorStorage,
+                    runtime.GetKeys,
+                    runtime.GetProperty,
+                    runtime.IHasFieldsInterface,
+                    runtime.InvokeMethodUnwrapped,
+                    runtime.InvokeMethodValue,
+                    runtime.InvokeValue,
+                    runtime.Numbers,
+                    runtime.NumericCoercion,
+                    runtime.ObjectPrototypeField,
+                    runtime.ObjectPrototypePopulateMethod,
+                    runtime.ObjectStorage,
+                    runtime.StringCoercion,
+                    runtime.TSFunctionInvokeWithThis,
+                    runtime.TSFunctionType,
+                    runtime.TSObjectMergeEnumerable,
+                    runtime.TSRegExpType,
+                    runtime.TSSymbolType,
+                    runtime.TSTypeErrorCtor,
+                    runtime.TypeOf,
+                    runtime.UndefinedInstance,
+                    runtime.UndefinedType
+                )
+            );
+            EmitJsonRawJsonMethods(
+                typeBuilder,
+                runtime.Json.RequireImplementation(),
+                new JsonRawJsonMethodsInputs(
+                    runtime.ArrayStorage,
+                    runtime.CreateException,
+                    runtime.ObjectStorage,
+                    runtime.StringCoercion,
+                    runtime.TSSyntaxErrorCtor
+                )
+            );
         }
         // Math / JSON value-form singleton populate bodies. Emitted here — after
         // EmitMathAdapters (Math.*Adapter) and the JSON methods above — so their
         // backing MethodBuilders are resolved. JSON helpers are null when JSON is
         // unused; EmitBuiltinSingletonPopulate skips null backings. (#276)
         EmitMathSingletonPopulate(runtime.Math, GetBuiltinSingletonInputs(runtime));
-        EmitJsonSingletonPopulate(runtime);
+        EmitJsonSingletonPopulate(runtime.Json, GetBuiltinSingletonInputs(runtime));
         // BigInt methods — gated on UsesBigInt. Detector flips it on for any
         // `123n` literal, bare `BigInt` identifier, or BigInt64Array/BigUint64Array
         // typed-array reference. EmitBigIntBinary in ILEmitter.Operators.cs only

@@ -326,7 +326,7 @@ public partial class RuntimeEmitter
         // JSON singleton — same pattern.
         var notJsonForHasOwnLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldsfld, runtime.JsonSingletonField);
+        il.Emit(OpCodes.Ldsfld, runtime.Json.SingletonField);
         il.Emit(OpCodes.Bne_Un, notJsonForHasOwnLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, nameLocal);

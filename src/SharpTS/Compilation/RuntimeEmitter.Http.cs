@@ -1016,7 +1016,7 @@ public partial class RuntimeEmitter
 
         // Parse JSON using the runtime's JsonParse method
         il.Emit(OpCodes.Ldloc, textLocal);
-        il.Emit(OpCodes.Call, runtime.JsonParse);
+        il.Emit(OpCodes.Call, runtime.Json.RequireImplementation().Parse);
 
         // Wrap in a resolved Promise
         il.Emit(OpCodes.Call, runtime.RequirePromise().TypeResolve);
@@ -3529,7 +3529,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "ToString", Type.EmptyTypes)!);
 
         il.MarkLabel(done);
-        il.Emit(OpCodes.Call, runtime.JsonParse);
+        il.Emit(OpCodes.Call, runtime.Json.RequireImplementation().Parse);
         // Mark consumed
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_1);
@@ -3853,7 +3853,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, fetch.ResponseBodyBytesField);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Encoding, "GetString", [_types.ByteArray])!);
-        il.Emit(OpCodes.Call, runtime.JsonParse);
+        il.Emit(OpCodes.Call, runtime.Json.RequireImplementation().Parse);
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_1);
@@ -3953,7 +3953,7 @@ public partial class RuntimeEmitter
         var il = jsonMethod.GetILGenerator();
         // JSON.stringify the data → string body
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.JsonStringify);
+        il.Emit(OpCodes.Call, runtime.Json.RequireImplementation().Stringify);
         var bodyLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Stloc, bodyLocal);
 

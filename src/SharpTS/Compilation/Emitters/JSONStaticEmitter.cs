@@ -56,11 +56,11 @@ public sealed class JSONStaticEmitter : IStaticTypeEmitterStrategy
                 {
                     emitter.EmitExpression(arguments[1]);
                     emitter.EmitBoxIfNeeded(arguments[1]);
-                    il.Emit(OpCodes.Call, ctx.Runtime!.JsonParseWithReviver);
+                    il.Emit(OpCodes.Call, ctx.Runtime!.Json.RequireImplementation().ParseWithReviver);
                 }
                 else
                 {
-                    il.Emit(OpCodes.Call, ctx.Runtime!.JsonParse);
+                    il.Emit(OpCodes.Call, ctx.Runtime!.Json.RequireImplementation().Parse);
                 }
                 return true;
 
@@ -101,7 +101,7 @@ public sealed class JSONStaticEmitter : IStaticTypeEmitterStrategy
                     {
                         il.Emit(OpCodes.Ldnull);
                     }
-                    il.Emit(OpCodes.Call, ctx.Runtime!.JsonStringifyFull);
+                    il.Emit(OpCodes.Call, ctx.Runtime!.Json.RequireImplementation().StringifyFull);
                 }
                 else
                 {
@@ -110,11 +110,11 @@ public sealed class JSONStaticEmitter : IStaticTypeEmitterStrategy
                         bool closedShape = JsonSerializationShapeAnalyzer.IsClosed(staticShape);
                         EmitLazyShapeDescriptor(ctx, staticShape, shapeField, closedShape);
                         il.Emit(closedShape ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
-                        il.Emit(OpCodes.Call, ctx.Runtime!.JsonStringifyShaped);
+                        il.Emit(OpCodes.Call, ctx.Runtime!.Json.RequireImplementation().StringifyShaped);
                     }
                     else
                     {
-                        il.Emit(OpCodes.Call, ctx.Runtime!.JsonStringify);
+                        il.Emit(OpCodes.Call, ctx.Runtime!.Json.RequireImplementation().Stringify);
                     }
                 }
                 return true;
@@ -131,8 +131,8 @@ public sealed class JSONStaticEmitter : IStaticTypeEmitterStrategy
                     il.Emit(OpCodes.Ldsfld, ctx.Runtime!.UndefinedInstance);
                 }
                 il.Emit(OpCodes.Call, methodName == "rawJSON"
-                    ? ctx.Runtime!.JsonRawJson
-                    : ctx.Runtime!.JsonIsRawJson);
+                    ? ctx.Runtime!.Json.RequireImplementation().RawJson
+                    : ctx.Runtime!.Json.RequireImplementation().IsRawJson);
                 return true;
 
             default:
@@ -149,12 +149,13 @@ public sealed class JSONStaticEmitter : IStaticTypeEmitterStrategy
     {
         var ctx = emitter.Context;
         var runtime = ctx.Runtime!;
+        if (runtime.Json.Implementation is not { } json) return false;
         MethodInfo? method = propertyName switch
         {
-            "parse"     => runtime.JsonParse,
-            "stringify" => runtime.JsonStringify,
-            "rawJSON"   => runtime.JsonRawJson,
-            "isRawJSON" => runtime.JsonIsRawJson,
+            "parse"     => json.Parse,
+            "stringify" => json.Stringify,
+            "rawJSON"   => json.RawJson,
+            "isRawJSON" => json.IsRawJson,
             _ => null
         };
         if (method == null) return false;
@@ -164,8 +165,8 @@ public sealed class JSONStaticEmitter : IStaticTypeEmitterStrategy
         // after `delete JSON.stringify`, a later `JSON.stringify` must not be
         // resurrected by this compile-time fast path.
         var il = ctx.IL;
-        il.Emit(OpCodes.Call, runtime.JsonSingletonPopulateMethod);
-        il.Emit(OpCodes.Ldsfld, runtime.JsonSingletonField);
+        il.Emit(OpCodes.Call, runtime.Json.SingletonPopulateMethod);
+        il.Emit(OpCodes.Ldsfld, runtime.Json.SingletonField);
         il.Emit(OpCodes.Ldstr, propertyName);
         il.Emit(OpCodes.Call, runtime.GetProperty);
         return true;
@@ -181,12 +182,12 @@ public sealed class JSONStaticEmitter : IStaticTypeEmitterStrategy
     /// raw-value methods use the same path so aliases and singleton access are
     /// fully callable rather than metadata-only stubs.
     /// </summary>
-    internal static IEnumerable<(string Name, MethodInfo? Method, int Length)> EnumerateValueFormMethods(EmittedRuntime runtime)
+    internal static IEnumerable<(string Name, MethodInfo? Method, int Length)> EnumerateValueFormMethods(EmittedJsonImplementation? json)
     {
-        yield return ("parse",     runtime.JsonParse, 2);
-        yield return ("stringify", runtime.JsonStringify, 3);
-        yield return ("rawJSON",   runtime.JsonRawJson, 1);
-        yield return ("isRawJSON", runtime.JsonIsRawJson, 1);
+        yield return ("parse",     json?.Parse, 2);
+        yield return ("stringify", json?.Stringify, 3);
+        yield return ("rawJSON",   json?.RawJson, 1);
+        yield return ("isRawJSON", json?.IsRawJson, 1);
     }
 
     public bool HasStaticProperty(string memberName) =>

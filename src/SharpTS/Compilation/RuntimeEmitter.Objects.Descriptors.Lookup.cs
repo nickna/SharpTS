@@ -1164,7 +1164,7 @@ public partial class RuntimeEmitter
         // handles JSON.X(); gOPD just needs to report spec attrs.
         var notJsonSingletonLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldsfld, runtime.JsonSingletonField);
+        il.Emit(OpCodes.Ldsfld, runtime.Json.SingletonField);
         il.Emit(OpCodes.Bne_Un, notJsonSingletonLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, propNameLocal);
@@ -1181,7 +1181,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Stloc, resultDictLocal);
             il.Emit(OpCodes.Ldloc, resultDictLocal);
             il.Emit(OpCodes.Ldstr, "value");
-            il.Emit(OpCodes.Ldsfld, runtime.JsonSingletonField);
+            il.Emit(OpCodes.Ldsfld, runtime.Json.SingletonField);
             il.Emit(OpCodes.Ldstr, n);
             il.Emit(OpCodes.Callvirt, _types.GetMethod(
                 _types.DictionaryStringObject, "get_Item", _types.String));

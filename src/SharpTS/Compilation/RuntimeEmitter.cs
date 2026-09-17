@@ -40,6 +40,8 @@ public partial class RuntimeEmitter
         if (_emitHosted)
             _features.UsesPromise = true;
         var runtime = new EmittedRuntime();
+        if (features.UsesJSON)
+            runtime.Json.BeginImplementationEmission();
         if (features.UsesReflect || features.UsesProxy)
             runtime.Reflect.BeginAssignmentEmission();
         if (features.UsesReflect)
@@ -281,9 +283,13 @@ public partial class RuntimeEmitter
             EmitCompactObjectRecordClasses(moduleBuilder, runtime);
         }
 
-        if (features.UsesJSON)
+        if (runtime.Json.Implementation is not null)
         {
-            EmitTSRawJsonClass(moduleBuilder, runtime);
+            EmitTSRawJsonClass(
+                moduleBuilder,
+                runtime.Json.RequireImplementation(),
+                new TSRawJsonClassInputs(runtime.DescriptorStorage, runtime.ObjectStorage)
+            );
         }
 
         // Emit $RegExp class for standalone regex support — gated on UsesRegExp.
@@ -728,6 +734,7 @@ public partial class RuntimeEmitter
         runtime.ObjectStorage.CompleteEmission();
         runtime.DescriptorStorage.CompleteEmission();
         runtime.Reflect.CompleteEmission();
+        runtime.Json.CompleteEmission();
         runtime.BroadcastChannel?.CompleteEmission();
         runtime.EventEmitter.CompleteEmission();
         runtime.NodeStreams?.CompleteEmission();

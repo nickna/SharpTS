@@ -252,7 +252,7 @@ The family helpers take the owner and exact function-key or undefined inputs whe
 Function wrappers still normalize to their MethodInfo when available; methodless wrappers keep
 their own identity. Four ConditionalWeakTable fields and closed BCL construction references stay
 local to emission, and each saved output owns fresh mutable descriptor/prototype/extensibility
-and symbol tables. Generic Object operations, JSON helper lifetime, and the shared
+and symbol tables. Generic Object operations, JSON record and late shape ownership, and the shared
 auto-property emitter remain separate ownership and infrastructure work under #1599.
 
 Reflect uses required `EmittedReflectRuntime` for ordinary receiver-aware reads, plus three
@@ -272,8 +272,26 @@ observable. The lazy metadata-store field is a local construction input; repeate
 stores and decorator closures isolated in their own generated assemblies. Family operations receive
 their owner and exact immutable inputs, including actual optional Promise/DataView components.
 Shared Proxy bridges accept exact callback/unwrapping inputs and retain adapters for generic callers.
-The separate constructor classifier, generic Object/invocation/Proxy ownership, JSON helper lifetime,
+The separate constructor classifier, generic Object/invocation/Proxy ownership, JSON record and late shape ownership,
 and shared BCL/singleton infrastructure remain residual work under #1599.
+
+JSON uses the required `Json` component for its singleton field and populate method. Its
+optional `Implementation` is selected by `UsesJSON` (also implied by HTTP detection) and owns
+25 declarations: ten parse/stringify/raw-value handles and fifteen cached helper methods.
+The raw-value type precedes the JSON helper bodies; the singleton field and populate shell
+retain their existing runtime-class positions after phase one. Checked reads report missing
+declarations, recursive helpers reuse internal declaration availability, and completion checks
+all selected declarations before freezing the two owners. Every compilation gets fresh handles,
+including when one RuntimeEmitter emits JSON, a minimal runtime and JSON again.
+
+The guest string-identity shape table remains lazy and isolated per saved assembly. Its field
+is a local construction input, and the generated GetJsonShapeTable method remains without a
+persistent emitter cache. Guest JSON namespace members and shape associations remain mutable.
+Family helpers take the JSON implementation, peer capabilities, exact handles and relevant
+analysis facts; optional RegExp branches inspect the supplied type. Scalar/compact record
+ownership and registries, later Program shape-field registration and shared BCL/invocation
+infrastructure remain required work under #1599. The late compiler shape registry is distinct
+from the guest string-identity table and must remain writable after runtime emission.
 
 Array operations use the required `ArrayOperations` component for 108 declarations: construction
 and static helpers, ordinary and specialized operations, prototype population, bound-method

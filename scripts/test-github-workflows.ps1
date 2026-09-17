@@ -79,7 +79,7 @@ foreach ($requiredText in @(
         $errors.Add("ci.yml is missing change-routing contract text: $requiredText")
     }
 }
-foreach ($jobName in @('build', 'typescript-conformance', 'dap-macos-smoke', 'aot-ratchet', 'native-aot-compile-smoke')) {
+foreach ($jobName in @('build', 'standalone', 'typescript-conformance', 'dap-macos-smoke', 'aot-ratchet', 'native-aot-compile-smoke')) {
     $job = Get-WorkflowJob $ci $jobName 'ci.yml'
     if (-not $job.Contains('needs: workflow-policy', [StringComparison]::Ordinal) -or
         -not $job.Contains("if: needs.workflow-policy.outputs.mode == 'full'", [StringComparison]::Ordinal)) {
@@ -91,6 +91,20 @@ if (-not $lightweightJob.Contains("if: needs.workflow-policy.outputs.mode == 'cs
     $errors.Add('ci.yml lightweight-validation must run only for C# trivia changes.')
 }
 $ciGateJob = Get-WorkflowJob $ci 'gate' 'ci.yml'
+if ($ciGateJob -notmatch '(?m)^    needs: \[[^\r\n]*\bstandalone\b' -or
+    $ciGateJob -notmatch '(?m)^          \$heavy = @\([^\r\n]*''standalone''') {
+    $errors.Add('ci.yml Gate must require standalone tests in the full route and skip them in lightweight routes.')
+}
+$coreJob = Get-WorkflowJob $ci 'build' 'ci.yml'
+$standaloneJob = Get-WorkflowJob $ci 'standalone' 'ci.yml'
+$coreFilter = 'Category!=LiveNetwork&Category!=LoadSensitive&Category!=npm&FullyQualifiedName!~SharpTS.Tests.CompilerTests.StandaloneDllTests.'
+$standaloneFilter = $coreFilter.Replace('FullyQualifiedName!~', 'FullyQualifiedName~')
+foreach ($partition in @(@($coreJob, $coreFilter), @($standaloneJob, $standaloneFilter))) {
+    if (-not $partition[0].Contains('--filter "' + $partition[1] + '"', [StringComparison]::Ordinal) -or
+        -not $partition[0].Contains('os: [ubuntu-24.04, windows-2025]', [StringComparison]::Ordinal)) {
+        $errors.Add('ci.yml core and standalone jobs must cover complementary filters on both platforms.')
+    }
+}
 foreach ($requiredText in @('build, typescript-conformance,', "'typescript-conformance'")) {
     if (-not $ciGateJob.Contains($requiredText, [StringComparison]::Ordinal)) {
         $errors.Add("ci.yml Gate must require the TypeScript job in the full route and skip it in lightweight routes: $requiredText")

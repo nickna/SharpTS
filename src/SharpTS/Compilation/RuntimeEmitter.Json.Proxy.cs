@@ -5,6 +5,8 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
+    private readonly record struct ProxyMaterializeForJsonInputs(MethodBuilder InvokeMethodUnwrapped);
+
     private void EmitInvokeMethodUnwrapped(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod("InvokeMethodUnwrapped",
@@ -107,7 +109,7 @@ public partial class RuntimeEmitter
     /// SharpTS.dll reference in the emitted assembly per the standalone-DLL constraint.
     /// </summary>
     private void EmitProxyMaterializeForJson(
-        ILGenerator il, LocalBuilder valueLocal, Label notProxyLabel, EmittedRuntime runtime)
+        ILGenerator il, LocalBuilder valueLocal, Label notProxyLabel, ProxyMaterializeForJsonInputs inputs)
     {
         var proxyLabel = il.DefineLabel();
         EmitProxyTypeCheck(il, () => il.Emit(OpCodes.Ldloc, valueLocal), proxyLabel, notProxyLabel);
@@ -130,7 +132,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Newarr, _types.Object);
         // [0] = null (Interpreter) — already null from Newarr
-        il.Emit(OpCodes.Call, runtime.InvokeMethodUnwrapped);
+        il.Emit(OpCodes.Call, inputs.InvokeMethodUnwrapped);
         il.Emit(OpCodes.Castclass, _types.ListOfString);
         il.Emit(OpCodes.Stloc, keysLocal);
 
@@ -178,7 +180,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, keyLocal);
         il.Emit(OpCodes.Stelem_Ref);
         // [1] = null (Interpreter) — already null from Newarr
-        il.Emit(OpCodes.Call, runtime.InvokeMethodUnwrapped);
+        il.Emit(OpCodes.Call, inputs.InvokeMethodUnwrapped);
         il.Emit(OpCodes.Stloc, valTmpLocal);
 
         // dict[k] = v

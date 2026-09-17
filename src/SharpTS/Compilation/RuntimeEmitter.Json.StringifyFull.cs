@@ -6,17 +6,152 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
+    private readonly record struct JsonStringifyFullInputs(
+        EmittedArrayStorageRuntime ArrayStorage,
+        MethodBuilder BoundTSFunctionInvokeWithThis,
+        TypeBuilder BoundTSFunctionType,
+        MethodBuilder CreateException,
+        EmittedDescriptorStorageRuntime DescriptorStorage,
+        MethodBuilder GetKeys,
+        MethodBuilder GetProperty,
+        Type IHasFieldsInterface,
+        MethodBuilder InvokeMethodUnwrapped,
+        MethodBuilder InvokeMethodValue,
+        MethodBuilder InvokeValue,
+        EmittedNumberRuntime Numbers,
+        EmittedNumericCoercionRuntime NumericCoercion,
+        FieldBuilder ObjectPrototypeField,
+        MethodBuilder ObjectPrototypePopulateMethod,
+        EmittedObjectStorageRuntime ObjectStorage,
+        EmittedStringCoercionRuntime StringCoercion,
+        MethodBuilder TSFunctionInvokeWithThis,
+        TypeBuilder TSFunctionType,
+        MethodBuilder TSObjectMergeEnumerable,
+        Type? TSRegExpType,
+        TypeBuilder TSSymbolType,
+        ConstructorBuilder TSTypeErrorCtor,
+        MethodBuilder TypeOf,
+        FieldInfo UndefinedInstance,
+        Type UndefinedType
+    );
+
+    private readonly record struct ConvertListToHashSetInputs(
+        EmittedArrayStorageRuntime ArrayStorage,
+        MethodBuilder GetProperty,
+        EmittedObjectStorageRuntime ObjectStorage,
+        EmittedStringCoercionRuntime StringCoercion
+    );
+
+    private readonly record struct StringifyValueFullHelperInputs(
+        EmittedArrayStorageRuntime ArrayStorage,
+        MethodBuilder BoundTSFunctionInvokeWithThis,
+        TypeBuilder BoundTSFunctionType,
+        MethodBuilder CreateException,
+        EmittedDescriptorStorageRuntime DescriptorStorage,
+        MethodBuilder GetKeys,
+        MethodBuilder GetProperty,
+        Type IHasFieldsInterface,
+        MethodBuilder InvokeMethodUnwrapped,
+        MethodBuilder InvokeMethodValue,
+        MethodBuilder InvokeValue,
+        EmittedNumberRuntime Numbers,
+        EmittedNumericCoercionRuntime NumericCoercion,
+        EmittedObjectStorageRuntime ObjectStorage,
+        EmittedStringCoercionRuntime StringCoercion,
+        MethodBuilder TSFunctionInvokeWithThis,
+        TypeBuilder TSFunctionType,
+        MethodBuilder TSObjectMergeEnumerable,
+        Type? TSRegExpType,
+        TypeBuilder TSSymbolType,
+        ConstructorBuilder TSTypeErrorCtor,
+        MethodBuilder TypeOf,
+        Type UndefinedType
+    );
+
+    private readonly record struct StringifyArrayFullInputs(
+        EmittedArrayStorageRuntime ArrayStorage,
+        MethodBuilder BoundTSFunctionInvokeWithThis,
+        TypeBuilder BoundTSFunctionType,
+        MethodBuilder GetProperty,
+        MethodBuilder InvokeMethodValue,
+        MethodBuilder InvokeValue,
+        MethodBuilder TSFunctionInvokeWithThis,
+        TypeBuilder TSFunctionType,
+        TypeBuilder TSSymbolType,
+        MethodBuilder TypeOf,
+        Type UndefinedType
+    );
+
+    private readonly record struct CallReplacerIfNeededInputs(
+        MethodBuilder BoundTSFunctionInvokeWithThis,
+        TypeBuilder BoundTSFunctionType,
+        MethodBuilder InvokeValue,
+        MethodBuilder TSFunctionInvokeWithThis,
+        TypeBuilder TSFunctionType
+    );
+
+    private readonly record struct CallReplacerWithKeyInputs(
+        MethodBuilder BoundTSFunctionInvokeWithThis,
+        TypeBuilder BoundTSFunctionType,
+        MethodBuilder InvokeValue,
+        MethodBuilder TSFunctionInvokeWithThis,
+        TypeBuilder TSFunctionType
+    );
+
+    private readonly record struct StringifyObjectFullInputs(
+        MethodBuilder BoundTSFunctionInvokeWithThis,
+        TypeBuilder BoundTSFunctionType,
+        EmittedDescriptorStorageRuntime DescriptorStorage,
+        MethodBuilder GetKeys,
+        MethodBuilder GetProperty,
+        MethodBuilder InvokeMethodValue,
+        MethodBuilder InvokeValue,
+        MethodBuilder TSFunctionInvokeWithThis,
+        TypeBuilder TSFunctionType,
+        TypeBuilder TSSymbolType,
+        MethodBuilder TypeOf,
+        Type UndefinedType
+    );
+
     /// <summary>
     /// Emits JsonStringifyFull as pure IL for standalone support.
     /// Signature: JsonStringifyFull(object? value, object? replacer, object? space) -> object?
     /// </summary>
-    private void EmitJsonStringifyFull(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitJsonStringifyFull(TypeBuilder typeBuilder, EmittedJsonImplementation json, JsonStringifyFullInputs inputs)
     {
         // First emit the escape helper (needed by stringify)
-        EmitEscapeJsonStringHelper(typeBuilder);
+        EmitEscapeJsonStringHelper(typeBuilder, json);
 
         // Then emit the helper method for recursive stringification
-        var stringifyFullHelper = EmitStringifyValueFullHelper(typeBuilder, runtime);
+        var stringifyFullHelper = EmitStringifyValueFullHelper(
+            typeBuilder,
+            json,
+            new StringifyValueFullHelperInputs(
+                inputs.ArrayStorage,
+                inputs.BoundTSFunctionInvokeWithThis,
+                inputs.BoundTSFunctionType,
+                inputs.CreateException,
+                inputs.DescriptorStorage,
+                inputs.GetKeys,
+                inputs.GetProperty,
+                inputs.IHasFieldsInterface,
+                inputs.InvokeMethodUnwrapped,
+                inputs.InvokeMethodValue,
+                inputs.InvokeValue,
+                inputs.Numbers,
+                inputs.NumericCoercion,
+                inputs.ObjectStorage,
+                inputs.StringCoercion,
+                inputs.TSFunctionInvokeWithThis,
+                inputs.TSFunctionType,
+                inputs.TSObjectMergeEnumerable,
+                inputs.TSRegExpType,
+                inputs.TSSymbolType,
+                inputs.TSTypeErrorCtor,
+                inputs.TypeOf,
+                inputs.UndefinedType
+            )
+        );
 
         var method = typeBuilder.DefineMethod(
             "JsonStringifyFull",
@@ -24,7 +159,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object, _types.Object, _types.Object]  // value, replacer, space
         );
-        runtime.JsonStringifyFull = method;
+        json.StringifyFull = method;
 
         var il = method.GetILGenerator();
 
@@ -54,7 +189,16 @@ public partial class RuntimeEmitter
         var spaceLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Stloc, spaceLocal);
-        EmitBoxedPrimitiveJsonCoerce(il, spaceLocal, runtime);
+        EmitBoxedPrimitiveJsonCoerce(
+            il,
+            spaceLocal,
+            new BoxedPrimitiveJsonCoerceInputs(
+                inputs.GetProperty,
+                inputs.NumericCoercion,
+                inputs.ObjectStorage,
+                inputs.StringCoercion
+            )
+        );
 
         // if (space == null) goto spaceDoneLabel
         il.Emit(OpCodes.Ldloc, spaceLocal);
@@ -138,11 +282,11 @@ public partial class RuntimeEmitter
         // ignored (PropertyList stays empty / replacerFunction stays null).
         // Only treat as function if it's actually a callable type.
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Isinst, inputs.TSFunctionType);
         var replacerIsFnLabel = il.DefineLabel();
         il.Emit(OpCodes.Brtrue, replacerIsFnLabel);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, runtime.BoundTSFunctionType);
+        il.Emit(OpCodes.Isinst, inputs.BoundTSFunctionType);
         il.Emit(OpCodes.Brtrue, replacerIsFnLabel);
         // Not callable, not array → ignore (replacerFunc stays null).
         il.Emit(OpCodes.Br, replacerDoneLabel);
@@ -153,7 +297,16 @@ public partial class RuntimeEmitter
 
         // replacer is List - convert to HashSet<string>
         il.MarkLabel(replacerIsListLabel);
-        EmitConvertListToHashSet(il, allowedKeysLocal, runtime);
+        EmitConvertListToHashSet(
+            il,
+            allowedKeysLocal,
+            new ConvertListToHashSetInputs(
+                inputs.ArrayStorage,
+                inputs.GetProperty,
+                inputs.ObjectStorage,
+                inputs.StringCoercion
+            )
+        );
 
         il.MarkLabel(replacerDoneLabel);
 
@@ -173,7 +326,7 @@ public partial class RuntimeEmitter
         // the backing dictionary directly so an inherited Object.prototype
         // setter for "" is not invoked.
         var rootHolderFieldsLocal = il.DeclareLocal(_types.DictionaryStringObject);
-        var rootHolderLocal = il.DeclareLocal(runtime.ObjectStorage.Type);
+        var rootHolderLocal = il.DeclareLocal(inputs.ObjectStorage.Type);
         il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.DictionaryStringObject));
         il.Emit(OpCodes.Stloc, rootHolderFieldsLocal);
         il.Emit(OpCodes.Ldloc, rootHolderFieldsLocal);
@@ -182,18 +335,30 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, _types.GetMethod(
             _types.DictionaryStringObject, "Add", _types.String, _types.Object));
         il.Emit(OpCodes.Ldloc, rootHolderFieldsLocal);
-        il.Emit(OpCodes.Newobj, runtime.ObjectStorage.Constructor);
+        il.Emit(OpCodes.Newobj, inputs.ObjectStorage.Constructor);
         il.Emit(OpCodes.Stloc, rootHolderLocal);
-        il.Emit(OpCodes.Call, runtime.ObjectPrototypePopulateMethod);
+        il.Emit(OpCodes.Call, inputs.ObjectPrototypePopulateMethod);
         il.Emit(OpCodes.Ldloc, rootHolderLocal);
-        il.Emit(OpCodes.Ldsfld, runtime.ObjectPrototypeField);
-        il.Emit(OpCodes.Call, runtime.DescriptorStorage.SetPrototype);
+        il.Emit(OpCodes.Ldsfld, inputs.ObjectPrototypeField);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.SetPrototype);
 
         // Per ECMA-262 25.5.2.3 SerializeJSONProperty step 2: toJSON runs
         // BEFORE step 3 (replacer). At the root, key = "" — the synthetic
         // wrapper is `{ "": value }` per step 12. Pass "" so toJSON sees
         // the spec-required key arg.
-        EmitToJsonCheck(il, rootValueLocal, runtime, "");
+        EmitToJsonCheck(
+            il,
+            rootValueLocal,
+            json,
+            new ToJsonCheckInputs(
+                inputs.GetProperty,
+                inputs.InvokeMethodValue,
+                inputs.TSSymbolType,
+                inputs.TypeOf,
+                inputs.UndefinedType
+            ),
+            ""
+        );
 
         var skipRootReplacerLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, replacerFuncLocal);
@@ -216,28 +381,28 @@ public partial class RuntimeEmitter
         var rootIsBoundLabel = il.DefineLabel();
         var rootCallDoneLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, replacerFuncLocal);
-        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Isinst, inputs.TSFunctionType);
         il.Emit(OpCodes.Brtrue, rootIsTSFunctionLabel);
         il.Emit(OpCodes.Ldloc, replacerFuncLocal);
-        il.Emit(OpCodes.Isinst, runtime.BoundTSFunctionType);
+        il.Emit(OpCodes.Isinst, inputs.BoundTSFunctionType);
         il.Emit(OpCodes.Brtrue, rootIsBoundLabel);
         il.Emit(OpCodes.Br, rootCallDoneLabel);
 
         il.MarkLabel(rootIsTSFunctionLabel);
         il.Emit(OpCodes.Ldloc, replacerFuncLocal);
-        il.Emit(OpCodes.Castclass, runtime.TSFunctionType);
+        il.Emit(OpCodes.Castclass, inputs.TSFunctionType);
         il.Emit(OpCodes.Ldloc, rootHolderLocal);
         il.Emit(OpCodes.Ldloc, rootArgsLocal);
-        il.Emit(OpCodes.Callvirt, runtime.TSFunctionInvokeWithThis);
+        il.Emit(OpCodes.Callvirt, inputs.TSFunctionInvokeWithThis);
         il.Emit(OpCodes.Stloc, rootValueLocal);
         il.Emit(OpCodes.Br, rootCallDoneLabel);
 
         il.MarkLabel(rootIsBoundLabel);
         il.Emit(OpCodes.Ldloc, replacerFuncLocal);
-        il.Emit(OpCodes.Castclass, runtime.BoundTSFunctionType);
+        il.Emit(OpCodes.Castclass, inputs.BoundTSFunctionType);
         il.Emit(OpCodes.Ldloc, rootHolderLocal);
         il.Emit(OpCodes.Ldloc, rootArgsLocal);
-        il.Emit(OpCodes.Callvirt, runtime.BoundTSFunctionInvokeWithThis);
+        il.Emit(OpCodes.Callvirt, inputs.BoundTSFunctionInvokeWithThis);
         il.Emit(OpCodes.Stloc, rootValueLocal);
 
         il.MarkLabel(rootCallDoneLabel);
@@ -262,7 +427,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, resultLocalRoot);
         var resultNonNullLabel = il.DefineLabel();
         il.Emit(OpCodes.Brtrue, resultNonNullLabel);
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, inputs.UndefinedInstance);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(resultNonNullLabel);
         il.Emit(OpCodes.Ldloc, resultLocalRoot);
@@ -278,7 +443,7 @@ public partial class RuntimeEmitter
     /// other types are dropped. Mirrors
     /// <c>Interpreter.TryCoerceReplacerArrayKey</c>.
     /// </summary>
-    private void EmitConvertListToHashSet(ILGenerator il, LocalBuilder allowedKeysLocal, EmittedRuntime runtime)
+    private void EmitConvertListToHashSet(ILGenerator il, LocalBuilder allowedKeysLocal, ConvertListToHashSetInputs inputs)
     {
         var listLocal = il.DeclareLocal(_types.ListOfObject);
         var iLocal = il.DeclareLocal(_types.Int32);
@@ -292,7 +457,7 @@ public partial class RuntimeEmitter
         var tagLocal = il.DeclareLocal(_types.String);
 
         // number[] unboxing: materialize a numeric-mode $Array replacer before reading its base list.
-        EmitDeoptArgIfNumericArray(il, runtime, 1);
+        EmitDeoptArgIfNumericArrayStorage(il, inputs.ArrayStorage, 1);
 
         // Cast replacer to List<object?>
         il.Emit(OpCodes.Ldarg_1);
@@ -336,7 +501,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, _types.Double);
         il.Emit(OpCodes.Brfalse, notDoubleLabel);
         il.Emit(OpCodes.Ldloc, elemLocal);
-        il.Emit(OpCodes.Call, runtime.StringCoercion.Stringify);
+        il.Emit(OpCodes.Call, inputs.StringCoercion.Stringify);
         il.Emit(OpCodes.Stloc, keyLocal);
         il.Emit(OpCodes.Br, addLabel);
 
@@ -346,7 +511,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(notDoubleLabel);
         var checkTagLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, elemLocal);
-        il.Emit(OpCodes.Isinst, runtime.ObjectStorage.Type);
+        il.Emit(OpCodes.Isinst, inputs.ObjectStorage.Type);
         il.Emit(OpCodes.Brtrue, checkTagLabel);
         il.Emit(OpCodes.Ldloc, elemLocal);
         il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
@@ -354,7 +519,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(checkTagLabel);
         il.Emit(OpCodes.Ldloc, elemLocal);
         il.Emit(OpCodes.Ldstr, "__primitiveType");
-        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, inputs.GetProperty);
         il.Emit(OpCodes.Isinst, _types.String);
         il.Emit(OpCodes.Stloc, tagLocal);
         il.Emit(OpCodes.Ldloc, tagLocal);
@@ -371,7 +536,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, skipLabel);
         il.MarkLabel(wrapperKeyLabel);
         il.Emit(OpCodes.Ldloc, elemLocal);
-        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
+        il.Emit(OpCodes.Call, inputs.StringCoercion.ToJsString);
         il.Emit(OpCodes.Stloc, keyLocal);
 
         il.MarkLabel(addLabel);
@@ -403,7 +568,7 @@ public partial class RuntimeEmitter
     /// The trailing key is the property name passed to toJSON / replacer per ECMA-262 25.5.2.3
     /// (array recursion passes ToString(index); object recursion passes the property name).
     /// </summary>
-    private MethodBuilder EmitStringifyValueFullHelper(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private MethodBuilder EmitStringifyValueFullHelper(TypeBuilder typeBuilder, EmittedJsonImplementation json, StringifyValueFullHelperInputs inputs)
     {
         var method = typeBuilder.DefineMethod(
             "StringifyValueFull",
@@ -432,7 +597,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg, 4);
         il.Emit(OpCodes.Ldc_I4, 512);
         il.Emit(OpCodes.Blt, depthOkLabel);
-        GuestErrorEmitter.ThrowTypeError(il, runtime, "Converting circular structure to JSON");
+        GuestErrorEmitter.ThrowError(il, inputs.CreateException, inputs.TSTypeErrorCtor, "Converting circular structure to JSON");
         il.MarkLabel(depthOkLabel);
 
         // Store value in local
@@ -449,7 +614,7 @@ public partial class RuntimeEmitter
         // also flows through this path.
         var undefRetNullLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
         il.Emit(OpCodes.Brfalse, undefRetNullLabel);
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ret);
@@ -461,32 +626,50 @@ public partial class RuntimeEmitter
 
         var notRawJsonLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Isinst, runtime.TSRawJsonType);
+        il.Emit(OpCodes.Isinst, json.RawJsonType);
         il.Emit(OpCodes.Brfalse, notRawJsonLabel);
         il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Castclass, runtime.TSRawJsonType);
-        il.Emit(OpCodes.Callvirt, runtime.TSRawJsonTextGetter);
+        il.Emit(OpCodes.Castclass, json.RawJsonType);
+        il.Emit(OpCodes.Callvirt, json.RawJsonTextGetter);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notRawJsonLabel);
 
         // ECMA-262 25.5.2.3 step 9: skip callable values (return undefined).
-        EmitFunctionSkipCheck(il, valueLocal, runtime);
+        EmitFunctionSkipCheck(
+            il,
+            valueLocal,
+            new FunctionSkipCheckInputs(inputs.BoundTSFunctionType, inputs.TSFunctionType, inputs.TSSymbolType)
+        );
 
         // Boxed-primitive unwrap (ECMA-262 25.5.2.3 step 4.a-c), honoring an own
         // valueOf/toString override (#574). See EmitBoxedPrimitiveJsonCoerce
         // (RuntimeEmitter.Json.Stringify.cs) for the rationale.
-        EmitBoxedPrimitiveJsonCoerce(il, valueLocal, runtime);
+        EmitBoxedPrimitiveJsonCoerce(
+            il,
+            valueLocal,
+            new BoxedPrimitiveJsonCoerceInputs(
+                inputs.GetProperty,
+                inputs.NumericCoercion,
+                inputs.ObjectStorage,
+                inputs.StringCoercion
+            )
+        );
 
         // The caller has already applied toJSON and the replacer. Unwrap a
         // boxed BigInt result, then perform step 10's mandatory rejection.
-        EmitBigIntCheck(il, valueLocal, runtime);
+        EmitBigIntCheck(il, valueLocal, new BigIntCheckInputs(inputs.CreateException, inputs.TSTypeErrorCtor));
 
         // Proxy materialization (#92): if value is SharpTSProxy, dispatch its
         // [[OwnPropertyKeys]] / [[Get]] traps and substitute a Dictionary so the
         // existing dict path serializes the proxied view. A revoked proxy throws
         // from TrapOwnKeys → naturally surfaces the spec-required TypeError.
         var notProxyLabelFull = il.DefineLabel();
-        EmitProxyMaterializeForJson(il, valueLocal, notProxyLabelFull, runtime);
+        EmitProxyMaterializeForJson(
+            il,
+            valueLocal,
+            notProxyLabelFull,
+            new ProxyMaterializeForJsonInputs(inputs.InvokeMethodUnwrapped)
+        );
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Stloc, allowPooledDictionaryKeysLocal);
         il.Emit(OpCodes.Br, dictLabel);
@@ -516,11 +699,11 @@ public partial class RuntimeEmitter
         // ECMA-262 25.5.2.3: $RegExp has no own enumerable properties, so
         // SerializeJSONObject yields "{}". Pre-fix fell through to "null".
         // Skip when UsesRegExp gated off — no RegExp values exist.
-        if (_features.UsesRegExp)
+        if (inputs.TSRegExpType is not null)
         {
             var notRegExpLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldloc, valueLocal);
-            il.Emit(OpCodes.Isinst, runtime.TSRegExpType);
+            il.Emit(OpCodes.Isinst, inputs.TSRegExpType);
             il.Emit(OpCodes.Brfalse, notRegExpLabel);
             il.Emit(OpCodes.Ldstr, "{}");
             il.Emit(OpCodes.Ret);
@@ -528,7 +711,12 @@ public partial class RuntimeEmitter
         }
 
         // Check for emitted $Object instance
-        EmitIsClassInstanceCheck(il, valueLocal, classInstanceLabel, runtime);
+        EmitIsClassInstanceCheck(
+            il,
+            valueLocal,
+            classInstanceLabel,
+            new IsClassInstanceCheckInputs(inputs.IHasFieldsInterface)
+        );
 
         // Default: return "null"
         il.MarkLabel(nullLabel);
@@ -549,23 +737,60 @@ public partial class RuntimeEmitter
 
         // double
         il.MarkLabel(doubleLabel);
-        EmitFormatNumber(il, valueLocal, runtime);
+        EmitFormatNumber(il, valueLocal, new FormatNumberInputs(inputs.Numbers));
 
         // string - escape for JSON
         il.MarkLabel(stringLabel);
         il.Emit(OpCodes.Ldloc, valueLocal);
         il.Emit(OpCodes.Castclass, _types.String);
-        il.Emit(OpCodes.Call, _escapeJsonStringMethod!);
+        il.Emit(OpCodes.Call, json.EscapeString!);
         il.Emit(OpCodes.Ret);
 
         // List<object?> - stringify array with full options
         il.MarkLabel(listLabel);
-        EmitStringifyArrayFull(il, method, valueLocal, runtime);
+        EmitStringifyArrayFull(
+            il,
+            method,
+            valueLocal,
+            json,
+            new StringifyArrayFullInputs(
+                inputs.ArrayStorage,
+                inputs.BoundTSFunctionInvokeWithThis,
+                inputs.BoundTSFunctionType,
+                inputs.GetProperty,
+                inputs.InvokeMethodValue,
+                inputs.InvokeValue,
+                inputs.TSFunctionInvokeWithThis,
+                inputs.TSFunctionType,
+                inputs.TSSymbolType,
+                inputs.TypeOf,
+                inputs.UndefinedType
+            )
+        );
 
         // Dictionary<string, object?> - stringify object with full options
         il.MarkLabel(dictLabel);
         EmitStringifyObjectFull(
-            il, method, valueLocal, runtime, allowPooledDictionaryKeysLocal);
+            il,
+            method,
+            valueLocal,
+            json,
+            new StringifyObjectFullInputs(
+                inputs.BoundTSFunctionInvokeWithThis,
+                inputs.BoundTSFunctionType,
+                inputs.DescriptorStorage,
+                inputs.GetKeys,
+                inputs.GetProperty,
+                inputs.InvokeMethodValue,
+                inputs.InvokeValue,
+                inputs.TSFunctionInvokeWithThis,
+                inputs.TSFunctionType,
+                inputs.TSSymbolType,
+                inputs.TypeOf,
+                inputs.UndefinedType
+            ),
+            allowPooledDictionaryKeysLocal
+        );
 
         // Class instance
         il.MarkLabel(classInstanceLabel);
@@ -582,14 +807,34 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, valueLocal);
         il.Emit(OpCodes.Stloc, classHolderLocal);
         il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Call, runtime.TSObjectMergeEnumerable);
+        il.Emit(OpCodes.Call, inputs.TSObjectMergeEnumerable);
         il.Emit(OpCodes.Stloc, classFieldsLocal);
         il.Emit(OpCodes.Ldloc, classFieldsLocal);
         il.Emit(OpCodes.Brfalse, noClassFieldsLabel);
         il.Emit(OpCodes.Ldloc, classFieldsLocal);
         il.Emit(OpCodes.Stloc, valueLocal);
         EmitStringifyObjectFull(
-            il, method, valueLocal, runtime, null, classHolderLocal);
+            il,
+            method,
+            valueLocal,
+            json,
+            new StringifyObjectFullInputs(
+                inputs.BoundTSFunctionInvokeWithThis,
+                inputs.BoundTSFunctionType,
+                inputs.DescriptorStorage,
+                inputs.GetKeys,
+                inputs.GetProperty,
+                inputs.InvokeMethodValue,
+                inputs.InvokeValue,
+                inputs.TSFunctionInvokeWithThis,
+                inputs.TSFunctionType,
+                inputs.TSSymbolType,
+                inputs.TypeOf,
+                inputs.UndefinedType
+            ),
+            null,
+            classHolderLocal
+        );
         il.MarkLabel(noClassFieldsLabel);
         il.Emit(OpCodes.Ldstr, "{}");
         il.Emit(OpCodes.Ret);
@@ -600,7 +845,7 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits array stringification with full options (replacer, indentation).
     /// </summary>
-    private void EmitStringifyArrayFull(ILGenerator il, MethodBuilder stringifyMethod, LocalBuilder valueLocal, EmittedRuntime runtime)
+    private void EmitStringifyArrayFull(ILGenerator il, MethodBuilder stringifyMethod, LocalBuilder valueLocal, EmittedJsonImplementation json, StringifyArrayFullInputs inputs)
     {
         var sbLocal = il.DeclareLocal(_types.StringBuilder);
         var arrLocal = il.DeclareLocal(_types.ListOfObject);
@@ -612,7 +857,7 @@ public partial class RuntimeEmitter
         var returnValueLocal = il.DeclareLocal(_types.String);
 
         // number[] unboxing: materialize a numeric-mode $Array before reading its base list.
-        EmitDeoptIfNumericArray(il, runtime, () => il.Emit(OpCodes.Ldloc, valueLocal));
+        EmitDeoptIfNumericArrayStorage(il, inputs.ArrayStorage, () => il.Emit(OpCodes.Ldloc, valueLocal));
 
         var loopStart = il.DefineLabel();
         var loopEnd = il.DefineLabel();
@@ -653,7 +898,7 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(indentDoneLabel);
 
-        il.Emit(OpCodes.Call, _jsonRentStringBuilderMethod!);
+        il.Emit(OpCodes.Call, json.RentStringBuilder!);
         il.Emit(OpCodes.Stloc, sbLocal);
         var cleanupDone = il.DefineLabel();
         il.BeginExceptionBlock();
@@ -700,7 +945,7 @@ public partial class RuntimeEmitter
         var holeAppendedLabel = il.DefineLabel();
         var notHoleLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, elemLocal);
-        il.Emit(OpCodes.Isinst, runtime.ArrayStorage.HoleType);
+        il.Emit(OpCodes.Isinst, inputs.ArrayStorage.HoleType);
         il.Emit(OpCodes.Brfalse, notHoleLabel);
         il.Emit(OpCodes.Ldloc, sbLocal);
         il.Emit(OpCodes.Ldstr, "null");
@@ -716,8 +961,32 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloca, iLocal);
         il.Emit(OpCodes.Call, _types.GetMethodNoParams(_types.Int32, "ToString"));
         il.Emit(OpCodes.Stloc, elemKeyLocal);
-        EmitToJsonCheck(il, elemLocal, runtime, keyLocal: elemKeyLocal);
-        EmitCallReplacerIfNeeded(il, elemLocal, elemKeyLocal, arrLocal, runtime);
+        EmitToJsonCheck(
+            il,
+            elemLocal,
+            json,
+            new ToJsonCheckInputs(
+                inputs.GetProperty,
+                inputs.InvokeMethodValue,
+                inputs.TSSymbolType,
+                inputs.TypeOf,
+                inputs.UndefinedType
+            ),
+            keyLocal: elemKeyLocal
+        );
+        EmitCallReplacerIfNeeded(
+            il,
+            elemLocal,
+            elemKeyLocal,
+            arrLocal,
+            new CallReplacerIfNeededInputs(
+                inputs.BoundTSFunctionInvokeWithThis,
+                inputs.BoundTSFunctionType,
+                inputs.InvokeValue,
+                inputs.TSFunctionInvokeWithThis,
+                inputs.TSFunctionType
+            )
+        );
 
         // strResult = StringifyValueFull(elem, replacer, allowedKeys, indentStr, depth + 1, i.ToString())
         // ECMA-262 25.5.2.4 SerializeJSONArray step 8.a — the key passed down
@@ -776,7 +1045,7 @@ public partial class RuntimeEmitter
 
         il.BeginFinallyBlock();
         il.Emit(OpCodes.Ldloc, sbLocal);
-        il.Emit(OpCodes.Call, _jsonReturnStringBuilderMethod!);
+        il.Emit(OpCodes.Call, json.ReturnStringBuilder!);
         il.EndExceptionBlock();
 
         il.MarkLabel(cleanupDone);
@@ -871,7 +1140,7 @@ public partial class RuntimeEmitter
     /// invoked with the holder (parent array) as `this`.
     /// Handles both $TSFunction and $BoundTSFunction.
     /// </summary>
-    private void EmitCallReplacerIfNeeded(ILGenerator il, LocalBuilder elemLocal, LocalBuilder keyLocal, LocalBuilder holderLocal, EmittedRuntime runtime)
+    private void EmitCallReplacerIfNeeded(ILGenerator il, LocalBuilder elemLocal, LocalBuilder keyLocal, LocalBuilder holderLocal, CallReplacerIfNeededInputs inputs)
     {
         var skipLabel = il.DefineLabel();
         var isTSFunctionLabel = il.DefineLabel();
@@ -898,18 +1167,18 @@ public partial class RuntimeEmitter
 
         // Check if replacer is $TSFunction
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Isinst, inputs.TSFunctionType);
         il.Emit(OpCodes.Brtrue, isTSFunctionLabel);
 
         // Check if replacer is $BoundTSFunction
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, runtime.BoundTSFunctionType);
+        il.Emit(OpCodes.Isinst, inputs.BoundTSFunctionType);
         il.Emit(OpCodes.Brtrue, isBoundLabel);
 
         // Unknown type - use InvokeValue fallback
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloc, argsLocal);
-        il.Emit(OpCodes.Call, runtime.InvokeValue);
+        il.Emit(OpCodes.Call, inputs.InvokeValue);
         il.Emit(OpCodes.Stloc, elemLocal);
         il.Emit(OpCodes.Br, callDoneLabel);
 
@@ -920,20 +1189,20 @@ public partial class RuntimeEmitter
         // user's `(k, v)` lines up with [key, val].
         il.MarkLabel(isTSFunctionLabel);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Castclass, runtime.TSFunctionType);
+        il.Emit(OpCodes.Castclass, inputs.TSFunctionType);
         il.Emit(OpCodes.Ldloc, holderLocal);
         il.Emit(OpCodes.Ldloc, argsLocal);
-        il.Emit(OpCodes.Callvirt, runtime.TSFunctionInvokeWithThis);
+        il.Emit(OpCodes.Callvirt, inputs.TSFunctionInvokeWithThis);
         il.Emit(OpCodes.Stloc, elemLocal);
         il.Emit(OpCodes.Br, callDoneLabel);
 
         // isBoundLabel: call $BoundTSFunction.InvokeWithThis(holder, args)
         il.MarkLabel(isBoundLabel);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Castclass, runtime.BoundTSFunctionType);
+        il.Emit(OpCodes.Castclass, inputs.BoundTSFunctionType);
         il.Emit(OpCodes.Ldloc, holderLocal);
         il.Emit(OpCodes.Ldloc, argsLocal);
-        il.Emit(OpCodes.Callvirt, runtime.BoundTSFunctionInvokeWithThis);
+        il.Emit(OpCodes.Callvirt, inputs.BoundTSFunctionInvokeWithThis);
         il.Emit(OpCodes.Stloc, elemLocal);
 
         il.MarkLabel(callDoneLabel);
@@ -945,7 +1214,7 @@ public partial class RuntimeEmitter
     /// Spec: replacer.call(holder, key, value) where holder is the parent.
     /// Handles both $TSFunction and $BoundTSFunction.
     /// </summary>
-    private void EmitCallReplacerWithKey(ILGenerator il, LocalBuilder valueLocal, LocalBuilder keyLocal, LocalBuilder holderLocal, EmittedRuntime runtime)
+    private void EmitCallReplacerWithKey(ILGenerator il, LocalBuilder valueLocal, LocalBuilder keyLocal, LocalBuilder holderLocal, CallReplacerWithKeyInputs inputs)
     {
         var skipLabel = il.DefineLabel();
         var isTSFunctionLabel = il.DefineLabel();
@@ -971,38 +1240,38 @@ public partial class RuntimeEmitter
 
         // Check if replacer is $TSFunction
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Isinst, inputs.TSFunctionType);
         il.Emit(OpCodes.Brtrue, isTSFunctionLabel);
 
         // Check if replacer is $BoundTSFunction
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, runtime.BoundTSFunctionType);
+        il.Emit(OpCodes.Isinst, inputs.BoundTSFunctionType);
         il.Emit(OpCodes.Brtrue, isBoundLabel);
 
         // Unknown type - use InvokeValue fallback
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloc, argsLocal);
-        il.Emit(OpCodes.Call, runtime.InvokeValue);
+        il.Emit(OpCodes.Call, inputs.InvokeValue);
         il.Emit(OpCodes.Stloc, valueLocal);
         il.Emit(OpCodes.Br, callDoneLabel);
 
         // isTSFunctionLabel: call $TSFunction.InvokeWithThis(holder, args).
         il.MarkLabel(isTSFunctionLabel);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Castclass, runtime.TSFunctionType);
+        il.Emit(OpCodes.Castclass, inputs.TSFunctionType);
         il.Emit(OpCodes.Ldloc, holderLocal);
         il.Emit(OpCodes.Ldloc, argsLocal);
-        il.Emit(OpCodes.Callvirt, runtime.TSFunctionInvokeWithThis);
+        il.Emit(OpCodes.Callvirt, inputs.TSFunctionInvokeWithThis);
         il.Emit(OpCodes.Stloc, valueLocal);
         il.Emit(OpCodes.Br, callDoneLabel);
 
         // isBoundLabel: call $BoundTSFunction.InvokeWithThis(holder, args)
         il.MarkLabel(isBoundLabel);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Castclass, runtime.BoundTSFunctionType);
+        il.Emit(OpCodes.Castclass, inputs.BoundTSFunctionType);
         il.Emit(OpCodes.Ldloc, holderLocal);
         il.Emit(OpCodes.Ldloc, argsLocal);
-        il.Emit(OpCodes.Callvirt, runtime.BoundTSFunctionInvokeWithThis);
+        il.Emit(OpCodes.Callvirt, inputs.BoundTSFunctionInvokeWithThis);
         il.Emit(OpCodes.Stloc, valueLocal);
 
         il.MarkLabel(callDoneLabel);
@@ -1016,7 +1285,7 @@ public partial class RuntimeEmitter
         ILGenerator il,
         MethodBuilder stringifyMethod,
         LocalBuilder valueLocal,
-        EmittedRuntime runtime,
+        EmittedJsonImplementation json, StringifyObjectFullInputs inputs,
         LocalBuilder? allowPooledDictionaryKeysLocal,
         LocalBuilder? replacerHolderLocal = null)
     {
@@ -1054,10 +1323,10 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldloc, allowPooledDictionaryKeysLocal);
             il.Emit(OpCodes.Brfalse, fallbackSnapshot);
             il.Emit(OpCodes.Ldloc, dictLocal);
-            il.Emit(OpCodes.Call, runtime.DescriptorStorage.HasPropertyDescriptors);
+            il.Emit(OpCodes.Call, inputs.DescriptorStorage.HasPropertyDescriptors);
             il.Emit(OpCodes.Brtrue, fallbackSnapshot);
             il.Emit(OpCodes.Ldloc, dictLocal);
-            il.Emit(OpCodes.Call, _jsonTryRentDictionaryKeysMethod!);
+            il.Emit(OpCodes.Call, json.TryRentDictionaryKeys!);
             il.Emit(OpCodes.Stloc, sourceKeysLocal);
             il.Emit(OpCodes.Ldloc, sourceKeysLocal);
             il.Emit(OpCodes.Brfalse, fallbackSnapshot);
@@ -1068,7 +1337,7 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(fallbackSnapshot);
         il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Call, runtime.GetKeys);
+        il.Emit(OpCodes.Call, inputs.GetKeys);
         il.Emit(OpCodes.Stloc, sourceKeysLocal);
         il.MarkLabel(snapshotReady);
 
@@ -1091,7 +1360,7 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(indentDoneLabel);
 
-        il.Emit(OpCodes.Call, _jsonRentStringBuilderMethod!);
+        il.Emit(OpCodes.Call, json.RentStringBuilder!);
         il.Emit(OpCodes.Stloc, sbLocal);
         il.Emit(OpCodes.Ldloc, sbLocal);
         il.Emit(OpCodes.Ldstr, "{");
@@ -1137,7 +1406,7 @@ public partial class RuntimeEmitter
         // Get(holder, key); absent keys become undefined and are omitted below.
         il.Emit(OpCodes.Ldloc, dictLocal);
         il.Emit(OpCodes.Ldloc, keyLocal);
-        il.Emit(OpCodes.Call, _jsonGetDictionaryPropertyMethod!);
+        il.Emit(OpCodes.Call, json.GetDictionaryProperty!);
         il.Emit(OpCodes.Stloc, valLocal);
         il.Emit(OpCodes.Br, iterDoneLabel);
 
@@ -1171,15 +1440,38 @@ public partial class RuntimeEmitter
         il.MarkLabel(generalSourceRead);
         il.Emit(OpCodes.Ldloc, dictLocal);
         il.Emit(OpCodes.Ldloc, keyLocal);
-        il.Emit(OpCodes.Call, _jsonGetDictionaryPropertyMethod!);
+        il.Emit(OpCodes.Call, json.GetDictionaryProperty!);
         il.Emit(OpCodes.Stloc, valLocal);
 
         il.MarkLabel(iterDoneLabel);
 
         // SerializeJSONProperty step 2 precedes the replacer step.
-        EmitToJsonCheck(il, valLocal, runtime, keyLocal: keyLocal);
+        EmitToJsonCheck(
+            il,
+            valLocal,
+            json,
+            new ToJsonCheckInputs(
+                inputs.GetProperty,
+                inputs.InvokeMethodValue,
+                inputs.TSSymbolType,
+                inputs.TypeOf,
+                inputs.UndefinedType
+            ),
+            keyLocal: keyLocal
+        );
         EmitCallReplacerWithKey(
-            il, valLocal, keyLocal, replacerHolderLocal ?? dictLocal, runtime);
+            il,
+            valLocal,
+            keyLocal,
+            replacerHolderLocal ?? dictLocal,
+            new CallReplacerWithKeyInputs(
+                inputs.BoundTSFunctionInvokeWithThis,
+                inputs.BoundTSFunctionType,
+                inputs.InvokeValue,
+                inputs.TSFunctionInvokeWithThis,
+                inputs.TSFunctionType
+            )
+        );
 
         // strResult = StringifyValueFull(val, replacer, allowedKeys, indentStr, depth + 1, keyLocal)
         // ECMA-262 25.5.2.5 SerializeJSONObject step 6.a — the recursive key
@@ -1220,7 +1512,7 @@ public partial class RuntimeEmitter
         // sb.Append(EscapeJsonString(key));
         il.Emit(OpCodes.Ldloc, sbLocal);
         il.Emit(OpCodes.Ldloc, keyLocal);
-        il.Emit(OpCodes.Call, _appendEscapedJsonStringMethod!);
+        il.Emit(OpCodes.Call, json.AppendEscapedString!);
 
         // sb.Append(indentStr.Length > 0 ? ": " : ":");
         il.Emit(OpCodes.Ldloc, sbLocal);
@@ -1269,13 +1561,13 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, rentedKeysLocal);
         il.Emit(OpCodes.Brfalse, skipReturn);
         il.Emit(OpCodes.Ldloc, sourceKeysLocal);
-        il.Emit(OpCodes.Call, _jsonReturnDictionaryKeysMethod!);
+        il.Emit(OpCodes.Call, json.ReturnDictionaryKeys!);
         il.MarkLabel(skipReturn);
         var skipBuilderReturn = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, sbLocal);
         il.Emit(OpCodes.Brfalse, skipBuilderReturn);
         il.Emit(OpCodes.Ldloc, sbLocal);
-        il.Emit(OpCodes.Call, _jsonReturnStringBuilderMethod!);
+        il.Emit(OpCodes.Call, json.ReturnStringBuilder!);
         il.MarkLabel(skipBuilderReturn);
         il.EndExceptionBlock();
 
