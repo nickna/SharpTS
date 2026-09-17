@@ -110,7 +110,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, _types.DictionaryObjectObject);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.GetMapProperty);
+        il.Emit(OpCodes.Call, runtime.RequireMap().GetProperty);
         il.Emit(OpCodes.Ret);
     }
 
@@ -127,7 +127,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, _types.HashSetOfObject);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.GetSetProperty);
+        il.Emit(OpCodes.Call, runtime.RequireSet().GetProperty);
         il.Emit(OpCodes.Ret);
     }
 

@@ -50,7 +50,7 @@ public partial class ILEmitter
                 {
                     IL.Emit(OpCodes.Ldnull);
                 }
-                IL.Emit(OpCodes.Call, _ctx.Runtime!.MapGet);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.RequireMap().Get);
                 break;
 
             case "set":
@@ -73,7 +73,7 @@ public partial class ILEmitter
                 {
                     IL.Emit(OpCodes.Ldnull);
                 }
-                IL.Emit(OpCodes.Call, _ctx.Runtime!.MapSet);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.RequireMap().Set);
                 break;
 
             case "has":
@@ -87,7 +87,7 @@ public partial class ILEmitter
                 {
                     IL.Emit(OpCodes.Ldnull);
                 }
-                IL.Emit(OpCodes.Call, _ctx.Runtime!.MapHas);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.RequireMap().Has);
                 IL.Emit(OpCodes.Box, _ctx.Types.Boolean);
                 break;
 
@@ -102,29 +102,29 @@ public partial class ILEmitter
                 {
                     IL.Emit(OpCodes.Ldnull);
                 }
-                IL.Emit(OpCodes.Call, _ctx.Runtime!.MapDelete);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.RequireMap().Delete);
                 IL.Emit(OpCodes.Box, _ctx.Types.Boolean);
                 break;
 
             case "clear":
                 IL.Emit(OpCodes.Ldloc, objLocal);
-                IL.Emit(OpCodes.Call, _ctx.Runtime!.MapClear);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.RequireMap().Clear);
                 IL.Emit(OpCodes.Ldsfld, _ctx.Runtime.UndefinedInstance);
                 break;
 
             case "keys":
                 IL.Emit(OpCodes.Ldloc, objLocal);
-                IL.Emit(OpCodes.Call, _ctx.Runtime!.MapKeys);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.RequireMap().Keys);
                 break;
 
             case "values":
                 IL.Emit(OpCodes.Ldloc, objLocal);
-                IL.Emit(OpCodes.Call, _ctx.Runtime!.MapValues);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.RequireMap().Values);
                 break;
 
             case "entries":
                 IL.Emit(OpCodes.Ldloc, objLocal);
-                IL.Emit(OpCodes.Call, _ctx.Runtime!.MapEntries);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.RequireMap().Entries);
                 break;
 
             case "forEach":
@@ -147,7 +147,7 @@ public partial class ILEmitter
                 {
                     IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.UndefinedInstance);
                 }
-                IL.Emit(OpCodes.Call, _ctx.Runtime!.MapForEach);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.RequireMap().ForEach);
                 IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.UndefinedInstance);
                 break;
 

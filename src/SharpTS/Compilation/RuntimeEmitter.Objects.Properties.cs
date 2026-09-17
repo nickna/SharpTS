@@ -1044,7 +1044,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitGetMapProperty(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitGetMapProperty(TypeBuilder typeBuilder, EmittedMapRuntime map)
     {
         // GetMapProperty(map: Dictionary<object,object>, name: string) -> object?
         // Returns size as double, or a $BoundMapMethod wrapper for known Map methods.
@@ -1057,7 +1057,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.DictionaryObjectObject, _types.String]
         );
-        runtime.GetMapProperty = method;
+        map.GetProperty = method;
 
         var il = method.GetILGenerator();
 
@@ -1083,7 +1083,7 @@ public partial class RuntimeEmitter
 
             il.Emit(OpCodes.Ldarg_0); // map
             il.Emit(OpCodes.Ldarg_1); // name
-            il.Emit(OpCodes.Newobj, runtime.BoundMapMethodCtor);
+            il.Emit(OpCodes.Newobj, map.BoundMethodConstructor);
             il.Emit(OpCodes.Ret);
 
             il.MarkLabel(skipLabel);
@@ -1102,7 +1102,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitGetSetProperty(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitGetSetProperty(TypeBuilder typeBuilder, EmittedSetRuntime set)
     {
         // GetSetProperty(set: HashSet<object>, name: string) -> object?
         // Returns size as double, or a $BoundSetMethod wrapper for known Set methods
@@ -1113,7 +1113,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.HashSetOfObject, _types.String]
         );
-        runtime.GetSetProperty = method;
+        set.GetProperty = method;
 
         var il = method.GetILGenerator();
 
@@ -1141,7 +1141,7 @@ public partial class RuntimeEmitter
 
             il.Emit(OpCodes.Ldarg_0); // set
             il.Emit(OpCodes.Ldarg_1); // name
-            il.Emit(OpCodes.Newobj, runtime.BoundSetMethodCtor);
+            il.Emit(OpCodes.Newobj, set.BoundMethodConstructor);
             il.Emit(OpCodes.Ret);
 
             il.MarkLabel(skipLabel);
@@ -1248,7 +1248,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(notTSObjectLabel);
 
         // Map (Dictionary<object, object>) - "size" + $BoundMapMethod wrappers.
-        if (_features.UsesMap)
+        if (runtime.Map is not null)
         {
             var notMapLabel = il.DefineLabel();
             EmitMapGetBranch(il, runtime, notMapLabel);
@@ -1256,7 +1256,7 @@ public partial class RuntimeEmitter
         }
 
         // Set (HashSet<object>) - duck-typed access via GetSetProperty.
-        if (_features.UsesSet)
+        if (runtime.Set is not null)
         {
             var notSetLabel = il.DefineLabel();
             EmitSetGetBranch(il, runtime, notSetLabel);
@@ -1721,16 +1721,16 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, runtime.ArrayOperations.BoundMethodType);
         il.Emit(OpCodes.Brtrue, callableWrapperLabel);
-        if (_features.UsesMap)
+        if (runtime.Map is not null)
         {
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.BoundMapMethodType);
+            il.Emit(OpCodes.Isinst, runtime.RequireMap().BoundMethodType);
             il.Emit(OpCodes.Brtrue, callableWrapperLabel);
         }
-        if (_features.UsesSet)
+        if (runtime.Set is not null)
         {
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.BoundSetMethodType);
+            il.Emit(OpCodes.Isinst, runtime.RequireSet().BoundMethodType);
             il.Emit(OpCodes.Brtrue, callableWrapperLabel);
         }
         il.Emit(OpCodes.Ldarg_0);
@@ -2320,27 +2320,27 @@ public partial class RuntimeEmitter
         il.MarkLabel(notBAMNameLabel);
 
         var notBMMNameLabel = il.DefineLabel();
-        if (_features.UsesMap)
+        if (runtime.Map is not null)
         {
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.BoundMapMethodType);
+            il.Emit(OpCodes.Isinst, runtime.RequireMap().BoundMethodType);
             il.Emit(OpCodes.Brfalse, notBMMNameLabel);
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Castclass, runtime.BoundMapMethodType);
-            il.Emit(OpCodes.Ldfld, runtime.BoundMapMethodNameField);
+            il.Emit(OpCodes.Castclass, runtime.RequireMap().BoundMethodType);
+            il.Emit(OpCodes.Ldfld, runtime.RequireMap().BoundNameField);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(notBMMNameLabel);
         }
 
         var notBSMNameLabel = il.DefineLabel();
-        if (_features.UsesSet)
+        if (runtime.Set is not null)
         {
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.BoundSetMethodType);
+            il.Emit(OpCodes.Isinst, runtime.RequireSet().BoundMethodType);
             il.Emit(OpCodes.Brfalse, notBSMNameLabel);
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Castclass, runtime.BoundSetMethodType);
-            il.Emit(OpCodes.Ldfld, runtime.BoundSetMethodNameField);
+            il.Emit(OpCodes.Castclass, runtime.RequireSet().BoundMethodType);
+            il.Emit(OpCodes.Ldfld, runtime.RequireSet().BoundNameField);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(notBSMNameLabel);
         }

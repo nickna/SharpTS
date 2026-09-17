@@ -213,18 +213,18 @@ public partial class RuntimeEmitter
         }
 
         var boundMapMethodLabel = il.DefineLabel();
-        if (_features.UsesMap)
+        if (runtime.Map is not null)
         {
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.BoundMapMethodType);
+            il.Emit(OpCodes.Isinst, runtime.RequireMap().BoundMethodType);
             il.Emit(OpCodes.Brtrue, boundMapMethodLabel);
         }
 
         var boundSetMethodLabel = il.DefineLabel();
-        if (_features.UsesSet)
+        if (runtime.Set is not null)
         {
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.BoundSetMethodType);
+            il.Emit(OpCodes.Isinst, runtime.RequireSet().BoundMethodType);
             il.Emit(OpCodes.Brtrue, boundSetMethodLabel);
         }
 
@@ -536,23 +536,23 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ret);
         }
 
-        if (_features.UsesMap)
+        if (runtime.Map is not null)
         {
             il.MarkLabel(boundMapMethodLabel);
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Castclass, runtime.BoundMapMethodType);
+            il.Emit(OpCodes.Castclass, runtime.RequireMap().BoundMethodType);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Callvirt, runtime.BoundMapMethodInvoke);
+            il.Emit(OpCodes.Callvirt, runtime.RequireMap().BoundMethodInvoke);
             il.Emit(OpCodes.Ret);
         }
 
-        if (_features.UsesSet)
+        if (runtime.Set is not null)
         {
             il.MarkLabel(boundSetMethodLabel);
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Castclass, runtime.BoundSetMethodType);
+            il.Emit(OpCodes.Castclass, runtime.RequireSet().BoundMethodType);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Callvirt, runtime.BoundSetMethodInvoke);
+            il.Emit(OpCodes.Callvirt, runtime.RequireSet().BoundMethodInvoke);
             il.Emit(OpCodes.Ret);
         }
 
@@ -789,15 +789,15 @@ public partial class RuntimeEmitter
         // Check $BoundMapMethod — gated on UsesMap (the wrapper type only
         // exists when EmitMapMethods runs).
         var notBoundMapMethodLabel = il.DefineLabel();
-        if (_features.UsesMap)
+        if (runtime.Map is not null)
         {
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Isinst, runtime.BoundMapMethodType);
+            il.Emit(OpCodes.Isinst, runtime.RequireMap().BoundMethodType);
             il.Emit(OpCodes.Brfalse, notBoundMapMethodLabel);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Castclass, runtime.BoundMapMethodType);
+            il.Emit(OpCodes.Castclass, runtime.RequireMap().BoundMethodType);
             il.Emit(OpCodes.Ldarg_2);
-            il.Emit(OpCodes.Callvirt, runtime.BoundMapMethodInvoke);
+            il.Emit(OpCodes.Callvirt, runtime.RequireMap().BoundMethodInvoke);
             il.Emit(OpCodes.Ret);
 
             il.MarkLabel(notBoundMapMethodLabel);
@@ -805,15 +805,15 @@ public partial class RuntimeEmitter
 
         // Check $BoundSetMethod — gated on UsesSet.
         var notBoundSetMethodLabel = il.DefineLabel();
-        if (_features.UsesSet)
+        if (runtime.Set is not null)
         {
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Isinst, runtime.BoundSetMethodType);
+            il.Emit(OpCodes.Isinst, runtime.RequireSet().BoundMethodType);
             il.Emit(OpCodes.Brfalse, notBoundSetMethodLabel);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Castclass, runtime.BoundSetMethodType);
+            il.Emit(OpCodes.Castclass, runtime.RequireSet().BoundMethodType);
             il.Emit(OpCodes.Ldarg_2);
-            il.Emit(OpCodes.Callvirt, runtime.BoundSetMethodInvoke);
+            il.Emit(OpCodes.Callvirt, runtime.RequireSet().BoundMethodInvoke);
             il.Emit(OpCodes.Ret);
 
             il.MarkLabel(notBoundSetMethodLabel);

@@ -37,7 +37,7 @@ public partial class ILEmitter
 
         EmitExpression(g.Object);
         EmitBoxIfNeeded(g.Object);
-        IL.Emit(OpCodes.Call, _ctx.Runtime!.MapSize);
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.RequireMap().Size);
         IL.Emit(OpCodes.Box, _ctx.Types.Double);
         SetStackUnknown();
         return true;
@@ -49,7 +49,7 @@ public partial class ILEmitter
 
         EmitExpression(g.Object);
         EmitBoxIfNeeded(g.Object);
-        IL.Emit(OpCodes.Call, _ctx.Runtime!.SetSize);
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.RequireSet().Size);
         IL.Emit(OpCodes.Box, _ctx.Types.Double);
         SetStackUnknown();
         return true;

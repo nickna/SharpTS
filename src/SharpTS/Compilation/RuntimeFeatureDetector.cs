@@ -982,7 +982,7 @@ public sealed class RuntimeFeatureDetector
                     // Duck-typed Map/Set method access on `any` receivers
                     // (cross-module patterns: `import { makeSet } from './lib';
                     // s.has(x)`) routes through ILEmitter.Calls.MapMethods which
-                    // unconditionally emits runtime.MapHas/Get/Set/etc. Flag
+                    // unconditionally emits runtime.RequireMap().Has/Get/Set/etc. Flag
                     // both Map and Set conservatively — false positives just
                     // over-emit the small dispatch wrappers.
                     case "has":

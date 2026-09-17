@@ -231,7 +231,11 @@ public partial class RuntimeEmitter
     /// entries deleted or cleared after iterator creation are skipped instead
     /// of leaking snapshot values. Kind: 0=keys, 1=values, 2=entries.
     /// </summary>
-    private void EmitMapCollectionIteratorType(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private void EmitMapCollectionIteratorType(
+        ModuleBuilder moduleBuilder,
+        EmittedCollectionKeysRuntime collectionKeys,
+        EmittedMapRuntime map
+    )
     {
         var typeBuilder = EmitTypeDefinitions.DefineType(
             moduleBuilder,
@@ -254,7 +258,7 @@ public partial class RuntimeEmitter
         var ctor = typeBuilder.DefineConstructor(MethodAttributes.Public,
             CallingConventions.Standard,
             [_types.DictionaryObjectObject, _types.ListOfObject, _types.Int32]);
-        runtime.MapCollectionIteratorCtor = ctor;
+        map.IteratorConstructor = ctor;
         var ctorIl = ctor.GetILGenerator();
         ctorIl.Emit(OpCodes.Ldarg_0);
         ctorIl.Emit(OpCodes.Call, _types.GetConstructor(_types.Object, Type.EmptyTypes)!);
@@ -363,7 +367,7 @@ public partial class RuntimeEmitter
 
         // keys(): denormalize the internal null sentinel.
         il.Emit(OpCodes.Ldloc, key);
-        il.Emit(OpCodes.Ldsfld, runtime.MapNullSentinel);
+        il.Emit(OpCodes.Ldsfld, collectionKeys.NullSentinel);
         var keyNotNullSentinel = il.DefineLabel();
         il.Emit(OpCodes.Bne_Un, keyNotNullSentinel);
         il.Emit(OpCodes.Ldnull);
@@ -384,7 +388,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, pair);
         il.Emit(OpCodes.Ldloc, pair);
         il.Emit(OpCodes.Ldloc, key);
-        il.Emit(OpCodes.Ldsfld, runtime.MapNullSentinel);
+        il.Emit(OpCodes.Ldsfld, collectionKeys.NullSentinel);
         var entryKeyNotNull = il.DefineLabel();
         var entryKeyReady = il.DefineLabel();
         il.Emit(OpCodes.Bne_Un, entryKeyNotNull);
@@ -430,7 +434,7 @@ public partial class RuntimeEmitter
     /// Emits a Set value iterator backed by the live set plus its initial
     /// insertion-order snapshot. Values deleted before visitation are skipped.
     /// </summary>
-    private void EmitSetCollectionIteratorType(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private void EmitSetCollectionIteratorType(ModuleBuilder moduleBuilder, EmittedSetRuntime set)
     {
         var typeBuilder = EmitTypeDefinitions.DefineType(
             moduleBuilder,
@@ -450,7 +454,7 @@ public partial class RuntimeEmitter
 
         var ctor = typeBuilder.DefineConstructor(MethodAttributes.Public,
             CallingConventions.Standard, [_types.HashSetOfObject, _types.ListOfObject]);
-        runtime.SetCollectionIteratorCtor = ctor;
+        set.IteratorConstructor = ctor;
         var ctorIl = ctor.GetILGenerator();
         ctorIl.Emit(OpCodes.Ldarg_0);
         ctorIl.Emit(OpCodes.Call, _types.GetConstructor(_types.Object, Type.EmptyTypes)!);
@@ -1397,7 +1401,7 @@ public partial class RuntimeEmitter
         // recognized as an array everywhere ($Array subclasses List<object?>). Gated on
         // UsesMap: no Map in the program ⇒ no Dictionary<object,object?> ⇒ dead arm.
         // Mirrors the IL in RuntimeEmitter.Maps.cs EmitMapEntries.
-        if (_features.UsesMap)
+        if (runtime.Map is not null)
         {
             var dictType = _types.DictionaryObjectObject;
             var kvpType = _types.MakeGenericType(_types.KeyValuePairOpen, _types.Object, _types.Object);
@@ -1445,7 +1449,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Call, _types.GetProperty(kvpType, "Key")!.GetGetMethod()!);
             il.Emit(OpCodes.Stloc, mapKeyLocal);
             il.Emit(OpCodes.Ldloc, mapKeyLocal);
-            il.Emit(OpCodes.Ldsfld, runtime.MapNullSentinel);
+            il.Emit(OpCodes.Ldsfld, runtime.CollectionKeys.NullSentinel);
             il.Emit(OpCodes.Bne_Un, mapKeyDone);
             il.Emit(OpCodes.Ldnull);
             il.Emit(OpCodes.Stloc, mapKeyLocal);
