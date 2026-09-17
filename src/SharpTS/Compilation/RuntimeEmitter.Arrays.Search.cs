@@ -2487,7 +2487,7 @@ public partial class RuntimeEmitter
             runtime.Operators,
             new ProxyHasCheckInputs(
                 runtime.Booleans,
-                runtime.InvokeMethodUnwrapped,
+                runtime.ReflectedMethods.InvokeUnwrapped,
                 runtime.ObjectDescriptors,
                 runtime.ObjectRead,
                 runtime.ObjectState

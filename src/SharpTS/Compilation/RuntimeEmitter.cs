@@ -591,7 +591,7 @@ public partial class RuntimeEmitter
 
         // Emit $MethodCallable type and constructor (Phase 1)
         // Must come before EmitRuntimeClass so GetFieldsProperty can wrap GetMember results
-        EmitMethodCallableTypeDefinition(moduleBuilder, runtime);
+        EmitMethodCallableTypeDefinition(moduleBuilder, runtime.ReflectedMethods);
 
         // Emit $TemplateStringsList class for tagged template literals
         // Must come before EmitRuntimeClass so InvokeTaggedTemplate can use the constructor
@@ -774,7 +774,8 @@ public partial class RuntimeEmitter
             EmitBoundSetMethodFinalize(runtime.RequireSet(), runtime.UndefinedInstance);
 
         // Finalize $MethodCallable with Invoke method (Phase 2)
-        EmitMethodCallableFinalize(runtime);
+        EmitMethodCallableFinalize(runtime.ReflectedMethods);
+        runtime.ReflectedMethods.CompleteEmission();
 
         // Net / Http / Tls / Dgram phase-1b/phase-2 finalize work — gated on
         // their own feature flags. UsesHttp ⇒ UsesNet, UsesTls ⇒ UsesNet.

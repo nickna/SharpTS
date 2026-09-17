@@ -330,6 +330,15 @@ carrier; the strict SyntaxError helper retains its existing CLR exception repres
 Exception wrapping follows supplied optional Promise metadata. Error-cause Proxy handling
 receives six explicit invocation/delegate handles through the shared reflection bridge.
 
+Required `ReflectedMethods` owns method lookup, the weak receiver/name cache,
+unwrapped reflection invocation and the staged `$MethodCallable` wrapper. The
+original cache field and static initialization stay in place. Callable type,
+constructor and Invoke shell remain available before the runtime helpers; late
+finalization emits Invoke and creates the type before completing the owner.
+Five helpers receive the owner, with explicit error metadata for unwrapping.
+Tests preserve overload selection, stable wrappers, cache isolation, exception
+identity, Invoke/Call fallback behavior and standalone crypto/event dispatch.
+
 Required `FunctionIntrospection` owns function-property lookup and constructor
 capability declarations. Both bodies are emitted at their original separate
 locations; completion follows constructor-capability emission. The two helpers

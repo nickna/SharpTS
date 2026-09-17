@@ -124,7 +124,7 @@ public partial class RuntimeEmitter
     private void EmitProxyMethodCallUnwrapped(
         ILGenerator il, EmittedRuntime runtime, Action emitLoadObj,
         string methodName, Action emitArgs) =>
-        EmitProxyMethodCallUnwrapped(il, runtime.InvokeMethodUnwrapped, emitLoadObj, methodName, emitArgs);
+        EmitProxyMethodCallUnwrapped(il, runtime.ReflectedMethods.InvokeUnwrapped, emitLoadObj, methodName, emitArgs);
 
     private void EmitProxyMethodCallUnwrapped(ILGenerator il, MethodInfo invokeMethodUnwrapped, Action emitLoadObj,
         string methodName, Action emitArgs)
@@ -600,7 +600,7 @@ public partial class RuntimeEmitter
                 runtime.ObjectState.IsExtensible,
                 runtime.Symbols.IsSymbol,
                 runtime.ObjectRead.Property,
-                runtime.InvokeMethodUnwrapped
+                runtime.ReflectedMethods.InvokeUnwrapped
             ),
             emitLoadObj
         );
@@ -649,7 +649,7 @@ public partial class RuntimeEmitter
         Action emitLoadKey)
     {
         EmitProxyGetOwnPropertyDescriptorCompiledCall(il,
-            new ProxyDescriptorCallInputs(runtime.InvokeMethodUnwrapped,
+            new ProxyDescriptorCallInputs(runtime.ReflectedMethods.InvokeUnwrapped,
                 runtime.ObjectDescriptors.GetOwnPropertyDescriptor, runtime.ObjectState.IsExtensible,
                 runtime.ObjectRead.Property), emitLoadObj, emitLoadKey);
     }

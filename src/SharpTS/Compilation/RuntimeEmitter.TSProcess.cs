@@ -1443,7 +1443,7 @@ public partial class RuntimeEmitter
 
             // pascal = ToPascalCase(name)
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Call, runtime.ToPascalCase);
+            il.Emit(OpCodes.Call, runtime.ReflectedMethods.ToPascalCase);
             il.Emit(OpCodes.Stloc, pascalLocal);
 
             // property?
@@ -1468,7 +1468,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Object, "GetType"));
             il.Emit(OpCodes.Ldloc, pascalLocal);
             il.Emit(OpCodes.Ldc_I4, (int)lookupFlags);
-            il.Emit(OpCodes.Call, runtime.SafeGetMethod);
+            il.Emit(OpCodes.Call, runtime.ReflectedMethods.FindMethod);
             il.Emit(OpCodes.Stloc, miLocal);
             il.Emit(OpCodes.Ldloc, miLocal);
             il.Emit(OpCodes.Brfalse, noMethod);
@@ -1496,7 +1496,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Object, "GetType"));
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Call, runtime.ToPascalCase);
+            il.Emit(OpCodes.Call, runtime.ReflectedMethods.ToPascalCase);
             il.Emit(OpCodes.Ldc_I4, (int)lookupFlags);
             il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetProperty", _types.String, typeof(BindingFlags)));
             il.Emit(OpCodes.Stloc, piLocal);
@@ -1538,7 +1538,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Brtrue, trueLabel);
 
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Call, runtime.ToPascalCase);
+            il.Emit(OpCodes.Call, runtime.ReflectedMethods.ToPascalCase);
             il.Emit(OpCodes.Stloc, pascalLocal);
 
             il.Emit(OpCodes.Ldarg_0);
@@ -1552,7 +1552,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Object, "GetType"));
             il.Emit(OpCodes.Ldloc, pascalLocal);
             il.Emit(OpCodes.Ldc_I4, (int)lookupFlags);
-            il.Emit(OpCodes.Call, runtime.SafeGetMethod);
+            il.Emit(OpCodes.Call, runtime.ReflectedMethods.FindMethod);
             il.Emit(OpCodes.Ldnull);
             il.Emit(OpCodes.Cgt_Un);
             il.Emit(OpCodes.Ret);

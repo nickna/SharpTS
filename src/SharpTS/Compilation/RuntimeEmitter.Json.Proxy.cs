@@ -7,12 +7,16 @@ public partial class RuntimeEmitter
 {
     private readonly record struct ProxyMaterializeForJsonInputs(MethodBuilder InvokeMethodUnwrapped);
 
-    private void EmitInvokeMethodUnwrapped(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitInvokeMethodUnwrapped(
+        TypeBuilder typeBuilder,
+        EmittedReflectedMethodRuntime reflectedMethods,
+        EmittedErrorRuntime errors
+    )
     {
         var method = typeBuilder.DefineMethod("InvokeMethodUnwrapped",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object, [_types.MethodBase, _types.Object, _types.ObjectArray]);
-        runtime.InvokeMethodUnwrapped = method;
+        reflectedMethods.InvokeUnwrapped = method;
         var il = method.GetILGenerator();
         var result = il.DeclareLocal(_types.Object);
         var invocationException = il.DeclareLocal(_types.TargetInvocationException);
@@ -81,8 +85,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, foreignThrowValue);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.PropertyInfo, "GetValue", _types.Object));
         il.Emit(OpCodes.Castclass, _types.String);
-        il.Emit(OpCodes.Newobj, runtime.Errors.TypeErrorConstructor);
-        il.Emit(OpCodes.Call, runtime.Errors.CreateException);
+        il.Emit(OpCodes.Newobj, errors.TypeErrorConstructor);
+        il.Emit(OpCodes.Call, errors.CreateException);
         il.Emit(OpCodes.Throw);
 
         il.MarkLabel(rethrowInnerException);
