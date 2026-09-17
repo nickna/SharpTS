@@ -5,15 +5,12 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
-    private FieldBuilder _finRegEntryHeldValueField = null!;
-    private FieldBuilder _finRegEntryQueueField = null!;
-    private FieldBuilder _finRegEntrySuppressedField = null!;
-
     /// <summary>
     /// Phase 1: Defines the $FinRegEntry type with fields, constructor, Suppress(), and Finalize().
     /// Must be called before EmitRuntimeClass.
     /// </summary>
-    private void EmitFinRegEntryTypeDefinition(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private void EmitFinRegEntryTypeDefinition(
+        ModuleBuilder moduleBuilder, EmittedFinalizationRegistryImplementation implementation)
     {
         var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$FinRegEntry",
@@ -22,9 +19,9 @@ public partial class RuntimeEmitter
         );
 
         // Fields
-        _finRegEntryHeldValueField = typeBuilder.DefineField("_heldValue", _types.Object, FieldAttributes.Private);
-        _finRegEntryQueueField = typeBuilder.DefineField("_queue", _types.ConcurrentQueueOfObject, FieldAttributes.Private);
-        _finRegEntrySuppressedField = typeBuilder.DefineField("_suppressed", _types.Boolean,
+        var heldValueField = typeBuilder.DefineField("_heldValue", _types.Object, FieldAttributes.Private);
+        var queueField = typeBuilder.DefineField("_queue", _types.ConcurrentQueueOfObject, FieldAttributes.Private);
+        var suppressedField = typeBuilder.DefineField("_suppressed", _types.Boolean,
             FieldAttributes.Private); // volatile semantics via Volatile.Read/Write in IL
 
         // Constructor: public $FinRegEntry(object heldValue, ConcurrentQueue<object?> queue)
@@ -33,7 +30,7 @@ public partial class RuntimeEmitter
             CallingConventions.Standard,
             [_types.Object, _types.ConcurrentQueueOfObject]
         );
-        runtime.FinRegEntryCtor = ctor;
+        implementation.EntryConstructor = ctor;
 
         var ctorIL = ctor.GetILGenerator();
         // base()
@@ -42,11 +39,11 @@ public partial class RuntimeEmitter
         // _heldValue = heldValue
         ctorIL.Emit(OpCodes.Ldarg_0);
         ctorIL.Emit(OpCodes.Ldarg_1);
-        ctorIL.Emit(OpCodes.Stfld, _finRegEntryHeldValueField);
+        ctorIL.Emit(OpCodes.Stfld, heldValueField);
         // _queue = queue
         ctorIL.Emit(OpCodes.Ldarg_0);
         ctorIL.Emit(OpCodes.Ldarg_2);
-        ctorIL.Emit(OpCodes.Stfld, _finRegEntryQueueField);
+        ctorIL.Emit(OpCodes.Stfld, queueField);
         ctorIL.Emit(OpCodes.Ret);
 
         // Method: public void Suppress()
@@ -56,12 +53,12 @@ public partial class RuntimeEmitter
             _types.Void,
             Type.EmptyTypes
         );
-        runtime.FinRegEntrySuppress = suppress;
+        implementation.SuppressEntry = suppress;
 
         var sil = suppress.GetILGenerator();
         // Volatile.Write(ref _suppressed, true)
         sil.Emit(OpCodes.Ldarg_0);
-        sil.Emit(OpCodes.Ldflda, _finRegEntrySuppressedField);
+        sil.Emit(OpCodes.Ldflda, suppressedField);
         sil.Emit(OpCodes.Ldc_I4_1);
         sil.Emit(OpCodes.Volatile);
         sil.Emit(OpCodes.Stind_I1);
@@ -82,7 +79,7 @@ public partial class RuntimeEmitter
 
         // Volatile.Read(ref _suppressed)
         fil.Emit(OpCodes.Ldarg_0);
-        fil.Emit(OpCodes.Ldflda, _finRegEntrySuppressedField);
+        fil.Emit(OpCodes.Ldflda, suppressedField);
         fil.Emit(OpCodes.Volatile);
         fil.Emit(OpCodes.Ldind_I1);
         var skipEnqueue = fil.DefineLabel();
@@ -90,9 +87,9 @@ public partial class RuntimeEmitter
 
         // _queue.Enqueue(_heldValue)
         fil.Emit(OpCodes.Ldarg_0);
-        fil.Emit(OpCodes.Ldfld, _finRegEntryQueueField);
+        fil.Emit(OpCodes.Ldfld, queueField);
         fil.Emit(OpCodes.Ldarg_0);
-        fil.Emit(OpCodes.Ldfld, _finRegEntryHeldValueField);
+        fil.Emit(OpCodes.Ldfld, heldValueField);
         var enqueueMethod = _types.GetMethod(_types.ConcurrentQueueOfObject, "Enqueue")!;
         fil.Emit(OpCodes.Callvirt, enqueueMethod);
 
@@ -110,30 +107,28 @@ public partial class RuntimeEmitter
         fil.Emit(OpCodes.Ret);
 
         // Finalize type
-        runtime.FinRegEntryType = typeBuilder.CreateType()!;
+        implementation.EntryType = typeBuilder.CreateType()!;
     }
 
-    private void EmitFinalizationRegistryMethods(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitFinalizationRegistryMethods(
+        TypeBuilder typeBuilder, EmittedFinalizationRegistryImplementation implementation,
+        FieldBuilder pokeTable, FieldInfo undefinedInstance)
     {
-        // Skip when the program doesn't construct a FinalizationRegistry — the
-        // Register/Unregister methods reference $FinRegEntry, which we also gate.
-        if (!_features.UsesFinalizationRegistry) return;
-
         // Note: _finRegPokeTable field is defined in EmitRuntimeClass before the static constructor
-        EmitCreateFinalizationRegistry(typeBuilder, runtime);
-        EmitFinalizationRegistryRegister(typeBuilder, runtime);
-        EmitFinalizationRegistryUnregister(typeBuilder, runtime);
+        EmitCreateFinalizationRegistry(typeBuilder, implementation);
+        EmitFinalizationRegistryRegister(typeBuilder, implementation, pokeTable, undefinedInstance);
+        EmitFinalizationRegistryUnregister(typeBuilder, implementation);
     }
 
     /// <summary>
     /// Emits static constructor initialization for _finRegPokeTable.
     /// Called from within the $Runtime static constructor emission.
     /// </summary>
-    internal void EmitFinRegPokeTableInit(ILGenerator il, EmittedRuntime runtime)
+    internal void EmitFinRegPokeTableInit(ILGenerator il, EmittedFinalizationRegistryRuntime finalizationRegistry)
     {
         // _finRegPokeTable = new ConditionalWeakTable<object, object>()
         il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ConditionalWeakTableObjectObject, Type.EmptyTypes)!);
-        il.Emit(OpCodes.Stsfld, runtime.FinRegPokeTableField);
+        il.Emit(OpCodes.Stsfld, finalizationRegistry.PokeTable);
     }
 
     /// <summary>
@@ -141,7 +136,8 @@ public partial class RuntimeEmitter
     /// Returns new object[] { callback, new ConcurrentQueue&lt;object?&gt;(), new List&lt;object?[]&gt;(), new object() }
     /// Pure IL, no reflection to SharpTS.dll.
     /// </summary>
-    private void EmitCreateFinalizationRegistry(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitCreateFinalizationRegistry(
+        TypeBuilder typeBuilder, EmittedFinalizationRegistryImplementation implementation)
     {
         var method = typeBuilder.DefineMethod(
             "CreateFinalizationRegistry",
@@ -149,7 +145,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object]
         );
-        runtime.CreateFinalizationRegistry = method;
+        implementation.Create = method;
 
         var il = method.GetILGenerator();
 
@@ -198,7 +194,9 @@ public partial class RuntimeEmitter
     /// Emits: public static void FinalizationRegistryRegister(object registry, object target, object heldValue, object token)
     /// Pure IL emission — creates $FinRegEntry, adds to ConditionalWeakTable, stores in entries list.
     /// </summary>
-    private void EmitFinalizationRegistryRegister(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitFinalizationRegistryRegister(
+        TypeBuilder typeBuilder, EmittedFinalizationRegistryImplementation implementation,
+        FieldBuilder pokeTable, FieldInfo undefinedInstance)
     {
         var method = typeBuilder.DefineMethod(
             "FinalizationRegistryRegister",
@@ -206,7 +204,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object, _types.Object, _types.Object, _types.Object]
         );
-        runtime.FinalizationRegistryRegister = method;
+        implementation.Register = method;
 
         var il = method.GetILGenerator();
         var returnLabel = il.DefineLabel();
@@ -280,14 +278,14 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, lockLocal);
 
         // var entry = new $FinRegEntry(heldValue, queue)
-        var entryLocal = il.DeclareLocal(runtime.FinRegEntryType);
+        var entryLocal = il.DeclareLocal(implementation.EntryType);
         il.Emit(OpCodes.Ldarg_2); // heldValue
         il.Emit(OpCodes.Ldloc, queueLocal);
-        il.Emit(OpCodes.Newobj, runtime.FinRegEntryCtor);
+        il.Emit(OpCodes.Newobj, implementation.EntryConstructor);
         il.Emit(OpCodes.Stloc, entryLocal);
 
         // _finRegPokeTable.AddOrUpdate(target, entry)
-        il.Emit(OpCodes.Ldsfld, runtime.FinRegPokeTableField);
+        il.Emit(OpCodes.Ldsfld, pokeTable);
         il.Emit(OpCodes.Ldarg_1); // target
         il.Emit(OpCodes.Ldloc, entryLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ConditionalWeakTableObjectObject, "AddOrUpdate")!);
@@ -337,7 +335,7 @@ public partial class RuntimeEmitter
         il.EndExceptionBlock();
 
         il.MarkLabel(returnLabel);
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, undefinedInstance);
         il.Emit(OpCodes.Ret);
     }
 
@@ -346,7 +344,8 @@ public partial class RuntimeEmitter
     /// Iterates entries backwards, suppresses matching entries, removes them, returns boxed bool.
     /// Pure IL emission.
     /// </summary>
-    private void EmitFinalizationRegistryUnregister(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitFinalizationRegistryUnregister(
+        TypeBuilder typeBuilder, EmittedFinalizationRegistryImplementation implementation)
     {
         var method = typeBuilder.DefineMethod(
             "FinalizationRegistryUnregister",
@@ -354,7 +353,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object, _types.Object]
         );
-        runtime.FinalizationRegistryUnregister = method;
+        implementation.Unregister = method;
 
         var il = method.GetILGenerator();
 
@@ -440,8 +439,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, entryArrLocal);
         il.Emit(OpCodes.Ldc_I4_3);
         il.Emit(OpCodes.Ldelem_Ref);
-        il.Emit(OpCodes.Castclass, runtime.FinRegEntryType);
-        il.Emit(OpCodes.Callvirt, runtime.FinRegEntrySuppress);
+        il.Emit(OpCodes.Castclass, implementation.EntryType);
+        il.Emit(OpCodes.Callvirt, implementation.SuppressEntry);
 
         // entries.RemoveAt(i)
         il.Emit(OpCodes.Ldloc, entriesLocal);

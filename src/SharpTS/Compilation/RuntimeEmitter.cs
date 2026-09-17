@@ -40,6 +40,14 @@ public partial class RuntimeEmitter
         if (_emitHosted)
             _features.UsesPromise = true;
         var runtime = new EmittedRuntime();
+        if (features.UsesWeakMap)
+            runtime.BeginWeakMapEmission();
+        if (features.UsesWeakSet)
+            runtime.BeginWeakSetEmission();
+        if (features.UsesWeakRef)
+            runtime.BeginWeakRefEmission();
+        if (features.UsesFinalizationRegistry)
+            runtime.FinalizationRegistry.BeginImplementationEmission();
         if (features.UsesMap)
             runtime.BeginMapEmission();
         if (features.UsesSet)
@@ -541,8 +549,8 @@ public partial class RuntimeEmitter
 
         // Emit $FinRegEntry type (finalizer helper for FinalizationRegistry)
         // Must come before EmitRuntimeClass so Register can use the constructor
-        if (features.UsesFinalizationRegistry)
-            EmitFinRegEntryTypeDefinition(moduleBuilder, runtime);
+        if (runtime.FinalizationRegistry.Implementation is { } finalizationRegistry)
+            EmitFinRegEntryTypeDefinition(moduleBuilder, finalizationRegistry);
 
         // FS stream/watcher types — gated on UsesFs. EmitFsModuleMethods is
         // also gated below in EmitRuntimeClass on the same flag, so dependent
@@ -748,6 +756,10 @@ public partial class RuntimeEmitter
         runtime.CollectionKeys.CompleteEmission();
         runtime.Map?.CompleteEmission();
         runtime.Set?.CompleteEmission();
+        runtime.WeakMap?.CompleteEmission();
+        runtime.WeakSet?.CompleteEmission();
+        runtime.WeakRef?.CompleteEmission();
+        runtime.FinalizationRegistry.CompleteEmission();
         runtime.BroadcastChannel?.CompleteEmission();
         runtime.EventEmitter.CompleteEmission();
         runtime.NodeStreams?.CompleteEmission();

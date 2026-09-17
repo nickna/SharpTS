@@ -54,7 +54,7 @@ public sealed class FinalizationRegistryEmitter : ITypeEmitterStrategy
                     il.Emit(OpCodes.Ldnull);
                 }
 
-                il.Emit(OpCodes.Call, ctx.Runtime!.FinalizationRegistryRegister);
+                il.Emit(OpCodes.Call, ctx.Runtime!.FinalizationRegistry.RequireImplementation().Register);
                 return true;
 
             case "unregister":
@@ -72,7 +72,7 @@ public sealed class FinalizationRegistryEmitter : ITypeEmitterStrategy
                     il.Emit(OpCodes.Ldnull);
                 }
 
-                il.Emit(OpCodes.Call, ctx.Runtime!.FinalizationRegistryUnregister);
+                il.Emit(OpCodes.Call, ctx.Runtime!.FinalizationRegistry.RequireImplementation().Unregister);
                 return true;
 
             default:

@@ -5,21 +5,21 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
-    private void EmitWeakRefMethods(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitWeakRefMethods(TypeBuilder typeBuilder, EmittedWeakRefRuntime weakRef)
     {
         // Shared primitive probe: RuntimeEmitter.WeakValidation.cs
-        runtime.ValidateWeakRefTarget = EmitWeakTargetValidator(typeBuilder, "ValidateWeakRefTarget",
+        weakRef.ValidateTarget = EmitWeakTargetValidator(typeBuilder, "ValidateWeakRefTarget",
             "Runtime Error: Invalid value used as weak reference target. WeakRef target must be an object");
 
-        EmitCreateWeakRef(typeBuilder, runtime);
-        EmitWeakRefDeref(typeBuilder, runtime);
+        EmitCreateWeakRef(typeBuilder, weakRef);
+        EmitWeakRefDeref(typeBuilder, weakRef);
     }
 
     /// <summary>
     /// Emits CreateWeakRef(object target) -> object (WeakReference&lt;object&gt;).
     /// Validates target is not a primitive, then creates a WeakReference.
     /// </summary>
-    private void EmitCreateWeakRef(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitCreateWeakRef(TypeBuilder typeBuilder, EmittedWeakRefRuntime weakRef)
     {
         var method = typeBuilder.DefineMethod(
             "CreateWeakRef",
@@ -27,7 +27,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object]
         );
-        runtime.CreateWeakRef = method;
+        weakRef.Create = method;
 
         var il = method.GetILGenerator();
 
@@ -39,7 +39,7 @@ public partial class RuntimeEmitter
 
         // ValidateWeakRefTarget(target)
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.ValidateWeakRefTarget);
+        il.Emit(OpCodes.Call, weakRef.ValidateTarget);
 
         // new WeakReference<object>(target)
         var weakRefType = _types.WeakReferenceObject;
@@ -57,7 +57,7 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits WeakRefDeref(object weakRef) -> object? (target or null).
     /// </summary>
-    private void EmitWeakRefDeref(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitWeakRefDeref(TypeBuilder typeBuilder, EmittedWeakRefRuntime weakRef)
     {
         var method = typeBuilder.DefineMethod(
             "WeakRefDeref",
@@ -65,7 +65,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object]
         );
-        runtime.WeakRefDeref = method;
+        weakRef.Dereference = method;
 
         var il = method.GetILGenerator();
         var weakRefType = _types.WeakReferenceObject;

@@ -156,12 +156,12 @@ public abstract partial class ExpressionEmitterBase
 
             // --- No-arg constructors ---
             case "WeakMap":
-                IL.Emit(OpCodes.Call, Ctx.Runtime!.CreateWeakMap);
+                IL.Emit(OpCodes.Call, Ctx.Runtime!.RequireWeakMap().Create);
                 SetStackUnknown();
                 return true;
 
             case "WeakSet":
-                IL.Emit(OpCodes.Call, Ctx.Runtime!.CreateWeakSet);
+                IL.Emit(OpCodes.Call, Ctx.Runtime!.RequireWeakSet().Create);
                 SetStackUnknown();
                 return true;
 
@@ -229,13 +229,13 @@ public abstract partial class ExpressionEmitterBase
             // --- Single boxed arg (null if missing) ---
             case "WeakRef":
                 EmitBoxedArgOrNull(arguments, 0);
-                IL.Emit(OpCodes.Call, Ctx.Runtime!.CreateWeakRef);
+                IL.Emit(OpCodes.Call, Ctx.Runtime!.RequireWeakRef().Create);
                 SetStackUnknown();
                 return true;
 
             case "FinalizationRegistry":
                 EmitBoxedArgOrNull(arguments, 0);
-                IL.Emit(OpCodes.Call, Ctx.Runtime!.CreateFinalizationRegistry);
+                IL.Emit(OpCodes.Call, Ctx.Runtime!.FinalizationRegistry.RequireImplementation().Create);
                 SetStackUnknown();
                 return true;
 

@@ -1308,7 +1308,7 @@ public partial class RuntimeEmitter
         // WeakMap and WeakSet share ConditionalWeakTable<object,object> as
         // their emitted representation. Their distinct method names resolve
         // the ambiguous receiver brand; has/delete have identical semantics.
-        if (_features.UsesWeakMap || _features.UsesWeakSet)
+        if (runtime.WeakMap is not null || runtime.WeakSet is not null)
         {
             var notWeakCollectionLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
@@ -1326,16 +1326,16 @@ public partial class RuntimeEmitter
                 il.MarkLabel(next);
             }
 
-            if (_features.UsesWeakMap)
+            if (runtime.WeakMap is not null)
             {
-                EmitWeakMethod("get", runtime.WeakMapGet, 1);
-                EmitWeakMethod("set", runtime.WeakMapSet, 2);
+                EmitWeakMethod("get", runtime.RequireWeakMap().Get, 1);
+                EmitWeakMethod("set", runtime.RequireWeakMap().Set, 2);
             }
-            if (_features.UsesWeakSet)
-                EmitWeakMethod("add", runtime.WeakSetAdd, 1);
+            if (runtime.WeakSet is not null)
+                EmitWeakMethod("add", runtime.RequireWeakSet().Add, 1);
 
-            var sharedHas = _features.UsesWeakMap ? runtime.WeakMapHas : runtime.WeakSetHas;
-            var sharedDelete = _features.UsesWeakMap ? runtime.WeakMapDelete : runtime.WeakSetDelete;
+            var sharedHas = runtime.WeakMap is not null ? runtime.RequireWeakMap().Has : runtime.RequireWeakSet().Has;
+            var sharedDelete = runtime.WeakMap is not null ? runtime.RequireWeakMap().Delete : runtime.RequireWeakSet().Delete;
             EmitWeakMethod("has", sharedHas, 1);
             EmitWeakMethod("delete", sharedDelete, 1);
             il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
@@ -1343,7 +1343,7 @@ public partial class RuntimeEmitter
             il.MarkLabel(notWeakCollectionLabel);
         }
 
-        if (_features.UsesWeakRef)
+        if (runtime.WeakRef is not null)
         {
             var notWeakRefLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
@@ -1354,7 +1354,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldstr, "deref");
             il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
             il.Emit(OpCodes.Brfalse, notDerefLabel);
-            EmitBoundRuntimeMethod(runtime.WeakRefDeref, "deref", 0);
+            EmitBoundRuntimeMethod(runtime.RequireWeakRef().Dereference, "deref", 0);
             il.MarkLabel(notDerefLabel);
             il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
             il.Emit(OpCodes.Ret);
@@ -1363,7 +1363,7 @@ public partial class RuntimeEmitter
 
         // FinalizationRegistry is an internal four-slot object[]. Intercept its
         // unique method names before the generic arguments-array branch.
-        if (_features.UsesFinalizationRegistry)
+        if (runtime.FinalizationRegistry.Implementation is not null)
         {
             var notFinalizationRegistryLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
@@ -1375,7 +1375,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldstr, "register");
             il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
             il.Emit(OpCodes.Brfalse, notRegisterLabel);
-            EmitBoundRuntimeMethod(runtime.FinalizationRegistryRegister, "register", 2);
+            EmitBoundRuntimeMethod(runtime.FinalizationRegistry.RequireImplementation().Register, "register", 2);
             il.MarkLabel(notRegisterLabel);
 
             var notUnregisterLabel = il.DefineLabel();
@@ -1383,7 +1383,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldstr, "unregister");
             il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
             il.Emit(OpCodes.Brfalse, notUnregisterLabel);
-            EmitBoundRuntimeMethod(runtime.FinalizationRegistryUnregister, "unregister", 1);
+            EmitBoundRuntimeMethod(runtime.FinalizationRegistry.RequireImplementation().Unregister, "unregister", 1);
             il.MarkLabel(notUnregisterLabel);
             il.Emit(OpCodes.Br, notFinalizationRegistryLabel);
             il.MarkLabel(notFinalizationRegistryLabel);

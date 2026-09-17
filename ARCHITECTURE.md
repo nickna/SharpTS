@@ -301,8 +301,21 @@ generic function helpers and early property dispatch; iterator constructors prec
 bodies; bound Invoke bodies and type finalization follow runtime-class emission. Completion
 validates every selected handle and freezes compiler metadata after these stages. Guest
 collections, iterator behavior and per-output comparer/sentinel identity remain mutable or
-isolated as before. Weak collections, general iteration and the full residual audit remain
-separate work under #1599.
+isolated as before. General iteration and the full residual audit remain separate work
+under #1599.
+
+WeakMap, WeakSet and WeakRef have independent optional components selected once by
+orchestration. Their six, five and three declarations include the validation helpers.
+`FinalizationRegistry` always owns the per-output poke table; its optional implementation
+owns the entry type, constructor, suppression method and three operations. Entry metadata
+is published before runtime-class emission, while operations are emitted before generic
+property dispatch. The three entry field builders are local to entry-type construction.
+Family helpers receive these owners and explicit poke-table/undefined dependencies; generic
+dispatch uses provided component availability, preserving WeakMap's shared has/delete
+preference when both weak collections are enabled. Completion validates required metadata
+before freezing the optional implementation, so failed completion remains repairable.
+Compiler metadata freezes after emission; guest weak tables, queues and registrations remain
+mutable and isolated per output. Finalizer IL, suppression and deployment rules are unchanged.
 
 Record storage uses the required `Records` component for the published compact-marker interface
 and thirteen layout registries. `Scalars` is selected by `UsesJSON || UsesCompactObjectRecords`

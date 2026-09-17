@@ -25,7 +25,7 @@ public sealed class WeakRefEmitter : ITypeEmitterStrategy
         emitter.EmitBoxIfNeeded(receiver);
 
         // Call WeakRefDeref(weakRef)
-        il.Emit(OpCodes.Call, ctx.Runtime!.WeakRefDeref);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireWeakRef().Dereference);
         return true;
     }
 

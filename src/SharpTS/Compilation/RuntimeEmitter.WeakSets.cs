@@ -6,19 +6,19 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
-    private void EmitWeakSetMethods(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitWeakSetMethods(TypeBuilder typeBuilder, EmittedWeakSetRuntime weakSet)
     {
         // Emit validation helper first (shared primitive probe: RuntimeEmitter.WeakValidation.cs)
-        runtime.ValidateWeakSetValue = EmitWeakTargetValidator(typeBuilder, "ValidateWeakSetValue",
+        weakSet.ValidateValue = EmitWeakTargetValidator(typeBuilder, "ValidateWeakSetValue",
             "Runtime Error: Invalid value used in weak set. WeakSet values must be objects");
 
-        EmitCreateWeakSet(typeBuilder, runtime);
-        EmitWeakSetAdd(typeBuilder, runtime);
-        EmitWeakSetHas(typeBuilder, runtime);
-        EmitWeakSetDelete(typeBuilder, runtime);
+        EmitCreateWeakSet(typeBuilder, weakSet);
+        EmitWeakSetAdd(typeBuilder, weakSet);
+        EmitWeakSetHas(typeBuilder, weakSet);
+        EmitWeakSetDelete(typeBuilder, weakSet);
     }
 
-    private void EmitCreateWeakSet(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitCreateWeakSet(TypeBuilder typeBuilder, EmittedWeakSetRuntime weakSet)
     {
         var method = typeBuilder.DefineMethod(
             "CreateWeakSet",
@@ -26,7 +26,7 @@ public partial class RuntimeEmitter
             _types.Object,
             _types.EmptyTypes
         );
-        runtime.CreateWeakSet = method;
+        weakSet.Create = method;
 
         var il = method.GetILGenerator();
 
@@ -36,7 +36,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitWeakSetAdd(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitWeakSetAdd(TypeBuilder typeBuilder, EmittedWeakSetRuntime weakSet)
     {
         var method = typeBuilder.DefineMethod(
             "WeakSetAdd",
@@ -44,7 +44,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object, _types.Object]
         );
-        runtime.WeakSetAdd = method;
+        weakSet.Add = method;
 
         var il = method.GetILGenerator();
         var cwtType = _types.ConditionalWeakTableObjectObject;
@@ -66,7 +66,7 @@ public partial class RuntimeEmitter
 
         // ValidateWeakSetValue(value);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.ValidateWeakSetValue);
+        il.Emit(OpCodes.Call, weakSet.ValidateValue);
 
         // table.AddOrUpdate(value, value); - Use value itself as sentinel (non-null)
         il.Emit(OpCodes.Ldarg_0);
@@ -81,7 +81,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitWeakSetHas(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitWeakSetHas(TypeBuilder typeBuilder, EmittedWeakSetRuntime weakSet)
     {
         var method = typeBuilder.DefineMethod(
             "WeakSetHas",
@@ -89,7 +89,7 @@ public partial class RuntimeEmitter
             _types.Boolean,
             [_types.Object, _types.Object]
         );
-        runtime.WeakSetHas = method;
+        weakSet.Has = method;
 
         var il = method.GetILGenerator();
         var cwtType = _types.ConditionalWeakTableObjectObject;
@@ -108,7 +108,7 @@ public partial class RuntimeEmitter
 
         // ValidateWeakSetValue(value);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.ValidateWeakSetValue);
+        il.Emit(OpCodes.Call, weakSet.ValidateValue);
 
         // return table.TryGetValue(value, out _);
         il.Emit(OpCodes.Ldarg_0);
@@ -123,7 +123,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitWeakSetDelete(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitWeakSetDelete(TypeBuilder typeBuilder, EmittedWeakSetRuntime weakSet)
     {
         var method = typeBuilder.DefineMethod(
             "WeakSetDelete",
@@ -131,7 +131,7 @@ public partial class RuntimeEmitter
             _types.Boolean,
             [_types.Object, _types.Object]
         );
-        runtime.WeakSetDelete = method;
+        weakSet.Delete = method;
 
         var il = method.GetILGenerator();
         var cwtType = _types.ConditionalWeakTableObjectObject;
@@ -149,7 +149,7 @@ public partial class RuntimeEmitter
 
         // ValidateWeakSetValue(value);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.ValidateWeakSetValue);
+        il.Emit(OpCodes.Call, weakSet.ValidateValue);
 
         // return table.Remove(value);
         il.Emit(OpCodes.Ldarg_0);

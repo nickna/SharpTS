@@ -25,18 +25,18 @@ public sealed class WeakSetEmitter : ITypeEmitterStrategy
         {
             case "add":
                 EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0);
-                il.Emit(OpCodes.Call, ctx.Runtime!.WeakSetAdd);
+                il.Emit(OpCodes.Call, ctx.Runtime!.RequireWeakSet().Add);
                 return true;
 
             case "has":
                 EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0);
-                il.Emit(OpCodes.Call, ctx.Runtime!.WeakSetHas);
+                il.Emit(OpCodes.Call, ctx.Runtime!.RequireWeakSet().Has);
                 il.Emit(OpCodes.Box, ctx.Types.Boolean);
                 return true;
 
             case "delete":
                 EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0);
-                il.Emit(OpCodes.Call, ctx.Runtime!.WeakSetDelete);
+                il.Emit(OpCodes.Call, ctx.Runtime!.RequireWeakSet().Delete);
                 il.Emit(OpCodes.Box, ctx.Types.Boolean);
                 return true;
 
