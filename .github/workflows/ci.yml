@@ -183,9 +183,9 @@ jobs:
       # LiveNetwork; the host-literal guardrail can't see package-name installs.
       # Run them on demand locally: dotnet test --filter "Category=npm"
       - name: Test core
-        run: dotnet test tests/SharpTS.Tests/SharpTS.Tests.csproj --no-build --configuration Release --verbosity normal --filter "Category!=LiveNetwork&Category!=LoadSensitive&Category!=npm"
-        # The 21,000+ case core suite can exceed fifteen minutes on hosted runners.
-        # Individual test deadlines and the overall job limit remain separate.
+        run: dotnet test tests/SharpTS.Tests/SharpTS.Tests.csproj --no-build --configuration Release --verbosity normal --filter "Category!=LiveNetwork&Category!=LoadSensitive&Category!=npm&FullyQualifiedName!~SharpTS.Tests.CompilerTests.StandaloneDllTests."
+        # The standalone job runs the complementary class on its own runner;
+        # its sequential child-process cases otherwise dominate this step.
         timeout-minutes: 20
 
       - name: Test GUI conformance
@@ -206,6 +206,31 @@ jobs:
       - name: Packaged SDK smoke test
         shell: pwsh
         run: ./scripts/test-packaged-sdk.ps1
+
+  standalone:
+    needs: workflow-policy
+    if: needs.workflow-policy.outputs.mode == 'full'
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2025]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Setup .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+      - name: Restore standalone tests
+        run: dotnet restore tests/SharpTS.Tests/SharpTS.Tests.csproj
+      - name: Build standalone tests
+        run: dotnet build tests/SharpTS.Tests/SharpTS.Tests.csproj --no-restore --configuration Release
+      - name: Test standalone
+        run: dotnet test tests/SharpTS.Tests/SharpTS.Tests.csproj --no-build --configuration Release --verbosity normal --filter "Category!=LiveNetwork&Category!=LoadSensitive&Category!=npm&FullyQualifiedName~SharpTS.Tests.CompilerTests.StandaloneDllTests."
+        timeout-minutes: 20
 
   typescript-conformance:
     needs: workflow-policy
@@ -557,7 +582,7 @@ jobs:
   gate:
     name: Gate
     if: always()
-    needs: [workflow-policy, build, typescript-conformance, dap-macos-smoke, aot-ratchet, native-aot-compile-smoke, lightweight-validation]
+    needs: [workflow-policy, build, typescript-conformance, standalone, dap-macos-smoke, aot-ratchet, native-aot-compile-smoke, lightweight-validation]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
@@ -572,7 +597,7 @@ jobs:
             throw "CI change classification or workflow policy did not pass."
           }
 
-          $heavy = @('build', 'typescript-conformance', 'dap-macos-smoke', 'aot-ratchet', 'native-aot-compile-smoke')
+          $heavy = @('build', 'typescript-conformance', 'standalone', 'dap-macos-smoke', 'aot-ratchet', 'native-aot-compile-smoke')
           if ($env:CHANGE_MODE -eq 'full') {
             $bad = @($heavy | Where-Object { $needs.PSObject.Properties[$_].Value.result -ne 'success' })
             if ($needs.'lightweight-validation'.result -ne 'skipped') {
