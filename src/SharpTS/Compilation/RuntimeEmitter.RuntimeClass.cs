@@ -820,9 +820,9 @@ public partial class RuntimeEmitter
         // binary64-rounding helper before its body is filled later below.
         EmitBigIntToNumber(typeBuilder, runtime.BigInt);
         EmitJsToInt32(typeBuilder, runtime.NumericCoercion);
-        EmitJsLessThan(typeBuilder, runtime);
-        EmitJsLessOrEqual(typeBuilder, runtime);
-        EmitUpdateNumeric(typeBuilder, runtime);
+        EmitJsLessThan(typeBuilder, runtime.Operators, runtime.NumericCoercion);
+        EmitJsLessOrEqual(typeBuilder, runtime.Operators, runtime.NumericCoercion);
+        EmitUpdateNumeric(typeBuilder, runtime.Operators, runtime.NumericCoercion);
         EmitIsTruthy(typeBuilder, runtime.Booleans, runtime.UndefinedType);
         // Promise resolving callbacks need these adoption tokens before their
         // bodies are filled by the resolve-value and capability emitters.
@@ -857,8 +857,37 @@ public partial class RuntimeEmitter
         // InvokeValue consumes the same types later in this method.
         if (_features.UsesPromise)
             EmitPromiseCallbackTypes(moduleBuilder, runtime);
-        EmitTypeOf(typeBuilder, runtime);
-        EmitAdd(typeBuilder, runtime);
+        EmitTypeOf(
+            typeBuilder,
+            runtime.Operators,
+            new TypeOfInputs(
+                runtime.ArrayOperations,
+                runtime.BoundAnyFunctionType,
+                runtime.BoundTSFunctionType,
+                runtime.FunctionApplyWrapperType,
+                runtime.FunctionBindWrapperType,
+                runtime.FunctionCallWrapperType,
+                runtime.IUnionTypeInterface,
+                runtime.IUnionTypeValueGetter,
+                runtime.Map,
+                runtime.Promise,
+                runtime.Set,
+                runtime.Symbols,
+                runtime.TSFunctionType,
+                runtime.UndefinedType
+            )
+        );
+        EmitAdd(
+            typeBuilder,
+            runtime.Operators,
+            new AddInputs(
+                runtime.BoxedPrimitives,
+                runtime.Errors,
+                runtime.NumericCoercion,
+                runtime.StringCoercion,
+                runtime.UndefinedType
+            )
+        );
         // Equals body needs runtime.StringCoercion.ToJsString for the ECMA-262 7.2.14
         // Object-vs-String branch (`new String(s) == s` requires
         // ToPrimitive(wrapper) → string, then string compare). ToJsString is
@@ -866,8 +895,8 @@ public partial class RuntimeEmitter
         // depend on this same chain). Declare the Equals MethodBuilder shell
         // here so any caller that references it before EmitEquals runs gets
         // a non-null token; body fills in after EmitToJsString below.
-        DeclareEquals(typeBuilder, runtime);
-        EmitStrictEquals(typeBuilder, runtime);
+        DeclareEquals(typeBuilder, runtime.Operators);
+        EmitStrictEquals(typeBuilder, runtime.Operators, runtime.UndefinedType);
         // Object methods - must come BEFORE iterator methods since GetProperty, InvokeMethodValue are needed
         EmitCreateObject(typeBuilder, runtime.ObjectConstruction);
         EmitGetArrayMethod(typeBuilder, runtime);
@@ -960,7 +989,20 @@ public partial class RuntimeEmitter
         // InstanceOf walks the prototype chain via GetFunctionMethod (for the
         // `F.prototype` fetch) — must be emitted AFTER GetFunctionMethod so
         // `runtime.GetFunctionMethod` is populated when InstanceOf references it.
-        EmitInstanceOf(typeBuilder, runtime);
+        EmitInstanceOf(
+            typeBuilder,
+            runtime.Operators,
+            new InstanceOfInputs(
+                runtime.Abort,
+                runtime.BoxedPrimitives,
+                runtime.GetFunctionMethod,
+                runtime.ObjectPrototypes,
+                runtime.Promise,
+                runtime.Symbols,
+                runtime.TSFunctionType,
+                runtime.UndefinedType
+            )
+        );
         EmitToPascalCase(typeBuilder, runtime);  // Must be emitted before GetFieldsProperty/SetFieldsProperty
         EmitSafeGetMethod(typeBuilder, runtime); // Must be emitted before GetFieldsProperty/SetFieldsProperty
         // ArrayConstructor (#61) must come before InvokeValue since InvokeValue's
@@ -1227,7 +1269,7 @@ public partial class RuntimeEmitter
         EmitToJsString(typeBuilder, runtime.StringCoercion, runtime.ArrayStorage, runtime.ArrayOperations,
             new StringCoercionInputs(
                 runtime.UndefinedType, runtime.Symbols.Type, runtime.GlobalThisSingletonField, runtime.GlobalThisGetProperty,
-                runtime.TypeOf, runtime.InvokeMethodValue, runtime.ArgumentsType, runtime.ObjectRead.Property, runtime.ObjectStorage.Type,
+                runtime.Operators.TypeOf, runtime.InvokeMethodValue, runtime.ArgumentsType, runtime.ObjectRead.Property, runtime.ObjectStorage.Type,
                 runtime.TSFunctionType, runtime.BoundAnyFunctionType, runtime.ObjectOwnProperties.HasOwnProperty, runtime.IHasFieldsInterface,
                 runtime.Symbols.GetStorage, runtime.Symbols.ToPrimitive, runtime.DescriptorStorage.DescriptorType,
                 runtime.DescriptorStorage.DescriptorGetter.GetGetMethod()!,
@@ -1244,7 +1286,16 @@ public partial class RuntimeEmitter
             runtime.Symbols.Type, runtime.ObjectStorage.Type, runtime.IHasFieldsInterface, runtime.Errors.CreateException, runtime.Errors.TypeErrorConstructor);
         // Equals body — must come after ToJsString since the Object-vs-String
         // branch calls runtime.StringCoercion.ToJsString.
-        EmitEquals(typeBuilder, runtime);
+        EmitEquals(
+            runtime.Operators,
+            new EqualsInputs(
+                runtime.BoxedPrimitives,
+                runtime.NumericCoercion,
+                runtime.ObjectStorage,
+                runtime.StringCoercion,
+                runtime.UndefinedType
+            )
+        );
         // ToNumber/ConvertToNumber bodies: emit AFTER GetProperty/InvokeMethodValue
         // so their ToPrimitive(value, "number") on Dictionary/$Object args can
         // call those helpers.
@@ -1254,7 +1305,7 @@ public partial class RuntimeEmitter
                 runtime.DescriptorStorage.DescriptorType, runtime.DescriptorStorage.DescriptorGetter.GetGetMethod()!,
                 runtime.DescriptorStorage.DescriptorSetter.GetGetMethod()!, runtime.DescriptorStorage.DescriptorValue.GetGetMethod()!,
                 runtime.Symbols.ToPrimitive, runtime.Symbols.GetStorage, runtime.ObjectRead.Property, runtime.InvokeMethodValue,
-                runtime.TypeOf, runtime.StringCoercion.ToJsString, runtime.BoxedPrimitives.UnwrapIfBoxed,
+                runtime.Operators.TypeOf, runtime.StringCoercion.ToJsString, runtime.BoxedPrimitives.UnwrapIfBoxed,
                 runtime.Errors.CreateException, runtime.Errors.TypeErrorConstructor));
         EmitConvertToNumber(typeBuilder, runtime.NumericCoercion,
             new ExplicitNumberInputs(runtime.UndefinedType, runtime.Symbols.Type, runtime.ObjectStorage.Type,
@@ -1376,7 +1427,29 @@ public partial class RuntimeEmitter
         // (Symbol helpers EmitGetSymbolDict + EmitIsSymbol now emitted earlier
         // — before EmitToJsString — so the @@toPrimitive lookup can use them.)
         // HasIn operator depends on IsSymbol and GetSymbolDict
-        EmitHasIn(typeBuilder, runtime);
+        EmitHasIn(
+            typeBuilder,
+            runtime.Operators,
+            new HasInInputs(
+                runtime.ArrayOperations,
+                runtime.ArrayStorage,
+                runtime.Booleans,
+                runtime.DescriptorStorage,
+                runtime.Errors,
+                runtime.IHasFieldsHasProperty,
+                runtime.IHasFieldsInterface,
+                runtime.InvokeMethodUnwrapped,
+                runtime.ObjectDescriptors,
+                runtime.ObjectPrototypes,
+                runtime.ObjectRead,
+                runtime.ObjectState,
+                runtime.ObjectStorage,
+                runtime.StringCoercion,
+                runtime.Symbols,
+                runtime.ToPascalCase,
+                runtime.UndefinedType
+            )
+        );
         // Array SetElement helpers - must come BEFORE GetIndex/SetIndex which reference them.
         // Previously only Typed variants were emitted here; the Object variant was deferred to
         // the Arrays section below. That left SetIndex's object-list branch unable to call it,
@@ -1492,7 +1565,7 @@ public partial class RuntimeEmitter
                 runtime.TSFunctionType
             )
         );
-        EmitStrictModeHelpers(typeBuilder, runtime);
+        EmitStrictModeHelpers(typeBuilder, runtime.Operators, runtime.Errors);
         // Basic iterator protocol methods - must come AFTER object methods (need GetProperty, InvokeMethodValue)
         EmitIteratorMethodsBasic(typeBuilder, runtime);
         // Emit $IteratorWrapper AFTER basic iterator methods (needs InvokeIteratorNext etc.)
@@ -2103,7 +2176,7 @@ public partial class RuntimeEmitter
                     runtime.StringCoercion.ToJsString,
                     runtime.ObjectPrototypes.GetPrototypeOf,
                     runtime.ObjectState.IsExtensible,
-                    runtime.HasIn
+                    runtime.Operators.HasIn
                 )
             );
             EmitReflectSingletonPopulate(runtime.Reflect.RequireNamespace(), GetBuiltinSingletonInputs(runtime));
@@ -2161,7 +2234,7 @@ public partial class RuntimeEmitter
         EmitToIntegerOrInfinityHelper(typeBuilder, runtime.NumericCoercion,
             new IntegerOrInfinityInputs(runtime.UndefinedType, runtime.ObjectStorage.Type, runtime.IHasFieldsInterface,
                 runtime.Symbols.ToPrimitive, runtime.Symbols.GetStorage, runtime.ObjectRead.Property, runtime.InvokeMethodValue,
-                runtime.TypeOf, runtime.BoxedPrimitives.IsOfType, runtime.Errors.CreateException, runtime.Errors.TypeErrorConstructor));
+                runtime.Operators.TypeOf, runtime.BoxedPrimitives.IsOfType, runtime.Errors.CreateException, runtime.Errors.TypeErrorConstructor));
         EmitArrayIncludes(typeBuilder, runtime);
         EmitArrayIncludesProto(typeBuilder, runtime);
         EmitArrayIncludesDouble(typeBuilder, runtime);
@@ -2340,7 +2413,7 @@ public partial class RuntimeEmitter
                     runtime.TSFunctionInvokeWithThis,
                     runtime.TSFunctionType,
                     runtime.Errors.TypeErrorConstructor,
-                    runtime.TypeOf,
+                    runtime.Operators.TypeOf,
                     runtime.UndefinedInstance,
                     runtime.UndefinedType
                 )
@@ -2478,7 +2551,7 @@ public partial class RuntimeEmitter
                     runtime.RegExps.Implementation?.Type,
                     runtime.Symbols.Type,
                     runtime.Errors.TypeErrorConstructor,
-                    runtime.TypeOf,
+                    runtime.Operators.TypeOf,
                     runtime.UndefinedInstance,
                     runtime.UndefinedType,
                     _features.JsonScalarRecordShapes,
@@ -2516,7 +2589,7 @@ public partial class RuntimeEmitter
                     runtime.RegExps.Implementation?.Type,
                     runtime.Symbols.Type,
                     runtime.Errors.TypeErrorConstructor,
-                    runtime.TypeOf,
+                    runtime.Operators.TypeOf,
                     runtime.UndefinedInstance,
                     runtime.UndefinedType
                 )
@@ -2551,7 +2624,7 @@ public partial class RuntimeEmitter
             EmitCreateBigInt(typeBuilder, bigInt,
                 new BigIntConversionInputs(
                     new BigIntPrimitiveInputs(runtime.ObjectRead.Index, runtime.ObjectRead.Property, runtime.InvokeMethodValue,
-                        runtime.Symbols.ToPrimitive, runtime.Symbols.Type, runtime.TypeOf, runtime.UndefinedType,
+                        runtime.Symbols.ToPrimitive, runtime.Symbols.Type, runtime.Operators.TypeOf, runtime.UndefinedType,
                         runtime.Errors.CreateException, runtime.Errors.TypeErrorConstructor),
                     runtime.ObjectStorage.Type, runtime.StringCoercion.ToJsString, runtime.Errors.RangeErrorConstructor, runtime.Errors.SyntaxErrorConstructor));
             EmitBigIntStaticMethods(typeBuilder, bigInt, runtime.NumericCoercion.ToNumber, runtime.Errors.CreateException, runtime.Errors.RangeErrorConstructor);
@@ -2629,7 +2702,7 @@ public partial class RuntimeEmitter
                 runtime.Symbols.ToPrimitive,
                 runtime.ObjectRead.Index,
                 runtime.UndefinedType,
-                runtime.TypeOf,
+                runtime.Operators.TypeOf,
                 runtime.InvokeMethodValue,
                 runtime.ObjectStorage.GetProperty,
                 runtime.ObjectOwnProperties.HasOwnProperty,
@@ -2655,7 +2728,7 @@ public partial class RuntimeEmitter
                 runtime.IHasFieldsInterface,
                 new ProxyHasInputs(
                     runtime.InvokeMethodUnwrapped,
-                    runtime.ProxyOrdinaryHas,
+                    runtime.Operators.ProxyOrdinaryHas,
                     runtime.ObjectDescriptors.GetOwnPropertyDescriptor,
                     runtime.ObjectState.IsExtensible,
                     runtime.ObjectRead.Property,
@@ -2741,7 +2814,7 @@ public partial class RuntimeEmitter
                     runtime.RuntimeType,
                     runtime.Symbols.Iterator,
                     runtime.Errors.TypeErrorConstructor,
-                    runtime.TypeOf,
+                    runtime.Operators.TypeOf,
                     runtime.UndefinedType
                 )
             );

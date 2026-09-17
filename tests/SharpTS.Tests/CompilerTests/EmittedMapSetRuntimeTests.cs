@@ -330,8 +330,12 @@ public sealed class EmittedMapSetRuntimeTests
         features.UsesSet = (flags & 2) != 0;
         var probe = module.DefineType("CollectionDispatch", TypeAttributes.Public);
         ObjectReadTestSupport.EmitProperty(emitter, probe, runtime);
-        foreach (string helper in new[] { "EmitTypeOf", "EmitInvokeValue" })
-            typeof(RuntimeEmitter).GetMethod(helper, InstanceMembers)!.Invoke(emitter, [probe, runtime]);
+        var typeOfHelper = typeof(RuntimeEmitter).GetMethod("EmitTypeOf", InstanceMembers)!;
+        var inputConstructor = Assert.Single(typeOfHelper.GetParameters()[2].ParameterType.GetConstructors());
+        var typeOfInputs = inputConstructor.Invoke(inputConstructor.GetParameters()
+            .Select(parameter => typeof(EmittedRuntime).GetProperty(parameter.Name!)!.GetValue(runtime)).ToArray());
+        typeOfHelper.Invoke(emitter, [probe, new EmittedOperatorRuntime(), typeOfInputs]);
+        typeof(RuntimeEmitter).GetMethod("EmitInvokeValue", InstanceMembers)!.Invoke(emitter, [probe, runtime]);
         probe.CreateType();
         using var bytes = new MemoryStream();
         builder.Save(bytes);

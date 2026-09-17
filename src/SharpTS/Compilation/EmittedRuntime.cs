@@ -17,6 +17,10 @@ namespace SharpTS.Compilation;
 /// <seealso cref="ILEmitter"/>
 public class EmittedRuntime
 {
+    /// <summary>Required operator declarations and equality body lifecycle for one compilation.</summary>
+    public EmittedOperatorRuntime Operators { get; } = new();
+
+
     /// <summary>Required named, computed, field and strict writing metadata for one compilation.</summary>
     public EmittedObjectWriteRuntime ObjectWrite { get; } = new();
 
@@ -247,18 +251,9 @@ public class EmittedRuntime
     /// <summary>Required numeric conversion declarations, including early RegExp coercion references.</summary>
     public EmittedNumericCoercionRuntime NumericCoercion { get; } = new();
 
-    public MethodBuilder JsLessThan { get; set; } = null!;
-    public MethodBuilder JsLessOrEqual { get; set; } = null!;
-    public MethodBuilder TypeOf { get; set; } = null!;
-    public MethodBuilder InstanceOf { get; set; } = null!;
-    public MethodBuilder HasIn { get; set; } = null!;
-    public MethodBuilder ProxyOrdinaryHas { get; set; } = null!;
 
 
     // Operator methods
-    public MethodBuilder Add { get; set; } = null!;
-    public new MethodBuilder Equals { get; set; } = null!;
-    public MethodBuilder StrictEquals { get; set; } = null!;
 
     // Runtime dispatcher for built-in static member access on stored Type
     // tokens (issue #63). Returns a $TSFunction wrapper matching what the
@@ -378,7 +373,6 @@ public class EmittedRuntime
     public FieldBuilder FunctionPrototypeField { get; set; } = null!;
     /// <summary>Idempotent populate for <see cref="FunctionPrototypeField"/>.</summary>
     public MethodBuilder FunctionPrototypePopulateMethod { get; set; } = null!;
-    public MethodBuilder WarnSloppyDeleteVariable { get; set; } = null!;
 
     // @DotNetType event subscription registry (compiled mode — see
     // RuntimeEmitter.EventSubscriptions.cs).
@@ -474,7 +468,6 @@ public class EmittedRuntime
     public EmittedSymbolRuntime Symbols { get; } = new();
 
     // Numeric increment/decrement.
-    public MethodBuilder UpdateNumeric { get; set; } = null!;
 
     /// <summary>Promise metadata, or null when Promise support is tree-shaken.</summary>
     public EmittedPromiseRuntime? Promise { get; private set; }

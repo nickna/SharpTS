@@ -50,7 +50,7 @@ public abstract partial class ExpressionEmitterBase
     /// </summary>
     protected void EmitCompoundOperation(TokenType opType)
     {
-        _helpers.EmitCompoundOperation(opType, Ctx.Runtime!.Add);
+        _helpers.EmitCompoundOperation(opType, Ctx.Runtime!.Operators.Add);
     }
 
     /// <summary>

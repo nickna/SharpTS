@@ -330,6 +330,16 @@ carrier; the strict SyntaxError helper retains its existing CLR exception repres
 Exception wrapping follows supplied optional Promise metadata. Error-cause Proxy handling
 receives six explicit invocation/delegate handles through the shared reflection bridge.
 
+Operators use required `Operators` ownership for eleven declarations, including
+numeric updates, comparison, classification, membership, addition and equality.
+Equality keeps its early declaration and validated late body. Completion checks
+every declaration and rejects later metadata writes. Thirteen existing helpers
+receive scoped owners and exact dependencies; Promise classification follows
+supplied optional metadata. The whole-holder Proxy membership adapter is removed
+while its existing scoped implementation is preserved. Comparison helpers retain
+the absent-runtime fallback and require declared operators when a runtime is
+supplied. Declaration order, guest semantics and deployment remain unchanged.
+
 Named, computed, field and strict writes use required `ObjectWrite` ownership
 for six declarations. Property keeps its early declaration and validated late
 body; completion checks every handle and rejects subsequent metadata writes.

@@ -5,6 +5,14 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
+    private readonly record struct ProxyHasCheckInputs(
+        EmittedBooleanRuntime Booleans,
+        MethodBuilder InvokeMethodUnwrapped,
+        EmittedObjectDescriptorRuntime ObjectDescriptors,
+        EmittedObjectReadRuntime ObjectRead,
+        EmittedObjectStateRuntime ObjectState
+    );
+
     private readonly record struct ProxySetPropertyCheckInputs(
         MethodBuilder InvokeMethodUnwrapped,
         EmittedObjectDescriptorRuntime ObjectDescriptors,
@@ -303,9 +311,16 @@ public partial class RuntimeEmitter
     /// Emits a proxy-aware has check: checks if obj is a proxy and calls TrapHas(key, null).
     /// Returns bool result.
     /// </summary>
-    internal void EmitProxyHasCheck(ILGenerator il, Action emitLoadObj, Action emitLoadKey, Label notProxyLabel, EmittedRuntime runtime)
+    private void EmitProxyHasCheck(
+        ILGenerator il,
+        Action emitLoadObj,
+        Action emitLoadKey,
+        Label notProxyLabel,
+        EmittedOperatorRuntime operators,
+        ProxyHasCheckInputs inputs
+    )
     {
-        EmitProxyHasResult(il, emitLoadObj, emitLoadKey, notProxyLabel, runtime);
+        EmitProxyHasResult(il, emitLoadObj, emitLoadKey, notProxyLabel, new ProxyHasInputs(inputs.InvokeMethodUnwrapped, operators.ProxyOrdinaryHas, inputs.ObjectDescriptors.GetOwnPropertyDescriptor, inputs.ObjectState.IsExtensible, inputs.ObjectRead.Property, inputs.Booleans.IsTruthy));
         il.Emit(OpCodes.Ret);
     }
 
@@ -372,13 +387,7 @@ public partial class RuntimeEmitter
     /// Emits the Proxy [[HasProperty]] trap and leaves its boolean result on
     /// the stack. Non-Proxy receivers branch to <paramref name="notProxyLabel"/>.
     /// </summary>
-    private void EmitProxyHasResult(ILGenerator il, Action emitLoadObj, Action emitLoadKey, Label notProxyLabel, EmittedRuntime runtime)
-    {
-        EmitProxyHasResult(il, emitLoadObj, emitLoadKey, notProxyLabel,
-            new ProxyHasInputs(runtime.InvokeMethodUnwrapped, runtime.ProxyOrdinaryHas,
-                runtime.ObjectDescriptors.GetOwnPropertyDescriptor, runtime.ObjectState.IsExtensible,
-                runtime.ObjectRead.Property, runtime.Booleans.IsTruthy));
-    }
+
 
     private void EmitProxyHasResult(ILGenerator il, Action emitLoadObj, Action emitLoadKey, Label notProxyLabel, ProxyHasInputs inputs)
     {

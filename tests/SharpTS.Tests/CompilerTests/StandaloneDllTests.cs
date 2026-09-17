@@ -3708,6 +3708,335 @@ public class StandaloneDllTests
             verifyStandardError: error => Assert.Empty(error)));
     }
 
+    public static IEnumerable<object[]> OperatorMetadataPrograms =>
+    [
+        new object[]
+        {
+            "minimal",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "console.log(1);" },
+            "1\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "updates",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let n:any=\"4\";console.log(n++,n,++n,n--,--n);let b:any=4n;console.log(b++,b,++b,b--,--b);" },
+            "4 5 6 6 4\n4n 5n 6n 6n 4n\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "update_order",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let count=0;const o:any={x:\"2\"};function key(){count++;return \"x\";}console.log(o[key()]++,o.x,count);" },
+            "2 3 1\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "relational",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const a:any=\"10\";const b:any=\"2\";console.log(a<b,a<=b,a>b,a>=b);console.log(a<2,a<=10,2>a,10>=a);" },
+            "true true false false\nfalse true false true\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "unordered",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const n:any=NaN;console.log(n<1,n<=1,n>1,n>=1,n==n,n===n);" },
+            "false false false false false false\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "addition",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const a:any=2;const b:any=\"3\";console.log(a+3,a+b,b+a,2n+3n);" },
+            "5 23 32 5n\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "mixed_addition",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const a:any=2n;try{console.log(a+1);}catch(e:any){console.log(e instanceof TypeError);}" },
+            "true\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "addition_hooks",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let trace=\"\";const a:any={valueOf(){trace+=\"a\";return 2;}};const b:any={valueOf(){trace+=\"b\";return 3;}};console.log(a+b,trace);" },
+            "5 ab\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "nullish",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const n:any=null;const u:any=undefined;console.log(n==u,n===u,n==0,u==false);" },
+            "true false false false\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "identity",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let count=0;const a:any={valueOf(){count++;return 1;}};const b:any={};console.log(a==a,a==b,a==null,a===a,count);" },
+            "true false false true 0\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "boxed_equality",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const s:any=new String(\"hello\");const n:any=new Number(2);console.log(s==\"hello\",n==2,s==s,s===s);" },
+            "true true true true\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "typeof_primitives",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "console.log(typeof null,typeof undefined,typeof true,typeof 1,typeof \"s\",typeof 1n,typeof Symbol(\"s\"));" },
+            "object undefined boolean number string bigint symbol\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "typeof_callables",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "function f(){}const g:any=f;console.log(typeof g,typeof g.bind(null),typeof g.call,typeof g.apply,typeof g.bind);" },
+            "function function function function function\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "typeof_collections",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "console.log(typeof [],typeof new Map(),typeof new Set(),typeof /x/,typeof new Date(0));" },
+            "object object object object object\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "promise_callbacks",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "new Promise((resolve:any,reject:any)=>{console.log(typeof resolve,typeof reject);resolve(1);});" },
+            "function function\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "instance_classes",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "class A{}class B extends A{}const b:any=new B();console.log(b instanceof B,b instanceof A,b instanceof Object);" },
+            "true true true\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "instance_functions",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "function A(){}function B(){}const a:any=new (A as any)();console.log(a instanceof A,a instanceof B,a instanceof Object);" },
+            "true false true\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "instance_primitives",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const n:any=2;const s:any=Symbol(\"s\");console.log(n instanceof Object,s instanceof Object,new Number(2) instanceof Number,Object(s) instanceof Symbol);" },
+            "false false true true\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "instance_promise",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const p:any=Promise.resolve(1);console.log(p instanceof Promise,p instanceof Object);" },
+            "true true\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "membership",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const p:any={x:1};const o:any=Object.create(p);o.y=2;console.log(\"x\" in o,\"y\" in o,\"z\" in o);" },
+            "true true false\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "membership_symbol",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const s=Symbol(\"s\");const o:any={[s]:1};console.log(s in o,Symbol(\"s\") in o);" },
+            "true false\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "membership_array",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const a:any=[1,,3];console.log(0 in a,1 in a,2 in a,\"length\" in a);" },
+            "true false true true\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "membership_invalid",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "for(const x of [null,undefined,1,\"x\",true]){try{console.log(\"x\" in (x as any));}catch(e:any){console.log(e instanceof TypeError);}}" },
+            "true\ntrue\ntrue\ntrue\ntrue\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "proxy_has",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let count=0;const p:any=new Proxy({x:1},{has(t:any,k:any){count++;return Reflect.has(t,k);}});console.log(\"x\" in p,\"y\" in p,count);" },
+            "true false 2\n",
+            false,
+            false
+        },
+        new object[]
+        {
+            "proxy_ordinary",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const p:any=new Proxy({x:1},{});console.log(\"x\" in p,\"y\" in p);" },
+            "true false\n",
+            false,
+            false
+        },
+        new object[]
+        {
+            "proxy_invariant",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const t:any={};Object.defineProperty(t,\"x\",{value:1,configurable:false});const p:any=new Proxy(t,{has(){return false;}});try{console.log(\"x\" in p);}catch(e:any){console.log(e instanceof TypeError);}" },
+            "true\n",
+            false,
+            false
+        },
+        new object[]
+        {
+            "generator",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "function* values(){const a:any=\"10\";const b:any=\"2\";yield a<b;yield a<=b;yield a>b;yield a>=b;yield typeof a;yield a+2;}console.log([...values()].join(\",\"));" },
+            "true,true,false,false,string,102\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "async",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "async function run(){const a:any=await Promise.resolve(\"10\");const b:any=\"2\";console.log(a<b,a<=b,a>b,a>=b,typeof a,a+2);}run();" },
+            "true true false false string 102\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "hosted_operators",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "export function inspect(a:any,b:any){return [a+b,a<b,a<=b,a==b,a===b,typeof a];}" },
+            "",
+            true,
+            true
+        },
+        new object[]
+        {
+            "hosted_minimal",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "export const value=1;" },
+            "",
+            true,
+            true
+        },
+    ];
+
+    [Theory]
+    [MemberData(nameof(OperatorMetadataPrograms))]
+    public void Isolated_OperatorMetadata_PreservesOperatorsAndDeployment(
+        string name, string entry, string[] paths, string[] sources, string expected, bool hosted, bool standalone)
+    {
+        using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        for (int i = 0; i < paths.Length; i++) tempDir.CreateFile(paths[i], sources[i]);
+        var sourcePath = tempDir.GetPath(entry);
+        var dllPath = tempDir.GetPath($"operators-metadata_{name}.dll");
+        var deployment = standalone ? " --standalone" : "";
+        var hosting = hosted ? " --target dll --hosted" : "";
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --noLib --compile \"{sourcePath}\" -o \"{dllPath}\" --verify{deployment}{hosting}", tempDir.Path);
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        var references = GetAssemblyReferences(dllPath);
+        Assert.DoesNotContain("SharpTS", references);
+        Assert.Equal(hosted, references.Contains("SharpTS.Hosting.Abstractions"));
+        Assert.Equal(!standalone, File.Exists(tempDir.GetPath("SharpTS.dll")));
+        if (!hosted)
+            Assert.Equal(expected, ExecuteCompiledDllIsolated(dllPath, timeoutMs: 30000,
+                verifyStandardError: error => Assert.Empty(error)));
+    }
+
+
     public static IEnumerable<object[]> ObjectWriteMetadataPrograms =>
     [
         new object[]

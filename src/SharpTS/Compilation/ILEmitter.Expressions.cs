@@ -1207,7 +1207,7 @@ public partial class ILEmitter
                     else
                     {
                         IL.Emit(OpCodes.Ldstr, v.Name.Lexeme);
-                        EmitCallUnknown(_ctx.Runtime!.WarnSloppyDeleteVariable);
+                        EmitCallUnknown(_ctx.Runtime!.Operators.WarnSloppyDeleteVariable);
                     }
                 }
                 SetStackType(StackType.Boolean);

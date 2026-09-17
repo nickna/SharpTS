@@ -8,18 +8,86 @@ namespace SharpTS.Compilation;
 // operator helpers: relational (<, <=), typeof, instanceof, in, +, ==, ===.
 public partial class RuntimeEmitter
 {
+    private readonly record struct TypeOfInputs(
+        EmittedArrayOperationsRuntime ArrayOperations,
+        TypeBuilder BoundAnyFunctionType,
+        TypeBuilder BoundTSFunctionType,
+        TypeBuilder FunctionApplyWrapperType,
+        TypeBuilder FunctionBindWrapperType,
+        TypeBuilder FunctionCallWrapperType,
+        Type IUnionTypeInterface,
+        MethodInfo IUnionTypeValueGetter,
+        EmittedMapRuntime? Map,
+        EmittedPromiseRuntime? Promise,
+        EmittedSetRuntime? Set,
+        EmittedSymbolRuntime Symbols,
+        TypeBuilder TSFunctionType,
+        Type UndefinedType
+    );
+
+    private readonly record struct InstanceOfInputs(
+        EmittedAbortRuntime? Abort,
+        EmittedBoxedPrimitiveRuntime BoxedPrimitives,
+        MethodBuilder GetFunctionMethod,
+        EmittedObjectPrototypeRuntime ObjectPrototypes,
+        EmittedPromiseRuntime? Promise,
+        EmittedSymbolRuntime Symbols,
+        TypeBuilder TSFunctionType,
+        Type UndefinedType
+    );
+
+    private readonly record struct HasInInputs(
+        EmittedArrayOperationsRuntime ArrayOperations,
+        EmittedArrayStorageRuntime ArrayStorage,
+        EmittedBooleanRuntime Booleans,
+        EmittedDescriptorStorageRuntime DescriptorStorage,
+        EmittedErrorRuntime Errors,
+        MethodInfo IHasFieldsHasProperty,
+        Type IHasFieldsInterface,
+        MethodBuilder InvokeMethodUnwrapped,
+        EmittedObjectDescriptorRuntime ObjectDescriptors,
+        EmittedObjectPrototypeRuntime ObjectPrototypes,
+        EmittedObjectReadRuntime ObjectRead,
+        EmittedObjectStateRuntime ObjectState,
+        EmittedObjectStorageRuntime ObjectStorage,
+        EmittedStringCoercionRuntime StringCoercion,
+        EmittedSymbolRuntime Symbols,
+        MethodBuilder ToPascalCase,
+        Type UndefinedType
+    );
+
+    private readonly record struct AddInputs(
+        EmittedBoxedPrimitiveRuntime BoxedPrimitives,
+        EmittedErrorRuntime Errors,
+        EmittedNumericCoercionRuntime NumericCoercion,
+        EmittedStringCoercionRuntime StringCoercion,
+        Type UndefinedType
+    );
+
+    private readonly record struct EqualsInputs(
+        EmittedBoxedPrimitiveRuntime BoxedPrimitives,
+        EmittedNumericCoercionRuntime NumericCoercion,
+        EmittedObjectStorageRuntime ObjectStorage,
+        EmittedStringCoercionRuntime StringCoercion,
+        Type UndefinedType
+    );
+
     /// <summary>
     /// ToNumeric update helper used by ++/-- on object-typed storage. BigInt
     /// remains BigInt; all other values follow ToNumber and return a Number.
     /// </summary>
-    private void EmitUpdateNumeric(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitUpdateNumeric(
+        TypeBuilder typeBuilder,
+        EmittedOperatorRuntime operators,
+        EmittedNumericCoercionRuntime numericCoercion
+    )
     {
         var method = typeBuilder.DefineMethod(
             "UpdateNumeric",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.Object, _types.Boolean]);
-        runtime.UpdateNumeric = method;
+        operators.UpdateNumeric = method;
         var il = method.GetILGenerator();
         var numberPath = il.DefineLabel();
         var subtractBigInt = il.DefineLabel();
@@ -45,7 +113,7 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(numberPath);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.NumericCoercion.ToNumber);
+        il.Emit(OpCodes.Call, numericCoercion.ToNumber);
         il.Emit(OpCodes.Ldc_R8, 1.0);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Brfalse, subtractNumber);
@@ -65,14 +133,18 @@ public partial class RuntimeEmitter
     /// Otherwise both are coerced via ToNumber and numerically compared
     /// (NaN on either side yields false).
     /// </summary>
-    private void EmitJsLessThan(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitJsLessThan(
+        TypeBuilder typeBuilder,
+        EmittedOperatorRuntime operators,
+        EmittedNumericCoercionRuntime numericCoercion
+    )
     {
         var method = typeBuilder.DefineMethod(
             "JsLessThan",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Boolean,
             [_types.Object, _types.Object]);
-        runtime.JsLessThan = method;
+        operators.LessThan = method;
 
         var il = method.GetILGenerator();
 
@@ -245,10 +317,10 @@ public partial class RuntimeEmitter
         var aLocal = il.DeclareLocal(_types.Double);
         var bLocal = il.DeclareLocal(_types.Double);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.NumericCoercion.ToNumber);
+        il.Emit(OpCodes.Call, numericCoercion.ToNumber);
         il.Emit(OpCodes.Stloc, aLocal);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.NumericCoercion.ToNumber);
+        il.Emit(OpCodes.Call, numericCoercion.ToNumber);
         il.Emit(OpCodes.Stloc, bLocal);
         // NaN check: a == a, b == b
         var notNaN = il.DefineLabel();
@@ -277,14 +349,18 @@ public partial class RuntimeEmitter
     /// AND neither operand is NaN". Implemented as !JsLessThan(y, x) provided
     /// neither is NaN; we replicate the helper inline to avoid double ToNumber.
     /// </summary>
-    private void EmitJsLessOrEqual(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitJsLessOrEqual(
+        TypeBuilder typeBuilder,
+        EmittedOperatorRuntime operators,
+        EmittedNumericCoercionRuntime numericCoercion
+    )
     {
         var method = typeBuilder.DefineMethod(
             "JsLessOrEqual",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Boolean,
             [_types.Object, _types.Object]);
-        runtime.JsLessOrEqual = method;
+        operators.LessThanOrEqual = method;
 
         var il = method.GetILGenerator();
 
@@ -312,10 +388,10 @@ public partial class RuntimeEmitter
         var aLocal = il.DeclareLocal(_types.Double);
         var bLocal = il.DeclareLocal(_types.Double);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.NumericCoercion.ToNumber);
+        il.Emit(OpCodes.Call, numericCoercion.ToNumber);
         il.Emit(OpCodes.Stloc, aLocal);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.NumericCoercion.ToNumber);
+        il.Emit(OpCodes.Call, numericCoercion.ToNumber);
         il.Emit(OpCodes.Stloc, bLocal);
         var falseLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, aLocal);
@@ -338,7 +414,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitTypeOf(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTypeOf(TypeBuilder typeBuilder, EmittedOperatorRuntime operators, TypeOfInputs inputs)
     {
         var method = typeBuilder.DefineMethod(
             "TypeOf",
@@ -346,7 +422,7 @@ public partial class RuntimeEmitter
             _types.String,
             [_types.Object]
         );
-        runtime.TypeOf = method;
+        operators.TypeOf = method;
 
         var il = method.GetILGenerator();
         var nullLabel = il.DefineLabel();
@@ -364,24 +440,24 @@ public partial class RuntimeEmitter
 
         // undefined => "undefined"
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
         il.Emit(OpCodes.Brtrue, undefinedLabel);
 
         // Check for union types using $IUnionType marker interface
         // If value implements $IUnionType, unwrap via Value property and recurse
         var notUnionLabel = il.DefineLabel();
-        var unionLocal = il.DeclareLocal(runtime.IUnionTypeInterface);
+        var unionLocal = il.DeclareLocal(inputs.IUnionTypeInterface);
 
         // Check: if (value is $IUnionType union)
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.IUnionTypeInterface);
+        il.Emit(OpCodes.Isinst, inputs.IUnionTypeInterface);
         il.Emit(OpCodes.Stloc, unionLocal);
         il.Emit(OpCodes.Ldloc, unionLocal);
         il.Emit(OpCodes.Brfalse, notUnionLabel);
 
         // Get underlying value via interface: union.Value
         il.Emit(OpCodes.Ldloc, unionLocal);
-        il.Emit(OpCodes.Callvirt, runtime.IUnionTypeValueGetter);
+        il.Emit(OpCodes.Callvirt, inputs.IUnionTypeValueGetter);
 
         // return TypeOf(underlyingValue) - recursive call
         il.Emit(OpCodes.Call, method);  // Recursive call to self
@@ -406,42 +482,42 @@ public partial class RuntimeEmitter
 
         // TSSymbol => "symbol"
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.Symbols.Type);
+        il.Emit(OpCodes.Isinst, inputs.Symbols.Type);
         il.Emit(OpCodes.Brtrue, symbolLabel);
 
         // TSFunction => "function"
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Isinst, inputs.TSFunctionType);
         il.Emit(OpCodes.Brtrue, functionLabel);
 
         // $BoundTSFunction => "function" (returned by Function.prototype.bind
         // and similar paths; without this, `typeof fn.bind(x) === "object"`).
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.BoundTSFunctionType);
+        il.Emit(OpCodes.Isinst, inputs.BoundTSFunctionType);
         il.Emit(OpCodes.Brtrue, functionLabel);
 
         // $FunctionBindWrapper / $FunctionCallWrapper / $FunctionApplyWrapper
         // => "function". These wrap non-$TSFunction targets for late-bound
         // dispatch and need to be callable from JS land.
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.FunctionBindWrapperType);
+        il.Emit(OpCodes.Isinst, inputs.FunctionBindWrapperType);
         il.Emit(OpCodes.Brtrue, functionLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.FunctionCallWrapperType);
+        il.Emit(OpCodes.Isinst, inputs.FunctionCallWrapperType);
         il.Emit(OpCodes.Brtrue, functionLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.FunctionApplyWrapperType);
+        il.Emit(OpCodes.Isinst, inputs.FunctionApplyWrapperType);
         il.Emit(OpCodes.Brtrue, functionLabel);
 
-        if (_features.UsesPromise)
+        if (inputs.Promise is not null)
         {
             // Promise resolving functions are callable built-ins even though
             // their optimized CLR representation is not a $TSFunction/delegate.
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.RequirePromise().ResolveCallbackType);
+            il.Emit(OpCodes.Isinst, inputs.Promise!.ResolveCallbackType);
             il.Emit(OpCodes.Brtrue, functionLabel);
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.RequirePromise().RejectCallbackType);
+            il.Emit(OpCodes.Isinst, inputs.Promise!.RejectCallbackType);
             il.Emit(OpCodes.Brtrue, functionLabel);
         }
 
@@ -455,25 +531,25 @@ public partial class RuntimeEmitter
         // for dynamic property access on arrays/maps/sets (duck typing across module boundaries)
         // and by `.bind` on non-$TSFunction targets.
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.ArrayOperations.BoundMethodType);
+        il.Emit(OpCodes.Isinst, inputs.ArrayOperations.BoundMethodType);
         il.Emit(OpCodes.Brtrue, functionLabel);
 
-        if (runtime.Map is not null)
+        if (inputs.Map is not null)
         {
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.RequireMap().BoundMethodType);
+            il.Emit(OpCodes.Isinst, inputs.Map!.BoundMethodType);
             il.Emit(OpCodes.Brtrue, functionLabel);
         }
 
-        if (runtime.Set is not null)
+        if (inputs.Set is not null)
         {
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.RequireSet().BoundMethodType);
+            il.Emit(OpCodes.Isinst, inputs.Set!.BoundMethodType);
             il.Emit(OpCodes.Brtrue, functionLabel);
         }
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.BoundAnyFunctionType);
+        il.Emit(OpCodes.Isinst, inputs.BoundAnyFunctionType);
         il.Emit(OpCodes.Brtrue, functionLabel);
 
         // System.Type => "function"
@@ -557,7 +633,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitInstanceOf(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitInstanceOf(TypeBuilder typeBuilder, EmittedOperatorRuntime operators, InstanceOfInputs inputs)
     {
         var method = typeBuilder.DefineMethod(
             "InstanceOf",
@@ -565,7 +641,7 @@ public partial class RuntimeEmitter
             _types.Boolean,
             [_types.Object, _types.Object]
         );
-        runtime.InstanceOf = method;
+        operators.InstanceOf = method;
 
         var il = method.GetILGenerator();
         var falseLabel = il.DefineLabel();
@@ -588,11 +664,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
         il.Emit(OpCodes.Brfalse, notDictRhsLabel);
 
-        if (runtime.Abort is not null)
+        if (inputs.Abort is not null)
         {
             var lhsDictLocal = il.DeclareLocal(_types.DictionaryStringObject);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Ldsfld, runtime.RequireAbort().NamespaceField);
+            il.Emit(OpCodes.Ldsfld, inputs.Abort!.NamespaceField);
             il.Emit(OpCodes.Bne_Un, falseLabel);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
@@ -621,14 +697,14 @@ public partial class RuntimeEmitter
         // the correct answer.
         var notTSFuncLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Isinst, inputs.TSFunctionType);
         il.Emit(OpCodes.Brfalse, notTSFuncLabel);
 
         // F.prototype = $Runtime.GetFunctionMethod(F, "prototype")
         var targetProtoLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldstr, "prototype");
-        il.Emit(OpCodes.Call, runtime.GetFunctionMethod);
+        il.Emit(OpCodes.Call, inputs.GetFunctionMethod);
         il.Emit(OpCodes.Stloc, targetProtoLocal);
 
         // If F has no .prototype somehow (e.g., bound function), fall back to
@@ -645,7 +721,7 @@ public partial class RuntimeEmitter
         // return false
         var currentLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.ObjectPrototypes.GetPrototypeOf);
+        il.Emit(OpCodes.Call, inputs.ObjectPrototypes.GetPrototypeOf);
         il.Emit(OpCodes.Stloc, currentLocal);
 
         var loopLabel = il.DefineLabel();
@@ -660,7 +736,7 @@ public partial class RuntimeEmitter
 
         // current = current.[[GetPrototypeOf]]
         il.Emit(OpCodes.Ldloc, currentLocal);
-        il.Emit(OpCodes.Call, runtime.ObjectPrototypes.GetPrototypeOf);
+        il.Emit(OpCodes.Call, inputs.ObjectPrototypes.GetPrototypeOf);
         il.Emit(OpCodes.Stloc, currentLocal);
         il.Emit(OpCodes.Br, loopLabel);
 
@@ -710,8 +786,8 @@ public partial class RuntimeEmitter
         PrimitiveToFalse(_types.Double);
         PrimitiveToFalse(_types.String);
         PrimitiveToFalse(_types.BigInteger);
-        PrimitiveToFalse(runtime.Symbols.Type);
-        PrimitiveToFalse(runtime.UndefinedType);
+        PrimitiveToFalse(inputs.Symbols.Type);
+        PrimitiveToFalse(inputs.UndefinedType);
         il.Emit(OpCodes.Br, trueLabel);
         il.MarkLabel(notObjectClassLabel);
 
@@ -734,7 +810,7 @@ public partial class RuntimeEmitter
             // classType is the primitive wrapper type — true iff boxed marker matches.
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldstr, typeTag);
-            il.Emit(OpCodes.Call, runtime.BoxedPrimitives.IsOfType);
+            il.Emit(OpCodes.Call, inputs.BoxedPrimitives.IsOfType);
             il.Emit(OpCodes.Brtrue, trueLabel);
             il.Emit(OpCodes.Br, falseLabel);
             il.MarkLabel(skip);
@@ -747,14 +823,14 @@ public partial class RuntimeEmitter
         // otherwise reach the IsAssignableFrom($TSSymbol, $TSSymbol) fallback and
         // wrongly match. Terminal like the wrappers above: true iff `instance` is
         // a boxed Symbol wrapper (`Object(sym)`), false for a bare symbol (#449).
-        CheckBoxed(runtime.Symbols.Type, "Symbol");
+        CheckBoxed(inputs.Symbols.Type, "Symbol");
 
         // `x instanceof Promise`: the Promise identifier resolves to
         // typeof(Task<object?>), but $Promise instances (and #242 Promise
         // subclasses, which derive from $Promise) wrap their task instead of
         // being one — accept them here; raw tasks fall through to the
         // IsAssignableFrom below.
-        if (_features.UsesPromise)
+        if (inputs.Promise is not null)
         {
             var notTaskTargetLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldloc, classTypeLocal);
@@ -762,7 +838,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
             il.Emit(OpCodes.Bne_Un, notTaskTargetLabel);
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.RequirePromise().Type);
+            il.Emit(OpCodes.Isinst, inputs.Promise!.Type);
             il.Emit(OpCodes.Brtrue, trueLabel);
             il.MarkLabel(notTaskTargetLabel);
         }
@@ -828,7 +904,7 @@ public partial class RuntimeEmitter
     /// Implements the JavaScript 'in' operator: checks if a property exists in an object.
     /// Handles both symbol keys and string keys.
     /// </summary>
-    private void EmitHasIn(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitHasIn(TypeBuilder typeBuilder, EmittedOperatorRuntime operators, HasInInputs inputs)
     {
         var method = typeBuilder.DefineMethod(
             "HasIn",
@@ -836,8 +912,8 @@ public partial class RuntimeEmitter
             _types.Boolean,
             [_types.Object, _types.Object]
         );
-        runtime.HasIn = method;
-        runtime.ProxyOrdinaryHas = typeBuilder.DefineMethod(
+        operators.HasIn = method;
+        operators.ProxyOrdinaryHas = typeBuilder.DefineMethod(
             "ProxyOrdinaryHas",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Boolean,
@@ -856,11 +932,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Brfalse, invalidRhsLabel);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
         il.Emit(OpCodes.Brtrue, invalidRhsLabel);
         var rhsType = il.DeclareLocal(_types.String);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.TypeOf);
+        il.Emit(OpCodes.Call, operators.TypeOf);
         il.Emit(OpCodes.Stloc, rhsType);
         il.Emit(OpCodes.Ldloc, rhsType);
         il.Emit(OpCodes.Ldstr, "object");
@@ -875,13 +951,26 @@ public partial class RuntimeEmitter
         // Proxy check: uses obj.GetType().FullName comparison (no SharpTS.dll dependency)
         // Note: HasIn signature is (key, obj) so obj is arg_1
         var notProxyLabel = il.DefineLabel();
-        EmitProxyHasCheck(il, () => il.Emit(OpCodes.Ldarg_1), () => il.Emit(OpCodes.Ldarg_0), notProxyLabel, runtime);
+        EmitProxyHasCheck(
+            il,
+            () => il.Emit(OpCodes.Ldarg_1),
+            () => il.Emit(OpCodes.Ldarg_0),
+            notProxyLabel,
+            operators,
+            new ProxyHasCheckInputs(
+                inputs.Booleans,
+                inputs.InvokeMethodUnwrapped,
+                inputs.ObjectDescriptors,
+                inputs.ObjectRead,
+                inputs.ObjectState
+            )
+        );
 
         il.MarkLabel(notProxyLabel);
 
         // Check if key is a symbol
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.Symbols.IsSymbol);
+        il.Emit(OpCodes.Call, inputs.Symbols.IsSymbol);
         il.Emit(OpCodes.Brtrue, symbolKeyLabel);
 
         // Ask [[GetOwnProperty]] before representation-specific fallbacks.
@@ -891,12 +980,12 @@ public partial class RuntimeEmitter
         var hasInDescriptorLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.ObjectDescriptors.GetOwnPropertyDescriptor);
+        il.Emit(OpCodes.Call, inputs.ObjectDescriptors.GetOwnPropertyDescriptor);
         il.Emit(OpCodes.Stloc, hasInDescriptorLocal);
         il.Emit(OpCodes.Ldloc, hasInDescriptorLocal);
         il.Emit(OpCodes.Brfalse, noOrdinaryOwnDescriptorLabel);
         il.Emit(OpCodes.Ldloc, hasInDescriptorLocal);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
         il.Emit(OpCodes.Brtrue, noOrdinaryOwnDescriptorLabel);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Ret);
@@ -910,8 +999,8 @@ public partial class RuntimeEmitter
         var continueSpecializedHasIn = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
-        il.Emit(OpCodes.Call, runtime.ArrayOperations.HasArrayLikeProperty);
+        il.Emit(OpCodes.Call, inputs.StringCoercion.ToJsString);
+        il.Emit(OpCodes.Call, inputs.ArrayOperations.HasArrayLikeProperty);
         il.Emit(OpCodes.Brfalse, continueSpecializedHasIn);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Ret);
@@ -920,16 +1009,16 @@ public partial class RuntimeEmitter
         // String key path
         // Check if obj is $TSObject
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, runtime.ObjectStorage.Type);
+        il.Emit(OpCodes.Isinst, inputs.ObjectStorage.Type);
         var notTSObjectLabel = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, notTSObjectLabel);
 
         // $TSObject - call HasProperty(string)
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Castclass, runtime.ObjectStorage.Type);
+        il.Emit(OpCodes.Castclass, inputs.ObjectStorage.Type);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Object, "ToString"));
-        il.Emit(OpCodes.Callvirt, runtime.ObjectStorage.HasProperty);
+        il.Emit(OpCodes.Callvirt, inputs.ObjectStorage.HasProperty);
         il.Emit(OpCodes.Ret);
 
         // Check if obj is Dictionary<string, object>
@@ -944,7 +1033,7 @@ public partial class RuntimeEmitter
         // return false).
         var tsArrayHasLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, runtime.ArrayStorage.Type);
+        il.Emit(OpCodes.Isinst, inputs.ArrayStorage.Type);
         il.Emit(OpCodes.Brtrue, tsArrayHasLabel);
 
         // Check if obj is List<object> (array)
@@ -962,14 +1051,14 @@ public partial class RuntimeEmitter
 
         // Check $IHasFields interface: call HasProperty(key) for typed backing fields + _fields dict
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, runtime.IHasFieldsInterface);
+        il.Emit(OpCodes.Isinst, inputs.IHasFieldsInterface);
         var notHasFieldsLabel = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, notHasFieldsLabel);
 
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Castclass, runtime.IHasFieldsInterface);
+        il.Emit(OpCodes.Castclass, inputs.IHasFieldsInterface);
         il.Emit(OpCodes.Ldloc, classKeyStrLocal);
-        il.Emit(OpCodes.Callvirt, runtime.IHasFieldsHasProperty);
+        il.Emit(OpCodes.Callvirt, inputs.IHasFieldsHasProperty);
         il.Emit(OpCodes.Brtrue, classTrueLabel);
 
         il.MarkLabel(notHasFieldsLabel);
@@ -978,7 +1067,7 @@ public partial class RuntimeEmitter
         // Convert camelCase key to PascalCase for .NET method lookup
         var classPascalNameLocal = il.DeclareLocal(_types.String);
         il.Emit(OpCodes.Ldloc, classKeyStrLocal);
-        il.Emit(OpCodes.Call, runtime.ToPascalCase);
+        il.Emit(OpCodes.Call, inputs.ToPascalCase);
         il.Emit(OpCodes.Stloc, classPascalNameLocal);
 
         // obj.GetType().GetProperty(pascalName, Instance | Public | IgnoreCase)
@@ -1070,7 +1159,7 @@ public partial class RuntimeEmitter
             var tsArrNoOwnDescriptor = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Ldloc, tsArrKeyStrLocal);
-            il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetPropertyDescriptor);
+            il.Emit(OpCodes.Call, inputs.DescriptorStorage.GetPropertyDescriptor);
             il.Emit(OpCodes.Brfalse, tsArrNoOwnDescriptor);
             il.Emit(OpCodes.Ldc_I4_1);
             il.Emit(OpCodes.Ret);
@@ -1094,9 +1183,9 @@ public partial class RuntimeEmitter
 
             // arr.HasIndex(idx) — handles sparse + hole semantics.
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Castclass, runtime.ArrayStorage.Type);
+            il.Emit(OpCodes.Castclass, inputs.ArrayStorage.Type);
             il.Emit(OpCodes.Ldloc, tsArrIndexLocal);
-            il.Emit(OpCodes.Callvirt, runtime.ArrayStorage.HasIndex);
+            il.Emit(OpCodes.Callvirt, inputs.ArrayStorage.HasIndex);
             il.Emit(OpCodes.Ret);
         }
 
@@ -1105,7 +1194,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(symbolKeyLabel);
         var symbolNotOwnLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.Symbols.GetStorage);
+        il.Emit(OpCodes.Call, inputs.Symbols.GetStorage);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryObjectObject, "ContainsKey", _types.Object));
         il.Emit(OpCodes.Brfalse, symbolNotOwnLabel);
@@ -1114,13 +1203,13 @@ public partial class RuntimeEmitter
         il.MarkLabel(symbolNotOwnLabel);
         var symbolPrototypeLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.ObjectPrototypes.GetPrototypeOf);
+        il.Emit(OpCodes.Call, inputs.ObjectPrototypes.GetPrototypeOf);
         il.Emit(OpCodes.Stloc, symbolPrototypeLocal);
         il.Emit(OpCodes.Ldloc, symbolPrototypeLocal);
         il.Emit(OpCodes.Brfalse, falseLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, symbolPrototypeLocal);
-        il.Emit(OpCodes.Call, runtime.HasIn);
+        il.Emit(OpCodes.Call, operators.HasIn);
         il.Emit(OpCodes.Ret);
 
         // Return false
@@ -1129,18 +1218,18 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(invalidRhsLabel);
-        GuestErrorEmitter.ThrowTypeError(il, runtime, "Right-hand side of 'in' is not an object");
+        GuestErrorEmitter.ThrowError(il, inputs.Errors.CreateException, inputs.Errors.TypeErrorConstructor, "Right-hand side of 'in' is not an object");
 
         // SharpTSProxy's compiled callback uses the natural (target, key)
         // order, while the emitted `in` helper uses (key, target).
-        var proxyOrdinaryHasIl = runtime.ProxyOrdinaryHas.GetILGenerator();
+        var proxyOrdinaryHasIl = operators.ProxyOrdinaryHas.GetILGenerator();
         proxyOrdinaryHasIl.Emit(OpCodes.Ldarg_1);
         proxyOrdinaryHasIl.Emit(OpCodes.Ldarg_0);
-        proxyOrdinaryHasIl.Emit(OpCodes.Call, runtime.HasIn);
+        proxyOrdinaryHasIl.Emit(OpCodes.Call, operators.HasIn);
         proxyOrdinaryHasIl.Emit(OpCodes.Ret);
     }
 
-    private void EmitAdd(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitAdd(TypeBuilder typeBuilder, EmittedOperatorRuntime operators, AddInputs inputs)
     {
         var method = typeBuilder.DefineMethod(
             "Add",
@@ -1148,7 +1237,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object, _types.Object]
         );
-        runtime.Add = method;
+        operators.Add = method;
 
         var il = method.GetILGenerator();
         var stringConcatLabel = il.DefineLabel();
@@ -1162,10 +1251,10 @@ public partial class RuntimeEmitter
         var leftLocal = il.DeclareLocal(_types.Object);
         var rightLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.BoxedPrimitives.UnwrapIfBoxed);
+        il.Emit(OpCodes.Call, inputs.BoxedPrimitives.UnwrapIfBoxed);
         il.Emit(OpCodes.Stloc, leftLocal);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.BoxedPrimitives.UnwrapIfBoxed);
+        il.Emit(OpCodes.Call, inputs.BoxedPrimitives.UnwrapIfBoxed);
         il.Emit(OpCodes.Stloc, rightLocal);
 
         // if (left is string || right is string) string concat
@@ -1188,14 +1277,14 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, rightLocal);
         il.Emit(OpCodes.Isinst, _types.BigInteger);
         il.Emit(OpCodes.Brtrue, addBigInts);
-        GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot mix BigInt and other types");
+        GuestErrorEmitter.ThrowError(il, inputs.Errors.CreateException, inputs.Errors.TypeErrorConstructor, "Cannot mix BigInt and other types");
 
         il.MarkLabel(leftNotBigInt);
         var neitherBigInt = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, rightLocal);
         il.Emit(OpCodes.Isinst, _types.BigInteger);
         il.Emit(OpCodes.Brfalse, neitherBigInt);
-        GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot mix BigInt and other types");
+        GuestErrorEmitter.ThrowError(il, inputs.Errors.CreateException, inputs.Errors.TypeErrorConstructor, "Cannot mix BigInt and other types");
 
         il.MarkLabel(addBigInts);
         il.Emit(OpCodes.Ldloc, leftLocal);
@@ -1213,10 +1302,10 @@ public partial class RuntimeEmitter
         // and any arithmetic with NaN yields NaN). Convert.ToDouble($Undefined) throws
         // because $Undefined isn't IConvertible; short-circuit here.
         il.Emit(OpCodes.Ldloc, leftLocal);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
         il.Emit(OpCodes.Brtrue, undefinedNanLabel);
         il.Emit(OpCodes.Ldloc, rightLocal);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
         il.Emit(OpCodes.Brtrue, undefinedNanLabel);
 
         // Numeric addition.  Use the language ToNumber operation, not CLR
@@ -1224,9 +1313,9 @@ public partial class RuntimeEmitter
         // ToPrimitive, Symbol must throw a guest TypeError, and undefined is
         // NaN rather than an InvalidCastException.
         il.Emit(OpCodes.Ldloc, leftLocal);
-        il.Emit(OpCodes.Call, runtime.NumericCoercion.ToNumber);
+        il.Emit(OpCodes.Call, inputs.NumericCoercion.ToNumber);
         il.Emit(OpCodes.Ldloc, rightLocal);
-        il.Emit(OpCodes.Call, runtime.NumericCoercion.ToNumber);
+        il.Emit(OpCodes.Call, inputs.NumericCoercion.ToNumber);
         il.Emit(OpCodes.Add);
         il.Emit(OpCodes.Box, _types.Double);
         il.Emit(OpCodes.Ret);
@@ -1240,9 +1329,9 @@ public partial class RuntimeEmitter
         // bool->"true"/"false") that throws TypeError for Symbol operands (§7.1.17).
         il.MarkLabel(stringConcatLabel);
         il.Emit(OpCodes.Ldloc, leftLocal);
-        il.Emit(OpCodes.Call, runtime.StringCoercion.StringifyCoerce);
+        il.Emit(OpCodes.Call, inputs.StringCoercion.StringifyCoerce);
         il.Emit(OpCodes.Ldloc, rightLocal);
-        il.Emit(OpCodes.Call, runtime.StringCoercion.StringifyCoerce);
+        il.Emit(OpCodes.Call, inputs.StringCoercion.StringifyCoerce);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", _types.String, _types.String));
         il.Emit(OpCodes.Ret);
     }
@@ -1252,9 +1341,9 @@ public partial class RuntimeEmitter
     /// <see cref="EmitEquals"/>, which must run AFTER EmitToJsString so the
     /// Object-vs-String spec branch can reference <c>runtime.StringCoercion.ToJsString</c>.
     /// </summary>
-    internal void DeclareEquals(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    internal void DeclareEquals(TypeBuilder typeBuilder, EmittedOperatorRuntime operators)
     {
-        runtime.Equals = typeBuilder.DefineMethod(
+        operators.LooseEquals = typeBuilder.DefineMethod(
             "Equals",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Boolean,
@@ -1262,9 +1351,9 @@ public partial class RuntimeEmitter
         );
     }
 
-    private void EmitEquals(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitEquals(EmittedOperatorRuntime operators, EqualsInputs inputs)
     {
-        var method = runtime.Equals;
+        var method = operators.LooseEquals;
 
         var il = method.GetILGenerator();
         var checkRightNullish = il.DefineLabel();
@@ -1293,7 +1382,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, leftLocal);
         il.Emit(OpCodes.Brfalse_S, checkRightNullish); // left is null
         il.Emit(OpCodes.Ldloc, leftLocal);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Cgt_Un); // true if left is SharpTSUndefined
         il.Emit(OpCodes.Stloc, leftNullish);
@@ -1319,7 +1408,7 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(rightNotNull);
         il.Emit(OpCodes.Ldloc, rightLocal);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Cgt_Un); // true if right is SharpTSUndefined
         il.Emit(OpCodes.Stloc, rightNullish);
@@ -1357,7 +1446,7 @@ public partial class RuntimeEmitter
         {
             var typeOfLocal = il.DeclareLocal(_types.String);
             il.Emit(OpCodes.Ldloc, operand);
-            il.Emit(OpCodes.Call, runtime.TypeOf);
+            il.Emit(OpCodes.Call, operators.TypeOf);
             il.Emit(OpCodes.Stloc, typeOfLocal);
             il.Emit(OpCodes.Ldloc, typeOfLocal);
             il.Emit(OpCodes.Ldstr, "object");
@@ -1387,7 +1476,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, leftObjectLike);
         il.Emit(OpCodes.Brfalse, checkRightObjectLikeLabel);
         il.Emit(OpCodes.Ldloc, leftLocal);
-        il.Emit(OpCodes.Call, runtime.BoxedPrimitives.UnwrapIfBoxed);
+        il.Emit(OpCodes.Call, inputs.BoxedPrimitives.UnwrapIfBoxed);
         il.Emit(OpCodes.Stloc, leftLocal);
         il.Emit(OpCodes.Br, operandsReadyLabel);
 
@@ -1395,7 +1484,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, rightObjectLike);
         il.Emit(OpCodes.Brfalse, operandsReadyLabel);
         il.Emit(OpCodes.Ldloc, rightLocal);
-        il.Emit(OpCodes.Call, runtime.BoxedPrimitives.UnwrapIfBoxed);
+        il.Emit(OpCodes.Call, inputs.BoxedPrimitives.UnwrapIfBoxed);
         il.Emit(OpCodes.Stloc, rightLocal);
         il.MarkLabel(operandsReadyLabel);
 
@@ -1420,7 +1509,7 @@ public partial class RuntimeEmitter
         var leftIsDictLabel = il.DefineLabel();
         il.Emit(OpCodes.Brtrue, leftIsDictLabel);
         il.Emit(OpCodes.Ldloc, leftLocal);
-        il.Emit(OpCodes.Isinst, runtime.ObjectStorage.Type);
+        il.Emit(OpCodes.Isinst, inputs.ObjectStorage.Type);
         il.Emit(OpCodes.Brfalse, notLeftCoercibleLabel);
         il.MarkLabel(leftIsDictLabel);
         // Right is String → ToJsString(LEFT) and string-compare.
@@ -1438,15 +1527,15 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, notLeftCoercibleLabel);
         il.MarkLabel(leftObjVsNumLabel);
         il.Emit(OpCodes.Ldloc, leftLocal);
-        il.Emit(OpCodes.Call, runtime.NumericCoercion.ToNumber);
+        il.Emit(OpCodes.Call, inputs.NumericCoercion.ToNumber);
         il.Emit(OpCodes.Ldloc, rightLocal);
-        il.Emit(OpCodes.Call, runtime.NumericCoercion.ToNumber);
+        il.Emit(OpCodes.Call, inputs.NumericCoercion.ToNumber);
         il.Emit(OpCodes.Ceq);
         il.Emit(OpCodes.Br, endLabel);
         // Object-vs-String: ToJsString(LEFT) and string-compare via op_Equality.
         il.MarkLabel(leftObjVsStringLabel);
         il.Emit(OpCodes.Ldloc, leftLocal);
-        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
+        il.Emit(OpCodes.Call, inputs.StringCoercion.ToJsString);
         il.Emit(OpCodes.Ldloc, rightLocal);
         il.Emit(OpCodes.Castclass, _types.String);
         il.Emit(OpCodes.Call, _types.StringOpEquality);
@@ -1460,7 +1549,7 @@ public partial class RuntimeEmitter
         var rightIsDictLabel = il.DefineLabel();
         il.Emit(OpCodes.Brtrue, rightIsDictLabel);
         il.Emit(OpCodes.Ldloc, rightLocal);
-        il.Emit(OpCodes.Isinst, runtime.ObjectStorage.Type);
+        il.Emit(OpCodes.Isinst, inputs.ObjectStorage.Type);
         il.Emit(OpCodes.Brfalse, notRightCoercibleLabel);
         il.MarkLabel(rightIsDictLabel);
         // Left is String → ToJsString(RIGHT) and string-compare.
@@ -1478,9 +1567,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, notRightCoercibleLabel);
         il.MarkLabel(rightObjVsNumLabel);
         il.Emit(OpCodes.Ldloc, leftLocal);
-        il.Emit(OpCodes.Call, runtime.NumericCoercion.ToNumber);
+        il.Emit(OpCodes.Call, inputs.NumericCoercion.ToNumber);
         il.Emit(OpCodes.Ldloc, rightLocal);
-        il.Emit(OpCodes.Call, runtime.NumericCoercion.ToNumber);
+        il.Emit(OpCodes.Call, inputs.NumericCoercion.ToNumber);
         il.Emit(OpCodes.Ceq);
         il.Emit(OpCodes.Br, endLabel);
         // String-vs-Object: ToJsString(RIGHT) and string-compare.
@@ -1488,7 +1577,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, leftLocal);
         il.Emit(OpCodes.Castclass, _types.String);
         il.Emit(OpCodes.Ldloc, rightLocal);
-        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
+        il.Emit(OpCodes.Call, inputs.StringCoercion.ToJsString);
         il.Emit(OpCodes.Call, _types.StringOpEquality);
         il.Emit(OpCodes.Br, endLabel);
         il.MarkLabel(notRightCoercibleLabel);
@@ -1520,9 +1609,10 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(endLabel);
         il.Emit(OpCodes.Ret);
+        operators.MarkEqualityBodyEmitted();
     }
 
-    private void EmitStrictEquals(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitStrictEquals(TypeBuilder typeBuilder, EmittedOperatorRuntime operators, Type undefinedType)
     {
         // ECMA-262 IsStrictlyEqual semantics: null/undefined are distinct values
         // (unlike loose ==). Used by Array.prototype.indexOf/lastIndexOf/includes,
@@ -1533,7 +1623,7 @@ public partial class RuntimeEmitter
             _types.Boolean,
             [_types.Object, _types.Object]
         );
-        runtime.StrictEquals = method;
+        operators.StrictEquals = method;
 
         var il = method.GetILGenerator();
         var trueLabel = il.DefineLabel();
@@ -1549,10 +1639,10 @@ public partial class RuntimeEmitter
 
         // If left is $Undefined → match iff right is $Undefined.
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, undefinedType);
         il.Emit(OpCodes.Brfalse, leftNotUndef);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, undefinedType);
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Cgt_Un);
         il.Emit(OpCodes.Br, endLabel);
@@ -1562,7 +1652,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Brfalse, falseLabel);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, undefinedType);
         il.Emit(OpCodes.Brtrue, falseLabel);
 
         // ECMA-262 IsStrictlyEqual: NaN !== NaN. Object.Equals(NaN, NaN) is true

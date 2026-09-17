@@ -10,10 +10,10 @@ public partial class RuntimeEmitter
     /// - ThrowStrictSyntaxError(string message): throws SyntaxError in strict mode
     /// - WarnSloppyDeleteVariable(string varName): warns in sloppy mode for delete variable
     /// </summary>
-    private void EmitStrictModeHelpers(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitStrictModeHelpers(TypeBuilder typeBuilder, EmittedOperatorRuntime operators, EmittedErrorRuntime errors)
     {
-        EmitThrowStrictSyntaxError(typeBuilder, runtime.Errors);
-        EmitWarnSloppyDeleteVariable(typeBuilder, runtime);
+        EmitThrowStrictSyntaxError(typeBuilder, errors);
+        EmitWarnSloppyDeleteVariable(typeBuilder, operators);
     }
 
     /// <summary>
@@ -44,7 +44,7 @@ public partial class RuntimeEmitter
     /// Emits WarnSloppyDeleteVariable(string varName) -> bool
     /// Logs warning and returns false (sloppy mode delete variable behavior).
     /// </summary>
-    private void EmitWarnSloppyDeleteVariable(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitWarnSloppyDeleteVariable(TypeBuilder typeBuilder, EmittedOperatorRuntime operators)
     {
         var method = typeBuilder.DefineMethod(
             "WarnSloppyDeleteVariable",
@@ -52,7 +52,7 @@ public partial class RuntimeEmitter
             _types.Boolean,
             [_types.String]
         );
-        runtime.WarnSloppyDeleteVariable = method;
+        operators.WarnSloppyDeleteVariable = method;
 
         var il = method.GetILGenerator();
 

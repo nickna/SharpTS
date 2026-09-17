@@ -384,7 +384,7 @@ public partial class RuntimeEmitter
         // Inheriting from Function.prototype does not grant [[Call]]. Validate
         // the actual receiver before creating a bound wrapper.
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.TypeOf);
+        il.Emit(OpCodes.Call, runtime.Operators.TypeOf);
         il.Emit(OpCodes.Ldstr, "function");
         il.Emit(OpCodes.Call, _types.StringOpEquality);
         var callableTargetLabel = il.DefineLabel();

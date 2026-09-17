@@ -34,7 +34,7 @@ public partial class RuntimeEmitter
     private void EmitThrowNotAFunction(ILGenerator il, EmittedRuntime runtime, Action loadCallee)
     {
         loadCallee();
-        il.Emit(OpCodes.Call, runtime.TypeOf);
+        il.Emit(OpCodes.Call, runtime.Operators.TypeOf);
         il.Emit(OpCodes.Ldstr, " is not a function");
         il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", _types.String, _types.String));
         GuestErrorEmitter.ThrowErrorFromStack(il, runtime, runtime.Errors.TypeErrorConstructor);

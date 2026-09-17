@@ -104,7 +104,7 @@ public partial class ILEmitter
                 EmitBoxIfNeeded(b.Left);
                 EmitExpression(b.Right);
                 EmitBoxIfNeeded(b.Right);
-                EmitCallUnknown(_ctx.Runtime!.Add);
+                EmitCallUnknown(_ctx.Runtime!.Operators.Add);
                 break;
 
             case Arithmetic arith:
@@ -249,7 +249,7 @@ public partial class ILEmitter
                         var resultEnd = IL.DefineLabel();
                         EmitBranchIfBoxedNaN(first, resultFalse);
                         EmitBranchIfBoxedNaN(second, resultFalse);
-                        IL.Emit(OpCodes.Call, _ctx.Runtime.JsLessThan);
+                        IL.Emit(OpCodes.Call, _ctx.Runtime.Operators.LessThan);
                         IL.Emit(OpCodes.Ldc_I4_0);
                         IL.Emit(OpCodes.Ceq);
                         IL.Emit(OpCodes.Br, resultEnd);
@@ -263,8 +263,8 @@ public partial class ILEmitter
                     else
                     {
                         IL.Emit(OpCodes.Call, cmp.Negated
-                            ? _ctx.Runtime.JsLessOrEqual
-                            : _ctx.Runtime.JsLessThan);
+                            ? _ctx.Runtime.Operators.LessThanOrEqual
+                            : _ctx.Runtime.Operators.LessThan);
                     }
                 }
                 SetStackType(StackType.Boolean);
@@ -284,7 +284,7 @@ public partial class ILEmitter
                 EmitBoxIfNeeded(b.Left);
                 EmitExpression(b.Right);
                 EmitBoxIfNeeded(b.Right);
-                EmitCallAndBoxBool(_ctx.Runtime!.HasIn);
+                EmitCallAndBoxBool(_ctx.Runtime!.Operators.HasIn);
                 break;
 
             case InstanceOf:
@@ -292,7 +292,7 @@ public partial class ILEmitter
                 EmitBoxIfNeeded(b.Left);
                 EmitExpression(b.Right);
                 EmitBoxIfNeeded(b.Right);
-                EmitCallAndBoxBool(_ctx.Runtime!.InstanceOf);
+                EmitCallAndBoxBool(_ctx.Runtime!.Operators.InstanceOf);
                 break;
         }
     }
@@ -401,7 +401,7 @@ public partial class ILEmitter
         if (!isStrict)
         {
             // Loose equality: use runtime.Equals which treats null == undefined
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.Equals);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.Operators.LooseEquals);
         }
         else
         {
@@ -691,7 +691,7 @@ public partial class ILEmitter
                 {
                     EmitExpression(u.Right);
                     EmitBoxIfNeeded(u.Right);
-                    EmitCallString(_ctx.Runtime!.TypeOf);
+                    EmitCallString(_ctx.Runtime!.Operators.TypeOf);
                 }
                 break;
 
@@ -841,7 +841,7 @@ public partial class ILEmitter
             EmitBoxIfNeeded(ca.Value);
 
             // Use runtime Add which handles both string concatenation and numeric addition
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.Add);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.Operators.Add);
             IL.Emit(OpCodes.Dup);
 
             // Store result
@@ -870,7 +870,7 @@ public partial class ILEmitter
         EmitBoxIfNeeded(new Expr.Variable(ca.Name));
         EmitExpression(ca.Value);
         EmitBoxIfNeeded(ca.Value);
-        _helpers.EmitCompoundOperation(ca.Operator.Type, _ctx.Runtime!.Add);
+        _helpers.EmitCompoundOperation(ca.Operator.Type, _ctx.Runtime!.Operators.Add);
 
         if (isTypedDouble && local != null)
         {
@@ -2156,7 +2156,7 @@ public partial class ILEmitter
                 IL.Emit(pi.Operator.Type == TokenType.PLUS_PLUS
                     ? OpCodes.Ldc_I4_1
                     : OpCodes.Ldc_I4_0);
-                IL.Emit(OpCodes.Call, _ctx.Runtime!.UpdateNumeric);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.Operators.UpdateNumeric);
                 IL.Emit(OpCodes.Dup);
                 EmitStoreIncrementedVariable(v.Name.Lexeme, isTypedDouble: false,
                     resultIsUnboxedDouble: false);
@@ -2308,7 +2308,7 @@ public partial class ILEmitter
         IL.MarkLabel(numericReady);
         IL.Emit(OpCodes.Ldloc, oldNumeric);
         IL.Emit(isIncrement ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
-        IL.Emit(OpCodes.Call, _ctx.Runtime!.UpdateNumeric);
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.Operators.UpdateNumeric);
         IL.Emit(OpCodes.Stloc, newNumeric);
     }
 
@@ -3144,7 +3144,7 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Stloc, right);
         IL.Emit(OpCodes.Ldloc, left);
         IL.Emit(OpCodes.Ldloc, right);
-        _helpers.EmitCompoundOperation(opType, _ctx.Runtime!.Add);
+        _helpers.EmitCompoundOperation(opType, _ctx.Runtime!.Operators.Add);
     }
 
     // The compound operators handled by the numeric path (arithmetic + bitwise) — i.e. those that
@@ -3274,7 +3274,7 @@ public partial class ILEmitter
         if (left.LocalType == _ctx.Types.Double) IL.Emit(OpCodes.Box, _ctx.Types.Double);
         IL.Emit(OpCodes.Ldloc, right);
         if (right.LocalType == _ctx.Types.Double) IL.Emit(OpCodes.Box, _ctx.Types.Double);
-        IL.Emit(OpCodes.Call, _ctx.Runtime!.Add);
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.Operators.Add);
         IL.MarkLabel(end);
         SetStackUnknown();
         return true;

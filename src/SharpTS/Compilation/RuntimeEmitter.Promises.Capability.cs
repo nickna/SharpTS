@@ -89,7 +89,7 @@ public partial class RuntimeEmitter
 
         // if (TypeOf(then) != "function") goto wrap;
         il.Emit(OpCodes.Ldloc, thenLocal);
-        il.Emit(OpCodes.Call, runtime.TypeOf);
+        il.Emit(OpCodes.Call, runtime.Operators.TypeOf);
         il.Emit(OpCodes.Ldstr, "function");
         il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
         il.Emit(OpCodes.Brfalse, wrapLabel);
@@ -392,7 +392,7 @@ public partial class RuntimeEmitter
         var callableLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, capabilityLocal);
         il.Emit(OpCodes.Ldfld, slot);
-        il.Emit(OpCodes.Call, runtime.TypeOf);
+        il.Emit(OpCodes.Call, runtime.Operators.TypeOf);
         il.Emit(OpCodes.Ldstr, "function");
         il.Emit(OpCodes.Call, _types.GetMethod(
             _types.String, "op_Equality", _types.String, _types.String));

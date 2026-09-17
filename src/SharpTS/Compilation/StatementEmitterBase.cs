@@ -1694,7 +1694,7 @@ public abstract class StatementEmitterBase : ExpressionEmitterBase
             IL.Emit(OpCodes.Ldloc, subjectLocal);
             EmitExpression(s.Cases[i].Value);
             EnsureBoxed();
-            IL.Emit(OpCodes.Call, Ctx.Runtime!.Equals);
+            IL.Emit(OpCodes.Call, Ctx.Runtime!.Operators.LooseEquals);
             IL.Emit(OpCodes.Brtrue, caseLabels[i]);
         }
 
@@ -1967,7 +1967,7 @@ public abstract class StatementEmitterBase : ExpressionEmitterBase
                     else
                     {
                         IL.Emit(OpCodes.Ldstr, v.Name.Lexeme);
-                        IL.Emit(OpCodes.Call, Ctx.Runtime!.WarnSloppyDeleteVariable);
+                        IL.Emit(OpCodes.Call, Ctx.Runtime!.Operators.WarnSloppyDeleteVariable);
                     }
                 }
                 SetStackType(StackType.Boolean);
