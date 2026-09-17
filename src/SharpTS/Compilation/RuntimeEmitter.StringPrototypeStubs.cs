@@ -619,11 +619,11 @@ public partial class RuntimeEmitter
         }
 
         // $RegExp — §22.2.6.13 brand check via [[RegExpMatcher]] slot.
-        if (runtime.TSRegExpType != null)
+        if (runtime.RegExps.Implementation != null)
         {
             var notTSRegExpLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.TSRegExpType);
+            il.Emit(OpCodes.Isinst, runtime.RegExps.RequireImplementation().Type);
             il.Emit(OpCodes.Brfalse, notTSRegExpLabel);
             EmitTag("[object RegExp]");
             il.MarkLabel(notTSRegExpLabel);

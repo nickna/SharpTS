@@ -62,33 +62,33 @@ public partial class ILEmitter
             case "source":
                 EmitExpression(g.Object);
                 EmitBoxIfNeeded(g.Object);
-                IL.Emit(OpCodes.Call, _ctx.Runtime!.RegExpGetSource);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.RegExps.RequireImplementation().GetSource);
                 SetStackType(StackType.String);
                 return true;
             case "flags":
                 EmitExpression(g.Object);
                 EmitBoxIfNeeded(g.Object);
-                IL.Emit(OpCodes.Call, _ctx.Runtime!.RegExpGetFlags);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.RegExps.RequireImplementation().GetFlags);
                 SetStackType(StackType.String);
                 return true;
             case "global":
                 EmitExpression(g.Object);
                 EmitBoxIfNeeded(g.Object);
-                IL.Emit(OpCodes.Call, _ctx.Runtime!.RegExpGetGlobal);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.RegExps.RequireImplementation().GetGlobal);
                 IL.Emit(OpCodes.Box, _ctx.Types.Boolean);
                 SetStackUnknown();
                 return true;
             case "ignoreCase":
                 EmitExpression(g.Object);
                 EmitBoxIfNeeded(g.Object);
-                IL.Emit(OpCodes.Call, _ctx.Runtime!.RegExpGetIgnoreCase);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.RegExps.RequireImplementation().GetIgnoreCase);
                 IL.Emit(OpCodes.Box, _ctx.Types.Boolean);
                 SetStackUnknown();
                 return true;
             case "multiline":
                 EmitExpression(g.Object);
                 EmitBoxIfNeeded(g.Object);
-                IL.Emit(OpCodes.Call, _ctx.Runtime!.RegExpGetMultiline);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.RegExps.RequireImplementation().GetMultiline);
                 IL.Emit(OpCodes.Box, _ctx.Types.Boolean);
                 SetStackUnknown();
                 return true;
@@ -101,11 +101,11 @@ public partial class ILEmitter
                 EmitBoxIfNeeded(g.Object);
                 IL.Emit(OpCodes.Call, propName switch
                 {
-                    "sticky" => _ctx.Runtime!.RegExpGetSticky,
-                    "unicode" => _ctx.Runtime!.RegExpGetUnicode,
-                    "dotAll" => _ctx.Runtime!.RegExpGetDotAll,
-                    "hasIndices" => _ctx.Runtime!.RegExpGetHasIndices,
-                    _ => _ctx.Runtime!.RegExpGetUnicodeSets,
+                    "sticky" => _ctx.Runtime!.RegExps.RequireImplementation().GetSticky,
+                    "unicode" => _ctx.Runtime!.RegExps.RequireImplementation().GetUnicode,
+                    "dotAll" => _ctx.Runtime!.RegExps.RequireImplementation().GetDotAll,
+                    "hasIndices" => _ctx.Runtime!.RegExps.RequireImplementation().GetHasIndices,
+                    _ => _ctx.Runtime!.RegExps.RequireImplementation().GetUnicodeSets,
                 });
                 IL.Emit(OpCodes.Box, _ctx.Types.Boolean);
                 SetStackUnknown();

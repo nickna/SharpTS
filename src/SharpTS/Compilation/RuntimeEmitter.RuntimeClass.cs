@@ -234,7 +234,7 @@ public partial class RuntimeEmitter
         // RegExp.prototype field forward-declared by DefineRuntimeClassPhase1 —
         // $RegExp's emission depends on the field token so the prototype's
         // proto-accessor helpers can compare against it. Reuse here.
-        var regexpPrototypeField = runtime.RegExpPrototypeField;
+        var regexpPrototypeField = runtime.RegExps.Prototype;
 
         // Promise.prototype is entirely absent from Promise-free assemblies.
         if (_features.UsesPromise)
@@ -534,7 +534,7 @@ public partial class RuntimeEmitter
         DefineErrorPrototypePopulateShell(typeBuilder, runtime);
         DefineNativeErrorPrototypePopulateShells(typeBuilder, runtime);
         DefineFunctionPrototypePopulateShell(typeBuilder, runtime);
-        DefineRegExpPrototypePopulateShell(typeBuilder, runtime);
+        DefineRegExpPrototypePopulateShell(typeBuilder, runtime.RegExps);
         if (_features.UsesPromise)
             DefinePromisePrototypePopulateShell(typeBuilder, runtime);
 
@@ -749,7 +749,7 @@ public partial class RuntimeEmitter
         cctorIL.Emit(OpCodes.Call, runtime.Strings.PrototypePopulateMethod);
         cctorIL.Emit(OpCodes.Call, runtime.ErrorPrototypePopulateMethod);
         cctorIL.Emit(OpCodes.Call, runtime.FunctionPrototypePopulateMethod);
-        cctorIL.Emit(OpCodes.Call, runtime.RegExpPrototypePopulateMethod);
+        cctorIL.Emit(OpCodes.Call, runtime.RegExps.PopulatePrototype);
         // Math / JSON value-form singletons (`const m = Math; m.max(...)`). Each
         // populate is idempotent and skips null backings, so calling the JSON one
         // unconditionally is safe even when the program doesn't use JSON (#276).
@@ -1037,7 +1037,7 @@ public partial class RuntimeEmitter
                 runtime.DescriptorStorage.DescriptorGetter.GetGetMethod()!,
                 runtime.DescriptorStorage.DescriptorSetter.GetGetMethod()!, runtime.DescriptorStorage.DescriptorValue.GetGetMethod()!,
                 runtime.DescriptorStorage.HasPrototypeEntry, runtime.DescriptorStorage.GetPrototype, runtime.CreateException, runtime.TSTypeErrorCtor),
-            _features.UsesRegExp ? runtime.TSRegExpType : null);
+            runtime.RegExps.Implementation is not null ? runtime.RegExps.RequireImplementation().Type : null);
         // StringFromValue (String(x) call form) wraps ToJsString with the
         // §22.1.1.1 Symbol exemption; emit right after it.
         EmitStringFromValue(typeBuilder, runtime.StringCoercion, runtime.Symbols.Type);
@@ -1499,11 +1499,11 @@ public partial class RuntimeEmitter
         EmitStringIndexOfFrom(typeBuilder, runtime.Strings, runtime.NumericCoercion.ToIntegerOrInfinity, runtime.StringCoercion.ToJsString);
         EmitPrimitiveStringIntrinsics(typeBuilder, runtime.Strings);
         EmitStringReplace(typeBuilder, runtime.Strings);
-        EmitStringIncludes(typeBuilder, runtime.Strings, new StringSearchInputs(runtime.TSRegExpType, runtime.UndefinedType, runtime.Symbols.Match,
+        EmitStringIncludes(typeBuilder, runtime.Strings, new StringSearchInputs(runtime.RegExps.Implementation?.Type, runtime.UndefinedType, runtime.Symbols.Match,
                 runtime.GetIndex, runtime.Booleans.IsTruthy, runtime.NumericCoercion.ToIntegerOrInfinity, runtime.StringCoercion.ToJsString, runtime.CreateException, runtime.TSTypeErrorCtor));
-        EmitStringStartsWith(typeBuilder, runtime.Strings, new StringSearchInputs(runtime.TSRegExpType, runtime.UndefinedType, runtime.Symbols.Match,
+        EmitStringStartsWith(typeBuilder, runtime.Strings, new StringSearchInputs(runtime.RegExps.Implementation?.Type, runtime.UndefinedType, runtime.Symbols.Match,
                 runtime.GetIndex, runtime.Booleans.IsTruthy, runtime.NumericCoercion.ToIntegerOrInfinity, runtime.StringCoercion.ToJsString, runtime.CreateException, runtime.TSTypeErrorCtor));
-        EmitStringEndsWith(typeBuilder, runtime.Strings, new StringSearchInputs(runtime.TSRegExpType, runtime.UndefinedType, runtime.Symbols.Match,
+        EmitStringEndsWith(typeBuilder, runtime.Strings, new StringSearchInputs(runtime.RegExps.Implementation?.Type, runtime.UndefinedType, runtime.Symbols.Match,
                 runtime.GetIndex, runtime.Booleans.IsTruthy, runtime.NumericCoercion.ToIntegerOrInfinity, runtime.StringCoercion.ToJsString, runtime.CreateException, runtime.TSTypeErrorCtor));
         EmitStringSlice(typeBuilder, runtime.Strings, runtime.CreateException, runtime.TSTypeErrorCtor, runtime.NumericCoercion.ToIntegerOrInfinity,
             runtime.StringCoercion.ToJsString, runtime.UndefinedInstance, runtime.UndefinedType);
@@ -1533,8 +1533,34 @@ public partial class RuntimeEmitter
         // ordering. Without this, the populate wires those slots to a
         // null-returning stub that drops args and breaks `new String(...)
         // .search(...)` (45 Test262 regressions, root-caused 2026-05-01).
-        if (_features.UsesRegExp)
-            EmitRegExpMethods(typeBuilder, runtime);
+        if (runtime.RegExps.Implementation is not null)
+            EmitRegExpMethods(
+                typeBuilder,
+                runtime.RegExps,
+                new RegExpMethodsInputs(
+                    runtime.ArrayStorage,
+                    runtime.Booleans,
+                    runtime.CreateException,
+                    runtime.DescriptorStorage,
+                    runtime.GetIndex,
+                    runtime.GetProperty,
+                    runtime.InvokeMethodValue,
+                    runtime.NormalizeToEnumerator,
+                    runtime.NumericCoercion,
+                    runtime.PadUndefinedAttrCtor,
+                    runtime.SetProperty,
+                    runtime.StringCoercion,
+                    runtime.StringTryInvokeSymbolMethod,
+                    runtime.Symbols,
+                    runtime.TSFunctionGetMethodInfo,
+                    runtime.TSFunctionInvokeWithThis,
+                    runtime.TSFunctionType,
+                    runtime.TSTypeErrorCtor,
+                    runtime.TypeOf,
+                    runtime.UndefinedInstance,
+                    runtime.UndefinedType
+                )
+            );
         // String.prototype dict populate — must come AFTER all the String* helpers,
         // the stubs (emitted earlier), AND the RegExp methods above.
         EmitStringPrototypePopulate(runtime.Strings,
@@ -1543,8 +1569,8 @@ public partial class RuntimeEmitter
                     runtime.DescriptorStorage.DescriptorEnumerable.GetSetMethod()!, runtime.DescriptorStorage.DefineProperty),
                 runtime.TSFunctionGetOrCreate, runtime.TSFunctionCtorWithCache, runtime.Symbols.GetStorage,
                 runtime.Symbols.Iterator, runtime.ObjectPrototypeField, runtime.DescriptorStorage.SetPrototype),
-            _features.UsesRegExp ? new StringPrototypeRegExpInputs(runtime.StringMatchRegExp, runtime.StringMatchAllRegExp,
-                runtime.StringSearchRegExp, runtime.StringReplaceAllRegExp, runtime.StringSplitProto) : null);
+            runtime.RegExps.Implementation is not null ? new StringPrototypeRegExpInputs(runtime.RegExps.RequireImplementation().StringMatch, runtime.RegExps.RequireImplementation().StringMatchAll,
+                runtime.RegExps.RequireImplementation().StringSearch, runtime.RegExps.RequireImplementation().StringReplaceAll, runtime.RegExps.RequireImplementation().StringSplitProto) : null);
         // Boolean.prototype population wires dedicated toString and valueOf helpers.
         EmitBooleanPrototypePopulate(typeBuilder, runtime.Booleans,
             new BooleanPrototypeInputs(
@@ -1640,7 +1666,7 @@ public partial class RuntimeEmitter
                     runtime.StringCoercion,
                     runtime.TSFunctionType,
                     runtime.TSObjectMergeEnumerable,
-                    runtime.TSRegExpType,
+                    runtime.RegExps.Implementation?.Type,
                     runtime.Symbols.Type,
                     runtime.TSTypeErrorCtor,
                     runtime.TypeOf,
@@ -1678,7 +1704,7 @@ public partial class RuntimeEmitter
                     runtime.TSFunctionInvokeWithThis,
                     runtime.TSFunctionType,
                     runtime.TSObjectMergeEnumerable,
-                    runtime.TSRegExpType,
+                    runtime.RegExps.Implementation?.Type,
                     runtime.Symbols.Type,
                     runtime.TSTypeErrorCtor,
                     runtime.TypeOf,
@@ -1827,8 +1853,18 @@ public partial class RuntimeEmitter
         // TSRegExpSym* helpers are emitted (they're referenced from the
         // populate IL). Emitted gated on UsesRegExp; otherwise the helpers
         // were never created.
-        if (_features.UsesRegExp)
-            EmitRegExpPrototypePopulate(typeBuilder, runtime);
+        if (runtime.RegExps.Implementation is not null)
+            EmitRegExpPrototypePopulate(
+                typeBuilder,
+                runtime.RegExps,
+                new RegExpPrototypePopulateInputs(
+                    runtime.DescriptorStorage,
+                    runtime.ObjectPrototypeField,
+                    runtime.Symbols,
+                    runtime.TSFunctionCtorWithCache,
+                    runtime.UndefinedInstance
+                )
+            );
         // Promise.prototype helpers + populate. Helpers wrap runtime.RequirePromise().Then
         // /PromiseCatch/PromiseFinally with an `__this`-aware signature so
         // `Promise.prototype.then.call(p, fn)` routes correctly. Must come

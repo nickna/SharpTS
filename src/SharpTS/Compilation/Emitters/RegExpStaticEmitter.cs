@@ -20,7 +20,7 @@ public sealed class RegExpStaticEmitter : IStaticTypeEmitterStrategy
             return false;
 
         var ctx = emitter.Context;
-        var escape = ctx.Runtime?.TSRegExpEscapeMethod;
+        var escape = ctx.Runtime?.RegExps.Implementation?.StaticEscape;
         if (escape == null)
             return false;
 
@@ -47,7 +47,7 @@ public sealed class RegExpStaticEmitter : IStaticTypeEmitterStrategy
 
         var ctx = emitter.Context;
         var runtime = ctx.Runtime;
-        var escape = runtime?.TSRegExpEscapeMethod;
+        var escape = runtime?.RegExps.Implementation?.StaticEscape;
         if (escape == null)
             return false;
 

@@ -3708,6 +3708,394 @@ public class StandaloneDllTests
             verifyStandardError: error => Assert.Empty(error)));
     }
 
+    public static IEnumerable<object[]> RegExpMetadataPrograms =>
+    [
+        new object[]
+        {
+            "minimal",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "console.log(1);" },
+            "1\n",
+            false
+        },
+        new object[]
+        {
+            "captures",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let match: any = /((1)|(12))((3)|(23))/.exec(\"123\");\nconsole.log(match[0] + \":\" + match.index + \":\" + match.input);\nconsole.log(match[3] === undefined);" },
+            "123:0:123\ntrue\n",
+            false
+        },
+        new object[]
+        {
+            "lastindex_raw",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let reads = 0;\nlet counter: any = { valueOf: function (): any { reads++; return 0; } };\nlet re: any = /./;\nre.lastIndex = counter;\nlet match = re.exec(\"abc\");\nconsole.log(match[0] + \":\" + reads + \":\" + (re.lastIndex === counter));" },
+            "a:1:true\n",
+            false
+        },
+        new object[]
+        {
+            "lastindex_global",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let reads = 0;\nlet re: any = /./g;\nre.lastIndex = { valueOf: function (): any { reads++; return 1; } };\nlet match = re.exec(\"abc\");\nconsole.log(match[0] + \":\" + reads + \":\" + re.lastIndex);" },
+            "b:1:2\n",
+            false
+        },
+        new object[]
+        {
+            "exec_contract",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "console.log((/undefined/).exec()[0]);\nlet exec: any = RegExp.prototype.exec;\ntry {\n    new exec();\n    console.log(\"constructed\");\n} catch (e) {\n    console.log(e instanceof TypeError);\n}" },
+            "undefined\ntrue\n",
+            false
+        },
+        new object[]
+        {
+            "exec_null",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let regexp: any = /ll|l/;\nlet match: any = regexp.exec(null);\nconsole.log(match instanceof Array);\nconsole.log(match[0] + \":\" + match.index + \":\" + match.input);" },
+            "true\nll:2:null\n",
+            false
+        },
+        new object[]
+        {
+            "match_replace_reset",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const matcher: any = /a/g;\nmatcher.lastIndex = 2;\nconst matches: any = \"aba\".match(matcher);\nconsole.log(matches.join(\",\") + \":\" + matcher.lastIndex);\n\nconst replacer: any = /a/g;\nreplacer.lastIndex = 2;\nconsole.log(\"aba\".replace(replacer, \"x\") + \":\" + replacer.lastIndex);" },
+            "a,a:0\nxbx:0\n",
+            false
+        },
+        new object[]
+        {
+            "symbol_accessor",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const intrinsicMatch: any = RegExp.prototype[Symbol.match];\nconst intrinsicExec: any = RegExp.prototype.exec;\nconst regexp: any = /a/g;\nlet order: string = \"\";\n\nObject.defineProperty(regexp, Symbol.match, {\n    configurable: true,\n    get: function (): any {\n        order = order + \"symbol>\";\n        return intrinsicMatch;\n    }\n});\nregexp.exec = function (input: string): any {\n    order = order + \"exec>\";\n    return intrinsicExec.call(this, input);\n};\n\nconsole.log(\"aba\".match(regexp).join(\",\"));\nconsole.log(order);" },
+            "a,a\nsymbol>exec>exec>exec>\n",
+            false
+        },
+        new object[]
+        {
+            "exec_accessor",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const intrinsicExec: any = RegExp.prototype.exec;\nlet gets: number = 0;\nlet calls: number = 0;\nObject.defineProperty(RegExp.prototype, \"exec\", {\n    configurable: true,\n    get: function (): any {\n        gets = gets + 1;\n        return function (input: string): any {\n            calls = calls + 1;\n            return intrinsicExec.call(this, input);\n        };\n    }\n});\n\nconsole.log(\"aba\".replace(/a/g, \"x\") + \":\" + gets + \":\" + calls);" },
+            "xbx:3:3\n",
+            false
+        },
+        new object[]
+        {
+            "groups_null",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const withNull: any = /x/;\nwithNull.exec = function(input: string): any {\n    return { 0: \"x\", length: 1, index: 0, input: input, groups: null };\n};\nconsole.log(\"x\".replace(withNull, function(): string {\n    console.log(arguments.length, arguments[3] === null);\n    return \"present\";\n}));\n\nconst withoutGroups: any = /x/;\nwithoutGroups.exec = function(input: string): any {\n    return { 0: \"x\", length: 1, index: 0, input: input };\n};\nconsole.log(\"x\".replace(withoutGroups, function(): string {\n    console.log(arguments.length, arguments[3] === undefined);\n    return \"absent\";\n}));\n\ntry {\n    console.log(\"x\".replace(withNull, \"$<name>\"));\n} catch (error) {\n    console.log(error instanceof TypeError);\n}" },
+            "4 true\npresent\n3 true\nabsent\ntrue\n",
+            false
+        },
+        new object[]
+        {
+            "symbol_overrides",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "RegExp.prototype[Symbol.match] = function (input: string): any {\n    console.log(\"match:\" + input + \":\" + (this instanceof RegExp));\n    return \"custom-match\";\n};\nRegExp.prototype[Symbol.replace] = function (\n    input: string, replacement: any): any {\n    console.log(\"replace:\" + input + \":\" + replacement + \":\" +\n        (this instanceof RegExp));\n    return \"custom-replace\";\n};\n\nconsole.log(\"aba\".match(/a/g));\nconsole.log(\"aba\".replace(/a/g, \"x\"));" },
+            "match:aba:true\ncustom-match\nreplace:aba:x:true\ncustom-replace\n",
+            false
+        },
+        new object[]
+        {
+            "replace_tokens",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "console.log(\"aba\".replace(/a/g, \"x\"));\nconsole.log(\"aba\".replace(/a/, \"x\"));\nconsole.log(\"abc\".replace(/(b)/, \"[$$][$&][$1][$`][$']\"));\nconsole.log(\"ab\".replace(/(?<letter>[a-z])/g, \"<$<letter>>\"));\nconsole.log(\"ab\".replace(/(?:)/g, \"-\"));" },
+            "xbx\nxba\na[$][b][b][a][c]c\n<a><b>\n-a-b-\n",
+            false
+        },
+        new object[]
+        {
+            "replace_callback",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const result: string = \"ab\".replace(\n    /(?<letter>[a-z])/g,\n    function(match: string, capture: string, index: number,\n        input: string, groups: any): string {\n        console.log(match, capture, index, input, groups.letter);\n        return capture.toUpperCase();\n    });\nconsole.log(result);" },
+            "a a 0 ab a\nb b 1 ab b\nAB\n",
+            false
+        },
+        new object[]
+        {
+            "replace_capture",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const topLevelReplacement: string = \"[$&]\";\nfunction replaceTopLevel(input: string): string {\n    return input.replace(/x/, topLevelReplacement);\n}\n\nfunction makeReplacer(replacement: string): any {\n    return function(input: string): string {\n        return input.replace(/x/, replacement);\n    };\n}\n\nconsole.log(replaceTopLevel(\"x\"));\nconst replaceCaptured: any = makeReplacer(\"<$&>\");\nconsole.log(replaceCaptured(\"x\"));" },
+            "[x]\n<x>\n",
+            false
+        },
+        new object[]
+        {
+            "replace_mutation",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "RegExp.prototype[Symbol.replace] = function(\n    input: string, replacement: any): string {\n    console.log(\"custom\", input, replacement);\n    return \"mutated\";\n};\nconsole.log(\"foo\".replace(/foo/g, \"bar\"));" },
+            "custom foo bar\nmutated\n",
+            false
+        },
+        new object[]
+        {
+            "test_overrides",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const r: any = /x/;\nr.exec = function(value: any): any {\n    console.log(\"own-exec\", value);\n    return { matched: true };\n};\nconsole.log(r.test(\"abc\"));\nr.test = function(value: any): boolean {\n    console.log(\"own-test\", value);\n    return false;\n};\nconsole.log(r.test(\"abc\"));" },
+            "own-exec abc\ntrue\nown-test abc\nfalse\n",
+            false
+        },
+        new object[]
+        {
+            "test_accessors",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const r: any = /x/;\nObject.defineProperty(r, \"exec\", {\n    configurable: true,\n    get: function(): any {\n        console.log(\"get-exec\");\n        return function(): any { return { matched: true }; };\n    }\n});\nconsole.log(r.test(\"abc\"));\n\nconst originalTest: any = Object.getOwnPropertyDescriptor(RegExp.prototype, \"test\");\ntry {\n    Object.defineProperty(RegExp.prototype, \"test\", {\n        configurable: true,\n        get: function(): any {\n            console.log(\"get-test\");\n            return function(): boolean { return false; };\n        }\n    });\n    console.log(/x/.test(\"abc\"));\n} finally {\n    Object.defineProperty(RegExp.prototype, \"test\", originalTest);\n}" },
+            "get-exec\ntrue\nget-test\nfalse\n",
+            false
+        },
+        new object[]
+        {
+            "sticky_readonly",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const globalRx: any = /a/g;\nconsole.log(globalRx.test(\"aa\"), globalRx.lastIndex);\nconsole.log(globalRx.test(\"aa\"), globalRx.lastIndex);\nconsole.log(globalRx.test(\"aa\"), globalRx.lastIndex);\n\nconst stickyRx: any = /a/y;\nstickyRx.lastIndex = 1;\nconsole.log(stickyRx.test(\"ba\"), stickyRx.lastIndex);\n\nconst locked: any = /z/g;\nObject.defineProperty(locked, \"lastIndex\", { writable: false });\ntry {\n    locked.test(\"x\");\n} catch (error) {\n    console.log(error instanceof TypeError);\n}" },
+            "true 1\ntrue 2\nfalse 0\ntrue 2\ntrue\n",
+            false
+        },
+        new object[]
+        {
+            "test_receiver",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let coercions: number = 0;\nconst argument: any = {\n    toString: function(): string {\n        coercions++;\n        throw new Error(\"coerced\");\n    }\n};\n\nfunction check(receiver: any): void {\n    try {\n        RegExp.prototype.test.call(receiver, argument);\n    } catch (error) {\n        console.log(error instanceof TypeError, coercions);\n    }\n}\n\ncheck(undefined);\ncheck(1n);" },
+            "true 0\ntrue 0\n",
+            false
+        },
+        new object[]
+        {
+            "hoist_stateful",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "function g(): boolean { return /a/g.test(\"aaa\"); }\nconsole.log(g(), g(), g(), g());\nfunction y(): boolean { return /a/y.test(\"aaa\"); }\nconsole.log(y(), y(), y(), y());" },
+            "true true true true\ntrue true true true\n",
+            false
+        },
+        new object[]
+        {
+            "hoist_plain",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "function count(n: number): number {\n    let c = 0;\n    for (let i = 0; i < n; i++) {\n        if (/^[a-z]+$/.test(\"abc\")) c++;\n    }\n    return c;\n}\nconsole.log(count(5));" },
+            "5\n",
+            false
+        },
+        new object[]
+        {
+            "hoist_escape",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "function uses(): boolean { return /a/.test(\"ba\"); }\nconst r = /a/;\nr.lastIndex = 7;\nconsole.log(uses());\nconsole.log(r.lastIndex);" },
+            "true\n7\n",
+            false
+        },
+        new object[]
+        {
+            "literal_identity",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "console.log(/a/ === /a/);" },
+            "false\n",
+            false
+        },
+        new object[]
+        {
+            "named_exec",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let regex = /(?<year>\\d{4})-(?<month>\\d{2})-(?<day>\\d{2})/;\nlet match = regex.exec(\"2024-03-15\");\nconsole.log(match.groups.year);\nconsole.log(match.groups.month);\nconsole.log(match.groups.day);" },
+            "2024\n03\n15\n",
+            false
+        },
+        new object[]
+        {
+            "named_matchall",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let str = \"2024-03 and 2025-12\";\nlet matches = [...str.matchAll(/(?<year>\\d{4})-(?<month>\\d{2})/g)];\nconsole.log(matches.length);\nconsole.log(matches[0].groups.year);\nconsole.log(matches[0].groups.month);\nconsole.log(matches[1].groups.year);\nconsole.log(matches[1].groups.month);" },
+            "2\n2024\n03\n2025\n12\n",
+            false
+        },
+        new object[]
+        {
+            "mixed_captures",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let regex = /(\\d+)-(?<name>\\w+)/;\nlet match = regex.exec(\"42-hello\");\nconsole.log(match[0]);\nconsole.log(match[1]);\nconsole.log(match[2]);\nconsole.log(match.groups.name);" },
+            "42-hello\n42\nhello\nhello\n",
+            false
+        },
+        new object[]
+        {
+            "flags",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "console.log(/a/y.sticky);\nconsole.log(/a/s.dotAll);\nconsole.log(/a/d.hasIndices);\nconsole.log(/a/u.unicode);" },
+            "true\ntrue\ntrue\ntrue\n",
+            false
+        },
+        new object[]
+        {
+            "matchall",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const str = \"test1 test2 test3\";\nconst matches = Array.from(str.matchAll(/test\\d/g));\nconsole.log(matches.length);\nconst m0 = matches[0];\nconst m1 = matches[1];\nconst m2 = matches[2];\nconsole.log(m0[\"0\"]);\nconsole.log(m1[\"0\"]);\nconsole.log(m2[\"0\"]);" },
+            "3\ntest1\ntest2\ntest3\n",
+            false
+        },
+        new object[]
+        {
+            "constructors",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const a = new RegExp('a', 'gi');\nconst b = new RegExp('b');\nconsole.log(a.source, a.flags, a.global, a.ignoreCase);\nconsole.log(b.source, b.flags === '', b.test('b'));\nconsole.log(a.toString());" },
+            "a gi true true\nb true true\n/a/gi\n",
+            false
+        },
+        new object[]
+        {
+            "clone",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const r = /a/gi; r.lastIndex = 2;\nconst c = structuredClone(r);\nconsole.log(c.source, c.flags, c.lastIndex, r.lastIndex, c === r);\nconsole.log(c.test('Aa'), c.lastIndex, r.lastIndex);" },
+            "a gi 0 2 false\ntrue 1 2\n",
+            false
+        },
+        new object[]
+        {
+            "consumers",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "console.log('a1b2'.replaceAll(/\\d/g, '#'));\nconsole.log('x,y;z'.split(/[,;]/).join('-'));\nconsole.log('hello world'.search(/world/));" },
+            "a#b#\nx-y-z\n6\n",
+            false
+        },
+        new object[]
+        {
+            "esm",
+            "main.ts",
+            new string[] { "dep.ts", "main.ts" },
+            new string[] { "export const pattern = /a/gi;", "import {pattern} from \"./dep\"; console.log(pattern.test(\"A\"), pattern.source, pattern.flags);" },
+            "true a gi\n",
+            false
+        },
+        new object[]
+        {
+            "commonjs",
+            "main.cjs",
+            new string[] { "dep.cjs", "main.cjs" },
+            new string[] { "exports.pattern = /a/gi;", "const dep = require(\"./dep.cjs\"); console.log(dep.pattern.test(\"A\"), dep.pattern.source, dep.pattern.flags);" },
+            "true a gi\n",
+            false
+        },
+        new object[]
+        {
+            "hosted_regexp",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "export function value(input: string) { return /^[a-z]+$/.test(input); }" },
+            "",
+            true
+        },
+        new object[]
+        {
+            "hosted_minimal",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "export const value = 1;" },
+            "",
+            true
+        },
+        new object[]
+        {
+            "prototype_descriptors",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const p: any = RegExp.prototype;\nfor (const key of ['source','flags','global','ignoreCase','multiline','sticky','unicode','dotAll','hasIndices','unicodeSets']) {\n const d: any = Object.getOwnPropertyDescriptor(p, key);\n console.log(key, typeof d.get, d.set === undefined, d.enumerable, d.configurable);\n}\nfor (const key of ['exec','test','toString']) {\n const d: any = Object.getOwnPropertyDescriptor(p, key);\n console.log(key, typeof d.value, d.writable, d.enumerable, d.configurable);\n}\nfor (const key of [Symbol.match, Symbol.matchAll, Symbol.replace, Symbol.search, Symbol.split]) {\n const d: any = Object.getOwnPropertyDescriptor(p, key);\n console.log(d.value.length, d.writable, d.enumerable, d.configurable);\n}" },
+            "source function true false true\nflags function true false true\nglobal function true false true\nignoreCase function true false true\nmultiline function true false true\nsticky function true false true\nunicode function true false true\ndotAll function true false true\nhasIndices function true false true\nunicodeSets function true false true\nexec function true false true\ntest function true false true\ntoString function true false true\n1 true false true\n1 true false true\n2 true false true\n1 true false true\n2 true false true\n",
+            false
+        },
+        new object[]
+        {
+            "search_override",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const r: any = /a/g; r.lastIndex = 2;\nlet calls = 0;\nr.exec = function(input: any): any { calls++; console.log(this.lastIndex, input); this.lastIndex = 9; return {index: 1}; };\nconsole.log(RegExp.prototype[Symbol.search].call(r, 'aba'), calls, r.lastIndex);" },
+            "0 aba\n1 1 2\n",
+            false
+        },
+        new object[]
+        {
+            "split_override",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const r: any = /a/;\nr[Symbol.split] = function(input: any, limit: any): any { console.log(this === r, input, limit); return ['custom']; };\nconsole.log('aba'.split(r, 2).join('|'));" },
+            "true aba 2\ncustom\n",
+            false
+        },
+        new object[]
+        {
+            "split_species_constructor",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "function Splitter(pattern: any, flags: any): any {\n console.log(pattern.source, flags); return new RegExp('b', flags);\n}\nconst r: any = /a/; r.constructor = { [Symbol.species]: Splitter };\nconst parts: any = RegExp.prototype[Symbol.split].call(r, 'abc', 2);\nconsole.log(parts.join('|'), r.lastIndex);" },
+            "a y\na|c 0\n",
+            false
+        },
+        new object[]
+        {
+            "matchall_species_constructor",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "function Matcher(pattern: any, flags: any): any {\n console.log(pattern.source, flags); return new RegExp('b', flags);\n}\nconst r: any = /a/g; r.lastIndex = 1; r.constructor = { [Symbol.species]: Matcher };\nconst iterator: any = RegExp.prototype[Symbol.matchAll].call(r, 'abb');\nconst a: any = iterator.next(); const b: any = iterator.next(); const end: any = iterator.next();\nconsole.log(a.value[0], a.value.index, b.value[0], b.value.index, end.done, r.lastIndex);" },
+            "a g\nb 1 b 2 true 1\n",
+            false
+        },
+    ];
+
+    [Theory]
+    [MemberData(nameof(RegExpMetadataPrograms))]
+    public void Isolated_RegExpMetadata_PreservesCollectionsAndDeployment(
+        string name, string entry, string[] paths, string[] sources, string expected, bool hosted)
+    {
+        using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        for (int i = 0; i < paths.Length; i++) tempDir.CreateFile(paths[i], sources[i]);
+        var sourcePath = tempDir.GetPath(entry);
+        var dllPath = tempDir.GetPath($"regexp-metadata_{name}.dll");
+        var hosting = hosted ? " --target dll --hosted" : "";
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --noLib --compile \"{sourcePath}\" -o \"{dllPath}\" --verify --standalone{hosting}", tempDir.Path);
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        var references = GetAssemblyReferences(dllPath);
+        Assert.DoesNotContain("SharpTS", references);
+        Assert.Equal(hosted, references.Contains("SharpTS.Hosting.Abstractions"));
+        Assert.False(File.Exists(tempDir.GetPath("SharpTS.dll")));
+        if (!hosted)
+            Assert.Equal(expected, ExecuteCompiledDllIsolated(dllPath, timeoutMs: 30000,
+                verifyStandardError: error => Assert.Empty(error)));
+    }
+
+
     public static IEnumerable<object[]> DateMetadataPrograms =>
     [
         new object[]

@@ -789,20 +789,20 @@ public abstract partial class ExpressionEmitterBase
             case 0:
                 IL.Emit(OpCodes.Ldstr, "");
                 IL.Emit(OpCodes.Ldstr, "");
-                IL.Emit(OpCodes.Call, Ctx.Runtime!.CreateRegExpWithFlags);
+                IL.Emit(OpCodes.Call, Ctx.Runtime!.RegExps.RequireImplementation().CreateWithFlags);
                 break;
             case 1:
                 EmitExpression(arguments[0]);
                 EnsureBoxed();
                 IL.Emit(OpCodes.Ldsfld, Ctx.Runtime!.UndefinedInstance);
-                IL.Emit(OpCodes.Call, Ctx.Runtime!.RegExpFromArgs);
+                IL.Emit(OpCodes.Call, Ctx.Runtime!.RegExps.RequireImplementation().FromArguments);
                 break;
             default:
                 EmitExpression(arguments[0]);
                 EnsureBoxed();
                 EmitExpression(arguments[1]);
                 EnsureBoxed();
-                IL.Emit(OpCodes.Call, Ctx.Runtime!.RegExpFromArgs);
+                IL.Emit(OpCodes.Call, Ctx.Runtime!.RegExps.RequireImplementation().FromArguments);
                 break;
         }
         SetStackUnknown();

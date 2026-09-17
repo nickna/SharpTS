@@ -270,10 +270,10 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Isinst, runtime.Dates.RequireImplementation().Type);
             il.Emit(OpCodes.Brtrue, pdsStoreLabel);
         }
-        if (_features.UsesRegExp)
+        if (runtime.RegExps.Implementation is not null)
         {
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.TSRegExpType);
+            il.Emit(OpCodes.Isinst, runtime.RegExps.RequireImplementation().Type);
             il.Emit(OpCodes.Brtrue, pdsStoreLabel);
         }
         if (_features.UsesPromise)
@@ -582,10 +582,10 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Isinst, runtime.Dates.RequireImplementation().Type);
             il.Emit(OpCodes.Brtrue, fieldsPdsStoreLabel);
         }
-        if (_features.UsesRegExp)
+        if (runtime.RegExps.Implementation is not null)
         {
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.TSRegExpType);
+            il.Emit(OpCodes.Isinst, runtime.RegExps.RequireImplementation().Type);
             il.Emit(OpCodes.Brtrue, fieldsPdsStoreLabel);
         }
         if (_features.UsesPromise)
@@ -819,10 +819,10 @@ public partial class RuntimeEmitter
         // $RegExp — `r.lastIndex = value` stores the raw JS value. ToLength is
         // deferred until RegExpBuiltinExec observes it.
         var tsRegExpSetLabel = il.DefineLabel();
-        if (_features.UsesRegExp)
+        if (runtime.RegExps.Implementation is not null)
         {
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.TSRegExpType);
+            il.Emit(OpCodes.Isinst, runtime.RegExps.RequireImplementation().Type);
             il.Emit(OpCodes.Brtrue, tsRegExpSetLabel);
         }
 
@@ -916,7 +916,7 @@ public partial class RuntimeEmitter
         // SetFieldsProperty so user data-property assignments
         // (`Object.defineProperty(r, 'foo', {writable:true}); r.foo = ...`)
         // still hit the user-property bag.
-        if (_features.UsesRegExp)
+        if (runtime.RegExps.Implementation is not null)
         {
             il.MarkLabel(tsRegExpSetLabel);
 
@@ -1002,17 +1002,17 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Brtrue, numericSetLabel);
             // non-number → rx._lastIndexBoxed = value (defer ToLength/valueOf to exec)
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Castclass, runtime.TSRegExpType);
+            il.Emit(OpCodes.Castclass, runtime.RegExps.RequireImplementation().Type);
             il.Emit(OpCodes.Ldarg_2);
-            il.Emit(OpCodes.Stfld, _tsRegExpLastIndexBoxedField);
+            il.Emit(OpCodes.Stfld, runtime.RegExps.RequireImplementation().BoxedLastIndexField);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(numericSetLabel);
             // primitive: rx._lastIndex = ToLength(value); rx._lastIndexBoxed = null
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Castclass, runtime.TSRegExpType);
+            il.Emit(OpCodes.Castclass, runtime.RegExps.RequireImplementation().Type);
             il.Emit(OpCodes.Ldarg_2);
             EmitToLengthBoxed(il, runtime);
-            il.Emit(OpCodes.Callvirt, runtime.TSRegExpLastIndexSetter);  // also clears boxed
+            il.Emit(OpCodes.Callvirt, runtime.RegExps.RequireImplementation().LastIndexSetter);  // also clears boxed
             il.Emit(OpCodes.Ret);
 
             il.MarkLabel(notLastIndexLabel);

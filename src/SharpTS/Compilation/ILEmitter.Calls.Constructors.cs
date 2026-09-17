@@ -576,7 +576,7 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Br, constructionDone);
         IL.MarkLabel(notStringType);
 
-        var regExpType = _ctx.Runtime!.TSRegExpType;
+        var regExpType = _ctx.Runtime!.RegExps.Implementation?.Type;
         if (regExpType is not null)
         {
             var notRegExpType = IL.DefineLabel();
@@ -592,7 +592,7 @@ public partial class ILEmitter
                 IL.Emit(OpCodes.Ldloc, argTemps[1]);
             else
                 IL.Emit(OpCodes.Ldsfld, _ctx.Runtime.UndefinedInstance);
-            IL.Emit(OpCodes.Call, _ctx.Runtime.RegExpFromArgs);
+            IL.Emit(OpCodes.Call, _ctx.Runtime.RegExps.RequireImplementation().FromArguments);
             IL.Emit(OpCodes.Br, constructionDone);
             IL.MarkLabel(notRegExpType);
         }

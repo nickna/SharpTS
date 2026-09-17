@@ -353,8 +353,6 @@ public class EmittedRuntime
     /// path is still intercepted at compile time by GlobalThisStaticEmitter.
     /// </summary>
     public FieldBuilder GlobalThisSingletonField { get; set; } = null!;
-    /// <summary>$Runtime.StringReplaceWithFunction(str, pattern, fn, replaceAll) — handles functional replacement for replace/replaceAll and stringifies each callback result.</summary>
-    public MethodBuilder StringReplaceWithFunction { get; set; } = null!;
     /// <summary>$Runtime.ObjectProtoToString(this) — ECMA-262 19.1.3.6 toString returns "[object X]" branded by receiver type. Wired into Object.prototype.toString slot for borrowed-method dispatch (`obj.toString = Object.prototype.toString; obj.toString()`).</summary>
     public MethodBuilder ObjectProtoToStringHelper { get; set; } = null!;
     /// <summary>$Runtime.ObjectProtoValueOf(this) — ECMA-262 19.1.3.7. Returns the receiver as-is (primitives stay primitive, objects stay objects). Wired into Object.prototype.valueOf so the materializer's ToPrimitive picks up the inherited method and sees a non-primitive return for plain objects (triggering the toString fallback).</summary>
@@ -404,10 +402,6 @@ public class EmittedRuntime
     public FieldBuilder FunctionPrototypeField { get; set; } = null!;
     /// <summary>Idempotent populate for <see cref="FunctionPrototypeField"/>.</summary>
     public MethodBuilder FunctionPrototypePopulateMethod { get; set; } = null!;
-    /// <summary>RegExp.prototype singleton dict — primarily a host for the five well-known symbol-keyed methods (@@match/@@replace/@@search/@@split/@@matchAll, ECMA-262 §22.2.5) reachable via `RegExp.prototype[Symbol.X]`. The symbol entries live in the per-object ConditionalWeakTable symbol dict, populated at module init.</summary>
-    public FieldBuilder RegExpPrototypeField { get; set; } = null!;
-    /// <summary>Idempotent populate for <see cref="RegExpPrototypeField"/>.</summary>
-    public MethodBuilder RegExpPrototypePopulateMethod { get; set; } = null!;
     /// <summary>$Runtime.FunctionProtoCall(__this, args) — ECMA-262 §20.2.3.3 Function.prototype.call. Dispatches __this with args[0] as thisArg, args[1..] as call args.</summary>
     /// <summary>$Runtime.FunctionProtoApply(__this, args) — ECMA-262 §20.2.3.1 Function.prototype.apply. Dispatches __this with args[0] as thisArg, args[1] (array-like) as call args.</summary>
     /// <summary>$Runtime.FunctionProtoBind(__this, args) — ECMA-262 §20.2.3.2 Function.prototype.bind. Returns a $BoundTSFunction (or shim) capturing __this + thisArg + boundArgs.</summary>
@@ -655,88 +649,11 @@ public class EmittedRuntime
     /// <summary>Required Date prototype declarations with optional Date type and operation metadata.</summary>
     public EmittedDateRuntime Dates { get; } = new();
 
-    // RegExp support - $Runtime wrapper methods
-    public MethodBuilder RegExpCoerceArg { get; set; } = null!;
-    public MethodBuilder CreateRegExpWithFlags { get; set; } = null!;
-    public MethodBuilder RegExpFromArgs { get; set; } = null!;
-    public MethodBuilder RegExpTest { get; set; } = null!;
-    public MethodBuilder RegExpExec { get; set; } = null!;
-    /// <summary>$Runtime.RegExpSymbolSplitProtocol(rx, string, limit) -> $Array — late-emitted ECMA-262 RegExp.prototype[@@split] protocol, including SpeciesConstructor and custom RegExpExec dispatch.</summary>
-    public MethodBuilder RegExpSymbolSplitProtocol { get; set; } = null!;
-    public MethodBuilder RegExpSymbolMatchAllProtocol { get; set; } = null!;
-    public MethodBuilder RegExpGetSource { get; set; } = null!;
-    public MethodBuilder RegExpGetFlags { get; set; } = null!;
-    public MethodBuilder RegExpGetGlobal { get; set; } = null!;
-    public MethodBuilder RegExpGetIgnoreCase { get; set; } = null!;
-    public MethodBuilder RegExpGetMultiline { get; set; } = null!;
-    public MethodBuilder RegExpGetSticky { get; set; } = null!;
-    public MethodBuilder RegExpGetUnicode { get; set; } = null!;
-    public MethodBuilder RegExpGetDotAll { get; set; } = null!;
-    public MethodBuilder RegExpGetHasIndices { get; set; } = null!;
-    public MethodBuilder RegExpGetUnicodeSets { get; set; } = null!;
-    public MethodBuilder RegExpGetLastIndex { get; set; } = null!;
-    public MethodBuilder RegExpSetLastIndex { get; set; } = null!;
-    public MethodBuilder StringMatchRegExp { get; set; } = null!;
+    /// <summary>Required RegExp prototype declarations and optional type, operation and protocol metadata.</summary>
+    public EmittedRegExpRuntime RegExps { get; } = new();
+
+    // Shared string symbol dispatch is independent of the optional RegExp implementation.
     public MethodBuilder StringTryInvokeSymbolMethod { get; set; } = null!;
-    public MethodBuilder StableRegExpReplace { get; set; } = null!;
-    public MethodBuilder StringReplaceRegExp { get; set; } = null!;
-    public MethodBuilder StringReplaceAllRegExp { get; set; } = null!;
-    public MethodBuilder StringSearchRegExp { get; set; } = null!;
-    public MethodBuilder StringSplitRegExp { get; set; } = null!;
-    public MethodBuilder StringSplitProto { get; set; } = null!;
-    public MethodBuilder StringMatchAllRegExp { get; set; } = null!;
-    public MethodBuilder StringMatchAllRegExpPrepared { get; set; } = null!;
-
-    // RegExp support - emitted $RegExp type for standalone assemblies
-    // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSRegExp
-    public TypeBuilder TSRegExpType { get; set; } = null!;
-    public ConstructorBuilder TSRegExpCtorPattern { get; set; } = null!;
-    public ConstructorBuilder TSRegExpCtorPatternFlags { get; set; } = null!;
-    public MethodBuilder TSRegExpNormalizeFlags { get; set; } = null!;
-    public MethodBuilder TSRegExpSourceGetter { get; set; } = null!;
-    public MethodBuilder TSRegExpFlagsGetter { get; set; } = null!;
-    public MethodBuilder TSRegExpGlobalGetter { get; set; } = null!;
-    public MethodBuilder TSRegExpIgnoreCaseGetter { get; set; } = null!;
-    public MethodBuilder TSRegExpMultilineGetter { get; set; } = null!;
-    public MethodBuilder TSRegExpLastIndexGetter { get; set; } = null!;
-    public MethodBuilder TSRegExpLastIndexSetter { get; set; } = null!;
-
-    // RegExp.prototype accessor-descriptor getters (ECMA-262 §22.2.5.{3-12}).
-    // Each is a static helper on $RegExp wrapped by RegExpPrototypePopulate
-    // into an accessor descriptor via PDSDefineProperty.
-    public MethodBuilder TSRegExpProtoGetSource { get; set; } = null!;
-    public MethodBuilder TSRegExpProtoGetFlags { get; set; } = null!;
-    public MethodBuilder TSRegExpProtoGetGlobal { get; set; } = null!;
-    public MethodBuilder TSRegExpProtoGetIgnoreCase { get; set; } = null!;
-    public MethodBuilder TSRegExpProtoGetMultiline { get; set; } = null!;
-    public MethodBuilder TSRegExpProtoGetSticky { get; set; } = null!;
-    public MethodBuilder TSRegExpProtoGetUnicode { get; set; } = null!;
-    public MethodBuilder TSRegExpProtoGetDotAll { get; set; } = null!;
-    public MethodBuilder TSRegExpProtoGetHasIndices { get; set; } = null!;
-    public MethodBuilder TSRegExpProtoGetUnicodeSets { get; set; } = null!;
-
-    // RegExp.prototype.exec / .test / .toString data methods. Throw
-    // TypeError on non-RegExp receivers; installed by RegExpPrototypePopulate
-    // as data properties on the prototype.
-    public MethodBuilder TSRegExpProtoExec { get; set; } = null!;
-    public MethodBuilder TSRegExpProtoTest { get; set; } = null!;
-    public MethodBuilder TSRegExpProtoToString { get; set; } = null!;
-    public MethodBuilder TSRegExpTestMethod { get; set; } = null!;
-    public MethodBuilder TSRegExpExecMethod { get; set; } = null!;
-    public MethodBuilder TSRegExpReplaceMethod { get; set; } = null!;
-    // ECMA-262 (ES2025) RegExp.escape static — emitted standalone on $RegExp.
-    public MethodBuilder TSRegExpEscapeMethod { get; set; } = null!;
-    public MethodBuilder BuildNamedGroups { get; set; } = null!;
-
-    // RegExp.prototype well-known-symbol-keyed methods (ECMA-262 §22.2.5).
-    // Emitted as static helpers `(rx, str, ...)` so they can be wrapped in
-    // a $TSFunction with the regex bound as `_target`.
-    public MethodBuilder TSRegExpSymMatchHelper { get; set; } = null!;
-    public MethodBuilder TSRegExpSymMatchAllHelper { get; set; } = null!;
-    public MethodBuilder TSRegExpSymReplaceHelper { get; set; } = null!;
-    public MethodBuilder TSRegExpSymSearchHelper { get; set; } = null!;
-    public MethodBuilder TSRegExpSymSplitHelper { get; set; } = null!;
-    public MethodBuilder TSRegExpAdvanceStringIndexSpec { get; set; } = null!;
 
     // groupBy support
     public MethodBuilder ObjectGroupBy { get; set; } = null!;

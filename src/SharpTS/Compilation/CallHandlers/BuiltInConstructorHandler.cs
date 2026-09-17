@@ -134,7 +134,7 @@ public class BuiltInConstructorHandler : ICallHandler
         var il = emitter.IL;
         var ctx = emitter.Context;
         var runtime = ctx.Runtime;
-        if (runtime?.RegExpFromArgs == null)
+        if (runtime?.RegExps.Implementation == null)
             return false;
 
         var patternLocal = il.DeclareLocal(ctx.Types.Object);
@@ -172,7 +172,7 @@ public class BuiltInConstructorHandler : ICallHandler
         // copying as required.
         var doFromArgs = il.DefineLabel();
         var done = il.DefineLabel();
-        if (runtime.TSRegExpType != null)
+        if (runtime.RegExps.Implementation != null)
         {
             var flagsOk = il.DefineLabel();
             il.Emit(OpCodes.Ldloc, flagsLocal);
@@ -197,7 +197,7 @@ public class BuiltInConstructorHandler : ICallHandler
             il.Emit(OpCodes.Ldloc, patternLocal);
             il.Emit(OpCodes.Ldstr, "constructor");
             il.Emit(OpCodes.Call, runtime.GetProperty);
-            il.Emit(OpCodes.Ldtoken, runtime.TSRegExpType);
+            il.Emit(OpCodes.Ldtoken, runtime.RegExps.RequireImplementation().Type);
             il.Emit(OpCodes.Call, ctx.Types.GetMethod(ctx.Types.Type, "GetTypeFromHandle", ctx.Types.RuntimeTypeHandle));
             il.Emit(OpCodes.Bne_Un, doFromArgs);                     // constructor !== RegExp → copy
             // short-circuit: return pattern unchanged
@@ -207,7 +207,7 @@ public class BuiltInConstructorHandler : ICallHandler
         il.MarkLabel(doFromArgs);
         il.Emit(OpCodes.Ldloc, patternLocal);
         il.Emit(OpCodes.Ldloc, flagsLocal);
-        il.Emit(OpCodes.Call, runtime.RegExpFromArgs);
+        il.Emit(OpCodes.Call, runtime.RegExps.RequireImplementation().FromArguments);
         il.MarkLabel(done);
         emitter.SetStackUnknown();
         return true;

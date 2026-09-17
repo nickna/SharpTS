@@ -10,11 +10,133 @@ namespace SharpTS.Compilation;
 /// </summary>
 public partial class RuntimeEmitter
 {
+    private readonly record struct RegExpMethodsInputs(
+        EmittedArrayStorageRuntime ArrayStorage,
+        EmittedBooleanRuntime Booleans,
+        MethodBuilder CreateException,
+        EmittedDescriptorStorageRuntime DescriptorStorage,
+        MethodBuilder GetIndex,
+        MethodBuilder GetProperty,
+        MethodBuilder InvokeMethodValue,
+        MethodBuilder NormalizeToEnumerator,
+        EmittedNumericCoercionRuntime NumericCoercion,
+        ConstructorBuilder PadUndefinedAttrCtor,
+        MethodBuilder SetProperty,
+        EmittedStringCoercionRuntime StringCoercion,
+        MethodBuilder StringTryInvokeSymbolMethod,
+        EmittedSymbolRuntime Symbols,
+        MethodBuilder TSFunctionGetMethodInfo,
+        MethodBuilder TSFunctionInvokeWithThis,
+        TypeBuilder TSFunctionType,
+        ConstructorBuilder TSTypeErrorCtor,
+        MethodBuilder TypeOf,
+        FieldInfo UndefinedInstance,
+        Type UndefinedType
+    );
+
+    private readonly record struct RegExpCoerceArgInputs(EmittedStringCoercionRuntime StringCoercion, Type UndefinedType);
+
+    private readonly record struct StringReplaceAllRegExpInputs(
+        MethodBuilder CreateException,
+        EmittedStringCoercionRuntime StringCoercion,
+        MethodBuilder StringTryInvokeSymbolMethod,
+        EmittedSymbolRuntime Symbols,
+        ConstructorBuilder TSTypeErrorCtor,
+        MethodBuilder TypeOf,
+        Type UndefinedType
+    );
+
+    private readonly record struct RegExpFromArgsInputs(
+        EmittedBooleanRuntime Booleans,
+        MethodBuilder GetIndex,
+        MethodBuilder GetProperty,
+        EmittedStringCoercionRuntime StringCoercion,
+        EmittedSymbolRuntime Symbols,
+        Type UndefinedType
+    );
+
+    private readonly record struct RegExpExecInputs(
+        MethodBuilder CreateException,
+        MethodBuilder GetProperty,
+        EmittedSymbolRuntime Symbols,
+        MethodBuilder TSFunctionInvokeWithThis,
+        TypeBuilder TSFunctionType,
+        ConstructorBuilder TSTypeErrorCtor,
+        Type UndefinedType
+    );
+
+    private readonly record struct StringMatchRegExpInputs(
+        EmittedArrayStorageRuntime ArrayStorage,
+        MethodBuilder GetIndex,
+        MethodBuilder InvokeMethodValue,
+        MethodBuilder StringTryInvokeSymbolMethod,
+        EmittedSymbolRuntime Symbols,
+        FieldInfo UndefinedInstance,
+        Type UndefinedType
+    );
+
+    private readonly record struct StringMatchAllRegExpInputs(
+        EmittedArrayStorageRuntime ArrayStorage,
+        EmittedBooleanRuntime Booleans,
+        MethodBuilder CreateException,
+        EmittedDescriptorStorageRuntime DescriptorStorage,
+        MethodBuilder GetIndex,
+        MethodBuilder GetProperty,
+        MethodBuilder InvokeMethodValue,
+        MethodBuilder NormalizeToEnumerator,
+        EmittedNumericCoercionRuntime NumericCoercion,
+        ConstructorBuilder PadUndefinedAttrCtor,
+        MethodBuilder SetProperty,
+        EmittedStringCoercionRuntime StringCoercion,
+        EmittedSymbolRuntime Symbols,
+        MethodBuilder TSFunctionGetMethodInfo,
+        TypeBuilder TSFunctionType,
+        ConstructorBuilder TSTypeErrorCtor,
+        MethodBuilder TypeOf,
+        FieldInfo UndefinedInstance,
+        Type UndefinedType
+    );
+
+    private readonly record struct StringReplaceRegExpInputs(
+        EmittedStringCoercionRuntime StringCoercion,
+        MethodBuilder StringTryInvokeSymbolMethod,
+        EmittedSymbolRuntime Symbols,
+        MethodBuilder TypeOf
+    );
+
+    private readonly record struct StringReplaceWithFunctionInputs(
+        MethodBuilder InvokeMethodValue,
+        EmittedStringCoercionRuntime StringCoercion,
+        FieldInfo UndefinedInstance
+    );
+
+    private readonly record struct StringSearchRegExpInputs(
+        MethodBuilder GetIndex,
+        MethodBuilder InvokeMethodValue,
+        MethodBuilder StringTryInvokeSymbolMethod,
+        EmittedSymbolRuntime Symbols,
+        FieldInfo UndefinedInstance
+    );
+
+    private readonly record struct StringSplitRegExpInputs(EmittedStringCoercionRuntime StringCoercion, Type UndefinedType);
+
+    private readonly record struct StringSplitProtoInputs(
+        MethodBuilder CreateException,
+        EmittedNumericCoercionRuntime NumericCoercion,
+        ConstructorBuilder PadUndefinedAttrCtor,
+        EmittedStringCoercionRuntime StringCoercion,
+        MethodBuilder StringTryInvokeSymbolMethod,
+        EmittedSymbolRuntime Symbols,
+        ConstructorBuilder TSTypeErrorCtor,
+        Type UndefinedType
+    );
+
     private LocalBuilder EmitStringSymbolDispatchPreamble(
         ILGenerator il,
-        EmittedRuntime runtime,
+        MethodBuilder stringTryInvokeSymbolMethod,
         FieldBuilder symbol,
-        params int[] argumentIndexes)
+        params int[] argumentIndexes
+    )
     {
         var invokedLocal = il.DeclareLocal(_types.Boolean);
         var hasOwnNativeSymbolLocal = il.DeclareLocal(_types.Boolean);
@@ -34,7 +156,7 @@ public partial class RuntimeEmitter
         }
         il.Emit(OpCodes.Ldloca, invokedLocal);
         il.Emit(OpCodes.Ldloca, hasOwnNativeSymbolLocal);
-        il.Emit(OpCodes.Call, runtime.StringTryInvokeSymbolMethod);
+        il.Emit(OpCodes.Call, stringTryInvokeSymbolMethod);
         il.Emit(OpCodes.Stloc, resultLocal);
         il.Emit(OpCodes.Ldloc, invokedLocal);
         il.Emit(OpCodes.Brfalse, continueLabel);
@@ -44,36 +166,156 @@ public partial class RuntimeEmitter
         return hasOwnNativeSymbolLocal;
     }
 
-    private void EmitRegExpMethods(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitRegExpMethods(TypeBuilder typeBuilder, EmittedRegExpRuntime regExps, RegExpMethodsInputs inputs)
     {
-        EmitRegExpCoerceArg(typeBuilder, runtime);
-        EmitCreateRegExpWithFlags(typeBuilder, runtime);
-        EmitRegExpFromArgs(typeBuilder, runtime);
-        EmitRegExpTest(typeBuilder, runtime);
-        EmitRegExpExec(typeBuilder, runtime);
-        EmitRegExpGetSource(typeBuilder, runtime);
-        EmitRegExpGetFlags(typeBuilder, runtime);
-        EmitRegExpGetGlobal(typeBuilder, runtime);
-        EmitRegExpGetIgnoreCase(typeBuilder, runtime);
-        EmitRegExpGetMultiline(typeBuilder, runtime);
-        runtime.RegExpGetSticky = EmitRegExpGetFlagBool(typeBuilder, runtime, "RegExpGetSticky", 'y');
-        runtime.RegExpGetUnicode = EmitRegExpGetFlagBool(typeBuilder, runtime, "RegExpGetUnicode", 'u');
-        runtime.RegExpGetDotAll = EmitRegExpGetFlagBool(typeBuilder, runtime, "RegExpGetDotAll", 's');
-        runtime.RegExpGetHasIndices = EmitRegExpGetFlagBool(typeBuilder, runtime, "RegExpGetHasIndices", 'd');
-        runtime.RegExpGetUnicodeSets = EmitRegExpGetFlagBool(typeBuilder, runtime, "RegExpGetUnicodeSets", 'v');
-        EmitRegExpGetLastIndex(typeBuilder, runtime);
-        EmitRegExpSetLastIndex(typeBuilder, runtime);
-        EmitStringMatchRegExp(typeBuilder, runtime);
-        EmitStringMatchAllRegExp(typeBuilder, runtime);
+        var regExp = regExps.RequireImplementation();
+        EmitRegExpCoerceArg(
+            typeBuilder,
+            regExp,
+            new RegExpCoerceArgInputs(inputs.StringCoercion, inputs.UndefinedType)
+        );
+        EmitCreateRegExpWithFlags(typeBuilder, regExp);
+        EmitRegExpFromArgs(
+            typeBuilder,
+            regExp,
+            new RegExpFromArgsInputs(
+                inputs.Booleans,
+                inputs.GetIndex,
+                inputs.GetProperty,
+                inputs.StringCoercion,
+                inputs.Symbols,
+                inputs.UndefinedType
+            )
+        );
+        EmitRegExpTest(typeBuilder, regExp);
+        EmitRegExpExec(
+            typeBuilder,
+            regExp,
+            new RegExpExecInputs(
+                inputs.CreateException,
+                inputs.GetProperty,
+                inputs.Symbols,
+                inputs.TSFunctionInvokeWithThis,
+                inputs.TSFunctionType,
+                inputs.TSTypeErrorCtor,
+                inputs.UndefinedType
+            )
+        );
+        EmitRegExpGetSource(typeBuilder, regExp);
+        EmitRegExpGetFlags(typeBuilder, regExp);
+        EmitRegExpGetGlobal(typeBuilder, regExp);
+        EmitRegExpGetIgnoreCase(typeBuilder, regExp);
+        EmitRegExpGetMultiline(typeBuilder, regExp);
+        regExp.GetSticky = EmitRegExpGetFlagBool(typeBuilder, regExp, "RegExpGetSticky", 'y');
+        regExp.GetUnicode = EmitRegExpGetFlagBool(typeBuilder, regExp, "RegExpGetUnicode", 'u');
+        regExp.GetDotAll = EmitRegExpGetFlagBool(typeBuilder, regExp, "RegExpGetDotAll", 's');
+        regExp.GetHasIndices = EmitRegExpGetFlagBool(typeBuilder, regExp, "RegExpGetHasIndices", 'd');
+        regExp.GetUnicodeSets = EmitRegExpGetFlagBool(typeBuilder, regExp, "RegExpGetUnicodeSets", 'v');
+        EmitRegExpGetLastIndex(typeBuilder, regExp);
+        EmitRegExpSetLastIndex(typeBuilder, regExp);
+        EmitStringMatchRegExp(
+            typeBuilder,
+            regExp,
+            new StringMatchRegExpInputs(
+                inputs.ArrayStorage,
+                inputs.GetIndex,
+                inputs.InvokeMethodValue,
+                inputs.StringTryInvokeSymbolMethod,
+                inputs.Symbols,
+                inputs.UndefinedInstance,
+                inputs.UndefinedType
+            )
+        );
+        EmitStringMatchAllRegExp(
+            typeBuilder,
+            regExps,
+            new StringMatchAllRegExpInputs(
+                inputs.ArrayStorage,
+                inputs.Booleans,
+                inputs.CreateException,
+                inputs.DescriptorStorage,
+                inputs.GetIndex,
+                inputs.GetProperty,
+                inputs.InvokeMethodValue,
+                inputs.NormalizeToEnumerator,
+                inputs.NumericCoercion,
+                inputs.PadUndefinedAttrCtor,
+                inputs.SetProperty,
+                inputs.StringCoercion,
+                inputs.Symbols,
+                inputs.TSFunctionGetMethodInfo,
+                inputs.TSFunctionType,
+                inputs.TSTypeErrorCtor,
+                inputs.TypeOf,
+                inputs.UndefinedInstance,
+                inputs.UndefinedType
+            )
+        );
         // WithFunction first: StringReplaceRegExp delegates to it for callable
         // replacements, so its MethodBuilder must be assigned beforehand.
-        EmitStringReplaceWithFunction(typeBuilder, runtime);
-        EmitStableRegExpReplace(typeBuilder, runtime);
-        EmitStringReplaceRegExp(typeBuilder, runtime);
-        EmitStringReplaceAllRegExp(typeBuilder, runtime);
-        EmitStringSearchRegExp(typeBuilder, runtime);
-        EmitStringSplitRegExp(typeBuilder, runtime);
-        EmitStringSplitProto(typeBuilder, runtime);
+        EmitStringReplaceWithFunction(
+            typeBuilder,
+            regExp,
+            new StringReplaceWithFunctionInputs(
+                inputs.InvokeMethodValue,
+                inputs.StringCoercion,
+                inputs.UndefinedInstance
+            )
+        );
+        EmitStableRegExpReplace(typeBuilder, regExp);
+        EmitStringReplaceRegExp(
+            typeBuilder,
+            regExp,
+            new StringReplaceRegExpInputs(
+                inputs.StringCoercion,
+                inputs.StringTryInvokeSymbolMethod,
+                inputs.Symbols,
+                inputs.TypeOf
+            )
+        );
+        EmitStringReplaceAllRegExp(
+            typeBuilder,
+            regExp,
+            new StringReplaceAllRegExpInputs(
+                inputs.CreateException,
+                inputs.StringCoercion,
+                inputs.StringTryInvokeSymbolMethod,
+                inputs.Symbols,
+                inputs.TSTypeErrorCtor,
+                inputs.TypeOf,
+                inputs.UndefinedType
+            )
+        );
+        EmitStringSearchRegExp(
+            typeBuilder,
+            regExp,
+            new StringSearchRegExpInputs(
+                inputs.GetIndex,
+                inputs.InvokeMethodValue,
+                inputs.StringTryInvokeSymbolMethod,
+                inputs.Symbols,
+                inputs.UndefinedInstance
+            )
+        );
+        EmitStringSplitRegExp(
+            typeBuilder,
+            regExp,
+            new StringSplitRegExpInputs(inputs.StringCoercion, inputs.UndefinedType)
+        );
+        EmitStringSplitProto(
+            typeBuilder,
+            regExp,
+            new StringSplitProtoInputs(
+                inputs.CreateException,
+                inputs.NumericCoercion,
+                inputs.PadUndefinedAttrCtor,
+                inputs.StringCoercion,
+                inputs.StringTryInvokeSymbolMethod,
+                inputs.Symbols,
+                inputs.TSTypeErrorCtor,
+                inputs.UndefinedType
+            )
+        );
     }
 
     /// <summary>
@@ -82,14 +324,14 @@ public partial class RuntimeEmitter
     /// RegExp @@replace algorithm; ordinary replacement text can call the typed
     /// regex helper directly without symbol lookup or argument-array creation.
     /// </summary>
-    private void EmitStableRegExpReplace(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitStableRegExpReplace(TypeBuilder typeBuilder, EmittedRegExpImplementation regExp)
     {
         var method = typeBuilder.DefineMethod(
             "StableRegExpReplace",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.String,
-            [_types.String, runtime.TSRegExpType, _types.String, _types.Boolean]);
-        runtime.StableRegExpReplace = method;
+            [_types.String, regExp.Type, _types.String, _types.Boolean]);
+        regExp.StableStringReplace = method;
 
         var il = method.GetILGenerator();
         var ordinaryReplacementLabel = il.DefineLabel();
@@ -103,7 +345,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Call, runtime.TSRegExpSymReplaceHelper);
+        il.Emit(OpCodes.Call, regExp.SymbolReplace);
         il.Emit(OpCodes.Castclass, _types.String);
         il.Emit(OpCodes.Ret);
 
@@ -112,7 +354,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Ldarg_3);
-        il.Emit(OpCodes.Call, runtime.TSRegExpReplaceMethod);
+        il.Emit(OpCodes.Call, regExp.InstanceReplace);
         il.Emit(OpCodes.Ret);
     }
 
@@ -125,7 +367,7 @@ public partial class RuntimeEmitter
     /// the literal /undefined/ pattern instead of the empty pattern /(?:)/,
     /// failing String.prototype.match Sputnik tests.
     /// </summary>
-    private void EmitRegExpCoerceArg(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitRegExpCoerceArg(TypeBuilder typeBuilder, EmittedRegExpImplementation regExp, RegExpCoerceArgInputs inputs)
     {
         var method = typeBuilder.DefineMethod(
             "RegExpCoerceArg",
@@ -133,7 +375,7 @@ public partial class RuntimeEmitter
             _types.String,
             [_types.Object]
         );
-        runtime.RegExpCoerceArg = method;
+        regExp.CoerceArgument = method;
 
         var il = method.GetILGenerator();
 
@@ -141,7 +383,7 @@ public partial class RuntimeEmitter
 
         // $Undefined.Instance → ""
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
         il.Emit(OpCodes.Brfalse, notUndefLabel);
         il.Emit(OpCodes.Ldstr, "");
         il.Emit(OpCodes.Ret);
@@ -154,7 +396,7 @@ public partial class RuntimeEmitter
         // S15.10.4.1_A8_T9 (`new RegExp(1, new Object("gi"))`) regressed when
         // Object("gi") started returning a wrapper instead of the raw string.
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
+        il.Emit(OpCodes.Call, inputs.StringCoercion.ToJsString);
         il.Emit(OpCodes.Ret);
     }
 
@@ -164,7 +406,11 @@ public partial class RuntimeEmitter
     /// Dispatches to $RegExp.Replace for global-regex patterns, otherwise falls
     /// back to C#'s String.Replace (full-string all-occurrences semantics).
     /// </summary>
-    private void EmitStringReplaceAllRegExp(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitStringReplaceAllRegExp(
+        TypeBuilder typeBuilder,
+        EmittedRegExpImplementation regExp,
+        StringReplaceAllRegExpInputs inputs
+    )
     {
         var method = typeBuilder.DefineMethod(
             "StringReplaceAllRegExp",
@@ -172,10 +418,10 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object, _types.Object, _types.Object]
         );
-        runtime.StringReplaceAllRegExp = method;
+        regExp.StringReplaceAll = method;
 
         var il = method.GetILGenerator();
-        var regexpLocal = il.DeclareLocal(runtime.TSRegExpType);
+        var regexpLocal = il.DeclareLocal(regExp.Type);
         var stringLocal = il.DeclareLocal(_types.String);
         var replacementLocal = il.DeclareLocal(_types.String);
         var searchLocal = il.DeclareLocal(_types.String);
@@ -190,13 +436,13 @@ public partial class RuntimeEmitter
         var receiverPresentLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Brtrue, receiverPresentLabel);
-        GuestErrorEmitter.ThrowTypeError(il, runtime, "String.prototype.replaceAll called on null or undefined");
+        GuestErrorEmitter.ThrowError(il, inputs.CreateException, inputs.TSTypeErrorCtor, "String.prototype.replaceAll called on null or undefined");
         il.MarkLabel(receiverPresentLabel);
         var receiverDefinedLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
         il.Emit(OpCodes.Brfalse, receiverDefinedLabel);
-        GuestErrorEmitter.ThrowTypeError(il, runtime, "String.prototype.replaceAll called on null or undefined");
+        GuestErrorEmitter.ThrowError(il, inputs.CreateException, inputs.TSTypeErrorCtor, "String.prototype.replaceAll called on null or undefined");
         il.MarkLabel(receiverDefinedLabel);
 
         // IsRegExp(searchValue) requires a global RegExp before @@replace is
@@ -204,23 +450,23 @@ public partial class RuntimeEmitter
         // values, then use the shared object-only GetMethod dispatch.
         var symbolDispatchLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, runtime.TSRegExpType);
+        il.Emit(OpCodes.Isinst, regExp.Type);
         il.Emit(OpCodes.Stloc, regexpLocal);
         il.Emit(OpCodes.Ldloc, regexpLocal);
         il.Emit(OpCodes.Brfalse, symbolDispatchLabel);
         il.Emit(OpCodes.Ldloc, regexpLocal);
-        il.Emit(OpCodes.Callvirt, runtime.TSRegExpGlobalGetter);
+        il.Emit(OpCodes.Callvirt, regExp.GlobalGetter);
         il.Emit(OpCodes.Brtrue, symbolDispatchLabel);
-        GuestErrorEmitter.ThrowTypeError(il, runtime, "String.prototype.replaceAll called with a non-global RegExp argument");
+        GuestErrorEmitter.ThrowError(il, inputs.CreateException, inputs.TSTypeErrorCtor, "String.prototype.replaceAll called with a non-global RegExp argument");
         il.MarkLabel(symbolDispatchLabel);
 
-        var hasOwnNativeReplaceLocal = EmitStringSymbolDispatchPreamble(il, runtime, runtime.Symbols.Replace, 0, 2);
+        var hasOwnNativeReplaceLocal = EmitStringSymbolDispatchPreamble(il, inputs.StringTryInvokeSymbolMethod, inputs.Symbols.Replace, 0, 2);
 
         // No custom @@replace method handled the operation. Only now perform
         // the spec's ToString(O), retaining its abrupt-completion ordering
         // relative to replaceValue coercion.
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
+        il.Emit(OpCodes.Call, inputs.StringCoercion.ToJsString);
         il.Emit(OpCodes.Stloc, stringLocal);
 
         // For the ordinary string-search fallback, ToString(searchValue)
@@ -241,7 +487,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Stloc, regexpLocal);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
+        il.Emit(OpCodes.Call, inputs.StringCoercion.ToJsString);
         il.Emit(OpCodes.Stloc, searchLocal);
         il.Emit(OpCodes.Ldloc, searchLocal);
         il.Emit(OpCodes.Stloc, effectivePatternLocal);
@@ -256,7 +502,7 @@ public partial class RuntimeEmitter
         // custom @@replace methods above receive the original value unchanged.
         var nonCallableReplacementLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Call, runtime.TypeOf);
+        il.Emit(OpCodes.Call, inputs.TypeOf);
         il.Emit(OpCodes.Ldstr, "function");
         il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
         il.Emit(OpCodes.Brfalse, nonCallableReplacementLabel);
@@ -264,12 +510,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, effectivePatternLocal);
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Call, runtime.StringReplaceWithFunction);
+        il.Emit(OpCodes.Call, regExp.StringReplaceWithFunction);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(nonCallableReplacementLabel);
 
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
+        il.Emit(OpCodes.Call, inputs.StringCoercion.ToJsString);
         il.Emit(OpCodes.Stloc, replacementLocal);
 
         // Native patterns retain the RegExp path; string fallback patterns
@@ -286,8 +532,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, stringLocal);
         il.Emit(OpCodes.Ldloc, replacementLocal);
         il.Emit(OpCodes.Ldloc, regexpLocal);
-        il.Emit(OpCodes.Callvirt, runtime.TSRegExpGlobalGetter);
-        il.Emit(OpCodes.Call, _tsRegExpReplaceMethod);
+        il.Emit(OpCodes.Callvirt, regExp.GlobalGetter);
+        il.Emit(OpCodes.Call, regExp.InstanceReplace);
         il.Emit(OpCodes.Ret);
 
         // String pattern path: search = ToString(pattern). Route values
@@ -376,7 +622,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitCreateRegExpWithFlags(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitCreateRegExpWithFlags(TypeBuilder typeBuilder, EmittedRegExpImplementation regExp)
     {
         var method = typeBuilder.DefineMethod(
             "CreateRegExpWithFlags",
@@ -384,13 +630,13 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.String, _types.String]
         );
-        runtime.CreateRegExpWithFlags = method;
+        regExp.CreateWithFlags = method;
 
         var il = method.GetILGenerator();
         // return new $RegExp(pattern, flags)
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Newobj, runtime.TSRegExpCtorPatternFlags);
+        il.Emit(OpCodes.Newobj, regExp.PatternFlagsConstructor);
         il.Emit(OpCodes.Ret);
     }
 
@@ -408,19 +654,19 @@ public partial class RuntimeEmitter
     /// of copying the source slot), which test262's S15.10.4.1_A1_T4.js
     /// caught once \$RegExp surface slots started returning real values.
     /// </summary>
-    private void EmitRegExpFromArgs(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitRegExpFromArgs(TypeBuilder typeBuilder, EmittedRegExpImplementation regExp, RegExpFromArgsInputs inputs)
     {
         var method = typeBuilder.DefineMethod(
             "RegExpFromArgs",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.Object, _types.Object]);
-        runtime.RegExpFromArgs = method;
+        regExp.FromArguments = method;
 
         var il = method.GetILGenerator();
         var srcLocal = il.DeclareLocal(_types.String);
         var flagsLocal = il.DeclareLocal(_types.String);
-        var rxLocal = il.DeclareLocal(runtime.TSRegExpType);
+        var rxLocal = il.DeclareLocal(regExp.Type);
 
         var patternIsRegExpLabel = il.DefineLabel();
         var patternNotRegExpLabel = il.DefineLabel();
@@ -428,7 +674,7 @@ public partial class RuntimeEmitter
 
         // var rx = pattern as $RegExp
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSRegExpType);
+        il.Emit(OpCodes.Isinst, regExp.Type);
         il.Emit(OpCodes.Stloc, rxLocal);
         il.Emit(OpCodes.Ldloc, rxLocal);
         il.Emit(OpCodes.Brtrue, patternIsRegExpLabel);
@@ -445,45 +691,45 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, _types.String);
         il.Emit(OpCodes.Brtrue, skipRegexLike);                  // string → not regexp-like
         il.Emit(OpCodes.Ldarg_0);                                // receiver
-        il.Emit(OpCodes.Ldsfld, runtime.Symbols.Match);            // Symbol.match (symbol object)
-        il.Emit(OpCodes.Call, runtime.GetIndex);                 // pattern[Symbol.match]
-        il.Emit(OpCodes.Call, runtime.Booleans.IsTruthy);
+        il.Emit(OpCodes.Ldsfld, inputs.Symbols.Match);            // Symbol.match (symbol object)
+        il.Emit(OpCodes.Call, inputs.GetIndex);                 // pattern[Symbol.match]
+        il.Emit(OpCodes.Call, inputs.Booleans.IsTruthy);
         il.Emit(OpCodes.Brfalse, skipRegexLike);
         // src = ToJsString(Get(pattern, "source"))
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "source");
-        il.Emit(OpCodes.Call, runtime.GetProperty);
-        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
+        il.Emit(OpCodes.Call, inputs.GetProperty);
+        il.Emit(OpCodes.Call, inputs.StringCoercion.ToJsString);
         il.Emit(OpCodes.Stloc, srcLocal);
         // flags = arg1 undefined ? ToJsString(Get(pattern,"flags")) : RegExpCoerceArg(arg1)
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Brfalse, objFlagsLabel);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
         il.Emit(OpCodes.Brtrue, objFlagsLabel);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.RegExpCoerceArg);
+        il.Emit(OpCodes.Call, regExp.CoerceArgument);
         il.Emit(OpCodes.Stloc, flagsLocal);
         il.Emit(OpCodes.Br, flagsResolvedLabel);
         il.MarkLabel(objFlagsLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "flags");
-        il.Emit(OpCodes.Call, runtime.GetProperty);
-        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
+        il.Emit(OpCodes.Call, inputs.GetProperty);
+        il.Emit(OpCodes.Call, inputs.StringCoercion.ToJsString);
         il.Emit(OpCodes.Stloc, flagsLocal);
         il.Emit(OpCodes.Br, flagsResolvedLabel);
         il.MarkLabel(skipRegexLike);
 
         // Non-RegExp: src = RegExpCoerceArg(pattern)
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.RegExpCoerceArg);
+        il.Emit(OpCodes.Call, regExp.CoerceArgument);
         il.Emit(OpCodes.Stloc, srcLocal);
         il.Emit(OpCodes.Br, patternNotRegExpLabel);
 
         il.MarkLabel(patternIsRegExpLabel);
         // src = rx.Source
         il.Emit(OpCodes.Ldloc, rxLocal);
-        il.Emit(OpCodes.Callvirt, runtime.TSRegExpSourceGetter);
+        il.Emit(OpCodes.Callvirt, regExp.SourceGetter);
         il.Emit(OpCodes.Stloc, srcLocal);
 
         // If flags arg is null/undefined: use rx.Flags
@@ -491,30 +737,30 @@ public partial class RuntimeEmitter
         var hasFlagsArgLabel = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, useRxFlagsLabelDecl(out var useRxFlagsLabel));
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
         il.Emit(OpCodes.Brtrue, useRxFlagsLabel);
         // Flags supplied — ToString
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.RegExpCoerceArg);
+        il.Emit(OpCodes.Call, regExp.CoerceArgument);
         il.Emit(OpCodes.Stloc, flagsLocal);
         il.Emit(OpCodes.Br, flagsResolvedLabel);
 
         il.MarkLabel(useRxFlagsLabel);
         il.Emit(OpCodes.Ldloc, rxLocal);
-        il.Emit(OpCodes.Callvirt, runtime.TSRegExpFlagsGetter);
+        il.Emit(OpCodes.Callvirt, regExp.FlagsGetter);
         il.Emit(OpCodes.Stloc, flagsLocal);
         il.Emit(OpCodes.Br, flagsResolvedLabel);
 
         il.MarkLabel(patternNotRegExpLabel);
         // flags = RegExpCoerceArg(arg1)
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.RegExpCoerceArg);
+        il.Emit(OpCodes.Call, regExp.CoerceArgument);
         il.Emit(OpCodes.Stloc, flagsLocal);
 
         il.MarkLabel(flagsResolvedLabel);
         il.Emit(OpCodes.Ldloc, srcLocal);
         il.Emit(OpCodes.Ldloc, flagsLocal);
-        il.Emit(OpCodes.Call, runtime.CreateRegExpWithFlags);
+        il.Emit(OpCodes.Call, regExp.CreateWithFlags);
         il.Emit(OpCodes.Ret);
 
         Label useRxFlagsLabelDecl(out Label l)
@@ -524,7 +770,7 @@ public partial class RuntimeEmitter
         }
     }
 
-    private void EmitRegExpTest(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitRegExpTest(TypeBuilder typeBuilder, EmittedRegExpImplementation regExp)
     {
         var method = typeBuilder.DefineMethod(
             "RegExpTest",
@@ -532,15 +778,14 @@ public partial class RuntimeEmitter
             _types.Boolean,
             [_types.Object, _types.String]
         );
-        runtime.RegExpTest = method;
 
         var il = method.GetILGenerator();
         var notRegExpLabel = il.DefineLabel();
-        var regexpLocal = il.DeclareLocal(runtime.TSRegExpType);
+        var regexpLocal = il.DeclareLocal(regExp.Type);
 
         // var regexp = regex as $RegExp
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSRegExpType);
+        il.Emit(OpCodes.Isinst, regExp.Type);
         il.Emit(OpCodes.Stloc, regexpLocal);
 
         // if (regexp == null) return false
@@ -552,7 +797,7 @@ public partial class RuntimeEmitter
         // throws when lastIndex was made non-writable.
         il.Emit(OpCodes.Ldloc, regexpLocal);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, runtime.TSRegExpExecMethod);
+        il.Emit(OpCodes.Callvirt, regExp.InstanceExec);
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Cgt_Un);
         il.Emit(OpCodes.Ret);
@@ -562,7 +807,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitRegExpExec(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitRegExpExec(TypeBuilder typeBuilder, EmittedRegExpImplementation regExp, RegExpExecInputs inputs)
     {
         var method = typeBuilder.DefineMethod(
             "RegExpExec",
@@ -570,11 +815,11 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object, _types.String]
         );
-        runtime.RegExpExec = method;
+        regExp.Exec = method;
 
         var il = method.GetILGenerator();
         var notRegExpLabel = il.DefineLabel();
-        var regexpLocal = il.DeclareLocal(runtime.TSRegExpType);
+        var regexpLocal = il.DeclareLocal(regExp.Type);
         var receiverLocal = il.DeclareLocal(_types.Object);
         var inputLocal = il.DeclareLocal(_types.String);
         var resultLocal = il.DeclareLocal(_types.Object);
@@ -586,7 +831,7 @@ public partial class RuntimeEmitter
 
         // var regexp = regex as $RegExp
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSRegExpType);
+        il.Emit(OpCodes.Isinst, regExp.Type);
         il.Emit(OpCodes.Stloc, regexpLocal);
 
         // A non-$RegExp receiver still participates in the abstract
@@ -599,16 +844,30 @@ public partial class RuntimeEmitter
         // return regexp.Exec(input)
         il.Emit(OpCodes.Ldloc, regexpLocal);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, runtime.TSRegExpExecMethod);
+        il.Emit(OpCodes.Callvirt, regExp.InstanceExec);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(notRegExpLabel);
-        EmitRegExpExecSlow(il, runtime, receiverLocal, inputLocal, resultLocal);
+        EmitRegExpExecSlow(
+            il,
+            new RegExpExecSlowInputs(
+                inputs.CreateException,
+                inputs.GetProperty,
+                inputs.Symbols,
+                inputs.TSFunctionInvokeWithThis,
+                inputs.TSFunctionType,
+                inputs.TSTypeErrorCtor,
+                inputs.UndefinedType
+            ),
+            receiverLocal,
+            inputLocal,
+            resultLocal
+        );
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitRegExpGetSource(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitRegExpGetSource(TypeBuilder typeBuilder, EmittedRegExpImplementation regExp)
     {
         var method = typeBuilder.DefineMethod(
             "RegExpGetSource",
@@ -616,21 +875,21 @@ public partial class RuntimeEmitter
             _types.String,
             [_types.Object]
         );
-        runtime.RegExpGetSource = method;
+        regExp.GetSource = method;
 
         var il = method.GetILGenerator();
         var notRegExpLabel = il.DefineLabel();
-        var regexpLocal = il.DeclareLocal(runtime.TSRegExpType);
+        var regexpLocal = il.DeclareLocal(regExp.Type);
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSRegExpType);
+        il.Emit(OpCodes.Isinst, regExp.Type);
         il.Emit(OpCodes.Stloc, regexpLocal);
 
         il.Emit(OpCodes.Ldloc, regexpLocal);
         il.Emit(OpCodes.Brfalse, notRegExpLabel);
 
         il.Emit(OpCodes.Ldloc, regexpLocal);
-        il.Emit(OpCodes.Callvirt, runtime.TSRegExpSourceGetter);
+        il.Emit(OpCodes.Callvirt, regExp.SourceGetter);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(notRegExpLabel);
@@ -638,7 +897,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitRegExpGetFlags(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitRegExpGetFlags(TypeBuilder typeBuilder, EmittedRegExpImplementation regExp)
     {
         var method = typeBuilder.DefineMethod(
             "RegExpGetFlags",
@@ -646,21 +905,21 @@ public partial class RuntimeEmitter
             _types.String,
             [_types.Object]
         );
-        runtime.RegExpGetFlags = method;
+        regExp.GetFlags = method;
 
         var il = method.GetILGenerator();
         var notRegExpLabel = il.DefineLabel();
-        var regexpLocal = il.DeclareLocal(runtime.TSRegExpType);
+        var regexpLocal = il.DeclareLocal(regExp.Type);
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSRegExpType);
+        il.Emit(OpCodes.Isinst, regExp.Type);
         il.Emit(OpCodes.Stloc, regexpLocal);
 
         il.Emit(OpCodes.Ldloc, regexpLocal);
         il.Emit(OpCodes.Brfalse, notRegExpLabel);
 
         il.Emit(OpCodes.Ldloc, regexpLocal);
-        il.Emit(OpCodes.Callvirt, runtime.TSRegExpFlagsGetter);
+        il.Emit(OpCodes.Callvirt, regExp.FlagsGetter);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(notRegExpLabel);
@@ -668,7 +927,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitRegExpGetGlobal(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitRegExpGetGlobal(TypeBuilder typeBuilder, EmittedRegExpImplementation regExp)
     {
         var method = typeBuilder.DefineMethod(
             "RegExpGetGlobal",
@@ -676,21 +935,21 @@ public partial class RuntimeEmitter
             _types.Boolean,
             [_types.Object]
         );
-        runtime.RegExpGetGlobal = method;
+        regExp.GetGlobal = method;
 
         var il = method.GetILGenerator();
         var notRegExpLabel = il.DefineLabel();
-        var regexpLocal = il.DeclareLocal(runtime.TSRegExpType);
+        var regexpLocal = il.DeclareLocal(regExp.Type);
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSRegExpType);
+        il.Emit(OpCodes.Isinst, regExp.Type);
         il.Emit(OpCodes.Stloc, regexpLocal);
 
         il.Emit(OpCodes.Ldloc, regexpLocal);
         il.Emit(OpCodes.Brfalse, notRegExpLabel);
 
         il.Emit(OpCodes.Ldloc, regexpLocal);
-        il.Emit(OpCodes.Callvirt, runtime.TSRegExpGlobalGetter);
+        il.Emit(OpCodes.Callvirt, regExp.GlobalGetter);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(notRegExpLabel);
@@ -698,7 +957,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitRegExpGetIgnoreCase(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitRegExpGetIgnoreCase(TypeBuilder typeBuilder, EmittedRegExpImplementation regExp)
     {
         var method = typeBuilder.DefineMethod(
             "RegExpGetIgnoreCase",
@@ -706,21 +965,21 @@ public partial class RuntimeEmitter
             _types.Boolean,
             [_types.Object]
         );
-        runtime.RegExpGetIgnoreCase = method;
+        regExp.GetIgnoreCase = method;
 
         var il = method.GetILGenerator();
         var notRegExpLabel = il.DefineLabel();
-        var regexpLocal = il.DeclareLocal(runtime.TSRegExpType);
+        var regexpLocal = il.DeclareLocal(regExp.Type);
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSRegExpType);
+        il.Emit(OpCodes.Isinst, regExp.Type);
         il.Emit(OpCodes.Stloc, regexpLocal);
 
         il.Emit(OpCodes.Ldloc, regexpLocal);
         il.Emit(OpCodes.Brfalse, notRegExpLabel);
 
         il.Emit(OpCodes.Ldloc, regexpLocal);
-        il.Emit(OpCodes.Callvirt, runtime.TSRegExpIgnoreCaseGetter);
+        il.Emit(OpCodes.Callvirt, regExp.IgnoreCaseGetter);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(notRegExpLabel);
@@ -728,7 +987,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitRegExpGetMultiline(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitRegExpGetMultiline(TypeBuilder typeBuilder, EmittedRegExpImplementation regExp)
     {
         var method = typeBuilder.DefineMethod(
             "RegExpGetMultiline",
@@ -736,21 +995,21 @@ public partial class RuntimeEmitter
             _types.Boolean,
             [_types.Object]
         );
-        runtime.RegExpGetMultiline = method;
+        regExp.GetMultiline = method;
 
         var il = method.GetILGenerator();
         var notRegExpLabel = il.DefineLabel();
-        var regexpLocal = il.DeclareLocal(runtime.TSRegExpType);
+        var regexpLocal = il.DeclareLocal(regExp.Type);
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSRegExpType);
+        il.Emit(OpCodes.Isinst, regExp.Type);
         il.Emit(OpCodes.Stloc, regexpLocal);
 
         il.Emit(OpCodes.Ldloc, regexpLocal);
         il.Emit(OpCodes.Brfalse, notRegExpLabel);
 
         il.Emit(OpCodes.Ldloc, regexpLocal);
-        il.Emit(OpCodes.Callvirt, runtime.TSRegExpMultilineGetter);
+        il.Emit(OpCodes.Callvirt, regExp.MultilineGetter);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(notRegExpLabel);
@@ -767,7 +1026,7 @@ public partial class RuntimeEmitter
     /// accessors do. Non-RegExp receivers return false, matching the other
     /// RegExpGet* wrappers.
     /// </summary>
-    private MethodBuilder EmitRegExpGetFlagBool(TypeBuilder typeBuilder, EmittedRuntime runtime, string name, char flagChar)
+    private MethodBuilder EmitRegExpGetFlagBool(TypeBuilder typeBuilder, EmittedRegExpImplementation regExp, string name, char flagChar)
     {
         var method = typeBuilder.DefineMethod(
             name,
@@ -778,17 +1037,17 @@ public partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
         var notRegExpLabel = il.DefineLabel();
-        var regexpLocal = il.DeclareLocal(runtime.TSRegExpType);
+        var regexpLocal = il.DeclareLocal(regExp.Type);
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSRegExpType);
+        il.Emit(OpCodes.Isinst, regExp.Type);
         il.Emit(OpCodes.Stloc, regexpLocal);
 
         il.Emit(OpCodes.Ldloc, regexpLocal);
         il.Emit(OpCodes.Brfalse, notRegExpLabel);
 
         il.Emit(OpCodes.Ldloc, regexpLocal);
-        il.Emit(OpCodes.Callvirt, runtime.TSRegExpFlagsGetter);
+        il.Emit(OpCodes.Callvirt, regExp.FlagsGetter);
         il.Emit(OpCodes.Ldc_I4, (int)flagChar);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "Contains", _types.Char));
         il.Emit(OpCodes.Ret);
@@ -799,7 +1058,7 @@ public partial class RuntimeEmitter
         return method;
     }
 
-    private void EmitRegExpGetLastIndex(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitRegExpGetLastIndex(TypeBuilder typeBuilder, EmittedRegExpImplementation regExp)
     {
         var method = typeBuilder.DefineMethod(
             "RegExpGetLastIndex",
@@ -807,21 +1066,20 @@ public partial class RuntimeEmitter
             _types.Double,
             [_types.Object]
         );
-        runtime.RegExpGetLastIndex = method;
 
         var il = method.GetILGenerator();
         var notRegExpLabel = il.DefineLabel();
-        var regexpLocal = il.DeclareLocal(runtime.TSRegExpType);
+        var regexpLocal = il.DeclareLocal(regExp.Type);
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSRegExpType);
+        il.Emit(OpCodes.Isinst, regExp.Type);
         il.Emit(OpCodes.Stloc, regexpLocal);
 
         il.Emit(OpCodes.Ldloc, regexpLocal);
         il.Emit(OpCodes.Brfalse, notRegExpLabel);
 
         il.Emit(OpCodes.Ldloc, regexpLocal);
-        il.Emit(OpCodes.Callvirt, runtime.TSRegExpLastIndexGetter);
+        il.Emit(OpCodes.Callvirt, regExp.LastIndexGetter);
         il.Emit(OpCodes.Conv_R8);
         il.Emit(OpCodes.Ret);
 
@@ -830,7 +1088,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitRegExpSetLastIndex(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitRegExpSetLastIndex(TypeBuilder typeBuilder, EmittedRegExpImplementation regExp)
     {
         var method = typeBuilder.DefineMethod(
             "RegExpSetLastIndex",
@@ -838,14 +1096,13 @@ public partial class RuntimeEmitter
             _types.Void,
             [_types.Object, _types.Double]
         );
-        runtime.RegExpSetLastIndex = method;
 
         var il = method.GetILGenerator();
         var notRegExpLabel = il.DefineLabel();
-        var regexpLocal = il.DeclareLocal(runtime.TSRegExpType);
+        var regexpLocal = il.DeclareLocal(regExp.Type);
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSRegExpType);
+        il.Emit(OpCodes.Isinst, regExp.Type);
         il.Emit(OpCodes.Stloc, regexpLocal);
 
         il.Emit(OpCodes.Ldloc, regexpLocal);
@@ -854,13 +1111,13 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, regexpLocal);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Conv_I4);
-        il.Emit(OpCodes.Callvirt, runtime.TSRegExpLastIndexSetter);
+        il.Emit(OpCodes.Callvirt, regExp.LastIndexSetter);
 
         il.MarkLabel(notRegExpLabel);
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitStringMatchRegExp(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitStringMatchRegExp(TypeBuilder typeBuilder, EmittedRegExpImplementation regExp, StringMatchRegExpInputs inputs)
     {
         // StringMatch(string str, object? pattern) -> object?
         // If pattern is $RegExp with global flag, return all matches as array
@@ -872,11 +1129,11 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.String, _types.Object]
         );
-        runtime.StringMatchRegExp = method;
+        regExp.StringMatch = method;
 
         var il = method.GetILGenerator();
-        EmitStringSymbolDispatchPreamble(il, runtime, runtime.Symbols.Match, 0);
-        var regexpLocal = il.DeclareLocal(runtime.TSRegExpType);
+        EmitStringSymbolDispatchPreamble(il, inputs.StringTryInvokeSymbolMethod, inputs.Symbols.Match, 0);
+        var regexpLocal = il.DeclareLocal(regExp.Type);
         var isStringPatternLabel = il.DefineLabel();
         var globalMatchLabel = il.DefineLabel();
         var globalMatchLabelEntryFromCoerced = il.DefineLabel();
@@ -891,18 +1148,18 @@ public partial class RuntimeEmitter
         // substring (the string-pattern fallback below handles that correctly).
         var notUndefPatternLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
         il.Emit(OpCodes.Brfalse, notUndefPatternLabel);
         il.Emit(OpCodes.Ldstr, "");
-        il.Emit(OpCodes.Newobj, runtime.TSRegExpCtorPattern);
-        il.Emit(OpCodes.Castclass, runtime.TSRegExpType);
+        il.Emit(OpCodes.Newobj, regExp.PatternConstructor);
+        il.Emit(OpCodes.Castclass, regExp.Type);
         il.Emit(OpCodes.Stloc, regexpLocal);
         il.Emit(OpCodes.Br, globalMatchLabelEntryFromCoerced);
         il.MarkLabel(notUndefPatternLabel);
 
         // var regexp = pattern as $RegExp
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, runtime.TSRegExpType);
+        il.Emit(OpCodes.Isinst, regExp.Type);
         il.Emit(OpCodes.Stloc, regexpLocal);
 
         // if (regexp != null)
@@ -912,13 +1169,13 @@ public partial class RuntimeEmitter
 
         // if (regexp.Global)
         il.Emit(OpCodes.Ldloc, regexpLocal);
-        il.Emit(OpCodes.Callvirt, runtime.TSRegExpGlobalGetter);
+        il.Emit(OpCodes.Callvirt, regExp.GlobalGetter);
         il.Emit(OpCodes.Brtrue, globalMatchLabel);
 
         // Non-global: return regexp.Exec(str)
         il.Emit(OpCodes.Ldloc, regexpLocal);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Callvirt, runtime.TSRegExpExecMethod);
+        il.Emit(OpCodes.Callvirt, regExp.InstanceExec);
         il.Emit(OpCodes.Ret);
 
         // Global match: get all matches and return as array
@@ -927,7 +1184,7 @@ public partial class RuntimeEmitter
         // var matches = regexp.MatchAll(str)  // List<object?> of full-match substrings
         il.Emit(OpCodes.Ldloc, regexpLocal);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, _tsRegExpMatchAllMethod);
+        il.Emit(OpCodes.Call, regExp.InstanceMatchAll);
         il.Emit(OpCodes.Stloc, matchesLocal);
 
         // if (matches.Count == 0) return null
@@ -943,7 +1200,7 @@ public partial class RuntimeEmitter
         // MatchAll already returns List<object?>, so hand it straight to the
         // $Array ctor with no intermediate copy. return new $Array(matches)
         il.Emit(OpCodes.Ldloc, matchesLocal);
-        il.Emit(OpCodes.Newobj, runtime.ArrayStorage.Ctor);
+        il.Emit(OpCodes.Newobj, inputs.ArrayStorage.Ctor);
         il.Emit(OpCodes.Ret);
 
         // RegExpCreate(pattern, undefined), then Invoke(rx, @@match, « str »).
@@ -955,12 +1212,12 @@ public partial class RuntimeEmitter
         var createdMethodLocal = il.DeclareLocal(_types.Object);
         var createdArgsLocal = il.DeclareLocal(_types.ObjectArray);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
-        il.Emit(OpCodes.Call, runtime.RegExpFromArgs);
+        il.Emit(OpCodes.Ldsfld, inputs.UndefinedInstance);
+        il.Emit(OpCodes.Call, regExp.FromArguments);
         il.Emit(OpCodes.Stloc, createdMatcherLocal);
         il.Emit(OpCodes.Ldloc, createdMatcherLocal);
-        il.Emit(OpCodes.Ldsfld, runtime.Symbols.Match);
-        il.Emit(OpCodes.Call, runtime.GetIndex);
+        il.Emit(OpCodes.Ldsfld, inputs.Symbols.Match);
+        il.Emit(OpCodes.Call, inputs.GetIndex);
         il.Emit(OpCodes.Stloc, createdMethodLocal);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Newarr, _types.Object);
@@ -972,12 +1229,13 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, createdMatcherLocal);
         il.Emit(OpCodes.Ldloc, createdMethodLocal);
         il.Emit(OpCodes.Ldloc, createdArgsLocal);
-        il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+        il.Emit(OpCodes.Call, inputs.InvokeMethodValue);
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitStringMatchAllRegExp(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitStringMatchAllRegExp(TypeBuilder typeBuilder, EmittedRegExpRuntime regExps, StringMatchAllRegExpInputs inputs)
     {
+        var regExp = regExps.RequireImplementation();
         // The public two-argument wrapper enters the full String#matchAll
         // protocol. RegExp.prototype[@@matchAll] calls the prepared core after
         // it has already completed SpeciesConstructor/flags construction; that
@@ -988,7 +1246,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object, _types.Object, _types.Boolean, _types.Boolean]
         );
-        runtime.StringMatchAllRegExpPrepared = coreMethod;
+        regExp.StringMatchAllPrepared = coreMethod;
 
         var method = typeBuilder.DefineMethod(
             "StringMatchAllRegExp",
@@ -996,8 +1254,8 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object, _types.Object]
         );
-        method.SetCustomAttribute(runtime.PadUndefinedAttrCtor, CustomAttributeEncoder.EmptyBlob);
-        runtime.StringMatchAllRegExp = method;
+        method.SetCustomAttribute(inputs.PadUndefinedAttrCtor, CustomAttributeEncoder.EmptyBlob);
+        regExp.StringMatchAll = method;
 
         var wrapperIL = method.GetILGenerator();
         wrapperIL.Emit(OpCodes.Ldarg_0);
@@ -1011,15 +1269,15 @@ public partial class RuntimeEmitter
         // Builds $Object match results directly, accessing $RegExp._regex field.
         // Uses index-based iteration (MatchCollection[i]) to avoid try/finally complexity.
         var il = coreMethod.GetILGenerator();
-        var regexpLocal = il.DeclareLocal(runtime.TSRegExpType);
+        var regexpLocal = il.DeclareLocal(regExp.Type);
         var regexLocal = il.DeclareLocal(typeof(Regex));
         var stringLocal = il.DeclareLocal(_types.String);
         var matcherLocal = il.DeclareLocal(_types.Object);
-        var matcherFunctionLocal = il.DeclareLocal(runtime.TSFunctionType);
+        var matcherFunctionLocal = il.DeclareLocal(inputs.TSFunctionType);
         var matcherArgsLocal = il.DeclareLocal(_types.ObjectArray);
         var symbolDictLocal = il.DeclareLocal(_types.DictionaryObjectObject);
         var symbolRawLocal = il.DeclareLocal(_types.Object);
-        var symbolDescriptorLocal = il.DeclareLocal(runtime.DescriptorStorage.DescriptorType);
+        var symbolDescriptorLocal = il.DeclareLocal(inputs.DescriptorStorage.DescriptorType);
         var symbolGetterLocal = il.DeclareLocal(_types.Object);
         var sourceLocal = il.DeclareLocal(_types.String);
         var flagsLocal = il.DeclareLocal(_types.String);
@@ -1037,16 +1295,16 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Brfalse, receiverThrowLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
         il.Emit(OpCodes.Brfalse, receiverOkLabel);
         il.MarkLabel(receiverThrowLabel);
-        GuestErrorEmitter.ThrowTypeError(il, runtime, "String.prototype.matchAll called on null or undefined");
+        GuestErrorEmitter.ThrowError(il, inputs.CreateException, inputs.TSTypeErrorCtor, "String.prototype.matchAll called on null or undefined");
         il.MarkLabel(receiverOkLabel);
 
         // Preserve the native brand when present. RegExpCreate below replaces
         // this local with the newly-created guest RegExp on the fallback path.
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, runtime.TSRegExpType);
+        il.Emit(OpCodes.Isinst, regExp.Type);
         il.Emit(OpCodes.Stloc, regexpLocal);
 
         // String.prototype.matchAll's ordinary fallback always creates a
@@ -1072,10 +1330,10 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Brfalse, patternClassificationDone);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
         il.Emit(OpCodes.Brtrue, patternClassificationDone);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.TypeOf);
+        il.Emit(OpCodes.Call, inputs.TypeOf);
         il.Emit(OpCodes.Stloc, patternTypeLocal);
         il.Emit(OpCodes.Ldloc, patternTypeLocal);
         il.Emit(OpCodes.Ldstr, "object");
@@ -1098,18 +1356,18 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, patternIsObjectLocal);
         il.Emit(OpCodes.Brfalse, isRegExpReady);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Ldsfld, runtime.Symbols.Match);
-        il.Emit(OpCodes.Call, runtime.GetIndex);
+        il.Emit(OpCodes.Ldsfld, inputs.Symbols.Match);
+        il.Emit(OpCodes.Call, inputs.GetIndex);
         il.Emit(OpCodes.Stloc, matcherLocal);
-        EmitObserveRegExpPrototypeOverride(runtime.Symbols.Match, runtime.TSRegExpSymMatchHelper,
+        EmitObserveRegExpPrototypeOverride(inputs.Symbols.Match, regExp.SymbolMatch,
             loadReceiver: () => il.Emit(OpCodes.Ldarg_1));
         il.Emit(OpCodes.Ldloc, matcherLocal);
         il.Emit(OpCodes.Brfalse, useNativeBrand);
         il.Emit(OpCodes.Ldloc, matcherLocal);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
         il.Emit(OpCodes.Brtrue, useNativeBrand);
         il.Emit(OpCodes.Ldloc, matcherLocal);
-        il.Emit(OpCodes.Call, runtime.Booleans.IsTruthy);
+        il.Emit(OpCodes.Call, inputs.Booleans.IsTruthy);
         il.Emit(OpCodes.Stloc, patternIsRegExpLocal);
         il.Emit(OpCodes.Br, isRegExpReady);
         il.MarkLabel(useNativeBrand);
@@ -1124,7 +1382,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, flagsValidated);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldstr, "flags");
-        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, inputs.GetProperty);
         il.Emit(OpCodes.Stloc, flagsValueLocal);
 
         // The compiled RegExp property fast path intentionally handles its
@@ -1137,18 +1395,18 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, flagsOverrideDone);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldstr, "flags");
-        il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetPropertyDescriptor);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.GetPropertyDescriptor);
         il.Emit(OpCodes.Brtrue, flagsOverrideDone);
 
-        il.Emit(OpCodes.Call, runtime.RegExpPrototypePopulateMethod);
-        il.Emit(OpCodes.Ldsfld, runtime.RegExpPrototypeField);
+        il.Emit(OpCodes.Call, regExps.PopulatePrototype);
+        il.Emit(OpCodes.Ldsfld, regExps.Prototype);
         il.Emit(OpCodes.Ldstr, "flags");
-        il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetPropertyDescriptor);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.GetPropertyDescriptor);
         il.Emit(OpCodes.Stloc, symbolDescriptorLocal);
         il.Emit(OpCodes.Ldloc, symbolDescriptorLocal);
         il.Emit(OpCodes.Brfalse, flagsOverrideDone);
         il.Emit(OpCodes.Ldloc, symbolDescriptorLocal);
-        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorGetter.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorGetter.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, symbolGetterLocal);
         var flagsDataDescriptor = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, symbolGetterLocal);
@@ -1158,13 +1416,13 @@ public partial class RuntimeEmitter
         // genuinely replaced accessor with the original RegExp as `this`.
         var invokeFlagsGetter = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, symbolGetterLocal);
-        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Isinst, inputs.TSFunctionType);
         il.Emit(OpCodes.Stloc, matcherFunctionLocal);
         il.Emit(OpCodes.Ldloc, matcherFunctionLocal);
         il.Emit(OpCodes.Brfalse, invokeFlagsGetter);
         il.Emit(OpCodes.Ldloc, matcherFunctionLocal);
-        il.Emit(OpCodes.Callvirt, runtime.TSFunctionGetMethodInfo);
-        _types.EmitLoadMethodInfo(il, runtime.TSRegExpProtoGetFlags);
+        il.Emit(OpCodes.Callvirt, inputs.TSFunctionGetMethodInfo);
+        _types.EmitLoadMethodInfo(il, regExp.PrototypeGetFlags);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Object, "Equals", _types.Object, _types.Object));
         il.Emit(OpCodes.Brtrue, flagsOverrideDone);
         il.MarkLabel(invokeFlagsGetter);
@@ -1172,21 +1430,21 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, symbolGetterLocal);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Newarr, _types.Object);
-        il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+        il.Emit(OpCodes.Call, inputs.InvokeMethodValue);
         il.Emit(OpCodes.Stloc, flagsValueLocal);
         il.Emit(OpCodes.Br, flagsOverrideDone);
 
         il.MarkLabel(flagsDataDescriptor);
         var flagsDataValue = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, symbolDescriptorLocal);
-        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorSetter.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorSetter.GetGetMethod()!);
         il.Emit(OpCodes.Brfalse, flagsDataValue);
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, inputs.UndefinedInstance);
         il.Emit(OpCodes.Stloc, flagsValueLocal);
         il.Emit(OpCodes.Br, flagsOverrideDone);
         il.MarkLabel(flagsDataValue);
         il.Emit(OpCodes.Ldloc, symbolDescriptorLocal);
-        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorValue.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorValue.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, flagsValueLocal);
         il.MarkLabel(flagsOverrideDone);
 
@@ -1196,20 +1454,20 @@ public partial class RuntimeEmitter
         var flagsThrow = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, flagsThrow);
         il.Emit(OpCodes.Dup);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
         il.Emit(OpCodes.Brfalse, flagsPresent);
         il.MarkLabel(flagsThrow);
         il.Emit(OpCodes.Pop);
-        GuestErrorEmitter.ThrowTypeError(il, runtime, "RegExp flags are null or undefined");
+        GuestErrorEmitter.ThrowError(il, inputs.CreateException, inputs.TSTypeErrorCtor, "RegExp flags are null or undefined");
         il.MarkLabel(flagsPresent);
-        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
+        il.Emit(OpCodes.Call, inputs.StringCoercion.ToJsString);
         il.Emit(OpCodes.Stloc, flagsLocal);
         il.Emit(OpCodes.Ldloc, flagsLocal);
         il.Emit(OpCodes.Ldstr, "g");
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "Contains", _types.String));
         var isGlobal = il.DefineLabel();
         il.Emit(OpCodes.Brtrue, isGlobal);
-        GuestErrorEmitter.ThrowTypeError(il, runtime, "String.prototype.matchAll called with a non-global RegExp argument");
+        GuestErrorEmitter.ThrowError(il, inputs.CreateException, inputs.TSTypeErrorCtor, "String.prototype.matchAll called with a non-global RegExp argument");
         il.MarkLabel(isGlobal);
         il.MarkLabel(flagsValidated);
 
@@ -1220,15 +1478,15 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, patternIsObjectLocal);
         il.Emit(OpCodes.Brfalse, fallbackCreateLabel);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Ldsfld, runtime.Symbols.MatchAll);
-        il.Emit(OpCodes.Call, runtime.GetIndex);
+        il.Emit(OpCodes.Ldsfld, inputs.Symbols.MatchAll);
+        il.Emit(OpCodes.Call, inputs.GetIndex);
         il.Emit(OpCodes.Stloc, matcherLocal);
-        EmitObserveRegExpPrototypeOverride(runtime.Symbols.MatchAll, runtime.TSRegExpSymMatchAllHelper,
+        EmitObserveRegExpPrototypeOverride(inputs.Symbols.MatchAll, regExp.SymbolMatchAll,
             loadReceiver: () => il.Emit(OpCodes.Ldarg_1));
         il.Emit(OpCodes.Ldloc, matcherLocal);
         il.Emit(OpCodes.Brfalse, fallbackCreateLabel);
         il.Emit(OpCodes.Ldloc, matcherLocal);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
         il.Emit(OpCodes.Brtrue, fallbackCreateLabel);
         var standardOriginalMatcher = il.DefineLabel();
         EmitInvokeMatchAllUnlessStandard(standardOriginalMatcher, loadReceiver: () => il.Emit(OpCodes.Ldarg_1),
@@ -1246,10 +1504,10 @@ public partial class RuntimeEmitter
         il.MarkLabel(standardReceiverOk);
         il.MarkLabel(preparedMatcherLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
+        il.Emit(OpCodes.Call, inputs.StringCoercion.ToJsString);
         il.Emit(OpCodes.Stloc, stringLocal);
         il.Emit(OpCodes.Ldloc, regexpLocal);
-        il.Emit(OpCodes.Ldfld, _tsRegExpRegexField);
+        il.Emit(OpCodes.Ldfld, regExp.RegexField);
         il.Emit(OpCodes.Stloc, regexLocal);
         il.Emit(OpCodes.Br, buildResultLabel);
 
@@ -1259,7 +1517,7 @@ public partial class RuntimeEmitter
         // overridden RegExp.prototype[@@matchAll] observes the correct `this`.
         il.MarkLabel(fallbackCreateLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
+        il.Emit(OpCodes.Call, inputs.StringCoercion.ToJsString);
         il.Emit(OpCodes.Stloc, stringLocal);
         var sourceReadyLabel = il.DefineLabel();
         var sourceCoerceLabel = il.DefineLabel();
@@ -1267,33 +1525,33 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, regexpLocal);
         il.Emit(OpCodes.Brfalse, sourceUndefinedLabel);
         il.Emit(OpCodes.Ldloc, regexpLocal);
-        il.Emit(OpCodes.Callvirt, runtime.TSRegExpSourceGetter);
+        il.Emit(OpCodes.Callvirt, regExp.SourceGetter);
         il.Emit(OpCodes.Stloc, sourceLocal);
         il.Emit(OpCodes.Br, sourceReadyLabel);
         il.MarkLabel(sourceUndefinedLabel);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
         il.Emit(OpCodes.Brfalse, sourceCoerceLabel);
         il.Emit(OpCodes.Ldstr, "");
         il.Emit(OpCodes.Stloc, sourceLocal);
         il.Emit(OpCodes.Br, sourceReadyLabel);
         il.MarkLabel(sourceCoerceLabel);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
+        il.Emit(OpCodes.Call, inputs.StringCoercion.ToJsString);
         il.Emit(OpCodes.Stloc, sourceLocal);
         il.MarkLabel(sourceReadyLabel);
         il.Emit(OpCodes.Ldloc, sourceLocal);
         il.Emit(OpCodes.Ldstr, "g");
-        il.Emit(OpCodes.Newobj, runtime.TSRegExpCtorPatternFlags);
+        il.Emit(OpCodes.Newobj, regExp.PatternFlagsConstructor);
         il.Emit(OpCodes.Stloc, regexpLocal);
         il.Emit(OpCodes.Ldloc, regexpLocal);
-        il.Emit(OpCodes.Ldfld, _tsRegExpRegexField);
+        il.Emit(OpCodes.Ldfld, regExp.RegexField);
         il.Emit(OpCodes.Stloc, regexLocal);
 
         // Invoke(rx, @@matchAll, « S »). GetIndex now walks the actual
         // RegExp.prototype symbol dictionary, so prototype overrides win while
         // the intrinsic helper remains eligible for the rich-result fast path.
-        EmitResolveRegExpPrototypeSymbol(runtime.Symbols.MatchAll,
+        EmitResolveRegExpPrototypeSymbol(inputs.Symbols.MatchAll,
             loadReceiver: () => il.Emit(OpCodes.Ldloc, regexpLocal));
         EmitInvokeMatchAllUnlessStandard(buildResultLabel,
             loadReceiver: () => il.Emit(OpCodes.Ldloc, regexpLocal),
@@ -1308,7 +1566,7 @@ public partial class RuntimeEmitter
             Action loadArgument)
         {
             var invokeLabel = il.DefineLabel();
-            EmitBranchIfMatcherWraps(runtime.TSRegExpSymMatchAllHelper, standardLabel);
+            EmitBranchIfMatcherWraps(regExp.SymbolMatchAll, standardLabel);
             il.Emit(OpCodes.Br, invokeLabel);
             il.MarkLabel(invokeLabel);
             EmitInvokeCurrentMatcher(loadReceiver, loadArgument);
@@ -1318,12 +1576,12 @@ public partial class RuntimeEmitter
         {
             var notFunctionLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldloc, matcherLocal);
-            il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+            il.Emit(OpCodes.Isinst, inputs.TSFunctionType);
             il.Emit(OpCodes.Stloc, matcherFunctionLocal);
             il.Emit(OpCodes.Ldloc, matcherFunctionLocal);
             il.Emit(OpCodes.Brfalse, notFunctionLabel);
             il.Emit(OpCodes.Ldloc, matcherFunctionLocal);
-            il.Emit(OpCodes.Callvirt, runtime.TSFunctionGetMethodInfo);
+            il.Emit(OpCodes.Callvirt, inputs.TSFunctionGetMethodInfo);
             _types.EmitLoadMethodInfo(il, helper);
             il.Emit(OpCodes.Call, _types.GetMethod(_types.Object, "Equals", _types.Object, _types.Object));
             il.Emit(OpCodes.Brtrue, matchLabel);
@@ -1347,7 +1605,7 @@ public partial class RuntimeEmitter
             // function itself. Only an inherited synthesized intrinsic should
             // be replaced by the current RegExp.prototype descriptor.
             loadReceiver();
-            il.Emit(OpCodes.Call, runtime.Symbols.GetStorage);
+            il.Emit(OpCodes.Call, inputs.Symbols.GetStorage);
             il.Emit(OpCodes.Stloc, symbolDictLocal);
             il.Emit(OpCodes.Ldloc, symbolDictLocal);
             il.Emit(OpCodes.Ldsfld, symbol);
@@ -1359,9 +1617,9 @@ public partial class RuntimeEmitter
 
         void EmitResolveRegExpPrototypeSymbol(FieldBuilder symbol, Action loadReceiver)
         {
-            il.Emit(OpCodes.Call, runtime.RegExpPrototypePopulateMethod);
-            il.Emit(OpCodes.Ldsfld, runtime.RegExpPrototypeField);
-            il.Emit(OpCodes.Call, runtime.Symbols.GetStorage);
+            il.Emit(OpCodes.Call, regExps.PopulatePrototype);
+            il.Emit(OpCodes.Ldsfld, regExps.Prototype);
+            il.Emit(OpCodes.Call, inputs.Symbols.GetStorage);
             il.Emit(OpCodes.Stloc, symbolDictLocal);
             il.Emit(OpCodes.Ldloc, symbolDictLocal);
             il.Emit(OpCodes.Ldsfld, symbol);
@@ -1370,19 +1628,19 @@ public partial class RuntimeEmitter
             var foundLabel = il.DefineLabel();
             var doneLabel = il.DefineLabel();
             il.Emit(OpCodes.Brtrue, foundLabel);
-            il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+            il.Emit(OpCodes.Ldsfld, inputs.UndefinedInstance);
             il.Emit(OpCodes.Stloc, matcherLocal);
             il.Emit(OpCodes.Br, doneLabel);
 
             il.MarkLabel(foundLabel);
             il.Emit(OpCodes.Ldloc, symbolRawLocal);
-            il.Emit(OpCodes.Isinst, runtime.DescriptorStorage.DescriptorType);
+            il.Emit(OpCodes.Isinst, inputs.DescriptorStorage.DescriptorType);
             il.Emit(OpCodes.Stloc, symbolDescriptorLocal);
             var rawValueLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldloc, symbolDescriptorLocal);
             il.Emit(OpCodes.Brfalse, rawValueLabel);
             il.Emit(OpCodes.Ldloc, symbolDescriptorLocal);
-            il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorGetter.GetGetMethod()!);
+            il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorGetter.GetGetMethod()!);
             il.Emit(OpCodes.Stloc, symbolGetterLocal);
             var dataDescriptorLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldloc, symbolGetterLocal);
@@ -1391,21 +1649,21 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldloc, symbolGetterLocal);
             il.Emit(OpCodes.Ldc_I4_0);
             il.Emit(OpCodes.Newarr, _types.Object);
-            il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+            il.Emit(OpCodes.Call, inputs.InvokeMethodValue);
             il.Emit(OpCodes.Stloc, matcherLocal);
             il.Emit(OpCodes.Br, doneLabel);
 
             il.MarkLabel(dataDescriptorLabel);
             var descriptorValueLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldloc, symbolDescriptorLocal);
-            il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorSetter.GetGetMethod()!);
+            il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorSetter.GetGetMethod()!);
             il.Emit(OpCodes.Brfalse, descriptorValueLabel);
-            il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+            il.Emit(OpCodes.Ldsfld, inputs.UndefinedInstance);
             il.Emit(OpCodes.Stloc, matcherLocal);
             il.Emit(OpCodes.Br, doneLabel);
             il.MarkLabel(descriptorValueLabel);
             il.Emit(OpCodes.Ldloc, symbolDescriptorLocal);
-            il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorValue.GetGetMethod()!);
+            il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorValue.GetGetMethod()!);
             il.Emit(OpCodes.Stloc, matcherLocal);
             il.Emit(OpCodes.Br, doneLabel);
 
@@ -1427,7 +1685,7 @@ public partial class RuntimeEmitter
             loadReceiver();
             il.Emit(OpCodes.Ldloc, matcherLocal);
             il.Emit(OpCodes.Ldloc, matcherArgsLocal);
-            il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+            il.Emit(OpCodes.Call, inputs.InvokeMethodValue);
             il.Emit(OpCodes.Ret);
         }
 
@@ -1435,7 +1693,7 @@ public partial class RuntimeEmitter
         var matchCollLocal = il.DeclareLocal(typeof(MatchCollection));
         var matchLocal = il.DeclareLocal(typeof(Match));
         var matchElementsLocal = il.DeclareLocal(_types.ListOfObject);
-        var matchArrayLocal = il.DeclareLocal(runtime.ArrayStorage.Type);
+        var matchArrayLocal = il.DeclareLocal(inputs.ArrayStorage.Type);
         var iLocal = il.DeclareLocal(_types.Int32);
         var countLocal = il.DeclareLocal(_types.Int32);
         var groupIndexLocal = il.DeclareLocal(_types.Int32);
@@ -1456,8 +1714,8 @@ public partial class RuntimeEmitter
         // not re-read the original receiver whose value was already cached.
         il.Emit(OpCodes.Ldloc, regexpLocal);
         il.Emit(OpCodes.Ldstr, "lastIndex");
-        il.Emit(OpCodes.Call, runtime.GetProperty);
-        il.Emit(OpCodes.Call, runtime.NumericCoercion.JsToInt32);
+        il.Emit(OpCodes.Call, inputs.GetProperty);
+        il.Emit(OpCodes.Call, inputs.NumericCoercion.JsToInt32);
         il.Emit(OpCodes.Stloc, startIndexLocal);
         il.Emit(OpCodes.Ldloc, startIndexLocal);
         il.Emit(OpCodes.Ldc_I4_0);
@@ -1533,7 +1791,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, groupDoneLabel);
 
         il.MarkLabel(groupMissingLabel);
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, inputs.UndefinedInstance);
 
         il.MarkLabel(groupDoneLabel);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", [_types.Object])!);
@@ -1547,7 +1805,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(groupLoopEndLabel);
 
         il.Emit(OpCodes.Ldloc, matchElementsLocal);
-        il.Emit(OpCodes.Newobj, runtime.ArrayStorage.Ctor);
+        il.Emit(OpCodes.Newobj, inputs.ArrayStorage.Ctor);
         il.Emit(OpCodes.Stloc, matchArrayLocal);
 
         il.Emit(OpCodes.Ldloc, matchArrayLocal);
@@ -1556,18 +1814,18 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, typeof(Capture).GetProperty("Index")!.GetGetMethod()!);
         il.Emit(OpCodes.Conv_R8);
         il.Emit(OpCodes.Box, _types.Double);
-        il.Emit(OpCodes.Call, runtime.SetProperty);
+        il.Emit(OpCodes.Call, inputs.SetProperty);
 
         il.Emit(OpCodes.Ldloc, matchArrayLocal);
         il.Emit(OpCodes.Ldstr, "input");
         il.Emit(OpCodes.Ldloc, stringLocal);
-        il.Emit(OpCodes.Call, runtime.SetProperty);
+        il.Emit(OpCodes.Call, inputs.SetProperty);
 
         il.Emit(OpCodes.Ldloc, matchArrayLocal);
         il.Emit(OpCodes.Ldstr, "groups");
         il.Emit(OpCodes.Ldloc, matchLocal);
-        il.Emit(OpCodes.Call, runtime.BuildNamedGroups);
-        il.Emit(OpCodes.Call, runtime.SetProperty);
+        il.Emit(OpCodes.Call, regExp.BuildNamedGroups);
+        il.Emit(OpCodes.Call, inputs.SetProperty);
 
         // result.Add(matchArray)
         il.Emit(OpCodes.Ldloc, resultLocal);
@@ -1589,11 +1847,15 @@ public partial class RuntimeEmitter
         // stateful IEnumerator<object> bridge. It supports next(), for-of,
         // spread, and Array.from without exposing Array-only properties.
         il.Emit(OpCodes.Ldloc, resultLocal);
-        il.Emit(OpCodes.Call, runtime.NormalizeToEnumerator);
+        il.Emit(OpCodes.Call, inputs.NormalizeToEnumerator);
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitStringReplaceRegExp(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitStringReplaceRegExp(
+        TypeBuilder typeBuilder,
+        EmittedRegExpImplementation regExp,
+        StringReplaceRegExpInputs inputs
+    )
     {
         // StringReplace(string str, object? pattern, object replacement) -> object
         // ECMA-262 22.1.3.18: ToString(searchValue) (step 4) happens BEFORE
@@ -1606,11 +1868,11 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.String, _types.Object, _types.Object]
         );
-        runtime.StringReplaceRegExp = method;
+        regExp.StringReplace = method;
 
         var il = method.GetILGenerator();
-        EmitStringSymbolDispatchPreamble(il, runtime, runtime.Symbols.Replace, 0, 2);
-        var regexpLocal = il.DeclareLocal(runtime.TSRegExpType);
+        EmitStringSymbolDispatchPreamble(il, inputs.StringTryInvokeSymbolMethod, inputs.Symbols.Replace, 0, 2);
+        var regexpLocal = il.DeclareLocal(regExp.Type);
         var isStringPatternLabel = il.DefineLabel();
         var searchLocal = il.DeclareLocal(_types.String);
         var replacementLocal = il.DeclareLocal(_types.String);
@@ -1627,7 +1889,7 @@ public partial class RuntimeEmitter
         // any-typed dynamic path that Test262 .js sources take.
         var notCallableLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Call, runtime.TypeOf);
+        il.Emit(OpCodes.Call, inputs.TypeOf);
         il.Emit(OpCodes.Ldstr, "function");
         il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
         il.Emit(OpCodes.Brfalse, notCallableLabel);
@@ -1635,13 +1897,13 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Call, runtime.StringReplaceWithFunction);
+        il.Emit(OpCodes.Call, regExp.StringReplaceWithFunction);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notCallableLabel);
 
         // var regexp = pattern as $RegExp
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, runtime.TSRegExpType);
+        il.Emit(OpCodes.Isinst, regExp.Type);
         il.Emit(OpCodes.Stloc, regexpLocal);
 
         // if (regexp != null)
@@ -1652,15 +1914,15 @@ public partial class RuntimeEmitter
         // Pass typed `_global` directly — String.prototype.replace doesn't
         // observe user PDS overrides on `r.global`.
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
+        il.Emit(OpCodes.Call, inputs.StringCoercion.ToJsString);
         il.Emit(OpCodes.Stloc, replacementLocal);
 
         il.Emit(OpCodes.Ldloc, regexpLocal);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, replacementLocal);
         il.Emit(OpCodes.Ldloc, regexpLocal);
-        il.Emit(OpCodes.Callvirt, runtime.TSRegExpGlobalGetter);
-        il.Emit(OpCodes.Call, _tsRegExpReplaceMethod);
+        il.Emit(OpCodes.Callvirt, regExp.GlobalGetter);
+        il.Emit(OpCodes.Call, regExp.InstanceReplace);
         il.Emit(OpCodes.Ret);
 
         // String pattern fallback
@@ -1668,12 +1930,12 @@ public partial class RuntimeEmitter
 
         // Step 4: ToJsString(searchValue) FIRST.
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
+        il.Emit(OpCodes.Call, inputs.StringCoercion.ToJsString);
         il.Emit(OpCodes.Stloc, searchLocal);
 
         // Step 5: ToJsString(replaceValue) AFTER the search has been coerced.
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
+        il.Emit(OpCodes.Call, inputs.StringCoercion.ToJsString);
         il.Emit(OpCodes.Stloc, replacementLocal);
 
         // var idx = str.IndexOf(search)
@@ -1718,17 +1980,21 @@ public partial class RuntimeEmitter
     /// captures), and the proper [m, c1, c2, ..., position, str] for the
     /// regex-pattern case.
     /// </summary>
-    private void EmitStringReplaceWithFunction(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitStringReplaceWithFunction(
+        TypeBuilder typeBuilder,
+        EmittedRegExpImplementation regExp,
+        StringReplaceWithFunctionInputs inputs
+    )
     {
         var method = typeBuilder.DefineMethod(
             "StringReplaceWithFunction",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.String,
             [_types.String, _types.Object, _types.Object, _types.Boolean]);
-        runtime.StringReplaceWithFunction = method;
+        regExp.StringReplaceWithFunction = method;
 
         var il = method.GetILGenerator();
-        var regexpLocal = il.DeclareLocal(runtime.TSRegExpType);
+        var regexpLocal = il.DeclareLocal(regExp.Type);
         var searchLocal = il.DeclareLocal(_types.String);
         var stringPatternLabel = il.DefineLabel();
         var notFoundLabel = il.DefineLabel();
@@ -1736,7 +2002,7 @@ public partial class RuntimeEmitter
 
         // var regexp = pattern as $RegExp
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, runtime.TSRegExpType);
+        il.Emit(OpCodes.Isinst, regExp.Type);
         il.Emit(OpCodes.Stloc, regexpLocal);
         il.Emit(OpCodes.Ldloc, regexpLocal);
         il.Emit(OpCodes.Brfalse, stringPatternLabel);
@@ -1746,13 +2012,13 @@ public partial class RuntimeEmitter
         // fall back to a manual loop.
         var regexLocal = il.DeclareLocal(typeof(Regex));
         il.Emit(OpCodes.Ldloc, regexpLocal);
-        il.Emit(OpCodes.Ldfld, _tsRegExpRegexField);
+        il.Emit(OpCodes.Ldfld, regExp.RegexField);
         il.Emit(OpCodes.Stloc, regexLocal);
 
         // Track Global flag — without it, only the first match is replaced.
         var isGlobalLocal = il.DeclareLocal(_types.Boolean);
         il.Emit(OpCodes.Ldloc, regexpLocal);
-        il.Emit(OpCodes.Callvirt, runtime.TSRegExpGlobalGetter);
+        il.Emit(OpCodes.Callvirt, regExp.GlobalGetter);
         il.Emit(OpCodes.Ldarg_3);
         il.Emit(OpCodes.Or);
         il.Emit(OpCodes.Stloc, isGlobalLocal);
@@ -1854,7 +2120,7 @@ public partial class RuntimeEmitter
         var groupStoreLabel = il.DefineLabel();
         il.Emit(OpCodes.Brtrue, groupSuccessLabel);
         // !Success: load undefined
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, inputs.UndefinedInstance);
         il.Emit(OpCodes.Br, groupStoreLabel);
         il.MarkLabel(groupSuccessLabel);
         il.Emit(OpCodes.Ldloc, groupLocal);
@@ -1889,16 +2155,16 @@ public partial class RuntimeEmitter
 
         // result = $Runtime.InvokeMethodValue(undefined, func, args)
         var resultObjLocal = il.DeclareLocal(_types.Object);
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, inputs.UndefinedInstance);
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Ldloc, argsArrLocal);
-        il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+        il.Emit(OpCodes.Call, inputs.InvokeMethodValue);
         il.Emit(OpCodes.Stloc, resultObjLocal);
 
         // sb.Append(ToJsString(result))
         il.Emit(OpCodes.Ldloc, sbLocal);
         il.Emit(OpCodes.Ldloc, resultObjLocal);
-        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
+        il.Emit(OpCodes.Call, inputs.StringCoercion.ToJsString);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StringBuilder, "Append", [_types.String])!);
         il.Emit(OpCodes.Pop);
 
@@ -1953,7 +2219,7 @@ public partial class RuntimeEmitter
         // String pattern path
         il.MarkLabel(stringPatternLabel);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
+        il.Emit(OpCodes.Call, inputs.StringCoercion.ToJsString);
         il.Emit(OpCodes.Stloc, searchLocal);
 
         // replaceAll with a string search reuses the regex loop with an escaped
@@ -2004,10 +2270,10 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, argsStrLocal);
 
         var resultStrLocal = il.DeclareLocal(_types.Object);
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, inputs.UndefinedInstance);
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Ldloc, argsStrLocal);
-        il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+        il.Emit(OpCodes.Call, inputs.InvokeMethodValue);
         il.Emit(OpCodes.Stloc, resultStrLocal);
 
         // return prefix + ToJsString(result) + suffix
@@ -2017,7 +2283,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "Substring", [_types.Int32, _types.Int32])!);
 
         il.Emit(OpCodes.Ldloc, resultStrLocal);
-        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
+        il.Emit(OpCodes.Call, inputs.StringCoercion.ToJsString);
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, idxLocal2);
@@ -2034,7 +2300,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitStringSearchRegExp(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitStringSearchRegExp(
+        TypeBuilder typeBuilder,
+        EmittedRegExpImplementation regExp,
+        StringSearchRegExpInputs inputs
+    )
     {
         // StringSearch(string str, object? pattern) -> object (index or a
         // custom @@search return value)
@@ -2044,16 +2314,16 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.String, _types.Object]
         );
-        runtime.StringSearchRegExp = method;
+        regExp.StringSearch = method;
 
         var il = method.GetILGenerator();
-        EmitStringSymbolDispatchPreamble(il, runtime, runtime.Symbols.Search, 0);
-        var regexpLocal = il.DeclareLocal(runtime.TSRegExpType);
+        EmitStringSymbolDispatchPreamble(il, inputs.StringTryInvokeSymbolMethod, inputs.Symbols.Search, 0);
+        var regexpLocal = il.DeclareLocal(regExp.Type);
         var isStringPatternLabel = il.DefineLabel();
 
         // var regexp = pattern as $RegExp
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, runtime.TSRegExpType);
+        il.Emit(OpCodes.Isinst, regExp.Type);
         il.Emit(OpCodes.Stloc, regexpLocal);
 
         // if (regexp != null)
@@ -2063,7 +2333,7 @@ public partial class RuntimeEmitter
         // return (double)regexp.Search(str)
         il.Emit(OpCodes.Ldloc, regexpLocal);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, _tsRegExpSearchMethod);
+        il.Emit(OpCodes.Call, regExp.InstanceSearch);
         il.Emit(OpCodes.Conv_R8);
         il.Emit(OpCodes.Box, _types.Double);
         il.Emit(OpCodes.Ret);
@@ -2074,12 +2344,12 @@ public partial class RuntimeEmitter
         var createdMethodLocal = il.DeclareLocal(_types.Object);
         var createdArgsLocal = il.DeclareLocal(_types.ObjectArray);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
-        il.Emit(OpCodes.Call, runtime.RegExpFromArgs);
+        il.Emit(OpCodes.Ldsfld, inputs.UndefinedInstance);
+        il.Emit(OpCodes.Call, regExp.FromArguments);
         il.Emit(OpCodes.Stloc, createdMatcherLocal);
         il.Emit(OpCodes.Ldloc, createdMatcherLocal);
-        il.Emit(OpCodes.Ldsfld, runtime.Symbols.Search);
-        il.Emit(OpCodes.Call, runtime.GetIndex);
+        il.Emit(OpCodes.Ldsfld, inputs.Symbols.Search);
+        il.Emit(OpCodes.Call, inputs.GetIndex);
         il.Emit(OpCodes.Stloc, createdMethodLocal);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Newarr, _types.Object);
@@ -2091,11 +2361,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, createdMatcherLocal);
         il.Emit(OpCodes.Ldloc, createdMethodLocal);
         il.Emit(OpCodes.Ldloc, createdArgsLocal);
-        il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+        il.Emit(OpCodes.Call, inputs.InvokeMethodValue);
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitStringSplitRegExp(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitStringSplitRegExp(TypeBuilder typeBuilder, EmittedRegExpImplementation regExp, StringSplitRegExpInputs inputs)
     {
         // StringSplit(string str, object? separator) -> List<object?>
         var method = typeBuilder.DefineMethod(
@@ -2104,10 +2374,10 @@ public partial class RuntimeEmitter
             _types.ListOfObject,
             [_types.String, _types.Object]
         );
-        runtime.StringSplitRegExp = method;
+        regExp.StringSplit = method;
 
         var il = method.GetILGenerator();
-        var regexpLocal = il.DeclareLocal(runtime.TSRegExpType);
+        var regexpLocal = il.DeclareLocal(regExp.Type);
         var isStringPatternLabel = il.DefineLabel();
         var sepLocal = il.DeclareLocal(_types.String);
         var partsLocal = il.DeclareLocal(typeof(string[]));
@@ -2127,7 +2397,7 @@ public partial class RuntimeEmitter
         // that the spec-correct undefined-arm fires through this branch.
         var sepNotUndefSingletonLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
         il.Emit(OpCodes.Brfalse, sepNotUndefSingletonLabel);
         // separator is $Undefined: return [str]
         il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, Type.EmptyTypes)!);
@@ -2139,7 +2409,7 @@ public partial class RuntimeEmitter
 
         // var regexp = separator as $RegExp
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, runtime.TSRegExpType);
+        il.Emit(OpCodes.Isinst, regExp.Type);
         il.Emit(OpCodes.Stloc, regexpLocal);
 
         // if (regexp != null)
@@ -2149,7 +2419,7 @@ public partial class RuntimeEmitter
         // var parts = regexp.Split(str)
         il.Emit(OpCodes.Ldloc, regexpLocal);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, _tsRegExpSplitMethod);
+        il.Emit(OpCodes.Call, regExp.InstanceSplit);
         il.Emit(OpCodes.Stloc, partsLocal);
 
         // Convert to List<object?>
@@ -2186,7 +2456,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(isStringPatternLabel);
 
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
+        il.Emit(OpCodes.Call, inputs.StringCoercion.ToJsString);
         il.Emit(OpCodes.Stloc, sepLocal);
 
         // Handle empty separator: split into characters
@@ -2283,7 +2553,7 @@ public partial class RuntimeEmitter
     /// logic in <c>StringEmitter.EmitSplit</c> so prototype-slot dispatch (used
     /// for wrapper / any-typed receivers) matches the typed fast path.
     /// </summary>
-    private void EmitStringSplitProto(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitStringSplitProto(TypeBuilder typeBuilder, EmittedRegExpImplementation regExp, StringSplitProtoInputs inputs)
     {
         var method = typeBuilder.DefineMethod(
             "StringSplitProto",
@@ -2293,8 +2563,8 @@ public partial class RuntimeEmitter
         // Unlike most built-ins, split must distinguish an omitted limit from
         // explicit null. Reuse the JS undefined-padding marker so reflective
         // prototype calls retain that distinction.
-        method.SetCustomAttribute(runtime.PadUndefinedAttrCtor, CustomAttributeEncoder.EmptyBlob);
-        runtime.StringSplitProto = method;
+        method.SetCustomAttribute(inputs.PadUndefinedAttrCtor, CustomAttributeEncoder.EmptyBlob);
+        regExp.StringSplitProto = method;
 
         var il = method.GetILGenerator();
 
@@ -2304,16 +2574,16 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Brfalse, receiverThrowLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
         il.Emit(OpCodes.Brfalse, receiverOkLabel);
         il.MarkLabel(receiverThrowLabel);
-        GuestErrorEmitter.ThrowTypeError(il, runtime, "String.prototype.split called on null or undefined");
+        GuestErrorEmitter.ThrowError(il, inputs.CreateException, inputs.TSTypeErrorCtor, "String.prototype.split called on null or undefined");
         il.MarkLabel(receiverOkLabel);
 
         // GetMethod(separator, @@split) precedes ToString(this) and limit
         // coercion. A custom method receives the original string and limit and
         // may return any value.
-        EmitStringSymbolDispatchPreamble(il, runtime, runtime.Symbols.Split, 0, 2);
+        EmitStringSymbolDispatchPreamble(il, inputs.StringTryInvokeSymbolMethod, inputs.Symbols.Split, 0, 2);
 
         var stringLocal = il.DeclareLocal(_types.String);
         var separatorLocal = il.DeclareLocal(_types.Object);
@@ -2332,7 +2602,7 @@ public partial class RuntimeEmitter
         // above receives the original value and can return without observing
         // receiver.toString.
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
+        il.Emit(OpCodes.Call, inputs.StringCoercion.ToJsString);
         il.Emit(OpCodes.Stloc, stringLocal);
 
         // The inherited native RegExp @@split is intentionally skipped by the
@@ -2340,18 +2610,18 @@ public partial class RuntimeEmitter
         // now, preserving the original limit value and its observable order.
         var nonRegExpSeparatorLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, runtime.TSRegExpType);
+        il.Emit(OpCodes.Isinst, regExp.Type);
         il.Emit(OpCodes.Brfalse, nonRegExpSeparatorLabel);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloc, stringLocal);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Call, runtime.TSRegExpSymSplitHelper);
+        il.Emit(OpCodes.Call, regExp.SymbolSplit);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(nonRegExpSeparatorLabel);
 
         // lim = limit === undefined ? 2^32-1 : ToUint32(limit).
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
         il.Emit(OpCodes.Brfalse, coerceLimitLabel);
 
         il.MarkLabel(defaultLimitLabel);
@@ -2361,7 +2631,7 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(coerceLimitLabel);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Call, runtime.NumericCoercion.ToNumber);
+        il.Emit(OpCodes.Call, inputs.NumericCoercion.ToNumber);
         il.Emit(OpCodes.Stloc, numberLocal);
         il.Emit(OpCodes.Ldloc, numberLocal);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Double, "IsFinite", [_types.Double])!);
@@ -2395,7 +2665,7 @@ public partial class RuntimeEmitter
         // StringSplitRegExp's [S] arm.
         var separatorReadyLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
         var coerceSeparatorLabel = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, coerceSeparatorLabel);
         il.Emit(OpCodes.Ldarg_1);
@@ -2403,7 +2673,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, separatorReadyLabel);
         il.MarkLabel(coerceSeparatorLabel);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
+        il.Emit(OpCodes.Call, inputs.StringCoercion.ToJsString);
         il.Emit(OpCodes.Stloc, separatorLocal);
         il.MarkLabel(separatorReadyLabel);
 
@@ -2419,7 +2689,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(performSplitLabel);
         il.Emit(OpCodes.Ldloc, stringLocal);
         il.Emit(OpCodes.Ldloc, separatorLocal);
-        il.Emit(OpCodes.Call, runtime.StringSplitRegExp);
+        il.Emit(OpCodes.Call, regExp.StringSplit);
         il.Emit(OpCodes.Stloc, resultLocal);
 
         // The list count is bounded by Int32, while lim retains the full

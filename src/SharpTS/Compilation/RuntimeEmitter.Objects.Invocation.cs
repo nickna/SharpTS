@@ -131,11 +131,11 @@ public partial class RuntimeEmitter
 
         // ECMA-262 §22.2.6: a RegExp object is not callable — calling one throws
         // TypeError. Checked early so it doesn't fall into the dispatch chain.
-        if (runtime.TSRegExpType != null)
+        if (runtime.RegExps.Implementation != null)
         {
             var notRegExpCallee = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.TSRegExpType);
+            il.Emit(OpCodes.Isinst, runtime.RegExps.RequireImplementation().Type);
             il.Emit(OpCodes.Brfalse, notRegExpCallee);
             GuestErrorEmitter.ThrowTypeError(il, runtime, "called value is not a function");
             il.MarkLabel(notRegExpCallee);
@@ -622,11 +622,11 @@ public partial class RuntimeEmitter
         // ECMA-262 §22.2.6: a RegExp object has no [[Call]] — calling one
         // (`/x/()`, `RegExp("a","g")()`) must throw TypeError. Checked early
         // so it doesn't fall into the dispatch chain.
-        if (runtime.TSRegExpType != null)
+        if (runtime.RegExps.Implementation != null)
         {
             var notRegExpCallee = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Isinst, runtime.TSRegExpType);
+            il.Emit(OpCodes.Isinst, runtime.RegExps.RequireImplementation().Type);
             il.Emit(OpCodes.Brfalse, notRegExpCallee);
             GuestErrorEmitter.ThrowTypeError(il, runtime, "called value is not a function");
             il.MarkLabel(notRegExpCallee);

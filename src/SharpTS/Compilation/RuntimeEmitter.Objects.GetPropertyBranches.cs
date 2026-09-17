@@ -883,17 +883,17 @@ public partial class RuntimeEmitter
     /// then the built-in slots — lastIndex/source/flags/global/ignoreCase/multiline plus the
     /// flag-string-parsed sticky/unicode/hasIndices/dotAll/unicodeSets — else GetFieldsProperty.
     /// Recurses through <paramref name="method"/> to reassemble "flags" from the per-flag reads.
-    /// Caller gates this arm and its dispatch on _features.UsesRegExp.
+    /// Caller gates this arm and its dispatch on runtime.RegExps.Implementation is not null.
     /// </summary>
     private void EmitRegExpGetBranch(ILGenerator il, EmittedRuntime runtime, MethodBuilder method, Label notMatch)
     {
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSRegExpType);
+        il.Emit(OpCodes.Isinst, runtime.RegExps.RequireImplementation().Type);
         il.Emit(OpCodes.Brfalse, notMatch);
 
-            var rxLocal = il.DeclareLocal(runtime.TSRegExpType);
+            var rxLocal = il.DeclareLocal(runtime.RegExps.RequireImplementation().Type);
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Castclass, runtime.TSRegExpType);
+            il.Emit(OpCodes.Castclass, runtime.RegExps.RequireImplementation().Type);
             il.Emit(OpCodes.Stloc, rxLocal);
 
             // ECMA-262 §22.2.6.* read paths go through ordinary Get, so
@@ -963,14 +963,14 @@ public partial class RuntimeEmitter
                 var numericLabel = il.DefineLabel();
                 var doneLabel = il.DefineLabel();
                 il.Emit(OpCodes.Ldloc, rxLocal);
-                il.Emit(OpCodes.Ldfld, _tsRegExpLastIndexBoxedField);
+                il.Emit(OpCodes.Ldfld, runtime.RegExps.RequireImplementation().BoxedLastIndexField);
                 il.Emit(OpCodes.Dup);
                 il.Emit(OpCodes.Brfalse, numericLabel);
                 il.Emit(OpCodes.Br, doneLabel);            // boxed non-null → return it
                 il.MarkLabel(numericLabel);
                 il.Emit(OpCodes.Pop);                      // drop the null
                 il.Emit(OpCodes.Ldloc, rxLocal);
-                il.Emit(OpCodes.Callvirt, runtime.TSRegExpLastIndexGetter);
+                il.Emit(OpCodes.Callvirt, runtime.RegExps.RequireImplementation().LastIndexGetter);
                 il.Emit(OpCodes.Conv_R8);
                 il.Emit(OpCodes.Box, _types.Double);
                 il.MarkLabel(doneLabel);
@@ -984,14 +984,14 @@ public partial class RuntimeEmitter
             // still wins.
             NameMatchBranch("constructor", () =>
             {
-                il.Emit(OpCodes.Ldtoken, runtime.TSRegExpType);
+                il.Emit(OpCodes.Ldtoken, runtime.RegExps.RequireImplementation().Type);
                 il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
             });
             // "source" / "flags" — string fields.
             NameMatchBranch("source", () =>
             {
                 il.Emit(OpCodes.Ldloc, rxLocal);
-                il.Emit(OpCodes.Callvirt, runtime.TSRegExpSourceGetter);
+                il.Emit(OpCodes.Callvirt, runtime.RegExps.RequireImplementation().SourceGetter);
             });
             // Spec-aligned ECMA-262 §22.2.6.4 — assemble the flags string from
             // individual property reads so user-installed `Object.defineProperty
@@ -1042,19 +1042,19 @@ public partial class RuntimeEmitter
             NameMatchBranch("global", () =>
             {
                 il.Emit(OpCodes.Ldloc, rxLocal);
-                il.Emit(OpCodes.Callvirt, runtime.TSRegExpGlobalGetter);
+                il.Emit(OpCodes.Callvirt, runtime.RegExps.RequireImplementation().GlobalGetter);
                 il.Emit(OpCodes.Box, _types.Boolean);
             });
             NameMatchBranch("ignoreCase", () =>
             {
                 il.Emit(OpCodes.Ldloc, rxLocal);
-                il.Emit(OpCodes.Callvirt, runtime.TSRegExpIgnoreCaseGetter);
+                il.Emit(OpCodes.Callvirt, runtime.RegExps.RequireImplementation().IgnoreCaseGetter);
                 il.Emit(OpCodes.Box, _types.Boolean);
             });
             NameMatchBranch("multiline", () =>
             {
                 il.Emit(OpCodes.Ldloc, rxLocal);
-                il.Emit(OpCodes.Callvirt, runtime.TSRegExpMultilineGetter);
+                il.Emit(OpCodes.Callvirt, runtime.RegExps.RequireImplementation().MultilineGetter);
                 il.Emit(OpCodes.Box, _types.Boolean);
             });
 
@@ -1067,7 +1067,7 @@ public partial class RuntimeEmitter
                 NameMatchBranch(propName, () =>
                 {
                     il.Emit(OpCodes.Ldloc, rxLocal);
-                    il.Emit(OpCodes.Callvirt, runtime.TSRegExpFlagsGetter);
+                    il.Emit(OpCodes.Callvirt, runtime.RegExps.RequireImplementation().FlagsGetter);
                     // s.Contains(ch) – use Contains(char) overload to dodge
                     // string-literal allocation for the single-char arg.
                     il.Emit(OpCodes.Ldc_I4, (int)ch);
@@ -1089,10 +1089,10 @@ public partial class RuntimeEmitter
             {
                 NameMatchBranch(propName, () =>
                 {
-                    il.Emit(OpCodes.Call, runtime.RegExpPrototypePopulateMethod);
+                    il.Emit(OpCodes.Call, runtime.RegExps.PopulatePrototype);
                     var prototypeDescriptorLocal =
                         il.DeclareLocal(runtime.DescriptorStorage.DescriptorType);
-                    il.Emit(OpCodes.Ldsfld, runtime.RegExpPrototypeField);
+                    il.Emit(OpCodes.Ldsfld, runtime.RegExps.Prototype);
                     il.Emit(OpCodes.Ldstr, propName);
                     il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetPropertyDescriptor);
                     il.Emit(OpCodes.Stloc, prototypeDescriptorLocal);
@@ -1152,8 +1152,8 @@ public partial class RuntimeEmitter
             // the PDS-first arm above; the prototype walk is required for
             // user-installed indexed data/accessors and other ordinary
             // properties on RegExp.prototype.
-            il.Emit(OpCodes.Call, runtime.RegExpPrototypePopulateMethod);
-            il.Emit(OpCodes.Ldsfld, runtime.RegExpPrototypeField);
+            il.Emit(OpCodes.Call, runtime.RegExps.PopulatePrototype);
+            il.Emit(OpCodes.Ldsfld, runtime.RegExps.Prototype);
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Call, method);
             il.Emit(OpCodes.Ret);

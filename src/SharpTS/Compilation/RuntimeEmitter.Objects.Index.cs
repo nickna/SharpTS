@@ -227,11 +227,11 @@ public partial class RuntimeEmitter
         // symbol-keyed methods (@@match/@@matchAll/@@replace/@@search/@@split,
         // ECMA-262 §22.2.5). When UsesRegExp is gated off there can't be a
         // RegExp value at runtime, so skip the Isinst entirely.
-        if (_features.UsesRegExp)
+        if (runtime.RegExps.Implementation is not null)
         {
             var notRegExpForSymbolLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.TSRegExpType);
+            il.Emit(OpCodes.Isinst, runtime.RegExps.RequireImplementation().Type);
             il.Emit(OpCodes.Brfalse, notRegExpForSymbolLabel);
 
             // Ordinary inherited symbol lookup precedes the intrinsic fallback.
@@ -239,8 +239,8 @@ public partial class RuntimeEmitter
             // `RegExp.prototype[Symbol.search] = custom` for every symbol, while
             // the populated intrinsic descriptors naturally preserve the
             // standard methods when no replacement exists.
-            il.Emit(OpCodes.Call, runtime.RegExpPrototypePopulateMethod);
-            il.Emit(OpCodes.Ldsfld, runtime.RegExpPrototypeField);
+            il.Emit(OpCodes.Call, runtime.RegExps.PopulatePrototype);
+            il.Emit(OpCodes.Ldsfld, runtime.RegExps.Prototype);
             il.Emit(OpCodes.Call, runtime.Symbols.GetStorage);
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Ldloca, symbolValueLocal);
@@ -2298,11 +2298,11 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitRegExpSymbolDispatch(ILGenerator il, EmittedRuntime runtime)
     {
-        EmitRegExpSymbolCase(il, runtime, runtime.Symbols.Match, runtime.TSRegExpSymMatchHelper);
-        EmitRegExpSymbolCase(il, runtime, runtime.Symbols.MatchAll, runtime.TSRegExpSymMatchAllHelper);
-        EmitRegExpSymbolCase(il, runtime, runtime.Symbols.Replace, runtime.TSRegExpSymReplaceHelper);
-        EmitRegExpSymbolCase(il, runtime, runtime.Symbols.Search, runtime.TSRegExpSymSearchHelper);
-        EmitRegExpSymbolCase(il, runtime, runtime.Symbols.Split, runtime.TSRegExpSymSplitHelper);
+        EmitRegExpSymbolCase(il, runtime, runtime.Symbols.Match, runtime.RegExps.RequireImplementation().SymbolMatch);
+        EmitRegExpSymbolCase(il, runtime, runtime.Symbols.MatchAll, runtime.RegExps.RequireImplementation().SymbolMatchAll);
+        EmitRegExpSymbolCase(il, runtime, runtime.Symbols.Replace, runtime.RegExps.RequireImplementation().SymbolReplace);
+        EmitRegExpSymbolCase(il, runtime, runtime.Symbols.Search, runtime.RegExps.RequireImplementation().SymbolSearch);
+        EmitRegExpSymbolCase(il, runtime, runtime.Symbols.Split, runtime.RegExps.RequireImplementation().SymbolSplit);
     }
 
     /// <summary>

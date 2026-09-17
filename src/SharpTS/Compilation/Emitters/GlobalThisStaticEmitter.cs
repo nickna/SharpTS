@@ -167,7 +167,7 @@ public sealed class GlobalThisStaticEmitter : IStaticTypeEmitterStrategy
         {
             "Array" => ctx.Types.IListOfObject,
             "Date" => ctx.Runtime!.Dates.Implementation?.Type,
-            "RegExp" => ctx.Runtime!.TSRegExpType,
+            "RegExp" => ctx.Runtime!.RegExps.Implementation?.Type,
             "Map" => ctx.Types.DictionaryObjectObject,
             "Set" => ctx.Types.HashSetOfObject,
             "WeakMap" => ctx.Types.ConditionalWeakTableObjectObject,

@@ -204,11 +204,11 @@ public partial class RuntimeEmitter
         // RegExp instances expose an intrinsic own lastIndex data property.
         // A user PDS descriptor won above; otherwise synthesize the live typed
         // value and the immutable enumerable/configurable attributes.
-        if (_features.UsesRegExp)
+        if (runtime.RegExps.Implementation is not null)
         {
             var notRegExpLastIndexDescriptor = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.TSRegExpType);
+            il.Emit(OpCodes.Isinst, runtime.RegExps.RequireImplementation().Type);
             il.Emit(OpCodes.Brfalse, notRegExpLastIndexDescriptor);
             il.Emit(OpCodes.Ldloc, propNameLocal);
             il.Emit(OpCodes.Ldstr, "lastIndex");
@@ -482,11 +482,11 @@ public partial class RuntimeEmitter
         // RegExp.escape is emitted as $RegExp.Escape, whose CLR casing does
         // not match the JavaScript key. Build the same cached function wrapper
         // used by RegExpStaticEmitter so descriptor value identity is stable.
-        if (_features.UsesRegExp)
+        if (runtime.RegExps.Implementation is not null)
         {
             var notRegExpEscapeDescriptor = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldtoken, runtime.TSRegExpType);
+            il.Emit(OpCodes.Ldtoken, runtime.RegExps.RequireImplementation().Type);
             il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle")!);
             il.Emit(OpCodes.Bne_Un, notRegExpEscapeDescriptor);
             il.Emit(OpCodes.Ldloc, propNameLocal);
@@ -495,7 +495,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Brfalse, notRegExpEscapeDescriptor);
             EmitBuiltinDataDescriptor(il, resultDictLocal, endLabel, () =>
             {
-                _types.EmitLoadMethodInfo(il, runtime.TSRegExpEscapeMethod);
+                _types.EmitLoadMethodInfo(il, runtime.RegExps.RequireImplementation().StaticEscape);
                 il.Emit(OpCodes.Ldstr, "escape");
                 il.Emit(OpCodes.Ldc_I4_1);
                 il.Emit(OpCodes.Call, runtime.TSFunctionGetOrCreate);

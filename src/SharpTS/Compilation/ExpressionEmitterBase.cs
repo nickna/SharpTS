@@ -2241,7 +2241,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
         Type? t = name switch
         {
             "Date" => Ctx.Runtime!.Dates.Implementation?.Type,
-            "RegExp" => Ctx.Runtime!.TSRegExpType,
+            "RegExp" => Ctx.Runtime!.RegExps.Implementation?.Type,
             "TextEncoder" => Ctx.Runtime!.RequireTextEncoding().EncoderType,
             "TextDecoder" => Ctx.Runtime!.RequireTextEncoding().DecoderType,
             "Buffer" => Ctx.Runtime!.Buffer?.Type,
@@ -2568,7 +2568,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
             IL.Emit(OpCodes.Pop);                    // []
             IL.Emit(OpCodes.Ldstr, re.Pattern);
             IL.Emit(OpCodes.Ldstr, re.Flags);
-            IL.Emit(OpCodes.Call, Ctx.Runtime!.CreateRegExpWithFlags); // [new]
+            IL.Emit(OpCodes.Call, Ctx.Runtime!.RegExps.RequireImplementation().CreateWithFlags); // [new]
             IL.Emit(OpCodes.Dup);                    // [new, new]
             IL.Emit(OpCodes.Stsfld, field);          // [new]
             IL.MarkLabel(done);                      // [regex] on both paths
@@ -2578,7 +2578,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
 
         IL.Emit(OpCodes.Ldstr, re.Pattern);
         IL.Emit(OpCodes.Ldstr, re.Flags);
-        EmitCallUnknown(Ctx.Runtime!.CreateRegExpWithFlags);
+        EmitCallUnknown(Ctx.Runtime!.RegExps.RequireImplementation().CreateWithFlags);
     }
     #endregion
 

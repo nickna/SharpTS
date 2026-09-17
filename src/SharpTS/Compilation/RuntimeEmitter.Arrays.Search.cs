@@ -2694,14 +2694,14 @@ public partial class RuntimeEmitter
         // that relationship is not represented by a per-instance PDS entry.
         // Generic Array algorithms use HasProperty before Get, so walk that
         // singleton explicitly for indexed properties installed by user code.
-        if (_features.UsesRegExp)
+        if (runtime.RegExps.Implementation is not null)
         {
             var notRegExpInstance = il.DefineLabel();
             il.Emit(OpCodes.Ldloc, currentLocal);
-            il.Emit(OpCodes.Isinst, runtime.TSRegExpType);
+            il.Emit(OpCodes.Isinst, runtime.RegExps.RequireImplementation().Type);
             il.Emit(OpCodes.Brfalse, notRegExpInstance);
-            il.Emit(OpCodes.Call, runtime.RegExpPrototypePopulateMethod);
-            il.Emit(OpCodes.Ldsfld, runtime.RegExpPrototypeField);
+            il.Emit(OpCodes.Call, runtime.RegExps.PopulatePrototype);
+            il.Emit(OpCodes.Ldsfld, runtime.RegExps.Prototype);
             il.Emit(OpCodes.Stloc, currentLocal);
             il.Emit(OpCodes.Br, loopStart);
             il.MarkLabel(notRegExpInstance);

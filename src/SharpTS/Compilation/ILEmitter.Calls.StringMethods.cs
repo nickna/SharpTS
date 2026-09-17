@@ -125,7 +125,7 @@ public partial class ILEmitter
                 {
                     IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.UndefinedInstance);
                 }
-                IL.Emit(OpCodes.Call, _ctx.Runtime!.StringReplaceRegExp);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.RegExps.RequireImplementation().StringReplace);
                 break;
 
             case "replaceAll":
@@ -152,7 +152,7 @@ public partial class ILEmitter
                 {
                     IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.UndefinedInstance);
                 }
-                IL.Emit(OpCodes.Call, _ctx.Runtime!.StringReplaceAllRegExp);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.RegExps.RequireImplementation().StringReplaceAll);
                 break;
 
             case "split":
@@ -177,7 +177,7 @@ public partial class ILEmitter
                 {
                     IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.UndefinedInstance);
                 }
-                IL.Emit(OpCodes.Call, _ctx.Runtime!.StringSplitProto);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.RegExps.RequireImplementation().StringSplitProto);
                 break;
 
             case "match":
@@ -190,7 +190,7 @@ public partial class ILEmitter
                 {
                     IL.Emit(OpCodes.Ldstr, "");
                 }
-                IL.Emit(OpCodes.Call, _ctx.Runtime!.StringMatchRegExp);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.RegExps.RequireImplementation().StringMatch);
                 break;
 
             case "search":
@@ -203,7 +203,7 @@ public partial class ILEmitter
                 {
                     IL.Emit(OpCodes.Ldstr, "");
                 }
-                IL.Emit(OpCodes.Call, _ctx.Runtime!.StringSearchRegExp);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.RegExps.RequireImplementation().StringSearch);
                 break;
 
             case "repeat":

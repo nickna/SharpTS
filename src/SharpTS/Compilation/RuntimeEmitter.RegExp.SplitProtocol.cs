@@ -4,14 +4,34 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
+    private readonly record struct RegExpSymbolSplitProtocolInputs(
+        EmittedArrayStorageRuntime ArrayStorage,
+        MethodBuilder ConstructDynamicValue,
+        MethodBuilder CreateException,
+        MethodBuilder GetIndex,
+        MethodBuilder GetProperty,
+        EmittedNumericCoercionRuntime NumericCoercion,
+        MethodBuilder SetProperty,
+        EmittedStringCoercionRuntime StringCoercion,
+        EmittedSymbolRuntime Symbols,
+        ConstructorBuilder TSTypeErrorCtor,
+        Type UndefinedType
+    );
+
+    private readonly record struct RejectPrimitiveInputs(
+        MethodBuilder CreateException,
+        EmittedSymbolRuntime Symbols,
+        ConstructorBuilder TSTypeErrorCtor
+    );
+
     /// <summary>
     /// Fills the phase-1 declaration of RegExp.prototype[@@split]. The body is
     /// emitted late because SpeciesConstructor must route through the shared
     /// dynamic-construction protocol.
     /// </summary>
-    private void EmitRegExpSymbolSplitProtocol(EmittedRuntime runtime)
+    private void EmitRegExpSymbolSplitProtocol(EmittedRegExpImplementation regExp, RegExpSymbolSplitProtocolInputs inputs)
     {
-        var method = runtime.RegExpSymbolSplitProtocol;
+        var method = regExp.SymbolSplitProtocol;
         var il = method.GetILGenerator();
 
         var s = il.DeclareLocal(_types.String);
@@ -48,7 +68,7 @@ public partial class RuntimeEmitter
         // S = ToString(string). The public wrapper already performed the
         // RequireObject check for rx.
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
+        il.Emit(OpCodes.Call, inputs.StringCoercion.ToJsString);
         il.Emit(OpCodes.Stloc, s);
 
         // C = SpeciesConstructor(rx, %RegExp%). Undefined constructor/species
@@ -56,7 +76,7 @@ public partial class RuntimeEmitter
         // symbol-keyed accessors and their abrupt completions are observable.
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "constructor");
-        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, inputs.GetProperty);
         il.Emit(OpCodes.Stloc, constructor);
 
         var defaultSpecies = il.DefineLabel();
@@ -67,23 +87,28 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, constructor);
         il.Emit(OpCodes.Brfalse, invalidConstructor);
         il.Emit(OpCodes.Ldloc, constructor);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
         il.Emit(OpCodes.Brfalse, haveConstructor);
         il.Emit(OpCodes.Br, defaultSpecies);
 
         il.MarkLabel(invalidConstructor);
-        GuestErrorEmitter.ThrowTypeError(il, runtime, "RegExp constructor property must be an object");
+        GuestErrorEmitter.ThrowError(il, inputs.CreateException, inputs.TSTypeErrorCtor, "RegExp constructor property must be an object");
 
         il.MarkLabel(haveConstructor);
-        EmitRejectPrimitive(il, runtime, constructor, "RegExp constructor property must be an object");
+        EmitRejectPrimitive(
+            il,
+            new RejectPrimitiveInputs(inputs.CreateException, inputs.Symbols, inputs.TSTypeErrorCtor),
+            constructor,
+            "RegExp constructor property must be an object"
+        );
         il.Emit(OpCodes.Ldloc, constructor);
-        il.Emit(OpCodes.Ldsfld, runtime.Symbols.Species);
-        il.Emit(OpCodes.Call, runtime.GetIndex);
+        il.Emit(OpCodes.Ldsfld, inputs.Symbols.Species);
+        il.Emit(OpCodes.Call, inputs.GetIndex);
         il.Emit(OpCodes.Stloc, species);
         il.Emit(OpCodes.Ldloc, species);
         il.Emit(OpCodes.Brfalse, defaultSpecies);
         il.Emit(OpCodes.Ldloc, species);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
         il.Emit(OpCodes.Brfalse, haveSpecies);
         il.Emit(OpCodes.Br, defaultSpecies);
 
@@ -97,8 +122,8 @@ public partial class RuntimeEmitter
         // flags = ToString(Get(rx, "flags")); newFlags includes sticky.
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "flags");
-        il.Emit(OpCodes.Call, runtime.GetProperty);
-        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
+        il.Emit(OpCodes.Call, inputs.GetProperty);
+        il.Emit(OpCodes.Call, inputs.StringCoercion.ToJsString);
         il.Emit(OpCodes.Stloc, flags);
 
         il.Emit(OpCodes.Ldloc, flags);
@@ -139,14 +164,14 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, species);
         il.Emit(OpCodes.Brtrue, constructCustom);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSRegExpType);
+        il.Emit(OpCodes.Isinst, regExp.Type);
         var defaultPlainReceiver = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, defaultPlainReceiver);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSRegExpType);
-        il.Emit(OpCodes.Callvirt, runtime.TSRegExpSourceGetter);
+        il.Emit(OpCodes.Castclass, regExp.Type);
+        il.Emit(OpCodes.Callvirt, regExp.SourceGetter);
         il.Emit(OpCodes.Ldloc, newFlags);
-        il.Emit(OpCodes.Newobj, runtime.TSRegExpCtorPatternFlags);
+        il.Emit(OpCodes.Newobj, regExp.PatternFlagsConstructor);
         il.Emit(OpCodes.Stloc, splitter);
         il.Emit(OpCodes.Br, splitterReady);
 
@@ -174,7 +199,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stelem_Ref);
         il.Emit(OpCodes.Ldloc, species);
         il.Emit(OpCodes.Ldloc, args);
-        il.Emit(OpCodes.Call, runtime.ConstructDynamicValue);
+        il.Emit(OpCodes.Call, inputs.ConstructDynamicValue);
         il.Emit(OpCodes.Stloc, splitter);
         il.MarkLabel(splitterReady);
 
@@ -189,7 +214,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, limitReady);
         il.MarkLabel(coerceLimit);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
         var limitNotUndefined = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, limitNotUndefined);
         il.Emit(OpCodes.Ldc_R8, 4294967295.0);
@@ -197,7 +222,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, limitReady);
         il.MarkLabel(limitNotUndefined);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Call, runtime.NumericCoercion.ToNumber);
+        il.Emit(OpCodes.Call, inputs.NumericCoercion.ToNumber);
         il.Emit(OpCodes.Stloc, number);
         var zeroLimit = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, number);
@@ -236,7 +261,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, limitNumber);
         il.Emit(OpCodes.Ldc_R8, 0.0);
         il.Emit(OpCodes.Bne_Un, nonZeroLimit);
-        EmitReturnArray(il, runtime, result);
+        EmitReturnArray(il, inputs.ArrayStorage, result);
         il.MarkLabel(nonZeroLimit);
 
         // Empty input: return [] when the splitter matches empty, otherwise [""].
@@ -244,10 +269,10 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, s);
         il.Emit(OpCodes.Callvirt, stringLength);
         il.Emit(OpCodes.Brtrue, nonEmpty);
-        EmitSetLastIndex(il, runtime, splitter, 0);
+        EmitSetLastIndex(il, inputs.SetProperty, splitter, 0);
         il.Emit(OpCodes.Ldloc, splitter);
         il.Emit(OpCodes.Ldloc, s);
-        il.Emit(OpCodes.Call, runtime.RegExpExec);
+        il.Emit(OpCodes.Call, regExp.Exec);
         il.Emit(OpCodes.Stloc, execResult);
         var emptyMatched = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, execResult);
@@ -256,7 +281,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, "");
         il.Emit(OpCodes.Callvirt, listAdd);
         il.MarkLabel(emptyMatched);
-        EmitReturnArray(il, runtime, result);
+        EmitReturnArray(il, inputs.ArrayStorage, result);
         il.MarkLabel(nonEmpty);
 
         il.Emit(OpCodes.Ldc_I4_0);
@@ -278,18 +303,18 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, q);
         il.Emit(OpCodes.Conv_R8);
         il.Emit(OpCodes.Box, _types.Double);
-        il.Emit(OpCodes.Call, runtime.SetProperty);
+        il.Emit(OpCodes.Call, inputs.SetProperty);
         il.Emit(OpCodes.Ldloc, splitter);
         il.Emit(OpCodes.Ldloc, s);
-        il.Emit(OpCodes.Call, runtime.RegExpExec);
+        il.Emit(OpCodes.Call, regExp.Exec);
         il.Emit(OpCodes.Stloc, execResult);
         il.Emit(OpCodes.Ldloc, execResult);
         il.Emit(OpCodes.Brfalse, noMatch);
 
         il.Emit(OpCodes.Ldloc, splitter);
         il.Emit(OpCodes.Ldstr, "lastIndex");
-        il.Emit(OpCodes.Call, runtime.GetProperty);
-        EmitToLengthInt(il, runtime, number, e, isNaN, floor);
+        il.Emit(OpCodes.Call, inputs.GetProperty);
+        EmitToLengthInt(il, inputs.NumericCoercion, number, e, isNaN, floor);
         il.Emit(OpCodes.Ldloc, e);
         il.Emit(OpCodes.Ldloc, s);
         il.Emit(OpCodes.Callvirt, stringLength);
@@ -312,13 +337,13 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Sub);
         il.Emit(OpCodes.Callvirt, substringRange);
         il.Emit(OpCodes.Callvirt, listAdd);
-        EmitReturnIfLimitReached(il, runtime, result, limitNumber, listCount);
+        EmitReturnIfLimitReached(il, inputs.ArrayStorage, result, limitNumber, listCount);
 
         // captureLength = ToLength(Get(z, "length")); append captures 1..n-1.
         il.Emit(OpCodes.Ldloc, execResult);
         il.Emit(OpCodes.Ldstr, "length");
-        il.Emit(OpCodes.Call, runtime.GetProperty);
-        EmitToLengthInt(il, runtime, number, captureLength, isNaN, floor);
+        il.Emit(OpCodes.Call, inputs.GetProperty);
+        EmitToLengthInt(il, inputs.NumericCoercion, number, captureLength, isNaN, floor);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Stloc, captureIndex);
         il.Emit(OpCodes.Br, captureLoop);
@@ -328,9 +353,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, captureIndex);
         il.Emit(OpCodes.Conv_R8);
         il.Emit(OpCodes.Box, _types.Double);
-        il.Emit(OpCodes.Call, runtime.GetIndex);
+        il.Emit(OpCodes.Call, inputs.GetIndex);
         il.Emit(OpCodes.Callvirt, listAdd);
-        EmitReturnIfLimitReached(il, runtime, result, limitNumber, listCount);
+        EmitReturnIfLimitReached(il, inputs.ArrayStorage, result, limitNumber, listCount);
         il.Emit(OpCodes.Ldloc, captureIndex);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Add);
@@ -351,7 +376,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, s);
         il.Emit(OpCodes.Ldloc, q);
         il.Emit(OpCodes.Ldloc, fullUnicode);
-        il.Emit(OpCodes.Call, runtime.TSRegExpAdvanceStringIndexSpec);
+        il.Emit(OpCodes.Call, regExp.AdvanceStringIndex);
         il.Emit(OpCodes.Stloc, q);
 
         il.MarkLabel(loopTest);
@@ -365,33 +390,30 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, p);
         il.Emit(OpCodes.Callvirt, substringTail);
         il.Emit(OpCodes.Callvirt, listAdd);
-        EmitReturnArray(il, runtime, result);
+        EmitReturnArray(il, inputs.ArrayStorage, result);
+        regExp.MarkSplitProtocolBodyEmitted();
     }
 
-    private void EmitRejectPrimitive(
-        ILGenerator il,
-        EmittedRuntime runtime,
-        LocalBuilder value,
-        string message)
+    private void EmitRejectPrimitive(ILGenerator il, RejectPrimitiveInputs inputs, LocalBuilder value, string message)
     {
         var ok = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, value);
         var nonNull = il.DefineLabel();
         il.Emit(OpCodes.Brtrue, nonNull);
-        GuestErrorEmitter.ThrowTypeError(il, runtime, message);
+        GuestErrorEmitter.ThrowError(il, inputs.CreateException, inputs.TSTypeErrorCtor, message);
         il.MarkLabel(nonNull);
 
         foreach (var type in new[]
                  {
                      _types.String, _types.Double, _types.Boolean,
-                     _types.BigInteger, runtime.Symbols.Type
+                     _types.BigInteger, inputs.Symbols.Type
                  })
         {
             il.Emit(OpCodes.Ldloc, value);
             il.Emit(OpCodes.Isinst, type);
             var next = il.DefineLabel();
             il.Emit(OpCodes.Brfalse, next);
-            GuestErrorEmitter.ThrowTypeError(il, runtime, message);
+            GuestErrorEmitter.ThrowError(il, inputs.CreateException, inputs.TSTypeErrorCtor, message);
             il.MarkLabel(next);
         }
         il.MarkLabel(ok);
@@ -399,13 +421,14 @@ public partial class RuntimeEmitter
 
     private void EmitToLengthInt(
         ILGenerator il,
-        EmittedRuntime runtime,
+        EmittedNumericCoercionRuntime numericCoercion,
         LocalBuilder number,
         LocalBuilder destination,
         System.Reflection.MethodInfo isNaN,
-        System.Reflection.MethodInfo floor)
+        System.Reflection.MethodInfo floor
+    )
     {
-        il.Emit(OpCodes.Call, runtime.NumericCoercion.ToNumber);
+        il.Emit(OpCodes.Call, numericCoercion.ToNumber);
         il.Emit(OpCodes.Stloc, number);
         var zero = il.DefineLabel();
         var max = il.DefineLabel();
@@ -434,21 +457,22 @@ public partial class RuntimeEmitter
         il.MarkLabel(done);
     }
 
-    private void EmitSetLastIndex(ILGenerator il, EmittedRuntime runtime, LocalBuilder splitter, int value)
+    private void EmitSetLastIndex(ILGenerator il, MethodBuilder setProperty, LocalBuilder splitter, int value)
     {
         il.Emit(OpCodes.Ldloc, splitter);
         il.Emit(OpCodes.Ldstr, "lastIndex");
         il.Emit(OpCodes.Ldc_R8, (double)value);
         il.Emit(OpCodes.Box, _types.Double);
-        il.Emit(OpCodes.Call, runtime.SetProperty);
+        il.Emit(OpCodes.Call, setProperty);
     }
 
     private void EmitReturnIfLimitReached(
         ILGenerator il,
-        EmittedRuntime runtime,
+        EmittedArrayStorageRuntime arrayStorage,
         LocalBuilder result,
         LocalBuilder limit,
-        System.Reflection.MethodInfo listCount)
+        System.Reflection.MethodInfo listCount
+    )
     {
         var keepGoing = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, result);
@@ -456,14 +480,14 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Conv_R8);
         il.Emit(OpCodes.Ldloc, limit);
         il.Emit(OpCodes.Blt, keepGoing);
-        EmitReturnArray(il, runtime, result);
+        EmitReturnArray(il, arrayStorage, result);
         il.MarkLabel(keepGoing);
     }
 
-    private static void EmitReturnArray(ILGenerator il, EmittedRuntime runtime, LocalBuilder result)
+    private static void EmitReturnArray(ILGenerator il, EmittedArrayStorageRuntime arrayStorage, LocalBuilder result)
     {
         il.Emit(OpCodes.Ldloc, result);
-        il.Emit(OpCodes.Newobj, runtime.ArrayStorage.Ctor);
+        il.Emit(OpCodes.Newobj, arrayStorage.Ctor);
         il.Emit(OpCodes.Ret);
     }
 }

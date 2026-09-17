@@ -1475,7 +1475,7 @@ public partial class RuntimeEmitter
         // vs "LastIndex") and silently returns undefined. Test262's
         // builtin-coerce-lastindex.js + many coerce/builtin-* tests require the
         // internal slot value to round-trip through `r.lastIndex` reads/writes.
-        if (_features.UsesRegExp)
+        if (runtime.RegExps.Implementation is not null)
         {
             var notRegExpLabel = il.DefineLabel();
             EmitRegExpGetBranch(il, runtime, method, notRegExpLabel);
@@ -1911,15 +1911,15 @@ public partial class RuntimeEmitter
             // ECMA-262 §22.2.5 protocol tests. Gated on UsesRegExp because
             // $RegExp itself is gated and the populate's referenced helpers
             // (TSRegExpSym*Helper) only exist when RegExp is emitted.
-            if (_features.UsesRegExp)
+            if (runtime.RegExps.Implementation is not null)
             {
                 var notRegExpLabel = il.DefineLabel();
                 il.Emit(OpCodes.Ldarg_0);
-                il.Emit(OpCodes.Ldtoken, runtime.TSRegExpType);
+                il.Emit(OpCodes.Ldtoken, runtime.RegExps.RequireImplementation().Type);
                 il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
                 il.Emit(OpCodes.Bne_Un, notRegExpLabel);
-                il.Emit(OpCodes.Call, runtime.RegExpPrototypePopulateMethod);
-                il.Emit(OpCodes.Ldsfld, runtime.RegExpPrototypeField);
+                il.Emit(OpCodes.Call, runtime.RegExps.PopulatePrototype);
+                il.Emit(OpCodes.Ldsfld, runtime.RegExps.Prototype);
                 il.Emit(OpCodes.Ret);
                 il.MarkLabel(notRegExpLabel);
             }

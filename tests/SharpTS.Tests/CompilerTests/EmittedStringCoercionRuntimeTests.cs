@@ -152,7 +152,7 @@ public class EmittedStringCoercionRuntimeTests
             runtime.CreateException, runtime.TSTypeErrorCtor
         ]);
         typeof(RuntimeEmitter).GetMethod("EmitToJsString", privateInstance)!.Invoke(emitter,
-            [helper, coercion, runtime.ArrayStorage, runtime.ArrayOperations, peers, includeRegExp ? runtime.TSRegExpType : null]);
+            [helper, coercion, runtime.ArrayStorage, runtime.ArrayOperations, peers, includeRegExp ? runtime.RegExps.RequireImplementation().Type : null]);
         helper.CreateType();
         using var bytes = Save(runtime);
         Verify(bytes);
@@ -162,7 +162,7 @@ public class EmittedStringCoercionRuntimeTests
         Assert.Equal("42", convert.Invoke(null, [42d]));
         if (includeRegExp)
         {
-            var regex = Activator.CreateInstance(loaded.GetType(runtime.TSRegExpType.Name)!, ["value", ""]);
+            var regex = Activator.CreateInstance(loaded.GetType(runtime.RegExps.RequireImplementation().Type.Name)!, ["value", ""]);
             var function = Activator.CreateInstance(loaded.GetType(runtime.TSFunctionType.Name)!,
                 [null, helperType.GetMethod("CustomToString")!, "toString", 0]);
             loaded.GetType("$Runtime")!.GetMethod("SetProperty")!.Invoke(null, [regex, "toString", function]);

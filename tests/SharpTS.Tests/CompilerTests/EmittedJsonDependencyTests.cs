@@ -24,7 +24,7 @@ public class EmittedJsonDependencyTests
         var module = builder.DefineDynamicModule("main");
         var emitter = new RuntimeEmitter(TypeProvider.Runtime);
         var runtime = emitter.EmitAll(module, features);
-        Assert.NotNull(runtime.TSRegExpType);
+        Assert.NotNull(runtime.RegExps.RequireImplementation().Type);
         features.UsesRegExp = globalFlag;
         var method = typeof(RuntimeEmitter).GetMethod(helper, BindingFlags.Instance | BindingFlags.NonPublic)!;
         Assert.DoesNotContain(method.GetParameters(), p => p.ParameterType == typeof(EmittedRuntime) || p.ParameterType == typeof(RuntimeFeatureSet));
@@ -32,7 +32,7 @@ public class EmittedJsonDependencyTests
         var constructor = Assert.Single(inputType.GetConstructors());
         object?[] arguments = constructor.GetParameters().Select(parameter =>
         {
-            if (parameter.Name == "TSRegExpType") return supplied ? runtime.TSRegExpType : null;
+            if (parameter.Name == "TSRegExpType") return supplied ? runtime.RegExps.RequireImplementation().Type : null;
             if (parameter.Name == "TSSymbolType") return runtime.Symbols.Type;
             var property = typeof(EmittedRuntime).GetProperty(parameter.Name!);
             return property is not null ? property.GetValue(runtime)
@@ -54,7 +54,7 @@ public class EmittedJsonDependencyTests
         var saved = assembly.GetType(type.Name)!.GetMethod(emitted.Name, BindingFlags.Static | BindingFlags.NonPublic)!;
         var operands = ReadTypeOperands(saved).Where(item => item.OpCode == OpCodes.Isinst && item.Type.Name == "$RegExp").ToArray();
         Assert.Equal(supplied ? 1 : 0, operands.Length);
-        if (supplied) Assert.Same(assembly.GetType(runtime.TSRegExpType!.Name), operands[0].Type);
+        if (supplied) Assert.Same(assembly.GetType(runtime.RegExps.RequireImplementation().Type.Name), operands[0].Type);
     }
 
     private static IEnumerable<(OpCode OpCode, Type Type)> ReadTypeOperands(MethodInfo method)
