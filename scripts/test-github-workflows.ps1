@@ -99,10 +99,20 @@ $coreJob = Get-WorkflowJob $ci 'build' 'ci.yml'
 $standaloneJob = Get-WorkflowJob $ci 'standalone' 'ci.yml'
 $coreFilter = 'Category!=LiveNetwork&Category!=LoadSensitive&Category!=npm&FullyQualifiedName!~SharpTS.Tests.CompilerTests.StandaloneDllTests.'
 $standaloneFilter = $coreFilter.Replace('FullyQualifiedName!~', 'FullyQualifiedName~')
-foreach ($partition in @(@($coreJob, $coreFilter), @($standaloneJob, $standaloneFilter))) {
-    if (-not $partition[0].Contains('--filter "' + $partition[1] + '"', [StringComparison]::Ordinal) -or
-        -not $partition[0].Contains('os: [ubuntu-24.04, windows-2025]', [StringComparison]::Ordinal)) {
+foreach ($partition in @($coreJob, $standaloneJob)) {
+    if (-not $partition.Contains('os: [ubuntu-24.04, windows-2025]', [StringComparison]::Ordinal)) {
         $errors.Add('ci.yml core and standalone jobs must cover complementary filters on both platforms.')
+    }
+}
+$standaloneScript = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'test-standalone-shard.ps1') -Raw
+if (-not $coreJob.Contains('--filter "' + $coreFilter + '"', [StringComparison]::Ordinal) -or
+    -not $standaloneScript.Contains('$baseFilter = ''' + $standaloneFilter + '''', [StringComparison]::Ordinal)) {
+    $errors.Add('Core and standalone discovery must retain their complementary category/class filters.')
+}
+foreach ($requiredText in @('shard: [0, 1]', 'shell: pwsh',
+    './scripts/test-standalone-shard.ps1 -ShardIndex ${{ matrix.shard }} -ShardCount 2', 'timeout-minutes: 20')) {
+    if (-not $standaloneJob.Contains($requiredText, [StringComparison]::Ordinal)) {
+        $errors.Add("ci.yml standalone job is missing its complete shard contract: $requiredText")
     }
 }
 foreach ($requiredText in @('build, typescript-conformance,', "'typescript-conformance'")) {
