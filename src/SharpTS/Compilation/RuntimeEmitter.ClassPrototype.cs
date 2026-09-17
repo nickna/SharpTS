@@ -13,8 +13,11 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitClassPrototypeSupport(
         TypeBuilder typeBuilder,
-        EmittedRuntime runtime,
-        FieldBuilder cacheField)
+        EmittedClassPrototypeRuntime classPrototypes,
+        EmittedObjectPrototypeRuntime objectPrototypes,
+        EmittedDescriptorStorageRuntime descriptorStorage,
+        FieldBuilder cacheField
+    )
     {
         var cacheType = cacheField.FieldType;
         var tryGetValue = _types.GetMethod(
@@ -27,14 +30,14 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.Type]);
-        runtime.GetClassPrototypeMethod = getMethod;
+        classPrototypes.Get = getMethod;
 
         var registerMethod = typeBuilder.DefineMethod(
             "RegisterClassPrototype",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Void,
             [_types.Type, _types.Object, _types.Type]);
-        runtime.RegisterClassPrototypeMethod = registerMethod;
+        classPrototypes.Register = registerMethod;
 
         // GetClassPrototype(Type): registered user classes return their stable
         // object. A cache miss forces the compiler-generated type initializer,
@@ -73,7 +76,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ret);
 
             il.MarkLabel(useObjectPrototype);
-            il.Emit(OpCodes.Ldsfld, runtime.ObjectPrototypeField);
+            il.Emit(OpCodes.Ldsfld, objectPrototypes.Prototype);
             il.Emit(OpCodes.Ret);
         }
 
@@ -98,13 +101,13 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Br, prototypeReady);
 
             il.MarkLabel(useObjectPrototype);
-            il.Emit(OpCodes.Ldsfld, runtime.ObjectPrototypeField);
+            il.Emit(OpCodes.Ldsfld, objectPrototypes.Prototype);
             il.Emit(OpCodes.Stloc, basePrototypeLocal);
 
             il.MarkLabel(prototypeReady);
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Ldloc, basePrototypeLocal);
-            il.Emit(OpCodes.Call, runtime.DescriptorStorage.SetPrototype);
+            il.Emit(OpCodes.Call, descriptorStorage.SetPrototype);
             il.Emit(OpCodes.Ret);
         }
     }

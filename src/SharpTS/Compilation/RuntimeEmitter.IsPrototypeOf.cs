@@ -5,6 +5,8 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
+    private readonly record struct IsPrototypeOfHelperInputs(EmittedErrorRuntime Errors, EmittedSymbolRuntime Symbols, Type UndefinedType);
+
     /// <summary>
     /// Emits <c>$Runtime.IsPrototypeOfHelper(object receiverProto, object target) -&gt; bool</c>:
     /// returns true iff <paramref name="receiverProto"/> appears in
@@ -13,14 +15,18 @@ public partial class RuntimeEmitter
     /// Used to back <c>obj.isPrototypeOf(other)</c> for $TSFunction / $Object /
     /// Dictionary receivers exposed via Object.prototype's populate.
     /// </summary>
-    private void EmitIsPrototypeOfHelper(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitIsPrototypeOfHelper(
+        TypeBuilder typeBuilder,
+        EmittedObjectPrototypeRuntime objectPrototypes,
+        IsPrototypeOfHelperInputs inputs
+    )
     {
         var method = typeBuilder.DefineMethod(
             "IsPrototypeOfHelper",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Boolean,
             [_types.Object, _types.Object]);
-        runtime.IsPrototypeOfHelperMethod = method;
+        objectPrototypes.IsPrototypeOf = method;
         // Param 0 is "__this" so the wrapping $TSFunction routes
         // .call(other, target) through InvokeWithThis's expectsThis path —
         // which now nulls _target around the inner Invoke so direct dispatch
@@ -42,7 +48,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Brfalse, falseLabel);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
         il.Emit(OpCodes.Brtrue, falseLabel);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Isinst, _types.Boolean);
@@ -57,7 +63,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, _types.String);
         il.Emit(OpCodes.Brtrue, falseLabel);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, runtime.Symbols.Type);
+        il.Emit(OpCodes.Isinst, inputs.Symbols.Type);
         il.Emit(OpCodes.Brtrue, falseLabel);
         // Step 2 reached (V is Object): ToObject(this) on null/undefined throws.
         // Pre-fix returned false silently, failing null-this-and-object-arg-
@@ -66,12 +72,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Brfalse, receiverNullThrowLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
         il.Emit(OpCodes.Brtrue, receiverNullThrowLabel);
         var afterReceiverNullLabel = il.DefineLabel();
         il.Emit(OpCodes.Br, afterReceiverNullLabel);
         il.MarkLabel(receiverNullThrowLabel);
-        GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot convert undefined or null to object");
+        GuestErrorEmitter.ThrowError(il, inputs.Errors.CreateException, inputs.Errors.TypeErrorConstructor, "Cannot convert undefined or null to object");
         il.MarkLabel(afterReceiverNullLabel);
 
         // Walk: current = PDSGetPrototype(target);
@@ -81,7 +87,7 @@ public partial class RuntimeEmitter
         // }
         var currentLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.ObjectGetPrototypeOf);
+        il.Emit(OpCodes.Call, objectPrototypes.GetPrototypeOf);
         il.Emit(OpCodes.Stloc, currentLocal);
 
         var loopStart = il.DefineLabel();
@@ -96,7 +102,7 @@ public partial class RuntimeEmitter
 
         // current = PDSGetPrototype(current)
         il.Emit(OpCodes.Ldloc, currentLocal);
-        il.Emit(OpCodes.Call, runtime.ObjectGetPrototypeOf);
+        il.Emit(OpCodes.Call, objectPrototypes.GetPrototypeOf);
         il.Emit(OpCodes.Stloc, currentLocal);
         il.Emit(OpCodes.Br, loopStart);
 

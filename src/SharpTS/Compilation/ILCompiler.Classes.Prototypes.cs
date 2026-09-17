@@ -14,7 +14,7 @@ public partial class ILCompiler
         _classes.PrototypeConstructors[typeBuilder] = typeBuilder.DefineConstructor(
             MethodAttributes.Family,
             CallingConventions.Standard,
-            [_runtime.ClassPrototypeMarkerType]);
+            [_runtime.ClassPrototypes.MarkerType]);
     }
 
     private void EmitClassPrototypeConstructor(TypeBuilder typeBuilder)
@@ -164,7 +164,7 @@ public partial class ILCompiler
             il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
         }
 
-        il.Emit(OpCodes.Call, _runtime.RegisterClassPrototypeMethod);
+        il.Emit(OpCodes.Call, _runtime.ClassPrototypes.Register);
 
         // Materialize the ordinary own properties created by
         // ClassDefinitionEvaluation. Generated instances expose methods through
@@ -172,7 +172,7 @@ public partial class ILCompiler
         // see stable descriptors for the constructor and each declared method.
         il.Emit(OpCodes.Ldtoken, selfType);
         il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
-        il.Emit(OpCodes.Call, _runtime.GetClassPrototypeMethod);
+        il.Emit(OpCodes.Call, _runtime.ClassPrototypes.Get);
         var prototypeLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Stloc, prototypeLocal);
 

@@ -2584,7 +2584,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, trueLabel);
         il.MarkLabel(tsArrayWalkPrototype);
         il.Emit(OpCodes.Ldloc, currentLocal);
-        il.Emit(OpCodes.Call, runtime.ObjectGetPrototypeOf);
+        il.Emit(OpCodes.Call, runtime.ObjectPrototypes.GetPrototypeOf);
         il.Emit(OpCodes.Stloc, currentLocal);
         il.Emit(OpCodes.Br, loopStart);
         il.MarkLabel(notTSArrayLabel);
@@ -2638,7 +2638,7 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(walkListPrototypeLabel);
         il.Emit(OpCodes.Ldloc, currentLocal);
-        il.Emit(OpCodes.Call, runtime.ObjectGetPrototypeOf);
+        il.Emit(OpCodes.Call, runtime.ObjectPrototypes.GetPrototypeOf);
         il.Emit(OpCodes.Stloc, currentLocal);
         il.Emit(OpCodes.Br, loopStart);
 
@@ -2745,12 +2745,12 @@ public partial class RuntimeEmitter
         // inherited indexed data properties — those would otherwise look
         // absent here).
         il.MarkLabel(checkObjectPrototypeLabel);
-        il.Emit(OpCodes.Call, runtime.ObjectPrototypePopulateMethod);
-        il.Emit(OpCodes.Ldsfld, runtime.ObjectPrototypeField);
+        il.Emit(OpCodes.Call, runtime.ObjectPrototypes.Populate);
+        il.Emit(OpCodes.Ldsfld, runtime.ObjectPrototypes.Prototype);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "ContainsKey", [_types.String])!);
         il.Emit(OpCodes.Brtrue, trueLabel);
-        il.Emit(OpCodes.Ldsfld, runtime.ObjectPrototypeField);
+        il.Emit(OpCodes.Ldsfld, runtime.ObjectPrototypes.Prototype);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetPropertyDescriptor);
         il.Emit(OpCodes.Brtrue, trueLabel);

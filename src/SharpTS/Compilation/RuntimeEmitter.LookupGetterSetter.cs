@@ -182,7 +182,7 @@ public partial class RuntimeEmitter
         // O = ObjectGetPrototypeOf(O). When the dispatch returns null (top of
         // chain), the loop-start null check returns undefined.
         il.Emit(OpCodes.Ldloc, oLocal);
-        il.Emit(OpCodes.Call, runtime.ObjectGetPrototypeOf);
+        il.Emit(OpCodes.Call, runtime.ObjectPrototypes.GetPrototypeOf);
         il.Emit(OpCodes.Stloc, oLocal);
         il.Emit(OpCodes.Br, loopStartLabel);
 

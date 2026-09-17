@@ -5,6 +5,46 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
+    private readonly record struct ObjectProtoToStringHelperInputs(
+        TypeBuilder ArgumentsType,
+        EmittedArrayOperationsRuntime ArrayOperations,
+        EmittedArrayStorageRuntime ArrayStorage,
+        EmittedBigIntRuntime BigInt,
+        EmittedBooleanRuntime Booleans,
+        TypeBuilder BoundAnyFunctionType,
+        TypeBuilder BoundTSFunctionType,
+        EmittedDateRuntime Dates,
+        EmittedErrorRuntime Errors,
+        TypeBuilder FunctionApplyWrapperType,
+        TypeBuilder FunctionBindWrapperType,
+        TypeBuilder FunctionCallWrapperType,
+        MethodBuilder GetIndex,
+        EmittedJsonRuntime Json,
+        EmittedMapRuntime? Map,
+        EmittedMathRuntime Math,
+        EmittedNumberRuntime Numbers,
+        EmittedObjectStorageRuntime ObjectStorage,
+        EmittedPromiseRuntime? Promise,
+        bool ProxySelected,
+        EmittedRegExpRuntime RegExps,
+        EmittedSetRuntime? Set,
+        EmittedStringRuntime Strings,
+        EmittedSymbolRuntime Symbols,
+        TypeBuilder TSFunctionType,
+        Type UndefinedType
+    );
+
+    private readonly record struct ObjectProtoValueOfHelperInputs(EmittedErrorRuntime Errors, Type UndefinedType);
+
+    private readonly record struct ObjectProtoToLocaleStringHelperInputs(
+        EmittedErrorRuntime Errors,
+        MethodBuilder GetProperty,
+        MethodBuilder InvokeMethodValue,
+        EmittedStringCoercionRuntime StringCoercion,
+        MethodBuilder TypeOf,
+        Type UndefinedType
+    );
+
     /// <summary>
     /// Emits stub <c>$Runtime.StringTo*</c> / <c>StringTrim*</c> helpers used
     /// only for <c>$TSFunction</c> wrapping in <see cref="EmitStringPrototypePopulate"/>.
@@ -66,9 +106,52 @@ public partial class RuntimeEmitter
         // for borrowed-method patterns. Mirrors the syntactic
         // `Object.prototype.toString.call(...)` pattern matcher in
         // ILEmitter.Calls.cs.
-        runtime.ObjectProtoToStringHelper = EmitObjectProtoToStringHelper(typeBuilder, runtime);
-        runtime.ObjectProtoValueOfHelper = EmitObjectProtoValueOfHelper(typeBuilder, runtime);
-        runtime.ObjectProtoToLocaleStringHelper = EmitObjectProtoToLocaleStringHelper(typeBuilder, runtime);
+        runtime.ObjectPrototypes.ToStringMethod = EmitObjectProtoToStringHelper(
+            typeBuilder,
+            new ObjectProtoToStringHelperInputs(
+                ArgumentsType: runtime.ArgumentsType,
+                ArrayOperations: runtime.ArrayOperations,
+                ArrayStorage: runtime.ArrayStorage,
+                BigInt: runtime.BigInt,
+                Booleans: runtime.Booleans,
+                BoundAnyFunctionType: runtime.BoundAnyFunctionType,
+                BoundTSFunctionType: runtime.BoundTSFunctionType,
+                Dates: runtime.Dates,
+                Errors: runtime.Errors,
+                FunctionApplyWrapperType: runtime.FunctionApplyWrapperType,
+                FunctionBindWrapperType: runtime.FunctionBindWrapperType,
+                FunctionCallWrapperType: runtime.FunctionCallWrapperType,
+                GetIndex: runtime.GetIndex,
+                Json: runtime.Json,
+                Map: runtime.Map,
+                Math: runtime.Math,
+                Numbers: runtime.Numbers,
+                ObjectStorage: runtime.ObjectStorage,
+                Promise: runtime.Promise,
+                ProxySelected: _features.UsesProxy,
+                RegExps: runtime.RegExps,
+                Set: runtime.Set,
+                Strings: runtime.Strings,
+                Symbols: runtime.Symbols,
+                TSFunctionType: runtime.TSFunctionType,
+                UndefinedType: runtime.UndefinedType
+            )
+        );
+        runtime.ObjectPrototypes.ValueOf = EmitObjectProtoValueOfHelper(
+            typeBuilder,
+            new ObjectProtoValueOfHelperInputs(runtime.Errors, runtime.UndefinedType)
+        );
+        runtime.ObjectPrototypes.ToLocaleString = EmitObjectProtoToLocaleStringHelper(
+            typeBuilder,
+            new ObjectProtoToLocaleStringHelperInputs(
+                runtime.Errors,
+                runtime.GetProperty,
+                runtime.InvokeMethodValue,
+                runtime.StringCoercion,
+                runtime.TypeOf,
+                runtime.UndefinedType
+            )
+        );
 
         // ECMA-262 23.1.3.32 Array.prototype.toString — returns the join of
         // the array elements with no separator (defaults to ","). Previously
@@ -237,7 +320,7 @@ public partial class RuntimeEmitter
         return method;
     }
 
-    private MethodBuilder EmitObjectProtoToLocaleStringHelper(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private MethodBuilder EmitObjectProtoToLocaleStringHelper(TypeBuilder typeBuilder, ObjectProtoToLocaleStringHelperInputs inputs)
     {
         // ECMA-262 §20.1.3.5: Object.prototype.toLocaleString does ? Invoke(O,
         // "toString"). Step 1 in ToObject(this) throws on null/undefined. Pre-
@@ -256,13 +339,13 @@ public partial class RuntimeEmitter
         var passThroughLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Brtrue, passThroughLabel);
-        GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot convert undefined or null to object");
+        GuestErrorEmitter.ThrowError(il, inputs.Errors.CreateException, inputs.Errors.TypeErrorConstructor, "Cannot convert undefined or null to object");
         il.MarkLabel(passThroughLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
         var notUndefLabel = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, notUndefLabel);
-        GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot convert undefined or null to object");
+        GuestErrorEmitter.ThrowError(il, inputs.Errors.CreateException, inputs.Errors.TypeErrorConstructor, "Cannot convert undefined or null to object");
         il.MarkLabel(notUndefLabel);
         // Invoke the receiver's live `toString` property. This is observable:
         // Object.prototype.toLocaleString.call(value) must respect an override
@@ -271,27 +354,27 @@ public partial class RuntimeEmitter
         var toStringLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "toString");
-        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, inputs.GetProperty);
         il.Emit(OpCodes.Stloc, toStringLocal);
         il.Emit(OpCodes.Ldloc, toStringLocal);
-        il.Emit(OpCodes.Call, runtime.TypeOf);
+        il.Emit(OpCodes.Call, inputs.TypeOf);
         il.Emit(OpCodes.Ldstr, "function");
         il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
         var callableLabel = il.DefineLabel();
         il.Emit(OpCodes.Brtrue, callableLabel);
-        GuestErrorEmitter.ThrowTypeError(il, runtime, "Object.prototype.toLocaleString toString is not callable");
+        GuestErrorEmitter.ThrowError(il, inputs.Errors.CreateException, inputs.Errors.TypeErrorConstructor, "Object.prototype.toLocaleString toString is not callable");
         il.MarkLabel(callableLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, toStringLocal);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Newarr, _types.Object);
-        il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
-        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
+        il.Emit(OpCodes.Call, inputs.InvokeMethodValue);
+        il.Emit(OpCodes.Call, inputs.StringCoercion.ToJsString);
         il.Emit(OpCodes.Ret);
         return method;
     }
 
-    private MethodBuilder EmitObjectProtoValueOfHelper(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private MethodBuilder EmitObjectProtoValueOfHelper(TypeBuilder typeBuilder, ObjectProtoValueOfHelperInputs inputs)
     {
         // ECMA-262 §20.1.3.7: returns ! ToObject(this). For our purposes we
         // pass the receiver through unchanged — primitives stay primitive
@@ -310,20 +393,20 @@ public partial class RuntimeEmitter
         var passThroughLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Brtrue, passThroughLabel);
-        GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot convert undefined or null to object");
+        GuestErrorEmitter.ThrowError(il, inputs.Errors.CreateException, inputs.Errors.TypeErrorConstructor, "Cannot convert undefined or null to object");
         il.MarkLabel(passThroughLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
         var notUndefLabel = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, notUndefLabel);
-        GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot convert undefined or null to object");
+        GuestErrorEmitter.ThrowError(il, inputs.Errors.CreateException, inputs.Errors.TypeErrorConstructor, "Cannot convert undefined or null to object");
         il.MarkLabel(notUndefLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ret);
         return method;
     }
 
-    private MethodBuilder EmitObjectProtoToStringHelper(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private MethodBuilder EmitObjectProtoToStringHelper(TypeBuilder typeBuilder, ObjectProtoToStringHelperInputs inputs)
     {
         var method = typeBuilder.DefineMethod(
             "ObjectProtoToString",
@@ -353,10 +436,10 @@ public partial class RuntimeEmitter
             // non-string replacements are ignored and fall back to "Object".
             var tagLocal = il.DeclareLocal(_types.String);
             var nonStringTagLabel = il.DefineLabel();
-            il.Emit(OpCodes.Call, runtime.BigInt.PrototypePopulateMethod);
-            il.Emit(OpCodes.Ldsfld, runtime.BigInt.PrototypeField);
-            il.Emit(OpCodes.Ldsfld, runtime.Symbols.ToStringTag);
-            il.Emit(OpCodes.Call, runtime.GetIndex);
+            il.Emit(OpCodes.Call, inputs.BigInt.PrototypePopulateMethod);
+            il.Emit(OpCodes.Ldsfld, inputs.BigInt.PrototypeField);
+            il.Emit(OpCodes.Ldsfld, inputs.Symbols.ToStringTag);
+            il.Emit(OpCodes.Call, inputs.GetIndex);
             il.Emit(OpCodes.Isinst, _types.String);
             il.Emit(OpCodes.Stloc, tagLocal);
             il.Emit(OpCodes.Ldloc, tagLocal);
@@ -381,7 +464,7 @@ public partial class RuntimeEmitter
         // undefined
         var notUndefLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
         il.Emit(OpCodes.Brfalse, notUndefLabel);
         EmitTag("[object Undefined]");
         il.MarkLabel(notUndefLabel);
@@ -389,7 +472,7 @@ public partial class RuntimeEmitter
         // Math singleton
         var notMathLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldsfld, runtime.Math.SingletonField);
+        il.Emit(OpCodes.Ldsfld, inputs.Math.SingletonField);
         il.Emit(OpCodes.Bne_Un, notMathLabel);
         EmitTag("[object Math]");
         il.MarkLabel(notMathLabel);
@@ -400,12 +483,12 @@ public partial class RuntimeEmitter
         // the primitive type so `(new Number()).toString.call(obj) === "[object Number]"`.
         var notBoxedTSObjectLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.ObjectStorage.Type);
+        il.Emit(OpCodes.Isinst, inputs.ObjectStorage.Type);
         il.Emit(OpCodes.Brfalse, notBoxedTSObjectLabel);
         var boxedTypeLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.ObjectStorage.Type);
-        il.Emit(OpCodes.Callvirt, runtime.ObjectStorage.FieldsGetter);
+        il.Emit(OpCodes.Castclass, inputs.ObjectStorage.Type);
+        il.Emit(OpCodes.Callvirt, inputs.ObjectStorage.FieldsGetter);
         il.Emit(OpCodes.Ldstr, "__primitiveType");
         il.Emit(OpCodes.Ldloca, boxedTypeLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "TryGetValue",
@@ -447,7 +530,7 @@ public partial class RuntimeEmitter
         // JSON singleton
         var notJsonLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldsfld, runtime.Json.SingletonField);
+        il.Emit(OpCodes.Ldsfld, inputs.Json.SingletonField);
         il.Emit(OpCodes.Bne_Un, notJsonLabel);
         EmitTag("[object JSON]");
         il.MarkLabel(notJsonLabel);
@@ -455,28 +538,28 @@ public partial class RuntimeEmitter
         // Number/String/Boolean/Array prototype singletons
         var notNumberProtoLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldsfld, runtime.Numbers.PrototypeField);
+        il.Emit(OpCodes.Ldsfld, inputs.Numbers.PrototypeField);
         il.Emit(OpCodes.Bne_Un, notNumberProtoLabel);
         EmitTag("[object Number]");
         il.MarkLabel(notNumberProtoLabel);
 
         var notStringProtoLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldsfld, runtime.Strings.PrototypeField);
+        il.Emit(OpCodes.Ldsfld, inputs.Strings.PrototypeField);
         il.Emit(OpCodes.Bne_Un, notStringProtoLabel);
         EmitTag("[object String]");
         il.MarkLabel(notStringProtoLabel);
 
         var notBoolProtoLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldsfld, runtime.Booleans.PrototypeField);
+        il.Emit(OpCodes.Ldsfld, inputs.Booleans.PrototypeField);
         il.Emit(OpCodes.Bne_Un, notBoolProtoLabel);
         EmitTag("[object Boolean]");
         il.MarkLabel(notBoolProtoLabel);
 
         var notArrayProtoLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldsfld, runtime.ArrayOperations.PrototypeField);
+        il.Emit(OpCodes.Ldsfld, inputs.ArrayOperations.PrototypeField);
         il.Emit(OpCodes.Bne_Un, notArrayProtoLabel);
         EmitTag("[object Array]");
         il.MarkLabel(notArrayProtoLabel);
@@ -486,7 +569,7 @@ public partial class RuntimeEmitter
         // would otherwise tag "[object Array]".
         var notArgumentsTypeLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.ArgumentsType);
+        il.Emit(OpCodes.Isinst, inputs.ArgumentsType);
         il.Emit(OpCodes.Brfalse, notArgumentsTypeLabel);
         EmitTag("[object Arguments]");
         il.MarkLabel(notArgumentsTypeLabel);
@@ -510,7 +593,7 @@ public partial class RuntimeEmitter
         // $Array
         var notTSArrayLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.ArrayStorage.Type);
+        il.Emit(OpCodes.Isinst, inputs.ArrayStorage.Type);
         il.Emit(OpCodes.Brfalse, notTSArrayLabel);
         EmitTag("[object Array]");
         il.MarkLabel(notTSArrayLabel);
@@ -564,18 +647,18 @@ public partial class RuntimeEmitter
             il.MarkLabel(notMatch);
         }
 
-        EmitFunctionBranch(runtime.TSFunctionType);
-        EmitFunctionBranch(runtime.BoundTSFunctionType);
-        EmitFunctionBranch(runtime.FunctionBindWrapperType);
-        EmitFunctionBranch(runtime.FunctionCallWrapperType);
-        EmitFunctionBranch(runtime.FunctionApplyWrapperType);
+        EmitFunctionBranch(inputs.TSFunctionType);
+        EmitFunctionBranch(inputs.BoundTSFunctionType);
+        EmitFunctionBranch(inputs.FunctionBindWrapperType);
+        EmitFunctionBranch(inputs.FunctionCallWrapperType);
+        EmitFunctionBranch(inputs.FunctionApplyWrapperType);
         EmitFunctionBranch(_types.Delegate);
-        EmitFunctionBranch(runtime.ArrayOperations.BoundMethodType);
-        if (runtime.Map is not null)
-            EmitFunctionBranch(runtime.RequireMap().BoundMethodType);
-        if (runtime.Set is not null)
-            EmitFunctionBranch(runtime.RequireSet().BoundMethodType);
-        EmitFunctionBranch(runtime.BoundAnyFunctionType);
+        EmitFunctionBranch(inputs.ArrayOperations.BoundMethodType);
+        if (inputs.Map is not null)
+            EmitFunctionBranch(inputs.Map!.BoundMethodType);
+        if (inputs.Set is not null)
+            EmitFunctionBranch(inputs.Set!.BoundMethodType);
+        EmitFunctionBranch(inputs.BoundAnyFunctionType);
         // System.Type — built-in constructors and class references held as
         // values are Type tokens (`var O = Object`); typeof says "function",
         // so the toString tag must agree (#314).
@@ -586,7 +669,7 @@ public partial class RuntimeEmitter
         // carrier itself is not one of the concrete callable CLR wrappers
         // above, so consult its runtime IsCallable slot explicitly. This also
         // handles proxies whose targets are themselves callable proxies.
-        if (_features.UsesProxy)
+        if (inputs.ProxySelected)
         {
             var notProxyLabel = il.DefineLabel();
             var proxyLabel = il.DefineLabel();
@@ -608,33 +691,33 @@ public partial class RuntimeEmitter
         }
 
         // $Date — ECMA-262 §21.4.4.42 brand check via [[DateValue]] slot.
-        if (runtime.Dates.Implementation != null)
+        if (inputs.Dates.Implementation != null)
         {
             var notTSDateLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.Dates.RequireImplementation().Type);
+            il.Emit(OpCodes.Isinst, inputs.Dates.RequireImplementation().Type);
             il.Emit(OpCodes.Brfalse, notTSDateLabel);
             EmitTag("[object Date]");
             il.MarkLabel(notTSDateLabel);
         }
 
         // $RegExp — §22.2.6.13 brand check via [[RegExpMatcher]] slot.
-        if (runtime.RegExps.Implementation != null)
+        if (inputs.RegExps.Implementation != null)
         {
             var notTSRegExpLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.RegExps.RequireImplementation().Type);
+            il.Emit(OpCodes.Isinst, inputs.RegExps.RequireImplementation().Type);
             il.Emit(OpCodes.Brfalse, notTSRegExpLabel);
             EmitTag("[object RegExp]");
             il.MarkLabel(notTSRegExpLabel);
         }
 
         // $Error — §20.5.3.4 brand check via [[ErrorData]] slot.
-        if (runtime.Errors.Type != null)
+        if (inputs.Errors.Type != null)
         {
             var notTSErrorLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.Errors.Type);
+            il.Emit(OpCodes.Isinst, inputs.Errors.Type);
             il.Emit(OpCodes.Brfalse, notTSErrorLabel);
             EmitTag("[object Error]");
             il.MarkLabel(notTSErrorLabel);
@@ -646,11 +729,11 @@ public partial class RuntimeEmitter
         // populate with "Promise". Emit a direct brand check here so
         // `Object.prototype.toString.call(promise) === "[object Promise]"`
         // without depending on prototype-chain walks at runtime.
-        if (runtime.Promise is not null)
+        if (inputs.Promise is not null)
         {
             var notTSPromiseLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.RequirePromise().Type);
+            il.Emit(OpCodes.Isinst, inputs.Promise!.Type);
             il.Emit(OpCodes.Brfalse, notTSPromiseLabel);
             EmitTag("[object Promise]");
             il.MarkLabel(notTSPromiseLabel);

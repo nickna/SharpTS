@@ -645,7 +645,7 @@ public partial class RuntimeEmitter
         // return false
         var currentLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.ObjectGetPrototypeOf);
+        il.Emit(OpCodes.Call, runtime.ObjectPrototypes.GetPrototypeOf);
         il.Emit(OpCodes.Stloc, currentLocal);
 
         var loopLabel = il.DefineLabel();
@@ -660,7 +660,7 @@ public partial class RuntimeEmitter
 
         // current = current.[[GetPrototypeOf]]
         il.Emit(OpCodes.Ldloc, currentLocal);
-        il.Emit(OpCodes.Call, runtime.ObjectGetPrototypeOf);
+        il.Emit(OpCodes.Call, runtime.ObjectPrototypes.GetPrototypeOf);
         il.Emit(OpCodes.Stloc, currentLocal);
         il.Emit(OpCodes.Br, loopLabel);
 
@@ -1114,7 +1114,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(symbolNotOwnLabel);
         var symbolPrototypeLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.ObjectGetPrototypeOf);
+        il.Emit(OpCodes.Call, runtime.ObjectPrototypes.GetPrototypeOf);
         il.Emit(OpCodes.Stloc, symbolPrototypeLocal);
         il.Emit(OpCodes.Ldloc, symbolPrototypeLocal);
         il.Emit(OpCodes.Brfalse, falseLabel);

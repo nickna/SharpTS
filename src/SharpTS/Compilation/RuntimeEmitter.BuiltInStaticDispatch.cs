@@ -147,8 +147,8 @@ public partial class RuntimeEmitter
         EmitObjectMethodLookup("preventExtensions",       runtime.ObjectState.PreventExtensions, 1);
         EmitObjectMethodLookup("getOwnPropertyNames",     runtime.GetOwnPropertyNames, 1);
         EmitObjectMethodLookup("getOwnPropertySymbols",   runtime.GetOwnPropertySymbols, 1);
-        EmitObjectMethodLookup("getPrototypeOf",          runtime.ObjectGetPrototypeOf, 1);
-        EmitObjectMethodLookup("setPrototypeOf",          runtime.ObjectSetPrototypeOf, 2);
+        EmitObjectMethodLookup("getPrototypeOf",          runtime.ObjectPrototypes.GetPrototypeOf, 1);
+        EmitObjectMethodLookup("setPrototypeOf",          runtime.ObjectPrototypes.SetPrototypeOf, 2);
         EmitObjectMethodLookup("defineProperty",          runtime.ObjectDescriptors.DefineProperty, 3);
         EmitObjectMethodLookup("defineProperties",        runtime.ObjectDescriptors.DefineProperties, 2);
         EmitObjectMethodLookup("getOwnPropertyDescriptor",  runtime.ObjectDescriptors.GetOwnPropertyDescriptor, 2);
@@ -156,7 +156,7 @@ public partial class RuntimeEmitter
         // create routes through the value-form wrapper: reflection dispatch
         // pads the missing props arg with null, which raw ObjectCreate must
         // treat as the explicit-null TypeError case.
-        EmitObjectMethodLookup("create",                  runtime.ObjectCreateValueForm, 2);
+        EmitObjectMethodLookup("create",                  runtime.ObjectPrototypes.CreateValueForm, 2);
         EmitObjectMethodLookup("assign",                  runtime.ObjectAssign, 2);
         EmitObjectMethodLookup("is",                      runtime.ObjectIs, 2);
         EmitObjectMethodLookup("hasOwn",                  runtime.ObjectHasOwn, 2);

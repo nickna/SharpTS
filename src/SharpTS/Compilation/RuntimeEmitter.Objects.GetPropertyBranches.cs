@@ -334,7 +334,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
         il.MarkLabel(tsArrayNoDescriptorFallback);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.ObjectGetPrototypeOf);
+        il.Emit(OpCodes.Call, runtime.ObjectPrototypes.GetPrototypeOf);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, runtime.GetProperty);
         il.Emit(OpCodes.Ret);
@@ -504,7 +504,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
         il.MarkLabel(listNoDescriptorFallback);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.ObjectGetPrototypeOf);
+        il.Emit(OpCodes.Call, runtime.ObjectPrototypes.GetPrototypeOf);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, runtime.GetProperty);
         il.Emit(OpCodes.Ret);
@@ -739,7 +739,7 @@ public partial class RuntimeEmitter
             il.MarkLabel(skip);
         }
         EmitTSObjProtoCheck("hasOwnProperty", runtime.HasOwnPropertyHelperMethod);
-        EmitTSObjProtoCheck("isPrototypeOf",  runtime.IsPrototypeOfHelperMethod);
+        EmitTSObjProtoCheck("isPrototypeOf",  runtime.ObjectPrototypes.IsPrototypeOf);
 
         var tsObjectInstanceLocal = il.DeclareLocal(runtime.ObjectStorage.Type);
         il.Emit(OpCodes.Ldarg_0);
@@ -862,9 +862,9 @@ public partial class RuntimeEmitter
         // the dict-branch fallback). Catches `({}.toString)` style accesses on
         // $Object instances created without an explicit prototype link.
         var tsObjProtoFallbackMissLabel = il.DefineLabel();
-        il.Emit(OpCodes.Call, runtime.ObjectPrototypePopulateMethod);
+        il.Emit(OpCodes.Call, runtime.ObjectPrototypes.Populate);
         var tsObjProtoFallbackLocal = il.DeclareLocal(_types.Object);
-        il.Emit(OpCodes.Ldsfld, runtime.ObjectPrototypeField);
+        il.Emit(OpCodes.Ldsfld, runtime.ObjectPrototypes.Prototype);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloca, tsObjProtoFallbackLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "TryGetValue",
@@ -1204,7 +1204,7 @@ public partial class RuntimeEmitter
             il.MarkLabel(skip);
         }
         EmitObjProtoMethodCheck("hasOwnProperty", runtime.HasOwnPropertyHelperMethod, 1);
-        EmitObjProtoMethodCheck("isPrototypeOf",  runtime.IsPrototypeOfHelperMethod, 1);
+        EmitObjProtoMethodCheck("isPrototypeOf",  runtime.ObjectPrototypes.IsPrototypeOf, 1);
 
         // Retrieve the descriptor once: querying TryGetGetter first repeated the
         // descriptor weak-table lookup for every ordinary dictionary property.
@@ -1420,9 +1420,9 @@ public partial class RuntimeEmitter
         // `({}).toString.call(receiver)` or for ToPrimitive coercion to find
         // the inherited methods on plain dicts. Lazy-populates on first read.
         var protoFallbackMissLabel = il.DefineLabel();
-        il.Emit(OpCodes.Call, runtime.ObjectPrototypePopulateMethod);
+        il.Emit(OpCodes.Call, runtime.ObjectPrototypes.Populate);
         var objProtoFallbackLocal = il.DeclareLocal(_types.Object);
-        il.Emit(OpCodes.Ldsfld, runtime.ObjectPrototypeField);
+        il.Emit(OpCodes.Ldsfld, runtime.ObjectPrototypes.Prototype);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloca, objProtoFallbackLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "TryGetValue",

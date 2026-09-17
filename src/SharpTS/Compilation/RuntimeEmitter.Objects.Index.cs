@@ -1095,7 +1095,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, noInheritedProxyLabel);
         var indexPrototypeLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.ObjectGetPrototypeOf);
+        il.Emit(OpCodes.Call, runtime.ObjectPrototypes.GetPrototypeOf);
         il.Emit(OpCodes.Stloc, indexPrototypeLocal);
         il.Emit(OpCodes.Ldloc, indexPrototypeLocal);
         il.Emit(OpCodes.Brfalse, noInheritedProxyLabel);

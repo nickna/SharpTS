@@ -186,7 +186,7 @@ public partial class RuntimeEmitter
         // CreateKeyedPromiseCombinatorResultObject uses a null prototype.
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
-        il.Emit(OpCodes.Call, runtime.ObjectCreate);
+        il.Emit(OpCodes.Call, runtime.ObjectPrototypes.Create);
         il.Emit(OpCodes.Stloc, result);
 
         il.Emit(OpCodes.Ldc_I4_0);

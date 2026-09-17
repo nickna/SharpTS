@@ -2171,16 +2171,16 @@ public partial class RuntimeEmitter
         // indexed properties anywhere on that standard chain force bailout.
         il.Emit(OpCodes.Ldsfld, runtime.ArrayOperations.PrototypeField);
         il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetPrototype);
-        il.Emit(OpCodes.Ldsfld, runtime.ObjectPrototypeField);
+        il.Emit(OpCodes.Ldsfld, runtime.ObjectPrototypes.Prototype);
         il.Emit(OpCodes.Bne_Un, returnFalse);
-        il.Emit(OpCodes.Ldsfld, runtime.ObjectPrototypeField);
+        il.Emit(OpCodes.Ldsfld, runtime.ObjectPrototypes.Prototype);
         il.Emit(OpCodes.Call, runtime.DescriptorStorage.HasPrototypeEntry);
         il.Emit(OpCodes.Brtrue, returnFalse);
         il.Emit(OpCodes.Ldsfld, runtime.ArrayOperations.PrototypeField);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, runtime.DescriptorStorage.HasIndexedOwnProperty);
         il.Emit(OpCodes.Brtrue, returnFalse);
-        il.Emit(OpCodes.Ldsfld, runtime.ObjectPrototypeField);
+        il.Emit(OpCodes.Ldsfld, runtime.ObjectPrototypes.Prototype);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, runtime.DescriptorStorage.HasIndexedOwnProperty);
         il.Emit(OpCodes.Brtrue, returnFalse);

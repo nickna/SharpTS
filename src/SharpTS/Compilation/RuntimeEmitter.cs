@@ -161,7 +161,7 @@ public partial class RuntimeEmitter
 
         // Marker used only to give compiler-generated prototype constructors a
         // signature that cannot collide with a user-declared constructor.
-        EmitClassPrototypeMarkerInterface(moduleBuilder, runtime);
+        EmitClassPrototypeMarkerInterface(moduleBuilder, runtime.ClassPrototypes);
 
         // Forward-declare the $Runtime class plus a handful of helper signatures
         // (Stringify, CreateException) so types that emit BEFORE EmitRuntimeClass
@@ -809,6 +809,8 @@ public partial class RuntimeEmitter
         runtime.ObjectState.CompleteEmission();
         runtime.Errors.CompleteEmission();
         runtime.ObjectDescriptors.CompleteEmission();
+        runtime.ObjectPrototypes.CompleteEmission();
+        runtime.ClassPrototypes.CompleteEmission();
         runtime.Reflect.CompleteEmission();
         runtime.Json.CompleteEmission();
         runtime.Records.CompleteEmission();

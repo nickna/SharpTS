@@ -17,6 +17,13 @@ namespace SharpTS.Compilation;
 /// <seealso cref="ILEmitter"/>
 public class EmittedRuntime
 {
+    /// <summary>Required Object prototype and prototype-chain operations for one compilation.</summary>
+    public EmittedObjectPrototypeRuntime ObjectPrototypes { get; } = new();
+
+    /// <summary>Required user-class prototype declarations and registration for one compilation.</summary>
+    public EmittedClassPrototypeRuntime ClassPrototypes { get; } = new();
+
+
     /// <summary>Required public Object descriptor operations for this compilation.</summary>
     public EmittedObjectDescriptorRuntime ObjectDescriptors { get; } = new();
 
@@ -191,9 +198,6 @@ public class EmittedRuntime
     // Constructor-free prototype objects for emitted user classes. Each user
     // class creates its prototype through a compiler-only constructor and
     // registers it here when the class definition is evaluated.
-    public Type ClassPrototypeMarkerType { get; set; } = null!;
-    public MethodBuilder GetClassPrototypeMethod { get; set; } = null!;
-    public MethodBuilder RegisterClassPrototypeMethod { get; set; } = null!;
 
     // The emitted runtime helper class
     public TypeBuilder RuntimeType { get; set; } = null!;
@@ -362,12 +366,6 @@ public class EmittedRuntime
     /// path is still intercepted at compile time by GlobalThisStaticEmitter.
     /// </summary>
     public FieldBuilder GlobalThisSingletonField { get; set; } = null!;
-    /// <summary>$Runtime.ObjectProtoToString(this) — ECMA-262 19.1.3.6 toString returns "[object X]" branded by receiver type. Wired into Object.prototype.toString slot for borrowed-method dispatch (`obj.toString = Object.prototype.toString; obj.toString()`).</summary>
-    public MethodBuilder ObjectProtoToStringHelper { get; set; } = null!;
-    /// <summary>$Runtime.ObjectProtoValueOf(this) — ECMA-262 19.1.3.7. Returns the receiver as-is (primitives stay primitive, objects stay objects). Wired into Object.prototype.valueOf so the materializer's ToPrimitive picks up the inherited method and sees a non-primitive return for plain objects (triggering the toString fallback).</summary>
-    public MethodBuilder ObjectProtoValueOfHelper { get; set; } = null!;
-    /// <summary>$Runtime.ObjectProtoToLocaleString(this) — ECMA-262 20.1.3.5. Wraps ObjectProtoToString with the null/undef TypeError throw mandated by ToObject(this); other receivers delegate to ObjectProtoToString.</summary>
-    public MethodBuilder ObjectProtoToLocaleStringHelper { get; set; } = null!;
     /// <summary>$Runtime.HasOwnPropertyHelper(obj, name) — backs <c>obj.hasOwnProperty(name)</c> for $TSFunction / $Object / Dictionary / List receivers.</summary>
     public MethodBuilder HasOwnPropertyHelperMethod { get; set; } = null!;
     /// <summary>$Runtime.LookupGetterHelper(obj, key) — backs <c>Object.prototype.__lookupGetter__</c> (ECMA-262 §B.2.2.4). Walks prototype chain.</summary>
@@ -380,13 +378,7 @@ public class EmittedRuntime
     public MethodBuilder DefineSetterHelperMethod { get; set; } = null!;
     /// <summary>$Runtime.PropertyIsEnumerableHelper(obj, name) — backs <c>obj.propertyIsEnumerable(name)</c>. Honors PDS descriptor's Enumerable bit; falls back to <c>hasOwn(name)</c> (default-enumerable for plain dict entries).</summary>
     public MethodBuilder PropertyIsEnumerableHelperMethod { get; set; } = null!;
-    /// <summary>$Runtime.IsPrototypeOfHelper(receiver, target) — backs <c>receiver.isPrototypeOf(target)</c>; walks target's prototype chain via PDS.</summary>
-    public MethodBuilder IsPrototypeOfHelperMethod { get; set; } = null!;
 
-    /// <summary>Object.prototype singleton dict, populated lazily with hasOwnProperty/isPrototypeOf/toString/valueOf wrappers.</summary>
-    public FieldBuilder ObjectPrototypeField { get; set; } = null!;
-    /// <summary>Idempotent populate for <see cref="ObjectPrototypeField"/>.</summary>
-    public MethodBuilder ObjectPrototypePopulateMethod { get; set; } = null!;
 
     /// <summary>Function.prototype singleton dict, populated lazily with $TSFunction wrappers for call/apply/bind/toString/constructor (ECMA-262 §20.2.3).</summary>
     public FieldBuilder FunctionPrototypeField { get; set; } = null!;
@@ -406,16 +398,7 @@ public class EmittedRuntime
     public MethodBuilder ObjectHasOwn { get; set; } = null!;
     public MethodBuilder ObjectIs { get; set; } = null!;
     public MethodBuilder ObjectAssign { get; set; } = null!;
-    public MethodBuilder ObjectCreate { get; set; } = null!;
-    /// <summary>
-    /// Value-form dispatch wrapper for Object.create: maps a null (reflection-
-    /// padded, i.e. absent) props slot to $Undefined before delegating, so
-    /// under-application doesn't trip ObjectCreate's explicit-null TypeError.
-    /// </summary>
-    public MethodBuilder ObjectCreateValueForm { get; set; } = null!;
     public MethodBuilder GetOwnPropertySymbols { get; set; } = null!;
-    public MethodBuilder ObjectGetPrototypeOf { get; set; } = null!;
-    public MethodBuilder ObjectSetPrototypeOf { get; set; } = null!;
 
     // @DotNetType event subscription registry (compiled mode — see
     // RuntimeEmitter.EventSubscriptions.cs).
