@@ -792,7 +792,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, methodKeyLocal);
         il.Emit(OpCodes.Brfalse, constructiblePrototypeLabel);
         il.Emit(OpCodes.Ldloc, methodKeyLocal);
-        il.Emit(OpCodes.Ldtoken, runtime.NonConstructibleAttrType);
+        il.Emit(OpCodes.Ldtoken, runtime.FunctionAttributes.NonConstructibleType);
         il.Emit(OpCodes.Call, _types.GetMethod(
             _types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
         il.Emit(OpCodes.Ldc_I4_0);

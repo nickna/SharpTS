@@ -17,6 +17,9 @@ namespace SharpTS.Compilation;
 /// <seealso cref="ILEmitter"/>
 public class EmittedRuntime
 {
+    /// <summary>Required function attributes, created before function wrapper emission.</summary>
+    public EmittedFunctionAttributesRuntime FunctionAttributes { get; } = new();
+
     /// <summary>Required operator declarations and equality body lifecycle for one compilation.</summary>
     public EmittedOperatorRuntime Operators { get; } = new();
 
@@ -282,14 +285,9 @@ public class EmittedRuntime
     // arg for a callback that could observe it through `arguments`.
     public FieldBuilder TSFunctionCapturesArgumentsField { get; set; } = null!;
     public FieldBuilder TSFunctionNumericRest4Field { get; set; } = null!;
-    public TypeBuilder NumericRest4AttrType { get; set; } = null!;
-    public ConstructorBuilder NumericRest4AttrCtor { get; set; } = null!;
-    public FieldBuilder NumericRest4AttrValueField { get; set; } = null!;
     // Marker attribute applied to function-declaration methods that reference
     // `arguments`. Its ctor is invoked via CustomAttributeBuilder at method
     // definition; the type token is read back via MethodInfo.IsDefined.
-    public TypeBuilder CapturesArgumentsAttrType { get; set; } = null!;
-    public ConstructorBuilder CapturesArgumentsAttrCtor { get; set; } = null!;
 
     // Marker attribute applied to USER TypeScript function methods (declarations,
     // arrows/function expressions, methods, async stubs). When the wrapped method
@@ -297,20 +295,10 @@ public class EmittedRuntime
     // `undefined` sentinel ($Undefined.Instance) instead of CLR null, matching JS
     // semantics and the direct-call path. Runtime built-ins stay unmarked and keep
     // null padding (their bodies use null-checks for optional-arg absence). (#640)
-    public TypeBuilder PadUndefinedAttrType { get; set; } = null!;
-    public ConstructorBuilder PadUndefinedAttrCtor { get; set; } = null!;
 
     // Attribute applied to emitted user methods with their ECMAScript Function.length.
     // CLR parameter metadata cannot represent the JS rule that arity stops at the first
     // default initializer, so reflective class-method wrappers read this value instead.
-    public TypeBuilder FunctionLengthAttrType { get; set; } = null!;
-    public ConstructorBuilder FunctionLengthAttrCtor { get; set; } = null!;
-    public FieldBuilder FunctionLengthAttrValueField { get; set; } = null!;
-    public TypeBuilder FunctionNameAttrType { get; set; } = null!;
-    public ConstructorBuilder FunctionNameAttrCtor { get; set; } = null!;
-    public FieldBuilder FunctionNameAttrValueField { get; set; } = null!;
-    public TypeBuilder NonConstructibleAttrType { get; set; } = null!;
-    public ConstructorBuilder NonConstructibleAttrCtor { get; set; } = null!;
 
     // Marker attribute applied to a user function-expression / `this`-bearing arrow method whose
     // first emitted parameter is the synthetic `__this` receiver slot. $TSFunction reads it back via
@@ -319,8 +307,6 @@ public class EmittedRuntime
     // break the name-based check and shift value-call arguments by one. (NickNa.PEPacker carries
     // parameter names across the rewrite as of 1.0.3; the attribute keeps this independent of that.)
     // (#738)
-    public TypeBuilder ExpectsThisAttrType { get; set; } = null!;
-    public ConstructorBuilder ExpectsThisAttrCtor { get; set; } = null!;
 
     /// <summary>Required core string operations and prototype declarations.</summary>
     public EmittedStringRuntime Strings { get; } = new();

@@ -5,7 +5,7 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
-    private void EmitNumericRest4Attribute(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private void EmitNumericRest4Attribute(ModuleBuilder moduleBuilder, EmittedFunctionAttributesRuntime attributes)
     {
         var type = moduleBuilder.DefineType("$NumericRest4",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit, typeof(Attribute));
@@ -19,15 +19,15 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Stfld, name);
         il.Emit(OpCodes.Ret);
-        runtime.NumericRest4AttrType = type;
-        runtime.NumericRest4AttrCtor = ctor;
-        runtime.NumericRest4AttrValueField = name;
+        attributes.NumericRest4Type = type;
+        attributes.NumericRest4Ctor = ctor;
+        attributes.NumericRest4ValueField = name;
         type.CreateType();
     }
 
     // Both callable constructors bind the capability to their actual MethodInfo.
     // Ordinary wrappers keep a null field and allocate no delegate or attribute.
-    private void EmitComputeNumericRest4(ILGenerator il, FieldBuilder entry, EmittedRuntime runtime)
+    private void EmitComputeNumericRest4(ILGenerator il, FieldBuilder entry, EmittedFunctionAttributesRuntime attributes)
     {
         var done = il.DefineLabel();
         var name = il.DeclareLocal(_types.String);
@@ -35,20 +35,20 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1); // Captured/instance target: never eligible.
         il.Emit(OpCodes.Brtrue, done);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Ldtoken, runtime.NumericRest4AttrType);
+        il.Emit(OpCodes.Ldtoken, attributes.NumericRest4Type);
         il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.MethodInfo, "IsDefined", _types.Type, _types.Boolean));
         il.Emit(OpCodes.Brfalse, done);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Ldtoken, runtime.NumericRest4AttrType);
+        il.Emit(OpCodes.Ldtoken, attributes.NumericRest4Type);
         il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.MethodInfo, "GetCustomAttributes", _types.Type, _types.Boolean));
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldelem_Ref);
-        il.Emit(OpCodes.Castclass, runtime.NumericRest4AttrType);
-        il.Emit(OpCodes.Ldfld, runtime.NumericRest4AttrValueField);
+        il.Emit(OpCodes.Castclass, attributes.NumericRest4Type);
+        il.Emit(OpCodes.Ldfld, attributes.NumericRest4ValueField);
         il.Emit(OpCodes.Stloc, name);
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Callvirt, _types.GetPropertyGetter(_types.MethodInfo, "DeclaringType"));

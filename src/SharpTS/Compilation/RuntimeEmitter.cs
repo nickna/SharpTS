@@ -189,24 +189,25 @@ public partial class RuntimeEmitter
         // Marker attribute for "this method's body reads JS `arguments`".
         // Must be defined+created before EmitTSFunctionClass so its ctor IL can
         // ldtoken the type for the IsDefined read.
-        EmitCapturesArgumentsAttribute(moduleBuilder, runtime);
+        EmitCapturesArgumentsAttribute(moduleBuilder, runtime.FunctionAttributes);
 
         // Marker attribute for "this is a user TS function; pad omitted args with the
         // `undefined` sentinel". Defined+created before EmitTSFunctionClass so the ctor IL
         // can ldtoken the type for the IsDefined read in AdjustArgs caching. (#640)
-        EmitPadUndefinedAttribute(moduleBuilder, runtime);
+        EmitPadUndefinedAttribute(moduleBuilder, runtime.FunctionAttributes);
 
         // Carries the ECMAScript Function.length of emitted user methods. This must be
         // available before $TSFunction so its reflective constructor can cache the value.
-        EmitFunctionLengthAttribute(moduleBuilder, runtime);
-        EmitFunctionNameAttribute(moduleBuilder, runtime);
-        EmitNumericRest4Attribute(moduleBuilder, runtime);
-        EmitNonConstructibleAttribute(moduleBuilder, runtime);
+        EmitFunctionLengthAttribute(moduleBuilder, runtime.FunctionAttributes);
+        EmitFunctionNameAttribute(moduleBuilder, runtime.FunctionAttributes);
+        EmitNumericRest4Attribute(moduleBuilder, runtime.FunctionAttributes);
+        EmitNonConstructibleAttribute(moduleBuilder, runtime.FunctionAttributes);
 
         // Marker attribute for "this method's first parameter is the synthetic `__this` receiver".
         // Defined+created before EmitTSFunctionClass so the ctor IL can ldtoken the type for the
         // IsDefined read that backstops the (ref-asm-fragile) parameter-name check. (#738)
-        EmitExpectsThisAttribute(moduleBuilder, runtime);
+        EmitExpectsThisAttribute(moduleBuilder, runtime.FunctionAttributes);
+        runtime.FunctionAttributes.CompleteEmission();
 
         if (features.CompactObjectRecordStableIteratorShapes.Count > 0)
             EmitStableNumberIteratorResult(moduleBuilder, runtime);
@@ -237,7 +238,7 @@ public partial class RuntimeEmitter
         // Emit $TSDate class for standalone Date support — gated on UsesDate.
         // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSDate
         if (runtime.Dates.Implementation is not null)
-            EmitTSDateClass(moduleBuilder, runtime.Dates.RequireImplementation(), runtime.NonConstructibleAttrCtor);
+            EmitTSDateClass(moduleBuilder, runtime.Dates.RequireImplementation(), runtime.FunctionAttributes.NonConstructibleCtor);
 
         // Emit $Error class hierarchy for standalone error support
         // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSError and subclasses
@@ -327,7 +328,7 @@ public partial class RuntimeEmitter
                     runtime.ObjectRead.Property,
                     runtime.NumericCoercion,
                     runtime.ObjectStorage,
-                    runtime.PadUndefinedAttrCtor,
+                    runtime.FunctionAttributes.PadUndefinedCtor,
                     runtime.ObjectWrite.Property,
                     runtime.StringCoercion,
                     runtime.Symbols,

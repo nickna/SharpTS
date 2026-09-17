@@ -113,9 +113,9 @@ public sealed class EmittedDateRuntimeTests
     {
         var builder = NewAssembly(); var module = builder.DefineDynamicModule("main");
         var emitter = new RuntimeEmitter(TypeProvider.Runtime); var runtime = new EmittedRuntime();
-        Invoke(emitter, "EmitNonConstructibleAttribute", module, runtime);
+        Invoke(emitter, "EmitNonConstructibleAttribute", module, runtime.FunctionAttributes);
         runtime.Dates.BeginImplementationEmission(); var date = runtime.Dates.RequireImplementation();
-        Invoke(emitter, "EmitTSDateClass", module, date, runtime.NonConstructibleAttrCtor);
+        Invoke(emitter, "EmitTSDateClass", module, date, runtime.FunctionAttributes.NonConstructibleCtor);
         Assert.True(date.Type.IsCreated());
         Assert.Equal(InstanceMethodNames.Order(StringComparer.Ordinal), date.InstanceMethods.Keys.Order(StringComparer.Ordinal));
         Assert.NotNull(date.NoArgsConstructor); Assert.NotNull(date.MillisecondsConstructor);

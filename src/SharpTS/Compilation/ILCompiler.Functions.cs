@@ -223,9 +223,9 @@ public partial class ILCompiler
             // skip-index-box optimization treats this `this`-less declaration
             // like an arrow and drops args[1], so `function(){...arguments[1]...}`
             // used as a map/forEach/every callback reads a null index (#101).
-            if (_runtime?.CapturesArgumentsAttrCtor != null)
+            if (_runtime?.FunctionAttributes.CapturesArgumentsCtor != null)
                 methodBuilder.SetCustomAttribute(
-                    _runtime.CapturesArgumentsAttrCtor, CustomAttributeEncoder.EmptyBlob);
+                    _runtime.FunctionAttributes.CapturesArgumentsCtor, CustomAttributeEncoder.EmptyBlob);
         }
 
         // Generate overloads for functions with default parameters
@@ -289,8 +289,8 @@ public partial class ILCompiler
                             entryIL.Emit(OpCodes.Ldarg, argument);
                         entryIL.Emit(OpCodes.Call, companion);
                         entryIL.Emit(OpCodes.Ret);
-                        methodBuilder.SetCustomAttribute(_runtime!.NumericRest4AttrCtor,
-                            CustomAttributeEncoder.Encode(_runtime.NumericRest4AttrCtor, entry.Name));
+                        methodBuilder.SetCustomAttribute(_runtime!.FunctionAttributes.NumericRest4Ctor,
+                            CustomAttributeEncoder.Encode(_runtime.FunctionAttributes.NumericRest4Ctor, entry.Name));
                     }
                     companions[variantIndex] = companion;
                     foreach (var call in variant.Calls)
@@ -1752,9 +1752,9 @@ public partial class ILCompiler
     /// </summary>
     internal void MarkPadsUndefined(MethodBuilder method)
     {
-        if (_runtime?.PadUndefinedAttrCtor != null)
+        if (_runtime?.FunctionAttributes.PadUndefinedCtor != null)
             method.SetCustomAttribute(
-                _runtime.PadUndefinedAttrCtor, CustomAttributeEncoder.EmptyBlob);
+                _runtime.FunctionAttributes.PadUndefinedCtor, CustomAttributeEncoder.EmptyBlob);
     }
 
     /// <summary>
@@ -1774,28 +1774,28 @@ public partial class ILCompiler
 
         _functions.Lengths[method] = length;
 
-        if (_runtime?.FunctionLengthAttrCtor == null)
+        if (_runtime?.FunctionAttributes.FunctionLengthCtor == null)
             return;
 
         method.SetCustomAttribute(
-            _runtime.FunctionLengthAttrCtor,
-            CustomAttributeEncoder.Encode(_runtime.FunctionLengthAttrCtor, length));
+            _runtime.FunctionAttributes.FunctionLengthCtor,
+            CustomAttributeEncoder.Encode(_runtime.FunctionAttributes.FunctionLengthCtor, length));
     }
 
     internal void MarkFunctionName(MethodBuilder method, string name)
     {
         _functions.Names[method] = name;
-        if (_runtime?.FunctionNameAttrCtor != null)
+        if (_runtime?.FunctionAttributes.FunctionNameCtor != null)
             method.SetCustomAttribute(
-                _runtime.FunctionNameAttrCtor,
-                CustomAttributeEncoder.Encode(_runtime.FunctionNameAttrCtor, name));
+                _runtime.FunctionAttributes.FunctionNameCtor,
+                CustomAttributeEncoder.Encode(_runtime.FunctionAttributes.FunctionNameCtor, name));
     }
 
     internal void MarkNonConstructible(MethodBuilder method)
     {
-        if (_runtime?.NonConstructibleAttrCtor != null)
+        if (_runtime?.FunctionAttributes.NonConstructibleCtor != null)
             method.SetCustomAttribute(
-                _runtime.NonConstructibleAttrCtor,
+                _runtime.FunctionAttributes.NonConstructibleCtor,
                 CustomAttributeEncoder.EmptyBlob);
     }
 
@@ -1809,9 +1809,9 @@ public partial class ILCompiler
     /// </summary>
     internal void MarkExpectsThis(MethodBuilder method)
     {
-        if (_runtime?.ExpectsThisAttrCtor != null)
+        if (_runtime?.FunctionAttributes.ExpectsThisCtor != null)
             method.SetCustomAttribute(
-                _runtime.ExpectsThisAttrCtor, CustomAttributeEncoder.EmptyBlob);
+                _runtime.FunctionAttributes.ExpectsThisCtor, CustomAttributeEncoder.EmptyBlob);
     }
 
     /// <summary>

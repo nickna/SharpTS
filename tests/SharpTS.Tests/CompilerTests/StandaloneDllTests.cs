@@ -3708,6 +3708,128 @@ public class StandaloneDllTests
             verifyStandardError: error => Assert.Empty(error)));
     }
 
+    public static IEnumerable<object[]> FunctionAttributePrograms =>
+    [
+        new object[]
+        {
+            "name_length",
+            "function f(a:number,b:number=4,...tail:number[]){return a+b+tail.length;}function g(a:number,b:number){return a+b;}const x:any=f;const y:any=g;console.log(x.name,x.length);console.log(y.name,y.length);\n",
+            "f 1\ng 2\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "undefined_padding",
+            "function f(a:any,b:any){console.log(a===undefined,b===undefined);}const g:any=f;g(1);g();\n",
+            "false true\ntrue true\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "arguments_extra",
+            "function collect(a:number){console.log(arguments.length,arguments[2]);}const v:any=collect;v(1,2,3);\n",
+            "3 3\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "receiver_bind",
+            "const f:any=function(this:any,x:number){return this.base+x;};console.log(f.call({base:7},2),f.apply({base:5},[4]));const b:any=f.bind({base:10},3);console.log(b());\n",
+            "9 9\n13\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "numeric_rest_selection",
+            "function first(...v:number[]):number{return v[0]+v[1]+v[2]+v[3];}function second(...v:number[]):number{return v[0]+v[1]+v[2]+v[3]+100;}let fn:(...v:number[])=>number=first;let trace=\"\";function argument(value:number):number{trace=trace+value;fn=second;return value;}function run():number{return fn(argument(1),2,3,4);}console.log(run(),fn(1,2,3,4),trace);\n",
+            "10 110 1\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "numeric_rest_fallback",
+            "function add(...v:number[]):number{return v[0]+v[1]+v[2]+v[3];}function observe(...v:number[]):number{return arguments.length+v.length;}function defaults(prefix:number=2,...v:number[]):number{return prefix+v.length;}function fixed(a:number,b:number,c:number,d:number):number{return a*b+c*d;}function choose(fn:(...v:number[])=>number):number{return fn(1,2,3,4);}function capture(value:number):(...v:number[])=>number{return (...v:number[]):number=>value+v[0];}const bound=add.bind(null,10);console.log(choose(observe),choose(defaults),choose(fixed),choose(capture(5)),choose(bound));\n",
+            "8 4 14 6 16\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "class_method",
+            "class Example{value=7;read(a:number,b:number=3){return this.value+a+b;}}const x=new Example();const fn:any=x.read;console.log(fn.name,fn.length,fn.call(x,2));\n",
+            "read 1 12\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "async_name",
+            "async function compute(x:number=3){return x+2;}const fn:any=compute;compute().then(v=>console.log(fn.name,fn.length,v));\n",
+            "compute 0 5\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "generator_name",
+            "function* values(start:number=2){yield start;yield start+1;}const g:any=values;console.log(g.name,g.length);for(const v of values()){console.log(v);}\n",
+            "values 0\n2\n3\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "hosted_minimal",
+            "export function label(value:number=3){return value+2;}\n",
+            "",
+            true,
+            "",
+        },
+        new object[]
+        {
+            "hosted_numeric_rest",
+            "export function add(...v:number[]):number{return v[0]+v[1]+v[2]+v[3];}export function inspect(){const f:any=add;return [f.name,f.length,f(1,2,3,4)];}\n",
+            "",
+            true,
+            "",
+        },
+        new object[]
+        {
+            "receiver_ref",
+            "const f:any=function(this:any,x:number){return this.base+x;};console.log(f.call({base:7},2),f.apply({base:5},[4]));const b:any=f.bind({base:10},3);console.log(b());\n",
+            "9 9\n13\n",
+            false,
+            "--ref-asm",
+        },
+    ];
+
+    [Theory]
+    [MemberData(nameof(FunctionAttributePrograms))]
+    public void Isolated_FunctionAttributes_PreserveInvocationMetadataAndDeployment(
+        string name, string source, string expected, bool hosted, string extraArguments)
+    {
+        using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var sourcePath = tempDir.CreateFile("main.ts", source);
+        var dllPath = tempDir.GetPath($"function_attributes_{name}.dll");
+        var hosting = hosted ? " --target dll --hosted" : "";
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{sourcePath}\" -o \"{dllPath}\" --verify --standalone{hosting} {extraArguments}", tempDir.Path);
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        var references = GetAssemblyReferences(dllPath);
+        Assert.DoesNotContain("SharpTS", references);
+        Assert.Equal(hosted, references.Contains("SharpTS.Hosting.Abstractions"));
+        Assert.False(File.Exists(tempDir.GetPath("SharpTS.dll")));
+        if (!hosted)
+            Assert.Equal(expected, ExecuteCompiledDllIsolated(dllPath, timeoutMs: 30000,
+                verifyStandardError: error => Assert.Empty(error)));
+    }
+
     public static IEnumerable<object[]> ScopedFeatureGatePrograms =>
     [
         new object[]
