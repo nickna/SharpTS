@@ -2723,8 +2723,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, currentLocal);
         il.Emit(OpCodes.Isinst, runtime.FunctionValues.Type);
         il.Emit(OpCodes.Brfalse, notFunctionInstance);
-        il.Emit(OpCodes.Call, runtime.FunctionPrototypePopulateMethod);
-        il.Emit(OpCodes.Ldsfld, runtime.FunctionPrototypeField);
+        il.Emit(OpCodes.Call, runtime.FunctionPrototypes.Populate);
+        il.Emit(OpCodes.Ldsfld, runtime.FunctionPrototypes.Prototype);
         il.Emit(OpCodes.Stloc, currentLocal);
         il.Emit(OpCodes.Br, loopStart);
         il.MarkLabel(notFunctionInstance);
@@ -2733,8 +2733,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, currentLocal);
         il.Emit(OpCodes.Isinst, runtime.FunctionBindings.BoundType);
         il.Emit(OpCodes.Brfalse, notBoundFunctionInstance);
-        il.Emit(OpCodes.Call, runtime.FunctionPrototypePopulateMethod);
-        il.Emit(OpCodes.Ldsfld, runtime.FunctionPrototypeField);
+        il.Emit(OpCodes.Call, runtime.FunctionPrototypes.Populate);
+        il.Emit(OpCodes.Ldsfld, runtime.FunctionPrototypes.Prototype);
         il.Emit(OpCodes.Stloc, currentLocal);
         il.Emit(OpCodes.Br, loopStart);
         il.MarkLabel(notBoundFunctionInstance);

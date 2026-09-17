@@ -794,9 +794,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, "constructor");
         il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
         il.Emit(OpCodes.Brfalse, notConstructorLabel);
-        il.Emit(OpCodes.Call, runtime.FunctionPrototypePopulateMethod);
+        il.Emit(OpCodes.Call, runtime.FunctionPrototypes.Populate);
         var ctorSlotLocal = il.DeclareLocal(_types.Object);
-        il.Emit(OpCodes.Ldsfld, runtime.FunctionPrototypeField);
+        il.Emit(OpCodes.Ldsfld, runtime.FunctionPrototypes.Prototype);
         il.Emit(OpCodes.Ldstr, "constructor");
         il.Emit(OpCodes.Ldloca, ctorSlotLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "TryGetValue",
@@ -1144,10 +1144,10 @@ public partial class RuntimeEmitter
         // it (and we don't want user-set Function.prototype.prototype to
         // shadow that).
         il.MarkLabel(fnProtoFallbackLabel);
-        il.Emit(OpCodes.Call, runtime.FunctionPrototypePopulateMethod);
+        il.Emit(OpCodes.Call, runtime.FunctionPrototypes.Populate);
         var functionPrototypeDescriptorLocal = il.DeclareLocal(
             runtime.DescriptorStorage.DescriptorType);
-        il.Emit(OpCodes.Ldsfld, runtime.FunctionPrototypeField);
+        il.Emit(OpCodes.Ldsfld, runtime.FunctionPrototypes.Prototype);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetPropertyDescriptor);
         il.Emit(OpCodes.Stloc, functionPrototypeDescriptorLocal);
@@ -1199,7 +1199,7 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(noFunctionPrototypeDescriptorLabel);
         var fpSlotLocal = il.DeclareLocal(_types.Object);
-        il.Emit(OpCodes.Ldsfld, runtime.FunctionPrototypeField);
+        il.Emit(OpCodes.Ldsfld, runtime.FunctionPrototypes.Prototype);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloca, fpSlotLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "TryGetValue",

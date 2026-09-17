@@ -3708,6 +3708,64 @@ public class StandaloneDllTests
             verifyStandardError: error => Assert.Empty(error)));
     }
 
+    public static IEnumerable<object[]> FunctionPrototypePrograms =>
+    [
+        new object[]
+        {
+            "prototype_descriptors",
+            "const p:any=Function.prototype;for(const name of [\"call\",\"apply\",\"bind\",\"toString\",\"constructor\"]){const d:any=Object.getOwnPropertyDescriptor(p,name);console.log(name,d.writable,d.enumerable,d.configurable,d.value===p[name]);}console.log(Object.getPrototypeOf(p)===Object.prototype);\n",
+            "call true false true true\napply true false true true\nbind true false true true\ntoString true false true true\nconstructor true false true true\ntrue\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "prototype_borrowed_call",
+            "function f(this:any,a:number,b:number){return this.x+a+b;}const c:any=Function.prototype.call;const a:any=Function.prototype.apply;console.log(c.call(f,{x:1},2,3),a.call(f,{x:4},[5,6]));\n",
+            "6 15\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "prototype_borrowed_bind",
+            "function f(this:any,a:number,b:number){return this.x+a+b;}const bind:any=Function.prototype.bind;const g:any=bind.call(f,{x:1},2);console.log(g(3),g.length,Object.getPrototypeOf(g)===Function.prototype);\n",
+            "6 1 true\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "prototype_property_helper",
+            "const has:any=Function.prototype.call.bind(Object.prototype.hasOwnProperty);console.log(has({x:1},\"x\"),has({},\"x\"));function f(a:number){}console.log(Object.getPrototypeOf(f)===Function.prototype,Function.prototype.constructor===Function,typeof Function.prototype.toString.call(f));\n",
+            "true false\ntrue true string\n",
+            false,
+            "",
+        },
+    ];
+
+    [Theory]
+    [MemberData(nameof(FunctionPrototypePrograms))]
+    public void Isolated_FunctionPrototype_PreservesDescriptorsAndBorrowedMethods(
+        string name, string source, string expected, bool hosted, string extraArguments)
+    {
+        using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var sourcePath = tempDir.CreateFile("main.ts", source);
+        var dllPath = tempDir.GetPath($"function_prototype_{name}.dll");
+        var hosting = hosted ? " --target dll --hosted" : "";
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{sourcePath}\" -o \"{dllPath}\" --verify --standalone{hosting} {extraArguments}", tempDir.Path);
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        var references = GetAssemblyReferences(dllPath);
+        Assert.DoesNotContain("SharpTS", references);
+        Assert.Equal(hosted, references.Contains("SharpTS.Hosting.Abstractions"));
+        Assert.False(File.Exists(tempDir.GetPath("SharpTS.dll")));
+        if (!hosted)
+            Assert.Equal(expected, ExecuteCompiledDllIsolated(dllPath, timeoutMs: 30000,
+                verifyStandardError: error => Assert.Empty(error)));
+    }
+
     public static IEnumerable<object[]> FunctionInvocationPrograms =>
     [
         new object[]

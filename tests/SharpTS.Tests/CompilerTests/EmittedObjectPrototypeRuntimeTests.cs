@@ -129,7 +129,7 @@ public sealed class EmittedObjectPrototypeRuntimeTests
         var expectedPromise = supplied ? saved.GetField("Prototype")!.GetValue(null) : null;
         Assert.Same(expectedPromise, getter.Invoke(null, [Activator.CreateInstance(loaded.GetType(promiseType.FullName!)!)]));
         Assert.Same(expectedPromise, getter.Invoke(null, [Task.FromResult<object>(1d)]));
-        var expectedFunction = supplied ? loaded.GetType("$Runtime")!.GetField(runtime.FunctionPrototypeField.Name)!.GetValue(null) : null;
+        var expectedFunction = supplied ? loaded.GetType("$Runtime")!.GetField(runtime.FunctionPrototypes.Prototype.Name)!.GetValue(null) : null;
         foreach (var receiver in new[] { resolve, reject }) Assert.Same(expectedFunction, getter.Invoke(null, [Activator.CreateInstance(loaded.GetType(receiver.FullName!)!)]));
         var operands = ReadTypeOperands(getter).Where(p => p.OpCode == OpCodes.Isinst).Select(p => p.Type).ToArray();
         foreach (var receiver in new[] { promiseType, resolve, reject }) Assert.Equal(supplied, operands.Contains(loaded.GetType(receiver.FullName!)!));
@@ -181,7 +181,7 @@ public sealed class EmittedObjectPrototypeRuntimeTests
         var ctor = Assert.Single(type.GetConstructors());
         return ctor.Invoke(ctor.GetParameters().Select(p => overrides.TryGetValue(p.Name!, out var value) ? value
             : p.Name == "GetProperty" ? runtime.ObjectRead.Property
-            : (p.Name switch { "TSFunctionGetOrCreate" => runtime.FunctionConstruction.GetOrCreate, _ => (p.Name switch { "ArgumentsType" => runtime.Arguments.Type, "BoundAnyFunctionType" => runtime.FunctionBindings.AnyType, "BoundTSFunctionType" => runtime.FunctionBindings.BoundType, "FunctionApplyWrapperType" => runtime.FunctionBindings.ApplyType, "FunctionBindWrapperType" => runtime.FunctionBindings.BindType, "FunctionCallWrapperType" => runtime.FunctionBindings.CallType, "TSFunctionType" => runtime.FunctionValues.Type, _ => typeof(EmittedRuntime).GetProperty(p.Name!)!.GetValue(runtime) }) })).ToArray());
+            : (p.Name switch { "TSFunctionGetOrCreate" => runtime.FunctionConstruction.GetOrCreate, _ => (p.Name switch { "ArgumentsType" => runtime.Arguments.Type, "BoundAnyFunctionType" => runtime.FunctionBindings.AnyType, "BoundTSFunctionType" => runtime.FunctionBindings.BoundType, "FunctionApplyWrapperType" => runtime.FunctionBindings.ApplyType, "FunctionBindWrapperType" => runtime.FunctionBindings.BindType, "FunctionCallWrapperType" => runtime.FunctionBindings.CallType, "TSFunctionType" => runtime.FunctionValues.Type, _ => (p.Name switch { "FunctionPrototypeField" => runtime.FunctionPrototypes.Prototype, "FunctionPrototypePopulateMethod" => runtime.FunctionPrototypes.Populate, _ => typeof(EmittedRuntime).GetProperty(p.Name!)!.GetValue(runtime) }) }) })).ToArray());
     }
     private static void Fill(object owner, string? missing = null)
     {

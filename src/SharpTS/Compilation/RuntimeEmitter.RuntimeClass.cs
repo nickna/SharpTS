@@ -229,7 +229,7 @@ public partial class RuntimeEmitter
             "_functionPrototype",
             _types.DictionaryStringObject,
             FieldAttributes.Public | FieldAttributes.Static);
-        runtime.FunctionPrototypeField = functionPrototypeField;
+        runtime.FunctionPrototypes.Prototype = functionPrototypeField;
 
         // RegExp.prototype field forward-declared by DefineRuntimeClassPhase1 —
         // $RegExp's emission depends on the field token so the prototype's
@@ -539,7 +539,7 @@ public partial class RuntimeEmitter
         DefineDatePrototypePopulateShell(typeBuilder, runtime.Dates);
         DefineErrorPrototypePopulateShell(typeBuilder, runtime.Errors);
         DefineNativeErrorPrototypePopulateShells(typeBuilder, runtime.Errors);
-        DefineFunctionPrototypePopulateShell(typeBuilder, runtime);
+        DefineFunctionPrototypePopulateShell(typeBuilder, runtime.FunctionPrototypes);
         DefineRegExpPrototypePopulateShell(typeBuilder, runtime.RegExps);
         if (_features.UsesPromise)
             DefinePromisePrototypePopulateShell(typeBuilder, runtime);
@@ -754,7 +754,7 @@ public partial class RuntimeEmitter
         cctorIL.Emit(OpCodes.Call, runtime.Dates.PopulatePrototype);
         cctorIL.Emit(OpCodes.Call, runtime.Strings.PrototypePopulateMethod);
         cctorIL.Emit(OpCodes.Call, runtime.Errors.PrototypePopulate);
-        cctorIL.Emit(OpCodes.Call, runtime.FunctionPrototypePopulateMethod);
+        cctorIL.Emit(OpCodes.Call, runtime.FunctionPrototypes.Populate);
         cctorIL.Emit(OpCodes.Call, runtime.RegExps.PopulatePrototype);
         // Math / JSON value-form singletons (`const m = Math; m.max(...)`). Each
         // populate is idempotent and skips null backings, so calling the JSON one
@@ -1214,8 +1214,8 @@ public partial class RuntimeEmitter
                 runtime.FunctionBindings.ApplyType,
                 runtime.FunctionBindings.BindType,
                 runtime.FunctionBindings.CallType,
-                runtime.FunctionPrototypeField,
-                runtime.FunctionPrototypePopulateMethod,
+                runtime.FunctionPrototypes.Prototype,
+                runtime.FunctionPrototypes.Populate,
                 runtime.GetFunctionMethod,
                 runtime.GlobalThisGetProperty,
                 runtime.GlobalThisSingletonField,
@@ -1466,8 +1466,8 @@ public partial class RuntimeEmitter
                 runtime.FunctionBindings.BoundType,
                 runtime.Buffer,
                 runtime.DescriptorStorage,
-                runtime.FunctionPrototypeField,
-                runtime.FunctionPrototypePopulateMethod,
+                runtime.FunctionPrototypes.Prototype,
+                runtime.FunctionPrototypes.Populate,
                 runtime.GlobalThisGetProperty,
                 runtime.GlobalThisSingletonField,
                 runtime.InvokeMethodUnwrapped,
@@ -1949,8 +1949,8 @@ public partial class RuntimeEmitter
                 runtime.Dates,
                 runtime.DescriptorStorage,
                 runtime.Errors,
-                runtime.FunctionPrototypeField,
-                runtime.FunctionPrototypePopulateMethod,
+                runtime.FunctionPrototypes.Prototype,
+                runtime.FunctionPrototypes.Populate,
                 runtime.ObjectRead.Property,
                 runtime.IHasFieldsInterface,
                 runtime.InvokeMethodUnwrapped,
@@ -2763,7 +2763,23 @@ public partial class RuntimeEmitter
         // $BoundTSFunction emission and after InvokeMethodValue is wired
         // (the call/apply helpers route through it). Emitted in the same tail
         // section as ErrorPrototype.
-        EmitFunctionPrototypePopulate(typeBuilder, runtime);
+        EmitFunctionPrototypePopulate(
+            typeBuilder,
+            runtime.FunctionPrototypes,
+            new FunctionPrototypePopulateInputs(
+                runtime.DescriptorStorage,
+                runtime.FunctionValues,
+                runtime.ObjectPrototypes,
+                runtime.FunctionConstruction,
+                runtime.UndefinedInstance,
+                runtime.InvokeMethodValue,
+                runtime.UndefinedType,
+                runtime.Operators,
+                runtime.FunctionBindings,
+                runtime.Errors
+            )
+        );
+        runtime.FunctionPrototypes.CompleteEmission();
         // RegExp.prototype populate body — must come after $RegExp's
         // TSRegExpSym* helpers are emitted (they're referenced from the
         // populate IL). Emitted gated on UsesRegExp; otherwise the helpers
