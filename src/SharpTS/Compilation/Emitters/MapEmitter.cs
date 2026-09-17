@@ -32,42 +32,42 @@ public sealed class MapEmitter : ITypeEmitterStrategy
         {
             case "get":
                 EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0);
-                il.Emit(OpCodes.Call, ctx.Runtime!.MapGet);
+                il.Emit(OpCodes.Call, ctx.Runtime!.RequireMap().Get);
                 return true;
 
             case "set":
                 EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0);
                 EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 1);
-                il.Emit(OpCodes.Call, ctx.Runtime!.MapSet);
+                il.Emit(OpCodes.Call, ctx.Runtime!.RequireMap().Set);
                 return true;
 
             case "has":
                 EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0);
-                il.Emit(OpCodes.Call, ctx.Runtime!.MapHas);
+                il.Emit(OpCodes.Call, ctx.Runtime!.RequireMap().Has);
                 il.Emit(OpCodes.Box, ctx.Types.Boolean);
                 return true;
 
             case "delete":
                 EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0);
-                il.Emit(OpCodes.Call, ctx.Runtime!.MapDelete);
+                il.Emit(OpCodes.Call, ctx.Runtime!.RequireMap().Delete);
                 il.Emit(OpCodes.Box, ctx.Types.Boolean);
                 return true;
 
             case "clear":
-                il.Emit(OpCodes.Call, ctx.Runtime!.MapClear);
+                il.Emit(OpCodes.Call, ctx.Runtime!.RequireMap().Clear);
                 il.Emit(OpCodes.Ldsfld, ctx.Runtime.UndefinedInstance);
                 return true;
 
             case "keys":
-                il.Emit(OpCodes.Call, ctx.Runtime!.MapKeys);
+                il.Emit(OpCodes.Call, ctx.Runtime!.RequireMap().Keys);
                 return true;
 
             case "values":
-                il.Emit(OpCodes.Call, ctx.Runtime!.MapValues);
+                il.Emit(OpCodes.Call, ctx.Runtime!.RequireMap().Values);
                 return true;
 
             case "entries":
-                il.Emit(OpCodes.Call, ctx.Runtime!.MapEntries);
+                il.Emit(OpCodes.Call, ctx.Runtime!.RequireMap().Entries);
                 return true;
 
             case "forEach":
@@ -81,7 +81,7 @@ public sealed class MapEmitter : ITypeEmitterStrategy
                 {
                     il.Emit(OpCodes.Ldsfld, ctx.Runtime!.UndefinedInstance);
                 }
-                il.Emit(OpCodes.Call, ctx.Runtime!.MapForEach);
+                il.Emit(OpCodes.Call, ctx.Runtime!.RequireMap().ForEach);
                 il.Emit(OpCodes.Ldsfld, ctx.Runtime!.UndefinedInstance);
                 return true;
 
@@ -168,7 +168,7 @@ public sealed class MapEmitter : ITypeEmitterStrategy
 
         emitter.EmitExpression(receiver);
         emitter.EmitBoxIfNeeded(receiver);
-        il.Emit(OpCodes.Call, ctx.Runtime!.MapSize);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireMap().Size);
         il.Emit(OpCodes.Box, ctx.Types.Double);
 
         return true;

@@ -123,11 +123,34 @@ public class EmittedRuntime
     public MethodBuilder TSNamespaceGet { get; set; } = null!;
     public MethodBuilder TSNamespaceSet { get; set; } = null!;
 
-    // The emitted ReferenceEqualityComparer class (for Map/Set key equality)
-    public FieldBuilder ReferenceEqualityComparerInstance { get; set; } = null!;
+    /// <summary>Required collection key identity declarations for this compilation.</summary>
+    public EmittedCollectionKeysRuntime CollectionKeys { get; } = new();
 
-    // Sentinel object for null/undefined Map keys (Dictionary<object,object?> can't use null keys)
-    public FieldBuilder MapNullSentinel { get; set; } = null!;
+    /// <summary>Map metadata, or null when the feature is omitted.</summary>
+    public EmittedMapRuntime? Map { get; private set; }
+
+    internal void BeginMapEmission()
+    {
+        if (Map is not null)
+            throw new InvalidOperationException("Map metadata emission has already started.");
+        Map = new EmittedMapRuntime();
+    }
+
+    public EmittedMapRuntime RequireMap() => Map
+        ?? throw new InvalidOperationException("Map runtime was not enabled for this compilation.");
+
+    /// <summary>Set metadata, or null when the feature is omitted.</summary>
+    public EmittedSetRuntime? Set { get; private set; }
+
+    internal void BeginSetEmission()
+    {
+        if (Set is not null)
+            throw new InvalidOperationException("Set metadata emission has already started.");
+        Set = new EmittedSetRuntime();
+    }
+
+    public EmittedSetRuntime RequireSet() => Set
+        ?? throw new InvalidOperationException("Set runtime was not enabled for this compilation.");
 
     // Cooperative cancellation for the Test262 runner (issue #74): a static
     // `bool _cancelRequested` on $Runtime that the runner flips via reflection
@@ -210,8 +233,6 @@ public class EmittedRuntime
     // compile-time ArrayStaticEmitter / NumberStaticEmitter / etc. would emit.
     public MethodBuilder LookupBuiltInStaticMember { get; set; } = null!;
     public MethodBuilder ExpandCallArgs { get; set; } = null!;
-    public ConstructorBuilder MapCollectionIteratorCtor { get; set; } = null!;
-    public ConstructorBuilder SetCollectionIteratorCtor { get; set; } = null!;
     // ECMA-262 RequireObjectCoercible(this) — throws TypeError if `this` is
     // null or undefined. Called from $TSFunction.CoercePrimitiveArgs via
     // late-bound reflection so the IL emitted before TSError ctors are built
@@ -507,24 +528,6 @@ public class EmittedRuntime
     /// arguments, "length" doesn't auto-update on out-of-range indexed sets).</summary>
     public FieldBuilder ArgumentsLengthField { get; set; } = null!;
 
-    // Bound map method for dynamic Map property access (duck typing across module boundaries)
-    public TypeBuilder BoundMapMethodType { get; set; } = null!;
-    public ConstructorBuilder BoundMapMethodCtor { get; set; } = null!;
-    public MethodBuilder BoundMapMethodInvoke { get; set; } = null!;
-    public FieldBuilder BoundMapMethodMapField { get; set; } = null!;
-    public FieldBuilder BoundMapMethodNameField { get; set; } = null!;
-
-    // Bound set method for dynamic Set property access (duck typing across module boundaries)
-    public TypeBuilder BoundSetMethodType { get; set; } = null!;
-    public ConstructorBuilder BoundSetMethodCtor { get; set; } = null!;
-    public MethodBuilder BoundSetMethodInvoke { get; set; } = null!;
-    public FieldBuilder BoundSetMethodSetField { get; set; } = null!;
-    public FieldBuilder BoundSetMethodNameField { get; set; } = null!;
-
-    // Helpers that wrap Dictionary/HashSet methods as bound callable wrappers
-    public MethodBuilder GetMapProperty { get; set; } = null!;
-    public MethodBuilder GetSetProperty { get; set; } = null!;
-
     // Generalized bind target — used when `.bind` is called on any callable other
     // than $TSFunction (arrays, maps, sets, etc.). Stores (target, boundArgs) and
     // prepends boundArgs to the call arguments on invocation. thisArg is ignored
@@ -647,44 +650,6 @@ public class EmittedRuntime
 
     public MethodBuilder GlobalEncodeURIComponent { get; set; } = null!;
     public MethodBuilder GlobalDecodeURIComponent { get; set; } = null!;
-
-    // Map support
-    public MethodBuilder NormalizeMapKey { get; set; } = null!;
-    public MethodBuilder DenormalizeMapKey { get; set; } = null!;
-    public MethodBuilder CreateMap { get; set; } = null!;
-    public MethodBuilder CreateMapFromEntries { get; set; } = null!;
-    public MethodBuilder MapSize { get; set; } = null!;
-    public MethodBuilder MapGet { get; set; } = null!;
-    public MethodBuilder MapSet { get; set; } = null!;
-    public MethodBuilder MapHas { get; set; } = null!;
-    public MethodBuilder MapDelete { get; set; } = null!;
-    public MethodBuilder MapClear { get; set; } = null!;
-    public MethodBuilder MapKeys { get; set; } = null!;
-    public MethodBuilder MapValues { get; set; } = null!;
-    public MethodBuilder MapEntries { get; set; } = null!;
-    public MethodBuilder MapForEach { get; set; } = null!;
-
-    // Set support
-    public MethodBuilder CreateSet { get; set; } = null!;
-    public MethodBuilder CreateSetFromArray { get; set; } = null!;
-    public MethodBuilder SetSize { get; set; } = null!;
-    public MethodBuilder SetAdd { get; set; } = null!;
-    public MethodBuilder SetHas { get; set; } = null!;
-    public MethodBuilder SetDelete { get; set; } = null!;
-    public MethodBuilder SetClear { get; set; } = null!;
-    public MethodBuilder SetKeys { get; set; } = null!;
-    public MethodBuilder SetValues { get; set; } = null!;
-    public MethodBuilder SetEntries { get; set; } = null!;
-    public MethodBuilder SetForEach { get; set; } = null!;
-
-    // ES2025 Set Operations
-    public MethodBuilder SetUnion { get; set; } = null!;
-    public MethodBuilder SetIntersection { get; set; } = null!;
-    public MethodBuilder SetDifference { get; set; } = null!;
-    public MethodBuilder SetSymmetricDifference { get; set; } = null!;
-    public MethodBuilder SetIsSubsetOf { get; set; } = null!;
-    public MethodBuilder SetIsSupersetOf { get; set; } = null!;
-    public MethodBuilder SetIsDisjointFrom { get; set; } = null!;
 
     // WeakMap support
     public MethodBuilder CreateWeakMap { get; set; } = null!;
@@ -889,7 +854,6 @@ public class EmittedRuntime
 
     // groupBy support
     public MethodBuilder ObjectGroupBy { get; set; } = null!;
-    public MethodBuilder MapGroupBy { get; set; } = null!;
 
     // Error support - emitted types for standalone assemblies
     // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSError and subclasses

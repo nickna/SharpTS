@@ -40,6 +40,10 @@ public partial class RuntimeEmitter
         if (_emitHosted)
             _features.UsesPromise = true;
         var runtime = new EmittedRuntime();
+        if (features.UsesMap)
+            runtime.BeginMapEmission();
+        if (features.UsesSet)
+            runtime.BeginSetEmission();
         if (features.UsesJSON)
             runtime.Json.BeginImplementationEmission();
         if (features.UsesReflect || features.UsesProxy)
@@ -206,7 +210,7 @@ public partial class RuntimeEmitter
         EmitTSSymbolClass(moduleBuilder, runtime);
 
         // Emit ReferenceEqualityComparer for Map/Set key equality
-        EmitReferenceEqualityComparerClass(moduleBuilder, runtime);
+        EmitReferenceEqualityComparerClass(moduleBuilder, runtime.CollectionKeys, runtime.TSSymbolType);
 
         // Emit $IGenerator interface for generator return/throw support
         EmitGeneratorInterface(moduleBuilder, runtime);
@@ -485,10 +489,10 @@ public partial class RuntimeEmitter
         // Emit $BoundMapMethod / $BoundSetMethod types and constructors (Phase 1)
         // Must come before EmitRuntimeClass so GetMapProperty/GetSetProperty can use them.
         // Gated alongside the rest of Map/Set emission.
-        if (features.UsesMap)
-            EmitBoundMapMethodTypeDefinition(moduleBuilder, runtime);
-        if (features.UsesSet)
-            EmitBoundSetMethodTypeDefinition(moduleBuilder, runtime);
+        if (runtime.Map is not null)
+            EmitBoundMapMethodTypeDefinition(moduleBuilder, runtime.RequireMap());
+        if (runtime.Set is not null)
+            EmitBoundSetMethodTypeDefinition(moduleBuilder, runtime.RequireSet());
 
         // Emit $BoundAnyFunction (the partial-apply wrapper for .bind on non-$TSFunction
         // callables) and the function bind/call/apply wrappers. All reference the
@@ -650,10 +654,10 @@ public partial class RuntimeEmitter
         // Finalize $BoundMapMethod / $BoundSetMethod with Invoke method (Phase 2)
         // Must come after EmitRuntimeClass (needs Map*/Set* runtime methods defined).
         // Gated alongside the rest of Map/Set emission.
-        if (features.UsesMap)
-            EmitBoundMapMethodFinalize(runtime);
-        if (features.UsesSet)
-            EmitBoundSetMethodFinalize(runtime);
+        if (runtime.Map is not null)
+            EmitBoundMapMethodFinalize(runtime.RequireMap(), runtime.UndefinedInstance);
+        if (runtime.Set is not null)
+            EmitBoundSetMethodFinalize(runtime.RequireSet(), runtime.UndefinedInstance);
 
         // Finalize $MethodCallable with Invoke method (Phase 2)
         EmitMethodCallableFinalize(runtime);
@@ -741,6 +745,9 @@ public partial class RuntimeEmitter
         runtime.Reflect.CompleteEmission();
         runtime.Json.CompleteEmission();
         runtime.Records.CompleteEmission();
+        runtime.CollectionKeys.CompleteEmission();
+        runtime.Map?.CompleteEmission();
+        runtime.Set?.CompleteEmission();
         runtime.BroadcastChannel?.CompleteEmission();
         runtime.EventEmitter.CompleteEmission();
         runtime.NodeStreams?.CompleteEmission();

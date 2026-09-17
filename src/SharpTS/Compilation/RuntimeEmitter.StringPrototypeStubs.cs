@@ -571,10 +571,10 @@ public partial class RuntimeEmitter
         EmitFunctionBranch(runtime.FunctionApplyWrapperType);
         EmitFunctionBranch(_types.Delegate);
         EmitFunctionBranch(runtime.ArrayOperations.BoundMethodType);
-        if (_features.UsesMap)
-            EmitFunctionBranch(runtime.BoundMapMethodType);
-        if (_features.UsesSet)
-            EmitFunctionBranch(runtime.BoundSetMethodType);
+        if (runtime.Map is not null)
+            EmitFunctionBranch(runtime.RequireMap().BoundMethodType);
+        if (runtime.Set is not null)
+            EmitFunctionBranch(runtime.RequireSet().BoundMethodType);
         EmitFunctionBranch(runtime.BoundAnyFunctionType);
         // System.Type — built-in constructors and class references held as
         // values are Type tokens (`var O = Object`); typeof says "function",

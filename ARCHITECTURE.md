@@ -291,6 +291,19 @@ Family helpers take the JSON implementation, peer capabilities, exact handles an
 analysis facts; optional RegExp branches inspect the supplied type. Shared BCL/invocation
 infrastructure remains required work under #1599.
 
+Map and Set use independent optional `Map` and `Set` components, selected at orchestration
+from `UsesMap` and `UsesSet`. The required `CollectionKeys` component owns the per-output
+equality comparer and null-key sentinel, also needed by shared iteration when Map is absent.
+Map owns 22 declarations and Set owns 25; there are no flat compatibility aliases. Family
+helpers receive those owners, array components and explicit error/invocation/iteration handles.
+Consumer dispatch follows provided component availability. Bound wrapper declarations precede
+generic function helpers and early property dispatch; iterator constructors precede operation
+bodies; bound Invoke bodies and type finalization follow runtime-class emission. Completion
+validates every selected handle and freezes compiler metadata after these stages. Guest
+collections, iterator behavior and per-output comparer/sentinel identity remain mutable or
+isolated as before. Weak collections, general iteration and the full residual audit remain
+separate work under #1599.
+
 Record storage uses the required `Records` component for the published compact-marker interface
 and thirteen layout registries. `Scalars` is selected by `UsesJSON || UsesCompactObjectRecords`
 and owns five scalar-record declarations. Empty registries preserve ordinary optional-layout

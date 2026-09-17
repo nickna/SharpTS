@@ -465,7 +465,7 @@ public partial class RuntimeEmitter
             _types.Object,
             FieldAttributes.Public | FieldAttributes.Static | FieldAttributes.InitOnly
         );
-        runtime.MapNullSentinel = mapNullSentinelField;
+        runtime.CollectionKeys.NullSentinel = mapNullSentinelField;
 
         // Static field for FinalizationRegistry poke table
         runtime.FinRegPokeTableField = typeBuilder.DefineField(
@@ -950,10 +950,10 @@ public partial class RuntimeEmitter
         // for Dictionary<object,object> / HashSet<object> receivers. Each calls
         // its respective Map/Set method MethodBuilders (and BoundMapMethodCtor
         // / BoundSetMethodCtor wrappers), so they fold up under UsesMap / UsesSet.
-        if (_features.UsesMap)
-            EmitGetMapProperty(typeBuilder, runtime);
-        if (_features.UsesSet)
-            EmitGetSetProperty(typeBuilder, runtime);
+        if (runtime.Map is not null)
+            EmitGetMapProperty(typeBuilder, runtime.RequireMap());
+        if (runtime.Set is not null)
+            EmitGetSetProperty(typeBuilder, runtime.RequireSet());
         // Exception helpers were moved earlier (above EmitToNumber) since
         // ToNumber's Symbol-throw branch emits a CreateException call that
         // must resolve to a non-null MethodBuilder.
@@ -1086,10 +1086,10 @@ public partial class RuntimeEmitter
         // but BEFORE IterateToList (which needs IteratorWrapperCtor)
         EmitIteratorWrapperType(moduleBuilder, runtime);
         EmitArrayIteratorType(moduleBuilder, runtime);
-        if (_features.UsesMap)
-            EmitMapCollectionIteratorType(moduleBuilder, runtime);
-        if (_features.UsesSet)
-            EmitSetCollectionIteratorType(moduleBuilder, runtime);
+        if (runtime.Map is not null)
+            EmitMapCollectionIteratorType(moduleBuilder, runtime.CollectionKeys, runtime.RequireMap());
+        if (runtime.Set is not null)
+            EmitSetCollectionIteratorType(moduleBuilder, runtime.RequireSet());
         if (_features.UsesPromise)
             EmitPromiseResolveValue(moduleBuilder, runtime);
         // Promise combinators reserve their normalization method token early,
@@ -1818,14 +1818,45 @@ public partial class RuntimeEmitter
         // depends on Map's own MapHas/Set/Get methods so it folds up under
         // the same gate. ObjectGroupBy stays unconditional (it builds a plain
         // Dictionary<string,object>, not a Map).
-        if (_features.UsesMap)
+        if (runtime.Map is not null)
         {
-            EmitMapMethods(typeBuilder, runtime);
-            EmitMapGroupBy(typeBuilder, runtime);
+            EmitMapMethods(
+                typeBuilder,
+                runtime.CollectionKeys,
+                runtime.RequireMap(),
+                new MapMethodsInputs(runtime.ArrayStorage, runtime.InvokeMethodValue, runtime.UndefinedInstance)
+            );
+            EmitMapGroupBy(
+                typeBuilder,
+                runtime.RequireMap(),
+                new MapGroupByInputs(
+                    runtime.ArrayStorage,
+                    runtime.CreateException,
+                    runtime.GetIteratorFunction,
+                    runtime.InvokeValue,
+                    runtime.IterateToList,
+                    runtime.RuntimeType,
+                    runtime.SymbolIterator,
+                    runtime.TSTypeErrorCtor,
+                    runtime.TypeOf,
+                    runtime.UndefinedType
+                )
+            );
         }
         // Set methods — gated on UsesSet.
-        if (_features.UsesSet)
-            EmitSetMethods(typeBuilder, runtime);
+        if (runtime.Set is not null)
+            EmitSetMethods(
+                typeBuilder,
+                runtime.CollectionKeys,
+                runtime.RequireSet(),
+                new SetMethodsInputs(
+                    runtime.ArrayOperations,
+                    runtime.ArrayStorage,
+                    runtime.CreateException,
+                    runtime.InvokeMethodValue,
+                    runtime.TSTypeErrorCtor
+                )
+            );
         // WeakMap/WeakSet/WeakRef/FinalizationRegistry helpers are emitted
         // before GetProperty, which binds their BCL-backed receiver methods.
         // Proxy methods — gated on UsesProxy (`new Proxy()` / bare `Proxy`).

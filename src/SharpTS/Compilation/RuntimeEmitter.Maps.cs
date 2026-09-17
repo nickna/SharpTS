@@ -5,22 +5,33 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
-    private void EmitMapMethods(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private readonly record struct MapMethodsInputs(
+        EmittedArrayStorageRuntime ArrayStorage,
+        MethodBuilder InvokeMethodValue,
+        FieldInfo UndefinedInstance
+    );
+
+    private void EmitMapMethods(
+        TypeBuilder typeBuilder,
+        EmittedCollectionKeysRuntime collectionKeys,
+        EmittedMapRuntime map,
+        MapMethodsInputs inputs
+    )
     {
-        EmitNormalizeMapKey(typeBuilder, runtime);
-        EmitDenormalizeMapKey(typeBuilder, runtime);
-        EmitCreateMap(typeBuilder, runtime);
-        EmitCreateMapFromEntries(typeBuilder, runtime);
-        EmitMapSize(typeBuilder, runtime);
-        EmitMapGet(typeBuilder, runtime);
-        EmitMapSet(typeBuilder, runtime);
-        EmitMapHas(typeBuilder, runtime);
-        EmitMapDelete(typeBuilder, runtime);
-        EmitMapClear(typeBuilder, runtime);
-        EmitMapKeys(typeBuilder, runtime);
-        EmitMapValues(typeBuilder, runtime);
-        EmitMapEntries(typeBuilder, runtime);
-        EmitMapForEach(typeBuilder, runtime);
+        EmitNormalizeMapKey(typeBuilder, collectionKeys, map);
+        EmitDenormalizeMapKey(typeBuilder, collectionKeys, map);
+        EmitCreateMap(typeBuilder, collectionKeys, map);
+        EmitCreateMapFromEntries(typeBuilder, collectionKeys, map, inputs.ArrayStorage);
+        EmitMapSize(typeBuilder, map);
+        EmitMapGet(typeBuilder, map, inputs.UndefinedInstance);
+        EmitMapSet(typeBuilder, map);
+        EmitMapHas(typeBuilder, map);
+        EmitMapDelete(typeBuilder, map);
+        EmitMapClear(typeBuilder, map);
+        EmitMapKeys(typeBuilder, map);
+        EmitMapValues(typeBuilder, map);
+        EmitMapEntries(typeBuilder, map);
+        EmitMapForEach(typeBuilder, map, inputs.InvokeMethodValue);
     }
 
     /// <summary>
@@ -29,7 +40,7 @@ public partial class RuntimeEmitter
     /// left untouched — it is a distinct singleton and a valid Dictionary key, so null and
     /// undefined remain separate Map keys (matches JS and SharpTSMap; see issue #960).
     /// </summary>
-    private void EmitNormalizeMapKey(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitNormalizeMapKey(TypeBuilder typeBuilder, EmittedCollectionKeysRuntime collectionKeys, EmittedMapRuntime map)
     {
         var method = typeBuilder.DefineMethod(
             "NormalizeMapKey",
@@ -37,7 +48,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object]
         );
-        runtime.NormalizeMapKey = method;
+        map.NormalizeKey = method;
 
         var il = method.GetILGenerator();
         var returnSentinelLabel = il.DefineLabel();
@@ -52,14 +63,14 @@ public partial class RuntimeEmitter
 
         // return _mapNullSentinel;
         il.MarkLabel(returnSentinelLabel);
-        il.Emit(OpCodes.Ldsfld, runtime.MapNullSentinel);
+        il.Emit(OpCodes.Ldsfld, collectionKeys.NullSentinel);
         il.Emit(OpCodes.Ret);
     }
 
     /// <summary>
     /// Emits DenormalizeMapKey(key): converts _mapNullSentinel back to null.
     /// </summary>
-    private void EmitDenormalizeMapKey(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitDenormalizeMapKey(TypeBuilder typeBuilder, EmittedCollectionKeysRuntime collectionKeys, EmittedMapRuntime map)
     {
         var method = typeBuilder.DefineMethod(
             "DenormalizeMapKey",
@@ -67,14 +78,14 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object]
         );
-        runtime.DenormalizeMapKey = method;
+        map.DenormalizeKey = method;
 
         var il = method.GetILGenerator();
         var returnNullLabel = il.DefineLabel();
 
         // if (key == _mapNullSentinel) return null;
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldsfld, runtime.MapNullSentinel);
+        il.Emit(OpCodes.Ldsfld, collectionKeys.NullSentinel);
         il.Emit(OpCodes.Beq, returnNullLabel);
 
         // return key;
@@ -87,7 +98,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitCreateMap(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitCreateMap(TypeBuilder typeBuilder, EmittedCollectionKeysRuntime collectionKeys, EmittedMapRuntime map)
     {
         var method = typeBuilder.DefineMethod(
             "CreateMap",
@@ -95,7 +106,7 @@ public partial class RuntimeEmitter
             _types.Object,
             _types.EmptyTypes
         );
-        runtime.CreateMap = method;
+        map.Create = method;
 
         var il = method.GetILGenerator();
 
@@ -103,12 +114,17 @@ public partial class RuntimeEmitter
         var dictType = _types.DictionaryObjectObject;
         var ctorWithComparer = _types.GetConstructor(dictType, [_types.IEqualityComparerOfObject])!;
 
-        il.Emit(OpCodes.Ldsfld, runtime.ReferenceEqualityComparerInstance);
+        il.Emit(OpCodes.Ldsfld, collectionKeys.ComparerInstance);
         il.Emit(OpCodes.Newobj, ctorWithComparer);
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitCreateMapFromEntries(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitCreateMapFromEntries(
+        TypeBuilder typeBuilder,
+        EmittedCollectionKeysRuntime collectionKeys,
+        EmittedMapRuntime map,
+        EmittedArrayStorageRuntime arrayStorage
+    )
     {
         var method = typeBuilder.DefineMethod(
             "CreateMapFromEntries",
@@ -116,7 +132,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object]
         );
-        runtime.CreateMapFromEntries = method;
+        map.CreateFromEntries = method;
 
         var il = method.GetILGenerator();
         var dictType = _types.DictionaryObjectObject;
@@ -137,12 +153,12 @@ public partial class RuntimeEmitter
         var continueLabel = il.DefineLabel();
 
         // var map = new Dictionary<object, object?>($ReferenceEqualityComparer.Instance)
-        il.Emit(OpCodes.Ldsfld, runtime.ReferenceEqualityComparerInstance);
+        il.Emit(OpCodes.Ldsfld, collectionKeys.ComparerInstance);
         il.Emit(OpCodes.Newobj, ctorWithComparer);
         il.Emit(OpCodes.Stloc, mapLocal);
 
         // number[] unboxing: materialize a numeric-mode $Array entries source before reading its base list.
-        EmitDeoptArgIfNumericArray(il, runtime, 0);
+        EmitDeoptArgIfNumericArrayStorage(il, arrayStorage, 0);
 
         // if (entries is not List<object?> list) return map;
         il.Emit(OpCodes.Ldarg_0);
@@ -185,7 +201,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, pairLocal);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Item").GetGetMethod()!);
-        il.Emit(OpCodes.Call, runtime.NormalizeMapKey);
+        il.Emit(OpCodes.Call, map.NormalizeKey);
         il.Emit(OpCodes.Stloc, keyLocal);
 
         // map[key] = pair[1];
@@ -212,7 +228,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitMapSize(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitMapSize(TypeBuilder typeBuilder, EmittedMapRuntime map)
     {
         var method = typeBuilder.DefineMethod(
             "MapSize",
@@ -220,7 +236,7 @@ public partial class RuntimeEmitter
             _types.Double,
             [_types.Object]
         );
-        runtime.MapSize = method;
+        map.Size = method;
 
         var il = method.GetILGenerator();
         var dictType = _types.DictionaryObjectObject;
@@ -245,7 +261,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitMapGet(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitMapGet(TypeBuilder typeBuilder, EmittedMapRuntime map, FieldInfo undefinedInstance)
     {
         var method = typeBuilder.DefineMethod(
             "MapGet",
@@ -253,7 +269,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object, _types.Object]
         );
-        runtime.MapGet = method;
+        map.Get = method;
 
         var il = method.GetILGenerator();
         var dictType = _types.DictionaryObjectObject;
@@ -270,7 +286,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, dictType);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.NormalizeMapKey);
+        il.Emit(OpCodes.Call, map.NormalizeKey);
         il.Emit(OpCodes.Ldloca, valueLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(dictType, "TryGetValue")!);
         il.Emit(OpCodes.Brfalse, returnUndefinedLabel);
@@ -280,11 +296,11 @@ public partial class RuntimeEmitter
 
         // Missing Map keys produce JavaScript undefined, not null.
         il.MarkLabel(returnUndefinedLabel);
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, undefinedInstance);
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitMapSet(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitMapSet(TypeBuilder typeBuilder, EmittedMapRuntime map)
     {
         var method = typeBuilder.DefineMethod(
             "MapSet",
@@ -292,7 +308,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object, _types.Object, _types.Object]
         );
-        runtime.MapSet = method;
+        map.Set = method;
 
         var il = method.GetILGenerator();
         var dictType = _types.DictionaryObjectObject;
@@ -308,7 +324,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, dictType);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.NormalizeMapKey);
+        il.Emit(OpCodes.Call, map.NormalizeKey);
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Callvirt, _types.GetProperty(dictType, "Item").GetSetMethod()!);
 
@@ -318,7 +334,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitMapHas(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitMapHas(TypeBuilder typeBuilder, EmittedMapRuntime map)
     {
         var method = typeBuilder.DefineMethod(
             "MapHas",
@@ -326,7 +342,7 @@ public partial class RuntimeEmitter
             _types.Boolean,
             [_types.Object, _types.Object]
         );
-        runtime.MapHas = method;
+        map.Has = method;
 
         var il = method.GetILGenerator();
         var dictType = _types.DictionaryObjectObject;
@@ -342,7 +358,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, dictType);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.NormalizeMapKey);
+        il.Emit(OpCodes.Call, map.NormalizeKey);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(dictType, "ContainsKey")!);
         il.Emit(OpCodes.Ret);
 
@@ -352,7 +368,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitMapDelete(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitMapDelete(TypeBuilder typeBuilder, EmittedMapRuntime map)
     {
         var method = typeBuilder.DefineMethod(
             "MapDelete",
@@ -360,7 +376,7 @@ public partial class RuntimeEmitter
             _types.Boolean,
             [_types.Object, _types.Object]
         );
-        runtime.MapDelete = method;
+        map.Delete = method;
 
         var il = method.GetILGenerator();
         var dictType = _types.DictionaryObjectObject;
@@ -376,7 +392,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, dictType);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.NormalizeMapKey);
+        il.Emit(OpCodes.Call, map.NormalizeKey);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(dictType, "Remove", [_types.Object])!);
         il.Emit(OpCodes.Ret);
 
@@ -386,7 +402,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitMapClear(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitMapClear(TypeBuilder typeBuilder, EmittedMapRuntime map)
     {
         var method = typeBuilder.DefineMethod(
             "MapClear",
@@ -394,7 +410,7 @@ public partial class RuntimeEmitter
             _types.Void,
             [_types.Object]
         );
-        runtime.MapClear = method;
+        map.Clear = method;
 
         var il = method.GetILGenerator();
         var dictType = _types.DictionaryObjectObject;
@@ -415,7 +431,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitMapKeys(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitMapKeys(TypeBuilder typeBuilder, EmittedMapRuntime map)
     {
         var method = typeBuilder.DefineMethod(
             "MapKeys",
@@ -423,7 +439,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object]
         );
-        runtime.MapKeys = method;
+        map.Keys = method;
 
         var il = method.GetILGenerator();
         var dictType = _types.DictionaryObjectObject;
@@ -483,7 +499,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, dictLocal);
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Newobj, runtime.MapCollectionIteratorCtor);
+        il.Emit(OpCodes.Newobj, map.IteratorConstructor);
         il.Emit(OpCodes.Ret);
 
         // return new List<object?>();
@@ -491,11 +507,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, Type.EmptyTypes)!);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Newobj, runtime.MapCollectionIteratorCtor);
+        il.Emit(OpCodes.Newobj, map.IteratorConstructor);
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitMapValues(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitMapValues(TypeBuilder typeBuilder, EmittedMapRuntime map)
     {
         var method = typeBuilder.DefineMethod(
             "MapValues",
@@ -503,7 +519,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object]
         );
-        runtime.MapValues = method;
+        map.Values = method;
 
         var il = method.GetILGenerator();
         var dictType = _types.DictionaryObjectObject;
@@ -562,7 +578,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, dictLocal);
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Newobj, runtime.MapCollectionIteratorCtor);
+        il.Emit(OpCodes.Newobj, map.IteratorConstructor);
         il.Emit(OpCodes.Ret);
 
         // return new List<object?>();
@@ -570,11 +586,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, Type.EmptyTypes)!);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Newobj, runtime.MapCollectionIteratorCtor);
+        il.Emit(OpCodes.Newobj, map.IteratorConstructor);
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitMapEntries(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitMapEntries(TypeBuilder typeBuilder, EmittedMapRuntime map)
     {
         var method = typeBuilder.DefineMethod(
             "MapEntries",
@@ -582,7 +598,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object]
         );
-        runtime.MapEntries = method;
+        map.Entries = method;
 
         var il = method.GetILGenerator();
         var dictType = _types.DictionaryObjectObject;
@@ -643,7 +659,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, dictLocal);
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ldc_I4_2);
-        il.Emit(OpCodes.Newobj, runtime.MapCollectionIteratorCtor);
+        il.Emit(OpCodes.Newobj, map.IteratorConstructor);
         il.Emit(OpCodes.Ret);
 
         // return new List<object?>();
@@ -651,19 +667,19 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, Type.EmptyTypes)!);
         il.Emit(OpCodes.Ldc_I4_2);
-        il.Emit(OpCodes.Newobj, runtime.MapCollectionIteratorCtor);
+        il.Emit(OpCodes.Newobj, map.IteratorConstructor);
         il.Emit(OpCodes.Ret);
     }
 
     // Shared by Set iterator factories, whose materialized values use the
     // ArrayIterator value mode.
-    private static void EmitArrayIteratorWrapper(ILGenerator il, EmittedRuntime runtime)
+    private static void EmitArrayIteratorWrapper(ILGenerator il, EmittedArrayOperationsRuntime arrayOperations)
     {
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Newobj, runtime.ArrayOperations.IteratorCtor);
+        il.Emit(OpCodes.Newobj, arrayOperations.IteratorCtor);
     }
 
-    private void EmitMapForEach(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitMapForEach(TypeBuilder typeBuilder, EmittedMapRuntime map, MethodBuilder invokeMethodValue)
     {
         var method = typeBuilder.DefineMethod(
             "MapForEach",
@@ -671,7 +687,7 @@ public partial class RuntimeEmitter
             _types.Void,
             [_types.Object, _types.Object, _types.Object]
         );
-        runtime.MapForEach = method;
+        map.ForEach = method;
 
         var il = method.GetILGenerator();
         var dictType = _types.DictionaryObjectObject;
@@ -731,7 +747,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Ldloca, currentLocal);
         il.Emit(OpCodes.Call, _types.GetProperty(kvpType, "Key")!.GetGetMethod()!);
-        il.Emit(OpCodes.Call, runtime.DenormalizeMapKey);
+        il.Emit(OpCodes.Call, map.DenormalizeKey);
         il.Emit(OpCodes.Stelem_Ref);
 
         // args[2] = map
@@ -744,7 +760,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloc, argsLocal);
-        il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+        il.Emit(OpCodes.Call, invokeMethodValue);
         il.Emit(OpCodes.Pop);  // Discard return value
 
         il.Emit(OpCodes.Br, loopStartLabel);
@@ -765,28 +781,28 @@ public partial class RuntimeEmitter
     /// `typeof === 'function'`. Mirrors $BoundArrayMethod.
     /// Must be called before EmitRuntimeClass so GetMapProperty can use the constructor.
     /// </summary>
-    internal void EmitBoundMapMethodTypeDefinition(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    internal void EmitBoundMapMethodTypeDefinition(ModuleBuilder moduleBuilder, EmittedMapRuntime map)
     {
         var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$BoundMapMethod",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object
         );
-        runtime.BoundMapMethodType = typeBuilder;
+        map.BoundMethodType = typeBuilder;
 
         // Assembly visibility so GetProperty's callable-wrapper handler can read
         // `_methodName` to return the method name for `map.get.name === 'get'`.
         var mapField = typeBuilder.DefineField("_map", _types.DictionaryObjectObject, FieldAttributes.Assembly);
         var methodNameField = typeBuilder.DefineField("_methodName", _types.String, FieldAttributes.Assembly);
-        runtime.BoundMapMethodMapField = mapField;
-        runtime.BoundMapMethodNameField = methodNameField;
+        map.BoundReceiverField = mapField;
+        map.BoundNameField = methodNameField;
 
         var ctorBuilder = typeBuilder.DefineConstructor(
             MethodAttributes.Public,
             CallingConventions.Standard,
             [_types.DictionaryObjectObject, _types.String]
         );
-        runtime.BoundMapMethodCtor = ctorBuilder;
+        map.BoundMethodConstructor = ctorBuilder;
 
         var ctorIL = ctorBuilder.GetILGenerator();
         ctorIL.Emit(OpCodes.Ldarg_0);
@@ -805,19 +821,19 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.ObjectArray]
         );
-        runtime.BoundMapMethodInvoke = invokeBuilder;
+        map.BoundMethodInvoke = invokeBuilder;
     }
 
     /// <summary>
     /// Phase 2: Emit Invoke body for $BoundMapMethod and create the type.
     /// Must be called after EmitRuntimeClass so Map* runtime methods exist.
     /// </summary>
-    internal void EmitBoundMapMethodFinalize(EmittedRuntime runtime)
+    internal void EmitBoundMapMethodFinalize(EmittedMapRuntime map, FieldInfo undefinedInstance)
     {
-        var typeBuilder = runtime.BoundMapMethodType;
-        var mapField = runtime.BoundMapMethodMapField;
-        var methodNameField = runtime.BoundMapMethodNameField;
-        var invokeBuilder = runtime.BoundMapMethodInvoke;
+        var typeBuilder = map.BoundMethodType;
+        var mapField = map.BoundReceiverField;
+        var methodNameField = map.BoundNameField;
+        var invokeBuilder = map.BoundMethodInvoke;
 
         var il = invokeBuilder.GetILGenerator();
         var endLabel = il.DefineLabel();
@@ -871,7 +887,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldelem_Ref);
             il.Emit(OpCodes.Br, done);
             il.MarkLabel(missing);
-            il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+            il.Emit(OpCodes.Ldsfld, undefinedInstance);
             il.MarkLabel(done);
         }
 
@@ -883,7 +899,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldfld, mapField);
             EmitArgOrNull(0);
-            il.Emit(OpCodes.Call, runtime.MapGet);
+            il.Emit(OpCodes.Call, map.Get);
         });
 
         // set(key, value) -> map (chainable)
@@ -893,7 +909,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldfld, mapField);
             EmitArgOrNull(0);
             EmitArgOrNull(1);
-            il.Emit(OpCodes.Call, runtime.MapSet);
+            il.Emit(OpCodes.Call, map.Set);
         });
 
         // has(key) -> boolean
@@ -902,7 +918,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldfld, mapField);
             EmitArgOrNull(0);
-            il.Emit(OpCodes.Call, runtime.MapHas);
+            il.Emit(OpCodes.Call, map.Has);
             il.Emit(OpCodes.Box, _types.Boolean);
         });
 
@@ -912,7 +928,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldfld, mapField);
             EmitArgOrNull(0);
-            il.Emit(OpCodes.Call, runtime.MapDelete);
+            il.Emit(OpCodes.Call, map.Delete);
             il.Emit(OpCodes.Box, _types.Boolean);
         });
 
@@ -921,8 +937,8 @@ public partial class RuntimeEmitter
         {
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldfld, mapField);
-            il.Emit(OpCodes.Call, runtime.MapClear);
-            il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+            il.Emit(OpCodes.Call, map.Clear);
+            il.Emit(OpCodes.Ldsfld, undefinedInstance);
         });
 
         // keys() -> iterator
@@ -930,7 +946,7 @@ public partial class RuntimeEmitter
         {
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldfld, mapField);
-            il.Emit(OpCodes.Call, runtime.MapKeys);
+            il.Emit(OpCodes.Call, map.Keys);
         });
 
         // values() -> iterator
@@ -938,7 +954,7 @@ public partial class RuntimeEmitter
         {
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldfld, mapField);
-            il.Emit(OpCodes.Call, runtime.MapValues);
+            il.Emit(OpCodes.Call, map.Values);
         });
 
         // entries() -> iterator
@@ -946,7 +962,7 @@ public partial class RuntimeEmitter
         {
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldfld, mapField);
-            il.Emit(OpCodes.Call, runtime.MapEntries);
+            il.Emit(OpCodes.Call, map.Entries);
         });
 
         // forEach(callback) -> undefined
@@ -956,8 +972,8 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldfld, mapField);
             EmitArgOrNull(0);
             EmitArgOrUndefined(1);
-            il.Emit(OpCodes.Call, runtime.MapForEach);
-            il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+            il.Emit(OpCodes.Call, map.ForEach);
+            il.Emit(OpCodes.Ldsfld, undefinedInstance);
         });
 
         // Fallthrough: return null

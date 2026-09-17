@@ -36,7 +36,7 @@ public sealed class MapStaticEmitter : IStaticTypeEmitterStrategy
                 {
                     il.Emit(OpCodes.Ldnull);
                 }
-                il.Emit(OpCodes.Call, ctx.Runtime!.MapGroupBy);
+                il.Emit(OpCodes.Call, ctx.Runtime!.RequireMap().GroupBy);
                 return true;
             default:
                 return false;
@@ -47,7 +47,7 @@ public sealed class MapStaticEmitter : IStaticTypeEmitterStrategy
     {
         if (propertyName != "groupBy") return false;
         var ctx = emitter.Context;
-        ctx.Types.EmitLoadMethodInfo(ctx.IL, ctx.Runtime!.MapGroupBy);
+        ctx.Types.EmitLoadMethodInfo(ctx.IL, ctx.Runtime!.RequireMap().GroupBy);
         ctx.IL.Emit(OpCodes.Ldstr, "groupBy");
         ctx.IL.Emit(OpCodes.Ldc_I4_2);
         ctx.IL.Emit(OpCodes.Call, ctx.Runtime.TSFunctionGetOrCreate);

@@ -5,6 +5,19 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
+    private readonly record struct MapGroupByInputs(
+        EmittedArrayStorageRuntime ArrayStorage,
+        MethodBuilder CreateException,
+        MethodBuilder GetIteratorFunction,
+        MethodBuilder InvokeValue,
+        MethodBuilder IterateToList,
+        TypeBuilder RuntimeType,
+        FieldBuilder SymbolIterator,
+        ConstructorBuilder TSTypeErrorCtor,
+        MethodBuilder TypeOf,
+        Type UndefinedType
+    );
+
     /// <summary>
     /// Emits Object.groupBy(iterable, callback) - groups array elements by callback return value (coerced to string).
     /// Returns a $Object whose keys are group names and values are $Array of elements.
@@ -191,7 +204,7 @@ public partial class RuntimeEmitter
     /// Emits Map.groupBy(iterable, callback) - groups array elements by callback return value.
     /// Returns a Dictionary&lt;object, object?&gt; (compiled Map) whose keys are callback results and values are $Array.
     /// </summary>
-    private void EmitMapGroupBy(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitMapGroupBy(TypeBuilder typeBuilder, EmittedMapRuntime map, MapGroupByInputs inputs)
     {
         var method = typeBuilder.DefineMethod(
             "MapGroupBy",
@@ -199,17 +212,17 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object, _types.Object]  // (iterable, callback)
         );
-        runtime.MapGroupBy = method;
+        map.GroupBy = method;
 
         var il = method.GetILGenerator();
 
         var callbackCallable = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.TypeOf);
+        il.Emit(OpCodes.Call, inputs.TypeOf);
         il.Emit(OpCodes.Ldstr, "function");
         il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
         il.Emit(OpCodes.Brtrue, callbackCallable);
-        GuestErrorEmitter.ThrowTypeError(il, runtime, "Map.groupBy: callback is not callable");
+        GuestErrorEmitter.ThrowError(il, inputs.CreateException, inputs.TSTypeErrorCtor, "Map.groupBy: callback is not callable");
         il.MarkLabel(callbackCallable);
 
         // Locals
@@ -227,7 +240,7 @@ public partial class RuntimeEmitter
         var addElementLabel = il.DefineLabel();
 
         // map = CreateMap() — creates Dictionary<object, object?> with ReferenceEqualityComparer
-        il.Emit(OpCodes.Call, runtime.CreateMap);
+        il.Emit(OpCodes.Call, map.Create);
         il.Emit(OpCodes.Stloc, mapLocal);
 
         // GroupBy consumes the iterator protocol, not only array storage.
@@ -235,7 +248,7 @@ public partial class RuntimeEmitter
         // host-IEnumerable compatibility fallback can accept the value.
         var materialize = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.ArrayStorage.Type);
+        il.Emit(OpCodes.Isinst, inputs.ArrayStorage.Type);
         il.Emit(OpCodes.Brtrue, materialize);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, _types.ListOfObject);
@@ -245,23 +258,23 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, materialize);
         var iteratorFn = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldsfld, runtime.SymbolIterator);
-        il.Emit(OpCodes.Call, runtime.GetIteratorFunction);
+        il.Emit(OpCodes.Ldsfld, inputs.SymbolIterator);
+        il.Emit(OpCodes.Call, inputs.GetIteratorFunction);
         il.Emit(OpCodes.Stloc, iteratorFn);
         var invalidIterable = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, iteratorFn);
         il.Emit(OpCodes.Brfalse, invalidIterable);
         il.Emit(OpCodes.Ldloc, iteratorFn);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
         il.Emit(OpCodes.Brfalse, materialize);
         il.MarkLabel(invalidIterable);
-        GuestErrorEmitter.ThrowTypeError(il, runtime, "Map.groupBy: items is not iterable");
+        GuestErrorEmitter.ThrowError(il, inputs.CreateException, inputs.TSTypeErrorCtor, "Map.groupBy: items is not iterable");
         il.MarkLabel(materialize);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldsfld, runtime.SymbolIterator);
-        il.Emit(OpCodes.Ldtoken, runtime.RuntimeType);
+        il.Emit(OpCodes.Ldsfld, inputs.SymbolIterator);
+        il.Emit(OpCodes.Ldtoken, inputs.RuntimeType);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle")!);
-        il.Emit(OpCodes.Call, runtime.IterateToList);
+        il.Emit(OpCodes.Call, inputs.IterateToList);
         il.Emit(OpCodes.Stloc, listLocal);
 
         // i = 0
@@ -295,25 +308,25 @@ public partial class RuntimeEmitter
         // key = InvokeValue(callback, args)
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloc, argsLocal);
-        il.Emit(OpCodes.Call, runtime.InvokeValue);
+        il.Emit(OpCodes.Call, inputs.InvokeValue);
         il.Emit(OpCodes.Stloc, keyLocal);
 
         // Use MapHas(map, key) to check if key exists
         // MapHas returns object (boxed bool) — check with unbox
         il.Emit(OpCodes.Ldloc, mapLocal);
         il.Emit(OpCodes.Ldloc, keyLocal);
-        il.Emit(OpCodes.Call, runtime.MapHas);
+        il.Emit(OpCodes.Call, map.Has);
         il.Emit(OpCodes.Brtrue, hasExistingLabel);
 
         // Key doesn't exist: create new $Array, store in map
         il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, _types.EmptyTypes));
-        il.Emit(OpCodes.Newobj, runtime.ArrayStorage.Ctor);
+        il.Emit(OpCodes.Newobj, inputs.ArrayStorage.Ctor);
         il.Emit(OpCodes.Stloc, existingLocal);
         // MapSet(map, key, existing)
         il.Emit(OpCodes.Ldloc, mapLocal);
         il.Emit(OpCodes.Ldloc, keyLocal);
         il.Emit(OpCodes.Ldloc, existingLocal);
-        il.Emit(OpCodes.Call, runtime.MapSet);
+        il.Emit(OpCodes.Call, map.Set);
         il.Emit(OpCodes.Pop);  // discard returned map
         il.Emit(OpCodes.Br, addElementLabel);
 
@@ -321,14 +334,14 @@ public partial class RuntimeEmitter
         il.MarkLabel(hasExistingLabel);
         il.Emit(OpCodes.Ldloc, mapLocal);
         il.Emit(OpCodes.Ldloc, keyLocal);
-        il.Emit(OpCodes.Call, runtime.MapGet);
+        il.Emit(OpCodes.Call, map.Get);
         il.Emit(OpCodes.Stloc, existingLocal);
 
         // Add current element to existing $Array
         il.MarkLabel(addElementLabel);
         il.Emit(OpCodes.Ldloc, existingLocal);
-        il.Emit(OpCodes.Castclass, runtime.ArrayStorage.Type);
-        il.Emit(OpCodes.Callvirt, runtime.ArrayStorage.ElementsGetter);
+        il.Emit(OpCodes.Castclass, inputs.ArrayStorage.Type);
+        il.Emit(OpCodes.Callvirt, inputs.ArrayStorage.ElementsGetter);
         il.Emit(OpCodes.Ldloc, listLocal);
         il.Emit(OpCodes.Ldloc, indexLocal);
         il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Item").GetGetMethod()!);

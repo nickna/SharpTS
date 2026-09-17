@@ -165,8 +165,8 @@ public partial class GeneratorMoveNextEmitter
         // Handle Map/Set specially - convert to List before iteration. Each
         // arm checks the corresponding $Runtime method MethodBuilder for null;
         // when Map/Set emission is gated off, the dispatch arm is skipped.
-        var hasMapEntries = _ctx?.Runtime?.MapEntries != null;
-        var hasSetValues = _ctx?.Runtime?.SetValues != null;
+        var hasMapEntries = _ctx?.Runtime?.Map is not null;
+        var hasSetValues = _ctx?.Runtime?.Set is not null;
         if (hasMapEntries || hasSetValues)
         {
             var afterMapSetLabel = _il.DefineLabel();
@@ -183,7 +183,7 @@ public partial class GeneratorMoveNextEmitter
 
                 // It's a Map - call MapEntries
                 _il.Emit(OpCodes.Ldloc, iterableLocal);
-                _il.Emit(OpCodes.Call, _ctx!.Runtime!.MapEntries);
+                _il.Emit(OpCodes.Call, _ctx!.Runtime!.RequireMap().Entries);
                 _il.Emit(OpCodes.Stloc, iterableLocal);
                 _il.Emit(OpCodes.Br, afterMapSetLabel);
             }
@@ -198,7 +198,7 @@ public partial class GeneratorMoveNextEmitter
 
                 // It's a Set - call SetValues
                 _il.Emit(OpCodes.Ldloc, iterableLocal);
-                _il.Emit(OpCodes.Call, _ctx!.Runtime!.SetValues);
+                _il.Emit(OpCodes.Call, _ctx!.Runtime!.RequireSet().Values);
                 _il.Emit(OpCodes.Stloc, iterableLocal);
             }
             else

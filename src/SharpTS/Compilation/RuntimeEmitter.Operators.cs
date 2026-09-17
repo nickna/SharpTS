@@ -458,17 +458,17 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, runtime.ArrayOperations.BoundMethodType);
         il.Emit(OpCodes.Brtrue, functionLabel);
 
-        if (_features.UsesMap)
+        if (runtime.Map is not null)
         {
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.BoundMapMethodType);
+            il.Emit(OpCodes.Isinst, runtime.RequireMap().BoundMethodType);
             il.Emit(OpCodes.Brtrue, functionLabel);
         }
 
-        if (_features.UsesSet)
+        if (runtime.Set is not null)
         {
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.BoundSetMethodType);
+            il.Emit(OpCodes.Isinst, runtime.RequireSet().BoundMethodType);
             il.Emit(OpCodes.Brtrue, functionLabel);
         }
 

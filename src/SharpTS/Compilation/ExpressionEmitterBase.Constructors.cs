@@ -406,24 +406,24 @@ public abstract partial class ExpressionEmitterBase
             // --- Map/Set with optional entries ---
             case "Map":
                 if (arguments.Count == 0)
-                    IL.Emit(OpCodes.Call, Ctx.Runtime!.CreateMap);
+                    IL.Emit(OpCodes.Call, Ctx.Runtime!.RequireMap().Create);
                 else
                 {
                     EmitExpression(arguments[0]);
                     EnsureBoxed();
-                    IL.Emit(OpCodes.Call, Ctx.Runtime!.CreateMapFromEntries);
+                    IL.Emit(OpCodes.Call, Ctx.Runtime!.RequireMap().CreateFromEntries);
                 }
                 SetStackUnknown();
                 return true;
 
             case "Set":
                 if (arguments.Count == 0)
-                    IL.Emit(OpCodes.Call, Ctx.Runtime!.CreateSet);
+                    IL.Emit(OpCodes.Call, Ctx.Runtime!.RequireSet().Create);
                 else
                 {
                     EmitExpression(arguments[0]);
                     EnsureBoxed();
-                    IL.Emit(OpCodes.Call, Ctx.Runtime!.CreateSetFromArray);
+                    IL.Emit(OpCodes.Call, Ctx.Runtime!.RequireSet().CreateFromArray);
                 }
                 SetStackUnknown();
                 return true;

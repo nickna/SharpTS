@@ -25,36 +25,36 @@ public sealed class SetEmitter : ITypeEmitterStrategy
         {
             case "add":
                 EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0);
-                il.Emit(OpCodes.Call, ctx.Runtime!.SetAdd);
+                il.Emit(OpCodes.Call, ctx.Runtime!.RequireSet().Add);
                 return true;
 
             case "has":
                 EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0);
-                il.Emit(OpCodes.Call, ctx.Runtime!.SetHas);
+                il.Emit(OpCodes.Call, ctx.Runtime!.RequireSet().Has);
                 il.Emit(OpCodes.Box, ctx.Types.Boolean);
                 return true;
 
             case "delete":
                 EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0);
-                il.Emit(OpCodes.Call, ctx.Runtime!.SetDelete);
+                il.Emit(OpCodes.Call, ctx.Runtime!.RequireSet().Delete);
                 il.Emit(OpCodes.Box, ctx.Types.Boolean);
                 return true;
 
             case "clear":
-                il.Emit(OpCodes.Call, ctx.Runtime!.SetClear);
+                il.Emit(OpCodes.Call, ctx.Runtime!.RequireSet().Clear);
                 il.Emit(OpCodes.Ldsfld, ctx.Runtime.UndefinedInstance);
                 return true;
 
             case "keys":
-                il.Emit(OpCodes.Call, ctx.Runtime!.SetKeys);
+                il.Emit(OpCodes.Call, ctx.Runtime!.RequireSet().Keys);
                 return true;
 
             case "values":
-                il.Emit(OpCodes.Call, ctx.Runtime!.SetValues);
+                il.Emit(OpCodes.Call, ctx.Runtime!.RequireSet().Values);
                 return true;
 
             case "entries":
-                il.Emit(OpCodes.Call, ctx.Runtime!.SetEntries);
+                il.Emit(OpCodes.Call, ctx.Runtime!.RequireSet().Entries);
                 return true;
 
             case "forEach":
@@ -68,46 +68,46 @@ public sealed class SetEmitter : ITypeEmitterStrategy
                 {
                     il.Emit(OpCodes.Ldsfld, ctx.Runtime!.UndefinedInstance);
                 }
-                il.Emit(OpCodes.Call, ctx.Runtime!.SetForEach);
+                il.Emit(OpCodes.Call, ctx.Runtime!.RequireSet().ForEach);
                 il.Emit(OpCodes.Ldsfld, ctx.Runtime!.UndefinedInstance);
                 return true;
 
             // ES2025 Set Operations
             case "union":
                 EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0);
-                il.Emit(OpCodes.Call, ctx.Runtime!.SetUnion);
+                il.Emit(OpCodes.Call, ctx.Runtime!.RequireSet().Union);
                 return true;
 
             case "intersection":
                 EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0);
-                il.Emit(OpCodes.Call, ctx.Runtime!.SetIntersection);
+                il.Emit(OpCodes.Call, ctx.Runtime!.RequireSet().Intersection);
                 return true;
 
             case "difference":
                 EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0);
-                il.Emit(OpCodes.Call, ctx.Runtime!.SetDifference);
+                il.Emit(OpCodes.Call, ctx.Runtime!.RequireSet().Difference);
                 return true;
 
             case "symmetricDifference":
                 EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0);
-                il.Emit(OpCodes.Call, ctx.Runtime!.SetSymmetricDifference);
+                il.Emit(OpCodes.Call, ctx.Runtime!.RequireSet().SymmetricDifference);
                 return true;
 
             case "isSubsetOf":
                 EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0);
-                il.Emit(OpCodes.Call, ctx.Runtime!.SetIsSubsetOf);
+                il.Emit(OpCodes.Call, ctx.Runtime!.RequireSet().IsSubsetOf);
                 il.Emit(OpCodes.Box, ctx.Types.Boolean);
                 return true;
 
             case "isSupersetOf":
                 EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0);
-                il.Emit(OpCodes.Call, ctx.Runtime!.SetIsSupersetOf);
+                il.Emit(OpCodes.Call, ctx.Runtime!.RequireSet().IsSupersetOf);
                 il.Emit(OpCodes.Box, ctx.Types.Boolean);
                 return true;
 
             case "isDisjointFrom":
                 EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0);
-                il.Emit(OpCodes.Call, ctx.Runtime!.SetIsDisjointFrom);
+                il.Emit(OpCodes.Call, ctx.Runtime!.RequireSet().IsDisjointFrom);
                 il.Emit(OpCodes.Box, ctx.Types.Boolean);
                 return true;
 
@@ -130,7 +130,7 @@ public sealed class SetEmitter : ITypeEmitterStrategy
 
         emitter.EmitExpression(receiver);
         emitter.EmitBoxIfNeeded(receiver);
-        il.Emit(OpCodes.Call, ctx.Runtime!.SetSize);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireSet().Size);
         il.Emit(OpCodes.Box, ctx.Types.Double);
 
         return true;

@@ -3708,6 +3708,186 @@ public class StandaloneDllTests
             verifyStandardError: error => Assert.Empty(error)));
     }
 
+    public static IEnumerable<object[]> MapSetMetadataPrograms =>
+    [
+        new object[]
+        {
+            "minimal",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "console.log(1);" },
+            "1\n",
+            false
+        },
+        new object[]
+        {
+            "map_operations",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const m = new Map<string,number>([['a',1],['b',2]]); console.log(m.size,m.get('a'),m.get('missing'),m.has('b')); console.log(m.set('a',3)===m,m.delete('b'),m.delete('b')); console.log(m.size,m.get('a')); m.clear(); console.log(m.size);" },
+            "2 1 undefined true\ntrue true false\n1 3\n0\n",
+            false
+        },
+        new object[]
+        {
+            "map_key_identity",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const a:any={},b:any={}; const s=Symbol('x'),t=Symbol('x'); const m=new Map<any,any>(); m.set(null,'null').set(undefined,'undefined').set(NaN,'nan').set(-0,'zero').set(a,'a').set(b,'b').set(s,'s').set(t,'t').set(1n,'big'); console.log(m.size,m.get(null),m.get(undefined),m.get(NaN),m.get(0),m.get(a),m.get(b),m.get(s),m.get(t),m.get(1n));" },
+            "9 null undefined nan zero a b s t big\n",
+            false
+        },
+        new object[]
+        {
+            "map_iterators",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const m=new Map<string,number>([['a',1],['b',2],['c',3]]); const keys=m.keys(),values=m.values(),entries=m.entries(); m.delete('b');m.set('a',9); for(const k of keys)console.log('k',k);for(const v of values)console.log('v',v);for(const p of entries)console.log('e',p[0],p[1]);" },
+            "k a\nk c\nv 9\nv 3\ne a 9\ne c 3\n",
+            false
+        },
+        new object[]
+        {
+            "map_bound_callbacks",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const m=new Map<string,number>([['a',1],['b',2]]);const get:any=m.get,set:any=m.set,has:any=m.has; console.log(set('c',3)===m,get('c'),has('c'));let total=0;const callback:any=(v:number,k:string,self:any)=>{total+=v;console.log(k,self===m);};m.forEach(callback);console.log(total);" },
+            "true 3 true\na true\nb true\nc true\n6\n",
+            false
+        },
+        new object[]
+        {
+            "map_group_by",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const values=[1,2,3,4,5];const groups=Map.groupBy(values,(x:number)=>x%2);console.log(groups.size,JSON.stringify(groups.get(0)),JSON.stringify(groups.get(1)));const key:any={};const refs=Map.groupBy(values,()=>key);console.log(refs.size,refs.get(key).length);" },
+            "2 [2,4] [1,3,5]\n1 5\n",
+            false
+        },
+        new object[]
+        {
+            "set_operations",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const s=new Set<number>([1,2,2,3]);console.log(s.size,s.has(2),s.has(4),s.add(4)===s);console.log(s.delete(2),s.delete(2));for(const v of s)console.log(v);s.clear();console.log(s.size);" },
+            "3 true false true\ntrue false\n1\n3\n4\n0\n",
+            false
+        },
+        new object[]
+        {
+            "set_key_identity",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const a:any={},b:any={},s=Symbol('x'),t=Symbol('x');const values=new Set<any>([NaN,NaN,-0,0,a,a,b,s,s,t,1n,1n]);console.log(values.size,values.has(NaN),values.has(0),values.has(a),values.has(b),values.has(s),values.has(t),values.has(1n));" },
+            "7 true true true true true true true\n",
+            false
+        },
+        new object[]
+        {
+            "set_algebra",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const a=new Set<number>([1,2,3]),b=new Set<number>([3,4]);console.log(a.union(b).size,a.intersection(b).size,a.difference(b).size,a.symmetricDifference(b).size);console.log(a.isSubsetOf(a.union(b)),a.isSupersetOf(new Set<number>([2])),a.isDisjointFrom(new Set<number>([5])));console.log(a.size,b.size);" },
+            "4 1 2 3\ntrue true true\n3 2\n",
+            false
+        },
+        new object[]
+        {
+            "set_bound_callbacks",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const s=new Set<string>(['a','b']);const add:any=s.add,has:any=s.has;console.log(add('c')===s,has('c'));const callback:any=(a:string,b:string,self:any)=>console.log(a,b,self===s);s.forEach(callback);for(const p of s.entries())console.log(p[0],p[1]);" },
+            "true true\na a true\nb b true\nc c true\na a\nb b\nc c\n",
+            false
+        },
+        new object[]
+        {
+            "numeric_array_constructor",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const numbers:number[]=[1,2,2,3];for(let i=0;i<10;i++)numbers[0]=i;const set=new Set<number>(numbers);console.log(numbers[0],set.size,set.has(9),set.has(2),set.has(3));" },
+            "9 3 true true true\n",
+            false
+        },
+        new object[]
+        {
+            "generic_iterator",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "function* entries():Generator<[string,number],void,any>{yield ['a',1];yield ['b',2];}const m=new Map<string,number>();for(const p of entries())m.set(p[0],p[1]);function* values():Generator<number,void,any>{yield 1;yield 2;yield 3;}const groups=Map.groupBy(values(),(n:number)=>n%2);console.log(m.size,m.get('b'),groups.size,JSON.stringify(groups.get(1)));" },
+            "2 2 2 [1,3]\n",
+            false
+        },
+        new object[]
+        {
+            "async_collections",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "async function run(){const m=new Map<string,number>([['a',1]]);const s=new Set<number>([1,2]);await Promise.resolve(0);m.set('b',s.size);console.log(m.size,m.get('b'),s.has(2));}run();" },
+            "2 2 true\n",
+            false
+        },
+        new object[]
+        {
+            "modules",
+            "main.ts",
+            new string[] { "main.ts", "values.ts" },
+            new string[] { "import {map,set} from './values';console.log(map.get('a'),set.size);map.set('b',2);set.add(3);console.log(map.size,set.size);", "export const map=new Map<string,number>([['a',1]]);export const set=new Set<number>([1,2]);" },
+            "1 2\n2 3\n",
+            false
+        },
+        new object[]
+        {
+            "commonjs",
+            "main.cjs",
+            new string[] { "main.cjs" },
+            new string[] { "const m=new Map([['a',1]]);const s=new Set([1,2]);console.log(m.get('a'),s.size);" },
+            "1 2\n",
+            false
+        },
+        new object[]
+        {
+            "hosted_both",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const map=new Map<string,number>([['a',1]]);const set=new Set<number>([1,2]);console.log(map.size,set.size);" },
+            "",
+            true
+        },
+        new object[]
+        {
+            "hosted_minimal",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "console.log(1);" },
+            "",
+            true
+        },
+    ];
+
+    [Theory]
+    [MemberData(nameof(MapSetMetadataPrograms))]
+    public void Isolated_MapSetMetadata_PreservesCollectionsAndDeployment(
+        string name, string entry, string[] paths, string[] sources, string expected, bool hosted)
+    {
+        using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        for (int i = 0; i < paths.Length; i++) tempDir.CreateFile(paths[i], sources[i]);
+        var sourcePath = tempDir.GetPath(entry);
+        var dllPath = tempDir.GetPath($"map-set-metadata_{name}.dll");
+        var hosting = hosted ? " --target dll --hosted" : "";
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --noLib --compile \"{sourcePath}\" -o \"{dllPath}\" --verify --standalone{hosting}", tempDir.Path);
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        var references = GetAssemblyReferences(dllPath);
+        Assert.DoesNotContain("SharpTS", references);
+        Assert.Equal(hosted, references.Contains("SharpTS.Hosting.Abstractions"));
+        Assert.False(File.Exists(tempDir.GetPath("SharpTS.dll")));
+        if (!hosted)
+            Assert.Equal(expected, ExecuteCompiledDllIsolated(dllPath, timeoutMs: 30000,
+                verifyStandardError: error => Assert.Empty(error)));
+    }
+
     public static IEnumerable<object[]> JsonMetadataPrograms =>
     [
         new object[]

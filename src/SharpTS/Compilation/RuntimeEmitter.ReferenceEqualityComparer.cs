@@ -6,7 +6,11 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
-    private void EmitReferenceEqualityComparerClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private void EmitReferenceEqualityComparerClass(
+        ModuleBuilder moduleBuilder,
+        EmittedCollectionKeysRuntime collectionKeys,
+        TypeBuilder tSSymbolType
+    )
     {
         // Define class: public sealed class $ReferenceEqualityComparer : IEqualityComparer<object>
         // This implements JavaScript-style equality for Map/Set keys:
@@ -26,7 +30,7 @@ public partial class RuntimeEmitter
             typeBuilder,
             FieldAttributes.Public | FieldAttributes.Static | FieldAttributes.InitOnly
         );
-        runtime.ReferenceEqualityComparerInstance = instanceField;
+        collectionKeys.ComparerInstance = instanceField;
 
         // Private constructor
         var ctorBuilder = typeBuilder.DefineConstructor(
@@ -51,15 +55,15 @@ public partial class RuntimeEmitter
         cctorIL.Emit(OpCodes.Ret);
 
         // Equals method: public bool Equals(object? x, object? y)
-        EmitReferenceEqualityComparerEquals(typeBuilder, runtime);
+        EmitReferenceEqualityComparerEquals(typeBuilder, tSSymbolType);
 
         // GetHashCode method: public int GetHashCode(object obj)
-        EmitReferenceEqualityComparerGetHashCode(typeBuilder, runtime);
+        EmitReferenceEqualityComparerGetHashCode(typeBuilder);
 
         typeBuilder.CreateType();
     }
 
-    private void EmitReferenceEqualityComparerEquals(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitReferenceEqualityComparerEquals(TypeBuilder typeBuilder, TypeBuilder tSSymbolType)
     {
         var method = typeBuilder.DefineMethod(
             "Equals",
@@ -131,11 +135,11 @@ public partial class RuntimeEmitter
         // Check for Symbol - use reference equality
         il.MarkLabel(checkSymbolLabel);
         il.Emit(OpCodes.Ldarg_1);  // x
-        il.Emit(OpCodes.Isinst, runtime.TSSymbolType);
+        il.Emit(OpCodes.Isinst, tSSymbolType);
         il.Emit(OpCodes.Brtrue, useReferenceEqualityLabel);
 
         il.Emit(OpCodes.Ldarg_2);  // y
-        il.Emit(OpCodes.Isinst, runtime.TSSymbolType);
+        il.Emit(OpCodes.Isinst, tSSymbolType);
         il.Emit(OpCodes.Brtrue, useReferenceEqualityLabel);
 
         // Default: use reference equality for all other objects
@@ -163,7 +167,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitReferenceEqualityComparerGetHashCode(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitReferenceEqualityComparerGetHashCode(TypeBuilder typeBuilder)
     {
         var method = typeBuilder.DefineMethod(
             "GetHashCode",

@@ -125,20 +125,20 @@ public partial class GeneratorMoveNextEmitter
         if (iterableType is TypeInfo.Map)
         {
             // Map iteration yields [key, value] entries (compile-time known)
-            _il.Emit(OpCodes.Call, _ctx.Runtime!.MapEntries);
+            _il.Emit(OpCodes.Call, _ctx.Runtime!.RequireMap().Entries);
         }
         else if (iterableType is TypeInfo.Set)
         {
             // Set iteration yields values (compile-time known)
-            _il.Emit(OpCodes.Call, _ctx.Runtime!.SetValues);
+            _il.Emit(OpCodes.Call, _ctx.Runtime!.RequireSet().Values);
         }
         else
         {
             // Fallback: runtime type checking for Map/Set when compile-time
             // type isn't available. Each arm gates on whether the corresponding
             // $Runtime helper was emitted (null MethodBuilder ⇒ feature off).
-            var hasMapEntries = _ctx.Runtime?.MapEntries != null;
-            var hasSetValues = _ctx.Runtime?.SetValues != null;
+            var hasMapEntries = _ctx.Runtime?.Map is not null;
+            var hasSetValues = _ctx.Runtime?.Set is not null;
             var iterableLocal = _il.DeclareLocal(_types.Object);
             _il.Emit(OpCodes.Stloc, iterableLocal);
 
@@ -158,7 +158,7 @@ public partial class GeneratorMoveNextEmitter
 
                     // It's a Map - call MapEntries to get List<object?>
                     _il.Emit(OpCodes.Ldloc, iterableLocal);
-                    _il.Emit(OpCodes.Call, _ctx.Runtime!.MapEntries);
+                    _il.Emit(OpCodes.Call, _ctx.Runtime!.RequireMap().Entries);
                     _il.Emit(OpCodes.Stloc, iterableLocal);
                     _il.Emit(OpCodes.Br, afterMapSetLabel);
                 }
@@ -172,7 +172,7 @@ public partial class GeneratorMoveNextEmitter
 
                     // It's a Set - call SetValues to get List<object?>
                     _il.Emit(OpCodes.Ldloc, iterableLocal);
-                    _il.Emit(OpCodes.Call, _ctx.Runtime!.SetValues);
+                    _il.Emit(OpCodes.Call, _ctx.Runtime!.RequireSet().Values);
                     _il.Emit(OpCodes.Stloc, iterableLocal);
                 }
                 else

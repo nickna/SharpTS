@@ -2195,12 +2195,12 @@ public partial class ILEmitter
         if (iterableType is TypeInfo.Map)
         {
             // Map iteration yields [key, value] entries
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.MapEntries);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.RequireMap().Entries);
         }
         else if (iterableType is TypeInfo.Set)
         {
             // Set iteration yields values
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.SetValues);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.RequireSet().Values);
         }
 
         if (iterableType is TypeInfo.Map or TypeInfo.Set)
@@ -2256,14 +2256,14 @@ public partial class ILEmitter
         // A statically known array takes the direct fast path below; emitting
         // dynamic collection branches before that compile-time early return
         // would leave their shared after-loop target unmarked.
-        if (arrayDesc == null && _ctx.RuntimeFeatures?.UsesMap == true)
+        if (arrayDesc == null && _ctx.Runtime?.Map is not null)
         {
             var notDynamicMap = builder.DefineLabel("forof_not_dynamic_map");
             IL.Emit(OpCodes.Ldloc, iterableLocal);
             IL.Emit(OpCodes.Isinst, _ctx.Types.DictionaryObjectObject);
             builder.Emit_Brfalse(notDynamicMap);
             IL.Emit(OpCodes.Ldloc, iterableLocal);
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.MapEntries);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.RequireMap().Entries);
             var start = builder.DefineLabel("forof_dynamic_map_start");
             var end = builder.DefineLabel("forof_dynamic_map_end");
             var cont = builder.DefineLabel("forof_dynamic_map_continue");
@@ -2273,14 +2273,14 @@ public partial class ILEmitter
             _ctx.Locals.EnterScope();
             builder.MarkLabel(notDynamicMap);
         }
-        if (arrayDesc == null && _ctx.RuntimeFeatures?.UsesSet == true)
+        if (arrayDesc == null && _ctx.Runtime?.Set is not null)
         {
             var notDynamicSet = builder.DefineLabel("forof_not_dynamic_set");
             IL.Emit(OpCodes.Ldloc, iterableLocal);
             IL.Emit(OpCodes.Isinst, _ctx.Types.HashSetOfObject);
             builder.Emit_Brfalse(notDynamicSet);
             IL.Emit(OpCodes.Ldloc, iterableLocal);
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.SetValues);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.RequireSet().Values);
             var start = builder.DefineLabel("forof_dynamic_set_start");
             var end = builder.DefineLabel("forof_dynamic_set_end");
             var cont = builder.DefineLabel("forof_dynamic_set_continue");
