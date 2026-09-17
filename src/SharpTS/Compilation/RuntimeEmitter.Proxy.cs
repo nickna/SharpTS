@@ -5,6 +5,21 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
+    private readonly record struct ProxySetPropertyCheckInputs(
+        MethodBuilder InvokeMethodUnwrapped,
+        EmittedObjectDescriptorRuntime ObjectDescriptors,
+        EmittedObjectReadRuntime ObjectRead,
+        EmittedReflectAssignment? ReflectAssignment
+    );
+
+    private readonly record struct ProxySetIndexCheckInputs(
+        MethodBuilder InvokeMethodUnwrapped,
+        EmittedObjectDescriptorRuntime ObjectDescriptors,
+        EmittedObjectReadRuntime ObjectRead,
+        EmittedReflectAssignment? ReflectAssignment,
+        EmittedStringCoercionRuntime StringCoercion
+    );
+
     private readonly record struct ProxyGetPropertyCheckInputs(
         MethodBuilder GetFunctionMethod,
         MethodBuilder InvokeMethodUnwrapped,
@@ -186,16 +201,21 @@ public partial class RuntimeEmitter
     /// Emits a proxy-aware property set: checks if obj is a proxy and calls TrapSet(name, value, null),
     /// otherwise falls through to notProxyLabel.
     /// </summary>
-    internal void EmitProxySetPropertyCheck(
-        ILGenerator il, EmittedRuntime runtime, Action emitLoadObj,
-        Action emitLoadName, Action emitLoadValue, Label notProxyLabel)
+    private void EmitProxySetPropertyCheck(
+        ILGenerator il,
+        ProxySetPropertyCheckInputs inputs,
+        Action emitLoadObj,
+        Action emitLoadName,
+        Action emitLoadValue,
+        Label notProxyLabel
+    )
     {
         var proxyLabel = il.DefineLabel();
         EmitProxyTypeCheck(il, emitLoadObj, proxyLabel, notProxyLabel);
 
         il.MarkLabel(proxyLabel);
         EmitProxySetCompiledCall(
-            il, runtime, emitLoadObj, emitLoadName, emitLoadValue, emitLoadObj);
+            il, new ProxySetCallInputs(inputs.ReflectAssignment!.Set, inputs.ObjectDescriptors.GetOwnPropertyDescriptor, inputs.ObjectRead.Property, inputs.InvokeMethodUnwrapped), emitLoadObj, emitLoadName, emitLoadValue, emitLoadObj);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Ret);
     }
@@ -254,20 +274,25 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits a proxy-aware index set: checks if obj is a proxy and calls TrapSet(key.ToString(), value, null).
     /// </summary>
-    internal void EmitProxySetIndexCheck(
-        ILGenerator il, EmittedRuntime runtime, Action emitLoadObj,
-        Action emitLoadIndex, Action emitLoadValue, Label notProxyLabel)
+    private void EmitProxySetIndexCheck(
+        ILGenerator il,
+        ProxySetIndexCheckInputs inputs,
+        Action emitLoadObj,
+        Action emitLoadIndex,
+        Action emitLoadValue,
+        Label notProxyLabel
+    )
     {
         var proxyLabel = il.DefineLabel();
         EmitProxyTypeCheck(il, emitLoadObj, proxyLabel, notProxyLabel);
 
         il.MarkLabel(proxyLabel);
         EmitProxySetCompiledCall(
-            il, runtime, emitLoadObj,
+            il, new ProxySetCallInputs(inputs.ReflectAssignment!.Set, inputs.ObjectDescriptors.GetOwnPropertyDescriptor, inputs.ObjectRead.Property, inputs.InvokeMethodUnwrapped), emitLoadObj,
             () =>
             {
                 emitLoadIndex();
-                il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
+                il.Emit(OpCodes.Call, inputs.StringCoercion.ToJsString);
             },
             emitLoadValue, emitLoadObj);
         il.Emit(OpCodes.Pop);
@@ -289,26 +314,7 @@ public partial class RuntimeEmitter
     /// receiver and delegating ordinary operations back to generated helpers.
     /// Leaves the trap's boolean status on the stack.
     /// </summary>
-    private void EmitProxySetCompiledCall(
-        ILGenerator il,
-        EmittedRuntime runtime,
-        Action emitLoadObj,
-        Action emitLoadName,
-        Action emitLoadValue,
-        Action emitLoadReceiver) =>
-        EmitProxySetCompiledCall(
-            il,
-            new ProxySetCallInputs(
-                runtime.Reflect.RequireAssignment().Set,
-                runtime.ObjectDescriptors.GetOwnPropertyDescriptor,
-                runtime.ObjectRead.Property,
-                runtime.InvokeMethodUnwrapped
-            ),
-            emitLoadObj,
-            emitLoadName,
-            emitLoadValue,
-            emitLoadReceiver
-        );
+
 
     private void EmitProxySetCompiledCall(ILGenerator il, ProxySetCallInputs inputs, Action emitLoadObj,
         Action emitLoadName, Action emitLoadValue, Action emitLoadReceiver)

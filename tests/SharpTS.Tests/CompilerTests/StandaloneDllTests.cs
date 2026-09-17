@@ -3708,6 +3708,405 @@ public class StandaloneDllTests
             verifyStandardError: error => Assert.Empty(error)));
     }
 
+    public static IEnumerable<object[]> ObjectWriteMetadataPrograms =>
+    [
+        new object[]
+        {
+            "minimal",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "console.log(1);" },
+            "1\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "named",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const o:any={x:1}; o.x=2; o.y=3; console.log(o.x,o.y);" },
+            "2 3\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "computed",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const o:any={}; const k:any=\"x\"; o[k]=4; o[2]=5; console.log(o.x,o[\"2\"]);" },
+            "4 5\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "fields",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "class Item { x=1; } const o:any=new Item(); o.x=2; o[\"x\"]=3; o.extra=4; console.log(o.x,o.extra);" },
+            "3 4\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "field_setter",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "class Item { x=1; set value(v:number){this.x=v*2;} } const o:any=new Item(); o.value=3; console.log(o.x); o[\"value\"]=4; console.log(o.x);" },
+            "6\n8\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "own_setter",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const o:any={y:0,set x(v:any){(this as any).y=v;}}; o.x=3; console.log(o.y); o[\"x\"]=4; console.log(o.y);" },
+            "3\n4\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "frozen",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const o:any=Object.freeze({x:1}); o.x=2; o[\"x\"]=3; o.y=4; console.log(o.x,o.y);" },
+            "1 undefined\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "sealed",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const o:any=Object.seal({x:1}); o.x=2; o[\"x\"]=3; o.y=4; console.log(o.x,o.y);" },
+            "3 undefined\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "nonextensible",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const o:any=Object.preventExtensions({x:1}); o[\"x\"]=2; o[\"y\"]=3; console.log(o.x,o.y);" },
+            "2 undefined\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "strict_named",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "function run(){\"use strict\";const o:any=Object.freeze({x:1});try{o.x=2;}catch(e:any){console.log(e instanceof TypeError);}console.log(o.x);}run();" },
+            "true\n1\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "strict_index",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "function run(){\"use strict\";const o:any=Object.freeze({x:1});const key:any=\"x\";try{o[key]=2;}catch(e:any){console.log(e instanceof TypeError);}console.log(o.x);}run();" },
+            "true\n1\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "strict_fields",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "class Item{x=1;}function run(){\"use strict\";const o:any=new Item();Object.freeze(o);try{o.x=2;}catch(e:any){console.log(e instanceof TypeError);}console.log(o.x);}run();" },
+            "true\n1\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "strict_symbol",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "function run(){\"use strict\";const s=Symbol(\"x\");const o:any={[s]:1};Object.freeze(o);try{o[s]=2;}catch(e:any){console.log(e instanceof TypeError);}console.log(o[s]);}run();" },
+            "true\n1\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "strict_new",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "function run(){\"use strict\";const o:any=Object.preventExtensions({x:1});try{o.y=2;}catch(e:any){console.log(e instanceof TypeError);}console.log(o.y);}run();" },
+            "true\nundefined\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "symbol",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const s=Symbol(\"x\");const o:any={};o[s]=1;o[s]=2;console.log(o[s],Object.getOwnPropertySymbols(o).length);" },
+            "2 1\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "sparse",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const a:any=[1];a[3]=4;console.log(a.length,a.join(\",\"));" },
+            "4 1,,,4\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "array_length",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const a:any=[1,2,3];a.length=1;console.log(a.length,a[1]);a.length=3;console.log(a.length,a.join(\",\"));" },
+            "1 undefined\n3 1,,\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "array_named",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const a:any=[1,2];a[\"label\"]=\"x\";a[4294967295]=7;console.log(a.length,a.label,a[4294967295]);" },
+            "2 x 7\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "arguments",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "function f(){const a:any=arguments;a.length=7;console.log(a.length);a[0]=9;console.log(a[0]);}f();" },
+            "7\n9\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "function_property",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "function f(){}const a:any=f;a.x=3;a[\"y\"]=4;console.log(a.x,a.y);" },
+            "3 4\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "constructor_property",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const a:any=Object;a.writeProbe=5;console.log(a.writeProbe);delete a.writeProbe;" },
+            "5\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "date_property",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const a:any=new Date(0);a.x=6;a[\"y\"]=7;console.log(a.x,a.y,a.getTime());" },
+            "6 7 0\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "regexp_lastindex",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const r:any=/a/g;r.lastIndex=\"1\";console.log(r.test(\"ba\"),r.lastIndex);r[\"lastIndex\"]=0;console.log(r.lastIndex);" },
+            "true 2\n0\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "promise_property",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const p:any=Promise.resolve(1);p.x=3;p[\"y\"]=4;console.log(p.x,p.y);" },
+            "3 4\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "globalthis",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const g:any=globalThis;g.writeProbe=7;g[\"writeProbe\"]=8;console.log(g.writeProbe);delete g.writeProbe;" },
+            "8\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "buffer",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const b:any=Buffer.from([1,2]);b[0]=257;b[1]=3;console.log(b[0],b[1],b.length);" },
+            "1 3 2\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "typedarray",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const a:any=new Uint8Array([1,2]);a[0]=258;a[1]=3;console.log(a[0],a[1],a.length);" },
+            "2 3 2\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "abort_onabort",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const c=new AbortController();const s:any=c.signal;let n=0;s.onabort=()=>{n++;};c.abort();console.log(n,s.aborted);" },
+            "1 true\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "commonjs",
+            "main.cjs",
+            new string[] { "dep.cjs", "main.cjs" },
+            new string[] { "exports.x=1;exports.x=9;", "const d=require(\"./dep.cjs\");console.log(d.x);" },
+            "9\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "module_exports",
+            "main.cjs",
+            new string[] { "dep.cjs", "main.cjs" },
+            new string[] { "module.exports={x:8};", "const d=require(\"./dep.cjs\");console.log(d.x);" },
+            "8\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "proxy_set",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let n=0;const target:any={x:1};const p:any=new Proxy(target,{set(t:any,k:any,v:any,r:any){n++;return Reflect.set(t,k,v,r);}});p.x=2;p[\"x\"]=3;console.log(target.x,n);" },
+            "3 2\n",
+            false,
+            false
+        },
+        new object[]
+        {
+            "proxy_forward",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const target:any={x:1};const p:any=new Proxy(target,{});p.x=4;p[\"y\"]=5;console.log(target.x,target.y);" },
+            "4 5\n",
+            false,
+            false
+        },
+        new object[]
+        {
+            "proxy_inherited",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let n=0;const p:any=new Proxy({},{set(t:any,k:any,v:any,r:any){n++;return Reflect.set(t,k,v,r);}});const o:any=Object.create(p);o.x=6;console.log(o.x,n,Object.hasOwn(o,\"x\"));" },
+            "6 1 true\n",
+            false,
+            false
+        },
+        new object[]
+        {
+            "proxy_strict",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "function run(){\"use strict\";const p:any=new Proxy({x:1},{set(){return false;}});try{p.x=2;}catch(e:any){console.log(e instanceof TypeError);}console.log(p.x);}run();" },
+            "true\n1\n",
+            false,
+            false
+        },
+        new object[]
+        {
+            "key_coercion",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let n=0;const k:any={toString(){n++;return \"x\";}};const o:any={};o[k]=5;console.log(o.x,n);" },
+            "5 1\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "hosted_write",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "export function write(value:any,key:any,next:any){value[key]=next;return value[key];}" },
+            "",
+            true,
+            true
+        },
+        new object[]
+        {
+            "hosted_minimal",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "export const value=1;" },
+            "",
+            true,
+            true
+        },
+    ];
+
+    [Theory]
+    [MemberData(nameof(ObjectWriteMetadataPrograms))]
+    public void Isolated_ObjectWriteMetadata_PreservesWritingAndDeployment(
+        string name, string entry, string[] paths, string[] sources, string expected, bool hosted, bool standalone)
+    {
+        using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        for (int i = 0; i < paths.Length; i++) tempDir.CreateFile(paths[i], sources[i]);
+        var sourcePath = tempDir.GetPath(entry);
+        var dllPath = tempDir.GetPath($"object-write-metadata_{name}.dll");
+        var deployment = standalone ? " --standalone" : "";
+        var hosting = hosted ? " --target dll --hosted" : "";
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --noLib --compile \"{sourcePath}\" -o \"{dllPath}\" --verify{deployment}{hosting}", tempDir.Path);
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        var references = GetAssemblyReferences(dllPath);
+        Assert.DoesNotContain("SharpTS", references);
+        Assert.Equal(hosted, references.Contains("SharpTS.Hosting.Abstractions"));
+        Assert.Equal(!standalone, File.Exists(tempDir.GetPath("SharpTS.dll")));
+        if (!hosted)
+            Assert.Equal(expected, ExecuteCompiledDllIsolated(dllPath, timeoutMs: 30000,
+                verifyStandardError: error => Assert.Empty(error)));
+    }
+
+
     public static IEnumerable<object[]> ObjectReadMetadataPrograms =>
     [
         new object[]

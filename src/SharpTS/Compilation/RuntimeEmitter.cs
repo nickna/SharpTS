@@ -328,7 +328,7 @@ public partial class RuntimeEmitter
                     runtime.NumericCoercion,
                     runtime.ObjectStorage,
                     runtime.PadUndefinedAttrCtor,
-                    runtime.SetProperty,
+                    runtime.ObjectWrite.Property,
                     runtime.StringCoercion,
                     runtime.Symbols,
                     runtime.TSFunctionGetMethodInfo,
@@ -622,7 +622,7 @@ public partial class RuntimeEmitter
                     runtime.ObjectRead.Index,
                     runtime.ObjectRead.Property,
                     runtime.NumericCoercion,
-                    runtime.SetProperty,
+                    runtime.ObjectWrite.Property,
                     runtime.StringCoercion,
                     runtime.Symbols,
                     runtime.Errors.TypeErrorConstructor,
@@ -637,7 +637,7 @@ public partial class RuntimeEmitter
                     runtime.ObjectRead.Index,
                     runtime.ObjectRead.Property,
                     runtime.NumericCoercion,
-                    runtime.SetProperty,
+                    runtime.ObjectWrite.Property,
                     runtime.StringCoercion,
                     runtime.Symbols,
                     runtime.Errors.TypeErrorConstructor,
@@ -817,6 +817,7 @@ public partial class RuntimeEmitter
         runtime.ObjectConstruction.CompleteEmission();
         runtime.ObjectDeletion.CompleteEmission();
         runtime.ObjectRead.CompleteEmission();
+        runtime.ObjectWrite.CompleteEmission();
         runtime.Reflect.CompleteEmission();
         runtime.Json.CompleteEmission();
         runtime.Records.CompleteEmission();

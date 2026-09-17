@@ -291,7 +291,7 @@ public partial class ILCompiler
                         il.Emit(OpCodes.Ldsfld, _runtime.UndefinedInstance);
                     }
                     // Call Runtime.SetIndex(object, key, value)
-                    il.Emit(OpCodes.Call, _runtime.SetIndex);
+                    il.Emit(OpCodes.Call, _runtime.ObjectWrite.Index);
                     continue;
                 }
 

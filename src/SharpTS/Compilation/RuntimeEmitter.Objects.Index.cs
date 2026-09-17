@@ -5,6 +5,32 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
+    private readonly record struct SetIndexInputs(
+        EmittedArrayOperationsRuntime ArrayOperations,
+        EmittedArrayStorageRuntime ArrayStorage,
+        EmittedBufferRuntime? Buffer,
+        EmittedDescriptorStorageRuntime DescriptorStorage,
+        MethodBuilder GlobalThisSetProperty,
+        FieldBuilder GlobalThisSingletonField,
+        MethodBuilder InvokeMethodUnwrapped,
+        MethodBuilder InvokeMethodValue,
+        EmittedMathRuntime Math,
+        EmittedObjectDescriptorRuntime ObjectDescriptors,
+        EmittedObjectOwnPropertiesRuntime ObjectOwnProperties,
+        EmittedObjectPrototypeRuntime ObjectPrototypes,
+        EmittedObjectReadRuntime ObjectRead,
+        EmittedObjectStateRuntime ObjectState,
+        EmittedObjectStorageRuntime ObjectStorage,
+        bool ProxySelected,
+        EmittedReflectAssignment? ReflectAssignment,
+        EmittedStringCoercionRuntime StringCoercion,
+        EmittedSymbolAccessorRuntime SymbolAccessors,
+        EmittedSymbolRuntime Symbols,
+        TypeBuilder TSFunctionType,
+        EmittedTypedArrayRuntime TypedArrays,
+        Type UndefinedType
+    );
+
     private readonly record struct GetIndexInputs(
         EmittedArrayOperationsRuntime ArrayOperations,
         EmittedArrayStorageRuntime ArrayStorage,
@@ -1125,7 +1151,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitSetIndex(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitSetIndex(TypeBuilder typeBuilder, EmittedObjectWriteRuntime objectWrite, SetIndexInputs inputs)
     {
         var method = typeBuilder.DefineMethod(
             "SetIndex",
@@ -1133,7 +1159,7 @@ public partial class RuntimeEmitter
             _types.Void,
             [_types.Object, _types.Object, _types.Object]
         );
-        runtime.SetIndex = method;
+        objectWrite.Index = method;
 
         var il = method.GetILGenerator();
         var dictLabel = il.DefineLabel();
@@ -1149,21 +1175,29 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Brfalse, nullLabel);
 
-        if (_features.UsesProxy)
+        if (inputs.ProxySelected)
         {
             var notProxyLabel = il.DefineLabel();
             EmitProxySetIndexCheck(
-                il, runtime,
+                il,
+                new ProxySetIndexCheckInputs(
+                    inputs.InvokeMethodUnwrapped,
+                    inputs.ObjectDescriptors,
+                    inputs.ObjectRead,
+                    inputs.ReflectAssignment,
+                    inputs.StringCoercion
+                ),
                 () => il.Emit(OpCodes.Ldarg_0),
                 () => il.Emit(OpCodes.Ldarg_1),
                 () => il.Emit(OpCodes.Ldarg_2),
-                notProxyLabel);
+                notProxyLabel
+            );
             il.MarkLabel(notProxyLabel);
         }
 
         // Check if index is a symbol first (symbols work on any object type)
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.Symbols.IsSymbol);
+        il.Emit(OpCodes.Call, inputs.Symbols.IsSymbol);
         il.Emit(OpCodes.Brtrue, symbolKeyLabel);
 
         // A missing indexed own property may resolve to an inherited Proxy.
@@ -1172,15 +1206,15 @@ public partial class RuntimeEmitter
         var noInheritedProxyLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.ObjectOwnProperties.HasOwnProperty);
+        il.Emit(OpCodes.Call, inputs.ObjectOwnProperties.HasOwnProperty);
         il.Emit(OpCodes.Brtrue, noInheritedProxyLabel);
         var indexPrototypeLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.ObjectPrototypes.GetPrototypeOf);
+        il.Emit(OpCodes.Call, inputs.ObjectPrototypes.GetPrototypeOf);
         il.Emit(OpCodes.Stloc, indexPrototypeLocal);
         il.Emit(OpCodes.Ldloc, indexPrototypeLocal);
         il.Emit(OpCodes.Brfalse, noInheritedProxyLabel);
-        if (_features.UsesProxy)
+        if (inputs.ProxySelected)
         {
             var inheritedProxyLabel = il.DefineLabel();
             var inheritedNotProxyLabel = il.DefineLabel();
@@ -1189,12 +1223,12 @@ public partial class RuntimeEmitter
                 inheritedProxyLabel, inheritedNotProxyLabel);
             il.MarkLabel(inheritedProxyLabel);
             EmitProxySetCompiledCall(
-                il, runtime,
+                il, new ProxySetCallInputs(inputs.ReflectAssignment!.Set, inputs.ObjectDescriptors.GetOwnPropertyDescriptor, inputs.ObjectRead.Property, inputs.InvokeMethodUnwrapped),
                 () => il.Emit(OpCodes.Ldloc, indexPrototypeLocal),
                 () =>
                 {
                     il.Emit(OpCodes.Ldarg_1);
-                    il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
+                    il.Emit(OpCodes.Call, inputs.StringCoercion.ToJsString);
                 },
                 () => il.Emit(OpCodes.Ldarg_2),
                 () => il.Emit(OpCodes.Ldarg_0));
@@ -1209,36 +1243,36 @@ public partial class RuntimeEmitter
         // per-object symbol-dict path above.
         var notGlobalThisIdxSetLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldsfld, runtime.GlobalThisSingletonField);
+        il.Emit(OpCodes.Ldsfld, inputs.GlobalThisSingletonField);
         il.Emit(OpCodes.Bne_Un, notGlobalThisIdxSetLabel);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
+        il.Emit(OpCodes.Call, inputs.StringCoercion.ToJsString);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Call, runtime.GlobalThisSetProperty);
+        il.Emit(OpCodes.Call, inputs.GlobalThisSetProperty);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notGlobalThisIdxSetLabel);
 
         // $Buffer (check before TypedArray — IsTypedArray excludes $Buffer).
-        if (_features.UsesBuffer)
+        if (inputs.Buffer is not null)
         {
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.RequireBuffer().Type);
+            il.Emit(OpCodes.Isinst, inputs.Buffer!.Type);
             il.Emit(OpCodes.Brtrue, tsBufferSetLabel);
         }
 
         // TypedArray (check before List since TypedArray is more specific) —
         // gated alongside the handler body below.
-        if (_features.HasAnyTypedArray)
+        if (inputs.TypedArrays.Implementation is not null)
         {
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Call, runtime.TypedArrays.IsTypedArray);
+            il.Emit(OpCodes.Call, inputs.TypedArrays.IsTypedArray);
             il.Emit(OpCodes.Brtrue, typedArraySetLabel);
         }
 
         // $Array (wrapper around List<object?>) - check before List
         var tsArraySetLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.ArrayStorage.Type);
+        il.Emit(OpCodes.Isinst, inputs.ArrayStorage.Type);
         il.Emit(OpCodes.Brtrue, tsArraySetLabel);
 
         // Descriptor-driven: check each array backing type
@@ -1271,7 +1305,7 @@ public partial class RuntimeEmitter
         // writes silently dropped on $Object instances (e.g. `new Foo()[0] = 11`).
         var tsObjectIdxSetLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.ObjectStorage.Type);
+        il.Emit(OpCodes.Isinst, inputs.ObjectStorage.Type);
         il.Emit(OpCodes.Brtrue, tsObjectIdxSetLabel);
 
         // $TSFunction indexed set: route to $Runtime.SetProperty so PDS-backed
@@ -1281,7 +1315,7 @@ public partial class RuntimeEmitter
         // path's index-to-string coercion via SetProperty under the hood.
         var tsFunctionIdxSetLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Isinst, inputs.TSFunctionType);
         il.Emit(OpCodes.Brtrue, tsFunctionIdxSetLabel);
 
         // Class instance / unknown receiver fallback: route to SetFieldsProperty
@@ -1304,9 +1338,9 @@ public partial class RuntimeEmitter
         il.MarkLabel(typeIdxSetLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
+        il.Emit(OpCodes.Call, inputs.StringCoercion.ToJsString);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Call, runtime.SetProperty);
+        il.Emit(OpCodes.Call, objectWrite.Property);
         il.Emit(OpCodes.Ret);
 
         // $Object indexed set handler: SetProperty(obj, Stringify(index), value).
@@ -1315,18 +1349,18 @@ public partial class RuntimeEmitter
         il.MarkLabel(tsObjectIdxSetLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
+        il.Emit(OpCodes.Call, inputs.StringCoercion.ToJsString);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Call, runtime.SetProperty);
+        il.Emit(OpCodes.Call, objectWrite.Property);
         il.Emit(OpCodes.Ret);
 
         // $TSFunction indexed set — coerce key via Stringify and route to SetProperty.
         il.MarkLabel(tsFunctionIdxSetLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
+        il.Emit(OpCodes.Call, inputs.StringCoercion.ToJsString);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Call, runtime.SetProperty);
+        il.Emit(OpCodes.Call, objectWrite.Property);
         il.Emit(OpCodes.Ret);
 
         // Symbol key handler: ECMA-262 §10.1.9 OrdinarySetWithOwnDescriptor —
@@ -1344,7 +1378,7 @@ public partial class RuntimeEmitter
             var symSetterLocal = il.DeclareLocal(_types.Object);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Call, runtime.SymbolAccessors.FindSetter);
+            il.Emit(OpCodes.Call, inputs.SymbolAccessors.FindSetter);
             il.Emit(OpCodes.Stloc, symSetterLocal);
             il.Emit(OpCodes.Ldloc, symSetterLocal);
             il.Emit(OpCodes.Brfalse, noSymSetterLabel);
@@ -1365,9 +1399,9 @@ public partial class RuntimeEmitter
 
             var symDictLocal = il.DeclareLocal(_types.DictionaryObjectObject);
             var symExistingValueLocal = il.DeclareLocal(_types.Object);
-            var symExistingDescriptorLocal = il.DeclareLocal(runtime.DescriptorStorage.DescriptorType);
+            var symExistingDescriptorLocal = il.DeclareLocal(inputs.DescriptorStorage.DescriptorType);
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Call, runtime.Symbols.GetStorage);
+            il.Emit(OpCodes.Call, inputs.Symbols.GetStorage);
             il.Emit(OpCodes.Stloc, symDictLocal);
 
             // Frozen objects reject writes to existing symbol properties too.
@@ -1375,7 +1409,7 @@ public partial class RuntimeEmitter
             // writable property, so only the frozen table is checked here.)
             var symFrozenStateLocal = il.DeclareLocal(_types.Object);
             var symReceiverNotFrozenLabel = il.DefineLabel();
-            il.Emit(OpCodes.Ldsfld, runtime.ObjectState.FrozenObjects);
+            il.Emit(OpCodes.Ldsfld, inputs.ObjectState.FrozenObjects);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldloca, symFrozenStateLocal);
             il.Emit(OpCodes.Callvirt, _types.GetMethod(
@@ -1396,7 +1430,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryObjectObject, "TryGetValue"));
             il.Emit(OpCodes.Brfalse, symCheckExtensibilityLabel);
             il.Emit(OpCodes.Ldloc, symExistingValueLocal);
-            il.Emit(OpCodes.Isinst, runtime.DescriptorStorage.DescriptorType);
+            il.Emit(OpCodes.Isinst, inputs.DescriptorStorage.DescriptorType);
             il.Emit(OpCodes.Stloc, symExistingDescriptorLocal);
             il.Emit(OpCodes.Ldloc, symExistingDescriptorLocal);
             il.Emit(OpCodes.Brfalse, symRawSetLabel);
@@ -1404,12 +1438,12 @@ public partial class RuntimeEmitter
             var symNoSetterLabel = il.DefineLabel();
             var symSetterValueLocal = il.DeclareLocal(_types.Object);
             il.Emit(OpCodes.Ldloc, symExistingDescriptorLocal);
-            il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorSetter.GetGetMethod()!);
+            il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorSetter.GetGetMethod()!);
             il.Emit(OpCodes.Stloc, symSetterValueLocal);
             il.Emit(OpCodes.Ldloc, symSetterValueLocal);
             il.Emit(OpCodes.Brfalse, symNoSetterLabel);
             il.Emit(OpCodes.Ldloc, symSetterValueLocal);
-            il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+            il.Emit(OpCodes.Isinst, inputs.UndefinedType);
             il.Emit(OpCodes.Brtrue, symNoSetterLabel);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldloc, symSetterValueLocal);
@@ -1419,7 +1453,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldc_I4_0);
             il.Emit(OpCodes.Ldarg_2);
             il.Emit(OpCodes.Stelem_Ref);
-            il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+            il.Emit(OpCodes.Call, inputs.InvokeMethodValue);
             il.Emit(OpCodes.Pop);
             il.Emit(OpCodes.Ret);
 
@@ -1428,20 +1462,20 @@ public partial class RuntimeEmitter
             // non-strict write.
             var symDataDescriptorLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldloc, symExistingDescriptorLocal);
-            il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorGetter.GetGetMethod()!);
+            il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorGetter.GetGetMethod()!);
             il.Emit(OpCodes.Brfalse, symDataDescriptorLabel);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(symDataDescriptorLabel);
             var symReturnWithoutSetLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldloc, symExistingDescriptorLocal);
-            il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorSetter.GetGetMethod()!);
+            il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorSetter.GetGetMethod()!);
             il.Emit(OpCodes.Brtrue, symReturnWithoutSetLabel);
             il.Emit(OpCodes.Ldloc, symExistingDescriptorLocal);
-            il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorWritable.GetGetMethod()!);
+            il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorWritable.GetGetMethod()!);
             il.Emit(OpCodes.Brfalse, symReturnWithoutSetLabel);
             il.Emit(OpCodes.Ldloc, symExistingDescriptorLocal);
             il.Emit(OpCodes.Ldarg_2);
-            il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorValue.GetSetMethod()!);
+            il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorValue.GetSetMethod()!);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(symReturnWithoutSetLabel);
             il.Emit(OpCodes.Ret);
@@ -1450,7 +1484,7 @@ public partial class RuntimeEmitter
             il.MarkLabel(symCheckExtensibilityLabel);
             var symExtTmp = il.DeclareLocal(_types.Object);
             var symNotNonExtLabel = il.DefineLabel();
-            il.Emit(OpCodes.Ldsfld, runtime.ObjectState.NonExtensibleObjects);
+            il.Emit(OpCodes.Ldsfld, inputs.ObjectState.NonExtensibleObjects);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldloca, symExtTmp);
             il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ConditionalWeakTable, "TryGetValue", _types.Object, _types.Object.MakeByRefType()));
@@ -1459,7 +1493,7 @@ public partial class RuntimeEmitter
             il.MarkLabel(symNotNonExtLabel);
 
             var symNotFrozenLabel = il.DefineLabel();
-            il.Emit(OpCodes.Ldsfld, runtime.ObjectState.FrozenObjects);
+            il.Emit(OpCodes.Ldsfld, inputs.ObjectState.FrozenObjects);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldloca, symExtTmp);
             il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ConditionalWeakTable, "TryGetValue", _types.Object, _types.Object.MakeByRefType()));
@@ -1468,7 +1502,7 @@ public partial class RuntimeEmitter
             il.MarkLabel(symNotFrozenLabel);
 
             var symNotSealedLabel = il.DefineLabel();
-            il.Emit(OpCodes.Ldsfld, runtime.ObjectState.SealedObjects);
+            il.Emit(OpCodes.Ldsfld, inputs.ObjectState.SealedObjects);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldloca, symExtTmp);
             il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ConditionalWeakTable, "TryGetValue", _types.Object, _types.Object.MakeByRefType()));
@@ -1489,13 +1523,13 @@ public partial class RuntimeEmitter
 
             il.MarkLabel(symCreateLabel);
             var newSymbolDescriptorLocal = il.DeclareLocal(
-                runtime.DescriptorStorage.DescriptorType);
-            il.Emit(OpCodes.Newobj, runtime.DescriptorStorage.DescriptorConstructor);
+                inputs.DescriptorStorage.DescriptorType);
+            il.Emit(OpCodes.Newobj, inputs.DescriptorStorage.DescriptorConstructor);
             il.Emit(OpCodes.Stloc, newSymbolDescriptorLocal);
             il.Emit(OpCodes.Ldloc, newSymbolDescriptorLocal);
             il.Emit(OpCodes.Ldarg_2);
             il.Emit(OpCodes.Callvirt,
-                runtime.DescriptorStorage.DescriptorValue.GetSetMethod()!);
+                inputs.DescriptorStorage.DescriptorValue.GetSetMethod()!);
             il.Emit(OpCodes.Ldloc, symDictLocal);
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Ldloc, newSymbolDescriptorLocal);
@@ -1505,29 +1539,29 @@ public partial class RuntimeEmitter
         }
 
         // TypedArray handler — skipped when typed arrays aren't emitted.
-        if (_features.HasAnyTypedArray)
+        if (inputs.TypedArrays.Implementation is not null)
         {
             il.MarkLabel(typedArraySetLabel);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Call, _types.GetMethod(_types.Convert, "ToInt32", _types.Object));
             il.Emit(OpCodes.Ldarg_2);
-            il.Emit(OpCodes.Call, runtime.TypedArrays.RequireImplementation().SetElement);
+            il.Emit(OpCodes.Call, inputs.TypedArrays.RequireImplementation().SetElement);
             il.Emit(OpCodes.Ret);
         }
 
         // $Buffer handler: data[idx] = (byte)(Convert.ToInt32(value) & 0xFF).
         // Matches SharpTSBuffer.this[int]= semantics: out-of-range is a no-op.
         // Gated together with the dispatch arm above.
-        if (_features.UsesBuffer)
+        if (inputs.Buffer is not null)
         {
             il.MarkLabel(tsBufferSetLabel);
             var bufSetDataLocal = il.DeclareLocal(_types.MakeArrayType(_types.Byte));
             var bufSetIndexLocal = il.DeclareLocal(_types.Int32);
             var bufSetDoneLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Castclass, runtime.RequireBuffer().Type);
-            il.Emit(OpCodes.Call, runtime.RequireBuffer().GetData);
+            il.Emit(OpCodes.Castclass, inputs.Buffer!.Type);
+            il.Emit(OpCodes.Call, inputs.Buffer!.GetData);
             il.Emit(OpCodes.Stloc, bufSetDataLocal);
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Call, _types.GetMethod(_types.Convert, "ToInt32", _types.Object));
@@ -1562,9 +1596,9 @@ public partial class RuntimeEmitter
         il.MarkLabel(classInstanceLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
+        il.Emit(OpCodes.Call, inputs.StringCoercion.ToJsString);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Call, runtime.SetFieldsProperty);
+        il.Emit(OpCodes.Call, objectWrite.FieldsProperty);
         il.Emit(OpCodes.Ret);
 
         // $Array handler: unwrap to List<object?> elements, then set
@@ -1585,7 +1619,7 @@ public partial class RuntimeEmitter
         // $Array PDS-data-store fallback picks them up. Without this, $Array.Set
         // throws RangeError for `a[4294967295] = X`.
         var tsArrayFrozenLocal = il.DeclareLocal(_types.Object);
-        il.Emit(OpCodes.Ldsfld, runtime.ObjectState.FrozenObjects);
+        il.Emit(OpCodes.Ldsfld, inputs.ObjectState.FrozenObjects);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloca, tsArrayFrozenLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ConditionalWeakTable, "TryGetValue", _types.Object, _types.Object.MakeByRefType()));
@@ -1594,7 +1628,7 @@ public partial class RuntimeEmitter
         var tsArraySetKeyLocal = il.DeclareLocal(_types.String);
         var idxLong = il.DeclareLocal(_types.Int64);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
+        il.Emit(OpCodes.Call, inputs.StringCoercion.ToJsString);
         il.Emit(OpCodes.Stloc, tsArraySetKeyLocal);
 
         var routeAsNamedLabel = il.DefineLabel();
@@ -1609,7 +1643,7 @@ public partial class RuntimeEmitter
         // non-extensible receivers. For arrays, "new" means index >= length.
         var tsArrayExtensibleLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.DescriptorStorage.IsExtensible);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.IsExtensible);
         il.Emit(OpCodes.Brtrue, tsArrayExtensibleLabel);
         // Non-extensible: silently return if idx >= length (new index).
         il.Emit(OpCodes.Ldloc, idxLong);
@@ -1635,29 +1669,29 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, tsArraySetKeyLocal);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Call, runtime.SetProperty);
+        il.Emit(OpCodes.Call, objectWrite.Property);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(doArraySetLabel);
 
         // Indexed descriptors participate in [[Set]] before array storage.
-        var tsArraySetDescriptorLocal = il.DeclareLocal(runtime.DescriptorStorage.DescriptorType);
+        var tsArraySetDescriptorLocal = il.DeclareLocal(inputs.DescriptorStorage.DescriptorType);
         var tsArraySetRawStorage = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, tsArraySetKeyLocal);
-        il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetPropertyDescriptor);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.GetPropertyDescriptor);
         il.Emit(OpCodes.Stloc, tsArraySetDescriptorLocal);
         il.Emit(OpCodes.Ldloc, tsArraySetDescriptorLocal);
         il.Emit(OpCodes.Brfalse, tsArraySetRawStorage);
         var tsArraySetterLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldloc, tsArraySetDescriptorLocal);
-        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorSetter.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorSetter.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, tsArraySetterLocal);
         var tsArrayNoSetter = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, tsArraySetterLocal);
         il.Emit(OpCodes.Brfalse, tsArrayNoSetter);
         il.Emit(OpCodes.Ldloc, tsArraySetterLocal);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
         il.Emit(OpCodes.Brtrue, nullLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, tsArraySetterLocal);
@@ -1667,22 +1701,22 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Stelem_Ref);
-        il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+        il.Emit(OpCodes.Call, inputs.InvokeMethodValue);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(tsArrayNoSetter);
         il.Emit(OpCodes.Ldloc, tsArraySetDescriptorLocal);
-        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorGetter.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorGetter.GetGetMethod()!);
         il.Emit(OpCodes.Brtrue, nullLabel); // getter-only accessor
         il.Emit(OpCodes.Ldloc, tsArraySetDescriptorLocal);
-        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorWritable.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorWritable.GetGetMethod()!);
         il.Emit(OpCodes.Brfalse, nullLabel);
         il.MarkLabel(tsArraySetRawStorage);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.ArrayStorage.Type);
+        il.Emit(OpCodes.Castclass, inputs.ArrayStorage.Type);
         il.Emit(OpCodes.Ldloc, idxLong);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Callvirt, runtime.ArrayStorage.SetLong);
+        il.Emit(OpCodes.Callvirt, inputs.ArrayStorage.SetLong);
         il.Emit(OpCodes.Ret);
 
         // Descriptor-driven: emit set handler for each backing type
@@ -1693,7 +1727,7 @@ public partial class RuntimeEmitter
 
             var listSetKeyLocal = il.DeclareLocal(_types.String);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
+            il.Emit(OpCodes.Call, inputs.StringCoercion.ToJsString);
             il.Emit(OpCodes.Stloc, listSetKeyLocal);
 
             // Lists (including $Arguments) can carry ordinary named
@@ -1711,28 +1745,28 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldloc, listSetKeyLocal);
             il.Emit(OpCodes.Ldarg_2);
-            il.Emit(OpCodes.Call, runtime.SetProperty);
+            il.Emit(OpCodes.Call, objectWrite.Property);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(listSetNumericKeyLabel);
 
-            var listSetDescriptorLocal = il.DeclareLocal(runtime.DescriptorStorage.DescriptorType);
+            var listSetDescriptorLocal = il.DeclareLocal(inputs.DescriptorStorage.DescriptorType);
             var listSetCanCreate = il.DefineLabel();
             var listSetRawStorage = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldloc, listSetKeyLocal);
-            il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetPropertyDescriptor);
+            il.Emit(OpCodes.Call, inputs.DescriptorStorage.GetPropertyDescriptor);
             il.Emit(OpCodes.Stloc, listSetDescriptorLocal);
             il.Emit(OpCodes.Ldloc, listSetDescriptorLocal);
             il.Emit(OpCodes.Brfalse, listSetCanCreate);
             var listSetterLocal = il.DeclareLocal(_types.Object);
             il.Emit(OpCodes.Ldloc, listSetDescriptorLocal);
-            il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorSetter.GetGetMethod()!);
+            il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorSetter.GetGetMethod()!);
             il.Emit(OpCodes.Stloc, listSetterLocal);
             var listNoSetter = il.DefineLabel();
             il.Emit(OpCodes.Ldloc, listSetterLocal);
             il.Emit(OpCodes.Brfalse, listNoSetter);
             il.Emit(OpCodes.Ldloc, listSetterLocal);
-            il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+            il.Emit(OpCodes.Isinst, inputs.UndefinedType);
             il.Emit(OpCodes.Brtrue, nullLabel);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldloc, listSetterLocal);
@@ -1742,22 +1776,22 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldc_I4_0);
             il.Emit(OpCodes.Ldarg_2);
             il.Emit(OpCodes.Stelem_Ref);
-            il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+            il.Emit(OpCodes.Call, inputs.InvokeMethodValue);
             il.Emit(OpCodes.Pop);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(listNoSetter);
             il.Emit(OpCodes.Ldloc, listSetDescriptorLocal);
-            il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorGetter.GetGetMethod()!);
+            il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorGetter.GetGetMethod()!);
             il.Emit(OpCodes.Brtrue, nullLabel);
             il.Emit(OpCodes.Ldloc, listSetDescriptorLocal);
-            il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorWritable.GetGetMethod()!);
+            il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorWritable.GetGetMethod()!);
             il.Emit(OpCodes.Brfalse, nullLabel);
             il.Emit(OpCodes.Br, listSetRawStorage);
 
             il.MarkLabel(listSetCanCreate);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldloc, listSetKeyLocal);
-            il.Emit(OpCodes.Call, runtime.DescriptorStorage.CanAddProperty);
+            il.Emit(OpCodes.Call, inputs.DescriptorStorage.CanAddProperty);
             il.Emit(OpCodes.Brfalse, nullLabel);
             il.MarkLabel(listSetRawStorage);
 
@@ -1765,7 +1799,7 @@ public partial class RuntimeEmitter
             {
                 // Object list has frozen check before mutation
                 var listFrozenCheckLocal = il.DeclareLocal(_types.Object);
-                il.Emit(OpCodes.Ldsfld, runtime.ObjectState.FrozenObjects);
+                il.Emit(OpCodes.Ldsfld, inputs.ObjectState.FrozenObjects);
                 il.Emit(OpCodes.Ldarg_0);
                 il.Emit(OpCodes.Ldloca, listFrozenCheckLocal);
                 il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ConditionalWeakTable, "TryGetValue", _types.Object, _types.Object.MakeByRefType()));
@@ -1780,7 +1814,7 @@ public partial class RuntimeEmitter
                 il.Emit(OpCodes.Ldarg_1);
                 il.Emit(OpCodes.Call, _types.GetMethod(_types.Convert, "ToInt32", _types.Object));
                 il.Emit(OpCodes.Ldarg_2);
-                il.Emit(OpCodes.Call, desc.GetSetArrayElementMethod(runtime.ArrayOperations));
+                il.Emit(OpCodes.Call, desc.GetSetArrayElementMethod(inputs.ArrayOperations));
             }
             else
             {
@@ -1794,7 +1828,7 @@ public partial class RuntimeEmitter
                 il.Emit(OpCodes.Call, _types.GetMethod(_types.Convert, "ToInt32", _types.Object));
                 il.Emit(OpCodes.Ldarg_2);
                 il.Emit(OpCodes.Call, convertMethod);
-                il.Emit(OpCodes.Call, desc.GetSetArrayElementMethod(runtime.ArrayOperations));
+                il.Emit(OpCodes.Call, desc.GetSetArrayElementMethod(inputs.ArrayOperations));
             }
             il.Emit(OpCodes.Ret);
         }
@@ -1808,7 +1842,7 @@ public partial class RuntimeEmitter
         var dictSkipMathConstLabel = il.DefineLabel();
         var dictNotMathLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldsfld, runtime.Math.SingletonField);
+        il.Emit(OpCodes.Ldsfld, inputs.Math.SingletonField);
         il.Emit(OpCodes.Bne_Un, dictNotMathLabel);
         // Argument 1 must be a string key matching a constant name.
         il.Emit(OpCodes.Ldarg_1);
@@ -1852,15 +1886,15 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Castclass, _types.String);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Call, runtime.SetProperty);
+        il.Emit(OpCodes.Call, objectWrite.Property);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(dictNumericKeyLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
+        il.Emit(OpCodes.Call, inputs.StringCoercion.ToJsString);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Call, runtime.SetProperty);
+        il.Emit(OpCodes.Call, objectWrite.Property);
         il.Emit(OpCodes.Ret);
     }
 

@@ -2890,7 +2890,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Dup);
             il.Emit(OpCodes.Ldstr, code);
             il.Emit(OpCodes.Ldstr, message);
-            il.Emit(OpCodes.Call, runtime.SetProperty);
+            il.Emit(OpCodes.Call, runtime.ObjectWrite.Property);
         }
 
         il.Emit(OpCodes.Ret);
@@ -3019,7 +3019,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, _types.MethodBaseGetMethodFromHandle);
         il.Emit(OpCodes.Castclass, _types.MethodInfo);
         il.Emit(OpCodes.Newobj, runtime.TSFunctionCtor);
-        il.Emit(OpCodes.Call, runtime.SetProperty);
+        il.Emit(OpCodes.Call, runtime.ObjectWrite.Property);
 
         // Add getName method as TSFunction
         il.Emit(OpCodes.Dup);
@@ -3029,7 +3029,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, _types.MethodBaseGetMethodFromHandle);
         il.Emit(OpCodes.Castclass, _types.MethodInfo);
         il.Emit(OpCodes.Newobj, runtime.TSFunctionCtor);
-        il.Emit(OpCodes.Call, runtime.SetProperty);
+        il.Emit(OpCodes.Call, runtime.ObjectWrite.Property);
     }
 
     private void EmitAgentExtractDoubleAsIntStringOption(ILGenerator il, EmittedRuntime runtime,
@@ -3145,58 +3145,58 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldstr, "keepAlive");
             il.Emit(OpCodes.Ldloc, keepAliveLocal);
             il.Emit(OpCodes.Box, _types.Boolean);
-            il.Emit(OpCodes.Call, runtime.SetProperty);
+            il.Emit(OpCodes.Call, runtime.ObjectWrite.Property);
 
             il.Emit(OpCodes.Dup);
             il.Emit(OpCodes.Ldstr, "keepAliveMsecs");
             il.Emit(OpCodes.Ldloc, keepAliveMsecsLocal);
             il.Emit(OpCodes.Box, _types.Double);
-            il.Emit(OpCodes.Call, runtime.SetProperty);
+            il.Emit(OpCodes.Call, runtime.ObjectWrite.Property);
 
             il.Emit(OpCodes.Dup);
             il.Emit(OpCodes.Ldstr, "maxSockets");
             il.Emit(OpCodes.Ldloc, maxSocketsLocal);
             il.Emit(OpCodes.Box, _types.Double);
-            il.Emit(OpCodes.Call, runtime.SetProperty);
+            il.Emit(OpCodes.Call, runtime.ObjectWrite.Property);
 
             il.Emit(OpCodes.Dup);
             il.Emit(OpCodes.Ldstr, "maxTotalSockets");
             il.Emit(OpCodes.Ldloc, maxTotalSocketsLocal);
             il.Emit(OpCodes.Box, _types.Double);
-            il.Emit(OpCodes.Call, runtime.SetProperty);
+            il.Emit(OpCodes.Call, runtime.ObjectWrite.Property);
 
             il.Emit(OpCodes.Dup);
             il.Emit(OpCodes.Ldstr, "maxFreeSockets");
             il.Emit(OpCodes.Ldloc, maxFreeSocketsLocal);
             il.Emit(OpCodes.Box, _types.Double);
-            il.Emit(OpCodes.Call, runtime.SetProperty);
+            il.Emit(OpCodes.Call, runtime.ObjectWrite.Property);
 
             il.Emit(OpCodes.Dup);
             il.Emit(OpCodes.Ldstr, "timeout");
             il.Emit(OpCodes.Ldloc, timeoutLocal);
             il.Emit(OpCodes.Box, _types.Double);
-            il.Emit(OpCodes.Call, runtime.SetProperty);
+            il.Emit(OpCodes.Call, runtime.ObjectWrite.Property);
 
             il.Emit(OpCodes.Dup);
             il.Emit(OpCodes.Ldstr, "scheduling");
             il.Emit(OpCodes.Ldstr, "lifo");
-            il.Emit(OpCodes.Call, runtime.SetProperty);
+            il.Emit(OpCodes.Call, runtime.ObjectWrite.Property);
 
             // Add empty objects for sockets/freeSockets/requests
             il.Emit(OpCodes.Dup);
             il.Emit(OpCodes.Ldstr, "sockets");
             il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.DictionaryStringObject));
-            il.Emit(OpCodes.Call, runtime.SetProperty);
+            il.Emit(OpCodes.Call, runtime.ObjectWrite.Property);
 
             il.Emit(OpCodes.Dup);
             il.Emit(OpCodes.Ldstr, "freeSockets");
             il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.DictionaryStringObject));
-            il.Emit(OpCodes.Call, runtime.SetProperty);
+            il.Emit(OpCodes.Call, runtime.ObjectWrite.Property);
 
             il.Emit(OpCodes.Dup);
             il.Emit(OpCodes.Ldstr, "requests");
             il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.DictionaryStringObject));
-            il.Emit(OpCodes.Call, runtime.SetProperty);
+            il.Emit(OpCodes.Call, runtime.ObjectWrite.Property);
 
             // Add methods
             EmitAgentMethods(il, runtime);
@@ -3282,58 +3282,58 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, "keepAlive");
         il.Emit(keepAlive ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Box, _types.Boolean);
-        il.Emit(OpCodes.Call, runtime.SetProperty);
+        il.Emit(OpCodes.Call, runtime.ObjectWrite.Property);
 
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Ldstr, "keepAliveMsecs");
         il.Emit(OpCodes.Ldc_R8, keepAliveMsecs);
         il.Emit(OpCodes.Box, _types.Double);
-        il.Emit(OpCodes.Call, runtime.SetProperty);
+        il.Emit(OpCodes.Call, runtime.ObjectWrite.Property);
 
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Ldstr, "maxSockets");
         il.Emit(OpCodes.Ldc_R8, maxSockets);
         il.Emit(OpCodes.Box, _types.Double);
-        il.Emit(OpCodes.Call, runtime.SetProperty);
+        il.Emit(OpCodes.Call, runtime.ObjectWrite.Property);
 
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Ldstr, "maxTotalSockets");
         il.Emit(OpCodes.Ldc_R8, maxTotalSockets);
         il.Emit(OpCodes.Box, _types.Double);
-        il.Emit(OpCodes.Call, runtime.SetProperty);
+        il.Emit(OpCodes.Call, runtime.ObjectWrite.Property);
 
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Ldstr, "maxFreeSockets");
         il.Emit(OpCodes.Ldc_R8, maxFreeSockets);
         il.Emit(OpCodes.Box, _types.Double);
-        il.Emit(OpCodes.Call, runtime.SetProperty);
+        il.Emit(OpCodes.Call, runtime.ObjectWrite.Property);
 
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Ldstr, "timeout");
         il.Emit(OpCodes.Ldc_R8, timeout);
         il.Emit(OpCodes.Box, _types.Double);
-        il.Emit(OpCodes.Call, runtime.SetProperty);
+        il.Emit(OpCodes.Call, runtime.ObjectWrite.Property);
 
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Ldstr, "scheduling");
         il.Emit(OpCodes.Ldstr, "lifo");
-        il.Emit(OpCodes.Call, runtime.SetProperty);
+        il.Emit(OpCodes.Call, runtime.ObjectWrite.Property);
 
         // Add empty objects for sockets/freeSockets/requests
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Ldstr, "sockets");
         il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.DictionaryStringObject));
-        il.Emit(OpCodes.Call, runtime.SetProperty);
+        il.Emit(OpCodes.Call, runtime.ObjectWrite.Property);
 
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Ldstr, "freeSockets");
         il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.DictionaryStringObject));
-        il.Emit(OpCodes.Call, runtime.SetProperty);
+        il.Emit(OpCodes.Call, runtime.ObjectWrite.Property);
 
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Ldstr, "requests");
         il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.DictionaryStringObject));
-        il.Emit(OpCodes.Call, runtime.SetProperty);
+        il.Emit(OpCodes.Call, runtime.ObjectWrite.Property);
 
         // Add methods
         EmitAgentMethods(il, runtime);

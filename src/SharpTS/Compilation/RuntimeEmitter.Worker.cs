@@ -667,8 +667,8 @@ public partial class RuntimeEmitter
     {
         // IsTypedArray is always emitted (GetProperty's central dispatch may
         // call it, and tree-shaking the GetProperty arm itself was already done).
-        // The body is gated on HasAnyTypedArray inside the helper — when no
-        // typed-array type was emitted, IsTypedArray just returns false.
+        // The body follows arrays.Implementation availability inside the helper.
+        // Without an emitted typed-array type, IsTypedArray just returns false.
         EmitIsTypedArrayHelper(runtimeType, runtime.TypedArrays);
         if (_features.HasAnyTypedArray)
         {

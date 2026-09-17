@@ -205,7 +205,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, values);
         il.Emit(OpCodes.Ldloc, index);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "get_Item", _types.Int32));
-        il.Emit(OpCodes.Call, runtime.SetIndex);
+        il.Emit(OpCodes.Call, runtime.ObjectWrite.Index);
         il.Emit(OpCodes.Ldloc, index);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Add);

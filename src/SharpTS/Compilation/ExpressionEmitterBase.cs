@@ -738,7 +738,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
         IL.Emit(OpCodes.Ldloc, objLocal);
         IL.Emit(OpCodes.Ldloc, idxLocal);
         IL.Emit(OpCodes.Ldloc, valueLocal);
-        IL.Emit(OpCodes.Call, Ctx.Runtime!.SetIndex);
+        IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectWrite.Index);
 
         IL.Emit(OpCodes.Ldloc, valueLocal);
         SetStackUnknown();
@@ -985,7 +985,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
         IL.Emit(OpCodes.Ldloc, objLocal);
         IL.Emit(OpCodes.Ldstr, s.Name.Lexeme);
         IL.Emit(OpCodes.Ldloc, valueLocal);
-        IL.Emit(OpCodes.Call, Ctx.Runtime!.SetProperty);
+        IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectWrite.Property);
         IL.Emit(OpCodes.Ldloc, valueLocal);
         SetStackUnknown();
     }
@@ -1504,7 +1504,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
                 {
                     IL.Emit(OpCodes.Ldloc, keyLocals[i]!);
                     IL.Emit(OpCodes.Ldloc, valueLocals[i]);
-                    IL.Emit(OpCodes.Call, Ctx.Runtime!.SetIndex);
+                    IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectWrite.Index);
                 }
                 else
                 {

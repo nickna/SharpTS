@@ -253,7 +253,7 @@ public abstract partial class ExpressionEmitterBase
             EmitMemberAccessIncrement(
                 isPrefix: true, pi.Operator.Type, objLocal,
                 emitKey: () => IL.Emit(OpCodes.Ldstr, get.Name.Lexeme),
-                Ctx.Runtime!.ObjectRead.Property, Ctx.Runtime!.SetProperty);
+                Ctx.Runtime!.ObjectRead.Property, Ctx.Runtime!.ObjectWrite.Property);
             return;
         }
 
@@ -265,7 +265,7 @@ public abstract partial class ExpressionEmitterBase
             EmitMemberAccessIncrement(
                 isPrefix: true, pi.Operator.Type, objLocal,
                 emitKey: () => IL.Emit(OpCodes.Ldloc, indexLocal),
-                Ctx.Runtime!.ObjectRead.Index, Ctx.Runtime!.SetIndex);
+                Ctx.Runtime!.ObjectRead.Index, Ctx.Runtime!.ObjectWrite.Index);
             return;
         }
 
@@ -314,7 +314,7 @@ public abstract partial class ExpressionEmitterBase
             EmitMemberAccessIncrement(
                 isPrefix: false, poi.Operator.Type, objLocal,
                 emitKey: () => IL.Emit(OpCodes.Ldstr, get.Name.Lexeme),
-                Ctx.Runtime!.ObjectRead.Property, Ctx.Runtime!.SetProperty);
+                Ctx.Runtime!.ObjectRead.Property, Ctx.Runtime!.ObjectWrite.Property);
             return;
         }
 
@@ -326,7 +326,7 @@ public abstract partial class ExpressionEmitterBase
             EmitMemberAccessIncrement(
                 isPrefix: false, poi.Operator.Type, objLocal,
                 emitKey: () => IL.Emit(OpCodes.Ldloc, indexLocal),
-                Ctx.Runtime!.ObjectRead.Index, Ctx.Runtime!.SetIndex);
+                Ctx.Runtime!.ObjectRead.Index, Ctx.Runtime!.ObjectWrite.Index);
             return;
         }
 
@@ -503,7 +503,7 @@ public abstract partial class ExpressionEmitterBase
             IL.Emit(OpCodes.Call, Types.TypeGetTypeFromHandle);
             IL.Emit(OpCodes.Ldstr, get.Name.Lexeme);
             IL.Emit(OpCodes.Ldloc, newValue);
-            IL.Emit(OpCodes.Call, Ctx.Runtime!.SetProperty);
+            IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectWrite.Property);
 
             IL.Emit(OpCodes.Ldloc, resultValue);
             SetStackUnknown();
@@ -543,7 +543,7 @@ public abstract partial class ExpressionEmitterBase
         IL.Emit(OpCodes.Ldloc, objLocal);
         IL.Emit(OpCodes.Ldstr, ls.Name.Lexeme);
         IL.Emit(OpCodes.Ldloc, resultLocal);
-        IL.Emit(OpCodes.Call, Ctx.Runtime!.SetProperty);
+        IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectWrite.Property);
         IL.Emit(OpCodes.Ldloc, resultLocal);
         IL.Emit(OpCodes.Br, endLabel);
 
@@ -583,7 +583,7 @@ public abstract partial class ExpressionEmitterBase
         IL.Emit(OpCodes.Ldloc, objLocal);
         IL.Emit(OpCodes.Ldloc, indexLocal);
         IL.Emit(OpCodes.Ldloc, resultLocal);
-        IL.Emit(OpCodes.Call, Ctx.Runtime!.SetIndex);
+        IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectWrite.Index);
         IL.Emit(OpCodes.Ldloc, resultLocal);
         IL.Emit(OpCodes.Br, endLabel);
 
@@ -641,7 +641,7 @@ public abstract partial class ExpressionEmitterBase
                 IL.Emit(OpCodes.Call, Types.TypeGetTypeFromHandle);
                 IL.Emit(OpCodes.Ldstr, cs.Name.Lexeme);
                 IL.Emit(OpCodes.Ldloc, inheritedResultTemp);
-                IL.Emit(OpCodes.Call, Ctx.Runtime!.SetProperty);
+                IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectWrite.Property);
 
                 IL.Emit(OpCodes.Ldloc, inheritedResultTemp);
                 SetStackUnknown();
@@ -677,7 +677,7 @@ public abstract partial class ExpressionEmitterBase
         IL.Emit(OpCodes.Ldloc, objTemp);
         IL.Emit(OpCodes.Ldstr, cs.Name.Lexeme);
         IL.Emit(OpCodes.Ldloc, resultLocal);
-        IL.Emit(OpCodes.Call, Ctx.Runtime!.SetProperty);
+        IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectWrite.Property);
 
         IL.Emit(OpCodes.Ldloc, resultLocal);
         SetStackUnknown();
@@ -717,7 +717,7 @@ public abstract partial class ExpressionEmitterBase
         IL.Emit(OpCodes.Ldloc, objTemp);
         IL.Emit(OpCodes.Ldloc, indexTemp);
         IL.Emit(OpCodes.Ldloc, resultLocal);
-        IL.Emit(OpCodes.Call, Ctx.Runtime!.SetIndex);
+        IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectWrite.Index);
 
         IL.Emit(OpCodes.Ldloc, resultLocal);
         SetStackUnknown();

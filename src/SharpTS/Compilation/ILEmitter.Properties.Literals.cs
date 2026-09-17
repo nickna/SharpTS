@@ -317,7 +317,7 @@ public partial class ILEmitter
                     EmitBoxIfNeeded(ck.Expression);
                     EmitExpression(prop.Value);
                     EmitBoxIfNeeded(prop.Value);
-                    IL.Emit(OpCodes.Call, _ctx.Runtime!.SetIndex);
+                    IL.Emit(OpCodes.Call, _ctx.Runtime!.ObjectWrite.Index);
                 }
                 else
                 {
@@ -577,7 +577,7 @@ public partial class ILEmitter
                         EmitBoxIfNeeded(vck.Expression);
                         EmitExpression(prop.Value);
                         EmitBoxIfNeeded(prop.Value);
-                        IL.Emit(OpCodes.Call, _ctx.Runtime!.SetIndex);
+                        IL.Emit(OpCodes.Call, _ctx.Runtime!.ObjectWrite.Index);
                     }
                     else
                     {
