@@ -750,12 +750,12 @@ public abstract partial class ExpressionEmitterBase
         switch (arguments.Count)
         {
             case 0:
-                IL.Emit(OpCodes.Call, Ctx.Runtime!.CreateDateNoArgs);
+                IL.Emit(OpCodes.Call, Ctx.Runtime!.Dates.RequireImplementation().CreateNoArgs);
                 break;
             case 1:
                 EmitExpression(arguments[0]);
                 EnsureBoxed();
-                IL.Emit(OpCodes.Call, Ctx.Runtime!.CreateDateFromValue);
+                IL.Emit(OpCodes.Call, Ctx.Runtime!.Dates.RequireImplementation().CreateFromValue);
                 break;
             default:
                 // new Date(year, month, day?, hours?, minutes?, seconds?, ms?)
@@ -766,7 +766,7 @@ public abstract partial class ExpressionEmitterBase
                     else
                         IL.Emit(OpCodes.Ldc_R8, i == 2 ? 1.0 : 0.0);
                 }
-                IL.Emit(OpCodes.Call, Ctx.Runtime!.CreateDateFromComponents);
+                IL.Emit(OpCodes.Call, Ctx.Runtime!.Dates.RequireImplementation().CreateFromComponents);
                 break;
         }
         SetStackUnknown();

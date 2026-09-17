@@ -1138,7 +1138,7 @@ public partial class RuntimeEmitter
             _types.Object, Type.EmptyTypes);
         var il = getter.GetILGenerator();
 
-        if (runtime.TSDateCtorMilliseconds == null)
+        if (runtime.Dates.Implementation == null)
         {
             il.Emit(OpCodes.Ldstr, $"X509Certificate.{propName} requires Date support in the compiled program");
             il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.InvalidOperationException, [_types.String])!);
@@ -1159,7 +1159,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldloca, dtoLocal);
             il.Emit(OpCodes.Call, typeof(DateTimeOffset).GetMethod("ToUnixTimeMilliseconds", Type.EmptyTypes)!);
             il.Emit(OpCodes.Conv_R8);
-            il.Emit(OpCodes.Newobj, runtime.TSDateCtorMilliseconds);
+            il.Emit(OpCodes.Newobj, runtime.Dates.RequireImplementation().MillisecondsConstructor);
         }
         il.Emit(OpCodes.Ret);
         prop.SetGetMethod(getter);

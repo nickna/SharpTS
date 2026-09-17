@@ -29,8 +29,8 @@ public sealed class DateStaticEmitter : IStaticTypeEmitterStrategy
 
         if (propertyName == "prototype")
         {
-            il.Emit(OpCodes.Call, runtime.DatePrototypePopulateMethod);
-            il.Emit(OpCodes.Ldsfld, runtime.DatePrototypeField);
+            il.Emit(OpCodes.Call, runtime.Dates.PopulatePrototype);
+            il.Emit(OpCodes.Ldsfld, runtime.Dates.Prototype);
             return true;
         }
 
@@ -52,7 +52,7 @@ public sealed class DateStaticEmitter : IStaticTypeEmitterStrategy
             // owns descriptor shadows and deletion tombstones, so assignments
             // and `delete Date.now` remain observable instead of this static
             // fast path permanently resurrecting the original function.
-            il.Emit(OpCodes.Ldtoken, runtime.TSDateType);
+            il.Emit(OpCodes.Ldtoken, runtime.Dates.RequireImplementation().Type);
             il.Emit(OpCodes.Call, ctx.Types.GetMethod(
                 ctx.Types.Type, "GetTypeFromHandle", ctx.Types.RuntimeTypeHandle));
             il.Emit(OpCodes.Ldstr, propertyName);

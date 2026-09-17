@@ -264,10 +264,10 @@ public partial class RuntimeEmitter
         // names (like `obj.length`, `obj[0]`).
         var pdsStoreLabel = il.DefineLabel();
         var afterPdsStoreLabel = il.DefineLabel();
-        if (_features.UsesDate)
+        if (runtime.Dates.Implementation is not null)
         {
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.TSDateType);
+            il.Emit(OpCodes.Isinst, runtime.Dates.RequireImplementation().Type);
             il.Emit(OpCodes.Brtrue, pdsStoreLabel);
         }
         if (_features.UsesRegExp)
@@ -576,10 +576,10 @@ public partial class RuntimeEmitter
         // extensibility throws were already handled at the top of this method.
         var fieldsPdsStoreLabel = il.DefineLabel();
         var afterFieldsPdsStoreLabel = il.DefineLabel();
-        if (_features.UsesDate)
+        if (runtime.Dates.Implementation is not null)
         {
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.TSDateType);
+            il.Emit(OpCodes.Isinst, runtime.Dates.RequireImplementation().Type);
             il.Emit(OpCodes.Brtrue, fieldsPdsStoreLabel);
         }
         if (_features.UsesRegExp)

@@ -47,7 +47,7 @@ public partial class RuntimeEmitter
                 runtime.TSSyntaxErrorCtor, runtime.TSURIErrorCtor, runtime.TSEvalErrorCtor),
             _features.HasAnyTypedArray ? new StructuredCloneBinaryInputs(runtime.RequireArrayBuffer(),
                 runtime.RequireSharedArrayBuffer(), runtime.TypedArrays.RequireImplementation()) : null,
-            _features.UsesDate ? new StructuredCloneDateInputs(runtime.TSDateType, runtime.TSDateCtorMilliseconds, _tsDateGetTimeMethod) : null,
+            runtime.Dates.Implementation is not null ? new StructuredCloneDateInputs(runtime.Dates.RequireImplementation().Type, runtime.Dates.RequireImplementation().MillisecondsConstructor, runtime.Dates.RequireImplementation().GetInstanceMethod("GetTime")) : null,
             _features.UsesRegExp ? new StructuredCloneRegExpInputs(runtime.TSRegExpType, runtime.TSRegExpCtorPatternFlags,
                 runtime.TSRegExpSourceGetter, runtime.TSRegExpFlagsGetter) : null,
             _features.UsesBuffer ? runtime.RequireBuffer() : null);

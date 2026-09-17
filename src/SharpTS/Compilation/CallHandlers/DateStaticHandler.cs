@@ -26,21 +26,21 @@ public class DateStaticHandler : ICallHandler
 
         switch (dateGet.Name.Lexeme)
         {
-            case "now":
-                il.Emit(OpCodes.Call, ctx.Runtime!.DateNow);
+            case "now" when ctx.Runtime?.Dates.Implementation != null:
+                il.Emit(OpCodes.Call, ctx.Runtime!.Dates.RequireImplementation().Now);
                 emitter.SetStackType(StackType.Double);
                 return true;
 
             // Date.UTC(year, month?, ...): the components are packaged as object[]; $TSDate.UTC
             // honors each supplied (finite) component and returns the UTC timestamp (#538).
-            case "UTC" when ctx.Runtime?.TSDateUTCStatic != null:
+            case "UTC" when ctx.Runtime?.Dates.Implementation != null:
                 emitter.EmitArgsArray(call.Arguments);
-                il.Emit(OpCodes.Call, ctx.Runtime.TSDateUTCStatic);
+                il.Emit(OpCodes.Call, ctx.Runtime.Dates.RequireImplementation().StaticUTC);
                 emitter.SetStackType(StackType.Double);
                 return true;
 
             // Date.parse(s): parse the (single) string argument to a timestamp, or NaN (#538).
-            case "parse" when ctx.Runtime?.TSDateParseStatic != null:
+            case "parse" when ctx.Runtime?.Dates.Implementation != null:
                 if (call.Arguments.Count > 0)
                 {
                     emitter.EmitExpression(call.Arguments[0]);
@@ -50,7 +50,7 @@ public class DateStaticHandler : ICallHandler
                 {
                     il.Emit(OpCodes.Ldnull);
                 }
-                il.Emit(OpCodes.Call, ctx.Runtime.TSDateParseStatic);
+                il.Emit(OpCodes.Call, ctx.Runtime.Dates.RequireImplementation().StaticParse);
                 emitter.SetStackType(StackType.Double);
                 return true;
 

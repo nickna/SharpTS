@@ -353,15 +353,6 @@ public class EmittedRuntime
     /// path is still intercepted at compile time by GlobalThisStaticEmitter.
     /// </summary>
     public FieldBuilder GlobalThisSingletonField { get; set; } = null!;
-    /// <summary>
-    /// Date.prototype singleton — a Dictionary&lt;string, object&gt; carrying $TSFunction
-    /// wrappers around the <c>$Runtime.Date*</c> helpers. Instance calls (<c>d.getTime()</c>)
-    /// are emitted inline by DateEmitter and never route through here; this object exists so
-    /// <c>Date.prototype</c> is addressable as a VALUE — reflection over it
-    /// (<c>Object.getOwnPropertyDescriptor(Date.prototype, "getTime")</c>), borrowing a method,
-    /// or monkey-patching. Null-backed when the program never mentions Date.
-    /// </summary>
-    public FieldBuilder DatePrototypeField { get; set; } = null!;
     /// <summary>$Runtime.StringReplaceWithFunction(str, pattern, fn, replaceAll) — handles functional replacement for replace/replaceAll and stringifies each callback result.</summary>
     public MethodBuilder StringReplaceWithFunction { get; set; } = null!;
     /// <summary>$Runtime.ObjectProtoToString(this) — ECMA-262 19.1.3.6 toString returns "[object X]" branded by receiver type. Wired into Object.prototype.toString slot for borrowed-method dispatch (`obj.toString = Object.prototype.toString; obj.toString()`).</summary>
@@ -370,8 +361,6 @@ public class EmittedRuntime
     public MethodBuilder ObjectProtoValueOfHelper { get; set; } = null!;
     /// <summary>$Runtime.ObjectProtoToLocaleString(this) — ECMA-262 20.1.3.5. Wraps ObjectProtoToString with the null/undef TypeError throw mandated by ToObject(this); other receivers delegate to ObjectProtoToString.</summary>
     public MethodBuilder ObjectProtoToLocaleStringHelper { get; set; } = null!;
-    /// <summary>Populates <see cref="DatePrototypeField"/> with $TSFunction wrappers for the Date.prototype methods; idempotent.</summary>
-    public MethodBuilder DatePrototypePopulateMethod { get; set; } = null!;
     /// <summary>$Runtime.HasOwnPropertyHelper(obj, name) — backs <c>obj.hasOwnProperty(name)</c> for $TSFunction / $Object / Dictionary / List receivers.</summary>
     public MethodBuilder HasOwnPropertyHelperMethod { get; set; } = null!;
     /// <summary>$Runtime.LookupGetterHelper(obj, key) — backs <c>Object.prototype.__lookupGetter__</c> (ECMA-262 §B.2.2.4). Walks prototype chain.</summary>
@@ -663,83 +652,8 @@ public class EmittedRuntime
     /// <summary>Required module registry metadata with optional CommonJS and dynamic-import declarations.</summary>
     public EmittedModuleRuntime Modules { get; } = new();
 
-    // The emitted TSDate class
-    // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSDate
-    public TypeBuilder TSDateType { get; set; } = null!;
-    public ConstructorBuilder TSDateCtorNoArgs { get; set; } = null!;
-    public ConstructorBuilder TSDateCtorMilliseconds { get; set; } = null!;
-    public ConstructorBuilder TSDateCtorString { get; set; } = null!;
-    public ConstructorBuilder TSDateCtorComponents { get; set; } = null!;
-    public MethodBuilder TSDateNowStatic { get; set; } = null!;
-    /// <summary>$TSDate.UTC(object[]) static — backs Date.UTC (#538). Null when UsesDate is off.</summary>
-    public MethodBuilder? TSDateUTCStatic { get; set; }
-    /// <summary>$TSDate.Parse(object) static — backs Date.parse (#538). Null when UsesDate is off.</summary>
-    public MethodBuilder? TSDateParseStatic { get; set; }
-    /// <summary>
-    /// Dictionary of $TSDate instance methods by name. Used to lookup methods before CreateType().
-    /// </summary>
-    public Dictionary<string, MethodBuilder> TSDateMethods { get; } = new();
-
-    // Date support
-    public MethodBuilder DateNow { get; set; } = null!;
-    public MethodBuilder CreateDateNoArgs { get; set; } = null!;
-    public MethodBuilder CreateDateFromValue { get; set; } = null!;
-    public MethodBuilder CreateDateFromComponents { get; set; } = null!;
-    public MethodBuilder DateToString { get; set; } = null!;
-    public MethodBuilder DateGetTime { get; set; } = null!;
-    public MethodBuilder DateGetFullYear { get; set; } = null!;
-    public MethodBuilder DateGetMonth { get; set; } = null!;
-    public MethodBuilder DateGetDate { get; set; } = null!;
-    public MethodBuilder DateGetDay { get; set; } = null!;
-    public MethodBuilder DateGetHours { get; set; } = null!;
-    public MethodBuilder DateGetMinutes { get; set; } = null!;
-    public MethodBuilder DateGetSeconds { get; set; } = null!;
-    public MethodBuilder DateGetMilliseconds { get; set; } = null!;
-    public MethodBuilder DateGetTimezoneOffset { get; set; } = null!;
-    public MethodBuilder DateSetTime { get; set; } = null!;
-    public MethodBuilder DateSetFullYear { get; set; } = null!;
-    public MethodBuilder DateSetMonth { get; set; } = null!;
-    public MethodBuilder DateSetDate { get; set; } = null!;
-    public MethodBuilder DateSetHours { get; set; } = null!;
-    public MethodBuilder DateSetMinutes { get; set; } = null!;
-    public MethodBuilder DateSetSeconds { get; set; } = null!;
-    public MethodBuilder DateSetMilliseconds { get; set; } = null!;
-    public MethodBuilder DateToISOString { get; set; } = null!;
-    public MethodBuilder DateToDateString { get; set; } = null!;
-    public MethodBuilder DateToTimeString { get; set; } = null!;
-    public MethodBuilder DateToJSON { get; set; } = null!;
-    public MethodBuilder DateValueOf { get; set; } = null!;
-    // UTC getters (issue #516)
-    public MethodBuilder DateGetUTCFullYear { get; set; } = null!;
-    public MethodBuilder DateGetUTCMonth { get; set; } = null!;
-    public MethodBuilder DateGetUTCDate { get; set; } = null!;
-    public MethodBuilder DateGetUTCDay { get; set; } = null!;
-    public MethodBuilder DateGetUTCHours { get; set; } = null!;
-    public MethodBuilder DateGetUTCMinutes { get; set; } = null!;
-    public MethodBuilder DateGetUTCSeconds { get; set; } = null!;
-    public MethodBuilder DateGetUTCMilliseconds { get; set; } = null!;
-    // UTC setters (issue #516)
-    public MethodBuilder DateSetUTCFullYear { get; set; } = null!;
-    public MethodBuilder DateSetUTCMonth { get; set; } = null!;
-    public MethodBuilder DateSetUTCDate { get; set; } = null!;
-    public MethodBuilder DateSetUTCHours { get; set; } = null!;
-    public MethodBuilder DateSetUTCMinutes { get; set; } = null!;
-    public MethodBuilder DateSetUTCSeconds { get; set; } = null!;
-    public MethodBuilder DateSetUTCMilliseconds { get; set; } = null!;
-    // Conversion + legacy (issue #516)
-    public MethodBuilder DateToUTCString { get; set; } = null!;
-    public MethodBuilder DateToLocaleDateString { get; set; } = null!;
-    public MethodBuilder DateToLocaleTimeString { get; set; } = null!;
-    public MethodBuilder DateToLocaleString { get; set; } = null!;
-    /// <summary>
-    /// $Runtime.DateToLocaleWithOptions(object receiver, int kind, object[] args) → string.
-    /// Reflects to RuntimeTypes.FormatDateToLocale to honor locale/options (#539); emitted only when
-    /// UsesDate is on, and reached only by toLocale* calls that actually pass arguments (soft SharpTS
-    /// dependency recorded at those call sites).
-    /// </summary>
-    public MethodBuilder? DateToLocaleWithOptions { get; set; }
-    public MethodBuilder DateGetYear { get; set; } = null!;
-    public MethodBuilder DateSetYear { get; set; } = null!;
+    /// <summary>Required Date prototype declarations with optional Date type and operation metadata.</summary>
+    public EmittedDateRuntime Dates { get; } = new();
 
     // RegExp support - $Runtime wrapper methods
     public MethodBuilder RegExpCoerceArg { get; set; } = null!;

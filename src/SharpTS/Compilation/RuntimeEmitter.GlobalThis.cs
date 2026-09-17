@@ -278,8 +278,8 @@ public partial class RuntimeEmitter
         }
 
         EmitTypeBranch("Array", _types.IListOfObject);
-        if (_features.UsesDate)
-            EmitTypeBranch("Date", runtime.TSDateType);
+        if (runtime.Dates.Implementation is not null)
+            EmitTypeBranch("Date", runtime.Dates.RequireImplementation().Type);
         if (_features.UsesRegExp)
             EmitTypeBranch("RegExp", runtime.TSRegExpType);
         EmitTypeBranch("Map", _types.DictionaryObjectObject);

@@ -40,6 +40,8 @@ public partial class RuntimeEmitter
         if (_emitHosted)
             _features.UsesPromise = true;
         var runtime = new EmittedRuntime();
+        if (features.UsesDate)
+            runtime.Dates.BeginImplementationEmission();
         if (features.UsesWeakMap)
             runtime.BeginWeakMapEmission();
         if (features.UsesWeakSet)
@@ -232,8 +234,8 @@ public partial class RuntimeEmitter
 
         // Emit $TSDate class for standalone Date support — gated on UsesDate.
         // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSDate
-        if (features.UsesDate)
-            EmitTSDateClass(moduleBuilder, runtime);
+        if (runtime.Dates.Implementation is not null)
+            EmitTSDateClass(moduleBuilder, runtime.Dates.RequireImplementation(), runtime.NonConstructibleAttrCtor);
 
         // Emit $Error class hierarchy for standalone error support
         // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSError and subclasses
@@ -762,6 +764,7 @@ public partial class RuntimeEmitter
         runtime.FinalizationRegistry.CompleteEmission();
         runtime.Symbols.CompleteEmission();
         runtime.SymbolAccessors.CompleteEmission();
+        runtime.Dates.CompleteEmission();
         runtime.BroadcastChannel?.CompleteEmission();
         runtime.EventEmitter.CompleteEmission();
         runtime.NodeStreams?.CompleteEmission();

@@ -354,14 +354,14 @@ public partial class RuntimeEmitter
         // mutable Date.prototype singleton. Bypassing reflection here prevents
         // the emitted CLR ToString method from shadowing a user replacement of
         // Date.prototype.toString.
-        if (_features.UsesDate)
+        if (runtime.Dates.Implementation is not null)
         {
             var notDateLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.TSDateType);
+            il.Emit(OpCodes.Isinst, runtime.Dates.RequireImplementation().Type);
             il.Emit(OpCodes.Brfalse, notDateLabel);
-            il.Emit(OpCodes.Call, runtime.DatePrototypePopulateMethod);
-            il.Emit(OpCodes.Ldsfld, runtime.DatePrototypeField);
+            il.Emit(OpCodes.Call, runtime.Dates.PopulatePrototype);
+            il.Emit(OpCodes.Ldsfld, runtime.Dates.Prototype);
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Call, runtime.Reflect.Get);

@@ -2240,7 +2240,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
     {
         Type? t = name switch
         {
-            "Date" => Ctx.Runtime!.TSDateType,
+            "Date" => Ctx.Runtime!.Dates.Implementation?.Type,
             "RegExp" => Ctx.Runtime!.TSRegExpType,
             "TextEncoder" => Ctx.Runtime!.RequireTextEncoding().EncoderType,
             "TextDecoder" => Ctx.Runtime!.RequireTextEncoding().DecoderType,
