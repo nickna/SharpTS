@@ -1137,6 +1137,7 @@ public partial class ILCompiler
         _programType.CreateType();
         _hostedRuntimeType?.CreateType();
         _hostedFactoryType?.CreateType();
+        _runtime.JsonShapes.CompleteEmission();
     }
 
     /// <summary>
@@ -1815,6 +1816,7 @@ public partial class ILCompiler
         _programType.CreateType();
         _hostedRuntimeType?.CreateType();
         _hostedFactoryType?.CreateType();
+        _runtime.JsonShapes.CompleteEmission();
     }
 
     #endregion

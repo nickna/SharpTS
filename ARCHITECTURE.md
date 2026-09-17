@@ -252,8 +252,8 @@ The family helpers take the owner and exact function-key or undefined inputs whe
 Function wrappers still normalize to their MethodInfo when available; methodless wrappers keep
 their own identity. Four ConditionalWeakTable fields and closed BCL construction references stay
 local to emission, and each saved output owns fresh mutable descriptor/prototype/extensibility
-and symbol tables. Generic Object operations, JSON record and late shape ownership, and the shared
-auto-property emitter remain separate ownership and infrastructure work under #1599.
+and symbol tables. Generic Object operations and the shared auto-property emitter remain
+separate ownership and infrastructure work under #1599.
 
 Reflect uses required `EmittedReflectRuntime` for ordinary receiver-aware reads, plus three
 explicit optional capabilities. Assignment has three declarations selected by `UsesReflect || UsesProxy`;
@@ -272,8 +272,8 @@ observable. The lazy metadata-store field is a local construction input; repeate
 stores and decorator closures isolated in their own generated assemblies. Family operations receive
 their owner and exact immutable inputs, including actual optional Promise/DataView components.
 Shared Proxy bridges accept exact callback/unwrapping inputs and retain adapters for generic callers.
-The separate constructor classifier, generic Object/invocation/Proxy ownership, JSON record and late shape ownership,
-and shared BCL/singleton infrastructure remain residual work under #1599.
+The separate constructor classifier, generic Object/invocation/Proxy ownership, and shared
+BCL/singleton infrastructure remain residual work under #1599.
 
 JSON uses the required `Json` component for its singleton field and populate method. Its
 optional `Implementation` is selected by `UsesJSON` (also implied by HTTP detection) and owns
@@ -288,10 +288,30 @@ The guest string-identity shape table remains lazy and isolated per saved assemb
 is a local construction input, and the generated GetJsonShapeTable method remains without a
 persistent emitter cache. Guest JSON namespace members and shape associations remain mutable.
 Family helpers take the JSON implementation, peer capabilities, exact handles and relevant
-analysis facts; optional RegExp branches inspect the supplied type. Scalar/compact record
-ownership and registries, later Program shape-field registration and shared BCL/invocation
-infrastructure remain required work under #1599. The late compiler shape registry is distinct
-from the guest string-identity table and must remain writable after runtime emission.
+analysis facts; optional RegExp branches inspect the supplied type. Shared BCL/invocation
+infrastructure remains required work under #1599.
+
+Record storage uses the required `Records` component for the published compact-marker interface
+and thirteen layout registries. `Scalars` is selected by `UsesJSON || UsesCompactObjectRecords`
+and owns five scalar-record declarations. Empty registries preserve ordinary optional-layout
+lookups when storage is absent. Registration stays at the original declaration sites, including
+forward uses before type finalization; public dictionary views cannot mutate those registries.
+Completion checks all selected declarations, four inline arities and ten getters, correlated
+layout keys and each layout's declared field count before freezing either owner. Typed JSON
+records may have more than four fields; compact records retain their one-to-four-field limit and
+recursive self-field types. Missing final slots therefore cannot silently appear complete.
+Family emitters receive explicit IHasFields contracts, shape maps, recursive-field facts and
+undefined metadata. Guest slots, per-instance materialization and per-output weak tables remain
+mutable and isolated when one emitter is reused.
+
+`JsonShapes` separately owns the later compiler registry for shape fields on `$Program`.
+Ordinal fingerprints reuse the same field; first registration retains its insertion-count name
+and assembly/static visibility. This registry stays writable after `EmitAll`, through function,
+method and entry-point emission, and completes in both single-file and module finalization paths.
+Timing and hosting use those same boundaries. Compiler completion freezes declarations while
+generated shape values remain lazy and mutable. This registry is distinct from the JSON guest
+string-identity table. Generic Object/invocation/iterator operations, other compiler registries,
+and the residual construction and shared-infrastructure audit remain required under #1599.
 
 Array operations use the required `ArrayOperations` component for 108 declarations: construction
 and static helpers, ordinary and specialized operations, prototype population, bound-method

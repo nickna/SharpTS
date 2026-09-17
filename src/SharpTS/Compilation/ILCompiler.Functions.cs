@@ -149,7 +149,7 @@ public partial class ILCompiler
             {
                 if (index < paramTypes.Length && index < funcType.ParamTypes.Count &&
                     TryGetCompactRecordShape(funcType.ParamTypes[index], out var parameterShape) &&
-                    _runtime.CompactObjectRecordTypes.TryGetValue(
+                    _runtime.Records.CompactTypes.TryGetValue(
                         JsonSerializationShapeAnalyzer.Fingerprint(parameterShape),
                         out var compactType))
                     paramTypes[index] = compactType;
@@ -164,7 +164,7 @@ public partial class ILCompiler
             funcType?.ReturnType, isAsync: false, _typeMapper, returnMayBeUndefined);
         if (_runtime is not null &&
             _exactCompactRecordReturns.TryGetValue(funcStmt, out string? returnFingerprint) &&
-            _runtime.CompactObjectRecordTypes.TryGetValue(
+            _runtime.Records.CompactTypes.TryGetValue(
                 returnFingerprint,
                 out var compactReturnType))
             returnType = compactReturnType;
@@ -605,7 +605,7 @@ public partial class ILCompiler
                     continue;
 
                 string fingerprint = JsonSerializationShapeAnalyzer.Fingerprint(parameterShape);
-                if (!_runtime.CompactObjectRecordTypes.TryGetValue(
+                if (!_runtime.Records.CompactTypes.TryGetValue(
                         fingerprint, out var compactType))
                     continue;
 

@@ -12,7 +12,10 @@ public partial class RuntimeEmitter
     /// general object semantics on the existing paths while JSON can consume an
     /// untouched exact-shape record without per-record dictionary storage.
     /// </summary>
-    private void EmitJsonScalarRecordClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private void EmitJsonScalarRecordClass(
+        ModuleBuilder moduleBuilder, EmittedRecordStorageRuntime records,
+        RecordStorageContractInputs contract,
+        IReadOnlyDictionary<string, JsonSerializationShape.Record> shapes)
     {
         var typeBuilder = EmitTypeDefinitions.DefineType(
             moduleBuilder,
@@ -20,10 +23,10 @@ public partial class RuntimeEmitter
             TypeAttributes.Public | TypeAttributes.Class |
             TypeAttributes.BeforeFieldInit,
             _types.Object);
-        runtime.JsonScalarRecordType = typeBuilder;
-        EmitTypeDefinitions.AddInterfaceImplementation(typeBuilder, runtime.IHasFieldsInterface);
+        records.RequireScalars().Type = typeBuilder;
+        EmitTypeDefinitions.AddInterfaceImplementation(typeBuilder, contract.IHasFieldsInterface);
         EmitTypeDefinitions.AddInterfaceImplementation(
-            typeBuilder, runtime.CompactObjectRecordInterface);
+            typeBuilder, records.MarkerInterface);
 
         var shapeField = typeBuilder.DefineField("_shape", _types.Object, FieldAttributes.Private);
         var materializedField = typeBuilder.DefineField(
@@ -47,7 +50,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Int32]);
         getValue.SetImplementationFlags(MethodImplAttributes.AggressiveInlining);
-        runtime.JsonScalarRecordGetValue = getValue;
+        records.RequireScalars().GetValue = getValue;
         var baseGetValueIl = getValue.GetILGenerator();
         baseGetValueIl.Emit(OpCodes.Ldnull);
         baseGetValueIl.Emit(OpCodes.Ret);
@@ -76,7 +79,7 @@ public partial class RuntimeEmitter
             MethodAttributes.Public,
             CallingConventions.Standard,
             [_types.Object, _types.ObjectArray]);
-        runtime.JsonScalarRecordCtor = arrayCtor;
+        records.RequireScalars().ArrayConstructor = arrayCtor;
         var arrayCtorIl = arrayCtor.GetILGenerator();
         arrayCtorIl.Emit(OpCodes.Ldarg_0);
         arrayCtorIl.Emit(OpCodes.Ldarg_1);
@@ -118,7 +121,7 @@ public partial class RuntimeEmitter
                 TypeAttributes.BeforeFieldInit,
                 typeBuilder);
             derivedTypes.Add(inlineType);
-            runtime.JsonScalarRecordInlineTypes.Add(arity, inlineType);
+            records.AddScalarInlineTypes(arity, inlineType);
             var inlineValueFields = Enumerable.Range(0, arity)
                 .Select(index => inlineType.DefineField(
                     $"_v{index}", _types.Object, FieldAttributes.Private))
@@ -130,7 +133,7 @@ public partial class RuntimeEmitter
                 MethodAttributes.Public,
                 CallingConventions.Standard,
                 parameterTypes);
-            runtime.JsonScalarRecordInlineCtors.Add(arity, inlineCtor);
+            records.AddScalarInlineCtors(arity, inlineCtor);
             var inlineIl = inlineCtor.GetILGenerator();
             inlineIl.Emit(OpCodes.Ldarg_0);
             inlineIl.Emit(OpCodes.Ldarg_1);
@@ -168,7 +171,7 @@ public partial class RuntimeEmitter
                     _types.Object,
                     Type.EmptyTypes);
                 directGetter.SetImplementationFlags(MethodImplAttributes.AggressiveInlining);
-                runtime.JsonScalarRecordInlineGetters.Add((arity, index), directGetter);
+                records.AddScalarInlineGetters((arity, index), directGetter);
                 var directIl = directGetter.GetILGenerator();
                 directIl.Emit(OpCodes.Ldarg_0);
                 directIl.Emit(OpCodes.Ldfld, inlineValueFields[index]);
@@ -178,7 +181,7 @@ public partial class RuntimeEmitter
         }
 
         int typedOrdinal = 0;
-        foreach (var pair in _features.JsonScalarRecordShapes.OrderBy(
+        foreach (var pair in shapes.OrderBy(
                      pair => pair.Key, StringComparer.Ordinal))
         {
             string fingerprint = pair.Key;
@@ -193,12 +196,12 @@ public partial class RuntimeEmitter
                 TypeAttributes.BeforeFieldInit,
                 typeBuilder);
             derivedTypes.Add(exactType);
-            runtime.JsonTypedScalarRecordTypes.Add(fingerprint, exactType);
+            records.AddTypedScalarTypes(fingerprint, exactType, shape.Fields.Count);
 
             var exactShapeField = exactType.DefineField(
                 "Shape", _types.Object,
                 FieldAttributes.Assembly | FieldAttributes.Static);
-            runtime.JsonTypedScalarRecordShapeFields.Add(fingerprint, exactShapeField);
+            records.AddTypedScalarShapeFields(fingerprint, exactShapeField);
 
             Type[] valueTypes = shape.Fields
                 .Select(field => GetJsonScalarRecordFieldType(field.Value))
@@ -207,7 +210,7 @@ public partial class RuntimeEmitter
                 exactType.DefineField(
                     $"_v{index}", fieldType, FieldAttributes.Assembly)).ToArray();
             for (int index = 0; index < valueFields.Length; index++)
-                runtime.JsonTypedScalarRecordValueFields.Add(
+                records.AddTypedScalarValueFields(
                     (fingerprint, index), valueFields[index]);
 
             var parameterTypes = new Type[valueTypes.Length + 1];
@@ -217,7 +220,7 @@ public partial class RuntimeEmitter
                 MethodAttributes.Public,
                 CallingConventions.Standard,
                 parameterTypes);
-            runtime.JsonTypedScalarRecordCtors.Add(fingerprint, exactCtor);
+            records.AddTypedScalarCtors(fingerprint, exactCtor);
             var exactCtorIl = exactCtor.GetILGenerator();
             exactCtorIl.Emit(OpCodes.Ldarg_0);
             exactCtorIl.Emit(OpCodes.Ldarg_1);
@@ -256,7 +259,7 @@ public partial class RuntimeEmitter
             exactType.DefineMethodOverride(exactGetValue, getValue);
         }
 
-        runtime.JsonScalarRecordShapeGetter = EmitSimpleGetter(
+        records.RequireScalars().ShapeGetter = EmitSimpleGetter(
             "get_Shape", _types.Object, shapeField);
 
         var isMaterialized = typeBuilder.DefineMethod(
@@ -264,7 +267,7 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.HideBySig,
             _types.Boolean,
             Type.EmptyTypes);
-        runtime.JsonScalarRecordIsMaterializedGetter = isMaterialized;
+        records.RequireScalars().IsMaterializedGetter = isMaterialized;
         var materializedIl = isMaterialized.GetILGenerator();
         materializedIl.Emit(OpCodes.Ldarg_0);
         materializedIl.Emit(OpCodes.Ldfld, materializedField);
@@ -289,7 +292,7 @@ public partial class RuntimeEmitter
         fieldsIl.Emit(OpCodes.Ldarg_0);
         fieldsIl.Emit(OpCodes.Call, ensure);
         fieldsIl.Emit(OpCodes.Ret);
-        typeBuilder.DefineMethodOverride(fieldsGetter, runtime.IHasFieldsFieldsGetter);
+        typeBuilder.DefineMethodOverride(fieldsGetter, contract.IHasFieldsFieldsGetter);
 
         var getProperty = typeBuilder.DefineMethod(
             "GetProperty",
@@ -299,7 +302,7 @@ public partial class RuntimeEmitter
         getProperty.SetImplementationFlags(MethodImplAttributes.AggressiveOptimization);
         EmitScalarGetProperty(
             getProperty.GetILGenerator(), shapeField, getValue, materializedField);
-        typeBuilder.DefineMethodOverride(getProperty, runtime.IHasFieldsGetProperty);
+        typeBuilder.DefineMethodOverride(getProperty, contract.IHasFieldsGetProperty);
 
         var setProperty = typeBuilder.DefineMethod(
             "SetProperty",
@@ -314,7 +317,7 @@ public partial class RuntimeEmitter
         setIl.Emit(OpCodes.Callvirt, _types.GetMethod(
             _types.DictionaryStringObject, "set_Item", [_types.String, _types.Object])!);
         setIl.Emit(OpCodes.Ret);
-        typeBuilder.DefineMethodOverride(setProperty, runtime.IHasFieldsSetProperty);
+        typeBuilder.DefineMethodOverride(setProperty, contract.IHasFieldsSetProperty);
 
         var hasProperty = typeBuilder.DefineMethod(
             "HasProperty",
@@ -323,7 +326,7 @@ public partial class RuntimeEmitter
             [_types.String]);
         EmitScalarHasProperty(
             hasProperty.GetILGenerator(), shapeField, materializedField);
-        typeBuilder.DefineMethodOverride(hasProperty, runtime.IHasFieldsHasProperty);
+        typeBuilder.DefineMethodOverride(hasProperty, contract.IHasFieldsHasProperty);
 
         typeBuilder.CreateType();
         foreach (var derivedType in derivedTypes)

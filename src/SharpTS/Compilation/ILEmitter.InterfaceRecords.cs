@@ -21,9 +21,9 @@ public partial class ILEmitter
         for (int i = 0; i < shape.Fields.Count; i++)
             if (shape.Fields[i].Key == get.Name.Lexeme) slot = i;
         string fingerprint = JsonSerializationShapeAnalyzer.Fingerprint(shape);
-        if (slot < 0 || !runtime.CompactObjectRecordTypes.TryGetValue(fingerprint, out var carrier) ||
-            !runtime.CompactObjectRecordValueFields.TryGetValue((fingerprint, slot), out var field) ||
-            !runtime.CompactObjectRecordIsMaterializedGetters.TryGetValue(fingerprint, out var materialized) ||
+        if (slot < 0 || !runtime.Records.CompactTypes.TryGetValue(fingerprint, out var carrier) ||
+            !runtime.Records.CompactValueFields.TryGetValue((fingerprint, slot), out var field) ||
+            !runtime.Records.CompactIsMaterializedGetters.TryGetValue(fingerprint, out var materialized) ||
             (numericConsumer && field.FieldType != _ctx.Types.Double))
             return false;
 

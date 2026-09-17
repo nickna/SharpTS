@@ -557,11 +557,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
         il.MarkLabel(accessorCleanupNotTSObject);
 
-        if (runtime.JsonScalarRecordType is not null)
+        if (runtime.Records.Scalars is not null)
         {
             var accessorCleanupNotScalar = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.CompactObjectRecordInterface);
+            il.Emit(OpCodes.Isinst, runtime.Records.MarkerInterface);
             il.Emit(OpCodes.Brfalse, accessorCleanupNotScalar);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Castclass, runtime.IHasFieldsInterface);
@@ -939,13 +939,13 @@ public partial class RuntimeEmitter
         // The compact scalar carrier is an ordinary object whose canonical
         // mutable representation is its lazily materialized Fields dictionary.
         // Apply data descriptors there just as for $Object/dictionary targets.
-        if (runtime.JsonScalarRecordType is not null)
+        if (runtime.Records.Scalars is not null)
         {
             var notScalarForValueLabel = il.DefineLabel();
             var scalarFieldsLocal =
                 il.DeclareLocal(_types.DictionaryStringObject);
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.CompactObjectRecordInterface);
+            il.Emit(OpCodes.Isinst, runtime.Records.MarkerInterface);
             il.Emit(OpCodes.Brfalse, notScalarForValueLabel);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Castclass, runtime.IHasFieldsInterface);

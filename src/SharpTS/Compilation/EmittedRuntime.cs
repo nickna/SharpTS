@@ -32,6 +32,12 @@ public class EmittedRuntime
     /// <summary>Required JSON namespace and optional parse/stringify/raw-value metadata.</summary>
     public EmittedJsonRuntime Json { get; } = new();
 
+    /// <summary>Required record marker, optional scalar declarations and early layout registries.</summary>
+    public EmittedRecordStorageRuntime Records { get; } = new();
+
+    /// <summary>Late shape fields on the generated Program type, completed after guest emission.</summary>
+    public EmittedJsonShapeRegistry JsonShapes { get; } = new();
+
     /// <summary>Required array operation metadata, emitted for every compilation.</summary>
     public EmittedArrayOperationsRuntime ArrayOperations { get; } = new();
 
@@ -560,32 +566,7 @@ public class EmittedRuntime
     public MethodBuilder ObjectRest { get; set; } = null!;
     public MethodBuilder ArrayDestructureSource { get; set; } = null!;  // #685: normalize array binding-pattern source via the iterator protocol
 
-    // JSON methods
-    /// <summary>
-    /// Lazily initialized immutable shape descriptors used by statically typed
-    /// no-replacer JSON.stringify call sites. They live on $Program so every
-    /// emitted function shares one descriptor without a SharpTS dependency.
-    /// </summary>
-    public Dictionary<string, FieldBuilder> JsonShapeFields { get; } = [];
-    public TypeBuilder JsonScalarRecordType { get; set; } = null!;
-    public Type CompactObjectRecordInterface { get; set; } = null!;
-    public ConstructorBuilder JsonScalarRecordCtor { get; set; } = null!;
-    public Dictionary<int, ConstructorBuilder> JsonScalarRecordInlineCtors { get; } = [];
-    public Dictionary<int, TypeBuilder> JsonScalarRecordInlineTypes { get; } = [];
-    public Dictionary<(int Arity, int Index), MethodBuilder> JsonScalarRecordInlineGetters { get; } = [];
-    public Dictionary<string, TypeBuilder> JsonTypedScalarRecordTypes { get; } = [];
-    public Dictionary<string, ConstructorBuilder> JsonTypedScalarRecordCtors { get; } = [];
-    public Dictionary<(string Fingerprint, int Index), FieldBuilder> JsonTypedScalarRecordValueFields { get; } = [];
-    public Dictionary<string, FieldBuilder> JsonTypedScalarRecordShapeFields { get; } = [];
-    public Dictionary<string, TypeBuilder> CompactObjectRecordTypes { get; } = [];
-    public Dictionary<string, ConstructorBuilder> CompactObjectRecordCtors { get; } = [];
-    public Dictionary<(string Fingerprint, int Index), FieldBuilder> CompactObjectRecordValueFields { get; } = [];
-    public Dictionary<string, FieldBuilder> CompactObjectRecordAnyMaterializedFields { get; } = [];
-    public Dictionary<string, MethodBuilder> CompactObjectRecordIsMaterializedGetters { get; } = [];
-    public Dictionary<string, MethodBuilder> CompactObjectRecordTryGetMaterializedDictionary { get; } = [];
-    public MethodBuilder JsonScalarRecordShapeGetter { get; set; } = null!;
-    public MethodBuilder JsonScalarRecordGetValue { get; set; } = null!;
-    public MethodBuilder JsonScalarRecordIsMaterializedGetter { get; set; } = null!;
+    // General invocation helper
     public MethodBuilder InvokeMethodUnwrapped { get; set; } = null!;
 
     // Symbol support

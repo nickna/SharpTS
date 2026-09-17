@@ -595,11 +595,11 @@ public partial class RuntimeEmitter
         // The compact JSON scalar carrier implements IHasFields for ordinary
         // object operations, but it is not a user class instance. Its default
         // [[Prototype]] is %Object.prototype% just like a dictionary literal.
-        if (runtime.JsonScalarRecordType is not null)
+        if (runtime.Records.Scalars is not null)
         {
             var notScalarRecord = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.CompactObjectRecordInterface);
+            il.Emit(OpCodes.Isinst, runtime.Records.MarkerInterface);
             il.Emit(OpCodes.Brfalse, notScalarRecord);
             il.Emit(OpCodes.Ldsfld, runtime.ObjectPrototypeField);
             il.Emit(OpCodes.Ret);
@@ -1092,10 +1092,10 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, runtime.IHasFieldsInterface);
         il.Emit(OpCodes.Brfalse, notClassInstanceLabel);
-        if (runtime.JsonScalarRecordType is not null)
+        if (runtime.Records.Scalars is not null)
         {
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.CompactObjectRecordInterface);
+            il.Emit(OpCodes.Isinst, runtime.Records.MarkerInterface);
             il.Emit(OpCodes.Brtrue, notClassInstanceLabel);
         }
         il.Emit(OpCodes.Ldarg_0);

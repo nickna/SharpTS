@@ -198,15 +198,7 @@ public sealed class JSONStaticEmitter : IStaticTypeEmitterStrategy
         JsonSerializationShape shape)
     {
         string fingerprint = JsonSerializationShapeAnalyzer.Fingerprint(shape);
-        if (ctx.Runtime!.JsonShapeFields.TryGetValue(fingerprint, out var field))
-            return field;
-
-        field = ctx.ProgramType!.DefineField(
-            $"$jsonShape_{ctx.Runtime.JsonShapeFields.Count}",
-            ctx.Types.Object,
-            FieldAttributes.Assembly | FieldAttributes.Static);
-        ctx.Runtime.JsonShapeFields.Add(fingerprint, field);
-        return field;
+        return ctx.Runtime!.JsonShapes.GetOrDefine(fingerprint, ctx.ProgramType!, ctx.Types.Object);
     }
 
     internal static void EmitLazyShapeDescriptor(

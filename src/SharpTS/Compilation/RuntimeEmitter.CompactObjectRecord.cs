@@ -5,15 +5,22 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
+    private readonly record struct RecordStorageContractInputs(
+        Type IHasFieldsInterface,
+        MethodInfo IHasFieldsFieldsGetter,
+        MethodInfo IHasFieldsGetProperty,
+        MethodInfo IHasFieldsSetProperty,
+        MethodInfo IHasFieldsHasProperty);
+
     private void EmitCompactObjectRecordInterface(
-        ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+        ModuleBuilder moduleBuilder, EmittedRecordStorageRuntime records)
     {
         var interfaceBuilder = EmitTypeDefinitions.DefineType(
             moduleBuilder,
             "$ICompactObjectRecord",
             TypeAttributes.Public | TypeAttributes.Interface | TypeAttributes.Abstract,
             null);
-        runtime.CompactObjectRecordInterface = interfaceBuilder.CreateType()!;
+        records.MarkerInterface = interfaceBuilder.CreateType()!;
     }
 
     /// <summary>
@@ -24,10 +31,14 @@ public partial class RuntimeEmitter
     /// cheap type-wide negative test with a per-instance weak-table probe while
     /// retaining full IHasFields mutation semantics.
     /// </summary>
-    private void EmitCompactObjectRecordClasses(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private void EmitCompactObjectRecordClasses(
+        ModuleBuilder moduleBuilder, EmittedRecordStorageRuntime records,
+        RecordStorageContractInputs contract, FieldInfo undefinedInstance,
+        IReadOnlyDictionary<string, JsonSerializationShape.Record> shapes,
+        IReadOnlySet<(string Fingerprint, int Index)> selfFields)
     {
         int ordinal = 0;
-        foreach (var pair in _features.CompactObjectRecordShapes.OrderBy(pair => pair.Key, StringComparer.Ordinal))
+        foreach (var pair in shapes.OrderBy(pair => pair.Key, StringComparer.Ordinal))
         {
             string fingerprint = pair.Key;
             JsonSerializationShape.Record shape = pair.Value;
@@ -39,15 +50,15 @@ public partial class RuntimeEmitter
                 TypeAttributes.Public | TypeAttributes.Class | TypeAttributes.Sealed |
                 TypeAttributes.BeforeFieldInit,
                 _types.Object);
-            EmitTypeDefinitions.AddInterfaceImplementation(typeBuilder, runtime.IHasFieldsInterface);
+            EmitTypeDefinitions.AddInterfaceImplementation(typeBuilder, contract.IHasFieldsInterface);
             EmitTypeDefinitions.AddInterfaceImplementation(
-                typeBuilder, runtime.CompactObjectRecordInterface);
-            runtime.CompactObjectRecordTypes.Add(fingerprint, typeBuilder);
+                typeBuilder, records.MarkerInterface);
+            records.AddCompactTypes(fingerprint, typeBuilder, shape.Fields.Count);
 
             var valueFields = shape.Fields.Select((field, index) =>
                 typeBuilder.DefineField(
                     $"_v{index}",
-                    _features.CompactObjectRecordSelfFields.Contains((fingerprint, index))
+                    selfFields.Contains((fingerprint, index))
                         ? typeBuilder
                         : GetJsonScalarRecordFieldType(field.Value),
                     FieldAttributes.Assembly)).ToArray();
@@ -57,15 +68,15 @@ public partial class RuntimeEmitter
                 "_materialized", weakTableType, FieldAttributes.Private | FieldAttributes.Static);
             var anyMaterialized = typeBuilder.DefineField(
                 "_anyMaterialized", _types.Boolean, FieldAttributes.Assembly | FieldAttributes.Static);
-            runtime.CompactObjectRecordAnyMaterializedFields.Add(fingerprint, anyMaterialized);
+            records.AddCompactAnyMaterializedFields(fingerprint, anyMaterialized);
             for (int index = 0; index < valueFields.Length; index++)
-                runtime.CompactObjectRecordValueFields.Add((fingerprint, index), valueFields[index]);
+                records.AddCompactValueFields((fingerprint, index), valueFields[index]);
 
             var ctor = typeBuilder.DefineConstructor(
                 MethodAttributes.Public,
                 CallingConventions.Standard,
                 valueFields.Select(field => field.FieldType).ToArray());
-            runtime.CompactObjectRecordCtors.Add(fingerprint, ctor);
+            records.AddCompactCtors(fingerprint, ctor);
             var ctorIl = ctor.GetILGenerator();
             ctorIl.Emit(OpCodes.Ldarg_0);
             ctorIl.Emit(OpCodes.Call, _types.GetConstructor(_types.Object, Type.EmptyTypes)!);
@@ -108,7 +119,7 @@ public partial class RuntimeEmitter
                 _types.Boolean,
                 Type.EmptyTypes);
             isMaterialized.SetImplementationFlags(MethodImplAttributes.AggressiveInlining);
-            runtime.CompactObjectRecordIsMaterializedGetters.Add(
+            records.AddCompactIsMaterializedGetters(
                 fingerprint, isMaterialized);
             var isMaterializedIl = isMaterialized.GetILGenerator();
             var probeMaterializedTable = isMaterializedIl.DefineLabel();
@@ -131,7 +142,7 @@ public partial class RuntimeEmitter
                 "TryGetMaterializedDictionary", MethodAttributes.Assembly | MethodAttributes.HideBySig,
                 _types.Boolean, [_types.DictionaryStringObject.MakeByRefType()]);
             tryGetMaterialized.SetImplementationFlags(MethodImplAttributes.AggressiveInlining);
-            runtime.CompactObjectRecordTryGetMaterializedDictionary.Add(fingerprint, tryGetMaterialized);
+            records.AddCompactTryGetMaterializedDictionary(fingerprint, tryGetMaterialized);
             var tryIl = tryGetMaterialized.GetILGenerator();
             var probeTable = tryIl.DefineLabel();
             tryIl.Emit(OpCodes.Ldsfld, anyMaterialized);
@@ -157,13 +168,13 @@ public partial class RuntimeEmitter
             fieldsIl.Emit(OpCodes.Ldarg_0);
             fieldsIl.Emit(OpCodes.Call, ensure);
             fieldsIl.Emit(OpCodes.Ret);
-            typeBuilder.DefineMethodOverride(fieldsGetter, runtime.IHasFieldsFieldsGetter);
+            typeBuilder.DefineMethodOverride(fieldsGetter, contract.IHasFieldsFieldsGetter);
 
             var getProperty = typeBuilder.DefineMethod(
                 "GetProperty", MethodAttributes.Public | MethodAttributes.Virtual |
                 MethodAttributes.HideBySig, _types.Object, [_types.String]);
             EmitGetProperty(getProperty.GetILGenerator());
-            typeBuilder.DefineMethodOverride(getProperty, runtime.IHasFieldsGetProperty);
+            typeBuilder.DefineMethodOverride(getProperty, contract.IHasFieldsGetProperty);
 
             var setProperty = typeBuilder.DefineMethod(
                 "SetProperty", MethodAttributes.Public | MethodAttributes.Virtual |
@@ -175,13 +186,13 @@ public partial class RuntimeEmitter
             setIl.Emit(OpCodes.Ldarg_2);
             setIl.Emit(OpCodes.Callvirt, dictSet);
             setIl.Emit(OpCodes.Ret);
-            typeBuilder.DefineMethodOverride(setProperty, runtime.IHasFieldsSetProperty);
+            typeBuilder.DefineMethodOverride(setProperty, contract.IHasFieldsSetProperty);
 
             var hasProperty = typeBuilder.DefineMethod(
                 "HasProperty", MethodAttributes.Public | MethodAttributes.Virtual |
                 MethodAttributes.HideBySig, _types.Boolean, [_types.String]);
             EmitHasProperty(hasProperty.GetILGenerator());
-            typeBuilder.DefineMethodOverride(hasProperty, runtime.IHasFieldsHasProperty);
+            typeBuilder.DefineMethodOverride(hasProperty, contract.IHasFieldsHasProperty);
 
             typeBuilder.CreateType();
 
@@ -250,7 +261,7 @@ public partial class RuntimeEmitter
                 il.Emit(OpCodes.Ldloc, value);
                 il.Emit(OpCodes.Ret);
                 il.MarkLabel(missing);
-                il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+                il.Emit(OpCodes.Ldsfld, undefinedInstance);
                 il.Emit(OpCodes.Ret);
                 il.MarkLabel(compact);
                 for (int index = 0; index < valueFields.Length; index++)
@@ -267,7 +278,7 @@ public partial class RuntimeEmitter
                     il.Emit(OpCodes.Ret);
                     il.MarkLabel(next);
                 }
-                il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+                il.Emit(OpCodes.Ldsfld, undefinedInstance);
                 il.Emit(OpCodes.Ret);
             }
 
