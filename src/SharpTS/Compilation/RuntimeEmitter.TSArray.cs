@@ -1836,7 +1836,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stfld, _tsArraySparseField);
         il.Emit(OpCodes.Ret);
 
-        EmitInlineThrowError(il, runtime, "Array operation requires materializing a sparse array whose length exceeds int.MaxValue.", runtime.TSRangeErrorCtor, throwRangeLabel);
+        EmitInlineThrowError(il, runtime, "Array operation requires materializing a sparse array whose length exceeds int.MaxValue.", runtime.Errors.RangeErrorConstructor, throwRangeLabel);
 
         return method;
     }
@@ -2364,8 +2364,8 @@ public partial class RuntimeEmitter
         il.MarkLabel(indexInRangeLabel);
         il.Emit(OpCodes.Ret);
 
-        EmitInlineThrowError(il, runtime, "Index out of bounds.", runtime.TSRangeErrorCtor, negThrowLabel);
-        EmitInlineThrowError(il, runtime, "Array index exceeds ECMA-262 uint32 maximum.", runtime.TSRangeErrorCtor, maxThrowLabel);
+        EmitInlineThrowError(il, runtime, "Index out of bounds.", runtime.Errors.RangeErrorConstructor, negThrowLabel);
+        EmitInlineThrowError(il, runtime, "Array index exceeds ECMA-262 uint32 maximum.", runtime.Errors.RangeErrorConstructor, maxThrowLabel);
     }
 
     /// <summary>
@@ -2399,7 +2399,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, frozenReturnLabel);
 
         // throw TypeError
-        EmitInlineThrowErrorInline(il, "TypeError: Cannot assign to read only property of array", runtime.TSTypeErrorCtor);
+        EmitInlineThrowErrorInline(il, "TypeError: Cannot assign to read only property of array", runtime.Errors.TypeErrorConstructor);
 
         il.MarkLabel(frozenReturnLabel);
         il.Emit(OpCodes.Ret);
@@ -2422,8 +2422,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, setCoreWithExtend);
         il.Emit(OpCodes.Ret);
 
-        EmitInlineThrowError(il, runtime, "Index out of bounds.", runtime.TSRangeErrorCtor, negThrowLabel);
-        EmitInlineThrowError(il, runtime, "Array index exceeds ECMA-262 uint32 maximum.", runtime.TSRangeErrorCtor, maxThrowLabel);
+        EmitInlineThrowError(il, runtime, "Index out of bounds.", runtime.Errors.RangeErrorConstructor, negThrowLabel);
+        EmitInlineThrowError(il, runtime, "Array index exceeds ECMA-262 uint32 maximum.", runtime.Errors.RangeErrorConstructor, maxThrowLabel);
     }
 
     /// <summary>
@@ -2784,8 +2784,8 @@ public partial class RuntimeEmitter
         // wrapping is inlined here because CreateException isn't yet emitted
         // at TSArray-time. Uses Exception.Data["__tsValue"] = $RangeError so
         // WrapException's existing __tsValue path returns the error instance.
-        EmitInlineThrowError(il, runtime, "Invalid array length.", runtime.TSRangeErrorCtor, negThrowLabel);
-        EmitInlineThrowError(il, runtime, "Array length exceeds ECMA-262 uint32 maximum.", runtime.TSRangeErrorCtor, tooBigThrowLabel);
+        EmitInlineThrowError(il, runtime, "Invalid array length.", runtime.Errors.RangeErrorConstructor, negThrowLabel);
+        EmitInlineThrowError(il, runtime, "Array length exceeds ECMA-262 uint32 maximum.", runtime.Errors.RangeErrorConstructor, tooBigThrowLabel);
     }
 
     /// <summary>

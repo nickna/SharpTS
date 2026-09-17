@@ -141,7 +141,7 @@ public abstract partial class AsyncFunctionMoveNextEmitter
                 RegisterLoopLocal(t.CatchParam.Lexeme, exLocal);
 
                 // Wrap the .NET exception to TypeScript exception object
-                IL.Emit(OpCodes.Call, Ctx.Runtime!.WrapException);
+                IL.Emit(OpCodes.Call, Ctx.Runtime!.Errors.WrapException);
                 EmitStoreVariable(t.CatchParam.Lexeme);
             }
             else
@@ -217,7 +217,7 @@ public abstract partial class AsyncFunctionMoveNextEmitter
 
             // Always catch to capture exception for finally handling
             IL.BeginCatchBlock(typeof(Exception));
-            IL.Emit(OpCodes.Call, Ctx.Runtime!.WrapException);
+            IL.Emit(OpCodes.Call, Ctx.Runtime!.Errors.WrapException);
             IL.Emit(OpCodes.Stloc, caughtExceptionLocal);
 
             IL.EndExceptionBlock();
@@ -237,7 +237,7 @@ public abstract partial class AsyncFunctionMoveNextEmitter
             if (t.CatchBlock != null)
             {
                 IL.BeginCatchBlock(typeof(Exception));
-                IL.Emit(OpCodes.Call, Ctx.Runtime!.WrapException);
+                IL.Emit(OpCodes.Call, Ctx.Runtime!.Errors.WrapException);
                 IL.Emit(OpCodes.Stloc, caughtExceptionLocal);
             }
             IL.EndExceptionBlock();
@@ -285,7 +285,7 @@ public abstract partial class AsyncFunctionMoveNextEmitter
                     EmitStatement(stmt);
                 _throwRoutingGuardDepth--;
                 IL.BeginCatchBlock(typeof(Exception));
-                IL.Emit(OpCodes.Call, Ctx.Runtime!.WrapException);
+                IL.Emit(OpCodes.Call, Ctx.Runtime!.Errors.WrapException);
                 IL.Emit(OpCodes.Stloc, outerExceptionLocal);
                 IL.EndExceptionBlock();
             }
@@ -336,7 +336,7 @@ public abstract partial class AsyncFunctionMoveNextEmitter
 
                 // Rethrow the exception
                 IL.Emit(OpCodes.Ldloc, caughtExceptionLocal);
-                IL.Emit(OpCodes.Call, Ctx.Runtime!.CreateException);
+                IL.Emit(OpCodes.Call, Ctx.Runtime!.Errors.CreateException);
                 IL.Emit(OpCodes.Throw);
 
                 IL.MarkLabel(noExceptionLabel);
@@ -446,7 +446,7 @@ public abstract partial class AsyncFunctionMoveNextEmitter
         _throwRoutingGuardDepth--;
 
         IL.BeginCatchBlock(typeof(Exception));
-        IL.Emit(OpCodes.Call, Ctx.Runtime!.WrapException);
+        IL.Emit(OpCodes.Call, Ctx.Runtime!.Errors.WrapException);
         IL.Emit(OpCodes.Stloc, caughtExceptionLocal);
 
         IL.EndExceptionBlock();

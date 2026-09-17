@@ -241,7 +241,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Ldloc, aggExLocal);
         il.MarkLabel(unwrapDoneLabel);
-        il.Emit(OpCodes.Call, runtime.WrapException);
+        il.Emit(OpCodes.Call, runtime.Errors.WrapException);
 
         il.MarkLabel(afterExceptionLabel);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(
@@ -268,9 +268,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, stateLocal);
         il.Emit(OpCodes.Ldfld, anyState.RejectionReasonsField);  // errors list
         il.Emit(OpCodes.Ldnull);  // message (use default)
-        il.Emit(OpCodes.Newobj, runtime.TSAggregateErrorCtor);
+        il.Emit(OpCodes.Newobj, runtime.Errors.AggregateErrorConstructor);
         // Wrap with CreateException to preserve the exact AggregateError value.
-        il.Emit(OpCodes.Call, runtime.CreateException);
+        il.Emit(OpCodes.Call, runtime.Errors.CreateException);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.TaskCompletionSourceOfObject, "TrySetException", [_types.Exception]));
         il.Emit(OpCodes.Pop);  // discard bool result
 
@@ -387,8 +387,8 @@ public partial class RuntimeEmitter
 
         il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, _types.EmptyTypes));  // errors = []
         il.Emit(OpCodes.Ldnull);  // message (use default)
-        il.Emit(OpCodes.Newobj, runtime.TSAggregateErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
+        il.Emit(OpCodes.Newobj, runtime.Errors.AggregateErrorConstructor);
+        il.Emit(OpCodes.Call, runtime.Errors.CreateException);
         il.Emit(OpCodes.Throw);
 
         il.MarkLabel(notEmptyLabel);

@@ -233,7 +233,7 @@ public partial class RuntimeEmitter
         // `thrown.constructor === expectedErrorConstructor` reads `undefined`.
         var afterErrorCtorLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSErrorType);
+        il.Emit(OpCodes.Isinst, runtime.Errors.Type);
         il.Emit(OpCodes.Brfalse, afterErrorCtorLabel);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldstr, "constructor");
@@ -472,7 +472,7 @@ public partial class RuntimeEmitter
         // Error.prototype properties.
         var notErrorLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSErrorType);
+        il.Emit(OpCodes.Isinst, runtime.Errors.Type);
         il.Emit(OpCodes.Brfalse, notErrorLabel);
 
         // Check "name"
@@ -482,8 +482,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
         il.Emit(OpCodes.Brfalse, notErrorNameLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSErrorType);
-        il.Emit(OpCodes.Callvirt, runtime.TSErrorNameGetter);
+        il.Emit(OpCodes.Castclass, runtime.Errors.Type);
+        il.Emit(OpCodes.Callvirt, runtime.Errors.NameGetter);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notErrorNameLabel);
 
@@ -494,8 +494,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
         il.Emit(OpCodes.Brfalse, notErrorMessageLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSErrorType);
-        il.Emit(OpCodes.Callvirt, runtime.TSErrorMessageGetter);
+        il.Emit(OpCodes.Castclass, runtime.Errors.Type);
+        il.Emit(OpCodes.Callvirt, runtime.Errors.MessageGetter);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notErrorMessageLabel);
 
@@ -506,8 +506,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
         il.Emit(OpCodes.Brfalse, notErrorStackLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSErrorType);
-        il.Emit(OpCodes.Callvirt, runtime.TSErrorStackGetter);
+        il.Emit(OpCodes.Castclass, runtime.Errors.Type);
+        il.Emit(OpCodes.Callvirt, runtime.Errors.StackGetter);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notErrorStackLabel);
 
@@ -518,8 +518,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
         il.Emit(OpCodes.Brfalse, notErrorCodeNameLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSErrorType);
-        il.Emit(OpCodes.Callvirt, runtime.TSErrorCodeGetter);
+        il.Emit(OpCodes.Castclass, runtime.Errors.Type);
+        il.Emit(OpCodes.Callvirt, runtime.Errors.CodeGetter);
         var codeNullLabel = il.DefineLabel();
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Brfalse, codeNullLabel);
@@ -535,8 +535,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
         il.Emit(OpCodes.Brfalse, notErrorSyscallNameLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSErrorType);
-        il.Emit(OpCodes.Callvirt, runtime.TSErrorSyscallGetter);
+        il.Emit(OpCodes.Castclass, runtime.Errors.Type);
+        il.Emit(OpCodes.Callvirt, runtime.Errors.SyscallGetter);
         var syscallNullLabel = il.DefineLabel();
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Brfalse, syscallNullLabel);
@@ -554,11 +554,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
         il.Emit(OpCodes.Brfalse, notAggregateErrorsNameLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSAggregateErrorType);
+        il.Emit(OpCodes.Isinst, runtime.Errors.AggregateErrorType);
         il.Emit(OpCodes.Brfalse, notAggregateErrorsNameLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSAggregateErrorType);
-        il.Emit(OpCodes.Callvirt, runtime.TSAggregateErrorErrorsGetter);
+        il.Emit(OpCodes.Castclass, runtime.Errors.AggregateErrorType);
+        il.Emit(OpCodes.Callvirt, runtime.Errors.AggregateErrorErrorsGetter);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notAggregateErrorsNameLabel);
 
@@ -1868,15 +1868,15 @@ public partial class RuntimeEmitter
                 il.Emit(OpCodes.Ret);
                 il.MarkLabel(notMatch);
             }
-            EmitErrorTypeBranch(runtime.TSTypeErrorType,      runtime.TypeErrorPrototypePopulateMethod,      runtime.TypeErrorPrototypeField);
-            EmitErrorTypeBranch(runtime.TSRangeErrorType,     runtime.RangeErrorPrototypePopulateMethod,     runtime.RangeErrorPrototypeField);
-            EmitErrorTypeBranch(runtime.TSReferenceErrorType, runtime.ReferenceErrorPrototypePopulateMethod, runtime.ReferenceErrorPrototypeField);
-            EmitErrorTypeBranch(runtime.TSSyntaxErrorType,    runtime.SyntaxErrorPrototypePopulateMethod,    runtime.SyntaxErrorPrototypeField);
-            EmitErrorTypeBranch(runtime.TSURIErrorType,       runtime.URIErrorPrototypePopulateMethod,       runtime.URIErrorPrototypeField);
-            EmitErrorTypeBranch(runtime.TSEvalErrorType,      runtime.EvalErrorPrototypePopulateMethod,      runtime.EvalErrorPrototypeField);
-            EmitErrorTypeBranch(runtime.TSAggregateErrorType, runtime.AggregateErrorPrototypePopulateMethod, runtime.AggregateErrorPrototypeField);
+            EmitErrorTypeBranch(runtime.Errors.TypeErrorType,      runtime.Errors.TypeErrorPrototypePopulate,      runtime.Errors.TypeErrorPrototype);
+            EmitErrorTypeBranch(runtime.Errors.RangeErrorType,     runtime.Errors.RangeErrorPrototypePopulate,     runtime.Errors.RangeErrorPrototype);
+            EmitErrorTypeBranch(runtime.Errors.ReferenceErrorType, runtime.Errors.ReferenceErrorPrototypePopulate, runtime.Errors.ReferenceErrorPrototype);
+            EmitErrorTypeBranch(runtime.Errors.SyntaxErrorType,    runtime.Errors.SyntaxErrorPrototypePopulate,    runtime.Errors.SyntaxErrorPrototype);
+            EmitErrorTypeBranch(runtime.Errors.URIErrorType,       runtime.Errors.URIErrorPrototypePopulate,       runtime.Errors.URIErrorPrototype);
+            EmitErrorTypeBranch(runtime.Errors.EvalErrorType,      runtime.Errors.EvalErrorPrototypePopulate,      runtime.Errors.EvalErrorPrototype);
+            EmitErrorTypeBranch(runtime.Errors.AggregateErrorType, runtime.Errors.AggregateErrorPrototypePopulate, runtime.Errors.AggregateErrorPrototype);
             // Base Error last (its Type token is distinct from the subclass tokens).
-            EmitErrorTypeBranch(runtime.TSErrorType, runtime.ErrorPrototypePopulateMethod, runtime.ErrorPrototypeField);
+            EmitErrorTypeBranch(runtime.Errors.Type, runtime.Errors.PrototypePopulate, runtime.Errors.Prototype);
 
             // typeof($TSFunction) → return Function.prototype singleton.
             // Required so `Function.prototype.call.bind(...)` (test262
@@ -2032,7 +2032,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Brfalse, notTypeLengthLabel);
             var notErrorLengthLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldtoken, runtime.TSErrorType);
+            il.Emit(OpCodes.Ldtoken, runtime.Errors.Type);
             il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
             il.Emit(OpCodes.Bne_Un, notErrorLengthLabel);
             il.Emit(OpCodes.Ldc_R8, 1.0);

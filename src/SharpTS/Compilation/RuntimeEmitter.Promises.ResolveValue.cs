@@ -193,7 +193,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Dup);
             il.Emit(OpCodes.Ldc_I4_0);
             il.Emit(OpCodes.Ldloc, exceptionLocal);
-            il.Emit(OpCodes.Call, runtime.WrapException);
+            il.Emit(OpCodes.Call, runtime.Errors.WrapException);
             il.Emit(OpCodes.Stelem_Ref);
             il.Emit(OpCodes.Callvirt, runtime.RequirePromise().RejectCallbackInvoke);
             il.Emit(OpCodes.Pop);

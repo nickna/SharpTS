@@ -37,7 +37,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, runtime.TypeOf);
         il.Emit(OpCodes.Ldstr, " is not a function");
         il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", _types.String, _types.String));
-        GuestErrorEmitter.ThrowErrorFromStack(il, runtime, runtime.TSTypeErrorCtor);
+        GuestErrorEmitter.ThrowErrorFromStack(il, runtime, runtime.Errors.TypeErrorConstructor);
     }
 
     private void EmitGetArrayMethod(TypeBuilder typeBuilder, EmittedRuntime runtime)

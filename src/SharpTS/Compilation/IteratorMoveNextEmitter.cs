@@ -61,7 +61,7 @@ public abstract partial class IteratorMoveNextEmitter : StateMachineExitRoutingE
             {
                 // Stack has the .NET exception; wrap to the TS value and bind to the catch param,
                 // honouring a hoisted field if the param is read across a yield/await (#569).
-                IL.Emit(OpCodes.Call, Ctx.Runtime!.WrapException);
+                IL.Emit(OpCodes.Call, Ctx.Runtime!.Errors.WrapException);
                 StoreCaughtExceptionToParam(t.CatchParam.Lexeme);
             }
             else

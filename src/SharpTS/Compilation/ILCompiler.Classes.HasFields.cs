@@ -399,9 +399,9 @@ public partial class ILCompiler
         EmitClassPrototypeFieldFallback(il);
         if (IsErrorSubclass(className))
         {
-            EmitErrorPropertyFallback(il, "name", _runtime.ErrorGetName);
-            EmitErrorPropertyFallback(il, "message", _runtime.ErrorGetMessage);
-            EmitErrorPropertyFallback(il, "stack", _runtime.ErrorGetStack);
+            EmitErrorPropertyFallback(il, "name", _runtime.Errors.GetName);
+            EmitErrorPropertyFallback(il, "message", _runtime.Errors.GetMessage);
+            EmitErrorPropertyFallback(il, "stack", _runtime.Errors.GetStack);
         }
 
         // 2d. `instance.constructor` → the class (a System.Type value). See
@@ -773,9 +773,9 @@ public partial class ILCompiler
 
         if (_classes.ErrorSubclasses.Contains(className))
         {
-            EmitErrorPropertyFallback(il, "name", _runtime.ErrorGetName);
-            EmitErrorPropertyFallback(il, "message", _runtime.ErrorGetMessage);
-            EmitErrorPropertyFallback(il, "stack", _runtime.ErrorGetStack);
+            EmitErrorPropertyFallback(il, "name", _runtime.Errors.GetName);
+            EmitErrorPropertyFallback(il, "message", _runtime.Errors.GetMessage);
+            EmitErrorPropertyFallback(il, "stack", _runtime.Errors.GetStack);
         }
 
         // 2d. `instance.constructor` → the class (a System.Type value). See

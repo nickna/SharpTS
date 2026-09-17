@@ -157,7 +157,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Brfalse, returnValueLabel);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldfld, thunkValueField);
-            il.Emit(OpCodes.Call, runtime.CreateException);
+            il.Emit(OpCodes.Call, runtime.Errors.CreateException);
             il.Emit(OpCodes.Throw);
             il.MarkLabel(returnValueLabel);
             il.Emit(OpCodes.Ldarg_0);
@@ -440,7 +440,7 @@ public partial class RuntimeEmitter
         // Not callable — throw TypeError. Message is parameterized so finally
         // callers don't see a "Promise.prototype.catch:" prefix.
         il.Emit(OpCodes.Ldstr, methodNameForError + ": this.then is not callable");
-        GuestErrorEmitter.ThrowErrorFromStack(il, runtime, runtime.TSTypeErrorCtor);
+        GuestErrorEmitter.ThrowErrorFromStack(il, runtime, runtime.Errors.TypeErrorConstructor);
         il.MarkLabel(thenCallableLabel);
         // args[0]: undefined (catch) or onFinally (finally — both slots fire
         //         the callback so it runs on fulfillment AND rejection).
@@ -482,7 +482,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, okLabel);
         il.MarkLabel(throwLabel);
         il.Emit(OpCodes.Ldstr, message);
-        GuestErrorEmitter.ThrowErrorFromStack(il, runtime, runtime.TSTypeErrorCtor);
+        GuestErrorEmitter.ThrowErrorFromStack(il, runtime, runtime.Errors.TypeErrorConstructor);
         il.MarkLabel(okLabel);
     }
 

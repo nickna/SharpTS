@@ -22,9 +22,9 @@ public partial class RuntimeEmitter
         // RequireObjectCoercible (throw TypeError on undefined/null) and
         // coerce via JS-spec ToJsString (so .call(false) → "false" not
         // .NET "False").
-        runtime.Strings.ToUpperCase = EmitStringStringStub(typeBuilder, runtime.CreateException, runtime.TSTypeErrorCtor, runtime.StringCoercion.ToJsString,
+        runtime.Strings.ToUpperCase = EmitStringStringStub(typeBuilder, runtime.Errors.CreateException, runtime.Errors.TypeErrorConstructor, runtime.StringCoercion.ToJsString,
             runtime.UndefinedType, "StringToUpperCase", "ToUpper", strictReceiver: true);
-        runtime.Strings.ToLowerCase = EmitStringStringStub(typeBuilder, runtime.CreateException, runtime.TSTypeErrorCtor, runtime.StringCoercion.ToJsString,
+        runtime.Strings.ToLowerCase = EmitStringStringStub(typeBuilder, runtime.Errors.CreateException, runtime.Errors.TypeErrorConstructor, runtime.StringCoercion.ToJsString,
             runtime.UndefinedType, "StringToLowerCase", "ToLower", strictReceiver: true);
         // JsTrim(string, int mode) for inline call sites that already have a
         // string on the stack. mode: 0=both, 1=start, 2=end. Define BEFORE
@@ -32,11 +32,11 @@ public partial class RuntimeEmitter
         runtime.Strings.TrimInline = EmitJsTrimInline(typeBuilder);
         // Trim variants need ECMA-262 whitespace set, which differs from .NET's
         // char.IsWhiteSpace by including ﻿ (ZWNBSP). Use a custom helper.
-        runtime.Strings.Trim = EmitJsTrimHelper(typeBuilder, runtime.Strings, runtime.CreateException, runtime.TSTypeErrorCtor,
+        runtime.Strings.Trim = EmitJsTrimHelper(typeBuilder, runtime.Strings, runtime.Errors.CreateException, runtime.Errors.TypeErrorConstructor,
             runtime.StringCoercion.ToJsString, runtime.UndefinedType, "StringTrim", trimMode: 0, strictReceiver: true);
-        runtime.Strings.TrimStart = EmitJsTrimHelper(typeBuilder, runtime.Strings, runtime.CreateException, runtime.TSTypeErrorCtor,
+        runtime.Strings.TrimStart = EmitJsTrimHelper(typeBuilder, runtime.Strings, runtime.Errors.CreateException, runtime.Errors.TypeErrorConstructor,
             runtime.StringCoercion.ToJsString, runtime.UndefinedType, "StringTrimStart", trimMode: 1, strictReceiver: true);
-        runtime.Strings.TrimEnd = EmitJsTrimHelper(typeBuilder, runtime.Strings, runtime.CreateException, runtime.TSTypeErrorCtor,
+        runtime.Strings.TrimEnd = EmitJsTrimHelper(typeBuilder, runtime.Strings, runtime.Errors.CreateException, runtime.Errors.TypeErrorConstructor,
             runtime.StringCoercion.ToJsString, runtime.UndefinedType, "StringTrimEnd", trimMode: 2, strictReceiver: true);
 
         // Generic stub for methods without specific helpers — used only for
@@ -44,7 +44,7 @@ public partial class RuntimeEmitter
         // into Object.prototype.toString / Array.prototype.toString. Stays
         // tolerant of null/undefined receivers (returns empty string) since
         // those wirings legitimately call with non-string receivers.
-        runtime.Strings.PrototypeGenericStub = EmitStringStringStub(typeBuilder, runtime.CreateException, runtime.TSTypeErrorCtor,
+        runtime.Strings.PrototypeGenericStub = EmitStringStringStub(typeBuilder, runtime.Errors.CreateException, runtime.Errors.TypeErrorConstructor,
             runtime.StringCoercion.ToJsString, runtime.UndefinedType, "_StringPrototypeStub", "ToString", strictReceiver: false);
 
         // Strict variant for methods whose first spec step is RequireObjectCoercible
@@ -52,14 +52,14 @@ public partial class RuntimeEmitter
         // receivers per ECMA-262 22.1.3.* step 1. Used for borrowed-method
         // patterns (`String.prototype.match.call(null, /./)`) where the inline
         // dispatch path doesn't fire.
-        _ = EmitStringStringStub(typeBuilder, runtime.CreateException, runtime.TSTypeErrorCtor, runtime.StringCoercion.ToJsString, runtime.UndefinedType,
+        _ = EmitStringStringStub(typeBuilder, runtime.Errors.CreateException, runtime.Errors.TypeErrorConstructor, runtime.StringCoercion.ToJsString, runtime.UndefinedType,
             "_StringPrototypeStrictStub", "ToString", strictReceiver: true);
 
         // ECMA-262 22.1.3.27 String.prototype.toString === valueOf === thisStringValue.
         // Returns the underlying string for both primitive strings and Stage-4z19
         // boxed wrappers; throws TypeError on non-string-like receivers (per spec).
-        runtime.Strings.ProtoToStringHelper = EmitStringProtoToStringHelper(typeBuilder, runtime.Strings, runtime.CreateException,
-            runtime.ObjectStorage.FieldsGetter, runtime.ObjectStorage.Type, runtime.TSTypeErrorCtor);
+        runtime.Strings.ProtoToStringHelper = EmitStringProtoToStringHelper(typeBuilder, runtime.Strings, runtime.Errors.CreateException,
+            runtime.ObjectStorage.FieldsGetter, runtime.ObjectStorage.Type, runtime.Errors.TypeErrorConstructor);
 
         // ECMA-262 19.1.3.6 Object.prototype.toString — returns "[object X]"
         // brand based on receiver type. Wired into the Object.prototype slot
@@ -630,11 +630,11 @@ public partial class RuntimeEmitter
         }
 
         // $Error — §20.5.3.4 brand check via [[ErrorData]] slot.
-        if (runtime.TSErrorType != null)
+        if (runtime.Errors.Type != null)
         {
             var notTSErrorLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.TSErrorType);
+            il.Emit(OpCodes.Isinst, runtime.Errors.Type);
             il.Emit(OpCodes.Brfalse, notTSErrorLabel);
             EmitTag("[object Error]");
             il.MarkLabel(notTSErrorLabel);

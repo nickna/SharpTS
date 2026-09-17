@@ -236,13 +236,13 @@ public class BuiltInConstructorHandler : ICallHandler
         }
 
         // Call runtime CreateError(errorTypeName, args)
-        il.Emit(OpCodes.Call, ctx.Runtime!.CreateError);
+        il.Emit(OpCodes.Call, ctx.Runtime!.Errors.CreateError);
         var createdError = il.DeclareLocal(ctx.Types.Object);
         il.Emit(OpCodes.Stloc, createdError);
         il.Emit(OpCodes.Ldloc, createdError);
-        il.Emit(OpCodes.Castclass, ctx.Runtime.TSErrorType);
+        il.Emit(OpCodes.Castclass, ctx.Runtime.Errors.Type);
         il.Emit(OpCodes.Ldstr, ctx.CurrentMethod?.Name ?? "Main");
-        il.Emit(OpCodes.Callvirt, ctx.Runtime.TSErrorCapturedStackSetter);
+        il.Emit(OpCodes.Callvirt, ctx.Runtime.Errors.CapturedStackSetter);
         il.Emit(OpCodes.Ldloc, createdError);
         return true;
     }

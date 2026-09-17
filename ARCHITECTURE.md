@@ -318,6 +318,18 @@ the supplied optional implementation. Native numeric signatures, mutable guest p
 timer calls and generated order are preserved. The locale/options wrapper exists whenever
 Date is selected, while its soft runtime dependency is recorded only at call sites using it.
 
+Error metadata uses the required `Errors` owner for 68 type, constructor, prototype,
+operation and exception-bridge declarations. Forty-five emission helpers receive scoped
+owners and exact dependencies; nine construction fields become local inputs. The two early
+factory declarations and eight prototype declarations keep their original body-emission
+order, with four explicit completion stages. Checked access remains available before
+completion; missing declarations/stages can be repaired, and completed metadata rejects
+further writes. Guest prototypes and error values retain their original mutable lifetimes.
+The guest Error hierarchy still derives from object, with a separate CLR thrown-value
+carrier; the strict SyntaxError helper retains its existing CLR exception representation.
+Exception wrapping follows supplied optional Promise metadata. Error-cause Proxy handling
+receives six explicit invocation/delegate handles through the shared reflection bridge.
+
 Object integrity and deleted-built-in metadata use required `ObjectState` ownership for
 four weak-table declarations, six integrity operations and two deletion helpers. Nine helper
 signatures receive this component and exact peers; their field parameters come from the owner.

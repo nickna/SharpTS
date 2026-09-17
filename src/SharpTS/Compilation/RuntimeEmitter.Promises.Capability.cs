@@ -132,7 +132,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, exLocal);
         il.Emit(OpCodes.Ldloc, tcsLocal);
         il.Emit(OpCodes.Ldloc, exLocal);
-        il.Emit(OpCodes.Call, runtime.WrapException);
+        il.Emit(OpCodes.Call, runtime.Errors.WrapException);
         il.Emit(OpCodes.Newobj, runtime.RequirePromise().RejectedExceptionCtor);
         il.Emit(OpCodes.Callvirt, tcsType.GetMethod("TrySetException", [_types.Exception])!);
         il.Emit(OpCodes.Pop);
@@ -200,7 +200,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Isinst, runtime.UndefinedType);
             il.Emit(OpCodes.Brtrue, checkRejectLabel);
             il.Emit(OpCodes.Ldstr, "Promise capability executor was already invoked");
-            GuestErrorEmitter.ThrowErrorFromStack(il, runtime, runtime.TSTypeErrorCtor);
+            GuestErrorEmitter.ThrowErrorFromStack(il, runtime, runtime.Errors.TypeErrorConstructor);
 
             // if (Reject is neither CLR-null nor JS undefined) throw TypeError.
             il.MarkLabel(checkRejectLabel);
@@ -212,7 +212,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Isinst, runtime.UndefinedType);
             il.Emit(OpCodes.Brtrue, captureArgsLabel);
             il.Emit(OpCodes.Ldstr, "Promise capability executor was already invoked");
-            GuestErrorEmitter.ThrowErrorFromStack(il, runtime, runtime.TSTypeErrorCtor);
+            GuestErrorEmitter.ThrowErrorFromStack(il, runtime, runtime.Errors.TypeErrorConstructor);
 
             il.MarkLabel(captureArgsLabel);
 
@@ -285,7 +285,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Task, "Exception").GetGetMethod()!);
             il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Exception, "InnerException").GetGetMethod()!);
-            il.Emit(OpCodes.Call, runtime.WrapException);
+            il.Emit(OpCodes.Call, runtime.Errors.WrapException);
             il.Emit(OpCodes.Stloc, argLocal);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldfld, rejectField);
@@ -398,7 +398,7 @@ public partial class RuntimeEmitter
             _types.String, "op_Equality", _types.String, _types.String));
         il.Emit(OpCodes.Brtrue, callableLabel);
         il.Emit(OpCodes.Ldstr, "Promise resolve or reject function is not callable");
-        GuestErrorEmitter.ThrowErrorFromStack(il, runtime, runtime.TSTypeErrorCtor);
+        GuestErrorEmitter.ThrowErrorFromStack(il, runtime, runtime.Errors.TypeErrorConstructor);
         il.MarkLabel(callableLabel);
     }
 
@@ -495,7 +495,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldloc, exceptionLocal);
-        il.Emit(OpCodes.Call, runtime.WrapException);
+        il.Emit(OpCodes.Call, runtime.Errors.WrapException);
         il.Emit(OpCodes.Stelem_Ref);
         il.Emit(OpCodes.Call, runtime.InvokeValue);
         il.Emit(OpCodes.Pop);

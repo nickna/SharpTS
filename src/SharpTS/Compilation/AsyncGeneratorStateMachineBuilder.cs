@@ -707,7 +707,7 @@ public class AsyncGeneratorStateMachineBuilder : StateMachineBuilderBase, IItera
         // Not an exception - wrap it using CreateException
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, _runtime!.CreateException);
+        il.Emit(OpCodes.Call, _runtime!.Errors.CreateException);
 
         il.MarkLabel(isExceptionLabel);
         // Stack now has Exception
@@ -780,8 +780,8 @@ public class AsyncGeneratorStateMachineBuilder : StateMachineBuilderBase, IItera
     private void EmitRejectAlreadyRunning(ILGenerator il)
     {
         il.Emit(OpCodes.Ldstr, "Async generator is already running");
-        il.Emit(OpCodes.Newobj, _runtime!.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, _runtime!.CreateException);
+        il.Emit(OpCodes.Newobj, _runtime!.Errors.TypeErrorConstructor);
+        il.Emit(OpCodes.Call, _runtime!.Errors.CreateException);
         var fromException = EmitGenerics.MakeGenericMethod(typeof(Task).GetMethod("FromException", 1, [typeof(Exception)])!, _types.Object);
         il.Emit(OpCodes.Call, fromException);
         il.Emit(OpCodes.Ret);

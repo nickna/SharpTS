@@ -53,7 +53,7 @@ public partial class RuntimeEmitter
         ctorIl.Emit(OpCodes.Ldarg_1);
         ctorIl.Emit(OpCodes.Ldc_I4_0);
         ctorIl.Emit(OpCodes.Bge, validLength);
-        GuestErrorEmitter.ThrowError(ctorIl, runtime, runtime.TSRangeErrorCtor,
+        GuestErrorEmitter.ThrowError(ctorIl, runtime, runtime.Errors.RangeErrorConstructor,
             "Invalid ArrayBuffer length");
         ctorIl.MarkLabel(validLength);
         ctorIl.Emit(OpCodes.Ldarg_0);

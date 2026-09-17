@@ -300,7 +300,7 @@ public partial class AsyncMoveNextEmitter
         emit();
         _throwRoutingGuardDepth--;
         _il.BeginCatchBlock(typeof(Exception));
-        _il.Emit(OpCodes.Call, _ctx!.Runtime!.WrapException);
+        _il.Emit(OpCodes.Call, _ctx!.Runtime!.Errors.WrapException);
         _il.Emit(OpCodes.Stloc, exLocal);
         _il.EndExceptionBlock();
         _il.Emit(OpCodes.Ldloc, exLocal);

@@ -20,7 +20,7 @@ public sealed class ErrorStaticEmitter : IStaticTypeEmitterStrategy
         {
             ctx.IL.Emit(OpCodes.Ldnull);
         }
-        ctx.IL.Emit(OpCodes.Call, ctx.Runtime!.ErrorIsError);
+        ctx.IL.Emit(OpCodes.Call, ctx.Runtime!.Errors.IsError);
         ctx.IL.Emit(OpCodes.Box, ctx.Types.Boolean);
         return true;
     }
@@ -29,7 +29,7 @@ public sealed class ErrorStaticEmitter : IStaticTypeEmitterStrategy
     {
         if (propertyName != "isError") return false;
         var ctx = emitter.Context;
-        ctx.Types.EmitLoadMethodInfo(ctx.IL, ctx.Runtime!.ErrorIsError);
+        ctx.Types.EmitLoadMethodInfo(ctx.IL, ctx.Runtime!.Errors.IsError);
         ctx.IL.Emit(OpCodes.Ldstr, "isError");
         ctx.IL.Emit(OpCodes.Ldc_I4_1);
         ctx.IL.Emit(OpCodes.Call, ctx.Runtime.TSFunctionGetOrCreate);

@@ -17,6 +17,9 @@ namespace SharpTS.Compilation;
 /// <seealso cref="ILEmitter"/>
 public class EmittedRuntime
 {
+    /// <summary>Required Error types, prototypes and exception bridges for this compilation.</summary>
+    public EmittedErrorRuntime Errors { get; } = new();
+
     /// <summary>Required object integrity and deleted-built-in metadata for this compilation.</summary>
     public EmittedObjectStateRuntime ObjectState { get; } = new();
 
@@ -381,25 +384,6 @@ public class EmittedRuntime
     public FieldBuilder ObjectPrototypeField { get; set; } = null!;
     /// <summary>Idempotent populate for <see cref="ObjectPrototypeField"/>.</summary>
     public MethodBuilder ObjectPrototypePopulateMethod { get; set; } = null!;
-    /// <summary>Error.prototype singleton dict — populated with a $TSFunction wrapping the spec-compliant ErrorToStringSpec IL helper. Returned by GetProperty's Type-receiver branch when receiver is typeof($Error). Required so <c>Error.prototype.toString.call(non-error)</c> hits the brand-checking helper instead of generic .NET reflection on $Error.</summary>
-    public FieldBuilder ErrorPrototypeField { get; set; } = null!;
-    /// <summary>Idempotent populate for <see cref="ErrorPrototypeField"/>.</summary>
-    public MethodBuilder ErrorPrototypePopulateMethod { get; set; } = null!;
-    /// <summary>TypeError.prototype singleton dict. Per ECMA-262 §20.5.6.4 each NativeError prototype is a distinct object whose [[Prototype]] is Error.prototype, with own `constructor` / `name` / `message` slots. Lazy-populated.</summary>
-    public FieldBuilder TypeErrorPrototypeField { get; set; } = null!;
-    public MethodBuilder TypeErrorPrototypePopulateMethod { get; set; } = null!;
-    public FieldBuilder RangeErrorPrototypeField { get; set; } = null!;
-    public MethodBuilder RangeErrorPrototypePopulateMethod { get; set; } = null!;
-    public FieldBuilder ReferenceErrorPrototypeField { get; set; } = null!;
-    public MethodBuilder ReferenceErrorPrototypePopulateMethod { get; set; } = null!;
-    public FieldBuilder SyntaxErrorPrototypeField { get; set; } = null!;
-    public MethodBuilder SyntaxErrorPrototypePopulateMethod { get; set; } = null!;
-    public FieldBuilder URIErrorPrototypeField { get; set; } = null!;
-    public MethodBuilder URIErrorPrototypePopulateMethod { get; set; } = null!;
-    public FieldBuilder EvalErrorPrototypeField { get; set; } = null!;
-    public MethodBuilder EvalErrorPrototypePopulateMethod { get; set; } = null!;
-    public FieldBuilder AggregateErrorPrototypeField { get; set; } = null!;
-    public MethodBuilder AggregateErrorPrototypePopulateMethod { get; set; } = null!;
 
     /// <summary>Function.prototype singleton dict, populated lazily with $TSFunction wrappers for call/apply/bind/toString/constructor (ECMA-262 §20.2.3).</summary>
     public FieldBuilder FunctionPrototypeField { get; set; } = null!;
@@ -414,7 +398,6 @@ public class EmittedRuntime
     public MethodBuilder SetIndexStrict { get; set; } = null!;
     public MethodBuilder DeleteIndex { get; set; } = null!;
     public MethodBuilder DeleteIndexStrict { get; set; } = null!;
-    public MethodBuilder ThrowStrictSyntaxError { get; set; } = null!;
     public MethodBuilder WarnSloppyDeleteVariable { get; set; } = null!;
     public MethodBuilder ObjectFromEntries { get; set; } = null!;
     public MethodBuilder ObjectHasOwn { get; set; } = null!;
@@ -507,9 +490,6 @@ public class EmittedRuntime
     public EmittedTemplateRuntime Templates { get; } = new();
 
     // Exception methods
-    public MethodBuilder CreateException { get; set; } = null!;
-    public MethodBuilder WrapException { get; set; } = null!;
-    public MethodBuilder ThrowUndefinedVariable { get; set; } = null!;
 
     // Utility methods
     public MethodBuilder DefineSymbolAccessor { get; set; } = null!;
@@ -641,73 +621,25 @@ public class EmittedRuntime
     // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSError and subclasses
 
     // $Error base class
-    public Type TSErrorType { get; set; } = null!;
-    public ConstructorBuilder TSErrorCtorMessage { get; set; } = null!;
-    public ConstructorBuilder TSErrorCtorNameMessage { get; set; } = null!;
-    public MethodBuilder TSErrorNameGetter { get; set; } = null!;
-    public MethodBuilder TSErrorNameSetter { get; set; } = null!;
-    public MethodBuilder TSErrorMessageGetter { get; set; } = null!;
-    public MethodBuilder TSErrorMessageSetter { get; set; } = null!;
-    public MethodBuilder TSErrorStackGetter { get; set; } = null!;
-    public MethodBuilder TSErrorStackSetter { get; set; } = null!;
-    public MethodBuilder TSErrorCapturedStackSetter { get; set; } = null!;
-    public MethodBuilder TSErrorCauseGetter { get; set; } = null!;
-    public MethodBuilder TSErrorCauseSetter { get; set; } = null!;
-    public MethodBuilder TSErrorHasCauseGetter { get; set; } = null!;
-    public MethodBuilder TSErrorCodeGetter { get; set; } = null!;
-    public MethodBuilder TSErrorCodeSetter { get; set; } = null!;
-    public MethodBuilder TSErrorSyscallGetter { get; set; } = null!;
-    public MethodBuilder TSErrorSyscallSetter { get; set; } = null!;
 
     // $TypeError
-    public Type TSTypeErrorType { get; set; } = null!;
-    public ConstructorBuilder TSTypeErrorCtor { get; set; } = null!;
 
     // $RangeError
-    public Type TSRangeErrorType { get; set; } = null!;
-    public ConstructorBuilder TSRangeErrorCtor { get; set; } = null!;
 
     // $ReferenceError
-    public Type TSReferenceErrorType { get; set; } = null!;
-    public ConstructorBuilder TSReferenceErrorCtor { get; set; } = null!;
 
     // $SyntaxError
-    public Type TSSyntaxErrorType { get; set; } = null!;
-    public ConstructorBuilder TSSyntaxErrorCtor { get; set; } = null!;
 
     // $URIError
-    public Type TSURIErrorType { get; set; } = null!;
-    public ConstructorBuilder TSURIErrorCtor { get; set; } = null!;
 
     // $EvalError
-    public Type TSEvalErrorType { get; set; } = null!;
-    public ConstructorBuilder TSEvalErrorCtor { get; set; } = null!;
 
     // $AggregateError
-    public Type TSAggregateErrorType { get; set; } = null!;
-    public ConstructorBuilder TSAggregateErrorCtor { get; set; } = null!;
-    public MethodBuilder TSAggregateErrorErrorsGetter { get; set; } = null!;
 
     // Error helper methods in $Runtime
-    public MethodBuilder CreateError { get; set; } = null!;
-    public MethodBuilder CreateErrorFromTypeOrNull { get; set; } = null!;
-    public MethodBuilder ErrorGetName { get; set; } = null!;
-    public MethodBuilder ErrorGetMessage { get; set; } = null!;
-    public MethodBuilder ErrorGetStack { get; set; } = null!;
-    public MethodBuilder ErrorSetName { get; set; } = null!;
-    public MethodBuilder ErrorSetMessage { get; set; } = null!;
-    public MethodBuilder ErrorDefineMessageProperty { get; set; } = null!;
-    public MethodBuilder ErrorSetStack { get; set; } = null!;
-    public MethodBuilder ErrorGetCause { get; set; } = null!;
-    public MethodBuilder ErrorSetCause { get; set; } = null!;
-    public MethodBuilder ErrorIsError { get; set; } = null!;
-    public MethodBuilder AggregateErrorGetErrors { get; set; } = null!;
 
     // $ThrownValueException : Exception — the allocation-light carrier for a
     // guest `throw` value. Message is derived lazily at a host boundary.
-    public Type ThrownValueExceptionType { get; set; } = null!;
-    public ConstructorBuilder ThrownValueExceptionCtor { get; set; } = null!;
-    public MethodBuilder ThrownValueExceptionValueGetter { get; set; } = null!;
 
     /// <summary>
     /// $CallArgsPool.Get(int arity) — returns a thread-static object[]

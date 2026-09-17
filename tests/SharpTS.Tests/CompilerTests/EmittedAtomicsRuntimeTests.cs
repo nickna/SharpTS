@@ -61,7 +61,7 @@ public class EmittedAtomicsRuntimeTests
         var component = new EmittedAtomicsRuntime();
         typeof(RuntimeEmitter).GetMethod("EmitAtomicsHelpersPure", BindingFlags.NonPublic | BindingFlags.Instance)!
             .Invoke(emitter, [helpers, component, runtime.TypedArrays.RequireImplementation(),
-                runtime.UndefinedType, runtime.UndefinedInstance, runtime.TSTypeErrorCtor, runtime.CreateException, runtime.TSRangeErrorCtor]);
+                runtime.UndefinedType, runtime.UndefinedInstance, runtime.Errors.TypeErrorConstructor, runtime.Errors.CreateException, runtime.Errors.RangeErrorConstructor]);
         foreach (var property in Handles)
         {
             var method = Assert.IsAssignableFrom<MethodBuilder>(property.GetValue(component));
@@ -193,13 +193,13 @@ public class EmittedAtomicsRuntimeTests
         ILGenerator Body(string name) => helpers.DefineMethod(name, MethodAttributes.Public | MethodAttributes.Static,
             typeof(void), Type.EmptyTypes).GetILGenerator();
         GuestErrorEmitter.ThrowTypeError(Body("RootType"), runtime, "invalid");
-        GuestErrorEmitter.ThrowError(Body("ExplicitType"), runtime.CreateException, runtime.TSTypeErrorCtor, "invalid");
+        GuestErrorEmitter.ThrowError(Body("ExplicitType"), runtime.Errors.CreateException, runtime.Errors.TypeErrorConstructor, "invalid");
         var root = Body("RootRange");
         root.Emit(OpCodes.Ldstr, "range");
-        GuestErrorEmitter.ThrowErrorFromStack(root, runtime, runtime.TSRangeErrorCtor);
+        GuestErrorEmitter.ThrowErrorFromStack(root, runtime, runtime.Errors.RangeErrorConstructor);
         var explicitBody = Body("ExplicitRange");
         explicitBody.Emit(OpCodes.Ldstr, "range");
-        GuestErrorEmitter.ThrowErrorFromStack(explicitBody, runtime.CreateException, runtime.TSRangeErrorCtor);
+        GuestErrorEmitter.ThrowErrorFromStack(explicitBody, runtime.Errors.CreateException, runtime.Errors.RangeErrorConstructor);
         helpers.CreateType();
         using var bytes = Save(runtime);
         Verify(bytes);

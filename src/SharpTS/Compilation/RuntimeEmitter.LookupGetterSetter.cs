@@ -68,7 +68,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, isGetter
             ? "Object.prototype.__defineGetter__: callback must be callable"
             : "Object.prototype.__defineSetter__: callback must be callable");
-        GuestErrorEmitter.ThrowErrorFromStack(il, runtime, runtime.TSTypeErrorCtor);
+        GuestErrorEmitter.ThrowErrorFromStack(il, runtime, runtime.Errors.TypeErrorConstructor);
         il.MarkLabel(isCallableLabel);
 
         // desc = new Dictionary<string, object>();

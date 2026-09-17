@@ -643,10 +643,10 @@ public partial class RuntimeEmitter
         var il = method.GetILGenerator();
         var jsName = char.ToLowerInvariant(methodName[0]) + methodName.Substring(1);
         il.Emit(OpCodes.Ldstr, $"tls.TLSSocket.{jsName}() is not supported on this runtime (not exposed by .NET SslStream)");
-        il.Emit(OpCodes.Newobj, runtime.TSErrorCtorMessage);
+        il.Emit(OpCodes.Newobj, runtime.Errors.MessageConstructor);
         // Wrap the $Error so the compiled guest try/catch can catch it (a raw $Error is not a
         // System.Exception and would surface as a RuntimeWrappedException).
-        il.Emit(OpCodes.Call, runtime.CreateException);
+        il.Emit(OpCodes.Call, runtime.Errors.CreateException);
         il.Emit(OpCodes.Throw);
     }
 

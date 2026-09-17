@@ -810,7 +810,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
         if (Ctx.LexicalInitializerTdzName == name)
         {
             IL.Emit(OpCodes.Ldstr, name);
-            IL.Emit(OpCodes.Call, Ctx.Runtime!.ThrowUndefinedVariable);
+            IL.Emit(OpCodes.Call, Ctx.Runtime!.Errors.ThrowUndefinedVariable);
             IL.Emit(OpCodes.Ldnull);
             SetStackUnknown();
             return;
@@ -833,7 +833,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
         // made `yield missingName` silently yield null while the synchronous
         // ILEmitter correctly threw.
         IL.Emit(OpCodes.Ldstr, name);
-        IL.Emit(OpCodes.Call, Ctx.Runtime!.ThrowUndefinedVariable);
+        IL.Emit(OpCodes.Call, Ctx.Runtime!.Errors.ThrowUndefinedVariable);
         // Unreachable stack value for verifier shape.
         IL.Emit(OpCodes.Ldnull);
         SetStackUnknown();
@@ -846,7 +846,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
             return false;
 
         IL.Emit(OpCodes.Ldstr, name);
-        IL.Emit(OpCodes.Call, Ctx.Runtime!.ThrowUndefinedVariable);
+        IL.Emit(OpCodes.Call, Ctx.Runtime!.Errors.ThrowUndefinedVariable);
         // Unreachable, but keeps the evaluation stack valid for the expression path.
         IL.Emit(OpCodes.Ldnull);
         SetStackUnknown();
@@ -871,7 +871,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
         {
             IL.Emit(OpCodes.Pop);
             IL.Emit(OpCodes.Ldstr, name);
-            IL.Emit(OpCodes.Call, Ctx.Runtime!.ThrowUndefinedVariable);
+            IL.Emit(OpCodes.Call, Ctx.Runtime!.Errors.ThrowUndefinedVariable);
             IL.Emit(OpCodes.Ldnull);
             SetStackUnknown();
             return;
@@ -2213,15 +2213,15 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
         if (!Runtime.BuiltIns.BuiltInNames.IsErrorTypeName(name)) return false;
         var errorType = name switch
         {
-            "Error" => Ctx.Runtime!.TSErrorType,
-            "TypeError" => Ctx.Runtime!.TSTypeErrorType,
-            "RangeError" => Ctx.Runtime!.TSRangeErrorType,
-            "ReferenceError" => Ctx.Runtime!.TSReferenceErrorType,
-            "SyntaxError" => Ctx.Runtime!.TSSyntaxErrorType,
-            "URIError" => Ctx.Runtime!.TSURIErrorType,
-            "EvalError" => Ctx.Runtime!.TSEvalErrorType,
-            "AggregateError" => Ctx.Runtime!.TSAggregateErrorType,
-            _ => Ctx.Runtime!.TSErrorType
+            "Error" => Ctx.Runtime!.Errors.Type,
+            "TypeError" => Ctx.Runtime!.Errors.TypeErrorType,
+            "RangeError" => Ctx.Runtime!.Errors.RangeErrorType,
+            "ReferenceError" => Ctx.Runtime!.Errors.ReferenceErrorType,
+            "SyntaxError" => Ctx.Runtime!.Errors.SyntaxErrorType,
+            "URIError" => Ctx.Runtime!.Errors.URIErrorType,
+            "EvalError" => Ctx.Runtime!.Errors.EvalErrorType,
+            "AggregateError" => Ctx.Runtime!.Errors.AggregateErrorType,
+            _ => Ctx.Runtime!.Errors.Type
         };
         IL.Emit(OpCodes.Ldtoken, errorType);
         IL.Emit(OpCodes.Call, Types.GetMethod(Types.Type, "GetTypeFromHandle", Types.RuntimeTypeHandle));
@@ -2509,7 +2509,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
                 // A class's inner name is in TDZ while its extends expression is
                 // evaluated, even if an outer binding has the same spelling.
                 IL.Emit(OpCodes.Ldstr, innerClassName);
-                IL.Emit(OpCodes.Call, Ctx.Runtime!.ThrowUndefinedVariable);
+                IL.Emit(OpCodes.Call, Ctx.Runtime!.Errors.ThrowUndefinedVariable);
                 IL.Emit(OpCodes.Ldnull); // unreachable stack balance
                 SetStackUnknown();
                 return;

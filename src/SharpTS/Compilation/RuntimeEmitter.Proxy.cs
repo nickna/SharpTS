@@ -318,17 +318,29 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Unbox_Any, _types.Boolean);
     }
 
+    private readonly record struct ProxyHasInputs(
+        MethodInfo InvokeMethodUnwrapped, MethodInfo OrdinaryHas, MethodInfo GetOwnPropertyDescriptor,
+        MethodInfo IsExtensible, MethodInfo GetProperty, MethodInfo IsTruthy);
+
     /// <summary>
     /// Emits the Proxy [[HasProperty]] trap and leaves its boolean result on
     /// the stack. Non-Proxy receivers branch to <paramref name="notProxyLabel"/>.
     /// </summary>
     private void EmitProxyHasResult(ILGenerator il, Action emitLoadObj, Action emitLoadKey, Label notProxyLabel, EmittedRuntime runtime)
     {
+        EmitProxyHasResult(il, emitLoadObj, emitLoadKey, notProxyLabel,
+            new ProxyHasInputs(runtime.InvokeMethodUnwrapped, runtime.ProxyOrdinaryHas,
+                runtime.ObjectGetOwnPropertyDescriptor, runtime.ObjectState.IsExtensible,
+                runtime.GetProperty, runtime.Booleans.IsTruthy));
+    }
+
+    private void EmitProxyHasResult(ILGenerator il, Action emitLoadObj, Action emitLoadKey, Label notProxyLabel, ProxyHasInputs inputs)
+    {
         var proxyLabel = il.DefineLabel();
         EmitProxyTypeCheck(il, emitLoadObj, proxyLabel, notProxyLabel);
 
         il.MarkLabel(proxyLabel);
-        EmitProxyMethodCallUnwrapped(il, runtime, emitLoadObj, "TrapHasCompiled", () =>
+        EmitProxyMethodCallUnwrapped(il, inputs.InvokeMethodUnwrapped, emitLoadObj, "TrapHasCompiled", () =>
         {
             il.Emit(OpCodes.Ldc_I4_5);
             il.Emit(OpCodes.Newarr, _types.Object);
@@ -339,15 +351,15 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Dup);
             il.Emit(OpCodes.Ldc_I4_1);
             il.Emit(OpCodes.Ldnull);
-            il.Emit(OpCodes.Ldftn, runtime.ProxyOrdinaryHas);
+            il.Emit(OpCodes.Ldftn, inputs.OrdinaryHas);
             il.Emit(OpCodes.Newobj, _types.GetConstructor(
                 typeof(Func<object, object, bool>), _types.Object, _types.IntPtr));
             il.Emit(OpCodes.Stelem_Ref);
-            EmitDelegateArgument(2, runtime.ObjectGetOwnPropertyDescriptor,
+            EmitDelegateArgument(2, inputs.GetOwnPropertyDescriptor,
                 typeof(Func<object, object, object?>));
-            EmitDelegateArgument(3, runtime.ObjectState.IsExtensible,
+            EmitDelegateArgument(3, inputs.IsExtensible,
                 typeof(Func<object, bool>));
-            EmitDelegateArgument(4, runtime.GetProperty,
+            EmitDelegateArgument(4, inputs.GetProperty,
                 typeof(Func<object, string, object?>));
 
             void EmitDelegateArgument(int slot, MethodInfo target, Type delegateType)
@@ -362,7 +374,7 @@ public partial class RuntimeEmitter
             }
         });
         // TrapHas returns object — apply truthy coercion (JS `in` coerces to boolean)
-        il.Emit(OpCodes.Call, runtime.Booleans.IsTruthy);
+        il.Emit(OpCodes.Call, inputs.IsTruthy);
     }
 
     /// <summary>

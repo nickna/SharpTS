@@ -9,34 +9,79 @@ namespace SharpTS.Compilation;
 /// </summary>
 public partial class RuntimeEmitter
 {
-    private void EmitErrorIsError(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private readonly record struct ErrorMethodsInputs(
+        EmittedDescriptorStorageRuntime DescriptorStorage,
+        MethodBuilder GetProperty,
+        MethodInfo IHasFieldsGetProperty,
+        MethodInfo IHasFieldsHasProperty,
+        Type IHasFieldsInterface,
+        ProxyHasInputs ProxyHas,
+        EmittedStringCoercionRuntime StringCoercion,
+        FieldInfo UndefinedInstance,
+        Type UndefinedType
+    );
+
+    private readonly record struct CreateErrorInputs(
+        EmittedDescriptorStorageRuntime DescriptorStorage,
+        MethodBuilder GetProperty,
+        MethodInfo IHasFieldsGetProperty,
+        MethodInfo IHasFieldsHasProperty,
+        Type IHasFieldsInterface,
+        ProxyHasInputs ProxyHas,
+        EmittedStringCoercionRuntime StringCoercion,
+        Type UndefinedType
+    );
+
+    private readonly record struct ApplyErrorOptionsInputs(
+        EmittedDescriptorStorageRuntime DescriptorStorage,
+        MethodBuilder GetProperty,
+        MethodInfo IHasFieldsGetProperty,
+        MethodInfo IHasFieldsHasProperty,
+        Type IHasFieldsInterface,
+        ProxyHasInputs ProxyHas
+    );
+
+    private void EmitErrorIsError(TypeBuilder typeBuilder, EmittedErrorRuntime errors)
     {
         var method = typeBuilder.DefineMethod(
             "ErrorIsError",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Boolean,
             [_types.Object]);
-        runtime.ErrorIsError = method;
+        errors.IsError = method;
 
         var il = method.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSErrorType);
+        il.Emit(OpCodes.Isinst, errors.Type);
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Cgt_Un);
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitErrorMethods(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitErrorMethods(TypeBuilder typeBuilder, EmittedErrorRuntime errors, ErrorMethodsInputs inputs)
     {
-        EmitErrorGetters(typeBuilder, runtime);
-        EmitErrorSetters(typeBuilder, runtime);
-        EmitErrorGetCause(typeBuilder, runtime);
-        EmitErrorSetCause(typeBuilder, runtime);
-        EmitAggregateErrorGetErrors(typeBuilder, runtime);
-        EmitErrorDefineMessageProperty(typeBuilder, runtime);
+        EmitErrorGetters(typeBuilder, errors);
+        EmitErrorSetters(typeBuilder, errors);
+        EmitErrorGetCause(typeBuilder, errors, inputs.UndefinedInstance);
+        EmitErrorSetCause(typeBuilder, errors);
+        EmitAggregateErrorGetErrors(typeBuilder, errors);
+        EmitErrorDefineMessageProperty(typeBuilder, errors, inputs.DescriptorStorage);
         // CreateError must come last - it references ErrorSetCause and other helpers
-        EmitCreateError(typeBuilder, runtime);
-        EmitCreateErrorFromTypeOrNull(typeBuilder, runtime);
+        EmitCreateError(
+            typeBuilder,
+            errors,
+            new CreateErrorInputs(
+                inputs.DescriptorStorage,
+                inputs.GetProperty,
+                inputs.IHasFieldsGetProperty,
+                inputs.IHasFieldsHasProperty,
+                inputs.IHasFieldsInterface,
+                inputs.ProxyHas,
+                inputs.StringCoercion,
+                inputs.UndefinedType
+            )
+        );
+        EmitCreateErrorFromTypeOrNull(errors);
     }
 
     /// <summary>
@@ -45,9 +90,9 @@ public partial class RuntimeEmitter
     /// constructors directly, losing optional arguments and own descriptors.
     /// Returns null for non-error types so the caller can keep its normal path.
     /// </summary>
-    private void EmitCreateErrorFromTypeOrNull(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitCreateErrorFromTypeOrNull(EmittedErrorRuntime errors)
     {
-        var method = runtime.CreateErrorFromTypeOrNull;
+        var method = errors.CreateErrorFromTypeOrNull;
 
         var il = method.GetILGenerator();
         var getTypeFromHandle = _types.GetMethod(
@@ -65,21 +110,22 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Brfalse, next);
             il.Emit(OpCodes.Ldstr, jsName);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Call, runtime.CreateError);
+            il.Emit(OpCodes.Call, errors.CreateError);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(next);
         }
 
-        EmitCase(runtime.TSErrorType, "Error");
-        EmitCase(runtime.TSTypeErrorType, "TypeError");
-        EmitCase(runtime.TSRangeErrorType, "RangeError");
-        EmitCase(runtime.TSReferenceErrorType, "ReferenceError");
-        EmitCase(runtime.TSSyntaxErrorType, "SyntaxError");
-        EmitCase(runtime.TSURIErrorType, "URIError");
-        EmitCase(runtime.TSEvalErrorType, "EvalError");
-        EmitCase(runtime.TSAggregateErrorType, "AggregateError");
+        EmitCase(errors.Type, "Error");
+        EmitCase(errors.TypeErrorType, "TypeError");
+        EmitCase(errors.RangeErrorType, "RangeError");
+        EmitCase(errors.ReferenceErrorType, "ReferenceError");
+        EmitCase(errors.SyntaxErrorType, "SyntaxError");
+        EmitCase(errors.URIErrorType, "URIError");
+        EmitCase(errors.EvalErrorType, "EvalError");
+        EmitCase(errors.AggregateErrorType, "AggregateError");
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ret);
+        errors.MarkCreateFromTypeBodyEmitted();
     }
 
     /// <summary>
@@ -88,40 +134,44 @@ public partial class RuntimeEmitter
     /// The ordinary Error factory performs the same operation inline, but a
     /// CLR base-constructor call otherwise bypasses that factory.
     /// </summary>
-    private void EmitErrorDefineMessageProperty(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitErrorDefineMessageProperty(
+        TypeBuilder typeBuilder,
+        EmittedErrorRuntime errors,
+        EmittedDescriptorStorageRuntime descriptorStorage
+    )
     {
         var method = typeBuilder.DefineMethod(
             "ErrorDefineMessageProperty",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Void,
             [_types.Object, _types.String]);
-        runtime.ErrorDefineMessageProperty = method;
+        errors.DefineMessageProperty = method;
 
         var il = method.GetILGenerator();
-        var descriptorLocal = il.DeclareLocal(runtime.DescriptorStorage.DescriptorType);
-        il.Emit(OpCodes.Newobj, runtime.DescriptorStorage.DescriptorConstructor);
+        var descriptorLocal = il.DeclareLocal(descriptorStorage.DescriptorType);
+        il.Emit(OpCodes.Newobj, descriptorStorage.DescriptorConstructor);
         il.Emit(OpCodes.Stloc, descriptorLocal);
         il.Emit(OpCodes.Ldloc, descriptorLocal);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorValue.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, descriptorStorage.DescriptorValue.GetSetMethod()!);
         il.Emit(OpCodes.Ldloc, descriptorLocal);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorWritable.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, descriptorStorage.DescriptorWritable.GetSetMethod()!);
         il.Emit(OpCodes.Ldloc, descriptorLocal);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorEnumerable.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, descriptorStorage.DescriptorEnumerable.GetSetMethod()!);
         il.Emit(OpCodes.Ldloc, descriptorLocal);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorConfigurable.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, descriptorStorage.DescriptorConfigurable.GetSetMethod()!);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "message");
         il.Emit(OpCodes.Ldloc, descriptorLocal);
-        il.Emit(OpCodes.Call, runtime.DescriptorStorage.DefineProperty);
+        il.Emit(OpCodes.Call, descriptorStorage.DefineProperty);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitCreateError(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitCreateError(TypeBuilder typeBuilder, EmittedErrorRuntime errors, CreateErrorInputs inputs)
     {
         // CreateError(string errorTypeName, object[] args) -> object
         // Creates the appropriate error type based on the name
@@ -131,7 +181,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.String, _types.ObjectArray]
         );
-        runtime.CreateError = method;
+        errors.CreateError = method;
 
         var il = method.GetILGenerator();
 
@@ -164,14 +214,14 @@ public partial class RuntimeEmitter
 
         var argUndefinedLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, arg0Local);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
         il.Emit(OpCodes.Brtrue, argUndefinedLabel);
         // Any non-undefined value, including JS null, is converted. ToJsString
         // maps CLR null to "null" and throws TypeError for Symbol.
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Stloc, hasMessageLocal);
         il.Emit(OpCodes.Ldloc, arg0Local);
-        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
+        il.Emit(OpCodes.Call, inputs.StringCoercion.ToJsString);
         il.Emit(OpCodes.Br, afterMessageLabel);
         il.MarkLabel(argUndefinedLabel);
         il.Emit(OpCodes.Ldc_I4_0);
@@ -250,42 +300,42 @@ public partial class RuntimeEmitter
         // Create TypeError
         il.MarkLabel(typeErrorLabel);
         il.Emit(OpCodes.Ldloc, messageLocal);
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
+        il.Emit(OpCodes.Newobj, errors.TypeErrorConstructor);
         il.Emit(OpCodes.Stloc, errorLocal);
         il.Emit(OpCodes.Br, applyOptionsLabel);
 
         // Create RangeError
         il.MarkLabel(rangeErrorLabel);
         il.Emit(OpCodes.Ldloc, messageLocal);
-        il.Emit(OpCodes.Newobj, runtime.TSRangeErrorCtor);
+        il.Emit(OpCodes.Newobj, errors.RangeErrorConstructor);
         il.Emit(OpCodes.Stloc, errorLocal);
         il.Emit(OpCodes.Br, applyOptionsLabel);
 
         // Create ReferenceError
         il.MarkLabel(referenceErrorLabel);
         il.Emit(OpCodes.Ldloc, messageLocal);
-        il.Emit(OpCodes.Newobj, runtime.TSReferenceErrorCtor);
+        il.Emit(OpCodes.Newobj, errors.ReferenceErrorConstructor);
         il.Emit(OpCodes.Stloc, errorLocal);
         il.Emit(OpCodes.Br, applyOptionsLabel);
 
         // Create SyntaxError
         il.MarkLabel(syntaxErrorLabel);
         il.Emit(OpCodes.Ldloc, messageLocal);
-        il.Emit(OpCodes.Newobj, runtime.TSSyntaxErrorCtor);
+        il.Emit(OpCodes.Newobj, errors.SyntaxErrorConstructor);
         il.Emit(OpCodes.Stloc, errorLocal);
         il.Emit(OpCodes.Br, applyOptionsLabel);
 
         // Create URIError
         il.MarkLabel(uriErrorLabel);
         il.Emit(OpCodes.Ldloc, messageLocal);
-        il.Emit(OpCodes.Newobj, runtime.TSURIErrorCtor);
+        il.Emit(OpCodes.Newobj, errors.URIErrorConstructor);
         il.Emit(OpCodes.Stloc, errorLocal);
         il.Emit(OpCodes.Br, applyOptionsLabel);
 
         // Create EvalError
         il.MarkLabel(evalErrorLabel);
         il.Emit(OpCodes.Ldloc, messageLocal);
-        il.Emit(OpCodes.Newobj, runtime.TSEvalErrorCtor);
+        il.Emit(OpCodes.Newobj, errors.EvalErrorConstructor);
         il.Emit(OpCodes.Stloc, errorLocal);
         il.Emit(OpCodes.Br, applyOptionsLabel);
 
@@ -337,12 +387,12 @@ public partial class RuntimeEmitter
         var aggregateMessageArgLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Stloc, aggregateMessageArgLocal);
         il.Emit(OpCodes.Ldloc, aggregateMessageArgLocal);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
         il.Emit(OpCodes.Brtrue, noAggMessageArgLabel);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Stloc, hasAggregateMessageLocal);
         il.Emit(OpCodes.Ldloc, aggregateMessageArgLocal);
-        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
+        il.Emit(OpCodes.Call, inputs.StringCoercion.ToJsString);
         il.Emit(OpCodes.Br, afterAggMessageLabel);
 
         il.MarkLabel(noAggMessageArgLabel);
@@ -356,28 +406,68 @@ public partial class RuntimeEmitter
         // Pass (errors, message) to constructor
         il.Emit(OpCodes.Ldloc, aggregateErrorsLocal);
         il.Emit(OpCodes.Ldloc, aggregateMessageLocal);
-        il.Emit(OpCodes.Newobj, runtime.TSAggregateErrorCtor);
+        il.Emit(OpCodes.Newobj, errors.AggregateErrorConstructor);
         il.Emit(OpCodes.Stloc, errorLocal);
         il.Emit(OpCodes.Br, applyAggOptionsLabel);
 
         // Create base Error
         il.MarkLabel(defaultErrorLabel);
         il.Emit(OpCodes.Ldloc, messageLocal);
-        il.Emit(OpCodes.Newobj, runtime.TSErrorCtorMessage);
+        il.Emit(OpCodes.Newobj, errors.MessageConstructor);
         il.Emit(OpCodes.Stloc, errorLocal);
         il.Emit(OpCodes.Br, applyOptionsLabel);
 
         // Apply options for non-AggregateError types: options is args[1]
         il.MarkLabel(applyOptionsLabel);
-        EmitDefineErrorDataPropertyIfPresent(il, runtime, errorLocal, "message", messageLocal, hasMessageLocal);
-        EmitApplyErrorOptions(il, runtime, errorLocal, 1);
+        EmitDefineErrorDataPropertyIfPresent(
+            il,
+            inputs.DescriptorStorage,
+            errorLocal,
+            "message",
+            messageLocal,
+            hasMessageLocal
+        );
+        EmitApplyErrorOptions(
+            il,
+            errors,
+            new ApplyErrorOptionsInputs(
+                inputs.DescriptorStorage,
+                inputs.GetProperty,
+                inputs.IHasFieldsGetProperty,
+                inputs.IHasFieldsHasProperty,
+                inputs.IHasFieldsInterface,
+                inputs.ProxyHas
+            ),
+            errorLocal,
+            1
+        );
         il.Emit(OpCodes.Ldloc, errorLocal);
         il.Emit(OpCodes.Ret);
 
         // Apply options for AggregateError: options is args[2]
         il.MarkLabel(applyAggOptionsLabel);
-        EmitDefineErrorDataPropertyIfPresent(il, runtime, errorLocal, "message", aggregateMessageLocal, hasAggregateMessageLocal);
-        EmitApplyErrorOptions(il, runtime, errorLocal, 2);
+        EmitDefineErrorDataPropertyIfPresent(
+            il,
+            inputs.DescriptorStorage,
+            errorLocal,
+            "message",
+            aggregateMessageLocal,
+            hasAggregateMessageLocal
+        );
+        EmitApplyErrorOptions(
+            il,
+            errors,
+            new ApplyErrorOptionsInputs(
+                inputs.DescriptorStorage,
+                inputs.GetProperty,
+                inputs.IHasFieldsGetProperty,
+                inputs.IHasFieldsHasProperty,
+                inputs.IHasFieldsInterface,
+                inputs.ProxyHas
+            ),
+            errorLocal,
+            2
+        );
         il.Emit(OpCodes.Ldloc, errorLocal);
         il.Emit(OpCodes.Ret);
     }
@@ -390,35 +480,36 @@ public partial class RuntimeEmitter
     /// </summary>
     private static void EmitDefineErrorDataPropertyIfPresent(
         ILGenerator il,
-        EmittedRuntime runtime,
+        EmittedDescriptorStorageRuntime descriptorStorage,
         LocalBuilder errorLocal,
         string propertyName,
         LocalBuilder valueLocal,
-        LocalBuilder presentLocal)
+        LocalBuilder presentLocal
+    )
     {
         var skipLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, presentLocal);
         il.Emit(OpCodes.Brfalse, skipLabel);
 
-        var descriptorLocal = il.DeclareLocal(runtime.DescriptorStorage.DescriptorType);
-        il.Emit(OpCodes.Newobj, runtime.DescriptorStorage.DescriptorConstructor);
+        var descriptorLocal = il.DeclareLocal(descriptorStorage.DescriptorType);
+        il.Emit(OpCodes.Newobj, descriptorStorage.DescriptorConstructor);
         il.Emit(OpCodes.Stloc, descriptorLocal);
         il.Emit(OpCodes.Ldloc, descriptorLocal);
         il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorValue.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, descriptorStorage.DescriptorValue.GetSetMethod()!);
         il.Emit(OpCodes.Ldloc, descriptorLocal);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorWritable.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, descriptorStorage.DescriptorWritable.GetSetMethod()!);
         il.Emit(OpCodes.Ldloc, descriptorLocal);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorEnumerable.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, descriptorStorage.DescriptorEnumerable.GetSetMethod()!);
         il.Emit(OpCodes.Ldloc, descriptorLocal);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorConfigurable.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, descriptorStorage.DescriptorConfigurable.GetSetMethod()!);
         il.Emit(OpCodes.Ldloc, errorLocal);
         il.Emit(OpCodes.Ldstr, propertyName);
         il.Emit(OpCodes.Ldloc, descriptorLocal);
-        il.Emit(OpCodes.Call, runtime.DescriptorStorage.DefineProperty);
+        il.Emit(OpCodes.Call, descriptorStorage.DefineProperty);
         il.Emit(OpCodes.Pop);
 
         il.MarkLabel(skipLabel);
@@ -430,9 +521,11 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitApplyErrorOptions(
         ILGenerator il,
-        EmittedRuntime runtime,
+        EmittedErrorRuntime errors,
+        ApplyErrorOptionsInputs inputs,
         LocalBuilder errorLocal,
-        int optionsArgIndex)
+        int optionsArgIndex
+    )
     {
         var skipLabel = il.DefineLabel();
         var tryHasFieldsLabel = il.DefineLabel();
@@ -469,11 +562,11 @@ public partial class RuntimeEmitter
             () => il.Emit(OpCodes.Ldloc, optionsLocal),
             () => il.Emit(OpCodes.Ldstr, "cause"),
             notProxyLabel,
-            runtime);
+            inputs.ProxyHas);
         il.Emit(OpCodes.Brfalse, skipLabel);
         il.Emit(OpCodes.Ldloc, optionsLocal);
         il.Emit(OpCodes.Ldstr, "cause");
-        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, inputs.GetProperty);
         il.Emit(OpCodes.Stloc, causeLocal);
         il.Emit(OpCodes.Br, setCauseLabel);
 
@@ -496,78 +589,70 @@ public partial class RuntimeEmitter
         // Try IHasFields (e.g. $Object instances)
         il.MarkLabel(tryHasFieldsLabel);
         il.Emit(OpCodes.Ldloc, optionsLocal);
-        il.Emit(OpCodes.Isinst, runtime.IHasFieldsInterface);
+        il.Emit(OpCodes.Isinst, inputs.IHasFieldsInterface);
         il.Emit(OpCodes.Brfalse, skipLabel);
 
         // Check HasProperty("cause")
         il.Emit(OpCodes.Ldloc, optionsLocal);
-        il.Emit(OpCodes.Castclass, runtime.IHasFieldsInterface);
+        il.Emit(OpCodes.Castclass, inputs.IHasFieldsInterface);
         il.Emit(OpCodes.Ldstr, "cause");
-        il.Emit(OpCodes.Callvirt, runtime.IHasFieldsHasProperty);
+        il.Emit(OpCodes.Callvirt, inputs.IHasFieldsHasProperty);
         il.Emit(OpCodes.Brfalse, skipLabel);
 
         // Get cause value: options.GetProperty("cause")
         il.Emit(OpCodes.Ldloc, optionsLocal);
-        il.Emit(OpCodes.Castclass, runtime.IHasFieldsInterface);
+        il.Emit(OpCodes.Castclass, inputs.IHasFieldsInterface);
         il.Emit(OpCodes.Ldstr, "cause");
-        il.Emit(OpCodes.Callvirt, runtime.IHasFieldsGetProperty);
+        il.Emit(OpCodes.Callvirt, inputs.IHasFieldsGetProperty);
         il.Emit(OpCodes.Stloc, causeLocal);
 
         // Set cause on the error
         il.MarkLabel(setCauseLabel);
         il.Emit(OpCodes.Ldloc, errorLocal);
         il.Emit(OpCodes.Ldloc, causeLocal);
-        il.Emit(OpCodes.Call, runtime.ErrorSetCause);
+        il.Emit(OpCodes.Call, errors.SetCause);
         // Also install a non-enumerable PDS data descriptor so
         // Object.getOwnPropertyDescriptor(err, "cause") surfaces the slot
         // (ECMA-262 §20.5.8.1 step 1.b → CreateNonEnumerableDataPropertyOrThrow:
         // writable:true, enumerable:false, configurable:true). Unlocks
         // built-ins/Error/cause_property + verifyProperty patterns.
-        var causeDescLocal = il.DeclareLocal(runtime.DescriptorStorage.DescriptorType);
-        il.Emit(OpCodes.Newobj, runtime.DescriptorStorage.DescriptorConstructor);
+        var causeDescLocal = il.DeclareLocal(inputs.DescriptorStorage.DescriptorType);
+        il.Emit(OpCodes.Newobj, inputs.DescriptorStorage.DescriptorConstructor);
         il.Emit(OpCodes.Stloc, causeDescLocal);
         il.Emit(OpCodes.Ldloc, causeDescLocal);
         il.Emit(OpCodes.Ldloc, causeLocal);
-        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorValue.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorValue.GetSetMethod()!);
         il.Emit(OpCodes.Ldloc, causeDescLocal);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorWritable.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorWritable.GetSetMethod()!);
         il.Emit(OpCodes.Ldloc, causeDescLocal);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorEnumerable.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorEnumerable.GetSetMethod()!);
         il.Emit(OpCodes.Ldloc, causeDescLocal);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorConfigurable.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorConfigurable.GetSetMethod()!);
         il.Emit(OpCodes.Ldloc, errorLocal);
         il.Emit(OpCodes.Ldstr, "cause");
         il.Emit(OpCodes.Ldloc, causeDescLocal);
-        il.Emit(OpCodes.Call, runtime.DescriptorStorage.DefineProperty);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.DefineProperty);
         il.Emit(OpCodes.Pop);
 
         il.MarkLabel(skipLabel);
     }
 
-    private void EmitErrorGetters(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitErrorGetters(TypeBuilder typeBuilder, EmittedErrorRuntime errors)
     {
         // ErrorGetName
-        runtime.ErrorGetName = EmitErrorPropertyGetter(typeBuilder, runtime, "ErrorGetName",
-            runtime.TSErrorType, runtime.TSErrorNameGetter);
+        errors.GetName = EmitErrorPropertyGetter(typeBuilder, "ErrorGetName", errors.Type, errors.NameGetter);
 
         // ErrorGetMessage
-        runtime.ErrorGetMessage = EmitErrorPropertyGetter(typeBuilder, runtime, "ErrorGetMessage",
-            runtime.TSErrorType, runtime.TSErrorMessageGetter);
+        errors.GetMessage = EmitErrorPropertyGetter(typeBuilder, "ErrorGetMessage", errors.Type, errors.MessageGetter);
 
         // ErrorGetStack
-        runtime.ErrorGetStack = EmitErrorPropertyGetter(typeBuilder, runtime, "ErrorGetStack",
-            runtime.TSErrorType, runtime.TSErrorStackGetter);
+        errors.GetStack = EmitErrorPropertyGetter(typeBuilder, "ErrorGetStack", errors.Type, errors.StackGetter);
     }
 
-    private MethodBuilder EmitErrorPropertyGetter(
-        TypeBuilder typeBuilder,
-        EmittedRuntime runtime,
-        string methodName,
-        Type errorType,
-        MethodBuilder propertyGetter)
+    private MethodBuilder EmitErrorPropertyGetter(TypeBuilder typeBuilder, string methodName, Type errorType, MethodBuilder propertyGetter)
     {
         var method = typeBuilder.DefineMethod(
             methodName,
@@ -597,27 +682,19 @@ public partial class RuntimeEmitter
         return method;
     }
 
-    private void EmitErrorSetters(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitErrorSetters(TypeBuilder typeBuilder, EmittedErrorRuntime errors)
     {
         // ErrorSetName
-        runtime.ErrorSetName = EmitErrorPropertySetter(typeBuilder, runtime, "ErrorSetName",
-            runtime.TSErrorType, runtime.TSErrorNameSetter);
+        errors.SetName = EmitErrorPropertySetter(typeBuilder, "ErrorSetName", errors.Type, errors.NameSetter);
 
         // ErrorSetMessage
-        runtime.ErrorSetMessage = EmitErrorPropertySetter(typeBuilder, runtime, "ErrorSetMessage",
-            runtime.TSErrorType, runtime.TSErrorMessageSetter);
+        errors.SetMessage = EmitErrorPropertySetter(typeBuilder, "ErrorSetMessage", errors.Type, errors.MessageSetter);
 
         // ErrorSetStack
-        runtime.ErrorSetStack = EmitErrorPropertySetter(typeBuilder, runtime, "ErrorSetStack",
-            runtime.TSErrorType, runtime.TSErrorStackSetter);
+        errors.SetStack = EmitErrorPropertySetter(typeBuilder, "ErrorSetStack", errors.Type, errors.StackSetter);
     }
 
-    private MethodBuilder EmitErrorPropertySetter(
-        TypeBuilder typeBuilder,
-        EmittedRuntime runtime,
-        string methodName,
-        Type errorType,
-        MethodBuilder propertySetter)
+    private MethodBuilder EmitErrorPropertySetter(TypeBuilder typeBuilder, string methodName, Type errorType, MethodBuilder propertySetter)
     {
         var method = typeBuilder.DefineMethod(
             methodName,
@@ -646,7 +723,7 @@ public partial class RuntimeEmitter
         return method;
     }
 
-    private void EmitErrorGetCause(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitErrorGetCause(TypeBuilder typeBuilder, EmittedErrorRuntime errors, FieldInfo undefinedInstance)
     {
         // ErrorGetCause(object errorObj) -> object?
         // Returns cause value if HasCause is true, otherwise returns $Undefined.Instance
@@ -656,7 +733,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object]
         );
-        runtime.ErrorGetCause = method;
+        errors.GetCause = method;
 
         var il = method.GetILGenerator();
         var undefinedLabel = il.DefineLabel();
@@ -664,29 +741,29 @@ public partial class RuntimeEmitter
 
         // Check if arg is $Error
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSErrorType);
+        il.Emit(OpCodes.Isinst, errors.Type);
         il.Emit(OpCodes.Brfalse, undefinedLabel);
 
         // Check HasCause
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSErrorType);
-        il.Emit(OpCodes.Callvirt, runtime.TSErrorHasCauseGetter);
+        il.Emit(OpCodes.Castclass, errors.Type);
+        il.Emit(OpCodes.Callvirt, errors.HasCauseGetter);
         il.Emit(OpCodes.Brfalse, noCauseLabel);
 
         // HasCause is true - return Cause value
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSErrorType);
-        il.Emit(OpCodes.Callvirt, runtime.TSErrorCauseGetter);
+        il.Emit(OpCodes.Castclass, errors.Type);
+        il.Emit(OpCodes.Callvirt, errors.CauseGetter);
         il.Emit(OpCodes.Ret);
 
         // HasCause is false or not an error - return undefined
         il.MarkLabel(noCauseLabel);
         il.MarkLabel(undefinedLabel);
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, undefinedInstance);
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitErrorSetCause(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitErrorSetCause(TypeBuilder typeBuilder, EmittedErrorRuntime errors)
     {
         // ErrorSetCause(object errorObj, object? value) -> void
         var method = typeBuilder.DefineMethod(
@@ -695,27 +772,27 @@ public partial class RuntimeEmitter
             _types.Void,
             [_types.Object, _types.Object]
         );
-        runtime.ErrorSetCause = method;
+        errors.SetCause = method;
 
         var il = method.GetILGenerator();
         var endLabel = il.DefineLabel();
 
         // Check if arg is $Error
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSErrorType);
+        il.Emit(OpCodes.Isinst, errors.Type);
         il.Emit(OpCodes.Brfalse, endLabel);
 
         // Call Cause property setter (which also sets HasCause)
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSErrorType);
+        il.Emit(OpCodes.Castclass, errors.Type);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, runtime.TSErrorCauseSetter);
+        il.Emit(OpCodes.Callvirt, errors.CauseSetter);
 
         il.MarkLabel(endLabel);
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitAggregateErrorGetErrors(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitAggregateErrorGetErrors(TypeBuilder typeBuilder, EmittedErrorRuntime errors)
     {
         var method = typeBuilder.DefineMethod(
             "AggregateErrorGetErrors",
@@ -723,20 +800,20 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object]
         );
-        runtime.AggregateErrorGetErrors = method;
+        errors.AggregateErrorGetErrors = method;
 
         var il = method.GetILGenerator();
         var nullLabel = il.DefineLabel();
 
         // Check if arg is $AggregateError
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSAggregateErrorType);
+        il.Emit(OpCodes.Isinst, errors.AggregateErrorType);
         il.Emit(OpCodes.Brfalse, nullLabel);
 
         // Call Errors property getter
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSAggregateErrorType);
-        il.Emit(OpCodes.Callvirt, runtime.TSAggregateErrorErrorsGetter);
+        il.Emit(OpCodes.Castclass, errors.AggregateErrorType);
+        il.Emit(OpCodes.Callvirt, errors.AggregateErrorErrorsGetter);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(nullLabel);

@@ -752,7 +752,7 @@ public partial class ILCompiler
                 il.Emit(OpCodes.Brfalse, skipMessageDescriptor);
                 il.Emit(OpCodes.Ldarg_0);
                 il.Emit(OpCodes.Ldloc, messageLocal);
-                il.Emit(OpCodes.Call, _runtime.ErrorDefineMessageProperty);
+                il.Emit(OpCodes.Call, _runtime.Errors.DefineMessageProperty);
                 il.MarkLabel(skipMessageDescriptor);
             }
             else if (ResolveClassExprImplicitBaseConstructor(classExpr) is { } baseCtor)

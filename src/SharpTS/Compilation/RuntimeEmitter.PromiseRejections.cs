@@ -135,7 +135,7 @@ public partial class RuntimeEmitter
             _types.GetProperty(taskType, "Exception").GetGetMethod()!);
         il.Emit(OpCodes.Callvirt,
             _types.GetProperty(_types.Exception, "InnerException").GetGetMethod()!);
-        il.Emit(OpCodes.Call, runtime.WrapException);
+        il.Emit(OpCodes.Call, runtime.Errors.WrapException);
         il.Emit(OpCodes.Stloc, reason);
 
         // process.emit('unhandledRejection', reason, promise)

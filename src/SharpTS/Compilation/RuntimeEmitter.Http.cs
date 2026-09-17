@@ -1619,7 +1619,7 @@ public partial class RuntimeEmitter
         var getAllCookiesMethod = _types.GetMethod(_cookieContainerType!, "GetAllCookies", Type.EmptyTypes);
         var uriTryCreate = typeof(Uri).GetMethod("TryCreate", [_types.String, typeof(UriKind), typeof(Uri).MakeByRefType()])!;
         var uriKindAbsolute = (int)UriKind.Absolute;
-        var typeErrorCtor = runtime.TSTypeErrorCtor;
+        var typeErrorCtor = runtime.Errors.TypeErrorConstructor;
         var cookieType = Type.GetType("System.Net.Cookie, System.Net.Primitives")!;
         var cookieExpiredProp = cookieType.GetProperty("Expired")!;
 
@@ -1656,7 +1656,7 @@ public partial class RuntimeEmitter
             gen.Emit(OpCodes.Ldarg, argIndex);
             gen.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", [_types.String, _types.String])!);
             gen.Emit(OpCodes.Newobj, typeErrorCtor);
-            gen.Emit(OpCodes.Call, runtime.CreateException);
+            gen.Emit(OpCodes.Call, runtime.Errors.CreateException);
             gen.Emit(OpCodes.Throw);
 
             gen.MarkLabel(okLabel);
@@ -1680,7 +1680,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Brtrue, validLabel);
             il.Emit(OpCodes.Ldstr, "Invalid URL: (null)");
             il.Emit(OpCodes.Newobj, typeErrorCtor);
-            il.Emit(OpCodes.Call, runtime.CreateException);
+            il.Emit(OpCodes.Call, runtime.Errors.CreateException);
             il.Emit(OpCodes.Throw);
             il.MarkLabel(validLabel);
 
@@ -1707,7 +1707,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Brtrue, validLabel);
             il.Emit(OpCodes.Ldstr, "Invalid URL: (null)");
             il.Emit(OpCodes.Newobj, typeErrorCtor);
-            il.Emit(OpCodes.Call, runtime.CreateException);
+            il.Emit(OpCodes.Call, runtime.Errors.CreateException);
             il.Emit(OpCodes.Throw);
             il.MarkLabel(validLabel);
 
@@ -2765,11 +2765,11 @@ public partial class RuntimeEmitter
         void EmitThrowTypeError(ILGenerator il, string message, string code)
         {
             il.Emit(OpCodes.Ldstr, message);
-            il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
+            il.Emit(OpCodes.Newobj, runtime.Errors.TypeErrorConstructor);
             il.Emit(OpCodes.Dup);
             il.Emit(OpCodes.Ldstr, code);
-            il.Emit(OpCodes.Callvirt, runtime.TSErrorCodeSetter);
-            il.Emit(OpCodes.Call, runtime.CreateException);
+            il.Emit(OpCodes.Callvirt, runtime.Errors.CodeSetter);
+            il.Emit(OpCodes.Call, runtime.Errors.CreateException);
             il.Emit(OpCodes.Throw);
         }
 

@@ -924,22 +924,22 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Stfld, _netSocketConnectingField);
 
             // var error = new $Error(_errorMsg); error.Code = _errorCode; error.Syscall = "connect";
-            var errorLocal = il.DeclareLocal(runtime.TSErrorType);
+            var errorLocal = il.DeclareLocal(runtime.Errors.Type);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldfld, errorMsgField);
-            il.Emit(OpCodes.Newobj, runtime.TSErrorCtorMessage);
+            il.Emit(OpCodes.Newobj, runtime.Errors.MessageConstructor);
             il.Emit(OpCodes.Stloc, errorLocal);
 
             // error.Code = _errorCode
             il.Emit(OpCodes.Ldloc, errorLocal);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldfld, errorCodeField);
-            il.Emit(OpCodes.Callvirt, runtime.TSErrorCodeSetter);
+            il.Emit(OpCodes.Callvirt, runtime.Errors.CodeSetter);
 
             // error.Syscall = "connect"
             il.Emit(OpCodes.Ldloc, errorLocal);
             il.Emit(OpCodes.Ldstr, "connect");
-            il.Emit(OpCodes.Callvirt, runtime.TSErrorSyscallSetter);
+            il.Emit(OpCodes.Callvirt, runtime.Errors.SyscallSetter);
 
             // _socket.Emit("error", new object[] { error })
             il.Emit(OpCodes.Ldarg_0);

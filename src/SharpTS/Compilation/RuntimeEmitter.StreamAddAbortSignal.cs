@@ -119,10 +119,10 @@ public partial class RuntimeEmitter
 
         // err = new $Error("The operation was aborted"); err.Name = "AbortError";
         il.Emit(OpCodes.Ldstr, "The operation was aborted");
-        il.Emit(OpCodes.Newobj, runtime.TSErrorCtorMessage);
+        il.Emit(OpCodes.Newobj, runtime.Errors.MessageConstructor);
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Ldstr, "AbortError");
-        il.Emit(OpCodes.Callvirt, runtime.TSErrorNameSetter);
+        il.Emit(OpCodes.Callvirt, runtime.Errors.NameSetter);
         il.Emit(OpCodes.Stloc, errLocal);
 
         loadStream(il);

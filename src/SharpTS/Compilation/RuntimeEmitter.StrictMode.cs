@@ -12,7 +12,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitStrictModeHelpers(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
-        EmitThrowStrictSyntaxError(typeBuilder, runtime);
+        EmitThrowStrictSyntaxError(typeBuilder, runtime.Errors);
         EmitWarnSloppyDeleteVariable(typeBuilder, runtime);
     }
 
@@ -20,7 +20,7 @@ public partial class RuntimeEmitter
     /// Emits ThrowStrictSyntaxError(string message) -> void
     /// Throws an exception with SyntaxError prefix.
     /// </summary>
-    private void EmitThrowStrictSyntaxError(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitThrowStrictSyntaxError(TypeBuilder typeBuilder, EmittedErrorRuntime errors)
     {
         var method = typeBuilder.DefineMethod(
             "ThrowStrictSyntaxError",
@@ -28,7 +28,7 @@ public partial class RuntimeEmitter
             _types.Void,
             [_types.String]
         );
-        runtime.ThrowStrictSyntaxError = method;
+        errors.ThrowStrictSyntaxError = method;
 
         var il = method.GetILGenerator();
 

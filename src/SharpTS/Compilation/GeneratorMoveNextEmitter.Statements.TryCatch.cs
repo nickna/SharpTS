@@ -181,7 +181,7 @@ public partial class GeneratorMoveNextEmitter
         _il.Emit(OpCodes.Stfld, _builder.StateField);
         _il.Emit(OpCodes.Ldarg_0);
         _il.Emit(OpCodes.Ldfld, GetPendingExceptionField());
-        _il.Emit(OpCodes.Call, _ctx!.Runtime!.CreateException);
+        _il.Emit(OpCodes.Call, _ctx!.Runtime!.Errors.CreateException);
         _il.Emit(OpCodes.Throw);
     });
 
@@ -319,7 +319,7 @@ public partial class GeneratorMoveNextEmitter
         _il.Emit(OpCodes.Ldc_I4, -2);
         _il.Emit(OpCodes.Stfld, _builder.StateField);
         loadValue();
-        _il.Emit(OpCodes.Call, _ctx!.Runtime!.CreateException);
+        _il.Emit(OpCodes.Call, _ctx!.Runtime!.Errors.CreateException);
         _il.Emit(OpCodes.Throw);
     }
 
@@ -519,7 +519,7 @@ public partial class GeneratorMoveNextEmitter
                 _il.Emit(OpCodes.Ldc_I4, -2);
                 _il.Emit(OpCodes.Stfld, _builder.StateField);
                 EmitLoadCaughtException();
-                _il.Emit(OpCodes.Call, _ctx!.Runtime!.CreateException);
+                _il.Emit(OpCodes.Call, _ctx!.Runtime!.Errors.CreateException);
                 _il.Emit(OpCodes.Throw);
             }
 
@@ -584,7 +584,7 @@ public partial class GeneratorMoveNextEmitter
             EmitStatement(stmt);
 
         _il.BeginCatchBlock(typeof(Exception));
-        _il.Emit(OpCodes.Call, _ctx!.Runtime!.WrapException);
+        _il.Emit(OpCodes.Call, _ctx!.Runtime!.Errors.WrapException);
         _il.Emit(OpCodes.Stloc, caughtExceptionLocal);
         // Record presence with the flag, not the value: a caught null/undefined would otherwise read
         // as "no exception" at the gates above (#619).
