@@ -203,7 +203,7 @@ public partial class AsyncMoveNextEmitter
 
         EmitExpression(f.Object);
         EnsureBoxed();
-        _il.Emit(OpCodes.Call, _ctx!.Runtime!.GetKeys);
+        _il.Emit(OpCodes.Call, _ctx!.Runtime!.ObjectKeys.Keys);
         var keysLocal = _il.DeclareLocal(typeof(List<object>));
         _il.Emit(OpCodes.Stloc, keysLocal);
 

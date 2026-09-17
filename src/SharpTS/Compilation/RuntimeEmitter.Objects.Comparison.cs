@@ -301,10 +301,10 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, source);
         // Preserve GetKeys' mature ordinary-object descriptor handling for
         // enumerable strings, then append all Symbols for per-key filtering.
-        il.Emit(OpCodes.Call, runtime.GetKeys);
+        il.Emit(OpCodes.Call, runtime.ObjectKeys.Keys);
         il.Emit(OpCodes.Stloc, keys);
         il.Emit(OpCodes.Ldloc, source);
-        il.Emit(OpCodes.Call, runtime.GetOwnPropertySymbols);
+        il.Emit(OpCodes.Call, runtime.ObjectKeys.Symbols);
         il.Emit(OpCodes.Castclass, listType);
         il.Emit(OpCodes.Stloc, symbolKeys);
         il.Emit(OpCodes.Ldloc, keys);

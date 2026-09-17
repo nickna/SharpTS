@@ -50,7 +50,7 @@ public sealed class ObjectStaticEmitter : IStaticTypeEmitterStrategy
         switch (methodName)
         {
             case "keys":
-                il.Emit(OpCodes.Call, ctx.Runtime!.GetKeys);
+                il.Emit(OpCodes.Call, ctx.Runtime!.ObjectKeys.Keys);
                 return true;
             case "values":
                 il.Emit(OpCodes.Call, ctx.Runtime!.GetValues);
@@ -184,7 +184,7 @@ public sealed class ObjectStaticEmitter : IStaticTypeEmitterStrategy
                 return true;
             case "getOwnPropertyNames":
                 // Object.getOwnPropertyNames(obj) - gets all own property names
-                il.Emit(OpCodes.Call, ctx.Runtime!.GetOwnPropertyNames);
+                il.Emit(OpCodes.Call, ctx.Runtime!.ObjectKeys.Names);
                 return true;
             case "create":
                 // Object.create(proto, propertiesObject?) - creates a new object with prototype
@@ -216,7 +216,7 @@ public sealed class ObjectStaticEmitter : IStaticTypeEmitterStrategy
                 return true;
             case "getOwnPropertySymbols":
                 // Object.getOwnPropertySymbols(obj) - returns array of symbol-keyed properties
-                il.Emit(OpCodes.Call, ctx.Runtime!.GetOwnPropertySymbols);
+                il.Emit(OpCodes.Call, ctx.Runtime!.ObjectKeys.Symbols);
                 return true;
             case "getPrototypeOf":
                 // Object.getPrototypeOf(obj) - returns the prototype

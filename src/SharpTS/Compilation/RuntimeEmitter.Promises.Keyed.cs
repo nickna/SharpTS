@@ -54,13 +54,13 @@ public partial class RuntimeEmitter
 
         // Own enumerable string keys, already descriptor-filtered and ordered.
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.GetKeys);
+        il.Emit(OpCodes.Call, runtime.ObjectKeys.Keys);
         il.Emit(OpCodes.Stloc, keys);
 
         // Append enumerable symbol keys after strings, preserving
         // [[OwnPropertyKeys]] order within the symbol portion.
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.GetOwnPropertySymbols);
+        il.Emit(OpCodes.Call, runtime.ObjectKeys.Symbols);
         il.Emit(OpCodes.Castclass, listType);
         il.Emit(OpCodes.Stloc, symbols);
         il.Emit(OpCodes.Ldc_I4_0);

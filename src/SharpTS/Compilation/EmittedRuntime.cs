@@ -17,6 +17,10 @@ namespace SharpTS.Compilation;
 /// <seealso cref="ILEmitter"/>
 public class EmittedRuntime
 {
+    /// <summary>Required own-property key enumeration and Proxy key callbacks for one compilation.</summary>
+    public EmittedObjectKeysRuntime ObjectKeys { get; } = new();
+
+
     /// <summary>Required Object prototype and prototype-chain operations for one compilation.</summary>
     public EmittedObjectPrototypeRuntime ObjectPrototypes { get; } = new();
 
@@ -234,11 +238,6 @@ public class EmittedRuntime
 
     public MethodBuilder GetLength { get; set; } = null!;
     public MethodBuilder GetElement { get; set; } = null!;
-    public MethodBuilder GetKeys { get; set; } = null!;
-    public MethodBuilder NormalizeOwnPropertyKeys { get; set; } = null!;
-    public MethodBuilder GetOwnPropertyNames { get; set; } = null!;
-    public MethodBuilder GetOrdinaryOwnPropertyKeys { get; set; } = null!;
-    public MethodBuilder CreateProxyOwnKeysList { get; set; } = null!;
     public MethodBuilder GetValues { get; set; } = null!;
     public MethodBuilder GetEntries { get; set; } = null!;
     // Runtime dispatcher for built-in static member access on stored Type
@@ -398,7 +397,6 @@ public class EmittedRuntime
     public MethodBuilder ObjectHasOwn { get; set; } = null!;
     public MethodBuilder ObjectIs { get; set; } = null!;
     public MethodBuilder ObjectAssign { get; set; } = null!;
-    public MethodBuilder GetOwnPropertySymbols { get; set; } = null!;
 
     // @DotNetType event subscription registry (compiled mode — see
     // RuntimeEmitter.EventSubscriptions.cs).

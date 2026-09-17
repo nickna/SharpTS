@@ -330,6 +330,15 @@ carrier; the strict SyntaxError helper retains its existing CLR exception repres
 Exception wrapping follows supplied optional Promise metadata. Error-cause Proxy handling
 receives six explicit invocation/delegate handles through the shared reflection bridge.
 
+Own-property key enumeration uses required `ObjectKeys` ownership for enumerable keys,
+own names and symbols, key normalization, ordinary mixed keys and Proxy array-like key
+lists. The six declarations reject missing, null, duplicate and post-completion writes.
+The two early Proxy callback declarations require an explicit later-body stage. Seven
+helper signatures receive this owner and exact dependencies; supplied optional Promise
+metadata controls callback name branches. Proxy own-key and descriptor calls retain
+their scoped peer inputs. Key filtering and order, index boundaries, read-only symbol
+enumeration, mutable guest state, declaration order and deployment remain unchanged.
+
 Object prototypes use required `ObjectPrototypes` ownership for the singleton, its
 population helper, `toString`/`valueOf`/`toLocaleString`, `isPrototypeOf`, object creation
 and prototype get/set operations. `ClassPrototypes` separately owns the early class marker
