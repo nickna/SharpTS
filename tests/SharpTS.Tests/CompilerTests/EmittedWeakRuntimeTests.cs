@@ -244,9 +244,7 @@ public sealed class EmittedWeakRuntimeTests
         var runtime = emitter.EmitAll(module, features);
         typeof(RuntimeEmitter).GetField("_features", InstanceMembers)!.SetValue(emitter, Features(flags));
         var probe = module.DefineType("WeakDispatch", TypeAttributes.Public);
-        runtime.GetProperty = probe.DefineMethod("GetProperty", MethodAttributes.Public | MethodAttributes.Static,
-            typeof(object), [typeof(object), typeof(string)]);
-        typeof(RuntimeEmitter).GetMethod("EmitGetProperty", InstanceMembers)!.Invoke(emitter, [probe, runtime]);
+        ObjectReadTestSupport.EmitProperty(emitter, probe, runtime);
         probe.CreateType();
         var assembly = SaveVerifyLoad(builder);
         var runtimeType = assembly.GetType("$Runtime")!;

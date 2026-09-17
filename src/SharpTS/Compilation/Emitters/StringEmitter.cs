@@ -596,7 +596,7 @@ public sealed class StringEmitter : ITypeEmitterStrategy
         // GetValue precedes ArgumentListEvaluation for a method call.
         il.Emit(OpCodes.Ldloc, receiverLocal);
         il.Emit(OpCodes.Ldstr, methodName);
-        il.Emit(OpCodes.Call, ctx.Runtime!.GetProperty);
+        il.Emit(OpCodes.Call, ctx.Runtime!.ObjectRead.Property);
         var functionLocal = emitter.SpillStackToObjectLocal();
 
         if (arguments.Any(argument => argument is Expr.Spread))

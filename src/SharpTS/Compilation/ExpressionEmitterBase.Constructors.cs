@@ -892,7 +892,7 @@ public abstract partial class ExpressionEmitterBase
             var afterObjectModeLabel = IL.DefineLabel();
             IL.Emit(OpCodes.Ldloc, optionsLocal);
             IL.Emit(OpCodes.Ldstr, "objectMode");
-            IL.Emit(OpCodes.Call, Ctx.Runtime!.GetProperty);
+            IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectRead.Property);
             IL.Emit(OpCodes.Dup);
             IL.Emit(OpCodes.Brfalse, skipObjectModeLabel);
             IL.Emit(OpCodes.Pop);
@@ -910,7 +910,7 @@ public abstract partial class ExpressionEmitterBase
                 var hwmValLocal = IL.DeclareLocal(typeof(object));
                 IL.Emit(OpCodes.Ldloc, optionsLocal);
                 IL.Emit(OpCodes.Ldstr, "highWaterMark");
-                IL.Emit(OpCodes.Call, Ctx.Runtime!.GetProperty);
+                IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectRead.Property);
                 IL.Emit(OpCodes.Stloc, hwmValLocal);
                 // Skip if null
                 IL.Emit(OpCodes.Ldloc, hwmValLocal);
@@ -953,7 +953,7 @@ public abstract partial class ExpressionEmitterBase
             var skipWriteLabel = IL.DefineLabel();
             IL.Emit(OpCodes.Ldloc, optionsLocal);
             IL.Emit(OpCodes.Ldstr, "write");
-            IL.Emit(OpCodes.Call, Ctx.Runtime!.GetProperty);
+            IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectRead.Property);
             var writeCallbackLocal = IL.DeclareLocal(typeof(object));
             IL.Emit(OpCodes.Stloc, writeCallbackLocal);
             IL.Emit(OpCodes.Ldloc, writeCallbackLocal);
@@ -967,7 +967,7 @@ public abstract partial class ExpressionEmitterBase
             var skipFinalLabel = IL.DefineLabel();
             IL.Emit(OpCodes.Ldloc, optionsLocal);
             IL.Emit(OpCodes.Ldstr, "final");
-            IL.Emit(OpCodes.Call, Ctx.Runtime!.GetProperty);
+            IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectRead.Property);
             var finalCallbackLocal = IL.DeclareLocal(typeof(object));
             IL.Emit(OpCodes.Stloc, finalCallbackLocal);
             IL.Emit(OpCodes.Ldloc, finalCallbackLocal);
@@ -983,7 +983,7 @@ public abstract partial class ExpressionEmitterBase
                 var objectModeValLocal = IL.DeclareLocal(typeof(object));
                 IL.Emit(OpCodes.Ldloc, optionsLocal);
                 IL.Emit(OpCodes.Ldstr, "objectMode");
-                IL.Emit(OpCodes.Call, Ctx.Runtime!.GetProperty);
+                IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectRead.Property);
                 IL.Emit(OpCodes.Stloc, objectModeValLocal);
                 // Check if value is boxed Boolean true
                 IL.Emit(OpCodes.Ldloc, objectModeValLocal);
@@ -1004,7 +1004,7 @@ public abstract partial class ExpressionEmitterBase
                 var autoDestroyValLocal = IL.DeclareLocal(typeof(object));
                 IL.Emit(OpCodes.Ldloc, optionsLocal);
                 IL.Emit(OpCodes.Ldstr, "autoDestroy");
-                IL.Emit(OpCodes.Call, Ctx.Runtime!.GetProperty);
+                IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectRead.Property);
                 IL.Emit(OpCodes.Stloc, autoDestroyValLocal);
                 IL.Emit(OpCodes.Ldloc, autoDestroyValLocal);
                 IL.Emit(OpCodes.Isinst, typeof(bool));
@@ -1024,7 +1024,7 @@ public abstract partial class ExpressionEmitterBase
                 var hwmValLocal = IL.DeclareLocal(typeof(object));
                 IL.Emit(OpCodes.Ldloc, optionsLocal);
                 IL.Emit(OpCodes.Ldstr, "highWaterMark");
-                IL.Emit(OpCodes.Call, Ctx.Runtime!.GetProperty);
+                IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectRead.Property);
                 IL.Emit(OpCodes.Stloc, hwmValLocal);
                 IL.Emit(OpCodes.Ldloc, hwmValLocal);
                 IL.Emit(OpCodes.Brfalse, skipHwmLabel);
@@ -1066,7 +1066,7 @@ public abstract partial class ExpressionEmitterBase
             var skipWriteLabel = IL.DefineLabel();
             IL.Emit(OpCodes.Ldloc, optionsLocal);
             IL.Emit(OpCodes.Ldstr, "write");
-            IL.Emit(OpCodes.Call, Ctx.Runtime!.GetProperty);
+            IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectRead.Property);
             var writeCallbackLocal = IL.DeclareLocal(typeof(object));
             IL.Emit(OpCodes.Stloc, writeCallbackLocal);
             IL.Emit(OpCodes.Ldloc, writeCallbackLocal);
@@ -1080,7 +1080,7 @@ public abstract partial class ExpressionEmitterBase
             var skipObjectModeLabel = IL.DefineLabel();
             IL.Emit(OpCodes.Ldloc, optionsLocal);
             IL.Emit(OpCodes.Ldstr, "objectMode");
-            IL.Emit(OpCodes.Call, Ctx.Runtime!.GetProperty);
+            IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectRead.Property);
             IL.Emit(OpCodes.Dup);
             IL.Emit(OpCodes.Brfalse, skipObjectModeLabel);
             IL.Emit(OpCodes.Pop);
@@ -1118,7 +1118,7 @@ public abstract partial class ExpressionEmitterBase
             var afterTransformLabel = IL.DefineLabel();
             IL.Emit(OpCodes.Ldloc, optionsLocal);
             IL.Emit(OpCodes.Ldstr, "transform");
-            IL.Emit(OpCodes.Call, Ctx.Runtime!.GetProperty);
+            IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectRead.Property);
             var transformCallbackLocal = IL.DeclareLocal(typeof(object));
             IL.Emit(OpCodes.Stloc, transformCallbackLocal);
             IL.Emit(OpCodes.Ldloc, transformCallbackLocal);
@@ -1132,7 +1132,7 @@ public abstract partial class ExpressionEmitterBase
             var afterFlushLabel = IL.DefineLabel();
             IL.Emit(OpCodes.Ldloc, optionsLocal);
             IL.Emit(OpCodes.Ldstr, "flush");
-            IL.Emit(OpCodes.Call, Ctx.Runtime!.GetProperty);
+            IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectRead.Property);
             var flushCallbackLocal = IL.DeclareLocal(typeof(object));
             IL.Emit(OpCodes.Stloc, flushCallbackLocal);
             IL.Emit(OpCodes.Ldloc, flushCallbackLocal);
@@ -1146,7 +1146,7 @@ public abstract partial class ExpressionEmitterBase
             var skipObjectModeLabel = IL.DefineLabel();
             IL.Emit(OpCodes.Ldloc, optionsLocal);
             IL.Emit(OpCodes.Ldstr, "objectMode");
-            IL.Emit(OpCodes.Call, Ctx.Runtime!.GetProperty);
+            IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectRead.Property);
             IL.Emit(OpCodes.Dup);
             IL.Emit(OpCodes.Brfalse, skipObjectModeLabel);
             IL.Emit(OpCodes.Pop);

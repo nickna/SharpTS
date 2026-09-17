@@ -84,7 +84,7 @@ public partial class RuntimeEmitter
         // then = GetProperty(value, "then");
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "then");
-        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
         il.Emit(OpCodes.Stloc, thenLocal);
 
         // if (TypeOf(then) != "function") goto wrap;

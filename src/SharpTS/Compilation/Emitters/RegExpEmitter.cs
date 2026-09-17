@@ -72,7 +72,7 @@ public sealed class RegExpEmitter : ITypeEmitterStrategy
             "unicodeSets" => ctx.Runtime!.RegExps.RequireImplementation().GetUnicodeSets,
             // lastIndex may hold any assigned JS value until RegExpBuiltinExec
             // performs ToLength, so it must use the object-valued property path.
-            "lastIndex" => ctx.Runtime!.GetProperty,
+            "lastIndex" => ctx.Runtime!.ObjectRead.Property,
             _ => null
         };
         if (getter is null)
@@ -182,7 +182,7 @@ public sealed class RegExpEmitter : ITypeEmitterStrategy
         // Property lookup precedes ArgumentListEvaluation.
         il.Emit(OpCodes.Ldloc, receiverLocal);
         il.Emit(OpCodes.Ldstr, methodName);
-        il.Emit(OpCodes.Call, ctx.Runtime!.GetProperty);
+        il.Emit(OpCodes.Call, ctx.Runtime!.ObjectRead.Property);
         var functionLocal = emitter.SpillStackToObjectLocal();
 
         if (arguments.Any(argument => argument is Expr.Spread))

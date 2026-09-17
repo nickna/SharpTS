@@ -419,7 +419,7 @@ public partial class AsyncMoveNextEmitter
             _il.Emit(OpCodes.Ldarg_0);
             _il.Emit(OpCodes.Ldfld, iteratorField);
             _il.Emit(OpCodes.Ldstr, "return");
-            _il.Emit(OpCodes.Call, _ctx.Runtime.GetProperty);
+            _il.Emit(OpCodes.Call, _ctx.Runtime.ObjectRead.Property);
             var fnLocal = _il.DeclareLocal(_types.Object);
             _il.Emit(OpCodes.Stloc, fnLocal);
 

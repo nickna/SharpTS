@@ -116,7 +116,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldfld, runtime.RequireWebStreams().TransformHolderTransformerField);
             il.Emit(OpCodes.Ldstr, "transform");
-            il.Emit(OpCodes.Call, runtime.GetFieldsProperty);
+            il.Emit(OpCodes.Call, runtime.ObjectRead.FieldsProperty);
             il.Emit(OpCodes.Stloc, transformFnLocal);
 
             // If transform is null/$Undefined, fall back to pass-through.
@@ -177,7 +177,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldfld, runtime.RequireWebStreams().TransformHolderTransformerField);
             il.Emit(OpCodes.Ldstr, "flush");
-            il.Emit(OpCodes.Call, runtime.GetFieldsProperty);
+            il.Emit(OpCodes.Call, runtime.ObjectRead.FieldsProperty);
             il.Emit(OpCodes.Stloc, flushLocal);
 
             var noFlushLabel = il.DefineLabel();

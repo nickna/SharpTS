@@ -569,7 +569,7 @@ public partial class RuntimeEmitter
         // lenVal = $Runtime.GetProperty(receiver, "length")
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "length");
-        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
         // double d = $Runtime.ToNumber(lenVal);
         il.Emit(OpCodes.Call, runtime.NumericCoercion.ToNumber);
         var dLocal = il.DeclareLocal(_types.Double);
@@ -660,7 +660,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, listLocal);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, idxKeyLocal);
-        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
         il.Emit(OpCodes.Br, addValueLabel);
         il.MarkLabel(addHoleLabel);
         il.Emit(OpCodes.Ldloc, listLocal);
@@ -879,7 +879,7 @@ public partial class RuntimeEmitter
         // lenVal = $Runtime.GetProperty(receiver, "length")
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "length");
-        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
         il.Emit(OpCodes.Stloc, lenValLocal);
         var haveLen = il.DefineLabel();
         var afterLen = il.DefineLabel();
@@ -1009,7 +1009,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, dictLocal);
         il.Emit(OpCodes.Ldloca, idxLocal);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Int32, "ToString", Type.EmptyTypes)!);
-        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
         il.Emit(OpCodes.Stloc, valLocal);
         il.Emit(OpCodes.Ldloc, valLocal);
         il.Emit(OpCodes.Brfalse, pushHole_dict);
@@ -1059,7 +1059,7 @@ public partial class RuntimeEmitter
             // fn = $Runtime.GetProperty(lenVal, name)
             il.Emit(OpCodes.Ldloc, lenValLocal);
             il.Emit(OpCodes.Ldstr, name);
-            il.Emit(OpCodes.Call, runtime.GetProperty);
+            il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
             il.Emit(OpCodes.Stloc, fnLocal);
             il.Emit(OpCodes.Ldloc, fnLocal);
             il.Emit(OpCodes.Brfalse, afterLabel);
@@ -1251,7 +1251,7 @@ public partial class RuntimeEmitter
         // len = ToLength(Get(O, "length")), without narrowing to Int32.
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "length");
-        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
         il.Emit(OpCodes.Call, runtime.NumericCoercion.ToNumber);
         il.Emit(OpCodes.Stloc, rawLenLocal);
 
@@ -1455,13 +1455,13 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, listElement);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, keyLocal);
-        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
         il.Emit(OpCodes.Br, elementReady);
         il.MarkLabel(listElement);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, indexLocal);
         il.Emit(OpCodes.Box, _types.Double);
-        il.Emit(OpCodes.Call, runtime.GetIndex);
+        il.Emit(OpCodes.Call, runtime.ObjectRead.Index);
         il.MarkLabel(elementReady);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, runtime.StrictEquals);
@@ -1696,7 +1696,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(readSpreadabilityLabel);
         il.Emit(OpCodes.Ldloc, elementLocal);
         il.Emit(OpCodes.Ldsfld, runtime.Symbols.IsConcatSpreadable);
-        il.Emit(OpCodes.Call, runtime.GetIndex);
+        il.Emit(OpCodes.Call, runtime.ObjectRead.Index);
         il.Emit(OpCodes.Stloc, spreadValueLocal);
 
         var defaultSpreadabilityLabel = il.DefineLabel();
@@ -1731,7 +1731,7 @@ public partial class RuntimeEmitter
         var rawLengthLocal = il.DeclareLocal(_types.Double);
         il.Emit(OpCodes.Ldloc, elementLocal);
         il.Emit(OpCodes.Ldstr, "length");
-        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
         il.Emit(OpCodes.Call, runtime.NumericCoercion.ToNumber);
         il.Emit(OpCodes.Stloc, rawLengthLocal);
 
@@ -1814,13 +1814,13 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, concatListElement);
         il.Emit(OpCodes.Ldloc, elementLocal);
         il.Emit(OpCodes.Ldloc, copyKeyLocal);
-        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
         il.Emit(OpCodes.Br, concatElementReady);
         il.MarkLabel(concatListElement);
         il.Emit(OpCodes.Ldloc, elementLocal);
         il.Emit(OpCodes.Ldloc, copyIndexLocal);
         il.Emit(OpCodes.Box, _types.Int32);
-        il.Emit(OpCodes.Call, runtime.GetIndex);
+        il.Emit(OpCodes.Call, runtime.ObjectRead.Index);
         il.MarkLabel(concatElementReady);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", _types.Object));
         il.Emit(OpCodes.Br, copyAddedLabel);
@@ -2014,7 +2014,7 @@ public partial class RuntimeEmitter
         // d = ToNumber(GetProperty(receiver, "length"))
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "length");
-        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
         il.Emit(OpCodes.Call, runtime.NumericCoercion.ToNumber);
         il.Emit(OpCodes.Stloc, dLocal);
 
@@ -2282,7 +2282,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(loadArrayPropertyLabel);
         il.Emit(OpCodes.Ldloc, rcvrLocal);
         il.Emit(OpCodes.Ldloc, keyStrLocal);
-        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notTSArrayReceiver);
 
@@ -2358,7 +2358,7 @@ public partial class RuntimeEmitter
         // still true) instead of treating it as a hole.
         il.Emit(OpCodes.Ldloc, dictLocal);
         il.Emit(OpCodes.Ldloc, keyStrLocal);
-        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(noOwnPds);
         // Not own (neither in _fields nor own PDS). ECMA-262 7.3.10
@@ -2374,7 +2374,7 @@ public partial class RuntimeEmitter
         // chain itself and invokes accessors).
         il.Emit(OpCodes.Ldloc, dictLocal);
         il.Emit(OpCodes.Ldloc, keyStrLocal);
-        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notDict);
 
@@ -2400,7 +2400,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, returnHoleLabel);
         il.Emit(OpCodes.Ldloc, rcvrLocal);
         il.Emit(OpCodes.Ldloc, tsoKeyStrLocal);
-        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
         il.Emit(OpCodes.Ret);
 
         // Compact ordinary-object carriers use the same live protocol as
@@ -2420,7 +2420,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, returnHoleLabel);
         il.Emit(OpCodes.Ldloc, rcvrLocal);
         il.Emit(OpCodes.Ldloc, tsoKeyStrLocal);
-        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(returnHoleLabel);

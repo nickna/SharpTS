@@ -168,7 +168,7 @@ public sealed class JSONStaticEmitter : IStaticTypeEmitterStrategy
         il.Emit(OpCodes.Call, runtime.Json.SingletonPopulateMethod);
         il.Emit(OpCodes.Ldsfld, runtime.Json.SingletonField);
         il.Emit(OpCodes.Ldstr, propertyName);
-        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
         return true;
     }
 

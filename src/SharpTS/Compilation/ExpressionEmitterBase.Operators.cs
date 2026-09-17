@@ -253,7 +253,7 @@ public abstract partial class ExpressionEmitterBase
             EmitMemberAccessIncrement(
                 isPrefix: true, pi.Operator.Type, objLocal,
                 emitKey: () => IL.Emit(OpCodes.Ldstr, get.Name.Lexeme),
-                Ctx.Runtime!.GetProperty, Ctx.Runtime!.SetProperty);
+                Ctx.Runtime!.ObjectRead.Property, Ctx.Runtime!.SetProperty);
             return;
         }
 
@@ -265,7 +265,7 @@ public abstract partial class ExpressionEmitterBase
             EmitMemberAccessIncrement(
                 isPrefix: true, pi.Operator.Type, objLocal,
                 emitKey: () => IL.Emit(OpCodes.Ldloc, indexLocal),
-                Ctx.Runtime!.GetIndex, Ctx.Runtime!.SetIndex);
+                Ctx.Runtime!.ObjectRead.Index, Ctx.Runtime!.SetIndex);
             return;
         }
 
@@ -314,7 +314,7 @@ public abstract partial class ExpressionEmitterBase
             EmitMemberAccessIncrement(
                 isPrefix: false, poi.Operator.Type, objLocal,
                 emitKey: () => IL.Emit(OpCodes.Ldstr, get.Name.Lexeme),
-                Ctx.Runtime!.GetProperty, Ctx.Runtime!.SetProperty);
+                Ctx.Runtime!.ObjectRead.Property, Ctx.Runtime!.SetProperty);
             return;
         }
 
@@ -326,7 +326,7 @@ public abstract partial class ExpressionEmitterBase
             EmitMemberAccessIncrement(
                 isPrefix: false, poi.Operator.Type, objLocal,
                 emitKey: () => IL.Emit(OpCodes.Ldloc, indexLocal),
-                Ctx.Runtime!.GetIndex, Ctx.Runtime!.SetIndex);
+                Ctx.Runtime!.ObjectRead.Index, Ctx.Runtime!.SetIndex);
             return;
         }
 
@@ -532,7 +532,7 @@ public abstract partial class ExpressionEmitterBase
         // Get current value
         IL.Emit(OpCodes.Ldloc, objLocal);
         IL.Emit(OpCodes.Ldstr, ls.Name.Lexeme);
-        IL.Emit(OpCodes.Call, Ctx.Runtime!.GetProperty);
+        IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectRead.Property);
         IL.Emit(OpCodes.Dup);
 
         EmitLogicalConditionCheck(ls.Operator.Type, skipLabel);
@@ -572,7 +572,7 @@ public abstract partial class ExpressionEmitterBase
         // Get current value
         IL.Emit(OpCodes.Ldloc, objLocal);
         IL.Emit(OpCodes.Ldloc, indexLocal);
-        IL.Emit(OpCodes.Call, Ctx.Runtime!.GetIndex);
+        IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectRead.Index);
         IL.Emit(OpCodes.Dup);
 
         EmitLogicalConditionCheck(lsi.Operator.Type, skipLabel);
@@ -660,7 +660,7 @@ public abstract partial class ExpressionEmitterBase
 
         IL.Emit(OpCodes.Ldloc, objTemp);
         IL.Emit(OpCodes.Ldstr, cs.Name.Lexeme);
-        IL.Emit(OpCodes.Call, Ctx.Runtime!.GetProperty);
+        IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectRead.Property);
         var currentTemp = _helpers.SpillStoreObject();
 
         // Spill the value so an await inside it suspends with an empty stack
@@ -700,7 +700,7 @@ public abstract partial class ExpressionEmitterBase
 
         IL.Emit(OpCodes.Ldloc, objTemp);
         IL.Emit(OpCodes.Ldloc, indexTemp);
-        IL.Emit(OpCodes.Call, Ctx.Runtime!.GetIndex);
+        IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectRead.Index);
         var currentTemp = _helpers.SpillStoreObject();
 
         // Spill the value so an await inside it suspends with an empty stack

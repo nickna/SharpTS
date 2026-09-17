@@ -316,7 +316,7 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Ldloc, objLocal);  // receiver
         IL.Emit(OpCodes.Ldloc, objLocal);
         IL.Emit(OpCodes.Ldstr, methodName);
-        IL.Emit(OpCodes.Call, _ctx.Runtime!.GetProperty);
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.ObjectRead.Property);
 
         // Create args array
         IL.Emit(OpCodes.Ldc_I4, arguments.Count);

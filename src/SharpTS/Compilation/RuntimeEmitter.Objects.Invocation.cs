@@ -1068,7 +1068,7 @@ public partial class RuntimeEmitter
         var fn = fnLocal;
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
         il.Emit(OpCodes.Stloc, fn);
         // if (fn == null) goto notEnumerator-or-synth
         il.Emit(OpCodes.Ldloc, fn);

@@ -347,7 +347,7 @@ public partial class ILEmitter
         builder.MarkLabel(dynamicDispatchLabel);
         IL.Emit(OpCodes.Ldloc, objLocal);
         IL.Emit(OpCodes.Ldstr, methodName);
-        IL.Emit(OpCodes.Call, _ctx.Runtime!.GetProperty);
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.ObjectRead.Property);
         var fnLocal = IL.DeclareLocal(_ctx.Types.Object);
         IL.Emit(OpCodes.Stloc, fnLocal);
         // args = new object[arguments.Count]

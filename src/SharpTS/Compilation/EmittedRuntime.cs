@@ -17,6 +17,10 @@ namespace SharpTS.Compilation;
 /// <seealso cref="ILEmitter"/>
 public class EmittedRuntime
 {
+    /// <summary>Required named, computed, field, list and element reading metadata for one compilation.</summary>
+    public EmittedObjectReadRuntime ObjectRead { get; } = new();
+
+
     /// <summary>Required strict and non-strict property/index deletion metadata for one compilation.</summary>
     public EmittedObjectDeletionRuntime ObjectDeletion { get; } = new();
 
@@ -252,8 +256,6 @@ public class EmittedRuntime
     public new MethodBuilder Equals { get; set; } = null!;
     public MethodBuilder StrictEquals { get; set; } = null!;
 
-    public MethodBuilder GetLength { get; set; } = null!;
-    public MethodBuilder GetElement { get; set; } = null!;
     // Runtime dispatcher for built-in static member access on stored Type
     // tokens (issue #63). Returns a $TSFunction wrapper matching what the
     // compile-time ArrayStaticEmitter / NumberStaticEmitter / etc. would emit.
@@ -325,10 +327,8 @@ public class EmittedRuntime
     public EmittedStringRuntime Strings { get; } = new();
 
     // Object methods
-    public MethodBuilder GetProperty { get; set; } = null!;
     public MethodBuilder SetProperty { get; set; } = null!;
     public MethodBuilder SetPropertyStrict { get; set; } = null!;
-    public MethodBuilder GetFieldsProperty { get; set; } = null!;
     /// <summary>
     /// Weak per-receiver cache of reflected CLR method wrappers used by
     /// <see cref="GetFieldsProperty"/>. Values are
@@ -338,7 +338,6 @@ public class EmittedRuntime
     public FieldBuilder ReflectedMethodCacheField { get; set; } = null!;
     public MethodBuilder SetFieldsProperty { get; set; } = null!;
     public MethodBuilder SetFieldsPropertyStrict { get; set; } = null!;
-    public MethodBuilder GetListProperty { get; set; } = null!;
     public MethodBuilder ToPascalCase { get; set; } = null!;
     public MethodBuilder SafeGetMethod { get; set; } = null!;
     public MethodBuilder NewOnFunction { get; set; } = null!;
@@ -379,11 +378,6 @@ public class EmittedRuntime
     public FieldBuilder FunctionPrototypeField { get; set; } = null!;
     /// <summary>Idempotent populate for <see cref="FunctionPrototypeField"/>.</summary>
     public MethodBuilder FunctionPrototypePopulateMethod { get; set; } = null!;
-    /// <summary>$Runtime.FunctionProtoCall(__this, args) — ECMA-262 §20.2.3.3 Function.prototype.call. Dispatches __this with args[0] as thisArg, args[1..] as call args.</summary>
-    /// <summary>$Runtime.FunctionProtoApply(__this, args) — ECMA-262 §20.2.3.1 Function.prototype.apply. Dispatches __this with args[0] as thisArg, args[1] (array-like) as call args.</summary>
-    /// <summary>$Runtime.FunctionProtoBind(__this, args) — ECMA-262 §20.2.3.2 Function.prototype.bind. Returns a $BoundTSFunction (or shim) capturing __this + thisArg + boundArgs.</summary>
-    /// <summary>$Runtime.FunctionProtoToString(__this) — ECMA-262 §20.2.3.5. Stringifies the function (or returns native-source-like text).</summary>
-    public MethodBuilder GetIndex { get; set; } = null!;
     public MethodBuilder SetIndex { get; set; } = null!;
     public MethodBuilder SetIndexStrict { get; set; } = null!;
     public MethodBuilder WarnSloppyDeleteVariable { get; set; } = null!;

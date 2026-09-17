@@ -121,7 +121,7 @@ public partial class RuntimeEmitter
                 FunctionApplyWrapperType: runtime.FunctionApplyWrapperType,
                 FunctionBindWrapperType: runtime.FunctionBindWrapperType,
                 FunctionCallWrapperType: runtime.FunctionCallWrapperType,
-                GetIndex: runtime.GetIndex,
+                GetIndex: runtime.ObjectRead.Index,
                 Json: runtime.Json,
                 Map: runtime.Map,
                 Math: runtime.Math,
@@ -145,7 +145,7 @@ public partial class RuntimeEmitter
             typeBuilder,
             new ObjectProtoToLocaleStringHelperInputs(
                 runtime.Errors,
-                runtime.GetProperty,
+                runtime.ObjectRead.Property,
                 runtime.InvokeMethodValue,
                 runtime.StringCoercion,
                 runtime.TypeOf,
@@ -278,7 +278,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloca, indexLocal);
         il.Emit(OpCodes.Call, _types.GetMethodNoParams(_types.Int32, "ToString"));
-        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
         il.Emit(OpCodes.Stloc, elementLocal);
         il.Emit(OpCodes.Ldloc, elementLocal);
         il.Emit(OpCodes.Isinst, runtime.UndefinedType);
@@ -287,7 +287,7 @@ public partial class RuntimeEmitter
 
         il.Emit(OpCodes.Ldloc, elementLocal);
         il.Emit(OpCodes.Ldstr, "toLocaleString");
-        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
         il.Emit(OpCodes.Stloc, methodLocal);
         il.Emit(OpCodes.Ldloc, methodLocal);
         il.Emit(OpCodes.Call, runtime.TypeOf);

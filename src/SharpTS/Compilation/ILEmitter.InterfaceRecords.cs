@@ -59,7 +59,7 @@ public partial class ILEmitter
         if (!IsNullPlaceholderGlobal(get.Object))
             EmitThrowIfUndefinedReceiverOnStack(get.Name.Lexeme);
         IL.Emit(OpCodes.Ldstr, get.Name.Lexeme);
-        IL.Emit(OpCodes.Call, runtime.GetProperty);
+        IL.Emit(OpCodes.Call, runtime.ObjectRead.Property);
         // Only a numeric consumer may coerce the fallback. An interface annotation
         // alone must not turn a dynamically replaced string field into a number.
         if (numericConsumer) IL.Emit(OpCodes.Call, runtime.NumericCoercion.ConvertToNumber);

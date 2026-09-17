@@ -183,7 +183,7 @@ public partial class RuntimeEmitter
         var valueLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldstr, callbackName);
-        il.Emit(OpCodes.Call, runtime.GetFieldsProperty);
+        il.Emit(OpCodes.Call, runtime.ObjectRead.FieldsProperty);
         il.Emit(OpCodes.Stloc, valueLocal);
 
         // If value is $Undefined.Instance, normalise to null.

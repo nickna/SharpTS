@@ -144,7 +144,7 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Ldloc, binding.ObjectLocal);
         EmitDoubleConstant(index);
         IL.Emit(OpCodes.Box, _ctx.Types.Double);
-        IL.Emit(OpCodes.Call, _ctx.Runtime.GetIndex);
+        IL.Emit(OpCodes.Call, _ctx.Runtime.ObjectRead.Index);
         IL.MarkLabel(end);
         SetStackUnknown();
         return true;
@@ -191,7 +191,7 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Ldloc, binding.ObjectLocal);
         EmitDoubleConstant(index);
         IL.Emit(OpCodes.Box, _ctx.Types.Double);
-        IL.Emit(OpCodes.Call, _ctx.Runtime.GetIndex);
+        IL.Emit(OpCodes.Call, _ctx.Runtime.ObjectRead.Index);
         IL.Emit(OpCodes.Call, _ctx.Runtime.NumericCoercion.ConvertToNumber);
         IL.Emit(OpCodes.Stloc, result);
 
@@ -242,7 +242,7 @@ public partial class ILEmitter
         IL.MarkLabel(fallback);
         IL.Emit(OpCodes.Ldloc, binding.ObjectLocal);
         IL.Emit(OpCodes.Ldstr, expression.Name.Lexeme);
-        IL.Emit(OpCodes.Call, _ctx.Runtime!.GetProperty);
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.ObjectRead.Property);
         IL.MarkLabel(end);
         SetStackUnknown();
         return true;
@@ -290,7 +290,7 @@ public partial class ILEmitter
         IL.MarkLabel(fallback);
         IL.Emit(OpCodes.Ldloc, binding.ObjectLocal);
         IL.Emit(OpCodes.Ldstr, expression.Name.Lexeme);
-        IL.Emit(OpCodes.Call, _ctx.Runtime!.GetProperty);
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.ObjectRead.Property);
         IL.Emit(OpCodes.Call, _ctx.Runtime.NumericCoercion.ConvertToNumber);
         IL.Emit(OpCodes.Stloc, result);
         IL.MarkLabel(end);

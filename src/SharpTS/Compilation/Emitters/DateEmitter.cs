@@ -322,7 +322,7 @@ public sealed class DateEmitter : ITypeEmitterStrategy
 
         il.Emit(OpCodes.Ldloc, receiverLocal);
         il.Emit(OpCodes.Ldstr, methodName);
-        il.Emit(OpCodes.Call, ctx.Runtime!.GetProperty);
+        il.Emit(OpCodes.Call, ctx.Runtime!.ObjectRead.Property);
         var functionLocal = emitter.SpillStackToObjectLocal();
 
         emitter.EmitArgsArrayWithSpread(arguments);

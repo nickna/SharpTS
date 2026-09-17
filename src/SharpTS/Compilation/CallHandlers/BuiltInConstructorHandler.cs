@@ -190,13 +190,13 @@ public class BuiltInConstructorHandler : ICallHandler
             // IsRegExp: pattern[Symbol.match] truthy
             il.Emit(OpCodes.Ldloc, patternLocal);
             il.Emit(OpCodes.Ldsfld, runtime.Symbols.Match);
-            il.Emit(OpCodes.Call, runtime.GetIndex);
+            il.Emit(OpCodes.Call, runtime.ObjectRead.Index);
             il.Emit(OpCodes.Call, runtime.Booleans.IsTruthy);
             il.Emit(OpCodes.Brfalse, doFromArgs);
             // pattern.constructor === %RegExp% (the $RegExp Type token)
             il.Emit(OpCodes.Ldloc, patternLocal);
             il.Emit(OpCodes.Ldstr, "constructor");
-            il.Emit(OpCodes.Call, runtime.GetProperty);
+            il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
             il.Emit(OpCodes.Ldtoken, runtime.RegExps.RequireImplementation().Type);
             il.Emit(OpCodes.Call, ctx.Types.GetMethod(ctx.Types.Type, "GetTypeFromHandle", ctx.Types.RuntimeTypeHandle));
             il.Emit(OpCodes.Bne_Un, doFromArgs);                     // constructor !== RegExp → copy

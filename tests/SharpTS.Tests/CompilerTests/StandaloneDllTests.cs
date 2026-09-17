@@ -3708,6 +3708,405 @@ public class StandaloneDllTests
             verifyStandardError: error => Assert.Empty(error)));
     }
 
+    public static IEnumerable<object[]> ObjectReadMetadataPrograms =>
+    [
+        new object[]
+        {
+            "minimal",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "console.log(1);" },
+            "1\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "named",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const o:any={x:1}; console.log(o.x,o.missing); o.x=2; console.log(o.x);" },
+            "1 undefined\n2\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "computed",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const o:any={x:3}; const key:any=\"x\"; console.log(o[key],o[\"missing\"]);" },
+            "3 undefined\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "fields",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "class Item { x=4; get doubled(){return this.x*2;} } const o:any=new Item(); console.log(o.x,o[\"doubled\"]); o.x=5; console.log(o.doubled);" },
+            "4 8\n10\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "getter",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let n=0; const o:any={get x(){n++;return n;}}; console.log(o.x,o[\"x\"],n);" },
+            "1 2 2\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "getter_receiver",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const p:any={get x(){return (this as any).y;}}; const o:any=Object.create(p); o.y=7; console.log(o.x,o[\"x\"]);" },
+            "7 7\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "symbol",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const s=Symbol(\"read\"); const o:any={[s]:8}; console.log(o[s]); o[s]=9; console.log(o[s]);" },
+            "8\n9\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "list",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const a:any=[1,2,3]; const get=(o:any,k:any)=>o[k]; console.log(get(a,\"length\"),get(a,1),get(a,\"join\").call(a,\"-\"));" },
+            "3 2 1-2-3\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "sparse",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const a:any=new Array(4); a[2]=6; console.log(a.length,a[0],a[2],a[3]); console.log([...a].join(\",\"));" },
+            "4 undefined 6 undefined\n,,6,\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "list_mutation",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const a:any=[1,2]; const old=Array.prototype.join; Array.prototype.join=function(){return \"custom\";}; console.log(a[\"join\"]()); Array.prototype.join=old; console.log(a.join(\",\"));" },
+            "custom\n1,2\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "list_descriptor",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const a:any=[1,2]; Object.defineProperty(a,\"join\",{value:function(){return \"own\";},configurable:true}); console.log(a[\"join\"]());" },
+            "own\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "string",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const s:any=\"abc\"; console.log(s.length,s[1],s[\"toUpperCase\"]());" },
+            "3 b ABC\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "boxed",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const s:any=new String(\"abc\"); const n:any=new Number(4); const b:any=new Boolean(true); console.log(s.length,s[1],n.valueOf(),b.valueOf());" },
+            "3 b 4 true\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "map",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const m:any=new Map([[\"x\",1]]); console.log(m.size,m[\"get\"](\"x\")); m.set(\"y\",2); console.log(m.size);" },
+            "1 1\n2\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "set",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const s:any=new Set([1,2]); console.log(s.size,s[\"has\"](2));" },
+            "2 true\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "weak",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const key={}; const m:any=new WeakMap(); const s:any=new WeakSet(); m.set(key,3); s.add(key); console.log(m[\"get\"](key),s[\"has\"](key)); const r:any=new WeakRef(key); console.log(r[\"deref\"]()===key);" },
+            "3 true\ntrue\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "bigint",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const x:any=123n; console.log(x[\"toString\"](),x[\"valueOf\"]()===123n);" },
+            "123 true\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "regexp",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const r:any=/a/gi; console.log(r.source,r.flags,r.global,r.ignoreCase,r[\"test\"](\"A\"));" },
+            "a gi true true true\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "regexp_symbol",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const r:any=/a/g; const m=r[Symbol.match](\"aba\"); console.log(m.join(\",\"),r.lastIndex); console.log(/a/[Symbol.search](\"ba\"));" },
+            "a,a 0\n1\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "arraybuffer",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const a:any=new ArrayBuffer(8); const b:any=new SharedArrayBuffer(4); console.log(a[\"byteLength\"],b.byteLength);" },
+            "8 4\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "dataview",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const a:any=new ArrayBuffer(8); const v:any=new DataView(a,2,4); v.setUint8(0,9); console.log(v.byteLength,v.byteOffset,v.buffer===a,v[\"getUint8\"](0));" },
+            "4 2 true 9\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "arguments",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "function f(a:any,b:any){const v:any=arguments; console.log(v.length,v[0],v[1]);} f(3,4);" },
+            "2 3 4\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "functions",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "function named(a:any,b:any){return a+b;} const f:any=named; console.log(f.name,f[\"length\"],f[\"call\"](null,2,3));" },
+            "named 2 5\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "namespace",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "namespace N {export const value=6;} const n:any=N; console.log(n.value,n[\"value\"]);" },
+            "6 6\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "globalthis",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const g:any=globalThis; g.readProbe=7; console.log(g.readProbe,g[\"readProbe\"]); delete g.readProbe;" },
+            "7 7\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "esm",
+            "main.ts",
+            new string[] { "dep.ts", "main.ts" },
+            new string[] { "export const value=8;", "import * as ns from \"./dep\"; const n:any=ns; console.log(n.value,n[\"value\"]);" },
+            "8 8\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "commonjs",
+            "main.cjs",
+            new string[] { "dep.cjs", "main.cjs" },
+            new string[] { "exports.value=9;", "const n=require(\"./dep.cjs\"); console.log(n.value,n[\"value\"]);" },
+            "9 9\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "proxy_get",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const p:any=new Proxy({x:3},{get(target:any,key:any,receiver:any){return key===\"x\"?target.x+1:Reflect.get(target,key,receiver);}}); console.log(p.x,p[\"x\"]);" },
+            "4 4\n",
+            false,
+            false
+        },
+        new object[]
+        {
+            "proxy_receiver",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const target:any={get x(){return (this as any).y;}}; const p:any=new Proxy(target,{get(t:any,k:any,r:any){if(k===\"y\")return 5;return Reflect.get(t,k,r);}}); console.log(p.x,p[\"x\"]);" },
+            "5 5\n",
+            false,
+            false
+        },
+        new object[]
+        {
+            "hosted_read",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "export function read(value:any,key:any){return value[key];} export function length(value:any){return value.length;}" },
+            "",
+            true,
+            true
+        },
+        new object[]
+        {
+            "hosted_minimal",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "export const value=1;" },
+            "",
+            true,
+            true
+        },
+        new object[]
+        {
+            "date_named",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const d:any=new Date(0); console.log(d.getUTCFullYear(),d.toISOString());" },
+            "1970 1970-01-01T00:00:00.000Z\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "promise_reads",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "new Promise((resolve:any)=>{console.log(resolve[\"name\"],resolve[\"length\"]); resolve(1);}); const p:any=Promise.resolve(5); p[\"then\"]((x:any)=>console.log(x));" },
+            " 1\n5\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "buffer_named",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const b:any=Buffer.from(\"abc\"); console.log(b.length,b[1],b.toString());" },
+            "3 98 abc\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "stats_module",
+            "main.cjs",
+            new string[] { "main.cjs" },
+            new string[] { "const fs=require(\"fs\"); const s=fs.statSync(\".\"); console.log(s.isDirectory(),typeof s.size);" },
+            "true number\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "typedarray_named",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const a:any=new Uint8Array([2,4]); console.log(a.length,a[0],a[1],a.byteLength,a.byteOffset); console.log(a.join(\"-\"));" },
+            "2 2 4 2 0\n2-4\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "abort_after",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const c=new AbortController(); const s:any=c.signal; console.log(s.aborted); c.abort(\"stop\"); console.log(s.aborted,s.reason);" },
+            "false\ntrue stop\n",
+            false,
+            true
+        },
+    ];
+
+    [Theory]
+    [MemberData(nameof(ObjectReadMetadataPrograms))]
+    public void Isolated_ObjectReadMetadata_PreservesReadingAndDeployment(
+        string name, string entry, string[] paths, string[] sources, string expected, bool hosted, bool standalone)
+    {
+        using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        for (int i = 0; i < paths.Length; i++) tempDir.CreateFile(paths[i], sources[i]);
+        var sourcePath = tempDir.GetPath(entry);
+        var dllPath = tempDir.GetPath($"object-read-metadata_{name}.dll");
+        var deployment = standalone ? " --standalone" : "";
+        var hosting = hosted ? " --target dll --hosted" : "";
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --noLib --compile \"{sourcePath}\" -o \"{dllPath}\" --verify{deployment}{hosting}", tempDir.Path);
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        var references = GetAssemblyReferences(dllPath);
+        Assert.DoesNotContain("SharpTS", references);
+        Assert.Equal(hosted, references.Contains("SharpTS.Hosting.Abstractions"));
+        Assert.Equal(!standalone, File.Exists(tempDir.GetPath("SharpTS.dll")));
+        if (!hosted)
+            Assert.Equal(expected, ExecuteCompiledDllIsolated(dllPath, timeoutMs: 30000,
+                verifyStandardError: error => Assert.Empty(error)));
+    }
+
+
     public static IEnumerable<object[]> ObjectDeletionMetadataPrograms =>
     [
         new object[]

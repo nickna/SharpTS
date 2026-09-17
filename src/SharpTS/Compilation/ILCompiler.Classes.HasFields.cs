@@ -931,7 +931,7 @@ public partial class ILCompiler
         il.Emit(OpCodes.Call, _runtime.ObjectPrototypes.Populate);
         il.Emit(OpCodes.Ldsfld, _runtime.ObjectPrototypes.Prototype);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, _runtime.GetProperty);
+        il.Emit(OpCodes.Call, _runtime.ObjectRead.Property);
         il.Emit(OpCodes.Ret);
     }
 

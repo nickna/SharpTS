@@ -224,13 +224,13 @@ public partial class AsyncMoveNextEmitter
 
         _il.Emit(OpCodes.Ldloc, indexLocal);
         _il.Emit(OpCodes.Ldloc, keysLocal);
-        _il.Emit(OpCodes.Call, _ctx!.Runtime!.GetLength);
+        _il.Emit(OpCodes.Call, _ctx!.Runtime!.ObjectRead.Length);
         _il.Emit(OpCodes.Clt);
         _il.Emit(OpCodes.Brfalse, outerBreakLabel);
 
         _il.Emit(OpCodes.Ldloc, keysLocal);
         _il.Emit(OpCodes.Ldloc, indexLocal);
-        _il.Emit(OpCodes.Call, _ctx!.Runtime!.GetElement);
+        _il.Emit(OpCodes.Call, _ctx!.Runtime!.ObjectRead.Element);
 
         if (varField != null)
         {

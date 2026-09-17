@@ -6,6 +6,14 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
+    private readonly record struct GetLengthInputs(
+        FieldBuilder ArgumentsLengthField,
+        TypeBuilder ArgumentsType,
+        EmittedArrayStorageRuntime ArrayStorage
+    );
+
+    private readonly record struct GetElementInputs(EmittedArrayStorageRuntime ArrayStorage, FieldInfo UndefinedInstance);
+
     private readonly record struct GetKeysInputs(
         EmittedArrayStorageRuntime ArrayStorage,
         EmittedBooleanRuntime Booleans,
@@ -131,7 +139,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitGetLength(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitGetLength(TypeBuilder typeBuilder, EmittedObjectReadRuntime objectRead, GetLengthInputs inputs)
     {
         var method = typeBuilder.DefineMethod(
             "GetLength",
@@ -139,7 +147,7 @@ public partial class RuntimeEmitter
             _types.Int32,
             [_types.Object]
         );
-        runtime.GetLength = method;
+        objectRead.Length = method;
 
         var il = method.GetILGenerator();
         var tsArrayLabel = il.DefineLabel();
@@ -150,17 +158,17 @@ public partial class RuntimeEmitter
         // from List<object>.
         var notArgumentsLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.ArgumentsType);
+        il.Emit(OpCodes.Isinst, inputs.ArgumentsType);
         il.Emit(OpCodes.Brfalse, notArgumentsLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.ArgumentsType);
-        il.Emit(OpCodes.Ldfld, runtime.ArgumentsLengthField);
+        il.Emit(OpCodes.Castclass, inputs.ArgumentsType);
+        il.Emit(OpCodes.Ldfld, inputs.ArgumentsLengthField);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notArgumentsLabel);
 
         // $Array (wrapper around List<object?>) - check before typed lists
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.ArrayStorage.Type);
+        il.Emit(OpCodes.Isinst, inputs.ArrayStorage.Type);
         il.Emit(OpCodes.Brtrue, tsArrayLabel);
 
         // Descriptor-driven: emit isinst check for each backing type
@@ -190,8 +198,8 @@ public partial class RuntimeEmitter
         // report 0 instead of 10_000_000.
         il.MarkLabel(tsArrayLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.ArrayStorage.Type);
-        il.Emit(OpCodes.Callvirt, runtime.ArrayStorage.LengthGetter);
+        il.Emit(OpCodes.Castclass, inputs.ArrayStorage.Type);
+        il.Emit(OpCodes.Callvirt, inputs.ArrayStorage.LengthGetter);
         il.Emit(OpCodes.Ret);
 
         // Descriptor-driven: emit Count handler for each backing type
@@ -212,7 +220,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitGetElement(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitGetElement(TypeBuilder typeBuilder, EmittedObjectReadRuntime objectRead, GetElementInputs inputs)
     {
         var method = typeBuilder.DefineMethod(
             "GetElement",
@@ -220,7 +228,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object, _types.Int32]
         );
-        runtime.GetElement = method;
+        objectRead.Element = method;
 
         var il = method.GetILGenerator();
         var tsArrayElLabel = il.DefineLabel();
@@ -229,7 +237,7 @@ public partial class RuntimeEmitter
 
         // $Array (wrapper around List<object?>) - check before List
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.ArrayStorage.Type);
+        il.Emit(OpCodes.Isinst, inputs.ArrayStorage.Type);
         il.Emit(OpCodes.Brtrue, tsArrayElLabel);
 
         // List
@@ -255,15 +263,15 @@ public partial class RuntimeEmitter
         var tsArrayGetItemResult = il.DeclareLocal(_types.Object);
         var tsArrayGetItemNotHole = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.ArrayStorage.Type);
-        il.Emit(OpCodes.Callvirt, runtime.ArrayStorage.ElementsGetter);
+        il.Emit(OpCodes.Castclass, inputs.ArrayStorage.Type);
+        il.Emit(OpCodes.Callvirt, inputs.ArrayStorage.ElementsGetter);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "get_Item", _types.Int32));
         il.Emit(OpCodes.Stloc, tsArrayGetItemResult);
         il.Emit(OpCodes.Ldloc, tsArrayGetItemResult);
-        il.Emit(OpCodes.Isinst, runtime.ArrayStorage.HoleType);
+        il.Emit(OpCodes.Isinst, inputs.ArrayStorage.HoleType);
         il.Emit(OpCodes.Brfalse, tsArrayGetItemNotHole);
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, inputs.UndefinedInstance);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(tsArrayGetItemNotHole);
         il.Emit(OpCodes.Ldloc, tsArrayGetItemResult);
@@ -2176,7 +2184,7 @@ public partial class RuntimeEmitter
 
             il.Emit(OpCodes.Ldsfld, runtime.ArrayOperations.PrototypeField);
             il.Emit(OpCodes.Ldstr, methodName);
-            il.Emit(OpCodes.Call, runtime.GetProperty);
+            il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
             var liveMethodLocal = il.DeclareLocal(_types.Object);
             il.Emit(OpCodes.Stloc, liveMethodLocal);
             il.Emit(OpCodes.Ldarg_0);

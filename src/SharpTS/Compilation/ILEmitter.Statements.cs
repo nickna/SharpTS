@@ -2458,14 +2458,14 @@ public partial class ILEmitter
             // Check if index < length
             IL.Emit(OpCodes.Ldloc, indexLocal);
             IL.Emit(OpCodes.Ldloc, iterableLocal);
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.GetLength);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.ObjectRead.Length);
             IL.Emit(OpCodes.Clt);
             builder.Emit_Brfalse(endLabel);
 
             // Get current element
             IL.Emit(OpCodes.Ldloc, iterableLocal);
             IL.Emit(OpCodes.Ldloc, indexLocal);
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.GetElement);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.ObjectRead.Element);
             IL.Emit(OpCodes.Stloc, indexLoopVar);
 
             // Emit body
@@ -2618,7 +2618,7 @@ public partial class ILEmitter
         // be reassigned or observed through an alias, so subsequent steps call it directly.
         IL.Emit(OpCodes.Ldloc, iteratorObject);
         IL.Emit(OpCodes.Ldstr, "next");
-        IL.Emit(OpCodes.Call, _ctx.Runtime.GetProperty);
+        IL.Emit(OpCodes.Call, _ctx.Runtime.ObjectRead.Property);
         IL.Emit(OpCodes.Castclass, _ctx.Runtime.TSFunctionType);
         var nextFunction = IL.DeclareLocal(_ctx.Runtime.TSFunctionType);
         IL.Emit(OpCodes.Stloc, nextFunction);
@@ -3147,14 +3147,14 @@ public partial class ILEmitter
         // Check if index < keys.Count
         IL.Emit(OpCodes.Ldloc, indexLocal);
         IL.Emit(OpCodes.Ldloc, keysLocal);
-        IL.Emit(OpCodes.Call, _ctx.Runtime!.GetLength);
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.ObjectRead.Length);
         IL.Emit(OpCodes.Clt);
         builder.Emit_Brfalse(endLabel);
 
         // Get current key: keys[index]
         IL.Emit(OpCodes.Ldloc, keysLocal);
         IL.Emit(OpCodes.Ldloc, indexLocal);
-        IL.Emit(OpCodes.Call, _ctx.Runtime!.GetElement);
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.ObjectRead.Element);
         IL.Emit(OpCodes.Stloc, loopVar);
 
         // Emit body

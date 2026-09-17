@@ -55,11 +55,7 @@ public partial class RuntimeEmitter
         // Reserve GetProperty(object, string) → object — generic property
         // reader used by $RegExp's Symbol.* protocol slow path to read
         // `exec`/`flags`/`lastIndex` etc. via the spec-aligned chain.
-        runtime.GetProperty = typeBuilder.DefineMethod(
-            "GetProperty",
-            MethodAttributes.Public | MethodAttributes.Static,
-            _types.Object,
-            [_types.Object, _types.String]);
+        DeclareObjectReadProperty(typeBuilder, runtime.ObjectRead);
 
         // Reserve SetProperty(object, string, object) → void.
         runtime.SetProperty = typeBuilder.DefineMethod(

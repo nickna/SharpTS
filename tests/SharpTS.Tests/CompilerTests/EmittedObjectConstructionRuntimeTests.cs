@@ -150,6 +150,8 @@ public sealed class EmittedObjectConstructionRuntimeTests
                 "GetOwnPropertyDescriptor" => runtime.ObjectDescriptors.GetOwnPropertyDescriptor,
                 "IsExtensible" => runtime.ObjectState.IsExtensible,
                 "IsSymbol" => runtime.Symbols.IsSymbol,
+                "GetProperty" => runtime.ObjectRead.Property,
+                "GetIndex" => runtime.ObjectRead.Index,
                 _ => typeof(EmittedRuntime).GetProperty(name)!.GetValue(runtime)
             };
         }

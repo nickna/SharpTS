@@ -266,7 +266,7 @@ public partial class RuntimeEmitter
             // falling back to Promise.prototype.constructor.
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldstr, "constructor");
-            il.Emit(OpCodes.Call, runtime.GetProperty);
+            il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
             il.Emit(OpCodes.Ldtoken, _types.TaskOfObject);
             il.Emit(OpCodes.Call, _types.GetMethod(
                 _types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));

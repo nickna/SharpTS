@@ -295,7 +295,7 @@ public sealed class ObjectStaticEmitter : IStaticTypeEmitterStrategy
         il.Emit(OpCodes.Ldtoken, ctx.Types.Object);
         il.Emit(OpCodes.Call, ctx.Types.GetMethod(ctx.Types.Type, "GetTypeFromHandle")!);
         il.Emit(OpCodes.Ldstr, propertyName);
-        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
         return true;
     }
 

@@ -191,7 +191,7 @@ public partial class RuntimeEmitter
             closeIl.BeginExceptionBlock();
             closeIl.Emit(OpCodes.Ldarg_0);
             closeIl.Emit(OpCodes.Ldstr, "return");
-            closeIl.Emit(OpCodes.Call, runtime.GetProperty);
+            closeIl.Emit(OpCodes.Call, runtime.ObjectRead.Property);
             closeIl.Emit(OpCodes.Stloc, returnMethodLocal);
 
             closeIl.Emit(OpCodes.Ldloc, returnMethodLocal);
@@ -286,7 +286,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(captureResolveLabel);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldstr, "resolve");
-        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
         il.Emit(OpCodes.Stloc, resolveFunctionLocal);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Stloc, invokeResolveLocal);
@@ -643,7 +643,7 @@ public partial class RuntimeEmitter
 
             targetIl.Emit(OpCodes.Ldloc, resolvedElementLocal);
             targetIl.Emit(OpCodes.Ldstr, "then");
-            targetIl.Emit(OpCodes.Call, runtime.GetProperty);
+            targetIl.Emit(OpCodes.Call, runtime.ObjectRead.Property);
             targetIl.Emit(OpCodes.Stloc, thenFunctionLocal);
             targetIl.Emit(OpCodes.Ldloc, thenFunctionLocal);
             targetIl.Emit(OpCodes.Call, runtime.TypeOf);
@@ -674,7 +674,7 @@ public partial class RuntimeEmitter
             targetIl.Emit(OpCodes.Bne_Un, raceDirectCapabilityLabel);
             targetIl.Emit(OpCodes.Ldloc, resolvedElementLocal);
             targetIl.Emit(OpCodes.Ldstr, "then");
-            targetIl.Emit(OpCodes.Call, runtime.GetProperty);
+            targetIl.Emit(OpCodes.Call, runtime.ObjectRead.Property);
             targetIl.Emit(OpCodes.Stloc, thenFunctionLocal);
             targetIl.Emit(OpCodes.Ldloc, thenFunctionLocal);
             targetIl.Emit(OpCodes.Call, runtime.TypeOf);
@@ -698,7 +698,7 @@ public partial class RuntimeEmitter
 
             targetIl.Emit(OpCodes.Ldloc, resolvedElementLocal);
             targetIl.Emit(OpCodes.Ldstr, "then");
-            targetIl.Emit(OpCodes.Call, runtime.GetProperty);
+            targetIl.Emit(OpCodes.Call, runtime.ObjectRead.Property);
             targetIl.Emit(OpCodes.Stloc, thenFunctionLocal);
             targetIl.Emit(OpCodes.Ldloc, thenFunctionLocal);
             targetIl.Emit(OpCodes.Call, runtime.TypeOf);
@@ -787,7 +787,7 @@ public partial class RuntimeEmitter
             targetIl.MarkLabel(invokeObservableThenLabel);
             targetIl.Emit(OpCodes.Ldloc, resolvedElementLocal);
             targetIl.Emit(OpCodes.Ldstr, "then");
-            targetIl.Emit(OpCodes.Call, runtime.GetProperty);
+            targetIl.Emit(OpCodes.Call, runtime.ObjectRead.Property);
             targetIl.Emit(OpCodes.Stloc, thenFunctionLocal);
             targetIl.Emit(OpCodes.Ldloc, thenFunctionLocal);
             targetIl.Emit(OpCodes.Call, runtime.TypeOf);

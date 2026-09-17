@@ -88,7 +88,7 @@ public partial class ILEmitter
         IL.MarkLabel(fallback);
         IL.Emit(OpCodes.Ldloc, load.Receiver);
         IL.Emit(OpCodes.Ldstr, expression.Name.Lexeme);
-        IL.Emit(OpCodes.Call, _ctx.Runtime!.GetProperty);
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.ObjectRead.Property);
         if (!boxed)
             IL.Emit(OpCodes.Call, _ctx.Runtime.NumericCoercion.ConvertToNumber);
         IL.MarkLabel(end);

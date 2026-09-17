@@ -241,13 +241,13 @@ public partial class RuntimeEmitter
 
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Ldstr, "recursive");
-            il.Emit(OpCodes.Call, runtime.GetProperty);
+            il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
             il.Emit(OpCodes.Call, runtime.Booleans.IsTruthy);
             il.Emit(OpCodes.Stloc, recursiveLocal);
 
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Ldstr, "force");
-            il.Emit(OpCodes.Call, runtime.GetProperty);
+            il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
             il.Emit(OpCodes.Call, runtime.Booleans.IsTruthy);
             il.Emit(OpCodes.Stloc, forceLocal);
             il.Emit(OpCodes.Br, afterRecursiveLabel);

@@ -1017,7 +1017,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, noSignalLabel);
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Ldstr, "signal");
-        il.Emit(OpCodes.Call, runtime.GetFieldsProperty);
+        il.Emit(OpCodes.Call, runtime.ObjectRead.FieldsProperty);
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
         il.Emit(OpCodes.Beq, haveSignalLabel);
@@ -1034,7 +1034,7 @@ public partial class RuntimeEmitter
         var writerLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldarg_1);                                        // dest
         il.Emit(OpCodes.Ldstr, "getWriter");
-        il.Emit(OpCodes.Call, runtime.GetFieldsProperty);                // → callable
+        il.Emit(OpCodes.Call, runtime.ObjectRead.FieldsProperty);                // → callable
         // Stack: [getWriterCallable]
         var getWriterCallableLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Stloc, getWriterCallableLocal);
@@ -1049,19 +1049,19 @@ public partial class RuntimeEmitter
         // writeCallable = $Runtime.GetFieldsProperty(writer, "write")
         il.Emit(OpCodes.Ldloc, writerLocal);
         il.Emit(OpCodes.Ldstr, "write");
-        il.Emit(OpCodes.Call, runtime.GetFieldsProperty);
+        il.Emit(OpCodes.Call, runtime.ObjectRead.FieldsProperty);
         il.Emit(OpCodes.Stloc, writeCallableLocal);
 
         // closeCallable = $Runtime.GetFieldsProperty(writer, "close")
         il.Emit(OpCodes.Ldloc, writerLocal);
         il.Emit(OpCodes.Ldstr, "close");
-        il.Emit(OpCodes.Call, runtime.GetFieldsProperty);
+        il.Emit(OpCodes.Call, runtime.ObjectRead.FieldsProperty);
         il.Emit(OpCodes.Stloc, closeCallableLocal);
 
         // abortCallable = $Runtime.GetFieldsProperty(writer, "abort")
         il.Emit(OpCodes.Ldloc, writerLocal);
         il.Emit(OpCodes.Ldstr, "abort");
-        il.Emit(OpCodes.Call, runtime.GetFieldsProperty);
+        il.Emit(OpCodes.Call, runtime.ObjectRead.FieldsProperty);
         il.Emit(OpCodes.Stloc, abortCallableLocal);
 
         // Loop label

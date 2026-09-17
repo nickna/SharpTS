@@ -704,7 +704,7 @@ public partial class RuntimeEmitter
         // First check if it's an emitted $TypedArray type. When tree-shaking has
         // gated typed arrays off, $TypedArray base type was never emitted —
         // skip the check (the helper just always returns false).
-        if (_features.HasAnyTypedArray)
+        if (arrays.Implementation is not null)
         {
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Isinst, arrays.RequireImplementation().BaseType);
@@ -1051,7 +1051,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Bge, loopDoneLabel);
             il.Emit(OpCodes.Ldloc, tsArrLocal);
             il.Emit(OpCodes.Ldloc, arrILocal);
-            il.Emit(OpCodes.Call, runtime.GetElement);
+            il.Emit(OpCodes.Call, runtime.ObjectRead.Element);
             il.Emit(OpCodes.Stloc, arrElemLocal);
             il.Emit(OpCodes.Ldloc, arrResultLocal);
             il.Emit(OpCodes.Castclass, arrays.BaseType);

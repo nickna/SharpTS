@@ -166,7 +166,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, nextIndex);
         il.Emit(OpCodes.Conv_R8);
         il.Emit(OpCodes.Box, _types.Double);
-        il.Emit(OpCodes.Call, runtime.GetIndex);
+        il.Emit(OpCodes.Call, runtime.ObjectRead.Index);
         il.Emit(OpCodes.Stloc, value);
         il.Emit(OpCodes.Br, storeCurrent);
 
@@ -188,7 +188,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, nextIndex);
         il.Emit(OpCodes.Conv_R8);
         il.Emit(OpCodes.Box, _types.Double);
-        il.Emit(OpCodes.Call, runtime.GetIndex);
+        il.Emit(OpCodes.Call, runtime.ObjectRead.Index);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(
             _types.ListOfObject, "Add", [_types.Object])!);
         il.Emit(OpCodes.Ldloc, pair);
@@ -817,7 +817,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(lookupReturn);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "return");
-        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
         il.Emit(OpCodes.Stloc, returnMethod);
 
         il.Emit(OpCodes.Ldloc, returnMethod);
@@ -915,7 +915,7 @@ public partial class RuntimeEmitter
         // Call GetProperty(result, "done")
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "done");
-        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
 
         // Call IsTruthy on the result
         il.Emit(OpCodes.Call, runtime.Booleans.IsTruthy);
@@ -942,7 +942,7 @@ public partial class RuntimeEmitter
         // Call GetProperty(result, "value")
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "value");
-        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
         il.Emit(OpCodes.Ret);
     }
 
@@ -967,7 +967,7 @@ public partial class RuntimeEmitter
         // Get "next" property from iterator
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "next");
-        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
         il.Emit(OpCodes.Stloc, nextMethodLocal);
 
         // Check if null
@@ -1012,7 +1012,7 @@ public partial class RuntimeEmitter
         // Get "next" property from iterator
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "next");
-        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
         il.Emit(OpCodes.Stloc, nextMethodLocal);
 
         // Check if null
@@ -1132,7 +1132,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, rawValueLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.GetIndex);
+        il.Emit(OpCodes.Call, runtime.ObjectRead.Index);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(rawValueLabel);
@@ -1332,7 +1332,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldloc, index);
             il.Emit(OpCodes.Conv_R8);
             il.Emit(OpCodes.Box, _types.Double);
-            il.Emit(OpCodes.Call, runtime.GetIndex);
+            il.Emit(OpCodes.Call, runtime.ObjectRead.Index);
             AppendValue();
             il.Emit(OpCodes.Ldloc, index);
             il.Emit(OpCodes.Ldc_I4_1);
