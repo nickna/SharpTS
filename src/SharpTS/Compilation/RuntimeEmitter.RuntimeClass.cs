@@ -978,7 +978,24 @@ public partial class RuntimeEmitter
         );
         // ObjectPrototypePopulate / ArrayPrototypePopulate shells already
         // defined above (before cctor) so the cctor can call them eagerly.
-        EmitGetFunctionMethod(typeBuilder, runtime);  // For bind/call/apply on functions
+        EmitGetFunctionMethod(
+            typeBuilder,
+            runtime.FunctionIntrospection,
+            new GetFunctionMethodInputs(
+                runtime.DescriptorStorage,
+                runtime.FunctionAttributes,
+                runtime.FunctionBindings,
+                runtime.FunctionConstruction,
+                runtime.FunctionPrototypes,
+                runtime.FunctionValues,
+                runtime.ObjectOwnProperties,
+                runtime.ObjectPrototypes,
+                runtime.ObjectState,
+                runtime.ObjectStorage,
+                runtime.UndefinedInstance,
+                runtime.UndefinedType
+            )
+        );  // For bind/call/apply on functions
         // Pre-define IsBoxedPrimitiveOfType shell so InstanceOf can reference
         // it. Body emitted later (after the prototype singletons are defined).
         DefineIsBoxedPrimitiveOfTypeShell(typeBuilder, runtime.BoxedPrimitives);
@@ -988,14 +1005,14 @@ public partial class RuntimeEmitter
         DefineNamespaceSingletonFields(typeBuilder, runtime.Abort, runtime.Intl);
         // InstanceOf walks the prototype chain via GetFunctionMethod (for the
         // `F.prototype` fetch) — must be emitted AFTER GetFunctionMethod so
-        // `runtime.GetFunctionMethod` is populated when InstanceOf references it.
+        // `runtime.FunctionIntrospection.GetProperty` is populated when InstanceOf references it.
         EmitInstanceOf(
             typeBuilder,
             runtime.Operators,
             new InstanceOfInputs(
                 runtime.Abort,
                 runtime.BoxedPrimitives,
-                runtime.GetFunctionMethod,
+                runtime.FunctionIntrospection.GetProperty,
                 runtime.ObjectPrototypes,
                 runtime.Promise,
                 runtime.Symbols,
@@ -1134,7 +1151,17 @@ public partial class RuntimeEmitter
         // Promise static wrappers validate their `this` value with the shared
         // constructor predicate. Emit it before Promise methods; Reflect also
         // consumes the same helper later.
-        EmitIsConstructor(typeBuilder, runtime);
+        EmitIsConstructor(
+            typeBuilder,
+            runtime.FunctionIntrospection,
+            new IsConstructorInputs(
+                runtime.FunctionBindings,
+                runtime.FunctionValues,
+                runtime.UndefinedType,
+                runtime.InvokeMethodUnwrapped
+            )
+        );
+        runtime.FunctionIntrospection.CompleteEmission();
         // Promise methods must come before GetProperty (which needs PromiseThen for typeof p.then)
         if (_features.UsesPromise)
             EmitPromiseMethods(typeBuilder, runtime);
@@ -1216,7 +1243,7 @@ public partial class RuntimeEmitter
                 runtime.FunctionBindings.CallType,
                 runtime.FunctionPrototypes.Prototype,
                 runtime.FunctionPrototypes.Populate,
-                runtime.GetFunctionMethod,
+                runtime.FunctionIntrospection.GetProperty,
                 runtime.GlobalThisGetProperty,
                 runtime.GlobalThisSingletonField,
                 runtime.IHasFieldsGetProperty,
@@ -2034,7 +2061,7 @@ public partial class RuntimeEmitter
                 runtime.InvokeMethodUnwrapped,
                 runtime.ObjectDescriptors.GetOwnPropertyDescriptor,
                 runtime.ObjectOwnProperties.HasOwnProperty,
-                runtime.GetFunctionMethod,
+                runtime.FunctionIntrospection.GetProperty,
                 runtime.InvokeMethodValue,
                 runtime.UndefinedInstance,
                 runtime.UndefinedType,
@@ -2157,7 +2184,7 @@ public partial class RuntimeEmitter
                     runtime.InvokeMethodUnwrapped,
                     runtime.Errors.CreateErrorFromTypeOrNull,
                     runtime.NumericCoercion.ToNumber,
-                    runtime.IsConstructorMethod,
+                    runtime.FunctionIntrospection.IsConstructor,
                     runtime.NewOnFunction,
                     runtime.UndefinedType,
                     runtime.ObjectRead.Property,

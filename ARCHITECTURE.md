@@ -330,6 +330,14 @@ carrier; the strict SyntaxError helper retains its existing CLR exception repres
 Exception wrapping follows supplied optional Promise metadata. Error-cause Proxy handling
 receives six explicit invocation/delegate handles through the shared reflection bridge.
 
+Required `FunctionIntrospection` owns function-property lookup and constructor
+capability declarations. Both bodies are emitted at their original separate
+locations; completion follows constructor-capability emission. The two helpers
+receive exact function/object owners and shared sentinel or invocation handles.
+Tests cover early property availability, fresh wrappers and prototype caches,
+name/length overrides, missing properties, bound constructor capabilities,
+reused emitters and isolated deployment.
+
 Required `FunctionPrototypes` owns the Function prototype singleton field and
 its early population declaration. The original later body marks population as
 emitted before completion; declaring both handles alone cannot complete the

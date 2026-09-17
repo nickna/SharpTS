@@ -5,6 +5,13 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
+    private readonly record struct IsConstructorInputs(
+        EmittedFunctionBindingRuntime FunctionBindings,
+        EmittedFunctionValueRuntime FunctionValues,
+        Type UndefinedType,
+        MethodBuilder InvokeMethodUnwrapped
+    );
+
     private readonly record struct ReflectGetInputs(MethodInfo InvokeMethodUnwrapped,
         MethodInfo ObjectGetOwnPropertyDescriptor, MethodInfo HasOwnPropertyHelperMethod,
         MethodInfo GetFunctionMethod, MethodInfo InvokeMethodValue, FieldInfo UndefinedInstance, Type UndefinedType,
@@ -978,7 +985,11 @@ public partial class RuntimeEmitter
     /// <c>isConstructor.js</c> harness which checks via
     /// <c>Reflect.construct(emptyFn, [], target)</c>.
     /// </summary>
-    private void EmitIsConstructor(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitIsConstructor(
+        TypeBuilder typeBuilder,
+        EmittedFunctionIntrospectionRuntime functionIntrospection,
+        IsConstructorInputs inputs
+    )
     {
         var method = typeBuilder.DefineMethod(
             "IsConstructor",
@@ -986,7 +997,7 @@ public partial class RuntimeEmitter
             _types.Boolean,
             [_types.Object]
         );
-        runtime.IsConstructorMethod = method;
+        functionIntrospection.IsConstructor = method;
 
         var il = method.GetILGenerator();
 
@@ -1000,7 +1011,7 @@ public partial class RuntimeEmitter
 
         var notUndefinedLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
         il.Emit(OpCodes.Brfalse, notUndefinedLabel);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ret);
@@ -1014,7 +1025,7 @@ public partial class RuntimeEmitter
             il, () => il.Emit(OpCodes.Ldarg_0), proxyLabel, notProxyLabel);
         il.MarkLabel(proxyLabel);
         EmitProxyMethodCallUnwrapped(
-            il, runtime, () => il.Emit(OpCodes.Ldarg_0),
+            il, inputs.InvokeMethodUnwrapped, () => il.Emit(OpCodes.Ldarg_0),
             "HasConstructableTarget", () =>
             {
                 il.Emit(OpCodes.Ldc_I4_1);
@@ -1022,7 +1033,7 @@ public partial class RuntimeEmitter
                 il.Emit(OpCodes.Dup);
                 il.Emit(OpCodes.Ldc_I4_0);
                 il.Emit(OpCodes.Ldnull);
-                il.Emit(OpCodes.Ldftn, runtime.IsConstructorMethod);
+                il.Emit(OpCodes.Ldftn, functionIntrospection.IsConstructor);
                 il.Emit(OpCodes.Newobj, _types.GetConstructor(
                     typeof(Func<object, bool>),
                     _types.Object, _types.IntPtr)!);
@@ -1044,7 +1055,7 @@ public partial class RuntimeEmitter
         // $TSFunction → check method's declaring type
         var notTSFunctionLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.FunctionValues.Type);
+        il.Emit(OpCodes.Isinst, inputs.FunctionValues.Type);
         il.Emit(OpCodes.Brfalse, notTSFunctionLabel);
 
         // var mi = ((TSFunction)fn).GetMethodInfo();
@@ -1054,8 +1065,8 @@ public partial class RuntimeEmitter
         // return true;
         var miLocal = il.DeclareLocal(_types.MethodInfo);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.FunctionValues.Type);
-        il.Emit(OpCodes.Callvirt, runtime.FunctionValues.GetMethodInfo);
+        il.Emit(OpCodes.Castclass, inputs.FunctionValues.Type);
+        il.Emit(OpCodes.Callvirt, inputs.FunctionValues.GetMethodInfo);
         il.Emit(OpCodes.Stloc, miLocal);
         var miNullLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, miLocal);
@@ -1130,12 +1141,12 @@ public partial class RuntimeEmitter
         // like the Proxy case above (ECMA-262 BoundFunctionCreate).
         var notBoundLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.FunctionBindings.BoundType);
+        il.Emit(OpCodes.Isinst, inputs.FunctionBindings.BoundType);
         il.Emit(OpCodes.Brfalse, notBoundLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.FunctionBindings.BoundType);
-        il.Emit(OpCodes.Ldfld, runtime.FunctionBindings.BoundTargetField);
-        il.Emit(OpCodes.Call, runtime.IsConstructorMethod);
+        il.Emit(OpCodes.Castclass, inputs.FunctionBindings.BoundType);
+        il.Emit(OpCodes.Ldfld, inputs.FunctionBindings.BoundTargetField);
+        il.Emit(OpCodes.Call, functionIntrospection.IsConstructor);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notBoundLabel);
 

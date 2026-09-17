@@ -3708,6 +3708,56 @@ public class StandaloneDllTests
             verifyStandardError: error => Assert.Empty(error)));
     }
 
+    public static IEnumerable<object[]> FunctionIntrospectionPrograms =>
+    [
+        new object[]
+        {
+            "introspection_properties",
+            "function sample(a:number,b:number){}const f:any=sample;console.log(f.name,f.length,f.missing===undefined);f.tag=7;console.log(f.tag,f.name,f.length);Object.defineProperty(f,\"name\",{value:\"renamed\",configurable:true});Object.defineProperty(f,\"length\",{value:4,configurable:true});console.log(f.name,f.length);\n",
+            "sample 2 true\n7 sample 2\nrenamed 4\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "introspection_prototype_identity",
+            "function First(){}function Second(){}const a:any=First;const b:any=Second;console.log(a.prototype===a.prototype,a.prototype!==b.prototype,a.prototype.constructor===a);a.prototype.tag=9;console.log(First.prototype.tag,b.prototype.tag===undefined);\n",
+            "true true true\n9 true\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "introspection_dynamic_construct",
+            "class Point{x:number;constructor(x:number){this.x=x;}}const p:any=Reflect.construct(Point as any,[7]);console.log(p.x,p instanceof Point);for(const value of [null,undefined,{},Function.prototype.call]){try{Reflect.construct(value as any,[]);console.log(false);}catch(error){console.log(error instanceof TypeError);}}\n",
+            "7 true\ntrue\ntrue\ntrue\ntrue\n",
+            false,
+            "",
+        },
+    ];
+
+    [Theory]
+    [MemberData(nameof(FunctionIntrospectionPrograms))]
+    public void Isolated_FunctionIntrospection_PreservesPropertiesAndConstructorCapabilities(
+        string name, string source, string expected, bool hosted, string extraArguments)
+    {
+        using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var sourcePath = tempDir.CreateFile("main.ts", source);
+        var dllPath = tempDir.GetPath($"function_introspection_{name}.dll");
+        var hosting = hosted ? " --target dll --hosted" : "";
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{sourcePath}\" -o \"{dllPath}\" --verify --standalone{hosting} {extraArguments}", tempDir.Path);
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        var references = GetAssemblyReferences(dllPath);
+        Assert.DoesNotContain("SharpTS", references);
+        Assert.Equal(hosted, references.Contains("SharpTS.Hosting.Abstractions"));
+        Assert.False(File.Exists(tempDir.GetPath("SharpTS.dll")));
+        if (!hosted)
+            Assert.Equal(expected, ExecuteCompiledDllIsolated(dllPath, timeoutMs: 30000,
+                verifyStandardError: error => Assert.Empty(error)));
+    }
+
     public static IEnumerable<object[]> FunctionPrototypePrograms =>
     [
         new object[]
