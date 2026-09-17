@@ -17,6 +17,10 @@ namespace SharpTS.Compilation;
 /// <seealso cref="ILEmitter"/>
 public class EmittedRuntime
 {
+    /// <summary>Required strict and non-strict property/index deletion metadata for one compilation.</summary>
+    public EmittedObjectDeletionRuntime ObjectDeletion { get; } = new();
+
+
     /// <summary>Required object construction, spread, enumerable projection and rest helpers for one compilation.</summary>
     public EmittedObjectConstructionRuntime ObjectConstruction { get; } = new();
 
@@ -324,9 +328,6 @@ public class EmittedRuntime
     public MethodBuilder GetProperty { get; set; } = null!;
     public MethodBuilder SetProperty { get; set; } = null!;
     public MethodBuilder SetPropertyStrict { get; set; } = null!;
-    public MethodBuilder DeleteProperty { get; set; } = null!;
-    public MethodBuilder CompactDictionaryOrder { get; set; } = null!;
-    public MethodBuilder DeletePropertyStrict { get; set; } = null!;
     public MethodBuilder GetFieldsProperty { get; set; } = null!;
     /// <summary>
     /// Weak per-receiver cache of reflected CLR method wrappers used by
@@ -385,8 +386,6 @@ public class EmittedRuntime
     public MethodBuilder GetIndex { get; set; } = null!;
     public MethodBuilder SetIndex { get; set; } = null!;
     public MethodBuilder SetIndexStrict { get; set; } = null!;
-    public MethodBuilder DeleteIndex { get; set; } = null!;
-    public MethodBuilder DeleteIndexStrict { get; set; } = null!;
     public MethodBuilder WarnSloppyDeleteVariable { get; set; } = null!;
 
     // @DotNetType event subscription registry (compiled mode — see

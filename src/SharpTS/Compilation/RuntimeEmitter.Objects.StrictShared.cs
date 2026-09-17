@@ -15,23 +15,23 @@ public partial class RuntimeEmitter
     /// <remarks>
     /// Emits <c>throw CreateException(new $TypeError(message))</c>.
     /// </remarks>
-    private void EmitThrowTypeError(ILGenerator il, EmittedRuntime runtime, string message)
+    private void EmitThrowTypeError(ILGenerator il, EmittedErrorRuntime errors, string message)
     {
         il.Emit(OpCodes.Ldstr, message);
-        GuestErrorEmitter.ThrowErrorFromStack(il, runtime, runtime.Errors.TypeErrorConstructor);
+        GuestErrorEmitter.ThrowErrorFromStack(il, errors.CreateException, errors.TypeErrorConstructor);
     }
 
     /// <summary>
     /// Emits <c>throw CreateException(new $TypeError(prefix + name + suffix))</c>
     /// where <c>name</c> is the property-name argument at slot 1.
     /// </summary>
-    private void EmitThrowTypeErrorWithName(ILGenerator il, EmittedRuntime runtime, string prefix, string suffix)
+    private void EmitThrowTypeErrorWithName(ILGenerator il, EmittedErrorRuntime errors, string prefix, string suffix)
     {
         il.Emit(OpCodes.Ldstr, prefix);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldstr, suffix);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", _types.String, _types.String, _types.String));
-        GuestErrorEmitter.ThrowErrorFromStack(il, runtime, runtime.Errors.TypeErrorConstructor);
+        GuestErrorEmitter.ThrowErrorFromStack(il, errors.CreateException, errors.TypeErrorConstructor);
     }
 
     /// <summary>

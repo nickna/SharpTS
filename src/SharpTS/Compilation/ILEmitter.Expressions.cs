@@ -1162,11 +1162,11 @@ public partial class ILEmitter
                 if (_ctx.IsStrictMode)
                 {
                     IL.Emit(OpCodes.Ldc_I4_1); // true for strict mode
-                    EmitCallUnknown(_ctx.Runtime!.DeletePropertyStrict);
+                    EmitCallUnknown(_ctx.Runtime!.ObjectDeletion.PropertyStrict);
                 }
                 else
                 {
-                    EmitCallUnknown(_ctx.Runtime!.DeleteProperty);
+                    EmitCallUnknown(_ctx.Runtime!.ObjectDeletion.Property);
                 }
                 SetStackType(StackType.Boolean);
                 break;
@@ -1180,11 +1180,11 @@ public partial class ILEmitter
                 if (_ctx.IsStrictMode)
                 {
                     IL.Emit(OpCodes.Ldc_I4_1); // true for strict mode
-                    EmitCallUnknown(_ctx.Runtime!.DeleteIndexStrict);
+                    EmitCallUnknown(_ctx.Runtime!.ObjectDeletion.IndexStrict);
                 }
                 else
                 {
-                    EmitCallUnknown(_ctx.Runtime!.DeleteIndex);
+                    EmitCallUnknown(_ctx.Runtime!.ObjectDeletion.Index);
                 }
                 SetStackType(StackType.Boolean);
                 break;

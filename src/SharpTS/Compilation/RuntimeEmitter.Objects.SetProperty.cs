@@ -383,7 +383,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_3); // strictMode
         var frozenSilentLabel = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, frozenSilentLabel);
-        EmitThrowTypeErrorWithName(il, runtime, "Cannot assign to read only property '", "' of object");
+        EmitThrowTypeErrorWithName(il, runtime.Errors, "Cannot assign to read only property '", "' of object");
         il.MarkLabel(frozenSilentLabel);
         il.Emit(OpCodes.Ret); // Silently return in non-strict mode
 
@@ -431,8 +431,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_3);
         var strictExistingSilentLabel = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, strictExistingSilentLabel);
-        EmitThrowTypeErrorWithName(il, runtime,
-            "Cannot assign to read only property '", "' of object");
+        EmitThrowTypeErrorWithName(il, runtime.Errors, "Cannot assign to read only property '", "' of object");
         il.MarkLabel(strictExistingSilentLabel);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(noStrictExistingDescriptorLabel);
@@ -534,7 +533,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_3);
         var strictErrorMessageSilentLabel = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, strictErrorMessageSilentLabel);
-        EmitThrowTypeErrorWithName(il, runtime, "Cannot assign to read only property '", "' of object");
+        EmitThrowTypeErrorWithName(il, runtime.Errors, "Cannot assign to read only property '", "' of object");
         il.MarkLabel(strictErrorMessageSilentLabel);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(strictErrorMessageWritableLabel);
@@ -1875,7 +1874,12 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Call, runtime.DescriptorStorage.IsFrozen);
             il.Emit(OpCodes.Brfalse, arrayNotFrozenLabel);
-            EmitThrowTypeErrorWithName(il, runtime, "Cannot assign to read only property '", "' of object '[object Array]'");
+            EmitThrowTypeErrorWithName(
+                il,
+                runtime.Errors,
+                "Cannot assign to read only property '",
+                "' of object '[object Array]'"
+            );
             il.MarkLabel(arrayNotFrozenLabel);
 
             // Own non-writable DATA descriptor → throw. Accessor descriptors
@@ -1894,7 +1898,12 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldloc, arrayDescLocal);
             il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorWritable.GetGetMethod()!);
             il.Emit(OpCodes.Brtrue, arrayDoStoreLabel); // writable → store
-            EmitThrowTypeErrorWithName(il, runtime, "Cannot assign to read only property '", "' of object '[object Array]'");
+            EmitThrowTypeErrorWithName(
+                il,
+                runtime.Errors,
+                "Cannot assign to read only property '",
+                "' of object '[object Array]'"
+            );
 
             il.MarkLabel(arrayDoStoreLabel);
             il.Emit(OpCodes.Ldarg_0);
@@ -1958,7 +1967,7 @@ public partial class RuntimeEmitter
             il.MarkLabel(tsFnStrictRejectLabel);
             il.Emit(OpCodes.Ldarg_3);
             il.Emit(OpCodes.Brfalse, nullLabel);
-            EmitThrowTypeErrorWithName(il, runtime, "Cannot assign to read only property '", "' of function");
+            EmitThrowTypeErrorWithName(il, runtime.Errors, "Cannot assign to read only property '", "' of function");
 
             il.MarkLabel(tsFnStrictNewPropertyLabel);
             // The synthesized intrinsic function `name` and `length` properties are
@@ -1971,7 +1980,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Brfalse, tsFnStrictNotIntrinsicLengthLabel);
             il.Emit(OpCodes.Ldarg_3);
             il.Emit(OpCodes.Brfalse, nullLabel);
-            EmitThrowTypeErrorWithName(il, runtime, "Cannot assign to read only property '", "' of function");
+            EmitThrowTypeErrorWithName(il, runtime.Errors, "Cannot assign to read only property '", "' of function");
             il.MarkLabel(tsFnStrictNotIntrinsicLengthLabel);
             var tsFnStrictNotIntrinsicNameLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_1);
@@ -1980,7 +1989,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Brfalse, tsFnStrictNotIntrinsicNameLabel);
             il.Emit(OpCodes.Ldarg_3);
             il.Emit(OpCodes.Brfalse, nullLabel);
-            EmitThrowTypeErrorWithName(il, runtime, "Cannot assign to read only property '", "' of function");
+            EmitThrowTypeErrorWithName(il, runtime.Errors, "Cannot assign to read only property '", "' of function");
             il.MarkLabel(tsFnStrictNotIntrinsicNameLabel);
             var tsFnStrictCanAddLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
@@ -1989,7 +1998,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Brtrue, tsFnStrictCanAddLabel);
             il.Emit(OpCodes.Ldarg_3);
             il.Emit(OpCodes.Brfalse, nullLabel);
-            EmitThrowTypeErrorWithName(il, runtime, "Cannot add property '", "' to a non-extensible function");
+            EmitThrowTypeErrorWithName(il, runtime.Errors, "Cannot add property '", "' to a non-extensible function");
             il.MarkLabel(tsFnStrictCanAddLabel);
             EmitDefineDataDescriptorFromValue(il, runtime);
             il.Emit(OpCodes.Ret);
@@ -2025,7 +2034,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, sharpWritableLabel);
         il.Emit(OpCodes.Ldarg_3);
         il.Emit(OpCodes.Brfalse, nullLabel);
-        EmitThrowTypeErrorWithName(il, runtime, "Cannot assign to read only property '", "' of object");
+        EmitThrowTypeErrorWithName(il, runtime.Errors, "Cannot assign to read only property '", "' of object");
         il.MarkLabel(sharpWritableLabel);
         il.MarkLabel(sharpDelegateToObjectLabel);
         il.Emit(OpCodes.Ldarg_0);
@@ -2067,7 +2076,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, nullLabel); // Not strict, silently return
 
         // Strict mode and frozen - throw TypeError
-        EmitThrowTypeErrorWithName(il, runtime, "Cannot assign to read only property '", "' of object");
+        EmitThrowTypeErrorWithName(il, runtime.Errors, "Cannot assign to read only property '", "' of object");
 
         // Check if sealed and property doesn't exist
         il.MarkLabel(sealedCheckLabel);
@@ -2090,7 +2099,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, nullLabel); // Not strict, silently return
 
         // Strict mode and sealed with new property - throw TypeError
-        EmitThrowTypeErrorWithName(il, runtime, "Cannot add property '", "' to a sealed object");
+        EmitThrowTypeErrorWithName(il, runtime.Errors, "Cannot add property '", "' to a sealed object");
 
         // Check extensibility via $PropertyDescriptorStore.CanAddProperty - fully standalone, no reflection
         il.MarkLabel(extensibleCheckLabel);
@@ -2104,7 +2113,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, nullLabel);  // Not strict, silently return
 
         // Strict mode and non-extensible with new property - throw TypeError
-        EmitThrowTypeErrorWithName(il, runtime, "Cannot add property '", "' to a non-extensible object");
+        EmitThrowTypeErrorWithName(il, runtime.Errors, "Cannot add property '", "' to a non-extensible object");
 
         // Actually set the property. Mirrors the non-strict SetProperty doSet
         // arm: honor a PDS accessor setter, and an existing non-writable data
@@ -2138,7 +2147,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, strictWritableLabel);
         il.Emit(OpCodes.Ldarg_3); // strictMode
         il.Emit(OpCodes.Brfalse, nullLabel); // sloppy → silent return
-        EmitThrowTypeErrorWithName(il, runtime, "Cannot assign to read only property '", "' of object");
+        EmitThrowTypeErrorWithName(il, runtime.Errors, "Cannot assign to read only property '", "' of object");
         il.MarkLabel(strictWritableLabel);
 
         // Keep PDS-backed data descriptors and dictionary storage synchronized.
@@ -2305,7 +2314,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(symThrowLabel);
-        EmitThrowTypeError(il, runtime, "Cannot assign to a read-only or non-extensible property");
+        EmitThrowTypeError(il, runtime.Errors, "Cannot assign to a read-only or non-extensible property");
 
         il.MarkLabel(notSymbolKeyLabel);
 
@@ -2517,7 +2526,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_3); // strictMode
         var listFrozenSilentLabel = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, listFrozenSilentLabel);
-        EmitThrowTypeError(il, runtime, "Cannot assign to read only property of frozen array");
+        EmitThrowTypeError(il, runtime.Errors, "Cannot assign to read only property of frozen array");
         il.MarkLabel(listFrozenSilentLabel);
         il.Emit(OpCodes.Ret); // Silently return in non-strict mode
         il.MarkLabel(listNotFrozenLabel);
