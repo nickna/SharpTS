@@ -627,11 +627,11 @@ public partial class RuntimeEmitter
         // direct `Date.UTC`/`Date.parse`/`Date.now` reads. The generic Type
         // probe can see the CLR UTC method first and wrap a different method
         // identity, breaking descriptor.value identity.
-        if (runtime.TSDateUTCStatic is not null)
+        if (runtime.Dates.Implementation is not null)
         {
             var notDateTypeLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldtoken, runtime.TSDateType);
+            il.Emit(OpCodes.Ldtoken, runtime.Dates.RequireImplementation().Type);
             il.Emit(OpCodes.Call, _types.GetMethod(
                 _types.Type, "GetTypeFromHandle")!);
             il.Emit(OpCodes.Bne_Un, notDateTypeLabel);
@@ -653,10 +653,10 @@ public partial class RuntimeEmitter
                 }, writable: true, configurable: true);
                 il.MarkLabel(next);
             }
-            EmitDateStaticDescriptor("UTC", runtime.TSDateUTCStatic, 7);
-            if (runtime.TSDateParseStatic is not null)
+            EmitDateStaticDescriptor("UTC", runtime.Dates.RequireImplementation().StaticUTC, 7);
+            if (runtime.Dates.Implementation is not null)
                 EmitDateStaticDescriptor(
-                    "parse", runtime.TSDateParseStatic, 1);
+                    "parse", runtime.Dates.RequireImplementation().StaticParse, 1);
             il.MarkLabel(notDateTypeLabel);
         }
     }

@@ -304,6 +304,20 @@ collections, iterator behavior and per-output comparer/sentinel identity remain 
 isolated as before. General iteration and the full residual audit remain separate work
 under #1599.
 
+Date has a required `Dates` owner for the prototype field and population declaration, plus
+an optional implementation selected once by orchestration. The implementation owns 58 type,
+constructor and operation handles and a checked 44-entry instance-method registry. The Date
+type and its methods are available early; runtime wrappers follow timer infrastructure, and
+prototype population follows those wrappers. Completion validates every selected handle,
+registry entry and the emitted prototype body, including its single-return absent path.
+Failed completion remains repairable. The registry exposes a read-only view and rejects
+unknown, null, duplicate and frozen declarations. Three Date field builders are local
+construction inputs; GetTime uses the instance registry instead of an emitter-held alias.
+Sixty emission signatures receive scoped metadata and exact peers. Generic consumers inspect
+the supplied optional implementation. Native numeric signatures, mutable guest prototypes,
+timer calls and generated order are preserved. The locale/options wrapper exists whenever
+Date is selected, while its soft runtime dependency is recorded only at call sites using it.
+
 Symbols use two required owners. `Symbols` owns 27 primitive, well-known, storage and
 prototype declarations, and `SymbolAccessors` owns the nine class-accessor registry
 declarations. The primitive class is emitted before comparer/iterator consumers; runtime

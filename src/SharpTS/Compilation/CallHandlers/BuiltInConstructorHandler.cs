@@ -89,8 +89,8 @@ public class BuiltInConstructorHandler : ICallHandler
         var ctx = emitter.Context;
 
         // Date() without 'new' returns current date as string
-        il.Emit(OpCodes.Call, ctx.Runtime!.CreateDateNoArgs);
-        il.Emit(OpCodes.Call, ctx.Runtime!.DateToString);
+        il.Emit(OpCodes.Call, ctx.Runtime!.Dates.RequireImplementation().CreateNoArgs);
+        il.Emit(OpCodes.Call, ctx.Runtime!.Dates.RequireImplementation().ToStringMethod);
         return true;
     }
 

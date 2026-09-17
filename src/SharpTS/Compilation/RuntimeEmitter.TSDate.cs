@@ -10,12 +10,14 @@ namespace SharpTS.Compilation;
 /// </summary>
 public partial class RuntimeEmitter
 {
-    private FieldBuilder _tsDateUtcDateTimeField = null!;
-    private FieldBuilder _tsDateIsInvalidField = null!;
-    private FieldBuilder _tsDateUnixEpochField = null!;
-    private MethodBuilder _tsDateGetTimeMethod = null!;
+    private readonly record struct DateTypeFields(FieldBuilder UtcDateTime, FieldBuilder IsInvalid, FieldBuilder UnixEpoch);
 
-    private void EmitTSDateClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+
+    private void EmitTSDateClass(
+        ModuleBuilder moduleBuilder,
+        EmittedDateImplementation date,
+        ConstructorBuilder nonConstructibleAttrCtor
+    )
     {
         // Define class: public sealed class $TSDate
         var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
@@ -23,94 +25,173 @@ public partial class RuntimeEmitter
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object
         );
-        runtime.TSDateType = typeBuilder;
+        date.Type = typeBuilder;
 
         // Fields
-        _tsDateUtcDateTimeField = typeBuilder.DefineField("_utcDateTime", _types.DateTime, FieldAttributes.Private);
-        _tsDateIsInvalidField = typeBuilder.DefineField("_isInvalid", _types.Boolean, FieldAttributes.Private);
-        _tsDateUnixEpochField = typeBuilder.DefineField("UnixEpoch", _types.DateTime,
+        var utcDateTime = typeBuilder.DefineField("_utcDateTime", _types.DateTime, FieldAttributes.Private);
+        var isInvalid = typeBuilder.DefineField("_isInvalid", _types.Boolean, FieldAttributes.Private);
+        var unixEpoch = typeBuilder.DefineField("UnixEpoch", _types.DateTime,
             FieldAttributes.Private | FieldAttributes.Static | FieldAttributes.InitOnly);
 
+        var fields = new DateTypeFields(utcDateTime, isInvalid, unixEpoch);
+
         // Static constructor to initialize UnixEpoch
-        EmitTSDateStaticConstructor(typeBuilder);
+        EmitTSDateStaticConstructor(typeBuilder, fields);
 
         // Constructors
-        EmitTSDateCtorNoArgs(typeBuilder, runtime);
-        EmitTSDateCtorMilliseconds(typeBuilder, runtime);
-        EmitTSDateCtorString(typeBuilder, runtime);
-        EmitTSDateCtorComponents(typeBuilder, runtime);
+        EmitTSDateCtorNoArgs(typeBuilder, date, fields);
+        EmitTSDateCtorMilliseconds(typeBuilder, date, fields);
+        EmitTSDateCtorString(typeBuilder, date, fields);
+        EmitTSDateCtorComponents(typeBuilder, date, fields);
 
         // Static Now method (UTC/parse are emitted after the instance members they reuse)
-        EmitTSDateNowStatic(typeBuilder, runtime);
+        EmitTSDateNowStatic(typeBuilder, date, fields);
 
         // Instance getter methods
-        EmitTSDateGetTime(typeBuilder, runtime);
-        EmitTSDateGetFullYear(typeBuilder, runtime);
-        EmitSimpleDateGetter(typeBuilder, runtime, "GetMonth", "Month", subtractAfter: 1);
-        EmitTSDateGetDate(typeBuilder, runtime);
-        EmitSimpleDateGetter(typeBuilder, runtime, "GetDay", "DayOfWeek");
-        EmitTSDateGetHours(typeBuilder, runtime);
-        EmitTSDateGetMinutes(typeBuilder, runtime);
-        EmitTSDateGetSeconds(typeBuilder, runtime);
-        EmitTSDateGetMilliseconds(typeBuilder, runtime);
-        EmitTSDateGetTimezoneOffset(typeBuilder, runtime);
+        EmitTSDateGetTime(typeBuilder, date, fields);
+        EmitTSDateGetFullYear(typeBuilder, date, fields);
+        EmitSimpleDateGetter(typeBuilder, date, fields, "GetMonth", "Month", subtractAfter: 1);
+        EmitTSDateGetDate(typeBuilder, date, fields);
+        EmitSimpleDateGetter(typeBuilder, date, fields, "GetDay", "DayOfWeek");
+        EmitTSDateGetHours(typeBuilder, date, fields);
+        EmitTSDateGetMinutes(typeBuilder, date, fields);
+        EmitTSDateGetSeconds(typeBuilder, date, fields);
+        EmitTSDateGetMilliseconds(typeBuilder, date, fields);
+        EmitTSDateGetTimezoneOffset(typeBuilder, date, fields);
 
         // UTC getter methods (#516)
-        EmitSimpleDateGetter(typeBuilder, runtime, "GetUTCFullYear", "Year", utc: true);
-        EmitSimpleDateGetter(typeBuilder, runtime, "GetUTCMonth", "Month", utc: true, subtractAfter: 1);
-        EmitSimpleDateGetter(typeBuilder, runtime, "GetUTCDate", "Day", utc: true);
-        EmitSimpleDateGetter(typeBuilder, runtime, "GetUTCDay", "DayOfWeek", utc: true);
-        EmitSimpleDateGetter(typeBuilder, runtime, "GetUTCHours", "Hour", utc: true);
-        EmitSimpleDateGetter(typeBuilder, runtime, "GetUTCMinutes", "Minute", utc: true);
-        EmitSimpleDateGetter(typeBuilder, runtime, "GetUTCSeconds", "Second", utc: true);
-        EmitSimpleDateGetter(typeBuilder, runtime, "GetUTCMilliseconds", "Millisecond", utc: true);
+        EmitSimpleDateGetter(typeBuilder, date, fields, "GetUTCFullYear", "Year", utc: true);
+        EmitSimpleDateGetter(typeBuilder, date, fields, "GetUTCMonth", "Month", utc: true, subtractAfter: 1);
+        EmitSimpleDateGetter(typeBuilder, date, fields, "GetUTCDate", "Day", utc: true);
+        EmitSimpleDateGetter(typeBuilder, date, fields, "GetUTCDay", "DayOfWeek", utc: true);
+        EmitSimpleDateGetter(typeBuilder, date, fields, "GetUTCHours", "Hour", utc: true);
+        EmitSimpleDateGetter(typeBuilder, date, fields, "GetUTCMinutes", "Minute", utc: true);
+        EmitSimpleDateGetter(typeBuilder, date, fields, "GetUTCSeconds", "Second", utc: true);
+        EmitSimpleDateGetter(typeBuilder, date, fields, "GetUTCMilliseconds", "Millisecond", utc: true);
         // Legacy getYear: local-time year minus 1900 (Annex B, #516)
-        EmitSimpleDateGetter(typeBuilder, runtime, "GetYear", "Year", subtractAfter: 1900);
+        EmitSimpleDateGetter(typeBuilder, date, fields, "GetYear", "Year", subtractAfter: 1900);
 
         // Instance setter methods (all route through the shared component setter). The
         // multi-component setters list the contiguous run they may write — index 0 is the
         // primary, the rest are optional trailing components honored when supplied (#536).
-        EmitTSDateSetTime(typeBuilder, runtime);
-        EmitDateComponentSetter(typeBuilder, runtime, "SetFullYear", [DateComponent.Year, DateComponent.Month, DateComponent.Day], utc: false);
-        EmitDateComponentSetter(typeBuilder, runtime, "SetMonth", [DateComponent.Month, DateComponent.Day], utc: false);
-        EmitDateComponentSetter(typeBuilder, runtime, "SetDate", [DateComponent.Day], utc: false);
-        EmitDateComponentSetter(typeBuilder, runtime, "SetHours", [DateComponent.Hour, DateComponent.Minute, DateComponent.Second, DateComponent.Millisecond], utc: false);
-        EmitDateComponentSetter(typeBuilder, runtime, "SetMinutes", [DateComponent.Minute, DateComponent.Second, DateComponent.Millisecond], utc: false);
-        EmitDateComponentSetter(typeBuilder, runtime, "SetSeconds", [DateComponent.Second, DateComponent.Millisecond], utc: false);
-        EmitDateComponentSetter(typeBuilder, runtime, "SetMilliseconds", [DateComponent.Millisecond], utc: false);
+        EmitTSDateSetTime(typeBuilder, date, fields);
+        EmitDateComponentSetter(
+            typeBuilder,
+            date,
+            fields,
+            "SetFullYear",
+            [DateComponent.Year, DateComponent.Month, DateComponent.Day],
+            utc: false
+        );
+        EmitDateComponentSetter(
+            typeBuilder,
+            date,
+            fields,
+            "SetMonth",
+            [DateComponent.Month, DateComponent.Day],
+            utc: false
+        );
+        EmitDateComponentSetter(typeBuilder, date, fields, "SetDate", [DateComponent.Day], utc: false);
+        EmitDateComponentSetter(
+            typeBuilder,
+            date,
+            fields,
+            "SetHours",
+            [DateComponent.Hour, DateComponent.Minute, DateComponent.Second, DateComponent.Millisecond],
+            utc: false
+        );
+        EmitDateComponentSetter(
+            typeBuilder,
+            date,
+            fields,
+            "SetMinutes",
+            [DateComponent.Minute, DateComponent.Second, DateComponent.Millisecond],
+            utc: false
+        );
+        EmitDateComponentSetter(
+            typeBuilder,
+            date,
+            fields,
+            "SetSeconds",
+            [DateComponent.Second, DateComponent.Millisecond],
+            utc: false
+        );
+        EmitDateComponentSetter(typeBuilder, date, fields, "SetMilliseconds", [DateComponent.Millisecond], utc: false);
 
         // UTC setter methods (#516)
-        EmitDateComponentSetter(typeBuilder, runtime, "SetUTCFullYear", [DateComponent.Year, DateComponent.Month, DateComponent.Day], utc: true);
-        EmitDateComponentSetter(typeBuilder, runtime, "SetUTCMonth", [DateComponent.Month, DateComponent.Day], utc: true);
-        EmitDateComponentSetter(typeBuilder, runtime, "SetUTCDate", [DateComponent.Day], utc: true);
-        EmitDateComponentSetter(typeBuilder, runtime, "SetUTCHours", [DateComponent.Hour, DateComponent.Minute, DateComponent.Second, DateComponent.Millisecond], utc: true);
-        EmitDateComponentSetter(typeBuilder, runtime, "SetUTCMinutes", [DateComponent.Minute, DateComponent.Second, DateComponent.Millisecond], utc: true);
-        EmitDateComponentSetter(typeBuilder, runtime, "SetUTCSeconds", [DateComponent.Second, DateComponent.Millisecond], utc: true);
-        EmitDateComponentSetter(typeBuilder, runtime, "SetUTCMilliseconds", [DateComponent.Millisecond], utc: true);
+        EmitDateComponentSetter(
+            typeBuilder,
+            date,
+            fields,
+            "SetUTCFullYear",
+            [DateComponent.Year, DateComponent.Month, DateComponent.Day],
+            utc: true
+        );
+        EmitDateComponentSetter(
+            typeBuilder,
+            date,
+            fields,
+            "SetUTCMonth",
+            [DateComponent.Month, DateComponent.Day],
+            utc: true
+        );
+        EmitDateComponentSetter(typeBuilder, date, fields, "SetUTCDate", [DateComponent.Day], utc: true);
+        EmitDateComponentSetter(
+            typeBuilder,
+            date,
+            fields,
+            "SetUTCHours",
+            [DateComponent.Hour, DateComponent.Minute, DateComponent.Second, DateComponent.Millisecond],
+            utc: true
+        );
+        EmitDateComponentSetter(
+            typeBuilder,
+            date,
+            fields,
+            "SetUTCMinutes",
+            [DateComponent.Minute, DateComponent.Second, DateComponent.Millisecond],
+            utc: true
+        );
+        EmitDateComponentSetter(
+            typeBuilder,
+            date,
+            fields,
+            "SetUTCSeconds",
+            [DateComponent.Second, DateComponent.Millisecond],
+            utc: true
+        );
+        EmitDateComponentSetter(
+            typeBuilder,
+            date,
+            fields,
+            "SetUTCMilliseconds",
+            [DateComponent.Millisecond],
+            utc: true
+        );
         // Legacy setYear (Annex B, #516) — emitted after SetFullYear, which it delegates to.
-        EmitTSDateSetYear(typeBuilder, runtime);
+        EmitTSDateSetYear(typeBuilder, date, fields);
 
         // Conversion methods
-        EmitTSDateToString(typeBuilder, runtime);
-        EmitTSDateToISOString(typeBuilder, runtime);
-        EmitTSDateToDateString(typeBuilder, runtime);
-        EmitTSDateToTimeString(typeBuilder, runtime);
-        EmitTSDateToUTCString(typeBuilder, runtime);
+        EmitTSDateToString(typeBuilder, date, fields);
+        EmitTSDateToISOString(typeBuilder, date, fields);
+        EmitTSDateToDateString(typeBuilder, date, fields);
+        EmitTSDateToTimeString(typeBuilder, date, fields);
+        EmitTSDateToUTCString(typeBuilder, date, fields);
         // toLocale* format in local time using the host's current culture (#516)
-        EmitTSDateLocaleString(typeBuilder, runtime, "ToLocaleDateString", "d");
-        EmitTSDateLocaleString(typeBuilder, runtime, "ToLocaleTimeString", "T");
-        EmitTSDateLocaleString(typeBuilder, runtime, "ToLocaleString", "G");
-        EmitTSDateValueOf(typeBuilder, runtime);
+        EmitTSDateLocaleString(typeBuilder, date, fields, "ToLocaleDateString", "d");
+        EmitTSDateLocaleString(typeBuilder, date, fields, "ToLocaleTimeString", "T");
+        EmitTSDateLocaleString(typeBuilder, date, fields, "ToLocaleString", "G");
+        EmitTSDateValueOf(typeBuilder, date);
 
         // Static Date.UTC / Date.parse (#538) — emitted last as they reuse the string ctor and
         // GetTime defined above.
-        EmitTSDateUTCStatic(typeBuilder, runtime);
-        EmitTSDateParseStatic(typeBuilder, runtime);
+        EmitTSDateUTCStatic(typeBuilder, date, fields, nonConstructibleAttrCtor);
+        EmitTSDateParseStatic(typeBuilder, date, nonConstructibleAttrCtor);
 
         typeBuilder.CreateType();
     }
 
-    private void EmitTSDateStaticConstructor(TypeBuilder typeBuilder)
+    private void EmitTSDateStaticConstructor(TypeBuilder typeBuilder, DateTypeFields fields)
     {
         var cctor = typeBuilder.DefineConstructor(
             MethodAttributes.Static | MethodAttributes.Private | MethodAttributes.SpecialName | MethodAttributes.RTSpecialName,
@@ -130,11 +211,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.DateTime, [
             _types.Int32, _types.Int32, _types.Int32, _types.Int32, _types.Int32, _types.Int32, _types.DateTimeKind
         ])!);
-        il.Emit(OpCodes.Stsfld, _tsDateUnixEpochField);
+        il.Emit(OpCodes.Stsfld, fields.UnixEpoch);
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitTSDateCtorNoArgs(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSDateCtorNoArgs(TypeBuilder typeBuilder, EmittedDateImplementation date, DateTypeFields fields)
     {
         // public $TSDate() { _utcDateTime = DateTime.UtcNow; _isInvalid = false; }
         var ctor = typeBuilder.DefineConstructor(
@@ -142,7 +223,7 @@ public partial class RuntimeEmitter
             CallingConventions.Standard,
             Type.EmptyTypes
         );
-        runtime.TSDateCtorNoArgs = ctor;
+        date.NoArgsConstructor = ctor;
 
         var il = ctor.GetILGenerator();
 
@@ -153,17 +234,17 @@ public partial class RuntimeEmitter
         // _utcDateTime = DateTime.UtcNow
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Call, _types.GetProperty(_types.DateTime, "UtcNow")!.GetGetMethod()!);
-        il.Emit(OpCodes.Stfld, _tsDateUtcDateTimeField);
+        il.Emit(OpCodes.Stfld, fields.UtcDateTime);
 
         // _isInvalid = false
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Stfld, _tsDateIsInvalidField);
+        il.Emit(OpCodes.Stfld, fields.IsInvalid);
 
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitTSDateCtorMilliseconds(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSDateCtorMilliseconds(TypeBuilder typeBuilder, EmittedDateImplementation date, DateTypeFields fields)
     {
         // public $TSDate(double milliseconds)
         var ctor = typeBuilder.DefineConstructor(
@@ -171,7 +252,7 @@ public partial class RuntimeEmitter
             CallingConventions.Standard,
             [_types.Double]
         );
-        runtime.TSDateCtorMilliseconds = ctor;
+        date.MillisecondsConstructor = ctor;
 
         var il = ctor.GetILGenerator();
         var invalidLabel = il.DefineLabel();
@@ -213,31 +294,31 @@ public partial class RuntimeEmitter
         // _utcDateTime = UnixEpoch.AddMilliseconds(milliseconds)
         // For value type instance methods, we need the address of the struct
         var epochLocal = il.DeclareLocal(_types.DateTime);
-        il.Emit(OpCodes.Ldsfld, _tsDateUnixEpochField);
+        il.Emit(OpCodes.Ldsfld, fields.UnixEpoch);
         il.Emit(OpCodes.Stloc, epochLocal);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloca, epochLocal);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.DateTime, "AddMilliseconds")!);
-        il.Emit(OpCodes.Stfld, _tsDateUtcDateTimeField);
+        il.Emit(OpCodes.Stfld, fields.UtcDateTime);
 
         // _isInvalid = false
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Stfld, _tsDateIsInvalidField);
+        il.Emit(OpCodes.Stfld, fields.IsInvalid);
         il.Emit(OpCodes.Br, endLabel);
 
         // invalidLabel: _isInvalid = true
         il.MarkLabel(invalidLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Stfld, _tsDateIsInvalidField);
+        il.Emit(OpCodes.Stfld, fields.IsInvalid);
 
         il.MarkLabel(endLabel);
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitTSDateCtorString(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSDateCtorString(TypeBuilder typeBuilder, EmittedDateImplementation date, DateTypeFields fields)
     {
         // public $TSDate(string isoString) - simplified: try parse, if fail set invalid
         var ctor = typeBuilder.DefineConstructor(
@@ -245,7 +326,7 @@ public partial class RuntimeEmitter
             CallingConventions.Standard,
             [_types.String]
         );
-        runtime.TSDateCtorString = ctor;
+        date.StringConstructor = ctor;
 
         var il = ctor.GetILGenerator();
         var invalidLabel = il.DefineLabel();
@@ -280,7 +361,7 @@ public partial class RuntimeEmitter
         // Already UTC - store directly
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, resultLocal);
-        il.Emit(OpCodes.Stfld, _tsDateUtcDateTimeField);
+        il.Emit(OpCodes.Stfld, fields.UtcDateTime);
         il.Emit(OpCodes.Br, validLabel);
 
         // Not UTC - convert to UTC
@@ -288,26 +369,26 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloca, resultLocal);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.DateTime, "ToUniversalTime")!);
-        il.Emit(OpCodes.Stfld, _tsDateUtcDateTimeField);
+        il.Emit(OpCodes.Stfld, fields.UtcDateTime);
 
         // _isInvalid = false
         il.MarkLabel(validLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Stfld, _tsDateIsInvalidField);
+        il.Emit(OpCodes.Stfld, fields.IsInvalid);
         il.Emit(OpCodes.Br, endLabel);
 
         // invalidLabel: _isInvalid = true
         il.MarkLabel(invalidLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Stfld, _tsDateIsInvalidField);
+        il.Emit(OpCodes.Stfld, fields.IsInvalid);
 
         il.MarkLabel(endLabel);
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitTSDateCtorComponents(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSDateCtorComponents(TypeBuilder typeBuilder, EmittedDateImplementation date, DateTypeFields fields)
     {
         // public $TSDate(int year, int month, int day, int hours, int minutes, int seconds, int milliseconds)
         var ctor = typeBuilder.DefineConstructor(
@@ -315,7 +396,7 @@ public partial class RuntimeEmitter
             CallingConventions.Standard,
             [_types.Int32, _types.Int32, _types.Int32, _types.Int32, _types.Int32, _types.Int32, _types.Int32]
         );
-        runtime.TSDateCtorComponents = ctor;
+        date.ComponentsConstructor = ctor;
 
         var il = ctor.GetILGenerator();
         var endLabel = il.DefineLabel();
@@ -406,12 +487,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloca, localDateTimeLocal);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.DateTime, "ToUniversalTime")!);
-        il.Emit(OpCodes.Stfld, _tsDateUtcDateTimeField);
+        il.Emit(OpCodes.Stfld, fields.UtcDateTime);
 
         // _isInvalid = false
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Stfld, _tsDateIsInvalidField);
+        il.Emit(OpCodes.Stfld, fields.IsInvalid);
         il.Emit(OpCodes.Leave, endLabel);
 
         // Catch block
@@ -419,7 +500,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Pop); // Discard exception
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Stfld, _tsDateIsInvalidField);
+        il.Emit(OpCodes.Stfld, fields.IsInvalid);
         il.Emit(OpCodes.Leave, endLabel);
 
         il.EndExceptionBlock();
@@ -428,7 +509,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitTSDateNowStatic(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSDateNowStatic(TypeBuilder typeBuilder, EmittedDateImplementation date, DateTypeFields fields)
     {
         // public static double Now() => (DateTime.UtcNow - UnixEpoch).TotalMilliseconds
         var method = typeBuilder.DefineMethod(
@@ -437,7 +518,7 @@ public partial class RuntimeEmitter
             _types.Double,
             Type.EmptyTypes
         );
-        runtime.TSDateNowStatic = method;
+        date.StaticNow = method;
 
         var il = method.GetILGenerator();
         var utcNowLocal = il.DeclareLocal(_types.DateTime);
@@ -448,7 +529,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, utcNowLocal);
 
         // UnixEpoch
-        il.Emit(OpCodes.Ldsfld, _tsDateUnixEpochField);
+        il.Emit(OpCodes.Ldsfld, fields.UnixEpoch);
         il.Emit(OpCodes.Stloc, unixEpochLocal);
 
         // Subtract: utcNow - unixEpoch
@@ -470,7 +551,12 @@ public partial class RuntimeEmitter
     // is non-finite or the date is out of range. Mirrors SharpTSDate.UTC. The components are read
     // and validated up front (outside the try) so a non-finite branch is a plain jump; the instant
     // is then built inside a try/catch (out-of-range -> NaN), matching the constructor.
-    private void EmitTSDateUTCStatic(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSDateUTCStatic(
+        TypeBuilder typeBuilder,
+        EmittedDateImplementation date,
+        DateTypeFields fields,
+        ConstructorBuilder nonConstructibleAttrCtor
+    )
     {
         var method = typeBuilder.DefineMethod(
             "UTC",
@@ -478,9 +564,9 @@ public partial class RuntimeEmitter
             _types.Double,
             [_types.ObjectArray]
         );
-        runtime.TSDateUTCStatic = method;
+        date.StaticUTC = method;
         method.SetCustomAttribute(
-            runtime.NonConstructibleAttrCtor, CustomAttributeEncoder.EmptyBlob);
+            nonConstructibleAttrCtor, CustomAttributeEncoder.EmptyBlob);
 
         var il = method.GetILGenerator();
         var nanLabel = il.DefineLabel();
@@ -549,7 +635,7 @@ public partial class RuntimeEmitter
 
         // result = (cur - UnixEpoch).TotalMilliseconds
         il.Emit(OpCodes.Ldloc, cur);
-        il.Emit(OpCodes.Ldsfld, _tsDateUnixEpochField);
+        il.Emit(OpCodes.Ldsfld, fields.UnixEpoch);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.DateTime, "op_Subtraction", [_types.DateTime, _types.DateTime])!);
         var tsLocal = il.DeclareLocal(_types.TimeSpan);
         il.Emit(OpCodes.Stloc, tsLocal);
@@ -631,7 +717,11 @@ public partial class RuntimeEmitter
 
     // ECMA-262 §21.4.3.2 (Date.parse): parse a date string to a timestamp (ms since epoch) or NaN.
     // Reuses the $TSDate string constructor + GetTime, mirroring SharpTSDate.Parse.
-    private void EmitTSDateParseStatic(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSDateParseStatic(
+        TypeBuilder typeBuilder,
+        EmittedDateImplementation date,
+        ConstructorBuilder nonConstructibleAttrCtor
+    )
     {
         var method = typeBuilder.DefineMethod(
             "Parse",
@@ -639,20 +729,20 @@ public partial class RuntimeEmitter
             _types.Double,
             [_types.Object]
         );
-        runtime.TSDateParseStatic = method;
+        date.StaticParse = method;
         method.SetCustomAttribute(
-            runtime.NonConstructibleAttrCtor, CustomAttributeEncoder.EmptyBlob);
+            nonConstructibleAttrCtor, CustomAttributeEncoder.EmptyBlob);
 
         var il = method.GetILGenerator();
         // return new $TSDate((string)s).GetTime();  — invalid strings yield an Invalid date => NaN.
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, _types.String);
-        il.Emit(OpCodes.Newobj, runtime.TSDateCtorString);
-        il.Emit(OpCodes.Call, _tsDateGetTimeMethod);
+        il.Emit(OpCodes.Newobj, date.StringConstructor);
+        il.Emit(OpCodes.Call, date.GetInstanceMethod("GetTime"));
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitTSDateGetTime(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSDateGetTime(TypeBuilder typeBuilder, EmittedDateImplementation date, DateTypeFields fields)
     {
         // public double GetTime() { if (_isInvalid) return NaN; return (_utcDateTime - UnixEpoch).TotalMilliseconds; }
         var method = typeBuilder.DefineMethod(
@@ -661,15 +751,14 @@ public partial class RuntimeEmitter
             _types.Double,
             Type.EmptyTypes
         );
-        _tsDateGetTimeMethod = method; // Save for later use
-        runtime.TSDateMethods["GetTime"] = method;
+        date.DeclareInstanceMethod("GetTime", method);
 
         var il = method.GetILGenerator();
         var validLabel = il.DefineLabel();
 
         // if (_isInvalid) return NaN
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsDateIsInvalidField);
+        il.Emit(OpCodes.Ldfld, fields.IsInvalid);
         il.Emit(OpCodes.Brfalse, validLabel);
         il.Emit(OpCodes.Ldc_R8, double.NaN);
         il.Emit(OpCodes.Ret);
@@ -677,8 +766,8 @@ public partial class RuntimeEmitter
         il.MarkLabel(validLabel);
         // (_utcDateTime - UnixEpoch).TotalMilliseconds
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsDateUtcDateTimeField);
-        il.Emit(OpCodes.Ldsfld, _tsDateUnixEpochField);
+        il.Emit(OpCodes.Ldfld, fields.UtcDateTime);
+        il.Emit(OpCodes.Ldsfld, fields.UnixEpoch);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.DateTime, "op_Subtraction", [_types.DateTime, _types.DateTime])!);
         var tsLocal = il.DeclareLocal(_types.TimeSpan);
         il.Emit(OpCodes.Stloc, tsLocal);
@@ -687,34 +776,34 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitTSDateGetFullYear(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSDateGetFullYear(TypeBuilder typeBuilder, EmittedDateImplementation date, DateTypeFields fields)
     {
-        EmitSimpleDateGetter(typeBuilder, runtime, "GetFullYear", "Year");
+        EmitSimpleDateGetter(typeBuilder, date, fields, "GetFullYear", "Year");
     }
 
-    private void EmitTSDateGetDate(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSDateGetDate(TypeBuilder typeBuilder, EmittedDateImplementation date, DateTypeFields fields)
     {
-        EmitSimpleDateGetter(typeBuilder, runtime, "GetDate", "Day");
+        EmitSimpleDateGetter(typeBuilder, date, fields, "GetDate", "Day");
     }
 
-    private void EmitTSDateGetHours(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSDateGetHours(TypeBuilder typeBuilder, EmittedDateImplementation date, DateTypeFields fields)
     {
-        EmitSimpleDateGetter(typeBuilder, runtime, "GetHours", "Hour");
+        EmitSimpleDateGetter(typeBuilder, date, fields, "GetHours", "Hour");
     }
 
-    private void EmitTSDateGetMinutes(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSDateGetMinutes(TypeBuilder typeBuilder, EmittedDateImplementation date, DateTypeFields fields)
     {
-        EmitSimpleDateGetter(typeBuilder, runtime, "GetMinutes", "Minute");
+        EmitSimpleDateGetter(typeBuilder, date, fields, "GetMinutes", "Minute");
     }
 
-    private void EmitTSDateGetSeconds(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSDateGetSeconds(TypeBuilder typeBuilder, EmittedDateImplementation date, DateTypeFields fields)
     {
-        EmitSimpleDateGetter(typeBuilder, runtime, "GetSeconds", "Second");
+        EmitSimpleDateGetter(typeBuilder, date, fields, "GetSeconds", "Second");
     }
 
-    private void EmitTSDateGetMilliseconds(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSDateGetMilliseconds(TypeBuilder typeBuilder, EmittedDateImplementation date, DateTypeFields fields)
     {
-        EmitSimpleDateGetter(typeBuilder, runtime, "GetMilliseconds", "Millisecond");
+        EmitSimpleDateGetter(typeBuilder, date, fields, "GetMilliseconds", "Millisecond");
     }
 
     /// <summary>
@@ -723,7 +812,15 @@ public partial class RuntimeEmitter
     /// it is converted to local time first. <paramref name="subtractAfter"/> offsets the result
     /// (e.g. 1 for the 0-indexed month, 1900 for the Annex B getYear).
     /// </summary>
-    private void EmitSimpleDateGetter(TypeBuilder typeBuilder, EmittedRuntime runtime, string methodName, string propertyName, bool utc = false, int subtractAfter = 0)
+    private void EmitSimpleDateGetter(
+        TypeBuilder typeBuilder,
+        EmittedDateImplementation date,
+        DateTypeFields fields,
+        string methodName,
+        string propertyName,
+        bool utc = false,
+        int subtractAfter = 0
+    )
     {
         var method = typeBuilder.DefineMethod(
             methodName,
@@ -731,13 +828,13 @@ public partial class RuntimeEmitter
             _types.Double,
             Type.EmptyTypes
         );
-        runtime.TSDateMethods[methodName] = method;
+        date.DeclareInstanceMethod(methodName, method);
 
         var il = method.GetILGenerator();
         var validLabel = il.DefineLabel();
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsDateIsInvalidField);
+        il.Emit(OpCodes.Ldfld, fields.IsInvalid);
         il.Emit(OpCodes.Brfalse, validLabel);
         il.Emit(OpCodes.Ldc_R8, double.NaN);
         il.Emit(OpCodes.Ret);
@@ -747,13 +844,13 @@ public partial class RuntimeEmitter
         {
             // Read the UTC instant directly; the property getter is called on the field address.
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldflda, _tsDateUtcDateTimeField);
+            il.Emit(OpCodes.Ldflda, fields.UtcDateTime);
         }
         else
         {
             var localTimeLocal = il.DeclareLocal(_types.DateTime);
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldflda, _tsDateUtcDateTimeField);
+            il.Emit(OpCodes.Ldflda, fields.UtcDateTime);
             il.Emit(OpCodes.Call, _types.GetMethod(_types.DateTime, "ToLocalTime")!);
             il.Emit(OpCodes.Stloc, localTimeLocal);
             il.Emit(OpCodes.Ldloca, localTimeLocal);
@@ -768,7 +865,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitTSDateGetTimezoneOffset(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSDateGetTimezoneOffset(TypeBuilder typeBuilder, EmittedDateImplementation date, DateTypeFields fields)
     {
         var method = typeBuilder.DefineMethod(
             "GetTimezoneOffset",
@@ -776,13 +873,13 @@ public partial class RuntimeEmitter
             _types.Double,
             Type.EmptyTypes
         );
-        runtime.TSDateMethods["GetTimezoneOffset"] = method;
+        date.DeclareInstanceMethod("GetTimezoneOffset", method);
 
         var il = method.GetILGenerator();
         var validLabel = il.DefineLabel();
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsDateIsInvalidField);
+        il.Emit(OpCodes.Ldfld, fields.IsInvalid);
         il.Emit(OpCodes.Brfalse, validLabel);
         il.Emit(OpCodes.Ldc_R8, double.NaN);
         il.Emit(OpCodes.Ret);
@@ -791,7 +888,7 @@ public partial class RuntimeEmitter
         // -TimeZoneInfo.Local.GetUtcOffset(_utcDateTime).TotalMinutes
         il.Emit(OpCodes.Call, typeof(TimeZoneInfo).GetProperty("Local")!.GetGetMethod()!);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsDateUtcDateTimeField);
+        il.Emit(OpCodes.Ldfld, fields.UtcDateTime);
         il.Emit(OpCodes.Callvirt, typeof(TimeZoneInfo).GetMethod("GetUtcOffset", [_types.DateTime])!);
         var tsLocal = il.DeclareLocal(_types.TimeSpan);
         il.Emit(OpCodes.Stloc, tsLocal);
@@ -801,7 +898,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitTSDateSetTime(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSDateSetTime(TypeBuilder typeBuilder, EmittedDateImplementation date, DateTypeFields fields)
     {
         // public double SetTime(double time) - sets from epoch ms, returns new timestamp
         var method = typeBuilder.DefineMethod(
@@ -810,7 +907,7 @@ public partial class RuntimeEmitter
             _types.Double,
             [_types.Double]
         );
-        runtime.TSDateMethods["SetTime"] = method;
+        date.DeclareInstanceMethod("SetTime", method);
 
         var il = method.GetILGenerator();
         var invalidLabel = il.DefineLabel();
@@ -836,28 +933,28 @@ public partial class RuntimeEmitter
         // Valid - set time
         // For value type instance methods, we need the address of the struct
         var epochLocal = il.DeclareLocal(_types.DateTime);
-        il.Emit(OpCodes.Ldsfld, _tsDateUnixEpochField);
+        il.Emit(OpCodes.Ldsfld, fields.UnixEpoch);
         il.Emit(OpCodes.Stloc, epochLocal);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloca, epochLocal);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.DateTime, "AddMilliseconds")!);
-        il.Emit(OpCodes.Stfld, _tsDateUtcDateTimeField);
+        il.Emit(OpCodes.Stfld, fields.UtcDateTime);
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Stfld, _tsDateIsInvalidField);
+        il.Emit(OpCodes.Stfld, fields.IsInvalid);
         il.Emit(OpCodes.Br, validLabel);
 
         il.MarkLabel(invalidLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Stfld, _tsDateIsInvalidField);
+        il.Emit(OpCodes.Stfld, fields.IsInvalid);
 
         il.MarkLabel(validLabel);
         // Call GetTime() to return result
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, _tsDateGetTimeMethod);
+        il.Emit(OpCodes.Call, date.GetInstanceMethod("GetTime"));
         il.Emit(OpCodes.Ret);
     }
 
@@ -879,12 +976,19 @@ public partial class RuntimeEmitter
     /// is true the instant is read and written directly in UTC; otherwise it round-trips through
     /// local time.
     /// </summary>
-    private void EmitDateComponentSetter(TypeBuilder typeBuilder, EmittedRuntime runtime, string methodName, DateComponent[] settable, bool utc)
+    private void EmitDateComponentSetter(
+        TypeBuilder typeBuilder,
+        EmittedDateImplementation date,
+        DateTypeFields fields,
+        string methodName,
+        DateComponent[] settable,
+        bool utc
+    )
     {
         bool multi = settable.Length > 1;
         var method = typeBuilder.DefineMethod(methodName, MethodAttributes.Public, _types.Double,
             multi ? [_types.ObjectArray] : [_types.Double]);
-        runtime.TSDateMethods[methodName] = method;
+        date.DeclareInstanceMethod(methodName, method);
 
         var il = method.GetILGenerator();
         var computeLabel = il.DefineLabel();
@@ -895,10 +999,10 @@ public partial class RuntimeEmitter
 
         // if (_isInvalid) return GetTime(); // stays NaN
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsDateIsInvalidField);
+        il.Emit(OpCodes.Ldfld, fields.IsInvalid);
         il.Emit(OpCodes.Brfalse, computeLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, _tsDateGetTimeMethod);
+        il.Emit(OpCodes.Call, date.GetInstanceMethod("GetTime"));
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(computeLabel);
@@ -906,13 +1010,13 @@ public partial class RuntimeEmitter
         if (utc)
         {
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldfld, _tsDateUtcDateTimeField);
+            il.Emit(OpCodes.Ldfld, fields.UtcDateTime);
             il.Emit(OpCodes.Stloc, dtLocal);
         }
         else
         {
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldflda, _tsDateUtcDateTimeField);
+            il.Emit(OpCodes.Ldflda, fields.UtcDateTime);
             il.Emit(OpCodes.Call, _types.GetMethod(_types.DateTime, "ToLocalTime")!);
             il.Emit(OpCodes.Stloc, dtLocal);
         }
@@ -986,7 +1090,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldloca, cur);
             il.Emit(OpCodes.Call, _types.GetMethod(_types.DateTime, "ToUniversalTime")!);
         }
-        il.Emit(OpCodes.Stfld, _tsDateUtcDateTimeField);
+        il.Emit(OpCodes.Stfld, fields.UtcDateTime);
         il.Emit(OpCodes.Leave, endLabel);
 
         // catch { _isInvalid = true; }
@@ -994,13 +1098,13 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Stfld, _tsDateIsInvalidField);
+        il.Emit(OpCodes.Stfld, fields.IsInvalid);
         il.Emit(OpCodes.Leave, endLabel);
         il.EndExceptionBlock();
 
         il.MarkLabel(endLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, _tsDateGetTimeMethod);
+        il.Emit(OpCodes.Call, date.GetInstanceMethod("GetTime"));
         il.Emit(OpCodes.Ret);
     }
 
@@ -1077,10 +1181,10 @@ public partial class RuntimeEmitter
     }
 
     // ECMA-262 Annex B B.2.4.2: setYear maps 0-99 to 1900-1999, then delegates to SetFullYear.
-    private void EmitTSDateSetYear(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSDateSetYear(TypeBuilder typeBuilder, EmittedDateImplementation date, DateTypeFields fields)
     {
         var method = typeBuilder.DefineMethod("SetYear", MethodAttributes.Public, _types.Double, [_types.Double]);
-        runtime.TSDateMethods["SetYear"] = method;
+        date.DeclareInstanceMethod("SetYear", method);
 
         var il = method.GetILGenerator();
         var computeLabel = il.DefineLabel();
@@ -1089,10 +1193,10 @@ public partial class RuntimeEmitter
 
         // if (_isInvalid) return GetTime();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsDateIsInvalidField);
+        il.Emit(OpCodes.Ldfld, fields.IsInvalid);
         il.Emit(OpCodes.Brfalse, computeLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, _tsDateGetTimeMethod);
+        il.Emit(OpCodes.Call, date.GetInstanceMethod("GetTime"));
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(computeLabel);
@@ -1125,28 +1229,28 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Conv_R8);
         il.Emit(OpCodes.Box, _types.Double);
         il.Emit(OpCodes.Stelem_Ref);
-        il.Emit(OpCodes.Call, runtime.TSDateMethods["SetFullYear"]);
+        il.Emit(OpCodes.Call, date.GetInstanceMethod("SetFullYear"));
         il.Emit(OpCodes.Ret);
     }
 
     // RFC 7231 UTC string, e.g. "Thu, 01 Jan 1970 00:00:00 GMT".
-    private void EmitTSDateToUTCString(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSDateToUTCString(TypeBuilder typeBuilder, EmittedDateImplementation date, DateTypeFields fields)
     {
         var method = typeBuilder.DefineMethod("ToUTCString", MethodAttributes.Public, _types.String, Type.EmptyTypes);
-        runtime.TSDateMethods["ToUTCString"] = method;
+        date.DeclareInstanceMethod("ToUTCString", method);
 
         var il = method.GetILGenerator();
         var validLabel = il.DefineLabel();
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsDateIsInvalidField);
+        il.Emit(OpCodes.Ldfld, fields.IsInvalid);
         il.Emit(OpCodes.Brfalse, validLabel);
         il.Emit(OpCodes.Ldstr, "Invalid Date");
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(validLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldflda, _tsDateUtcDateTimeField);
+        il.Emit(OpCodes.Ldflda, fields.UtcDateTime);
         il.Emit(OpCodes.Ldstr, "ddd, dd MMM yyyy HH:mm:ss 'GMT'");
         il.Emit(OpCodes.Call, typeof(CultureInfo).GetProperty("InvariantCulture")!.GetGetMethod()!);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.DateTime, "ToString", [_types.String, typeof(IFormatProvider)])!);
@@ -1154,16 +1258,22 @@ public partial class RuntimeEmitter
     }
 
     // toLocale* family: format in local time using the host's current culture (#516).
-    private void EmitTSDateLocaleString(TypeBuilder typeBuilder, EmittedRuntime runtime, string methodName, string format)
+    private void EmitTSDateLocaleString(
+        TypeBuilder typeBuilder,
+        EmittedDateImplementation date,
+        DateTypeFields fields,
+        string methodName,
+        string format
+    )
     {
         var method = typeBuilder.DefineMethod(methodName, MethodAttributes.Public, _types.String, Type.EmptyTypes);
-        runtime.TSDateMethods[methodName] = method;
+        date.DeclareInstanceMethod(methodName, method);
 
         var il = method.GetILGenerator();
         var validLabel = il.DefineLabel();
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsDateIsInvalidField);
+        il.Emit(OpCodes.Ldfld, fields.IsInvalid);
         il.Emit(OpCodes.Brfalse, validLabel);
         il.Emit(OpCodes.Ldstr, "Invalid Date");
         il.Emit(OpCodes.Ret);
@@ -1171,7 +1281,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(validLabel);
         var localTimeLocal = il.DeclareLocal(_types.DateTime);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldflda, _tsDateUtcDateTimeField);
+        il.Emit(OpCodes.Ldflda, fields.UtcDateTime);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.DateTime, "ToLocalTime")!);
         il.Emit(OpCodes.Stloc, localTimeLocal);
         il.Emit(OpCodes.Ldloca, localTimeLocal);
@@ -1181,7 +1291,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitTSDateToString(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSDateToString(TypeBuilder typeBuilder, EmittedDateImplementation date, DateTypeFields fields)
     {
         var method = typeBuilder.DefineMethod(
             "ToString",
@@ -1189,13 +1299,13 @@ public partial class RuntimeEmitter
             _types.String,
             Type.EmptyTypes
         );
-        runtime.TSDateMethods["ToString"] = method;
+        date.DeclareInstanceMethod("ToString", method);
 
         var il = method.GetILGenerator();
         var validLabel = il.DefineLabel();
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsDateIsInvalidField);
+        il.Emit(OpCodes.Ldfld, fields.IsInvalid);
         il.Emit(OpCodes.Brfalse, validLabel);
         il.Emit(OpCodes.Ldstr, "Invalid Date");
         il.Emit(OpCodes.Ret);
@@ -1206,7 +1316,7 @@ public partial class RuntimeEmitter
         var localTimeLocal = il.DeclareLocal(_types.DateTime);
         var formattedLocal = il.DeclareLocal(_types.String);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldflda, _tsDateUtcDateTimeField);
+        il.Emit(OpCodes.Ldflda, fields.UtcDateTime);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.DateTime, "ToLocalTime")!);
         il.Emit(OpCodes.Stloc, localTimeLocal);
 
@@ -1225,7 +1335,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitTSDateToISOString(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSDateToISOString(TypeBuilder typeBuilder, EmittedDateImplementation date, DateTypeFields fields)
     {
         var method = typeBuilder.DefineMethod(
             "ToISOString",
@@ -1233,13 +1343,13 @@ public partial class RuntimeEmitter
             _types.String,
             Type.EmptyTypes
         );
-        runtime.TSDateMethods["ToISOString"] = method;
+        date.DeclareInstanceMethod("ToISOString", method);
 
         var il = method.GetILGenerator();
         var validLabel = il.DefineLabel();
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsDateIsInvalidField);
+        il.Emit(OpCodes.Ldfld, fields.IsInvalid);
         il.Emit(OpCodes.Brfalse, validLabel);
         il.Emit(OpCodes.Ldstr, "Runtime Error: Invalid Date");
         il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.Exception, [_types.String])!);
@@ -1247,14 +1357,14 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(validLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldflda, _tsDateUtcDateTimeField);
+        il.Emit(OpCodes.Ldflda, fields.UtcDateTime);
         il.Emit(OpCodes.Ldstr, "yyyy-MM-ddTHH:mm:ss.fffZ");
         il.Emit(OpCodes.Call, typeof(CultureInfo).GetProperty("InvariantCulture")!.GetGetMethod()!);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.DateTime, "ToString", [_types.String, typeof(IFormatProvider)])!);
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitTSDateToDateString(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSDateToDateString(TypeBuilder typeBuilder, EmittedDateImplementation date, DateTypeFields fields)
     {
         var method = typeBuilder.DefineMethod(
             "ToDateString",
@@ -1262,13 +1372,13 @@ public partial class RuntimeEmitter
             _types.String,
             Type.EmptyTypes
         );
-        runtime.TSDateMethods["ToDateString"] = method;
+        date.DeclareInstanceMethod("ToDateString", method);
 
         var il = method.GetILGenerator();
         var validLabel = il.DefineLabel();
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsDateIsInvalidField);
+        il.Emit(OpCodes.Ldfld, fields.IsInvalid);
         il.Emit(OpCodes.Brfalse, validLabel);
         il.Emit(OpCodes.Ldstr, "Invalid Date");
         il.Emit(OpCodes.Ret);
@@ -1276,7 +1386,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(validLabel);
         var localTimeLocal = il.DeclareLocal(_types.DateTime);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldflda, _tsDateUtcDateTimeField);
+        il.Emit(OpCodes.Ldflda, fields.UtcDateTime);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.DateTime, "ToLocalTime")!);
         il.Emit(OpCodes.Stloc, localTimeLocal);
 
@@ -1287,7 +1397,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitTSDateToTimeString(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSDateToTimeString(TypeBuilder typeBuilder, EmittedDateImplementation date, DateTypeFields fields)
     {
         var method = typeBuilder.DefineMethod(
             "ToTimeString",
@@ -1295,13 +1405,13 @@ public partial class RuntimeEmitter
             _types.String,
             Type.EmptyTypes
         );
-        runtime.TSDateMethods["ToTimeString"] = method;
+        date.DeclareInstanceMethod("ToTimeString", method);
 
         var il = method.GetILGenerator();
         var validLabel = il.DefineLabel();
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsDateIsInvalidField);
+        il.Emit(OpCodes.Ldfld, fields.IsInvalid);
         il.Emit(OpCodes.Brfalse, validLabel);
         il.Emit(OpCodes.Ldstr, "Invalid Date");
         il.Emit(OpCodes.Ret);
@@ -1310,7 +1420,7 @@ public partial class RuntimeEmitter
         var localTimeLocal = il.DeclareLocal(_types.DateTime);
         var formattedLocal = il.DeclareLocal(_types.String);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldflda, _tsDateUtcDateTimeField);
+        il.Emit(OpCodes.Ldflda, fields.UtcDateTime);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.DateTime, "ToLocalTime")!);
         il.Emit(OpCodes.Stloc, localTimeLocal);
 
@@ -1329,7 +1439,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitTSDateValueOf(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSDateValueOf(TypeBuilder typeBuilder, EmittedDateImplementation date)
     {
         var method = typeBuilder.DefineMethod(
             "ValueOf",
@@ -1337,11 +1447,11 @@ public partial class RuntimeEmitter
             _types.Double,
             Type.EmptyTypes
         );
-        runtime.TSDateMethods["ValueOf"] = method;
+        date.DeclareInstanceMethod("ValueOf", method);
 
         var il = method.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, _tsDateGetTimeMethod);
+        il.Emit(OpCodes.Call, date.GetInstanceMethod("GetTime"));
         il.Emit(OpCodes.Ret);
     }
 }

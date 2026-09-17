@@ -698,14 +698,14 @@ public partial class RuntimeEmitter
         // Date instances inherit from Date.prototype. They are emitted CLR
         // objects rather than dictionary wrappers, so they need an explicit
         // intrinsic-prototype branch.
-        if (_features.UsesDate)
+        if (runtime.Dates.Implementation is not null)
         {
             var notTSDateForProtoLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.TSDateType);
+            il.Emit(OpCodes.Isinst, runtime.Dates.RequireImplementation().Type);
             il.Emit(OpCodes.Brfalse, notTSDateForProtoLabel);
-            il.Emit(OpCodes.Call, runtime.DatePrototypePopulateMethod);
-            il.Emit(OpCodes.Ldsfld, runtime.DatePrototypeField);
+            il.Emit(OpCodes.Call, runtime.Dates.PopulatePrototype);
+            il.Emit(OpCodes.Ldsfld, runtime.Dates.Prototype);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(notTSDateForProtoLabel);
         }

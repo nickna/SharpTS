@@ -166,7 +166,7 @@ public sealed class GlobalThisStaticEmitter : IStaticTypeEmitterStrategy
         Type? t = name switch
         {
             "Array" => ctx.Types.IListOfObject,
-            "Date" => ctx.Runtime!.TSDateType,
+            "Date" => ctx.Runtime!.Dates.RequireImplementation().Type,
             "RegExp" => ctx.Runtime!.TSRegExpType,
             "Map" => ctx.Types.DictionaryObjectObject,
             "Set" => ctx.Types.HashSetOfObject,

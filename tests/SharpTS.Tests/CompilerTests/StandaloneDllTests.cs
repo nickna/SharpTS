@@ -3708,6 +3708,265 @@ public class StandaloneDllTests
             verifyStandardError: error => Assert.Empty(error)));
     }
 
+    public static IEnumerable<object[]> DateMetadataPrograms =>
+    [
+        new object[]
+        {
+            "minimal",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "console.log(1);" },
+            "1\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "current",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let d = new Date();\nlet now = Date.now();\nlet diff = now - d.getTime();\nconsole.log(diff >= 0 && diff < 1000);" },
+            "true\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "components",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let d = new Date(2024, 5, 20, 14, 30, 45, 123);\nconsole.log(d.getFullYear());\nconsole.log(d.getMonth());\nconsole.log(d.getDate());\nconsole.log(d.getHours());\nconsole.log(d.getMinutes());\nconsole.log(d.getSeconds());\nconsole.log(d.getMilliseconds());" },
+            "2024\n5\n20\n14\n30\n45\n123\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "multi_setters",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let d = new Date(0);\nd.setUTCFullYear(2020, 5, 15);\nd.setUTCHours(13, 30, 45, 500);\nconsole.log(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());\nconsole.log(d.getUTCHours(), d.getUTCMinutes(), d.getUTCSeconds(), d.getUTCMilliseconds());\nlet m = new Date(2024, 0, 1, 10, 20, 30, 40);\nm.setHours(8, 15, 5);\nconsole.log(m.getHours(), m.getMinutes(), m.getSeconds(), m.getMilliseconds());" },
+            "2020 5 15\n13 30 45 500\n8 15 5 40\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "overflow",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let d = new Date(0);\nd.setUTCFullYear(2020, 1, 31);\nconsole.log(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());" },
+            "2020 2 2\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "utc",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "console.log(Date.UTC(2024, 0, 1));\nconsole.log(Date.UTC(2024, 5, 15, 13, 30, 45, 500));\nconsole.log(Date.UTC(2024));\nconsole.log(Date.UTC(70, 0, 1));\nconsole.log(Number.isNaN(Date.UTC(2024, NaN)));\nconsole.log(new Date(Date.UTC(2000, 0, 1)).toISOString());" },
+            "1704067200000\n1718458245500\n1704067200000\n0\ntrue\n2000-01-01T00:00:00.000Z\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "parse",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "console.log(Date.parse('2024-01-15T10:30:00Z'));\nconsole.log(Number.isNaN(Date.parse('not a date')));\nconsole.log(Date.parse('2024-01-15T10:30:00Z') === new Date('2024-01-15T10:30:00Z').getTime());" },
+            "1705314600000\ntrue\ntrue\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "static_values",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const u = Date.UTC;\nconst p = Date.parse;\nconsole.log(u(2024, 0, 1));\nconsole.log(p('2024-01-15T10:30:00Z'));" },
+            "1704067200000\n1705314600000\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "copy",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const original: any = new Date(1438560000000);\noriginal.valueOf = () => { throw new Error(\"unexpected coercion\"); };\noriginal.toString = () => { throw new Error(\"unexpected coercion\"); };\nconsole.log(new Date(original).getTime());\nconsole.log(typeof new Date(8640000000000000).getTimezoneOffset());\nconsole.log(typeof new Date(-8640000000000000).getTimezoneOffset());" },
+            "1438560000000\nnumber\nnumber\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "prototype_mutation",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const date: any = new Date(0);\nconsole.log(/^[0-9]{2}:[0-9]{2}:[0-9]{2} GMT[+-][0-9]{4}$/.test(date.toTimeString()));\nconsole.log(/ GMT[+-][0-9]{4}$/.test(date.toString()));\nDate.prototype.toString = Object.prototype.toString;\nconsole.log(date.toString());" },
+            "true\ntrue\n[object Date]\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "nonconstructors",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "function isConstructor(value: any) {\n    try {\n        Reflect.construct(function() {}, [], value);\n        return true;\n    } catch {\n        return false;\n    }\n}\nconsole.log(isConstructor(Date.now));\nconsole.log(isConstructor(Date.parse));\nconsole.log(isConstructor(Date.UTC));" },
+            "false\nfalse\nfalse\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "locale_options",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let d = new Date(Date.UTC(2024, 0, 15, 12, 0, 0));\nlet enFull = d.toLocaleDateString('en-US', { dateStyle: 'full', timeZone: 'UTC' });\nlet deFull = d.toLocaleDateString('de-DE', { dateStyle: 'full', timeZone: 'UTC' });\nlet enShort = d.toLocaleDateString('en-US', { dateStyle: 'short', timeZone: 'UTC' });\nlet enTime = d.toLocaleTimeString('en-US', { timeStyle: 'medium', timeZone: 'UTC' });\nconsole.log(enFull.includes('Monday') && enFull.includes('January') && enFull.includes('2024'));\nconsole.log(deFull.includes('Montag') && deFull.includes('Januar'));\nconsole.log(deFull !== enFull);\nconsole.log(enShort !== enFull && !enShort.includes('Monday'));\nconsole.log(enTime.includes('12:00:00'));" },
+            "true\ntrue\ntrue\ntrue\ntrue\n",
+            false,
+            false
+        },
+        new object[]
+        {
+            "descriptors",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const date = new Date(0);\nconst descriptor = Object.getOwnPropertyDescriptor(Date.prototype, 'toJSON')!;\nconsole.log(Object.prototype.hasOwnProperty.call(Date.prototype, 'toJSON'));\nconsole.log(descriptor.writable, descriptor.enumerable, descriptor.configurable);\nconsole.log(Object.getOwnPropertyDescriptor(date, 'toJSON') === undefined);" },
+            "true\ntrue false true\ntrue\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "locale_noargs",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let d = new Date(0);\nconsole.log(typeof d.toLocaleDateString(), d.toLocaleDateString().length > 0);\nconsole.log(typeof d.toLocaleTimeString(), d.toLocaleTimeString().length > 0);\nconsole.log(typeof d.toLocaleString(), d.toLocaleString().length > 0);" },
+            "string true\nstring true\nstring true\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "invalid",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let d = new Date(NaN);\nconsole.log(d.toUTCString());\nconsole.log(d.toLocaleDateString());\nconsole.log(Number.isNaN(d.getUTCFullYear()));\nconsole.log(Number.isNaN(d.setUTCSeconds(30)));" },
+            "Invalid Date\nInvalid Date\ntrue\ntrue\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "json",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let d = new Date('2024-06-15T12:00:00Z');\nconsole.log(d.toJSON() === d.toISOString());" },
+            "true\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "invalid_json",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let d = new Date(NaN);\nconsole.log(d.toJSON());" },
+            "null\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "timer_reentrancy",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let calls = 0;\nsetTimeout(() => {\n    calls++;\n    console.log(Date.now() >= 0);\n}, 0);\n\nconst started = Date.now();\nwhile (calls === 0 && Date.now() - started < 5000) { }\nconsole.log(calls);" },
+            "true\n1\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "clone",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const a=new Date(0);const b=structuredClone(a);b.setTime(1000);console.log(a.getTime(),b.getTime(),a!==b);" },
+            "0 1000 true\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "modules",
+            "main.ts",
+            new string[] { "dep.ts", "main.ts" },
+            new string[] { "export const epoch=new Date(0);", "import {epoch} from \"./dep\";console.log(epoch.toISOString());" },
+            "1970-01-01T00:00:00.000Z\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "commonjs",
+            "main.cjs",
+            new string[] { "dep.cjs", "main.cjs" },
+            new string[] { "exports.epoch=new Date(0);", "const dep=require(\"./dep.cjs\");console.log(dep.epoch.toISOString());" },
+            "1970-01-01T00:00:00.000Z\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "hosted_date",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "export function value(){return new Date(0).toISOString();}" },
+            "",
+            true,
+            true
+        },
+        new object[]
+        {
+            "hosted_minimal",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "export const value=1;" },
+            "",
+            true,
+            true
+        },
+    ];
+
+    [Theory]
+    [MemberData(nameof(DateMetadataPrograms))]
+    public void Isolated_DateMetadata_PreservesCollectionsAndDeployment(
+        string name, string entry, string[] paths, string[] sources, string expected, bool hosted, bool standalone)
+    {
+        using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        for (int i = 0; i < paths.Length; i++) tempDir.CreateFile(paths[i], sources[i]);
+        var sourcePath = tempDir.GetPath(entry);
+        var dllPath = tempDir.GetPath($"date-metadata_{name}.dll");
+        var deployment = standalone ? " --standalone" : "";
+        var hosting = hosted ? " --target dll --hosted" : "";
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --noLib --compile \"{sourcePath}\" -o \"{dllPath}\" --verify{deployment}{hosting}", tempDir.Path);
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        var references = GetAssemblyReferences(dllPath);
+        Assert.DoesNotContain("SharpTS", references);
+        Assert.Equal(hosted, references.Contains("SharpTS.Hosting.Abstractions"));
+        Assert.Equal(!standalone, File.Exists(tempDir.GetPath("SharpTS.dll")));
+        if (!hosted)
+            Assert.Equal(expected, ExecuteCompiledDllIsolated(dllPath, timeoutMs: 30000,
+                verifyStandardError: error => Assert.Empty(error)));
+    }
+
+
     public static IEnumerable<object[]> SymbolMetadataPrograms =>
     [
         new object[]

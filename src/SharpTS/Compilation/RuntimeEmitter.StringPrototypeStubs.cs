@@ -608,11 +608,11 @@ public partial class RuntimeEmitter
         }
 
         // $Date — ECMA-262 §21.4.4.42 brand check via [[DateValue]] slot.
-        if (runtime.TSDateType != null)
+        if (runtime.Dates.Implementation != null)
         {
             var notTSDateLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.TSDateType);
+            il.Emit(OpCodes.Isinst, runtime.Dates.RequireImplementation().Type);
             il.Emit(OpCodes.Brfalse, notTSDateLabel);
             EmitTag("[object Date]");
             il.MarkLabel(notTSDateLabel);

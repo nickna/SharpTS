@@ -164,7 +164,7 @@ public class EmittedBoxedPrimitiveRuntimeTests
             runtime.ObjectStorage.Type, runtime.Symbols.ToPrimitive, runtime.GetIndex, runtime.UndefinedType,
             runtime.TypeOf, runtime.InvokeMethodValue, runtime.ObjectStorage.GetProperty,
             runtime.HasOwnPropertyHelperMethod, runtime.GetProperty, runtime.CreateException, runtime.TSTypeErrorCtor);
-        var dateInputs = includeDate ? CreateInputs("BoxedDateInputs", runtime.TSDateType, runtime.DateToString) : null;
+        var dateInputs = includeDate ? CreateInputs("BoxedDateInputs", runtime.Dates.RequireImplementation().Type, runtime.Dates.RequireImplementation().ToStringMethod) : null;
         InvokeEmitter("EmitUnwrapIfBoxedBody", emitter, boxed, peers, dateInputs);
         helper.CreateType();
         using var bytes = Save(runtime);
@@ -173,10 +173,10 @@ public class EmittedBoxedPrimitiveRuntimeTests
         var runtimeType = assembly.GetType("$Runtime")!;
         var helperType = assembly.GetType(helper.Name)!;
         Assert.Equal(42d, Call(helperType, boxed.UnwrapIfBoxed, 42d));
-        var date = Activator.CreateInstance(assembly.GetType(runtime.TSDateType.Name)!, [0d]);
+        var date = Activator.CreateInstance(assembly.GetType(runtime.Dates.RequireImplementation().Type.Name)!, [0d]);
         var actual = Call(helperType, boxed.UnwrapIfBoxed, date);
         if (includeDate)
-            Assert.Equal(Call(runtimeType, runtime.DateToString, date), Assert.IsType<string>(actual));
+            Assert.Equal(Call(runtimeType, runtime.Dates.RequireImplementation().ToStringMethod, date), Assert.IsType<string>(actual));
         else
             Assert.Same(date, actual);
     }

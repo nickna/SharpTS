@@ -126,7 +126,7 @@ public partial class RuntimeEmitter
         // Date.prototype — addressable as a value so reflection over it works
         // (`Object.getOwnPropertyDescriptor(Date.prototype, "getTime")`).
         // Instance calls are emitted inline by DateEmitter and never read this.
-        runtime.DatePrototypeField = typeBuilder.DefineField(
+        runtime.Dates.Prototype = typeBuilder.DefineField(
             "_datePrototype",
             _types.DictionaryStringObject,
             FieldAttributes.Public | FieldAttributes.Static);
@@ -530,7 +530,7 @@ public partial class RuntimeEmitter
         DefineBigIntPrototypePopulateShell(typeBuilder, runtime.BigInt);
         DefineSymbolPrototypePopulateShell(typeBuilder, runtime.Symbols);
         DefineBooleanPrototypePopulateShell(typeBuilder, runtime.Booleans);
-        DefineDatePrototypePopulateShell(typeBuilder, runtime);
+        DefineDatePrototypePopulateShell(typeBuilder, runtime.Dates);
         DefineErrorPrototypePopulateShell(typeBuilder, runtime);
         DefineNativeErrorPrototypePopulateShells(typeBuilder, runtime);
         DefineFunctionPrototypePopulateShell(typeBuilder, runtime);
@@ -605,7 +605,7 @@ public partial class RuntimeEmitter
             cctorIL.Emit(OpCodes.Stsfld, runtime.Reflect.RequireNamespace().SingletonField);
         }
         cctorIL.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.DictionaryStringObject));
-        cctorIL.Emit(OpCodes.Stsfld, runtime.DatePrototypeField);
+        cctorIL.Emit(OpCodes.Stsfld, runtime.Dates.Prototype);
 
         // Array.prototype starts empty; populated lazily by
         // EmitArrayPrototypePopulate-emitted helper on first read.
@@ -745,7 +745,7 @@ public partial class RuntimeEmitter
             cctorIL.Emit(OpCodes.Call, runtime.BigInt.PrototypePopulateMethod);
         cctorIL.Emit(OpCodes.Call, runtime.Symbols.PopulatePrototype);
         cctorIL.Emit(OpCodes.Call, runtime.Booleans.PrototypePopulateMethod);
-        cctorIL.Emit(OpCodes.Call, runtime.DatePrototypePopulateMethod);
+        cctorIL.Emit(OpCodes.Call, runtime.Dates.PopulatePrototype);
         cctorIL.Emit(OpCodes.Call, runtime.Strings.PrototypePopulateMethod);
         cctorIL.Emit(OpCodes.Call, runtime.ErrorPrototypePopulateMethod);
         cctorIL.Emit(OpCodes.Call, runtime.FunctionPrototypePopulateMethod);
@@ -1769,11 +1769,23 @@ public partial class RuntimeEmitter
         // Virtual timer infrastructure (must come before DateMethods which calls ProcessPendingTimers)
         EmitTimerQueueInfrastructure(typeBuilder, runtime);
         // Date methods
-        if (_features.UsesDate)
-            EmitDateMethods(typeBuilder, runtime);
+        if (runtime.Dates.Implementation is not null)
+            EmitDateMethods(
+                typeBuilder,
+                runtime.Dates.RequireImplementation(),
+                new DateMethodsInputs(runtime.NonConstructibleAttrCtor, runtime.Timers)
+            );
         // Date.prototype populate — must come AFTER EmitDateMethods, which is what
         // assigns the runtime.Date* helper builders the wiring below references.
-        EmitDatePrototypePopulate(typeBuilder, runtime);
+        EmitDatePrototypePopulate(
+            typeBuilder,
+            runtime.Dates,
+            new DatePrototypePopulateInputs(
+                runtime.DescriptorStorage,
+                runtime.ObjectPrototypeField,
+                runtime.TSFunctionGetOrCreate
+            )
+        );
         // Fill the default-hint ToPrimitive body after every dependency is
         // bound, including DateToString for Date's special default hint.
         EmitUnwrapIfBoxedBody(runtime.BoxedPrimitives,
@@ -1789,7 +1801,7 @@ public partial class RuntimeEmitter
                 runtime.GetProperty,
                 runtime.CreateException,
                 runtime.TSTypeErrorCtor),
-            _features.UsesDate ? new BoxedDateInputs(runtime.TSDateType, runtime.DateToString) : null);
+            runtime.Dates.Implementation is not null ? new BoxedDateInputs(runtime.Dates.RequireImplementation().Type, runtime.Dates.RequireImplementation().ToStringMethod) : null);
         // Fill in LookupBuiltInStaticMember's body now that IsArray, NumberIs*,
         // StringFrom*, TSFunctionCtor (#63) and DateNow (value-form `Date.now`,
         // gated on UsesDate) are all in place. Only the body is late — the
