@@ -416,7 +416,7 @@ public sealed class StringEmitter : ITypeEmitterStrategy
 
         // The helper performs @@replace dispatch before deciding whether the
         // original replacement is callable or needs ToString coercion.
-        il.Emit(OpCodes.Call, ctx.Runtime!.StringReplaceRegExp);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RegExps.RequireImplementation().StringReplace);
     }
 
     private static bool TryEmitStableRegExpReplace(
@@ -441,11 +441,11 @@ public sealed class StringEmitter : ITypeEmitterStrategy
         ctx.IL.Emit(OpCodes.Ldloc, inputLocal);
         emitter.EmitExpression(literal);
         emitter.EmitBoxIfNeeded(literal);
-        ctx.IL.Emit(OpCodes.Castclass, ctx.Runtime.TSRegExpType);
+        ctx.IL.Emit(OpCodes.Castclass, ctx.Runtime.RegExps.RequireImplementation().Type);
         emitter.EmitExpression(arguments[1]);
         emitter.EmitConversionForParameter(arguments[1], ctx.Types.String);
         ctx.IL.Emit(literal.Flags.Contains('g') ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
-        ctx.IL.Emit(OpCodes.Call, ctx.Runtime.StableRegExpReplace);
+        ctx.IL.Emit(OpCodes.Call, ctx.Runtime.RegExps.RequireImplementation().StableStringReplace);
         emitter.SetStackType(StackType.String);
         return true;
     }
@@ -640,7 +640,7 @@ public sealed class StringEmitter : ITypeEmitterStrategy
         {
             il.Emit(OpCodes.Ldsfld, ctx.Runtime!.UndefinedInstance);
         }
-        il.Emit(OpCodes.Call, ctx.Runtime!.StringSplitProto);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RegExps.RequireImplementation().StringSplitProto);
     }
 
     private static void EmitMatch(IEmitterContext emitter, List<Expr> arguments)
@@ -657,7 +657,7 @@ public sealed class StringEmitter : ITypeEmitterStrategy
         {
             il.Emit(OpCodes.Ldstr, "");
         }
-        il.Emit(OpCodes.Call, ctx.Runtime!.StringMatchRegExp);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RegExps.RequireImplementation().StringMatch);
     }
 
     private static void EmitMatchAll(IEmitterContext emitter, List<Expr> arguments)
@@ -674,7 +674,7 @@ public sealed class StringEmitter : ITypeEmitterStrategy
         {
             il.Emit(OpCodes.Ldstr, "");
         }
-        il.Emit(OpCodes.Call, ctx.Runtime!.StringMatchAllRegExp);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RegExps.RequireImplementation().StringMatchAll);
     }
 
     private static void EmitSearch(IEmitterContext emitter, List<Expr> arguments)
@@ -691,7 +691,7 @@ public sealed class StringEmitter : ITypeEmitterStrategy
         {
             il.Emit(OpCodes.Ldstr, "");
         }
-        il.Emit(OpCodes.Call, ctx.Runtime!.StringSearchRegExp);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RegExps.RequireImplementation().StringSearch);
     }
 
     private static void EmitIncludes(IEmitterContext emitter, List<Expr> arguments)
@@ -942,7 +942,7 @@ public sealed class StringEmitter : ITypeEmitterStrategy
         {
             il.Emit(OpCodes.Ldsfld, ctx.Runtime!.UndefinedInstance);
         }
-        il.Emit(OpCodes.Call, ctx.Runtime!.StringReplaceAllRegExp);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RegExps.RequireImplementation().StringReplaceAll);
     }
 
     private static void EmitAt(IEmitterContext emitter, List<Expr> arguments)

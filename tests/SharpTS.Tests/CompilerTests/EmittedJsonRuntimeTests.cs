@@ -202,7 +202,7 @@ public class EmittedJsonRuntimeTests
         Assert.Equal(true, Call(type, json.IsRawJson.Name, raw));
         Assert.Equal(false, Call(type, json.IsRawJson.Name, value));
         Assert.Equal("123", Call(type, json.Stringify.Name, raw));
-        if (runtime.TSRegExpType is { } regexp)
+        if (runtime.RegExps.Implementation?.Type is { } regexp)
         {
             var saved = assembly.GetType(regexp.Name)!;
             var instance = Activator.CreateInstance(saved, ["x", ""]);

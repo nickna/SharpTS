@@ -48,8 +48,8 @@ public partial class RuntimeEmitter
             _features.HasAnyTypedArray ? new StructuredCloneBinaryInputs(runtime.RequireArrayBuffer(),
                 runtime.RequireSharedArrayBuffer(), runtime.TypedArrays.RequireImplementation()) : null,
             runtime.Dates.Implementation is not null ? new StructuredCloneDateInputs(runtime.Dates.RequireImplementation().Type, runtime.Dates.RequireImplementation().MillisecondsConstructor, runtime.Dates.RequireImplementation().GetInstanceMethod("GetTime")) : null,
-            _features.UsesRegExp ? new StructuredCloneRegExpInputs(runtime.TSRegExpType, runtime.TSRegExpCtorPatternFlags,
-                runtime.TSRegExpSourceGetter, runtime.TSRegExpFlagsGetter) : null,
+            runtime.RegExps.Implementation is not null ? new StructuredCloneRegExpInputs(runtime.RegExps.RequireImplementation().Type, runtime.RegExps.RequireImplementation().PatternFlagsConstructor,
+                runtime.RegExps.RequireImplementation().SourceGetter, runtime.RegExps.RequireImplementation().FlagsGetter) : null,
             _features.UsesBuffer ? runtime.RequireBuffer() : null);
 
         // worker_threads module helpers

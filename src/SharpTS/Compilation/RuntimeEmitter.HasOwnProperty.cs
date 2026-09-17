@@ -236,11 +236,11 @@ public partial class RuntimeEmitter
         // RegExp instances have an intrinsic own lastIndex data property even
         // though its live value is stored in typed fields rather than a user
         // dictionary. Other own properties may still be installed through PDS.
-        if (_features.UsesRegExp)
+        if (runtime.RegExps.Implementation is not null)
         {
             var notRegExp = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.TSRegExpType);
+            il.Emit(OpCodes.Isinst, runtime.RegExps.RequireImplementation().Type);
             il.Emit(OpCodes.Brfalse, notRegExp);
             il.Emit(OpCodes.Ldloc, nameLocal);
             il.Emit(OpCodes.Ldstr, "lastIndex");
@@ -532,11 +532,11 @@ public partial class RuntimeEmitter
         NameEq("isError");
         il.MarkLabel(notErrorConsLabel);
 
-        if (_features.UsesRegExp)
+        if (runtime.RegExps.Implementation is not null)
         {
             var notRegExpConsLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldtoken, runtime.TSRegExpType);
+            il.Emit(OpCodes.Ldtoken, runtime.RegExps.RequireImplementation().Type);
             il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle")!);
             il.Emit(OpCodes.Bne_Un, notRegExpConsLabel);
             NameEq("escape");
@@ -692,11 +692,11 @@ public partial class RuntimeEmitter
 
         // RegExp lastIndex is an intrinsic own non-enumerable property. It is
         // not placed in PDS until user code redefines its attributes.
-        if (_features.UsesRegExp)
+        if (runtime.RegExps.Implementation is not null)
         {
             var pieNotRegExpLastIndex = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.TSRegExpType);
+            il.Emit(OpCodes.Isinst, runtime.RegExps.RequireImplementation().Type);
             il.Emit(OpCodes.Brfalse, pieNotRegExpLastIndex);
             il.Emit(OpCodes.Ldloc, nameLocal);
             il.Emit(OpCodes.Ldstr, "lastIndex");

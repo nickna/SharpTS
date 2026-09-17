@@ -275,11 +275,11 @@ public partial class RuntimeEmitter
     {
         // RegExp instances likewise expose intrinsic lastIndex outside PDS.
         // Its descriptor is writable but non-enumerable/non-configurable.
-        if (_features.UsesRegExp)
+        if (runtime.RegExps.Implementation is not null)
         {
             var notIntrinsicRegExpLastIndexLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.TSRegExpType);
+            il.Emit(OpCodes.Isinst, runtime.RegExps.RequireImplementation().Type);
             il.Emit(OpCodes.Brfalse, notIntrinsicRegExpLastIndexLabel);
             il.Emit(OpCodes.Ldloc, propNameLocal);
             il.Emit(OpCodes.Ldstr, "lastIndex");

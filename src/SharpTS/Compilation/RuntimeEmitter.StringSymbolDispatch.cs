@@ -63,14 +63,14 @@ public partial class RuntimeEmitter
         // it resolves the current RegExp.prototype descriptor before falling
         // back to the intrinsic. This makes prototype replacements observable
         // to String.prototype.match/search/replace/split as required by GetMethod.
-        if (_features.UsesRegExp)
+        if (runtime.RegExps.Implementation is not null)
         {
             var notNativeRegExpLabel = il.DefineLabel();
             var afterOwnRegExpSymbolLabel = il.DefineLabel();
             var ownSymbolsLocal = il.DeclareLocal(_types.DictionaryObjectObject);
             var ownSymbolValueLocal = il.DeclareLocal(_types.Object);
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.TSRegExpType);
+            il.Emit(OpCodes.Isinst, runtime.RegExps.RequireImplementation().Type);
             il.Emit(OpCodes.Brfalse, notNativeRegExpLabel);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Call, runtime.Symbols.GetStorage);

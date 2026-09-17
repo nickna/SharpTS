@@ -318,6 +318,22 @@ the supplied optional implementation. Native numeric signatures, mutable guest p
 timer calls and generated order are preserved. The locale/options wrapper exists whenever
 Date is selected, while its soft runtime dependency is recorded only at call sites using it.
 
+RegExp has a required `RegExps` owner for its prototype field and population declaration,
+with an optional implementation selected once by orchestration. The implementation owns 66
+type, constructor, field, operation and protocol handles. Sixty-six flat declarations are
+removed, including three write-only stores whose emitted helpers remain. Thirty emitter-held
+construction fields are eliminated: 23 become local inputs, five move to the implementation,
+and two duplicate aliases use existing owned handles. Eighty-eight emission signatures receive
+scoped owners and exact peers. The prototype field is always declared early; the selected
+population method and split/matchAll protocol tokens are reserved before the RegExp class.
+The absent population method is declared later and has a single-return body, preserving member
+order in both configurations. Completion validates all declarations, prototype population and
+both late protocol bodies before freezing metadata; incomplete emission remains repairable.
+Generic consumers inspect the supplied implementation. Compiled-regex caches stay on each
+generated type, while lastIndex and guest prototype mutations retain their existing lifetimes.
+The shared string symbol dispatcher is an explicit peer. The late AST-identity regex-hoist
+registry remains separate and must be included in the residual lifecycle audit.
+
 Symbols use two required owners. `Symbols` owns 27 primitive, well-known, storage and
 prototype declarations, and `SymbolAccessors` owns the nine class-accessor registry
 declarations. The primitive class is emitted before comparer/iterator consumers; runtime

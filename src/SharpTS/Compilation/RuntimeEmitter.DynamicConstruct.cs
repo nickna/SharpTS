@@ -44,11 +44,11 @@ public partial class RuntimeEmitter
         // An aliased RegExp constructor is represented by the emitted $RegExp
         // Type. Activator cannot supply its JavaScript optional arguments (and
         // has no parameterless overload), so route it through RegExpFromArgs.
-        if (_features.UsesRegExp)
+        if (runtime.RegExps.Implementation is not null)
         {
             var notRegExpTypeLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldtoken, runtime.TSRegExpType);
+            il.Emit(OpCodes.Ldtoken, runtime.RegExps.RequireImplementation().Type);
             il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
             il.Emit(OpCodes.Bne_Un, notRegExpTypeLabel);
             var regexpArgsPresent = il.DefineLabel();
@@ -81,7 +81,7 @@ public partial class RuntimeEmitter
             il.MarkLabel(regexpFlagsPresent);
             il.Emit(OpCodes.Ldloc, regexpPatternLocal);
             il.Emit(OpCodes.Ldloc, regexpFlagsLocal);
-            il.Emit(OpCodes.Call, runtime.RegExpFromArgs);
+            il.Emit(OpCodes.Call, runtime.RegExps.RequireImplementation().FromArguments);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(notRegExpTypeLabel);
         }

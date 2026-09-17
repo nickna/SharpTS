@@ -4,14 +4,27 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
+    private readonly record struct RegExpSymbolMatchAllProtocolInputs(
+        MethodBuilder ConstructDynamicValue,
+        MethodBuilder CreateException,
+        MethodBuilder GetIndex,
+        MethodBuilder GetProperty,
+        EmittedNumericCoercionRuntime NumericCoercion,
+        MethodBuilder SetProperty,
+        EmittedStringCoercionRuntime StringCoercion,
+        EmittedSymbolRuntime Symbols,
+        ConstructorBuilder TSTypeErrorCtor,
+        Type UndefinedType
+    );
+
     /// <summary>
     /// Fills the phase-1 declaration of RegExp.prototype[@@matchAll]. Emitting
     /// this body late makes dynamic SpeciesConstructor and ordinary property
     /// operations available to the public $RegExp wrapper.
     /// </summary>
-    private void EmitRegExpSymbolMatchAllProtocol(EmittedRuntime runtime)
+    private void EmitRegExpSymbolMatchAllProtocol(EmittedRegExpImplementation regExp, RegExpSymbolMatchAllProtocolInputs inputs)
     {
-        var il = runtime.RegExpSymbolMatchAllProtocol.GetILGenerator();
+        var il = regExp.SymbolMatchAllProtocol.GetILGenerator();
         var s = il.DeclareLocal(_types.String);
         var constructor = il.DeclareLocal(_types.Object);
         var species = il.DeclareLocal(_types.Object);
@@ -23,33 +36,37 @@ public partial class RuntimeEmitter
         var global = il.DeclareLocal(_types.Boolean);
 
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
+        il.Emit(OpCodes.Call, inputs.StringCoercion.ToJsString);
         il.Emit(OpCodes.Stloc, s);
 
         // C = SpeciesConstructor(rx, %RegExp%).
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "constructor");
-        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, inputs.GetProperty);
         il.Emit(OpCodes.Stloc, constructor);
         var defaultSpecies = il.DefineLabel();
         var haveConstructor = il.DefineLabel();
         var haveSpecies = il.DefineLabel();
         var speciesReady = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, constructor);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
         il.Emit(OpCodes.Brfalse, haveConstructor);
         il.Emit(OpCodes.Br, defaultSpecies);
         il.MarkLabel(haveConstructor);
-        EmitRejectPrimitive(il, runtime, constructor,
-            "RegExp constructor property must be an object");
+        EmitRejectPrimitive(
+            il,
+            new RejectPrimitiveInputs(inputs.CreateException, inputs.Symbols, inputs.TSTypeErrorCtor),
+            constructor,
+            "RegExp constructor property must be an object"
+        );
         il.Emit(OpCodes.Ldloc, constructor);
-        il.Emit(OpCodes.Ldsfld, runtime.Symbols.Species);
-        il.Emit(OpCodes.Call, runtime.GetIndex);
+        il.Emit(OpCodes.Ldsfld, inputs.Symbols.Species);
+        il.Emit(OpCodes.Call, inputs.GetIndex);
         il.Emit(OpCodes.Stloc, species);
         il.Emit(OpCodes.Ldloc, species);
         il.Emit(OpCodes.Brfalse, defaultSpecies);
         il.Emit(OpCodes.Ldloc, species);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
         il.Emit(OpCodes.Brfalse, haveSpecies);
         il.MarkLabel(defaultSpecies);
         il.Emit(OpCodes.Ldnull);
@@ -60,8 +77,8 @@ public partial class RuntimeEmitter
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "flags");
-        il.Emit(OpCodes.Call, runtime.GetProperty);
-        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
+        il.Emit(OpCodes.Call, inputs.GetProperty);
+        il.Emit(OpCodes.Call, inputs.StringCoercion.ToJsString);
         il.Emit(OpCodes.Stloc, flags);
 
         il.Emit(OpCodes.Ldloc, flags);
@@ -77,7 +94,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, constructCustom);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, flags);
-        il.Emit(OpCodes.Call, runtime.RegExpFromArgs);
+        il.Emit(OpCodes.Call, regExp.FromArguments);
         il.Emit(OpCodes.Stloc, matcher);
         il.Emit(OpCodes.Br, matcherReady);
         il.MarkLabel(constructCustom);
@@ -94,7 +111,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stelem_Ref);
         il.Emit(OpCodes.Ldloc, species);
         il.Emit(OpCodes.Ldloc, args);
-        il.Emit(OpCodes.Call, runtime.ConstructDynamicValue);
+        il.Emit(OpCodes.Call, inputs.ConstructDynamicValue);
         il.Emit(OpCodes.Stloc, matcher);
         il.MarkLabel(matcherReady);
 
@@ -102,8 +119,8 @@ public partial class RuntimeEmitter
         // escape before the iterator is created.
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "lastIndex");
-        il.Emit(OpCodes.Call, runtime.GetProperty);
-        il.Emit(OpCodes.Call, runtime.NumericCoercion.ToNumber);
+        il.Emit(OpCodes.Call, inputs.GetProperty);
+        il.Emit(OpCodes.Call, inputs.NumericCoercion.ToNumber);
         il.Emit(OpCodes.Stloc, lastIndexNumber);
         var zeroLastIndex = il.DefineLabel();
         var maxLastIndex = il.DefineLabel();
@@ -136,7 +153,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, lastIndex);
         il.Emit(OpCodes.Conv_R8);
         il.Emit(OpCodes.Box, _types.Double);
-        il.Emit(OpCodes.Call, runtime.SetProperty);
+        il.Emit(OpCodes.Call, inputs.SetProperty);
 
         // The String#matchAll materializer already produces spec-shaped match
         // arrays and a stateful iterator. Its intrinsic matcher branch avoids
@@ -145,7 +162,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, matcher);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Ldloc, global);
-        il.Emit(OpCodes.Call, runtime.StringMatchAllRegExpPrepared);
+        il.Emit(OpCodes.Call, regExp.StringMatchAllPrepared);
         il.Emit(OpCodes.Ret);
+        regExp.MarkMatchAllProtocolBodyEmitted();
     }
 }

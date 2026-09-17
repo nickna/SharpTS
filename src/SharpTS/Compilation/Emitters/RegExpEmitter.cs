@@ -30,9 +30,9 @@ public sealed class RegExpEmitter : ITypeEmitterStrategy
             // branch is Regex.IsMatch and returns a native IL bool.
             emitter.EmitExpression(receiver);
             emitter.EmitBoxIfNeeded(receiver);
-            il.Emit(OpCodes.Castclass, ctx.Runtime!.TSRegExpType);
+            il.Emit(OpCodes.Castclass, ctx.Runtime!.RegExps.RequireImplementation().Type);
             EmitStableStringArgument(emitter, arguments);
-            il.Emit(OpCodes.Callvirt, ctx.Runtime.TSRegExpTestMethod);
+            il.Emit(OpCodes.Callvirt, ctx.Runtime.RegExps.RequireImplementation().InstanceTest);
             emitter.SetStackType(StackType.Boolean);
             return true;
         }
@@ -60,16 +60,16 @@ public sealed class RegExpEmitter : ITypeEmitterStrategy
         // emission path.
         var getter = propertyName switch
         {
-            "source" => ctx.Runtime!.RegExpGetSource,
-            "flags" => ctx.Runtime!.RegExpGetFlags,
-            "global" => ctx.Runtime!.RegExpGetGlobal,
-            "ignoreCase" => ctx.Runtime!.RegExpGetIgnoreCase,
-            "multiline" => ctx.Runtime!.RegExpGetMultiline,
-            "sticky" => ctx.Runtime!.RegExpGetSticky,
-            "unicode" => ctx.Runtime!.RegExpGetUnicode,
-            "dotAll" => ctx.Runtime!.RegExpGetDotAll,
-            "hasIndices" => ctx.Runtime!.RegExpGetHasIndices,
-            "unicodeSets" => ctx.Runtime!.RegExpGetUnicodeSets,
+            "source" => ctx.Runtime!.RegExps.RequireImplementation().GetSource,
+            "flags" => ctx.Runtime!.RegExps.RequireImplementation().GetFlags,
+            "global" => ctx.Runtime!.RegExps.RequireImplementation().GetGlobal,
+            "ignoreCase" => ctx.Runtime!.RegExps.RequireImplementation().GetIgnoreCase,
+            "multiline" => ctx.Runtime!.RegExps.RequireImplementation().GetMultiline,
+            "sticky" => ctx.Runtime!.RegExps.RequireImplementation().GetSticky,
+            "unicode" => ctx.Runtime!.RegExps.RequireImplementation().GetUnicode,
+            "dotAll" => ctx.Runtime!.RegExps.RequireImplementation().GetDotAll,
+            "hasIndices" => ctx.Runtime!.RegExps.RequireImplementation().GetHasIndices,
+            "unicodeSets" => ctx.Runtime!.RegExps.RequireImplementation().GetUnicodeSets,
             // lastIndex may hold any assigned JS value until RegExpBuiltinExec
             // performs ToLength, so it must use the object-valued property path.
             "lastIndex" => ctx.Runtime!.GetProperty,

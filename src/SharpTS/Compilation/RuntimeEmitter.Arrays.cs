@@ -1340,11 +1340,11 @@ public partial class RuntimeEmitter
         // RegExp instances are created with an own non-enumerable lastIndex
         // property before any user expando. Keep that intrinsic at the front
         // even when defineProperty later changes its attributes/value.
-        if (_features.UsesRegExp)
+        if (runtime.RegExps.Implementation is not null)
         {
             var notRegExpForNamesLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.TSRegExpType);
+            il.Emit(OpCodes.Isinst, runtime.RegExps.RequireImplementation().Type);
             il.Emit(OpCodes.Brfalse, notRegExpForNamesLabel);
             il.Emit(OpCodes.Ldloc, namesLocal);
             il.Emit(OpCodes.Ldstr, "lastIndex");

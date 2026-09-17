@@ -40,6 +40,8 @@ public partial class RuntimeEmitter
         if (_emitHosted)
             _features.UsesPromise = true;
         var runtime = new EmittedRuntime();
+        if (features.UsesRegExp)
+            runtime.RegExps.BeginImplementationEmission();
         if (features.UsesDate)
             runtime.Dates.BeginImplementationEmission();
         if (features.UsesWeakMap)
@@ -313,8 +315,31 @@ public partial class RuntimeEmitter
 
         // Emit $RegExp class for standalone regex support — gated on UsesRegExp.
         // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSRegExp
-        if (features.UsesRegExp)
-            EmitTSRegExpClass(moduleBuilder, runtime);
+        if (runtime.RegExps.Implementation is not null)
+            EmitTSRegExpClass(
+                moduleBuilder,
+                runtime.RegExps,
+                new TSRegExpClassInputs(
+                    runtime.ArrayStorage,
+                    runtime.Booleans,
+                    runtime.CreateException,
+                    runtime.DescriptorStorage,
+                    runtime.GetProperty,
+                    runtime.NumericCoercion,
+                    runtime.ObjectStorage,
+                    runtime.PadUndefinedAttrCtor,
+                    runtime.SetProperty,
+                    runtime.StringCoercion,
+                    runtime.Symbols,
+                    runtime.TSFunctionGetMethodInfo,
+                    runtime.TSFunctionInvokeWithThis,
+                    runtime.TSFunctionType,
+                    runtime.TSSyntaxErrorCtor,
+                    runtime.TSTypeErrorCtor,
+                    runtime.UndefinedInstance,
+                    runtime.UndefinedType
+                )
+            );
 
         // AssertionError now lives in stdlib/node/assert.ts (embedded stdlib migration).
         // Emit $NodeError class for standalone fs module support
@@ -586,10 +611,39 @@ public partial class RuntimeEmitter
 
         // RegExp @@split needs ConstructDynamicValue for SpeciesConstructor;
         // its signature was reserved before $RegExp emitted its public wrapper.
-        if (features.UsesRegExp)
+        if (runtime.RegExps.Implementation is not null)
         {
-            EmitRegExpSymbolSplitProtocol(runtime);
-            EmitRegExpSymbolMatchAllProtocol(runtime);
+            EmitRegExpSymbolSplitProtocol(
+                runtime.RegExps.RequireImplementation(),
+                new RegExpSymbolSplitProtocolInputs(
+                    runtime.ArrayStorage,
+                    runtime.ConstructDynamicValue,
+                    runtime.CreateException,
+                    runtime.GetIndex,
+                    runtime.GetProperty,
+                    runtime.NumericCoercion,
+                    runtime.SetProperty,
+                    runtime.StringCoercion,
+                    runtime.Symbols,
+                    runtime.TSTypeErrorCtor,
+                    runtime.UndefinedType
+                )
+            );
+            EmitRegExpSymbolMatchAllProtocol(
+                runtime.RegExps.RequireImplementation(),
+                new RegExpSymbolMatchAllProtocolInputs(
+                    runtime.ConstructDynamicValue,
+                    runtime.CreateException,
+                    runtime.GetIndex,
+                    runtime.GetProperty,
+                    runtime.NumericCoercion,
+                    runtime.SetProperty,
+                    runtime.StringCoercion,
+                    runtime.Symbols,
+                    runtime.TSTypeErrorCtor,
+                    runtime.UndefinedType
+                )
+            );
         }
 
         // General NewPromiseCapability (#349): the $PromiseCapability holder type
@@ -765,6 +819,7 @@ public partial class RuntimeEmitter
         runtime.Symbols.CompleteEmission();
         runtime.SymbolAccessors.CompleteEmission();
         runtime.Dates.CompleteEmission();
+        runtime.RegExps.CompleteEmission();
         runtime.BroadcastChannel?.CompleteEmission();
         runtime.EventEmitter.CompleteEmission();
         runtime.NodeStreams?.CompleteEmission();

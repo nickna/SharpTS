@@ -280,8 +280,8 @@ public partial class RuntimeEmitter
         EmitTypeBranch("Array", _types.IListOfObject);
         if (runtime.Dates.Implementation is not null)
             EmitTypeBranch("Date", runtime.Dates.RequireImplementation().Type);
-        if (_features.UsesRegExp)
-            EmitTypeBranch("RegExp", runtime.TSRegExpType);
+        if (runtime.RegExps.Implementation is not null)
+            EmitTypeBranch("RegExp", runtime.RegExps.RequireImplementation().Type);
         EmitTypeBranch("Map", _types.DictionaryObjectObject);
         EmitTypeBranch("Set", _types.HashSetOfObject);
         EmitTypeBranch("WeakMap", _types.ConditionalWeakTableObjectObject);

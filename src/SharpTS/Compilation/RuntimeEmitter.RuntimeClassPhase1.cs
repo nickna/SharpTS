@@ -183,14 +183,14 @@ public partial class RuntimeEmitter
         // emitted before the runtime helpers it needs (dynamic construction,
         // generic Get/Set, and RegExpExec), so its public symbol wrapper calls
         // this forward declaration; the body is filled after those helpers.
-        if (_features.UsesRegExp)
+        if (runtime.RegExps.Implementation is not null)
         {
-            runtime.RegExpSymbolSplitProtocol = typeBuilder.DefineMethod(
+            runtime.RegExps.RequireImplementation().SymbolSplitProtocol = typeBuilder.DefineMethod(
                 "RegExpSymbolSplitProtocol",
                 MethodAttributes.Public | MethodAttributes.Static,
                 _types.Object,
                 [_types.Object, _types.Object, _types.Object]);
-            runtime.RegExpSymbolMatchAllProtocol = typeBuilder.DefineMethod(
+            runtime.RegExps.RequireImplementation().SymbolMatchAllProtocol = typeBuilder.DefineMethod(
                 "RegExpSymbolMatchAllProtocol",
                 MethodAttributes.Public | MethodAttributes.Static,
                 _types.Object,
@@ -248,7 +248,7 @@ public partial class RuntimeEmitter
         // to detect the "called on RegExp.prototype itself" spec case.
         // Cctor in EmitRuntimeClass initializes it to a fresh Dictionary;
         // RegExpPrototypePopulate fills the per-process singleton lazily.
-        runtime.RegExpPrototypeField = typeBuilder.DefineField(
+        runtime.RegExps.Prototype = typeBuilder.DefineField(
             "_regexpPrototype",
             _types.DictionaryStringObject,
             FieldAttributes.Public | FieldAttributes.Static);
@@ -258,9 +258,9 @@ public partial class RuntimeEmitter
         // descriptors, so reserve the populate method token here; the body is
         // still filled by EmitRegExpPrototypePopulate with the rest of the
         // runtime prototype machinery.
-        if (_features.UsesRegExp)
+        if (runtime.RegExps.Implementation is not null)
         {
-            runtime.RegExpPrototypePopulateMethod = typeBuilder.DefineMethod(
+            runtime.RegExps.PopulatePrototype = typeBuilder.DefineMethod(
                 "_RegExpPrototypePopulate",
                 MethodAttributes.Public | MethodAttributes.Static,
                 _types.Void,
