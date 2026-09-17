@@ -299,7 +299,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Stelem_Ref);
             EmitDelegateArgument(3, runtime.ObjectGetOwnPropertyDescriptor,
                 typeof(Func<object, object, object?>));
-            EmitDelegateArgument(4, runtime.ObjectIsExtensible,
+            EmitDelegateArgument(4, runtime.ObjectState.IsExtensible,
                 typeof(Func<object, bool>));
             EmitDelegateArgument(5, runtime.GetProperty,
                 typeof(Func<object, string, object?>));

@@ -17,6 +17,9 @@ namespace SharpTS.Compilation;
 /// <seealso cref="ILEmitter"/>
 public class EmittedRuntime
 {
+    /// <summary>Required object integrity and deleted-built-in metadata for this compilation.</summary>
+    public EmittedObjectStateRuntime ObjectState { get; } = new();
+
     /// <summary>Required array storage metadata, emitted for every compilation.</summary>
     public EmittedArrayStorageRuntime ArrayStorage { get; } = new();
 
@@ -417,10 +420,6 @@ public class EmittedRuntime
     public MethodBuilder ObjectHasOwn { get; set; } = null!;
     public MethodBuilder ObjectIs { get; set; } = null!;
     public MethodBuilder ObjectAssign { get; set; } = null!;
-    public MethodBuilder ObjectFreeze { get; set; } = null!;
-    public MethodBuilder ObjectSeal { get; set; } = null!;
-    public MethodBuilder ObjectIsFrozen { get; set; } = null!;
-    public MethodBuilder ObjectIsSealed { get; set; } = null!;
     public MethodBuilder ObjectDefineProperty { get; set; } = null!;
     public MethodBuilder ObjectGetOwnPropertyDescriptor { get; set; } = null!;
     public MethodBuilder ObjectDefineProperties { get; set; } = null!;
@@ -432,35 +431,15 @@ public class EmittedRuntime
     /// under-application doesn't trip ObjectCreate's explicit-null TypeError.
     /// </summary>
     public MethodBuilder ObjectCreateValueForm { get; set; } = null!;
-    public MethodBuilder ObjectPreventExtensions { get; set; } = null!;
-    public MethodBuilder ObjectIsExtensible { get; set; } = null!;
     public MethodBuilder GetOwnPropertySymbols { get; set; } = null!;
     public MethodBuilder ObjectGetPrototypeOf { get; set; } = null!;
     public MethodBuilder ObjectSetPrototypeOf { get; set; } = null!;
-    public FieldBuilder FrozenObjectsField { get; set; } = null!;
-    public FieldBuilder SealedObjectsField { get; set; } = null!;
 
     // @DotNetType event subscription registry (compiled mode — see
     // RuntimeEmitter.EventSubscriptions.cs).
     public FieldBuilder EventSubscriptionsField { get; set; } = null!;
     public MethodBuilder AddEventSubscription { get; set; } = null!;
     public MethodBuilder RemoveEventSubscription { get; set; } = null!;
-    public FieldBuilder NonExtensibleObjectsField { get; set; } = null!;
-    /// <summary>
-    /// Per-object set of deleted built-in property names — `name`/`length`
-    /// on functions are configurable per ECMA-262 §17, but their values are
-    /// synthetic in compiled mode (no real backing slot). This table records
-    /// which names have been deleted so HasOwnPropertyHelper / GetFunctionMethod /
-    /// ObjectGetOwnPropertyDescriptor can hide them after `delete fn.name`.
-    /// Stored as ConditionalWeakTable&lt;object, HashSet&lt;string&gt;&gt; via the
-    /// open generic ConditionalWeakTable&lt;object, object&gt; (value is downcast
-    /// to HashSet&lt;string&gt; on read).
-    /// </summary>
-    public FieldBuilder DeletedBuiltinsField { get; set; } = null!;
-    /// <summary>$Runtime.MarkBuiltinDeleted(object obj, string name) — adds <paramref name="name"/> to the deleted-set for <paramref name="obj"/>, lazily creating the set.</summary>
-    public MethodBuilder MarkBuiltinDeletedMethod { get; set; } = null!;
-    /// <summary>$Runtime.IsBuiltinDeleted(object obj, string name) — true iff <paramref name="name"/> was deleted on <paramref name="obj"/>.</summary>
-    public MethodBuilder IsBuiltinDeletedMethod { get; set; } = null!;
 
     public MethodBuilder IsConstructorMethod { get; set; } = null!;
 

@@ -8,6 +8,9 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
+    private readonly record struct ObjectPreventExtensionsInputs(EmittedArrayStorageRuntime ArrayStorage, MethodBuilder CreateException, EmittedDescriptorStorageRuntime DescriptorStorage, MethodBuilder GetProperty, MethodBuilder InvokeMethodUnwrapped, EmittedObjectStorageRuntime ObjectStorage, ConstructorBuilder TSTypeErrorCtor);
+    private readonly record struct ObjectIsExtensibleInputs(EmittedDescriptorStorageRuntime DescriptorStorage, MethodBuilder GetProperty, MethodBuilder InvokeMethodUnwrapped);
+
     /// <summary>
     /// Emits Object.create(proto, propertiesObject?) - creates a new object with prototype.
     /// Signature: object ObjectCreate(object proto, object propertiesObject)
@@ -149,8 +152,7 @@ public partial class RuntimeEmitter
     /// Signature: object ObjectPreventExtensions(object obj)
     /// Uses PropertyDescriptorStore for enforcement and local table for standalone checks.
     /// </summary>
-    private void EmitObjectPreventExtensions(TypeBuilder typeBuilder, EmittedRuntime runtime,
-        FieldBuilder nonExtensibleObjectsField, FieldBuilder frozenObjectsField, FieldBuilder sealedObjectsField)
+    private void EmitObjectPreventExtensions(TypeBuilder typeBuilder, EmittedObjectStateRuntime objectState, ObjectPreventExtensionsInputs inputs)
     {
         var method = typeBuilder.DefineMethod(
             "ObjectPreventExtensions",
@@ -158,7 +160,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object]
         );
-        runtime.ObjectPreventExtensions = method;
+        objectState.PreventExtensions = method;
 
         var il = method.GetILGenerator();
         var returnLabel = il.DefineLabel();
@@ -176,7 +178,7 @@ public partial class RuntimeEmitter
             il, () => il.Emit(OpCodes.Ldarg_0),
             proxyForPreventExtensionsLabel, notProxyForPreventExtensionsLabel);
         il.MarkLabel(proxyForPreventExtensionsLabel);
-        EmitProxyMethodCallUnwrapped(il, runtime, () => il.Emit(OpCodes.Ldarg_0),
+        EmitProxyMethodCallUnwrapped(il, inputs.InvokeMethodUnwrapped, () => il.Emit(OpCodes.Ldarg_0),
             "TrapPreventExtensionsCompiled", () =>
             {
                 il.Emit(OpCodes.Ldc_I4_3);
@@ -184,21 +186,21 @@ public partial class RuntimeEmitter
                 il.Emit(OpCodes.Dup);
                 il.Emit(OpCodes.Ldc_I4_0);
                 il.Emit(OpCodes.Ldnull);
-                il.Emit(OpCodes.Ldftn, runtime.ObjectPreventExtensions);
+                il.Emit(OpCodes.Ldftn, objectState.PreventExtensions);
                 il.Emit(OpCodes.Newobj, _types.GetConstructor(
                     typeof(Func<object, object?>), _types.Object, _types.IntPtr));
                 il.Emit(OpCodes.Stelem_Ref);
                 il.Emit(OpCodes.Dup);
                 il.Emit(OpCodes.Ldc_I4_1);
                 il.Emit(OpCodes.Ldnull);
-                il.Emit(OpCodes.Ldftn, runtime.ObjectIsExtensible);
+                il.Emit(OpCodes.Ldftn, objectState.IsExtensible);
                 il.Emit(OpCodes.Newobj, _types.GetConstructor(
                     typeof(Func<object, bool>), _types.Object, _types.IntPtr));
                 il.Emit(OpCodes.Stelem_Ref);
                 il.Emit(OpCodes.Dup);
                 il.Emit(OpCodes.Ldc_I4_2);
                 il.Emit(OpCodes.Ldnull);
-                il.Emit(OpCodes.Ldftn, runtime.GetProperty);
+                il.Emit(OpCodes.Ldftn, inputs.GetProperty);
                 il.Emit(OpCodes.Newobj, _types.GetConstructor(
                     typeof(Func<object, string, object?>), _types.Object, _types.IntPtr));
                 il.Emit(OpCodes.Stelem_Ref);
@@ -206,7 +208,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Unbox_Any, _types.Boolean);
         var proxyPreventExtensionsSucceededLabel = il.DefineLabel();
         il.Emit(OpCodes.Brtrue, proxyPreventExtensionsSucceededLabel);
-        GuestErrorEmitter.ThrowTypeError(il, runtime,
+        GuestErrorEmitter.ThrowError(il, inputs.CreateException, inputs.TSTypeErrorCtor,
             "Proxy preventExtensions trap returned false");
         il.MarkLabel(proxyPreventExtensionsSucceededLabel);
         il.Emit(OpCodes.Ldarg_0);
@@ -218,11 +220,11 @@ public partial class RuntimeEmitter
         // properties. The PDS/CWT bookkeeping below is the cross-type record.
         var notTSObjectLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.ObjectStorage.Type);
+        il.Emit(OpCodes.Isinst, inputs.ObjectStorage.Type);
         il.Emit(OpCodes.Brfalse, notTSObjectLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.ObjectStorage.Type);
-        il.Emit(OpCodes.Callvirt, runtime.ObjectStorage.PreventExtensions);
+        il.Emit(OpCodes.Castclass, inputs.ObjectStorage.Type);
+        il.Emit(OpCodes.Callvirt, inputs.ObjectStorage.PreventExtensions);
         il.MarkLabel(notTSObjectLabel);
 
         // number[] unboxing: mark a $Array non-extensible so the unboxed PushDouble fast path refuses to
@@ -230,19 +232,19 @@ public partial class RuntimeEmitter
         // can't reach).
         var notTSArrayPxLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.ArrayStorage.Type);
+        il.Emit(OpCodes.Isinst, inputs.ArrayStorage.Type);
         il.Emit(OpCodes.Brfalse, notTSArrayPxLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.ArrayStorage.Type);
-        il.Emit(OpCodes.Callvirt, runtime.ArrayStorage.MarkNonExtensible);
+        il.Emit(OpCodes.Castclass, inputs.ArrayStorage.Type);
+        il.Emit(OpCodes.Callvirt, inputs.ArrayStorage.MarkNonExtensible);
         il.MarkLabel(notTSArrayPxLabel);
 
         // Call $PropertyDescriptorStore.PreventExtensions(obj) - fully standalone, no reflection
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.DescriptorStorage.PreventExtensions);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.PreventExtensions);
 
         // Also add to local non-extensible objects table for standalone checks
-        il.Emit(OpCodes.Ldsfld, nonExtensibleObjectsField);
+        il.Emit(OpCodes.Ldsfld, objectState.NonExtensibleObjects);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_1); // true
         il.Emit(OpCodes.Box, _types.Boolean);
@@ -279,10 +281,9 @@ public partial class RuntimeEmitter
     /// Checks both PropertyDescriptorStore and local tables for compatibility.
     /// Returns false for primitives, frozen, sealed, or explicitly non-extensible objects.
     /// </summary>
-    private void EmitObjectIsExtensible(TypeBuilder typeBuilder, EmittedRuntime runtime,
-        FieldBuilder nonExtensibleObjectsField, FieldBuilder frozenObjectsField, FieldBuilder sealedObjectsField)
+    private void EmitObjectIsExtensible(EmittedObjectStateRuntime objectState, ObjectIsExtensibleInputs inputs)
     {
-        var method = runtime.ObjectIsExtensible;
+        var method = objectState.IsExtensible;
 
         var il = method.GetILGenerator();
         var returnFalseLabel = il.DefineLabel();
@@ -325,7 +326,7 @@ public partial class RuntimeEmitter
             il, () => il.Emit(OpCodes.Ldarg_0), proxyLabel, notProxyLabel);
         il.MarkLabel(proxyLabel);
         EmitProxyMethodCallUnwrapped(
-            il, runtime, () => il.Emit(OpCodes.Ldarg_0),
+            il, inputs.InvokeMethodUnwrapped, () => il.Emit(OpCodes.Ldarg_0),
             "TrapIsExtensibleCompiled", () =>
             {
                 il.Emit(OpCodes.Ldc_I4_2);
@@ -333,14 +334,14 @@ public partial class RuntimeEmitter
                 il.Emit(OpCodes.Dup);
                 il.Emit(OpCodes.Ldc_I4_0);
                 il.Emit(OpCodes.Ldnull);
-                il.Emit(OpCodes.Ldftn, runtime.ObjectIsExtensible);
+                il.Emit(OpCodes.Ldftn, objectState.IsExtensible);
                 il.Emit(OpCodes.Newobj, _types.GetConstructor(
                     typeof(Func<object, bool>), _types.Object, _types.IntPtr)!);
                 il.Emit(OpCodes.Stelem_Ref);
                 il.Emit(OpCodes.Dup);
                 il.Emit(OpCodes.Ldc_I4_1);
                 il.Emit(OpCodes.Ldnull);
-                il.Emit(OpCodes.Ldftn, runtime.GetProperty);
+                il.Emit(OpCodes.Ldftn, inputs.GetProperty);
                 il.Emit(OpCodes.Newobj, _types.GetConstructor(
                     typeof(Func<object, string, object?>), _types.Object, _types.IntPtr)!);
                 il.Emit(OpCodes.Stelem_Ref);
@@ -352,13 +353,13 @@ public partial class RuntimeEmitter
         // Check $PropertyDescriptorStore.IsExtensible(obj) - fully standalone, no reflection
         il.MarkLabel(checkPropertyStoreLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.DescriptorStorage.IsExtensible);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.IsExtensible);
         il.Emit(OpCodes.Brfalse, returnFalseLabel); // Not extensible per property store
 
         // Also check local tables for backward compatibility
         // Check if obj is in the non-extensible objects table
         il.MarkLabel(checkLocalTablesLabel);
-        il.Emit(OpCodes.Ldsfld, nonExtensibleObjectsField);
+        il.Emit(OpCodes.Ldsfld, objectState.NonExtensibleObjects);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloca, valueLocal);
         var tryGetValue = _types.GetMethod(_types.ConditionalWeakTable, "TryGetValue");
@@ -367,7 +368,7 @@ public partial class RuntimeEmitter
 
         // Check if obj is in the frozen objects table
         il.MarkLabel(checkFrozenLabel);
-        il.Emit(OpCodes.Ldsfld, frozenObjectsField);
+        il.Emit(OpCodes.Ldsfld, objectState.FrozenObjects);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloca, valueLocal);
         il.Emit(OpCodes.Callvirt, tryGetValue!);
@@ -375,7 +376,7 @@ public partial class RuntimeEmitter
 
         // Check if obj is in the sealed objects table
         il.MarkLabel(checkSealedLabel);
-        il.Emit(OpCodes.Ldsfld, sealedObjectsField);
+        il.Emit(OpCodes.Ldsfld, objectState.SealedObjects);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloca, valueLocal);
         il.Emit(OpCodes.Callvirt, tryGetValue!);
@@ -389,6 +390,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(returnFalseLabel);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ret);
+        objectState.MarkIsExtensibleBodyEmitted();
     }
 
     /// <summary>
@@ -555,7 +557,7 @@ public partial class RuntimeEmitter
                 il.Emit(OpCodes.Dup);
                 il.Emit(OpCodes.Ldc_I4_1);
                 il.Emit(OpCodes.Ldnull);
-                il.Emit(OpCodes.Ldftn, runtime.ObjectIsExtensible);
+                il.Emit(OpCodes.Ldftn, runtime.ObjectState.IsExtensible);
                 il.Emit(OpCodes.Newobj, _types.GetConstructor(
                     typeof(Func<object, bool>), _types.Object, _types.IntPtr));
                 il.Emit(OpCodes.Stelem_Ref);
@@ -1029,7 +1031,7 @@ public partial class RuntimeEmitter
                 il.Emit(OpCodes.Dup);
                 il.Emit(OpCodes.Ldc_I4_2);
                 il.Emit(OpCodes.Ldnull);
-                il.Emit(OpCodes.Ldftn, runtime.ObjectIsExtensible);
+                il.Emit(OpCodes.Ldftn, runtime.ObjectState.IsExtensible);
                 il.Emit(OpCodes.Newobj, _types.GetConstructor(
                     typeof(Func<object, bool>), _types.Object, _types.IntPtr));
                 il.Emit(OpCodes.Stelem_Ref);
@@ -1107,7 +1109,7 @@ public partial class RuntimeEmitter
 
         // Check if object is extensible - if not, throw TypeError
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.ObjectIsExtensible);
+        il.Emit(OpCodes.Call, runtime.ObjectState.IsExtensible);
         il.Emit(OpCodes.Brtrue, nullCheckDoneLabel);  // Object is extensible, proceed
 
         // Object is not extensible - throw TypeError

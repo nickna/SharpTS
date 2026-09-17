@@ -318,6 +318,15 @@ the supplied optional implementation. Native numeric signatures, mutable guest p
 timer calls and generated order are preserved. The locale/options wrapper exists whenever
 Date is selected, while its soft runtime dependency is recorded only at call sites using it.
 
+Object integrity and deleted-built-in metadata use required `ObjectState` ownership for
+four weak-table declarations, six integrity operations and two deletion helpers. Nine helper
+signatures receive this component and exact peers; their field parameters come from the owner.
+The early `IsExtensible` declaration keeps its later body-emission stage, checked explicitly at
+completion. Declaration access is available before completion, incomplete emission can be
+repaired, and completion rejects further compiler-metadata writes. Generated table initialization
+order and mutable per-output guest contents remain unchanged. Proxy dispatch uses the existing
+method-only reflection bridge with explicit invocation and error-construction dependencies.
+
 RegExp has a required `RegExps` owner for its prototype field and population declaration,
 with an optional implementation selected once by orchestration. The implementation owns 66
 type, constructor, field, operation and protocol handles. Sixty-six flat declarations are

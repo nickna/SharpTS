@@ -345,7 +345,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Stelem_Ref);
             EmitDelegateArgument(2, runtime.ObjectGetOwnPropertyDescriptor,
                 typeof(Func<object, object, object?>));
-            EmitDelegateArgument(3, runtime.ObjectIsExtensible,
+            EmitDelegateArgument(3, runtime.ObjectState.IsExtensible,
                 typeof(Func<object, bool>));
             EmitDelegateArgument(4, runtime.GetProperty,
                 typeof(Func<object, string, object?>));
@@ -390,7 +390,7 @@ public partial class RuntimeEmitter
                 typeof(Func<object, string, bool>));
             EmitDelegateArgument(2, runtime.ObjectGetOwnPropertyDescriptor,
                 typeof(Func<object, object, object?>));
-            EmitDelegateArgument(3, runtime.ObjectIsExtensible,
+            EmitDelegateArgument(3, runtime.ObjectState.IsExtensible,
                 typeof(Func<object, bool>));
             EmitDelegateArgument(4, runtime.GetProperty,
                 typeof(Func<object, string, object?>));
@@ -525,7 +525,7 @@ public partial class RuntimeEmitter
                 runtime.GetOrdinaryOwnPropertyKeys,
                 runtime.CreateProxyOwnKeysList,
                 runtime.ObjectGetOwnPropertyDescriptor,
-                runtime.ObjectIsExtensible,
+                runtime.ObjectState.IsExtensible,
                 runtime.Symbols.IsSymbol,
                 runtime.GetProperty,
                 runtime.InvokeMethodUnwrapped
@@ -593,7 +593,7 @@ public partial class RuntimeEmitter
                 il.Emit(OpCodes.Dup);
                 il.Emit(OpCodes.Ldc_I4_2);
                 il.Emit(OpCodes.Ldnull);
-                il.Emit(OpCodes.Ldftn, runtime.ObjectIsExtensible);
+                il.Emit(OpCodes.Ldftn, runtime.ObjectState.IsExtensible);
                 il.Emit(OpCodes.Newobj, _types.GetConstructor(
                     typeof(Func<object, bool>),
                     _types.Object, _types.IntPtr)!);

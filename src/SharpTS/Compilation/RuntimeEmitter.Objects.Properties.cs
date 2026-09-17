@@ -1999,7 +1999,7 @@ public partial class RuntimeEmitter
             var typeBuiltinPresentLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Call, runtime.IsBuiltinDeletedMethod);
+            il.Emit(OpCodes.Call, runtime.ObjectState.IsBuiltinDeleted);
             il.Emit(OpCodes.Brfalse, typeBuiltinPresentLabel);
             il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
             il.Emit(OpCodes.Ret);

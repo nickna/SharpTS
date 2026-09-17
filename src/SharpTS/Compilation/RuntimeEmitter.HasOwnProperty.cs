@@ -122,7 +122,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, trueLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, nameLocal);
-        il.Emit(OpCodes.Call, runtime.IsBuiltinDeletedMethod);
+        il.Emit(OpCodes.Call, runtime.ObjectState.IsBuiltinDeleted);
         il.Emit(OpCodes.Brtrue, falseLabel);
         foreach (var globalName in new[]
         {
@@ -175,7 +175,7 @@ public partial class RuntimeEmitter
         // no longer own — report false. Per ECMA-262 §17, both are configurable.
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, nameLocal);
-        il.Emit(OpCodes.Call, runtime.IsBuiltinDeletedMethod);
+        il.Emit(OpCodes.Call, runtime.ObjectState.IsBuiltinDeleted);
         il.Emit(OpCodes.Brtrue, falseLabel);
         // True for "name" or "length"
         il.Emit(OpCodes.Ldloc, nameLocal);
@@ -312,7 +312,7 @@ public partial class RuntimeEmitter
         // First skip if marked deleted in tracker.
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, nameLocal);
-        il.Emit(OpCodes.Call, runtime.IsBuiltinDeletedMethod);
+        il.Emit(OpCodes.Call, runtime.ObjectState.IsBuiltinDeleted);
         il.Emit(OpCodes.Brtrue, falseLabel);
         foreach (var m in new[] { "abs", "acos", "acosh", "asin", "asinh", "atan", "atan2",
             "atanh", "cbrt", "ceil", "clz32", "cos", "cosh", "exp", "expm1", "floor",
@@ -330,7 +330,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Bne_Un, notJsonForHasOwnLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, nameLocal);
-        il.Emit(OpCodes.Call, runtime.IsBuiltinDeletedMethod);
+        il.Emit(OpCodes.Call, runtime.ObjectState.IsBuiltinDeleted);
         il.Emit(OpCodes.Brtrue, falseLabel);
         DictNameEq("parse"); DictNameEq("stringify"); DictNameEq("isRawJSON"); DictNameEq("rawJSON");
         il.MarkLabel(notJsonForHasOwnLabel);
@@ -446,7 +446,7 @@ public partial class RuntimeEmitter
         // (e.g. `delete Object.assign` marks Object Type + "assign" as deleted).
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, nameLocal);
-        il.Emit(OpCodes.Call, runtime.IsBuiltinDeletedMethod);
+        il.Emit(OpCodes.Call, runtime.ObjectState.IsBuiltinDeleted);
         il.Emit(OpCodes.Brtrue, falseLabel);
         // "prototype" / "name" / "length" → true for any Type
         void NameEq(string n)

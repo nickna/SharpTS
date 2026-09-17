@@ -166,7 +166,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(checkDeletedLabel);
         il.Emit(OpCodes.Ldsfld, runtime.GlobalThisSingletonField);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.IsBuiltinDeletedMethod);
+        il.Emit(OpCodes.Call, runtime.ObjectState.IsBuiltinDeleted);
         il.Emit(OpCodes.Brfalse, checkBuiltInsLabel);
         il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
         il.Emit(OpCodes.Br, returnLabel);

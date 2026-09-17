@@ -207,7 +207,7 @@ public sealed class ReflectStaticEmitter : IStaticTypeEmitterStrategy
                 else
                     il.Emit(OpCodes.Ldnull);
 
-                il.Emit(OpCodes.Call, ctx.Runtime!.ObjectIsExtensible);
+                il.Emit(OpCodes.Call, ctx.Runtime!.ObjectState.IsExtensible);
                 il.Emit(OpCodes.Box, typeof(bool));
                 return true;
             }

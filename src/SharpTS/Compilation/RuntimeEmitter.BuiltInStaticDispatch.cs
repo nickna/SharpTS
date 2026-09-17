@@ -142,9 +142,9 @@ public partial class RuntimeEmitter
         EmitObjectMethodLookup("values",                  runtime.GetValues, 1);
         EmitObjectMethodLookup("entries",                 runtime.GetEntries, 1);
         EmitObjectMethodLookup("fromEntries",             runtime.ObjectFromEntries, 1);
-        EmitObjectMethodLookup("freeze",                  runtime.ObjectFreeze, 1);
-        EmitObjectMethodLookup("seal",                    runtime.ObjectSeal, 1);
-        EmitObjectMethodLookup("preventExtensions",       runtime.ObjectPreventExtensions, 1);
+        EmitObjectMethodLookup("freeze",                  runtime.ObjectState.Freeze, 1);
+        EmitObjectMethodLookup("seal",                    runtime.ObjectState.Seal, 1);
+        EmitObjectMethodLookup("preventExtensions",       runtime.ObjectState.PreventExtensions, 1);
         EmitObjectMethodLookup("getOwnPropertyNames",     runtime.GetOwnPropertyNames, 1);
         EmitObjectMethodLookup("getOwnPropertySymbols",   runtime.GetOwnPropertySymbols, 1);
         EmitObjectMethodLookup("getPrototypeOf",          runtime.ObjectGetPrototypeOf, 1);
@@ -161,9 +161,9 @@ public partial class RuntimeEmitter
         EmitObjectMethodLookup("is",                      runtime.ObjectIs, 2);
         EmitObjectMethodLookup("hasOwn",                  runtime.ObjectHasOwn, 2);
         EmitObjectMethodLookup("groupBy",                 runtime.ObjectGroupBy, 2);
-        EmitObjectMethodLookup("isExtensible",            runtime.ObjectIsExtensible, 1);
-        EmitObjectMethodLookup("isFrozen",                runtime.ObjectIsFrozen, 1);
-        EmitObjectMethodLookup("isSealed",                runtime.ObjectIsSealed, 1);
+        EmitObjectMethodLookup("isExtensible",            runtime.ObjectState.IsExtensible, 1);
+        EmitObjectMethodLookup("isFrozen",                runtime.ObjectState.IsFrozen, 1);
+        EmitObjectMethodLookup("isSealed",                runtime.ObjectState.IsSealed, 1);
 
         // Symbol.* (#234) — bare `Symbol` resolves to the $TSSymbol Type token.
         // Well-known symbols (iterator, species, …) are public static FIELDS

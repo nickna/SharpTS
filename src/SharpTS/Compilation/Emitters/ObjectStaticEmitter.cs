@@ -123,20 +123,20 @@ public sealed class ObjectStaticEmitter : IStaticTypeEmitterStrategy
                 return true;
             case "freeze":
                 // Object.freeze(obj) - freezes the object and returns it
-                il.Emit(OpCodes.Call, ctx.Runtime!.ObjectFreeze);
+                il.Emit(OpCodes.Call, ctx.Runtime!.ObjectState.Freeze);
                 return true;
             case "seal":
                 // Object.seal(obj) - seals the object and returns it
-                il.Emit(OpCodes.Call, ctx.Runtime!.ObjectSeal);
+                il.Emit(OpCodes.Call, ctx.Runtime!.ObjectState.Seal);
                 return true;
             case "isFrozen":
                 // Object.isFrozen(obj) - returns true if the object is frozen
-                il.Emit(OpCodes.Call, ctx.Runtime!.ObjectIsFrozen);
+                il.Emit(OpCodes.Call, ctx.Runtime!.ObjectState.IsFrozen);
                 il.Emit(OpCodes.Box, typeof(bool));
                 return true;
             case "isSealed":
                 // Object.isSealed(obj) - returns true if the object is sealed
-                il.Emit(OpCodes.Call, ctx.Runtime!.ObjectIsSealed);
+                il.Emit(OpCodes.Call, ctx.Runtime!.ObjectState.IsSealed);
                 il.Emit(OpCodes.Box, typeof(bool));
                 return true;
             case "defineProperty":
@@ -207,11 +207,11 @@ public sealed class ObjectStaticEmitter : IStaticTypeEmitterStrategy
                 return true;
             case "preventExtensions":
                 // Object.preventExtensions(obj) - prevents adding new properties
-                il.Emit(OpCodes.Call, ctx.Runtime!.ObjectPreventExtensions);
+                il.Emit(OpCodes.Call, ctx.Runtime!.ObjectState.PreventExtensions);
                 return true;
             case "isExtensible":
                 // Object.isExtensible(obj) - returns whether object can have new properties
-                il.Emit(OpCodes.Call, ctx.Runtime!.ObjectIsExtensible);
+                il.Emit(OpCodes.Call, ctx.Runtime!.ObjectState.IsExtensible);
                 il.Emit(OpCodes.Box, typeof(bool));
                 return true;
             case "getOwnPropertySymbols":

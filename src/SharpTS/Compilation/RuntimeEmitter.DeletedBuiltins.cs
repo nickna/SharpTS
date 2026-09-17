@@ -7,26 +7,26 @@ namespace SharpTS.Compilation;
 public partial class RuntimeEmitter
 {
     /// <summary>
-    /// Emits two helpers backing the <see cref="EmittedRuntime.DeletedBuiltinsField"/>
-    /// per-instance set. <see cref="EmittedRuntime.MarkBuiltinDeletedMethod"/>
+    /// Emits two helpers backing the <see cref="EmittedObjectStateRuntime.DeletedBuiltins"/>
+    /// per-instance set. <see cref="EmittedObjectStateRuntime.MarkBuiltinDeleted"/>
     /// records a deletion (lazily creating the per-object HashSet);
-    /// <see cref="EmittedRuntime.IsBuiltinDeletedMethod"/> consults it. Used
+    /// <see cref="EmittedObjectStateRuntime.IsBuiltinDeleted"/> consults it. Used
     /// for ECMA-262 §17 configurable-name/length semantics on $TSFunction.
     /// </summary>
-    private void EmitDeletedBuiltinsHelpers(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitDeletedBuiltinsHelpers(TypeBuilder typeBuilder, EmittedObjectStateRuntime objectState)
     {
-        EmitMarkBuiltinDeleted(typeBuilder, runtime);
-        EmitIsBuiltinDeleted(typeBuilder, runtime);
+        EmitMarkBuiltinDeleted(typeBuilder, objectState);
+        EmitIsBuiltinDeleted(typeBuilder, objectState);
     }
 
-    private void EmitMarkBuiltinDeleted(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitMarkBuiltinDeleted(TypeBuilder typeBuilder, EmittedObjectStateRuntime objectState)
     {
         var method = typeBuilder.DefineMethod(
             "MarkBuiltinDeleted",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Void,
             [_types.Object, _types.String]);
-        runtime.MarkBuiltinDeletedMethod = method;
+        objectState.MarkBuiltinDeleted = method;
         method.DefineParameter(1, ParameterAttributes.None, "obj");
         method.DefineParameter(2, ParameterAttributes.None, "name");
 
@@ -43,7 +43,7 @@ public partial class RuntimeEmitter
         // var existing = null; _deletedBuiltins.TryGetValue(obj, out existing);
         var existingLocal = il.DeclareLocal(_types.Object);
         var setLocal = il.DeclareLocal(hashSetType);
-        il.Emit(OpCodes.Ldsfld, runtime.DeletedBuiltinsField);
+        il.Emit(OpCodes.Ldsfld, objectState.DeletedBuiltins);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloca, existingLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ConditionalWeakTable, "TryGetValue",
@@ -55,7 +55,7 @@ public partial class RuntimeEmitter
         // No existing entry — create a fresh HashSet<string> and add it to the table.
         il.Emit(OpCodes.Newobj, hashSetType.GetConstructor(Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, setLocal);
-        il.Emit(OpCodes.Ldsfld, runtime.DeletedBuiltinsField);
+        il.Emit(OpCodes.Ldsfld, objectState.DeletedBuiltins);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, setLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ConditionalWeakTable, "Add",
@@ -77,14 +77,14 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitIsBuiltinDeleted(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitIsBuiltinDeleted(TypeBuilder typeBuilder, EmittedObjectStateRuntime objectState)
     {
         var method = typeBuilder.DefineMethod(
             "IsBuiltinDeleted",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Boolean,
             [_types.Object, _types.String]);
-        runtime.IsBuiltinDeletedMethod = method;
+        objectState.IsBuiltinDeleted = method;
         method.DefineParameter(1, ParameterAttributes.None, "obj");
         method.DefineParameter(2, ParameterAttributes.None, "name");
 
@@ -102,7 +102,7 @@ public partial class RuntimeEmitter
 
         // var existing = null; if (!_deletedBuiltins.TryGetValue(obj, out existing)) return false;
         var existingLocal = il.DeclareLocal(_types.Object);
-        il.Emit(OpCodes.Ldsfld, runtime.DeletedBuiltinsField);
+        il.Emit(OpCodes.Ldsfld, objectState.DeletedBuiltins);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloca, existingLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ConditionalWeakTable, "TryGetValue",

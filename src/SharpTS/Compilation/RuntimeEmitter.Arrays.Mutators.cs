@@ -52,7 +52,7 @@ public partial class RuntimeEmitter
         var checkLocal = il.DeclareLocal(_types.Object);
 
         // Check frozen
-        il.Emit(OpCodes.Ldsfld, runtime.FrozenObjectsField);
+        il.Emit(OpCodes.Ldsfld, runtime.ObjectState.FrozenObjects);
         il.Emit(OpCodes.Ldarg_0);  // list
         il.Emit(OpCodes.Ldloca, checkLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(
@@ -63,7 +63,7 @@ public partial class RuntimeEmitter
         if (checkSealed)
         {
             // Check sealed
-            il.Emit(OpCodes.Ldsfld, runtime.SealedObjectsField);
+            il.Emit(OpCodes.Ldsfld, runtime.ObjectState.SealedObjects);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldloca, checkLocal);
             il.Emit(OpCodes.Callvirt, _types.GetMethod(
@@ -95,7 +95,7 @@ public partial class RuntimeEmitter
         var notSealedLabel = il.DefineLabel();
 
         // Check frozen
-        il.Emit(OpCodes.Ldsfld, runtime.FrozenObjectsField);
+        il.Emit(OpCodes.Ldsfld, runtime.ObjectState.FrozenObjects);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloca, checkLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(
@@ -112,7 +112,7 @@ public partial class RuntimeEmitter
 
         if (checkSealed)
         {
-            il.Emit(OpCodes.Ldsfld, runtime.SealedObjectsField);
+            il.Emit(OpCodes.Ldsfld, runtime.ObjectState.SealedObjects);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldloca, checkLocal);
             il.Emit(OpCodes.Callvirt, _types.GetMethod(
@@ -2047,7 +2047,7 @@ public partial class RuntimeEmitter
 
         // Preserve the existing frozen-array behavior without materializing a
         // packed receiver merely to discover that sort returns it unchanged.
-        il.Emit(OpCodes.Ldsfld, runtime.FrozenObjectsField);
+        il.Emit(OpCodes.Ldsfld, runtime.ObjectState.FrozenObjects);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloca, frozenMarker);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(
