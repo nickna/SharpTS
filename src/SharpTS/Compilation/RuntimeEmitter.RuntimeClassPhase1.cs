@@ -58,11 +58,7 @@ public partial class RuntimeEmitter
         DeclareObjectReadProperty(typeBuilder, runtime.ObjectRead);
 
         // Reserve SetProperty(object, string, object) → void.
-        runtime.SetProperty = typeBuilder.DefineMethod(
-            "SetProperty",
-            MethodAttributes.Public | MethodAttributes.Static,
-            _types.Void,
-            [_types.Object, _types.String, _types.Object]);
+        DeclareObjectWriteProperty(typeBuilder, runtime.ObjectWrite);
 
         // Proxy [[Set]] needs the receiver-aware OrdinarySet helper while
         // SetPropertyStrict is being emitted, before Reflect's public methods

@@ -1053,8 +1053,42 @@ public partial class RuntimeEmitter
         // Exception helpers were moved earlier (above EmitToNumber) since
         // ToNumber's Symbol-throw branch emits a CreateException call that
         // must resolve to a non-null MethodBuilder.
-        EmitSetFieldsProperty(typeBuilder, runtime);
-        EmitSetFieldsPropertyStrict(typeBuilder, runtime);
+        EmitSetFieldsProperty(
+            typeBuilder,
+            runtime.ObjectWrite,
+            new SetFieldsPropertyInputs(
+                runtime.Dates,
+                runtime.DescriptorStorage,
+                runtime.Errors,
+                runtime.IHasFieldsHasProperty,
+                runtime.IHasFieldsInterface,
+                runtime.IHasFieldsSetProperty,
+                runtime.InvokeMethodValue,
+                runtime.ObjectState,
+                runtime.ObjectStorage,
+                runtime.Promise,
+                runtime.RegExps,
+                runtime.SafeGetMethod
+            )
+        );
+        EmitSetFieldsPropertyStrict(
+            typeBuilder,
+            runtime.ObjectWrite,
+            new SetFieldsPropertyStrictInputs(
+                runtime.Dates,
+                runtime.DescriptorStorage,
+                runtime.Errors,
+                runtime.IHasFieldsHasProperty,
+                runtime.IHasFieldsInterface,
+                runtime.IHasFieldsSetProperty,
+                runtime.InvokeMethodValue,
+                runtime.ObjectState,
+                runtime.ObjectStorage,
+                runtime.Promise,
+                runtime.RegExps,
+                runtime.SafeGetMethod
+            )
+        );
         // Promise static wrappers validate their `this` value with the shared
         // constructor predicate. Emit it before Promise methods; Reflect also
         // consumes the same helper later.
@@ -1230,8 +1264,62 @@ public partial class RuntimeEmitter
         // GetProperty and ToString-coerce substitutions via ToJsString.
         EmitStringRaw(typeBuilder, runtime.Templates,
             runtime.UndefinedType, runtime.ObjectRead.Property, runtime.NumericCoercion.ToNumber, runtime.StringCoercion.ToJsString, runtime.Errors.CreateException, runtime.Errors.TypeErrorConstructor);
-        EmitSetProperty(typeBuilder, runtime);
-        EmitSetPropertyStrict(typeBuilder, runtime);
+        EmitSetProperty(
+            runtime.ObjectWrite,
+            new SetPropertyInputs(
+                runtime.Abort,
+                runtime.ArgumentsLengthField,
+                runtime.ArgumentsType,
+                runtime.ArrayStorage,
+                runtime.BoundAnyFunctionType,
+                runtime.BoundTSFunctionType,
+                runtime.Modules.CommonJs,
+                runtime.DescriptorStorage,
+                runtime.Errors,
+                runtime.GlobalThisSetProperty,
+                runtime.GlobalThisSingletonField,
+                runtime.InvokeMethodUnwrapped,
+                runtime.InvokeMethodValue,
+                runtime.LookupBuiltInStaticMember,
+                runtime.NumericCoercion,
+                runtime.ObjectDescriptors,
+                runtime.ObjectOwnProperties,
+                runtime.ObjectPrototypes,
+                runtime.ObjectRead,
+                runtime.ObjectState,
+                runtime.ObjectStorage,
+                _features.UsesProxy,
+                runtime.Reflect.Assignment,
+                runtime.RegExps,
+                runtime.TSFunctionInvokeWithThis,
+                runtime.TSFunctionType,
+                runtime.UndefinedType
+            )
+        );
+        EmitSetPropertyStrict(
+            typeBuilder,
+            runtime.ObjectWrite,
+            new SetPropertyStrictInputs(
+                runtime.ArrayOperations,
+                runtime.ArrayStorage,
+                runtime.BoundAnyFunctionType,
+                runtime.BoundTSFunctionType,
+                runtime.Modules.CommonJs,
+                runtime.DescriptorStorage,
+                runtime.Errors,
+                runtime.GlobalThisSetProperty,
+                runtime.GlobalThisSingletonField,
+                runtime.InvokeMethodUnwrapped,
+                runtime.InvokeMethodValue,
+                runtime.ObjectDescriptors,
+                runtime.ObjectRead,
+                runtime.ObjectState,
+                runtime.ObjectStorage,
+                _features.UsesProxy,
+                runtime.Reflect.Assignment,
+                runtime.TSFunctionType
+            )
+        );
         EmitDeleteProperty(
             typeBuilder,
             runtime.ObjectDeletion,
@@ -1328,8 +1416,50 @@ public partial class RuntimeEmitter
         // DisposeResource uses the shared Symbol indexed-get path so descriptor
         // carriers and accessors are observed correctly.
         EmitDisposeResource(typeBuilder, runtime);
-        EmitSetIndex(typeBuilder, runtime);
-        EmitSetIndexStrict(typeBuilder, runtime);
+        EmitSetIndex(
+            typeBuilder,
+            runtime.ObjectWrite,
+            new SetIndexInputs(
+                runtime.ArrayOperations,
+                runtime.ArrayStorage,
+                runtime.Buffer,
+                runtime.DescriptorStorage,
+                runtime.GlobalThisSetProperty,
+                runtime.GlobalThisSingletonField,
+                runtime.InvokeMethodUnwrapped,
+                runtime.InvokeMethodValue,
+                runtime.Math,
+                runtime.ObjectDescriptors,
+                runtime.ObjectOwnProperties,
+                runtime.ObjectPrototypes,
+                runtime.ObjectRead,
+                runtime.ObjectState,
+                runtime.ObjectStorage,
+                _features.UsesProxy,
+                runtime.Reflect.Assignment,
+                runtime.StringCoercion,
+                runtime.SymbolAccessors,
+                runtime.Symbols,
+                runtime.TSFunctionType,
+                runtime.TypedArrays,
+                runtime.UndefinedType
+            )
+        );
+        EmitSetIndexStrict(
+            typeBuilder,
+            runtime.ObjectWrite,
+            new SetIndexStrictInputs(
+                runtime.ArrayOperations,
+                runtime.ArrayStorage,
+                runtime.DescriptorStorage,
+                runtime.Errors,
+                runtime.InvokeMethodValue,
+                runtime.ObjectState,
+                runtime.StringCoercion,
+                runtime.Symbols,
+                runtime.UndefinedType
+            )
+        );
         EmitDeleteIndex(
             typeBuilder,
             runtime.ObjectDeletion,
@@ -1525,7 +1655,7 @@ public partial class RuntimeEmitter
                     runtime.InvokeMethodUnwrapped
                 ),
                 _features.UsesProxy,
-                runtime.SetIndex,
+                runtime.ObjectWrite.Index,
                 runtime.Symbols,
                 runtime.UndefinedType
             )
@@ -1596,8 +1726,8 @@ public partial class RuntimeEmitter
                     runtime.ObjectRead.Property,
                     runtime.InvokeMethodUnwrapped
                 ),
-                runtime.SetIndexStrict,
-                runtime.SetPropertyStrict,
+                runtime.ObjectWrite.IndexStrict,
+                runtime.ObjectWrite.PropertyStrict,
                 runtime.Symbols,
                 runtime.UndefinedType
             )
@@ -1859,7 +1989,7 @@ public partial class RuntimeEmitter
                     runtime.InvokeMethodValue,
                     runtime.UndefinedType,
                     runtime.ObjectRead.Property,
-                    runtime.SetProperty
+                    runtime.ObjectWrite.Property
                 )
             );
             EmitReflectDefineProperty(
@@ -2202,7 +2332,7 @@ public partial class RuntimeEmitter
                     runtime.NormalizeToEnumerator,
                     runtime.NumericCoercion,
                     runtime.PadUndefinedAttrCtor,
-                    runtime.SetProperty,
+                    runtime.ObjectWrite.Property,
                     runtime.StringCoercion,
                     runtime.StringTryInvokeSymbolMethod,
                     runtime.Symbols,

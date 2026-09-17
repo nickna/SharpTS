@@ -929,7 +929,7 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Ldloc, receiverLocal);
         IL.Emit(OpCodes.Ldstr, s.Name.Lexeme);
         IL.Emit(OpCodes.Ldloc, valueLocal);
-        IL.Emit(OpCodes.Call, _ctx.Runtime!.SetProperty);
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.ObjectWrite.Property);
 
         IL.MarkLabel(endLabel);
         IL.Emit(OpCodes.Ldloc, valueLocal);
@@ -1147,11 +1147,11 @@ public partial class ILEmitter
         if (_ctx.IsStrictMode)
         {
             IL.Emit(OpCodes.Ldc_I4_1); // true for strict mode
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.SetPropertyStrict);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.ObjectWrite.PropertyStrict);
         }
         else
         {
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.SetProperty);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.ObjectWrite.Property);
         }
 
         // Put result back on stack
@@ -1783,11 +1783,11 @@ public partial class ILEmitter
         if (_ctx.IsStrictMode)
         {
             IL.Emit(OpCodes.Ldc_I4_1);
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.SetIndexStrict);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.ObjectWrite.IndexStrict);
         }
         else
         {
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.SetIndex);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.ObjectWrite.Index);
         }
 
         IL.MarkLabel(endLabel);
@@ -2040,11 +2040,11 @@ public partial class ILEmitter
                 if (_ctx.IsStrictMode)
                 {
                     IL.Emit(OpCodes.Ldc_I4_1);
-                    IL.Emit(OpCodes.Call, _ctx.Runtime!.SetIndexStrict);
+                    IL.Emit(OpCodes.Call, _ctx.Runtime!.ObjectWrite.IndexStrict);
                 }
                 else
                 {
-                    IL.Emit(OpCodes.Call, _ctx.Runtime!.SetIndex);
+                    IL.Emit(OpCodes.Call, _ctx.Runtime!.ObjectWrite.Index);
                 }
                 IL.Emit(OpCodes.Ldloc, fallbackValueLocal);
                 SetStackUnknown();
@@ -2171,11 +2171,11 @@ public partial class ILEmitter
         if (_ctx.IsStrictMode)
         {
             IL.Emit(OpCodes.Ldc_I4_1);
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.SetIndexStrict);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.ObjectWrite.IndexStrict);
         }
         else
         {
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.SetIndex);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.ObjectWrite.Index);
         }
 
         IL.Emit(OpCodes.Ldloc, valueLocalGeneric);
@@ -2426,11 +2426,11 @@ public partial class ILEmitter
         if (_ctx.IsStrictMode)
         {
             IL.Emit(OpCodes.Ldc_I4_1);
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.SetIndexStrict);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.ObjectWrite.IndexStrict);
         }
         else
         {
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.SetIndex);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.ObjectWrite.Index);
         }
         IL.Emit(OpCodes.Ldloc, valueLocal);
 

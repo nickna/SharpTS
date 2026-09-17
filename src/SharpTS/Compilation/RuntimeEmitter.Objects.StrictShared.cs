@@ -4,6 +4,8 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
+    private readonly record struct GlobalThisSetRedirectInputs(MethodBuilder GlobalThisSetProperty, FieldBuilder GlobalThisSingletonField);
+
     /// <summary>
     /// Shared emit idioms for the property/index set/delete runtime methods
     /// (#1131). The strict variants used to hand-mirror the non-strict
@@ -41,15 +43,15 @@ public partial class RuntimeEmitter
     /// (visible to subsequent GlobalThisGetProperty reads) and returns.
     /// Mirrors the syntactic <c>globalThis.foo = v</c> path.
     /// </summary>
-    private void EmitGlobalThisSetRedirect(ILGenerator il, EmittedRuntime runtime)
+    private void EmitGlobalThisSetRedirect(ILGenerator il, GlobalThisSetRedirectInputs inputs)
     {
         var notGlobalThisLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldsfld, runtime.GlobalThisSingletonField);
+        il.Emit(OpCodes.Ldsfld, inputs.GlobalThisSingletonField);
         il.Emit(OpCodes.Bne_Un, notGlobalThisLabel);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Call, runtime.GlobalThisSetProperty);
+        il.Emit(OpCodes.Call, inputs.GlobalThisSetProperty);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notGlobalThisLabel);
     }
@@ -84,18 +86,18 @@ public partial class RuntimeEmitter
     /// Value = value })</c> with the bool result popped. Receiver/name/value
     /// are args 0/1/2. Caller emits the trailing <c>Ret</c>.
     /// </summary>
-    private void EmitDefineDataDescriptorFromValue(ILGenerator il, EmittedRuntime runtime)
+    private void EmitDefineDataDescriptorFromValue(ILGenerator il, EmittedDescriptorStorageRuntime descriptorStorage)
     {
-        var descLocal = il.DeclareLocal(runtime.DescriptorStorage.DescriptorType);
-        il.Emit(OpCodes.Newobj, runtime.DescriptorStorage.DescriptorConstructor);
+        var descLocal = il.DeclareLocal(descriptorStorage.DescriptorType);
+        il.Emit(OpCodes.Newobj, descriptorStorage.DescriptorConstructor);
         il.Emit(OpCodes.Stloc, descLocal);
         il.Emit(OpCodes.Ldloc, descLocal);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorValue.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, descriptorStorage.DescriptorValue.GetSetMethod()!);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloc, descLocal);
-        il.Emit(OpCodes.Call, runtime.DescriptorStorage.DefineProperty);
+        il.Emit(OpCodes.Call, descriptorStorage.DefineProperty);
         il.Emit(OpCodes.Pop);
     }
 
@@ -104,7 +106,7 @@ public partial class RuntimeEmitter
     /// SetProperty family: <c>InvokeMethodValue(obj, setter, [value]); return;</c>
     /// with the receiver at arg 0 and the value at arg 2.
     /// </summary>
-    private void EmitInvokePdsSetterWithValueAndReturn(ILGenerator il, EmittedRuntime runtime, LocalBuilder setterLocal)
+    private void EmitInvokePdsSetterWithValueAndReturn(ILGenerator il, MethodBuilder invokeMethodValue, LocalBuilder setterLocal)
     {
         il.Emit(OpCodes.Ldarg_0);  // receiver (obj)
         il.Emit(OpCodes.Ldloc, setterLocal);  // function (setter)
@@ -114,7 +116,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldarg_2);  // value
         il.Emit(OpCodes.Stelem_Ref);
-        il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+        il.Emit(OpCodes.Call, invokeMethodValue);
         il.Emit(OpCodes.Pop);  // Discard return value
         il.Emit(OpCodes.Ret);
     }

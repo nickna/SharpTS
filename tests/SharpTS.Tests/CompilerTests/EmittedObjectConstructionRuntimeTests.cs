@@ -152,6 +152,7 @@ public sealed class EmittedObjectConstructionRuntimeTests
                 "IsSymbol" => runtime.Symbols.IsSymbol,
                 "GetProperty" => runtime.ObjectRead.Property,
                 "GetIndex" => runtime.ObjectRead.Index,
+                "SetIndex" => runtime.ObjectWrite.Index,
                 _ => typeof(EmittedRuntime).GetProperty(name)!.GetValue(runtime)
             };
         }

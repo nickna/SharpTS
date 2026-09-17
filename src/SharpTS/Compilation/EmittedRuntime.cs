@@ -17,6 +17,10 @@ namespace SharpTS.Compilation;
 /// <seealso cref="ILEmitter"/>
 public class EmittedRuntime
 {
+    /// <summary>Required named, computed, field and strict writing metadata for one compilation.</summary>
+    public EmittedObjectWriteRuntime ObjectWrite { get; } = new();
+
+
     /// <summary>Required named, computed, field, list and element reading metadata for one compilation.</summary>
     public EmittedObjectReadRuntime ObjectRead { get; } = new();
 
@@ -327,8 +331,6 @@ public class EmittedRuntime
     public EmittedStringRuntime Strings { get; } = new();
 
     // Object methods
-    public MethodBuilder SetProperty { get; set; } = null!;
-    public MethodBuilder SetPropertyStrict { get; set; } = null!;
     /// <summary>
     /// Weak per-receiver cache of reflected CLR method wrappers used by
     /// <see cref="GetFieldsProperty"/>. Values are
@@ -336,8 +338,6 @@ public class EmittedRuntime
     /// emitted $TSFunction objects.
     /// </summary>
     public FieldBuilder ReflectedMethodCacheField { get; set; } = null!;
-    public MethodBuilder SetFieldsProperty { get; set; } = null!;
-    public MethodBuilder SetFieldsPropertyStrict { get; set; } = null!;
     public MethodBuilder ToPascalCase { get; set; } = null!;
     public MethodBuilder SafeGetMethod { get; set; } = null!;
     public MethodBuilder NewOnFunction { get; set; } = null!;
@@ -378,8 +378,6 @@ public class EmittedRuntime
     public FieldBuilder FunctionPrototypeField { get; set; } = null!;
     /// <summary>Idempotent populate for <see cref="FunctionPrototypeField"/>.</summary>
     public MethodBuilder FunctionPrototypePopulateMethod { get; set; } = null!;
-    public MethodBuilder SetIndex { get; set; } = null!;
-    public MethodBuilder SetIndexStrict { get; set; } = null!;
     public MethodBuilder WarnSloppyDeleteVariable { get; set; } = null!;
 
     // @DotNetType event subscription registry (compiled mode — see

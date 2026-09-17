@@ -330,6 +330,16 @@ carrier; the strict SyntaxError helper retains its existing CLR exception repres
 Exception wrapping follows supplied optional Promise metadata. Error-cause Proxy handling
 receives six explicit invocation/delegate handles through the shared reflection bridge.
 
+Named, computed, field and strict writes use required `ObjectWrite` ownership
+for six declarations. Property keeps its early declaration and validated late
+body; completion checks every handle and rejects subsequent metadata writes.
+Twelve helpers receive scoped owners and exact dependencies. Optional receiver
+branches follow supplied metadata, while Proxy selection is explicit. The
+redundant whole-holder Proxy adapter is removed; its declaration reads remain
+inside selected branches and its existing exact call record is preserved.
+Strict/sloppy behavior, setter receivers, descriptor and Symbol rules, declaration
+order, mutable guest state and deployment remain unchanged.
+
 Property, index, field, list, length and element reads use required `ObjectRead`
 ownership for six declarations. Property keeps its early declaration and late
 body; completion requires both the declarations and body, and rejects subsequent

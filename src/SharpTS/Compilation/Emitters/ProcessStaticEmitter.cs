@@ -114,7 +114,7 @@ public sealed class ProcessStaticEmitter : IStaticTypeEmitterStrategy
                 il.Emit(OpCodes.Call, ctx.Runtime!.Process.GetObject);
                 il.Emit(OpCodes.Ldstr, "sourceMapsEnabled");
                 EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0);
-                il.Emit(OpCodes.Call, ctx.Runtime!.SetProperty);
+                il.Emit(OpCodes.Call, ctx.Runtime!.ObjectWrite.Property);
                 il.Emit(OpCodes.Ldnull);
                 return true;
 

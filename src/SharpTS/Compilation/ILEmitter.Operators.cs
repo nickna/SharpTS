@@ -1107,7 +1107,7 @@ public partial class ILEmitter
         var resultLocal = IL.DeclareLocal(_ctx.Types.Object);
         IL.Emit(OpCodes.Dup);
         IL.Emit(OpCodes.Stloc, resultLocal);
-        IL.Emit(OpCodes.Call, _ctx.Runtime!.SetProperty);
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.ObjectWrite.Property);
         IL.Emit(OpCodes.Ldloc, resultLocal);
         builder.Emit_Br(endLabel);
 
@@ -1181,7 +1181,7 @@ public partial class ILEmitter
         var resultLocal = IL.DeclareLocal(_ctx.Types.Object);
         IL.Emit(OpCodes.Dup);
         IL.Emit(OpCodes.Stloc, resultLocal);
-        IL.Emit(OpCodes.Call, _ctx.Runtime!.SetIndex);
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.ObjectWrite.Index);
         IL.Emit(OpCodes.Ldloc, resultLocal);
         builder.Emit_Br(endLabel);
 
@@ -2252,7 +2252,7 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Ldloc, receiver);
         IL.Emit(OpCodes.Ldstr, get.Name.Lexeme);
         IL.Emit(OpCodes.Ldloc, newValue);
-        IL.Emit(OpCodes.Call, _ctx.Runtime!.SetProperty);
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.ObjectWrite.Property);
         IL.Emit(OpCodes.Ldloc, isPrefix ? newValue : oldValue);
         SetStackUnknown();
     }
@@ -2276,7 +2276,7 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Ldloc, receiver);
         IL.Emit(OpCodes.Ldloc, index);
         IL.Emit(OpCodes.Ldloc, newValue);
-        IL.Emit(OpCodes.Call, _ctx.Runtime!.SetIndex);
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.ObjectWrite.Index);
         IL.Emit(OpCodes.Ldloc, isPrefix ? newValue : oldValue);
         SetStackUnknown();
     }
@@ -2896,7 +2896,7 @@ public partial class ILEmitter
             IL.Emit(OpCodes.Call, _ctx.Types.TypeGetTypeFromHandle);
             IL.Emit(OpCodes.Ldstr, get.Name.Lexeme);
             IL.Emit(OpCodes.Ldloc, newValue);
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.SetProperty);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.ObjectWrite.Property);
         }
 
         if (isPrefix)
@@ -2965,7 +2965,7 @@ public partial class ILEmitter
                 IL.Emit(OpCodes.Call, _ctx.Types.TypeGetTypeFromHandle);
                 IL.Emit(OpCodes.Ldstr, cs.Name.Lexeme);
                 IL.Emit(OpCodes.Ldloc, inheritedResultCS);
-                IL.Emit(OpCodes.Call, _ctx.Runtime!.SetProperty);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.ObjectWrite.Property);
 
                 IL.Emit(OpCodes.Ldloc, inheritedResultCS);
                 SetStackUnknown();
@@ -2998,7 +2998,7 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Ldloc, objectLocal);
         IL.Emit(OpCodes.Ldstr, cs.Name.Lexeme);
         IL.Emit(OpCodes.Ldloc, resultLocal);
-        IL.Emit(OpCodes.Call, _ctx.Runtime!.SetProperty);
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.ObjectWrite.Property);
 
         // Leave result on stack
         IL.Emit(OpCodes.Ldloc, resultLocal);
@@ -3125,7 +3125,7 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Ldloc, objLocal);
         IL.Emit(OpCodes.Ldloc, indexLocal);
         IL.Emit(OpCodes.Ldloc, resultLocal);
-        IL.Emit(OpCodes.Call, _ctx.Runtime!.SetIndex);
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.ObjectWrite.Index);
 
         // Leave result on stack
         IL.Emit(OpCodes.Ldloc, resultLocal);
