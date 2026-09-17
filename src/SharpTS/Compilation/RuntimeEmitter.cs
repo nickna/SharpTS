@@ -808,6 +808,7 @@ public partial class RuntimeEmitter
         runtime.DescriptorStorage.CompleteEmission();
         runtime.ObjectState.CompleteEmission();
         runtime.Errors.CompleteEmission();
+        runtime.ObjectDescriptors.CompleteEmission();
         runtime.Reflect.CompleteEmission();
         runtime.Json.CompleteEmission();
         runtime.Records.CompleteEmission();

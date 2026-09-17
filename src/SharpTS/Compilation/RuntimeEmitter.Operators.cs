@@ -891,7 +891,7 @@ public partial class RuntimeEmitter
         var hasInDescriptorLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.ObjectGetOwnPropertyDescriptor);
+        il.Emit(OpCodes.Call, runtime.ObjectDescriptors.GetOwnPropertyDescriptor);
         il.Emit(OpCodes.Stloc, hasInDescriptorLocal);
         il.Emit(OpCodes.Ldloc, hasInDescriptorLocal);
         il.Emit(OpCodes.Brfalse, noOrdinaryOwnDescriptorLabel);

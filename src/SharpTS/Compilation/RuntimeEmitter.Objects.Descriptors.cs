@@ -7,13 +7,161 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
+    private readonly record struct StoredPropertyDescriptorResultInputs(
+        EmittedDescriptorStorageRuntime DescriptorStorage,
+        FieldInfo UndefinedInstance
+    );
+
+    private readonly record struct DefinePropertyReceiverValidationInputs(
+        EmittedErrorRuntime Errors,
+        EmittedSymbolRuntime Symbols,
+        Type UndefinedType
+    );
+
+    private readonly record struct DefinePropertySymbolReceiverInputs(
+        EmittedDescriptorStorageRuntime DescriptorStorage,
+        EmittedErrorRuntime Errors,
+        EmittedSymbolRuntime Symbols
+    );
+
+    private readonly record struct DefinePropertyProxyReceiverInputs(
+        EmittedErrorRuntime Errors,
+        MethodBuilder GetProperty,
+        MethodBuilder HasOwnPropertyHelperMethod,
+        MethodBuilder InvokeMethodUnwrapped,
+        EmittedObjectStateRuntime ObjectState
+    );
+
+    private readonly record struct ObjectDefinePropertyInputs(
+        EmittedArrayOperationsRuntime ArrayOperations,
+        EmittedArrayStorageRuntime ArrayStorage,
+        EmittedBooleanRuntime Booleans,
+        TypeBuilder BoundAnyFunctionType,
+        EmittedDescriptorStorageRuntime DescriptorStorage,
+        EmittedErrorRuntime Errors,
+        MethodBuilder GetProperty,
+        MethodBuilder HasOwnPropertyHelperMethod,
+        MethodInfo IHasFieldsFieldsGetter,
+        Type IHasFieldsInterface,
+        MethodBuilder InvokeMethodUnwrapped,
+        EmittedNumericCoercionRuntime NumericCoercion,
+        MethodBuilder ObjectIs,
+        EmittedObjectStateRuntime ObjectState,
+        EmittedObjectStorageRuntime ObjectStorage,
+        EmittedRecordStorageRuntime Records,
+        EmittedRegExpRuntime RegExps,
+        EmittedStringCoercionRuntime StringCoercion,
+        EmittedSymbolRuntime Symbols,
+        TypeBuilder TSFunctionType,
+        FieldInfo UndefinedInstance,
+        Type UndefinedType
+    );
+
+    private readonly record struct DefinePropertyArrayLengthCoercionInputs(
+        EmittedArrayOperationsRuntime ArrayOperations,
+        EmittedErrorRuntime Errors,
+        MethodBuilder GetProperty,
+        EmittedNumericCoercionRuntime NumericCoercion
+    );
+
+    private readonly record struct DefinePropertyDescriptorTypeValidationInputs(
+        EmittedErrorRuntime Errors,
+        EmittedSymbolRuntime Symbols,
+        Type UndefinedType
+    );
+
+    private readonly record struct DefinePropertyDescriptorNormalizationInputs(
+        EmittedArrayOperationsRuntime ArrayOperations,
+        EmittedDescriptorStorageRuntime DescriptorStorage,
+        MethodBuilder GetProperty,
+        Type UndefinedType
+    );
+
+    private readonly record struct DefinePropertyDescriptorFieldsInputs(
+        EmittedBooleanRuntime Booleans,
+        TypeBuilder BoundAnyFunctionType,
+        EmittedDescriptorStorageRuntime DescriptorStorage,
+        EmittedErrorRuntime Errors,
+        TypeBuilder TSFunctionType,
+        FieldInfo UndefinedInstance,
+        Type UndefinedType
+    );
+
+    private readonly record struct DefinePropertyRedefinitionValidationInputs(
+        EmittedArrayStorageRuntime ArrayStorage,
+        EmittedBooleanRuntime Booleans,
+        EmittedDescriptorStorageRuntime DescriptorStorage,
+        EmittedErrorRuntime Errors,
+        MethodBuilder ObjectIs,
+        FieldInfo UndefinedInstance
+    );
+
+    private readonly record struct ObjectGetOwnPropertyDescriptorInputs(
+        EmittedArrayStorageRuntime ArrayStorage,
+        EmittedDateRuntime Dates,
+        EmittedDescriptorStorageRuntime DescriptorStorage,
+        MethodBuilder GetEntries,
+        MethodBuilder GetKeys,
+        MethodBuilder GetOwnPropertyNames,
+        MethodBuilder GetProperty,
+        MethodBuilder GlobalThisGetProperty,
+        FieldBuilder GlobalThisSingletonField,
+        MethodInfo IHasFieldsFieldsGetter,
+        Type IHasFieldsInterface,
+        EmittedJsonRuntime Json,
+        MethodBuilder LookupBuiltInStaticMember,
+        EmittedMathRuntime Math,
+        MethodBuilder ObjectAssign,
+        MethodBuilder ObjectFromEntries,
+        MethodBuilder ObjectHasOwn,
+        MethodBuilder ObjectIs,
+        EmittedObjectStateRuntime ObjectState,
+        EmittedObjectStorageRuntime ObjectStorage,
+        EmittedPromiseRuntime? Promise,
+        ProxyDescriptorCallInputs ProxyDescriptor,
+        EmittedRegExpRuntime RegExps,
+        EmittedStringCoercionRuntime StringCoercion,
+        EmittedSymbolRuntime Symbols,
+        MethodBuilder TSFunctionGetOrCreate,
+        TypeBuilder TSFunctionType,
+        FieldInfo UndefinedInstance,
+        Type UndefinedType
+    );
+
+    private readonly record struct SymbolKeyDescriptorLookupInputs(
+        EmittedDescriptorStorageRuntime DescriptorStorage,
+        EmittedSymbolRuntime Symbols,
+        FieldInfo UndefinedInstance
+    );
+
+    private readonly record struct ObjectDefinePropertiesInputs(
+        EmittedErrorRuntime Errors,
+        MethodBuilder GetKeys,
+        MethodBuilder GetProperty,
+        EmittedSymbolRuntime Symbols,
+        Type UndefinedType
+    );
+
+    private readonly record struct ObjectGetOwnPropertyDescriptorsInputs(
+        EmittedErrorRuntime Errors,
+        MethodBuilder GetOrdinaryOwnPropertyKeys,
+        ProxyOwnKeysCallInputs ProxyOwnKeys,
+        EmittedSymbolRuntime Symbols,
+        FieldInfo UndefinedInstance,
+        Type UndefinedType
+    );
+
     // Marks the shared descriptor-found label with an empty stack, then branches to the
     // shared exit with one result object. Reads the stored descriptor and receiver (arg 0);
     // internal labels and scratch locals belong to this stage.
     private void EmitStoredPropertyDescriptorResult(
-        ILGenerator il, EmittedRuntime runtime,
-        LocalBuilder descriptorLocal, LocalBuilder resultDictLocal,
-        Label hasDescriptorLabel, Label endLabel)
+        ILGenerator il,
+        StoredPropertyDescriptorResultInputs inputs,
+        LocalBuilder descriptorLocal,
+        LocalBuilder resultDictLocal,
+        Label hasDescriptorLabel,
+        Label endLabel
+    )
     {
         // hasDescriptorLabel: Convert $CompiledPropertyDescriptor to JS object
         il.MarkLabel(hasDescriptorLabel);
@@ -25,10 +173,10 @@ public partial class RuntimeEmitter
         var isDataLabel = il.DefineLabel();
 
         il.Emit(OpCodes.Ldloc, descriptorLocal);
-        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorGetter.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorGetter.GetGetMethod()!);
         il.Emit(OpCodes.Brtrue, isAccessorLabel);
         il.Emit(OpCodes.Ldloc, descriptorLocal);
-        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorSetter.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorSetter.GetGetMethod()!);
         il.Emit(OpCodes.Brtrue, isAccessorLabel);
         il.Emit(OpCodes.Br, isDataLabel);
 
@@ -44,18 +192,18 @@ public partial class RuntimeEmitter
         var noGetLabel = il.DefineLabel();
         var afterGetLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, descriptorLocal);
-        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorGetter.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorGetter.GetGetMethod()!);
         il.Emit(OpCodes.Brfalse, noGetLabel);
         il.Emit(OpCodes.Ldloc, resultDictLocal);
         il.Emit(OpCodes.Ldstr, "get");
         il.Emit(OpCodes.Ldloc, descriptorLocal);
-        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorGetter.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorGetter.GetGetMethod()!);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item"));
         il.Emit(OpCodes.Br, afterGetLabel);
         il.MarkLabel(noGetLabel);
         il.Emit(OpCodes.Ldloc, resultDictLocal);
         il.Emit(OpCodes.Ldstr, "get");
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, inputs.UndefinedInstance);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item"));
         il.MarkLabel(afterGetLabel);
 
@@ -63,18 +211,18 @@ public partial class RuntimeEmitter
         var noSetLabel = il.DefineLabel();
         var afterSetLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, descriptorLocal);
-        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorSetter.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorSetter.GetGetMethod()!);
         il.Emit(OpCodes.Brfalse, noSetLabel);
         il.Emit(OpCodes.Ldloc, resultDictLocal);
         il.Emit(OpCodes.Ldstr, "set");
         il.Emit(OpCodes.Ldloc, descriptorLocal);
-        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorSetter.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorSetter.GetGetMethod()!);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item"));
         il.Emit(OpCodes.Br, afterSetLabel);
         il.MarkLabel(noSetLabel);
         il.Emit(OpCodes.Ldloc, resultDictLocal);
         il.Emit(OpCodes.Ldstr, "set");
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, inputs.UndefinedInstance);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item"));
         il.MarkLabel(afterSetLabel);
 
@@ -89,24 +237,24 @@ public partial class RuntimeEmitter
         var pdsIsFrozenLocal = il.DeclareLocal(_types.Boolean);
         var pdsIsSealedLocal = il.DeclareLocal(_types.Boolean);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.DescriptorStorage.IsFrozen);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.IsFrozen);
         il.Emit(OpCodes.Stloc, pdsIsFrozenLocal);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.DescriptorStorage.IsSealed);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.IsSealed);
         il.Emit(OpCodes.Stloc, pdsIsSealedLocal);
 
         // Set value
         il.Emit(OpCodes.Ldloc, resultDictLocal);
         il.Emit(OpCodes.Ldstr, "value");
         il.Emit(OpCodes.Ldloc, descriptorLocal);
-        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorValue.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorValue.GetGetMethod()!);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item"));
 
         // Set writable: stored value AND !frozen.
         il.Emit(OpCodes.Ldloc, resultDictLocal);
         il.Emit(OpCodes.Ldstr, "writable");
         il.Emit(OpCodes.Ldloc, descriptorLocal);
-        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorWritable.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorWritable.GetGetMethod()!);
         il.Emit(OpCodes.Ldloc, pdsIsFrozenLocal);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ceq);  // !frozen
@@ -120,7 +268,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, resultDictLocal);
         il.Emit(OpCodes.Ldstr, "enumerable");
         il.Emit(OpCodes.Ldloc, descriptorLocal);
-        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorEnumerable.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorEnumerable.GetGetMethod()!);
         il.Emit(OpCodes.Box, _types.Boolean);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item"));
 
@@ -132,16 +280,16 @@ public partial class RuntimeEmitter
         var pdsCfgIsFrozenLocal = il.DeclareLocal(_types.Boolean);
         var pdsCfgIsSealedLocal = il.DeclareLocal(_types.Boolean);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.DescriptorStorage.IsFrozen);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.IsFrozen);
         il.Emit(OpCodes.Stloc, pdsCfgIsFrozenLocal);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.DescriptorStorage.IsSealed);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.IsSealed);
         il.Emit(OpCodes.Stloc, pdsCfgIsSealedLocal);
 
         il.Emit(OpCodes.Ldloc, resultDictLocal);
         il.Emit(OpCodes.Ldstr, "configurable");
         il.Emit(OpCodes.Ldloc, descriptorLocal);
-        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorConfigurable.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorConfigurable.GetGetMethod()!);
         il.Emit(OpCodes.Ldloc, pdsCfgIsFrozenLocal);
         il.Emit(OpCodes.Ldloc, pdsCfgIsSealedLocal);
         il.Emit(OpCodes.Or);
@@ -172,7 +320,7 @@ public partial class RuntimeEmitter
     // These stages require an empty evaluation stack and leave it empty on fallthrough.
     // Receiver branches own their labels and return from the emitted method when handled;
     // the caller owns shared locals and preserves dispatch/coercion order.
-    private void EmitDefinePropertyReceiverValidation(ILGenerator il, EmittedRuntime runtime)
+    private void EmitDefinePropertyReceiverValidation(ILGenerator il, DefinePropertyReceiverValidationInputs inputs)
     {
         // ECMA-262 §20.1.2.4 step 1: If Type(O) is not Object, throw TypeError.
         // Covers null/undefined/primitives. test262 15.2.3.6-{1-*}.js verify.
@@ -181,7 +329,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Brfalse, primitiveThrowLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
         il.Emit(OpCodes.Brtrue, primitiveThrowLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, _types.Double);
@@ -196,16 +344,21 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, _types.String);
         il.Emit(OpCodes.Brtrue, primitiveThrowLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.Symbols.Type);
+        il.Emit(OpCodes.Isinst, inputs.Symbols.Type);
         il.Emit(OpCodes.Brtrue, primitiveThrowLabel);
         il.Emit(OpCodes.Br, skipTypeThrowLabel);
 
         il.MarkLabel(primitiveThrowLabel);
-        GuestErrorEmitter.ThrowTypeError(il, runtime, "Object.defineProperty called on non-object");
+        GuestErrorEmitter.ThrowError(il, inputs.Errors.CreateException, inputs.Errors.TypeErrorConstructor, "Object.defineProperty called on non-object");
         il.MarkLabel(skipTypeThrowLabel);
     }
 
-    private void EmitDefinePropertySymbolReceiver(ILGenerator il, EmittedRuntime runtime, MethodBuilder method, LocalBuilder descriptorLocal)
+    private void EmitDefinePropertySymbolReceiver(
+        ILGenerator il,
+        DefinePropertySymbolReceiverInputs inputs,
+        MethodBuilder method,
+        LocalBuilder descriptorLocal
+    )
     {
         // Symbol-keyed properties live in the object's symbol dictionary. Normalize
         // the supplied descriptor through this same method using an ephemeral
@@ -214,7 +367,7 @@ public partial class RuntimeEmitter
         // validation/defaulting rules without maintaining a second parser.
         var notSymbolLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.Symbols.IsSymbol);
+        il.Emit(OpCodes.Call, inputs.Symbols.IsSymbol);
         il.Emit(OpCodes.Brfalse, notSymbolLabel);
 
         // A symbol property uses a separate key dictionary, but it is still an
@@ -223,7 +376,7 @@ public partial class RuntimeEmitter
         var symbolCanDefineLabel = il.DefineLabel();
         var symbolDefineDictLocal = il.DeclareLocal(_types.DictionaryObjectObject);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.Symbols.GetStorage);
+        il.Emit(OpCodes.Call, inputs.Symbols.GetStorage);
         il.Emit(OpCodes.Stloc, symbolDefineDictLocal);
         il.Emit(OpCodes.Ldloc, symbolDefineDictLocal);
         il.Emit(OpCodes.Ldarg_1);
@@ -231,9 +384,9 @@ public partial class RuntimeEmitter
             _types.DictionaryObjectObject, "ContainsKey", _types.Object));
         il.Emit(OpCodes.Brtrue, symbolCanDefineLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.DescriptorStorage.IsExtensible);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.IsExtensible);
         il.Emit(OpCodes.Brtrue, symbolCanDefineLabel);
-        GuestErrorEmitter.ThrowTypeError(il, runtime,
+        GuestErrorEmitter.ThrowError(il, inputs.Errors.CreateException, inputs.Errors.TypeErrorConstructor,
             "Cannot define property on a non-extensible object");
         il.MarkLabel(symbolCanDefineLabel);
 
@@ -247,12 +400,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Ldloc, symbolDescriptorHolderLocal);
         il.Emit(OpCodes.Ldstr, "");
-        il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetPropertyDescriptor);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.GetPropertyDescriptor);
         il.Emit(OpCodes.Stloc, descriptorLocal);
 
         // GetSymbolDict(obj)[symbol] = normalizedDescriptor
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.Symbols.GetStorage);
+        il.Emit(OpCodes.Call, inputs.Symbols.GetStorage);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloc, descriptorLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryObjectObject, "set_Item", _types.Object, _types.Object));
@@ -263,7 +416,13 @@ public partial class RuntimeEmitter
         il.MarkLabel(notSymbolLabel);
     }
 
-    private void EmitDefinePropertyProxyReceiver(ILGenerator il, EmittedRuntime runtime, MethodBuilder method, LocalBuilder propNameLocal)
+    private void EmitDefinePropertyProxyReceiver(
+        ILGenerator il,
+        EmittedObjectDescriptorRuntime descriptors,
+        DefinePropertyProxyReceiverInputs inputs,
+        MethodBuilder method,
+        LocalBuilder propNameLocal
+    )
     {
         // Proxy [[DefineOwnProperty]] dispatch. The callback lets the runtime
         // proxy forward a missing trap to the emitted target representation.
@@ -276,7 +435,7 @@ public partial class RuntimeEmitter
             notProxyForDefineLabel);
         il.MarkLabel(proxyForDefineLabel);
         EmitProxyMethodCallUnwrapped(
-            il, runtime, () => il.Emit(OpCodes.Ldarg_0),
+            il, inputs.InvokeMethodUnwrapped, () => il.Emit(OpCodes.Ldarg_0),
             "TrapDefinePropertyCompiled", () =>
         {
             il.Emit(OpCodes.Ldc_I4_7);
@@ -297,13 +456,13 @@ public partial class RuntimeEmitter
                 typeof(Func<object, object, object, object?>),
                 _types.Object, _types.IntPtr)!);
             il.Emit(OpCodes.Stelem_Ref);
-            EmitDelegateArgument(3, runtime.ObjectGetOwnPropertyDescriptor,
+            EmitDelegateArgument(3, descriptors.GetOwnPropertyDescriptor,
                 typeof(Func<object, object, object?>));
-            EmitDelegateArgument(4, runtime.ObjectState.IsExtensible,
+            EmitDelegateArgument(4, inputs.ObjectState.IsExtensible,
                 typeof(Func<object, bool>));
-            EmitDelegateArgument(5, runtime.GetProperty,
+            EmitDelegateArgument(5, inputs.GetProperty,
                 typeof(Func<object, string, object?>));
-            EmitDelegateArgument(6, runtime.HasOwnPropertyHelperMethod,
+            EmitDelegateArgument(6, inputs.HasOwnPropertyHelperMethod,
                 typeof(Func<object, string, bool>));
 
             void EmitDelegateArgument(int slot, MethodInfo target, Type delegateType)
@@ -320,7 +479,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Unbox_Any, _types.Boolean);
         var proxyDefineSucceededLabel = il.DefineLabel();
         il.Emit(OpCodes.Brtrue, proxyDefineSucceededLabel);
-        GuestErrorEmitter.ThrowTypeError(il, runtime, "Proxy defineProperty trap returned false");
+        GuestErrorEmitter.ThrowError(il, inputs.Errors.CreateException, inputs.Errors.TypeErrorConstructor, "Proxy defineProperty trap returned false");
         il.MarkLabel(proxyDefineSucceededLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ret);
@@ -332,7 +491,11 @@ public partial class RuntimeEmitter
     /// Signature: object ObjectDefineProperty(object obj, object prop, object descriptor)
     /// Creates a $CompiledPropertyDescriptor and registers it in the emitted $PropertyDescriptorStore.
     /// </summary>
-    private void EmitObjectDefineProperty(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitObjectDefineProperty(
+        TypeBuilder typeBuilder,
+        EmittedObjectDescriptorRuntime descriptors,
+        ObjectDefinePropertyInputs inputs
+    )
     {
         var method = typeBuilder.DefineMethod(
             "ObjectDefineProperty",
@@ -340,43 +503,76 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object, _types.Object, _types.Object]
         );
-        runtime.ObjectDefineProperty = method;
+        descriptors.DefineProperty = method;
 
         var il = method.GetILGenerator();
 
         // Emit standalone property descriptor creation and registration
         // This avoids any runtime dependency on SharpTS.dll
 
-        var descriptorLocal = il.DeclareLocal(runtime.DescriptorStorage.DescriptorType);
+        var descriptorLocal = il.DeclareLocal(inputs.DescriptorStorage.DescriptorType);
         var dictLocal = il.DeclareLocal(_types.DictionaryStringObject);
         var propNameLocal = il.DeclareLocal(_types.String);
         var valueLocal = il.DeclareLocal(_types.Object);
         var notDictLabel = il.DefineLabel();
         var setDescriptorDoneLabel = il.DefineLabel();
 
-        EmitDefinePropertyReceiverValidation(il, runtime);
+        EmitDefinePropertyReceiverValidation(
+            il,
+            new DefinePropertyReceiverValidationInputs(inputs.Errors, inputs.Symbols, inputs.UndefinedType)
+        );
 
-        EmitDefinePropertySymbolReceiver(il, runtime, method, descriptorLocal);
+        EmitDefinePropertySymbolReceiver(
+            il,
+            new DefinePropertySymbolReceiverInputs(inputs.DescriptorStorage, inputs.Errors, inputs.Symbols),
+            method,
+            descriptorLocal
+        );
 
         // propName = $Runtime.ToJsString(prop) — ECMA-262 §7.1.19 ToPropertyKey
         // string path via the spec-shaped ToString. Avoids the prop.ToString()
         // Callvirt-on-null NRE for `Object.defineProperty(obj, null, ...)`,
-        // and unlike runtime.StringCoercion.Stringify (which produces debug "[1, 2]" form for
+        // and unlike inputs.StringCoercion.Stringify (which produces debug "[1, 2]" form for
         // arrays) honors `Array.prototype.toString` join semantics so
         // `defineProperty(obj, [1], ...)` lands at key "1" (matches V8/SM).
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
+        il.Emit(OpCodes.Call, inputs.StringCoercion.ToJsString);
         il.Emit(OpCodes.Stloc, propNameLocal);
 
-        EmitDefinePropertyProxyReceiver(il, runtime, method, propNameLocal);
+        EmitDefinePropertyProxyReceiver(
+            il,
+            descriptors,
+            new DefinePropertyProxyReceiverInputs(
+                inputs.Errors,
+                inputs.GetProperty,
+                inputs.HasOwnPropertyHelperMethod,
+                inputs.InvokeMethodUnwrapped,
+                inputs.ObjectState
+            ),
+            method,
+            propNameLocal
+        );
 
         var (lenWasCoercedLocal, lenValLocal, coercedLenLocal) =
-            EmitDefinePropertyArrayLengthCoercion(il, runtime, propNameLocal);
+            EmitDefinePropertyArrayLengthCoercion(
+                il,
+                new DefinePropertyArrayLengthCoercionInputs(
+                    inputs.ArrayOperations,
+                    inputs.Errors,
+                    inputs.GetProperty,
+                    inputs.NumericCoercion
+                ),
+                propNameLocal
+            );
 
-        EmitDefinePropertyExtensibilityValidation(il, runtime, propNameLocal);
+        EmitDefinePropertyExtensibilityValidation(
+            il,
+            new DefinePropertyExtensibilityValidationInputs(inputs.DescriptorStorage, inputs.Errors),
+            propNameLocal
+        );
 
         // Create new $CompiledPropertyDescriptor
-        il.Emit(OpCodes.Newobj, runtime.DescriptorStorage.DescriptorConstructor);
+        il.Emit(OpCodes.Newobj, inputs.DescriptorStorage.DescriptorConstructor);
         il.Emit(OpCodes.Stloc, descriptorLocal);
 
         // ECMA-262 6.2.5.1 CompletePropertyDescriptor: when Object.defineProperty receives
@@ -385,52 +581,146 @@ public partial class RuntimeEmitter
         // we reset them here to match the spec for the defineProperty path.
         il.Emit(OpCodes.Ldloc, descriptorLocal);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorWritable.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorWritable.GetSetMethod()!);
         il.Emit(OpCodes.Ldloc, descriptorLocal);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorEnumerable.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorEnumerable.GetSetMethod()!);
         il.Emit(OpCodes.Ldloc, descriptorLocal);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorConfigurable.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorConfigurable.GetSetMethod()!);
 
-        EmitDefinePropertyDescriptorTypeValidation(il, runtime);
+        EmitDefinePropertyDescriptorTypeValidation(
+            il,
+            new DefinePropertyDescriptorTypeValidationInputs(inputs.Errors, inputs.Symbols, inputs.UndefinedType)
+        );
 
         EmitDefinePropertyDescriptorNormalization(
-            il, runtime, dictLocal, lenWasCoercedLocal, lenValLocal, coercedLenLocal);
+            il,
+            new DefinePropertyDescriptorNormalizationInputs(
+                inputs.ArrayOperations,
+                inputs.DescriptorStorage,
+                inputs.GetProperty,
+                inputs.UndefinedType
+            ),
+            dictLocal,
+            lenWasCoercedLocal,
+            lenValLocal,
+            coercedLenLocal
+        );
 
         // Extract properties from descriptor dictionary
         var dictTryGetValue = _types.GetMethod(_types.DictionaryStringObject, "TryGetValue", _types.String, _types.Object.MakeByRefType());
 
-        EmitDefinePropertyDescriptorFields(il, runtime, dictLocal, descriptorLocal, valueLocal, dictTryGetValue);
+        EmitDefinePropertyDescriptorFields(
+            il,
+            new DefinePropertyDescriptorFieldsInputs(
+                inputs.Booleans,
+                inputs.BoundAnyFunctionType,
+                inputs.DescriptorStorage,
+                inputs.Errors,
+                inputs.TSFunctionType,
+                inputs.UndefinedInstance,
+                inputs.UndefinedType
+            ),
+            dictLocal,
+            descriptorLocal,
+            valueLocal,
+            dictTryGetValue
+        );
 
         il.MarkLabel(setDescriptorDoneLabel);
 
-        var existingDescLocal = EmitDefinePropertyExistingDescriptor(il, runtime, propNameLocal);
+        var existingDescLocal = EmitDefinePropertyExistingDescriptor(
+            il,
+            new DefinePropertyExistingDescriptorInputs(
+                inputs.ArrayStorage,
+                inputs.DescriptorStorage,
+                inputs.GetProperty,
+                inputs.HasOwnPropertyHelperMethod,
+                inputs.IHasFieldsInterface,
+                inputs.ObjectStorage,
+                inputs.RegExps,
+                inputs.TSFunctionType,
+                inputs.UndefinedType
+            ),
+            propNameLocal
+        );
 
         var (newIsAccessorOuter, newIsDataOuter) =
-            EmitDefinePropertyDescriptorClassification(il, runtime, dictLocal, dictTryGetValue);
+            EmitDefinePropertyDescriptorClassification(il, inputs.Errors, dictLocal, dictTryGetValue);
 
-        EmitDefinePropertyRedefinitionValidation(il, runtime, propNameLocal, dictLocal, existingDescLocal, dictTryGetValue);
+        EmitDefinePropertyRedefinitionValidation(
+            il,
+            new DefinePropertyRedefinitionValidationInputs(
+                inputs.ArrayStorage,
+                inputs.Booleans,
+                inputs.DescriptorStorage,
+                inputs.Errors,
+                inputs.ObjectIs,
+                inputs.UndefinedInstance
+            ),
+            propNameLocal,
+            dictLocal,
+            existingDescLocal,
+            dictTryGetValue
+        );
 
         EmitDefinePropertyDescriptorMerge(
-            il, runtime, dictLocal, descriptorLocal, existingDescLocal, dictTryGetValue, newIsAccessorOuter, newIsDataOuter);
+            il,
+            inputs.DescriptorStorage,
+            dictLocal,
+            descriptorLocal,
+            existingDescLocal,
+            dictTryGetValue,
+            newIsAccessorOuter,
+            newIsDataOuter
+        );
 
         // Call $PropertyDescriptorStore.DefineProperty(obj, propName, descriptor)
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, propNameLocal);
         il.Emit(OpCodes.Ldloc, descriptorLocal);
-        il.Emit(OpCodes.Call, runtime.DescriptorStorage.DefineProperty);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.DefineProperty);
         var descriptorStoredLabel = il.DefineLabel();
         il.Emit(OpCodes.Brtrue, descriptorStoredLabel);
-        GuestErrorEmitter.ThrowTypeError(il, runtime,
+        GuestErrorEmitter.ThrowError(il, inputs.Errors.CreateException, inputs.Errors.TypeErrorConstructor,
             "Cannot define property on a non-extensible object");
         il.MarkLabel(descriptorStoredLabel);
 
-        EmitDefinePropertyArrayIndexLengthGrowth(il, runtime, propNameLocal);
+        EmitDefinePropertyArrayIndexLengthGrowth(il, inputs.ArrayStorage, propNameLocal);
 
-        EmitDefinePropertyAccessorStorage(il, runtime, propNameLocal, descriptorLocal);
+        EmitDefinePropertyAccessorStorage(
+            il,
+            new DefinePropertyAccessorStorageInputs(
+                inputs.ArrayStorage,
+                inputs.DescriptorStorage,
+                inputs.IHasFieldsFieldsGetter,
+                inputs.IHasFieldsInterface,
+                inputs.ObjectStorage,
+                inputs.Records,
+                inputs.UndefinedInstance
+            ),
+            propNameLocal,
+            descriptorLocal
+        );
 
-        EmitDefinePropertyDataStorage(il, runtime, propNameLocal, dictLocal, descriptorLocal, dictTryGetValue);
+        EmitDefinePropertyDataStorage(
+            il,
+            new DefinePropertyDataStorageInputs(
+                inputs.ArrayStorage,
+                inputs.DescriptorStorage,
+                inputs.IHasFieldsFieldsGetter,
+                inputs.IHasFieldsInterface,
+                inputs.NumericCoercion,
+                inputs.ObjectStorage,
+                inputs.Records,
+                inputs.UndefinedInstance
+            ),
+            propNameLocal,
+            dictLocal,
+            descriptorLocal,
+            dictTryGetValue
+        );
         // Return the object
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ret);
@@ -441,7 +731,11 @@ public partial class RuntimeEmitter
     // WasCoerced is true, OriginalValue caches the single getter read and CoercedValue
     // holds the validated length. All labels and remaining locals belong to this stage.
     private (LocalBuilder WasCoerced, LocalBuilder OriginalValue, LocalBuilder CoercedValue)
-        EmitDefinePropertyArrayLengthCoercion(ILGenerator il, EmittedRuntime runtime, LocalBuilder propNameLocal)
+        EmitDefinePropertyArrayLengthCoercion(
+        ILGenerator il,
+        DefinePropertyArrayLengthCoercionInputs inputs,
+        LocalBuilder propNameLocal
+    )
     {
         // ECMA-262 10.4.2.4 ArraySetLength steps 3-4: newLen =
         // ToUint32(Desc.[[Value]]), numberLen = ToNumber(Desc.[[Value]]) —
@@ -469,18 +763,18 @@ public partial class RuntimeEmitter
         var lenValLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Ldstr, "value");
-        il.Emit(OpCodes.Call, runtime.ArrayOperations.HasArrayLikeProperty);
+        il.Emit(OpCodes.Call, inputs.ArrayOperations.HasArrayLikeProperty);
         il.Emit(OpCodes.Brfalse, skipArrayLenCheck);
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Ldstr, "value");
-        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, inputs.GetProperty);
         il.Emit(OpCodes.Stloc, lenValLocal);
         // First coercion (ToUint32's inner ToNumber) — valueOf call #1.
         var lenNumLocal = il.DeclareLocal(_types.Double);
         var newLenLocal = il.DeclareLocal(_types.Double);
         var numberLenLocal = il.DeclareLocal(_types.Double);
         il.Emit(OpCodes.Ldloc, lenValLocal);
-        il.Emit(OpCodes.Call, runtime.NumericCoercion.ToNumber);
+        il.Emit(OpCodes.Call, inputs.NumericCoercion.ToNumber);
         il.Emit(OpCodes.Stloc, lenNumLocal);
         // newLen = ToUint32(lenNum): NaN/±Inf → 0; else truncate, fmod 2^32,
         // normalize into [0, 2^32).
@@ -516,7 +810,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, newLenLocal);
         // Second coercion — valueOf call #2.
         il.Emit(OpCodes.Ldloc, lenValLocal);
-        il.Emit(OpCodes.Call, runtime.NumericCoercion.ToNumber);
+        il.Emit(OpCodes.Call, inputs.NumericCoercion.ToNumber);
         il.Emit(OpCodes.Stloc, numberLenLocal);
         // SameValueZero(newLen, numberLen) — Bne_Un branches on unordered,
         // so a NaN numberLen lands at rangeErr; ±0 compare equal.
@@ -532,14 +826,14 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, lenWasCoercedLocal);
         il.Emit(OpCodes.Br, skipArrayLenCheck);
         il.MarkLabel(rangeErrLabel);
-        GuestErrorEmitter.ThrowRangeError(il, runtime, "Invalid array length");
+        GuestErrorEmitter.ThrowError(il, inputs.Errors.CreateException, inputs.Errors.RangeErrorConstructor, "Invalid array length");
         il.MarkLabel(skipArrayLenCheck);
 
         return (lenWasCoercedLocal, lenValLocal, coercedLenLocal);
     }
 
     // Reads descriptor argument 2; throws or falls through with an empty stack.
-    private void EmitDefinePropertyDescriptorTypeValidation(ILGenerator il, EmittedRuntime runtime)
+    private void EmitDefinePropertyDescriptorTypeValidation(ILGenerator il, DefinePropertyDescriptorTypeValidationInputs inputs)
     {
         // ECMA-262 §6.2.5.5 ToPropertyDescriptor step 1: If Type(Obj) is not
         // Object, throw TypeError. Covers null/undefined/primitives in the
@@ -549,7 +843,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Brfalse, descThrowLabel);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
         il.Emit(OpCodes.Brtrue, descThrowLabel);
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Isinst, _types.Double);
@@ -569,12 +863,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, typeof(System.Numerics.BigInteger));
         il.Emit(OpCodes.Brtrue, descThrowLabel);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Isinst, runtime.Symbols.Type);
+        il.Emit(OpCodes.Isinst, inputs.Symbols.Type);
         il.Emit(OpCodes.Brtrue, descThrowLabel);
         il.Emit(OpCodes.Br, descTypeOkLabel);
 
         il.MarkLabel(descThrowLabel);
-        GuestErrorEmitter.ThrowTypeError(il, runtime, "Property description must be an object");
+        GuestErrorEmitter.ThrowError(il, inputs.Errors.CreateException, inputs.Errors.TypeErrorConstructor, "Property description must be an object");
 
         il.MarkLabel(descTypeOkLabel);
     }
@@ -583,13 +877,18 @@ public partial class RuntimeEmitter
     // Entry and fallthrough stacks are empty. Getter reads, own-field overlays, and the
     // coerced-length override must remain in this order. Scratch locals/labels stay here.
     private void EmitDefinePropertyDescriptorNormalization(
-        ILGenerator il, EmittedRuntime runtime, LocalBuilder dictLocal,
-        LocalBuilder lenWasCoercedLocal, LocalBuilder lenValLocal, LocalBuilder coercedLenLocal)
+        ILGenerator il,
+        DefinePropertyDescriptorNormalizationInputs inputs,
+        LocalBuilder dictLocal,
+        LocalBuilder lenWasCoercedLocal,
+        LocalBuilder lenValLocal,
+        LocalBuilder coercedLenLocal
+    )
     {
         // ECMA-262 §6.2.5.5 ToPropertyDescriptor reads each known descriptor
         // field via [[Get]], which walks the prototype chain AND invokes
         // accessors. We always normalize the descriptor into a fresh Dict via
-        // runtime.GetProperty (which checks PDS accessors + walks proto chain
+        // inputs.GetProperty (which checks PDS accessors + walks proto chain
         // for $Object / $IHasFields), then if the descriptor is itself a Dict,
         // overlay explicit own keys on top — so `{value: undefined}` correctly
         // sets value to JS undefined rather than being treated as absent.
@@ -624,14 +923,14 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldloc, local);
             il.Emit(OpCodes.Brfalse, notDefined);
             il.Emit(OpCodes.Ldloc, local);
-            il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+            il.Emit(OpCodes.Isinst, inputs.UndefinedType);
             il.Emit(OpCodes.Brtrue, notDefined);
             il.Emit(OpCodes.Br, target);
             il.MarkLabel(notDefined);
         }
 
-        var getterGet = runtime.DescriptorStorage.DescriptorGetter.GetGetMethod()!;
-        var setterGet = runtime.DescriptorStorage.DescriptorSetter.GetGetMethod()!;
+        var getterGet = inputs.DescriptorStorage.DescriptorGetter.GetGetMethod()!;
+        var setterGet = inputs.DescriptorStorage.DescriptorSetter.GetGetMethod()!;
 
         void EmitGetAndStash(string field)
         {
@@ -656,7 +955,7 @@ public partial class RuntimeEmitter
             }
             il.Emit(OpCodes.Ldarg_2);
             il.Emit(OpCodes.Ldstr, field);
-            il.Emit(OpCodes.Call, runtime.GetProperty);
+            il.Emit(OpCodes.Call, inputs.GetProperty);
             il.Emit(OpCodes.Stloc, fieldValLocal);
             // Defined value → stash it.
             EmitBranchIfDefined(fieldValLocal, stashLabel);
@@ -667,7 +966,7 @@ public partial class RuntimeEmitter
             // distinguished from an absent field without firing a getter.
             il.Emit(OpCodes.Ldarg_2);
             il.Emit(OpCodes.Ldstr, field);
-            il.Emit(OpCodes.Call, runtime.ArrayOperations.HasArrayLikeProperty);
+            il.Emit(OpCodes.Call, inputs.ArrayOperations.HasArrayLikeProperty);
             il.Emit(OpCodes.Brtrue, stashLabel);
             il.Emit(OpCodes.Br, skipLabel);
 
@@ -710,10 +1009,10 @@ public partial class RuntimeEmitter
             // the placeholder here would replace that result with undefined.
             // Only overlay ordinary own data entries (the path needed to
             // distinguish an explicit `{ value: undefined }` from absence).
-            var ownDescriptorLocal = il.DeclareLocal(runtime.DescriptorStorage.DescriptorType);
+            var ownDescriptorLocal = il.DeclareLocal(inputs.DescriptorStorage.DescriptorType);
             il.Emit(OpCodes.Ldarg_2);
             il.Emit(OpCodes.Ldstr, field);
-            il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetPropertyDescriptor);
+            il.Emit(OpCodes.Call, inputs.DescriptorStorage.GetPropertyDescriptor);
             il.Emit(OpCodes.Stloc, ownDescriptorLocal);
             var noOwnDescriptorLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldloc, ownDescriptorLocal);
@@ -768,8 +1067,13 @@ public partial class RuntimeEmitter
     // is caller-owned scratch; its final value is not an output of this stage. Callable
     // validation may throw. Entry/fallthrough stacks are empty and all labels are local.
     private void EmitDefinePropertyDescriptorFields(
-        ILGenerator il, EmittedRuntime runtime, LocalBuilder dictLocal,
-        LocalBuilder descriptorLocal, LocalBuilder valueLocal, MethodInfo dictTryGetValue)
+        ILGenerator il,
+        DefinePropertyDescriptorFieldsInputs inputs,
+        LocalBuilder dictLocal,
+        LocalBuilder descriptorLocal,
+        LocalBuilder valueLocal,
+        MethodInfo dictTryGetValue
+    )
     {
         // Try to get "value" property
         var noValueLabel = il.DefineLabel();
@@ -780,7 +1084,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, noValueLabel);
         il.Emit(OpCodes.Ldloc, descriptorLocal);
         il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorValue.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorValue.GetSetMethod()!);
         il.MarkLabel(noValueLabel);
 
         // Try to get "writable" property
@@ -793,8 +1097,8 @@ public partial class RuntimeEmitter
         // Convert to bool and set
         il.Emit(OpCodes.Ldloc, descriptorLocal);
         il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Call, runtime.Booleans.IsTruthy);  // Convert to bool
-        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorWritable.GetSetMethod()!);
+        il.Emit(OpCodes.Call, inputs.Booleans.IsTruthy);  // Convert to bool
+        il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorWritable.GetSetMethod()!);
         il.MarkLabel(noWritableLabel);
 
         // Try to get "get" property (getter). ECMA-262 §6.2.5.5 step 7:
@@ -814,26 +1118,26 @@ public partial class RuntimeEmitter
         // value per ECMA-262 §6.2.5.5 step 7. JS-null falls through to the
         // callable-instance check (which it fails) and throws.
         il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
         il.Emit(OpCodes.Brtrue, getterIsUndefLabel);
         il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Isinst, inputs.TSFunctionType);
         il.Emit(OpCodes.Brtrue, getterStoreLabel);
         il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Isinst, runtime.BoundAnyFunctionType);
+        il.Emit(OpCodes.Isinst, inputs.BoundAnyFunctionType);
         il.Emit(OpCodes.Brtrue, getterStoreLabel);
-        GuestErrorEmitter.ThrowTypeError(il, runtime, "Property descriptor 'get' is not callable");
+        GuestErrorEmitter.ThrowError(il, inputs.Errors.CreateException, inputs.Errors.TypeErrorConstructor, "Property descriptor 'get' is not callable");
         il.MarkLabel(getterIsUndefLabel);
         // Store $Undefined.Instance so the descriptor remains classified as
         // accessor (slot non-null).
         il.Emit(OpCodes.Ldloc, descriptorLocal);
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
-        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorGetter.GetSetMethod()!);
+        il.Emit(OpCodes.Ldsfld, inputs.UndefinedInstance);
+        il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorGetter.GetSetMethod()!);
         il.Emit(OpCodes.Br, noGetterLabel);
         il.MarkLabel(getterStoreLabel);
         il.Emit(OpCodes.Ldloc, descriptorLocal);
         il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorGetter.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorGetter.GetSetMethod()!);
         il.MarkLabel(noGetterLabel);
 
         // Try to get "set" property (setter). Same callable check as "get".
@@ -847,24 +1151,24 @@ public partial class RuntimeEmitter
         var setterIsUndefLabel = il.DefineLabel();
         // Only JS-undefined accepted as non-callable per §6.2.5.5 step 8.
         il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
         il.Emit(OpCodes.Brtrue, setterIsUndefLabel);
         il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Isinst, inputs.TSFunctionType);
         il.Emit(OpCodes.Brtrue, setterStoreLabel);
         il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Isinst, runtime.BoundAnyFunctionType);
+        il.Emit(OpCodes.Isinst, inputs.BoundAnyFunctionType);
         il.Emit(OpCodes.Brtrue, setterStoreLabel);
-        GuestErrorEmitter.ThrowTypeError(il, runtime, "Property descriptor 'set' is not callable");
+        GuestErrorEmitter.ThrowError(il, inputs.Errors.CreateException, inputs.Errors.TypeErrorConstructor, "Property descriptor 'set' is not callable");
         il.MarkLabel(setterIsUndefLabel);
         il.Emit(OpCodes.Ldloc, descriptorLocal);
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
-        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorSetter.GetSetMethod()!);
+        il.Emit(OpCodes.Ldsfld, inputs.UndefinedInstance);
+        il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorSetter.GetSetMethod()!);
         il.Emit(OpCodes.Br, noSetterLabel);
         il.MarkLabel(setterStoreLabel);
         il.Emit(OpCodes.Ldloc, descriptorLocal);
         il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorSetter.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorSetter.GetSetMethod()!);
         il.MarkLabel(noSetterLabel);
 
         // Try to get "enumerable" property
@@ -876,8 +1180,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, noEnumerableLabel);
         il.Emit(OpCodes.Ldloc, descriptorLocal);
         il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Call, runtime.Booleans.IsTruthy);
-        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorEnumerable.GetSetMethod()!);
+        il.Emit(OpCodes.Call, inputs.Booleans.IsTruthy);
+        il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorEnumerable.GetSetMethod()!);
         il.MarkLabel(noEnumerableLabel);
 
         // Try to get "configurable" property
@@ -889,8 +1193,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, noConfigurableLabel);
         il.Emit(OpCodes.Ldloc, descriptorLocal);
         il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Call, runtime.Booleans.IsTruthy);
-        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorConfigurable.GetSetMethod()!);
+        il.Emit(OpCodes.Call, inputs.Booleans.IsTruthy);
+        il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorConfigurable.GetSetMethod()!);
         il.MarkLabel(noConfigurableLabel);
     }
 
@@ -898,8 +1202,13 @@ public partial class RuntimeEmitter
     // Receiver argument 0 supplies the live array length for SameValue checks.
     // Every branch/throw belongs to this stage; entry and fallthrough stacks are empty.
     private void EmitDefinePropertyRedefinitionValidation(
-        ILGenerator il, EmittedRuntime runtime, LocalBuilder propNameLocal,
-        LocalBuilder dictLocal, LocalBuilder existingDescLocal, MethodInfo dictTryGetValue)
+        ILGenerator il,
+        DefinePropertyRedefinitionValidationInputs inputs,
+        LocalBuilder propNameLocal,
+        LocalBuilder dictLocal,
+        LocalBuilder existingDescLocal,
+        MethodInfo dictTryGetValue
+    )
     {
         var validationEndLabel = il.DefineLabel();
         // No existing descriptor → skip validation (new property add).
@@ -907,7 +1216,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, validationEndLabel);
         // Existing is configurable → all changes allowed.
         il.Emit(OpCodes.Ldloc, existingDescLocal);
-        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorConfigurable.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorConfigurable.GetGetMethod()!);
         il.Emit(OpCodes.Brtrue, validationEndLabel);
 
         // Existing is non-configurable. Examine new descriptor for forbidden
@@ -929,7 +1238,7 @@ public partial class RuntimeEmitter
         var checkEnumerableLabel = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, checkEnumerableLabel);
         il.Emit(OpCodes.Ldloc, configKeyLocal);
-        il.Emit(OpCodes.Call, runtime.Booleans.IsTruthy);
+        il.Emit(OpCodes.Call, inputs.Booleans.IsTruthy);
         il.Emit(OpCodes.Brtrue, throwRedefineLabel);
         il.MarkLabel(checkEnumerableLabel);
 
@@ -942,9 +1251,9 @@ public partial class RuntimeEmitter
         var checkTypeLabel = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, checkTypeLabel);
         il.Emit(OpCodes.Ldloc, enumKeyLocal);
-        il.Emit(OpCodes.Call, runtime.Booleans.IsTruthy);
+        il.Emit(OpCodes.Call, inputs.Booleans.IsTruthy);
         il.Emit(OpCodes.Ldloc, existingDescLocal);
-        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorEnumerable.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorEnumerable.GetGetMethod()!);
         il.Emit(OpCodes.Bne_Un, throwRedefineLabel);
         il.MarkLabel(checkTypeLabel);
 
@@ -954,10 +1263,10 @@ public partial class RuntimeEmitter
         var notExistingAccessor = il.DefineLabel();
         var setExistingAccessor = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, existingDescLocal);
-        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorGetter.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorGetter.GetGetMethod()!);
         il.Emit(OpCodes.Brtrue, setExistingAccessor);
         il.Emit(OpCodes.Ldloc, existingDescLocal);
-        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorSetter.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorSetter.GetGetMethod()!);
         il.Emit(OpCodes.Brfalse, notExistingAccessor);
         il.MarkLabel(setExistingAccessor);
         il.Emit(OpCodes.Ldc_I4_1);
@@ -1044,19 +1353,19 @@ public partial class RuntimeEmitter
         var existingGetterForCompare = il.DeclareLocal(_types.Object);
         var haveExistingGetter = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, existingDescLocal);
-        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorGetter.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorGetter.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, existingGetterForCompare);
         il.Emit(OpCodes.Ldloc, existingGetterForCompare);
         il.Emit(OpCodes.Brtrue, haveExistingGetter);
         // An omitted getter in a completed accessor descriptor has the
         // ECMAScript value undefined. Normalize the CLR null representation
         // before SameValue so `{ get: undefined }` is an allowed no-op.
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, inputs.UndefinedInstance);
         il.Emit(OpCodes.Stloc, existingGetterForCompare);
         il.MarkLabel(haveExistingGetter);
         il.Emit(OpCodes.Ldloc, accessorGetKeyLocal);
         il.Emit(OpCodes.Ldloc, existingGetterForCompare);
-        il.Emit(OpCodes.Call, runtime.ObjectIs);
+        il.Emit(OpCodes.Call, inputs.ObjectIs);
         il.Emit(OpCodes.Brfalse, throwRedefineLabel);
         il.MarkLabel(skipGetCheck);
         var accessorSetKeyLocal = il.DeclareLocal(_types.Object);
@@ -1069,16 +1378,16 @@ public partial class RuntimeEmitter
         var existingSetterForCompare = il.DeclareLocal(_types.Object);
         var haveExistingSetter = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, existingDescLocal);
-        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorSetter.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorSetter.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, existingSetterForCompare);
         il.Emit(OpCodes.Ldloc, existingSetterForCompare);
         il.Emit(OpCodes.Brtrue, haveExistingSetter);
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, inputs.UndefinedInstance);
         il.Emit(OpCodes.Stloc, existingSetterForCompare);
         il.MarkLabel(haveExistingSetter);
         il.Emit(OpCodes.Ldloc, accessorSetKeyLocal);
         il.Emit(OpCodes.Ldloc, existingSetterForCompare);
-        il.Emit(OpCodes.Call, runtime.ObjectIs);
+        il.Emit(OpCodes.Call, inputs.ObjectIs);
         il.Emit(OpCodes.Brfalse, throwRedefineLabel);
         il.MarkLabel(skipSetCheck);
         il.MarkLabel(skipAccessorCheck);
@@ -1091,7 +1400,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, skipWritableCheck);
         // existing data. Check writable.
         il.Emit(OpCodes.Ldloc, existingDescLocal);
-        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorWritable.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorWritable.GetGetMethod()!);
         il.Emit(OpCodes.Brtrue, skipWritableCheck); // existing.writable=true → all OK
         // existing.writable=false. New specifies writable=true → throw.
         var writableKeyLocal = il.DeclareLocal(_types.Object);
@@ -1102,7 +1411,7 @@ public partial class RuntimeEmitter
         var checkValueChange = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, checkValueChange);
         il.Emit(OpCodes.Ldloc, writableKeyLocal);
-        il.Emit(OpCodes.Call, runtime.Booleans.IsTruthy);
+        il.Emit(OpCodes.Call, inputs.Booleans.IsTruthy);
         il.Emit(OpCodes.Brtrue, throwRedefineLabel);
         il.MarkLabel(checkValueChange);
         // New specifies value != existing.value → throw (data with writable=false).
@@ -1124,14 +1433,14 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, skipWritableCheck);
         var existingValueForCompare = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldloc, existingDescLocal);
-        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorValue.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorValue.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, existingValueForCompare);
 
         // Array \`length\` special case: read list.Count for compare.
         var afterArrayLenOverride = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.ArrayStorage.Type);
-        var arrayLenLocal = il.DeclareLocal(runtime.ArrayStorage.Type);
+        il.Emit(OpCodes.Isinst, inputs.ArrayStorage.Type);
+        var arrayLenLocal = il.DeclareLocal(inputs.ArrayStorage.Type);
         il.Emit(OpCodes.Stloc, arrayLenLocal);
         il.Emit(OpCodes.Ldloc, arrayLenLocal);
         il.Emit(OpCodes.Brfalse, afterArrayLenOverride);
@@ -1141,7 +1450,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, afterArrayLenOverride);
         // existingValueForCompare = (double)array.[[ArrayLength]]
         il.Emit(OpCodes.Ldloc, arrayLenLocal);
-        il.Emit(OpCodes.Callvirt, runtime.ArrayStorage.LongLengthGetter);
+        il.Emit(OpCodes.Callvirt, inputs.ArrayStorage.LongLengthGetter);
         il.Emit(OpCodes.Conv_R8);
         il.Emit(OpCodes.Box, _types.Double);
         il.Emit(OpCodes.Stloc, existingValueForCompare);
@@ -1152,11 +1461,11 @@ public partial class RuntimeEmitter
         // ECMA-262 SameValue (Object.is) not Object.Equals: distinguishes
         // +0 vs -0 (returns false) and equates NaN with itself (returns true).
         // Test262 15.2.3.6-4-87 asserts redefining {value:+0,writable:false}
-        // with {value:-0} throws TypeError. runtime.ObjectIs implements proper
+        // with {value:-0} throws TypeError. inputs.ObjectIs implements proper
         // SameValue per §7.2.10.
         il.Emit(OpCodes.Ldloc, valueKeyLocal);
         il.Emit(OpCodes.Ldloc, existingValueForCompare);
-        il.Emit(OpCodes.Call, runtime.ObjectIs);
+        il.Emit(OpCodes.Call, inputs.ObjectIs);
         il.Emit(OpCodes.Brfalse, throwRedefineLabel);
         il.MarkLabel(skipWritableCheck);
 
@@ -1164,7 +1473,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, validationEndLabel);
 
         il.MarkLabel(throwRedefineLabel);
-        GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot redefine property");
+        GuestErrorEmitter.ThrowError(il, inputs.Errors.CreateException, inputs.Errors.TypeErrorConstructor, "Cannot redefine property");
 
         il.MarkLabel(validationEndLabel);
     }
@@ -1174,10 +1483,9 @@ public partial class RuntimeEmitter
     /// Signature: object ObjectGetOwnPropertyDescriptor(object obj, object prop)
     /// Returns a JavaScript object with descriptor properties.
     /// </summary>
-    private void DeclareObjectGetOwnPropertyDescriptor(
-        TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void DeclareObjectGetOwnPropertyDescriptor(TypeBuilder typeBuilder, EmittedObjectDescriptorRuntime descriptors)
     {
-        runtime.ObjectGetOwnPropertyDescriptor = typeBuilder.DefineMethod(
+        descriptors.GetOwnPropertyDescriptor = typeBuilder.DefineMethod(
             "ObjectGetOwnPropertyDescriptor",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
@@ -1185,9 +1493,12 @@ public partial class RuntimeEmitter
         );
     }
 
-    private void EmitObjectGetOwnPropertyDescriptor(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitObjectGetOwnPropertyDescriptor(
+        EmittedObjectDescriptorRuntime descriptors,
+        ObjectGetOwnPropertyDescriptorInputs inputs
+    )
     {
-        var method = runtime.ObjectGetOwnPropertyDescriptor;
+        var method = descriptors.GetOwnPropertyDescriptor;
 
         var il = method.GetILGenerator();
 
@@ -1199,7 +1510,7 @@ public partial class RuntimeEmitter
         // descriptors are complete.
 
         var propNameLocal = il.DeclareLocal(_types.String);
-        var descriptorLocal = il.DeclareLocal(runtime.DescriptorStorage.DescriptorType);
+        var descriptorLocal = il.DeclareLocal(inputs.DescriptorStorage.DescriptorType);
         var resultDictLocal = il.DeclareLocal(_types.DictionaryStringObject);
         var valueLocal = il.DeclareLocal(_types.Object);
         var returnNullLabel = il.DefineLabel();
@@ -1211,7 +1522,10 @@ public partial class RuntimeEmitter
         // empty, then either fall through empty, branch to hasDescriptorLabel/returnNullLabel
         // empty, or branch to endLabel with one result object. No exception region crosses
         // a stage boundary. Dispatch order determines descriptor precedence.
-        EmitGetOwnDescriptorProxyReceiver(il, runtime);
+        EmitGetOwnDescriptorProxyReceiver(
+            il,
+            new GetOwnDescriptorProxyReceiverInputs(inputs.ProxyDescriptor, inputs.UndefinedInstance)
+        );
 
         // ECMA-262 §7.3.5 + §19.1.2.4: when the property key is a Symbol,
         // look it up in the per-object symbol dict (same one that handles
@@ -1221,63 +1535,192 @@ public partial class RuntimeEmitter
         // TypeError on every Symbol-keyed gOPD call.
         var notSymbolKeyLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, runtime.Symbols.Type);
+        il.Emit(OpCodes.Isinst, inputs.Symbols.Type);
         il.Emit(OpCodes.Brfalse, notSymbolKeyLabel);
-        EmitSymbolKeyDescriptorLookup(il, runtime, descriptorLocal, hasDescriptorLabel);
+        EmitSymbolKeyDescriptorLookup(
+            il,
+            new SymbolKeyDescriptorLookupInputs(inputs.DescriptorStorage, inputs.Symbols, inputs.UndefinedInstance),
+            descriptorLocal,
+            hasDescriptorLabel
+        );
         il.MarkLabel(notSymbolKeyLabel);
 
         // propName = $Runtime.ToJsString(prop) — spec ECMA-262 ToString. Honors
         // Array.prototype.toString (so `gOPD(obj, [1])` looks up "1", not "[1]"),
         // and avoids the prop.ToString() NRE for null.
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
+        il.Emit(OpCodes.Call, inputs.StringCoercion.ToJsString);
         il.Emit(OpCodes.Stloc, propNameLocal);
 
         EmitGetOwnDescriptorGlobalReceiver(
-            il, runtime, propNameLocal, descriptorLocal, resultDictLocal, hasDescriptorLabel, returnNullLabel, endLabel);
+            il,
+            new GetOwnDescriptorGlobalReceiverInputs(
+                inputs.DescriptorStorage,
+                inputs.GlobalThisGetProperty,
+                inputs.GlobalThisSingletonField,
+                inputs.ObjectState
+            ),
+            propNameLocal,
+            descriptorLocal,
+            resultDictLocal,
+            hasDescriptorLabel,
+            returnNullLabel,
+            endLabel
+        );
 
-        EmitGetOwnDescriptorArrayLength(il, runtime, propNameLocal, resultDictLocal, endLabel);
+        EmitGetOwnDescriptorArrayLength(
+            il,
+            new GetOwnDescriptorArrayLengthInputs(inputs.ArrayStorage, inputs.DescriptorStorage),
+            propNameLocal,
+            resultDictLocal,
+            endLabel
+        );
 
         // Try to get descriptor from $PropertyDescriptorStore
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, propNameLocal);
-        il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetPropertyDescriptor);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.GetPropertyDescriptor);
         il.Emit(OpCodes.Stloc, descriptorLocal);
 
         // If descriptor is not null, convert it to a JS object
         il.Emit(OpCodes.Ldloc, descriptorLocal);
         il.Emit(OpCodes.Brtrue, hasDescriptorLabel);
 
-        EmitGetOwnDescriptorRegExpReceiver(il, runtime, propNameLocal, resultDictLocal, endLabel);
+        EmitGetOwnDescriptorRegExpReceiver(
+            il,
+            new GetOwnDescriptorRegExpReceiverInputs(inputs.GetProperty, inputs.RegExps),
+            propNameLocal,
+            resultDictLocal,
+            endLabel
+        );
 
         EmitGetOwnDescriptorFunctionReceiver(
-            il, runtime, propNameLocal, resultDictLocal, returnNullLabel, endLabel);
+            il,
+            new GetOwnDescriptorFunctionReceiverInputs(
+                inputs.GetProperty,
+                inputs.ObjectState,
+                inputs.Promise,
+                inputs.TSFunctionType,
+                inputs.UndefinedType
+            ),
+            propNameLocal,
+            resultDictLocal,
+            returnNullLabel,
+            endLabel
+        );
 
         EmitGetOwnDescriptorConstructorReceiver(
-            il, runtime, propNameLocal, resultDictLocal, returnNullLabel, endLabel);
+            il,
+            descriptors,
+            new GetOwnDescriptorConstructorReceiverInputs(
+                inputs.Dates,
+                inputs.GetEntries,
+                inputs.GetKeys,
+                inputs.GetOwnPropertyNames,
+                inputs.GetProperty,
+                inputs.LookupBuiltInStaticMember,
+                inputs.ObjectAssign,
+                inputs.ObjectFromEntries,
+                inputs.ObjectHasOwn,
+                inputs.ObjectIs,
+                inputs.ObjectState,
+                inputs.RegExps,
+                inputs.TSFunctionGetOrCreate,
+                inputs.TSFunctionType,
+                inputs.UndefinedInstance,
+                inputs.UndefinedType
+            ),
+            propNameLocal,
+            resultDictLocal,
+            returnNullLabel,
+            endLabel
+        );
 
-        EmitGetOwnDescriptorIndexedReceiver(il, runtime, propNameLocal, resultDictLocal, returnNullLabel, endLabel);
+        EmitGetOwnDescriptorIndexedReceiver(
+            il,
+            inputs.ArrayStorage,
+            propNameLocal,
+            resultDictLocal,
+            returnNullLabel,
+            endLabel
+        );
 
-        EmitGetOwnDescriptorMathReceiver(il, runtime, propNameLocal, resultDictLocal, returnNullLabel, endLabel);
+        EmitGetOwnDescriptorMathReceiver(
+            il,
+            new GetOwnDescriptorMathReceiverInputs(
+                inputs.Math,
+                inputs.ObjectState,
+                inputs.TSFunctionGetOrCreate,
+                inputs.UndefinedInstance
+            ),
+            propNameLocal,
+            resultDictLocal,
+            returnNullLabel,
+            endLabel
+        );
 
-        EmitGetOwnDescriptorJsonReceiver(il, runtime, propNameLocal, resultDictLocal, returnNullLabel, endLabel);
+        EmitGetOwnDescriptorJsonReceiver(
+            il,
+            new GetOwnDescriptorJsonReceiverInputs(inputs.Json, inputs.ObjectState),
+            propNameLocal,
+            resultDictLocal,
+            returnNullLabel,
+            endLabel
+        );
 
         EmitGetOwnDescriptorDictionaryReceiver(
-            il, runtime, propNameLocal, resultDictLocal, valueLocal, returnNullLabel, endLabel);
+            il,
+            inputs.DescriptorStorage,
+            propNameLocal,
+            resultDictLocal,
+            valueLocal,
+            returnNullLabel,
+            endLabel
+        );
 
-        EmitGetOwnDescriptorLiteralAccessor(il, runtime, propNameLocal, resultDictLocal, valueLocal, endLabel);
+        EmitGetOwnDescriptorLiteralAccessor(
+            il,
+            new GetOwnDescriptorLiteralAccessorInputs(
+                inputs.DescriptorStorage,
+                inputs.ObjectStorage,
+                inputs.UndefinedInstance
+            ),
+            propNameLocal,
+            resultDictLocal,
+            valueLocal,
+            endLabel
+        );
 
         EmitGetOwnDescriptorFieldsReceiver(
-            il, runtime, propNameLocal, resultDictLocal, valueLocal, returnNullLabel, endLabel);
+            il,
+            new GetOwnDescriptorFieldsReceiverInputs(
+                inputs.DescriptorStorage,
+                inputs.IHasFieldsFieldsGetter,
+                inputs.IHasFieldsInterface
+            ),
+            propNameLocal,
+            resultDictLocal,
+            valueLocal,
+            returnNullLabel,
+            endLabel
+        );
 
-        EmitStoredPropertyDescriptorResult(il, runtime, descriptorLocal, resultDictLocal, hasDescriptorLabel, endLabel);
+        EmitStoredPropertyDescriptorResult(
+            il,
+            new StoredPropertyDescriptorResultInputs(inputs.DescriptorStorage, inputs.UndefinedInstance),
+            descriptorLocal,
+            resultDictLocal,
+            hasDescriptorLabel,
+            endLabel
+        );
 
         // returnNullLabel: return undefined
         il.MarkLabel(returnNullLabel);
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, inputs.UndefinedInstance);
 
         il.MarkLabel(endLabel);
         il.Emit(OpCodes.Ret);
+        descriptors.MarkGetOwnPropertyDescriptorBodyEmitted();
     }
 
     /// <summary>
@@ -1292,16 +1735,17 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitSymbolKeyDescriptorLookup(
         ILGenerator il,
-        EmittedRuntime runtime,
+        SymbolKeyDescriptorLookupInputs inputs,
         LocalBuilder descriptorLocal,
-        Label hasDescriptorLabel)
+        Label hasDescriptorLabel
+    )
     {
         var symDictLocal = il.DeclareLocal(_types.DictionaryObjectObject);
         var valueLocal = il.DeclareLocal(_types.Object);
         var resultDictLocal = il.DeclareLocal(_types.DictionaryStringObject);
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.Symbols.GetStorage);
+        il.Emit(OpCodes.Call, inputs.Symbols.GetStorage);
         il.Emit(OpCodes.Stloc, symDictLocal);
 
         var foundLabel = il.DefineLabel();
@@ -1312,7 +1756,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, foundLabel);
 
         // Not in user symbol-dict — return undefined.
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, inputs.UndefinedInstance);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(foundLabel);
@@ -1320,7 +1764,7 @@ public partial class RuntimeEmitter
         // ordinary descriptor-to-object builder in the enclosing method.
         var rawSymbolValueLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Isinst, runtime.DescriptorStorage.DescriptorType);
+        il.Emit(OpCodes.Isinst, inputs.DescriptorStorage.DescriptorType);
         il.Emit(OpCodes.Stloc, descriptorLocal);
         il.Emit(OpCodes.Ldloc, descriptorLocal);
         il.Emit(OpCodes.Brfalse, rawSymbolValueLabel);
@@ -1342,7 +1786,7 @@ public partial class RuntimeEmitter
         var notToStringTagLabel = il.DefineLabel();
         var writableDoneLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Ldsfld, runtime.Symbols.ToStringTag);
+        il.Emit(OpCodes.Ldsfld, inputs.Symbols.ToStringTag);
         il.Emit(OpCodes.Bne_Un, notToStringTagLabel);
         // matches Symbol.toStringTag → writable:false
         EmitDescriptorBoolField(il, resultDictLocal, "writable", false);
@@ -1361,7 +1805,11 @@ public partial class RuntimeEmitter
     /// Signature: object ObjectDefineProperties(object obj, object props)
     /// Iterates over keys of props dictionary and calls ObjectDefineProperty for each.
     /// </summary>
-    private void EmitObjectDefineProperties(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitObjectDefineProperties(
+        TypeBuilder typeBuilder,
+        EmittedObjectDescriptorRuntime descriptors,
+        ObjectDefinePropertiesInputs inputs
+    )
     {
         var method = typeBuilder.DefineMethod(
             "ObjectDefineProperties",
@@ -1369,7 +1817,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object, _types.Object]
         );
-        runtime.ObjectDefineProperties = method;
+        descriptors.DefineProperties = method;
 
         var il = method.GetILGenerator();
 
@@ -1380,7 +1828,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Brfalse, dpsThrowLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
         il.Emit(OpCodes.Brtrue, dpsThrowLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, _types.Double);
@@ -1395,12 +1843,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, _types.String);
         il.Emit(OpCodes.Brtrue, dpsThrowLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.Symbols.Type);
+        il.Emit(OpCodes.Isinst, inputs.Symbols.Type);
         il.Emit(OpCodes.Brtrue, dpsThrowLabel);
         il.Emit(OpCodes.Br, dpsOkLabel);
 
         il.MarkLabel(dpsThrowLabel);
-        GuestErrorEmitter.ThrowTypeError(il, runtime, "Object.defineProperties called on non-object");
+        GuestErrorEmitter.ThrowError(il, inputs.Errors.CreateException, inputs.Errors.TypeErrorConstructor, "Object.defineProperties called on non-object");
         il.MarkLabel(dpsOkLabel);
 
         // ECMA-262 §20.1.2.3 step 2: Let props be ? ToObject(Properties).
@@ -1411,12 +1859,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Brfalse, dpsPropsThrowLabel);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
         il.Emit(OpCodes.Brtrue, dpsPropsThrowLabel);
         il.Emit(OpCodes.Br, dpsPropsOkLabel);
 
         il.MarkLabel(dpsPropsThrowLabel);
-        GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot convert undefined or null to object");
+        GuestErrorEmitter.ThrowError(il, inputs.Errors.CreateException, inputs.Errors.TypeErrorConstructor, "Cannot convert undefined or null to object");
         il.MarkLabel(dpsPropsOkLabel);
 
         // Use the same generic enumerable-own-key abstraction as Object.keys.
@@ -1433,7 +1881,7 @@ public partial class RuntimeEmitter
         var loopEndLabel = il.DefineLabel();
 
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.GetKeys);
+        il.Emit(OpCodes.Call, inputs.GetKeys);
         il.Emit(OpCodes.Stloc, keysLocal);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Stloc, indexLocal);
@@ -1457,8 +1905,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloc, keyLocal);
         il.Emit(OpCodes.Castclass, _types.String);
-        il.Emit(OpCodes.Call, runtime.GetProperty);
-        il.Emit(OpCodes.Call, runtime.ObjectDefineProperty);
+        il.Emit(OpCodes.Call, inputs.GetProperty);
+        il.Emit(OpCodes.Call, descriptors.DefineProperty);
         il.Emit(OpCodes.Pop);
 
         il.Emit(OpCodes.Ldloc, indexLocal);
@@ -1478,7 +1926,11 @@ public partial class RuntimeEmitter
     /// Signature: object ObjectGetOwnPropertyDescriptors(object obj)
     /// Iterates over keys and calls ObjectGetOwnPropertyDescriptor for each, collecting into a new dict.
     /// </summary>
-    private void EmitObjectGetOwnPropertyDescriptors(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitObjectGetOwnPropertyDescriptors(
+        TypeBuilder typeBuilder,
+        EmittedObjectDescriptorRuntime descriptors,
+        ObjectGetOwnPropertyDescriptorsInputs inputs
+    )
     {
         var method = typeBuilder.DefineMethod(
             "ObjectGetOwnPropertyDescriptors",
@@ -1486,7 +1938,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object]
         );
-        runtime.ObjectGetOwnPropertyDescriptors = method;
+        descriptors.GetOwnPropertyDescriptors = method;
 
         var il = method.GetILGenerator();
         var resultLocal = il.DeclareLocal(_types.DictionaryStringObject);
@@ -1503,10 +1955,10 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Brfalse, descriptorsReceiverThrowLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
         il.Emit(OpCodes.Brfalse, descriptorsReceiverContinueLabel);
         il.MarkLabel(descriptorsReceiverThrowLabel);
-        GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot convert undefined or null to object");
+        GuestErrorEmitter.ThrowError(il, inputs.Errors.CreateException, inputs.Errors.TypeErrorConstructor, "Cannot convert undefined or null to object");
         il.MarkLabel(descriptorsReceiverContinueLabel);
 
         il.Emit(OpCodes.Newobj, _types.DictionaryStringObjectCtor);
@@ -1523,12 +1975,12 @@ public partial class RuntimeEmitter
             proxyKeysLabel, ordinaryKeysLabel);
         il.MarkLabel(proxyKeysLabel);
         EmitProxyOwnKeysCompiledCall(
-            il, runtime, () => il.Emit(OpCodes.Ldarg_0));
+            il, inputs.ProxyOwnKeys, () => il.Emit(OpCodes.Ldarg_0));
         il.Emit(OpCodes.Stloc, keysLocal);
         il.Emit(OpCodes.Br, keysReadyLabel);
         il.MarkLabel(ordinaryKeysLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.GetOrdinaryOwnPropertyKeys);
+        il.Emit(OpCodes.Call, inputs.GetOrdinaryOwnPropertyKeys);
         il.Emit(OpCodes.Stloc, keysLocal);
         il.MarkLabel(keysReadyLabel);
 
@@ -1551,16 +2003,16 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, keyLocal);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, keyLocal);
-        il.Emit(OpCodes.Call, runtime.ObjectGetOwnPropertyDescriptor);
+        il.Emit(OpCodes.Call, descriptors.GetOwnPropertyDescriptor);
         il.Emit(OpCodes.Stloc, descLocal);
         il.Emit(OpCodes.Ldloc, descLocal);
         il.Emit(OpCodes.Brfalse, skipNullLabel);
         il.Emit(OpCodes.Ldloc, descLocal);
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, inputs.UndefinedInstance);
         il.Emit(OpCodes.Beq, skipNullLabel);
 
         il.Emit(OpCodes.Ldloc, keyLocal);
-        il.Emit(OpCodes.Call, runtime.Symbols.IsSymbol);
+        il.Emit(OpCodes.Call, inputs.Symbols.IsSymbol);
         il.Emit(OpCodes.Brtrue, symbolKeyLabel);
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ldloc, keyLocal);
@@ -1571,7 +2023,7 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(symbolKeyLabel);
         il.Emit(OpCodes.Ldloc, resultLocal);
-        il.Emit(OpCodes.Call, runtime.Symbols.GetStorage);
+        il.Emit(OpCodes.Call, inputs.Symbols.GetStorage);
         il.Emit(OpCodes.Ldloc, keyLocal);
         il.Emit(OpCodes.Ldloc, descLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(

@@ -139,7 +139,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Dup);
             il.Emit(OpCodes.Ldc_I4_5);
             il.Emit(OpCodes.Ldnull);
-            il.Emit(OpCodes.Ldftn, runtime.ObjectGetOwnPropertyDescriptor);
+            il.Emit(OpCodes.Ldftn, runtime.ObjectDescriptors.GetOwnPropertyDescriptor);
             il.Emit(OpCodes.Newobj, _types.GetConstructor(
                 typeof(Func<object, object, object?>), _types.Object, _types.IntPtr));
             il.Emit(OpCodes.Stelem_Ref);
@@ -203,7 +203,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Dup);
             il.Emit(OpCodes.Ldc_I4_3);
             il.Emit(OpCodes.Ldnull);
-            il.Emit(OpCodes.Ldftn, runtime.ObjectGetOwnPropertyDescriptor);
+            il.Emit(OpCodes.Ldftn, runtime.ObjectDescriptors.GetOwnPropertyDescriptor);
             il.Emit(OpCodes.Newobj, _types.GetConstructor(
                 typeof(Func<object, object, object?>), _types.Object, _types.IntPtr));
             il.Emit(OpCodes.Stelem_Ref);
@@ -260,7 +260,7 @@ public partial class RuntimeEmitter
             il,
             new ProxySetCallInputs(
                 runtime.Reflect.RequireAssignment().Set,
-                runtime.ObjectGetOwnPropertyDescriptor,
+                runtime.ObjectDescriptors.GetOwnPropertyDescriptor,
                 runtime.GetProperty,
                 runtime.InvokeMethodUnwrapped
             ),
@@ -330,7 +330,7 @@ public partial class RuntimeEmitter
     {
         EmitProxyHasResult(il, emitLoadObj, emitLoadKey, notProxyLabel,
             new ProxyHasInputs(runtime.InvokeMethodUnwrapped, runtime.ProxyOrdinaryHas,
-                runtime.ObjectGetOwnPropertyDescriptor, runtime.ObjectState.IsExtensible,
+                runtime.ObjectDescriptors.GetOwnPropertyDescriptor, runtime.ObjectState.IsExtensible,
                 runtime.GetProperty, runtime.Booleans.IsTruthy));
     }
 
@@ -400,7 +400,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Stelem_Ref);
             EmitDelegateArgument(1, runtime.DeleteProperty,
                 typeof(Func<object, string, bool>));
-            EmitDelegateArgument(2, runtime.ObjectGetOwnPropertyDescriptor,
+            EmitDelegateArgument(2, runtime.ObjectDescriptors.GetOwnPropertyDescriptor,
                 typeof(Func<object, object, object?>));
             EmitDelegateArgument(3, runtime.ObjectState.IsExtensible,
                 typeof(Func<object, bool>));
@@ -536,7 +536,7 @@ public partial class RuntimeEmitter
             new ProxyOwnKeysCallInputs(
                 runtime.GetOrdinaryOwnPropertyKeys,
                 runtime.CreateProxyOwnKeysList,
-                runtime.ObjectGetOwnPropertyDescriptor,
+                runtime.ObjectDescriptors.GetOwnPropertyDescriptor,
                 runtime.ObjectState.IsExtensible,
                 runtime.Symbols.IsSymbol,
                 runtime.GetProperty,
@@ -579,13 +579,27 @@ public partial class RuntimeEmitter
         }
     }
 
+    private readonly record struct ProxyDescriptorCallInputs(
+        MethodInfo InvokeMethodUnwrapped, MethodInfo GetOwnPropertyDescriptor,
+        MethodInfo IsExtensible, MethodInfo GetProperty);
+
     /// <summary>Leaves a compiled Proxy [[GetOwnProperty]] result on stack.</summary>
     private void EmitProxyGetOwnPropertyDescriptorCompiledCall(
         ILGenerator il, EmittedRuntime runtime, Action emitLoadObj,
         Action emitLoadKey)
     {
+        EmitProxyGetOwnPropertyDescriptorCompiledCall(il,
+            new ProxyDescriptorCallInputs(runtime.InvokeMethodUnwrapped,
+                runtime.ObjectDescriptors.GetOwnPropertyDescriptor, runtime.ObjectState.IsExtensible,
+                runtime.GetProperty), emitLoadObj, emitLoadKey);
+    }
+
+    private void EmitProxyGetOwnPropertyDescriptorCompiledCall(
+        ILGenerator il, ProxyDescriptorCallInputs inputs, Action emitLoadObj,
+        Action emitLoadKey)
+    {
         EmitProxyMethodCallUnwrapped(
-            il, runtime, emitLoadObj,
+            il, inputs.InvokeMethodUnwrapped, emitLoadObj,
             "TrapGetOwnPropertyDescriptorCompiled", () =>
             {
                 il.Emit(OpCodes.Ldc_I4_4);
@@ -597,7 +611,7 @@ public partial class RuntimeEmitter
                 il.Emit(OpCodes.Dup);
                 il.Emit(OpCodes.Ldc_I4_1);
                 il.Emit(OpCodes.Ldnull);
-                il.Emit(OpCodes.Ldftn, runtime.ObjectGetOwnPropertyDescriptor);
+                il.Emit(OpCodes.Ldftn, inputs.GetOwnPropertyDescriptor);
                 il.Emit(OpCodes.Newobj, _types.GetConstructor(
                     typeof(Func<object, object, object?>),
                     _types.Object, _types.IntPtr)!);
@@ -605,7 +619,7 @@ public partial class RuntimeEmitter
                 il.Emit(OpCodes.Dup);
                 il.Emit(OpCodes.Ldc_I4_2);
                 il.Emit(OpCodes.Ldnull);
-                il.Emit(OpCodes.Ldftn, runtime.ObjectState.IsExtensible);
+                il.Emit(OpCodes.Ldftn, inputs.IsExtensible);
                 il.Emit(OpCodes.Newobj, _types.GetConstructor(
                     typeof(Func<object, bool>),
                     _types.Object, _types.IntPtr)!);
@@ -613,7 +627,7 @@ public partial class RuntimeEmitter
                 il.Emit(OpCodes.Dup);
                 il.Emit(OpCodes.Ldc_I4_3);
                 il.Emit(OpCodes.Ldnull);
-                il.Emit(OpCodes.Ldftn, runtime.GetProperty);
+                il.Emit(OpCodes.Ldftn, inputs.GetProperty);
                 il.Emit(OpCodes.Newobj, _types.GetConstructor(
                     typeof(Func<object, string, object?>),
                     _types.Object, _types.IntPtr)!);

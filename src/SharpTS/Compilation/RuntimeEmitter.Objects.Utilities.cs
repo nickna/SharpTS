@@ -127,7 +127,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, ordinaryEnumerableCheck);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloc, keyLocal);
-        il.Emit(OpCodes.Call, runtime.ObjectGetOwnPropertyDescriptor);
+        il.Emit(OpCodes.Call, runtime.ObjectDescriptors.GetOwnPropertyDescriptor);
         il.Emit(OpCodes.Stloc, descriptorLocal);
         il.Emit(OpCodes.Ldloc, descriptorLocal);
         il.Emit(OpCodes.Brfalse, nextKey);

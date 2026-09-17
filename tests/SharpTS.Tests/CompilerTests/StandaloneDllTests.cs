@@ -3708,6 +3708,375 @@ public class StandaloneDllTests
             verifyStandardError: error => Assert.Empty(error)));
     }
 
+    public static IEnumerable<object[]> ObjectDescriptorMetadataPrograms =>
+    [
+        new object[]
+        {
+            "minimal",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "console.log(1);" },
+            "1\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "data",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let obj: any = {};\nObject.defineProperty(obj, \"x\", { value: 42, writable: true, enumerable: true, configurable: true });\nconsole.log(obj.x);" },
+            "42\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "write_storage",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let sloppyObject: any = {};\nObject.defineProperty(sloppyObject, \"x\", { value: 42, writable: true });\nsloppyObject.x = 100;\nconsole.log(sloppyObject.x);\nconsole.log(Object.getOwnPropertyDescriptor(sloppyObject, \"x\").value);\n\nlet strictObject: any = {};\nObject.defineProperty(strictObject, \"x\", { value: 42, writable: true });\nfunction assignStrict() {\n    \"use strict\";\n    strictObject.x = 200;\n}\nassignStrict();\nconsole.log(strictObject.x);\nconsole.log(Object.getOwnPropertyDescriptor(strictObject, \"x\").value);" },
+            "100\n100\n200\n200\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "class_data",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "class Point {\n    x: number;\n    constructor(x: number) {\n        this.x = x;\n    }\n}\nlet p = new Point(10);\nObject.defineProperty(p, \"y\", { value: 20, writable: true, enumerable: true, configurable: true });\nconsole.log(p.x);\nconsole.log((p as any).y);" },
+            "10\n20\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "array_data",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let arr: any = [1, 2, 3];\nObject.defineProperty(arr, \"customProp\", { value: \"hello\", writable: true, enumerable: true, configurable: true });\nconsole.log(arr.customProp);\nconsole.log(arr[0]);" },
+            "hello\n1\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "array_length",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let arr: any = [1, 2, 3];\nlet desc = Object.getOwnPropertyDescriptor(arr, \"length\");\nconsole.log(desc.value);\nconsole.log(desc.writable);\nconsole.log(desc.enumerable);\nconsole.log(desc.configurable);" },
+            "3\ntrue\nfalse\nfalse\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "class_descriptor",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "class Point {\n    x: number;\n    constructor(x: number) {\n        this.x = x;\n    }\n}\nlet p = new Point(42);\nlet desc = Object.getOwnPropertyDescriptor(p, \"x\");\nconsole.log(desc.value);\nconsole.log(desc.writable);" },
+            "42\ntrue\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "roundtrip",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let obj: any = {};\nObject.defineProperty(obj, \"name\", {\n    value: \"Alice\",\n    writable: true,\n    enumerable: false,\n    configurable: true\n});\nlet desc = Object.getOwnPropertyDescriptor(obj, \"name\");\nconsole.log(desc.value);\nconsole.log(desc.writable);\nconsole.log(desc.enumerable);\nconsole.log(desc.configurable);" },
+            "Alice\ntrue\nfalse\ntrue\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "getter_setter",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let obj: any = { _value: 10 };\nObject.defineProperty(obj, \"value\", {\n    get: function() { return this._value; },\n    set: function(v: number) { this._value = v; },\n    enumerable: true,\n    configurable: true\n});\nconsole.log(obj.value);\nobj.value = 50;\nconsole.log(obj.value);" },
+            "10\n50\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "accessor",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let obj: any = { _x: 5 };\nObject.defineProperty(obj, \"x\", {\n    get: function() { return this._x; },\n    enumerable: true,\n    configurable: true\n});\nlet desc = Object.getOwnPropertyDescriptor(obj, \"x\");\nconsole.log(typeof desc.get);\nconsole.log(desc.enumerable);\nconsole.log(desc.configurable);" },
+            "function\ntrue\ntrue\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "bound_accessors",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let backing = 0;\nfunction myGetter(): number { return backing; }\nfunction mySetter(v: number): void { backing = v; }\nlet obj: any = {};\nObject.defineProperty(obj, \"val\", {\n    get: myGetter,\n    set: mySetter,\n    enumerable: true,\n    configurable: true\n});\nobj.val = 42;\nconsole.log(obj.val);" },
+            "42\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "arrow_accessors",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let storage: any = { _count: 0 };\nlet obj: any = {};\nObject.defineProperty(obj, \"count\", {\n    get: () => storage._count,\n    set: (v: number) => { storage._count = v; },\n    enumerable: true,\n    configurable: true\n});\nobj.count = 10;\nconsole.log(obj.count);\nconsole.log(storage._count);" },
+            "10\n10\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "accessor_identity",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const getter = function (): number { return 1; };\nconst setter = function (value: number): void {};\nconst descriptors: any = {\n    get: getter,\n    set: setter,\n    configurable: true\n};\nconst prototype: any = {};\nObject.defineProperty(prototype, 'value', descriptors);\nconst subject: any = Object.create(prototype);\nconsole.log(subject.__lookupGetter__('value') === descriptors.get);\nconsole.log(subject.__lookupSetter__('value') === descriptors.set);" },
+            "true\ntrue\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "inherited_value",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const proto: any = {};\nObject.defineProperty(proto, \"value\", { set() {} });\nconst Ctor: any = function () {};\nCtor.prototype = proto;\nconst child: any = new Ctor();\nconst o: any = { property: 120 };\nObject.defineProperty(o, \"property\", child);\nconsole.log(typeof o.property);" },
+            "undefined\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "partial",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const o: any = { a: 42 };\nObject.defineProperty(o, \"a\", { writable: false });\nconsole.log(o.a);" },
+            "42\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "regexp_inherited",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "(RegExp.prototype as any).enumerable = true;\nconst regObj: any = new RegExp();\nconst obj: any = {};\nObject.defineProperty(obj, \"property\", regObj);\nlet seen = false;\nfor (const p in obj) if (p === \"property\") seen = true;\nconsole.log(seen);\nconsole.log((regObj as any).enumerable);" },
+            "true\ntrue\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "define_many",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let obj: any = {};\nObject.defineProperties(obj, {\n    name: { value: \"Alice\", writable: true, enumerable: true, configurable: true },\n    age: { value: 30, writable: true, enumerable: true, configurable: true }\n});\nconsole.log(obj.name);\nconsole.log(obj.age);" },
+            "Alice\n30\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "define_accessors",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let obj: any = { _value: 0 };\nObject.defineProperties(obj, {\n    value: {\n        get: function() { return obj._value; },\n        set: function(v: number) { obj._value = v * 2; },\n        enumerable: true,\n        configurable: true\n    }\n});\nobj.value = 5;\nconsole.log(obj.value);\nconsole.log(obj._value);" },
+            "10\n10\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "all_roundtrip",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let original: any = { a: 1, b: \"hello\" };\nlet descs = Object.getOwnPropertyDescriptors(original);\nlet copy: any = Object.defineProperties({}, descs);\nconsole.log(copy.a);\nconsole.log(copy.b);" },
+            "1\nhello\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "proxy_missing",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const target: any = { attr: 1 };\nconst proxy: any = new Proxy(target, {});\nconst descriptor: any = Object.getOwnPropertyDescriptor(proxy, \"attr\");\nconsole.log(descriptor.value);\nconsole.log(descriptor.writable);\nconsole.log(descriptor.enumerable);\nconsole.log(descriptor.configurable);\nconsole.log(proxy.hasOwnProperty(\"attr\"));" },
+            "1\ntrue\ntrue\ntrue\ntrue\n",
+            false,
+            false
+        },
+        new object[]
+        {
+            "proxy_define",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const target: any = {};\nlet sawWritableField = false;\nlet sawWritableValue: any;\nconst proxy: any = new Proxy(target, {\n    defineProperty(inner: any, key: string, descriptor: any) {\n        sawWritableField = Object.prototype.hasOwnProperty.call(\n            descriptor, \"writable\");\n        sawWritableValue = descriptor.writable;\n        Object.defineProperty(inner, key, {\n            configurable: false,\n            writable: true\n        });\n        return true;\n    }\n});\ntry {\n    Reflect.defineProperty(proxy, \"prop\", { writable: false });\n    console.log(false);\n} catch (error) {\n    console.log(error instanceof TypeError);\n}\nconsole.log(sawWritableField);\nconsole.log(sawWritableValue);\nconst descriptor: any = Object.getOwnPropertyDescriptor(target, \"prop\");\nconsole.log(descriptor.writable);\nconsole.log(descriptor.configurable);" },
+            "true\ntrue\nfalse\ntrue\nfalse\n",
+            false,
+            false
+        },
+        new object[]
+        {
+            "proxy_traps",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let ordinaryGets = 0;\nconst proxy: any = new Proxy({}, {\n    ownKeys(): string[] { return ['hidden']; },\n    getOwnPropertyDescriptor(): any { return undefined; },\n    get(): any { ordinaryGets++; throw new Error('unexpected get'); }\n});\nconsole.log(Reflect.ownKeys(proxy).join(','));\nconsole.log(Object.getOwnPropertyDescriptor(proxy, 'hidden') === undefined);\nconsole.log(Object.keys(Object.getOwnPropertyDescriptors(proxy)).length);\nconsole.log(ordinaryGets);" },
+            "hidden\ntrue\n0\n0\n",
+            false,
+            false
+        },
+        new object[]
+        {
+            "array_nonwritable",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "var values = [];\nObject.defineProperty(values, \"0\", { value: 12 });\nvalues[0] = 99;\nconsole.log(values[0]);\nconsole.log(values.length);" },
+            "12\n1\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "array_generic",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "Object.defineProperty(Array.prototype, \"0\", {\n  value: 11,\n  configurable: true\n});\nvar values = [];\nObject.defineProperty(values, \"0\", { configurable: false });\nconsole.log(typeof values[0]);\nconsole.log(values.length);\ndelete Array.prototype[0];" },
+            "undefined\n1\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "accessor_replace",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "var objectValue: any = { 0: 11 };\nObject.defineProperty(objectValue, \"0\", {\n  get: function() { return 7; },\n  configurable: true\n});\nconsole.log(objectValue[0]);" },
+            "7\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "symbols",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const key = Symbol('key'); const target: any = {};\nObject.defineProperty(target, key, { value: 3, writable: true, enumerable: false, configurable: true });\nconst descriptor: any = Object.getOwnPropertyDescriptor(target, key);\nconst all: any = Object.getOwnPropertyDescriptors(target);\nconsole.log(descriptor.value, descriptor.writable, descriptor.enumerable, descriptor.configurable);\nconsole.log(all[key].value, Object.getOwnPropertySymbols(all)[0] === key);\nObject.defineProperty(target, key, { value: 4 }); console.log(target[key]);" },
+            "3 true false true\n3 true\n4\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "json_math",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "for (const key of ['parse', 'stringify', 'isRawJSON', 'rawJSON']) {\n const descriptor: any = Object.getOwnPropertyDescriptor(JSON, key);\n console.log(descriptor.value === (JSON as any)[key], descriptor.writable, descriptor.enumerable, descriptor.configurable);\n}\nconst pi: any = Object.getOwnPropertyDescriptor(Math, 'PI');\nconsole.log(pi.value === Math.PI, pi.writable, pi.enumerable, pi.configurable);" },
+            "true true false true\ntrue true false true\ntrue true false true\ntrue true false true\ntrue false false false\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "functions",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "function abc(a: number, b: number) { return a + b; }\nfor (const key of ['name', 'length']) { const d: any = Object.getOwnPropertyDescriptor(abc, key); console.log(d.value === (abc as any)[key], d.writable, d.enumerable, d.configurable); }\nconst prototype: any = Object.getOwnPropertyDescriptor(abc, 'prototype');\nconsole.log(prototype.value === (abc as any).prototype, prototype.writable, prototype.enumerable, prototype.configurable);" },
+            "true false false true\ntrue false false true\ntrue true false false\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "promise_callbacks",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "new Promise((resolve: any, reject: any) => {\n for (const fn of [resolve, reject]) { const d: any = Object.getOwnPropertyDescriptor(fn, 'length'); console.log(d.value === fn.length, d.writable, d.enumerable, d.configurable); }\n resolve(1);\n});" },
+            "true false false true\ntrue false false true\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "array_length_coercion",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let log = ''; const values: any = [1, 2, 3];\nconst length: any = { valueOf() { log += 'v'; return 1; } };\nObject.defineProperty(values, 'length', { value: length });\nconsole.log(log, values.length, values[0], values[1] === undefined);\ntry { Object.defineProperty(values, 'length', {value: 1.5}); } catch (e: any) { console.log(e instanceof RangeError); }" },
+            "vv 1 1 true\ntrue\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "esm",
+            "main.ts",
+            new string[] { "dep.ts", "main.ts" },
+            new string[] { "export const target = {}; Object.defineProperty(target, 'x', {value: 7});", "import {target} from './dep'; const d = Object.getOwnPropertyDescriptor(target, 'x'); console.log(d.value, d.writable);" },
+            "7 false\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "commonjs",
+            "main.cjs",
+            new string[] { "dep.cjs", "main.cjs" },
+            new string[] { "exports.target = {}; Object.defineProperty(exports.target, 'x', {value: 9, enumerable: true});", "const dep = require('./dep.cjs'); const all = Object.getOwnPropertyDescriptors(dep.target); console.log(all.x.value, all.x.enumerable);" },
+            "9 true\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "hosted_descriptor",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "export function descriptor() { const target = {}; Object.defineProperty(target, 'x', {value: 2}); return Object.getOwnPropertyDescriptor(target, 'x'); }" },
+            "",
+            true,
+            true
+        },
+        new object[]
+        {
+            "hosted_minimal",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "export const value = 1;" },
+            "",
+            true,
+            true
+        },
+    ];
+
+    [Theory]
+    [MemberData(nameof(ObjectDescriptorMetadataPrograms))]
+    public void Isolated_ObjectDescriptorMetadata_PreservesDescriptorsAndDeployment(
+        string name, string entry, string[] paths, string[] sources, string expected, bool hosted, bool standalone)
+    {
+        using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        for (int i = 0; i < paths.Length; i++) tempDir.CreateFile(paths[i], sources[i]);
+        var sourcePath = tempDir.GetPath(entry);
+        var dllPath = tempDir.GetPath($"object-descriptor-metadata_{name}.dll");
+        var deployment = standalone ? " --standalone" : "";
+        var hosting = hosted ? " --target dll --hosted" : "";
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --noLib --compile \"{sourcePath}\" -o \"{dllPath}\" --verify{deployment}{hosting}", tempDir.Path);
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        var references = GetAssemblyReferences(dllPath);
+        Assert.DoesNotContain("SharpTS", references);
+        Assert.Equal(hosted, references.Contains("SharpTS.Hosting.Abstractions"));
+        Assert.Equal(!standalone, File.Exists(tempDir.GetPath("SharpTS.dll")));
+        if (!hosted)
+            Assert.Equal(expected, ExecuteCompiledDllIsolated(dllPath, timeoutMs: 30000,
+                verifyStandardError: error => Assert.Empty(error)));
+    }
+
+
     public static IEnumerable<object[]> ErrorMetadataPrograms =>
     [
         new object[]

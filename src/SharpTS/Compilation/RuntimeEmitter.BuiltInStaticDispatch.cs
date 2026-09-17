@@ -149,10 +149,10 @@ public partial class RuntimeEmitter
         EmitObjectMethodLookup("getOwnPropertySymbols",   runtime.GetOwnPropertySymbols, 1);
         EmitObjectMethodLookup("getPrototypeOf",          runtime.ObjectGetPrototypeOf, 1);
         EmitObjectMethodLookup("setPrototypeOf",          runtime.ObjectSetPrototypeOf, 2);
-        EmitObjectMethodLookup("defineProperty",          runtime.ObjectDefineProperty, 3);
-        EmitObjectMethodLookup("defineProperties",        runtime.ObjectDefineProperties, 2);
-        EmitObjectMethodLookup("getOwnPropertyDescriptor",  runtime.ObjectGetOwnPropertyDescriptor, 2);
-        EmitObjectMethodLookup("getOwnPropertyDescriptors", runtime.ObjectGetOwnPropertyDescriptors, 1);
+        EmitObjectMethodLookup("defineProperty",          runtime.ObjectDescriptors.DefineProperty, 3);
+        EmitObjectMethodLookup("defineProperties",        runtime.ObjectDescriptors.DefineProperties, 2);
+        EmitObjectMethodLookup("getOwnPropertyDescriptor",  runtime.ObjectDescriptors.GetOwnPropertyDescriptor, 2);
+        EmitObjectMethodLookup("getOwnPropertyDescriptors", runtime.ObjectDescriptors.GetOwnPropertyDescriptors, 1);
         // create routes through the value-form wrapper: reflection dispatch
         // pads the missing props arg with null, which raw ObjectCreate must
         // treat as the explicit-null TypeError case.

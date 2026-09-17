@@ -334,7 +334,7 @@ public partial class RuntimeEmitter
         // snapshotted key disappeared.
         il.Emit(OpCodes.Ldloc, source);
         il.Emit(OpCodes.Ldloc, key);
-        il.Emit(OpCodes.Call, runtime.ObjectGetOwnPropertyDescriptor);
+        il.Emit(OpCodes.Call, runtime.ObjectDescriptors.GetOwnPropertyDescriptor);
         il.Emit(OpCodes.Stloc, descriptor);
         il.Emit(OpCodes.Ldloc, descriptor);
         il.Emit(OpCodes.Brfalse, nextKey);

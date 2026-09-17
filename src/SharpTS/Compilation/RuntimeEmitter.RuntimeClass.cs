@@ -888,7 +888,7 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Boolean,
             [_types.Object]);
-        DeclareObjectGetOwnPropertyDescriptor(typeBuilder, runtime);
+        DeclareObjectGetOwnPropertyDescriptor(typeBuilder, runtime.ObjectDescriptors);
         EmitHasOwnPropertyHelper(typeBuilder, runtime);
         // propertyIsEnumerable shares HasOwn's plumbing (PDS lookup + dict
         // fallback) so emit it immediately after.
@@ -1150,7 +1150,34 @@ public partial class RuntimeEmitter
         EmitObjectSeal(typeBuilder, runtime.ObjectState, new ObjectIntegrityInputs(runtime.ArrayStorage, runtime.DescriptorStorage, runtime.ObjectStorage));
         EmitObjectIsFrozen(typeBuilder, runtime.ObjectState);
         EmitObjectIsSealed(typeBuilder, runtime.ObjectState);
-        EmitObjectDefineProperty(typeBuilder, runtime);
+        EmitObjectDefineProperty(
+            typeBuilder,
+            runtime.ObjectDescriptors,
+            new ObjectDefinePropertyInputs(
+                runtime.ArrayOperations,
+                runtime.ArrayStorage,
+                runtime.Booleans,
+                runtime.BoundAnyFunctionType,
+                runtime.DescriptorStorage,
+                runtime.Errors,
+                runtime.GetProperty,
+                runtime.HasOwnPropertyHelperMethod,
+                runtime.IHasFieldsFieldsGetter,
+                runtime.IHasFieldsInterface,
+                runtime.InvokeMethodUnwrapped,
+                runtime.NumericCoercion,
+                runtime.ObjectIs,
+                runtime.ObjectState,
+                runtime.ObjectStorage,
+                runtime.Records,
+                runtime.RegExps,
+                runtime.StringCoercion,
+                runtime.Symbols,
+                runtime.TSFunctionType,
+                runtime.UndefinedInstance,
+                runtime.UndefinedType
+            )
+        );
         // Math.* adapters must precede gOPD so its Math singleton synth can
         // reach the adapter MethodBuilders to produce identity-stable
         // `desc.value === Math.X` for built-in methods. Moved up from the
@@ -1166,9 +1193,76 @@ public partial class RuntimeEmitter
         // builder only needs randomField (defined at line 215) — both
         // available now.
         EmitRandom(typeBuilder, runtime.Math, randomField);
-        EmitObjectGetOwnPropertyDescriptor(typeBuilder, runtime);
-        EmitObjectDefineProperties(typeBuilder, runtime);
-        EmitObjectGetOwnPropertyDescriptors(typeBuilder, runtime);
+        EmitObjectGetOwnPropertyDescriptor(
+            runtime.ObjectDescriptors,
+            new ObjectGetOwnPropertyDescriptorInputs(
+                runtime.ArrayStorage,
+                runtime.Dates,
+                runtime.DescriptorStorage,
+                runtime.GetEntries,
+                runtime.GetKeys,
+                runtime.GetOwnPropertyNames,
+                runtime.GetProperty,
+                runtime.GlobalThisGetProperty,
+                runtime.GlobalThisSingletonField,
+                runtime.IHasFieldsFieldsGetter,
+                runtime.IHasFieldsInterface,
+                runtime.Json,
+                runtime.LookupBuiltInStaticMember,
+                runtime.Math,
+                runtime.ObjectAssign,
+                runtime.ObjectFromEntries,
+                runtime.ObjectHasOwn,
+                runtime.ObjectIs,
+                runtime.ObjectState,
+                runtime.ObjectStorage,
+                runtime.Promise,
+                new ProxyDescriptorCallInputs(
+                    runtime.InvokeMethodUnwrapped,
+                    runtime.ObjectDescriptors.GetOwnPropertyDescriptor,
+                    runtime.ObjectState.IsExtensible,
+                    runtime.GetProperty
+                ),
+                runtime.RegExps,
+                runtime.StringCoercion,
+                runtime.Symbols,
+                runtime.TSFunctionGetOrCreate,
+                runtime.TSFunctionType,
+                runtime.UndefinedInstance,
+                runtime.UndefinedType
+            )
+        );
+        EmitObjectDefineProperties(
+            typeBuilder,
+            runtime.ObjectDescriptors,
+            new ObjectDefinePropertiesInputs(
+                runtime.Errors,
+                runtime.GetKeys,
+                runtime.GetProperty,
+                runtime.Symbols,
+                runtime.UndefinedType
+            )
+        );
+        EmitObjectGetOwnPropertyDescriptors(
+            typeBuilder,
+            runtime.ObjectDescriptors,
+            new ObjectGetOwnPropertyDescriptorsInputs(
+                runtime.Errors,
+                runtime.GetOrdinaryOwnPropertyKeys,
+                new ProxyOwnKeysCallInputs(
+                    runtime.GetOrdinaryOwnPropertyKeys,
+                    runtime.CreateProxyOwnKeysList,
+                    runtime.ObjectDescriptors.GetOwnPropertyDescriptor,
+                    runtime.ObjectState.IsExtensible,
+                    runtime.Symbols.IsSymbol,
+                    runtime.GetProperty,
+                    runtime.InvokeMethodUnwrapped
+                ),
+                runtime.Symbols,
+                runtime.UndefinedInstance,
+                runtime.UndefinedType
+            )
+        );
         EmitObjectCreate(typeBuilder, runtime, prototypeStoreField);
         // Promise keyed-combinator shells are declared with Promise methods,
         // but their implementation needs all of the object-model helpers above.
@@ -1197,7 +1291,7 @@ public partial class RuntimeEmitter
             runtime.Reflect,
             new ReflectGetInputs(
                 runtime.InvokeMethodUnwrapped,
-                runtime.ObjectGetOwnPropertyDescriptor,
+                runtime.ObjectDescriptors.GetOwnPropertyDescriptor,
                 runtime.HasOwnPropertyHelperMethod,
                 runtime.GetFunctionMethod,
                 runtime.InvokeMethodValue,
@@ -1214,11 +1308,11 @@ public partial class RuntimeEmitter
                 new ReflectSetInputs(
                     new ProxySetCallInputs(
                         runtime.Reflect.RequireAssignment().Set,
-                        runtime.ObjectGetOwnPropertyDescriptor,
+                        runtime.ObjectDescriptors.GetOwnPropertyDescriptor,
                         runtime.GetProperty,
                         runtime.InvokeMethodUnwrapped
                     ),
-                    runtime.ObjectGetOwnPropertyDescriptor,
+                    runtime.ObjectDescriptors.GetOwnPropertyDescriptor,
                     runtime.DescriptorStorage.IsFrozen,
                     runtime.HasOwnPropertyHelperMethod,
                     runtime.StringCoercion.ToJsString,
@@ -1235,10 +1329,10 @@ public partial class RuntimeEmitter
                 runtime.Reflect.RequireAssignment(),
                 new ReflectDefinePropertyInputs(
                     runtime.InvokeMethodUnwrapped,
-                    runtime.ObjectGetOwnPropertyDescriptor,
+                    runtime.ObjectDescriptors.GetOwnPropertyDescriptor,
                     runtime.HasOwnPropertyHelperMethod,
                     runtime.StringCoercion.ToJsString,
-                    runtime.ObjectDefineProperty,
+                    runtime.ObjectDescriptors.DefineProperty,
                     runtime.ObjectState.IsExtensible,
                     runtime.GetProperty
                 )
@@ -1251,7 +1345,7 @@ public partial class RuntimeEmitter
                 runtime.Reflect.RequireNamespace(),
                 new ReflectDeletePropertyInputs(
                     runtime.InvokeMethodUnwrapped,
-                    runtime.ObjectGetOwnPropertyDescriptor,
+                    runtime.ObjectDescriptors.GetOwnPropertyDescriptor,
                     runtime.StringCoercion.ToJsString,
                     runtime.ObjectState.IsExtensible,
                     runtime.DeleteProperty,
@@ -1295,7 +1389,7 @@ public partial class RuntimeEmitter
                     new ProxyOwnKeysCallInputs(
                         runtime.GetOrdinaryOwnPropertyKeys,
                         runtime.CreateProxyOwnKeysList,
-                        runtime.ObjectGetOwnPropertyDescriptor,
+                        runtime.ObjectDescriptors.GetOwnPropertyDescriptor,
                         runtime.ObjectState.IsExtensible,
                         runtime.Symbols.IsSymbol,
                         runtime.GetProperty,
@@ -1337,7 +1431,7 @@ public partial class RuntimeEmitter
                     runtime.Reflect.Get,
                     runtime.Reflect.RequireAssignment().Set,
                     runtime.Reflect.RequireAssignment().DefineProperty,
-                    runtime.ObjectGetOwnPropertyDescriptor,
+                    runtime.ObjectDescriptors.GetOwnPropertyDescriptor,
                     runtime.StringCoercion.ToJsString,
                     runtime.ObjectGetPrototypeOf,
                     runtime.ObjectState.IsExtensible,
@@ -1635,7 +1729,7 @@ public partial class RuntimeEmitter
                     runtime.InvokeMethodUnwrapped,
                     runtime.NormalizeOwnPropertyKeys,
                     runtime.NumericCoercion,
-                    runtime.ObjectDefineProperty,
+                    runtime.ObjectDescriptors.DefineProperty,
                     runtime.TSFunctionInvokeWithThis,
                     runtime.TSFunctionType,
                     runtime.UndefinedType
@@ -1851,7 +1945,7 @@ public partial class RuntimeEmitter
                 new ProxyHasInputs(
                     runtime.InvokeMethodUnwrapped,
                     runtime.ProxyOrdinaryHas,
-                    runtime.ObjectGetOwnPropertyDescriptor,
+                    runtime.ObjectDescriptors.GetOwnPropertyDescriptor,
                     runtime.ObjectState.IsExtensible,
                     runtime.GetProperty,
                     runtime.Booleans.IsTruthy

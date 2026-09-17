@@ -162,7 +162,7 @@ public sealed class ObjectStaticEmitter : IStaticTypeEmitterStrategy
                 {
                     il.Emit(OpCodes.Ldnull);
                 }
-                il.Emit(OpCodes.Call, ctx.Runtime!.ObjectDefineProperty);
+                il.Emit(OpCodes.Call, ctx.Runtime!.ObjectDescriptors.DefineProperty);
                 return true;
             case "getOwnPropertyDescriptor":
                 // Object.getOwnPropertyDescriptor(obj, prop) - gets a property descriptor.
@@ -180,7 +180,7 @@ public sealed class ObjectStaticEmitter : IStaticTypeEmitterStrategy
                 {
                     il.Emit(OpCodes.Ldnull);
                 }
-                il.Emit(OpCodes.Call, ctx.Runtime!.ObjectGetOwnPropertyDescriptor);
+                il.Emit(OpCodes.Call, ctx.Runtime!.ObjectDescriptors.GetOwnPropertyDescriptor);
                 return true;
             case "getOwnPropertyNames":
                 // Object.getOwnPropertyNames(obj) - gets all own property names
@@ -265,12 +265,12 @@ public sealed class ObjectStaticEmitter : IStaticTypeEmitterStrategy
                 {
                     il.Emit(OpCodes.Ldnull);
                 }
-                il.Emit(OpCodes.Call, ctx.Runtime!.ObjectDefineProperties);
+                il.Emit(OpCodes.Call, ctx.Runtime!.ObjectDescriptors.DefineProperties);
                 return true;
             case "getOwnPropertyDescriptors":
                 // Object.getOwnPropertyDescriptors(obj) - gets all property descriptors
                 // First argument (obj) is already on the stack
-                il.Emit(OpCodes.Call, ctx.Runtime!.ObjectGetOwnPropertyDescriptors);
+                il.Emit(OpCodes.Call, ctx.Runtime!.ObjectDescriptors.GetOwnPropertyDescriptors);
                 return true;
             default:
                 // Pop the argument we pushed and return false
