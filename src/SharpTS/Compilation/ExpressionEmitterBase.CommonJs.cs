@@ -249,7 +249,7 @@ public abstract partial class ExpressionEmitterBase
                 {
                     IL.Emit(OpCodes.Ldnull);
                     Ctx.Types.EmitLoadMethodInfoViaHandle(IL, helperMethod);
-                    IL.Emit(OpCodes.Newobj, Ctx.Runtime!.TSFunctionCtor);
+                    IL.Emit(OpCodes.Newobj, Ctx.Runtime!.FunctionConstruction.Constructor);
                 }
                 else
                 {

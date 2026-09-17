@@ -497,7 +497,7 @@ public partial class ILCompiler
                     il.Emit(OpCodes.Call, getMethodFromHandleWithType);
                     il.Emit(OpCodes.Castclass, _types.MethodInfo);
                 }
-                il.Emit(OpCodes.Newobj, _runtime.TSFunctionCtor);
+                il.Emit(OpCodes.Newobj, _runtime.FunctionConstruction.Constructor);
                 il.Emit(OpCodes.Ret);
 
                 il.MarkLabel(nextLabel);
@@ -525,7 +525,7 @@ public partial class ILCompiler
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldloc, strMethodLocal);
             il.Emit(OpCodes.Castclass, _types.MethodInfo);
-            il.Emit(OpCodes.Newobj, _runtime.TSFunctionCtor);
+            il.Emit(OpCodes.Newobj, _runtime.FunctionConstruction.Constructor);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(noStrMethodLabel);
         }
@@ -859,7 +859,7 @@ public partial class ILCompiler
                     il.Emit(OpCodes.Call, getMethodFromHandleWithType);
                     il.Emit(OpCodes.Castclass, _types.MethodInfo);
                 }
-                il.Emit(OpCodes.Newobj, _runtime.TSFunctionCtor);
+                il.Emit(OpCodes.Newobj, _runtime.FunctionConstruction.Constructor);
                 il.Emit(OpCodes.Ret);
 
                 il.MarkLabel(nextLabel);
@@ -883,7 +883,7 @@ public partial class ILCompiler
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldloc, computedMethodLocal);
             il.Emit(OpCodes.Castclass, _types.MethodInfo);
-            il.Emit(OpCodes.Newobj, _runtime.TSFunctionCtor);
+            il.Emit(OpCodes.Newobj, _runtime.FunctionConstruction.Constructor);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(noComputedMethodLabel);
         }

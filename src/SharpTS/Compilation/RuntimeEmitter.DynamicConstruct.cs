@@ -123,7 +123,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
         il.Emit(OpCodes.Bne_Un, notFunctionType);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.FunctionConstructor);
+        il.Emit(OpCodes.Call, runtime.FunctionConstruction.Construct);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notFunctionType);
 

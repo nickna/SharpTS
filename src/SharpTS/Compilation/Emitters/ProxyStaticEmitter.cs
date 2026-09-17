@@ -53,7 +53,7 @@ public sealed class ProxyStaticEmitter : IStaticTypeEmitterStrategy
         ctx.Types.EmitLoadMethodInfo(ctx.IL, ctx.Runtime!.CreateRevocableProxy);
         ctx.IL.Emit(OpCodes.Ldstr, "revocable");
         ctx.IL.Emit(OpCodes.Ldc_I4_2);
-        ctx.IL.Emit(OpCodes.Call, ctx.Runtime.TSFunctionGetOrCreate);
+        ctx.IL.Emit(OpCodes.Call, ctx.Runtime.FunctionConstruction.GetOrCreate);
         return true;
     }
 

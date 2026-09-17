@@ -687,7 +687,7 @@ public partial class RuntimeEmitter
         _types.EmitLoadMethodInfoViaHandle(il, timerPromises.AsyncIntervalClosureNext);
         il.Emit(OpCodes.Ldstr, "next");
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Newobj, runtime.TSFunctionCtorWithCache);
+        il.Emit(OpCodes.Newobj, runtime.FunctionConstruction.CachedConstructor);
         il.Emit(OpCodes.Callvirt, dictSetItem);
 
         // dict["return"] = new $TSFunction(closure, closure.Return, "return", 1);
@@ -697,7 +697,7 @@ public partial class RuntimeEmitter
         _types.EmitLoadMethodInfoViaHandle(il, timerPromises.AsyncIntervalClosureReturn);
         il.Emit(OpCodes.Ldstr, "return");
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Newobj, runtime.TSFunctionCtorWithCache);
+        il.Emit(OpCodes.Newobj, runtime.FunctionConstruction.CachedConstructor);
         il.Emit(OpCodes.Callvirt, dictSetItem);
 
         // Set Symbol.asyncIterator on dict → TSFunction that returns dict itself
@@ -709,7 +709,7 @@ public partial class RuntimeEmitter
         _types.EmitLoadMethodInfoViaHandle(il, timerPromises.AsyncIntervalClosureGetSelf);
         il.Emit(OpCodes.Ldstr, "[Symbol.asyncIterator]");
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Newobj, runtime.TSFunctionCtorWithCache);
+        il.Emit(OpCodes.Newobj, runtime.FunctionConstruction.CachedConstructor);
         var symbolDictSetItem = _types.GetMethod(_types.DictionaryObjectObject, "set_Item", [_types.Object, _types.Object])!;
         il.Emit(OpCodes.Callvirt, symbolDictSetItem);
 
@@ -804,7 +804,7 @@ public partial class RuntimeEmitter
         _types.EmitLoadMethodInfoViaHandle(il, timerPromises.AsyncIntervalClosureNext);
         il.Emit(OpCodes.Ldstr, "next");
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Newobj, runtime.TSFunctionCtorWithCache);
+        il.Emit(OpCodes.Newobj, runtime.FunctionConstruction.CachedConstructor);
         il.Emit(OpCodes.Callvirt, dictSetItem);
 
         // dict["return"] = new $TSFunction(closure, closure.Return, "return", 1);
@@ -814,7 +814,7 @@ public partial class RuntimeEmitter
         _types.EmitLoadMethodInfoViaHandle(il, timerPromises.AsyncIntervalClosureReturn);
         il.Emit(OpCodes.Ldstr, "return");
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Newobj, runtime.TSFunctionCtorWithCache);
+        il.Emit(OpCodes.Newobj, runtime.FunctionConstruction.CachedConstructor);
         il.Emit(OpCodes.Callvirt, dictSetItem);
 
         // GetSymbolDict(dict)[Symbol.asyncIterator] = closure.GetSelf
@@ -825,7 +825,7 @@ public partial class RuntimeEmitter
         _types.EmitLoadMethodInfoViaHandle(il, timerPromises.AsyncIntervalClosureGetSelf);
         il.Emit(OpCodes.Ldstr, "[Symbol.asyncIterator]");
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Newobj, runtime.TSFunctionCtorWithCache);
+        il.Emit(OpCodes.Newobj, runtime.FunctionConstruction.CachedConstructor);
         var symbolDictSetItem = _types.GetMethod(_types.DictionaryObjectObject, "set_Item", [_types.Object, _types.Object])!;
         il.Emit(OpCodes.Callvirt, symbolDictSetItem);
 

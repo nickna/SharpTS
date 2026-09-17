@@ -196,7 +196,7 @@ public sealed class PromiseStaticEmitter : IStaticTypeEmitterStrategy
         ctx.Types.EmitLoadMethodInfo(il, method);
         il.Emit(OpCodes.Ldstr, propertyName);
         il.Emit(OpCodes.Ldc_I4, specLength);
-        il.Emit(OpCodes.Call, runtime.TSFunctionGetOrCreate);
+        il.Emit(OpCodes.Call, runtime.FunctionConstruction.GetOrCreate);
         return true;
     }
 

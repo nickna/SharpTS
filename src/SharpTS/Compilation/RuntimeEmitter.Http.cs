@@ -3018,7 +3018,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldtoken, http.AgentDestroyMethod);
         il.Emit(OpCodes.Call, _types.MethodBaseGetMethodFromHandle);
         il.Emit(OpCodes.Castclass, _types.MethodInfo);
-        il.Emit(OpCodes.Newobj, runtime.TSFunctionCtor);
+        il.Emit(OpCodes.Newobj, runtime.FunctionConstruction.Constructor);
         il.Emit(OpCodes.Call, runtime.ObjectWrite.Property);
 
         // Add getName method as TSFunction
@@ -3028,7 +3028,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldtoken, http.AgentGetNameMethod);
         il.Emit(OpCodes.Call, _types.MethodBaseGetMethodFromHandle);
         il.Emit(OpCodes.Castclass, _types.MethodInfo);
-        il.Emit(OpCodes.Newobj, runtime.TSFunctionCtor);
+        il.Emit(OpCodes.Newobj, runtime.FunctionConstruction.Constructor);
         il.Emit(OpCodes.Call, runtime.ObjectWrite.Property);
     }
 
@@ -3221,7 +3221,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldtoken, factoryMethod);
             il.Emit(OpCodes.Call, _types.MethodBaseGetMethodFromHandle);
             il.Emit(OpCodes.Castclass, _types.MethodInfo);
-            il.Emit(OpCodes.Newobj, runtime.TSFunctionCtor);
+            il.Emit(OpCodes.Newobj, runtime.FunctionConstruction.Constructor);
             il.Emit(OpCodes.Ret);
         }
     }

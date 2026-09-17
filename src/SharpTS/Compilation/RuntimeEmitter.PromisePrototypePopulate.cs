@@ -225,7 +225,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Castclass, _types.MethodInfo);
             il.Emit(OpCodes.Ldstr, string.Empty);
             il.Emit(OpCodes.Ldc_I4_0);
-            il.Emit(OpCodes.Newobj, runtime.TSFunctionCtorWithCache);
+            il.Emit(OpCodes.Newobj, runtime.FunctionConstruction.CachedConstructor);
             il.Emit(OpCodes.Stloc, thunkFunctionLocal);
 
             // return Invoke(promise, "then", « thunkFunction »)
@@ -340,7 +340,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Castclass, _types.MethodInfo);
         il.Emit(OpCodes.Ldstr, string.Empty);
         il.Emit(OpCodes.Ldc_I4, length);
-        il.Emit(OpCodes.Newobj, runtime.TSFunctionCtorWithCache);
+        il.Emit(OpCodes.Newobj, runtime.FunctionConstruction.CachedConstructor);
     }
 
     /// <summary>

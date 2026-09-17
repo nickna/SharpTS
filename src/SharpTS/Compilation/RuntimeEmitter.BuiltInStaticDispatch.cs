@@ -87,7 +87,7 @@ public partial class RuntimeEmitter
             _types.EmitLoadMethodInfo(il, backingMethod);
             il.Emit(OpCodes.Ldstr, memberName);
             il.Emit(OpCodes.Ldc_I4, specLength);
-            il.Emit(OpCodes.Call, runtime.TSFunctionGetOrCreate);
+            il.Emit(OpCodes.Call, runtime.FunctionConstruction.GetOrCreate);
             il.Emit(OpCodes.Ret);
 
             il.MarkLabel(skipLabel);
@@ -132,7 +132,7 @@ public partial class RuntimeEmitter
             _types.EmitLoadMethodInfo(il, backingMethod);
             il.Emit(OpCodes.Ldstr, memberName);
             il.Emit(OpCodes.Ldc_I4, specLength);
-            il.Emit(OpCodes.Call, runtime.TSFunctionGetOrCreate);
+            il.Emit(OpCodes.Call, runtime.FunctionConstruction.GetOrCreate);
             il.Emit(OpCodes.Ret);
 
             il.MarkLabel(skipLabel);

@@ -112,7 +112,7 @@ public partial class RuntimeEmitter
         if (helper is null) return;
         EmitWirePrototypeMethodDescriptor(il, new PrototypeDescriptorInputs(runtime.DescriptorStorage.DescriptorConstructor,
             runtime.DescriptorStorage.DescriptorValue.GetSetMethod()!, runtime.DescriptorStorage.DescriptorEnumerable.GetSetMethod()!,
-            runtime.DescriptorStorage.DefineProperty), runtime.TSFunctionGetOrCreate,
+            runtime.DescriptorStorage.DefineProperty), runtime.FunctionConstruction.GetOrCreate,
             protoField, descLocal, setItem, jsName, helper, jsLength, nameThisParam);
     }
 

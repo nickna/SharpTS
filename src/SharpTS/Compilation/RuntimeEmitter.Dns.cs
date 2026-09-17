@@ -655,7 +655,7 @@ public partial class RuntimeEmitter
         getterIl.Emit(OpCodes.Ldtoken, implMethod);
         getterIl.Emit(OpCodes.Call, _types.MethodBaseGetMethodFromHandle);
         getterIl.Emit(OpCodes.Castclass, _types.MethodInfo);
-        getterIl.Emit(OpCodes.Newobj, runtime.TSFunctionCtor);
+        getterIl.Emit(OpCodes.Newobj, runtime.FunctionConstruction.Constructor);
         getterIl.Emit(OpCodes.Ret);
     }
 
@@ -733,7 +733,7 @@ public partial class RuntimeEmitter
         getterIl.Emit(OpCodes.Ldtoken, implMethod);
         getterIl.Emit(OpCodes.Call, _types.MethodBaseGetMethodFromHandle);
         getterIl.Emit(OpCodes.Castclass, _types.MethodInfo);
-        getterIl.Emit(OpCodes.Newobj, runtime.TSFunctionCtor);
+        getterIl.Emit(OpCodes.Newobj, runtime.FunctionConstruction.Constructor);
         getterIl.Emit(OpCodes.Ret);
     }
 

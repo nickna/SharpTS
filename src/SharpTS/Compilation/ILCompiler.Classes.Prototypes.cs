@@ -275,7 +275,7 @@ public partial class ILCompiler
                     il.Emit(OpCodes.Ldtoken, selfType);
                     il.Emit(OpCodes.Call, _types.MethodBaseGetMethodFromHandleWithType);
                     il.Emit(OpCodes.Castclass, _types.MethodInfo);
-                    il.Emit(OpCodes.Newobj, _runtime.TSFunctionCtor);
+                    il.Emit(OpCodes.Newobj, _runtime.FunctionConstruction.Constructor);
                 });
             }
         }
@@ -359,7 +359,7 @@ public partial class ILCompiler
             il.Emit(OpCodes.Ldtoken, selfType);
             il.Emit(OpCodes.Call, _types.MethodBaseGetMethodFromHandleWithType);
             il.Emit(OpCodes.Castclass, _types.MethodInfo);
-            il.Emit(OpCodes.Newobj, _runtime.TSFunctionCtor);
+            il.Emit(OpCodes.Newobj, _runtime.FunctionConstruction.Constructor);
         }
     }
 }

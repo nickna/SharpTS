@@ -681,7 +681,7 @@ public partial class ILEmitter
         }
 
         IL.Emit(OpCodes.Castclass, _ctx.Types.MethodInfo);
-        IL.Emit(OpCodes.Newobj, _ctx.Runtime!.TSFunctionCtor);
+        IL.Emit(OpCodes.Newobj, _ctx.Runtime!.FunctionConstruction.Constructor);
     }
 
     /// <summary>
@@ -944,7 +944,7 @@ public partial class ILEmitter
         {
             IL.Emit(OpCodes.Ldnull); // target (null for static methods)
             _ctx.Types.EmitLoadMethodInfoViaHandle(IL, helperMethod);
-            IL.Emit(OpCodes.Newobj, _ctx.Runtime!.TSFunctionCtor);
+            IL.Emit(OpCodes.Newobj, _ctx.Runtime!.FunctionConstruction.Constructor);
         }
         else
         {

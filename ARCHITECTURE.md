@@ -330,6 +330,14 @@ carrier; the strict SyntaxError helper retains its existing CLR exception repres
 Exception wrapping follows supplied optional Promise metadata. Error-cause Proxy handling
 receives six explicit invocation/delegate handles through the shared reflection bridge.
 
+Function construction uses required `FunctionConstruction` ownership for ordinary
+and cached wrapper constructors, the identity-preserving wrapper factory, and
+dynamic Function construction. The owner completes after the original function
+wrapper type is created. Dynamic construction receives only that owner and its
+exact global/undefined declarations. Factory keys preserve method, name and arity;
+per-output instance and invoker caches remain independent across repeated emission.
+Invocation metadata, argument context and binding wrappers remain separate work.
+
 Function attribute metadata uses required `FunctionAttributes` ownership for the
 seventeen handles of seven attribute classes. Each class is created in its original
 order, and the owner completes before function-wrapper emission. Attribute emitters

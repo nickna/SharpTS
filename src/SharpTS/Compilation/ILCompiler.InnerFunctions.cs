@@ -921,7 +921,7 @@ public partial class ILCompiler
             il.Emit(OpCodes.Ldtoken, displayClass);
             il.Emit(OpCodes.Call, _types.MethodBaseGetMethodFromHandleWithType);
             il.Emit(OpCodes.Castclass, _types.MethodInfo);
-            il.Emit(OpCodes.Newobj, _runtime.TSFunctionCtor);
+            il.Emit(OpCodes.Newobj, _runtime.FunctionConstruction.Constructor);
         }
         else
         {
@@ -930,7 +930,7 @@ public partial class ILCompiler
             il.Emit(OpCodes.Ldtoken, method);
             il.Emit(OpCodes.Call, _types.MethodBaseGetMethodFromHandle);
             il.Emit(OpCodes.Castclass, _types.MethodInfo);
-            il.Emit(OpCodes.Newobj, _runtime.TSFunctionCtor);
+            il.Emit(OpCodes.Newobj, _runtime.FunctionConstruction.Constructor);
         }
 
         // Store TSFunction in the appropriate location
@@ -1064,7 +1064,7 @@ public partial class ILCompiler
                 int arity = ctx.GetFunctionLength(capturedFuncMethod);
                 il.Emit(OpCodes.Ldstr, ctx.GetFunctionName(capturedFuncMethod, capturedVar));
                 il.Emit(OpCodes.Ldc_I4, arity);
-                il.Emit(OpCodes.Call, ctx.Runtime!.TSFunctionGetOrCreate);
+                il.Emit(OpCodes.Call, ctx.Runtime!.FunctionConstruction.GetOrCreate);
             }
             else
             {

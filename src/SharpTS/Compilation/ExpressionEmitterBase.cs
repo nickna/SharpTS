@@ -1872,7 +1872,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
         // state trips ILVerify PathStackDepth into an InvalidProgramException.
         IL.Emit(OpCodes.Ldnull);
         Types.EmitLoadMethodInfoViaHandle(IL, method);
-        IL.Emit(OpCodes.Newobj, Ctx.Runtime!.TSFunctionCtor);
+        IL.Emit(OpCodes.Newobj, Ctx.Runtime!.FunctionConstruction.Constructor);
         SetStackUnknown();
     }
 
@@ -1911,7 +1911,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
     {
         EmitCapturingArrowDisplayViaHooks(af, displayCtor);
         Types.EmitLoadMethodInfoViaHandle(IL, method);
-        IL.Emit(OpCodes.Newobj, Ctx.Runtime!.TSFunctionCtor);
+        IL.Emit(OpCodes.Newobj, Ctx.Runtime!.FunctionConstruction.Constructor);
         SetStackUnknown();
     }
 
@@ -2084,7 +2084,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
             int arity = Ctx.GetFunctionLength(funcMethod);
             IL.Emit(OpCodes.Ldstr, Ctx.GetFunctionName(funcMethod, name));
             IL.Emit(OpCodes.Ldc_I4, arity);
-            IL.Emit(OpCodes.Call, Ctx.Runtime!.TSFunctionGetOrCreate);
+            IL.Emit(OpCodes.Call, Ctx.Runtime!.FunctionConstruction.GetOrCreate);
             SetStackUnknown();
             return true;
         }
@@ -2395,7 +2395,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
 
         IL.Emit(OpCodes.Ldnull);
         Types.EmitLoadMethodInfoViaHandle(IL, method);
-        IL.Emit(OpCodes.Newobj, Ctx.Runtime!.TSFunctionCtor);
+        IL.Emit(OpCodes.Newobj, Ctx.Runtime!.FunctionConstruction.Constructor);
         SetStackUnknown();
         return true;
     }

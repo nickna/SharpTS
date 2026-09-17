@@ -91,7 +91,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldtoken, _types.ListOfObject);
         il.Emit(OpCodes.Call, _types.MethodBaseGetMethodFromHandleWithType);
         il.Emit(OpCodes.Castclass, _types.MethodInfo);
-        il.Emit(OpCodes.Newobj, runtime.TSFunctionCtor);
+        il.Emit(OpCodes.Newobj, runtime.FunctionConstruction.Constructor);
         il.Emit(OpCodes.Ret);
 
         // Handle pop - need special handling since pop returns removed element
@@ -402,7 +402,7 @@ public partial class RuntimeEmitter
             [_types.Type, _types.Type])!);
         il.Emit(OpCodes.Brfalse, notFunctionTypeLabel);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.FunctionConstructor);
+        il.Emit(OpCodes.Call, runtime.FunctionConstruction.Construct);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notFunctionTypeLabel);
 
@@ -1297,7 +1297,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(foundLabel);
         il.Emit(OpCodes.Ldarg_0); // instance (target for the bound method)
         il.Emit(OpCodes.Ldloc, methodInfoLocal);
-        il.Emit(OpCodes.Newobj, runtime.TSFunctionCtor);
+        il.Emit(OpCodes.Newobj, runtime.FunctionConstruction.Constructor);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(nullLabel);

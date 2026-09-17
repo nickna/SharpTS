@@ -32,7 +32,7 @@ public sealed class ArrayBufferStaticEmitter : IStaticTypeEmitterStrategy
         ctx.Types.EmitLoadMethodInfo(ctx.IL, ctx.Runtime!.RequireArrayBuffer().IsView);
         ctx.IL.Emit(OpCodes.Ldstr, "isView");
         ctx.IL.Emit(OpCodes.Ldc_I4_1);
-        ctx.IL.Emit(OpCodes.Call, ctx.Runtime.TSFunctionGetOrCreate);
+        ctx.IL.Emit(OpCodes.Call, ctx.Runtime.FunctionConstruction.GetOrCreate);
         return true;
     }
 

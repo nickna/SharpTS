@@ -7,7 +7,13 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
-    private void EmitFunctionConstructor(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private readonly record struct FunctionConstructorInputs(FieldBuilder GlobalThisSingletonField, FieldInfo UndefinedInstance, Type UndefinedType);
+
+    private void EmitFunctionConstructor(
+        TypeBuilder typeBuilder,
+        EmittedFunctionConstructionRuntime functionConstruction,
+        FunctionConstructorInputs inputs
+    )
     {
         // These are ordinary sloppy functions, with the same receiver binding
         // as guest functions. Keep them off $Runtime, whose methods are branded
@@ -16,7 +22,7 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static, _types.Object, [_types.Object]);
         emptyBody.DefineParameter(1, ParameterAttributes.None, "__this");
         var emptyIL = emptyBody.GetILGenerator();
-        emptyIL.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        emptyIL.Emit(OpCodes.Ldsfld, inputs.UndefinedInstance);
         emptyIL.Emit(OpCodes.Ret);
 
         var returnThisBody = typeBuilder.DefineMethod("ReturnThisFunctionBody",
@@ -27,17 +33,17 @@ public partial class RuntimeEmitter
         bodyIL.Emit(OpCodes.Ldarg_0);
         bodyIL.Emit(OpCodes.Brfalse, useGlobal);
         bodyIL.Emit(OpCodes.Ldarg_0);
-        bodyIL.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        bodyIL.Emit(OpCodes.Isinst, inputs.UndefinedType);
         bodyIL.Emit(OpCodes.Brtrue, useGlobal);
         bodyIL.Emit(OpCodes.Ldarg_0);
         bodyIL.Emit(OpCodes.Ret);
         bodyIL.MarkLabel(useGlobal);
-        bodyIL.Emit(OpCodes.Ldsfld, runtime.GlobalThisSingletonField);
+        bodyIL.Emit(OpCodes.Ldsfld, inputs.GlobalThisSingletonField);
         bodyIL.Emit(OpCodes.Ret);
 
         var method = typeBuilder.DefineMethod("ConstructFunction",
             MethodAttributes.Public | MethodAttributes.Static, typeBuilder, [_types.ObjectArray]);
-        runtime.FunctionConstructor = method;
+        functionConstruction.Construct = method;
         var il = method.GetILGenerator();
         var body = il.DeclareLocal(_types.String);
         var empty = il.DefineLabel();
@@ -82,7 +88,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Castclass, _types.MethodInfo);
         il.Emit(OpCodes.Ldstr, "anonymous");
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Newobj, runtime.TSFunctionCtorWithCache);
+        il.Emit(OpCodes.Newobj, functionConstruction.CachedConstructor);
         il.Emit(OpCodes.Ret);
     }
 }

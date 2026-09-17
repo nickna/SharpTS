@@ -648,7 +648,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Brfalse, skipLabel);
             il.Emit(OpCodes.Ldarg_0);
             _types.EmitLoadMethodInfo(il, helper);
-            il.Emit(OpCodes.Newobj, runtime.TSFunctionCtor);
+            il.Emit(OpCodes.Newobj, runtime.FunctionConstruction.Constructor);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(skipLabel);
         }
