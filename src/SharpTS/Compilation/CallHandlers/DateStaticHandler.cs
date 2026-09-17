@@ -26,7 +26,7 @@ public class DateStaticHandler : ICallHandler
 
         switch (dateGet.Name.Lexeme)
         {
-            case "now":
+            case "now" when ctx.Runtime?.Dates.Implementation != null:
                 il.Emit(OpCodes.Call, ctx.Runtime!.Dates.RequireImplementation().Now);
                 emitter.SetStackType(StackType.Double);
                 return true;

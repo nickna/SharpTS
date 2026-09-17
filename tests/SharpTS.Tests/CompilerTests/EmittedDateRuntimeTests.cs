@@ -2,6 +2,8 @@ using System.Collections;
 using System.Reflection;
 using System.Reflection.Emit;
 using SharpTS.Compilation;
+using SharpTS.Compilation.CallHandlers;
+using SharpTS.Compilation.Emitters;
 using SharpTS.Parsing;
 using Xunit;
 
@@ -228,6 +230,75 @@ public sealed class EmittedDateRuntimeTests
         foreach (string name in new[] { "DatePrototypeField", "DatePrototypePopulateMethod", "CreateDateFromComponents", "CreateDateFromValue", "CreateDateNoArgs", "DateGetDate", "DateGetDay", "DateGetFullYear", "DateGetHours", "DateGetMilliseconds", "DateGetMinutes", "DateGetMonth", "DateGetSeconds", "DateGetTime", "DateGetTimezoneOffset", "DateGetUTCDate", "DateGetUTCDay", "DateGetUTCFullYear", "DateGetUTCHours", "DateGetUTCMilliseconds", "DateGetUTCMinutes", "DateGetUTCMonth", "DateGetUTCSeconds", "DateGetYear", "DateNow", "DateSetDate", "DateSetFullYear", "DateSetHours", "DateSetMilliseconds", "DateSetMinutes", "DateSetMonth", "DateSetSeconds", "DateSetTime", "DateSetUTCDate", "DateSetUTCFullYear", "DateSetUTCHours", "DateSetUTCMilliseconds", "DateSetUTCMinutes", "DateSetUTCMonth", "DateSetUTCSeconds", "DateSetYear", "DateToDateString", "DateToISOString", "DateToJSON", "DateToLocaleDateString", "DateToLocaleString", "DateToLocaleTimeString", "DateToLocaleWithOptions", "DateToString", "DateToTimeString", "DateToUTCString", "DateValueOf", "TSDateCtorComponents", "TSDateCtorMilliseconds", "TSDateCtorNoArgs", "TSDateCtorString", "TSDateNowStatic", "TSDateParseStatic", "TSDateType", "TSDateUTCStatic", "TSDateMethods" }) Assert.Null(typeof(EmittedRuntime).GetProperty(name));
         foreach (string name in new[] { "_tsDateGetTimeMethod", "_tsDateUtcDateTimeField", "_tsDateIsInvalidField", "_tsDateUnixEpochField" })
             Assert.Null(typeof(RuntimeEmitter).GetField(name, InstanceMembers));
+    }
+
+    [Theory]
+    [InlineData("now", false)]
+    [InlineData("now", true)]
+    [InlineData("UTC", false)]
+    [InlineData("UTC", true)]
+    [InlineData("parse", false)]
+    [InlineData("parse", true)]
+    public void StaticCallsFallThroughWithoutDateImplementation(string name, bool supplied)
+    {
+        var builder = NewAssembly(); var module = builder.DefineDynamicModule("main");
+        var features = Detect(supplied ? "const value=new Date(0);" : "const value=1;");
+        var runtime = new RuntimeEmitter(TypeProvider.Runtime).EmitAll(module, features);
+        features.UsesDate = !supplied;
+        var type = module.DefineType("DateCallProbe", TypeAttributes.Public);
+        var method = type.DefineMethod("Invoke", MethodAttributes.Public | MethodAttributes.Static, typeof(double), Type.EmptyTypes);
+        var il = method.GetILGenerator();
+        var context = new CompilationContext(il, new TypeMapper(module), [], [], null, null)
+        {
+            Runtime = runtime, RuntimeFeatures = features
+        };
+        var statement = Assert.IsType<Stmt.Expression>(Assert.Single(new Parser(new Lexer($"Date.{name}();").ScanTokens()).ParseOrThrow()));
+        var call = Assert.IsType<Expr.Call>(statement.Expr);
+        Assert.Equal(supplied, new DateStaticHandler().TryHandle(new ILEmitter(context), call));
+        if (!supplied)
+        {
+            Assert.Equal(0, il.ILOffset);
+            il.Emit(OpCodes.Ldc_R8, -1d);
+        }
+        il.Emit(OpCodes.Ret); type.CreateType();
+        var result = Assert.IsType<double>(Call(SaveVerifyLoad(builder).GetType(type.Name)!, "Invoke"));
+        if (!supplied) Assert.Equal(-1d, result);
+        else if (name == "now") Assert.True(double.IsFinite(result) && result > 0);
+        else Assert.True(double.IsNaN(result));
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public void ConstructorValuesFallThroughWithoutDateImplementation(bool globalThis, bool supplied)
+    {
+        var builder = NewAssembly(); var module = builder.DefineDynamicModule("main");
+        var features = Detect(supplied ? "const value=new Date(0);" : "const value=1;");
+        var runtime = new RuntimeEmitter(TypeProvider.Runtime).EmitAll(module, features);
+        features.UsesDate = !supplied;
+        var type = module.DefineType("DateTypeProbe", TypeAttributes.Public);
+        var method = type.DefineMethod("Invoke", MethodAttributes.Public | MethodAttributes.Static, typeof(Type), Type.EmptyTypes);
+        var il = method.GetILGenerator();
+        var context = new CompilationContext(il, new TypeMapper(module), [], [], null, null)
+        {
+            Runtime = runtime, RuntimeFeatures = features
+        };
+        object? emitted = globalThis
+            ? typeof(GlobalThisStaticEmitter).GetMethod("TryEmitBuiltInClassType", StaticMembers)!.Invoke(null, [il, context, "Date"])
+            : typeof(ExpressionEmitterBase).GetMethod("TryEmitBuiltInClassType", InstanceMembers)!.Invoke(new ILEmitter(context), ["Date"]);
+        Assert.Equal(supplied, Assert.IsType<bool>(emitted));
+        if (!supplied)
+        {
+            Assert.Equal(0, il.ILOffset);
+            il.Emit(OpCodes.Ldnull);
+        }
+        il.Emit(OpCodes.Ret); type.CreateType();
+        var loaded = SaveVerifyLoad(builder);
+        var result = Call(loaded.GetType(type.Name)!, "Invoke");
+        if (supplied) Assert.Same(loaded.GetType("$TSDate"), result);
+        else Assert.Null(result);
     }
 
     private static void Fill(object owner, string? omitted = null)
