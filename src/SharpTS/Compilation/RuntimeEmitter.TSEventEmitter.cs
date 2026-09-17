@@ -551,18 +551,18 @@ public partial class RuntimeEmitter
             var isBound = il.DefineLabel();
             var invokeEnd = il.DefineLabel();
             il.Emit(OpCodes.Ldloc, listenerLocal);
-            il.Emit(OpCodes.Isinst, runtime.BoundTSFunctionType);
+            il.Emit(OpCodes.Isinst, runtime.FunctionBindings.BoundType);
             il.Emit(OpCodes.Brtrue, isBound);
             il.Emit(OpCodes.Ldloc, listenerLocal);
-            il.Emit(OpCodes.Castclass, runtime.TSFunctionType);
+            il.Emit(OpCodes.Castclass, runtime.FunctionValues.Type);
             il.Emit(OpCodes.Ldarg_2);
-            il.Emit(OpCodes.Callvirt, runtime.TSFunctionInvoke);
+            il.Emit(OpCodes.Callvirt, runtime.FunctionValues.Invoke);
             il.Emit(OpCodes.Br, invokeEnd);
             il.MarkLabel(isBound);
             il.Emit(OpCodes.Ldloc, listenerLocal);
-            il.Emit(OpCodes.Castclass, runtime.BoundTSFunctionType);
+            il.Emit(OpCodes.Castclass, runtime.FunctionBindings.BoundType);
             il.Emit(OpCodes.Ldarg_2);
-            il.Emit(OpCodes.Callvirt, runtime.BoundTSFunctionInvoke);
+            il.Emit(OpCodes.Callvirt, runtime.FunctionBindings.BoundInvoke);
             il.MarkLabel(invokeEnd);
         }
 

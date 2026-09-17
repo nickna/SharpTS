@@ -116,10 +116,10 @@ public partial class RuntimeEmitter
         // shrinking its List backing store.
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, arrayField);
-        il.Emit(OpCodes.Isinst, runtime.ArgumentsType);
+        il.Emit(OpCodes.Isinst, runtime.Arguments.Type);
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Brfalse, useListCount);
-        il.Emit(OpCodes.Ldfld, runtime.ArgumentsLengthField);
+        il.Emit(OpCodes.Ldfld, runtime.Arguments.LengthField);
         il.Emit(OpCodes.Stloc, liveLength);
         il.Emit(OpCodes.Br, haveLiveLength);
         il.MarkLabel(useListCount);

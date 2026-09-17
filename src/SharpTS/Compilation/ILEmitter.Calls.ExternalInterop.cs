@@ -1004,7 +1004,7 @@ public partial class ILEmitter
             var delegateLocal = IL.DeclareLocal(handlerDelegateType);
 
             IL.Emit(OpCodes.Ldloc, tsFuncLocal);
-            IL.Emit(OpCodes.Castclass, _ctx.Runtime!.TSFunctionType);
+            IL.Emit(OpCodes.Castclass, _ctx.Runtime!.FunctionValues.Type);
             IL.Emit(OpCodes.Newobj, adapter.Ctor);
             IL.Emit(OpCodes.Ldftn, adapter.Invoke);
             var delegateCtor = ManagedDotNetInterop.GetConstructor(

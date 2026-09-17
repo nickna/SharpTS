@@ -429,10 +429,10 @@ public partial class RuntimeEmitter
         // dispatch (TSFunction + bind/call/apply wrappers + bound array methods).
         var thenCallableLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, thenLocal);
-        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Isinst, runtime.FunctionValues.Type);
         il.Emit(OpCodes.Brtrue, thenCallableLabel);
         il.Emit(OpCodes.Ldloc, thenLocal);
-        il.Emit(OpCodes.Isinst, runtime.BoundTSFunctionType);
+        il.Emit(OpCodes.Isinst, runtime.FunctionBindings.BoundType);
         il.Emit(OpCodes.Brtrue, thenCallableLabel);
         il.Emit(OpCodes.Ldloc, thenLocal);
         il.Emit(OpCodes.Isinst, runtime.ArrayOperations.BoundMethodType);

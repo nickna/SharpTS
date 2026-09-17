@@ -20,14 +20,14 @@ public partial class RuntimeEmitter
     /// fall through to the [object Array] / true paths, breaking ~30 test262
     /// tests that probe these spec details on the arguments object.
     /// </remarks>
-    internal void EmitArgumentsTypeDefinition(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    internal void EmitArgumentsTypeDefinition(ModuleBuilder moduleBuilder, EmittedArgumentsRuntime arguments)
     {
         var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$Arguments",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.ListOfObject
         );
-        runtime.ArgumentsType = typeBuilder;
+        arguments.Type = typeBuilder;
 
         // public int _length — JS-visible length (per ECMA-262 10.4.4 sloppy
         // arguments objects use ordinary "length" property that does NOT
@@ -38,7 +38,7 @@ public partial class RuntimeEmitter
             "_length",
             _types.Int32,
             FieldAttributes.Public);
-        runtime.ArgumentsLengthField = lengthField;
+        arguments.LengthField = lengthField;
 
         // Ctor: public $Arguments() : base() { _length = 0; }
         var defaultCtor = typeBuilder.DefineConstructor(
@@ -53,7 +53,7 @@ public partial class RuntimeEmitter
         defaultIL.Emit(OpCodes.Ldc_I4_0);
         defaultIL.Emit(OpCodes.Stfld, lengthField);
         defaultIL.Emit(OpCodes.Ret);
-        runtime.ArgumentsDefaultCtor = defaultCtor;
+        arguments.DefaultCtor = defaultCtor;
 
         // Ctor: public $Arguments(int capacity) : base(capacity) { _length = 0; }
         var capacityCtor = typeBuilder.DefineConstructor(
@@ -88,7 +88,7 @@ public partial class RuntimeEmitter
         enumIL.Emit(OpCodes.Callvirt, _types.GetPropertyGetter(_types.ListOfObject, "Count"));
         enumIL.Emit(OpCodes.Stfld, lengthField);
         enumIL.Emit(OpCodes.Ret);
-        runtime.ArgumentsEnumerableCtor = enumCtor;
+        arguments.EnumerableCtor = enumCtor;
 
         typeBuilder.CreateType();
     }

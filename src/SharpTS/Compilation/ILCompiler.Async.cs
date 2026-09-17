@@ -1395,7 +1395,7 @@ public partial class ILCompiler
                 il.Emit(OpCodes.Ldarg_0);
             else
             {
-                il.Emit(OpCodes.Ldsfld, _runtime!.CurrentFunctionThisField);
+                il.Emit(OpCodes.Ldsfld, _runtime!.FunctionValues.CurrentThisField);
                 if (coerceSloppyDynamicThis)
                 {
                     // Async free functions snapshot their receiver before MoveNext runs.

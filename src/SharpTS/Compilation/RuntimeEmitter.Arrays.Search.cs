@@ -331,18 +331,18 @@ public partial class RuntimeEmitter
         // `function(a, b) { arguments[2] = 9; ...every.call(arguments, ...) }`.
         var notArguments = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.ArgumentsType);
+        il.Emit(OpCodes.Isinst, runtime.Arguments.Type);
         il.Emit(OpCodes.Brfalse, notArguments);
         // result = new List<object>(); for (i = 0; i < _length; i++) result.Add(args[i]);
-        var argsLocal = il.DeclareLocal(runtime.ArgumentsType);
+        var argsLocal = il.DeclareLocal(runtime.Arguments.Type);
         var argsResultLocal = il.DeclareLocal(_types.ListOfObject);
         var argsIdxLocal = il.DeclareLocal(_types.Int32);
         var argsLenLocal = il.DeclareLocal(_types.Int32);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.ArgumentsType);
+        il.Emit(OpCodes.Castclass, runtime.Arguments.Type);
         il.Emit(OpCodes.Stloc, argsLocal);
         il.Emit(OpCodes.Ldloc, argsLocal);
-        il.Emit(OpCodes.Ldfld, runtime.ArgumentsLengthField);
+        il.Emit(OpCodes.Ldfld, runtime.Arguments.LengthField);
         il.Emit(OpCodes.Stloc, argsLenLocal);
         il.Emit(OpCodes.Ldloc, argsLenLocal);
         il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, _types.Int32));
@@ -1891,7 +1891,7 @@ public partial class RuntimeEmitter
         // slots from the original receiver on each iteration.
         var notListReceiver = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.ArgumentsType);
+        il.Emit(OpCodes.Isinst, runtime.Arguments.Type);
         il.Emit(OpCodes.Brtrue, delegateLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, _types.ListOfObject);
@@ -2721,7 +2721,7 @@ public partial class RuntimeEmitter
         // the function prototype to observe inherited indexed properties.
         var notFunctionInstance = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, currentLocal);
-        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Isinst, runtime.FunctionValues.Type);
         il.Emit(OpCodes.Brfalse, notFunctionInstance);
         il.Emit(OpCodes.Call, runtime.FunctionPrototypePopulateMethod);
         il.Emit(OpCodes.Ldsfld, runtime.FunctionPrototypeField);
@@ -2731,7 +2731,7 @@ public partial class RuntimeEmitter
 
         var notBoundFunctionInstance = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, currentLocal);
-        il.Emit(OpCodes.Isinst, runtime.BoundTSFunctionType);
+        il.Emit(OpCodes.Isinst, runtime.FunctionBindings.BoundType);
         il.Emit(OpCodes.Brfalse, notBoundFunctionInstance);
         il.Emit(OpCodes.Call, runtime.FunctionPrototypePopulateMethod);
         il.Emit(OpCodes.Ldsfld, runtime.FunctionPrototypeField);

@@ -323,14 +323,14 @@ public partial class RuntimeEmitter
 
         // Check arg2 first (3-arg form: path, options, callback)
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Isinst, runtime.FunctionValues.Type);
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Brtrue, haveCallbackLabel);
         il.Emit(OpCodes.Pop);
 
         // Check arg1 (2-arg form: path, callback)
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Isinst, runtime.FunctionValues.Type);
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Brtrue, haveCallbackLabel);
         il.Emit(OpCodes.Pop);
@@ -431,12 +431,12 @@ public partial class RuntimeEmitter
         var noCallbackLabel = il.DefineLabel();
 
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Isinst, runtime.FunctionValues.Type);
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Brtrue, haveCallbackLabel);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Isinst, runtime.FunctionValues.Type);
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Brtrue, haveCallbackLabel);
         il.Emit(OpCodes.Pop);

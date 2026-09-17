@@ -493,7 +493,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Stfld, resolveClosureTcsField);
 
             // var resolveFunc = new $TSFunction(closure, resolveMethod, "resolve", 1)
-            var resolveFuncLocal = il.DeclareLocal(runtime.TSFunctionType);
+            var resolveFuncLocal = il.DeclareLocal(runtime.FunctionValues.Type);
             il.Emit(OpCodes.Ldloc, closureLocal);
             il.Emit(OpCodes.Castclass, typeof(object));
             il.Emit(OpCodes.Ldtoken, resolveMethod);
@@ -505,7 +505,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Stloc, resolveFuncLocal);
 
             // var rejectFunc = new $TSFunction(closure, rejectMethod, "reject", 1)
-            var rejectFuncLocal = il.DeclareLocal(runtime.TSFunctionType);
+            var rejectFuncLocal = il.DeclareLocal(runtime.FunctionValues.Type);
             il.Emit(OpCodes.Ldloc, closureLocal);
             il.Emit(OpCodes.Castclass, typeof(object));
             il.Emit(OpCodes.Ldtoken, rejectMethod);
@@ -1056,12 +1056,12 @@ public partial class RuntimeEmitter
 
             // Check if func is $TSFunction
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+            il.Emit(OpCodes.Isinst, runtime.FunctionValues.Type);
             il.Emit(OpCodes.Brtrue, isTSFunctionLabel);
 
             // Check if func is $BoundTSFunction
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.BoundTSFunctionType);
+            il.Emit(OpCodes.Isinst, runtime.FunctionBindings.BoundType);
             il.Emit(OpCodes.Brtrue, isBoundLabel);
 
             // Unknown callable - use InvokeValue fallback
@@ -1081,18 +1081,18 @@ public partial class RuntimeEmitter
             // Per ECMA-262 §27.2.1 PromiseReactionJob: thisArgument = undefined.
             il.MarkLabel(isTSFunctionLabel);
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Castclass, runtime.TSFunctionType);
+            il.Emit(OpCodes.Castclass, runtime.FunctionValues.Type);
             il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
             il.Emit(OpCodes.Ldloc, argsLocal);
-            il.Emit(OpCodes.Callvirt, runtime.TSFunctionInvokeWithThis);
+            il.Emit(OpCodes.Callvirt, runtime.FunctionValues.InvokeWithThis);
             il.Emit(OpCodes.Br, endLabel);
 
             // isBoundLabel: call $BoundTSFunction.Invoke
             il.MarkLabel(isBoundLabel);
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Castclass, runtime.BoundTSFunctionType);
+            il.Emit(OpCodes.Castclass, runtime.FunctionBindings.BoundType);
             il.Emit(OpCodes.Ldloc, argsLocal);
-            il.Emit(OpCodes.Callvirt, runtime.BoundTSFunctionInvoke);
+            il.Emit(OpCodes.Callvirt, runtime.FunctionBindings.BoundInvoke);
             il.Emit(OpCodes.Br, endLabel);
 
             // nullLabel: return null
@@ -1131,12 +1131,12 @@ public partial class RuntimeEmitter
 
             // Check if func is $TSFunction
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+            il.Emit(OpCodes.Isinst, runtime.FunctionValues.Type);
             il.Emit(OpCodes.Brtrue, isTSFunctionLabel);
 
             // Check if func is $BoundTSFunction
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.BoundTSFunctionType);
+            il.Emit(OpCodes.Isinst, runtime.FunctionBindings.BoundType);
             il.Emit(OpCodes.Brtrue, isBoundLabel);
 
             // Unknown callable - use InvokeValue fallback
@@ -1156,18 +1156,18 @@ public partial class RuntimeEmitter
             // Per ECMA-262 §27.2.1 PromiseReactionJob: thisArgument = undefined.
             il.MarkLabel(isTSFunctionLabel);
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Castclass, runtime.TSFunctionType);
+            il.Emit(OpCodes.Castclass, runtime.FunctionValues.Type);
             il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
             il.Emit(OpCodes.Ldloc, argsLocal);
-            il.Emit(OpCodes.Callvirt, runtime.TSFunctionInvokeWithThis);
+            il.Emit(OpCodes.Callvirt, runtime.FunctionValues.InvokeWithThis);
             il.Emit(OpCodes.Br, endLabel);
 
             // isBoundLabel: call $BoundTSFunction.Invoke
             il.MarkLabel(isBoundLabel);
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Castclass, runtime.BoundTSFunctionType);
+            il.Emit(OpCodes.Castclass, runtime.FunctionBindings.BoundType);
             il.Emit(OpCodes.Ldloc, argsLocal);
-            il.Emit(OpCodes.Callvirt, runtime.BoundTSFunctionInvoke);
+            il.Emit(OpCodes.Callvirt, runtime.FunctionBindings.BoundInvoke);
             il.Emit(OpCodes.Br, endLabel);
 
             // nullLabel: return null

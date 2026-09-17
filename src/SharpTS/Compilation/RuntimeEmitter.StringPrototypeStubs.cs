@@ -109,18 +109,18 @@ public partial class RuntimeEmitter
         runtime.ObjectPrototypes.ToStringMethod = EmitObjectProtoToStringHelper(
             typeBuilder,
             new ObjectProtoToStringHelperInputs(
-                ArgumentsType: runtime.ArgumentsType,
+                ArgumentsType: runtime.Arguments.Type,
                 ArrayOperations: runtime.ArrayOperations,
                 ArrayStorage: runtime.ArrayStorage,
                 BigInt: runtime.BigInt,
                 Booleans: runtime.Booleans,
-                BoundAnyFunctionType: runtime.BoundAnyFunctionType,
-                BoundTSFunctionType: runtime.BoundTSFunctionType,
+                BoundAnyFunctionType: runtime.FunctionBindings.AnyType,
+                BoundTSFunctionType: runtime.FunctionBindings.BoundType,
                 Dates: runtime.Dates,
                 Errors: runtime.Errors,
-                FunctionApplyWrapperType: runtime.FunctionApplyWrapperType,
-                FunctionBindWrapperType: runtime.FunctionBindWrapperType,
-                FunctionCallWrapperType: runtime.FunctionCallWrapperType,
+                FunctionApplyWrapperType: runtime.FunctionBindings.ApplyType,
+                FunctionBindWrapperType: runtime.FunctionBindings.BindType,
+                FunctionCallWrapperType: runtime.FunctionBindings.CallType,
                 GetIndex: runtime.ObjectRead.Index,
                 Json: runtime.Json,
                 Map: runtime.Map,
@@ -133,7 +133,7 @@ public partial class RuntimeEmitter
                 Set: runtime.Set,
                 Strings: runtime.Strings,
                 Symbols: runtime.Symbols,
-                TSFunctionType: runtime.TSFunctionType,
+                TSFunctionType: runtime.FunctionValues.Type,
                 UndefinedType: runtime.UndefinedType
             )
         );

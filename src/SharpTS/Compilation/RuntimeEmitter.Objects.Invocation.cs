@@ -142,23 +142,23 @@ public partial class RuntimeEmitter
         }
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Isinst, runtime.FunctionValues.Type);
         il.Emit(OpCodes.Brtrue, tsFunctionLabel);
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.BoundTSFunctionType);
+        il.Emit(OpCodes.Isinst, runtime.FunctionBindings.BoundType);
         il.Emit(OpCodes.Brtrue, boundTsFunctionLabel);
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.FunctionBindWrapperType);
+        il.Emit(OpCodes.Isinst, runtime.FunctionBindings.BindType);
         il.Emit(OpCodes.Brtrue, bindWrapperLabel);
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.FunctionCallWrapperType);
+        il.Emit(OpCodes.Isinst, runtime.FunctionBindings.CallType);
         il.Emit(OpCodes.Brtrue, callWrapperLabel);
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.FunctionApplyWrapperType);
+        il.Emit(OpCodes.Isinst, runtime.FunctionBindings.ApplyType);
         il.Emit(OpCodes.Brtrue, applyWrapperLabel);
 
         if (_features.UsesTextEncoding)
@@ -230,7 +230,7 @@ public partial class RuntimeEmitter
 
         var boundAnyFunctionLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.BoundAnyFunctionType);
+        il.Emit(OpCodes.Isinst, runtime.FunctionBindings.AnyType);
         il.Emit(OpCodes.Brtrue, boundAnyFunctionLabel);
 
         // Handle Func<object?[], object?> (from CreateBoundMethod in RuntimeTypes.Methods)
@@ -395,7 +395,7 @@ public partial class RuntimeEmitter
         var notFunctionTypeLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, _types.Type);
-        il.Emit(OpCodes.Ldtoken, runtime.TSFunctionType);
+        il.Emit(OpCodes.Ldtoken, runtime.FunctionValues.Type);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle",
             [_types.RuntimeTypeHandle])!);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "op_Equality",
@@ -438,41 +438,41 @@ public partial class RuntimeEmitter
         // Behavior unchanged for callables without __this naming: InvokeWithThis
         // sets thread-local _currentThis and calls Invoke unchanged.
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSFunctionType);
+        il.Emit(OpCodes.Castclass, runtime.FunctionValues.Type);
         // A call through InvokeValue has no Reference receiver.  Pass the JS
         // undefined sentinel so strict callees retain undefined while sloppy
         // callees normalize it to globalThis in LoadThis.
         il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, runtime.TSFunctionInvokeWithThis);
+        il.Emit(OpCodes.Callvirt, runtime.FunctionValues.InvokeWithThis);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(boundTsFunctionLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.BoundTSFunctionType);
+        il.Emit(OpCodes.Castclass, runtime.FunctionBindings.BoundType);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, runtime.BoundTSFunctionInvoke);
+        il.Emit(OpCodes.Callvirt, runtime.FunctionBindings.BoundInvoke);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(bindWrapperLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.FunctionBindWrapperType);
+        il.Emit(OpCodes.Castclass, runtime.FunctionBindings.BindType);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, runtime.FunctionBindWrapperInvoke);
+        il.Emit(OpCodes.Callvirt, runtime.FunctionBindings.BindInvoke);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(callWrapperLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.FunctionCallWrapperType);
+        il.Emit(OpCodes.Castclass, runtime.FunctionBindings.CallType);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, runtime.FunctionCallWrapperInvoke);
+        il.Emit(OpCodes.Callvirt, runtime.FunctionBindings.CallInvoke);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(applyWrapperLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.FunctionApplyWrapperType);
+        il.Emit(OpCodes.Castclass, runtime.FunctionBindings.ApplyType);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, runtime.FunctionApplyWrapperInvoke);
+        il.Emit(OpCodes.Callvirt, runtime.FunctionBindings.ApplyInvoke);
         il.Emit(OpCodes.Ret);
 
         if (_features.UsesTextEncoding)
@@ -558,9 +558,9 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(boundAnyFunctionLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.BoundAnyFunctionType);
+        il.Emit(OpCodes.Castclass, runtime.FunctionBindings.AnyType);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, runtime.BoundAnyFunctionInvoke);
+        il.Emit(OpCodes.Callvirt, runtime.FunctionBindings.AnyInvoke);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(funcDelegateLabel);
@@ -634,14 +634,14 @@ public partial class RuntimeEmitter
 
         // if (function is $TSFunction tsFunc)
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Isinst, runtime.FunctionValues.Type);
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Brfalse, notTSFunctionLabel);
 
         // return tsFunc.InvokeWithThis(receiver, args)
         il.Emit(OpCodes.Ldarg_0);  // receiver
         il.Emit(OpCodes.Ldarg_2);  // args
-        il.Emit(OpCodes.Callvirt, runtime.TSFunctionInvokeWithThis);
+        il.Emit(OpCodes.Callvirt, runtime.FunctionValues.InvokeWithThis);
         il.Emit(OpCodes.Ret);
 
         // Not a TSFunction - handle known callable wrappers without calling InvokeValue
@@ -652,44 +652,44 @@ public partial class RuntimeEmitter
         var notCallWrapperLabel = il.DefineLabel();
 
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, runtime.BoundTSFunctionType);
+        il.Emit(OpCodes.Isinst, runtime.FunctionBindings.BoundType);
         il.Emit(OpCodes.Brfalse, notBoundLabel);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Castclass, runtime.BoundTSFunctionType);
+        il.Emit(OpCodes.Castclass, runtime.FunctionBindings.BoundType);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Callvirt, runtime.BoundTSFunctionInvokeWithThis);
+        il.Emit(OpCodes.Callvirt, runtime.FunctionBindings.BoundInvokeWithThis);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(notBoundLabel);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, runtime.FunctionBindWrapperType);
+        il.Emit(OpCodes.Isinst, runtime.FunctionBindings.BindType);
         il.Emit(OpCodes.Brfalse, notBindWrapperLabel);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Castclass, runtime.FunctionBindWrapperType);
+        il.Emit(OpCodes.Castclass, runtime.FunctionBindings.BindType);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Callvirt, runtime.FunctionBindWrapperInvoke);
+        il.Emit(OpCodes.Callvirt, runtime.FunctionBindings.BindInvoke);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(notBindWrapperLabel);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, runtime.FunctionCallWrapperType);
+        il.Emit(OpCodes.Isinst, runtime.FunctionBindings.CallType);
         il.Emit(OpCodes.Brfalse, notCallWrapperLabel);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Castclass, runtime.FunctionCallWrapperType);
+        il.Emit(OpCodes.Castclass, runtime.FunctionBindings.CallType);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Callvirt, runtime.FunctionCallWrapperInvoke);
+        il.Emit(OpCodes.Callvirt, runtime.FunctionBindings.CallInvoke);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(notCallWrapperLabel);
         var notApplyWrapperLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, runtime.FunctionApplyWrapperType);
+        il.Emit(OpCodes.Isinst, runtime.FunctionBindings.ApplyType);
         il.Emit(OpCodes.Brfalse, notApplyWrapperLabel);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Castclass, runtime.FunctionApplyWrapperType);
+        il.Emit(OpCodes.Castclass, runtime.FunctionBindings.ApplyType);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Callvirt, runtime.FunctionApplyWrapperInvoke);
+        il.Emit(OpCodes.Callvirt, runtime.FunctionBindings.ApplyInvoke);
         il.Emit(OpCodes.Ret);
 
         // Tree-shakable wrapper-type dispatch chain. We thread `currentReject`
@@ -822,12 +822,12 @@ public partial class RuntimeEmitter
         // Check $BoundAnyFunction (partial-apply wrapper produced by .bind on non-$TSFunction targets)
         var notBoundAnyFunctionLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, runtime.BoundAnyFunctionType);
+        il.Emit(OpCodes.Isinst, runtime.FunctionBindings.AnyType);
         il.Emit(OpCodes.Brfalse, notBoundAnyFunctionLabel);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Castclass, runtime.BoundAnyFunctionType);
+        il.Emit(OpCodes.Castclass, runtime.FunctionBindings.AnyType);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Callvirt, runtime.BoundAnyFunctionInvoke);
+        il.Emit(OpCodes.Callvirt, runtime.FunctionBindings.AnyInvoke);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(notBoundAnyFunctionLabel);

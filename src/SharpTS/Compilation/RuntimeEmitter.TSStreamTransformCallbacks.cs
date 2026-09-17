@@ -76,14 +76,14 @@ public partial class RuntimeEmitter
         // result = _fn.Invoke([chunk])
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, fnField);
-        il.Emit(OpCodes.Castclass, runtime.TSFunctionType);
+        il.Emit(OpCodes.Castclass, runtime.FunctionValues.Type);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Newarr, _types.Object);
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldloc, chunkLocal);
         il.Emit(OpCodes.Stelem_Ref);
-        il.Emit(OpCodes.Callvirt, runtime.TSFunctionInvoke);
+        il.Emit(OpCodes.Callvirt, runtime.FunctionValues.Invoke);
         il.Emit(OpCodes.Stloc, resultLocal);
 
         // done = args[2] (the $TransformDoneCallback)
@@ -179,14 +179,14 @@ public partial class RuntimeEmitter
         // result = _fn.Invoke([chunk])
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, fnField);
-        il.Emit(OpCodes.Castclass, runtime.TSFunctionType);
+        il.Emit(OpCodes.Castclass, runtime.FunctionValues.Type);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Newarr, _types.Object);
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldloc, chunkLocal);
         il.Emit(OpCodes.Stelem_Ref);
-        il.Emit(OpCodes.Callvirt, runtime.TSFunctionInvoke);
+        il.Emit(OpCodes.Callvirt, runtime.FunctionValues.Invoke);
         il.Emit(OpCodes.Stloc, resultLocal);
 
         // Check if done callback exists: args.Length >= 3

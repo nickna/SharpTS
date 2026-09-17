@@ -643,9 +643,9 @@ public class LocalVariableResolver : IVariableResolver
         //    sentinel denotes sloppy-mode `this` (= globalThis) so that a subsequent
         //    `this.x` read routes through GlobalThisGetProperty and — crucially for
         //    #735/#733 — value-position JS null stays distinct from a sloppy `this`.
-        if (_ctx.Runtime?.CurrentFunctionThisField != null)
+        if (_ctx.Runtime?.FunctionValues.CurrentThisField != null)
         {
-            _il.Emit(OpCodes.Ldsfld, _ctx.Runtime.CurrentFunctionThisField);
+            _il.Emit(OpCodes.Ldsfld, _ctx.Runtime.FunctionValues.CurrentThisField);
             if (!(_ctx.ThisBindingIsStrictOverride ?? _ctx.IsStrictMode))
                 EmitCoerceSloppyThisToGlobal();
             return;

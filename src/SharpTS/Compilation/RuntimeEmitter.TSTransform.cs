@@ -102,16 +102,16 @@ public partial class RuntimeEmitter
         invokeIL.Emit(OpCodes.Brfalse, noUserCallbackLabel);
         invokeIL.Emit(OpCodes.Ldarg_0);
         invokeIL.Emit(OpCodes.Ldfld, runtime.RequireNodeStreams().TransformDoneCallbackUserCallbackField);
-        invokeIL.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        invokeIL.Emit(OpCodes.Isinst, runtime.FunctionValues.Type);
         invokeIL.Emit(OpCodes.Brfalse, noUserCallbackLabel);
 
         // _userCallback.Invoke([])
         invokeIL.Emit(OpCodes.Ldarg_0);
         invokeIL.Emit(OpCodes.Ldfld, runtime.RequireNodeStreams().TransformDoneCallbackUserCallbackField);
-        invokeIL.Emit(OpCodes.Castclass, runtime.TSFunctionType);
+        invokeIL.Emit(OpCodes.Castclass, runtime.FunctionValues.Type);
         invokeIL.Emit(OpCodes.Ldc_I4_0);
         invokeIL.Emit(OpCodes.Newarr, _types.Object);
-        invokeIL.Emit(OpCodes.Callvirt, runtime.TSFunctionInvoke);
+        invokeIL.Emit(OpCodes.Callvirt, runtime.FunctionValues.Invoke);
         invokeIL.Emit(OpCodes.Pop);
 
         invokeIL.MarkLabel(noUserCallbackLabel);
@@ -201,20 +201,20 @@ public partial class RuntimeEmitter
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, runtime.RequireNodeStreams().TransformCallbackField);
-        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Isinst, runtime.FunctionValues.Type);
         il.Emit(OpCodes.Brfalse, noTransformLabel);
 
         // Call transform callback: transform(chunk, encoding, done)
         // The done callback should push transformed data to readable side
 
         // Declare locals for callback and args
-        var callbackLocal = il.DeclareLocal(runtime.TSFunctionType);
+        var callbackLocal = il.DeclareLocal(runtime.FunctionValues.Type);
         var argsLocal = il.DeclareLocal(_types.ObjectArray);
 
         // Store callback
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, runtime.RequireNodeStreams().TransformCallbackField);
-        il.Emit(OpCodes.Castclass, runtime.TSFunctionType);
+        il.Emit(OpCodes.Castclass, runtime.FunctionValues.Type);
         il.Emit(OpCodes.Stloc, callbackLocal);
 
         // Create args: [chunk, encoding, done_callback]
@@ -252,7 +252,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, callbackLocal);
         il.Emit(OpCodes.Ldarg_0);  // this (for InvokeWithThis's thisArg parameter)
         il.Emit(OpCodes.Ldloc, argsLocal);
-        il.Emit(OpCodes.Callvirt, runtime.TSFunctionInvokeWithThis);
+        il.Emit(OpCodes.Callvirt, runtime.FunctionValues.InvokeWithThis);
         il.Emit(OpCodes.Pop);
 
         il.Emit(OpCodes.Ldc_I4_1);
@@ -324,19 +324,19 @@ public partial class RuntimeEmitter
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, runtime.RequireNodeStreams().TransformFlushCallbackField);
-        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Isinst, runtime.FunctionValues.Type);
         il.Emit(OpCodes.Brfalse, noFlushLabel);
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, runtime.RequireNodeStreams().TransformFlushCallbackField);
-        il.Emit(OpCodes.Castclass, runtime.TSFunctionType);
+        il.Emit(OpCodes.Castclass, runtime.FunctionValues.Type);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Newarr, _types.Object);
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldarg_3); // callback
         il.Emit(OpCodes.Stelem_Ref);
-        il.Emit(OpCodes.Callvirt, runtime.TSFunctionInvoke);
+        il.Emit(OpCodes.Callvirt, runtime.FunctionValues.Invoke);
         il.Emit(OpCodes.Pop);
 
         il.MarkLabel(noFlushLabel);

@@ -615,7 +615,7 @@ public partial class ILEmitter
 
         if (selfRefField != null && displayClassLocal != null)
         {
-            var tsFuncLocal = IL.DeclareLocal(_ctx.Runtime!.TSFunctionType);
+            var tsFuncLocal = IL.DeclareLocal(_ctx.Runtime!.FunctionValues.Type);
             IL.Emit(OpCodes.Stloc, tsFuncLocal);
             IL.Emit(OpCodes.Ldloc, displayClassLocal);
             IL.Emit(OpCodes.Ldloc, tsFuncLocal);

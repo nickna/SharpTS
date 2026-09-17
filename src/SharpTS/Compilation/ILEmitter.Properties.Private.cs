@@ -373,7 +373,7 @@ public partial class ILEmitter
 
     private void EmitStaticPrivateReceiverBrandCheck(string className, string memberName)
     {
-        if (_ctx.Runtime?.CurrentFunctionThisField == null
+        if (_ctx.Runtime?.FunctionValues.CurrentThisField == null
             || _ctx.ClassRegistry?.TryGetClass(className, out var ownerBuilder) != true
             || ownerBuilder == null)
             return;
@@ -384,7 +384,7 @@ public partial class ILEmitter
         // Direct statically-bound calls do not publish a dynamic receiver; use the
         // lexical owner in that case. Value calls (including through Proxy) publish
         // their actual receiver through InvokeWithThis and must pass the private brand.
-        IL.Emit(OpCodes.Ldsfld, _ctx.Runtime.CurrentFunctionThisField);
+        IL.Emit(OpCodes.Ldsfld, _ctx.Runtime.FunctionValues.CurrentThisField);
         IL.Emit(OpCodes.Dup);
         IL.Emit(OpCodes.Brtrue, receiverReady);
         IL.Emit(OpCodes.Pop);

@@ -6,6 +6,14 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
+    private readonly record struct TSFunctionClassInputs(
+        EmittedArgumentsRuntime Arguments,
+        EmittedFunctionAttributesRuntime FunctionAttributes,
+        FieldBuilder GlobalThisSingletonField,
+        FieldInfo UndefinedInstance,
+        Type UndefinedType
+    );
+
     /// <summary>
     /// Emits a tiny dedicated type <c>$ArgumentsContext</c> holding the thread-static
     /// <c>_currentArguments</c> slot used to surface JS <c>arguments</c> in compiled
@@ -13,7 +21,7 @@ public partial class RuntimeEmitter
     /// matters — placing the field on <c>$TSFunction</c> or <c>$Runtime</c> alongside
     /// other ThreadStatic slots regressed an Intl test in layout-dependent ways.
     /// </summary>
-    private void EmitArgumentsContextClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private void EmitArgumentsContextClass(ModuleBuilder moduleBuilder, EmittedArgumentsRuntime arguments)
     {
         var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$ArgumentsContext",
@@ -26,7 +34,7 @@ public partial class RuntimeEmitter
             FieldAttributes.Public | FieldAttributes.Static);
         var threadStaticCtor = typeof(ThreadStaticAttribute).GetConstructor(Type.EmptyTypes)!;
         field.SetCustomAttribute(threadStaticCtor, CustomAttributeEncoder.EmptyBlob);
-        runtime.CurrentArgumentsField = field;
+        arguments.CurrentField = field;
         typeBuilder.CreateType();
     }
 
@@ -188,7 +196,12 @@ public partial class RuntimeEmitter
         typeBuilder.CreateType();
     }
 
-    private void EmitTSFunctionClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private void EmitTSFunctionClass(
+        ModuleBuilder moduleBuilder,
+        EmittedFunctionValueRuntime functionValues,
+        EmittedFunctionConstructionRuntime functionConstruction,
+        TSFunctionClassInputs inputs
+    )
     {
         // Define class: public sealed class $TSFunction
         var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
@@ -196,14 +209,14 @@ public partial class RuntimeEmitter
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object
         );
-        runtime.TSFunctionType = typeBuilder;
+        functionValues.Type = typeBuilder;
 
         // Fields
         var targetField = typeBuilder.DefineField("_target", _types.Object, FieldAttributes.Private);
         var methodField = typeBuilder.DefineField("_method", _types.MethodInfo, FieldAttributes.Private);
         var numericRest4Field = typeBuilder.DefineField("_numericRest4",
             typeof(Func<double, double, double, double, double>), FieldAttributes.Assembly | FieldAttributes.InitOnly);
-        runtime.TSFunctionNumericRest4Field = numericRest4Field;
+        functionValues.NumericRest4Field = numericRest4Field;
         _ = methodField;
         // Cached name and length for functions where reflection doesn't work (e.g., MethodBuilder tokens)
         var cachedNameField = typeBuilder.DefineField("_cachedName", _types.String, FieldAttributes.Private);
@@ -217,12 +230,12 @@ public partial class RuntimeEmitter
         // Exposed Public so iterator helpers in $Runtime can read it directly
         // for the "unary-arrow fast path" without going through a method call.
         var expectsThisField = typeBuilder.DefineField("_expectsThis", _types.Boolean, FieldAttributes.Public);
-        runtime.TSFunctionExpectsThisField = expectsThisField;
+        functionValues.ExpectsThisField = expectsThisField;
         // True when the wrapped method's body reads JS `arguments` (marked with
         // the $CapturesArguments attribute). Public so the iterator-helper
         // skip-index-box detection can read it without a method call.
         var capturesArgumentsField = typeBuilder.DefineField("_capturesArguments", _types.Boolean, FieldAttributes.Public);
-        runtime.TSFunctionCapturesArgumentsField = capturesArgumentsField;
+        functionValues.CapturesArgumentsField = capturesArgumentsField;
         // Bitmask of parameter positions that AdjustArgs pads with the `undefined`
         // sentinel (instead of CLR null) when the argument is omitted. Bit i is set iff
         // the wrapped method carries the $PadUndefined marker (i.e. is a user TS function)
@@ -248,7 +261,7 @@ public partial class RuntimeEmitter
         // pad / trim / rest-list / rest-array branches. Computed once at
         // construction, read as field loads thereafter.
         var paramCountField = typeBuilder.DefineField("_paramCount", _types.Int32, FieldAttributes.Public);
-        runtime.TSFunctionParamCountField = paramCountField;
+        functionValues.ParamCountField = paramCountField;
         var hasListRestField = typeBuilder.DefineField("_hasListRest", _types.Boolean, FieldAttributes.Private);
         var hasArrayRestField = typeBuilder.DefineField("_hasArrayRest", _types.Boolean, FieldAttributes.Private);
         // Bits 1/2 select union/primitive conversion independently. Keep metadata
@@ -308,7 +321,7 @@ public partial class RuntimeEmitter
         // issue at cctor time — the runtime value is always a $TSObject.
         var prototypeCacheType = _types.MakeGenericType(_types.ConcurrentDictionaryOpen, _types.MethodInfo, _types.Object);
         var prototypeCacheField = typeBuilder.DefineField("_prototypeCache", prototypeCacheType, FieldAttributes.Public | FieldAttributes.Static | FieldAttributes.InitOnly);
-        runtime.TSFunctionPrototypeCacheField = prototypeCacheField;
+        functionValues.PrototypeCacheField = prototypeCacheField;
 
         // Thread-static "current function this" slot. Reads in compiled function bodies
         // (LocalVariableResolver.LoadThis's final fallback path) pick this up when the
@@ -323,7 +336,7 @@ public partial class RuntimeEmitter
             FieldAttributes.Public | FieldAttributes.Static);
         var threadStaticCtor = typeof(ThreadStaticAttribute).GetConstructor(Type.EmptyTypes)!;
         currentThisField.SetCustomAttribute(threadStaticCtor, CustomAttributeEncoder.EmptyBlob);
-        runtime.CurrentFunctionThisField = currentThisField;
+        functionValues.CurrentThisField = currentThisField;
 
         // Note: the thread-static `_currentArguments` slot used for JS `arguments` is
         // defined on $ArgumentsContext (emitted before this type) — see
@@ -353,7 +366,7 @@ public partial class RuntimeEmitter
         cctorIL.Emit(OpCodes.Stsfld, invokerCacheField);
         // Bare calls start with ECMAScript undefined. Sloppy bodies coerce it
         // to globalThis when they read `this`; strict bodies preserve it.
-        cctorIL.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        cctorIL.Emit(OpCodes.Ldsfld, inputs.UndefinedInstance);
         cctorIL.Emit(OpCodes.Stsfld, currentThisField);
         cctorIL.Emit(OpCodes.Ret);
 
@@ -363,7 +376,7 @@ public partial class RuntimeEmitter
             CallingConventions.Standard,
             [_types.Object, _types.MethodInfo]
         );
-        runtime.FunctionConstruction.Constructor = ctorBuilder;
+        functionConstruction.Constructor = ctorBuilder;
 
         var ctorIL = ctorBuilder.GetILGenerator();
         // Call base constructor
@@ -395,20 +408,20 @@ public partial class RuntimeEmitter
         ctorIL.Emit(OpCodes.Brfalse, noMethodLabel);
         // User methods carry their ECMAScript arity explicitly because reflection cannot
         // recover the "stop at the first default initializer" rule.
-        EmitComputeFunctionLength(ctorIL, cachedLengthField, runtime.FunctionAttributes, methodArgIndex: 2);
-        EmitComputeFunctionName(ctorIL, cachedNameField, runtime.FunctionAttributes, methodArgIndex: 2);
+        EmitComputeFunctionLength(ctorIL, cachedLengthField, inputs.FunctionAttributes, methodArgIndex: 2);
+        EmitComputeFunctionName(ctorIL, cachedNameField, inputs.FunctionAttributes, methodArgIndex: 2);
         // this._expectsThis = (method.GetParameters().Length > 0 && params[0].Name == "__this")
-        EmitComputeExpectsThis(ctorIL, expectsThisField, runtime.FunctionAttributes, methodArgIndex: 2);
+        EmitComputeExpectsThis(ctorIL, expectsThisField, inputs.FunctionAttributes, methodArgIndex: 2);
         // this._capturesArguments = method.IsDefined($CapturesArguments)
-        EmitComputeCapturesArguments(ctorIL, capturesArgumentsField, runtime.FunctionAttributes, methodArgIndex: 2);
+        EmitComputeCapturesArguments(ctorIL, capturesArgumentsField, inputs.FunctionAttributes, methodArgIndex: 2);
         // this._padUndefinedMask = $PadUndefined ? (object-param bits) : 0
-        EmitComputePadUndefinedMask(ctorIL, padUndefinedMaskField, runtime.FunctionAttributes, methodArgIndex: 2);
+        EmitComputePadUndefinedMask(ctorIL, padUndefinedMaskField, inputs.FunctionAttributes, methodArgIndex: 2);
         // this._paramCount, _hasListRest, _hasArrayRest: cached by AdjustArgs.
         EmitComputeAdjustArgsCache(ctorIL, paramCountField, hasListRestField, hasArrayRestField, methodArgIndex: 2);
         EmitComputeNeedsArgConversion(ctorIL, needsArgConversionField, conversionParametersField, hasListRestField, methodArgIndex: 2);
         // this._invoker = LookupOrAdd(_invokerCache, method)  [pseudocode]
         EmitLookupOrCreateInvoker(ctorIL, invokerField, invokerCacheField, invokerCacheType, methodArgIndex: 2);
-        EmitComputeNumericRest4(ctorIL, numericRest4Field, runtime.FunctionAttributes);
+        EmitComputeNumericRest4(ctorIL, numericRest4Field, inputs.FunctionAttributes);
         ctorIL.MarkLabel(noMethodLabel);
         ctorIL.Emit(OpCodes.Ret);
 
@@ -419,7 +432,7 @@ public partial class RuntimeEmitter
             CallingConventions.Standard,
             [_types.Object, _types.MethodInfo, _types.String, _types.Int32]
         );
-        runtime.FunctionConstruction.CachedConstructor = ctorWithCacheBuilder;
+        functionConstruction.CachedConstructor = ctorWithCacheBuilder;
 
         var ctorCacheIL = ctorWithCacheBuilder.GetILGenerator();
         // Call base constructor
@@ -445,24 +458,24 @@ public partial class RuntimeEmitter
         ctorCacheIL.Emit(OpCodes.Ldarg_2);
         ctorCacheIL.Emit(OpCodes.Brfalse, noCachedMethodLabel);
         // this._expectsThis = (method.GetParameters().Length > 0 && params[0].Name == "__this")
-        EmitComputeExpectsThis(ctorCacheIL, expectsThisField, runtime.FunctionAttributes, methodArgIndex: 2);
-        EmitComputeCapturesArguments(ctorCacheIL, capturesArgumentsField, runtime.FunctionAttributes, methodArgIndex: 2);
-        EmitComputePadUndefinedMask(ctorCacheIL, padUndefinedMaskField, runtime.FunctionAttributes, methodArgIndex: 2);
+        EmitComputeExpectsThis(ctorCacheIL, expectsThisField, inputs.FunctionAttributes, methodArgIndex: 2);
+        EmitComputeCapturesArguments(ctorCacheIL, capturesArgumentsField, inputs.FunctionAttributes, methodArgIndex: 2);
+        EmitComputePadUndefinedMask(ctorCacheIL, padUndefinedMaskField, inputs.FunctionAttributes, methodArgIndex: 2);
         EmitComputeAdjustArgsCache(ctorCacheIL, paramCountField, hasListRestField, hasArrayRestField, methodArgIndex: 2);
         EmitComputeNeedsArgConversion(ctorCacheIL, needsArgConversionField, conversionParametersField, hasListRestField, methodArgIndex: 2);
         // this._invoker = LookupOrAdd(_invokerCache, method)
         EmitLookupOrCreateInvoker(ctorCacheIL, invokerField, invokerCacheField, invokerCacheType, methodArgIndex: 2);
-        EmitComputeNumericRest4(ctorCacheIL, numericRest4Field, runtime.FunctionAttributes);
+        EmitComputeNumericRest4(ctorCacheIL, numericRest4Field, inputs.FunctionAttributes);
         ctorCacheIL.MarkLabel(noCachedMethodLabel);
         ctorCacheIL.Emit(OpCodes.Ret);
 
         EmitFunctionConstructor(
             typeBuilder,
-            runtime.FunctionConstruction,
+            functionConstruction,
             new FunctionConstructorInputs(
-                runtime.GlobalThisSingletonField,
-                runtime.UndefinedInstance,
-                runtime.UndefinedType
+                inputs.GlobalThisSingletonField,
+                inputs.UndefinedInstance,
+                inputs.UndefinedType
             )
         );
 
@@ -478,7 +491,7 @@ public partial class RuntimeEmitter
             typeBuilder,
             [_types.MethodInfo, _types.String, _types.Int32]
         );
-        runtime.FunctionConstruction.GetOrCreate = getOrCreateBuilder;
+        functionConstruction.GetOrCreate = getOrCreateBuilder;
         var gocIL = getOrCreateBuilder.GetILGenerator();
 
         var cacheKeyLocal = gocIL.DeclareLocal(instanceCacheKeyType);
@@ -545,7 +558,7 @@ public partial class RuntimeEmitter
             _types.MethodInfo,
             Type.EmptyTypes
         );
-        runtime.TSFunctionGetMethodInfo = getMethodInfoBuilder;
+        functionValues.GetMethodInfo = getMethodInfoBuilder;
         var gmIL = getMethodInfoBuilder.GetILGenerator();
         gmIL.Emit(OpCodes.Ldarg_0);
         gmIL.Emit(OpCodes.Ldfld, methodField);
@@ -556,23 +569,30 @@ public partial class RuntimeEmitter
             MethodAttributes.Assembly | MethodAttributes.HideBySig,
             _types.Object,
             Type.EmptyTypes);
-        runtime.TSFunctionGetTarget = getTargetBuilder;
+        functionValues.GetTarget = getTargetBuilder;
         var gtIL = getTargetBuilder.GetILGenerator();
         gtIL.Emit(OpCodes.Ldarg_0);
         gtIL.Emit(OpCodes.Ldfld, targetField);
         gtIL.Emit(OpCodes.Ret);
 
         // Instance argument adjustment uses the cached rest/arity metadata.
-        var adjustArgsMethod = EmitTSFunctionAdjustArgsHelper(typeBuilder, runtime, paramCountField, hasListRestField, hasArrayRestField, padUndefinedMaskField);
+        var adjustArgsMethod = EmitTSFunctionAdjustArgsHelper(
+            typeBuilder,
+            inputs.UndefinedInstance,
+            paramCountField,
+            hasListRestField,
+            hasArrayRestField,
+            padUndefinedMaskField
+        );
 
         // Conversion helpers consume the cached signature, not MethodInfo.GetParameters per call.
-        var convertArgsMethod = EmitTSFunctionConvertArgsHelper(typeBuilder, runtime);
+        var convertArgsMethod = EmitTSFunctionConvertArgsHelper(typeBuilder);
 
         // Coerces args whose target parameter type is `string` via $Runtime.ToJsString.
         // Used for borrowed prototype methods like
         // `Number.prototype.split = String.prototype.split; new Number(x).split(...)`
         // where the wrapped helper expects (string, ...) but receives a non-string `this`.
-        var coercePrimitivesMethod = EmitTSFunctionCoercePrimitivesHelper(typeBuilder, runtime);
+        var coercePrimitivesMethod = EmitTSFunctionCoercePrimitivesHelper(typeBuilder, inputs.UndefinedType);
 
         void EmitConvertArguments(ILGenerator il, LocalBuilder args)
         {
@@ -602,7 +622,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.ObjectArray]
         );
-        runtime.TSFunctionInvoke = invokeBuilder;
+        functionValues.Invoke = invokeBuilder;
 
         var invokeIL = invokeBuilder.GetILGenerator();
 
@@ -683,10 +703,10 @@ public partial class RuntimeEmitter
         // try/finally restore: the prologue on the callee side reads once at entry and
         // clears immediately, and each new Invoke re-sets for its own callee, so the
         // value never needs to be restored to a prior state here.
-        if (runtime.CurrentArgumentsField != null)
+        if (inputs.Arguments.CurrentField != null)
         {
             invokeIL.Emit(OpCodes.Ldarg_1);
-            invokeIL.Emit(OpCodes.Stsfld, runtime.CurrentArgumentsField);
+            invokeIL.Emit(OpCodes.Stsfld, inputs.Arguments.CurrentField);
         }
 
         // Use cached MethodInvoker for fast dispatch — its Span<object?>
@@ -713,7 +733,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object, _types.ObjectArray]
         );
-        runtime.TSFunctionInvokeWithThis = invokeWithThisBuilder;
+        functionValues.InvokeWithThis = invokeWithThisBuilder;
 
         var iwt = invokeWithThisBuilder.GetILGenerator();
 
@@ -879,10 +899,10 @@ public partial class RuntimeEmitter
         // slot and expect the rest to be the user's actual arguments. Using
         // raw Ldarg_2 here would empty out `arguments` for any `arguments.length`
         // / `arguments[i]` access from inside a function-expression body.
-        if (runtime.CurrentArgumentsField != null)
+        if (inputs.Arguments.CurrentField != null)
         {
             iwt.Emit(OpCodes.Ldloc, effectiveArgsIWT);
-            iwt.Emit(OpCodes.Stsfld, runtime.CurrentArgumentsField);
+            iwt.Emit(OpCodes.Stsfld, inputs.Arguments.CurrentField);
         }
 
         // invokeTarget = method.IsStatic ? null : _target
@@ -916,9 +936,17 @@ public partial class RuntimeEmitter
         iwt.Emit(OpCodes.Callvirt, iwtInvokerInvokeSpan);
         iwt.Emit(OpCodes.Ret);
 
-        EmitTSFunctionInvokeWithThis0(typeBuilder, runtime, expectsThisField,
-            paramCountField, capturesArgumentsField, needsArgConversionField,
-            invokerField, methodField, targetField);
+        EmitTSFunctionInvokeWithThis0(
+            typeBuilder,
+            functionValues,
+            expectsThisField,
+            paramCountField,
+            capturesArgumentsField,
+            needsArgConversionField,
+            invokerField,
+            methodField,
+            targetField
+        );
 
         // ToString method
         var toStringBuilder = typeBuilder.DefineMethod(
@@ -939,7 +967,7 @@ public partial class RuntimeEmitter
             _types.Void,
             [_types.Object]
         );
-        runtime.TSFunctionBindThis = bindThisBuilder;
+        functionValues.BindThis = bindThisBuilder;
 
         var bindThisIL = bindThisBuilder.GetILGenerator();
         var noTargetLabel = bindThisIL.DefineLabel();
@@ -1017,7 +1045,7 @@ public partial class RuntimeEmitter
             _types.Int32,
             Type.EmptyTypes
         );
-        runtime.TSFunctionLengthGetter = lengthGetterBuilder;
+        functionValues.LengthGetter = lengthGetterBuilder;
 
         var lengthIL = lengthGetterBuilder.GetILGenerator();
         var paramsLocalLength = lengthIL.DeclareLocal(_types.MakeArrayType(_types.ParameterInfo));
@@ -1159,7 +1187,7 @@ public partial class RuntimeEmitter
             _types.String,
             Type.EmptyTypes
         );
-        runtime.TSFunctionNameGetter = nameGetterBuilder;
+        functionValues.NameGetter = nameGetterBuilder;
 
         var nameIL = nameGetterBuilder.GetILGenerator();
         var nameReturnEmpty = nameIL.DefineLabel();
@@ -1687,9 +1715,14 @@ public partial class RuntimeEmitter
     /// <c>_hasArrayRest</c>) instead of per-call <c>MethodInfo.GetParameters</c>
     /// + <c>ParameterType</c> reflection.
     /// </summary>
-    private MethodBuilder EmitTSFunctionAdjustArgsHelper(TypeBuilder typeBuilder, EmittedRuntime runtime,
-        FieldBuilder paramCountField, FieldBuilder hasListRestField, FieldBuilder hasArrayRestField,
-        FieldBuilder padUndefinedMaskField)
+    private MethodBuilder EmitTSFunctionAdjustArgsHelper(
+        TypeBuilder typeBuilder,
+        FieldInfo undefinedInstance,
+        FieldBuilder paramCountField,
+        FieldBuilder hasListRestField,
+        FieldBuilder hasArrayRestField,
+        FieldBuilder padUndefinedMaskField
+    )
     {
         // private object[] AdjustArgs(object[] args)
         // Instance method: arg0 = this, arg1 = args. paramCount and rest-shape
@@ -1965,7 +1998,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, padSkipSlot);
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ldloc, padIdxLocal);
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, undefinedInstance);
         il.Emit(OpCodes.Stelem_Ref);
         il.MarkLabel(padSkipSlot);
         il.Emit(OpCodes.Ldloc, padIdxLocal);
@@ -2020,7 +2053,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Brfalse, next);
             il.Emit(OpCodes.Ldloc, result);
             il.Emit(OpCodes.Ldloc, index);
-            il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+            il.Emit(OpCodes.Ldsfld, undefinedInstance);
             il.Emit(OpCodes.Stelem_Ref);
             il.MarkLabel(next);
             il.Emit(OpCodes.Ldloc, index);
@@ -2040,7 +2073,7 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits a private static helper method on $TSFunction to convert arguments for union type parameters.
     /// </summary>
-    private MethodBuilder EmitTSFunctionConvertArgsHelper(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private MethodBuilder EmitTSFunctionConvertArgsHelper(TypeBuilder typeBuilder)
     {
         // private static void ConvertArgsForUnionTypes(ParameterInfo[] parameters, object[] args)
         // Wraps raw primitive values into union types using op_Implicit operators.
@@ -2189,7 +2222,7 @@ public partial class RuntimeEmitter
     /// before $Runtime, so the MethodBuilder reference isn't available at IL
     /// emit time. Caches the resolved MethodInfo in a static field.
     /// </summary>
-    private MethodBuilder EmitTSFunctionCoercePrimitivesHelper(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private MethodBuilder EmitTSFunctionCoercePrimitivesHelper(TypeBuilder typeBuilder, Type undefinedType)
     {
         // Static cache fields for resolved $Runtime helpers.
         var toJsStringCacheField = typeBuilder.DefineField(
@@ -2360,7 +2393,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldelem_Ref);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, undefinedType);
         il.Emit(OpCodes.Brfalse, skipNullishThisCheckLabel);
 
         il.MarkLabel(invokeHelperLabel);

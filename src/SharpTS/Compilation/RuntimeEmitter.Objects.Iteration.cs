@@ -1471,7 +1471,7 @@ public partial class RuntimeEmitter
         // The $Arguments marker subclass would otherwise match the IList check
         // below (it inherits from List<object>), so screen it out first.
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.ArgumentsType);
+        il.Emit(OpCodes.Isinst, runtime.Arguments.Type);
         var notArgumentsLabel = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, notArgumentsLabel);
         il.Emit(OpCodes.Ldc_I4_0);

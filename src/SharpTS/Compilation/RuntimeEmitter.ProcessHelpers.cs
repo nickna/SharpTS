@@ -634,14 +634,14 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_2); // doneCallback
             il.Emit(OpCodes.Brfalse, noDoneLabel);
             il.Emit(OpCodes.Ldarg_2);
-            il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+            il.Emit(OpCodes.Isinst, runtime.FunctionValues.Type);
             il.Emit(OpCodes.Brfalse, noDoneLabel);
             il.Emit(OpCodes.Ldarg_2);
-            il.Emit(OpCodes.Castclass, runtime.TSFunctionType);
+            il.Emit(OpCodes.Castclass, runtime.FunctionValues.Type);
             il.Emit(OpCodes.Ldnull); // this
             il.Emit(OpCodes.Ldc_I4_0);
             il.Emit(OpCodes.Newarr, _types.Object);
-            il.Emit(OpCodes.Callvirt, runtime.TSFunctionInvokeWithThis);
+            il.Emit(OpCodes.Callvirt, runtime.FunctionValues.InvokeWithThis);
             il.Emit(OpCodes.Pop);
             il.MarkLabel(noDoneLabel);
             il.Emit(OpCodes.Ldnull);
@@ -675,14 +675,14 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_2);
             il.Emit(OpCodes.Brfalse, noDoneLabel);
             il.Emit(OpCodes.Ldarg_2);
-            il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+            il.Emit(OpCodes.Isinst, runtime.FunctionValues.Type);
             il.Emit(OpCodes.Brfalse, noDoneLabel);
             il.Emit(OpCodes.Ldarg_2);
-            il.Emit(OpCodes.Castclass, runtime.TSFunctionType);
+            il.Emit(OpCodes.Castclass, runtime.FunctionValues.Type);
             il.Emit(OpCodes.Ldnull);
             il.Emit(OpCodes.Ldc_I4_0);
             il.Emit(OpCodes.Newarr, _types.Object);
-            il.Emit(OpCodes.Callvirt, runtime.TSFunctionInvokeWithThis);
+            il.Emit(OpCodes.Callvirt, runtime.FunctionValues.InvokeWithThis);
             il.Emit(OpCodes.Pop);
             il.MarkLabel(noDoneLabel);
             il.Emit(OpCodes.Ldnull);
@@ -784,11 +784,11 @@ public partial class RuntimeEmitter
         // We call SetTimeout(callback, 0, callbackArgs)
 
         // Store callback in local first (needs casting to TSFunctionType)
-        var callbackLocal = implIl.DeclareLocal(runtime.TSFunctionType);
+        var callbackLocal = implIl.DeclareLocal(runtime.FunctionValues.Type);
         implIl.Emit(OpCodes.Ldarg_0);
         implIl.Emit(OpCodes.Ldc_I4_0);
         implIl.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "get_Item", _types.Int32));
-        implIl.Emit(OpCodes.Castclass, runtime.TSFunctionType);
+        implIl.Emit(OpCodes.Castclass, runtime.FunctionValues.Type);
         implIl.Emit(OpCodes.Stloc, callbackLocal);
 
         // Create callback args array (args[1..])

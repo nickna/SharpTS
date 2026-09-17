@@ -32,7 +32,7 @@ internal static class ObjectReadTestSupport
         {
             if (overrides is not null && overrides.TryGetValue(parameter.Name!, out var value)) return value;
             if (parameter.Name == "CommonJs") return runtime.Modules.CommonJs;
-            return (parameter.Name switch { "TSFunctionCtor" => runtime.FunctionConstruction.Constructor, "TSFunctionCtorWithCache" => runtime.FunctionConstruction.CachedConstructor, "TSFunctionGetOrCreate" => runtime.FunctionConstruction.GetOrCreate, _ => typeof(EmittedRuntime).GetProperty(parameter.Name!)!.GetValue(runtime) });
+            return (parameter.Name switch { "TSFunctionCtor" => runtime.FunctionConstruction.Constructor, "TSFunctionCtorWithCache" => runtime.FunctionConstruction.CachedConstructor, "TSFunctionGetOrCreate" => runtime.FunctionConstruction.GetOrCreate, _ => (parameter.Name switch { "ArgumentsLengthField" => runtime.Arguments.LengthField, "ArgumentsType" => runtime.Arguments.Type, "BoundAnyFunctionType" => runtime.FunctionBindings.AnyType, "BoundTSFunctionType" => runtime.FunctionBindings.BoundType, "FunctionApplyWrapperType" => runtime.FunctionBindings.ApplyType, "FunctionBindWrapperType" => runtime.FunctionBindings.BindType, "FunctionCallWrapperType" => runtime.FunctionBindings.CallType, "TSFunctionBindThis" => runtime.FunctionValues.BindThis, "TSFunctionExpectsThisField" => runtime.FunctionValues.ExpectsThisField, "TSFunctionInvokeWithThis" => runtime.FunctionValues.InvokeWithThis, "TSFunctionType" => runtime.FunctionValues.Type, _ => typeof(EmittedRuntime).GetProperty(parameter.Name!)!.GetValue(runtime) }) });
         }).ToArray());
     }
 }

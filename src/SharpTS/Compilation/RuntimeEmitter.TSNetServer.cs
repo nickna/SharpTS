@@ -899,7 +899,7 @@ public partial class RuntimeEmitter
         // Check TSFunction
         var notTs = il.DefineLabel();
         il.Emit(OpCodes.Ldarg, argIdx);
-        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Isinst, runtime.FunctionValues.Type);
         il.Emit(OpCodes.Brfalse, notTs);
         il.Emit(OpCodes.Ldarg, argIdx);
         il.Emit(OpCodes.Stloc, target);
@@ -908,7 +908,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(notTs);
         // Check BoundTSFunction
         il.Emit(OpCodes.Ldarg, argIdx);
-        il.Emit(OpCodes.Isinst, runtime.BoundTSFunctionType);
+        il.Emit(OpCodes.Isinst, runtime.FunctionBindings.BoundType);
         il.Emit(OpCodes.Brfalse, skip);
         il.Emit(OpCodes.Ldarg, argIdx);
         il.Emit(OpCodes.Stloc, target);
@@ -1157,11 +1157,11 @@ public partial class RuntimeEmitter
         // if (callback is TSFunction) callback.Invoke([null, connections.Count])
         var noCb = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Isinst, runtime.FunctionValues.Type);
         il.Emit(OpCodes.Brfalse, noCb);
 
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Castclass, runtime.TSFunctionType);
+        il.Emit(OpCodes.Castclass, runtime.FunctionValues.Type);
         il.Emit(OpCodes.Ldc_I4_2);
         il.Emit(OpCodes.Newarr, _types.Object);
         il.Emit(OpCodes.Dup);
@@ -1176,7 +1176,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Conv_R8);
         il.Emit(OpCodes.Box, _types.Double);
         il.Emit(OpCodes.Stelem_Ref);
-        il.Emit(OpCodes.Callvirt, runtime.TSFunctionInvoke);
+        il.Emit(OpCodes.Callvirt, runtime.FunctionValues.Invoke);
         il.Emit(OpCodes.Pop);
 
         il.MarkLabel(noCb);

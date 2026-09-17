@@ -130,7 +130,7 @@ public partial class RuntimeEmitter
         {
             var skipCb = il.DefineLabel();
             il.Emit(OpCodes.Ldarg, argIdx);
-            il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+            il.Emit(OpCodes.Isinst, runtime.FunctionValues.Type);
             il.Emit(OpCodes.Brfalse, skipCb);
             il.Emit(OpCodes.Ldarg, argIdx);
             il.Emit(OpCodes.Stloc, callbackLocal);

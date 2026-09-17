@@ -1203,14 +1203,14 @@ public partial class RuntimeEmitter
         var tryArg2 = il.DefineLabel();
         // arg3 callable?
         il.Emit(OpCodes.Ldarg_3);
-        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Isinst, runtime.FunctionValues.Type);
         il.Emit(OpCodes.Brfalse, tryArg2);
         il.Emit(OpCodes.Ldarg_3);
         EmitInvokeNullArg(il, runtime);
         il.Emit(OpCodes.Br, done);
         il.MarkLabel(tryArg2);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Isinst, runtime.FunctionValues.Type);
         il.Emit(OpCodes.Brfalse, done);
         il.Emit(OpCodes.Ldarg_2);
         EmitInvokeNullArg(il, runtime);
