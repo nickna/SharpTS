@@ -230,7 +230,7 @@ public partial class RuntimeEmitter
         var ordinaryDeleteDescriptorAllowedLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.ObjectGetOwnPropertyDescriptor);
+        il.Emit(OpCodes.Call, runtime.ObjectDescriptors.GetOwnPropertyDescriptor);
         il.Emit(OpCodes.Stloc, ordinaryDeleteDescriptorLocal);
         il.Emit(OpCodes.Ldloc, ordinaryDeleteDescriptorLocal);
         il.Emit(OpCodes.Brfalse, ordinaryDeleteDescriptorAllowedLabel);

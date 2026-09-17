@@ -17,6 +17,9 @@ namespace SharpTS.Compilation;
 /// <seealso cref="ILEmitter"/>
 public class EmittedRuntime
 {
+    /// <summary>Required public Object descriptor operations for this compilation.</summary>
+    public EmittedObjectDescriptorRuntime ObjectDescriptors { get; } = new();
+
     /// <summary>Required Error types, prototypes and exception bridges for this compilation.</summary>
     public EmittedErrorRuntime Errors { get; } = new();
 
@@ -403,10 +406,6 @@ public class EmittedRuntime
     public MethodBuilder ObjectHasOwn { get; set; } = null!;
     public MethodBuilder ObjectIs { get; set; } = null!;
     public MethodBuilder ObjectAssign { get; set; } = null!;
-    public MethodBuilder ObjectDefineProperty { get; set; } = null!;
-    public MethodBuilder ObjectGetOwnPropertyDescriptor { get; set; } = null!;
-    public MethodBuilder ObjectDefineProperties { get; set; } = null!;
-    public MethodBuilder ObjectGetOwnPropertyDescriptors { get; set; } = null!;
     public MethodBuilder ObjectCreate { get; set; } = null!;
     /// <summary>
     /// Value-form dispatch wrapper for Object.create: maps a null (reflection-

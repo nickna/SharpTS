@@ -247,7 +247,7 @@ public sealed class ReflectStaticEmitter : IStaticTypeEmitterStrategy
                 else
                     il.Emit(OpCodes.Ldnull);
 
-                il.Emit(OpCodes.Call, ctx.Runtime!.ObjectGetOwnPropertyDescriptor);
+                il.Emit(OpCodes.Call, ctx.Runtime!.ObjectDescriptors.GetOwnPropertyDescriptor);
                 return true;
             }
 

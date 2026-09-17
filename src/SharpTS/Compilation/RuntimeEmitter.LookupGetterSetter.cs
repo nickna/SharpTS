@@ -94,7 +94,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloc, descDictLocal);
-        il.Emit(OpCodes.Call, runtime.ObjectDefineProperty);
+        il.Emit(OpCodes.Call, runtime.ObjectDescriptors.DefineProperty);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
         il.Emit(OpCodes.Ret);

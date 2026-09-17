@@ -97,7 +97,7 @@ public partial class RuntimeEmitter
 
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.ObjectDefineProperties);
+        il.Emit(OpCodes.Call, runtime.ObjectDescriptors.DefineProperties);
         il.Emit(OpCodes.Pop);
 
         il.MarkLabel(noPropsLabel);

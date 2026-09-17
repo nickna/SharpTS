@@ -330,6 +330,17 @@ carrier; the strict SyntaxError helper retains its existing CLR exception repres
 Exception wrapping follows supplied optional Promise metadata. Error-cause Proxy handling
 receives six explicit invocation/delegate handles through the shared reflection bridge.
 
+Object descriptor APIs use required `ObjectDescriptors` ownership for `defineProperty`,
+`getOwnPropertyDescriptor`, `defineProperties` and `getOwnPropertyDescriptors`. The lookup
+token stays available at its early declaration point; its later body is required explicitly
+before completion. All four declarations reject missing, null, duplicate and post-completion
+writes. Forty-nine helper signatures receive their owner and exact dependencies, including
+the two tuple-returning normalization stages. Promise callback and JSON singleton receiver
+arms follow supplied component availability. Shared Proxy calls receive explicit invocation
+and descriptor handles; their adapters retain other callers. This component is separate from
+descriptor storage. Receiver order, shared labels and stack contracts, generated member
+order, existing null/undefined behavior, guest descriptor mutation and deployment are unchanged.
+
 Object integrity and deleted-built-in metadata use required `ObjectState` ownership for
 four weak-table declarations, six integrity operations and two deletion helpers. Nine helper
 signatures receive this component and exact peers; their field parameters come from the owner.
