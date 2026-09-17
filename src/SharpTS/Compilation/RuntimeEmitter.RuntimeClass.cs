@@ -468,7 +468,7 @@ public partial class RuntimeEmitter
         runtime.CollectionKeys.NullSentinel = mapNullSentinelField;
 
         // Static field for FinalizationRegistry poke table
-        runtime.FinRegPokeTableField = typeBuilder.DefineField(
+        runtime.FinalizationRegistry.PokeTable = typeBuilder.DefineField(
             "_finRegPokeTable",
             _types.ConditionalWeakTableObjectObject,
             FieldAttributes.Private | FieldAttributes.Static
@@ -728,7 +728,7 @@ public partial class RuntimeEmitter
         // The initialization is done inline in EmitPerfHooksMethods instead
 
         // Initialize _finRegPokeTable = new ConditionalWeakTable<object, object>()
-        EmitFinRegPokeTableInit(cctorIL, runtime);
+        EmitFinRegPokeTableInit(cctorIL, runtime.FinalizationRegistry);
 
         // Define the event-subscription registry (field + two helper methods). Must be
         // emitted while we still hold the cctor IL generator so the field gets initialized.
@@ -994,13 +994,15 @@ public partial class RuntimeEmitter
         // by BCL types, so generic property access cannot discover their
         // JavaScript method names. Emit their helpers before GetProperty so its
         // receiver branches can bind them into $TSFunction wrappers.
-        if (_features.UsesWeakMap)
-            EmitWeakMapMethods(typeBuilder, runtime);
-        if (_features.UsesWeakSet)
-            EmitWeakSetMethods(typeBuilder, runtime);
-        if (_features.UsesWeakRef)
-            EmitWeakRefMethods(typeBuilder, runtime);
-        EmitFinalizationRegistryMethods(typeBuilder, runtime);
+        if (runtime.WeakMap is { } weakMap)
+            EmitWeakMapMethods(typeBuilder, weakMap);
+        if (runtime.WeakSet is { } weakSet)
+            EmitWeakSetMethods(typeBuilder, weakSet);
+        if (runtime.WeakRef is { } weakRef)
+            EmitWeakRefMethods(typeBuilder, weakRef);
+        if (runtime.FinalizationRegistry.Implementation is { } finalizationRegistry)
+            EmitFinalizationRegistryMethods(typeBuilder, finalizationRegistry,
+                runtime.FinalizationRegistry.PokeTable, runtime.UndefinedInstance);
         // Boxed Symbol property access binds these helpers directly.
         EmitSymbolPrototypePopulate(typeBuilder, runtime);
         // String/Number/Boolean populate shells already defined above

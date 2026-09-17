@@ -3708,6 +3708,169 @@ public class StandaloneDllTests
             verifyStandardError: error => Assert.Empty(error)));
     }
 
+    public static IEnumerable<object[]> WeakMetadataPrograms =>
+    [
+        new object[]
+        {
+            "minimal",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "console.log(1);" },
+            "1\n",
+            false
+        },
+        new object[]
+        {
+            "weak_map",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const a={id:1},b={id:1};const map=new WeakMap<object,number>();console.log(map.set(a,7)===map,map.has(a),map.has(b),map.get(a));map.set(a,9);console.log(map.get(a),map.get(b)==null,map.delete(a),map.delete(a));console.log(a.id,b.id);" },
+            "true true false 7\n9 true true false\n1 1\n",
+            false
+        },
+        new object[]
+        {
+            "weak_set",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const a={id:1},b={id:1};const set=new WeakSet<object>();console.log(set.add(a)===set,set.has(a),set.has(b));console.log(set.delete(a),set.delete(a),set.has(a));console.log(a.id,b.id);" },
+            "true true false\ntrue false false\n1 1\n",
+            false
+        },
+        new object[]
+        {
+            "weak_ref_class",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "class Value{constructor(public name:string){}}const value=new Value('kept');const a=new WeakRef(value),b=new WeakRef(value);console.log(a.deref()===value,b.deref()===value,a.deref()!.name);console.log(value.name);" },
+            "true true kept\nkept\n",
+            false
+        },
+        new object[]
+        {
+            "finalization_tokens",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const registry=new FinalizationRegistry((held:any)=>{});const target={id:1},token={id:2},other={id:3};registry.register(target,'held',token);console.log(registry.unregister(other),registry.unregister(token),registry.unregister(token));console.log(target.id,token.id);" },
+            "false true false\n1 2\n",
+            false
+        },
+        new object[]
+        {
+            "independent_registries",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const a=new FinalizationRegistry((held:any)=>{}),b=new FinalizationRegistry((held:any)=>{});const x={id:1},y={id:2},token={id:3};a.register(x,'x',token);b.register(y,'y',token);console.log(a.unregister(token),a.unregister(token),b.unregister(token));console.log(x.id,y.id,token.id);" },
+            "true false true\n1 2 3\n",
+            false
+        },
+        new object[]
+        {
+            "all_families",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const target={id:1};const map=new WeakMap<object,number>();const set=new WeakSet<object>();const ref=new WeakRef(target);const registry=new FinalizationRegistry((held:any)=>{});map.set(target,7);set.add(target);registry.register(target,'held',target);console.log(map.get(target),set.has(target),ref.deref()===target,registry.unregister(target));console.log(target.id);" },
+            "7 true true true\n1\n",
+            false
+        },
+        new object[]
+        {
+            "invalid_primitives",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const map=new WeakMap<any,number>(),set=new WeakSet<any>();let errors=0;try{map.set(1,2);}catch(e){errors++;}try{set.add(1);}catch(e){errors++;}try{new WeakRef(1 as any);}catch(e){errors++;}console.log(errors);" },
+            "3\n",
+            false
+        },
+        new object[]
+        {
+            "dynamic_properties",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const key:any={id:1};const map:any=new WeakMap<object,number>();const set:any=new WeakSet<object>();const put=map.set,get=map.get,add=set.add,has=set.has;put(key,7);add(key);console.log(typeof get,typeof has,get(key),has(key));console.log(key.id);" },
+            "function function 7 true\n1\n",
+            false
+        },
+        new object[]
+        {
+            "async_weak",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "async function run(){const target={id:1};const map=new WeakMap<object,number>();const ref=new WeakRef(target);map.set(target,await Promise.resolve(8));console.log(map.get(target),ref.deref()===target,target.id);}run();" },
+            "8 true 1\n",
+            false
+        },
+        new object[]
+        {
+            "generator_weak",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "function* run():Generator<number,void,any>{const target={id:1};const map=new WeakMap<object,number>();map.set(target,8);yield map.get(target)!;const ref=new WeakRef(target);yield ref.deref()!.id;console.log(target.id);}for(const value of run()){console.log(value);}" },
+            "8\n1\n1\n",
+            false
+        },
+        new object[]
+        {
+            "modules",
+            "main.ts",
+            new string[] { "main.ts", "values.ts" },
+            new string[] { "import {make} from './values';const target={id:1};const pair=make(target);console.log(pair.map.get(target),pair.set.has(target),target.id);", "export function make(target:object){const map=new WeakMap<object,number>();const set=new WeakSet<object>();map.set(target,7);set.add(target);return {map:map,set:set};}" },
+            "7 true 1\n",
+            false
+        },
+        new object[]
+        {
+            "commonjs",
+            "main.cjs",
+            new string[] { "main.cjs", "values.cjs" },
+            new string[] { "const values=require('./values.cjs');const target={id:1};console.log(values.lookup(target),target.id);", "exports.lookup=function(target){const map=new WeakMap();map.set(target,5);return map.get(target);};" },
+            "5 1\n",
+            false
+        },
+        new object[]
+        {
+            "hosted_both",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const target={id:1};const map=new WeakMap<object,number>();const set=new WeakSet<object>();const ref=new WeakRef(target);const registry=new FinalizationRegistry((held:any)=>{});map.set(target,7);set.add(target);registry.register(target,'held',target);console.log(map.get(target),set.has(target),ref.deref()===target,registry.unregister(target));console.log(target.id);" },
+            "",
+            true
+        },
+        new object[]
+        {
+            "hosted_minimal",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "console.log(1);" },
+            "",
+            true
+        },
+    ];
+
+    [Theory]
+    [MemberData(nameof(WeakMetadataPrograms))]
+    public void Isolated_WeakMetadata_PreservesCollectionsAndDeployment(
+        string name, string entry, string[] paths, string[] sources, string expected, bool hosted)
+    {
+        using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        for (int i = 0; i < paths.Length; i++) tempDir.CreateFile(paths[i], sources[i]);
+        var sourcePath = tempDir.GetPath(entry);
+        var dllPath = tempDir.GetPath($"weak-metadata_{name}.dll");
+        var hosting = hosted ? " --target dll --hosted" : "";
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --noLib --compile \"{sourcePath}\" -o \"{dllPath}\" --verify --standalone{hosting}", tempDir.Path);
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        var references = GetAssemblyReferences(dllPath);
+        Assert.DoesNotContain("SharpTS", references);
+        Assert.Equal(hosted, references.Contains("SharpTS.Hosting.Abstractions"));
+        Assert.False(File.Exists(tempDir.GetPath("SharpTS.dll")));
+        if (!hosted)
+            Assert.Equal(expected, ExecuteCompiledDllIsolated(dllPath, timeoutMs: 30000,
+                verifyStandardError: error => Assert.Empty(error)));
+    }
+
+
     public static IEnumerable<object[]> MapSetMetadataPrograms =>
     [
         new object[]

@@ -6,20 +6,20 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
-    private void EmitWeakMapMethods(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitWeakMapMethods(TypeBuilder typeBuilder, EmittedWeakMapRuntime weakMap)
     {
         // Emit validation helper first (shared primitive probe: RuntimeEmitter.WeakValidation.cs)
-        runtime.ValidateWeakMapKey = EmitWeakTargetValidator(typeBuilder, "ValidateWeakMapKey",
+        weakMap.ValidateKey = EmitWeakTargetValidator(typeBuilder, "ValidateWeakMapKey",
             "Runtime Error: Invalid value used as weak map key. WeakMap keys must be objects");
 
-        EmitCreateWeakMap(typeBuilder, runtime);
-        EmitWeakMapGet(typeBuilder, runtime);
-        EmitWeakMapSet(typeBuilder, runtime);
-        EmitWeakMapHas(typeBuilder, runtime);
-        EmitWeakMapDelete(typeBuilder, runtime);
+        EmitCreateWeakMap(typeBuilder, weakMap);
+        EmitWeakMapGet(typeBuilder, weakMap);
+        EmitWeakMapSet(typeBuilder, weakMap);
+        EmitWeakMapHas(typeBuilder, weakMap);
+        EmitWeakMapDelete(typeBuilder, weakMap);
     }
 
-    private void EmitCreateWeakMap(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitCreateWeakMap(TypeBuilder typeBuilder, EmittedWeakMapRuntime weakMap)
     {
         var method = typeBuilder.DefineMethod(
             "CreateWeakMap",
@@ -27,7 +27,7 @@ public partial class RuntimeEmitter
             _types.Object,
             _types.EmptyTypes
         );
-        runtime.CreateWeakMap = method;
+        weakMap.Create = method;
 
         var il = method.GetILGenerator();
 
@@ -37,7 +37,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitWeakMapGet(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitWeakMapGet(TypeBuilder typeBuilder, EmittedWeakMapRuntime weakMap)
     {
         var method = typeBuilder.DefineMethod(
             "WeakMapGet",
@@ -45,7 +45,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object, _types.Object]
         );
-        runtime.WeakMapGet = method;
+        weakMap.Get = method;
 
         var il = method.GetILGenerator();
         var cwtType = _types.ConditionalWeakTableObjectObject;
@@ -64,7 +64,7 @@ public partial class RuntimeEmitter
 
         // ValidateWeakMapKey(key);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.ValidateWeakMapKey);
+        il.Emit(OpCodes.Call, weakMap.ValidateKey);
 
         // if (table.TryGetValue(key, out var value)) return value; else return null;
         il.Emit(OpCodes.Ldarg_0);
@@ -82,7 +82,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitWeakMapSet(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitWeakMapSet(TypeBuilder typeBuilder, EmittedWeakMapRuntime weakMap)
     {
         var method = typeBuilder.DefineMethod(
             "WeakMapSet",
@@ -90,7 +90,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object, _types.Object, _types.Object]
         );
-        runtime.WeakMapSet = method;
+        weakMap.Set = method;
 
         var il = method.GetILGenerator();
         var cwtType = _types.ConditionalWeakTableObjectObject;
@@ -108,7 +108,7 @@ public partial class RuntimeEmitter
 
         // ValidateWeakMapKey(key);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.ValidateWeakMapKey);
+        il.Emit(OpCodes.Call, weakMap.ValidateKey);
 
         // table.AddOrUpdate(key, value);
         il.Emit(OpCodes.Ldarg_0);
@@ -123,7 +123,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitWeakMapHas(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitWeakMapHas(TypeBuilder typeBuilder, EmittedWeakMapRuntime weakMap)
     {
         var method = typeBuilder.DefineMethod(
             "WeakMapHas",
@@ -131,7 +131,7 @@ public partial class RuntimeEmitter
             _types.Boolean,
             [_types.Object, _types.Object]
         );
-        runtime.WeakMapHas = method;
+        weakMap.Has = method;
 
         var il = method.GetILGenerator();
         var cwtType = _types.ConditionalWeakTableObjectObject;
@@ -150,7 +150,7 @@ public partial class RuntimeEmitter
 
         // ValidateWeakMapKey(key);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.ValidateWeakMapKey);
+        il.Emit(OpCodes.Call, weakMap.ValidateKey);
 
         // return table.TryGetValue(key, out _);
         il.Emit(OpCodes.Ldarg_0);
@@ -165,7 +165,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitWeakMapDelete(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitWeakMapDelete(TypeBuilder typeBuilder, EmittedWeakMapRuntime weakMap)
     {
         var method = typeBuilder.DefineMethod(
             "WeakMapDelete",
@@ -173,7 +173,7 @@ public partial class RuntimeEmitter
             _types.Boolean,
             [_types.Object, _types.Object]
         );
-        runtime.WeakMapDelete = method;
+        weakMap.Delete = method;
 
         var il = method.GetILGenerator();
         var cwtType = _types.ConditionalWeakTableObjectObject;
@@ -191,7 +191,7 @@ public partial class RuntimeEmitter
 
         // ValidateWeakMapKey(key);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.ValidateWeakMapKey);
+        il.Emit(OpCodes.Call, weakMap.ValidateKey);
 
         // return table.Remove(key);
         il.Emit(OpCodes.Ldarg_0);

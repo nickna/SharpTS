@@ -651,42 +651,51 @@ public class EmittedRuntime
     public MethodBuilder GlobalEncodeURIComponent { get; set; } = null!;
     public MethodBuilder GlobalDecodeURIComponent { get; set; } = null!;
 
-    // WeakMap support
-    public MethodBuilder CreateWeakMap { get; set; } = null!;
-    public MethodBuilder WeakMapGet { get; set; } = null!;
-    public MethodBuilder WeakMapSet { get; set; } = null!;
-    public MethodBuilder WeakMapHas { get; set; } = null!;
-    public MethodBuilder WeakMapDelete { get; set; } = null!;
+    /// <summary>WeakMap metadata, or null when the feature is omitted.</summary>
+    public EmittedWeakMapRuntime? WeakMap { get; private set; }
 
-    // WeakSet support
-    public MethodBuilder CreateWeakSet { get; set; } = null!;
-    public MethodBuilder WeakSetAdd { get; set; } = null!;
-    public MethodBuilder WeakSetHas { get; set; } = null!;
-    public MethodBuilder WeakSetDelete { get; set; } = null!;
+    internal void BeginWeakMapEmission()
+    {
+        if (WeakMap is not null)
+            throw new InvalidOperationException("WeakMap metadata emission has already started.");
+        WeakMap = new EmittedWeakMapRuntime();
+    }
 
-    // WeakRef support
-    public MethodBuilder CreateWeakRef { get; set; } = null!;
-    public MethodBuilder WeakRefDeref { get; set; } = null!;
+    public EmittedWeakMapRuntime RequireWeakMap() => WeakMap
+        ?? throw new InvalidOperationException("WeakMap runtime was not enabled for this compilation.");
+
+    /// <summary>WeakSet metadata, or null when the feature is omitted.</summary>
+    public EmittedWeakSetRuntime? WeakSet { get; private set; }
+
+    internal void BeginWeakSetEmission()
+    {
+        if (WeakSet is not null)
+            throw new InvalidOperationException("WeakSet metadata emission has already started.");
+        WeakSet = new EmittedWeakSetRuntime();
+    }
+
+    public EmittedWeakSetRuntime RequireWeakSet() => WeakSet
+        ?? throw new InvalidOperationException("WeakSet runtime was not enabled for this compilation.");
+
+    /// <summary>WeakRef metadata, or null when the feature is omitted.</summary>
+    public EmittedWeakRefRuntime? WeakRef { get; private set; }
+
+    internal void BeginWeakRefEmission()
+    {
+        if (WeakRef is not null)
+            throw new InvalidOperationException("WeakRef metadata emission has already started.");
+        WeakRef = new EmittedWeakRefRuntime();
+    }
+
+    public EmittedWeakRefRuntime RequireWeakRef() => WeakRef
+        ?? throw new InvalidOperationException("WeakRef runtime was not enabled for this compilation.");
+
+    /// <summary>Required finalization poke table and optional registry implementation for this compilation.</summary>
+    public EmittedFinalizationRegistryRuntime FinalizationRegistry { get; } = new();
 
     // Proxy support
     public MethodBuilder CreateProxy { get; set; } = null!;
     public MethodBuilder CreateRevocableProxy { get; set; } = null!;
-
-    // FinalizationRegistry support
-    public MethodBuilder CreateFinalizationRegistry { get; set; } = null!;
-    public MethodBuilder FinalizationRegistryRegister { get; set; } = null!;
-    public MethodBuilder FinalizationRegistryUnregister { get; set; } = null!;
-
-    // $FinRegEntry emitted type (pure IL finalizer entry)
-    public Type FinRegEntryType { get; set; } = null!;
-    public ConstructorBuilder FinRegEntryCtor { get; set; } = null!;
-    public MethodBuilder FinRegEntrySuppress { get; set; } = null!;
-    public FieldBuilder FinRegPokeTableField { get; set; } = null!;
-
-    // WeakMap/WeakSet/WeakRef validation helpers
-    public MethodBuilder ValidateWeakMapKey { get; set; } = null!;
-    public MethodBuilder ValidateWeakSetValue { get; set; } = null!;
-    public MethodBuilder ValidateWeakRefTarget { get; set; } = null!;
 
     /// <summary>Required module registry metadata with optional CommonJS and dynamic-import declarations.</summary>
     public EmittedModuleRuntime Modules { get; } = new();

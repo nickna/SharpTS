@@ -25,24 +25,24 @@ public sealed class WeakMapEmitter : ITypeEmitterStrategy
         {
             case "get":
                 EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0);
-                il.Emit(OpCodes.Call, ctx.Runtime!.WeakMapGet);
+                il.Emit(OpCodes.Call, ctx.Runtime!.RequireWeakMap().Get);
                 return true;
 
             case "set":
                 EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0);
                 EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 1);
-                il.Emit(OpCodes.Call, ctx.Runtime!.WeakMapSet);
+                il.Emit(OpCodes.Call, ctx.Runtime!.RequireWeakMap().Set);
                 return true;
 
             case "has":
                 EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0);
-                il.Emit(OpCodes.Call, ctx.Runtime!.WeakMapHas);
+                il.Emit(OpCodes.Call, ctx.Runtime!.RequireWeakMap().Has);
                 il.Emit(OpCodes.Box, ctx.Types.Boolean);
                 return true;
 
             case "delete":
                 EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0);
-                il.Emit(OpCodes.Call, ctx.Runtime!.WeakMapDelete);
+                il.Emit(OpCodes.Call, ctx.Runtime!.RequireWeakMap().Delete);
                 il.Emit(OpCodes.Box, ctx.Types.Boolean);
                 return true;
 
