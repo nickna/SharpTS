@@ -91,7 +91,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldtoken, _types.ListOfObject);
         il.Emit(OpCodes.Call, _types.MethodBaseGetMethodFromHandleWithType);
         il.Emit(OpCodes.Castclass, _types.MethodInfo);
-        il.Emit(OpCodes.Newobj, runtime.TSFunctionCtor);
+        il.Emit(OpCodes.Newobj, runtime.FunctionValues.Ctor);
         il.Emit(OpCodes.Ret);
 
         // Handle pop - need special handling since pop returns removed element
@@ -142,7 +142,7 @@ public partial class RuntimeEmitter
         }
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Isinst, runtime.FunctionValues.Type);
         il.Emit(OpCodes.Brtrue, tsFunctionLabel);
 
         il.Emit(OpCodes.Ldarg_0);
@@ -395,14 +395,14 @@ public partial class RuntimeEmitter
         var notFunctionTypeLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, _types.Type);
-        il.Emit(OpCodes.Ldtoken, runtime.TSFunctionType);
+        il.Emit(OpCodes.Ldtoken, runtime.FunctionValues.Type);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle",
             [_types.RuntimeTypeHandle])!);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "op_Equality",
             [_types.Type, _types.Type])!);
         il.Emit(OpCodes.Brfalse, notFunctionTypeLabel);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.FunctionConstructor);
+        il.Emit(OpCodes.Call, runtime.FunctionValues.Construct);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notFunctionTypeLabel);
 
@@ -438,13 +438,13 @@ public partial class RuntimeEmitter
         // Behavior unchanged for callables without __this naming: InvokeWithThis
         // sets thread-local _currentThis and calls Invoke unchanged.
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSFunctionType);
+        il.Emit(OpCodes.Castclass, runtime.FunctionValues.Type);
         // A call through InvokeValue has no Reference receiver.  Pass the JS
         // undefined sentinel so strict callees retain undefined while sloppy
         // callees normalize it to globalThis in LoadThis.
         il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, runtime.TSFunctionInvokeWithThis);
+        il.Emit(OpCodes.Callvirt, runtime.FunctionValues.InvokeWithThis);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(boundTsFunctionLabel);
@@ -634,14 +634,14 @@ public partial class RuntimeEmitter
 
         // if (function is $TSFunction tsFunc)
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Isinst, runtime.FunctionValues.Type);
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Brfalse, notTSFunctionLabel);
 
         // return tsFunc.InvokeWithThis(receiver, args)
         il.Emit(OpCodes.Ldarg_0);  // receiver
         il.Emit(OpCodes.Ldarg_2);  // args
-        il.Emit(OpCodes.Callvirt, runtime.TSFunctionInvokeWithThis);
+        il.Emit(OpCodes.Callvirt, runtime.FunctionValues.InvokeWithThis);
         il.Emit(OpCodes.Ret);
 
         // Not a TSFunction - handle known callable wrappers without calling InvokeValue
@@ -1297,7 +1297,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(foundLabel);
         il.Emit(OpCodes.Ldarg_0); // instance (target for the bound method)
         il.Emit(OpCodes.Ldloc, methodInfoLocal);
-        il.Emit(OpCodes.Newobj, runtime.TSFunctionCtor);
+        il.Emit(OpCodes.Newobj, runtime.FunctionValues.Ctor);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(nullLabel);

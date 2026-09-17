@@ -197,7 +197,7 @@ public sealed class EmittedObjectWriteRuntimeTests
             if (overrides.TryGetValue(parameter.Name!, out var value)) return value;
             if (parameter.Name == "CommonJs") return runtime.Modules.CommonJs;
             if (parameter.Name == "ReflectAssignment") return runtime.Reflect.Assignment;
-            return typeof(EmittedRuntime).GetProperty(parameter.Name!)!.GetValue(runtime);
+            return (parameter.Name switch { "TSFunctionType" => runtime.FunctionValues.Type, "TSFunctionInvokeWithThis" => runtime.FunctionValues.InvokeWithThis, "ArgumentsType" => runtime.Arguments.Type, "ArgumentsLengthField" => runtime.Arguments.LengthField, _ => typeof(EmittedRuntime).GetProperty(parameter.Name!)!.GetValue(runtime) });
         }).ToArray());
     }
 

@@ -2619,8 +2619,8 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Ldloc, iteratorObject);
         IL.Emit(OpCodes.Ldstr, "next");
         IL.Emit(OpCodes.Call, _ctx.Runtime.ObjectRead.Property);
-        IL.Emit(OpCodes.Castclass, _ctx.Runtime.TSFunctionType);
-        var nextFunction = IL.DeclareLocal(_ctx.Runtime.TSFunctionType);
+        IL.Emit(OpCodes.Castclass, _ctx.Runtime.FunctionValues.Type);
+        var nextFunction = IL.DeclareLocal(_ctx.Runtime.FunctionValues.Type);
         IL.Emit(OpCodes.Stloc, nextFunction);
 
         LocalBuilder? nextTarget = null;
@@ -2630,7 +2630,7 @@ public partial class ILEmitter
         {
             nextTarget = IL.DeclareLocal(displayClass!);
             IL.Emit(OpCodes.Ldloc, nextFunction);
-            IL.Emit(OpCodes.Callvirt, _ctx.Runtime.TSFunctionGetTarget);
+            IL.Emit(OpCodes.Callvirt, _ctx.Runtime.FunctionValues.GetTarget);
             IL.Emit(OpCodes.Castclass, displayClass!);
             IL.Emit(OpCodes.Stloc, nextTarget);
         }

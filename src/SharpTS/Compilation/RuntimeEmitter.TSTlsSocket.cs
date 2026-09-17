@@ -971,7 +971,7 @@ public partial class RuntimeEmitter
         {
             var skipCb = il.DefineLabel();
             il.Emit(OpCodes.Ldarg, argIdx);
-            il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+            il.Emit(OpCodes.Isinst, runtime.FunctionValues.Type);
             il.Emit(OpCodes.Brfalse, skipCb);
             il.Emit(OpCodes.Ldarg, argIdx);
             il.Emit(OpCodes.Stloc, callbackLocal);
@@ -1053,10 +1053,10 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, callbackLocal);
         il.Emit(OpCodes.Brfalse, noCallback);
         il.Emit(OpCodes.Ldloc, callbackLocal);
-        il.Emit(OpCodes.Castclass, runtime.TSFunctionType);
+        il.Emit(OpCodes.Castclass, runtime.FunctionValues.Type);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Newarr, _types.Object);
-        il.Emit(OpCodes.Callvirt, runtime.TSFunctionInvoke);
+        il.Emit(OpCodes.Callvirt, runtime.FunctionValues.Invoke);
         il.Emit(OpCodes.Pop);
         il.MarkLabel(noCallback);
 
@@ -1127,13 +1127,13 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Brfalse, noCb);
             var notTSFunc = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+            il.Emit(OpCodes.Isinst, runtime.FunctionValues.Type);
             il.Emit(OpCodes.Brfalse, notTSFunc);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Castclass, runtime.TSFunctionType);
+            il.Emit(OpCodes.Castclass, runtime.FunctionValues.Type);
             il.Emit(OpCodes.Ldc_I4_0);
             il.Emit(OpCodes.Newarr, _types.Object);
-            il.Emit(OpCodes.Callvirt, runtime.TSFunctionInvoke);
+            il.Emit(OpCodes.Callvirt, runtime.FunctionValues.Invoke);
             il.Emit(OpCodes.Pop);
             il.Emit(OpCodes.Br, noCb);
             il.MarkLabel(notTSFunc);

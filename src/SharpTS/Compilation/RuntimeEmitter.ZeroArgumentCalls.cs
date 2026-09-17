@@ -15,11 +15,11 @@ public partial class RuntimeEmitter
         EmitStackGuard(il, runtime);
         var fallback = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Isinst, runtime.FunctionValues.Type);
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Brfalse, fallback);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Callvirt, runtime.TSFunctionInvokeWithThis0);
+        il.Emit(OpCodes.Callvirt, runtime.FunctionValues.InvokeWithThis0);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(fallback);
         il.Emit(OpCodes.Pop);
@@ -30,13 +30,21 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitTSFunctionInvokeWithThis0(TypeBuilder typeBuilder, EmittedRuntime runtime,
-        FieldBuilder expectsThis, FieldBuilder parameterCount, FieldBuilder capturesArguments,
-        FieldBuilder needsConversion, FieldBuilder invoker, FieldBuilder methodInfo, FieldBuilder target)
+    private void EmitTSFunctionInvokeWithThis0(
+        TypeBuilder typeBuilder,
+        EmittedFunctionValueRuntime functionValues,
+        FieldBuilder expectsThis,
+        FieldBuilder parameterCount,
+        FieldBuilder capturesArguments,
+        FieldBuilder needsConversion,
+        FieldBuilder invoker,
+        FieldBuilder methodInfo,
+        FieldBuilder target
+    )
     {
         var method = typeBuilder.DefineMethod("InvokeWithThis0", MethodAttributes.Public,
             _types.Object, [_types.Object]);
-        runtime.TSFunctionInvokeWithThis0 = method;
+        functionValues.InvokeWithThis0 = method;
         var il = method.GetILGenerator();
         var fallback = il.DefineLabel();
         // Metadata is cached when the function is constructed. Only a single
@@ -79,7 +87,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
         EmitEmptyArguments(il);
-        il.Emit(OpCodes.Callvirt, runtime.TSFunctionInvokeWithThis);
+        il.Emit(OpCodes.Callvirt, functionValues.InvokeWithThis);
         il.Emit(OpCodes.Ret);
     }
 

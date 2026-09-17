@@ -1044,7 +1044,7 @@ public partial class RuntimeEmitter
         // $TSFunction → check method's declaring type
         var notTSFunctionLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Isinst, runtime.FunctionValues.Type);
         il.Emit(OpCodes.Brfalse, notTSFunctionLabel);
 
         // var mi = ((TSFunction)fn).GetMethodInfo();
@@ -1054,8 +1054,8 @@ public partial class RuntimeEmitter
         // return true;
         var miLocal = il.DeclareLocal(_types.MethodInfo);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSFunctionType);
-        il.Emit(OpCodes.Callvirt, runtime.TSFunctionGetMethodInfo);
+        il.Emit(OpCodes.Castclass, runtime.FunctionValues.Type);
+        il.Emit(OpCodes.Callvirt, runtime.FunctionValues.GetMethodInfo);
         il.Emit(OpCodes.Stloc, miLocal);
         var miNullLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, miLocal);

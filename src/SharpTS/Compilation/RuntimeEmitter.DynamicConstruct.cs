@@ -119,11 +119,11 @@ public partial class RuntimeEmitter
 
         var notFunctionType = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldtoken, runtime.TSFunctionType);
+        il.Emit(OpCodes.Ldtoken, runtime.FunctionValues.Type);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
         il.Emit(OpCodes.Bne_Un, notFunctionType);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.FunctionConstructor);
+        il.Emit(OpCodes.Call, runtime.FunctionValues.Construct);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notFunctionType);
 

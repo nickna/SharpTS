@@ -780,7 +780,7 @@ public partial class RuntimeEmitter
         EmitFormatNumberMethod(typeBuilder, runtime.Numbers);
         EmitConcatStringInt64Method(typeBuilder, runtime.StringCoercion);
         EmitStringify(typeBuilder, runtime.StringCoercion,
-            runtime.ArrayStorage, runtime.UndefinedType, runtime.Numbers.Format, runtime.TSFunctionType, runtime.TSFunctionInvokeWithThis);
+            runtime.ArrayStorage, runtime.UndefinedType, runtime.Numbers.Format, runtime.FunctionValues.Type, runtime.FunctionValues.InvokeWithThis);
         // EmitStringRaw is moved later in this method (after ToJsString/
         // ToNumber/GetProperty are emitted) so the spec-form String.raw can
         // resolve template.raw properties + ToString-coerce substitutions.
@@ -873,7 +873,7 @@ public partial class RuntimeEmitter
                 runtime.Promise,
                 runtime.Set,
                 runtime.Symbols,
-                runtime.TSFunctionType,
+                runtime.FunctionValues.Type,
                 runtime.UndefinedType
             )
         );
@@ -949,7 +949,7 @@ public partial class RuntimeEmitter
                 ),
                 runtime.RegExps,
                 runtime.Symbols,
-                runtime.TSFunctionType,
+                runtime.FunctionValues.Type,
                 runtime.UndefinedType
             )
         );
@@ -963,7 +963,7 @@ public partial class RuntimeEmitter
                 runtime.Errors,
                 runtime.RegExps,
                 runtime.Symbols,
-                runtime.TSFunctionType,
+                runtime.FunctionValues.Type,
                 runtime.UndefinedType
             )
         );
@@ -999,7 +999,7 @@ public partial class RuntimeEmitter
                 runtime.ObjectPrototypes,
                 runtime.Promise,
                 runtime.Symbols,
-                runtime.TSFunctionType,
+                runtime.FunctionValues.Type,
                 runtime.UndefinedType
             )
         );
@@ -1060,8 +1060,8 @@ public partial class RuntimeEmitter
                 runtime.Reflect,
                 runtime.ReflectedMethodCacheField,
                 runtime.SafeGetMethod,
-                runtime.TSFunctionCtor,
-                runtime.TSFunctionType,
+                runtime.FunctionValues.Ctor,
+                runtime.FunctionValues.Type,
                 runtime.ToPascalCase,
                 runtime.UndefinedInstance,
                 runtime.UndefinedType
@@ -1071,8 +1071,8 @@ public partial class RuntimeEmitter
             typeBuilder,
             runtime.ObjectRead,
             new GetListPropertyInputs(
-                runtime.ArgumentsLengthField,
-                runtime.ArgumentsType,
+                runtime.Arguments.LengthField,
+                runtime.Arguments.Type,
                 runtime.ArrayOperations,
                 _features.UsesArrayPrototypeMutation,
                 runtime.DescriptorStorage,
@@ -1147,8 +1147,8 @@ public partial class RuntimeEmitter
         // UsesAbortController, also implied by UsesWebStreams/fetch/http.
         if (_features.UsesAbortController)
         {
-            EmitFireAbortEvent(typeBuilder, runtime.RequireAbort(), runtime.TSFunctionType,
-                runtime.TSFunctionInvoke, runtime.BoundTSFunctionType, runtime.BoundTSFunctionInvoke);
+            EmitFireAbortEvent(typeBuilder, runtime.RequireAbort(), runtime.FunctionValues.Type,
+                runtime.FunctionValues.Invoke, runtime.BoundTSFunctionType, runtime.BoundTSFunctionInvoke);
             EmitAbortControllerMethods(typeBuilder, runtime.RequireAbort(),
                 reason => runtime.RequireSharpTSRuntime(reason), _features.UsesAbortSignalAny);
             // stream.addAbortSignal destroy-on-abort wiring (#1027) — needs the AbortSignal
@@ -1184,7 +1184,7 @@ public partial class RuntimeEmitter
                 runtime.DescriptorStorage,
                 runtime.ObjectPrototypes.Prototype,
                 runtime.ObjectStorage,
-                runtime.TSFunctionGetOrCreate,
+                runtime.FunctionValues.GetOrCreate,
                 runtime.Errors.TypeErrorConstructor
             )
         );
@@ -1194,8 +1194,8 @@ public partial class RuntimeEmitter
             runtime.ObjectRead,
             new GetPropertyInputs(
                 runtime.Abort,
-                runtime.ArgumentsLengthField,
-                runtime.ArgumentsType,
+                runtime.Arguments.LengthField,
+                runtime.Arguments.Type,
                 runtime.ArrayBuffer,
                 runtime.ArrayOperations,
                 runtime.ArrayStorage,
@@ -1240,13 +1240,13 @@ public partial class RuntimeEmitter
                 runtime.Strings,
                 runtime.SymbolAccessors,
                 runtime.Symbols,
-                runtime.TSFunctionBindThis,
-                runtime.TSFunctionCtor,
-                runtime.TSFunctionCtorWithCache,
-                runtime.TSFunctionExpectsThisField,
-                runtime.TSFunctionGetOrCreate,
-                runtime.TSFunctionInvokeWithThis,
-                runtime.TSFunctionType,
+                runtime.FunctionValues.BindThis,
+                runtime.FunctionValues.Ctor,
+                runtime.FunctionValues.CtorWithCache,
+                runtime.FunctionValues.ExpectsThisField,
+                runtime.FunctionValues.GetOrCreate,
+                runtime.FunctionValues.InvokeWithThis,
+                runtime.FunctionValues.Type,
                 runtime.TSNamespaceGet,
                 runtime.TSNamespaceType,
                 runtime.TypedArrays,
@@ -1269,8 +1269,8 @@ public partial class RuntimeEmitter
         EmitToJsString(typeBuilder, runtime.StringCoercion, runtime.ArrayStorage, runtime.ArrayOperations,
             new StringCoercionInputs(
                 runtime.UndefinedType, runtime.Symbols.Type, runtime.GlobalThisSingletonField, runtime.GlobalThisGetProperty,
-                runtime.Operators.TypeOf, runtime.InvokeMethodValue, runtime.ArgumentsType, runtime.ObjectRead.Property, runtime.ObjectStorage.Type,
-                runtime.TSFunctionType, runtime.BoundAnyFunctionType, runtime.ObjectOwnProperties.HasOwnProperty, runtime.IHasFieldsInterface,
+                runtime.Operators.TypeOf, runtime.InvokeMethodValue, runtime.Arguments.Type, runtime.ObjectRead.Property, runtime.ObjectStorage.Type,
+                runtime.FunctionValues.Type, runtime.BoundAnyFunctionType, runtime.ObjectOwnProperties.HasOwnProperty, runtime.IHasFieldsInterface,
                 runtime.Symbols.GetStorage, runtime.Symbols.ToPrimitive, runtime.DescriptorStorage.DescriptorType,
                 runtime.DescriptorStorage.DescriptorGetter.GetGetMethod()!,
                 runtime.DescriptorStorage.DescriptorSetter.GetGetMethod()!, runtime.DescriptorStorage.DescriptorValue.GetGetMethod()!,
@@ -1301,7 +1301,7 @@ public partial class RuntimeEmitter
         // call those helpers.
         EmitToNumber(typeBuilder, runtime.NumericCoercion,
             new AbstractNumberInputs(runtime.UndefinedType, runtime.Symbols.Type, runtime.ObjectStorage.Type,
-                runtime.TSFunctionType, runtime.BoundAnyFunctionType, runtime.IHasFieldsInterface,
+                runtime.FunctionValues.Type, runtime.BoundAnyFunctionType, runtime.IHasFieldsInterface,
                 runtime.DescriptorStorage.DescriptorType, runtime.DescriptorStorage.DescriptorGetter.GetGetMethod()!,
                 runtime.DescriptorStorage.DescriptorSetter.GetGetMethod()!, runtime.DescriptorStorage.DescriptorValue.GetGetMethod()!,
                 runtime.Symbols.ToPrimitive, runtime.Symbols.GetStorage, runtime.ObjectRead.Property, runtime.InvokeMethodValue,
@@ -1319,8 +1319,8 @@ public partial class RuntimeEmitter
             runtime.ObjectWrite,
             new SetPropertyInputs(
                 runtime.Abort,
-                runtime.ArgumentsLengthField,
-                runtime.ArgumentsType,
+                runtime.Arguments.LengthField,
+                runtime.Arguments.Type,
                 runtime.ArrayStorage,
                 runtime.BoundAnyFunctionType,
                 runtime.BoundTSFunctionType,
@@ -1342,8 +1342,8 @@ public partial class RuntimeEmitter
                 _features.UsesProxy,
                 runtime.Reflect.Assignment,
                 runtime.RegExps,
-                runtime.TSFunctionInvokeWithThis,
-                runtime.TSFunctionType,
+                runtime.FunctionValues.InvokeWithThis,
+                runtime.FunctionValues.Type,
                 runtime.UndefinedType
             )
         );
@@ -1368,7 +1368,7 @@ public partial class RuntimeEmitter
                 runtime.ObjectStorage,
                 _features.UsesProxy,
                 runtime.Reflect.Assignment,
-                runtime.TSFunctionType
+                runtime.FunctionValues.Type
             )
         );
         EmitDeleteProperty(
@@ -1389,7 +1389,7 @@ public partial class RuntimeEmitter
                 runtime.ObjectState,
                 runtime.ObjectStorage,
                 runtime.Records,
-                runtime.TSFunctionType,
+                runtime.FunctionValues.Type,
                 runtime.UndefinedType
             )
         );
@@ -1411,7 +1411,7 @@ public partial class RuntimeEmitter
                 runtime.ObjectState,
                 runtime.ObjectStorage,
                 runtime.Records,
-                runtime.TSFunctionType,
+                runtime.FunctionValues.Type,
                 runtime.UndefinedType
             )
         );
@@ -1479,8 +1479,8 @@ public partial class RuntimeEmitter
                 runtime.Strings,
                 runtime.SymbolAccessors,
                 runtime.Symbols,
-                runtime.TSFunctionCtor,
-                runtime.TSFunctionType,
+                runtime.FunctionValues.Ctor,
+                runtime.FunctionValues.Type,
                 runtime.TypedArrays,
                 runtime.UndefinedInstance,
                 runtime.UndefinedType
@@ -1513,7 +1513,7 @@ public partial class RuntimeEmitter
                 runtime.StringCoercion,
                 runtime.SymbolAccessors,
                 runtime.Symbols,
-                runtime.TSFunctionType,
+                runtime.FunctionValues.Type,
                 runtime.TypedArrays,
                 runtime.UndefinedType
             )
@@ -1546,7 +1546,7 @@ public partial class RuntimeEmitter
                 runtime.Promise,
                 runtime.StringCoercion,
                 runtime.Symbols,
-                runtime.TSFunctionType
+                runtime.FunctionValues.Type
             )
         );
         EmitDeleteIndexStrict(
@@ -1562,7 +1562,7 @@ public partial class RuntimeEmitter
                 runtime.Promise,
                 runtime.StringCoercion,
                 runtime.Symbols,
-                runtime.TSFunctionType
+                runtime.FunctionValues.Type
             )
         );
         EmitStrictModeHelpers(typeBuilder, runtime.Operators, runtime.Errors);
@@ -1594,7 +1594,7 @@ public partial class RuntimeEmitter
         EmitGetLength(
             typeBuilder,
             runtime.ObjectRead,
-            new GetLengthInputs(runtime.ArgumentsLengthField, runtime.ArgumentsType, runtime.ArrayStorage)
+            new GetLengthInputs(runtime.Arguments.LengthField, runtime.Arguments.Type, runtime.ArrayStorage)
         );
         EmitGetElement(
             typeBuilder,
@@ -1701,7 +1701,7 @@ public partial class RuntimeEmitter
                     runtime.InvokeMethodUnwrapped
                 ),
                 runtime.Symbols,
-                runtime.TSFunctionType,
+                runtime.FunctionValues.Type,
                 runtime.UndefinedType
             )
         );
@@ -1746,7 +1746,7 @@ public partial class RuntimeEmitter
                 runtime.IHasFieldsInterface,
                 runtime.ObjectKeys,
                 runtime.ObjectStorage,
-                runtime.TSFunctionType,
+                runtime.FunctionValues.Type,
                 runtime.UndefinedType
             )
         );
@@ -1763,7 +1763,7 @@ public partial class RuntimeEmitter
                 runtime.IHasFieldsInterface,
                 runtime.ObjectKeys,
                 runtime.ObjectStorage,
-                runtime.TSFunctionType,
+                runtime.FunctionValues.Type,
                 runtime.UndefinedType
             )
         );
@@ -1832,7 +1832,7 @@ public partial class RuntimeEmitter
                 runtime.RegExps,
                 runtime.StringCoercion,
                 runtime.Symbols,
-                runtime.TSFunctionType,
+                runtime.FunctionValues.Type,
                 runtime.UndefinedInstance,
                 runtime.UndefinedType
             )
@@ -1885,8 +1885,8 @@ public partial class RuntimeEmitter
                 runtime.RegExps,
                 runtime.StringCoercion,
                 runtime.Symbols,
-                runtime.TSFunctionGetOrCreate,
-                runtime.TSFunctionType,
+                runtime.FunctionValues.GetOrCreate,
+                runtime.FunctionValues.Type,
                 runtime.UndefinedInstance,
                 runtime.UndefinedType
             )
@@ -1961,7 +1961,7 @@ public partial class RuntimeEmitter
                 runtime.Records,
                 runtime.RegExps,
                 runtime.Strings,
-                runtime.TSFunctionType,
+                runtime.FunctionValues.Type,
                 runtime.UndefinedType
             ),
             prototypeStoreField
@@ -1996,7 +1996,7 @@ public partial class RuntimeEmitter
                 runtime.ObjectDescriptors,
                 runtime.ObjectPrototypes,
                 runtime.StringCoercion,
-                runtime.TSFunctionType,
+                runtime.FunctionValues.Type,
                 runtime.UndefinedInstance,
                 runtime.UndefinedType
             )
@@ -2013,7 +2013,7 @@ public partial class RuntimeEmitter
                 runtime.IterateToList,
                 runtime.RuntimeType,
                 runtime.Symbols,
-                runtime.TSFunctionType,
+                runtime.FunctionValues.Type,
                 runtime.UndefinedType
             )
         );
@@ -2314,7 +2314,7 @@ public partial class RuntimeEmitter
                     runtime.DescriptorStorage.DescriptorEnumerable.GetSetMethod()!,
                     runtime.DescriptorStorage.DefineProperty
                 ),
-                runtime.TSFunctionGetOrCreate
+                runtime.FunctionValues.GetOrCreate
             )
         );
         // Boxed primitive helpers — must come AFTER prototype populates so
@@ -2409,9 +2409,9 @@ public partial class RuntimeEmitter
                     runtime.StringCoercion,
                     runtime.StringTryInvokeSymbolMethod,
                     runtime.Symbols,
-                    runtime.TSFunctionGetMethodInfo,
-                    runtime.TSFunctionInvokeWithThis,
-                    runtime.TSFunctionType,
+                    runtime.FunctionValues.GetMethodInfo,
+                    runtime.FunctionValues.InvokeWithThis,
+                    runtime.FunctionValues.Type,
                     runtime.Errors.TypeErrorConstructor,
                     runtime.Operators.TypeOf,
                     runtime.UndefinedInstance,
@@ -2424,7 +2424,7 @@ public partial class RuntimeEmitter
             new StringPrototypeInputs(runtime.DescriptorStorage.DescriptorType,
                 new PrototypeDescriptorInputs(runtime.DescriptorStorage.DescriptorConstructor, runtime.DescriptorStorage.DescriptorValue.GetSetMethod()!,
                     runtime.DescriptorStorage.DescriptorEnumerable.GetSetMethod()!, runtime.DescriptorStorage.DefineProperty),
-                runtime.TSFunctionGetOrCreate, runtime.TSFunctionCtorWithCache, runtime.Symbols.GetStorage,
+                runtime.FunctionValues.GetOrCreate, runtime.FunctionValues.CtorWithCache, runtime.Symbols.GetStorage,
                 runtime.Symbols.Iterator, runtime.ObjectPrototypes.Prototype, runtime.DescriptorStorage.SetPrototype),
             runtime.RegExps.Implementation is not null ? new StringPrototypeRegExpInputs(runtime.RegExps.RequireImplementation().StringMatch, runtime.RegExps.RequireImplementation().StringMatchAll,
                 runtime.RegExps.RequireImplementation().StringSearch, runtime.RegExps.RequireImplementation().StringReplaceAll, runtime.RegExps.RequireImplementation().StringSplitProto) : null);
@@ -2434,7 +2434,7 @@ public partial class RuntimeEmitter
                 new PrototypeDescriptorInputs(runtime.DescriptorStorage.DescriptorConstructor,
                     runtime.DescriptorStorage.DescriptorValue.GetSetMethod()!, runtime.DescriptorStorage.DescriptorEnumerable.GetSetMethod()!,
                     runtime.DescriptorStorage.DefineProperty),
-                runtime.DescriptorStorage.DescriptorType, runtime.TSFunctionGetOrCreate,
+                runtime.DescriptorStorage.DescriptorType, runtime.FunctionValues.GetOrCreate,
                 runtime.ObjectPrototypes.Prototype, runtime.DescriptorStorage.SetPrototype,
                 new BooleanReceiverInputs(runtime.ObjectStorage.Type, runtime.ObjectStorage.FieldsGetter,
                     runtime.Errors.CreateException, runtime.Errors.TypeErrorConstructor)));
@@ -2514,8 +2514,8 @@ public partial class RuntimeEmitter
                     runtime.ObjectKeys.Normalize,
                     runtime.NumericCoercion,
                     runtime.ObjectDescriptors.DefineProperty,
-                    runtime.TSFunctionInvokeWithThis,
-                    runtime.TSFunctionType,
+                    runtime.FunctionValues.InvokeWithThis,
+                    runtime.FunctionValues.Type,
                     runtime.UndefinedType
                 )
             );
@@ -2546,7 +2546,7 @@ public partial class RuntimeEmitter
                     runtime.ObjectPrototypes.Populate,
                     runtime.ObjectStorage,
                     runtime.StringCoercion,
-                    runtime.TSFunctionType,
+                    runtime.FunctionValues.Type,
                     runtime.ObjectConstruction.GetEnumerableFields,
                     runtime.RegExps.Implementation?.Type,
                     runtime.Symbols.Type,
@@ -2583,8 +2583,8 @@ public partial class RuntimeEmitter
                     runtime.ObjectPrototypes.Populate,
                     runtime.ObjectStorage,
                     runtime.StringCoercion,
-                    runtime.TSFunctionInvokeWithThis,
-                    runtime.TSFunctionType,
+                    runtime.FunctionValues.InvokeWithThis,
+                    runtime.FunctionValues.Type,
                     runtime.ObjectConstruction.GetEnumerableFields,
                     runtime.RegExps.Implementation?.Type,
                     runtime.Symbols.Type,
@@ -2638,7 +2638,7 @@ public partial class RuntimeEmitter
                         runtime.DescriptorStorage.DefineProperty),
                     runtime.DescriptorStorage.DescriptorType,
                     runtime.DescriptorStorage.DescriptorWritable.GetSetMethod()!, runtime.DescriptorStorage.DescriptorConfigurable.GetSetMethod()!,
-                    runtime.TSFunctionGetOrCreate, runtime.Symbols.GetStorage, runtime.Symbols.ToStringTag,
+                    runtime.FunctionValues.GetOrCreate, runtime.Symbols.GetStorage, runtime.Symbols.ToStringTag,
                     runtime.ObjectPrototypes.Prototype, runtime.DescriptorStorage.SetPrototype,
                     runtime.ObjectStorage.Type, runtime.ObjectStorage.FieldsGetter, runtime.NumericCoercion.ToNumber, runtime.UndefinedType,
                     runtime.Errors.CreateException, runtime.Errors.TypeErrorConstructor));
@@ -2663,7 +2663,7 @@ public partial class RuntimeEmitter
                     runtime.DescriptorStorage.DescriptorValue.GetSetMethod()!, runtime.DescriptorStorage.DescriptorEnumerable.GetSetMethod()!,
                     runtime.DescriptorStorage.DefineProperty),
                 runtime.DescriptorStorage.DescriptorType,
-                runtime.TSFunctionGetOrCreate,
+                runtime.FunctionValues.GetOrCreate,
                 runtime.ObjectPrototypes.Prototype,
                 runtime.DescriptorStorage.SetPrototype,
                 runtime.ObjectStorage.Type,
@@ -2691,7 +2691,7 @@ public partial class RuntimeEmitter
             new DatePrototypePopulateInputs(
                 runtime.DescriptorStorage,
                 runtime.ObjectPrototypes.Prototype,
-                runtime.TSFunctionGetOrCreate
+                runtime.FunctionValues.GetOrCreate
             )
         );
         // Fill the default-hint ToPrimitive body after every dependency is
@@ -2751,7 +2751,7 @@ public partial class RuntimeEmitter
                 runtime.ObjectPrototypes.Prototype,
                 runtime.StringCoercion,
                 runtime.Symbols,
-                runtime.TSFunctionCtorWithCache,
+                runtime.FunctionValues.CtorWithCache,
                 runtime.UndefinedType
             )
         );
@@ -2776,7 +2776,7 @@ public partial class RuntimeEmitter
                     runtime.DescriptorStorage,
                     runtime.ObjectPrototypes.Prototype,
                     runtime.Symbols,
-                    runtime.TSFunctionCtorWithCache,
+                    runtime.FunctionValues.CtorWithCache,
                     runtime.UndefinedInstance
                 )
             );

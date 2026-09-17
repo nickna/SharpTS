@@ -177,7 +177,7 @@ public sealed class ArrayStaticEmitter : IStaticTypeEmitterStrategy
         ctx.Types.EmitLoadMethodInfo(il, info.method);
         il.Emit(OpCodes.Ldstr, info.jsName);
         il.Emit(OpCodes.Ldc_I4, info.jsLength);
-        il.Emit(OpCodes.Call, runtime.TSFunctionGetOrCreate);
+        il.Emit(OpCodes.Call, runtime.FunctionValues.GetOrCreate);
         return true;
     }
 

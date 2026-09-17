@@ -23,7 +23,7 @@ public partial class RuntimeEmitter
         runtime.BoundTSFunctionType = typeBuilder;
 
         // Fields - _target is Assembly since it needs to be accessed by GetFunctionMethod
-        var targetField = typeBuilder.DefineField("_target", runtime.TSFunctionType, FieldAttributes.Assembly);
+        var targetField = typeBuilder.DefineField("_target", runtime.FunctionValues.Type, FieldAttributes.Assembly);
         runtime.BoundTSFunctionTargetField = targetField;
         var thisArgField = typeBuilder.DefineField("_thisArg", _types.Object, FieldAttributes.Private);
         var boundArgsField = typeBuilder.DefineField("_boundArgs", _types.ObjectArray, FieldAttributes.Assembly);
@@ -33,7 +33,7 @@ public partial class RuntimeEmitter
         var ctorBuilder = typeBuilder.DefineConstructor(
             MethodAttributes.Public,
             CallingConventions.Standard,
-            [runtime.TSFunctionType, _types.Object, _types.ObjectArray]
+            [runtime.FunctionValues.Type, _types.Object, _types.ObjectArray]
         );
         runtime.BoundTSFunctionCtor = ctorBuilder;
 
@@ -141,7 +141,7 @@ public partial class RuntimeEmitter
         invokeIL.Emit(OpCodes.Ldarg_0);
         invokeIL.Emit(OpCodes.Ldfld, thisArgField);
         invokeIL.Emit(OpCodes.Ldloc, combinedArgsLocal);
-        invokeIL.Emit(OpCodes.Callvirt, runtime.TSFunctionInvokeWithThis);
+        invokeIL.Emit(OpCodes.Callvirt, runtime.FunctionValues.InvokeWithThis);
         invokeIL.Emit(OpCodes.Ret);
 
         // InvokeWithThis method: public object InvokeWithThis(object thisArg, object[] args)
@@ -354,13 +354,13 @@ public partial class RuntimeEmitter
         var notTSFunctionLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, targetField);
-        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Isinst, runtime.FunctionValues.Type);
         il.Emit(OpCodes.Brfalse, notTSFunctionLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, targetField);
-        il.Emit(OpCodes.Castclass, runtime.TSFunctionType);
+        il.Emit(OpCodes.Castclass, runtime.FunctionValues.Type);
         il.Emit(OpCodes.Ldloc, argsLocal);
-        il.Emit(OpCodes.Callvirt, runtime.TSFunctionInvoke);
+        il.Emit(OpCodes.Callvirt, runtime.FunctionValues.Invoke);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notTSFunctionLabel);
 
@@ -571,13 +571,13 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, ownUndefinedAccessor);
         var ownGetterIsBound = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, ownGetter);
-        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Isinst, runtime.FunctionValues.Type);
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Brfalse, ownGetterIsBound);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Newarr, _types.Object);
-        il.Emit(OpCodes.Callvirt, runtime.TSFunctionInvokeWithThis);
+        il.Emit(OpCodes.Callvirt, runtime.FunctionValues.InvokeWithThis);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(ownGetterIsBound);
         il.Emit(OpCodes.Pop);
@@ -648,7 +648,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Brfalse, skipLabel);
             il.Emit(OpCodes.Ldarg_0);
             _types.EmitLoadMethodInfo(il, helper);
-            il.Emit(OpCodes.Newobj, runtime.TSFunctionCtor);
+            il.Emit(OpCodes.Newobj, runtime.FunctionValues.Ctor);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(skipLabel);
         }
@@ -688,13 +688,13 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, functionPdsUndefinedAccessorLabel);
         var functionPdsBoundGetterLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, functionPdsGetterLocal);
-        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Isinst, runtime.FunctionValues.Type);
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Brfalse, functionPdsBoundGetterLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Newarr, _types.Object);
-        il.Emit(OpCodes.Callvirt, runtime.TSFunctionInvokeWithThis);
+        il.Emit(OpCodes.Callvirt, runtime.FunctionValues.InvokeWithThis);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(functionPdsBoundGetterLabel);
         il.Emit(OpCodes.Pop);
@@ -761,9 +761,9 @@ public partial class RuntimeEmitter
         // Only auto-create for actual $TSFunction callees (has an inner _method
         // field). Other callable shapes ($BoundArrayMethod, $FunctionCallWrapper,
         // etc.) don't have a meaningful prototype and fall through to null.
-        var tsfuncLocal = il.DeclareLocal(runtime.TSFunctionType);
+        var tsfuncLocal = il.DeclareLocal(runtime.FunctionValues.Type);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Isinst, runtime.FunctionValues.Type);
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Stloc, tsfuncLocal);
         il.Emit(OpCodes.Brfalse, missLabel);
@@ -771,7 +771,7 @@ public partial class RuntimeEmitter
         // methodKey = tsfuncLocal.GetMethodInfo()  (public getter — avoids
         // field-access violation from accessing private _method across
         // TypeBuilder boundaries at JIT time).
-        var prototypeCacheType = runtime.TSFunctionPrototypeCacheField.FieldType;
+        var prototypeCacheType = runtime.FunctionValues.PrototypeCacheField.FieldType;
         var tryGetValueM = _types.GetMethod(prototypeCacheType, "TryGetValue", [_types.MethodInfo, _types.Object.MakeByRefType()])!;
         var prototypeCacheGetOrAdd = _types.GetMethods(prototypeCacheType)
             .First(m => m.Name == "GetOrAdd"
@@ -782,7 +782,7 @@ public partial class RuntimeEmitter
         var newProto = il.DeclareLocal(runtime.ObjectStorage.Type);
         var methodKeyLocal = il.DeclareLocal(_types.MethodInfo);
         il.Emit(OpCodes.Ldloc, tsfuncLocal);
-        il.Emit(OpCodes.Callvirt, runtime.TSFunctionGetMethodInfo);
+        il.Emit(OpCodes.Callvirt, runtime.FunctionValues.GetMethodInfo);
         il.Emit(OpCodes.Stloc, methodKeyLocal);
 
         // Arrow and async methods carry $NonConstructible. They do not
@@ -828,7 +828,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(notRuntimeMethodLabel);
 
         // if (_prototypeCache.TryGetValue(methodKey, out cached)) return cached
-        il.Emit(OpCodes.Ldsfld, runtime.TSFunctionPrototypeCacheField);
+        il.Emit(OpCodes.Ldsfld, runtime.FunctionValues.PrototypeCacheField);
         il.Emit(OpCodes.Ldloc, methodKeyLocal);
         il.Emit(OpCodes.Ldloca, cachedProto);
         il.Emit(OpCodes.Callvirt, tryGetValueM);
@@ -902,7 +902,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, runtime.DescriptorStorage.DefineProperty);
         il.Emit(OpCodes.Pop);
 
-        il.Emit(OpCodes.Ldsfld, runtime.TSFunctionPrototypeCacheField);
+        il.Emit(OpCodes.Ldsfld, runtime.FunctionValues.PrototypeCacheField);
         il.Emit(OpCodes.Ldloc, methodKeyLocal);
         il.Emit(OpCodes.Ldloc, newProto);
         il.Emit(OpCodes.Callvirt, prototypeCacheGetOrAdd);
@@ -932,7 +932,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(lengthLabel);
         var lengthNotTSFunctionLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Isinst, runtime.FunctionValues.Type);
         il.Emit(OpCodes.Brfalse, lengthNotTSFunctionLabel);
         // If `length` was deleted on this $TSFunction, return undefined
         // instead of the cached spec value (ECMA-262 §17 configurable).
@@ -946,8 +946,8 @@ public partial class RuntimeEmitter
         il.MarkLabel(lengthDeletedSkipLabel);
         // It's a $TSFunction - call get_Length()
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSFunctionType);
-        il.Emit(OpCodes.Call, runtime.TSFunctionLengthGetter);
+        il.Emit(OpCodes.Castclass, runtime.FunctionValues.Type);
+        il.Emit(OpCodes.Call, runtime.FunctionValues.LengthGetter);
         il.Emit(OpCodes.Conv_R8);
         il.Emit(OpCodes.Box, _types.Double);
         il.Emit(OpCodes.Ret);
@@ -960,7 +960,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, runtime.BoundTSFunctionType);
         il.Emit(OpCodes.Ldfld, runtime.BoundTSFunctionTargetField);
-        il.Emit(OpCodes.Call, runtime.TSFunctionLengthGetter);
+        il.Emit(OpCodes.Call, runtime.FunctionValues.LengthGetter);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, runtime.BoundTSFunctionType);
         il.Emit(OpCodes.Ldfld, runtime.BoundTSFunctionBoundArgsField);
@@ -1041,7 +1041,7 @@ public partial class RuntimeEmitter
 
         // Check for $TSFunction
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Isinst, runtime.FunctionValues.Type);
         il.Emit(OpCodes.Brtrue, nameIsTSFunctionLabel);
 
         // Check for $BoundTSFunction
@@ -1065,8 +1065,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
         il.MarkLabel(nameDeletedSkipLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSFunctionType);
-        il.Emit(OpCodes.Call, runtime.TSFunctionNameGetter);
+        il.Emit(OpCodes.Castclass, runtime.FunctionValues.Type);
+        il.Emit(OpCodes.Call, runtime.FunctionValues.NameGetter);
         il.Emit(OpCodes.Br, nameEndLabel);
 
         // It's a $BoundTSFunction - get "bound " + target.Name
@@ -1077,7 +1077,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, runtime.BoundTSFunctionType);
         il.Emit(OpCodes.Ldfld, runtime.BoundTSFunctionTargetField);
-        il.Emit(OpCodes.Call, runtime.TSFunctionNameGetter);
+        il.Emit(OpCodes.Call, runtime.FunctionValues.NameGetter);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", _types.String, _types.String));
 
         il.MarkLabel(nameEndLabel);
@@ -1114,13 +1114,13 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, functionPrototypeUndefinedLabel);
         var functionPrototypeBoundGetterLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, functionPrototypeGetterLocal);
-        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Isinst, runtime.FunctionValues.Type);
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Brfalse, functionPrototypeBoundGetterLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Newarr, _types.Object);
-        il.Emit(OpCodes.Callvirt, runtime.TSFunctionInvokeWithThis);
+        il.Emit(OpCodes.Callvirt, runtime.FunctionValues.InvokeWithThis);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(functionPrototypeBoundGetterLabel);
         il.Emit(OpCodes.Pop);
@@ -1282,7 +1282,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Isinst, callableType);
             il.Emit(OpCodes.Brtrue, callableTargetLabel);
         }
-        AcceptCallable(runtime.TSFunctionType);
+        AcceptCallable(runtime.FunctionValues.Type);
         AcceptCallable(runtime.BoundTSFunctionType);
         AcceptCallable(runtime.BoundAnyFunctionType);
         AcceptCallable(runtime.ArrayOperations.BoundMethodType);
@@ -1308,7 +1308,7 @@ public partial class RuntimeEmitter
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, targetField);
-        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Isinst, runtime.FunctionValues.Type);
         il.Emit(OpCodes.Brtrue, isTSFunctionLabel);
 
         il.Emit(OpCodes.Ldarg_0);
@@ -1345,7 +1345,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(isTSFunctionLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, targetField);
-        il.Emit(OpCodes.Castclass, runtime.TSFunctionType);
+        il.Emit(OpCodes.Castclass, runtime.FunctionValues.Type);
         il.Emit(OpCodes.Ldloc, thisArgLocal);
         il.Emit(OpCodes.Ldloc, boundArgsLocal);
         il.Emit(OpCodes.Newobj, runtime.BoundTSFunctionCtor);
@@ -1485,7 +1485,7 @@ public partial class RuntimeEmitter
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, targetField);
-        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Isinst, runtime.FunctionValues.Type);
         il.Emit(OpCodes.Brtrue, isTSFunctionLabel);
 
         il.Emit(OpCodes.Ldarg_0);
@@ -1542,10 +1542,10 @@ public partial class RuntimeEmitter
         il.MarkLabel(isTSFunctionLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, targetField);
-        il.Emit(OpCodes.Castclass, runtime.TSFunctionType);
+        il.Emit(OpCodes.Castclass, runtime.FunctionValues.Type);
         il.Emit(OpCodes.Ldloc, thisArgLocal);
         il.Emit(OpCodes.Ldloc, callArgsLocal);
-        il.Emit(OpCodes.Callvirt, runtime.TSFunctionInvokeWithThis);
+        il.Emit(OpCodes.Callvirt, runtime.FunctionValues.InvokeWithThis);
         il.Emit(OpCodes.Ret);
 
         // return (($BoundTSFunction)_target).InvokeWithThis(thisArg, callArgs)
@@ -1779,7 +1779,7 @@ public partial class RuntimeEmitter
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, targetField);
-        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Isinst, runtime.FunctionValues.Type);
         il.Emit(OpCodes.Brtrue, isTSFunctionLabel);
 
         il.Emit(OpCodes.Ldarg_0);
@@ -1798,10 +1798,10 @@ public partial class RuntimeEmitter
         il.MarkLabel(isTSFunctionLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, targetField);
-        il.Emit(OpCodes.Castclass, runtime.TSFunctionType);
+        il.Emit(OpCodes.Castclass, runtime.FunctionValues.Type);
         il.Emit(OpCodes.Ldloc, thisArgLocal);
         il.Emit(OpCodes.Ldloc, callArgsLocal);
-        il.Emit(OpCodes.Callvirt, runtime.TSFunctionInvokeWithThis);
+        il.Emit(OpCodes.Callvirt, runtime.FunctionValues.InvokeWithThis);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(isBoundTSFunctionLabel);

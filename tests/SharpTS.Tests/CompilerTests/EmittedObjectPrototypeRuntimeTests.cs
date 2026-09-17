@@ -181,7 +181,7 @@ public sealed class EmittedObjectPrototypeRuntimeTests
         var ctor = Assert.Single(type.GetConstructors());
         return ctor.Invoke(ctor.GetParameters().Select(p => overrides.TryGetValue(p.Name!, out var value) ? value
             : p.Name == "GetProperty" ? runtime.ObjectRead.Property
-            : typeof(EmittedRuntime).GetProperty(p.Name!)!.GetValue(runtime)).ToArray());
+            : (p.Name switch { "TSFunctionType" => runtime.FunctionValues.Type, "TSFunctionGetOrCreate" => runtime.FunctionValues.GetOrCreate, "ArgumentsType" => runtime.Arguments.Type, _ => typeof(EmittedRuntime).GetProperty(p.Name!)!.GetValue(runtime) })).ToArray());
     }
     private static void Fill(object owner, string? missing = null)
     {

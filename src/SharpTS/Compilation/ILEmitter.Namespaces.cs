@@ -122,7 +122,7 @@ public partial class ILEmitter
                     IL.Emit(OpCodes.Ldtoken, methodBuilder);
                     IL.Emit(OpCodes.Call, _ctx.Types.MethodBaseGetMethodFromHandle);
                     IL.Emit(OpCodes.Castclass, _ctx.Types.MethodInfo);
-                    IL.Emit(OpCodes.Newobj, _ctx.Runtime!.TSFunctionCtor);
+                    IL.Emit(OpCodes.Newobj, _ctx.Runtime!.FunctionValues.Ctor);
                     IL.Emit(OpCodes.Call, _ctx.Runtime!.TSNamespaceSet);
                 }
                 break;

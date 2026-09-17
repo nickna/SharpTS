@@ -3708,6 +3708,184 @@ public class StandaloneDllTests
             verifyStandardError: error => Assert.Empty(error)));
     }
 
+    public static IEnumerable<object[]> FunctionValuePrograms =>
+    [
+        new object[]
+        {
+            "identity",
+            "function f(x:number){return x+1;}const a:any=f;const b:any=f;a.tag=7;console.log(a===b,b.tag,a.name,a.length);console.log(String.prototype.toString===String.prototype.valueOf);\n",
+            "true 7 f 1\nfalse\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "prototypes",
+            "function F(this:any,x:number){this.x=x;}const a:any=F;const b:any=F;a.prototype.tag=3;const x:any=new a(7);console.log(a.prototype===b.prototype,x.tag,x.x,x instanceof b);\n",
+            "true 3 7 true\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "nested_arguments",
+            "function inner(x:number){console.log(arguments.length,arguments[1]);}function outer(a:number){const saved=()=>arguments[2];const i:any=inner;i(8,9);console.log(arguments.length,arguments[0],saved());}const f:any=outer;f(1,2,3);\n",
+            "2 9\n3 1 3\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "arguments_brand_length",
+            "function f(a:number){console.log(Array.isArray(arguments),Object.prototype.toString.call(arguments),arguments.length);arguments[4]=9;console.log(arguments.length,arguments[4]);}const g:any=f;g(1,2);\n",
+            "false [object Arguments] 2\n2 9\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "arguments_throw",
+            "function bad(a:number){throw new Error(\"bad\");}function outer(a:number){try{const b:any=bad;b(8,9);}catch(e){console.log(arguments.length,arguments[1]);}}const f:any=outer;f(1,2,3);\n",
+            "3 2\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "receiver_nested_throw",
+            "function inner(this:any){console.log(this.name);throw new Error(\"bad\");}function outer(this:any){try{inner.call({name:\"inner\"});}catch(e){}console.log(this.name);}outer.call({name:\"outer\"});\n",
+            "inner\nouter\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "strict_sloppy",
+            "function strict(this:any){\"use strict\";return this;}function sloppy(this:any){return this;}const a:any=strict;const b:any=sloppy;console.log(a.call(null)===null,a.call(undefined)===undefined,b.call(null)===globalThis,b.call(undefined)===globalThis);\n",
+            "true true true true\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "zero_receiver",
+            "const f:any=function(this:any){return this.x;};const x:any={x:7,f:f};console.log(x.f(),f.call({x:9}),f.bind({x:11})());\n",
+            "7 9 11\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "zero_arguments_capture",
+            "const f:any=function(this:any){return arguments.length+this.x;};const x:any={x:7,f:f};console.log(x.f(),x.f(1,2),f.call({x:8}));\n",
+            "7 9 8\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "function_constructor",
+            "const ctor:any=Function;const empty:any=ctor();const self:any=ctor(\"return this;\");console.log(empty.name,empty.length,empty()===undefined,self()===globalThis,self.call({x:7}).x);\n",
+            "anonymous 0 true true 7\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "closures_bind",
+            "function make(x:number){return function(this:any,y:number){return x+this.base+y;};}const a:any=make(1);const b:any=make(5);console.log(a.call({base:2},3),b.apply({base:4},[6]),a.bind({base:7},8)());\n",
+            "6 15 16\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "default_rest",
+            "function f(a:number=4,...xs:number[]){return a+xs.length+arguments.length;}const g:any=f;console.log(g(),g(undefined,2,3),g(1,2,3,4));\n",
+            "4 9 8\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "hosted_functions",
+            "export function run(x:number){function f(a:number){return arguments.length+a;}const g:any=f;return g(x,2,3);}\n",
+            "",
+            true,
+            "",
+        },
+        new object[]
+        {
+            "hosted_receivers",
+            "export function run(x:number){const f:any=function(this:any){return this.x;};return f.call({x:x});}\n",
+            "",
+            true,
+            "",
+        },
+        new object[]
+        {
+            "numeric_rest_selection",
+            "function first(...v:number[]):number{return v[0]+v[1]+v[2]+v[3];}function second(...v:number[]):number{return v[0]+v[1]+v[2]+v[3]+100;}let fn:(...v:number[])=>number=first;let trace=\"\";function argument(value:number):number{trace=trace+value;fn=second;return value;}function run():number{return fn(argument(1),2,3,4);}console.log(run(),fn(1,2,3,4),trace);\n",
+            "10 110 1\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "numeric_rest_fallback",
+            "function add(...v:number[]):number{return v[0]+v[1]+v[2]+v[3];}function observe(...v:number[]):number{return arguments.length+v.length;}function defaults(prefix:number=2,...v:number[]):number{return prefix+v.length;}function fixed(a:number,b:number,c:number,d:number):number{return a*b+c*d;}function choose(fn:(...v:number[])=>number):number{return fn(1,2,3,4);}function capture(value:number):(...v:number[])=>number{return (...v:number[]):number=>value+v[0];}const bound=add.bind(null,10);console.log(choose(observe),choose(defaults),choose(fixed),choose(capture(5)),choose(bound));\n",
+            "8 4 14 6 16\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "receiver_ref",
+            "const f:any=function(this:any,x:number){return this.base+x;};console.log(f.call({base:7},2),f.apply({base:5},[4]));const b:any=f.bind({base:10},3);console.log(b());\n",
+            "9 9\n13\n",
+            false,
+            "--ref-asm",
+        },
+        new object[]
+        {
+            "async_name",
+            "async function compute(x:number=3){return x+2;}const fn:any=compute;compute().then(v=>console.log(fn.name,fn.length,v));\n",
+            "compute 0 5\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "generator_name",
+            "function* values(start:number=2){yield start;yield start+1;}const g:any=values;console.log(g.name,g.length);for(const v of values()){console.log(v);}\n",
+            "values 0\n2\n3\n",
+            false,
+            "",
+        },
+    ];
+
+    [Theory]
+    [MemberData(nameof(FunctionValuePrograms))]
+    public void Isolated_FunctionValues_PreserveFunctionsArgumentsAndDeployment(
+        string name, string source, string expected, bool hosted, string extraArguments)
+    {
+        using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var sourcePath = tempDir.CreateFile("main.ts", source);
+        var dllPath = tempDir.GetPath($"function_values_{name}.dll");
+        var hosting = hosted ? " --target dll --hosted" : "";
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{sourcePath}\" -o \"{dllPath}\" --verify --standalone{hosting} {extraArguments}", tempDir.Path);
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        var references = GetAssemblyReferences(dllPath);
+        Assert.DoesNotContain("SharpTS", references);
+        Assert.Equal(hosted, references.Contains("SharpTS.Hosting.Abstractions"));
+        Assert.False(File.Exists(tempDir.GetPath("SharpTS.dll")));
+        if (!hosted)
+            Assert.Equal(expected, ExecuteCompiledDllIsolated(dllPath, timeoutMs: 30000,
+                verifyStandardError: error => Assert.Empty(error)));
+    }
+
     public static IEnumerable<object[]> FunctionAttributePrograms =>
     [
         new object[]

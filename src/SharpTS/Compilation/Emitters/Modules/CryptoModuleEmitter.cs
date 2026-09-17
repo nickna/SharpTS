@@ -100,7 +100,7 @@ public sealed class CryptoModuleEmitter : IBuiltInModuleEmitter
                 il.Emit(OpCodes.Ldstr, "convertKey");
                 il.Emit(OpCodes.Ldnull);
                 ctx.Types.EmitLoadMethodInfoViaHandle(il, ctx.Runtime!.RequireCrypto().EcdhConvertKey);
-                il.Emit(OpCodes.Newobj, ctx.Runtime.TSFunctionCtor);
+                il.Emit(OpCodes.Newobj, ctx.Runtime.FunctionValues.Ctor);
                 il.Emit(OpCodes.Callvirt,
                     ctx.Types.GetMethod(dictType, "Add", ctx.Types.String, ctx.Types.Object));
                 il.Emit(OpCodes.Call, ctx.Runtime.ObjectConstruction.Create);

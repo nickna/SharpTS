@@ -1355,12 +1355,12 @@ public partial class RuntimeEmitter
         var il = method.GetILGenerator();
         var loopLabel = il.DefineLabel();
         var doneLabel = il.DefineLabel();
-        var callbackLocal = il.DeclareLocal(runtime.TSFunctionType);
+        var callbackLocal = il.DeclareLocal(runtime.FunctionValues.Type);
         var argsLocal = il.DeclareLocal(_types.ObjectArray);
 
         // Cast callback to $TSFunction
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Castclass, runtime.TSFunctionType);
+        il.Emit(OpCodes.Castclass, runtime.FunctionValues.Type);
         il.Emit(OpCodes.Stloc, callbackLocal);
 
         // while (_readBuffer.Count > 0)
@@ -1381,7 +1381,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldfld, runtime.RequireNodeStreams().ReadableBufferField);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(queueType, "Dequeue")!);
         il.Emit(OpCodes.Stelem_Ref);
-        il.Emit(OpCodes.Callvirt, runtime.TSFunctionInvoke);
+        il.Emit(OpCodes.Callvirt, runtime.FunctionValues.Invoke);
         il.Emit(OpCodes.Pop);
 
         il.Emit(OpCodes.Br, loopLabel);
@@ -1432,7 +1432,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "GetType"));
         il.Emit(OpCodes.Ldstr, "Invoke");
         il.Emit(OpCodes.Callvirt, _types.GetMethod(typeof(Type), "GetMethod", _types.String)!);
-        il.Emit(OpCodes.Newobj, runtime.TSFunctionCtor);
+        il.Emit(OpCodes.Newobj, runtime.FunctionValues.Ctor);
         il.Emit(OpCodes.Callvirt, runtime.RequireNodeStreams().TransformSetTransformCallback);
 
         // this.Pipe(transform)
@@ -1486,7 +1486,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "GetType"));
         il.Emit(OpCodes.Ldstr, "Invoke");
         il.Emit(OpCodes.Callvirt, _types.GetMethod(typeof(Type), "GetMethod", _types.String)!);
-        il.Emit(OpCodes.Newobj, runtime.TSFunctionCtor);
+        il.Emit(OpCodes.Newobj, runtime.FunctionValues.Ctor);
         il.Emit(OpCodes.Callvirt, runtime.RequireNodeStreams().TransformSetTransformCallback);
 
         // this.Pipe(transform)

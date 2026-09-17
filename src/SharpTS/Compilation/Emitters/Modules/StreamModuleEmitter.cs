@@ -112,7 +112,7 @@ public sealed class StreamModuleEmitter : IBuiltInModuleEmitter
         il.Emit(OpCodes.Ldstr, "pipeline");
         il.Emit(OpCodes.Ldnull); // target
         ctx.Types.EmitLoadMethodInfoViaHandle(il, ctx.Runtime!.RequireNodeStreams().PromisePipeline);
-        il.Emit(OpCodes.Newobj, ctx.Runtime!.TSFunctionCtor);
+        il.Emit(OpCodes.Newobj, ctx.Runtime!.FunctionValues.Ctor);
         il.Emit(OpCodes.Call, addMethod);
 
         // Add "finished" -> TSFunction wrapping PromiseFinished
@@ -120,7 +120,7 @@ public sealed class StreamModuleEmitter : IBuiltInModuleEmitter
         il.Emit(OpCodes.Ldstr, "finished");
         il.Emit(OpCodes.Ldnull);
         ctx.Types.EmitLoadMethodInfoViaHandle(il, ctx.Runtime!.RequireNodeStreams().PromiseFinished);
-        il.Emit(OpCodes.Newobj, ctx.Runtime!.TSFunctionCtor);
+        il.Emit(OpCodes.Newobj, ctx.Runtime!.FunctionValues.Ctor);
         il.Emit(OpCodes.Call, addMethod);
 
         // Wrap in SharpTSObject

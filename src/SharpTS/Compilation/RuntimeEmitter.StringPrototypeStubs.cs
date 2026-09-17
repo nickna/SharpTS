@@ -109,7 +109,7 @@ public partial class RuntimeEmitter
         runtime.ObjectPrototypes.ToStringMethod = EmitObjectProtoToStringHelper(
             typeBuilder,
             new ObjectProtoToStringHelperInputs(
-                ArgumentsType: runtime.ArgumentsType,
+                ArgumentsType: runtime.Arguments.Type,
                 ArrayOperations: runtime.ArrayOperations,
                 ArrayStorage: runtime.ArrayStorage,
                 BigInt: runtime.BigInt,
@@ -133,7 +133,7 @@ public partial class RuntimeEmitter
                 Set: runtime.Set,
                 Strings: runtime.Strings,
                 Symbols: runtime.Symbols,
-                TSFunctionType: runtime.TSFunctionType,
+                TSFunctionType: runtime.FunctionValues.Type,
                 UndefinedType: runtime.UndefinedType
             )
         );

@@ -225,7 +225,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Castclass, _types.MethodInfo);
             il.Emit(OpCodes.Ldstr, string.Empty);
             il.Emit(OpCodes.Ldc_I4_0);
-            il.Emit(OpCodes.Newobj, runtime.TSFunctionCtorWithCache);
+            il.Emit(OpCodes.Newobj, runtime.FunctionValues.CtorWithCache);
             il.Emit(OpCodes.Stloc, thunkFunctionLocal);
 
             // return Invoke(promise, "then", « thunkFunction »)
@@ -340,7 +340,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Castclass, _types.MethodInfo);
         il.Emit(OpCodes.Ldstr, string.Empty);
         il.Emit(OpCodes.Ldc_I4, length);
-        il.Emit(OpCodes.Newobj, runtime.TSFunctionCtorWithCache);
+        il.Emit(OpCodes.Newobj, runtime.FunctionValues.CtorWithCache);
     }
 
     /// <summary>
@@ -429,7 +429,7 @@ public partial class RuntimeEmitter
         // dispatch (TSFunction + bind/call/apply wrappers + bound array methods).
         var thenCallableLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, thenLocal);
-        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Isinst, runtime.FunctionValues.Type);
         il.Emit(OpCodes.Brtrue, thenCallableLabel);
         il.Emit(OpCodes.Ldloc, thenLocal);
         il.Emit(OpCodes.Isinst, runtime.BoundTSFunctionType);

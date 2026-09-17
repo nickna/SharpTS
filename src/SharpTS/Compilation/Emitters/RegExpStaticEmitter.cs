@@ -59,7 +59,7 @@ public sealed class RegExpStaticEmitter : IStaticTypeEmitterStrategy
         ctx.Types.EmitLoadMethodInfo(il, escape);
         il.Emit(OpCodes.Ldstr, "escape");
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Call, runtime!.TSFunctionGetOrCreate);
+        il.Emit(OpCodes.Call, runtime!.FunctionValues.GetOrCreate);
         return true;
     }
 }

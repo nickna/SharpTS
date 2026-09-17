@@ -41,6 +41,8 @@ public class EmittedJsonDependencyTests
             if (parameter.Name == "TSObjectMergeEnumerable") return runtime.ObjectConstruction.GetEnumerableFields;
             if (parameter.Name == "CreateException") return runtime.Errors.CreateException;
             if (parameter.Name == "TSTypeErrorCtor") return runtime.Errors.TypeErrorConstructor;
+            if (parameter.Name == "TSFunctionType") return runtime.FunctionValues.Type;
+            if (parameter.Name == "TSFunctionInvokeWithThis") return runtime.FunctionValues.InvokeWithThis;
             var property = typeof(EmittedRuntime).GetProperty(parameter.Name!);
             return property is not null ? property.GetValue(runtime)
                 : typeof(RuntimeFeatureSet).GetProperty(parameter.Name!)!.GetValue(features);

@@ -153,7 +153,7 @@ public sealed class EmittedDateRuntimeTests
         Invoke(emitter, "DefineDatePrototypePopulateShell", type, root);
         var methodInfo = typeof(RuntimeEmitter).GetMethod("EmitDatePrototypePopulate", InstanceMembers)!;
         var inputsType = methodInfo.GetParameters()[2].ParameterType;
-        var inputs = Activator.CreateInstance(inputsType, runtime.DescriptorStorage, runtime.ObjectPrototypes.Prototype, runtime.TSFunctionGetOrCreate)!;
+        var inputs = Activator.CreateInstance(inputsType, runtime.DescriptorStorage, runtime.ObjectPrototypes.Prototype, runtime.FunctionValues.GetOrCreate)!;
         methodInfo.Invoke(emitter, [type, root, inputs]); root.CompleteEmission(); type.CreateType();
         var loaded = SaveVerifyLoad(builder); var probe = loaded.GetType(type.Name)!;
         var dictionary = new Dictionary<string, object>(); probe.GetField("Prototype")!.SetValue(null, dictionary);

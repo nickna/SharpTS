@@ -46,7 +46,7 @@ public partial class RuntimeEmitter
         // bare `Function` resolves to typeof($TSFunction).
         il.Emit(OpCodes.Ldsfld, runtime.FunctionPrototypeField);
         il.Emit(OpCodes.Ldstr, "constructor");
-        il.Emit(OpCodes.Ldtoken, runtime.TSFunctionType);
+        il.Emit(OpCodes.Ldtoken, runtime.FunctionValues.Type);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
         il.Emit(OpCodes.Callvirt, setItem);
         // "constructor" is non-enumerable per ECMA-262 §17. Installed below
@@ -72,7 +72,7 @@ public partial class RuntimeEmitter
         // constructor: non-enumerable per ECMA-262 §17.
         EmitInstallNonEnumerable(il, runtime, runtime.FunctionPrototypeField, fnDescLocal, "constructor", () =>
         {
-            il.Emit(OpCodes.Ldtoken, runtime.TSFunctionType);
+            il.Emit(OpCodes.Ldtoken, runtime.FunctionValues.Type);
             il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
         });
 
@@ -405,12 +405,12 @@ public partial class RuntimeEmitter
         // non-$TSFunction case fall back to InvokeBindGeneric runtime helper.
         var notTSFunctionLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Isinst, runtime.FunctionValues.Type);
         il.Emit(OpCodes.Brfalse, notTSFunctionLabel);
 
         // return new $BoundTSFunction((TSFunction)__this, thisArg, boundArgs)
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSFunctionType);
+        il.Emit(OpCodes.Castclass, runtime.FunctionValues.Type);
         il.Emit(OpCodes.Ldloc, thisArgLocal);
         il.Emit(OpCodes.Ldloc, boundArgsLocal);
         il.Emit(OpCodes.Newobj, runtime.BoundTSFunctionCtor);

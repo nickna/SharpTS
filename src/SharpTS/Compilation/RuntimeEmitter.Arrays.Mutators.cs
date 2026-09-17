@@ -2106,7 +2106,7 @@ public partial class RuntimeEmitter
         // Only ordinary array/list representations qualify. Arguments also
         // inherits List<object> but has a distinct observable length slot.
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.ArgumentsType);
+        il.Emit(OpCodes.Isinst, runtime.Arguments.Type);
         il.Emit(OpCodes.Brtrue, returnFalse);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, _types.ListOfObject);

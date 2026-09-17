@@ -655,7 +655,7 @@ public partial class RuntimeEmitter
         getterIl.Emit(OpCodes.Ldtoken, implMethod);
         getterIl.Emit(OpCodes.Call, _types.MethodBaseGetMethodFromHandle);
         getterIl.Emit(OpCodes.Castclass, _types.MethodInfo);
-        getterIl.Emit(OpCodes.Newobj, runtime.TSFunctionCtor);
+        getterIl.Emit(OpCodes.Newobj, runtime.FunctionValues.Ctor);
         getterIl.Emit(OpCodes.Ret);
     }
 
@@ -733,7 +733,7 @@ public partial class RuntimeEmitter
         getterIl.Emit(OpCodes.Ldtoken, implMethod);
         getterIl.Emit(OpCodes.Call, _types.MethodBaseGetMethodFromHandle);
         getterIl.Emit(OpCodes.Castclass, _types.MethodInfo);
-        getterIl.Emit(OpCodes.Newobj, runtime.TSFunctionCtor);
+        getterIl.Emit(OpCodes.Newobj, runtime.FunctionValues.Ctor);
         getterIl.Emit(OpCodes.Ret);
     }
 
@@ -3867,7 +3867,7 @@ public partial class RuntimeEmitter
 
         // callback.Invoke([null, result])
         il.Emit(OpCodes.Ldarg_1); // callback
-        il.Emit(OpCodes.Castclass, runtime.TSFunctionType);
+        il.Emit(OpCodes.Castclass, runtime.FunctionValues.Type);
         il.Emit(OpCodes.Ldc_I4_2);
         il.Emit(OpCodes.Newarr, _types.Object);
         il.Emit(OpCodes.Dup);
@@ -3878,7 +3878,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Stelem_Ref);
-        il.Emit(OpCodes.Callvirt, runtime.TSFunctionInvoke);
+        il.Emit(OpCodes.Callvirt, runtime.FunctionValues.Invoke);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Leave, endLabel);
 
@@ -3888,7 +3888,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, exLocal);
 
         il.Emit(OpCodes.Ldarg_1); // callback
-        il.Emit(OpCodes.Castclass, runtime.TSFunctionType);
+        il.Emit(OpCodes.Castclass, runtime.FunctionValues.Type);
         il.Emit(OpCodes.Ldc_I4_2);
         il.Emit(OpCodes.Newarr, _types.Object);
         il.Emit(OpCodes.Dup);
@@ -3900,7 +3900,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Stelem_Ref);
-        il.Emit(OpCodes.Callvirt, runtime.TSFunctionInvoke);
+        il.Emit(OpCodes.Callvirt, runtime.FunctionValues.Invoke);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Leave, endLabel);
 
@@ -3996,7 +3996,7 @@ public partial class RuntimeEmitter
 
         // callback(null, result)
         il.Emit(OpCodes.Ldloc, callbackLocal);
-        il.Emit(OpCodes.Castclass, runtime.TSFunctionType);
+        il.Emit(OpCodes.Castclass, runtime.FunctionValues.Type);
         il.Emit(OpCodes.Ldc_I4_2);
         il.Emit(OpCodes.Newarr, _types.Object);
         il.Emit(OpCodes.Dup);
@@ -4007,7 +4007,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Ldloc, recordResultLocal);
         il.Emit(OpCodes.Stelem_Ref);
-        il.Emit(OpCodes.Callvirt, runtime.TSFunctionInvoke);
+        il.Emit(OpCodes.Callvirt, runtime.FunctionValues.Invoke);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Leave, endLabel);
 
@@ -4016,7 +4016,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, exLocal1);
 
         il.Emit(OpCodes.Ldloc, callbackLocal);
-        il.Emit(OpCodes.Castclass, runtime.TSFunctionType);
+        il.Emit(OpCodes.Castclass, runtime.FunctionValues.Type);
         il.Emit(OpCodes.Ldc_I4_2);
         il.Emit(OpCodes.Newarr, _types.Object);
         il.Emit(OpCodes.Dup);
@@ -4028,7 +4028,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Stelem_Ref);
-        il.Emit(OpCodes.Callvirt, runtime.TSFunctionInvoke);
+        il.Emit(OpCodes.Callvirt, runtime.FunctionValues.Invoke);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Leave, endLabel);
 
@@ -4059,7 +4059,7 @@ public partial class RuntimeEmitter
 
         // callback(null, result)
         il.Emit(OpCodes.Ldloc, callbackLocal);
-        il.Emit(OpCodes.Castclass, runtime.TSFunctionType);
+        il.Emit(OpCodes.Castclass, runtime.FunctionValues.Type);
         il.Emit(OpCodes.Ldc_I4_2);
         il.Emit(OpCodes.Newarr, _types.Object);
         il.Emit(OpCodes.Dup);
@@ -4070,7 +4070,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Stelem_Ref);
-        il.Emit(OpCodes.Callvirt, runtime.TSFunctionInvoke);
+        il.Emit(OpCodes.Callvirt, runtime.FunctionValues.Invoke);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Leave, endLabel);
 
@@ -4079,7 +4079,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, exLocal);
 
         il.Emit(OpCodes.Ldloc, callbackLocal);
-        il.Emit(OpCodes.Castclass, runtime.TSFunctionType);
+        il.Emit(OpCodes.Castclass, runtime.FunctionValues.Type);
         il.Emit(OpCodes.Ldc_I4_2);
         il.Emit(OpCodes.Newarr, _types.Object);
         il.Emit(OpCodes.Dup);
@@ -4091,7 +4091,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Stelem_Ref);
-        il.Emit(OpCodes.Callvirt, runtime.TSFunctionInvoke);
+        il.Emit(OpCodes.Callvirt, runtime.FunctionValues.Invoke);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Leave, endLabel);
 
@@ -4149,7 +4149,7 @@ public partial class RuntimeEmitter
 
         // callback(null, result)
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Castclass, runtime.TSFunctionType);
+        il.Emit(OpCodes.Castclass, runtime.FunctionValues.Type);
         il.Emit(OpCodes.Ldc_I4_2);
         il.Emit(OpCodes.Newarr, _types.Object);
         il.Emit(OpCodes.Dup);
@@ -4160,7 +4160,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Stelem_Ref);
-        il.Emit(OpCodes.Callvirt, runtime.TSFunctionInvoke);
+        il.Emit(OpCodes.Callvirt, runtime.FunctionValues.Invoke);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Leave, endLabel);
 
@@ -4169,7 +4169,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, exLocal);
 
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Castclass, runtime.TSFunctionType);
+        il.Emit(OpCodes.Castclass, runtime.FunctionValues.Type);
         il.Emit(OpCodes.Ldc_I4_2);
         il.Emit(OpCodes.Newarr, _types.Object);
         il.Emit(OpCodes.Dup);
@@ -4181,7 +4181,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Stelem_Ref);
-        il.Emit(OpCodes.Callvirt, runtime.TSFunctionInvoke);
+        il.Emit(OpCodes.Callvirt, runtime.FunctionValues.Invoke);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Leave, endLabel);
 
@@ -4309,7 +4309,7 @@ public partial class RuntimeEmitter
             // Success: callback.Invoke([null, _result])
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldfld, callbackField);
-            il.Emit(OpCodes.Castclass, runtime.TSFunctionType);
+            il.Emit(OpCodes.Castclass, runtime.FunctionValues.Type);
             il.Emit(OpCodes.Ldc_I4_2);
             il.Emit(OpCodes.Newarr, _types.Object);
             il.Emit(OpCodes.Dup);
@@ -4321,7 +4321,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldfld, resultField);
             il.Emit(OpCodes.Stelem_Ref);
-            il.Emit(OpCodes.Callvirt, runtime.TSFunctionInvoke);
+            il.Emit(OpCodes.Callvirt, runtime.FunctionValues.Invoke);
             il.Emit(OpCodes.Pop);
             il.Emit(OpCodes.Br, done);
 
@@ -4329,7 +4329,7 @@ public partial class RuntimeEmitter
             il.MarkLabel(errorPath);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldfld, callbackField);
-            il.Emit(OpCodes.Castclass, runtime.TSFunctionType);
+            il.Emit(OpCodes.Castclass, runtime.FunctionValues.Type);
             il.Emit(OpCodes.Ldc_I4_2);
             il.Emit(OpCodes.Newarr, _types.Object);
             il.Emit(OpCodes.Dup);
@@ -4341,7 +4341,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldc_I4_1);
             il.Emit(OpCodes.Ldnull);
             il.Emit(OpCodes.Stelem_Ref);
-            il.Emit(OpCodes.Callvirt, runtime.TSFunctionInvoke);
+            il.Emit(OpCodes.Callvirt, runtime.FunctionValues.Invoke);
             il.Emit(OpCodes.Pop);
 
             il.MarkLabel(done);

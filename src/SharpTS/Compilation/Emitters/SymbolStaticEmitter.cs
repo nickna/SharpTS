@@ -138,7 +138,7 @@ public sealed class SymbolStaticEmitter : IStaticTypeEmitterStrategy
                 ctx.Types.EmitLoadMethodInfo(il, runtime.Symbols.For);
                 il.Emit(OpCodes.Ldstr, "for");
                 il.Emit(OpCodes.Ldc_I4_1);
-                il.Emit(OpCodes.Call, runtime.TSFunctionGetOrCreate);
+                il.Emit(OpCodes.Call, runtime.FunctionValues.GetOrCreate);
                 return true;
             }
             case "keyFor":
@@ -148,7 +148,7 @@ public sealed class SymbolStaticEmitter : IStaticTypeEmitterStrategy
                 ctx.Types.EmitLoadMethodInfo(il, runtime.Symbols.KeyFor);
                 il.Emit(OpCodes.Ldstr, "keyFor");
                 il.Emit(OpCodes.Ldc_I4_1);
-                il.Emit(OpCodes.Call, runtime.TSFunctionGetOrCreate);
+                il.Emit(OpCodes.Call, runtime.FunctionValues.GetOrCreate);
                 return true;
             }
             default:

@@ -157,7 +157,7 @@ public sealed class EmittedObjectOwnPropertiesRuntimeTests
                 "GetOwnPropertyDescriptor" => runtime.ObjectDescriptors.GetOwnPropertyDescriptor,
                 "IsExtensible" => runtime.ObjectState.IsExtensible,
                 "GetProperty" => runtime.ObjectRead.Property,
-                _ => typeof(EmittedRuntime).GetProperty(name)!.GetValue(runtime)
+                _ => (name switch { "TSFunctionType" => runtime.FunctionValues.Type, _ => typeof(EmittedRuntime).GetProperty(name)!.GetValue(runtime) })
             };
         }
         return ctor.Invoke(ctor.GetParameters().Select(Value).ToArray());

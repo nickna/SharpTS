@@ -65,7 +65,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, mapFnOkLabel);
         // Provided value: must be callable. $TSFunction passes; everything else throws.
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Isinst, runtime.FunctionValues.Type);
         il.Emit(OpCodes.Brtrue, mapFnOkLabel);
         GuestErrorEmitter.ThrowTypeError(il, runtime, "Array.from: mapfn argument must be callable");
         il.MarkLabel(mapFnOkLabel);

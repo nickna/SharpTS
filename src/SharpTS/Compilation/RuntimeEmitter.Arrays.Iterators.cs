@@ -47,7 +47,7 @@ public partial class RuntimeEmitter
         // independent internal slot. The eager materializer already honors
         // that slot; treating it as a raw List would visit appended indices.
         il.Emit(OpCodes.Ldloc, rcvrLocal);
-        il.Emit(OpCodes.Isinst, runtime.ArgumentsType);
+        il.Emit(OpCodes.Isinst, runtime.Arguments.Type);
         il.Emit(OpCodes.Brtrue, isLazyFalse);
         il.Emit(OpCodes.Ldloc, rcvrLocal);
         il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
@@ -139,7 +139,7 @@ public partial class RuntimeEmitter
         // throws TypeError. ECMA-262 IsCallable returns true only for
         // function-like values; tests like `arr.every(true)` rely on the throw.
         il.Emit(loadOp);
-        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Isinst, runtime.FunctionValues.Type);
         il.Emit(OpCodes.Brtrue, okLabel);
         il.Emit(loadOp);
         il.Emit(OpCodes.Isinst, runtime.BoundTSFunctionType);
@@ -332,8 +332,8 @@ public partial class RuntimeEmitter
 
         // var tsFn = callback as $TSFunction;
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
-        var tsFnLocal = il.DeclareLocal(runtime.TSFunctionType);
+        il.Emit(OpCodes.Isinst, runtime.FunctionValues.Type);
+        var tsFnLocal = il.DeclareLocal(runtime.FunctionValues.Type);
         il.Emit(OpCodes.Stloc, tsFnLocal);
         il.Emit(OpCodes.Ldloc, tsFnLocal);
         il.Emit(OpCodes.Brfalse, notTSFunctionLabel);
@@ -342,7 +342,7 @@ public partial class RuntimeEmitter
         // bodies that read JS `arguments`); leave skipIndexBox=false to keep
         // boxing the index for arguments[1] correctness.
         il.Emit(OpCodes.Ldloc, tsFnLocal);
-        il.Emit(OpCodes.Ldfld, runtime.TSFunctionExpectsThisField);
+        il.Emit(OpCodes.Ldfld, runtime.FunctionValues.ExpectsThisField);
         il.Emit(OpCodes.Brtrue, doneLabel);
 
         // if (tsFn._capturesArguments) goto doneLabel — `this`-less function
@@ -352,12 +352,12 @@ public partial class RuntimeEmitter
         // index (#101). Arrows never set this flag (they can't bind their own
         // `arguments`), so the unary-arrow fast path is preserved.
         il.Emit(OpCodes.Ldloc, tsFnLocal);
-        il.Emit(OpCodes.Ldfld, runtime.TSFunctionCapturesArgumentsField);
+        il.Emit(OpCodes.Ldfld, runtime.FunctionValues.CapturesArgumentsField);
         il.Emit(OpCodes.Brtrue, doneLabel);
 
         // if (tsFn._paramCount > 1) goto doneLabel
         il.Emit(OpCodes.Ldloc, tsFnLocal);
-        il.Emit(OpCodes.Ldfld, runtime.TSFunctionParamCountField);
+        il.Emit(OpCodes.Ldfld, runtime.FunctionValues.ParamCountField);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Bgt, doneLabel);
 
@@ -2065,7 +2065,7 @@ public partial class RuntimeEmitter
         // throw TypeError per ECMA-262 IsCallable. Mirrors
         // EmitThrowIfCallbackNotCallable used by every/filter/map.
         il.Emit(OpCodes.Ldloc, callbackLocal);
-        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Isinst, runtime.FunctionValues.Type);
         il.Emit(OpCodes.Brtrue, reduceCallableOk);
         il.Emit(OpCodes.Ldloc, callbackLocal);
         il.Emit(OpCodes.Isinst, runtime.BoundTSFunctionType);
@@ -2262,7 +2262,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, reduceRCallableThrow);
         // Positive callable check (mirrors reduce / EmitThrowIfCallbackNotCallable).
         il.Emit(OpCodes.Ldloc, callbackLocal);
-        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Isinst, runtime.FunctionValues.Type);
         il.Emit(OpCodes.Brtrue, reduceRCallableOk);
         il.Emit(OpCodes.Ldloc, callbackLocal);
         il.Emit(OpCodes.Isinst, runtime.BoundTSFunctionType);

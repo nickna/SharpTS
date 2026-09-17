@@ -554,9 +554,9 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Isinst, runtime.BoundTSFunctionType);
             il.Emit(OpCodes.Brtrue, isBound);
             il.Emit(OpCodes.Ldloc, listenerLocal);
-            il.Emit(OpCodes.Castclass, runtime.TSFunctionType);
+            il.Emit(OpCodes.Castclass, runtime.FunctionValues.Type);
             il.Emit(OpCodes.Ldarg_2);
-            il.Emit(OpCodes.Callvirt, runtime.TSFunctionInvoke);
+            il.Emit(OpCodes.Callvirt, runtime.FunctionValues.Invoke);
             il.Emit(OpCodes.Br, invokeEnd);
             il.MarkLabel(isBound);
             il.Emit(OpCodes.Ldloc, listenerLocal);

@@ -952,7 +952,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldtoken, mainImpl);
         il.Emit(OpCodes.Call, _types.MethodBaseGetMethodFromHandle);
         il.Emit(OpCodes.Castclass, _types.MethodInfo);
-        il.Emit(OpCodes.Newobj, runtime.TSFunctionCtor);
+        il.Emit(OpCodes.Newobj, runtime.FunctionValues.Ctor);
         il.Emit(OpCodes.Stloc, fnLocal);
 
         // SetProperty(fn, memberName, new $TSFunction(null, memberImpl))
@@ -962,7 +962,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldtoken, memberImpl);
         il.Emit(OpCodes.Call, _types.MethodBaseGetMethodFromHandle);
         il.Emit(OpCodes.Castclass, _types.MethodInfo);
-        il.Emit(OpCodes.Newobj, runtime.TSFunctionCtor);
+        il.Emit(OpCodes.Newobj, runtime.FunctionValues.Ctor);
         il.Emit(OpCodes.Call, runtime.ObjectWrite.Property);
 
         il.Emit(OpCodes.Ldloc, fnLocal);
@@ -1252,7 +1252,7 @@ public partial class RuntimeEmitter
                 il.Emit(OpCodes.Ldtoken, impl);
                 il.Emit(OpCodes.Call, _types.MethodBaseGetMethodFromHandle);
                 il.Emit(OpCodes.Castclass, _types.MethodInfo);
-                il.Emit(OpCodes.Newobj, runtime.TSFunctionCtor);
+                il.Emit(OpCodes.Newobj, runtime.FunctionValues.Ctor);
                 il.Emit(OpCodes.Callvirt, setItem);
             }
 
@@ -1474,7 +1474,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Brfalse, noMethod);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldloc, miLocal);
-            il.Emit(OpCodes.Newobj, runtime.TSFunctionCtor);
+            il.Emit(OpCodes.Newobj, runtime.FunctionValues.Ctor);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(noMethod);
 

@@ -59,7 +59,7 @@ public partial class AsyncArrowMoveNextEmitter
         {
             _il.Emit(OpCodes.Ldnull);
             Types.EmitLoadMethodInfoViaHandle(_il, funcMethod);
-            _il.Emit(OpCodes.Newobj, _ctx.Runtime!.TSFunctionCtor);
+            _il.Emit(OpCodes.Newobj, _ctx.Runtime!.FunctionValues.Ctor);
             SetStackUnknown();
             return;
         }

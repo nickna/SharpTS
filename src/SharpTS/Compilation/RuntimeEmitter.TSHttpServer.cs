@@ -1882,13 +1882,13 @@ public partial class RuntimeEmitter
         // Check if callback is TSFunction
         var notTSFunc = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, callbackLocal);
-        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Isinst, runtime.FunctionValues.Type);
         il.Emit(OpCodes.Brfalse, notTSFunc);
         il.Emit(OpCodes.Ldloc, callbackLocal);
-        il.Emit(OpCodes.Castclass, runtime.TSFunctionType);
+        il.Emit(OpCodes.Castclass, runtime.FunctionValues.Type);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Newarr, _types.Object);
-        il.Emit(OpCodes.Callvirt, runtime.TSFunctionInvoke);
+        il.Emit(OpCodes.Callvirt, runtime.FunctionValues.Invoke);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Br, noCallbackLabel);
 
@@ -1998,13 +1998,13 @@ public partial class RuntimeEmitter
 
         var finishNotTsFuncLabel = finishIl.DefineLabel();
         finishIl.Emit(OpCodes.Ldloc, finishCallbackLocal);
-        finishIl.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        finishIl.Emit(OpCodes.Isinst, runtime.FunctionValues.Type);
         finishIl.Emit(OpCodes.Brfalse, finishNotTsFuncLabel);
         finishIl.Emit(OpCodes.Ldloc, finishCallbackLocal);
-        finishIl.Emit(OpCodes.Castclass, runtime.TSFunctionType);
+        finishIl.Emit(OpCodes.Castclass, runtime.FunctionValues.Type);
         finishIl.Emit(OpCodes.Ldc_I4_0);
         finishIl.Emit(OpCodes.Newarr, _types.Object);
-        finishIl.Emit(OpCodes.Callvirt, runtime.TSFunctionInvoke);
+        finishIl.Emit(OpCodes.Callvirt, runtime.FunctionValues.Invoke);
         finishIl.Emit(OpCodes.Pop);
         finishIl.Emit(OpCodes.Br, noFinishCallbackLabel);
 

@@ -17,6 +17,13 @@ namespace SharpTS.Compilation;
 /// <seealso cref="ILEmitter"/>
 public class EmittedRuntime
 {
+    /// <summary>Required function values, invocation caches and receiver-context declarations.</summary>
+    public EmittedFunctionValueRuntime FunctionValues { get; } = new();
+
+    /// <summary>Required argument-context and later branded argument-object declarations.</summary>
+    public EmittedArgumentsRuntime Arguments { get; } = new();
+
+
     /// <summary>Required function attributes, created before function wrapper emission.</summary>
     public EmittedFunctionAttributesRuntime FunctionAttributes { get; } = new();
 
@@ -149,24 +156,10 @@ public class EmittedRuntime
     public FieldInfo LexicalUninitializedInstance { get; set; } = null!;
 
     // The emitted TSFunction class
-    public TypeBuilder TSFunctionType { get; set; } = null!;
-    public ConstructorBuilder TSFunctionCtor { get; set; } = null!;
-    /// <summary>
-    /// Alternative constructor with cached name/length: $TSFunction(object target, MethodInfo method, string name, int length).
-    /// Use when MethodInfo might not support GetParameters() (e.g., MethodBuilder tokens in persisted assemblies).
-    /// </summary>
-    public ConstructorBuilder TSFunctionCtorWithCache { get; set; } = null!;
-    public MethodBuilder FunctionConstructor { get; set; } = null!;
-    public MethodBuilder TSFunctionInvoke { get; set; } = null!;
-    public MethodBuilder TSFunctionInvokeWithThis { get; set; } = null!;
-    public MethodBuilder TSFunctionGetTarget { get; set; } = null!;
     public Type StableNumberIteratorResultType { get; set; } = null!;
     public ConstructorInfo StableNumberIteratorResultCtor { get; set; } = null!;
     public FieldInfo StableNumberIteratorResultValueField { get; set; } = null!;
     public FieldInfo StableNumberIteratorResultDoneField { get; set; } = null!;
-    public MethodBuilder TSFunctionBindThis { get; set; } = null!;
-    public MethodBuilder TSFunctionLengthGetter { get; set; } = null!;
-    public MethodBuilder TSFunctionNameGetter { get; set; } = null!;
 
     // The emitted TSNamespace class
     public TypeBuilder TSNamespaceType { get; set; } = null!;
@@ -271,20 +264,13 @@ public class EmittedRuntime
 
     // $TSFunction static factory + instance cache: stable identity for
     // function-declaration references (see RuntimeEmitter.TSFunction.cs).
-    public MethodBuilder TSFunctionGetOrCreate { get; set; } = null!;
-    public FieldBuilder TSFunctionPrototypeCacheField { get; set; } = null!;
-    public MethodBuilder TSFunctionGetMethodInfo { get; set; } = null!;
     // Exposed for iterator helpers' "skip index box for unary arrows" fast
     // path — read at runtime to detect callback arity without reflection.
-    public FieldBuilder TSFunctionParamCountField { get; set; } = null!;
-    public FieldBuilder TSFunctionExpectsThisField { get; set; } = null!;
     // True when the wrapped method's body reads JS `arguments`. Set via the
     // $CapturesArguments marker attribute (function declarations only — function
     // expressions already get _expectsThis=true via their __this param). Read by
     // the iterator-helper skip-index-box detection so it never drops the index
     // arg for a callback that could observe it through `arguments`.
-    public FieldBuilder TSFunctionCapturesArgumentsField { get; set; } = null!;
-    public FieldBuilder TSFunctionNumericRest4Field { get; set; } = null!;
     // Marker attribute applied to function-declaration methods that reference
     // `arguments`. Its ctor is invoked via CustomAttributeBuilder at method
     // definition; the type token is read back via MethodInfo.IsDefined.
@@ -323,25 +309,7 @@ public class EmittedRuntime
     public MethodBuilder SafeGetMethod { get; set; } = null!;
     public MethodBuilder NewOnFunction { get; set; } = null!;
 
-    /// <summary>
-    /// Thread-static field holding the current function's <c>this</c> when the
-    /// enclosing call path (e.g. <c>$Runtime.NewOnFunction</c>) has a thisArg that
-    /// the compiled method signature can't otherwise receive. <see cref="LocalVariableResolver.LoadThis"/>
-    /// falls back to this field when a method has no <c>__this</c> param and no
-    /// captured <c>this</c>.
-    /// </summary>
-    public FieldBuilder CurrentFunctionThisField { get; set; } = null!;
 
-    /// <summary>
-    /// Thread-static field holding the current call's full argument array (pre-AdjustArgs).
-    /// Set by <c>$TSFunction.Invoke</c>/<c>InvokeWithThis</c> around MethodInfo.Invoke so
-    /// that a flagged function body can reconstruct the JS <c>arguments</c> object with
-    /// every caller value — including extras the fixed method signature would otherwise
-    /// drop (the lodash <c>overRest</c> pattern that motivates #64). Read once in the
-    /// function prologue; null means "fall back to declared parameters" (the direct-call
-    /// fast path in compiled code where arity is exact).
-    /// </summary>
-    public FieldBuilder CurrentArgumentsField { get; set; } = null!;
 
 
     /// <summary>
@@ -375,7 +343,6 @@ public class EmittedRuntime
     public MethodBuilder InvokeValue { get; set; } = null!;
     public MethodBuilder InvokeMethodValue { get; set; } = null!;
     public MethodBuilder InvokeMethodValue0 { get; set; } = null!;
-    public MethodBuilder TSFunctionInvokeWithThis0 { get; set; } = null!;
     public MethodBuilder ConstructDynamicValue { get; set; } = null!;
     public MethodBuilder GetSuperMethod { get; set; } = null!;
 
@@ -405,12 +372,6 @@ public class EmittedRuntime
     // $Arguments : List<object> — marker subclass for the JS arguments object.
     // Used to brand sloppy-arguments instances so the brand-tagger returns
     // "[object Arguments]" and Array.isArray returns false per ECMA-262.
-    public TypeBuilder ArgumentsType { get; set; } = null!;
-    public ConstructorBuilder ArgumentsDefaultCtor { get; set; } = null!;
-    public ConstructorBuilder ArgumentsEnumerableCtor { get; set; } = null!;
-    /// <summary>$Arguments._length — JS-visible length (per ECMA-262 sloppy
-    /// arguments, "length" doesn't auto-update on out-of-range indexed sets).</summary>
-    public FieldBuilder ArgumentsLengthField { get; set; } = null!;
 
     // Generalized bind target — used when `.bind` is called on any callable other
     // than $TSFunction (arrays, maps, sets, etc.). Stores (target, boundArgs) and

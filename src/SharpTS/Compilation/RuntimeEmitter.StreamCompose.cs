@@ -356,7 +356,7 @@ public partial class RuntimeEmitter
     {
         il.Emit(OpCodes.Ldloc, bridgeLocal);
         EmitInstanceMethodInfoLiteral(il, bridgeMethod, runtime.RequireNodeStreams().ComposeBridgeType);
-        il.Emit(OpCodes.Newobj, runtime.TSFunctionCtor);
+        il.Emit(OpCodes.Newobj, runtime.FunctionValues.Ctor);
     }
 
     /// <summary>

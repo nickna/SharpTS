@@ -53,7 +53,7 @@ public sealed class AtomicsStaticEmitter : IStaticTypeEmitterStrategy
         il.Emit(OpCodes.Castclass, ctx.Types.MethodInfo);
         il.Emit(OpCodes.Ldstr, "pause");
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Call, ctx.Runtime.TSFunctionGetOrCreate);
+        il.Emit(OpCodes.Call, ctx.Runtime.FunctionValues.GetOrCreate);
         return true;
     }
 

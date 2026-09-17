@@ -595,15 +595,15 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
                     // $Arguments check: use _length, not Count, per ECMA-262 sloppy
                     // arguments. Only emits the runtime check when ArgumentsType is
                     // wired (production: always; tests may skip).
-                    if (ctx.Runtime?.ArgumentsType != null && ctx.Runtime?.ArgumentsLengthField != null)
+                    if (ctx.Runtime?.Arguments.Type != null && ctx.Runtime?.Arguments.LengthField != null)
                     {
                         var notArgsLengthLabel = il.DefineLabel();
                         il.Emit(OpCodes.Ldloc, h.TypedLocal);
-                        il.Emit(OpCodes.Isinst, ctx.Runtime!.ArgumentsType);
+                        il.Emit(OpCodes.Isinst, ctx.Runtime!.Arguments.Type);
                         il.Emit(OpCodes.Brfalse, notArgsLengthLabel);
                         il.Emit(OpCodes.Ldloc, h.TypedLocal);
-                        il.Emit(OpCodes.Castclass, ctx.Runtime!.ArgumentsType);
-                        il.Emit(OpCodes.Ldfld, ctx.Runtime!.ArgumentsLengthField);
+                        il.Emit(OpCodes.Castclass, ctx.Runtime!.Arguments.Type);
+                        il.Emit(OpCodes.Ldfld, ctx.Runtime!.Arguments.LengthField);
                         il.Emit(OpCodes.Conv_R8);
                         il.Emit(OpCodes.Br, endLabel);
                         il.MarkLabel(notArgsLengthLabel);
@@ -656,15 +656,15 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
         il.MarkLabel(tsArrayCheckLabel);
 
         // $Arguments check: use _length per ECMA-262 sloppy arguments.
-        if (ctx.Runtime?.ArgumentsType != null && ctx.Runtime?.ArgumentsLengthField != null)
+        if (ctx.Runtime?.Arguments.Type != null && ctx.Runtime?.Arguments.LengthField != null)
         {
             var notArgsLengthNH = il.DefineLabel();
             il.Emit(OpCodes.Ldloc, objLocal);
-            il.Emit(OpCodes.Isinst, ctx.Runtime!.ArgumentsType);
+            il.Emit(OpCodes.Isinst, ctx.Runtime!.Arguments.Type);
             il.Emit(OpCodes.Brfalse, notArgsLengthNH);
             il.Emit(OpCodes.Ldloc, objLocal);
-            il.Emit(OpCodes.Castclass, ctx.Runtime!.ArgumentsType);
-            il.Emit(OpCodes.Ldfld, ctx.Runtime!.ArgumentsLengthField);
+            il.Emit(OpCodes.Castclass, ctx.Runtime!.Arguments.Type);
+            il.Emit(OpCodes.Ldfld, ctx.Runtime!.Arguments.LengthField);
             il.Emit(OpCodes.Conv_R8);
             il.Emit(OpCodes.Br, endLabelNH);
             il.MarkLabel(notArgsLengthNH);

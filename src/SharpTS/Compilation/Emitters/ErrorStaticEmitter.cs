@@ -32,7 +32,7 @@ public sealed class ErrorStaticEmitter : IStaticTypeEmitterStrategy
         ctx.Types.EmitLoadMethodInfo(ctx.IL, ctx.Runtime!.Errors.IsError);
         ctx.IL.Emit(OpCodes.Ldstr, "isError");
         ctx.IL.Emit(OpCodes.Ldc_I4_1);
-        ctx.IL.Emit(OpCodes.Call, ctx.Runtime.TSFunctionGetOrCreate);
+        ctx.IL.Emit(OpCodes.Call, ctx.Runtime.FunctionValues.GetOrCreate);
         return true;
     }
 

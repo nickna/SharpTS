@@ -333,7 +333,7 @@ public sealed class EmittedMapSetRuntimeTests
         var typeOfHelper = typeof(RuntimeEmitter).GetMethod("EmitTypeOf", InstanceMembers)!;
         var inputConstructor = Assert.Single(typeOfHelper.GetParameters()[2].ParameterType.GetConstructors());
         var typeOfInputs = inputConstructor.Invoke(inputConstructor.GetParameters()
-            .Select(parameter => typeof(EmittedRuntime).GetProperty(parameter.Name!)!.GetValue(runtime)).ToArray());
+            .Select(parameter => (parameter.Name switch { "TSFunctionType" => runtime.FunctionValues.Type, _ => typeof(EmittedRuntime).GetProperty(parameter.Name!)!.GetValue(runtime) })).ToArray());
         typeOfHelper.Invoke(emitter, [probe, new EmittedOperatorRuntime(), typeOfInputs]);
         typeof(RuntimeEmitter).GetMethod("EmitInvokeValue", InstanceMembers)!.Invoke(emitter, [probe, runtime]);
         probe.CreateType();

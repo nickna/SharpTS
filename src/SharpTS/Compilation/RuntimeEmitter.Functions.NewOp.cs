@@ -25,8 +25,8 @@ public partial class RuntimeEmitter
         // The thread-static `_currentFunctionThis` field is now defined on $TSFunction
         // (during EmitTSFunctionClass) so that $TSFunction.InvokeWithThis can also
         // set/restore it for `Fn.call(target, ...)` paths. NewOnFunction just consumes
-        // runtime.CurrentFunctionThisField below.
-        var currentThisField = runtime.CurrentFunctionThisField;
+        // runtime.FunctionValues.CurrentThisField below.
+        var currentThisField = runtime.FunctionValues.CurrentThisField;
 
         var method = runtime.NewOnFunction;
 
@@ -88,7 +88,7 @@ public partial class RuntimeEmitter
         // Only run the check for $TSFunction inputs — Type and other callees
         // were already constructable in the legacy code path.
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Isinst, runtime.FunctionValues.Type);
         il.Emit(OpCodes.Brfalse, skipConstructorCheckLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Call, runtime.IsConstructorMethod);
@@ -125,7 +125,7 @@ public partial class RuntimeEmitter
         // skip the prototype link).
         var skipProtoLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Isinst, runtime.FunctionValues.Type);
         il.Emit(OpCodes.Brfalse, skipProtoLabel);
 
         // Read F.prototype via $Runtime.GetFunctionMethod(fn, "prototype") so
@@ -163,14 +163,14 @@ public partial class RuntimeEmitter
 
         // if (fn is $TSFunction) result = fn.InvokeWithThis(newObj, args);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Isinst, runtime.FunctionValues.Type);
         il.Emit(OpCodes.Brfalse, tryBound);
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSFunctionType);
+        il.Emit(OpCodes.Castclass, runtime.FunctionValues.Type);
         il.Emit(OpCodes.Ldloc, newObjLocal);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, runtime.TSFunctionInvokeWithThis);
+        il.Emit(OpCodes.Callvirt, runtime.FunctionValues.InvokeWithThis);
         il.Emit(OpCodes.Stloc, resultLocal);
         il.Emit(OpCodes.Leave, afterTry);
 

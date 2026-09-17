@@ -144,8 +144,8 @@ public class EmittedStringCoercionRuntimeTests
         var peers = Activator.CreateInstance(inputType,
         [
             runtime.UndefinedType, runtime.Symbols.Type, runtime.GlobalThisSingletonField, runtime.GlobalThisGetProperty,
-            runtime.Operators.TypeOf, runtime.InvokeMethodValue, runtime.ArgumentsType, runtime.ObjectRead.Property, runtime.ObjectStorage.Type,
-            runtime.TSFunctionType, runtime.BoundAnyFunctionType, runtime.ObjectOwnProperties.HasOwnProperty, runtime.IHasFieldsInterface,
+            runtime.Operators.TypeOf, runtime.InvokeMethodValue, runtime.Arguments.Type, runtime.ObjectRead.Property, runtime.ObjectStorage.Type,
+            runtime.FunctionValues.Type, runtime.BoundAnyFunctionType, runtime.ObjectOwnProperties.HasOwnProperty, runtime.IHasFieldsInterface,
             getSymbols, runtime.Symbols.ToPrimitive, runtime.DescriptorStorage.DescriptorType,
             runtime.DescriptorStorage.DescriptorGetter.GetGetMethod()!, runtime.DescriptorStorage.DescriptorSetter.GetGetMethod()!,
             runtime.DescriptorStorage.DescriptorValue.GetGetMethod()!, runtime.DescriptorStorage.HasPrototypeEntry, runtime.DescriptorStorage.GetPrototype,
@@ -163,7 +163,7 @@ public class EmittedStringCoercionRuntimeTests
         if (includeRegExp)
         {
             var regex = Activator.CreateInstance(loaded.GetType(runtime.RegExps.RequireImplementation().Type.Name)!, ["value", ""]);
-            var function = Activator.CreateInstance(loaded.GetType(runtime.TSFunctionType.Name)!,
+            var function = Activator.CreateInstance(loaded.GetType(runtime.FunctionValues.Type.Name)!,
                 [null, helperType.GetMethod("CustomToString")!, "toString", 0]);
             loaded.GetType("$Runtime")!.GetMethod("SetProperty")!.Invoke(null, [regex, "toString", function]);
             Assert.Equal("custom regex", convert.Invoke(null, [regex]));

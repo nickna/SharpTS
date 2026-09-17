@@ -330,6 +330,18 @@ carrier; the strict SyntaxError helper retains its existing CLR exception repres
 Exception wrapping follows supplied optional Promise metadata. Error-cause Proxy handling
 receives six explicit invocation/delegate handles through the shared reflection bridge.
 
+Function values use required `FunctionValues` ownership for nineteen wrapper,
+invocation-cache and receiver-context declarations. Required `Arguments` owns the
+early thread-static context and the later branded argument-object declarations.
+The function owner completes immediately after wrapper creation; the arguments
+owner completes after the branded type is created. Eight helpers take their
+owners and exact peer declarations, preserving original declaration order and
+argument conversion. Compiler fallback paths retain absent-runtime behavior and
+require declared metadata when a runtime exists. Reuse, cache identity, receiver
+restoration, argument snapshots, numeric-path allocation and standalone output
+tests cover these boundaries. Binding, invocation dispatch and function
+prototypes remain separate migration work.
+
 Function attribute metadata uses required `FunctionAttributes` ownership for the
 seventeen handles of seven attribute classes. Each class is created in its original
 order, and the owner completes before function-wrapper emission. Attribute emitters

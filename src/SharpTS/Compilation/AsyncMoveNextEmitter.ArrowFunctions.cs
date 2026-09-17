@@ -57,7 +57,7 @@ public partial class AsyncMoveNextEmitter
         }
 
         Types.EmitLoadMethodInfoViaHandle(_il, arrowBuilder.StubMethod);
-        _il.Emit(OpCodes.Newobj, _ctx!.Runtime!.TSFunctionCtor);
+        _il.Emit(OpCodes.Newobj, _ctx!.Runtime!.FunctionValues.Ctor);
         SetStackUnknown();
     }
 
@@ -93,7 +93,7 @@ public partial class AsyncMoveNextEmitter
         if (_ctx.DisplayClassFields == null || !_ctx.DisplayClassFields.TryGetValue(af, out var fieldMap))
         {
             Types.EmitLoadMethodInfoViaHandle(_il, method);
-            _il.Emit(OpCodes.Newobj, _ctx.Runtime!.TSFunctionCtor);
+            _il.Emit(OpCodes.Newobj, _ctx.Runtime!.FunctionValues.Ctor);
             SetStackUnknown();
             return;
         }
@@ -140,7 +140,7 @@ public partial class AsyncMoveNextEmitter
         }
 
         Types.EmitLoadMethodInfoViaHandle(_il, method);
-        _il.Emit(OpCodes.Newobj, _ctx.Runtime!.TSFunctionCtor);
+        _il.Emit(OpCodes.Newobj, _ctx.Runtime!.FunctionValues.Ctor);
         SetStackUnknown();
     }
 
@@ -148,7 +148,7 @@ public partial class AsyncMoveNextEmitter
     {
         _il.Emit(OpCodes.Ldnull);
         Types.EmitLoadMethodInfoViaHandle(_il, method);
-        _il.Emit(OpCodes.Newobj, _ctx!.Runtime!.TSFunctionCtor);
+        _il.Emit(OpCodes.Newobj, _ctx!.Runtime!.FunctionValues.Ctor);
         SetStackUnknown();
     }
 }

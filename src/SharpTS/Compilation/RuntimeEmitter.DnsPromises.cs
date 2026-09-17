@@ -615,7 +615,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldtoken, runtime.RequireDns().PromisesWrapperMethods[wrapperKey]);
             il.Emit(OpCodes.Call, typeof(MethodBase).GetMethod("GetMethodFromHandle", [typeof(RuntimeMethodHandle)])!);
             il.Emit(OpCodes.Castclass, typeof(MethodInfo));
-            il.Emit(OpCodes.Newobj, runtime.TSFunctionCtor);
+            il.Emit(OpCodes.Newobj, runtime.FunctionValues.Ctor);
 
             il.Emit(OpCodes.Call, addMethod);
         }

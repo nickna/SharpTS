@@ -185,11 +185,11 @@ public partial class RuntimeEmitter
 
         // Check TSFunction
         loadCallback();
-        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Isinst, runtime.FunctionValues.Type);
         il.Emit(OpCodes.Brfalse, notTSFunc);
 
         loadCallback();
-        il.Emit(OpCodes.Castclass, runtime.TSFunctionType);
+        il.Emit(OpCodes.Castclass, runtime.FunctionValues.Type);
         if (argCount == 0)
         {
             il.Emit(OpCodes.Ldc_I4_0);
@@ -199,7 +199,7 @@ public partial class RuntimeEmitter
         {
             loadArgs?.Invoke(il);
         }
-        il.Emit(OpCodes.Callvirt, runtime.TSFunctionInvoke);
+        il.Emit(OpCodes.Callvirt, runtime.FunctionValues.Invoke);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Br, doneLabel);
 
@@ -314,14 +314,14 @@ public partial class RuntimeEmitter
 
         // if (cb is TSFunction) ((TSFunction)cb).Invoke(new object[0]);
         il.Emit(OpCodes.Ldloc, cbLocal);
-        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Isinst, runtime.FunctionValues.Type);
         il.Emit(OpCodes.Brfalse, notTSFunc);
 
         il.Emit(OpCodes.Ldloc, cbLocal);
-        il.Emit(OpCodes.Castclass, runtime.TSFunctionType);
+        il.Emit(OpCodes.Castclass, runtime.FunctionValues.Type);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Newarr, _types.Object);
-        il.Emit(OpCodes.Callvirt, runtime.TSFunctionInvoke);
+        il.Emit(OpCodes.Callvirt, runtime.FunctionValues.Invoke);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Br, doneLabel);
 
@@ -401,7 +401,7 @@ public partial class RuntimeEmitter
         var doneCheck = il.DefineLabel();
 
         loadValue();
-        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Isinst, runtime.FunctionValues.Type);
         il.Emit(OpCodes.Brtrue, isCallable);
 
         loadValue();

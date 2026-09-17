@@ -385,7 +385,7 @@ public partial class ILEmitter
             int arity = _ctx.GetFunctionLength(funcMethod);
             IL.Emit(OpCodes.Ldstr, _ctx.GetFunctionName(funcMethod, className));
             IL.Emit(OpCodes.Ldc_I4, arity);
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.TSFunctionGetOrCreate);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.FunctionValues.GetOrCreate);
         }
         else
         {
@@ -513,11 +513,11 @@ public partial class ILEmitter
         var notFunctionType = IL.DefineLabel();
         var functionDone = IL.DefineLabel();
         IL.Emit(OpCodes.Ldloc, typeLocal);
-        IL.Emit(OpCodes.Ldtoken, _ctx.Runtime!.TSFunctionType);
+        IL.Emit(OpCodes.Ldtoken, _ctx.Runtime!.FunctionValues.Type);
         IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(_ctx.Types.Type, "GetTypeFromHandle", _ctx.Types.RuntimeTypeHandle));
         IL.Emit(OpCodes.Bne_Un, notFunctionType);
         EmitArgsArrayWithSpread(n.Arguments);
-        IL.Emit(OpCodes.Call, _ctx.Runtime.FunctionConstructor);
+        IL.Emit(OpCodes.Call, _ctx.Runtime.FunctionValues.Construct);
         IL.Emit(OpCodes.Br, functionDone);
         IL.MarkLabel(notFunctionType);
 

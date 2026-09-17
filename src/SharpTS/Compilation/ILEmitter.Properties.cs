@@ -98,8 +98,8 @@ public partial class ILEmitter
         if (g.Name.Lexeme == "length"
             && g.Object is Expr.Variable argsVar
             && argsVar.Name.Lexeme == "arguments"
-            && _ctx.Runtime?.ArgumentsType != null
-            && _ctx.Runtime?.ArgumentsLengthField != null)
+            && _ctx.Runtime?.Arguments.Type != null
+            && _ctx.Runtime?.Arguments.LengthField != null)
         {
             EmitExpression(g.Object);
             EmitBoxIfNeeded(g.Object);
@@ -108,11 +108,11 @@ public partial class ILEmitter
             var notArgsTypeLabel = IL.DefineLabel();
             var endLabel = IL.DefineLabel();
             IL.Emit(OpCodes.Ldloc, argsLocal);
-            IL.Emit(OpCodes.Isinst, _ctx.Runtime!.ArgumentsType);
+            IL.Emit(OpCodes.Isinst, _ctx.Runtime!.Arguments.Type);
             IL.Emit(OpCodes.Brfalse, notArgsTypeLabel);
             IL.Emit(OpCodes.Ldloc, argsLocal);
-            IL.Emit(OpCodes.Castclass, _ctx.Runtime!.ArgumentsType);
-            IL.Emit(OpCodes.Ldfld, _ctx.Runtime!.ArgumentsLengthField);
+            IL.Emit(OpCodes.Castclass, _ctx.Runtime!.Arguments.Type);
+            IL.Emit(OpCodes.Ldfld, _ctx.Runtime!.Arguments.LengthField);
             IL.Emit(OpCodes.Conv_R8);
             IL.Emit(OpCodes.Box, _ctx.Types.Double);
             IL.Emit(OpCodes.Br, endLabel);

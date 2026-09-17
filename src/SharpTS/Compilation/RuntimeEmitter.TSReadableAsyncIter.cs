@@ -236,7 +236,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, "next");
         il.Emit(OpCodes.Ldarg_0);
         EmitInstanceMethodInfoLiteral(il, runtime.RequireNodeStreams().ReadableIterNext, typeBuilder);
-        il.Emit(OpCodes.Newobj, runtime.TSFunctionCtor);
+        il.Emit(OpCodes.Newobj, runtime.FunctionValues.Ctor);
         il.Emit(OpCodes.Callvirt, dictSetItem);
 
         // dict["return"] = new $TSFunction(this, IterReturn);
@@ -244,7 +244,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, "return");
         il.Emit(OpCodes.Ldarg_0);
         EmitInstanceMethodInfoLiteral(il, runtime.RequireNodeStreams().ReadableIterReturn, typeBuilder);
-        il.Emit(OpCodes.Newobj, runtime.TSFunctionCtor);
+        il.Emit(OpCodes.Newobj, runtime.FunctionValues.Ctor);
         il.Emit(OpCodes.Callvirt, dictSetItem);
 
         il.Emit(OpCodes.Ldloc, dictLocal);

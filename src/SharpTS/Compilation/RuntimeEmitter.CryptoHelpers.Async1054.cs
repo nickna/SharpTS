@@ -21,7 +21,7 @@ public partial class RuntimeEmitter
     private void EmitCryptoResultCallback(ILGenerator il, EmittedRuntime runtime, LocalBuilder callbackLoc, LocalBuilder resultLoc)
     {
         il.Emit(OpCodes.Ldloc, callbackLoc);
-        il.Emit(OpCodes.Castclass, runtime.TSFunctionType);
+        il.Emit(OpCodes.Castclass, runtime.FunctionValues.Type);
         il.Emit(OpCodes.Ldc_I4_2);
         il.Emit(OpCodes.Newarr, _types.Object);
         il.Emit(OpCodes.Dup);
@@ -32,14 +32,14 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Ldloc, resultLoc);
         il.Emit(OpCodes.Stelem_Ref);
-        il.Emit(OpCodes.Callvirt, runtime.TSFunctionInvoke);
+        il.Emit(OpCodes.Callvirt, runtime.FunctionValues.Invoke);
         il.Emit(OpCodes.Pop);
     }
 
     private void EmitCryptoErrorCallback(ILGenerator il, EmittedRuntime runtime, LocalBuilder callbackLoc, LocalBuilder exLoc)
     {
         il.Emit(OpCodes.Ldloc, callbackLoc);
-        il.Emit(OpCodes.Castclass, runtime.TSFunctionType);
+        il.Emit(OpCodes.Castclass, runtime.FunctionValues.Type);
         il.Emit(OpCodes.Ldc_I4_2);
         il.Emit(OpCodes.Newarr, _types.Object);
         il.Emit(OpCodes.Dup);
@@ -51,7 +51,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Stelem_Ref);
-        il.Emit(OpCodes.Callvirt, runtime.TSFunctionInvoke);
+        il.Emit(OpCodes.Callvirt, runtime.FunctionValues.Invoke);
         il.Emit(OpCodes.Pop);
     }
 
@@ -64,7 +64,7 @@ public partial class RuntimeEmitter
         {
             var skipLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg, argIndex);
-            il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+            il.Emit(OpCodes.Isinst, runtime.FunctionValues.Type);
             il.Emit(OpCodes.Brfalse, skipLabel);
             il.Emit(OpCodes.Ldarg, argIndex);
             il.Emit(OpCodes.Stloc, callbackLoc);

@@ -289,7 +289,7 @@ public partial class RuntimeEmitter
         EmitTypeBranch("Promise", _types.TaskOfObject);
         if (_features.UsesBuffer)
             EmitTypeBranch("Buffer", runtime.RequireBuffer().Type);
-        EmitTypeBranch("Function", runtime.TSFunctionType);
+        EmitTypeBranch("Function", runtime.FunctionValues.Type);
         if (_features.UsesTextEncoding)
         {
             EmitTypeBranch("TextEncoder", runtime.RequireTextEncoding().EncoderType);
@@ -440,7 +440,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Castclass, _types.MethodInfo);
             il.Emit(OpCodes.Ldstr, jsName);
             il.Emit(OpCodes.Ldc_I4, jsLength);
-            il.Emit(OpCodes.Call, runtime.TSFunctionGetOrCreate);
+            il.Emit(OpCodes.Call, runtime.FunctionValues.GetOrCreate);
         }
         il.MarkLabel(parseIntLabel);
         EmitGetOrCreateTSFn(runtime.Numbers.ParseInt, "parseInt", 2);
@@ -551,7 +551,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldtoken, wrappedMethod);
         il.Emit(OpCodes.Call, _types.MethodBaseGetMethodFromHandle);
         il.Emit(OpCodes.Castclass, _types.MethodInfo);
-        il.Emit(OpCodes.Newobj, runtime.TSFunctionCtor);
+        il.Emit(OpCodes.Newobj, runtime.FunctionValues.Ctor);
         il.Emit(OpCodes.Stsfld, cachedField);
         il.MarkLabel(alreadyCachedLabel);
         il.Emit(OpCodes.Ldsfld, cachedField);

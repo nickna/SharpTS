@@ -176,7 +176,7 @@
     "Reason": "Net and TLS servers expose matching names but bind methods to different transport implementations; retain the explicit transport adapters."
   },
   {
-    "Hash": "d11966a79cc15242c8615d8221c8d2dd89670aac2b626a3cc605d9e244beab65",
+    "Hash": "d3caf59c58d2db4c62118a056823934f77bdd0d9d9981f3c9870977cb1c23c13",
     "Members": [
       "src/SharpTS/Compilation/AsyncGeneratorMoveNextEmitter.Expressions.cs::AsyncGeneratorMoveNextEmitter.EmitCapturingArrowFunction(Expr.ArrowFunction af, MethodBuilder method, TypeBuilder displayClass)",
       "src/SharpTS/Compilation/AsyncMoveNextEmitter.ArrowFunctions.cs::AsyncMoveNextEmitter.EmitCapturingArrowFunction(Expr.ArrowFunction af, MethodBuilder method, TypeBuilder displayClass)"

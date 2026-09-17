@@ -201,7 +201,7 @@ public partial class ILEmitter
             _ctx.Types.EmitLoadMethodInfo(IL, _ctx.Runtime!.CreateProxy);
             IL.Emit(OpCodes.Ldstr, "Proxy");
             IL.Emit(OpCodes.Ldc_I4_2);
-            IL.Emit(OpCodes.Call, _ctx.Runtime.TSFunctionGetOrCreate);
+            IL.Emit(OpCodes.Call, _ctx.Runtime.FunctionValues.GetOrCreate);
             SetStackUnknown();
             return;
         }
@@ -298,7 +298,7 @@ public partial class ILEmitter
             int arity = _ctx.GetFunctionLength(methodBuilder);
             IL.Emit(OpCodes.Ldstr, _ctx.GetFunctionName(methodBuilder, name));
             IL.Emit(OpCodes.Ldc_I4, arity);  // function length
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.TSFunctionGetOrCreate);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.FunctionValues.GetOrCreate);
             SetStackUnknown();
             return;
         }
@@ -324,7 +324,7 @@ public partial class ILEmitter
                 IL.Emit(OpCodes.Call, _ctx.Types.MethodBaseGetMethodFromHandle);
             }
             IL.Emit(OpCodes.Castclass, _ctx.Types.MethodInfo);
-            EmitNewobjUnknown(_ctx.Runtime!.TSFunctionCtor);
+            EmitNewobjUnknown(_ctx.Runtime!.FunctionValues.Ctor);
             return;
         }
 

@@ -40,10 +40,10 @@ public partial class ILCompiler
         // `$TSFunction._currentFunctionThis` (set by InvokeWithThis for an `o.gen()` / `.call(recv)`
         // value-call), coerced from null/undefined → globalThis for a sloppy generator to match
         // OrdinaryCallBindThis and LocalVariableResolver.LoadThis. Strict generators preserve undefined.
-        if (smBuilder.ThisField != null && _runtime?.CurrentFunctionThisField != null)
+        if (smBuilder.ThisField != null && _runtime?.FunctionValues.CurrentThisField != null)
         {
             il.Emit(OpCodes.Dup);       // Keep state machine reference on stack
-            il.Emit(OpCodes.Ldsfld, _runtime.CurrentFunctionThisField);
+            il.Emit(OpCodes.Ldsfld, _runtime.FunctionValues.CurrentThisField);
             if (_runtime.GlobalThisSingletonField != null)
             {
                 var keepThis = il.DefineLabel();

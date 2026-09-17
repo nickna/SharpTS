@@ -910,9 +910,9 @@ public partial class ILCompiler
         // sites switch to the marker ctors. The local stays typed as
         // List<object> because that's the lowest-common-denominator type for
         // every code path that reads `arguments`.
-        var argsCtorEmpty = ctx.Runtime?.ArgumentsDefaultCtor
+        var argsCtorEmpty = ctx.Runtime?.Arguments.DefaultCtor
             ?? ctx.Types.GetDefaultConstructor(listType);
-        var argsCtorEnum = ctx.Runtime?.ArgumentsEnumerableCtor
+        var argsCtorEnum = ctx.Runtime?.Arguments.EnumerableCtor
             ?? ctx.Types.GetConstructor(listType, ctx.Types.IEnumerableOfObject);
 
         // Fast-path: if $TSFunction._currentArguments is set (we were invoked via
@@ -921,7 +921,7 @@ public partial class ILCompiler
         // arity are visible — lodash overRest pattern from #64. Otherwise, fall through
         // to the declared-parameter materialization below (covers the direct-call path
         // where arity matches by construction).
-        var currentArgsField = ctx.Runtime?.CurrentArgumentsField;
+        var currentArgsField = ctx.Runtime?.Arguments.CurrentField;
         var useDeclaredParamsLabel = il.DefineLabel();
         var doneLabel = il.DefineLabel();
 
@@ -1031,7 +1031,7 @@ public partial class ILCompiler
         // match the post-population Count. Set it now so subsequent
         // arguments[N] = v writes (which DO extend list.Count) don't move the
         // JS-visible length per ECMA-262 sloppy-arguments spec.
-        var argsLengthField = ctx.Runtime?.ArgumentsLengthField;
+        var argsLengthField = ctx.Runtime?.Arguments.LengthField;
         if (argsLengthField != null)
         {
             // Only $Arguments has _length — use Isinst to skip the field set
@@ -1040,10 +1040,10 @@ public partial class ILCompiler
             // the local is always $Arguments-typed.
             var skipLengthSetLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldloc, argsLocal);
-            il.Emit(OpCodes.Isinst, ctx.Runtime!.ArgumentsType);
+            il.Emit(OpCodes.Isinst, ctx.Runtime!.Arguments.Type);
             il.Emit(OpCodes.Brfalse, skipLengthSetLabel);
             il.Emit(OpCodes.Ldloc, argsLocal);
-            il.Emit(OpCodes.Castclass, ctx.Runtime!.ArgumentsType);
+            il.Emit(OpCodes.Castclass, ctx.Runtime!.Arguments.Type);
             il.Emit(OpCodes.Ldloc, argsLocal);
             il.Emit(OpCodes.Callvirt, ctx.Types.GetPropertyGetter(ctx.Types.ListOfObject, "Count"));
             il.Emit(OpCodes.Stfld, argsLengthField);

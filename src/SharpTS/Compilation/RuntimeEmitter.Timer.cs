@@ -32,7 +32,7 @@ public partial class RuntimeEmitter
         _ = typeBuilder;
 
         // Fields: Callback ($TSFunction), Args (object[]), Cts (CancellationTokenSource)
-        var callbackField = typeBuilder.DefineField("Callback", runtime.TSFunctionType, FieldAttributes.Public);
+        var callbackField = typeBuilder.DefineField("Callback", runtime.FunctionValues.Type, FieldAttributes.Public);
         var argsField = typeBuilder.DefineField("Args", _types.ObjectArray, FieldAttributes.Public);
         var ctsField = typeBuilder.DefineField("Cts", _types.CancellationTokenSource, FieldAttributes.Public);
 
@@ -83,7 +83,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldfld, callbackField);
         il.Emit(OpCodes.Ldarg_0); // this
         il.Emit(OpCodes.Ldfld, argsField);
-        il.Emit(OpCodes.Callvirt, runtime.TSFunctionInvoke);
+        il.Emit(OpCodes.Callvirt, runtime.FunctionValues.Invoke);
         il.Emit(OpCodes.Pop); // Discard return value
 
         il.MarkLabel(skipLabel);
@@ -484,7 +484,7 @@ public partial class RuntimeEmitter
         _ = typeBuilder;
 
         // Fields: Callback ($TSFunction), Args (object[]), Cts (CancellationTokenSource), DelayMs (int)
-        var callbackField = typeBuilder.DefineField("Callback", runtime.TSFunctionType, FieldAttributes.Public);
+        var callbackField = typeBuilder.DefineField("Callback", runtime.FunctionValues.Type, FieldAttributes.Public);
         var argsField = typeBuilder.DefineField("Args", _types.ObjectArray, FieldAttributes.Public);
         var ctsField = typeBuilder.DefineField("Cts", _types.CancellationTokenSource, FieldAttributes.Public);
         var delayMsField = typeBuilder.DefineField("DelayMs", _types.Int32, FieldAttributes.Public);
@@ -538,7 +538,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldfld, callbackField);
         il.Emit(OpCodes.Ldarg_0); // this
         il.Emit(OpCodes.Ldfld, argsField);
-        il.Emit(OpCodes.Callvirt, runtime.TSFunctionInvoke);
+        il.Emit(OpCodes.Callvirt, runtime.FunctionValues.Invoke);
         il.Emit(OpCodes.Pop); // Discard return value
 
         // Check cancellation again after callback
@@ -737,7 +737,7 @@ public partial class RuntimeEmitter
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object);
         var callbackField = closure.DefineField(
-            "Callback", runtime.TSFunctionType, FieldAttributes.Public);
+            "Callback", runtime.FunctionValues.Type, FieldAttributes.Public);
         var closureCtor = closure.DefineConstructor(
             MethodAttributes.Public, CallingConventions.Standard, Type.EmptyTypes);
         {
@@ -754,7 +754,7 @@ public partial class RuntimeEmitter
             runIl.Emit(OpCodes.Ldfld, callbackField);
             runIl.Emit(OpCodes.Ldc_I4_0);
             runIl.Emit(OpCodes.Newarr, _types.Object);
-            runIl.Emit(OpCodes.Callvirt, runtime.TSFunctionInvoke);
+            runIl.Emit(OpCodes.Callvirt, runtime.FunctionValues.Invoke);
             runIl.Emit(OpCodes.Pop);
             runIl.Emit(OpCodes.Ret);
         }
@@ -805,7 +805,7 @@ public partial class RuntimeEmitter
             "QueueMicrotask",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Void,
-            [runtime.TSFunctionType]
+            [runtime.FunctionValues.Type]
         );
         microtasks.QueueMicrotask = method;
 
@@ -1266,7 +1266,7 @@ public partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
 
-        var callbackLocal = il.DeclareLocal(runtime.TSFunctionType);
+        var callbackLocal = il.DeclareLocal(runtime.FunctionValues.Type);
         var extraArgsLocal = il.DeclareLocal(_types.ObjectArray);
 
         var hasCallbackLabel = il.DefineLabel();
@@ -1285,7 +1285,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldelem_Ref);
-        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Isinst, runtime.FunctionValues.Type);
         il.Emit(OpCodes.Stloc, callbackLocal);
 
         // Extract extra args (args[1..]) - setImmediate has no delay parameter
