@@ -35,7 +35,7 @@ public sealed class JSONStaticEmitter : IStaticTypeEmitterStrategy
                     // if (arg is $TSSymbol) throw TypeError
                     var notSymbolLabel = il.DefineLabel();
                     il.Emit(OpCodes.Ldloc, argLocal);
-                    il.Emit(OpCodes.Isinst, ctx.Runtime!.TSSymbolType);
+                    il.Emit(OpCodes.Isinst, ctx.Runtime!.Symbols.Type);
                     il.Emit(OpCodes.Brfalse, notSymbolLabel);
                     GuestErrorEmitter.ThrowTypeError(il, ctx.Runtime!, "Cannot convert a Symbol value to a string");
                     il.MarkLabel(notSymbolLabel);

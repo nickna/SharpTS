@@ -92,11 +92,11 @@ public partial class RuntimeEmitter
         // helpers below.
         var notSymbolKeyLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.IsSymbolMethod);
+        il.Emit(OpCodes.Call, runtime.Symbols.IsSymbol);
         il.Emit(OpCodes.Brfalse, notSymbolKeyLabel);
         // GetSymbolDict(obj).ContainsKey(symbol)
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.GetSymbolDictMethod);
+        il.Emit(OpCodes.Call, runtime.Symbols.GetStorage);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryObjectObject, "ContainsKey", _types.Object));
         il.Emit(OpCodes.Ret);
@@ -654,13 +654,13 @@ public partial class RuntimeEmitter
         // Enumerable bit must be observed directly.
         var pieNotSymbolLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.IsSymbolMethod);
+        il.Emit(OpCodes.Call, runtime.Symbols.IsSymbol);
         il.Emit(OpCodes.Brfalse, pieNotSymbolLabel);
         var pieSymbolValueLocal = il.DeclareLocal(_types.Object);
         var pieSymbolDescriptorLocal = il.DeclareLocal(runtime.DescriptorStorage.DescriptorType);
         var pieSymbolPresentLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.GetSymbolDictMethod);
+        il.Emit(OpCodes.Call, runtime.Symbols.GetStorage);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloca, pieSymbolValueLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryObjectObject, "TryGetValue"));

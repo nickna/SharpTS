@@ -3708,6 +3708,205 @@ public class StandaloneDllTests
             verifyStandardError: error => Assert.Empty(error)));
     }
 
+    public static IEnumerable<object[]> SymbolMetadataPrograms =>
+    [
+        new object[]
+        {
+            "minimal",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "console.log(1);" },
+            "1\n",
+            false
+        },
+        new object[]
+        {
+            "unique",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let s1 = Symbol(\"test\");\nlet s2 = Symbol(\"test\");\nconsole.log(s1 === s2);\nconsole.log(s1 !== s2);" },
+            "false\ntrue\n",
+            false
+        },
+        new object[]
+        {
+            "object_keys",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let sym1 = Symbol(\"first\");\nlet sym2 = Symbol(\"second\");\nlet obj: { [key: symbol]: number } = {};\nobj[sym1] = 10;\nobj[sym2] = 20;\nconsole.log(obj[sym1]);\nconsole.log(obj[sym2]);" },
+            "10\n20\n",
+            false
+        },
+        new object[]
+        {
+            "registry",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const f: any = Symbol;\nconst shared = f.for(\"registry-key\");\nconsole.log(shared === Symbol.for(\"registry-key\"));\nconsole.log(f.keyFor(shared));" },
+            "true\nregistry-key\n",
+            false
+        },
+        new object[]
+        {
+            "prototype",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const s: any = Symbol(\"dyn\");\nconsole.log(s.description);\nconsole.log(s.toString());\nconsole.log(s.valueOf() === s);" },
+            "dyn\nSymbol(dyn)\ntrue\n",
+            false
+        },
+        new object[]
+        {
+            "string_call",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "console.log(String(Symbol(\"d\")));\nconsole.log(String(Symbol()));" },
+            "Symbol(d)\nSymbol()\n",
+            false
+        },
+        new object[]
+        {
+            "coercion_error",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const s = Symbol(\"d\");\ntry {\n    const t = `value: ${s}`;\n    console.log(\"no throw\", t);\n} catch (e) {\n    console.log(e instanceof TypeError, e.message);\n}" },
+            "true Cannot convert a Symbol value to a string\n",
+            false
+        },
+        new object[]
+        {
+            "generic_iterator",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "class Box<T> {\n  constructor(private items: T[]) {}\n  *[Symbol.iterator](): Iterator<T> { for (const x of this.items) yield x; }\n}\nfor (const n of new Box<number>([1, 2, 3])) console.log(n);" },
+            "1\n2\n3\n",
+            false
+        },
+        new object[]
+        {
+            "inherited_method",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "class Base { [\"inh\"]() { return 99; } }\nclass Derived extends Base {}\nconsole.log((new Derived() as any).inh());" },
+            "99\n",
+            false
+        },
+        new object[]
+        {
+            "async_iterator",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "class ARange { async *[Symbol.asyncIterator]() { yield 10; yield 20; } }\nasync function main() {\n  for await (const x of new ARange()) console.log(x);\n}\nmain();" },
+            "10\n20\n",
+            false
+        },
+        new object[]
+        {
+            "bound_method",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "class R { *[Symbol.iterator]() { yield 5; } }\nconst it = (new R() as any)[Symbol.iterator]();\nconsole.log(it.next().value);" },
+            "5\n",
+            false
+        },
+        new object[]
+        {
+            "numeric_key",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "class C { [1]() { return 7; } }\nconst c = new C() as any;\nconsole.log(c[1]());\nconsole.log(c[\"1\"]());" },
+            "7\n7\n",
+            false
+        },
+        new object[]
+        {
+            "instance_accessor",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "class Tagged {\n    stored: any = null;\n    get [Symbol.toStringTag]() { return \"Tagged!\"; }\n    set [Symbol.toPrimitive](v: any) { this.stored = v; }\n}\nconst t = new Tagged();\nconsole.log((t as any)[Symbol.toStringTag]);\n(t as any)[Symbol.toPrimitive] = 42;\nconsole.log(t.stored);" },
+            "Tagged!\n42\n",
+            false
+        },
+        new object[]
+        {
+            "inherited_static_accessor",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "class Base {\n    static get [Symbol.species]() { return Base; }\n}\nclass Sub extends Base {}\nconsole.log((Sub as any)[Symbol.species] === Base);" },
+            "true\n",
+            false
+        },
+        new object[]
+        {
+            "class_expression",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const mk = Symbol(\"mk\");\nconst C = class {\n    _v: number = 5;\n    get [Symbol.toStringTag]() { return \"tag\" + this._v; }\n    get [mk]() { return this._v; }\n    set [mk](x: number) { this._v = x; }\n};\nconst c = new C() as any;\nconsole.log(c[Symbol.toStringTag], c[mk]);\nc[mk] = 99;\nconsole.log(c[Symbol.toStringTag], c[mk]);" },
+            "tag5 5\ntag99 99\n",
+            false
+        },
+        new object[]
+        {
+            "modules",
+            "main.ts",
+            new string[] { "key.ts", "main.ts" },
+            new string[] { "export const key=Symbol.for(\"module\"); export class Box { [key]() { return 7; } }", "import {key,Box} from \"./key\"; console.log(Symbol.keyFor(key),(new Box() as any)[key]());" },
+            "module 7\n",
+            false
+        },
+        new object[]
+        {
+            "commonjs",
+            "main.cjs",
+            new string[] { "dep.cjs", "main.cjs" },
+            new string[] { "const key=Symbol.for(\"common\");module.exports={key,value:{[key]:9}};", "const dep=require(\"./dep.cjs\");console.log(Symbol.keyFor(dep.key),dep.value[dep.key]);" },
+            "common 9\n",
+            false
+        },
+        new object[]
+        {
+            "hosted_symbols",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "export function value() { const key=Symbol.for(\"hosted\"); return Symbol.keyFor(key); }" },
+            "",
+            true
+        },
+        new object[]
+        {
+            "hosted_minimal",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "export const value=1;" },
+            "",
+            true
+        },
+    ];
+
+    [Theory]
+    [MemberData(nameof(SymbolMetadataPrograms))]
+    public void Isolated_SymbolMetadata_PreservesCollectionsAndDeployment(
+        string name, string entry, string[] paths, string[] sources, string expected, bool hosted)
+    {
+        using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        for (int i = 0; i < paths.Length; i++) tempDir.CreateFile(paths[i], sources[i]);
+        var sourcePath = tempDir.GetPath(entry);
+        var dllPath = tempDir.GetPath($"symbol-metadata_{name}.dll");
+        var hosting = hosted ? " --target dll --hosted" : "";
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --noLib --compile \"{sourcePath}\" -o \"{dllPath}\" --verify --standalone{hosting}", tempDir.Path);
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        var references = GetAssemblyReferences(dllPath);
+        Assert.DoesNotContain("SharpTS", references);
+        Assert.Equal(hosted, references.Contains("SharpTS.Hosting.Abstractions"));
+        Assert.False(File.Exists(tempDir.GetPath("SharpTS.dll")));
+        if (!hosted)
+            Assert.Equal(expected, ExecuteCompiledDllIsolated(dllPath, timeoutMs: 30000,
+                verifyStandardError: error => Assert.Empty(error)));
+    }
+
+
     public static IEnumerable<object[]> WeakMetadataPrograms =>
     [
         new object[]

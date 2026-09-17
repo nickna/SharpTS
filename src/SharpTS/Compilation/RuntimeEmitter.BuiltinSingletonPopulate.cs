@@ -17,7 +17,7 @@ public partial class RuntimeEmitter
             runtime.DescriptorStorage.DescriptorValue.GetSetMethod()!, runtime.DescriptorStorage.DescriptorEnumerable.GetSetMethod()!,
             runtime.DescriptorStorage.DefineProperty),
         runtime.DescriptorStorage.DescriptorWritable.GetSetMethod()!, runtime.TSFunctionGetOrCreate,
-        runtime.GetSymbolDictMethod, runtime.SymbolToStringTag);
+        runtime.Symbols.GetStorage, runtime.Symbols.ToStringTag);
 
     // Math.* / JSON.* are normally intercepted at compile time by the dedicated
     // static emitters (MathStaticEmitter / JSONStaticEmitter) before the

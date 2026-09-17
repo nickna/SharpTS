@@ -194,8 +194,8 @@ public partial class ILEmitter
 
         EmitExpression(g.Object);
         EmitBoxIfNeeded(g.Object);
-        IL.Emit(OpCodes.Castclass, _ctx.Runtime!.TSSymbolType);
-        IL.Emit(OpCodes.Call, _ctx.Runtime!.SymbolDescriptionGetter);
+        IL.Emit(OpCodes.Castclass, _ctx.Runtime!.Symbols.Type);
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.Symbols.DescriptionGetter);
         SetStackUnknown();
         return true;
     }

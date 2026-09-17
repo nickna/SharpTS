@@ -34,7 +34,7 @@ public partial class RuntimeEmitter
         EmitIsInstanceBranch(il, _types.Double, rejectInput);
         EmitIsInstanceBranch(il, _types.Int32, rejectInput);
         EmitIsInstanceBranch(il, _types.String, rejectInput);
-        EmitIsInstanceBranch(il, runtime.TSSymbolType, rejectInput);
+        EmitIsInstanceBranch(il, runtime.Symbols.Type, rejectInput);
         EmitIsInstanceBranch(il, typeof(System.Numerics.BigInteger), rejectInput);
         il.Emit(OpCodes.Br, validInput);
 

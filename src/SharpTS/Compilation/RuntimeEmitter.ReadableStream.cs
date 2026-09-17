@@ -408,7 +408,7 @@ public partial class RuntimeEmitter
         // var list = $Runtime.IterateToList(iterable, Symbol.iterator, typeof($Runtime));
         var listLocal = il.DeclareLocal(_types.ListOfObject);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldsfld, runtime.SymbolIterator);
+        il.Emit(OpCodes.Ldsfld, runtime.Symbols.Iterator);
         il.Emit(OpCodes.Ldtoken, runtime.RuntimeType);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
         il.Emit(OpCodes.Call, runtime.IterateToList);

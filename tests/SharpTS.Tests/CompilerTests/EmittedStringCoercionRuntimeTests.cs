@@ -143,10 +143,10 @@ public class EmittedStringCoercionRuntimeTests
         var inputType = typeof(RuntimeEmitter).GetNestedType("StringCoercionInputs", BindingFlags.NonPublic)!;
         var peers = Activator.CreateInstance(inputType,
         [
-            runtime.UndefinedType, runtime.TSSymbolType, runtime.GlobalThisSingletonField, runtime.GlobalThisGetProperty,
+            runtime.UndefinedType, runtime.Symbols.Type, runtime.GlobalThisSingletonField, runtime.GlobalThisGetProperty,
             runtime.TypeOf, runtime.InvokeMethodValue, runtime.ArgumentsType, runtime.GetProperty, runtime.ObjectStorage.Type,
             runtime.TSFunctionType, runtime.BoundAnyFunctionType, runtime.HasOwnPropertyHelperMethod, runtime.IHasFieldsInterface,
-            getSymbols, runtime.SymbolToPrimitive, runtime.DescriptorStorage.DescriptorType,
+            getSymbols, runtime.Symbols.ToPrimitive, runtime.DescriptorStorage.DescriptorType,
             runtime.DescriptorStorage.DescriptorGetter.GetGetMethod()!, runtime.DescriptorStorage.DescriptorSetter.GetGetMethod()!,
             runtime.DescriptorStorage.DescriptorValue.GetGetMethod()!, runtime.DescriptorStorage.HasPrototypeEntry, runtime.DescriptorStorage.GetPrototype,
             runtime.CreateException, runtime.TSTypeErrorCtor
@@ -211,7 +211,7 @@ public class EmittedStringCoercionRuntimeTests
         using var bytes = Save(runtime);
         var assembly = Assembly.Load(bytes.ToArray());
         var type = assembly.GetType("$Runtime")!;
-        var symbol = Activator.CreateInstance(assembly.GetType(runtime.TSSymbolType.Name)!, ["value"]);
+        var symbol = Activator.CreateInstance(assembly.GetType(runtime.Symbols.Type.Name)!, ["value"]);
         Assert.Equal("Symbol(value)", Convert(type, runtime.StringCoercion.FromValue, symbol));
         foreach (var method in new[] { runtime.StringCoercion.ToJsString, runtime.StringCoercion.StringifyCoerce })
         {

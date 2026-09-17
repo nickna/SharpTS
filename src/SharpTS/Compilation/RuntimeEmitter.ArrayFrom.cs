@@ -19,7 +19,7 @@ public partial class RuntimeEmitter
             "ArrayFrom",
             MethodAttributes.Public | MethodAttributes.Static,
             runtime.ArrayStorage.Type,
-            [_types.Object, _types.Object, runtime.TSSymbolType, _types.Type, _types.Object]
+            [_types.Object, _types.Object, runtime.Symbols.Type, _types.Type, _types.Object]
         );
         runtime.ArrayOperations.From = method;
 
@@ -460,7 +460,7 @@ public partial class RuntimeEmitter
         // return ArrayFrom(iterable, mapFn, SymbolIterator, typeof($Runtime), thisArg)
         il.Emit(OpCodes.Ldloc, iterableLocal);
         il.Emit(OpCodes.Ldloc, mapFnLocal);
-        il.Emit(OpCodes.Ldsfld, runtime.SymbolIterator);
+        il.Emit(OpCodes.Ldsfld, runtime.Symbols.Iterator);
         il.Emit(OpCodes.Ldtoken, runtime.RuntimeType);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
         il.Emit(OpCodes.Ldloc, thisArgLocal);

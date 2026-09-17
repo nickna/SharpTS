@@ -10,7 +10,7 @@ public partial class RuntimeEmitter
     /// Emits: private static Dictionary&lt;object, object?&gt; GetSymbolDict(object obj)
     /// Returns the symbol dictionary for an object from the ConditionalWeakTable.
     /// </summary>
-    private void EmitGetSymbolDict(TypeBuilder typeBuilder, EmittedRuntime runtime, FieldBuilder symbolStorageField)
+    private void EmitGetSymbolDict(TypeBuilder typeBuilder, EmittedSymbolRuntime symbols, FieldBuilder symbolStorageField)
     {
         var symbolDictType = _types.DictionaryObjectObject;
         var symbolStorageType = _types.MakeGenericType(_types.ConditionalWeakTableOpen, _types.Object, symbolDictType);
@@ -21,7 +21,7 @@ public partial class RuntimeEmitter
             symbolDictType,
             [_types.Object]
         );
-        runtime.GetSymbolDictMethod = method;
+        symbols.GetStorage = method;
 
         var il = method.GetILGenerator();
 
@@ -35,7 +35,7 @@ public partial class RuntimeEmitter
         var tryGet = typeBuilder.DefineMethod(
             "TryGetSymbolDict", MethodAttributes.Private | MethodAttributes.Static,
             symbolDictType, [_types.Object]);
-        runtime.TryGetSymbolDictMethod = tryGet;
+        symbols.TryGetStorage = tryGet;
         var readIl = tryGet.GetILGenerator();
         var result = readIl.DeclareLocal(symbolDictType);
         readIl.Emit(OpCodes.Ldsfld, symbolStorageField);
@@ -52,7 +52,7 @@ public partial class RuntimeEmitter
     /// Emits: private static bool IsSymbol(object obj)
     /// Returns true if the object is a TSSymbol.
     /// </summary>
-    private void EmitIsSymbol(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitIsSymbol(TypeBuilder typeBuilder, EmittedSymbolRuntime symbols)
     {
         var method = typeBuilder.DefineMethod(
             "IsSymbol",
@@ -60,7 +60,7 @@ public partial class RuntimeEmitter
             _types.Boolean,
             [_types.Object]
         );
-        runtime.IsSymbolMethod = method;
+        symbols.IsSymbol = method;
 
         var il = method.GetILGenerator();
         var falseLabel = il.DefineLabel();

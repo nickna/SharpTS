@@ -432,7 +432,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, _types.BigInteger);
         il.Emit(OpCodes.Brtrue, fulfillHandlerResultLabel);
         il.Emit(OpCodes.Ldloc, callbackResultLocal);
-        il.Emit(OpCodes.Isinst, runtime.TSSymbolType);
+        il.Emit(OpCodes.Isinst, runtime.Symbols.Type);
         il.Emit(OpCodes.Brtrue, fulfillHandlerResultLabel);
         il.Emit(OpCodes.Ldloc, callbackResultLocal);
         il.Emit(OpCodes.Brtrue, adoptHandlerResultLabel);

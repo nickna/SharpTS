@@ -353,7 +353,7 @@ public partial class RuntimeEmitter
         // GetKeys, including accessor placeholders and array indices.
         il.MarkLabel(ordinaryEnumerableCheck);
         il.Emit(OpCodes.Ldloc, key);
-        il.Emit(OpCodes.Call, runtime.IsSymbolMethod);
+        il.Emit(OpCodes.Call, runtime.Symbols.IsSymbol);
         il.Emit(OpCodes.Brfalse, ordinaryStringEnumerable);
         il.Emit(OpCodes.Ldloc, source);
         il.Emit(OpCodes.Ldloc, key);
@@ -363,7 +363,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(enumerableCheckDone);
 
         il.Emit(OpCodes.Ldloc, key);
-        il.Emit(OpCodes.Call, runtime.IsSymbolMethod);
+        il.Emit(OpCodes.Call, runtime.Symbols.IsSymbol);
         il.Emit(OpCodes.Brtrue, symbolSet);
         il.Emit(OpCodes.Ldloc, target);
         il.Emit(OpCodes.Ldloc, key);

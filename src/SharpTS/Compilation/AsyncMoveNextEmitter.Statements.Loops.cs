@@ -78,7 +78,7 @@ public partial class AsyncMoveNextEmitter
             _il.Emit(OpCodes.Stloc, iterableLocal);
 
             _il.Emit(OpCodes.Ldloc, iterableLocal);
-            _il.Emit(OpCodes.Ldsfld, _ctx!.Runtime!.SymbolAsyncIterator);
+            _il.Emit(OpCodes.Ldsfld, _ctx!.Runtime!.Symbols.AsyncIterator);
             _il.Emit(OpCodes.Call, _ctx.Runtime.GetIteratorFunction);
             _il.Emit(OpCodes.Stloc, asyncIterFnLocal);
 

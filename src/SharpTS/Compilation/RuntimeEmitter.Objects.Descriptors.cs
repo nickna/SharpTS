@@ -196,7 +196,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, _types.String);
         il.Emit(OpCodes.Brtrue, primitiveThrowLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSSymbolType);
+        il.Emit(OpCodes.Isinst, runtime.Symbols.Type);
         il.Emit(OpCodes.Brtrue, primitiveThrowLabel);
         il.Emit(OpCodes.Br, skipTypeThrowLabel);
 
@@ -214,7 +214,7 @@ public partial class RuntimeEmitter
         // validation/defaulting rules without maintaining a second parser.
         var notSymbolLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.IsSymbolMethod);
+        il.Emit(OpCodes.Call, runtime.Symbols.IsSymbol);
         il.Emit(OpCodes.Brfalse, notSymbolLabel);
 
         // A symbol property uses a separate key dictionary, but it is still an
@@ -223,7 +223,7 @@ public partial class RuntimeEmitter
         var symbolCanDefineLabel = il.DefineLabel();
         var symbolDefineDictLocal = il.DeclareLocal(_types.DictionaryObjectObject);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.GetSymbolDictMethod);
+        il.Emit(OpCodes.Call, runtime.Symbols.GetStorage);
         il.Emit(OpCodes.Stloc, symbolDefineDictLocal);
         il.Emit(OpCodes.Ldloc, symbolDefineDictLocal);
         il.Emit(OpCodes.Ldarg_1);
@@ -252,7 +252,7 @@ public partial class RuntimeEmitter
 
         // GetSymbolDict(obj)[symbol] = normalizedDescriptor
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.GetSymbolDictMethod);
+        il.Emit(OpCodes.Call, runtime.Symbols.GetStorage);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloc, descriptorLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryObjectObject, "set_Item", _types.Object, _types.Object));
@@ -569,7 +569,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, typeof(System.Numerics.BigInteger));
         il.Emit(OpCodes.Brtrue, descThrowLabel);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Isinst, runtime.TSSymbolType);
+        il.Emit(OpCodes.Isinst, runtime.Symbols.Type);
         il.Emit(OpCodes.Brtrue, descThrowLabel);
         il.Emit(OpCodes.Br, descTypeOkLabel);
 
@@ -1221,7 +1221,7 @@ public partial class RuntimeEmitter
         // TypeError on every Symbol-keyed gOPD call.
         var notSymbolKeyLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, runtime.TSSymbolType);
+        il.Emit(OpCodes.Isinst, runtime.Symbols.Type);
         il.Emit(OpCodes.Brfalse, notSymbolKeyLabel);
         EmitSymbolKeyDescriptorLookup(il, runtime, descriptorLocal, hasDescriptorLabel);
         il.MarkLabel(notSymbolKeyLabel);
@@ -1301,7 +1301,7 @@ public partial class RuntimeEmitter
         var resultDictLocal = il.DeclareLocal(_types.DictionaryStringObject);
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.GetSymbolDictMethod);
+        il.Emit(OpCodes.Call, runtime.Symbols.GetStorage);
         il.Emit(OpCodes.Stloc, symDictLocal);
 
         var foundLabel = il.DefineLabel();
@@ -1342,7 +1342,7 @@ public partial class RuntimeEmitter
         var notToStringTagLabel = il.DefineLabel();
         var writableDoneLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Ldsfld, runtime.SymbolToStringTag);
+        il.Emit(OpCodes.Ldsfld, runtime.Symbols.ToStringTag);
         il.Emit(OpCodes.Bne_Un, notToStringTagLabel);
         // matches Symbol.toStringTag → writable:false
         EmitDescriptorBoolField(il, resultDictLocal, "writable", false);
@@ -1395,7 +1395,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, _types.String);
         il.Emit(OpCodes.Brtrue, dpsThrowLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSSymbolType);
+        il.Emit(OpCodes.Isinst, runtime.Symbols.Type);
         il.Emit(OpCodes.Brtrue, dpsThrowLabel);
         il.Emit(OpCodes.Br, dpsOkLabel);
 
@@ -1560,7 +1560,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Beq, skipNullLabel);
 
         il.Emit(OpCodes.Ldloc, keyLocal);
-        il.Emit(OpCodes.Call, runtime.IsSymbolMethod);
+        il.Emit(OpCodes.Call, runtime.Symbols.IsSymbol);
         il.Emit(OpCodes.Brtrue, symbolKeyLabel);
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ldloc, keyLocal);
@@ -1571,7 +1571,7 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(symbolKeyLabel);
         il.Emit(OpCodes.Ldloc, resultLocal);
-        il.Emit(OpCodes.Call, runtime.GetSymbolDictMethod);
+        il.Emit(OpCodes.Call, runtime.Symbols.GetStorage);
         il.Emit(OpCodes.Ldloc, keyLocal);
         il.Emit(OpCodes.Ldloc, descLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(

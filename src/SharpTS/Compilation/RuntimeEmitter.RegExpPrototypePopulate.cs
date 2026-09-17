@@ -61,7 +61,7 @@ public partial class RuntimeEmitter
         // GetSymbolDict(RegExpPrototypeField).
         var symbolDictLocal = il.DeclareLocal(_types.DictionaryObjectObject);
         il.Emit(OpCodes.Ldsfld, runtime.RegExpPrototypeField);
-        il.Emit(OpCodes.Call, runtime.GetSymbolDictMethod);
+        il.Emit(OpCodes.Call, runtime.Symbols.GetStorage);
         il.Emit(OpCodes.Stloc, symbolDictLocal);
 
         var symbolSetItem = _types.GetMethod(_types.DictionaryObjectObject, "set_Item",
@@ -97,11 +97,11 @@ public partial class RuntimeEmitter
 
         // ECMA-262 §22.2.5 spec lengths:
         //   @@match=1, @@matchAll=1, @@replace=2, @@search=1, @@split=2.
-        WireSymbol(runtime.SymbolMatch,    runtime.TSRegExpSymMatchHelper,    "[Symbol.match]",    1);
-        WireSymbol(runtime.SymbolMatchAll, runtime.TSRegExpSymMatchAllHelper, "[Symbol.matchAll]", 1);
-        WireSymbol(runtime.SymbolReplace,  runtime.TSRegExpSymReplaceHelper,  "[Symbol.replace]",  2);
-        WireSymbol(runtime.SymbolSearch,   runtime.TSRegExpSymSearchHelper,   "[Symbol.search]",   1);
-        WireSymbol(runtime.SymbolSplit,    runtime.TSRegExpSymSplitHelper,    "[Symbol.split]",    2);
+        WireSymbol(runtime.Symbols.Match,    runtime.TSRegExpSymMatchHelper,    "[Symbol.match]",    1);
+        WireSymbol(runtime.Symbols.MatchAll, runtime.TSRegExpSymMatchAllHelper, "[Symbol.matchAll]", 1);
+        WireSymbol(runtime.Symbols.Replace,  runtime.TSRegExpSymReplaceHelper,  "[Symbol.replace]",  2);
+        WireSymbol(runtime.Symbols.Search,   runtime.TSRegExpSymSearchHelper,   "[Symbol.search]",   1);
+        WireSymbol(runtime.Symbols.Split,    runtime.TSRegExpSymSplitHelper,    "[Symbol.split]",    2);
 
         // ECMA-262 §22.2.5.{3-12} accessor descriptors. Each spec accessor
         // (source/flags/global/ignoreCase/multiline/sticky/unicode/dotAll/

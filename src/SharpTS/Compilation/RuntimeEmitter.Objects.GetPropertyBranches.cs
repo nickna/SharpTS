@@ -812,7 +812,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Object, "Equals", _types.Object, _types.Object));
         il.Emit(OpCodes.Brfalse, notBoxedSymbolDescription);
         il.Emit(OpCodes.Ldloc, tsObjectInstanceLocal);
-        il.Emit(OpCodes.Call, runtime.SymbolPrototypeDescription);
+        il.Emit(OpCodes.Call, runtime.Symbols.PrototypeDescription);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notBoxedSymbolDescription);
 
@@ -830,7 +830,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, tsObjectInstanceLocal);
         il.Emit(OpCodes.Ldstr, "__primitiveValue");
         il.Emit(OpCodes.Callvirt, runtime.ObjectStorage.GetProperty);
-        _types.EmitLoadMethodInfo(il, runtime.SymbolToStringMethod);
+        _types.EmitLoadMethodInfo(il, runtime.Symbols.ToStringMethod);
         il.Emit(OpCodes.Newobj, runtime.TSFunctionCtor);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notBoxedSymbolToString);

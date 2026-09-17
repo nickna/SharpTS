@@ -355,7 +355,7 @@ public partial class RuntimeEmitter
             var nonStringTagLabel = il.DefineLabel();
             il.Emit(OpCodes.Call, runtime.BigInt.PrototypePopulateMethod);
             il.Emit(OpCodes.Ldsfld, runtime.BigInt.PrototypeField);
-            il.Emit(OpCodes.Ldsfld, runtime.SymbolToStringTag);
+            il.Emit(OpCodes.Ldsfld, runtime.Symbols.ToStringTag);
             il.Emit(OpCodes.Call, runtime.GetIndex);
             il.Emit(OpCodes.Isinst, _types.String);
             il.Emit(OpCodes.Stloc, tagLocal);

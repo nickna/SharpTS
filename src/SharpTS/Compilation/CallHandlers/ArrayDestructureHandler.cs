@@ -50,7 +50,7 @@ public class ArrayDestructureHandler : ICallHandler
             // An own/prototype Symbol.iterator replacement makes positional reads observably
             // wrong even for a statically typed array. Materialize through the iterator protocol
             // when whole-program analysis cannot prove the built-in iterator remains intact.
-            il.Emit(OpCodes.Ldsfld, ctx.Runtime!.SymbolIterator);
+            il.Emit(OpCodes.Ldsfld, ctx.Runtime!.Symbols.Iterator);
             il.Emit(OpCodes.Ldtoken, ctx.Runtime.RuntimeType);
             il.Emit(OpCodes.Call, ctx.Types.GetMethod(ctx.Types.Type, "GetTypeFromHandle"));
             il.Emit(OpCodes.Call, ctx.Runtime.IterateToList);
@@ -60,7 +60,7 @@ public class ArrayDestructureHandler : ICallHandler
 
         // Otherwise normalize at runtime:
         //   ArrayDestructureSource(value, Symbol.iterator, runtimeType)
-        il.Emit(OpCodes.Ldsfld, ctx.Runtime!.SymbolIterator);
+        il.Emit(OpCodes.Ldsfld, ctx.Runtime!.Symbols.Iterator);
         il.Emit(OpCodes.Ldtoken, ctx.Runtime!.RuntimeType);
         il.Emit(OpCodes.Call, ctx.Types.GetMethod(ctx.Types.Type, "GetTypeFromHandle"));
         il.Emit(OpCodes.Call, ctx.Runtime!.ArrayDestructureSource);

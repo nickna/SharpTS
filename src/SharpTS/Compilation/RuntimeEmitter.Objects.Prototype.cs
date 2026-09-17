@@ -48,7 +48,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, _types.String);
         il.Emit(OpCodes.Brtrue, protoThrowLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSSymbolType);
+        il.Emit(OpCodes.Isinst, runtime.Symbols.Type);
         il.Emit(OpCodes.Brtrue, protoThrowLabel);
         il.Emit(OpCodes.Br, protoOkLabel);
 
@@ -440,7 +440,7 @@ public partial class RuntimeEmitter
         // Return a fresh empty list without creating symbol storage on the source.
         var returnResult = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.TryGetSymbolDictMethod);
+        il.Emit(OpCodes.Call, runtime.Symbols.TryGetStorage);
         var symbolDictLocal = il.DeclareLocal(_types.DictionaryObjectObject);
         il.Emit(OpCodes.Stloc, symbolDictLocal);
         il.Emit(OpCodes.Ldloc, symbolDictLocal);
@@ -966,10 +966,10 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Isinst, _types.String);
         il.Emit(OpCodes.Brtrue, protoThrowLabel);
-        if (runtime.TSSymbolType != null)
+        if (runtime.Symbols.Type != null)
         {
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Isinst, runtime.TSSymbolType);
+            il.Emit(OpCodes.Isinst, runtime.Symbols.Type);
             il.Emit(OpCodes.Brtrue, protoThrowLabel);
         }
         il.Emit(OpCodes.Ldarg_1);
@@ -998,7 +998,7 @@ public partial class RuntimeEmitter
         ReturnPrimitiveTarget(_types.Double);
         ReturnPrimitiveTarget(_types.Int32);
         ReturnPrimitiveTarget(_types.String);
-        ReturnPrimitiveTarget(runtime.TSSymbolType!);
+        ReturnPrimitiveTarget(runtime.Symbols.Type!);
         ReturnPrimitiveTarget(_types.BigInteger);
         il.Emit(OpCodes.Br, objectTargetLabel);
         il.MarkLabel(objectTargetLabel);

@@ -98,7 +98,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, keysLocal);
         // No symbols means no temporary symbol list (and no attached symbol storage).
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.TryGetSymbolDictMethod);
+        il.Emit(OpCodes.Call, runtime.Symbols.TryGetStorage);
         il.Emit(OpCodes.Brfalse, keysReady);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, runtime.GetOwnPropertySymbols);
@@ -144,7 +144,7 @@ public partial class RuntimeEmitter
         // GetKeys already filtered ordinary string keys. Symbols need their descriptor bit checked.
         il.MarkLabel(ordinaryEnumerableCheck);
         il.Emit(OpCodes.Ldloc, keyLocal);
-        il.Emit(OpCodes.Call, runtime.IsSymbolMethod);
+        il.Emit(OpCodes.Call, runtime.Symbols.IsSymbol);
         il.Emit(OpCodes.Brfalse, enumerableCheckDone);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloc, keyLocal);
@@ -202,7 +202,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, runtime.DescriptorStorage.HasPropertyDescriptors);
         il.Emit(OpCodes.Brtrue, fallback);
         il.Emit(OpCodes.Ldloc, source);
-        il.Emit(OpCodes.Call, runtime.TryGetSymbolDictMethod);
+        il.Emit(OpCodes.Call, runtime.Symbols.TryGetStorage);
         il.Emit(OpCodes.Stloc, symbols);
         il.Emit(OpCodes.Ldloc, symbols);
         il.Emit(OpCodes.Brfalse, noSymbols);
@@ -611,7 +611,7 @@ public partial class RuntimeEmitter
 
         // If key is a Symbol → symbol-dict path. Else → $Object accessor path.
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.IsSymbolMethod);
+        il.Emit(OpCodes.Call, runtime.Symbols.IsSymbol);
         il.Emit(OpCodes.Brfalse, stringKeyLabel);
 
         // Symbol path: build $CompiledPropertyDescriptor and store in symbol-dict.
@@ -629,7 +629,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorSetter.GetSetMethod()!);
         // GetSymbolDict(obj)[key] = desc
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.GetSymbolDictMethod);
+        il.Emit(OpCodes.Call, runtime.Symbols.GetStorage);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloc, descLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryObjectObject, "set_Item", _types.Object, _types.Object));

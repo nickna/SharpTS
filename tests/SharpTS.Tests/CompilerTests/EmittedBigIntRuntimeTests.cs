@@ -237,7 +237,7 @@ public class EmittedBigIntRuntimeTests
         var boxed = Call(type, runtime.BoxedPrimitives.ToObject, new BigInteger(42));
         Assert.Equal(new BigInteger(42), type.GetMethod("BigIntValueOf")!.Invoke(null, [boxed]));
         Assert.Contains("requires that 'this' be a BigInt", GuestFailure(() => type.GetMethod("BigIntValueOf")!.Invoke(null, [42d])));
-        var symbols = Assert.IsAssignableFrom<IDictionary>(Call(type, runtime.GetSymbolDictMethod, prototype));
+        var symbols = Assert.IsAssignableFrom<IDictionary>(Call(type, runtime.Symbols.GetStorage, prototype));
         var tag = Assert.Single(symbols.Values.Cast<object>());
         Assert.Equal("BigInt", tag.GetType().GetProperty("Value")!.GetValue(tag));
         Assert.Equal(false, tag.GetType().GetProperty("Writable")!.GetValue(tag));

@@ -4702,7 +4702,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, nonObjectLabel);
         // symbol → throw
         il.Emit(OpCodes.Ldloc, resultLocal);
-        il.Emit(OpCodes.Isinst, runtime.TSSymbolType);
+        il.Emit(OpCodes.Isinst, runtime.Symbols.Type);
         il.Emit(OpCodes.Brtrue, nonObjectLabel);
         il.Emit(OpCodes.Br, resultOkLabel);
 
@@ -4848,7 +4848,7 @@ public partial class RuntimeEmitter
         RejectIsinst(_types.Boolean);
         RejectIsinst(_types.Double);
         RejectIsinst(_types.Int32);
-        RejectIsinst(runtime.TSSymbolType);
+        RejectIsinst(runtime.Symbols.Type);
         RejectIsinst(_types.BigInteger); // BigInt is a primitive, not an Object.
 
         // 2. Fast path: a real $RegExp returns its cached flags.
@@ -5003,7 +5003,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, _types.Int32);
         il.Emit(OpCodes.Brtrue, throwLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSSymbolType);
+        il.Emit(OpCodes.Isinst, runtime.Symbols.Type);
         il.Emit(OpCodes.Brtrue, throwLabel);
 
         // If arg is RegExp.prototype itself → spec fallback.
@@ -5228,7 +5228,7 @@ public partial class RuntimeEmitter
         // Test262's this-val-non-obj.js lists Symbol.match itself as a
         // "non-object" value and expects TypeError when passed as `this`.
         il.Emit(OpCodes.Ldarg, argIndex);
-        il.Emit(OpCodes.Isinst, runtime.TSSymbolType);
+        il.Emit(OpCodes.Isinst, runtime.Symbols.Type);
         il.Emit(OpCodes.Brtrue, throwLabel);
 
         // Compiled BigInts use System.Numerics.BigInteger and remain primitive.
