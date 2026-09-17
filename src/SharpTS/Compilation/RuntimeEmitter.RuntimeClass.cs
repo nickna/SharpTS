@@ -358,13 +358,13 @@ public partial class RuntimeEmitter
             _types.ConditionalWeakTable,
             FieldAttributes.Public | FieldAttributes.Static | FieldAttributes.InitOnly
         );
-        runtime.FrozenObjectsField = frozenObjectsField;
+        runtime.ObjectState.FrozenObjects = frozenObjectsField;
         var sealedObjectsField = typeBuilder.DefineField(
             "_sealedObjects",
             _types.ConditionalWeakTable,
             FieldAttributes.Public | FieldAttributes.Static | FieldAttributes.InitOnly
         );
-        runtime.SealedObjectsField = sealedObjectsField;
+        runtime.ObjectState.SealedObjects = sealedObjectsField;
 
         // Static field for non-extensible objects tracking: ConditionalWeakTable<object, object>
         var nonExtensibleObjectsField = typeBuilder.DefineField(
@@ -372,7 +372,7 @@ public partial class RuntimeEmitter
             _types.ConditionalWeakTable,
             FieldAttributes.Public | FieldAttributes.Static | FieldAttributes.InitOnly
         );
-        runtime.NonExtensibleObjectsField = nonExtensibleObjectsField;
+        runtime.ObjectState.NonExtensibleObjects = nonExtensibleObjectsField;
 
         // Static field for prototype tracking: ConditionalWeakTable<object, object>
         var prototypeStoreField = typeBuilder.DefineField(
@@ -395,7 +395,7 @@ public partial class RuntimeEmitter
             _types.ConditionalWeakTable,
             FieldAttributes.Public | FieldAttributes.Static | FieldAttributes.InitOnly
         );
-        runtime.DeletedBuiltinsField = deletedBuiltinsField;
+        runtime.ObjectState.DeletedBuiltins = deletedBuiltinsField;
 
         // SharpTS standalone programs historically auto-await Task-valued
         // top-level expressions. A custom NewPromiseCapability result is still
@@ -865,7 +865,7 @@ public partial class RuntimeEmitter
         // GetFunctionMethod / ObjectGetOwnPropertyDescriptor / DeleteIndex to
         // hide name/length on a $TSFunction after `delete fn.name`. Emitted
         // before its consumers.
-        EmitDeletedBuiltinsHelpers(typeBuilder, runtime);
+        EmitDeletedBuiltinsHelpers(typeBuilder, runtime.ObjectState);
         // Symbol helpers — moved before HasOwnPropertyHelper so its
         // Symbol-key arm can call IsSymbolMethod / GetSymbolDictMethod
         // (Object.prototype.hasOwnProperty must honor Symbol keys per
@@ -879,7 +879,7 @@ public partial class RuntimeEmitter
         // hasOwnProperty + isPrototypeOf helpers — must come before
         // GetFunctionMethod so the corresponding arms can return $TSFunction
         // wrappers.
-        runtime.ObjectIsExtensible = typeBuilder.DefineMethod(
+        runtime.ObjectState.IsExtensible = typeBuilder.DefineMethod(
             "ObjectIsExtensible",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Boolean,
@@ -1124,7 +1124,7 @@ public partial class RuntimeEmitter
         // extensibility callbacks even though their public Object methods are
         // emitted later in this section. Declare the descriptor shell and emit
         // isExtensible up front so key consumers can capture stable delegates.
-        EmitObjectIsExtensible(typeBuilder, runtime, nonExtensibleObjectsField, frozenObjectsField, sealedObjectsField);
+        EmitObjectIsExtensible(runtime.ObjectState, new ObjectIsExtensibleInputs(runtime.DescriptorStorage, runtime.GetProperty, runtime.InvokeMethodUnwrapped));
         DeclareProxyOwnKeysHelpers(typeBuilder, runtime);
         EmitNormalizeOwnPropertyKeys(typeBuilder, runtime);
         EmitGetOwnPropertyNames(typeBuilder, runtime);
@@ -1142,10 +1142,10 @@ public partial class RuntimeEmitter
         EmitObjectHasOwn(typeBuilder, runtime);
         EmitObjectIs(typeBuilder, runtime);
         EmitObjectAssign(typeBuilder, runtime);
-        EmitObjectFreeze(typeBuilder, runtime, frozenObjectsField, sealedObjectsField);
-        EmitObjectSeal(typeBuilder, runtime, sealedObjectsField);
-        EmitObjectIsFrozen(typeBuilder, runtime, frozenObjectsField);
-        EmitObjectIsSealed(typeBuilder, runtime, sealedObjectsField);
+        EmitObjectFreeze(typeBuilder, runtime.ObjectState, new ObjectIntegrityInputs(runtime.ArrayStorage, runtime.DescriptorStorage, runtime.ObjectStorage));
+        EmitObjectSeal(typeBuilder, runtime.ObjectState, new ObjectIntegrityInputs(runtime.ArrayStorage, runtime.DescriptorStorage, runtime.ObjectStorage));
+        EmitObjectIsFrozen(typeBuilder, runtime.ObjectState);
+        EmitObjectIsSealed(typeBuilder, runtime.ObjectState);
         EmitObjectDefineProperty(typeBuilder, runtime);
         // Math.* adapters must precede gOPD so its Math singleton synth can
         // reach the adapter MethodBuilders to produce identity-stable
@@ -1170,7 +1170,7 @@ public partial class RuntimeEmitter
         // but their implementation needs all of the object-model helpers above.
         if (_features.UsesPromise)
             EmitPromiseKeyedMethodBodies(runtime);
-        EmitObjectPreventExtensions(typeBuilder, runtime, nonExtensibleObjectsField, frozenObjectsField, sealedObjectsField);
+        EmitObjectPreventExtensions(typeBuilder, runtime.ObjectState, new ObjectPreventExtensionsInputs(runtime.ArrayStorage, runtime.CreateException, runtime.DescriptorStorage, runtime.GetProperty, runtime.InvokeMethodUnwrapped, runtime.ObjectStorage, runtime.TSTypeErrorCtor));
         EmitObjectGetPrototypeOf(typeBuilder, runtime, prototypeStoreField);
         EmitObjectSetPrototypeOf(typeBuilder, runtime, prototypeStoreField, nonExtensibleObjectsField);
         // __lookupGetter__ / __lookupSetter__ helpers (ECMA-262 §B.2.2.4/5).
@@ -1235,7 +1235,7 @@ public partial class RuntimeEmitter
                     runtime.HasOwnPropertyHelperMethod,
                     runtime.StringCoercion.ToJsString,
                     runtime.ObjectDefineProperty,
-                    runtime.ObjectIsExtensible,
+                    runtime.ObjectState.IsExtensible,
                     runtime.GetProperty
                 )
             );
@@ -1249,7 +1249,7 @@ public partial class RuntimeEmitter
                     runtime.InvokeMethodUnwrapped,
                     runtime.ObjectGetOwnPropertyDescriptor,
                     runtime.StringCoercion.ToJsString,
-                    runtime.ObjectIsExtensible,
+                    runtime.ObjectState.IsExtensible,
                     runtime.DeleteProperty,
                     runtime.UndefinedType,
                     runtime.GetProperty
@@ -1260,8 +1260,8 @@ public partial class RuntimeEmitter
                 runtime.Reflect.RequireNamespace(),
                 new ReflectPreventExtensionsInputs(
                     runtime.InvokeMethodUnwrapped,
-                    runtime.ObjectPreventExtensions,
-                    runtime.ObjectIsExtensible,
+                    runtime.ObjectState.PreventExtensions,
+                    runtime.ObjectState.IsExtensible,
                     runtime.GetProperty
                 )
             );
@@ -1276,7 +1276,7 @@ public partial class RuntimeEmitter
                     runtime.InvokeMethodUnwrapped,
                     runtime.ObjectGetPrototypeOf,
                     runtime.ObjectSetPrototypeOf,
-                    runtime.ObjectIsExtensible,
+                    runtime.ObjectState.IsExtensible,
                     runtime.UndefinedType,
                     runtime.Symbols.Type,
                     runtime.GetProperty
@@ -1292,7 +1292,7 @@ public partial class RuntimeEmitter
                         runtime.GetOrdinaryOwnPropertyKeys,
                         runtime.CreateProxyOwnKeysList,
                         runtime.ObjectGetOwnPropertyDescriptor,
-                        runtime.ObjectIsExtensible,
+                        runtime.ObjectState.IsExtensible,
                         runtime.Symbols.IsSymbol,
                         runtime.GetProperty,
                         runtime.InvokeMethodUnwrapped
@@ -1336,7 +1336,7 @@ public partial class RuntimeEmitter
                     runtime.ObjectGetOwnPropertyDescriptor,
                     runtime.StringCoercion.ToJsString,
                     runtime.ObjectGetPrototypeOf,
-                    runtime.ObjectIsExtensible,
+                    runtime.ObjectState.IsExtensible,
                     runtime.HasIn
                 )
             );
@@ -1598,9 +1598,9 @@ public partial class RuntimeEmitter
         EmitGetEnumMemberName(typeBuilder, runtime);
         EmitConcatTemplate(typeBuilder, runtime.Templates, runtime.StringCoercion.StringifyCoerce);
         EmitInvokeTaggedTemplate(typeBuilder, runtime.Templates,
-            runtime.ObjectFreeze, runtime.InvokeValue, runtime.CreateException, runtime.TSTypeErrorCtor);
+            runtime.ObjectState.Freeze, runtime.InvokeValue, runtime.CreateException, runtime.TSTypeErrorCtor);
         EmitInvokeTaggedTemplateWithThis(typeBuilder, runtime.Templates,
-            runtime.ObjectFreeze, runtime.InvokeMethodValue, runtime.CreateException, runtime.TSTypeErrorCtor);
+            runtime.ObjectState.Freeze, runtime.InvokeMethodValue, runtime.CreateException, runtime.TSTypeErrorCtor);
         EmitObjectRest(typeBuilder, runtime);
         // #685: array binding-pattern source normalizer — depends on IterateToList /
         // GetIteratorFunction (emitted above via EmitIteratorMethodsAdvanced).

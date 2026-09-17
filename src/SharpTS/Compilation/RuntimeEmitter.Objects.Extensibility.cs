@@ -5,12 +5,14 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
+    private readonly record struct ObjectIntegrityInputs(EmittedArrayStorageRuntime ArrayStorage, EmittedDescriptorStorageRuntime DescriptorStorage, EmittedObjectStorageRuntime ObjectStorage);
+
     /// <summary>
     /// Emits Object.freeze(obj) - freezes an object to prevent property changes.
     /// Uses PropertyDescriptorStore to track frozen objects for compiled code.
     /// Signature: object ObjectFreeze(object obj)
     /// </summary>
-    private void EmitObjectFreeze(TypeBuilder typeBuilder, EmittedRuntime runtime, FieldBuilder frozenObjectsField, FieldBuilder sealedObjectsField)
+    private void EmitObjectFreeze(TypeBuilder typeBuilder, EmittedObjectStateRuntime objectState, ObjectIntegrityInputs inputs)
     {
         var method = typeBuilder.DefineMethod(
             "ObjectFreeze",
@@ -18,7 +20,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object]
         );
-        runtime.ObjectFreeze = method;
+        objectState.Freeze = method;
 
         var il = method.GetILGenerator();
         var returnLabel = il.DefineLabel();
@@ -34,11 +36,11 @@ public partial class RuntimeEmitter
         // that predate the $Array encapsulation.
         var notTSArrayLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.ArrayStorage.Type);
+        il.Emit(OpCodes.Isinst, inputs.ArrayStorage.Type);
         il.Emit(OpCodes.Brfalse, notTSArrayLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.ArrayStorage.Type);
-        il.Emit(OpCodes.Callvirt, runtime.ArrayStorage.Freeze);
+        il.Emit(OpCodes.Castclass, inputs.ArrayStorage.Type);
+        il.Emit(OpCodes.Callvirt, inputs.ArrayStorage.Freeze);
         il.MarkLabel(notTSArrayLabel);
 
         // Mirror for $Object: set its internal _isFrozen/_isSealed/_isNonExtensible
@@ -47,19 +49,19 @@ public partial class RuntimeEmitter
         // and that's the common path for tests that freeze user objects.
         var notTSObjectLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.ObjectStorage.Type);
+        il.Emit(OpCodes.Isinst, inputs.ObjectStorage.Type);
         il.Emit(OpCodes.Brfalse, notTSObjectLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.ObjectStorage.Type);
-        il.Emit(OpCodes.Callvirt, runtime.ObjectStorage.Freeze);
+        il.Emit(OpCodes.Castclass, inputs.ObjectStorage.Type);
+        il.Emit(OpCodes.Callvirt, inputs.ObjectStorage.Freeze);
         il.MarkLabel(notTSObjectLabel);
 
         // Call $PropertyDescriptorStore.Freeze(obj) - fully standalone, no reflection
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.DescriptorStorage.Freeze);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.Freeze);
 
         // Also add to legacy frozen objects table for backward compatibility
-        il.Emit(OpCodes.Ldsfld, frozenObjectsField);
+        il.Emit(OpCodes.Ldsfld, objectState.FrozenObjects);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_1);  // true
         il.Emit(OpCodes.Box, _types.Boolean);
@@ -86,7 +88,7 @@ public partial class RuntimeEmitter
         }
 
         // Also add to sealed objects table (frozen implies sealed)
-        il.Emit(OpCodes.Ldsfld, sealedObjectsField);
+        il.Emit(OpCodes.Ldsfld, objectState.SealedObjects);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Box, _types.Boolean);
@@ -120,7 +122,7 @@ public partial class RuntimeEmitter
     /// Uses PropertyDescriptorStore to track sealed objects for compiled code.
     /// Signature: object ObjectSeal(object obj)
     /// </summary>
-    private void EmitObjectSeal(TypeBuilder typeBuilder, EmittedRuntime runtime, FieldBuilder sealedObjectsField)
+    private void EmitObjectSeal(TypeBuilder typeBuilder, EmittedObjectStateRuntime objectState, ObjectIntegrityInputs inputs)
     {
         var method = typeBuilder.DefineMethod(
             "ObjectSeal",
@@ -128,7 +130,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object]
         );
-        runtime.ObjectSeal = method;
+        objectState.Seal = method;
 
         var il = method.GetILGenerator();
         var returnLabel = il.DefineLabel();
@@ -141,11 +143,11 @@ public partial class RuntimeEmitter
         // TSObjectSetProperty's instance-method gate honors sealing.
         var notTSObjectSealLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.ObjectStorage.Type);
+        il.Emit(OpCodes.Isinst, inputs.ObjectStorage.Type);
         il.Emit(OpCodes.Brfalse, notTSObjectSealLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.ObjectStorage.Type);
-        il.Emit(OpCodes.Callvirt, runtime.ObjectStorage.Seal);
+        il.Emit(OpCodes.Castclass, inputs.ObjectStorage.Type);
+        il.Emit(OpCodes.Callvirt, inputs.ObjectStorage.Seal);
         il.MarkLabel(notTSObjectSealLabel);
 
         // number[] unboxing: mark a $Array non-extensible so the unboxed PushDouble fast path refuses to
@@ -153,19 +155,19 @@ public partial class RuntimeEmitter
         // ArrayPush consults, which PushDouble can't reach).
         var notTSArraySealLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.ArrayStorage.Type);
+        il.Emit(OpCodes.Isinst, inputs.ArrayStorage.Type);
         il.Emit(OpCodes.Brfalse, notTSArraySealLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.ArrayStorage.Type);
-        il.Emit(OpCodes.Callvirt, runtime.ArrayStorage.MarkNonExtensible);
+        il.Emit(OpCodes.Castclass, inputs.ArrayStorage.Type);
+        il.Emit(OpCodes.Callvirt, inputs.ArrayStorage.MarkNonExtensible);
         il.MarkLabel(notTSArraySealLabel);
 
         // Call $PropertyDescriptorStore.Seal(obj) - fully standalone, no reflection
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.DescriptorStorage.Seal);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.Seal);
 
         // Also add to legacy sealed objects table for backward compatibility
-        il.Emit(OpCodes.Ldsfld, sealedObjectsField);
+        il.Emit(OpCodes.Ldsfld, objectState.SealedObjects);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Box, _types.Boolean);
@@ -200,7 +202,7 @@ public partial class RuntimeEmitter
     /// Emits Object.isFrozen(obj) - checks if an object is frozen.
     /// Signature: bool ObjectIsFrozen(object obj)
     /// </summary>
-    private void EmitObjectIsFrozen(TypeBuilder typeBuilder, EmittedRuntime runtime, FieldBuilder frozenObjectsField)
+    private void EmitObjectIsFrozen(TypeBuilder typeBuilder, EmittedObjectStateRuntime objectState)
     {
         var method = typeBuilder.DefineMethod(
             "ObjectIsFrozen",
@@ -208,7 +210,7 @@ public partial class RuntimeEmitter
             _types.Boolean,
             [_types.Object]
         );
-        runtime.ObjectIsFrozen = method;
+        objectState.IsFrozen = method;
 
         var il = method.GetILGenerator();
         var returnTrueLabel = il.DefineLabel();
@@ -250,7 +252,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(checkTableLabel);
         // Check if obj is in frozen objects table
         var valueLocal = il.DeclareLocal(_types.Object);
-        il.Emit(OpCodes.Ldsfld, frozenObjectsField);
+        il.Emit(OpCodes.Ldsfld, objectState.FrozenObjects);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloca, valueLocal);
         var tryGetValue = _types.GetMethod(_types.ConditionalWeakTable, "TryGetValue");
@@ -262,7 +264,7 @@ public partial class RuntimeEmitter
     /// Emits Object.isSealed(obj) - checks if an object is sealed.
     /// Signature: bool ObjectIsSealed(object obj)
     /// </summary>
-    private void EmitObjectIsSealed(TypeBuilder typeBuilder, EmittedRuntime runtime, FieldBuilder sealedObjectsField)
+    private void EmitObjectIsSealed(TypeBuilder typeBuilder, EmittedObjectStateRuntime objectState)
     {
         var method = typeBuilder.DefineMethod(
             "ObjectIsSealed",
@@ -270,7 +272,7 @@ public partial class RuntimeEmitter
             _types.Boolean,
             [_types.Object]
         );
-        runtime.ObjectIsSealed = method;
+        objectState.IsSealed = method;
 
         var il = method.GetILGenerator();
         var checkTableLabel = il.DefineLabel();
@@ -311,7 +313,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(checkTableLabel);
         // Check if obj is in sealed objects table
         var valueLocal = il.DeclareLocal(_types.Object);
-        il.Emit(OpCodes.Ldsfld, sealedObjectsField);
+        il.Emit(OpCodes.Ldsfld, objectState.SealedObjects);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloca, valueLocal);
         var tryGetValue = _types.GetMethod(_types.ConditionalWeakTable, "TryGetValue");

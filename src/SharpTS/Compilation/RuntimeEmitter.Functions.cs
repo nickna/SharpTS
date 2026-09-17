@@ -939,7 +939,7 @@ public partial class RuntimeEmitter
         var lengthDeletedSkipLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "length");
-        il.Emit(OpCodes.Call, runtime.IsBuiltinDeletedMethod);
+        il.Emit(OpCodes.Call, runtime.ObjectState.IsBuiltinDeleted);
         il.Emit(OpCodes.Brfalse, lengthDeletedSkipLabel);
         il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
         il.Emit(OpCodes.Ret);
@@ -1059,7 +1059,7 @@ public partial class RuntimeEmitter
         var nameDeletedSkipLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "name");
-        il.Emit(OpCodes.Call, runtime.IsBuiltinDeletedMethod);
+        il.Emit(OpCodes.Call, runtime.ObjectState.IsBuiltinDeleted);
         il.Emit(OpCodes.Brfalse, nameDeletedSkipLabel);
         il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
         il.Emit(OpCodes.Ret);

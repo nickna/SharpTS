@@ -217,7 +217,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(noGlobalDictionaryLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.MarkBuiltinDeletedMethod);
+        il.Emit(OpCodes.Call, runtime.ObjectState.MarkBuiltinDeleted);
         il.Emit(OpCodes.Br, trueLabel);
         il.MarkLabel(notGlobalObjectLabel);
 
@@ -322,7 +322,7 @@ public partial class RuntimeEmitter
             // check in HasOwnPropertyHelper / gOPD doesn't resurrect this name.
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Call, runtime.MarkBuiltinDeletedMethod);
+            il.Emit(OpCodes.Call, runtime.ObjectState.MarkBuiltinDeleted);
             il.Emit(OpCodes.Ldc_I4_1);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(typeNoPdsDescLabel);
@@ -347,7 +347,7 @@ public partial class RuntimeEmitter
                 il.Emit(OpCodes.Brfalse, nextKey);
                 il.Emit(OpCodes.Ldarg_0);
                 il.Emit(OpCodes.Ldarg_1);
-                il.Emit(OpCodes.Call, runtime.MarkBuiltinDeletedMethod);
+                il.Emit(OpCodes.Call, runtime.ObjectState.MarkBuiltinDeleted);
                 il.Emit(OpCodes.Ldc_I4_1);
                 il.Emit(OpCodes.Ret);
                 il.MarkLabel(nextKey);
@@ -398,7 +398,7 @@ public partial class RuntimeEmitter
                 il.Emit(OpCodes.Brfalse, skipLabel);
                 il.Emit(OpCodes.Ldarg_0);
                 il.Emit(OpCodes.Ldarg_1);
-                il.Emit(OpCodes.Call, runtime.MarkBuiltinDeletedMethod);
+                il.Emit(OpCodes.Call, runtime.ObjectState.MarkBuiltinDeleted);
                 il.Emit(OpCodes.Ldc_I4_1);
                 il.Emit(OpCodes.Ret);
                 il.MarkLabel(skipLabel);
@@ -536,7 +536,7 @@ public partial class RuntimeEmitter
             // handler performs (preserved pre-#1131 behavior).
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Call, runtime.MarkBuiltinDeletedMethod);
+            il.Emit(OpCodes.Call, runtime.ObjectState.MarkBuiltinDeleted);
             il.Emit(OpCodes.Ldc_I4_1);
             il.Emit(OpCodes.Ret);
         }
@@ -551,7 +551,7 @@ public partial class RuntimeEmitter
             //      property lookups return undefined.
             // Frozen check.
             var tsFnDelTmp = il.DeclareLocal(_types.Object);
-            il.Emit(OpCodes.Ldsfld, runtime.FrozenObjectsField);
+            il.Emit(OpCodes.Ldsfld, runtime.ObjectState.FrozenObjects);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldloca, tsFnDelTmp);
             il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ConditionalWeakTable, "TryGetValue", _types.Object, _types.Object.MakeByRefType()));
@@ -562,7 +562,7 @@ public partial class RuntimeEmitter
 
             // Sealed check.
             il.MarkLabel(tsFnNotFrozenLabel);
-            il.Emit(OpCodes.Ldsfld, runtime.SealedObjectsField);
+            il.Emit(OpCodes.Ldsfld, runtime.ObjectState.SealedObjects);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldloca, tsFnDelTmp);
             il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ConditionalWeakTable, "TryGetValue", _types.Object, _types.Object.MakeByRefType()));
@@ -598,7 +598,7 @@ public partial class RuntimeEmitter
             // name/length and any other descriptor-less data entry).
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Call, runtime.MarkBuiltinDeletedMethod);
+            il.Emit(OpCodes.Call, runtime.ObjectState.MarkBuiltinDeleted);
             il.Emit(OpCodes.Ldc_I4_1);
             il.Emit(OpCodes.Ret);
         }
@@ -825,7 +825,7 @@ public partial class RuntimeEmitter
         var valueLocal = il.DeclareLocal(_types.Object);
 
         // Check if frozen
-        il.Emit(OpCodes.Ldsfld, runtime.FrozenObjectsField);
+        il.Emit(OpCodes.Ldsfld, runtime.ObjectState.FrozenObjects);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloca, valueLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ConditionalWeakTable, "TryGetValue", _types.Object, _types.Object.MakeByRefType()));
@@ -837,7 +837,7 @@ public partial class RuntimeEmitter
 
         // Check if sealed
         il.MarkLabel(notFrozenLabel);
-        il.Emit(OpCodes.Ldsfld, runtime.SealedObjectsField);
+        il.Emit(OpCodes.Ldsfld, runtime.ObjectState.SealedObjects);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloca, valueLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ConditionalWeakTable, "TryGetValue", _types.Object, _types.Object.MakeByRefType()));

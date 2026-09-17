@@ -3708,6 +3708,315 @@ public class StandaloneDllTests
             verifyStandardError: error => Assert.Empty(error)));
     }
 
+    public static IEnumerable<object[]> ObjectStateMetadataPrograms =>
+    [
+        new object[]
+        {
+            "minimal",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "console.log(1);" },
+            "1\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "freeze_identity",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let obj: { a: number } = { a: 1 };\nlet frozen = Object.freeze(obj);\nconsole.log(frozen === obj);" },
+            "true\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "freeze_write",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let obj: { a: number } = { a: 1 };\nObject.freeze(obj);\nobj.a = 100;\nconsole.log(obj.a);" },
+            "1\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "freeze_add",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let obj: any = { a: 1 };\nObject.freeze(obj);\nobj.b = 2;\nconsole.log(obj.a);\nconsole.log(obj.b === undefined || obj.b === null);" },
+            "1\ntrue\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "frozen_flag",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let obj: { a: number } = { a: 1 };\nObject.freeze(obj);\nconsole.log(Object.isFrozen(obj));" },
+            "true\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "primitives",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "console.log(Object.isFrozen(null));\nconsole.log(Object.isFrozen(42));\nconsole.log(Object.isFrozen(\"hello\"));" },
+            "true\ntrue\ntrue\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "seal_write",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let obj: { a: number } = { a: 1 };\nObject.seal(obj);\nobj.a = 100;\nconsole.log(obj.a);" },
+            "100\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "seal_add",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let obj: any = { a: 1 };\nObject.seal(obj);\nobj.b = 2;\nconsole.log(obj.a);\nconsole.log(obj.b === undefined || obj.b === null);" },
+            "1\ntrue\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "frozen_sealed",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let obj: { a: number } = { a: 1 };\nObject.freeze(obj);\nconsole.log(Object.isSealed(obj));" },
+            "true\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "array_frozen",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let arr: number[] = [1, 2, 3];\nObject.freeze(arr);\narr[0] = 100;\nconsole.log(arr[0]);" },
+            "1\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "array_sealed",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let arr: number[] = [1, 2, 3];\nObject.seal(arr);\narr[0] = 100;\nconsole.log(arr[0]);" },
+            "100\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "class_frozen",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "class Point {\n    x: number;\n    y: number;\n    constructor(x: number, y: number) {\n        this.x = x;\n        this.y = y;\n    }\n}\nlet p = new Point(10, 20);\nObject.freeze(p);\np.x = 100;\nconsole.log(p.x);\nconsole.log(p.y);" },
+            "10\n20\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "class_sealed",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "class Point {\n    x: number;\n    y: number;\n    constructor(x: number, y: number) {\n        this.x = x;\n        this.y = y;\n    }\n}\nlet p = new Point(10, 20);\nObject.seal(p);\np.x = 100;\nconsole.log(p.x);\nconsole.log(p.y);" },
+            "100\n20\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "shallow",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let obj: any = { nested: { value: 1 } };\nObject.freeze(obj);\nobj.nested.value = 100;\nconsole.log(obj.nested.value);" },
+            "100\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "prevent_add",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let obj: any = { x: 1 };\nObject.preventExtensions(obj);\nobj.y = 2;\nconsole.log(obj.y === undefined);" },
+            "true\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "prevent_write",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let obj: any = { x: 1 };\nObject.preventExtensions(obj);\nobj.x = 100;\nconsole.log(obj.x);" },
+            "100\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "prevent_delete",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let obj: any = { x: 1, y: 2 };\nObject.preventExtensions(obj);\ndelete obj.y;\nconsole.log(obj.y === undefined);" },
+            "true\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "prevent_identity",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let obj: any = { x: 1 };\nlet result = Object.preventExtensions(obj);\nconsole.log(result === obj);" },
+            "true\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "prevent_array_write",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let arr: number[] = [1, 2, 3];\nObject.preventExtensions(arr);\narr[0] = 100;\nconsole.log(arr[0]);" },
+            "100\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "callable",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "function callback(): void {}\nconsole.log(Object.isExtensible(callback));\nconsole.log(Reflect.isExtensible(callback));\nObject.preventExtensions(callback);\nconsole.log(Object.isExtensible(callback));\nconsole.log(Reflect.isExtensible(callback));" },
+            "true\ntrue\nfalse\nfalse\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "extensible_primitives",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "console.log(Object.isExtensible(42));\nconsole.log(Object.isExtensible(\"hello\"));" },
+            "false\nfalse\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "prevent_class",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "class Point {\n    x: number;\n    constructor(x: number) {\n        this.x = x;\n    }\n}\nlet p: any = new Point(10);\nObject.preventExtensions(p);\nconsole.log(Object.isExtensible(p));\np.y = 20;  // Should be ignored\nconsole.log(p.y === undefined);" },
+            "false\ntrue\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "reflect_prevent",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let obj: any = {};\nlet result: boolean = Reflect.preventExtensions(obj);\nconsole.log(result);\nconsole.log(Reflect.isExtensible(obj));" },
+            "true\nfalse\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "proxy_normal_deployment",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const target: any = [];\nconst proxy: any = new Proxy(new Proxy(target, {}), {});\nconsole.log(Reflect.defineProperty(proxy, \"x\", { value: 1 }));\nconsole.log(target.x);\nObject.preventExtensions(target);\nconsole.log(Reflect.defineProperty(proxy, \"y\", { value: 2 }));\nconsole.log(Reflect.set(proxy, \"z\", 3));" },
+            "true\n1\nfalse\nfalse\n",
+            false,
+            false
+        },
+        new object[]
+        {
+            "esm",
+            "main.ts",
+            new string[] { "dep.ts", "main.ts" },
+            new string[] { "export const value = Object.freeze({a:1});", "import {value} from \"./dep\"; console.log(Object.isFrozen(value), value.a);" },
+            "true 1\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "commonjs",
+            "main.cjs",
+            new string[] { "dep.cjs", "main.cjs" },
+            new string[] { "exports.value = Object.freeze({a:1});", "const dep = require(\"./dep.cjs\"); console.log(Object.isFrozen(dep.value), dep.value.a);" },
+            "true 1\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "hosted_state",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "export function value(input: any) { Object.seal(input); return Object.isExtensible(input); }" },
+            "",
+            true,
+            true
+        },
+        new object[]
+        {
+            "hosted_minimal",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "export const value = 1;" },
+            "",
+            true,
+            true
+        },
+    ];
+
+    [Theory]
+    [MemberData(nameof(ObjectStateMetadataPrograms))]
+    public void Isolated_ObjectStateMetadata_PreservesIntegrityAndDeployment(
+        string name, string entry, string[] paths, string[] sources, string expected, bool hosted, bool standalone)
+    {
+        using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        for (int i = 0; i < paths.Length; i++) tempDir.CreateFile(paths[i], sources[i]);
+        var sourcePath = tempDir.GetPath(entry);
+        var dllPath = tempDir.GetPath($"object-state-metadata_{name}.dll");
+        var deployment = standalone ? " --standalone" : "";
+        var hosting = hosted ? " --target dll --hosted" : "";
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --noLib --compile \"{sourcePath}\" -o \"{dllPath}\" --verify{deployment}{hosting}", tempDir.Path);
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        var references = GetAssemblyReferences(dllPath);
+        Assert.DoesNotContain("SharpTS", references);
+        Assert.Equal(hosted, references.Contains("SharpTS.Hosting.Abstractions"));
+        Assert.Equal(!standalone, File.Exists(tempDir.GetPath("SharpTS.dll")));
+        if (!hosted)
+            Assert.Equal(expected, ExecuteCompiledDllIsolated(dllPath, timeoutMs: 30000,
+                verifyStandardError: error => Assert.Empty(error)));
+    }
+
+
     public static IEnumerable<object[]> RegExpMetadataPrograms =>
     [
         new object[]

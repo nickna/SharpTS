@@ -806,6 +806,7 @@ public partial class RuntimeEmitter
         runtime.NumericCoercion.CompleteEmission();
         runtime.ObjectStorage.CompleteEmission();
         runtime.DescriptorStorage.CompleteEmission();
+        runtime.ObjectState.CompleteEmission();
         runtime.Reflect.CompleteEmission();
         runtime.Json.CompleteEmission();
         runtime.Records.CompleteEmission();

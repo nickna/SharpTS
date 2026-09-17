@@ -1294,7 +1294,7 @@ public partial class RuntimeEmitter
             // writable property, so only the frozen table is checked here.)
             var symFrozenStateLocal = il.DeclareLocal(_types.Object);
             var symReceiverNotFrozenLabel = il.DefineLabel();
-            il.Emit(OpCodes.Ldsfld, runtime.FrozenObjectsField);
+            il.Emit(OpCodes.Ldsfld, runtime.ObjectState.FrozenObjects);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldloca, symFrozenStateLocal);
             il.Emit(OpCodes.Callvirt, _types.GetMethod(
@@ -1369,7 +1369,7 @@ public partial class RuntimeEmitter
             il.MarkLabel(symCheckExtensibilityLabel);
             var symExtTmp = il.DeclareLocal(_types.Object);
             var symNotNonExtLabel = il.DefineLabel();
-            il.Emit(OpCodes.Ldsfld, runtime.NonExtensibleObjectsField);
+            il.Emit(OpCodes.Ldsfld, runtime.ObjectState.NonExtensibleObjects);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldloca, symExtTmp);
             il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ConditionalWeakTable, "TryGetValue", _types.Object, _types.Object.MakeByRefType()));
@@ -1378,7 +1378,7 @@ public partial class RuntimeEmitter
             il.MarkLabel(symNotNonExtLabel);
 
             var symNotFrozenLabel = il.DefineLabel();
-            il.Emit(OpCodes.Ldsfld, runtime.FrozenObjectsField);
+            il.Emit(OpCodes.Ldsfld, runtime.ObjectState.FrozenObjects);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldloca, symExtTmp);
             il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ConditionalWeakTable, "TryGetValue", _types.Object, _types.Object.MakeByRefType()));
@@ -1387,7 +1387,7 @@ public partial class RuntimeEmitter
             il.MarkLabel(symNotFrozenLabel);
 
             var symNotSealedLabel = il.DefineLabel();
-            il.Emit(OpCodes.Ldsfld, runtime.SealedObjectsField);
+            il.Emit(OpCodes.Ldsfld, runtime.ObjectState.SealedObjects);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldloca, symExtTmp);
             il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ConditionalWeakTable, "TryGetValue", _types.Object, _types.Object.MakeByRefType()));
@@ -1504,7 +1504,7 @@ public partial class RuntimeEmitter
         // $Array PDS-data-store fallback picks them up. Without this, $Array.Set
         // throws RangeError for `a[4294967295] = X`.
         var tsArrayFrozenLocal = il.DeclareLocal(_types.Object);
-        il.Emit(OpCodes.Ldsfld, runtime.FrozenObjectsField);
+        il.Emit(OpCodes.Ldsfld, runtime.ObjectState.FrozenObjects);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloca, tsArrayFrozenLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ConditionalWeakTable, "TryGetValue", _types.Object, _types.Object.MakeByRefType()));
@@ -1684,7 +1684,7 @@ public partial class RuntimeEmitter
             {
                 // Object list has frozen check before mutation
                 var listFrozenCheckLocal = il.DeclareLocal(_types.Object);
-                il.Emit(OpCodes.Ldsfld, runtime.FrozenObjectsField);
+                il.Emit(OpCodes.Ldsfld, runtime.ObjectState.FrozenObjects);
                 il.Emit(OpCodes.Ldarg_0);
                 il.Emit(OpCodes.Ldloca, listFrozenCheckLocal);
                 il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ConditionalWeakTable, "TryGetValue", _types.Object, _types.Object.MakeByRefType()));
@@ -1934,7 +1934,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Stloc, tsFnIdxKeyStr);
 
             var tsFnIdxTmp = il.DeclareLocal(_types.Object);
-            il.Emit(OpCodes.Ldsfld, runtime.FrozenObjectsField);
+            il.Emit(OpCodes.Ldsfld, runtime.ObjectState.FrozenObjects);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldloca, tsFnIdxTmp);
             il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ConditionalWeakTable, "TryGetValue", _types.Object, _types.Object.MakeByRefType()));
@@ -1944,7 +1944,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ret);
 
             il.MarkLabel(tsFnIdxNotFrozenLabel);
-            il.Emit(OpCodes.Ldsfld, runtime.SealedObjectsField);
+            il.Emit(OpCodes.Ldsfld, runtime.ObjectState.SealedObjects);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldloca, tsFnIdxTmp);
             il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ConditionalWeakTable, "TryGetValue", _types.Object, _types.Object.MakeByRefType()));
@@ -1977,7 +1977,7 @@ public partial class RuntimeEmitter
 
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldloc, tsFnIdxKeyStr);
-            il.Emit(OpCodes.Call, runtime.MarkBuiltinDeletedMethod);
+            il.Emit(OpCodes.Call, runtime.ObjectState.MarkBuiltinDeleted);
             il.Emit(OpCodes.Ldc_I4_1);
             il.Emit(OpCodes.Ret);
         }
@@ -2108,7 +2108,7 @@ public partial class RuntimeEmitter
         // for sealed objects with symbol props.
         il.MarkLabel(symbolKeyLabel);
         var symDelObjLocal = il.DeclareLocal(_types.Object);
-        il.Emit(OpCodes.Ldsfld, runtime.FrozenObjectsField);
+        il.Emit(OpCodes.Ldsfld, runtime.ObjectState.FrozenObjects);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloca, symDelObjLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ConditionalWeakTable, "TryGetValue", _types.Object, _types.Object.MakeByRefType()));
@@ -2116,7 +2116,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, symDelNotFrozenLabel);
         EmitDeleteIndexFail("Cannot delete a non-configurable symbol property");
         il.MarkLabel(symDelNotFrozenLabel);
-        il.Emit(OpCodes.Ldsfld, runtime.SealedObjectsField);
+        il.Emit(OpCodes.Ldsfld, runtime.ObjectState.SealedObjects);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloca, symDelObjLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ConditionalWeakTable, "TryGetValue", _types.Object, _types.Object.MakeByRefType()));
@@ -2156,7 +2156,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(dictLabel);
         // Check if frozen
         var valueLocal = il.DeclareLocal(_types.Object);
-        il.Emit(OpCodes.Ldsfld, runtime.FrozenObjectsField);
+        il.Emit(OpCodes.Ldsfld, runtime.ObjectState.FrozenObjects);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloca, valueLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ConditionalWeakTable, "TryGetValue", _types.Object, _types.Object.MakeByRefType()));
@@ -2167,7 +2167,7 @@ public partial class RuntimeEmitter
 
         // Check if sealed
         il.MarkLabel(notFrozenLabel);
-        il.Emit(OpCodes.Ldsfld, runtime.SealedObjectsField);
+        il.Emit(OpCodes.Ldsfld, runtime.ObjectState.SealedObjects);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloca, valueLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ConditionalWeakTable, "TryGetValue", _types.Object, _types.Object.MakeByRefType()));
@@ -2268,7 +2268,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(didxMarkDelLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, didxKeyStrLocal);
-        il.Emit(OpCodes.Call, runtime.MarkBuiltinDeletedMethod);
+        il.Emit(OpCodes.Call, runtime.ObjectState.MarkBuiltinDeleted);
         il.MarkLabel(didxAfterMarkLabel);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Ret);

@@ -894,13 +894,13 @@ public partial class ILEmitter
         // Bail to slow path on Object.freeze/seal — keeps spec semantics
         // intact without having to replicate the property-descriptor
         // dance here. Check FrozenObjects first; then SealedObjects.
-        IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.FrozenObjectsField);
+        IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.ObjectState.FrozenObjects);
         IL.Emit(OpCodes.Ldloc, receiverLocal);
         IL.Emit(OpCodes.Ldloca, ignoredLocal);
         IL.Emit(OpCodes.Callvirt, cwtTryGet);
         IL.Emit(OpCodes.Brtrue, fallbackLabel);
 
-        IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.SealedObjectsField);
+        IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.ObjectState.SealedObjects);
         IL.Emit(OpCodes.Ldloc, receiverLocal);
         IL.Emit(OpCodes.Ldloca, ignoredLocal);
         IL.Emit(OpCodes.Callvirt, cwtTryGet);
@@ -2393,7 +2393,7 @@ public partial class ILEmitter
         // List path: check frozen, then cast
         IL.MarkLabel(isListLabel);
         var frozenCheckLocal = IL.DeclareLocal(_ctx.Types.Object);
-        IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.FrozenObjectsField);
+        IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.ObjectState.FrozenObjects);
         IL.Emit(OpCodes.Ldloc, objLocal);
         IL.Emit(OpCodes.Ldloca, frozenCheckLocal);
         IL.Emit(OpCodes.Callvirt, _ctx.Types.GetMethod(
@@ -2613,7 +2613,7 @@ public partial class ILEmitter
         var notFrozenLabel = IL.DefineLabel();
         var endLabel = IL.DefineLabel();
         var frozenCheckLocal = IL.DeclareLocal(_ctx.Types.Object);
-        IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.FrozenObjectsField);
+        IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.ObjectState.FrozenObjects);
         IL.Emit(OpCodes.Ldloc, receiverTemp);
         IL.Emit(OpCodes.Ldloca, frozenCheckLocal);
         IL.Emit(OpCodes.Callvirt, _ctx.Types.GetMethod(_ctx.Types.ConditionalWeakTable, "TryGetValue", _ctx.Types.Object, _ctx.Types.Object.MakeByRefType()));
@@ -2727,7 +2727,7 @@ public partial class ILEmitter
 
         var endLabel = IL.DefineLabel();
         var frozenCheckLocal = IL.DeclareLocal(_ctx.Types.Object);
-        IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.FrozenObjectsField);
+        IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.ObjectState.FrozenObjects);
         IL.Emit(OpCodes.Ldloc, receiverTemp);
         IL.Emit(OpCodes.Ldloca, frozenCheckLocal);
         IL.Emit(OpCodes.Callvirt, _ctx.Types.GetMethod(

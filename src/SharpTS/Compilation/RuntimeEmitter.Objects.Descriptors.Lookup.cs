@@ -104,7 +104,7 @@ public partial class RuntimeEmitter
         // before synthesizing the public own-property descriptor.
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, propNameLocal);
-        il.Emit(OpCodes.Call, runtime.IsBuiltinDeletedMethod);
+        il.Emit(OpCodes.Call, runtime.ObjectState.IsBuiltinDeleted);
         il.Emit(OpCodes.Brtrue, returnNullLabel);
 
         void EmitGlobalDescriptorCheck(
@@ -277,7 +277,7 @@ public partial class RuntimeEmitter
         // Hide if this instance had `name` deleted.
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "name");
-        il.Emit(OpCodes.Call, runtime.IsBuiltinDeletedMethod);
+        il.Emit(OpCodes.Call, runtime.ObjectState.IsBuiltinDeleted);
         il.Emit(OpCodes.Brtrue, returnNullLabel);
         // value = TSFunction.GetMember(fn, "name") — or just inline it via the
         // GetProperty path which handles function name lookup.
@@ -304,7 +304,7 @@ public partial class RuntimeEmitter
         // Hide if this instance had `length` deleted.
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "length");
-        il.Emit(OpCodes.Call, runtime.IsBuiltinDeletedMethod);
+        il.Emit(OpCodes.Call, runtime.ObjectState.IsBuiltinDeleted);
         il.Emit(OpCodes.Brtrue, returnNullLabel);
         il.Emit(OpCodes.Newobj, _types.DictionaryStringObjectCtor);
         il.Emit(OpCodes.Stloc, resultDictLocal);
@@ -593,7 +593,7 @@ public partial class RuntimeEmitter
         EmitObjectMethodNameCheck("defineProperties");
         EmitObjectMethodValueDescCheck("defineProperty", runtime.ObjectDefineProperty, 3);
         EmitObjectMethodValueDescCheck("entries", runtime.GetEntries, 1);
-        EmitObjectMethodValueDescCheck("freeze", runtime.ObjectFreeze, 1);
+        EmitObjectMethodValueDescCheck("freeze", runtime.ObjectState.Freeze, 1);
         EmitObjectMethodValueDescCheck("fromEntries", runtime.ObjectFromEntries, 1);
         EmitObjectMethodNameCheck("getOwnPropertyDescriptor");
         EmitObjectMethodNameCheck("getOwnPropertyDescriptors");
@@ -604,11 +604,11 @@ public partial class RuntimeEmitter
         EmitObjectMethodValueDescCheck("hasOwn", runtime.ObjectHasOwn, 2);
         EmitObjectMethodValueDescCheck("is", runtime.ObjectIs, 2);
         EmitObjectMethodNameCheck("isExtensible");
-        EmitObjectMethodValueDescCheck("isFrozen", runtime.ObjectIsFrozen, 1);
-        EmitObjectMethodValueDescCheck("isSealed", runtime.ObjectIsSealed, 1);
+        EmitObjectMethodValueDescCheck("isFrozen", runtime.ObjectState.IsFrozen, 1);
+        EmitObjectMethodValueDescCheck("isSealed", runtime.ObjectState.IsSealed, 1);
         EmitObjectMethodValueDescCheck("keys", runtime.GetKeys, 1);
         EmitObjectMethodNameCheck("preventExtensions");
-        EmitObjectMethodValueDescCheck("seal", runtime.ObjectSeal, 1);
+        EmitObjectMethodValueDescCheck("seal", runtime.ObjectState.Seal, 1);
         EmitObjectMethodNameCheck("setPrototypeOf");
         EmitObjectMethodNameCheck("values");
         il.MarkLabel(objTypeNotObjectLabel);
@@ -1045,7 +1045,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Bne_Un, notMathSingletonLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, propNameLocal);
-        il.Emit(OpCodes.Call, runtime.IsBuiltinDeletedMethod);
+        il.Emit(OpCodes.Call, runtime.ObjectState.IsBuiltinDeleted);
         il.Emit(OpCodes.Brtrue, returnNullLabel);
         void EmitMathNameDesc(string n, bool isMethod, double? constValue = null,
             MethodBuilder? methodTarget = null, int methodArity = 1)
@@ -1168,7 +1168,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Bne_Un, notJsonSingletonLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, propNameLocal);
-        il.Emit(OpCodes.Call, runtime.IsBuiltinDeletedMethod);
+        il.Emit(OpCodes.Call, runtime.ObjectState.IsBuiltinDeleted);
         il.Emit(OpCodes.Brtrue, returnNullLabel);
         void EmitJsonNameDesc(string n)
         {
