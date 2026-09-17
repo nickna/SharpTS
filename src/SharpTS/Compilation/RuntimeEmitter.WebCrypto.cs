@@ -141,7 +141,7 @@ public partial class RuntimeEmitter
         // object form: GetProperty(obj, "name")
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "name");
-        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
         il.Emit(OpCodes.Isinst, _types.String);
         il.Emit(OpCodes.Stloc, nameLocal);
         il.Emit(OpCodes.Ldloc, nameLocal);
@@ -197,7 +197,7 @@ public partial class RuntimeEmitter
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "name");
-        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
         il.Emit(OpCodes.Isinst, _types.String);
         il.Emit(OpCodes.Stloc, nameLocal);
         il.Emit(OpCodes.Ldloc, nameLocal);
@@ -235,7 +235,7 @@ public partial class RuntimeEmitter
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
         il.Emit(OpCodes.Stloc, valueLocal);
 
         // undefined sentinel → null

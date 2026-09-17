@@ -282,7 +282,7 @@ public partial class GeneratorMoveNextEmitter
         _il.Emit(OpCodes.Ldfld, indexField);
         _il.Emit(OpCodes.Ldarg_0);
         _il.Emit(OpCodes.Ldfld, keysField);
-        _il.Emit(OpCodes.Call, _ctx.Runtime!.GetLength);
+        _il.Emit(OpCodes.Call, _ctx.Runtime!.ObjectRead.Length);
         _il.Emit(OpCodes.Clt);
         _il.Emit(OpCodes.Brfalse, endLabel);
 
@@ -293,7 +293,7 @@ public partial class GeneratorMoveNextEmitter
             _il.Emit(OpCodes.Ldfld, keysField);
             _il.Emit(OpCodes.Ldarg_0);
             _il.Emit(OpCodes.Ldfld, indexField);
-            _il.Emit(OpCodes.Call, _ctx.Runtime!.GetElement);
+            _il.Emit(OpCodes.Call, _ctx.Runtime!.ObjectRead.Element);
         });
 
         EmitStatement(f.Body);

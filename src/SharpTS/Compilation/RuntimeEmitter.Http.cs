@@ -1926,7 +1926,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, skipRedirectExtract);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldstr, "redirect");
-        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
         var redirectValLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Stloc, redirectValLocal);
         il.Emit(OpCodes.Ldloc, redirectValLocal);
@@ -1948,7 +1948,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, skipCredsExtract);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldstr, "credentials");
-        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
         var credsValLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Stloc, credsValLocal);
         il.Emit(OpCodes.Ldloc, credsValLocal);
@@ -1981,7 +1981,7 @@ public partial class RuntimeEmitter
 
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldstr, "method");
-        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Brfalse, useDefaultMethod2Label);
         il.Emit(OpCodes.Call, runtime.StringCoercion.Stringify);
@@ -2027,7 +2027,7 @@ public partial class RuntimeEmitter
         // Get "body" property from options
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldstr, "body");
-        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Brfalse, hasBodyLabel);
         il.Emit(OpCodes.Dup);
@@ -2070,7 +2070,7 @@ public partial class RuntimeEmitter
         // Get "signal" property from options
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldstr, "signal");
-        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
         var signalLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Stloc, signalLocal);
 
@@ -2442,7 +2442,7 @@ public partial class RuntimeEmitter
         // Get "headers" property from options
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldstr, "headers");
-        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
         var headersObjLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Stloc, headersObjLocal);
 
@@ -2991,7 +2991,7 @@ public partial class RuntimeEmitter
 
         il.Emit(OpCodes.Ldloc, optionsLocal);
         il.Emit(OpCodes.Ldstr, propName);
-        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
         il.Emit(OpCodes.Stloc, valueLocal);
 
         // If value is string, use it
@@ -3040,7 +3040,7 @@ public partial class RuntimeEmitter
 
         il.Emit(OpCodes.Ldloc, optionsLocal);
         il.Emit(OpCodes.Ldstr, propName);
-        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
         il.Emit(OpCodes.Stloc, valueLocal);
 
         // If value is boxed double, convert to int string
@@ -3235,7 +3235,7 @@ public partial class RuntimeEmitter
         // GetProperty(options, name)
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, name);
-        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
         il.Emit(OpCodes.Stloc, valueLocal);
 
         il.Emit(OpCodes.Ldloc, valueLocal);
@@ -3258,7 +3258,7 @@ public partial class RuntimeEmitter
         // GetProperty(options, name)
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, name);
-        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
         il.Emit(OpCodes.Stloc, valueLocal);
 
         il.Emit(OpCodes.Ldloc, valueLocal);
@@ -3401,7 +3401,7 @@ public partial class RuntimeEmitter
         var methodLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Ldstr, "method");
-        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
         il.Emit(OpCodes.Stloc, methodLocal);
 
         var skipMethod = il.DefineLabel();
@@ -3418,7 +3418,7 @@ public partial class RuntimeEmitter
         var headersLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Ldstr, "headers");
-        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
         il.Emit(OpCodes.Stloc, headersLocal);
 
         var skipHeaders = il.DefineLabel();
@@ -3435,7 +3435,7 @@ public partial class RuntimeEmitter
         var bodyLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Ldstr, "body");
-        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
         il.Emit(OpCodes.Stloc, bodyLocal);
 
         var skipBody = il.DefineLabel();
@@ -3700,7 +3700,7 @@ public partial class RuntimeEmitter
         var statusLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Ldstr, "status");
-        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
         il.Emit(OpCodes.Stloc, statusLocal);
 
         var skipStatus = il.DefineLabel();
@@ -3735,7 +3735,7 @@ public partial class RuntimeEmitter
         var stLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Ldstr, "statusText");
-        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
         il.Emit(OpCodes.Stloc, stLocal);
 
         var skipST = il.DefineLabel();
@@ -3751,7 +3751,7 @@ public partial class RuntimeEmitter
         var hLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Ldstr, "headers");
-        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
         il.Emit(OpCodes.Stloc, hLocal);
 
         var skipH = il.DefineLabel();

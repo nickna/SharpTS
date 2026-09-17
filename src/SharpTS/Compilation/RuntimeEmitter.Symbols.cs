@@ -116,7 +116,7 @@ public partial class RuntimeEmitter
         // the resource as receiver.
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.GetIndex);
+        il.Emit(OpCodes.Call, runtime.ObjectRead.Index);
         il.Emit(OpCodes.Stloc, disposeMethodLocal);
 
         // if (disposeMethod == null) return;

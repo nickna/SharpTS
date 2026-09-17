@@ -669,7 +669,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
             var idxLocal = SpillBoxed(gi.Index);
             IL.Emit(OpCodes.Ldloc, objLocal);
             IL.Emit(OpCodes.Ldloc, idxLocal);
-            IL.Emit(OpCodes.Call, Ctx.Runtime!.GetIndex);
+            IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectRead.Index);
             IL.Emit(OpCodes.Br, endLabel);
 
             IL.MarkLabel(nullishLabel);
@@ -689,7 +689,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
                 EmitThrowIfUndefinedIndexReceiver(objLocal, idxLocal);
             IL.Emit(OpCodes.Ldloc, objLocal);
             IL.Emit(OpCodes.Ldloc, idxLocal);
-            IL.Emit(OpCodes.Call, Ctx.Runtime!.GetIndex);
+            IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectRead.Index);
             SetStackUnknown();
         }
     }
@@ -2158,7 +2158,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
             case "postMessage":
                 IL.Emit(OpCodes.Call, Ctx.Runtime!.Workers.ParentPort);
                 IL.Emit(OpCodes.Ldstr, "postMessage");
-                IL.Emit(OpCodes.Call, Ctx.Runtime!.GetProperty);
+                IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectRead.Property);
                 SetStackUnknown();
                 return true;
             default:
@@ -2922,7 +2922,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
             IL.Emit(OpCodes.Isinst, Ctx.Runtime!.UndefinedType);
             IL.Emit(OpCodes.Brtrue, nullishLabel);           // $Undefined → nullish
             IL.Emit(OpCodes.Ldstr, g.Name.Lexeme);
-            IL.Emit(OpCodes.Call, Ctx.Runtime!.GetProperty);
+            IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectRead.Property);
             IL.Emit(OpCodes.Br, endLabel);
             IL.MarkLabel(nullishLabel);
             IL.Emit(OpCodes.Pop);
@@ -2938,7 +2938,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
             if (!IsNullPlaceholderGlobal(g.Object))
                 EmitThrowIfUndefinedReceiverOnStack(g.Name.Lexeme);
             IL.Emit(OpCodes.Ldstr, g.Name.Lexeme);
-            IL.Emit(OpCodes.Call, Ctx.Runtime!.GetProperty);
+            IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectRead.Property);
         }
         SetStackUnknown();
     }

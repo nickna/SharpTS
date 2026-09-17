@@ -68,7 +68,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Call, require);
         il.Emit(OpCodes.Ldstr, "next");
-        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
         il.Emit(OpCodes.Ret);
 
         runtime.InvokeCapturedIteratorNext = EmitCall("InvokeCapturedIteratorNext", false);

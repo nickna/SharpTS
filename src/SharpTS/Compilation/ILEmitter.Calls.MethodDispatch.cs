@@ -668,7 +668,7 @@ public partial class ILEmitter
         // Get the method/function value from the object using same receiver
         IL.Emit(OpCodes.Ldloc, receiverLocal);
         IL.Emit(OpCodes.Ldstr, methodName);
-        IL.Emit(OpCodes.Call, _ctx.Runtime!.GetProperty);
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.ObjectRead.Property);
 
         // Create args array. A `...spread` argument has to be flattened into the array before
         // dispatch — otherwise the callee sees the iterable itself as one argument, which then

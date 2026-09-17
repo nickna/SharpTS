@@ -65,7 +65,7 @@ public partial class ILEmitter
 
                 IL.Emit(OpCodes.Call, cjsGetExports);
                 IL.Emit(OpCodes.Ldstr, importedName);
-                IL.Emit(OpCodes.Call, _ctx.Runtime!.GetProperty);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.ObjectRead.Property);
                 StoreInBinding(localName);
             }
         }

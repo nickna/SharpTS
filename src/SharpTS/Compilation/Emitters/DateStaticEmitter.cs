@@ -56,7 +56,7 @@ public sealed class DateStaticEmitter : IStaticTypeEmitterStrategy
             il.Emit(OpCodes.Call, ctx.Types.GetMethod(
                 ctx.Types.Type, "GetTypeFromHandle", ctx.Types.RuntimeTypeHandle));
             il.Emit(OpCodes.Ldstr, propertyName);
-            il.Emit(OpCodes.Call, runtime.GetProperty);
+            il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
             return true;
         }
 

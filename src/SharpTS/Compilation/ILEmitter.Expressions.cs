@@ -989,7 +989,7 @@ public partial class ILEmitter
             // Get the method: GetProperty(obj, name) — handles all object types including dictionaries
             IL.Emit(OpCodes.Ldloc, receiverLocal);
             IL.Emit(OpCodes.Ldstr, g.Name.Lexeme);
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.GetProperty);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.ObjectRead.Property);
             // Push thisArg (receiver) for WithThis call
             IL.Emit(OpCodes.Ldloc, receiverLocal);
         }

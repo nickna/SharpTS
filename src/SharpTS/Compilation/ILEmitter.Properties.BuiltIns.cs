@@ -114,7 +114,7 @@ public partial class ILEmitter
                 EmitExpression(g.Object);
                 EmitBoxIfNeeded(g.Object);
                 IL.Emit(OpCodes.Ldstr, propName);
-                IL.Emit(OpCodes.Call, _ctx.Runtime!.GetProperty);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.ObjectRead.Property);
                 SetStackUnknown();
                 return true;
             default:

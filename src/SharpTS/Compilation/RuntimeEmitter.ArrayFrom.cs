@@ -189,7 +189,7 @@ public partial class RuntimeEmitter
         il.BeginExceptionBlock();
         il.Emit(OpCodes.Ldloc, iteratorLocal);
         il.Emit(OpCodes.Ldstr, "return");
-        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
         il.Emit(OpCodes.Stloc, returnMethodLocal);
         var skipReturnCallLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, returnMethodLocal);

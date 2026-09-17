@@ -1272,7 +1272,7 @@ public abstract class StatementEmitterBase : ExpressionEmitterBase
                 // Get the "return" method from the async iterator
                 il.Emit(OpCodes.Ldloc, asyncIteratorLocal);
                 il.Emit(OpCodes.Ldstr, "return");
-                il.Emit(OpCodes.Call, runtime.GetProperty);
+                il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
 
                 var returnFnLocal = il.DeclareLocal(types.Object);
                 il.Emit(OpCodes.Stloc, returnFnLocal);
@@ -1383,7 +1383,7 @@ public abstract class StatementEmitterBase : ExpressionEmitterBase
             // Check if done: GetProperty(result, "done")
             il.Emit(OpCodes.Ldloc, genResultLocal);
             il.Emit(OpCodes.Ldstr, "done");
-            il.Emit(OpCodes.Call, runtime.GetProperty);
+            il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
 
             // Convert to bool and check - natural done exits directly (no cleanup needed)
             il.Emit(OpCodes.Call, runtime.Booleans.IsTruthy);
@@ -1394,7 +1394,7 @@ public abstract class StatementEmitterBase : ExpressionEmitterBase
             {
                 il.Emit(OpCodes.Ldloc, genResultLocal);
                 il.Emit(OpCodes.Ldstr, "value");
-                il.Emit(OpCodes.Call, runtime.GetProperty);
+                il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
             });
 
             EmitStatement(f.Body);
@@ -1460,7 +1460,7 @@ public abstract class StatementEmitterBase : ExpressionEmitterBase
         // Check index < keys.Count
         IL.Emit(OpCodes.Ldloc, indexLocal);
         IL.Emit(OpCodes.Ldloc, keysLocal);
-        IL.Emit(OpCodes.Call, Ctx.Runtime!.GetLength);
+        IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectRead.Length);
         IL.Emit(OpCodes.Clt);
         IL.Emit(OpCodes.Brfalse, endLabel);
 
@@ -1469,7 +1469,7 @@ public abstract class StatementEmitterBase : ExpressionEmitterBase
         {
             IL.Emit(OpCodes.Ldloc, keysLocal);
             IL.Emit(OpCodes.Ldloc, indexLocal);
-            IL.Emit(OpCodes.Call, Ctx.Runtime!.GetElement);
+            IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectRead.Element);
         });
 
         // Emit body

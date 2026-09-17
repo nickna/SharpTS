@@ -330,6 +330,16 @@ carrier; the strict SyntaxError helper retains its existing CLR exception repres
 Exception wrapping follows supplied optional Promise metadata. Error-cause Proxy handling
 receives six explicit invocation/delegate handles through the shared reflection bridge.
 
+Property, index, field, list, length and element reads use required `ObjectRead`
+ownership for six declarations. Property keeps its early declaration and late
+body; completion requires both the declarations and body, and rejects subsequent
+writes. Twenty-three helper boundaries take scoped owners and exact dependencies.
+Optional receiver branches follow supplied metadata, while list optimization
+uses explicit prototype-mutation and descriptor selections. TypedArray detection
+also follows its supplied implementation. Declaration order, receiver and key
+evaluation, getter behavior, prototype lookup, mutable guest state and deployment
+remain unchanged.
+
 Property and index deletion use required `ObjectDeletion` ownership for five
 declarations. Checked access rejects missing, null, duplicate and post-completion
 writes. Ten helpers receive scoped owners and exact dependencies, including shared

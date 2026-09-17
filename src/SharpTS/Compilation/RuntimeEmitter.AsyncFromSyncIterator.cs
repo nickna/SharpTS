@@ -322,7 +322,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, iteratorField);
         il.Emit(OpCodes.Ldstr, "return");
-        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
         il.Emit(OpCodes.Stloc, fnLocal);
         il.Emit(OpCodes.Ldloc, fnLocal);
         il.Emit(OpCodes.Brfalse, noProtocolReturn);
@@ -420,7 +420,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, iteratorField);
         il.Emit(OpCodes.Ldstr, "throw");
-        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
         il.Emit(OpCodes.Stloc, fnLocal);
         il.Emit(OpCodes.Ldloc, fnLocal);
         il.Emit(OpCodes.Brfalse, noThrow);

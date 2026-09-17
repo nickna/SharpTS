@@ -654,7 +654,7 @@ public partial class ILEmitter
             var lengthOkLabel = IL.DefineLabel();
             IL.Emit(OpCodes.Ldloc, receiverLocal);
             IL.Emit(OpCodes.Ldstr, "length");
-            IL.Emit(OpCodes.Call, runtime.GetProperty);
+            IL.Emit(OpCodes.Call, runtime.ObjectRead.Property);
             IL.Emit(OpCodes.Call, runtime.NumericCoercion.ToNumber);
             IL.Emit(OpCodes.Ldc_R8, 4294967295.0); // 2^32 - 1
             IL.Emit(OpCodes.Ble_Un, lengthOkLabel);
@@ -709,7 +709,7 @@ public partial class ILEmitter
         {
             IL.Emit(OpCodes.Ldloc, receiverLocal);
             IL.Emit(OpCodes.Ldstr, "length");
-            IL.Emit(OpCodes.Call, runtime.GetProperty);
+            IL.Emit(OpCodes.Call, runtime.ObjectRead.Property);
             IL.Emit(OpCodes.Call, runtime.NumericCoercion.ToNumber);
             IL.Emit(OpCodes.Pop);
         }

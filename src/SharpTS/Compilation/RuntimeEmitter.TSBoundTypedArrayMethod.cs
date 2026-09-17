@@ -195,7 +195,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(setLoopBody);
         LoadArray();
         il.Emit(OpCodes.Ldloc, offsetLoc); il.Emit(OpCodes.Ldloc, iLoc); il.Emit(OpCodes.Add);
-        il.Emit(OpCodes.Ldloc, sourceLoc); il.Emit(OpCodes.Ldloc, iLoc); il.Emit(OpCodes.Call, runtime.GetElement);
+        il.Emit(OpCodes.Ldloc, sourceLoc); il.Emit(OpCodes.Ldloc, iLoc); il.Emit(OpCodes.Call, runtime.ObjectRead.Element);
         il.Emit(OpCodes.Callvirt, arrays.ElementSet);
         il.Emit(OpCodes.Ldloc, iLoc); il.Emit(OpCodes.Ldc_I4_1); il.Emit(OpCodes.Add); il.Emit(OpCodes.Stloc, iLoc);
         il.MarkLabel(setLoopCond);

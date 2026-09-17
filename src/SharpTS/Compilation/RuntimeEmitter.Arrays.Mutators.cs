@@ -157,7 +157,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, receiver);
         il.Emit(OpCodes.Ldloc, receiver);
         il.Emit(OpCodes.Ldstr, "length");
-        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
         il.Emit(OpCodes.Call, runtime.NumericCoercion.ToNumber);
         il.Emit(OpCodes.Stloc, length);
 
@@ -302,7 +302,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, lastIndexLocal);
         il.Emit(OpCodes.Box, _types.Int32);
         il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
-        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
         il.Emit(OpCodes.Stloc, lastLocal);
 
         // The getter above may freeze or seal the receiver. Re-check before
@@ -423,7 +423,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, key);
         il.Emit(OpCodes.Ldloc, receiver);
         il.Emit(OpCodes.Ldloc, key);
-        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
         il.Emit(OpCodes.Stloc, element);
         il.Emit(OpCodes.Ldloc, receiver);
         il.Emit(OpCodes.Ldloc, key);
@@ -565,7 +565,7 @@ public partial class RuntimeEmitter
         var first = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldloc, receiver);
         il.Emit(OpCodes.Ldstr, "0");
-        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
         il.Emit(OpCodes.Stloc, first);
 
         var k = il.DeclareLocal(_types.Double);
@@ -599,7 +599,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, deleteTarget);
         il.Emit(OpCodes.Ldloc, receiver);
         il.Emit(OpCodes.Ldloc, fromKey);
-        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
         il.Emit(OpCodes.Stloc, value);
         il.Emit(OpCodes.Ldloc, receiver);
         il.Emit(OpCodes.Ldloc, toKey);
@@ -1197,7 +1197,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, deleteTarget);
         il.Emit(OpCodes.Ldloc, receiver);
         il.Emit(OpCodes.Ldloc, fromKey);
-        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
         il.Emit(OpCodes.Stloc, value);
         il.Emit(OpCodes.Ldloc, receiver);
         il.Emit(OpCodes.Ldloc, toKey);
@@ -1373,7 +1373,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, result);
         il.Emit(OpCodes.Ldloc, receiver);
         il.Emit(OpCodes.Ldloc, key);
-        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", _types.Object));
         il.Emit(OpCodes.Br, next);
         il.MarkLabel(hole);
@@ -1482,7 +1482,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, noLowerValue);
         il.Emit(OpCodes.Ldloc, receiver);
         il.Emit(OpCodes.Ldloc, lowerKey);
-        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
         il.Emit(OpCodes.Stloc, lowerValue);
         il.MarkLabel(noLowerValue);
 
@@ -1495,7 +1495,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, noUpperValue);
         il.Emit(OpCodes.Ldloc, receiver);
         il.Emit(OpCodes.Ldloc, upperKey);
-        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
         il.Emit(OpCodes.Stloc, upperValue);
         il.MarkLabel(noUpperValue);
 
@@ -3729,7 +3729,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, deleted);
         il.Emit(OpCodes.Ldloc, receiver);
         il.Emit(OpCodes.Ldloc, fromKey);
-        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", _types.Object));
         il.Emit(OpCodes.Br, deletedNext);
         il.MarkLabel(deletedHole);
@@ -3784,7 +3784,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, leftDelete);
         il.Emit(OpCodes.Ldloc, receiver);
         il.Emit(OpCodes.Ldloc, fromKey);
-        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
         il.Emit(OpCodes.Stloc, value);
         il.Emit(OpCodes.Ldloc, receiver);
         il.Emit(OpCodes.Ldloc, toKey);
@@ -3867,7 +3867,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, rightDelete);
         il.Emit(OpCodes.Ldloc, receiver);
         il.Emit(OpCodes.Ldloc, fromKey);
-        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
         il.Emit(OpCodes.Stloc, value);
         il.Emit(OpCodes.Ldloc, receiver);
         il.Emit(OpCodes.Ldloc, toKey);
@@ -4359,7 +4359,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, result);
         il.Emit(OpCodes.Ldloc, receiver);
         il.Emit(OpCodes.Ldloc, key);
-        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(
             _types.ListOfObject, "Add", _types.Object));
         il.Emit(OpCodes.Ldloc, sourceIndex);
@@ -4410,7 +4410,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, result);
         il.Emit(OpCodes.Ldloc, receiver);
         il.Emit(OpCodes.Ldloc, key);
-        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(
             _types.ListOfObject, "Add", _types.Object));
         il.Emit(OpCodes.Ldloc, sourceIndex);
@@ -5157,7 +5157,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, backwardDeleteTarget);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, fromKeyLocal);
-        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
         il.Emit(OpCodes.Stloc, copiedValueLocal);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, toLocal);
@@ -5223,7 +5223,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, forwardDeleteTarget);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, fromKeyLocal);
-        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
         il.Emit(OpCodes.Stloc, copiedValueLocal);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, toLocal);
@@ -5412,7 +5412,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, deleteTarget);
         il.Emit(OpCodes.Ldloc, receiver);
         il.Emit(OpCodes.Ldloc, fromKey);
-        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
         il.Emit(OpCodes.Stloc, value);
         il.Emit(OpCodes.Ldloc, receiver);
         il.Emit(OpCodes.Ldloc, toKey);

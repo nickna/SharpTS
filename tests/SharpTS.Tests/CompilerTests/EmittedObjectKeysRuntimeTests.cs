@@ -159,6 +159,7 @@ public sealed class EmittedObjectKeysRuntimeTests
                 "GetOwnPropertyDescriptor" => runtime.ObjectDescriptors.GetOwnPropertyDescriptor,
                 "IsExtensible" => runtime.ObjectState.IsExtensible,
                 "IsSymbol" => runtime.Symbols.IsSymbol,
+                "GetProperty" => runtime.ObjectRead.Property,
                 _ => typeof(EmittedRuntime).GetProperty(name)!.GetValue(runtime)
             };
         }

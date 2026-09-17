@@ -640,7 +640,7 @@ public abstract partial class ExpressionEmitterBase
         // evaluated — a later argument can suspend (await/yield), which requires a clear stack.
         IL.Emit(OpCodes.Ldloc, objLocal);
         IL.Emit(OpCodes.Ldstr, methodName);
-        IL.Emit(OpCodes.Call, Ctx.Runtime!.GetProperty); // → fn
+        IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectRead.Property); // → fn
         var fnLocal = _helpers.SpillStoreObject();
 
         // When the caller hasn't pre-spilled the arguments and one can suspend, spill them now
@@ -1740,7 +1740,7 @@ public abstract partial class ExpressionEmitterBase
             EmitThrowIfReceiverUndefined(receiverLocal, methodGet.Name.Lexeme);
             IL.Emit(OpCodes.Ldloc, receiverLocal);
             IL.Emit(OpCodes.Ldstr, methodGet.Name.Lexeme);
-            IL.Emit(OpCodes.Call, Ctx.Runtime!.GetProperty);
+            IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectRead.Property);
             calleeLocal = _helpers.SpillStoreObject();
         }
         else if (callReference is Expr.GetIndex methodIndex)
@@ -1761,7 +1761,7 @@ public abstract partial class ExpressionEmitterBase
             var indexLocal = _helpers.SpillStoreObject();
             IL.Emit(OpCodes.Ldloc, receiverLocal);
             IL.Emit(OpCodes.Ldloc, indexLocal);
-            IL.Emit(OpCodes.Call, Ctx.Runtime!.GetIndex);
+            IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectRead.Index);
             calleeLocal = _helpers.SpillStoreObject();
         }
         else
@@ -1938,7 +1938,7 @@ public abstract partial class ExpressionEmitterBase
             // matching the interpreter's HasOptionalInChain rule.
             IL.Emit(OpCodes.Ldloc, recvLocal);
             IL.Emit(OpCodes.Ldstr, g.Name.Lexeme);
-            IL.Emit(OpCodes.Call, Ctx.Runtime!.GetProperty);
+            IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectRead.Property);
             var fnLocal = _helpers.SpillStoreObject();
             IL.Emit(OpCodes.Ldloc, fnLocal);
             IL.Emit(OpCodes.Brfalse, nullishLabel);
@@ -2006,7 +2006,7 @@ public abstract partial class ExpressionEmitterBase
         // undefined WITHOUT evaluating the argument (the parity fix — #627).
         IL.Emit(OpCodes.Ldloc, recvLocal);
         IL.Emit(OpCodes.Ldstr, g.Name.Lexeme);
-        IL.Emit(OpCodes.Call, Ctx.Runtime!.GetProperty);
+        IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectRead.Property);
         var fnLocal = _helpers.SpillStoreObject();
         IL.Emit(OpCodes.Ldloc, fnLocal);
         IL.Emit(OpCodes.Brfalse, nullishLabel);
@@ -2080,7 +2080,7 @@ public abstract partial class ExpressionEmitterBase
 
             IL.Emit(OpCodes.Ldloc, receiverLocal);
             IL.Emit(OpCodes.Ldstr, get.Name.Lexeme);
-            IL.Emit(OpCodes.Call, Ctx.Runtime!.GetProperty);
+            IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectRead.Property);
             calleeLocal = _helpers.SpillStoreObject();
         }
         else if (reference is Expr.GetIndex index)
@@ -2107,7 +2107,7 @@ public abstract partial class ExpressionEmitterBase
             var indexLocal = _helpers.SpillStoreObject();
             IL.Emit(OpCodes.Ldloc, receiverLocal);
             IL.Emit(OpCodes.Ldloc, indexLocal);
-            IL.Emit(OpCodes.Call, Ctx.Runtime!.GetIndex);
+            IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectRead.Index);
             calleeLocal = _helpers.SpillStoreObject();
         }
         else if (reference is Expr.Super)

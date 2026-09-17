@@ -1069,7 +1069,7 @@ public partial class ILEmitter
         // Get current property value
         IL.Emit(OpCodes.Ldloc, objLocal);
         IL.Emit(OpCodes.Ldstr, ls.Name.Lexeme);
-        IL.Emit(OpCodes.Call, _ctx.Runtime!.GetProperty);
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.ObjectRead.Property);
         IL.Emit(OpCodes.Dup);
 
         switch (ls.Operator.Type)
@@ -1143,7 +1143,7 @@ public partial class ILEmitter
         // Get current value at index
         IL.Emit(OpCodes.Ldloc, objLocal);
         IL.Emit(OpCodes.Ldloc, indexLocal);
-        IL.Emit(OpCodes.Call, _ctx.Runtime!.GetIndex);
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.ObjectRead.Index);
         IL.Emit(OpCodes.Dup);
 
         switch (lsi.Operator.Type)
@@ -2243,7 +2243,7 @@ public partial class ILEmitter
         var receiver = SpillBoxed(get.Object);
         IL.Emit(OpCodes.Ldloc, receiver);
         IL.Emit(OpCodes.Ldstr, get.Name.Lexeme);
-        IL.Emit(OpCodes.Call, _ctx.Runtime!.GetProperty);
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.ObjectRead.Property);
         var rawValue = IL.DeclareLocal(_ctx.Types.Object);
         IL.Emit(OpCodes.Stloc, rawValue);
         EmitNumericUpdate(rawValue, isIncrement, out var oldValue, out var newValue);
@@ -2267,7 +2267,7 @@ public partial class ILEmitter
         var index = SpillBoxed(gi.Index);
         IL.Emit(OpCodes.Ldloc, receiver);
         IL.Emit(OpCodes.Ldloc, index);
-        IL.Emit(OpCodes.Call, _ctx.Runtime!.GetIndex);
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.ObjectRead.Index);
         var rawValue = IL.DeclareLocal(_ctx.Types.Object);
         IL.Emit(OpCodes.Stloc, rawValue);
         EmitNumericUpdate(rawValue, isIncrement, out var oldValue, out var newValue);
@@ -2986,7 +2986,7 @@ public partial class ILEmitter
             EmitThrowIfReceiverUndefined(objectLocal, cs.Name.Lexeme, isWrite: false);
         IL.Emit(OpCodes.Ldloc, objectLocal);
         IL.Emit(OpCodes.Ldstr, cs.Name.Lexeme);
-        IL.Emit(OpCodes.Call, _ctx.Runtime!.GetProperty);
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.ObjectRead.Property);
 
         // Apply operation
         EmitCompoundOperation(cs.Operator.Type, cs.Value);
@@ -3113,7 +3113,7 @@ public partial class ILEmitter
         // Get current value: GetIndex(obj, index)
         IL.Emit(OpCodes.Ldloc, objLocal);
         IL.Emit(OpCodes.Ldloc, indexLocal);
-        IL.Emit(OpCodes.Call, _ctx.Runtime!.GetIndex);
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.ObjectRead.Index);
 
         // Apply operation
         EmitCompoundOperation(csi.Operator.Type, csi.Value);

@@ -507,7 +507,7 @@ public sealed class ReflectStaticEmitter : IStaticTypeEmitterStrategy
         il.Emit(OpCodes.Call, reflectNamespace.SingletonPopulateMethod);
         il.Emit(OpCodes.Ldsfld, reflectNamespace.SingletonField);
         il.Emit(OpCodes.Ldstr, propertyName);
-        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
         return true;
     }
 

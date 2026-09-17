@@ -89,7 +89,7 @@ public partial class RuntimeEmitter
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.GetIndex);
+        il.Emit(OpCodes.Call, runtime.ObjectRead.Index);
         il.Emit(OpCodes.Stloc, methodLocal);
 
         // undefined and null both mean that the built-in fallback continues.

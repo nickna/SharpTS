@@ -78,7 +78,7 @@ public partial class RuntimeEmitter
             // e = opt.encoding; return (e is string) ? e : null
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldstr, "encoding");
-            il.Emit(OpCodes.Call, runtime.GetProperty);
+            il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
             il.Emit(OpCodes.Isinst, _types.String);
             il.Emit(OpCodes.Dup);
             il.Emit(OpCodes.Brtrue, retIt);
@@ -382,7 +382,7 @@ public partial class RuntimeEmitter
             // Get "recursive" property if options is provided
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Ldstr, "recursive");
-            il.Emit(OpCodes.Call, runtime.GetProperty);
+            il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
             il.Emit(OpCodes.Call, runtime.Booleans.IsTruthy);
             il.Emit(OpCodes.Brfalse, nonRecursive);
 
@@ -438,7 +438,7 @@ public partial class RuntimeEmitter
         // Check if options has withFileTypes property
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldstr, "withFileTypes");
-        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
         var wftValueLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Stloc, wftValueLocal);
 
@@ -450,7 +450,7 @@ public partial class RuntimeEmitter
         // Check if options has recursive property
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldstr, "recursive");
-        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
         var recValueLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Stloc, recValueLocal);
 

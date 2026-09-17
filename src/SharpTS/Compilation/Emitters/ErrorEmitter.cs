@@ -36,7 +36,7 @@ public sealed class ErrorEmitter : ITypeEmitterStrategy
         // an await/yield in an otherwise-ignored toString argument.
         il.Emit(OpCodes.Ldloc, receiverLocal);
         il.Emit(OpCodes.Ldstr, "toString");
-        il.Emit(OpCodes.Call, ctx.Runtime!.GetProperty);
+        il.Emit(OpCodes.Call, ctx.Runtime!.ObjectRead.Property);
         var functionLocal = emitter.SpillStackToObjectLocal();
 
         emitter.EmitArgsArrayWithSpread(arguments);

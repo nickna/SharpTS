@@ -112,7 +112,7 @@ public sealed class CryptoModuleEmitter : IBuiltInModuleEmitter
             case "subtle":
                 il.Emit(OpCodes.Call, ctx.Runtime!.WebCrypto.GetObject);
                 il.Emit(OpCodes.Ldstr, "subtle");
-                il.Emit(OpCodes.Call, ctx.Runtime!.GetProperty);
+                il.Emit(OpCodes.Call, ctx.Runtime!.ObjectRead.Property);
                 return true;
             default:
                 return false;

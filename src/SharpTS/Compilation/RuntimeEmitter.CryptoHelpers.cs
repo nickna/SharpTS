@@ -845,14 +845,14 @@ public partial class RuntimeEmitter
         // Get "publicKey" from result
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ldstr, "publicKey");
-        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
         il.Emit(OpCodes.Stelem_Ref);
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Ldc_I4_2);
         // Get "privateKey" from result
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ldstr, "privateKey");
-        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
         il.Emit(OpCodes.Stelem_Ref);
         il.Emit(OpCodes.Callvirt, runtime.TSFunctionInvoke);
         il.Emit(OpCodes.Pop);

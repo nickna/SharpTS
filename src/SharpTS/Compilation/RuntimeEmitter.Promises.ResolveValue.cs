@@ -34,7 +34,7 @@ public partial class RuntimeEmitter
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "then");
-        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
         il.Emit(OpCodes.Stloc, thenLocal);
         il.Emit(OpCodes.Ldloc, thenLocal);
         il.Emit(OpCodes.Call, runtime.TypeOf);

@@ -137,7 +137,7 @@ public partial class RuntimeEmitter
         // not just $Object instances. A null/undefined receiver returns null.
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "level");
-        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
         var levelLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Stloc, levelLocal);
 
@@ -253,7 +253,7 @@ public partial class RuntimeEmitter
             // nested = GetProperty(options, nestedObjectKey); if null/undefined -> default
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldstr, nestedObjectKey);
-            il.Emit(OpCodes.Call, runtime.GetProperty);
+            il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
             var nestedLocal = il.DeclareLocal(_types.Object);
             il.Emit(OpCodes.Stloc, nestedLocal);
             il.Emit(OpCodes.Ldloc, nestedLocal);
@@ -264,7 +264,7 @@ public partial class RuntimeEmitter
             // val = GetProperty(nested, key)
             il.Emit(OpCodes.Ldloc, nestedLocal);
             il.Emit(OpCodes.Ldstr, key);
-            il.Emit(OpCodes.Call, runtime.GetProperty);
+            il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
             il.Emit(OpCodes.Stloc, valLocal);
         }
         else
@@ -272,7 +272,7 @@ public partial class RuntimeEmitter
             // val = GetProperty(options, key)
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldstr, key);
-            il.Emit(OpCodes.Call, runtime.GetProperty);
+            il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
             il.Emit(OpCodes.Stloc, valLocal);
         }
 
@@ -333,7 +333,7 @@ public partial class RuntimeEmitter
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "maxOutputLength");
-        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
         il.Emit(OpCodes.Stloc, valLocal);
 
         il.Emit(OpCodes.Ldloc, valLocal);

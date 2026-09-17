@@ -120,7 +120,7 @@ public partial class ILEmitter
             // Fallback: arg may have been overwritten by user code with a
             // non-$Arguments value (`arguments = ...`). Use GetLength.
             IL.Emit(OpCodes.Ldloc, argsLocal);
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.GetLength);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.ObjectRead.Length);
             IL.Emit(OpCodes.Conv_R8);
             IL.Emit(OpCodes.Box, _ctx.Types.Double);
             IL.MarkLabel(endLabel);
@@ -443,7 +443,7 @@ public partial class ILEmitter
 
             // Not nullish - proceed with property access
             IL.Emit(OpCodes.Ldstr, g.Name.Lexeme);
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.GetProperty);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.ObjectRead.Property);
             builder.Emit_Br(endLabel);
 
             builder.MarkLabel(nullishLabel);
@@ -463,7 +463,7 @@ public partial class ILEmitter
             if (!IsNullPlaceholderGlobal(g.Object))
                 EmitThrowIfUndefinedReceiverOnStack(g.Name.Lexeme);
             IL.Emit(OpCodes.Ldstr, g.Name.Lexeme);
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.GetProperty);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.ObjectRead.Property);
         }
     }
 
@@ -584,7 +584,7 @@ public partial class ILEmitter
         IL.MarkLabel(fallback);
         IL.Emit(OpCodes.Ldloc, receiver);
         IL.Emit(OpCodes.Ldstr, g.Name.Lexeme);
-        IL.Emit(OpCodes.Call, runtime.GetProperty);
+        IL.Emit(OpCodes.Call, runtime.ObjectRead.Property);
         IL.Emit(OpCodes.Call, runtime.NumericCoercion.ConvertToNumber);
         IL.Emit(OpCodes.Stloc, result);
 
@@ -673,7 +673,7 @@ public partial class ILEmitter
                 IL.MarkLabel(jsonFallback);
                 IL.Emit(OpCodes.Ldloc, receiverLocal);
                 IL.Emit(OpCodes.Ldstr, g.Name.Lexeme);
-                IL.Emit(OpCodes.Call, _ctx.Runtime.GetProperty);
+                IL.Emit(OpCodes.Call, _ctx.Runtime.ObjectRead.Property);
                 IL.Emit(OpCodes.Call, _ctx.Runtime.NumericCoercion.ConvertToNumber);
                 IL.Emit(OpCodes.Stloc, numberResult);
                 IL.MarkLabel(jsonEnd);
@@ -810,7 +810,7 @@ public partial class ILEmitter
         IL.MarkLabel(fallbackLabel);
         IL.Emit(OpCodes.Ldloc, receiverLocal);
         IL.Emit(OpCodes.Ldstr, g.Name.Lexeme);
-        IL.Emit(OpCodes.Call, _ctx.Runtime!.GetProperty);
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.ObjectRead.Property);
 
         IL.MarkLabel(endLabel);
         SetStackUnknown();
@@ -1216,7 +1216,7 @@ public partial class ILEmitter
             // Not nullish — proceed with index access
             EmitExpression(gi.Index);
             EmitBoxIfNeeded(gi.Index);
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.GetIndex);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.ObjectRead.Index);
             builder.Emit_Br(endLabel);
 
             builder.MarkLabel(nullishLabel);
@@ -1433,7 +1433,7 @@ public partial class ILEmitter
                     EmitBoxIfNeeded(gi.Object);
                     EmitExpression(gi.Index);
                     EmitBoxIfNeeded(gi.Index);
-                    IL.Emit(OpCodes.Call, _ctx.Runtime!.GetIndex);
+                    IL.Emit(OpCodes.Call, _ctx.Runtime!.ObjectRead.Index);
                     SetStackUnknown();
 
                     IL.MarkLabel(endLabel);
@@ -1497,7 +1497,7 @@ public partial class ILEmitter
             IL.Emit(OpCodes.Ldloc, objLocal);
             EmitExpression(gi.Index);
             EmitBoxIfNeeded(gi.Index);
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.GetIndex);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.ObjectRead.Index);
             SetStackUnknown();
 
             IL.MarkLabel(endLabelNH);
@@ -1516,7 +1516,7 @@ public partial class ILEmitter
             EmitThrowIfUndefinedIndexReceiver(idxRecvLocal, idxKeyLocal);
         IL.Emit(OpCodes.Ldloc, idxRecvLocal);
         IL.Emit(OpCodes.Ldloc, idxKeyLocal);
-        IL.Emit(OpCodes.Call, _ctx.Runtime!.GetIndex);
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.ObjectRead.Index);
     }
 
     private bool TryEmitFlattenedNumericRestIndex(Expr.GetIndex expression)
@@ -1677,7 +1677,7 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Ldloc, receiverLocal);
         IL.Emit(OpCodes.Ldloc, indexDouble);
         IL.Emit(OpCodes.Box, _ctx.Types.Double);
-        IL.Emit(OpCodes.Call, _ctx.Runtime!.GetIndex);
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.ObjectRead.Index);
         SetStackUnknown();
         if (!boxResult) EnsureDouble();
 

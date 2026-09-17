@@ -324,7 +324,7 @@ public partial class RuntimeEmitter
                     runtime.Booleans,
                     runtime.Errors.CreateException,
                     runtime.DescriptorStorage,
-                    runtime.GetProperty,
+                    runtime.ObjectRead.Property,
                     runtime.NumericCoercion,
                     runtime.ObjectStorage,
                     runtime.PadUndefinedAttrCtor,
@@ -619,8 +619,8 @@ public partial class RuntimeEmitter
                     runtime.ArrayStorage,
                     runtime.ConstructDynamicValue,
                     runtime.Errors.CreateException,
-                    runtime.GetIndex,
-                    runtime.GetProperty,
+                    runtime.ObjectRead.Index,
+                    runtime.ObjectRead.Property,
                     runtime.NumericCoercion,
                     runtime.SetProperty,
                     runtime.StringCoercion,
@@ -634,8 +634,8 @@ public partial class RuntimeEmitter
                 new RegExpSymbolMatchAllProtocolInputs(
                     runtime.ConstructDynamicValue,
                     runtime.Errors.CreateException,
-                    runtime.GetIndex,
-                    runtime.GetProperty,
+                    runtime.ObjectRead.Index,
+                    runtime.ObjectRead.Property,
                     runtime.NumericCoercion,
                     runtime.SetProperty,
                     runtime.StringCoercion,
@@ -816,6 +816,7 @@ public partial class RuntimeEmitter
         runtime.ObjectOperations.CompleteEmission();
         runtime.ObjectConstruction.CompleteEmission();
         runtime.ObjectDeletion.CompleteEmission();
+        runtime.ObjectRead.CompleteEmission();
         runtime.Reflect.CompleteEmission();
         runtime.Json.CompleteEmission();
         runtime.Records.CompleteEmission();

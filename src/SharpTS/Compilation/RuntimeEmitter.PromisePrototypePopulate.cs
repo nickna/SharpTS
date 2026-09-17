@@ -231,7 +231,7 @@ public partial class RuntimeEmitter
             // return Invoke(promise, "then", « thunkFunction »)
             il.Emit(OpCodes.Ldloc, promiseLocal);
             il.Emit(OpCodes.Ldstr, "then");
-            il.Emit(OpCodes.Call, runtime.GetProperty);
+            il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
             il.Emit(OpCodes.Stloc, thenLocal);
             il.Emit(OpCodes.Ldloc, promiseLocal);
             il.Emit(OpCodes.Ldloc, thenLocal);
@@ -299,7 +299,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(haveArgumentsLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "then");
-        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
         il.Emit(OpCodes.Stloc, thenLocal);
         il.Emit(OpCodes.Ldloc, thenLocal);
         il.Emit(OpCodes.Call, runtime.TypeOf);
@@ -422,7 +422,7 @@ public partial class RuntimeEmitter
         var thenLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "then");
-        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
         il.Emit(OpCodes.Stloc, thenLocal);
         // if (!IsCallable(then)) throw TypeError. Inline check — Isinst against
         // each known callable shape. Mirrors $Runtime's typeof "function" branch

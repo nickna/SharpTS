@@ -156,6 +156,7 @@ public sealed class EmittedObjectOwnPropertiesRuntimeTests
             {
                 "GetOwnPropertyDescriptor" => runtime.ObjectDescriptors.GetOwnPropertyDescriptor,
                 "IsExtensible" => runtime.ObjectState.IsExtensible,
+                "GetProperty" => runtime.ObjectRead.Property,
                 _ => typeof(EmittedRuntime).GetProperty(name)!.GetValue(runtime)
             };
         }

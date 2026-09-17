@@ -463,7 +463,7 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
                 il.Emit(OpCodes.Pop);
                 il.Emit(OpCodes.Ldsfld, ctx.Runtime!.ArrayOperations.PrototypeField);
                 il.Emit(OpCodes.Ldstr, methodName);
-                il.Emit(OpCodes.Call, ctx.Runtime!.GetProperty);
+                il.Emit(OpCodes.Call, ctx.Runtime!.ObjectRead.Property);
                 var toStringMethodLocal = il.DeclareLocal(ctx.Types.Object);
                 il.Emit(OpCodes.Stloc, toStringMethodLocal);
                 il.Emit(OpCodes.Ldloc, receiverLocal);
@@ -618,7 +618,7 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
                 il.MarkLabel(fallbackLabel);
                 emitter.EmitExpression(receiver);
                 emitter.EmitBoxIfNeeded(receiver);
-                il.Emit(OpCodes.Call, ctx.Runtime!.GetLength);
+                il.Emit(OpCodes.Call, ctx.Runtime!.ObjectRead.Length);
                 il.Emit(OpCodes.Conv_R8);
 
                 il.MarkLabel(endLabel);
@@ -682,7 +682,7 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
 
         il.MarkLabel(fallbackLabelNH);
         il.Emit(OpCodes.Ldloc, objLocal);
-        il.Emit(OpCodes.Call, ctx.Runtime!.GetLength);
+        il.Emit(OpCodes.Call, ctx.Runtime!.ObjectRead.Length);
         il.Emit(OpCodes.Conv_R8);
 
         il.MarkLabel(endLabelNH);
