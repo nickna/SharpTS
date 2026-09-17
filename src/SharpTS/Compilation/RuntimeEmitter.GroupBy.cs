@@ -5,6 +5,19 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
+    private readonly record struct ObjectGroupByInputs(
+        EmittedArrayStorageRuntime ArrayStorage,
+        EmittedDescriptorStorageRuntime DescriptorStorage,
+        EmittedErrorRuntime Errors,
+        MethodBuilder GetIteratorFunction,
+        MethodBuilder InvokeValue,
+        MethodBuilder IterateToList,
+        TypeBuilder RuntimeType,
+        EmittedSymbolRuntime Symbols,
+        TypeBuilder TSFunctionType,
+        Type UndefinedType
+    );
+
     private readonly record struct MapGroupByInputs(
         EmittedArrayStorageRuntime ArrayStorage,
         MethodBuilder CreateException,
@@ -22,7 +35,11 @@ public partial class RuntimeEmitter
     /// Emits Object.groupBy(iterable, callback) - groups array elements by callback return value (coerced to string).
     /// Returns a $Object whose keys are group names and values are $Array of elements.
     /// </summary>
-    private void EmitObjectGroupBy(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitObjectGroupBy(
+        TypeBuilder typeBuilder,
+        EmittedObjectOperationsRuntime objectOperations,
+        ObjectGroupByInputs inputs
+    )
     {
         var method = typeBuilder.DefineMethod(
             "ObjectGroupBy",
@@ -30,7 +47,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object, _types.Object]  // (iterable, callback)
         );
-        runtime.ObjectGroupBy = method;
+        objectOperations.GroupBy = method;
 
         var il = method.GetILGenerator();
 
@@ -39,9 +56,9 @@ public partial class RuntimeEmitter
         // did nothing and returned an empty object.
         var gbCallableOkLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Isinst, inputs.TSFunctionType);
         il.Emit(OpCodes.Brtrue, gbCallableOkLabel);
-        GuestErrorEmitter.ThrowTypeError(il, runtime, "Object.groupBy: callback is not callable");
+        GuestErrorEmitter.ThrowError(il, inputs.Errors.CreateException, inputs.Errors.TypeErrorConstructor, "Object.groupBy: callback is not callable");
         il.MarkLabel(gbCallableOkLabel);
 
         // Locals
@@ -70,7 +87,7 @@ public partial class RuntimeEmitter
         // produces the guest TypeError mandated by GetIterator.
         var groupByMaterializeLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.ArrayStorage.Type);
+        il.Emit(OpCodes.Isinst, inputs.ArrayStorage.Type);
         il.Emit(OpCodes.Brtrue, groupByMaterializeLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, _types.ListOfObject);
@@ -80,27 +97,27 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, groupByMaterializeLabel);
         var groupByIteratorLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldsfld, runtime.Symbols.Iterator);
-        il.Emit(OpCodes.Call, runtime.GetIteratorFunction);
+        il.Emit(OpCodes.Ldsfld, inputs.Symbols.Iterator);
+        il.Emit(OpCodes.Call, inputs.GetIteratorFunction);
         il.Emit(OpCodes.Stloc, groupByIteratorLocal);
         var groupByHasIteratorLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, groupByIteratorLocal);
         il.Emit(OpCodes.Brfalse, groupByHasIteratorLabel);
         il.Emit(OpCodes.Ldloc, groupByIteratorLocal);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
         il.Emit(OpCodes.Brfalse, groupByMaterializeLabel);
         il.MarkLabel(groupByHasIteratorLabel);
-        GuestErrorEmitter.ThrowTypeError(il, runtime, "Object.groupBy: items is not iterable");
+        GuestErrorEmitter.ThrowError(il, inputs.Errors.CreateException, inputs.Errors.TypeErrorConstructor, "Object.groupBy: items is not iterable");
         il.MarkLabel(groupByMaterializeLabel);
 
         // Materialize through the shared iterator protocol. Besides arrays,
         // this handles custom iterables and produces the spec TypeError for a
         // nullish/non-callable Symbol.iterator instead of a CLR cast error.
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldsfld, runtime.Symbols.Iterator);
-        il.Emit(OpCodes.Ldtoken, runtime.RuntimeType);
+        il.Emit(OpCodes.Ldsfld, inputs.Symbols.Iterator);
+        il.Emit(OpCodes.Ldtoken, inputs.RuntimeType);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle")!);
-        il.Emit(OpCodes.Call, runtime.IterateToList);
+        il.Emit(OpCodes.Call, inputs.IterateToList);
         il.Emit(OpCodes.Stloc, listLocal);
 
         // i = 0
@@ -136,7 +153,7 @@ public partial class RuntimeEmitter
         // key = InvokeValue(callback, args)
         il.Emit(OpCodes.Ldarg_1);  // callback
         il.Emit(OpCodes.Ldloc, argsLocal);
-        il.Emit(OpCodes.Call, runtime.InvokeValue);
+        il.Emit(OpCodes.Call, inputs.InvokeValue);
         il.Emit(OpCodes.Stloc, keyLocal);
 
         // keyStr = key?.ToString() ?? "undefined"
@@ -160,7 +177,7 @@ public partial class RuntimeEmitter
         // Create new list, wrap in $Array, store in dict
         // existing = new $Array(new List<object?>())
         il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, _types.EmptyTypes));
-        il.Emit(OpCodes.Newobj, runtime.ArrayStorage.Ctor);
+        il.Emit(OpCodes.Newobj, inputs.ArrayStorage.Ctor);
         il.Emit(OpCodes.Stloc, existingLocal);
         // dict[keyStr] = existing
         il.Emit(OpCodes.Ldloc, dictLocal);
@@ -173,8 +190,8 @@ public partial class RuntimeEmitter
         // Get elements from existing $Array and add current element
         // ((existing as $Array).Elements).Add(list[i])
         il.Emit(OpCodes.Ldloc, existingLocal);
-        il.Emit(OpCodes.Castclass, runtime.ArrayStorage.Type);
-        il.Emit(OpCodes.Callvirt, runtime.ArrayStorage.ElementsGetter);
+        il.Emit(OpCodes.Castclass, inputs.ArrayStorage.Type);
+        il.Emit(OpCodes.Callvirt, inputs.ArrayStorage.ElementsGetter);
         il.Emit(OpCodes.Ldloc, listLocal);
         il.Emit(OpCodes.Ldloc, indexLocal);
         il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Item").GetGetMethod()!);
@@ -195,7 +212,7 @@ public partial class RuntimeEmitter
         // fallback that can mask the explicit null PDS entry.
         il.Emit(OpCodes.Ldloc, dictLocal);
         il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Call, runtime.DescriptorStorage.SetPrototype);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.SetPrototype);
         il.Emit(OpCodes.Ldloc, dictLocal);
         il.Emit(OpCodes.Ret);
     }

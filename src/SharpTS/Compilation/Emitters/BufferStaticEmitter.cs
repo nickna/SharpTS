@@ -171,7 +171,7 @@ public sealed class BufferStaticEmitter : IStaticTypeEmitterStrategy
                 il.Emit(OpCodes.Brtrue, isListLabel);
 
                 // Not a list - use GetValues to convert object to array
-                il.Emit(OpCodes.Call, ctx.Runtime!.GetValues);
+                il.Emit(OpCodes.Call, ctx.Runtime!.ObjectOperations.Values);
                 il.Emit(OpCodes.Br, afterListCheckLabel);
 
                 // Already a list - cast directly
