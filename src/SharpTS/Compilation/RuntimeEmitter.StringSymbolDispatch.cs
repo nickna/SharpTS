@@ -110,7 +110,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, methodLocal);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+        il.Emit(OpCodes.Call, runtime.Invocation.Method);
         il.Emit(OpCodes.Ret);
     }
 }

@@ -195,7 +195,7 @@ public sealed class RegExpEmitter : ITypeEmitterStrategy
         il.Emit(OpCodes.Ldloc, functionLocal);
         il.Emit(OpCodes.Ldloc, argumentsLocal);
         il.Emit(OpCodes.Castclass, ctx.Types.ObjectArray);
-        il.Emit(OpCodes.Call, ctx.Runtime.InvokeMethodValue);
+        il.Emit(OpCodes.Call, ctx.Runtime.Invocation.Method);
         emitter.SetStackUnknown();
     }
 

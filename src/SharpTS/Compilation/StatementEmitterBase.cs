@@ -1179,7 +1179,7 @@ public abstract class StatementEmitterBase : ExpressionEmitterBase
             il.Emit(OpCodes.Ldloc, asyncIteratorFnLocal);    // method
             il.Emit(OpCodes.Ldc_I4_0);
             il.Emit(OpCodes.Newarr, types.Object);           // args
-            il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+            il.Emit(OpCodes.Call, runtime.Invocation.Method);
 
             var asyncIteratorLocal = il.DeclareLocal(types.Object);
             il.Emit(OpCodes.Stloc, asyncIteratorLocal);
@@ -1293,7 +1293,7 @@ public abstract class StatementEmitterBase : ExpressionEmitterBase
                 il.Emit(OpCodes.Ldloc, returnFnLocal);
                 il.Emit(OpCodes.Ldc_I4_0);
                 il.Emit(OpCodes.Newarr, types.Object);
-                il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+                il.Emit(OpCodes.Call, runtime.Invocation.Method);
 
                 // If result is a Task, await it. Unwrap $TSPromise first if present.
                 var returnResultLocal = il.DeclareLocal(types.Object);

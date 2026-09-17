@@ -214,7 +214,7 @@ public partial class RuntimeEmitter
         // Actually re-do: the caller should set up the stack as:
         //   [null receiver, callback, args]
         // before calling this helper.
-        il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+        il.Emit(OpCodes.Call, runtime.Invocation.Method);
 
         // Stack: [object result]
         // Convert to Task<object>:

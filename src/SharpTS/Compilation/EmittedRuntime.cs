@@ -17,6 +17,10 @@ namespace SharpTS.Compilation;
 /// <seealso cref="ILEmitter"/>
 public class EmittedRuntime
 {
+    /// <summary>Required dynamic value, receiver-aware and zero-argument invocation metadata.</summary>
+    public EmittedInvocationRuntime Invocation { get; } = new();
+
+
     /// <summary>Required reflected-method lookup, wrapper cache and staged callable metadata.</summary>
     public EmittedReflectedMethodRuntime ReflectedMethods { get; } = new();
 
@@ -345,9 +349,6 @@ public class EmittedRuntime
     public MethodBuilder DisposeResource { get; set; } = null!;
 
     // Invocation methods
-    public MethodBuilder InvokeValue { get; set; } = null!;
-    public MethodBuilder InvokeMethodValue { get; set; } = null!;
-    public MethodBuilder InvokeMethodValue0 { get; set; } = null!;
     public MethodBuilder ConstructDynamicValue { get; set; } = null!;
     public MethodBuilder GetSuperMethod { get; set; } = null!;
 

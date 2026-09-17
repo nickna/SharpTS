@@ -75,7 +75,7 @@ public partial class ILEmitter
             if (arguments[i].LocalType == _ctx.Types.Double) IL.Emit(OpCodes.Box, _ctx.Types.Double);
             IL.Emit(OpCodes.Stelem_Ref);
         }
-        IL.Emit(OpCodes.Call, _ctx.Runtime.InvokeMethodValue);
+        IL.Emit(OpCodes.Call, _ctx.Runtime.Invocation.Method);
         SetStackUnknown();
         EnsureDouble();
         IL.MarkLabel(done);

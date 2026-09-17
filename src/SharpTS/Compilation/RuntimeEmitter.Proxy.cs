@@ -5,6 +5,8 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
+    internal readonly record struct ProxyInvokeCheckInputs(EmittedObjectReadRuntime ObjectRead, EmittedReflectedMethodRuntime ReflectedMethods);
+
     private readonly record struct ProxyHasCheckInputs(
         EmittedBooleanRuntime Booleans,
         MethodBuilder InvokeMethodUnwrapped,
@@ -915,15 +917,21 @@ public partial class RuntimeEmitter
     /// Emits a proxy-aware invoke check: checks if callee is a proxy and calls TrapApply(null, argsList, null).
     /// </summary>
     internal void EmitProxyInvokeCheck(
-        ILGenerator il, EmittedRuntime runtime, Action emitLoadCallee,
-        Action emitLoadThisArg, Action emitLoadArgs, Label notProxyLabel)
+        ILGenerator il,
+        EmittedInvocationRuntime invocation,
+        ProxyInvokeCheckInputs inputs,
+        Action emitLoadCallee,
+        Action emitLoadThisArg,
+        Action emitLoadArgs,
+        Label notProxyLabel
+    )
     {
         var proxyLabel = il.DefineLabel();
         EmitProxyTypeCheck(il, emitLoadCallee, proxyLabel, notProxyLabel);
 
         il.MarkLabel(proxyLabel);
         EmitProxyMethodCallUnwrapped(
-            il, runtime, emitLoadCallee, "TrapApplyCompiled", () =>
+            il, inputs.ReflectedMethods.InvokeUnwrapped, emitLoadCallee, "TrapApplyCompiled", () =>
         {
             il.Emit(OpCodes.Ldc_I4_4);
             il.Emit(OpCodes.Newarr, _types.Object);
@@ -938,7 +946,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Dup);
             il.Emit(OpCodes.Ldc_I4_2);
             il.Emit(OpCodes.Ldnull);
-            il.Emit(OpCodes.Ldftn, runtime.InvokeMethodValue);
+            il.Emit(OpCodes.Ldftn, invocation.Method);
             il.Emit(OpCodes.Newobj, _types.GetConstructor(
                 typeof(Func<object, object, object?[], object?>),
                 _types.Object, _types.IntPtr)!);
@@ -946,7 +954,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Dup);
             il.Emit(OpCodes.Ldc_I4_3);
             il.Emit(OpCodes.Ldnull);
-            il.Emit(OpCodes.Ldftn, runtime.ObjectRead.Property);
+            il.Emit(OpCodes.Ldftn, inputs.ObjectRead.Property);
             il.Emit(OpCodes.Newobj, _types.GetConstructor(
                 typeof(Func<object, string, object?>),
                 _types.Object, _types.IntPtr)!);

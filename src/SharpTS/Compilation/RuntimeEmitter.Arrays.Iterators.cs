@@ -409,7 +409,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldsfld, runtime.ArrayOperations.CallbackThisArgField);
         il.Emit(OpCodes.Ldarg_1); // callback
         il.Emit(OpCodes.Ldloc, argsLocal);
-        il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+        il.Emit(OpCodes.Call, runtime.Invocation.Method);
     }
 
     private void EmitArrayMap(TypeBuilder typeBuilder, EmittedRuntime runtime)
@@ -2200,7 +2200,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
         il.Emit(OpCodes.Ldloc, callbackLocal);
         il.Emit(OpCodes.Ldloc, argsLocal);
-        il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+        il.Emit(OpCodes.Call, runtime.Invocation.Method);
         il.Emit(OpCodes.Stloc, accLocal);
 
         il.MarkLabel(reduceAdvance);
@@ -2396,7 +2396,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
         il.Emit(OpCodes.Ldloc, callbackLocal);
         il.Emit(OpCodes.Ldloc, argsLocal);
-        il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+        il.Emit(OpCodes.Call, runtime.Invocation.Method);
         il.Emit(OpCodes.Stloc, accLocal);
 
         il.MarkLabel(reduceRightAdvance);

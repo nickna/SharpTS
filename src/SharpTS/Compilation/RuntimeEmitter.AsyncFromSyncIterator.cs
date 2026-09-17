@@ -333,7 +333,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldfld, iteratorField);
         il.Emit(OpCodes.Ldloc, fnLocal);
         EmitSingleObjectArgumentArray(il, argumentIndex: 1);
-        il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+        il.Emit(OpCodes.Call, runtime.Invocation.Method);
         il.Emit(OpCodes.Stloc, stepLocal);
         il.Emit(OpCodes.Br, haveStep);
 
@@ -431,7 +431,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldfld, iteratorField);
         il.Emit(OpCodes.Ldloc, fnLocal);
         EmitSingleObjectArgumentArray(il, argumentIndex: 1);
-        il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+        il.Emit(OpCodes.Call, runtime.Invocation.Method);
         il.Emit(OpCodes.Stloc, stepLocal);
         il.Emit(OpCodes.Ldloc, stepLocal);
         il.Emit(OpCodes.Call, _asyncFromSyncAwaitResult);
@@ -572,7 +572,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, iteratorFnLocal);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Newarr, _types.Object);
-        il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+        il.Emit(OpCodes.Call, runtime.Invocation.Method);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Newobj, runtime.AsyncFromSyncIteratorCtor);
         il.Emit(OpCodes.Ret);

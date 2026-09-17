@@ -203,7 +203,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldfld, onFinallyField);
             il.Emit(OpCodes.Ldc_I4_0);
             il.Emit(OpCodes.Newarr, _types.Object);
-            il.Emit(OpCodes.Call, runtime.InvokeValue);
+            il.Emit(OpCodes.Call, runtime.Invocation.Value);
             il.Emit(OpCodes.Stloc, resultLocal);
 
             // promise = PromiseResolve(%Promise%, result)
@@ -241,7 +241,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldc_I4_0);
             il.Emit(OpCodes.Ldloc, thunkFunctionLocal);
             il.Emit(OpCodes.Stelem_Ref);
-            il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+            il.Emit(OpCodes.Call, runtime.Invocation.Method);
             il.Emit(OpCodes.Ret);
             return method;
         }
@@ -323,7 +323,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Ldloc, catchFinallyLocal);
         il.Emit(OpCodes.Stelem_Ref);
-        il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+        il.Emit(OpCodes.Call, runtime.Invocation.Method);
     }
 
     private void EmitPromiseFinallyFunctionWrapper(
@@ -460,7 +460,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Stelem_Ref);
-        il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+        il.Emit(OpCodes.Call, runtime.Invocation.Method);
 
         il.MarkLabel(endLabel);
     }

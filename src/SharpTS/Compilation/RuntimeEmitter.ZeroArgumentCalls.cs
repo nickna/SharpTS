@@ -5,28 +5,38 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
-    private void EmitInvokeMethodValue0(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private readonly record struct InvokeMethodValue0Inputs(
+        MethodBuilder? CheckCancellationMethod,
+        EmittedErrorRuntime Errors,
+        EmittedFunctionValueRuntime FunctionValues
+    );
+
+    private void EmitInvokeMethodValue0(
+        TypeBuilder typeBuilder,
+        EmittedInvocationRuntime invocation,
+        InvokeMethodValue0Inputs inputs
+    )
     {
         var method = typeBuilder.DefineMethod("InvokeMethodValue0",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object, [_types.Object, _types.Object]);
-        runtime.InvokeMethodValue0 = method;
+        invocation.Method0 = method;
         var il = method.GetILGenerator();
-        EmitStackGuard(il, runtime);
+        EmitStackGuard(il, new StackGuardInputs(inputs.CheckCancellationMethod, inputs.Errors));
         var fallback = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, runtime.FunctionValues.Type);
+        il.Emit(OpCodes.Isinst, inputs.FunctionValues.Type);
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Brfalse, fallback);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Callvirt, runtime.FunctionValues.InvokeWithThis0);
+        il.Emit(OpCodes.Callvirt, inputs.FunctionValues.InvokeWithThis0);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(fallback);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
         EmitEmptyArguments(il);
-        il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+        il.Emit(OpCodes.Call, invocation.Method);
         il.Emit(OpCodes.Ret);
     }
 

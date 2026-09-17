@@ -61,7 +61,7 @@ public class GlobalFunctionHandler : ICallHandler
         il.Emit(System.Reflection.Emit.OpCodes.Ldstr, name);
         il.Emit(System.Reflection.Emit.OpCodes.Call, ctx.Runtime.GlobalThisGetProperty);
         emitter.EmitArgsArrayWithSpread(call.Arguments);
-        il.Emit(System.Reflection.Emit.OpCodes.Call, ctx.Runtime.InvokeMethodValue);
+        il.Emit(System.Reflection.Emit.OpCodes.Call, ctx.Runtime.Invocation.Method);
         emitter.SetStackUnknown();
         return true;
     }

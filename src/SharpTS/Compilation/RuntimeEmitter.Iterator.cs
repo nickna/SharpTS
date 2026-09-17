@@ -830,7 +830,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, returnMethod);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Newarr, _types.Object);
-        il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+        il.Emit(OpCodes.Call, runtime.Invocation.Method);
         il.Emit(OpCodes.Stloc, closeResult);
 
         // IteratorClose requires the return method's result to be an Object.
@@ -979,7 +979,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, nextMethodLocal);    // nextMethod
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Newarr, _types.Object);     // empty args array
-        il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+        il.Emit(OpCodes.Call, runtime.Invocation.Method);
         il.Emit(OpCodes.Ret);
 
         // Throw error if next is null
@@ -1032,7 +1032,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);               // iterator (receiver/"this")
         il.Emit(OpCodes.Ldloc, nextMethodLocal);
         il.Emit(OpCodes.Ldloc, argsLocal);
-        il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+        il.Emit(OpCodes.Call, runtime.Invocation.Method);
         il.Emit(OpCodes.Ret);
 
         // Throw error if next is null
@@ -1599,7 +1599,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, iterFnLocal);  // function
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Newarr, _types.Object);  // empty args
-        il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+        il.Emit(OpCodes.Call, runtime.Invocation.Method);
         il.Emit(OpCodes.Stloc, iteratorLocal);
 
         // GetIterator requires the iterator method to return an Object.

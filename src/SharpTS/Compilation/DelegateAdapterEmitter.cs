@@ -150,7 +150,7 @@ public class DelegateAdapterEmitter
         }
 
         // _fn.Invoke(args) — stack: [_fn, args] → [object]
-        il.Emit(OpCodes.Call, _runtime.InvokeValue);
+        il.Emit(OpCodes.Call, _runtime.Invocation.Value);
 
         EmitUnboxForReturn(il, returnType);
         il.Emit(OpCodes.Ret);

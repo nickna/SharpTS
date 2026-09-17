@@ -139,7 +139,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, iteratorFnLocal);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Newarr, _types.Object);
-        il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+        il.Emit(OpCodes.Call, runtime.Invocation.Method);
         il.Emit(OpCodes.Stloc, iteratorLocal);
         il.Emit(OpCodes.Ldloc, iteratorLocal);
         il.Emit(OpCodes.Ldarg_3);
@@ -179,7 +179,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg, (short)4);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloc, mapperArgsLocal);
-        il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+        il.Emit(OpCodes.Call, runtime.Invocation.Method);
         il.Emit(OpCodes.Stloc, mappedValueLocal);
         il.BeginCatchBlock(_types.Exception);
         il.Emit(OpCodes.Stloc, mapperExceptionLocal);
@@ -201,7 +201,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, returnMethodLocal);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Newarr, _types.Object);
-        il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+        il.Emit(OpCodes.Call, runtime.Invocation.Method);
         il.Emit(OpCodes.Pop);
         il.MarkLabel(skipReturnCallLabel);
         il.BeginCatchBlock(_types.Exception);
@@ -321,7 +321,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg, (short)4);  // thisArg
         il.Emit(OpCodes.Ldarg_1);  // mapFn
         il.Emit(OpCodes.Ldloc, argsLocal);
-        il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+        il.Emit(OpCodes.Call, runtime.Invocation.Method);
 
         // Add result to mappedResult
         var callResultLocal = il.DeclareLocal(_types.Object);

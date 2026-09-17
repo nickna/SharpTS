@@ -823,7 +823,7 @@ public partial class RuntimeEmitter
         // Finalize $ReadlineInterface class (Phase 2)
         // Must come after EmitRuntimeClass (Question uses InvokeValue)
         if (features.UsesReadline)
-            EmitReadlineInterfaceFinalize(runtime.RequireReadline(), runtime.InvokeValue);
+            EmitReadlineInterfaceFinalize(runtime.RequireReadline(), runtime.Invocation.Value);
 
         // Crypto Phase-2 finalize calls — gated on UsesCrypto with the type
         // emission above.

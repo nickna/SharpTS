@@ -2334,7 +2334,7 @@ public partial class ILEmitter
             IL.Emit(OpCodes.Ldloc, iteratorFnLocal);     // method
             IL.Emit(OpCodes.Ldc_I4_0);
             IL.Emit(OpCodes.Newarr, _ctx.Types.Object);  // args
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.InvokeMethodValue);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.Invocation.Method);
 
             // Store the iterator object
             var iteratorObjLocal = IL.DeclareLocal(_ctx.Types.Object);
@@ -2610,7 +2610,7 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Ldloc, iteratorFunction);
         IL.Emit(OpCodes.Ldc_I4_0);
         IL.Emit(OpCodes.Newarr, _ctx.Types.Object);
-        IL.Emit(OpCodes.Call, _ctx.Runtime.InvokeMethodValue);
+        IL.Emit(OpCodes.Call, _ctx.Runtime.Invocation.Method);
         var iteratorObject = IL.DeclareLocal(_ctx.Types.Object);
         IL.Emit(OpCodes.Stloc, iteratorObject);
 

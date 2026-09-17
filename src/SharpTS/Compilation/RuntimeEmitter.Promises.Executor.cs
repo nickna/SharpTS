@@ -70,7 +70,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, getterLocal);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Newarr, _types.Object);
-        il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+        il.Emit(OpCodes.Call, runtime.Invocation.Method);
         il.Emit(OpCodes.Pop);
 
         il.MarkLabel(doneLabel);
@@ -158,7 +158,7 @@ public partial class RuntimeEmitter
             thenIl.Emit(OpCodes.Ldloc, rejectLocal);
             thenIl.MarkLabel(haveRejectLabel);
             thenIl.Emit(OpCodes.Stelem_Ref);
-            thenIl.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+            thenIl.Emit(OpCodes.Call, runtime.Invocation.Method);
             thenIl.Emit(OpCodes.Pop);
 
             thenIl.Emit(OpCodes.Ldloc, tcsLocal);
@@ -214,7 +214,7 @@ public partial class RuntimeEmitter
             closeIl.Emit(OpCodes.Ldloc, returnMethodLocal);
             closeIl.Emit(OpCodes.Ldc_I4_0);
             closeIl.Emit(OpCodes.Newarr, _types.Object);
-            closeIl.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+            closeIl.Emit(OpCodes.Call, runtime.Invocation.Method);
             closeIl.Emit(OpCodes.Pop);
             closeIl.Emit(OpCodes.Leave, finishCloseLabel);
             closeIl.MarkLabel(noReturnMethodLabel);
@@ -491,7 +491,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, iteratorFunctionLocal);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Newarr, _types.Object);
-        il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+        il.Emit(OpCodes.Call, runtime.Invocation.Method);
         il.Emit(OpCodes.Stloc, iteratorLocal);
 
         // GetIterator requires @@iterator to return an Object. TypeOf(null) is
@@ -590,7 +590,7 @@ public partial class RuntimeEmitter
             targetIl.Emit(OpCodes.Ldc_I4_0);
             targetIl.Emit(OpCodes.Ldloc, elementLocal);
             targetIl.Emit(OpCodes.Stelem_Ref);
-            targetIl.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+            targetIl.Emit(OpCodes.Call, runtime.Invocation.Method);
             targetIl.Emit(OpCodes.Stloc, resolvedElementLocal);
         }
 
@@ -724,7 +724,7 @@ public partial class RuntimeEmitter
             targetIl.Emit(OpCodes.Ldarg_2);
             targetIl.Emit(OpCodes.Call, runtime.RequirePromise().GetPromiseCapabilityRejectMethod);
             targetIl.Emit(OpCodes.Stelem_Ref);
-            targetIl.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+            targetIl.Emit(OpCodes.Call, runtime.Invocation.Method);
             targetIl.Emit(OpCodes.Pop);
 
             // The custom capability has been wired directly. Keep the host
@@ -1795,7 +1795,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
         il.Emit(OpCodes.Ldarg_0);  // executor
         il.Emit(OpCodes.Ldloc, argsLocal);  // args
-        il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+        il.Emit(OpCodes.Call, runtime.Invocation.Method);
         il.Emit(OpCodes.Pop);  // Discard executor return value
 
         il.Emit(OpCodes.Leave, endTryLabel);

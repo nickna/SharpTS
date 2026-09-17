@@ -86,7 +86,7 @@ public sealed class EmittedReflectedMethodRuntimeTests
             var wrapper = get.Invoke(null, [host, "echo"])!;
             Assert.True(wrappers.Add(wrapper)); Assert.Same(wrapper, get.Invoke(null, [host, "echo"]));
             Assert.NotSame(wrapper, get.Invoke(null, [new HostTarget(error), "echo"]));
-            Assert.Equal("zero", type.GetMethod(runtime.InvokeValue.Name)!.Invoke(null, [wrapper, Array.Empty<object>()]));
+            Assert.Equal("zero", type.GetMethod(runtime.Invocation.Value.Name)!.Invoke(null, [wrapper, Array.Empty<object>()]));
             var unwrapped = type.GetMethod(owner.InvokeUnwrapped.Name)!;
             Assert.Equal("zero", unwrapped.Invoke(null, [method, host, Array.Empty<object>()]));
             var thrown = Assert.Throws<TargetInvocationException>(() => unwrapped.Invoke(null, [typeof(HostTarget).GetMethod("Fail"), host, Array.Empty<object>()]));

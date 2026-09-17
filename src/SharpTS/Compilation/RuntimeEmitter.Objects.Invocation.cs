@@ -6,6 +6,61 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
+    private readonly record struct StackGuardInputs(MethodBuilder? CheckCancellationMethod, EmittedErrorRuntime Errors);
+
+    private readonly record struct ThrowNotAFunctionInputs(EmittedErrorRuntime Errors, EmittedOperatorRuntime Operators);
+
+    private readonly record struct InvokeValueInputs(
+        EmittedArrayOperationsRuntime ArrayOperations,
+        MethodBuilder? CheckCancellationMethod,
+        EmittedErrorRuntime Errors,
+        EmittedFunctionBindingRuntime FunctionBindings,
+        EmittedFunctionValueRuntime FunctionValues,
+        EmittedMapRuntime? Map,
+        EmittedNodeStreamRuntime? NodeStreams,
+        EmittedObjectReadRuntime ObjectRead,
+        EmittedOperatorRuntime Operators,
+        EmittedPromiseRuntime? Promise,
+        EmittedReflectedMethodRuntime ReflectedMethods,
+        EmittedRegExpRuntime RegExps,
+        EmittedSetRuntime? Set,
+        EmittedTextEncodingRuntime? TextEncoding,
+        EmittedTypedArrayRuntime TypedArrays,
+        Type UndefinedType,
+        bool HasAnyTypedArray,
+        bool UsesNodeStreams,
+        bool UsesPromise,
+        bool UsesTextEncoding,
+        EmittedFunctionConstructionRuntime FunctionConstruction,
+        Type IHasFieldsInterface,
+        EmittedStringCoercionRuntime StringCoercion,
+        EmittedSymbolRuntime Symbols,
+        FieldInfo UndefinedInstance
+    );
+
+    private readonly record struct InvokeMethodValueInputs(
+        EmittedArrayOperationsRuntime ArrayOperations,
+        MethodBuilder? CheckCancellationMethod,
+        EmittedErrorRuntime Errors,
+        EmittedFunctionBindingRuntime FunctionBindings,
+        EmittedFunctionValueRuntime FunctionValues,
+        EmittedMapRuntime? Map,
+        EmittedNodeStreamRuntime? NodeStreams,
+        EmittedObjectReadRuntime ObjectRead,
+        EmittedOperatorRuntime Operators,
+        EmittedPromiseRuntime? Promise,
+        EmittedReflectedMethodRuntime ReflectedMethods,
+        EmittedRegExpRuntime RegExps,
+        EmittedSetRuntime? Set,
+        EmittedTextEncodingRuntime? TextEncoding,
+        EmittedTypedArrayRuntime TypedArrays,
+        Type UndefinedType,
+        bool HasAnyTypedArray,
+        bool UsesNodeStreams,
+        bool UsesPromise,
+        bool UsesTextEncoding
+    );
+
     /// <summary>
     /// Emits a guest-recursion guard at the top of a dynamic-invocation
     /// helper: (1) CheckCancellation, so deep non-loop recursion — which
@@ -14,15 +69,15 @@ public partial class RuntimeEmitter
     /// imminent (uncatchable, process-killing) CLR StackOverflowException
     /// into a catchable guest RangeError. Issue #180.
     /// </summary>
-    private void EmitStackGuard(ILGenerator il, EmittedRuntime runtime)
+    private void EmitStackGuard(ILGenerator il, StackGuardInputs inputs)
     {
-        if (runtime.CheckCancellationMethod != null)
-            il.Emit(OpCodes.Call, runtime.CheckCancellationMethod);
+        if (inputs.CheckCancellationMethod != null)
+            il.Emit(OpCodes.Call, inputs.CheckCancellationMethod);
         var stackOkLabel = il.DefineLabel();
         il.Emit(OpCodes.Call, typeof(System.Runtime.CompilerServices.RuntimeHelpers)
             .GetMethod("TryEnsureSufficientExecutionStack", Type.EmptyTypes)!);
         il.Emit(OpCodes.Brtrue, stackOkLabel);
-        GuestErrorEmitter.ThrowRangeError(il, runtime, "Maximum call stack size exceeded");
+        GuestErrorEmitter.ThrowError(il, inputs.Errors.CreateException, inputs.Errors.RangeErrorConstructor, "Maximum call stack size exceeded");
         il.MarkLabel(stackOkLabel);
     }
 
@@ -31,13 +86,13 @@ public partial class RuntimeEmitter
     /// matching the interpreter's message for invoking a non-callable (#260).
     /// <paramref name="loadCallee"/> must push the callee value onto the stack.
     /// </summary>
-    private void EmitThrowNotAFunction(ILGenerator il, EmittedRuntime runtime, Action loadCallee)
+    private void EmitThrowNotAFunction(ILGenerator il, ThrowNotAFunctionInputs inputs, Action loadCallee)
     {
         loadCallee();
-        il.Emit(OpCodes.Call, runtime.Operators.TypeOf);
+        il.Emit(OpCodes.Call, inputs.Operators.TypeOf);
         il.Emit(OpCodes.Ldstr, " is not a function");
         il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", _types.String, _types.String));
-        GuestErrorEmitter.ThrowErrorFromStack(il, runtime, runtime.Errors.TypeErrorConstructor);
+        GuestErrorEmitter.ThrowErrorFromStack(il, inputs.Errors.CreateException, inputs.Errors.TypeErrorConstructor);
     }
 
     private void EmitGetArrayMethod(TypeBuilder typeBuilder, EmittedRuntime runtime)
@@ -106,7 +161,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitInvokeValue(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitInvokeValue(TypeBuilder typeBuilder, EmittedInvocationRuntime invocation, InvokeValueInputs inputs)
     {
         var method = typeBuilder.DefineMethod(
             "InvokeValue",
@@ -114,10 +169,10 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object, _types.ObjectArray]
         );
-        runtime.InvokeValue = method;
+        invocation.Value = method;
 
         var il = method.GetILGenerator();
-        EmitStackGuard(il, runtime);
+        EmitStackGuard(il, new StackGuardInputs(inputs.CheckCancellationMethod, inputs.Errors));
         var nullLabel = il.DefineLabel();
         var tsFunctionLabel = il.DefineLabel();
         var boundTsFunctionLabel = il.DefineLabel();
@@ -131,106 +186,106 @@ public partial class RuntimeEmitter
 
         // ECMA-262 §22.2.6: a RegExp object is not callable — calling one throws
         // TypeError. Checked early so it doesn't fall into the dispatch chain.
-        if (runtime.RegExps.Implementation != null)
+        if (inputs.RegExps.Implementation != null)
         {
             var notRegExpCallee = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.RegExps.RequireImplementation().Type);
+            il.Emit(OpCodes.Isinst, inputs.RegExps.RequireImplementation().Type);
             il.Emit(OpCodes.Brfalse, notRegExpCallee);
-            GuestErrorEmitter.ThrowTypeError(il, runtime, "called value is not a function");
+            GuestErrorEmitter.ThrowError(il, inputs.Errors.CreateException, inputs.Errors.TypeErrorConstructor, "called value is not a function");
             il.MarkLabel(notRegExpCallee);
         }
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.FunctionValues.Type);
+        il.Emit(OpCodes.Isinst, inputs.FunctionValues.Type);
         il.Emit(OpCodes.Brtrue, tsFunctionLabel);
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.FunctionBindings.BoundType);
+        il.Emit(OpCodes.Isinst, inputs.FunctionBindings.BoundType);
         il.Emit(OpCodes.Brtrue, boundTsFunctionLabel);
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.FunctionBindings.BindType);
+        il.Emit(OpCodes.Isinst, inputs.FunctionBindings.BindType);
         il.Emit(OpCodes.Brtrue, bindWrapperLabel);
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.FunctionBindings.CallType);
+        il.Emit(OpCodes.Isinst, inputs.FunctionBindings.CallType);
         il.Emit(OpCodes.Brtrue, callWrapperLabel);
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.FunctionBindings.ApplyType);
+        il.Emit(OpCodes.Isinst, inputs.FunctionBindings.ApplyType);
         il.Emit(OpCodes.Brtrue, applyWrapperLabel);
 
-        if (_features.UsesTextEncoding)
+        if (inputs.UsesTextEncoding)
         {
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.RequireTextEncoding().DecodeMethodType);
+            il.Emit(OpCodes.Isinst, (inputs.TextEncoding ?? throw new InvalidOperationException("Text-encoding runtime was not enabled for this compilation.")).DecodeMethodType);
             il.Emit(OpCodes.Brtrue, textDecoderDecodeLabel);
         }
 
         // Stream callback wrappers — only meaningful when Node streams emit.
         var transformCbLabel = il.DefineLabel();
         var writeCallbackWrapperLabel = il.DefineLabel();
-        if (_features.UsesNodeStreams)
+        if (inputs.UsesNodeStreams)
         {
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.RequireNodeStreams().TransformDoneCallbackType);
+            il.Emit(OpCodes.Isinst, (inputs.NodeStreams ?? throw new InvalidOperationException("Node streams were not enabled for this compilation.")).TransformDoneCallbackType);
             il.Emit(OpCodes.Brtrue, transformCbLabel);
 
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.RequireNodeStreams().WriteCallbackWrapperType);
+            il.Emit(OpCodes.Isinst, (inputs.NodeStreams ?? throw new InvalidOperationException("Node streams were not enabled for this compilation.")).WriteCallbackWrapperType);
             il.Emit(OpCodes.Brtrue, writeCallbackWrapperLabel);
         }
 
         Label resolveCallbackLabel = default;
         Label rejectCallbackLabel = default;
-        if (_features.UsesPromise)
+        if (inputs.UsesPromise)
         {
             resolveCallbackLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.RequirePromise().ResolveCallbackType);
+            il.Emit(OpCodes.Isinst, (inputs.Promise ?? throw new InvalidOperationException("Promise runtime was not enabled for this compilation.")).ResolveCallbackType);
             il.Emit(OpCodes.Brtrue, resolveCallbackLabel);
 
             rejectCallbackLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.RequirePromise().RejectCallbackType);
+            il.Emit(OpCodes.Isinst, (inputs.Promise ?? throw new InvalidOperationException("Promise runtime was not enabled for this compilation.")).RejectCallbackType);
             il.Emit(OpCodes.Brtrue, rejectCallbackLabel);
         }
 
         var boundArrayMethodLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.ArrayOperations.BoundMethodType);
+        il.Emit(OpCodes.Isinst, inputs.ArrayOperations.BoundMethodType);
         il.Emit(OpCodes.Brtrue, boundArrayMethodLabel);
 
         // $BoundTypedArrayMethod (#940) — value-position call (`const f = a.fill; f(x)`).
         Label boundTypedArrayMethodLabel = default;
-        if (_features.HasAnyTypedArray)
+        if (inputs.HasAnyTypedArray)
         {
             boundTypedArrayMethodLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.TypedArrays.RequireImplementation().BoundMethodType);
+            il.Emit(OpCodes.Isinst, inputs.TypedArrays.RequireImplementation().BoundMethodType);
             il.Emit(OpCodes.Brtrue, boundTypedArrayMethodLabel);
         }
 
         var boundMapMethodLabel = il.DefineLabel();
-        if (runtime.Map is not null)
+        if (inputs.Map is not null)
         {
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.RequireMap().BoundMethodType);
+            il.Emit(OpCodes.Isinst, (inputs.Map ?? throw new InvalidOperationException("Map runtime was not enabled for this compilation.")).BoundMethodType);
             il.Emit(OpCodes.Brtrue, boundMapMethodLabel);
         }
 
         var boundSetMethodLabel = il.DefineLabel();
-        if (runtime.Set is not null)
+        if (inputs.Set is not null)
         {
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.RequireSet().BoundMethodType);
+            il.Emit(OpCodes.Isinst, (inputs.Set ?? throw new InvalidOperationException("Set runtime was not enabled for this compilation.")).BoundMethodType);
             il.Emit(OpCodes.Brtrue, boundSetMethodLabel);
         }
 
         var boundAnyFunctionLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.FunctionBindings.AnyType);
+        il.Emit(OpCodes.Isinst, inputs.FunctionBindings.AnyType);
         il.Emit(OpCodes.Brtrue, boundAnyFunctionLabel);
 
         // Handle Func<object?[], object?> (from CreateBoundMethod in RuntimeTypes.Methods)
@@ -242,7 +297,7 @@ public partial class RuntimeEmitter
         // Handle $MethodCallable
         var methodCallableLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.ReflectedMethods.CallableType);
+        il.Emit(OpCodes.Isinst, inputs.ReflectedMethods.CallableType);
         il.Emit(OpCodes.Brtrue, methodCallableLabel);
 
         // Built-in type constructors stored as values (issue #61): patterns
@@ -258,17 +313,24 @@ public partial class RuntimeEmitter
         // Proxy check: uses obj.GetType().FullName comparison (no SharpTS.dll dependency)
         var notProxyLabel = il.DefineLabel();
         EmitProxyInvokeCheck(
-            il, runtime,
+            il,
+            invocation,
+            new ProxyInvokeCheckInputs(inputs.ObjectRead, inputs.ReflectedMethods),
             () => il.Emit(OpCodes.Ldarg_0),
-            () => il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance),
+            () => il.Emit(OpCodes.Ldsfld, inputs.UndefinedInstance),
             () => il.Emit(OpCodes.Ldarg_1),
-            notProxyLabel);
+            notProxyLabel
+        );
 
         // ECMA-262 §7.3.13: invoking a non-callable throws TypeError. This was
         // a silent `return null` for years, which masked dispatch regressions
         // (#239) — see #260.
         il.MarkLabel(notProxyLabel);
-        EmitThrowNotAFunction(il, runtime, () => il.Emit(OpCodes.Ldarg_0));
+        EmitThrowNotAFunction(
+            il,
+            new ThrowNotAFunctionInputs(inputs.Errors, inputs.Operators),
+            () => il.Emit(OpCodes.Ldarg_0)
+        );
 
         // Type dispatch — currently only Array (IList<object>) has a runtime
         // constructor helper wired up. Other built-in Type constructors
@@ -284,7 +346,7 @@ public partial class RuntimeEmitter
         var notArrayTypeLabel = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, notArrayTypeLabel);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.ArrayOperations.Constructor);
+        il.Emit(OpCodes.Call, inputs.ArrayOperations.Constructor);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notArrayTypeLabel);
 
@@ -296,7 +358,7 @@ public partial class RuntimeEmitter
         var symbolNoDescLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, _types.Type);
-        il.Emit(OpCodes.Ldtoken, runtime.Symbols.Type);
+        il.Emit(OpCodes.Ldtoken, inputs.Symbols.Type);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", [_types.RuntimeTypeHandle])!);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "op_Equality", [_types.Type, _types.Type])!);
         il.Emit(OpCodes.Brfalse, notSymbolTypeLabel);
@@ -311,19 +373,19 @@ public partial class RuntimeEmitter
         var symbolDescriptionReadyLabel = il.DefineLabel();
         il.Emit(OpCodes.Stloc, symbolDescriptionLocal);
         il.Emit(OpCodes.Ldloc, symbolDescriptionLocal);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
         il.Emit(OpCodes.Brfalse, symbolStringifyDescriptionLabel);
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Br, symbolDescriptionReadyLabel);
         il.MarkLabel(symbolStringifyDescriptionLabel);
         il.Emit(OpCodes.Ldloc, symbolDescriptionLocal);
-        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
+        il.Emit(OpCodes.Call, inputs.StringCoercion.ToJsString);
         il.MarkLabel(symbolDescriptionReadyLabel);
-        il.Emit(OpCodes.Newobj, runtime.Symbols.Constructor);
+        il.Emit(OpCodes.Newobj, inputs.Symbols.Constructor);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(symbolNoDescLabel);
         il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Newobj, runtime.Symbols.Constructor);
+        il.Emit(OpCodes.Newobj, inputs.Symbols.Constructor);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notSymbolTypeLabel);
 
@@ -350,7 +412,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldelem_Ref);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
         il.Emit(OpCodes.Brtrue, objectFreshLabel);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldc_I4_0);
@@ -381,7 +443,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldelem_Ref);
-        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
+        il.Emit(OpCodes.Call, inputs.StringCoercion.ToJsString);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(stringNoArgLabel);
         il.Emit(OpCodes.Ldstr, "");
@@ -395,14 +457,14 @@ public partial class RuntimeEmitter
         var notFunctionTypeLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, _types.Type);
-        il.Emit(OpCodes.Ldtoken, runtime.FunctionValues.Type);
+        il.Emit(OpCodes.Ldtoken, inputs.FunctionValues.Type);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle",
             [_types.RuntimeTypeHandle])!);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "op_Equality",
             [_types.Type, _types.Type])!);
         il.Emit(OpCodes.Brfalse, notFunctionTypeLabel);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.FunctionConstruction.Construct);
+        il.Emit(OpCodes.Call, inputs.FunctionConstruction.Construct);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notFunctionTypeLabel);
 
@@ -410,14 +472,14 @@ public partial class RuntimeEmitter
         // function constructors, are never callable.  This path is reached by
         // indirect calls such as `Derived.apply(receiver, args)`.
         var notEmittedClassLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldtoken, runtime.IHasFieldsInterface);
+        il.Emit(OpCodes.Ldtoken, inputs.IHasFieldsInterface);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle",
             [_types.RuntimeTypeHandle])!);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, _types.Type);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "IsAssignableFrom", [_types.Type])!);
         il.Emit(OpCodes.Brfalse, notEmittedClassLabel);
-        GuestErrorEmitter.ThrowTypeError(il, runtime, "Class constructor cannot be invoked without 'new'");
+        GuestErrorEmitter.ThrowError(il, inputs.Errors.CreateException, inputs.Errors.TypeErrorConstructor, "Class constructor cannot be invoked without 'new'");
         il.MarkLabel(notEmittedClassLabel);
 
         // A built-in constructor Type without a call-form helper. These ARE
@@ -438,129 +500,129 @@ public partial class RuntimeEmitter
         // Behavior unchanged for callables without __this naming: InvokeWithThis
         // sets thread-local _currentThis and calls Invoke unchanged.
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.FunctionValues.Type);
+        il.Emit(OpCodes.Castclass, inputs.FunctionValues.Type);
         // A call through InvokeValue has no Reference receiver.  Pass the JS
         // undefined sentinel so strict callees retain undefined while sloppy
         // callees normalize it to globalThis in LoadThis.
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, inputs.UndefinedInstance);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, runtime.FunctionValues.InvokeWithThis);
+        il.Emit(OpCodes.Callvirt, inputs.FunctionValues.InvokeWithThis);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(boundTsFunctionLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.FunctionBindings.BoundType);
+        il.Emit(OpCodes.Castclass, inputs.FunctionBindings.BoundType);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, runtime.FunctionBindings.BoundInvoke);
+        il.Emit(OpCodes.Callvirt, inputs.FunctionBindings.BoundInvoke);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(bindWrapperLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.FunctionBindings.BindType);
+        il.Emit(OpCodes.Castclass, inputs.FunctionBindings.BindType);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, runtime.FunctionBindings.BindInvoke);
+        il.Emit(OpCodes.Callvirt, inputs.FunctionBindings.BindInvoke);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(callWrapperLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.FunctionBindings.CallType);
+        il.Emit(OpCodes.Castclass, inputs.FunctionBindings.CallType);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, runtime.FunctionBindings.CallInvoke);
+        il.Emit(OpCodes.Callvirt, inputs.FunctionBindings.CallInvoke);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(applyWrapperLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.FunctionBindings.ApplyType);
+        il.Emit(OpCodes.Castclass, inputs.FunctionBindings.ApplyType);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, runtime.FunctionBindings.ApplyInvoke);
+        il.Emit(OpCodes.Callvirt, inputs.FunctionBindings.ApplyInvoke);
         il.Emit(OpCodes.Ret);
 
-        if (_features.UsesTextEncoding)
+        if (inputs.UsesTextEncoding)
         {
             il.MarkLabel(textDecoderDecodeLabel);
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Castclass, runtime.RequireTextEncoding().DecodeMethodType);
+            il.Emit(OpCodes.Castclass, (inputs.TextEncoding ?? throw new InvalidOperationException("Text-encoding runtime was not enabled for this compilation.")).DecodeMethodType);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Callvirt, runtime.RequireTextEncoding().DecodeMethodInvoke);
+            il.Emit(OpCodes.Callvirt, (inputs.TextEncoding ?? throw new InvalidOperationException("Text-encoding runtime was not enabled for this compilation.")).DecodeMethodInvoke);
             il.Emit(OpCodes.Ret);
         }
 
-        if (_features.UsesNodeStreams)
+        if (inputs.UsesNodeStreams)
         {
             il.MarkLabel(transformCbLabel);
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Castclass, runtime.RequireNodeStreams().TransformDoneCallbackType);
+            il.Emit(OpCodes.Castclass, (inputs.NodeStreams ?? throw new InvalidOperationException("Node streams were not enabled for this compilation.")).TransformDoneCallbackType);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Callvirt, runtime.RequireNodeStreams().TransformDoneCallbackInvoke);
+            il.Emit(OpCodes.Callvirt, (inputs.NodeStreams ?? throw new InvalidOperationException("Node streams were not enabled for this compilation.")).TransformDoneCallbackInvoke);
             il.Emit(OpCodes.Ret);
 
             il.MarkLabel(writeCallbackWrapperLabel);
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Castclass, runtime.RequireNodeStreams().WriteCallbackWrapperType);
+            il.Emit(OpCodes.Castclass, (inputs.NodeStreams ?? throw new InvalidOperationException("Node streams were not enabled for this compilation.")).WriteCallbackWrapperType);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Callvirt, runtime.RequireNodeStreams().WriteCallbackWrapperInvoke);
+            il.Emit(OpCodes.Callvirt, (inputs.NodeStreams ?? throw new InvalidOperationException("Node streams were not enabled for this compilation.")).WriteCallbackWrapperInvoke);
             il.Emit(OpCodes.Ret);
         }
 
-        if (_features.UsesPromise)
+        if (inputs.UsesPromise)
         {
             il.MarkLabel(resolveCallbackLabel);
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Castclass, runtime.RequirePromise().ResolveCallbackType);
+            il.Emit(OpCodes.Castclass, (inputs.Promise ?? throw new InvalidOperationException("Promise runtime was not enabled for this compilation.")).ResolveCallbackType);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Callvirt, runtime.RequirePromise().ResolveCallbackInvoke);
+            il.Emit(OpCodes.Callvirt, (inputs.Promise ?? throw new InvalidOperationException("Promise runtime was not enabled for this compilation.")).ResolveCallbackInvoke);
             il.Emit(OpCodes.Ret);
 
             il.MarkLabel(rejectCallbackLabel);
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Castclass, runtime.RequirePromise().RejectCallbackType);
+            il.Emit(OpCodes.Castclass, (inputs.Promise ?? throw new InvalidOperationException("Promise runtime was not enabled for this compilation.")).RejectCallbackType);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Callvirt, runtime.RequirePromise().RejectCallbackInvoke);
+            il.Emit(OpCodes.Callvirt, (inputs.Promise ?? throw new InvalidOperationException("Promise runtime was not enabled for this compilation.")).RejectCallbackInvoke);
             il.Emit(OpCodes.Ret);
         }
 
         il.MarkLabel(boundArrayMethodLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.ArrayOperations.BoundMethodType);
+        il.Emit(OpCodes.Castclass, inputs.ArrayOperations.BoundMethodType);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, runtime.ArrayOperations.BoundMethodInvoke);
+        il.Emit(OpCodes.Callvirt, inputs.ArrayOperations.BoundMethodInvoke);
         il.Emit(OpCodes.Ret);
 
-        if (_features.HasAnyTypedArray)
+        if (inputs.HasAnyTypedArray)
         {
             il.MarkLabel(boundTypedArrayMethodLabel);
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Castclass, runtime.TypedArrays.RequireImplementation().BoundMethodType);
+            il.Emit(OpCodes.Castclass, inputs.TypedArrays.RequireImplementation().BoundMethodType);
             il.Emit(OpCodes.Ldarg_1);  // args
-            il.Emit(OpCodes.Callvirt, runtime.TypedArrays.RequireImplementation().BoundMethodInvoke);
+            il.Emit(OpCodes.Callvirt, inputs.TypedArrays.RequireImplementation().BoundMethodInvoke);
             il.Emit(OpCodes.Ret);
         }
 
-        if (runtime.Map is not null)
+        if (inputs.Map is not null)
         {
             il.MarkLabel(boundMapMethodLabel);
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Castclass, runtime.RequireMap().BoundMethodType);
+            il.Emit(OpCodes.Castclass, (inputs.Map ?? throw new InvalidOperationException("Map runtime was not enabled for this compilation.")).BoundMethodType);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Callvirt, runtime.RequireMap().BoundMethodInvoke);
+            il.Emit(OpCodes.Callvirt, (inputs.Map ?? throw new InvalidOperationException("Map runtime was not enabled for this compilation.")).BoundMethodInvoke);
             il.Emit(OpCodes.Ret);
         }
 
-        if (runtime.Set is not null)
+        if (inputs.Set is not null)
         {
             il.MarkLabel(boundSetMethodLabel);
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Castclass, runtime.RequireSet().BoundMethodType);
+            il.Emit(OpCodes.Castclass, (inputs.Set ?? throw new InvalidOperationException("Set runtime was not enabled for this compilation.")).BoundMethodType);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Callvirt, runtime.RequireSet().BoundMethodInvoke);
+            il.Emit(OpCodes.Callvirt, (inputs.Set ?? throw new InvalidOperationException("Set runtime was not enabled for this compilation.")).BoundMethodInvoke);
             il.Emit(OpCodes.Ret);
         }
 
         il.MarkLabel(boundAnyFunctionLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.FunctionBindings.AnyType);
+        il.Emit(OpCodes.Castclass, inputs.FunctionBindings.AnyType);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, runtime.FunctionBindings.AnyInvoke);
+        il.Emit(OpCodes.Callvirt, inputs.FunctionBindings.AnyInvoke);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(funcDelegateLabel);
@@ -572,23 +634,31 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(methodCallableLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.ReflectedMethods.CallableType);
+        il.Emit(OpCodes.Castclass, inputs.ReflectedMethods.CallableType);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, runtime.ReflectedMethods.CallableInvoke);
+        il.Emit(OpCodes.Callvirt, inputs.ReflectedMethods.CallableInvoke);
         il.Emit(OpCodes.Ret);
 
         // Null callee: `f(x)` where f is null. Throws TypeError per ECMA-262
         // (previously a silent `return null` — #260).
         il.MarkLabel(nullLabel);
-        EmitThrowNotAFunction(il, runtime, () => il.Emit(OpCodes.Ldarg_0));
+        EmitThrowNotAFunction(
+            il,
+            new ThrowNotAFunctionInputs(inputs.Errors, inputs.Operators),
+            () => il.Emit(OpCodes.Ldarg_0)
+        );
     }
 
-    private void EmitInvokeMethodValue(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitInvokeMethodValue(
+        TypeBuilder typeBuilder,
+        EmittedInvocationRuntime invocation,
+        InvokeMethodValueInputs inputs
+    )
     {
-        var method = runtime.InvokeMethodValue;
+        var method = invocation.Method;
 
         var il = method.GetILGenerator();
-        EmitStackGuard(il, runtime);
+        EmitStackGuard(il, new StackGuardInputs(inputs.CheckCancellationMethod, inputs.Errors));
         // Check if value is $TSFunction and call InvokeWithThis
         // arg0 = receiver, arg1 = function, arg2 = args
         var notTSFunctionLabel = il.DefineLabel();
@@ -600,7 +670,11 @@ public partial class RuntimeEmitter
         var notNullLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Brtrue, notNullLabel);
-        EmitThrowNotAFunction(il, runtime, () => il.Emit(OpCodes.Ldarg_1));
+        EmitThrowNotAFunction(
+            il,
+            new ThrowNotAFunctionInputs(inputs.Errors, inputs.Operators),
+            () => il.Emit(OpCodes.Ldarg_1)
+        );
         il.MarkLabel(notNullLabel);
 
         // A reflected MethodBase (a computed symbol-keyed method resolved from the symbol-method
@@ -622,26 +696,26 @@ public partial class RuntimeEmitter
         // ECMA-262 §22.2.6: a RegExp object has no [[Call]] — calling one
         // (`/x/()`, `RegExp("a","g")()`) must throw TypeError. Checked early
         // so it doesn't fall into the dispatch chain.
-        if (runtime.RegExps.Implementation != null)
+        if (inputs.RegExps.Implementation != null)
         {
             var notRegExpCallee = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Isinst, runtime.RegExps.RequireImplementation().Type);
+            il.Emit(OpCodes.Isinst, inputs.RegExps.RequireImplementation().Type);
             il.Emit(OpCodes.Brfalse, notRegExpCallee);
-            GuestErrorEmitter.ThrowTypeError(il, runtime, "called value is not a function");
+            GuestErrorEmitter.ThrowError(il, inputs.Errors.CreateException, inputs.Errors.TypeErrorConstructor, "called value is not a function");
             il.MarkLabel(notRegExpCallee);
         }
 
         // if (function is $TSFunction tsFunc)
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, runtime.FunctionValues.Type);
+        il.Emit(OpCodes.Isinst, inputs.FunctionValues.Type);
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Brfalse, notTSFunctionLabel);
 
         // return tsFunc.InvokeWithThis(receiver, args)
         il.Emit(OpCodes.Ldarg_0);  // receiver
         il.Emit(OpCodes.Ldarg_2);  // args
-        il.Emit(OpCodes.Callvirt, runtime.FunctionValues.InvokeWithThis);
+        il.Emit(OpCodes.Callvirt, inputs.FunctionValues.InvokeWithThis);
         il.Emit(OpCodes.Ret);
 
         // Not a TSFunction - handle known callable wrappers without calling InvokeValue
@@ -652,44 +726,44 @@ public partial class RuntimeEmitter
         var notCallWrapperLabel = il.DefineLabel();
 
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, runtime.FunctionBindings.BoundType);
+        il.Emit(OpCodes.Isinst, inputs.FunctionBindings.BoundType);
         il.Emit(OpCodes.Brfalse, notBoundLabel);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Castclass, runtime.FunctionBindings.BoundType);
+        il.Emit(OpCodes.Castclass, inputs.FunctionBindings.BoundType);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Callvirt, runtime.FunctionBindings.BoundInvokeWithThis);
+        il.Emit(OpCodes.Callvirt, inputs.FunctionBindings.BoundInvokeWithThis);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(notBoundLabel);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, runtime.FunctionBindings.BindType);
+        il.Emit(OpCodes.Isinst, inputs.FunctionBindings.BindType);
         il.Emit(OpCodes.Brfalse, notBindWrapperLabel);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Castclass, runtime.FunctionBindings.BindType);
+        il.Emit(OpCodes.Castclass, inputs.FunctionBindings.BindType);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Callvirt, runtime.FunctionBindings.BindInvoke);
+        il.Emit(OpCodes.Callvirt, inputs.FunctionBindings.BindInvoke);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(notBindWrapperLabel);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, runtime.FunctionBindings.CallType);
+        il.Emit(OpCodes.Isinst, inputs.FunctionBindings.CallType);
         il.Emit(OpCodes.Brfalse, notCallWrapperLabel);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Castclass, runtime.FunctionBindings.CallType);
+        il.Emit(OpCodes.Castclass, inputs.FunctionBindings.CallType);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Callvirt, runtime.FunctionBindings.CallInvoke);
+        il.Emit(OpCodes.Callvirt, inputs.FunctionBindings.CallInvoke);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(notCallWrapperLabel);
         var notApplyWrapperLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, runtime.FunctionBindings.ApplyType);
+        il.Emit(OpCodes.Isinst, inputs.FunctionBindings.ApplyType);
         il.Emit(OpCodes.Brfalse, notApplyWrapperLabel);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Castclass, runtime.FunctionBindings.ApplyType);
+        il.Emit(OpCodes.Castclass, inputs.FunctionBindings.ApplyType);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Callvirt, runtime.FunctionBindings.ApplyInvoke);
+        il.Emit(OpCodes.Callvirt, inputs.FunctionBindings.ApplyInvoke);
         il.Emit(OpCodes.Ret);
 
         // Tree-shakable wrapper-type dispatch chain. We thread `currentReject`
@@ -716,18 +790,18 @@ public partial class RuntimeEmitter
             currentReject = nextReject;
         }
 
-        if (_features.UsesTextEncoding)
-            EmitWrapperCheck(runtime.RequireTextEncoding().DecodeMethodType, runtime.RequireTextEncoding().DecodeMethodInvoke);
+        if (inputs.UsesTextEncoding)
+            EmitWrapperCheck((inputs.TextEncoding ?? throw new InvalidOperationException("Text-encoding runtime was not enabled for this compilation.")).DecodeMethodType, (inputs.TextEncoding ?? throw new InvalidOperationException("Text-encoding runtime was not enabled for this compilation.")).DecodeMethodInvoke);
         // Stream callback wrappers — gated on UsesNodeStreams.
-        if (_features.UsesNodeStreams)
+        if (inputs.UsesNodeStreams)
         {
-            EmitWrapperCheck(runtime.RequireNodeStreams().TransformDoneCallbackType, runtime.RequireNodeStreams().TransformDoneCallbackInvoke);
-            EmitWrapperCheck(runtime.RequireNodeStreams().WriteCallbackWrapperType, runtime.RequireNodeStreams().WriteCallbackWrapperInvoke);
+            EmitWrapperCheck((inputs.NodeStreams ?? throw new InvalidOperationException("Node streams were not enabled for this compilation.")).TransformDoneCallbackType, (inputs.NodeStreams ?? throw new InvalidOperationException("Node streams were not enabled for this compilation.")).TransformDoneCallbackInvoke);
+            EmitWrapperCheck((inputs.NodeStreams ?? throw new InvalidOperationException("Node streams were not enabled for this compilation.")).WriteCallbackWrapperType, (inputs.NodeStreams ?? throw new InvalidOperationException("Node streams were not enabled for this compilation.")).WriteCallbackWrapperInvoke);
         }
-        if (_features.UsesPromise)
+        if (inputs.UsesPromise)
         {
-            EmitWrapperCheck(runtime.RequirePromise().ResolveCallbackType, runtime.RequirePromise().ResolveCallbackInvoke);
-            EmitWrapperCheck(runtime.RequirePromise().RejectCallbackType, runtime.RequirePromise().RejectCallbackInvoke);
+            EmitWrapperCheck((inputs.Promise ?? throw new InvalidOperationException("Promise runtime was not enabled for this compilation.")).ResolveCallbackType, (inputs.Promise ?? throw new InvalidOperationException("Promise runtime was not enabled for this compilation.")).ResolveCallbackInvoke);
+            EmitWrapperCheck((inputs.Promise ?? throw new InvalidOperationException("Promise runtime was not enabled for this compilation.")).RejectCallbackType, (inputs.Promise ?? throw new InvalidOperationException("Promise runtime was not enabled for this compilation.")).RejectCallbackInvoke);
         }
 
         // After the chain, mark the final reject label so the fall-through code
@@ -743,25 +817,25 @@ public partial class RuntimeEmitter
         var notBoundArrayMethodLabel = il.DefineLabel();
         var useOriginalBamLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, runtime.ArrayOperations.BoundMethodType);
+        il.Emit(OpCodes.Isinst, inputs.ArrayOperations.BoundMethodType);
         il.Emit(OpCodes.Brfalse, notBoundArrayMethodLabel);
 
-        var bamLocal = il.DeclareLocal(runtime.ArrayOperations.BoundMethodType);
+        var bamLocal = il.DeclareLocal(inputs.ArrayOperations.BoundMethodType);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Castclass, runtime.ArrayOperations.BoundMethodType);
+        il.Emit(OpCodes.Castclass, inputs.ArrayOperations.BoundMethodType);
         il.Emit(OpCodes.Stloc, bamLocal);
 
         // If receiver is null/undefined → use bamLocal as-is (legacy behavior).
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Brfalse, useOriginalBamLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
         il.Emit(OpCodes.Brtrue, useOriginalBamLabel);
 
         // If receiver === bamLocal._list → use bamLocal as-is.
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, bamLocal);
-        il.Emit(OpCodes.Ldfld, runtime.ArrayOperations.BoundMethodListField);
+        il.Emit(OpCodes.Ldfld, inputs.ArrayOperations.BoundMethodListField);
         il.Emit(OpCodes.Ceq);
         il.Emit(OpCodes.Brtrue, useOriginalBamLabel);
 
@@ -770,18 +844,18 @@ public partial class RuntimeEmitter
         // callback's array slot (per ECMA-262) sees `f`, not the materialized
         // copy. Mirrors the Array.prototype.X.call(receiver, ...) pattern path.
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Stsfld, runtime.ArrayOperations.CurrentReceiverField);
+        il.Emit(OpCodes.Stsfld, inputs.ArrayOperations.CurrentReceiverField);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.ArrayOperations.Materialize);
+        il.Emit(OpCodes.Call, inputs.ArrayOperations.Materialize);
         il.Emit(OpCodes.Ldloc, bamLocal);
-        il.Emit(OpCodes.Ldfld, runtime.ArrayOperations.BoundMethodNameField);
-        il.Emit(OpCodes.Newobj, runtime.ArrayOperations.BoundMethodCtor);
+        il.Emit(OpCodes.Ldfld, inputs.ArrayOperations.BoundMethodNameField);
+        il.Emit(OpCodes.Newobj, inputs.ArrayOperations.BoundMethodCtor);
         il.Emit(OpCodes.Stloc, bamLocal);
 
         il.MarkLabel(useOriginalBamLabel);
         il.Emit(OpCodes.Ldloc, bamLocal);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Callvirt, runtime.ArrayOperations.BoundMethodInvoke);
+        il.Emit(OpCodes.Callvirt, inputs.ArrayOperations.BoundMethodInvoke);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(notBoundArrayMethodLabel);
@@ -789,15 +863,15 @@ public partial class RuntimeEmitter
         // Check $BoundMapMethod — gated on UsesMap (the wrapper type only
         // exists when EmitMapMethods runs).
         var notBoundMapMethodLabel = il.DefineLabel();
-        if (runtime.Map is not null)
+        if (inputs.Map is not null)
         {
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Isinst, runtime.RequireMap().BoundMethodType);
+            il.Emit(OpCodes.Isinst, (inputs.Map ?? throw new InvalidOperationException("Map runtime was not enabled for this compilation.")).BoundMethodType);
             il.Emit(OpCodes.Brfalse, notBoundMapMethodLabel);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Castclass, runtime.RequireMap().BoundMethodType);
+            il.Emit(OpCodes.Castclass, (inputs.Map ?? throw new InvalidOperationException("Map runtime was not enabled for this compilation.")).BoundMethodType);
             il.Emit(OpCodes.Ldarg_2);
-            il.Emit(OpCodes.Callvirt, runtime.RequireMap().BoundMethodInvoke);
+            il.Emit(OpCodes.Callvirt, (inputs.Map ?? throw new InvalidOperationException("Map runtime was not enabled for this compilation.")).BoundMethodInvoke);
             il.Emit(OpCodes.Ret);
 
             il.MarkLabel(notBoundMapMethodLabel);
@@ -805,15 +879,15 @@ public partial class RuntimeEmitter
 
         // Check $BoundSetMethod — gated on UsesSet.
         var notBoundSetMethodLabel = il.DefineLabel();
-        if (runtime.Set is not null)
+        if (inputs.Set is not null)
         {
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Isinst, runtime.RequireSet().BoundMethodType);
+            il.Emit(OpCodes.Isinst, (inputs.Set ?? throw new InvalidOperationException("Set runtime was not enabled for this compilation.")).BoundMethodType);
             il.Emit(OpCodes.Brfalse, notBoundSetMethodLabel);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Castclass, runtime.RequireSet().BoundMethodType);
+            il.Emit(OpCodes.Castclass, (inputs.Set ?? throw new InvalidOperationException("Set runtime was not enabled for this compilation.")).BoundMethodType);
             il.Emit(OpCodes.Ldarg_2);
-            il.Emit(OpCodes.Callvirt, runtime.RequireSet().BoundMethodInvoke);
+            il.Emit(OpCodes.Callvirt, (inputs.Set ?? throw new InvalidOperationException("Set runtime was not enabled for this compilation.")).BoundMethodInvoke);
             il.Emit(OpCodes.Ret);
 
             il.MarkLabel(notBoundSetMethodLabel);
@@ -822,28 +896,28 @@ public partial class RuntimeEmitter
         // Check $BoundAnyFunction (partial-apply wrapper produced by .bind on non-$TSFunction targets)
         var notBoundAnyFunctionLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, runtime.FunctionBindings.AnyType);
+        il.Emit(OpCodes.Isinst, inputs.FunctionBindings.AnyType);
         il.Emit(OpCodes.Brfalse, notBoundAnyFunctionLabel);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Castclass, runtime.FunctionBindings.AnyType);
+        il.Emit(OpCodes.Castclass, inputs.FunctionBindings.AnyType);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Callvirt, runtime.FunctionBindings.AnyInvoke);
+        il.Emit(OpCodes.Callvirt, inputs.FunctionBindings.AnyInvoke);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(notBoundAnyFunctionLabel);
 
         // $BoundTypedArrayMethod (#940) — wraps a typed-array bulk method bound to its receiver.
         // The receiver is already captured in the wrapper, so arg0 is ignored (like $MethodCallable).
-        if (_features.HasAnyTypedArray)
+        if (inputs.HasAnyTypedArray)
         {
             var notBoundTypedArrayMethodLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Isinst, runtime.TypedArrays.RequireImplementation().BoundMethodType);
+            il.Emit(OpCodes.Isinst, inputs.TypedArrays.RequireImplementation().BoundMethodType);
             il.Emit(OpCodes.Brfalse, notBoundTypedArrayMethodLabel);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Castclass, runtime.TypedArrays.RequireImplementation().BoundMethodType);
+            il.Emit(OpCodes.Castclass, inputs.TypedArrays.RequireImplementation().BoundMethodType);
             il.Emit(OpCodes.Ldarg_2);  // args
-            il.Emit(OpCodes.Callvirt, runtime.TypedArrays.RequireImplementation().BoundMethodInvoke);
+            il.Emit(OpCodes.Callvirt, inputs.TypedArrays.RequireImplementation().BoundMethodInvoke);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(notBoundTypedArrayMethodLabel);
         }
@@ -851,12 +925,12 @@ public partial class RuntimeEmitter
         // Handle $MethodCallable (wraps BuiltInMethod from GetMember)
         var notMethodCallableLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, runtime.ReflectedMethods.CallableType);
+        il.Emit(OpCodes.Isinst, inputs.ReflectedMethods.CallableType);
         il.Emit(OpCodes.Brfalse, notMethodCallableLabel);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Castclass, runtime.ReflectedMethods.CallableType);
+        il.Emit(OpCodes.Castclass, inputs.ReflectedMethods.CallableType);
         il.Emit(OpCodes.Ldarg_2);  // args
-        il.Emit(OpCodes.Callvirt, runtime.ReflectedMethods.CallableInvoke);
+        il.Emit(OpCodes.Callvirt, inputs.ReflectedMethods.CallableInvoke);
         il.Emit(OpCodes.Ret);
 
         // Handle Func<object?[], object?> (from CreateBoundMethod in RuntimeTypes.Methods)
@@ -882,7 +956,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, notTypeCalleeLabel);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Call, runtime.InvokeValue);
+        il.Emit(OpCodes.Call, invocation.Value);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(notTypeCalleeLabel);
@@ -890,11 +964,14 @@ public partial class RuntimeEmitter
         // Proxy apply trap check, preserving the method-call receiver.
         var notProxyLabel2 = il.DefineLabel();
         EmitProxyInvokeCheck(
-            il, runtime,
+            il,
+            invocation,
+            new ProxyInvokeCheckInputs(inputs.ObjectRead, inputs.ReflectedMethods),
             () => il.Emit(OpCodes.Ldarg_1),
             () => il.Emit(OpCodes.Ldarg_0),
             () => il.Emit(OpCodes.Ldarg_2),
-            notProxyLabel2);
+            notProxyLabel2
+        );
 
         il.MarkLabel(notProxyLabel2);
 
@@ -955,7 +1032,12 @@ public partial class RuntimeEmitter
         // Unrecognized non-callable (plain object, number, $Undefined, …):
         // throw TypeError per ECMA-262 instead of silently returning null (#260).
         il.MarkLabel(noCallMethodLabel);
-        EmitThrowNotAFunction(il, runtime, () => il.Emit(OpCodes.Ldarg_1));
+        EmitThrowNotAFunction(
+            il,
+            new ThrowNotAFunctionInputs(inputs.Errors, inputs.Operators),
+            () => il.Emit(OpCodes.Ldarg_1)
+        );
+        invocation.MarkMethodBodyEmitted();
     }
 
     /// <summary>
@@ -1081,7 +1163,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, fn);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+        il.Emit(OpCodes.Call, runtime.Invocation.Method);
         il.Emit(OpCodes.Ret);
 
         // No JS-level next/return. var en = recv as IEnumerator<object>;
@@ -1100,7 +1182,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, fn);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+        il.Emit(OpCodes.Call, runtime.Invocation.Method);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(synthLabel);
@@ -1117,7 +1199,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, fn);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+        il.Emit(OpCodes.Call, runtime.Invocation.Method);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notThrowSynthLabel);
 

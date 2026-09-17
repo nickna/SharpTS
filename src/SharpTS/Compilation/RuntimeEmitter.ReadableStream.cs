@@ -241,7 +241,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, runtime.RequireWebStreams().ReadableControllerField); // controller arg
         il.Emit(OpCodes.Stelem_Ref);
-        il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+        il.Emit(OpCodes.Call, runtime.Invocation.Method);
         il.Emit(OpCodes.Pop); // discard return value (start can be sync or return undefined)
 
         il.MarkLabel(startNullLabel);
@@ -711,7 +711,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, runtime.RequireWebStreams().ReadableControllerField);
         il.Emit(OpCodes.Stelem_Ref);
-        il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+        il.Emit(OpCodes.Call, runtime.Invocation.Method);
 
         // Stack: [pullResult]. If the pull callback was async (returned a
         // Task<object> or $Promise), synchronously await it before retrying
@@ -950,7 +950,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Stelem_Ref);
-        il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+        il.Emit(OpCodes.Call, runtime.Invocation.Method);
         il.Emit(OpCodes.Pop);
 
         il.MarkLabel(noCbLabel);
@@ -1043,7 +1043,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, getWriterCallableLocal);                  // callable
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Newarr, _types.Object);                          // empty args
-        il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+        il.Emit(OpCodes.Call, runtime.Invocation.Method);
         il.Emit(OpCodes.Stloc, writerLocal);
 
         // writeCallable = $Runtime.GetFieldsProperty(writer, "write")
@@ -1127,7 +1127,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldloc, reasonLocal);
         il.Emit(OpCodes.Stelem_Ref);
-        il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+        il.Emit(OpCodes.Call, runtime.Invocation.Method);
         EmitUnwrapResultToTask(il, runtime, awaiterLocal);
         il.BeginCatchBlock(_types.Exception);
         il.Emit(OpCodes.Pop);
@@ -1230,7 +1230,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, writerLocal);             // receiver = writer
         il.Emit(OpCodes.Ldloc, writeCallableLocal);      // callable
         il.Emit(OpCodes.Ldloc, writeArgsLocal);          // args
-        il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+        il.Emit(OpCodes.Call, runtime.Invocation.Method);
         // Cooperative wait for the write too: a push-style WritableStream whose
         // write() resolves later through the event loop would otherwise deadlock
         // the sync pump the same way a push source read does (#448).
@@ -1247,7 +1247,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, closeCallableLocal);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Newarr, _types.Object);
-        il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+        il.Emit(OpCodes.Call, runtime.Invocation.Method);
         EmitUnwrapResultToTask(il, runtime, awaiterLocal);
 
         il.MarkLabel(noCloseLabel);

@@ -124,7 +124,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, lockLocal);
         il.Emit(OpCodes.Newobj, runtime.RequirePromise().RejectCallbackCtor);
         il.Emit(OpCodes.Stelem_Ref);
-        il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+        il.Emit(OpCodes.Call, runtime.Invocation.Method);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Leave, endTryLabel);
 
@@ -497,7 +497,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, exceptionLocal);
         il.Emit(OpCodes.Call, runtime.Errors.WrapException);
         il.Emit(OpCodes.Stelem_Ref);
-        il.Emit(OpCodes.Call, runtime.InvokeValue);
+        il.Emit(OpCodes.Call, runtime.Invocation.Value);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Leave, returnPromiseLabel);
         il.EndExceptionBlock();
@@ -536,7 +536,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Stelem_Ref);
-        il.Emit(OpCodes.Call, runtime.InvokeValue);
+        il.Emit(OpCodes.Call, runtime.Invocation.Value);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Ldloc, capabilityLocal);
         il.Emit(OpCodes.Ldfld, runtime.RequirePromise().CapabilityInstanceField);
@@ -573,7 +573,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldloc, argLocal);
         il.Emit(OpCodes.Stelem_Ref);
-        il.Emit(OpCodes.Call, runtime.InvokeValue);
+        il.Emit(OpCodes.Call, runtime.Invocation.Value);
         il.Emit(OpCodes.Pop);
     }
 

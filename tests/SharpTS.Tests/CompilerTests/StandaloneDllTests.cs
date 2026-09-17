@@ -3708,6 +3708,72 @@ public class StandaloneDllTests
             verifyStandardError: error => Assert.Empty(error)));
     }
 
+    public static IEnumerable<object[]> InvocationDispatchPrograms =>
+    [
+        new object[]
+        {
+            "dispatch_receivers",
+            "function read(this:any,x:number){return this.n+x;}const a:any={n:7,read};const b:any={n:11,read:a.read};console.log(a[\"read\"](3),b.read(2));const echo:any=(x:number)=>x+1;console.log(echo(4));const s:any=String;console.log(s(23));\n",
+            "10 13\n5\n23\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "dispatch_zero_arguments",
+            "const o:any={n:7,read:function(this:any){return this.n;}};const count:any=(...xs:any[])=>xs.length;console.log(o[\"read\"](),count());const a:any={f:count};console.log(a.f(),a.f(1,2));try{const bad:any=null;bad();}catch(e:any){console.log(e instanceof TypeError);}try{const p:any={f:null};p.f();}catch(e:any){console.log(e instanceof TypeError);}\n",
+            "7 0\n0 2\ntrue\ntrue\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "dispatch_map_get",
+            "const m:any=new Map([[\"x\",7]]);const get:any=m.get;console.log(get.call(m,\"x\"));\n",
+            "7\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "dispatch_set_has",
+            "const s:any=new Set([1,2]);const has:any=s.has;console.log(has.call(s,2));\n",
+            "true\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "dispatch_promise_resolve",
+            "new Promise((resolve:any)=>{const f:any=resolve;f(9);}).then((n:any)=>console.log(n));\n",
+            "9\n",
+            false,
+            "",
+        },
+    ];
+
+    [Theory]
+    [MemberData(nameof(InvocationDispatchPrograms))]
+    public void Isolated_InvocationDispatch_PreservesReceiversAndOptionalWrappers(
+        string name, string source, string expected, bool hosted, string extraArguments)
+    {
+        using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var sourcePath = tempDir.CreateFile("main.ts", source);
+        var dllPath = tempDir.GetPath($"invocation_dispatch_{name}.dll");
+        var hosting = hosted ? " --target dll --hosted" : "";
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{sourcePath}\" -o \"{dllPath}\" --verify --standalone{hosting} {extraArguments}", tempDir.Path);
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        var references = GetAssemblyReferences(dllPath);
+        Assert.DoesNotContain("SharpTS", references);
+        Assert.Equal(hosted, references.Contains("SharpTS.Hosting.Abstractions"));
+        Assert.False(File.Exists(tempDir.GetPath("SharpTS.dll")));
+        if (!hosted)
+            Assert.Equal(expected, ExecuteCompiledDllIsolated(dllPath, timeoutMs: 30000,
+                verifyStandardError: error => Assert.Empty(error)));
+    }
+
     public static IEnumerable<object[]> ReflectedMethodPrograms =>
     [
         new object[]

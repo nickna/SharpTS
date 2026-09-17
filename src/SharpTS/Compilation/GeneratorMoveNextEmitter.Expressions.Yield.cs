@@ -247,7 +247,7 @@ public partial class GeneratorMoveNextEmitter
             _il.Emit(OpCodes.Ldloc, iterFnLocal);       // function
             _il.Emit(OpCodes.Ldc_I4_0);
             _il.Emit(OpCodes.Newarr, typeof(object));   // empty args
-            _il.Emit(OpCodes.Call, _ctx.Runtime.InvokeMethodValue);
+            _il.Emit(OpCodes.Call, _ctx.Runtime.Invocation.Method);
             _il.Emit(OpCodes.Stloc, iteratorLocal);
         });
 

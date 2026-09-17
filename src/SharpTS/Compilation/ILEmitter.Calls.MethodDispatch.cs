@@ -707,7 +707,7 @@ public partial class ILEmitter
         }
 
         // Call InvokeMethodValue(receiver, function, args) to bind 'this'
-        IL.Emit(OpCodes.Call, _ctx.Runtime!.InvokeMethodValue);
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.Invocation.Method);
     }
 
     /// <summary>

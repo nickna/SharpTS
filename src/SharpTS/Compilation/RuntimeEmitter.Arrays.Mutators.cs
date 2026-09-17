@@ -1796,7 +1796,7 @@ public partial class RuntimeEmitter
         // callResult = InvokeValue(callback, args)
         il.Emit(OpCodes.Ldarg_1); // callback - first arg
         il.Emit(OpCodes.Ldloc, argsLocal); // args - second arg
-        il.Emit(OpCodes.Call, runtime.InvokeValue);
+        il.Emit(OpCodes.Call, runtime.Invocation.Value);
         il.Emit(OpCodes.Stloc, callResultLocal);
 
         // number[] unboxing deopt: a numeric-mode $Array callback result is an EMPTY base list
@@ -2757,7 +2757,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Ldloc, argsLocal);
-            il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+            il.Emit(OpCodes.Call, runtime.Invocation.Method);
         }
 
         // Convert compare result to a sign in compareResultLocal:

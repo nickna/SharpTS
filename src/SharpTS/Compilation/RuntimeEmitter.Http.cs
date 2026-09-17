@@ -691,7 +691,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Ldloc, keyLocal);
         il.Emit(OpCodes.Stelem_Ref);
-        il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+        il.Emit(OpCodes.Call, runtime.Invocation.Method);
         il.Emit(OpCodes.Pop); // Discard result
 
         il.Emit(OpCodes.Br, loopStart);

@@ -1074,7 +1074,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldloc, lenValLocal);
             il.Emit(OpCodes.Ldloc, fnLocal);
             il.Emit(OpCodes.Ldloc, emptyArgsLocal);
-            il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+            il.Emit(OpCodes.Call, runtime.Invocation.Method);
             il.Emit(OpCodes.Stloc, resultLocal);
 
             // If result is still an object (Dictionary or $Object), don't

@@ -64,7 +64,7 @@
     "Reason": "DNS callback and promise module surfaces share result-order configuration; retain existing adapters while deferring a module-helper extraction."
   },
   {
-    "Hash": "094a4f24c3373c22039f144c5389cc8c210cfa5bc8a15e3f3a5096fc2e33b309",
+    "Hash": "8a025f5fac0bf22fa9d0b9ed4703e1a28e994d8ab52e68ffadb2ac149141b6c7",
     "Members": [
       "src/SharpTS/Compilation/Emitters/RegExpEmitter.cs::RegExpEmitter.EmitDynamicMethodCall(IEmitterContext emitter, Expr receiver, string methodName, List<Expr> arguments)",
       "src/SharpTS/Compilation/Emitters/StringEmitter.cs::StringEmitter.EmitDynamicMethodCall(IEmitterContext emitter, Expr receiver, string methodName, List<Expr> arguments)"

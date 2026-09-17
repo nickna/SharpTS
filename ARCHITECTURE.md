@@ -330,6 +330,15 @@ carrier; the strict SyntaxError helper retains its existing CLR exception repres
 Exception wrapping follows supplied optional Promise metadata. Error-cause Proxy handling
 receives six explicit invocation/delegate handles through the shared reflection bridge.
 
+Required `Invocation` owns dynamic value, receiver-aware and zero-argument
+call helpers. The Method shell keeps its original forward-declaration location;
+completion follows all three original bodies and checks the delayed Method body.
+Six helper boundaries receive explicit metadata, including cancellation and
+error declarations. Text decoding, stream callbacks, promises and TypedArray
+wrappers retain separate feature selections; Map and Set remain selected by
+metadata availability. Tests cover missing declarations, reuse, disabled
+optional metadata, receiver identity, zero-argument fallback and saved output.
+
 Required `ReflectedMethods` owns method lookup, the weak receiver/name cache,
 unwrapped reflection invocation and the staged `$MethodCallable` wrapper. The
 original cache field and static initialization stay in place. Callable type,
