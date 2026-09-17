@@ -1139,14 +1139,105 @@ public partial class RuntimeEmitter
         // emitted later in this section. Declare the descriptor shell and emit
         // isExtensible up front so key consumers can capture stable delegates.
         EmitObjectIsExtensible(runtime.ObjectState, new ObjectIsExtensibleInputs(runtime.DescriptorStorage, runtime.GetProperty, runtime.InvokeMethodUnwrapped));
-        DeclareProxyOwnKeysHelpers(typeBuilder, runtime);
-        EmitNormalizeOwnPropertyKeys(typeBuilder, runtime);
-        EmitGetOwnPropertyNames(typeBuilder, runtime);
+        DeclareProxyOwnKeysHelpers(typeBuilder, runtime.ObjectKeys);
+        EmitNormalizeOwnPropertyKeys(typeBuilder, runtime.ObjectKeys);
+        EmitGetOwnPropertyNames(
+            typeBuilder,
+            runtime.ObjectKeys,
+            new GetOwnPropertyNamesInputs(
+                runtime.ArrayStorage,
+                runtime.Booleans,
+                runtime.DescriptorStorage,
+                runtime.Errors,
+                runtime.GetProperty,
+                runtime.IHasFieldsFieldsGetter,
+                runtime.IHasFieldsInterface,
+                runtime.ObjectStorage,
+                runtime.Promise,
+                new ProxyDescriptorCallInputs(
+                    runtime.InvokeMethodUnwrapped,
+                    runtime.ObjectDescriptors.GetOwnPropertyDescriptor,
+                    runtime.ObjectState.IsExtensible,
+                    runtime.GetProperty
+                ),
+                new ProxyOwnKeysCallInputs(
+                    runtime.ObjectKeys.Ordinary,
+                    runtime.ObjectKeys.CreateProxyList,
+                    runtime.ObjectDescriptors.GetOwnPropertyDescriptor,
+                    runtime.ObjectState.IsExtensible,
+                    runtime.Symbols.IsSymbol,
+                    runtime.GetProperty,
+                    runtime.InvokeMethodUnwrapped
+                ),
+                runtime.RegExps,
+                runtime.Symbols,
+                runtime.UndefinedType
+            )
+        );
         // Object.assign consumes both halves of [[OwnPropertyKeys]], so make
         // the Symbol-key collector available before emitting assign.
-        EmitGetOwnPropertySymbols(typeBuilder, runtime);
-        EmitProxyOwnKeysHelperBodies(runtime);
-        EmitGetKeys(typeBuilder, runtime);
+        EmitGetOwnPropertySymbols(
+            typeBuilder,
+            runtime.ObjectKeys,
+            new GetOwnPropertySymbolsInputs(
+                runtime.Booleans,
+                runtime.Errors,
+                runtime.GetProperty,
+                new ProxyDescriptorCallInputs(
+                    runtime.InvokeMethodUnwrapped,
+                    runtime.ObjectDescriptors.GetOwnPropertyDescriptor,
+                    runtime.ObjectState.IsExtensible,
+                    runtime.GetProperty
+                ),
+                new ProxyOwnKeysCallInputs(
+                    runtime.ObjectKeys.Ordinary,
+                    runtime.ObjectKeys.CreateProxyList,
+                    runtime.ObjectDescriptors.GetOwnPropertyDescriptor,
+                    runtime.ObjectState.IsExtensible,
+                    runtime.Symbols.IsSymbol,
+                    runtime.GetProperty,
+                    runtime.InvokeMethodUnwrapped
+                ),
+                runtime.Symbols,
+                runtime.UndefinedType
+            )
+        );
+        EmitProxyOwnKeysHelperBodies(
+            runtime.ObjectKeys,
+            new ProxyOwnKeysHelperBodiesInputs(runtime.GetProperty, runtime.NumericCoercion)
+        );
+        EmitGetKeys(
+            typeBuilder,
+            runtime.ObjectKeys,
+            new GetKeysInputs(
+                runtime.ArrayStorage,
+                runtime.Booleans,
+                runtime.DescriptorStorage,
+                runtime.Errors,
+                runtime.GetProperty,
+                runtime.IHasFieldsFieldsGetter,
+                runtime.IHasFieldsInterface,
+                runtime.ObjectStorage,
+                new ProxyDescriptorCallInputs(
+                    runtime.InvokeMethodUnwrapped,
+                    runtime.ObjectDescriptors.GetOwnPropertyDescriptor,
+                    runtime.ObjectState.IsExtensible,
+                    runtime.GetProperty
+                ),
+                new ProxyOwnKeysCallInputs(
+                    runtime.ObjectKeys.Ordinary,
+                    runtime.ObjectKeys.CreateProxyList,
+                    runtime.ObjectDescriptors.GetOwnPropertyDescriptor,
+                    runtime.ObjectState.IsExtensible,
+                    runtime.Symbols.IsSymbol,
+                    runtime.GetProperty,
+                    runtime.InvokeMethodUnwrapped
+                ),
+                runtime.Symbols,
+                runtime.TSFunctionType,
+                runtime.UndefinedType
+            )
+        );
         // MergeIntoObject implements CopyDataProperties through GetKeys and
         // GetProperty, so its body must be emitted after GetKeys is available.
         EmitMergeIntoObject(typeBuilder, runtime);
@@ -1210,8 +1301,8 @@ public partial class RuntimeEmitter
                 runtime.Dates,
                 runtime.DescriptorStorage,
                 runtime.GetEntries,
-                runtime.GetKeys,
-                runtime.GetOwnPropertyNames,
+                runtime.ObjectKeys.Keys,
+                runtime.ObjectKeys.Names,
                 runtime.GetProperty,
                 runtime.GlobalThisGetProperty,
                 runtime.GlobalThisSingletonField,
@@ -1247,7 +1338,7 @@ public partial class RuntimeEmitter
             runtime.ObjectDescriptors,
             new ObjectDefinePropertiesInputs(
                 runtime.Errors,
-                runtime.GetKeys,
+                runtime.ObjectKeys.Keys,
                 runtime.GetProperty,
                 runtime.Symbols,
                 runtime.UndefinedType
@@ -1258,10 +1349,10 @@ public partial class RuntimeEmitter
             runtime.ObjectDescriptors,
             new ObjectGetOwnPropertyDescriptorsInputs(
                 runtime.Errors,
-                runtime.GetOrdinaryOwnPropertyKeys,
+                runtime.ObjectKeys.Ordinary,
                 new ProxyOwnKeysCallInputs(
-                    runtime.GetOrdinaryOwnPropertyKeys,
-                    runtime.CreateProxyOwnKeysList,
+                    runtime.ObjectKeys.Ordinary,
+                    runtime.ObjectKeys.CreateProxyList,
                     runtime.ObjectDescriptors.GetOwnPropertyDescriptor,
                     runtime.ObjectState.IsExtensible,
                     runtime.Symbols.IsSymbol,
@@ -1450,17 +1541,17 @@ public partial class RuntimeEmitter
                     runtime.Errors.CreateException,
                     runtime.Errors.TypeErrorConstructor,
                     new ProxyOwnKeysCallInputs(
-                        runtime.GetOrdinaryOwnPropertyKeys,
-                        runtime.CreateProxyOwnKeysList,
+                        runtime.ObjectKeys.Ordinary,
+                        runtime.ObjectKeys.CreateProxyList,
                         runtime.ObjectDescriptors.GetOwnPropertyDescriptor,
                         runtime.ObjectState.IsExtensible,
                         runtime.Symbols.IsSymbol,
                         runtime.GetProperty,
                         runtime.InvokeMethodUnwrapped
                     ),
-                    runtime.GetOrdinaryOwnPropertyKeys,
-                    runtime.GetOwnPropertySymbols,
-                    runtime.GetOwnPropertyNames,
+                    runtime.ObjectKeys.Ordinary,
+                    runtime.ObjectKeys.Symbols,
+                    runtime.ObjectKeys.Names,
                     runtime.UndefinedType,
                     runtime.Symbols.Type
                 )
@@ -1808,7 +1899,7 @@ public partial class RuntimeEmitter
                     runtime.DeleteProperty,
                     runtime.DescriptorStorage,
                     runtime.InvokeMethodUnwrapped,
-                    runtime.NormalizeOwnPropertyKeys,
+                    runtime.ObjectKeys.Normalize,
                     runtime.NumericCoercion,
                     runtime.ObjectDescriptors.DefineProperty,
                     runtime.TSFunctionInvokeWithThis,
@@ -1825,7 +1916,7 @@ public partial class RuntimeEmitter
                     runtime.BoundTSFunctionType,
                     runtime.Errors.CreateException,
                     runtime.DescriptorStorage,
-                    runtime.GetKeys,
+                    runtime.ObjectKeys.Keys,
                     runtime.GetProperty,
                     runtime.IHasFieldsInterface,
                     runtime.InvokeMethodUnwrapped,
@@ -1868,7 +1959,7 @@ public partial class RuntimeEmitter
                     runtime.BoundTSFunctionType,
                     runtime.Errors.CreateException,
                     runtime.DescriptorStorage,
-                    runtime.GetKeys,
+                    runtime.ObjectKeys.Keys,
                     runtime.GetProperty,
                     runtime.IHasFieldsInterface,
                     runtime.InvokeMethodUnwrapped,

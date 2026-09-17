@@ -258,7 +258,7 @@ public partial class GeneratorMoveNextEmitter
         // Get keys from the object and stash them in the hoisted field (need a temp for the swap).
         EmitExpression(f.Object);
         EnsureBoxed();
-        _il.Emit(OpCodes.Call, _ctx!.Runtime!.GetKeys);
+        _il.Emit(OpCodes.Call, _ctx!.Runtime!.ObjectKeys.Keys);
         var keysTemp = _il.DeclareLocal(_types.ListOfObject);
         _il.Emit(OpCodes.Stloc, keysTemp);
         _il.Emit(OpCodes.Ldarg_0);

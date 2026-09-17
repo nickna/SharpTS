@@ -1439,7 +1439,7 @@ public abstract class StatementEmitterBase : ExpressionEmitterBase
         // Get keys from object
         EmitExpression(f.Object);
         EnsureBoxed();
-        IL.Emit(OpCodes.Call, Ctx.Runtime!.GetKeys);
+        IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectKeys.Keys);
 
         var keysLocal = IL.DeclareLocal(Types.ListOfObject);
         IL.Emit(OpCodes.Stloc, keysLocal);

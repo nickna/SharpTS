@@ -138,15 +138,15 @@ public partial class RuntimeEmitter
             il.MarkLabel(skipLabel);
         }
 
-        EmitObjectMethodLookup("keys",                    runtime.GetKeys, 1);
+        EmitObjectMethodLookup("keys",                    runtime.ObjectKeys.Keys, 1);
         EmitObjectMethodLookup("values",                  runtime.GetValues, 1);
         EmitObjectMethodLookup("entries",                 runtime.GetEntries, 1);
         EmitObjectMethodLookup("fromEntries",             runtime.ObjectFromEntries, 1);
         EmitObjectMethodLookup("freeze",                  runtime.ObjectState.Freeze, 1);
         EmitObjectMethodLookup("seal",                    runtime.ObjectState.Seal, 1);
         EmitObjectMethodLookup("preventExtensions",       runtime.ObjectState.PreventExtensions, 1);
-        EmitObjectMethodLookup("getOwnPropertyNames",     runtime.GetOwnPropertyNames, 1);
-        EmitObjectMethodLookup("getOwnPropertySymbols",   runtime.GetOwnPropertySymbols, 1);
+        EmitObjectMethodLookup("getOwnPropertyNames",     runtime.ObjectKeys.Names, 1);
+        EmitObjectMethodLookup("getOwnPropertySymbols",   runtime.ObjectKeys.Symbols, 1);
         EmitObjectMethodLookup("getPrototypeOf",          runtime.ObjectPrototypes.GetPrototypeOf, 1);
         EmitObjectMethodLookup("setPrototypeOf",          runtime.ObjectPrototypes.SetPrototypeOf, 2);
         EmitObjectMethodLookup("defineProperty",          runtime.ObjectDescriptors.DefineProperty, 3);

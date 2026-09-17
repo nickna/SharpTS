@@ -94,14 +94,14 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Stloc, sourceIsProxyLocal);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.GetKeys);
+        il.Emit(OpCodes.Call, runtime.ObjectKeys.Keys);
         il.Emit(OpCodes.Stloc, keysLocal);
         // No symbols means no temporary symbol list (and no attached symbol storage).
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, runtime.Symbols.TryGetStorage);
         il.Emit(OpCodes.Brfalse, keysReady);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.GetOwnPropertySymbols);
+        il.Emit(OpCodes.Call, runtime.ObjectKeys.Symbols);
         il.Emit(OpCodes.Castclass, listType);
         il.Emit(OpCodes.Stloc, symbolKeysLocal);
         il.Emit(OpCodes.Ldloc, keysLocal);
@@ -540,7 +540,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.DictionaryStringObject));
         il.Emit(OpCodes.Stloc, descriptorResultLocal);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.GetKeys);
+        il.Emit(OpCodes.Call, runtime.ObjectKeys.Keys);
         il.Emit(OpCodes.Stloc, descriptorKeysLocal);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Stloc, descriptorIndexLocal);

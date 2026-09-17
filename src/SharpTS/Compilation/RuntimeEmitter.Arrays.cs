@@ -6,6 +6,39 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
+    private readonly record struct GetKeysInputs(
+        EmittedArrayStorageRuntime ArrayStorage,
+        EmittedBooleanRuntime Booleans,
+        EmittedDescriptorStorageRuntime DescriptorStorage,
+        EmittedErrorRuntime Errors,
+        MethodBuilder GetProperty,
+        MethodInfo IHasFieldsFieldsGetter,
+        Type IHasFieldsInterface,
+        EmittedObjectStorageRuntime ObjectStorage,
+        ProxyDescriptorCallInputs ProxyDescriptor,
+        ProxyOwnKeysCallInputs ProxyOwnKeys,
+        EmittedSymbolRuntime Symbols,
+        TypeBuilder TSFunctionType,
+        Type UndefinedType
+    );
+
+    private readonly record struct GetOwnPropertyNamesInputs(
+        EmittedArrayStorageRuntime ArrayStorage,
+        EmittedBooleanRuntime Booleans,
+        EmittedDescriptorStorageRuntime DescriptorStorage,
+        EmittedErrorRuntime Errors,
+        MethodBuilder GetProperty,
+        MethodInfo IHasFieldsFieldsGetter,
+        Type IHasFieldsInterface,
+        EmittedObjectStorageRuntime ObjectStorage,
+        EmittedPromiseRuntime? Promise,
+        ProxyDescriptorCallInputs ProxyDescriptor,
+        ProxyOwnKeysCallInputs ProxyOwnKeys,
+        EmittedRegExpRuntime RegExps,
+        EmittedSymbolRuntime Symbols,
+        Type UndefinedType
+    );
+
     /// <summary>
     /// Emits a SetArrayElement method for the given backing type descriptor.
     /// Auto-extends the list with default entries if index &gt;= Count (JS semantics).
@@ -255,7 +288,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitGetKeys(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitGetKeys(TypeBuilder typeBuilder, EmittedObjectKeysRuntime objectKeys, GetKeysInputs inputs)
     {
         var method = typeBuilder.DefineMethod(
             "GetKeys",
@@ -263,11 +296,11 @@ public partial class RuntimeEmitter
             _types.ListOfObject,
             [_types.Object]
         );
-        runtime.GetKeys = method;
+        objectKeys.Keys = method;
 
         var il = method.GetILGenerator();
         // number[] unboxing: materialize a numeric-mode $Array before enumerating it as an object.
-        EmitDeoptArgIfNumericArray(il, runtime, 0);
+        EmitDeoptArgIfNumericArrayStorage(il, inputs.ArrayStorage, 0);
         var dictType = _types.DictionaryStringObject;
         var listType = _types.ListOfObject;
 
@@ -288,13 +321,13 @@ public partial class RuntimeEmitter
         var notNullForKeysLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Brtrue, notNullForKeysLabel);
-        GuestErrorEmitter.ThrowTypeError(il, runtime, "Object.keys called on null or undefined");
+        GuestErrorEmitter.ThrowError(il, inputs.Errors.CreateException, inputs.Errors.TypeErrorConstructor, "Object.keys called on null or undefined");
         il.MarkLabel(notNullForKeysLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
         var notUndefForKeysLabel = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, notUndefForKeysLabel);
-        GuestErrorEmitter.ThrowTypeError(il, runtime, "Object.keys called on null or undefined");
+        GuestErrorEmitter.ThrowError(il, inputs.Errors.CreateException, inputs.Errors.TypeErrorConstructor, "Object.keys called on null or undefined");
         il.MarkLabel(notUndefForKeysLabel);
 
         // Proxy short-circuit (#92): if obj is SharpTSProxy, dispatch TrapOwnKeys
@@ -302,7 +335,20 @@ public partial class RuntimeEmitter
         var notProxyLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Brfalse, notProxyLabel);
-        EmitProxyOwnKeysCheck(il, runtime, () => il.Emit(OpCodes.Ldarg_0), notProxyLabel, enumerableOnly: true);
+        EmitProxyOwnKeysCheck(
+            il,
+            new ProxyOwnKeysCheckInputs(
+                inputs.Booleans,
+                inputs.GetProperty,
+                inputs.ProxyDescriptor,
+                inputs.ProxyOwnKeys,
+                inputs.Symbols,
+                inputs.UndefinedType
+            ),
+            () => il.Emit(OpCodes.Ldarg_0),
+            notProxyLabel,
+            enumerableOnly: true
+        );
         il.MarkLabel(notProxyLabel);
 
         // String primitive: indexed-char keys "0", "1", ... per ECMA-262
@@ -358,7 +404,7 @@ public partial class RuntimeEmitter
         // Without this, RegExp.prototype's built-in methods that carry
         // PDS-installed non-enumerable descriptors still surface in Object.keys.
         il.Emit(OpCodes.Ldloc, dictLocal);
-        il.Emit(OpCodes.Call, runtime.DescriptorStorage.HasPropertyDescriptors);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.HasPropertyDescriptors);
         il.Emit(OpCodes.Stloc, hasDescriptorsLocal);
 
         // The snapshot is required because getters can mutate later keys, but
@@ -377,7 +423,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, _types.GetMethod(keysType, "GetEnumerator")!);
         il.Emit(OpCodes.Stloc, keysEnumeratorLocal);
         var currentKeyLocal = il.DeclareLocal(_types.String);
-        var keyDescLocal = il.DeclareLocal(runtime.DescriptorStorage.DescriptorType);
+        var keyDescLocal = il.DeclareLocal(inputs.DescriptorStorage.DescriptorType);
 
         var keysLoopStart = il.DefineLabel();
         var keysLoopEnd = il.DefineLabel();
@@ -400,14 +446,14 @@ public partial class RuntimeEmitter
         // descriptor = PDSGetPropertyDescriptor(dict, current)
         il.Emit(OpCodes.Ldloc, dictLocal);
         il.Emit(OpCodes.Ldloc, currentKeyLocal);
-        il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetPropertyDescriptor);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.GetPropertyDescriptor);
         il.Emit(OpCodes.Stloc, keyDescLocal);
         // if (descriptor != null && !descriptor.Enumerable) skip
         il.Emit(OpCodes.Ldloc, keyDescLocal);
         il.Emit(OpCodes.Brfalse, /*include*/ keysLoopSkip /*placeholder, will overwrite*/);
         // descriptor exists — check Enumerable
         il.Emit(OpCodes.Ldloc, keyDescLocal);
-        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorEnumerable.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorEnumerable.GetGetMethod()!);
         il.Emit(OpCodes.Brfalse, keysLoopStart);  // skip non-enumerable: jump back to loop top
         il.MarkLabel(keysLoopSkip);
 
@@ -431,7 +477,7 @@ public partial class RuntimeEmitter
         var pdsKeysList = il.DeclareLocal(listType);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, dictLocal);
-        il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetEnumerableExtraKeys);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.GetEnumerableExtraKeys);
         il.Emit(OpCodes.Stloc, pdsKeysList);
         // Append each element to resultLocal: resultLocal.AddRange(pdsKeysList).
         il.Emit(OpCodes.Ldloc, resultLocal);
@@ -440,7 +486,7 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(normalizeDictKeys);
         il.Emit(OpCodes.Ldloc, resultLocal);
-        il.Emit(OpCodes.Call, runtime.NormalizeOwnPropertyKeys);
+        il.Emit(OpCodes.Call, objectKeys.Normalize);
         il.Emit(OpCodes.Ret);
 
         // Check if obj is List<object?>
@@ -473,7 +519,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, listLocal);
         il.Emit(OpCodes.Ldloc, indexLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "get_Item", [_types.Int32])!);
-        il.Emit(OpCodes.Isinst, runtime.ArrayStorage.HoleType);
+        il.Emit(OpCodes.Isinst, inputs.ArrayStorage.HoleType);
         il.Emit(OpCodes.Brtrue, listLoopSkip);
 
         // Indexed array/list properties can carry descriptor metadata in PDS.
@@ -481,19 +527,19 @@ public partial class RuntimeEmitter
         // descriptor is enumerable:false (for example an index created by
         // Object.defineProperties with no enumerable member).
         var listKeyLocal = il.DeclareLocal(_types.String);
-        var listKeyDescLocal = il.DeclareLocal(runtime.DescriptorStorage.DescriptorType);
+        var listKeyDescLocal = il.DeclareLocal(inputs.DescriptorStorage.DescriptorType);
         il.Emit(OpCodes.Ldloca, indexLocal);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Int32, "ToString", Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, listKeyLocal);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, listKeyLocal);
-        il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetPropertyDescriptor);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.GetPropertyDescriptor);
         il.Emit(OpCodes.Stloc, listKeyDescLocal);
         var listKeyEnumerableLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, listKeyDescLocal);
         il.Emit(OpCodes.Brfalse, listKeyEnumerableLabel);
         il.Emit(OpCodes.Ldloc, listKeyDescLocal);
-        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorEnumerable.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorEnumerable.GetGetMethod()!);
         il.Emit(OpCodes.Brfalse, listLoopSkip);
         il.MarkLabel(listKeyEnumerableLabel);
 
@@ -518,14 +564,14 @@ public partial class RuntimeEmitter
         var pdsArrayKeysList = il.DeclareLocal(listType);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetEnumerableExtraKeys);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.GetEnumerableExtraKeys);
         il.Emit(OpCodes.Stloc, pdsArrayKeysList);
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ldloc, pdsArrayKeysList);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "AddRange", [_types.IEnumerableOfObject])!);
 
         il.Emit(OpCodes.Ldloc, resultLocal);
-        il.Emit(OpCodes.Call, runtime.NormalizeOwnPropertyKeys);
+        il.Emit(OpCodes.Call, objectKeys.Normalize);
         il.Emit(OpCodes.Ret);
 
         // Emitted $Object path for class instances (standalone-safe)
@@ -539,7 +585,7 @@ public partial class RuntimeEmitter
         // PDSGetEnumerableExtraKeys append.
         var notTSFnForKeysLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Isinst, inputs.TSFunctionType);
         il.Emit(OpCodes.Brfalse, notTSFnForKeysLabel);
         il.Emit(OpCodes.Newobj, _types.GetConstructor(listType, Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, resultLocal);
@@ -550,15 +596,15 @@ public partial class RuntimeEmitter
         void EmitEnumerableFunctionIntrinsic(string name)
         {
             var skip = il.DefineLabel();
-            var desc = il.DeclareLocal(runtime.DescriptorStorage.DescriptorType);
+            var desc = il.DeclareLocal(inputs.DescriptorStorage.DescriptorType);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldstr, name);
-            il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetPropertyDescriptor);
+            il.Emit(OpCodes.Call, inputs.DescriptorStorage.GetPropertyDescriptor);
             il.Emit(OpCodes.Stloc, desc);
             il.Emit(OpCodes.Ldloc, desc);
             il.Emit(OpCodes.Brfalse, skip);
             il.Emit(OpCodes.Ldloc, desc);
-            il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorEnumerable.GetGetMethod()!);
+            il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorEnumerable.GetGetMethod()!);
             il.Emit(OpCodes.Brfalse, skip);
             il.Emit(OpCodes.Ldloc, resultLocal);
             il.Emit(OpCodes.Ldstr, name);
@@ -571,7 +617,7 @@ public partial class RuntimeEmitter
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetEnumerableExtraKeys);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.GetEnumerableExtraKeys);
         var fnPdsKeysLocal = il.DeclareLocal(listType);
         il.Emit(OpCodes.Stloc, fnPdsKeysLocal);
         var fnKeyIndexLocal = il.DeclareLocal(_types.Int32);
@@ -605,7 +651,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, fnKeyLoop);
         il.MarkLabel(fnKeyEnd);
         il.Emit(OpCodes.Ldloc, resultLocal);
-        il.Emit(OpCodes.Call, runtime.NormalizeOwnPropertyKeys);
+        il.Emit(OpCodes.Call, objectKeys.Normalize);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notTSFnForKeysLabel);
 
@@ -613,12 +659,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, resultLocal);
         // if (!(obj is $IHasFields)) return empty list
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.IHasFieldsInterface);
+        il.Emit(OpCodes.Isinst, inputs.IHasFieldsInterface);
         il.Emit(OpCodes.Brfalse, returnResultLabel);
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.IHasFieldsInterface);
-        il.Emit(OpCodes.Callvirt, runtime.IHasFieldsFieldsGetter);
+        il.Emit(OpCodes.Castclass, inputs.IHasFieldsInterface);
+        il.Emit(OpCodes.Callvirt, inputs.IHasFieldsFieldsGetter);
         il.Emit(OpCodes.Stloc, fieldsDictLocal);
         il.Emit(OpCodes.Ldloc, fieldsDictLocal);
         il.Emit(OpCodes.Brfalse, returnResultLabel);
@@ -667,16 +713,16 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, skipKeyLabel);
 
         // PDS descriptor lookup; if present AND non-enumerable, skip.
-        var fieldsKeyDescLocal = il.DeclareLocal(runtime.DescriptorStorage.DescriptorType);
+        var fieldsKeyDescLocal = il.DeclareLocal(inputs.DescriptorStorage.DescriptorType);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, keyLocal);
-        il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetPropertyDescriptor);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.GetPropertyDescriptor);
         il.Emit(OpCodes.Stloc, fieldsKeyDescLocal);
         var fieldsAddKeyLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, fieldsKeyDescLocal);
         il.Emit(OpCodes.Brfalse, fieldsAddKeyLabel);
         il.Emit(OpCodes.Ldloc, fieldsKeyDescLocal);
-        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorEnumerable.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorEnumerable.GetGetMethod()!);
         il.Emit(OpCodes.Brfalse, skipKeyLabel);
         il.MarkLabel(fieldsAddKeyLabel);
 
@@ -698,12 +744,12 @@ public partial class RuntimeEmitter
         // to read the dict; iterate keys; add unless already in result.
         var notTSObjectForGetters = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.ObjectStorage.Type);
+        il.Emit(OpCodes.Isinst, inputs.ObjectStorage.Type);
         il.Emit(OpCodes.Brfalse, notTSObjectForGetters);
         var tsoGettersDict = il.DeclareLocal(dictType);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.ObjectStorage.Type);
-        il.Emit(OpCodes.Callvirt, runtime.ObjectStorage.GetGettersDictionary);
+        il.Emit(OpCodes.Castclass, inputs.ObjectStorage.Type);
+        il.Emit(OpCodes.Callvirt, inputs.ObjectStorage.GetGettersDictionary);
         il.Emit(OpCodes.Stloc, tsoGettersDict);
         var skipGettersIter = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, tsoGettersDict);
@@ -730,16 +776,16 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "Contains")!);
         il.Emit(OpCodes.Brtrue, gettersLoopStart);
         // PDS descriptor: skip if Enumerable=false.
-        var gettersDescLocal = il.DeclareLocal(runtime.DescriptorStorage.DescriptorType);
+        var gettersDescLocal = il.DeclareLocal(inputs.DescriptorStorage.DescriptorType);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, gettersKeyLocal);
-        il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetPropertyDescriptor);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.GetPropertyDescriptor);
         il.Emit(OpCodes.Stloc, gettersDescLocal);
         il.Emit(OpCodes.Ldloc, gettersDescLocal);
         var gettersAddLabel = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, gettersAddLabel);
         il.Emit(OpCodes.Ldloc, gettersDescLocal);
-        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorEnumerable.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorEnumerable.GetGetMethod()!);
         il.Emit(OpCodes.Brfalse, gettersLoopStart);
         il.MarkLabel(gettersAddLabel);
         il.Emit(OpCodes.Ldloc, resultLocal);
@@ -754,8 +800,8 @@ public partial class RuntimeEmitter
         // Symmetric iteration of _setters for setter-only literal accessors.
         var tsoSettersDict = il.DeclareLocal(dictType);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.ObjectStorage.Type);
-        il.Emit(OpCodes.Callvirt, runtime.ObjectStorage.GetSettersDictionary);
+        il.Emit(OpCodes.Castclass, inputs.ObjectStorage.Type);
+        il.Emit(OpCodes.Callvirt, inputs.ObjectStorage.GetSettersDictionary);
         il.Emit(OpCodes.Stloc, tsoSettersDict);
         var skipSettersIter = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, tsoSettersDict);
@@ -781,16 +827,16 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "Contains")!);
         il.Emit(OpCodes.Brtrue, settersLoopStart);
         // PDS descriptor: skip if Enumerable=false.
-        var settersDescLocal = il.DeclareLocal(runtime.DescriptorStorage.DescriptorType);
+        var settersDescLocal = il.DeclareLocal(inputs.DescriptorStorage.DescriptorType);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, settersKeyLocal);
-        il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetPropertyDescriptor);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.GetPropertyDescriptor);
         il.Emit(OpCodes.Stloc, settersDescLocal);
         il.Emit(OpCodes.Ldloc, settersDescLocal);
         var settersAddLabel = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, settersAddLabel);
         il.Emit(OpCodes.Ldloc, settersDescLocal);
-        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorEnumerable.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorEnumerable.GetGetMethod()!);
         il.Emit(OpCodes.Brfalse, settersLoopStart);
         il.MarkLabel(settersAddLabel);
         il.Emit(OpCodes.Ldloc, resultLocal);
@@ -812,14 +858,14 @@ public partial class RuntimeEmitter
         var pdsKeysListIH = il.DeclareLocal(listType);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, fieldsDictLocal);
-        il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetEnumerableExtraKeys);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.GetEnumerableExtraKeys);
         il.Emit(OpCodes.Stloc, pdsKeysListIH);
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ldloc, pdsKeysListIH);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "AddRange", [_types.IEnumerableOfObject])!);
 
         il.Emit(OpCodes.Ldloc, resultLocal);
-        il.Emit(OpCodes.Call, runtime.NormalizeOwnPropertyKeys);
+        il.Emit(OpCodes.Call, objectKeys.Normalize);
         il.Emit(OpCodes.Ret);
 
         // Return empty list
@@ -833,7 +879,7 @@ public partial class RuntimeEmitter
     /// list: canonical array indices first in ascending numeric order, followed
     /// by all other strings in their original creation order.
     /// </summary>
-    private void EmitNormalizeOwnPropertyKeys(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitNormalizeOwnPropertyKeys(TypeBuilder typeBuilder, EmittedObjectKeysRuntime objectKeys)
     {
         var listOfUInt32 = typeof(List<uint>);
         var method = typeBuilder.DefineMethod(
@@ -842,7 +888,7 @@ public partial class RuntimeEmitter
             _types.ListOfObject,
             [_types.ListOfObject]
         );
-        runtime.NormalizeOwnPropertyKeys = method;
+        objectKeys.Normalize = method;
 
         var il = method.GetILGenerator();
         var numericLocal = il.DeclareLocal(listOfUInt32);
@@ -988,7 +1034,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitGetOwnPropertyNames(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitGetOwnPropertyNames(
+        TypeBuilder typeBuilder,
+        EmittedObjectKeysRuntime objectKeys,
+        GetOwnPropertyNamesInputs inputs
+    )
     {
         var method = typeBuilder.DefineMethod(
             "GetOwnPropertyNames",
@@ -996,7 +1046,7 @@ public partial class RuntimeEmitter
             _types.ListOfObject,
             [_types.Object]
         );
-        runtime.GetOwnPropertyNames = method;
+        objectKeys.Names = method;
 
         var il = method.GetILGenerator();
 
@@ -1016,12 +1066,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Brfalse, gopnThrowLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
         il.Emit(OpCodes.Brtrue, gopnThrowLabel);
         il.Emit(OpCodes.Br, gopnTypeOkLabel);
 
         il.MarkLabel(gopnThrowLabel);
-        GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot convert undefined or null to object");
+        GuestErrorEmitter.ThrowError(il, inputs.Errors.CreateException, inputs.Errors.TypeErrorConstructor, "Cannot convert undefined or null to object");
         il.MarkLabel(gopnTypeOkLabel);
 
         // Proxy short-circuit (#92): if obj is SharpTSProxy, dispatch TrapOwnKeys
@@ -1029,7 +1079,20 @@ public partial class RuntimeEmitter
         var notProxyLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Brfalse, notProxyLabel);
-        EmitProxyOwnKeysCheck(il, runtime, () => il.Emit(OpCodes.Ldarg_0), notProxyLabel, enumerableOnly: false);
+        EmitProxyOwnKeysCheck(
+            il,
+            new ProxyOwnKeysCheckInputs(
+                inputs.Booleans,
+                inputs.GetProperty,
+                inputs.ProxyDescriptor,
+                inputs.ProxyOwnKeys,
+                inputs.Symbols,
+                inputs.UndefinedType
+            ),
+            () => il.Emit(OpCodes.Ldarg_0),
+            notProxyLabel,
+            enumerableOnly: false
+        );
         il.MarkLabel(notProxyLabel);
 
         // if (obj is Dictionary<string, object?> dict)
@@ -1103,13 +1166,13 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, _types.DictionaryStringObject);
-        il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetAllExtraKeys);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.GetAllExtraKeys);
         il.Emit(OpCodes.Stloc, pdsExtraNamesLocal);
         il.Emit(OpCodes.Ldloc, namesLocal);
         il.Emit(OpCodes.Ldloc, pdsExtraNamesLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "AddRange", [_types.IEnumerableOfObject])!);
         il.Emit(OpCodes.Ldloc, namesLocal);
-        il.Emit(OpCodes.Call, runtime.NormalizeOwnPropertyKeys);
+        il.Emit(OpCodes.Call, objectKeys.Normalize);
         il.Emit(OpCodes.Ret);
 
         // List case: return ["0", "1", ..., "length"] (skipping holes).
@@ -1134,7 +1197,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Castclass, _types.ListOfObject);
         il.Emit(OpCodes.Ldloc, iLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "get_Item", [_types.Int32])!);
-        il.Emit(OpCodes.Isinst, runtime.ArrayStorage.HoleType);
+        il.Emit(OpCodes.Isinst, inputs.ArrayStorage.HoleType);
         il.Emit(OpCodes.Brtrue, listLoopSkip);
 
         // names.Add(i.ToString())
@@ -1169,7 +1232,7 @@ public partial class RuntimeEmitter
         var listPdsNamesLocal = il.DeclareLocal(_types.ListOfObject);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetAllExtraKeys);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.GetAllExtraKeys);
         il.Emit(OpCodes.Stloc, listPdsNamesLocal);
         var listExtraIndexLocal = il.DeclareLocal(_types.Int32);
         var listExtraKeyLocal = il.DeclareLocal(_types.Object);
@@ -1203,7 +1266,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(listExtraEnd);
 
         il.Emit(OpCodes.Ldloc, namesLocal);
-        il.Emit(OpCodes.Call, runtime.NormalizeOwnPropertyKeys);
+        il.Emit(OpCodes.Call, objectKeys.Normalize);
         il.Emit(OpCodes.Ret);
 
         // Object case: use $IHasFields fields dictionary (standalone-safe)
@@ -1231,20 +1294,20 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notAnonymousDelegateForNamesLabel);
 
-        if (_features.UsesPromise)
+        if (inputs.Promise is not null)
         {
             // Promise combinator element callbacks are anonymous built-in
             // functions. Their own string keys are ordered length, name.
             var notResolveCallbackForNamesLabel = il.DefineLabel();
             var promiseCallbackNamesLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.RequirePromise().ResolveCallbackType);
+            il.Emit(OpCodes.Isinst, inputs.Promise!.ResolveCallbackType);
             il.Emit(OpCodes.Brfalse, notResolveCallbackForNamesLabel);
             il.Emit(OpCodes.Br, promiseCallbackNamesLabel);
             il.MarkLabel(notResolveCallbackForNamesLabel);
             var notPromiseCallbackForNamesLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.RequirePromise().RejectCallbackType);
+            il.Emit(OpCodes.Isinst, inputs.Promise!.RejectCallbackType);
             il.Emit(OpCodes.Brfalse, notPromiseCallbackForNamesLabel);
             il.MarkLabel(promiseCallbackNamesLabel);
             AddName("length");
@@ -1340,11 +1403,11 @@ public partial class RuntimeEmitter
         // RegExp instances are created with an own non-enumerable lastIndex
         // property before any user expando. Keep that intrinsic at the front
         // even when defineProperty later changes its attributes/value.
-        if (runtime.RegExps.Implementation is not null)
+        if (inputs.RegExps.Implementation is not null)
         {
             var notRegExpForNamesLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.RegExps.RequireImplementation().Type);
+            il.Emit(OpCodes.Isinst, inputs.RegExps.RequireImplementation().Type);
             il.Emit(OpCodes.Brfalse, notRegExpForNamesLabel);
             il.Emit(OpCodes.Ldloc, namesLocal);
             il.Emit(OpCodes.Ldstr, "lastIndex");
@@ -1355,12 +1418,12 @@ public partial class RuntimeEmitter
         var noFieldsDictLabel = il.DefineLabel();
         var fieldsDictLocal = il.DeclareLocal(_types.DictionaryStringObject);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.IHasFieldsInterface);
+        il.Emit(OpCodes.Isinst, inputs.IHasFieldsInterface);
         il.Emit(OpCodes.Brfalse, noFieldsDictLabel);
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.IHasFieldsInterface);
-        il.Emit(OpCodes.Callvirt, runtime.IHasFieldsFieldsGetter);
+        il.Emit(OpCodes.Castclass, inputs.IHasFieldsInterface);
+        il.Emit(OpCodes.Callvirt, inputs.IHasFieldsFieldsGetter);
         il.Emit(OpCodes.Stloc, fieldsDictLocal);
         il.Emit(OpCodes.Ldloc, fieldsDictLocal);
         il.Emit(OpCodes.Brfalse, noFieldsDictLabel);
@@ -1426,10 +1489,10 @@ public partial class RuntimeEmitter
             var accessorLoopEndLabel = il.DefineLabel();
 
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.ObjectStorage.Type);
+            il.Emit(OpCodes.Isinst, inputs.ObjectStorage.Type);
             il.Emit(OpCodes.Brfalse, doneLabel);
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Castclass, runtime.ObjectStorage.Type);
+            il.Emit(OpCodes.Castclass, inputs.ObjectStorage.Type);
             il.Emit(OpCodes.Callvirt, accessorMapGetter);
             il.Emit(OpCodes.Stloc, accessorDictLocal);
             il.Emit(OpCodes.Ldloc, accessorDictLocal);
@@ -1465,8 +1528,8 @@ public partial class RuntimeEmitter
             il.MarkLabel(doneLabel);
         }
 
-        EmitLiteralAccessorNames(runtime.ObjectStorage.GetGettersDictionary);
-        EmitLiteralAccessorNames(runtime.ObjectStorage.GetSettersDictionary);
+        EmitLiteralAccessorNames(inputs.ObjectStorage.GetGettersDictionary);
+        EmitLiteralAccessorNames(inputs.ObjectStorage.GetSettersDictionary);
 
         // Append PDS extras (accessor-only own props + non-enumerable own
         // props installed via Object.defineProperty). Mirrors the dict path
@@ -1476,7 +1539,7 @@ public partial class RuntimeEmitter
         var objPdsExtraNamesLocal = il.DeclareLocal(_types.ListOfObject);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, fieldsDictLocal);
-        il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetAllExtraKeys);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.GetAllExtraKeys);
         il.Emit(OpCodes.Stloc, objPdsExtraNamesLocal);
         var objExtraIndexLocal = il.DeclareLocal(_types.Int32);
         var objExtraKeyLocal = il.DeclareLocal(_types.Object);
@@ -1509,7 +1572,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, objExtraLoop);
         il.MarkLabel(objExtraEnd);
         il.Emit(OpCodes.Ldloc, namesLocal);
-        il.Emit(OpCodes.Call, runtime.NormalizeOwnPropertyKeys);
+        il.Emit(OpCodes.Call, objectKeys.Normalize);
         il.Emit(OpCodes.Ret);
     }
 

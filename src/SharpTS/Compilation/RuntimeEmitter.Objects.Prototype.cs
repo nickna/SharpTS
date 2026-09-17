@@ -8,6 +8,16 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
+    private readonly record struct GetOwnPropertySymbolsInputs(
+        EmittedBooleanRuntime Booleans,
+        EmittedErrorRuntime Errors,
+        MethodBuilder GetProperty,
+        ProxyDescriptorCallInputs ProxyDescriptor,
+        ProxyOwnKeysCallInputs ProxyOwnKeys,
+        EmittedSymbolRuntime Symbols,
+        Type UndefinedType
+    );
+
     private readonly record struct ObjectCreateInputs(
         EmittedDescriptorStorageRuntime DescriptorStorage,
         EmittedErrorRuntime Errors,
@@ -451,7 +461,11 @@ public partial class RuntimeEmitter
     /// Signature: object GetOwnPropertySymbols(object obj)
     /// Uses the compiled assembly's GetSymbolDict to retrieve symbol keys.
     /// </summary>
-    private void EmitGetOwnPropertySymbols(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitGetOwnPropertySymbols(
+        TypeBuilder typeBuilder,
+        EmittedObjectKeysRuntime objectKeys,
+        GetOwnPropertySymbolsInputs inputs
+    )
     {
         var method = typeBuilder.DefineMethod(
             "GetOwnPropertySymbols",
@@ -459,7 +473,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object]
         );
-        runtime.GetOwnPropertySymbols = method;
+        objectKeys.Symbols = method;
 
         var il = method.GetILGenerator();
 
@@ -470,20 +484,31 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Brfalse, gOPSThrowLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
         il.Emit(OpCodes.Brtrue, gOPSThrowLabel);
         il.Emit(OpCodes.Br, gOPSTypeOkLabel);
         il.MarkLabel(gOPSThrowLabel);
-        GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot convert undefined or null to object");
+        GuestErrorEmitter.ThrowError(il, inputs.Errors.CreateException, inputs.Errors.TypeErrorConstructor, "Cannot convert undefined or null to object");
         il.MarkLabel(gOPSTypeOkLabel);
 
         // Proxy [[OwnPropertyKeys]] validates the complete mixed key list
         // before GetOwnPropertyKeys filters it to Symbols.
         var notProxyForSymbolsLabel = il.DefineLabel();
         EmitProxyOwnKeysCheck(
-            il, runtime, () => il.Emit(OpCodes.Ldarg_0),
-            notProxyForSymbolsLabel, enumerableOnly: false,
-            symbolsOnly: true);
+            il,
+            new ProxyOwnKeysCheckInputs(
+                inputs.Booleans,
+                inputs.GetProperty,
+                inputs.ProxyDescriptor,
+                inputs.ProxyOwnKeys,
+                inputs.Symbols,
+                inputs.UndefinedType
+            ),
+            () => il.Emit(OpCodes.Ldarg_0),
+            notProxyForSymbolsLabel,
+            enumerableOnly: false,
+            symbolsOnly: true
+        );
         il.MarkLabel(notProxyForSymbolsLabel);
 
         // Create the result list
@@ -495,7 +520,7 @@ public partial class RuntimeEmitter
         // Return a fresh empty list without creating symbol storage on the source.
         var returnResult = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.Symbols.TryGetStorage);
+        il.Emit(OpCodes.Call, inputs.Symbols.TryGetStorage);
         var symbolDictLocal = il.DeclareLocal(_types.DictionaryObjectObject);
         il.Emit(OpCodes.Stloc, symbolDictLocal);
         il.Emit(OpCodes.Ldloc, symbolDictLocal);

@@ -3708,6 +3708,385 @@ public class StandaloneDllTests
             verifyStandardError: error => Assert.Empty(error)));
     }
 
+    public static IEnumerable<object[]> OwnKeysMetadataPrograms =>
+    [
+        new object[]
+        {
+            "minimal",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "console.log(1);" },
+            "1\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "keys",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let obj: { a: number, b: number, c: number } = { a: 1, b: 2, c: 3 };\nlet keys: string[] = Object.keys(obj);\nconsole.log(keys.length);" },
+            "3\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "class_keys",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "class Person {\n    name: string;\n    age: number;\n    constructor(n: string, a: number) {\n        this.name = n;\n        this.age = a;\n    }\n}\nlet p = new Person(\"Alice\", 30);\nlet keys: string[] = Object.keys(p);\nconsole.log(keys.length);" },
+            "2\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "names",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let obj: { a: number, b: number, c: number } = { a: 1, b: 2, c: 3 };\nlet names: string[] = Object.getOwnPropertyNames(obj);\nconsole.log(names.length);" },
+            "3\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "array_names",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let arr: number[] = [1, 2, 3];\nlet names: string[] = Object.getOwnPropertyNames(arr);\n// Should include \"0\", \"1\", \"2\", \"length\"\nconsole.log(names.includes(\"0\"));\nconsole.log(names.includes(\"1\"));\nconsole.log(names.includes(\"2\"));\nconsole.log(names.includes(\"length\"));" },
+            "true\ntrue\ntrue\ntrue\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "hidden",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let obj: any = {};\nObject.defineProperty(obj, \"hidden\", { value: 42, enumerable: false });\nObject.defineProperty(obj, \"visible\", { value: 100, enumerable: true });\nlet names: string[] = Object.getOwnPropertyNames(obj);\nconsole.log(names.includes(\"hidden\"));\nconsole.log(names.includes(\"visible\"));" },
+            "true\ntrue\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "accessors",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const objectValue: any = {};\nObject.defineProperty(objectValue, \"accessor\", { get() { return 1; } });\nconst arrayValue: any[] = [1, 2];\narrayValue.data = 3;\nObject.defineProperty(arrayValue, \"accessor\", { get() { return 4; } });\nconsole.log(Object.getOwnPropertyNames(objectValue).includes(\"accessor\"));\nconsole.log(Object.getOwnPropertyNames(arrayValue).includes(\"data\"));\nconsole.log(Object.getOwnPropertyNames(arrayValue).includes(\"accessor\"));" },
+            "true\ntrue\ntrue\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "defined",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let obj: any = { visible: 1 };\nObject.defineProperty(obj, \"hidden\", { value: 2, enumerable: false });\nlet names: string[] = Object.getOwnPropertyNames(obj);\nconsole.log(names.length);\nconsole.log(names.includes(\"visible\"));\nconsole.log(names.includes(\"hidden\"));" },
+            "2\ntrue\ntrue\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "class_names",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "class Person {\n    name: string;\n    constructor(n: string) {\n        this.name = n;\n    }\n    greet(): string {\n        return \"Hello\";\n    }\n}\nlet p = new Person(\"Alice\");\nlet names: string[] = Object.getOwnPropertyNames(p);\nconsole.log(names.includes(\"name\"));\nconsole.log(names.includes(\"greet\"));" },
+            "true\nfalse\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "empty",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let obj: {} = {};\nlet names: string[] = Object.getOwnPropertyNames(obj);\nconsole.log(names.length);" },
+            "0\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "mixed",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let obj: { name: string, age: number, active: boolean } = { name: \"Alice\", age: 30, active: true };\nlet names: string[] = Object.getOwnPropertyNames(obj);\nconsole.log(names.length);" },
+            "3\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "symbol_use",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let sym = Symbol(\"key\");\nlet obj: any = { [sym]: 42 };\nlet symbols = Object.getOwnPropertySymbols(obj);\nconsole.log(obj[symbols[0]]);" },
+            "42\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "class_symbols",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let sym = Symbol(\"prop\");\nclass MyClass {\n    x: number = 1;\n}\nlet obj: any = new MyClass();\nobj[sym] = \"symbol value\";\nlet symbols = Object.getOwnPropertySymbols(obj);\nconsole.log(symbols.length);" },
+            "1\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "created",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let proto = { a: 1, b: 2 };\nlet obj = Object.create(proto);\n// ECMA-262 §20.1.2.16 Object.keys: own enumerable keys only.\n// Object.create(proto) returns a FRESH empty object with [[Prototype]]\n// = proto. proto's keys are reached via the prototype chain at\n// property-access time — they are NOT own keys of the created obj.\nlet keys = Object.keys(obj);\nconsole.log(keys.length);\n// Inherited access still works through the prototype chain.\nconsole.log(obj.a);\nconsole.log(obj.b);" },
+            "0\n1\n2\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "proxy_keys",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let target: any = { a: 1, b: 2 };\nlet proxy: any = new Proxy(target, {\n    ownKeys: function(t: any): string[] { return [\"x\", \"y\"]; },\n    getOwnPropertyDescriptor: function(t: any, key: string): any {\n        return { configurable: true, enumerable: true, value: key };\n    }\n});\nconsole.log(Object.keys(proxy).join(\",\"));" },
+            "x,y\n",
+            false,
+            false
+        },
+        new object[]
+        {
+            "proxy_names",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let target: any = { a: 1 };\nlet proxy: any = new Proxy(target, {\n    ownKeys: function(t: any): string[] { return [\"p\", \"q\", \"r\"]; }\n});\nconsole.log(Object.getOwnPropertyNames(proxy).join(\",\"));" },
+            "p,q,r\n",
+            false,
+            false
+        },
+        new object[]
+        {
+            "proxy_revoked",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let target: any = { a: 1 };\nlet r: any = Proxy.revocable(target, {});\nr.revoke();\ntry {\n    Object.keys(r.proxy);\n    console.log(\"should not reach\");\n} catch (e) {\n    console.log(\"threw\");\n}" },
+            "threw\n",
+            false,
+            false
+        },
+        new object[]
+        {
+            "shape_mutation",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const sym: symbol = Symbol(\"hidden\");\nconst record: any = {\n    10: \"ten\",\n    first: \"a\",\n    2: \"two\",\n    1: \"one\",\n    [sym]: \"symbol\"\n};\nrecord.last = \"z\";\nconsole.log(Object.keys(record).join(\",\"));" },
+            "1,2,10,first,last\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "proxy_mutation",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let getterCalls: number = 0;\nconst accessor: any = {\n    a: 1,\n    get b(): number { getterCalls = getterCalls + 1; return 2; }\n};\nconsole.log(Object.keys(accessor).join(\",\"));\nconsole.log(getterCalls);\n\nlet ownKeysCalls: number = 0;\nconst proxy: any = new Proxy({ x: 1, y: 2 }, {\n    ownKeys(target: any): any[] {\n        ownKeysCalls = ownKeysCalls + 1;\n        return Reflect.ownKeys(target);\n    }\n});\nconsole.log(Object.keys(proxy).join(\",\"));\nconsole.log(ownKeysCalls);" },
+            "a,b\n0\nx,y\n1\n",
+            false,
+            false
+        },
+        new object[]
+        {
+            "spread_order",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "function copy(value: any): any { return { prefix: 0, ...value, suffix: 1 }; }\nconst value: any = { a: 1, \"10\": 10, \"2\": 2, \"01\": 1, \"4294967295\": 5 };\nconst result: any = copy(value);\nconsole.log(Object.keys(result).join(\",\"));\nconsole.log(result[\"10\"] + result[\"2\"] + result[\"01\"]);" },
+            "2,10,prefix,a,01,4294967295,suffix\n13\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "index_names",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const targets: any[] = [{}, []];\nconst keys: string[] = [\"01\", \"+1\", \" 1 \", \"4294967295\"];\nfor (const target of targets) {\n    for (const key of keys) {\n        Object.defineProperty(target, key, {\n            value: key, enumerable: true, configurable: true\n        });\n    }\n    target[2] = \"2\";\n    target[0] = \"0\";\n    console.log(Object.keys(target).join(\",\"));\n    console.log(target[\"01\"], target[\"+1\"], target[\" 1 \"], target[\"4294967295\"]);\n}\nconsole.log(targets[1].length);" },
+            "0,2,01,+1, 1 ,4294967295\n01 +1  1  4294967295\n0,2,01,+1, 1 ,4294967295\n01 +1  1  4294967295\n3\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "function_keys",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "function f() {}\nconsole.log(Object.keys(f).length);\n(f as any).alpha = 1;\n(f as any).beta = 2;\nconsole.log(Object.keys(f).join(\",\"));\nconsole.log(Object.values(f).join(\",\"));" },
+            "0\nalpha,beta\n1,2\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "reflect_keys",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let obj: any = { a: 1, b: 2, c: 3 };\nlet keys: any = Reflect.ownKeys(obj);\nconsole.log(keys.length);\nconsole.log(keys[0]);\nconsole.log(keys[1]);\nconsole.log(keys[2]);" },
+            "3\na\nb\nc\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "nullish",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "for (const method of [Object.keys, Object.getOwnPropertyNames, Object.getOwnPropertySymbols]) {\n for (const value of [null, undefined]) { try { method(value); } catch (e: any) { console.log(e instanceof TypeError); } }\n}" },
+            "true\ntrue\ntrue\ntrue\ntrue\ntrue\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "promise_callbacks",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "new Promise((resolve: any, reject: any) => {\n console.log(Object.getOwnPropertyNames(resolve).join(',')); console.log(Object.getOwnPropertyNames(reject).join(','));\n console.log(Object.keys(resolve).length, Object.getOwnPropertySymbols(reject).length); resolve(1);\n});" },
+            "length,name\nlength,name\n0 0\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "sparse_array",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const a: any = [1,2,3]; delete a[1]; a.extra = 4; Object.defineProperty(a, 'hidden', {value: 5});\nconsole.log(Object.keys(a).join(',')); console.log(Object.getOwnPropertyNames(a).join(','));" },
+            "0,2,extra\n0,2,length,extra,hidden\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "index_boundaries",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const o: any = {}; o.b=1; o['4294967295']=2; o['2']=3; o['01']=4; o['4294967294']=5; o['0']=6;\nconsole.log(Object.keys(o).join(',')); console.log(Object.getOwnPropertyNames(o).join(','));" },
+            "0,2,4294967294,b,4294967295,01\n0,2,4294967294,b,4294967295,01\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "proxy_mixed",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const s = Symbol('s'); const t: any = {a:1,b:2}; t[s]=3;\nconst p: any = new Proxy(t, {ownKeys() { return [s, 'b', 'a']; }});\nconsole.log(Object.keys(p).join(',')); console.log(Object.getOwnPropertyNames(p).join(',')); console.log(Object.getOwnPropertySymbols(p)[0]===s);" },
+            "b,a\nb,a\ntrue\n",
+            false,
+            false
+        },
+        new object[]
+        {
+            "proxy_duplicate",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "const p: any = new Proxy({a:1}, {ownKeys() { return ['a','a']; }});\nfor (const method of [Object.keys,Object.getOwnPropertyNames,Object.getOwnPropertySymbols]) { try { method(p); } catch (e: any) { console.log(e instanceof TypeError); } }" },
+            "true\ntrue\ntrue\n",
+            false,
+            false
+        },
+        new object[]
+        {
+            "proxy_arraylike_order",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let trace = '';\nconst list: any = {get length() { trace += 'l'; return 2.9; }, get 0() { trace += '0'; return 'b'; }, get 1() { trace += '1'; return 'a'; }};\nconst p: any = new Proxy({a:1,b:2}, {ownKeys() { trace += 'k'; return list; }});\nconsole.log(Object.getOwnPropertyNames(p).join(',')); console.log(trace);" },
+            "b,a\nkl01\n",
+            false,
+            false
+        },
+        new object[]
+        {
+            "esm",
+            "main.ts",
+            new string[] { "dep.ts", "main.ts" },
+            new string[] { "export const s = Symbol('module'); export const value: any = {z:1, '2':2, '1':3}; value[s]=4;", "import {s,value} from './dep'; console.log(Object.keys(value).join(',')); console.log(Object.getOwnPropertySymbols(value)[0]===s);" },
+            "1,2,z\ntrue\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "commonjs",
+            "main.cjs",
+            new string[] { "dep.cjs", "main.cjs" },
+            new string[] { "exports.value = {z:1, '2':2, '1':3};", "const dep = require('./dep.cjs'); console.log(Object.getOwnPropertyNames(dep.value).join(','));" },
+            "1,2,z\n",
+            false,
+            true
+        },
+        new object[]
+        {
+            "hosted_keys",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "export function keys(value: any) { return Object.keys(value); } export function names(value: any) { return Object.getOwnPropertyNames(value); } export function symbols(value: any) { return Object.getOwnPropertySymbols(value); }" },
+            "",
+            true,
+            true
+        },
+        new object[]
+        {
+            "hosted_minimal",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "export const value = 1;" },
+            "",
+            true,
+            true
+        },
+        new object[]
+        {
+            "symbol_redefinition",
+            "main.ts",
+            new string[] { "main.ts" },
+            new string[] { "let first = Symbol(\"first\");\nlet second = Symbol(\"second\");\nlet obj: any = {};\nobj[first] = 1;\nobj[second] = 2;\nObject.defineProperty(obj, first, { get: () => 3 });\nlet objectKeys = Object.getOwnPropertySymbols(obj);\nconsole.log(objectKeys[0] === first, objectKeys[1] === second);\n\nlet array: any = [];\narray[first] = 1;\narray[second] = 2;\nObject.defineProperty(array, first, { writable: false });\nlet arrayKeys = Object.getOwnPropertySymbols(array);\nconsole.log(arrayKeys[0] === first, arrayKeys[1] === second);\nconsole.log(Object.getOwnPropertyDescriptor(array, first)!.writable);" },
+            "true true\ntrue true\nfalse\n",
+            false,
+            true
+        },
+    ];
+
+    [Theory]
+    [MemberData(nameof(OwnKeysMetadataPrograms))]
+    public void Isolated_OwnKeysMetadata_PreservesEnumerationAndDeployment(
+        string name, string entry, string[] paths, string[] sources, string expected, bool hosted, bool standalone)
+    {
+        using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        for (int i = 0; i < paths.Length; i++) tempDir.CreateFile(paths[i], sources[i]);
+        var sourcePath = tempDir.GetPath(entry);
+        var dllPath = tempDir.GetPath($"own-keys-metadata_{name}.dll");
+        var deployment = standalone ? " --standalone" : "";
+        var hosting = hosted ? " --target dll --hosted" : "";
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --noLib --compile \"{sourcePath}\" -o \"{dllPath}\" --verify{deployment}{hosting}", tempDir.Path);
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        var references = GetAssemblyReferences(dllPath);
+        Assert.DoesNotContain("SharpTS", references);
+        Assert.Equal(hosted, references.Contains("SharpTS.Hosting.Abstractions"));
+        Assert.Equal(!standalone, File.Exists(tempDir.GetPath("SharpTS.dll")));
+        if (!hosted)
+            Assert.Equal(expected, ExecuteCompiledDllIsolated(dllPath, timeoutMs: 30000,
+                verifyStandardError: error => Assert.Empty(error)));
+    }
+
+
     public static IEnumerable<object[]> ObjectPrototypeMetadataPrograms =>
     [
         new object[]

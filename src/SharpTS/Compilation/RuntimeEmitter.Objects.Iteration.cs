@@ -283,7 +283,7 @@ public partial class RuntimeEmitter
             var loopEnd = il.DefineLabel();
 
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Call, runtime.GetKeys);
+            il.Emit(OpCodes.Call, runtime.ObjectKeys.Keys);
             il.Emit(OpCodes.Stloc, keysLocal);
             il.Emit(OpCodes.Newobj, _types.GetConstructor(listType, Type.EmptyTypes)!);
             il.Emit(OpCodes.Stloc, resultLocal);
@@ -825,7 +825,7 @@ public partial class RuntimeEmitter
             var loopEnd = il.DefineLabel();
 
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Call, runtime.GetKeys);
+            il.Emit(OpCodes.Call, runtime.ObjectKeys.Keys);
             il.Emit(OpCodes.Stloc, keysLocal);
             il.Emit(OpCodes.Newobj, _types.GetConstructor(listType, Type.EmptyTypes)!);
             il.Emit(OpCodes.Stloc, resultLocal);

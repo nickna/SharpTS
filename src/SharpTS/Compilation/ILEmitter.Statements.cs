@@ -3129,7 +3129,7 @@ public partial class ILEmitter
 
         // Evaluate object and get keys
         EmitExpression(f.Object);
-        IL.Emit(OpCodes.Call, _ctx.Runtime!.GetKeys);
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.ObjectKeys.Keys);
         var keysLocal = IL.DeclareLocal(_ctx.Types.ListOfObject);
         IL.Emit(OpCodes.Stloc, keysLocal);
 

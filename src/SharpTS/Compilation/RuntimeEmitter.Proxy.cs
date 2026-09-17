@@ -5,6 +5,17 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
+    private readonly record struct ProxyOwnKeysHelperBodiesInputs(MethodBuilder GetProperty, EmittedNumericCoercionRuntime NumericCoercion);
+
+    private readonly record struct ProxyOwnKeysCheckInputs(
+        EmittedBooleanRuntime Booleans,
+        MethodBuilder GetProperty,
+        ProxyDescriptorCallInputs ProxyDescriptor,
+        ProxyOwnKeysCallInputs ProxyOwnKeys,
+        EmittedSymbolRuntime Symbols,
+        Type UndefinedType
+    );
+
     private readonly record struct ProxySetCallInputs(MethodInfo Set, MethodInfo GetOwnPropertyDescriptor,
         MethodInfo GetProperty, MethodInfo InvokeMethodUnwrapped);
 
@@ -421,32 +432,31 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Unbox_Any, _types.Boolean);
     }
 
-    private void DeclareProxyOwnKeysHelpers(
-        TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void DeclareProxyOwnKeysHelpers(TypeBuilder typeBuilder, EmittedObjectKeysRuntime objectKeys)
     {
-        runtime.GetOrdinaryOwnPropertyKeys = typeBuilder.DefineMethod(
+        objectKeys.Ordinary = typeBuilder.DefineMethod(
             "GetOrdinaryOwnPropertyKeys",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.ListOfObject,
             [_types.Object]);
-        runtime.CreateProxyOwnKeysList = typeBuilder.DefineMethod(
+        objectKeys.CreateProxyList = typeBuilder.DefineMethod(
             "CreateProxyOwnKeysList",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.ListOfObject,
             [_types.Object]);
     }
 
-    private void EmitProxyOwnKeysHelperBodies(EmittedRuntime runtime)
+    private void EmitProxyOwnKeysHelperBodies(EmittedObjectKeysRuntime objectKeys, ProxyOwnKeysHelperBodiesInputs inputs)
     {
         // OrdinaryOwnPropertyKeys = ordered string keys followed by Symbols.
-        var il = runtime.GetOrdinaryOwnPropertyKeys.GetILGenerator();
+        var il = objectKeys.Ordinary.GetILGenerator();
         var result = il.DeclareLocal(_types.ListOfObject);
         var symbols = il.DeclareLocal(_types.ListOfObject);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.GetOwnPropertyNames);
+        il.Emit(OpCodes.Call, objectKeys.Names);
         il.Emit(OpCodes.Stloc, result);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.GetOwnPropertySymbols);
+        il.Emit(OpCodes.Call, objectKeys.Symbols);
         il.Emit(OpCodes.Isinst, _types.ListOfObject);
         il.Emit(OpCodes.Stloc, symbols);
         var noSymbols = il.DefineLabel();
@@ -463,7 +473,7 @@ public partial class RuntimeEmitter
         // CreateListFromArrayLike for an ownKeys trap result. Every read goes
         // through the emitted [[Get]] path so accessors and Proxy receivers are
         // observed in the required length-then-index order.
-        il = runtime.CreateProxyOwnKeysList.GetILGenerator();
+        il = objectKeys.CreateProxyList.GetILGenerator();
         result = il.DeclareLocal(_types.ListOfObject);
         var lengthNumber = il.DeclareLocal(_types.Double);
         var length = il.DeclareLocal(_types.Int32);
@@ -473,8 +483,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, result);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "length");
-        il.Emit(OpCodes.Call, runtime.GetProperty);
-        il.Emit(OpCodes.Call, runtime.NumericCoercion.ToNumber);
+        il.Emit(OpCodes.Call, inputs.GetProperty);
+        il.Emit(OpCodes.Call, inputs.NumericCoercion.ToNumber);
         il.Emit(OpCodes.Stloc, lengthNumber);
 
         var zeroLength = il.DefineLabel();
@@ -515,7 +525,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloca, index);
         il.Emit(OpCodes.Call, _types.GetMethodNoParams(_types.Int32, "ToString")!);
-        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, inputs.GetProperty);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(
             _types.ListOfObject, "Add", [_types.Object])!);
         il.Emit(OpCodes.Ldloc, index);
@@ -526,6 +536,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(done);
         il.Emit(OpCodes.Ldloc, result);
         il.Emit(OpCodes.Ret);
+        objectKeys.MarkProxyCallbackBodiesEmitted();
     }
 
     /// <summary>Leaves the full mixed string/Symbol own-key list on stack.</summary>
@@ -534,8 +545,8 @@ public partial class RuntimeEmitter
         EmitProxyOwnKeysCompiledCall(
             il,
             new ProxyOwnKeysCallInputs(
-                runtime.GetOrdinaryOwnPropertyKeys,
-                runtime.CreateProxyOwnKeysList,
+                runtime.ObjectKeys.Ordinary,
+                runtime.ObjectKeys.CreateProxyList,
                 runtime.ObjectDescriptors.GetOwnPropertyDescriptor,
                 runtime.ObjectState.IsExtensible,
                 runtime.Symbols.IsSymbol,
@@ -639,13 +650,14 @@ public partial class RuntimeEmitter
     /// Emits a proxy-aware ownKeys check. The full mixed key list is validated
     /// before this consumer filters it to strings or Symbols.
     /// </summary>
-    internal void EmitProxyOwnKeysCheck(
+    private void EmitProxyOwnKeysCheck(
         ILGenerator il,
-        EmittedRuntime runtime,
+        ProxyOwnKeysCheckInputs inputs,
         Action emitLoadObj,
         Label notProxyLabel,
         bool enumerableOnly,
-        bool symbolsOnly = false)
+        bool symbolsOnly = false
+    )
     {
         var proxyLabel = il.DefineLabel();
         EmitProxyTypeCheck(il, emitLoadObj, proxyLabel, notProxyLabel);
@@ -653,7 +665,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(proxyLabel);
 
         var keysListLocal = il.DeclareLocal(_types.ListOfObject);
-        EmitProxyOwnKeysCompiledCall(il, runtime, emitLoadObj);
+        EmitProxyOwnKeysCompiledCall(il, inputs.ProxyOwnKeys, emitLoadObj);
         il.Emit(OpCodes.Stloc, keysListLocal);
 
         // result = new List<object?>();
@@ -684,7 +696,7 @@ public partial class RuntimeEmitter
         if (symbolsOnly)
         {
             il.Emit(OpCodes.Ldloc, currentKeyLocal);
-            il.Emit(OpCodes.Call, runtime.Symbols.IsSymbol);
+            il.Emit(OpCodes.Call, inputs.Symbols.IsSymbol);
             il.Emit(OpCodes.Brfalse, advanceLabel);
         }
         else
@@ -702,13 +714,13 @@ public partial class RuntimeEmitter
             // abrupt completions, revocation, and invariant validation.
             var descriptorLocal = il.DeclareLocal(_types.Object);
             EmitProxyGetOwnPropertyDescriptorCompiledCall(
-                il, runtime, emitLoadObj,
+                il, inputs.ProxyDescriptor, emitLoadObj,
                 () => il.Emit(OpCodes.Ldloc, currentKeyLocal));
             il.Emit(OpCodes.Stloc, descriptorLocal);
             il.Emit(OpCodes.Ldloc, descriptorLocal);
             il.Emit(OpCodes.Brfalse, advanceLabel);
             il.Emit(OpCodes.Ldloc, descriptorLocal);
-            il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+            il.Emit(OpCodes.Isinst, inputs.UndefinedType);
             il.Emit(OpCodes.Brtrue, advanceLabel);
             // Reflection bridges use SharpTS.dll's undefined singleton.
             il.Emit(OpCodes.Ldloc, descriptorLocal);
@@ -721,8 +733,8 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Brtrue, advanceLabel);
             il.Emit(OpCodes.Ldloc, descriptorLocal);
             il.Emit(OpCodes.Ldstr, "enumerable");
-            il.Emit(OpCodes.Call, runtime.GetProperty);
-            il.Emit(OpCodes.Call, runtime.Booleans.IsTruthy);
+            il.Emit(OpCodes.Call, inputs.GetProperty);
+            il.Emit(OpCodes.Call, inputs.Booleans.IsTruthy);
             il.Emit(OpCodes.Brfalse, advanceLabel);
         }
 
