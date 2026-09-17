@@ -28,7 +28,7 @@ public partial class RuntimeEmitter
     /// backing <c>Object.prototype.__defineGetter__/__defineSetter__</c>
     /// (ECMA-262 §B.2.2.2 / §B.2.2.3). Validates the function arg is callable,
     /// builds a configurable+enumerable accessor descriptor, and forwards to
-    /// <see cref="EmittedRuntime.ObjectDefineProperty"/>.
+    /// <see cref="EmittedObjectDescriptorRuntime.DefineProperty"/>.
     /// </summary>
     private MethodBuilder EmitDefineAccessorHelper(TypeBuilder typeBuilder, EmittedRuntime runtime, bool isGetter)
     {
