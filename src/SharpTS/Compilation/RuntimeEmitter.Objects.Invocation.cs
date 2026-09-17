@@ -242,7 +242,7 @@ public partial class RuntimeEmitter
         // Handle $MethodCallable
         var methodCallableLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.MethodCallableType);
+        il.Emit(OpCodes.Isinst, runtime.ReflectedMethods.CallableType);
         il.Emit(OpCodes.Brtrue, methodCallableLabel);
 
         // Built-in type constructors stored as values (issue #61): patterns
@@ -572,9 +572,9 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(methodCallableLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.MethodCallableType);
+        il.Emit(OpCodes.Castclass, runtime.ReflectedMethods.CallableType);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, runtime.MethodCallableInvoke);
+        il.Emit(OpCodes.Callvirt, runtime.ReflectedMethods.CallableInvoke);
         il.Emit(OpCodes.Ret);
 
         // Null callee: `f(x)` where f is null. Throws TypeError per ECMA-262
@@ -851,12 +851,12 @@ public partial class RuntimeEmitter
         // Handle $MethodCallable (wraps BuiltInMethod from GetMember)
         var notMethodCallableLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, runtime.MethodCallableType);
+        il.Emit(OpCodes.Isinst, runtime.ReflectedMethods.CallableType);
         il.Emit(OpCodes.Brfalse, notMethodCallableLabel);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Castclass, runtime.MethodCallableType);
+        il.Emit(OpCodes.Castclass, runtime.ReflectedMethods.CallableType);
         il.Emit(OpCodes.Ldarg_2);  // args
-        il.Emit(OpCodes.Callvirt, runtime.MethodCallableInvoke);
+        il.Emit(OpCodes.Callvirt, runtime.ReflectedMethods.CallableInvoke);
         il.Emit(OpCodes.Ret);
 
         // Handle Func<object?[], object?> (from CreateBoundMethod in RuntimeTypes.Methods)

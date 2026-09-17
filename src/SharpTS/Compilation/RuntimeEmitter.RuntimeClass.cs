@@ -494,7 +494,7 @@ public partial class RuntimeEmitter
             "_reflectedMethodCache",
             reflectedMethodCacheType,
             FieldAttributes.Private | FieldAttributes.Static | FieldAttributes.InitOnly);
-        runtime.ReflectedMethodCacheField = reflectedMethodCacheField;
+        runtime.ReflectedMethods.Cache = reflectedMethodCacheField;
 
         // Static field for console group indentation level (needed early for ConsoleLog)
         var consoleGroupLevelField = typeBuilder.DefineField(
@@ -806,7 +806,7 @@ public partial class RuntimeEmitter
         EmitCreateException(runtime.Errors);
         // Reflection-backed Proxy bridges also use this helper to unwrap
         // SharpTS.dll guest exceptions and preserve emitted error branding.
-        EmitInvokeMethodUnwrapped(typeBuilder, runtime);
+        EmitInvokeMethodUnwrapped(typeBuilder, runtime.ReflectedMethods, runtime.Errors);
         EmitWrapException(
             typeBuilder,
             runtime.Errors,
@@ -942,7 +942,7 @@ public partial class RuntimeEmitter
                 runtime.ObjectStorage,
                 runtime.Promise,
                 new ProxyDescriptorCallInputs(
-                    runtime.InvokeMethodUnwrapped,
+                    runtime.ReflectedMethods.InvokeUnwrapped,
                     runtime.ObjectDescriptors.GetOwnPropertyDescriptor,
                     runtime.ObjectState.IsExtensible,
                     runtime.ObjectRead.Property
@@ -1020,8 +1020,8 @@ public partial class RuntimeEmitter
                 runtime.UndefinedType
             )
         );
-        EmitToPascalCase(typeBuilder, runtime);  // Must be emitted before GetFieldsProperty/SetFieldsProperty
-        EmitSafeGetMethod(typeBuilder, runtime); // Must be emitted before GetFieldsProperty/SetFieldsProperty
+        EmitToPascalCase(typeBuilder, runtime.ReflectedMethods);  // Must be emitted before GetFieldsProperty/SetFieldsProperty
+        EmitSafeGetMethod(typeBuilder, runtime.ReflectedMethods); // Must be emitted before GetFieldsProperty/SetFieldsProperty
         // ArrayConstructor (#61) must come before InvokeValue since InvokeValue's
         // Type-callee dispatch branch emits a direct call to it for `Array(n)`
         // patterns where Array was stored as a value.
@@ -1069,17 +1069,17 @@ public partial class RuntimeEmitter
                 runtime.IHasFieldsHasProperty,
                 runtime.IHasFieldsInterface,
                 runtime.InvokeMethodValue,
-                runtime.MethodCallableCtor,
+                runtime.ReflectedMethods.CallableConstructor,
                 runtime.ObjectOwnProperties,
                 runtime.ObjectPrototypes,
                 runtime.ObjectStorage,
                 runtime.Records,
                 runtime.Reflect,
-                runtime.ReflectedMethodCacheField,
-                runtime.SafeGetMethod,
+                runtime.ReflectedMethods.Cache,
+                runtime.ReflectedMethods.FindMethod,
                 runtime.FunctionConstruction.Constructor,
                 runtime.FunctionValues.Type,
-                runtime.ToPascalCase,
+                runtime.ReflectedMethods.ToPascalCase,
                 runtime.UndefinedInstance,
                 runtime.UndefinedType
             )
@@ -1127,7 +1127,7 @@ public partial class RuntimeEmitter
                 runtime.ObjectStorage,
                 runtime.Promise,
                 runtime.RegExps,
-                runtime.SafeGetMethod
+                runtime.ReflectedMethods.FindMethod
             )
         );
         EmitSetFieldsPropertyStrict(
@@ -1145,7 +1145,7 @@ public partial class RuntimeEmitter
                 runtime.ObjectStorage,
                 runtime.Promise,
                 runtime.RegExps,
-                runtime.SafeGetMethod
+                runtime.ReflectedMethods.FindMethod
             )
         );
         // Promise static wrappers validate their `this` value with the shared
@@ -1158,7 +1158,7 @@ public partial class RuntimeEmitter
                 runtime.FunctionBindings,
                 runtime.FunctionValues,
                 runtime.UndefinedType,
-                runtime.InvokeMethodUnwrapped
+                runtime.ReflectedMethods.InvokeUnwrapped
             )
         );
         runtime.FunctionIntrospection.CompleteEmission();
@@ -1248,7 +1248,7 @@ public partial class RuntimeEmitter
                 runtime.GlobalThisSingletonField,
                 runtime.IHasFieldsGetProperty,
                 runtime.IHasFieldsInterface,
-                runtime.InvokeMethodUnwrapped,
+                runtime.ReflectedMethods.InvokeUnwrapped,
                 runtime.InvokeMethodValue,
                 runtime.LookupBuiltInStaticMember,
                 runtime.Map,
@@ -1261,7 +1261,7 @@ public partial class RuntimeEmitter
                 runtime.Promise,
                 runtime.Reflect,
                 runtime.RegExps,
-                runtime.SafeGetMethod,
+                runtime.ReflectedMethods.FindMethod,
                 runtime.Set,
                 runtime.SharedArrayBuffer,
                 runtime.Strings,
@@ -1356,7 +1356,7 @@ public partial class RuntimeEmitter
                 runtime.Errors,
                 runtime.GlobalThisSetProperty,
                 runtime.GlobalThisSingletonField,
-                runtime.InvokeMethodUnwrapped,
+                runtime.ReflectedMethods.InvokeUnwrapped,
                 runtime.InvokeMethodValue,
                 runtime.LookupBuiltInStaticMember,
                 runtime.NumericCoercion,
@@ -1387,7 +1387,7 @@ public partial class RuntimeEmitter
                 runtime.Errors,
                 runtime.GlobalThisSetProperty,
                 runtime.GlobalThisSingletonField,
-                runtime.InvokeMethodUnwrapped,
+                runtime.ReflectedMethods.InvokeUnwrapped,
                 runtime.InvokeMethodValue,
                 runtime.ObjectDescriptors,
                 runtime.ObjectRead,
@@ -1411,7 +1411,7 @@ public partial class RuntimeEmitter
                 runtime.GlobalThisSingletonField,
                 runtime.IHasFieldsFieldsGetter,
                 runtime.IHasFieldsInterface,
-                runtime.InvokeMethodUnwrapped,
+                runtime.ReflectedMethods.InvokeUnwrapped,
                 runtime.ObjectDescriptors,
                 runtime.ObjectState,
                 runtime.ObjectStorage,
@@ -1433,7 +1433,7 @@ public partial class RuntimeEmitter
                 runtime.GlobalThisSingletonField,
                 runtime.IHasFieldsFieldsGetter,
                 runtime.IHasFieldsInterface,
-                runtime.InvokeMethodUnwrapped,
+                runtime.ReflectedMethods.InvokeUnwrapped,
                 runtime.ObjectDescriptors,
                 runtime.ObjectState,
                 runtime.ObjectStorage,
@@ -1465,7 +1465,7 @@ public partial class RuntimeEmitter
                 runtime.Errors,
                 runtime.IHasFieldsHasProperty,
                 runtime.IHasFieldsInterface,
-                runtime.InvokeMethodUnwrapped,
+                runtime.ReflectedMethods.InvokeUnwrapped,
                 runtime.ObjectDescriptors,
                 runtime.ObjectPrototypes,
                 runtime.ObjectRead,
@@ -1473,7 +1473,7 @@ public partial class RuntimeEmitter
                 runtime.ObjectStorage,
                 runtime.StringCoercion,
                 runtime.Symbols,
-                runtime.ToPascalCase,
+                runtime.ReflectedMethods.ToPascalCase,
                 runtime.UndefinedType
             )
         );
@@ -1497,7 +1497,7 @@ public partial class RuntimeEmitter
                 runtime.FunctionPrototypes.Populate,
                 runtime.GlobalThisGetProperty,
                 runtime.GlobalThisSingletonField,
-                runtime.InvokeMethodUnwrapped,
+                runtime.ReflectedMethods.InvokeUnwrapped,
                 runtime.InvokeMethodValue,
                 runtime.ObjectDescriptors,
                 runtime.ObjectStorage,
@@ -1526,7 +1526,7 @@ public partial class RuntimeEmitter
                 runtime.DescriptorStorage,
                 runtime.GlobalThisSetProperty,
                 runtime.GlobalThisSingletonField,
-                runtime.InvokeMethodUnwrapped,
+                runtime.ReflectedMethods.InvokeUnwrapped,
                 runtime.InvokeMethodValue,
                 runtime.Math,
                 runtime.ObjectDescriptors,
@@ -1632,7 +1632,7 @@ public partial class RuntimeEmitter
         // extensibility callbacks even though their public Object methods are
         // emitted later in this section. Declare the descriptor shell and emit
         // isExtensible up front so key consumers can capture stable delegates.
-        EmitObjectIsExtensible(runtime.ObjectState, new ObjectIsExtensibleInputs(runtime.DescriptorStorage, runtime.ObjectRead.Property, runtime.InvokeMethodUnwrapped));
+        EmitObjectIsExtensible(runtime.ObjectState, new ObjectIsExtensibleInputs(runtime.DescriptorStorage, runtime.ObjectRead.Property, runtime.ReflectedMethods.InvokeUnwrapped));
         DeclareProxyOwnKeysHelpers(typeBuilder, runtime.ObjectKeys);
         EmitNormalizeOwnPropertyKeys(typeBuilder, runtime.ObjectKeys);
         EmitGetOwnPropertyNames(
@@ -1649,7 +1649,7 @@ public partial class RuntimeEmitter
                 runtime.ObjectStorage,
                 runtime.Promise,
                 new ProxyDescriptorCallInputs(
-                    runtime.InvokeMethodUnwrapped,
+                    runtime.ReflectedMethods.InvokeUnwrapped,
                     runtime.ObjectDescriptors.GetOwnPropertyDescriptor,
                     runtime.ObjectState.IsExtensible,
                     runtime.ObjectRead.Property
@@ -1661,7 +1661,7 @@ public partial class RuntimeEmitter
                     runtime.ObjectState.IsExtensible,
                     runtime.Symbols.IsSymbol,
                     runtime.ObjectRead.Property,
-                    runtime.InvokeMethodUnwrapped
+                    runtime.ReflectedMethods.InvokeUnwrapped
                 ),
                 runtime.RegExps,
                 runtime.Symbols,
@@ -1678,7 +1678,7 @@ public partial class RuntimeEmitter
                 runtime.Errors,
                 runtime.ObjectRead.Property,
                 new ProxyDescriptorCallInputs(
-                    runtime.InvokeMethodUnwrapped,
+                    runtime.ReflectedMethods.InvokeUnwrapped,
                     runtime.ObjectDescriptors.GetOwnPropertyDescriptor,
                     runtime.ObjectState.IsExtensible,
                     runtime.ObjectRead.Property
@@ -1690,7 +1690,7 @@ public partial class RuntimeEmitter
                     runtime.ObjectState.IsExtensible,
                     runtime.Symbols.IsSymbol,
                     runtime.ObjectRead.Property,
-                    runtime.InvokeMethodUnwrapped
+                    runtime.ReflectedMethods.InvokeUnwrapped
                 ),
                 runtime.Symbols,
                 runtime.UndefinedType
@@ -1713,7 +1713,7 @@ public partial class RuntimeEmitter
                 runtime.IHasFieldsInterface,
                 runtime.ObjectStorage,
                 new ProxyDescriptorCallInputs(
-                    runtime.InvokeMethodUnwrapped,
+                    runtime.ReflectedMethods.InvokeUnwrapped,
                     runtime.ObjectDescriptors.GetOwnPropertyDescriptor,
                     runtime.ObjectState.IsExtensible,
                     runtime.ObjectRead.Property
@@ -1725,7 +1725,7 @@ public partial class RuntimeEmitter
                     runtime.ObjectState.IsExtensible,
                     runtime.Symbols.IsSymbol,
                     runtime.ObjectRead.Property,
-                    runtime.InvokeMethodUnwrapped
+                    runtime.ReflectedMethods.InvokeUnwrapped
                 ),
                 runtime.Symbols,
                 runtime.FunctionValues.Type,
@@ -1752,7 +1752,7 @@ public partial class RuntimeEmitter
                     runtime.ObjectState.IsExtensible,
                     runtime.Symbols.IsSymbol,
                     runtime.ObjectRead.Property,
-                    runtime.InvokeMethodUnwrapped
+                    runtime.ReflectedMethods.InvokeUnwrapped
                 ),
                 _features.UsesProxy,
                 runtime.ObjectWrite.Index,
@@ -1824,7 +1824,7 @@ public partial class RuntimeEmitter
                     runtime.ObjectState.IsExtensible,
                     runtime.Symbols.IsSymbol,
                     runtime.ObjectRead.Property,
-                    runtime.InvokeMethodUnwrapped
+                    runtime.ReflectedMethods.InvokeUnwrapped
                 ),
                 runtime.ObjectWrite.IndexStrict,
                 runtime.ObjectWrite.PropertyStrict,
@@ -1850,7 +1850,7 @@ public partial class RuntimeEmitter
                 runtime.ObjectOwnProperties.HasOwnProperty,
                 runtime.IHasFieldsFieldsGetter,
                 runtime.IHasFieldsInterface,
-                runtime.InvokeMethodUnwrapped,
+                runtime.ReflectedMethods.InvokeUnwrapped,
                 runtime.NumericCoercion,
                 runtime.ObjectOperations.Is,
                 runtime.ObjectState,
@@ -1904,7 +1904,7 @@ public partial class RuntimeEmitter
                 runtime.ObjectStorage,
                 runtime.Promise,
                 new ProxyDescriptorCallInputs(
-                    runtime.InvokeMethodUnwrapped,
+                    runtime.ReflectedMethods.InvokeUnwrapped,
                     runtime.ObjectDescriptors.GetOwnPropertyDescriptor,
                     runtime.ObjectState.IsExtensible,
                     runtime.ObjectRead.Property
@@ -1942,7 +1942,7 @@ public partial class RuntimeEmitter
                     runtime.ObjectState.IsExtensible,
                     runtime.Symbols.IsSymbol,
                     runtime.ObjectRead.Property,
-                    runtime.InvokeMethodUnwrapped
+                    runtime.ReflectedMethods.InvokeUnwrapped
                 ),
                 runtime.Symbols,
                 runtime.UndefinedInstance,
@@ -1965,7 +1965,7 @@ public partial class RuntimeEmitter
         // but their implementation needs all of the object-model helpers above.
         if (_features.UsesPromise)
             EmitPromiseKeyedMethodBodies(runtime);
-        EmitObjectPreventExtensions(typeBuilder, runtime.ObjectState, new ObjectPreventExtensionsInputs(runtime.ArrayStorage, runtime.Errors.CreateException, runtime.DescriptorStorage, runtime.ObjectRead.Property, runtime.InvokeMethodUnwrapped, runtime.ObjectStorage, runtime.Errors.TypeErrorConstructor));
+        EmitObjectPreventExtensions(typeBuilder, runtime.ObjectState, new ObjectPreventExtensionsInputs(runtime.ArrayStorage, runtime.Errors.CreateException, runtime.DescriptorStorage, runtime.ObjectRead.Property, runtime.ReflectedMethods.InvokeUnwrapped, runtime.ObjectStorage, runtime.Errors.TypeErrorConstructor));
         EmitObjectGetPrototypeOf(
             runtime.ClassPrototypes,
             runtime.ObjectPrototypes,
@@ -1980,7 +1980,7 @@ public partial class RuntimeEmitter
                 runtime.FunctionPrototypes.Populate,
                 runtime.ObjectRead.Property,
                 runtime.IHasFieldsInterface,
-                runtime.InvokeMethodUnwrapped,
+                runtime.ReflectedMethods.InvokeUnwrapped,
                 runtime.Numbers,
                 runtime.ObjectState,
                 runtime.ObjectStorage,
@@ -2001,7 +2001,7 @@ public partial class RuntimeEmitter
                 runtime.Errors,
                 runtime.ObjectRead.Property,
                 runtime.IHasFieldsInterface,
-                runtime.InvokeMethodUnwrapped,
+                runtime.ReflectedMethods.InvokeUnwrapped,
                 runtime.ObjectState,
                 runtime.ObjectStorage,
                 runtime.Records,
@@ -2058,7 +2058,7 @@ public partial class RuntimeEmitter
             typeBuilder,
             runtime.Reflect,
             new ReflectGetInputs(
-                runtime.InvokeMethodUnwrapped,
+                runtime.ReflectedMethods.InvokeUnwrapped,
                 runtime.ObjectDescriptors.GetOwnPropertyDescriptor,
                 runtime.ObjectOwnProperties.HasOwnProperty,
                 runtime.FunctionIntrospection.GetProperty,
@@ -2078,7 +2078,7 @@ public partial class RuntimeEmitter
                         runtime.Reflect.RequireAssignment().Set,
                         runtime.ObjectDescriptors.GetOwnPropertyDescriptor,
                         runtime.ObjectRead.Property,
-                        runtime.InvokeMethodUnwrapped
+                        runtime.ReflectedMethods.InvokeUnwrapped
                     ),
                     runtime.ObjectDescriptors.GetOwnPropertyDescriptor,
                     runtime.DescriptorStorage.IsFrozen,
@@ -2096,7 +2096,7 @@ public partial class RuntimeEmitter
                 typeBuilder,
                 runtime.Reflect.RequireAssignment(),
                 new ReflectDefinePropertyInputs(
-                    runtime.InvokeMethodUnwrapped,
+                    runtime.ReflectedMethods.InvokeUnwrapped,
                     runtime.ObjectDescriptors.GetOwnPropertyDescriptor,
                     runtime.ObjectOwnProperties.HasOwnProperty,
                     runtime.StringCoercion.ToJsString,
@@ -2112,7 +2112,7 @@ public partial class RuntimeEmitter
                 typeBuilder,
                 runtime.Reflect.RequireNamespace(),
                 new ReflectDeletePropertyInputs(
-                    runtime.InvokeMethodUnwrapped,
+                    runtime.ReflectedMethods.InvokeUnwrapped,
                     runtime.ObjectDescriptors.GetOwnPropertyDescriptor,
                     runtime.StringCoercion.ToJsString,
                     runtime.ObjectState.IsExtensible,
@@ -2125,7 +2125,7 @@ public partial class RuntimeEmitter
                 typeBuilder,
                 runtime.Reflect.RequireNamespace(),
                 new ReflectPreventExtensionsInputs(
-                    runtime.InvokeMethodUnwrapped,
+                    runtime.ReflectedMethods.InvokeUnwrapped,
                     runtime.ObjectState.PreventExtensions,
                     runtime.ObjectState.IsExtensible,
                     runtime.ObjectRead.Property
@@ -2139,7 +2139,7 @@ public partial class RuntimeEmitter
                 new ReflectSetPrototypeOfInputs(
                     runtime.Errors.CreateException,
                     runtime.Errors.TypeErrorConstructor,
-                    runtime.InvokeMethodUnwrapped,
+                    runtime.ReflectedMethods.InvokeUnwrapped,
                     runtime.ObjectPrototypes.GetPrototypeOf,
                     runtime.ObjectPrototypes.SetPrototypeOf,
                     runtime.ObjectState.IsExtensible,
@@ -2161,7 +2161,7 @@ public partial class RuntimeEmitter
                         runtime.ObjectState.IsExtensible,
                         runtime.Symbols.IsSymbol,
                         runtime.ObjectRead.Property,
-                        runtime.InvokeMethodUnwrapped
+                        runtime.ReflectedMethods.InvokeUnwrapped
                     ),
                     runtime.ObjectKeys.Ordinary,
                     runtime.ObjectKeys.Symbols,
@@ -2181,7 +2181,7 @@ public partial class RuntimeEmitter
                 new ReflectConstructInputs(
                     runtime.Errors.CreateException,
                     runtime.Errors.TypeErrorConstructor,
-                    runtime.InvokeMethodUnwrapped,
+                    runtime.ReflectedMethods.InvokeUnwrapped,
                     runtime.Errors.CreateErrorFromTypeOrNull,
                     runtime.NumericCoercion.ToNumber,
                     runtime.FunctionIntrospection.IsConstructor,
@@ -2537,7 +2537,7 @@ public partial class RuntimeEmitter
                 new JsonParseWithReviverInputs(
                     runtime.ObjectDeletion.Property,
                     runtime.DescriptorStorage,
-                    runtime.InvokeMethodUnwrapped,
+                    runtime.ReflectedMethods.InvokeUnwrapped,
                     runtime.ObjectKeys.Normalize,
                     runtime.NumericCoercion,
                     runtime.ObjectDescriptors.DefineProperty,
@@ -2558,7 +2558,7 @@ public partial class RuntimeEmitter
                     runtime.ObjectKeys.Keys,
                     runtime.ObjectRead.Property,
                     runtime.IHasFieldsInterface,
-                    runtime.InvokeMethodUnwrapped,
+                    runtime.ReflectedMethods.InvokeUnwrapped,
                     runtime.InvokeMethodValue,
                     runtime.Records.RequireScalars().GetValue,
                     runtime.Records.RequireScalars().IsMaterializedGetter,
@@ -2601,7 +2601,7 @@ public partial class RuntimeEmitter
                     runtime.ObjectKeys.Keys,
                     runtime.ObjectRead.Property,
                     runtime.IHasFieldsInterface,
-                    runtime.InvokeMethodUnwrapped,
+                    runtime.ReflectedMethods.InvokeUnwrapped,
                     runtime.InvokeMethodValue,
                     runtime.InvokeValue,
                     runtime.Numbers,
@@ -2754,7 +2754,7 @@ public partial class RuntimeEmitter
                 runtime.IHasFieldsHasProperty,
                 runtime.IHasFieldsInterface,
                 new ProxyHasInputs(
-                    runtime.InvokeMethodUnwrapped,
+                    runtime.ReflectedMethods.InvokeUnwrapped,
                     runtime.Operators.ProxyOrdinaryHas,
                     runtime.ObjectDescriptors.GetOwnPropertyDescriptor,
                     runtime.ObjectState.IsExtensible,

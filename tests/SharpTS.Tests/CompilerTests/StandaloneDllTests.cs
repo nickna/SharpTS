@@ -3708,6 +3708,56 @@ public class StandaloneDllTests
             verifyStandardError: error => Assert.Empty(error)));
     }
 
+    public static IEnumerable<object[]> ReflectedMethodPrograms =>
+    [
+        new object[]
+        {
+            "reflection_hash_cache",
+            "import {createHash} from \"node:crypto\";const h:any=createHash(\"sha256\");const update:any=h.update;console.log(update===h.update);update.call(h,\"abc\");console.log(h.digest(\"hex\"));\n",
+            "true\nba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "reflection_crypto_callable",
+            "import {getDiffieHellman} from \"node:crypto\";const d:any=getDiffieHellman(\"modp14\");console.log(d.getPrime(\"hex\").length,d.getGenerator(\"hex\"));\n",
+            "512 02\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "reflection_event_callable",
+            "import {EventEmitter} from \"node:events\";const e:any=new EventEmitter();const emit:any=e.emit;console.log(emit===e.emit);e.on(\"x\",(n:number)=>console.log(n));emit.call(e,\"x\",7);\n",
+            "true\n7\n",
+            false,
+            "",
+        },
+    ];
+
+    [Theory]
+    [MemberData(nameof(ReflectedMethodPrograms))]
+    public void Isolated_ReflectedMethods_PreserveCachedWrappersAndCallableDispatch(
+        string name, string source, string expected, bool hosted, string extraArguments)
+    {
+        using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var sourcePath = tempDir.CreateFile("main.ts", source);
+        var dllPath = tempDir.GetPath($"reflected_method_{name}.dll");
+        var hosting = hosted ? " --target dll --hosted" : "";
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{sourcePath}\" -o \"{dllPath}\" --verify --standalone{hosting} {extraArguments}", tempDir.Path);
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        var references = GetAssemblyReferences(dllPath);
+        Assert.DoesNotContain("SharpTS", references);
+        Assert.Equal(hosted, references.Contains("SharpTS.Hosting.Abstractions"));
+        Assert.False(File.Exists(tempDir.GetPath("SharpTS.dll")));
+        if (!hosted)
+            Assert.Equal(expected, ExecuteCompiledDllIsolated(dllPath, timeoutMs: 30000,
+                verifyStandardError: error => Assert.Empty(error)));
+    }
+
     public static IEnumerable<object[]> FunctionIntrospectionPrograms =>
     [
         new object[]

@@ -111,7 +111,7 @@ public partial class RuntimeEmitter
         Type UndefinedType
     );
 
-    internal void EmitToPascalCase(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    internal void EmitToPascalCase(TypeBuilder typeBuilder, EmittedReflectedMethodRuntime reflectedMethods)
     {
         // ToPascalCase(string name) -> string
         // Converts "camelCase" to "PascalCase" by upper-casing first character
@@ -121,7 +121,7 @@ public partial class RuntimeEmitter
             _types.String,
             [_types.String]
         );
-        runtime.ToPascalCase = method;
+        reflectedMethods.ToPascalCase = method;
 
         var il = method.GetILGenerator();
         var returnOriginalLabel = il.DefineLabel();
@@ -164,7 +164,7 @@ public partial class RuntimeEmitter
     /// <c>GetFieldsProperty</c>'s callable wrapping); otherwise return the first
     /// name-matching overload. Returns null when no method matches the name.
     /// </summary>
-    internal void EmitSafeGetMethod(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    internal void EmitSafeGetMethod(TypeBuilder typeBuilder, EmittedReflectedMethodRuntime reflectedMethods)
     {
         var method = typeBuilder.DefineMethod(
             "SafeGetMethod",
@@ -172,7 +172,7 @@ public partial class RuntimeEmitter
             _types.MethodInfo,
             [_types.Type, _types.String, typeof(BindingFlags)]
         );
-        runtime.SafeGetMethod = method;
+        reflectedMethods.FindMethod = method;
 
         var il = method.GetILGenerator();
         var resultLocal = il.DeclareLocal(_types.MethodInfo);
@@ -2885,18 +2885,18 @@ public partial class RuntimeEmitter
     /// Phase 1: Define $MethodCallable type (wraps BuiltInMethod or other callable objects
     /// returned by GetMember so they can be dispatched through InvokeMethodValue/InvokeValue).
     /// </summary>
-    internal void EmitMethodCallableTypeDefinition(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    internal void EmitMethodCallableTypeDefinition(ModuleBuilder moduleBuilder, EmittedReflectedMethodRuntime reflectedMethods)
     {
         var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$MethodCallable",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object
         );
-        runtime.MethodCallableType = typeBuilder;
+        reflectedMethods.CallableType = typeBuilder;
 
         // Field: object _callable
         var callableField = typeBuilder.DefineField("_callable", _types.Object, FieldAttributes.Private);
-        runtime.MethodCallableField = callableField;
+        reflectedMethods.CallableField = callableField;
 
         // Constructor: $MethodCallable(object callable)
         var ctorBuilder = typeBuilder.DefineConstructor(
@@ -2904,7 +2904,7 @@ public partial class RuntimeEmitter
             CallingConventions.Standard,
             [_types.Object]
         );
-        runtime.MethodCallableCtor = ctorBuilder;
+        reflectedMethods.CallableConstructor = ctorBuilder;
 
         var ctorIL = ctorBuilder.GetILGenerator();
         ctorIL.Emit(OpCodes.Ldarg_0);
@@ -2921,17 +2921,17 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.ObjectArray]
         );
-        runtime.MethodCallableInvoke = invokeBuilder;
+        reflectedMethods.CallableInvoke = invokeBuilder;
     }
 
     /// <summary>
     /// Phase 2: Emit Invoke method body for $MethodCallable and create the type.
     /// Uses reflection to call "Invoke" (for TSFunction) or "Call" (for BuiltInMethod) on the wrapped object.
     /// </summary>
-    internal void EmitMethodCallableFinalize(EmittedRuntime runtime)
+    internal void EmitMethodCallableFinalize(EmittedReflectedMethodRuntime reflectedMethods)
     {
-        var callableField = runtime.MethodCallableField;
-        var invokeBuilder = runtime.MethodCallableInvoke;
+        var callableField = reflectedMethods.CallableField;
+        var invokeBuilder = reflectedMethods.CallableInvoke;
 
         var il = invokeBuilder.GetILGenerator();
 
@@ -3008,7 +3008,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ret);
 
-        runtime.MethodCallableType.CreateType();
+        reflectedMethods.CallableType.CreateType();
+        reflectedMethods.MarkCallableFinalized();
     }
 }
 

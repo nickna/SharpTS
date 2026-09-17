@@ -17,6 +17,10 @@ namespace SharpTS.Compilation;
 /// <seealso cref="ILEmitter"/>
 public class EmittedRuntime
 {
+    /// <summary>Required reflected-method lookup, wrapper cache and staged callable metadata.</summary>
+    public EmittedReflectedMethodRuntime ReflectedMethods { get; } = new();
+
+
     /// <summary>Required function property lookup and constructor-capability declarations.</summary>
     public EmittedFunctionIntrospectionRuntime FunctionIntrospection { get; } = new();
 
@@ -313,15 +317,6 @@ public class EmittedRuntime
     public EmittedStringRuntime Strings { get; } = new();
 
     // Object methods
-    /// <summary>
-    /// Weak per-receiver cache of reflected CLR method wrappers used by
-    /// <see cref="GetFieldsProperty"/>. Values are
-    /// ConcurrentDictionary&lt;string, object&gt; instances whose entries are
-    /// emitted $TSFunction objects.
-    /// </summary>
-    public FieldBuilder ReflectedMethodCacheField { get; set; } = null!;
-    public MethodBuilder ToPascalCase { get; set; } = null!;
-    public MethodBuilder SafeGetMethod { get; set; } = null!;
     public MethodBuilder NewOnFunction { get; set; } = null!;
 
 
@@ -373,10 +368,6 @@ public class EmittedRuntime
     // because bound methods already capture their receiver.
 
     // Method callable wrapper for GetMember results (BuiltInMethod etc.)
-    public TypeBuilder MethodCallableType { get; set; } = null!;
-    public ConstructorBuilder MethodCallableCtor { get; set; } = null!;
-    public MethodBuilder MethodCallableInvoke { get; set; } = null!;
-    public FieldBuilder MethodCallableField { get; set; } = null!;
 
     /// <summary>Required template strings, concatenation, raw conversion, and tag invocation metadata.</summary>
     public EmittedTemplateRuntime Templates { get; } = new();
@@ -398,7 +389,6 @@ public class EmittedRuntime
     public MethodBuilder ArrayDestructureSource { get; set; } = null!;  // #685: normalize array binding-pattern source via the iterator protocol
 
     // General invocation helper
-    public MethodBuilder InvokeMethodUnwrapped { get; set; } = null!;
 
     /// <summary>Required Symbol primitive, identity, storage and prototype metadata for this compilation.</summary>
     public EmittedSymbolRuntime Symbols { get; } = new();
