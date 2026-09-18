@@ -189,7 +189,7 @@ public partial class RuntimeEmitter
         // If value is $Undefined.Instance, normalise to null.
         var notUndefinedLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
         il.Emit(OpCodes.Bne_Un, notUndefinedLabel);
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Stloc, valueLocal);

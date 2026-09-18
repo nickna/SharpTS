@@ -128,7 +128,7 @@ public sealed class JSONStaticEmitter : IStaticTypeEmitterStrategy
                 }
                 else
                 {
-                    il.Emit(OpCodes.Ldsfld, ctx.Runtime!.UndefinedInstance);
+                    il.Emit(OpCodes.Ldsfld, ctx.Runtime!.Sentinels.UndefinedInstance);
                 }
                 il.Emit(OpCodes.Call, methodName == "rawJSON"
                     ? ctx.Runtime!.Json.RequireImplementation().RawJson

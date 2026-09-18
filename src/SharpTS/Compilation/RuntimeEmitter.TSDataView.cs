@@ -840,7 +840,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Conv_U1);
 
         il.Emit(OpCodes.Stelem_I1);
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
         il.Emit(OpCodes.Ret);
 
         if (methodName == "SetInt8") view.SetInt8 = method;
@@ -896,7 +896,7 @@ public partial class RuntimeEmitter
         EmitStoreByte(il, view.BufferField, offsetLocal, 1, valueLocal, 8); // high byte
 
         il.MarkLabel(endLabel);
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
         il.Emit(OpCodes.Ret);
 
         if (methodName == "SetInt16") view.SetInt16 = method;
@@ -1004,7 +1004,7 @@ public partial class RuntimeEmitter
         EmitStoreByte(il, view.BufferField, offsetLocal, 3, valueLocal, 24);
 
         il.MarkLabel(endLabel);
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
         il.Emit(OpCodes.Ret);
 
         if (methodName == "SetInt32") view.SetInt32 = method;
@@ -1063,7 +1063,7 @@ public partial class RuntimeEmitter
         EmitStoreByte(il, view.BufferField, offsetLocal, 3, valueLocal, 24);
 
         il.MarkLabel(endLabel);
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
         il.Emit(OpCodes.Ret);
 
         view.SetFloat32 = method;
@@ -1129,7 +1129,7 @@ public partial class RuntimeEmitter
         EmitStoreByte64(il, view.BufferField, offsetLocal, 7, valueLocal, 56);
 
         il.MarkLabel(endLabel);
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
         il.Emit(OpCodes.Ret);
 
         view.SetFloat64 = method;
@@ -1207,7 +1207,7 @@ public partial class RuntimeEmitter
         EmitStoreByte64(il, view.BufferField, offsetLocal, 7, valueLocal, 56);
 
         il.MarkLabel(endLabel);
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
         il.Emit(OpCodes.Ret);
 
         if (signed)

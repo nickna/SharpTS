@@ -123,7 +123,7 @@ public partial class ILEmitter
                 }
                 else
                 {
-                    IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.UndefinedInstance);
+                    IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.Sentinels.UndefinedInstance);
                 }
                 IL.Emit(OpCodes.Call, _ctx.Runtime!.Numbers.ToExponential);
                 break;
@@ -226,7 +226,7 @@ public partial class ILEmitter
                 }
                 else
                 {
-                    IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.UndefinedInstance);
+                    IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.Sentinels.UndefinedInstance);
                 }
                 IL.Emit(OpCodes.Call, _ctx.Runtime!.Numbers.ToExponential);
                 break;

@@ -127,7 +127,7 @@ public abstract partial class AsyncFunctionMoveNextEmitter : StateMachineExitRou
         }
         else
         {
-            IL.Emit(OpCodes.Ldsfld, Ctx.Runtime!.UndefinedInstance);
+            IL.Emit(OpCodes.Ldsfld, Ctx.Runtime!.Sentinels.UndefinedInstance);
         }
 
         // If a flag-based finally lies between this return and the function boundary, run it (and any

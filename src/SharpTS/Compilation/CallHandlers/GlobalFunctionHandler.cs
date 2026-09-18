@@ -57,7 +57,7 @@ public class GlobalFunctionHandler : ICallHandler
         // A bare call to a mutable global binding must observe the current
         // globalThis property. Undefined preserves ordinary call-this binding:
         // sloppy functions receive globalThis and strict functions keep undefined.
-        il.Emit(System.Reflection.Emit.OpCodes.Ldsfld, ctx.Runtime!.UndefinedInstance);
+        il.Emit(System.Reflection.Emit.OpCodes.Ldsfld, ctx.Runtime!.Sentinels.UndefinedInstance);
         il.Emit(System.Reflection.Emit.OpCodes.Ldstr, name);
         il.Emit(System.Reflection.Emit.OpCodes.Call, ctx.Runtime.GlobalThisGetProperty);
         emitter.EmitArgsArrayWithSpread(call.Arguments);
@@ -100,7 +100,7 @@ public class GlobalFunctionHandler : ICallHandler
         // the absence into CLR null (and so no interpreter bridge is needed).
         if (call.Arguments.Count == 0)
         {
-            il.Emit(System.Reflection.Emit.OpCodes.Ldsfld, ctx.Runtime!.UndefinedInstance);
+            il.Emit(System.Reflection.Emit.OpCodes.Ldsfld, ctx.Runtime!.Sentinels.UndefinedInstance);
             emitter.SetStackUnknown();
             return true;
         }
@@ -165,7 +165,7 @@ public class GlobalFunctionHandler : ICallHandler
         il.Emit(System.Reflection.Emit.OpCodes.Stelem_Ref);
         il.Emit(System.Reflection.Emit.OpCodes.Dup);
         il.Emit(System.Reflection.Emit.OpCodes.Ldc_I4_2);
-        il.Emit(System.Reflection.Emit.OpCodes.Ldsfld, ctx.Runtime.UndefinedInstance);
+        il.Emit(System.Reflection.Emit.OpCodes.Ldsfld, ctx.Runtime.Sentinels.UndefinedInstance);
         il.Emit(System.Reflection.Emit.OpCodes.Stelem_Ref);
         il.Emit(System.Reflection.Emit.OpCodes.Callvirt, ctx.Types.GetMethod(
             ctx.Types.MethodInfo, "Invoke", ctx.Types.Object, ctx.Types.ObjectArray));
@@ -323,7 +323,7 @@ public class GlobalFunctionHandler : ICallHandler
     {
         if (call.Arguments.Count == 0)
         {
-            il.Emit(System.Reflection.Emit.OpCodes.Ldsfld, ctx.Runtime!.UndefinedInstance);
+            il.Emit(System.Reflection.Emit.OpCodes.Ldsfld, ctx.Runtime!.Sentinels.UndefinedInstance);
         }
         else
         {
@@ -339,7 +339,7 @@ public class GlobalFunctionHandler : ICallHandler
     {
         if (call.Arguments.Count == 0)
         {
-            il.Emit(System.Reflection.Emit.OpCodes.Ldsfld, ctx.Runtime!.UndefinedInstance);
+            il.Emit(System.Reflection.Emit.OpCodes.Ldsfld, ctx.Runtime!.Sentinels.UndefinedInstance);
         }
         else
         {

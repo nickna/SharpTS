@@ -109,7 +109,7 @@ public sealed class MathStaticEmitter : IStaticTypeEmitterStrategy
             var input = il.DeclareLocal(ctx.Types.Object);
             if (arguments.Count == 0)
             {
-                il.Emit(OpCodes.Ldsfld, ctx.Runtime!.UndefinedInstance);
+                il.Emit(OpCodes.Ldsfld, ctx.Runtime!.Sentinels.UndefinedInstance);
             }
             else
             {

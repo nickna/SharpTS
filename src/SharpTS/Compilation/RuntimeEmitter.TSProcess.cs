@@ -1478,7 +1478,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ret);
             il.MarkLabel(noMethod);
 
-            il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+            il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
             il.Emit(OpCodes.Ret);
         }
         tb.DefineMethodOverride(getProp, runtime.IHasFieldsGetProperty);

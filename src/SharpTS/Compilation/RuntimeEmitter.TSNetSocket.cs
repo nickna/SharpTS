@@ -2443,7 +2443,7 @@ public partial class RuntimeEmitter
 
         // ── default — return undefined ──
         il.MarkLabel(defaultLabel);
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
         il.Emit(OpCodes.Ret);
     }
 

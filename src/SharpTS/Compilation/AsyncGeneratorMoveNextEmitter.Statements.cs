@@ -36,7 +36,7 @@ public partial class AsyncGeneratorMoveNextEmitter
             // Bare `return;` completes with `undefined`. Store the `$Undefined` sentinel into Current so
             // the completion value is undefined, not the stale last-yielded value (#481/#540).
             _il.Emit(OpCodes.Ldarg_0);
-            _il.Emit(OpCodes.Ldsfld, _ctx!.Runtime!.UndefinedInstance);
+            _il.Emit(OpCodes.Ldsfld, _ctx!.Runtime!.Sentinels.UndefinedInstance);
             _il.Emit(OpCodes.Stfld, _builder.CurrentField);
         }
 
@@ -232,7 +232,7 @@ public partial class AsyncGeneratorMoveNextEmitter
         _il.Emit(OpCodes.Ldarg_0);
         _il.Emit(OpCodes.Ldfld, iteratorField);
         _il.Emit(OpCodes.Castclass, asyncGenInterface);
-        _il.Emit(OpCodes.Ldsfld, _ctx!.Runtime!.UndefinedInstance);
+        _il.Emit(OpCodes.Ldsfld, _ctx!.Runtime!.Sentinels.UndefinedInstance);
         _il.Emit(OpCodes.Callvirt, _ctx.Runtime.RequireAsyncGenerators().Next);  // Task<object>
         SetStackUnknown();
         EmitAwaitFromValueOnStack(nextState);

@@ -64,7 +64,7 @@ public partial class IteratorMoveNextEmitter
             }
             else
             {
-                IL.Emit(OpCodes.Ldsfld, Ctx.Runtime!.UndefinedInstance);
+                IL.Emit(OpCodes.Ldsfld, Ctx.Runtime!.Sentinels.UndefinedInstance);
             }
             StoreToDCField(dcField);
             return;
