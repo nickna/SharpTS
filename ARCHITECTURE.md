@@ -330,6 +330,16 @@ carrier; the strict SyntaxError helper retains its existing CLR exception repres
 Exception wrapping follows supplied optional Promise metadata. Error-cause Proxy handling
 receives six explicit invocation/delegate handles through the shared reflection bridge.
 
+Required `IteratorHelpers` owns normalization, lazy adapter constructors,
+factory declarations and eager iterator operations. Scoped emitters receive
+exact wrapper, error, invocation, truthiness, generator and undefined inputs;
+callback helpers receive only their supplied invocation and truthiness handles.
+The existing generator-type availability branch remains unchanged. The component
+completes after the original helper orchestration call. Five adapter types keep
+their original local fields, construction order and finalization boundaries.
+Lazy callback timing, indices, eager consumption, completion values and generated
+method signatures remain unchanged by this ownership migration.
+
 Required `IteratorCollection` owns iterable-to-list and append-to-list method
 handles. Both remain forward-declared before earlier consumers, and completion
 follows both bodies at their original orchestration boundary. Scoped helpers

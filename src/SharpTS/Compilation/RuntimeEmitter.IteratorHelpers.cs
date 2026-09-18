@@ -10,38 +10,50 @@ namespace SharpTS.Compilation;
 /// </summary>
 public partial class RuntimeEmitter
 {
+    private readonly record struct IteratorHelperInputs(
+        EmittedErrorRuntime Errors,
+        ConstructorInfo WrapperCtor,
+        MethodInfo InvokeMethod,
+        MethodInfo IsTruthy,
+        EmittedGeneratorRuntime Generators,
+        FieldInfo UndefinedInstance
+    );
+
+    private readonly record struct IteratorCallbackInputs(MethodInfo InvokeMethod, MethodInfo IsTruthy);
+
+
     /// <summary>
     /// Emits all iterator helper methods and types.
     /// Must be called AFTER EmitIteratorMethodsAdvanced (needs IterateToList, InvokeMethodValue).
     /// </summary>
-    private void EmitIteratorHelperMethods(TypeBuilder typeBuilder, ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private void EmitIteratorHelperMethods(TypeBuilder typeBuilder, ModuleBuilder moduleBuilder, EmittedIteratorHelpersRuntime iteratorHelpers, IteratorHelperInputs inputs)
     {
         // Helper to normalize any iterable source to IEnumerator<object>
-        EmitNormalizeToEnumerator(typeBuilder, runtime);
+        EmitNormalizeToEnumerator(typeBuilder, iteratorHelpers, inputs.WrapperCtor, inputs.Errors);
 
         // Lazy wrapper types
-        EmitMapIteratorType(moduleBuilder, runtime);
-        EmitFilterIteratorType(moduleBuilder, runtime);
-        EmitTakeIteratorType(moduleBuilder, runtime);
-        EmitDropIteratorType(moduleBuilder, runtime);
-        EmitFlatMapIteratorType(moduleBuilder, runtime);
+        EmitMapIteratorType(moduleBuilder, iteratorHelpers, new IteratorCallbackInputs(inputs.InvokeMethod, inputs.IsTruthy));
+        EmitFilterIteratorType(moduleBuilder, iteratorHelpers, new IteratorCallbackInputs(inputs.InvokeMethod, inputs.IsTruthy));
+        EmitTakeIteratorType(moduleBuilder, iteratorHelpers);
+        EmitDropIteratorType(moduleBuilder, iteratorHelpers);
+        EmitFlatMapIteratorType(moduleBuilder, iteratorHelpers, inputs.InvokeMethod);
 
         // Lazy factory methods (on $Runtime)
-        EmitIteratorMap(typeBuilder, runtime);
-        EmitIteratorFilter(typeBuilder, runtime);
-        EmitIteratorTake(typeBuilder, runtime);
-        EmitIteratorDrop(typeBuilder, runtime);
-        EmitIteratorFlatMap(typeBuilder, runtime);
+        EmitIteratorMap(typeBuilder, iteratorHelpers);
+        EmitIteratorFilter(typeBuilder, iteratorHelpers);
+        EmitIteratorTake(typeBuilder, iteratorHelpers);
+        EmitIteratorDrop(typeBuilder, iteratorHelpers);
+        EmitIteratorFlatMap(typeBuilder, iteratorHelpers);
 
         // Eager methods (on $Runtime)
-        EmitIteratorReduce(typeBuilder, runtime);
-        EmitIteratorToArray(typeBuilder, runtime);
-        EmitIteratorForEach(typeBuilder, runtime);
-        EmitIteratorSome(typeBuilder, runtime);
-        EmitIteratorEvery(typeBuilder, runtime);
-        EmitIteratorFind(typeBuilder, runtime);
-        EmitIteratorNext(typeBuilder, runtime);
-        EmitIteratorFrom(typeBuilder, runtime);
+        EmitIteratorReduce(typeBuilder, iteratorHelpers, inputs.InvokeMethod, inputs.Errors);
+        EmitIteratorToArray(typeBuilder, iteratorHelpers);
+        EmitIteratorForEach(typeBuilder, iteratorHelpers, inputs.InvokeMethod);
+        EmitIteratorSome(typeBuilder, iteratorHelpers, new IteratorCallbackInputs(inputs.InvokeMethod, inputs.IsTruthy));
+        EmitIteratorEvery(typeBuilder, iteratorHelpers, new IteratorCallbackInputs(inputs.InvokeMethod, inputs.IsTruthy));
+        EmitIteratorFind(typeBuilder, iteratorHelpers, new IteratorCallbackInputs(inputs.InvokeMethod, inputs.IsTruthy));
+        EmitIteratorNext(typeBuilder, iteratorHelpers, inputs.Generators, inputs.UndefinedInstance);
+        EmitIteratorFrom(typeBuilder, iteratorHelpers);
     }
 
     /// <summary>
@@ -49,7 +61,7 @@ public partial class RuntimeEmitter
     /// Handles List&lt;object&gt;, IEnumerable&lt;object&gt;, and custom iterators via $IteratorWrapper.
     /// Signature: IEnumerator&lt;object&gt; NormalizeToEnumerator(object source)
     /// </summary>
-    private void EmitNormalizeToEnumerator(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitNormalizeToEnumerator(TypeBuilder typeBuilder, EmittedIteratorHelpersRuntime iteratorHelpers, ConstructorInfo wrapperCtor, EmittedErrorRuntime errors)
     {
         var method = typeBuilder.DefineMethod(
             "NormalizeToEnumerator",
@@ -57,7 +69,7 @@ public partial class RuntimeEmitter
             _types.IEnumeratorOfObject,
             [_types.Object]
         );
-        runtime.NormalizeToEnumerator = method;
+        iteratorHelpers.NormalizeToEnumerator = method;
 
         var il = method.GetILGenerator();
         var tryEnumerableLabel = il.DefineLabel();
@@ -89,11 +101,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, throwLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldnull); // runtimeType parameter (unused)
-        il.Emit(OpCodes.Newobj, runtime.IteratorWrappers.Ctor);
+        il.Emit(OpCodes.Newobj, wrapperCtor);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(throwLabel);
-        GuestErrorEmitter.ThrowTypeError(il, runtime, "Value is not iterable.");
+        GuestErrorEmitter.ThrowError(il, errors.CreateException, errors.TypeErrorConstructor, "Value is not iterable.");
     }
 
     #region Lazy Iterator Types
@@ -102,7 +114,7 @@ public partial class RuntimeEmitter
     /// Emits $MapIterator: wraps a source enumerator and applies a callback to each element.
     /// Fields: _source (IEnumerator&lt;object&gt;), _callback (object), _index (int), _current (object)
     /// </summary>
-    private void EmitMapIteratorType(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private void EmitMapIteratorType(ModuleBuilder moduleBuilder, EmittedIteratorHelpersRuntime iteratorHelpers, IteratorCallbackInputs callback)
     {
         var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$MapIterator",
@@ -121,7 +133,7 @@ public partial class RuntimeEmitter
         var ctor = typeBuilder.DefineConstructor(
             MethodAttributes.Public, CallingConventions.Standard,
             [_types.IEnumeratorOfObject, _types.Object]);
-        runtime.MapIteratorCtor = ctor;
+        iteratorHelpers.MapIteratorCtor = ctor;
 
         var ctorIl = ctor.GetILGenerator();
         ctorIl.Emit(OpCodes.Ldarg_0);
@@ -135,7 +147,7 @@ public partial class RuntimeEmitter
         ctorIl.Emit(OpCodes.Ret);
 
         // MoveNext: source.MoveNext() ? { _current = callback(source.Current, _index++); return true; } : false
-        EmitCallbackMoveNext(typeBuilder, runtime, sourceField, callbackField, indexField, currentField,
+        EmitCallbackMoveNext(typeBuilder, callback, sourceField, callbackField, indexField, currentField,
             includeIndex: true, filterMode: false);
 
         EmitCurrentProperty(typeBuilder, currentField);
@@ -149,7 +161,7 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits $FilterIterator: wraps a source enumerator and yields only elements matching a predicate.
     /// </summary>
-    private void EmitFilterIteratorType(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private void EmitFilterIteratorType(ModuleBuilder moduleBuilder, EmittedIteratorHelpersRuntime iteratorHelpers, IteratorCallbackInputs callback)
     {
         var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$FilterIterator",
@@ -167,7 +179,7 @@ public partial class RuntimeEmitter
         var ctor = typeBuilder.DefineConstructor(
             MethodAttributes.Public, CallingConventions.Standard,
             [_types.IEnumeratorOfObject, _types.Object]);
-        runtime.FilterIteratorCtor = ctor;
+        iteratorHelpers.FilterIteratorCtor = ctor;
 
         var ctorIl = ctor.GetILGenerator();
         ctorIl.Emit(OpCodes.Ldarg_0);
@@ -181,7 +193,7 @@ public partial class RuntimeEmitter
         ctorIl.Emit(OpCodes.Ret);
 
         // MoveNext: loop source.MoveNext(), call predicate, if truthy set current and return true
-        EmitCallbackMoveNext(typeBuilder, runtime, sourceField, callbackField, indexField, currentField,
+        EmitCallbackMoveNext(typeBuilder, callback, sourceField, callbackField, indexField, currentField,
             includeIndex: true, filterMode: true);
 
         EmitCurrentProperty(typeBuilder, currentField);
@@ -195,7 +207,7 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits $TakeIterator: wraps a source enumerator and yields at most 'limit' elements.
     /// </summary>
-    private void EmitTakeIteratorType(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private void EmitTakeIteratorType(ModuleBuilder moduleBuilder, EmittedIteratorHelpersRuntime iteratorHelpers)
     {
         var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$TakeIterator",
@@ -214,7 +226,7 @@ public partial class RuntimeEmitter
         var ctor = typeBuilder.DefineConstructor(
             MethodAttributes.Public, CallingConventions.Standard,
             [_types.IEnumeratorOfObject, _types.Int32]);
-        runtime.TakeIteratorCtor = ctor;
+        iteratorHelpers.TakeIteratorCtor = ctor;
 
         var ctorIl = ctor.GetILGenerator();
         ctorIl.Emit(OpCodes.Ldarg_0);
@@ -280,7 +292,7 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits $DropIterator: wraps a source enumerator and skips the first 'count' elements.
     /// </summary>
-    private void EmitDropIteratorType(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private void EmitDropIteratorType(ModuleBuilder moduleBuilder, EmittedIteratorHelpersRuntime iteratorHelpers)
     {
         var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$DropIterator",
@@ -299,7 +311,7 @@ public partial class RuntimeEmitter
         var ctor = typeBuilder.DefineConstructor(
             MethodAttributes.Public, CallingConventions.Standard,
             [_types.IEnumeratorOfObject, _types.Int32]);
-        runtime.DropIteratorCtor = ctor;
+        iteratorHelpers.DropIteratorCtor = ctor;
 
         var ctorIl = ctor.GetILGenerator();
         ctorIl.Emit(OpCodes.Ldarg_0);
@@ -379,7 +391,7 @@ public partial class RuntimeEmitter
     /// Emits $FlatMapIterator: wraps a source enumerator, calls callback for each element,
     /// and flattens the result by iterating inner results.
     /// </summary>
-    private void EmitFlatMapIteratorType(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private void EmitFlatMapIteratorType(ModuleBuilder moduleBuilder, EmittedIteratorHelpersRuntime iteratorHelpers, MethodInfo invokeMethod)
     {
         var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$FlatMapIterator",
@@ -398,7 +410,7 @@ public partial class RuntimeEmitter
         var ctor = typeBuilder.DefineConstructor(
             MethodAttributes.Public, CallingConventions.Standard,
             [_types.IEnumeratorOfObject, _types.Object]);
-        runtime.FlatMapIteratorCtor = ctor;
+        iteratorHelpers.FlatMapIteratorCtor = ctor;
 
         var ctorIl = ctor.GetILGenerator();
         ctorIl.Emit(OpCodes.Ldarg_0);
@@ -483,10 +495,10 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, callbackField);
         il.Emit(OpCodes.Ldloc, argsLocal);
-        il.Emit(OpCodes.Call, runtime.Invocation.Method);
+        il.Emit(OpCodes.Call, invokeMethod);
 
         // this._inner = NormalizeToEnumerator(result)
-        il.Emit(OpCodes.Call, runtime.NormalizeToEnumerator);
+        il.Emit(OpCodes.Call, iteratorHelpers.NormalizeToEnumerator);
         var innerLocal = il.DeclareLocal(_types.IEnumeratorOfObject);
         il.Emit(OpCodes.Stloc, innerLocal);   // pop enumerator into local
         il.Emit(OpCodes.Ldarg_0);              // push this
@@ -517,7 +529,7 @@ public partial class RuntimeEmitter
     /// For map: calls callback and stores result as current.
     /// For filter: loops until predicate returns truthy.
     /// </summary>
-    private void EmitCallbackMoveNext(TypeBuilder typeBuilder, EmittedRuntime runtime,
+    private void EmitCallbackMoveNext(TypeBuilder typeBuilder, IteratorCallbackInputs callback,
         FieldBuilder sourceField, FieldBuilder callbackField, FieldBuilder indexField, FieldBuilder currentField,
         bool includeIndex, bool filterMode)
     {
@@ -577,12 +589,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, callbackField);
         il.Emit(OpCodes.Ldloc, argsLocal);
-        il.Emit(OpCodes.Call, runtime.Invocation.Method);
+        il.Emit(OpCodes.Call, callback.InvokeMethod);
 
         if (filterMode)
         {
             // if (!IsTruthy(result)) goto loopStart (skip this element)
-            il.Emit(OpCodes.Call, runtime.Booleans.IsTruthy);
+            il.Emit(OpCodes.Call, callback.IsTruthy);
             il.Emit(OpCodes.Brfalse, loopStartLabel);
 
             // Passed filter: _current = source.Current (not the callback result)
@@ -685,81 +697,81 @@ public partial class RuntimeEmitter
 
     #region Lazy Factory Methods (on $Runtime)
 
-    private void EmitIteratorMap(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitIteratorMap(TypeBuilder typeBuilder, EmittedIteratorHelpersRuntime iteratorHelpers)
     {
         // static object IteratorMap(object source, object callback)
         // Returns a lazy $MapIterator wrapping the normalized source enumerator
         var method = typeBuilder.DefineMethod(
             "IteratorMap", MethodAttributes.Public | MethodAttributes.Static,
             _types.Object, [_types.Object, _types.Object]);
-        runtime.IteratorMap = method;
+        iteratorHelpers.Map = method;
 
         var il = method.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.NormalizeToEnumerator);
+        il.Emit(OpCodes.Call, iteratorHelpers.NormalizeToEnumerator);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Newobj, runtime.MapIteratorCtor);
+        il.Emit(OpCodes.Newobj, iteratorHelpers.MapIteratorCtor);
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitIteratorFilter(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitIteratorFilter(TypeBuilder typeBuilder, EmittedIteratorHelpersRuntime iteratorHelpers)
     {
         var method = typeBuilder.DefineMethod(
             "IteratorFilter", MethodAttributes.Public | MethodAttributes.Static,
             _types.Object, [_types.Object, _types.Object]);
-        runtime.IteratorFilter = method;
+        iteratorHelpers.Filter = method;
 
         var il = method.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.NormalizeToEnumerator);
+        il.Emit(OpCodes.Call, iteratorHelpers.NormalizeToEnumerator);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Newobj, runtime.FilterIteratorCtor);
+        il.Emit(OpCodes.Newobj, iteratorHelpers.FilterIteratorCtor);
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitIteratorTake(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitIteratorTake(TypeBuilder typeBuilder, EmittedIteratorHelpersRuntime iteratorHelpers)
     {
         // static object IteratorTake(object source, int limit)
         var method = typeBuilder.DefineMethod(
             "IteratorTake", MethodAttributes.Public | MethodAttributes.Static,
             _types.Object, [_types.Object, _types.Int32]);
-        runtime.IteratorTake = method;
+        iteratorHelpers.Take = method;
 
         var il = method.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.NormalizeToEnumerator);
+        il.Emit(OpCodes.Call, iteratorHelpers.NormalizeToEnumerator);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Newobj, runtime.TakeIteratorCtor);
+        il.Emit(OpCodes.Newobj, iteratorHelpers.TakeIteratorCtor);
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitIteratorDrop(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitIteratorDrop(TypeBuilder typeBuilder, EmittedIteratorHelpersRuntime iteratorHelpers)
     {
         var method = typeBuilder.DefineMethod(
             "IteratorDrop", MethodAttributes.Public | MethodAttributes.Static,
             _types.Object, [_types.Object, _types.Int32]);
-        runtime.IteratorDrop = method;
+        iteratorHelpers.Drop = method;
 
         var il = method.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.NormalizeToEnumerator);
+        il.Emit(OpCodes.Call, iteratorHelpers.NormalizeToEnumerator);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Newobj, runtime.DropIteratorCtor);
+        il.Emit(OpCodes.Newobj, iteratorHelpers.DropIteratorCtor);
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitIteratorFlatMap(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitIteratorFlatMap(TypeBuilder typeBuilder, EmittedIteratorHelpersRuntime iteratorHelpers)
     {
         var method = typeBuilder.DefineMethod(
             "IteratorFlatMap", MethodAttributes.Public | MethodAttributes.Static,
             _types.Object, [_types.Object, _types.Object]);
-        runtime.IteratorFlatMap = method;
+        iteratorHelpers.FlatMap = method;
 
         var il = method.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.NormalizeToEnumerator);
+        il.Emit(OpCodes.Call, iteratorHelpers.NormalizeToEnumerator);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Newobj, runtime.FlatMapIteratorCtor);
+        il.Emit(OpCodes.Newobj, iteratorHelpers.FlatMapIteratorCtor);
         il.Emit(OpCodes.Ret);
     }
 
@@ -767,13 +779,13 @@ public partial class RuntimeEmitter
 
     #region Eager Methods (on $Runtime)
 
-    private void EmitIteratorReduce(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitIteratorReduce(TypeBuilder typeBuilder, EmittedIteratorHelpersRuntime iteratorHelpers, MethodInfo invokeMethod, EmittedErrorRuntime errors)
     {
         // static object IteratorReduce(object source, object callback, object initial, bool hasInitial)
         var method = typeBuilder.DefineMethod(
             "IteratorReduce", MethodAttributes.Public | MethodAttributes.Static,
             _types.Object, [_types.Object, _types.Object, _types.Object, _types.Boolean]);
-        runtime.IteratorReduce = method;
+        iteratorHelpers.Reduce = method;
 
         var il = method.GetILGenerator();
         var accLocal = il.DeclareLocal(_types.Object);
@@ -796,7 +808,7 @@ public partial class RuntimeEmitter
 
         // enum = NormalizeToEnumerator(source)
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.NormalizeToEnumerator);
+        il.Emit(OpCodes.Call, iteratorHelpers.NormalizeToEnumerator);
         il.Emit(OpCodes.Stloc, enumLocal);
 
         // Allocate args array [2]
@@ -836,7 +848,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloc, argsLocal);
-        il.Emit(OpCodes.Call, runtime.Invocation.Method);
+        il.Emit(OpCodes.Call, invokeMethod);
         il.Emit(OpCodes.Stloc, accLocal);
         il.Emit(OpCodes.Br, loopStartLabel);
 
@@ -848,16 +860,16 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(throwLabel);
-        GuestErrorEmitter.ThrowTypeError(il, runtime, "Reduce of empty iterator with no initial value.");
+        GuestErrorEmitter.ThrowError(il, errors.CreateException, errors.TypeErrorConstructor, "Reduce of empty iterator with no initial value.");
     }
 
-    private void EmitIteratorToArray(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitIteratorToArray(TypeBuilder typeBuilder, EmittedIteratorHelpersRuntime iteratorHelpers)
     {
         // static object IteratorToArray(object source)
         var method = typeBuilder.DefineMethod(
             "IteratorToArray", MethodAttributes.Public | MethodAttributes.Static,
             _types.Object, [_types.Object]);
-        runtime.IteratorToArray = method;
+        iteratorHelpers.ToArray = method;
 
         var il = method.GetILGenerator();
         var listLocal = il.DeclareLocal(_types.ListOfObject);
@@ -871,7 +883,7 @@ public partial class RuntimeEmitter
 
         // var enum = NormalizeToEnumerator(source)
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.NormalizeToEnumerator);
+        il.Emit(OpCodes.Call, iteratorHelpers.NormalizeToEnumerator);
         il.Emit(OpCodes.Stloc, enumLocal);
 
         il.MarkLabel(loopLabel);
@@ -891,13 +903,13 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitIteratorForEach(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitIteratorForEach(TypeBuilder typeBuilder, EmittedIteratorHelpersRuntime iteratorHelpers, MethodInfo invokeMethod)
     {
         // static object IteratorForEach(object source, object callback)
         var method = typeBuilder.DefineMethod(
             "IteratorForEach", MethodAttributes.Public | MethodAttributes.Static,
             _types.Object, [_types.Object, _types.Object]);
-        runtime.IteratorForEach = method;
+        iteratorHelpers.ForEach = method;
 
         var il = method.GetILGenerator();
         var enumLocal = il.DeclareLocal(_types.IEnumeratorOfObject);
@@ -907,7 +919,7 @@ public partial class RuntimeEmitter
         var doneLabel = il.DefineLabel();
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.NormalizeToEnumerator);
+        il.Emit(OpCodes.Call, iteratorHelpers.NormalizeToEnumerator);
         il.Emit(OpCodes.Stloc, enumLocal);
 
         il.Emit(OpCodes.Ldc_I4_2);
@@ -942,7 +954,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloc, argsLocal);
-        il.Emit(OpCodes.Call, runtime.Invocation.Method);
+        il.Emit(OpCodes.Call, invokeMethod);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Br, loopLabel);
 
@@ -951,18 +963,18 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitIteratorSome(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitIteratorSome(TypeBuilder typeBuilder, EmittedIteratorHelpersRuntime iteratorHelpers, IteratorCallbackInputs callback)
     {
-        EmitIteratorPredicateMethod(typeBuilder, runtime, "IteratorSome",
+        EmitIteratorPredicateMethod(typeBuilder, iteratorHelpers.NormalizeToEnumerator, callback, "IteratorSome",
             trueOnMatch: true, out var methodBuilder);
-        runtime.IteratorSome = methodBuilder;
+        iteratorHelpers.Some = methodBuilder;
     }
 
-    private void EmitIteratorEvery(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitIteratorEvery(TypeBuilder typeBuilder, EmittedIteratorHelpersRuntime iteratorHelpers, IteratorCallbackInputs callback)
     {
-        EmitIteratorPredicateMethod(typeBuilder, runtime, "IteratorEvery",
+        EmitIteratorPredicateMethod(typeBuilder, iteratorHelpers.NormalizeToEnumerator, callback, "IteratorEvery",
             trueOnMatch: false, out var methodBuilder);
-        runtime.IteratorEvery = methodBuilder;
+        iteratorHelpers.Every = methodBuilder;
     }
 
     /// <summary>
@@ -970,7 +982,7 @@ public partial class RuntimeEmitter
     /// For some: returns true on first truthy match, false if none match.
     /// For every: returns false on first falsy match, true if all match.
     /// </summary>
-    private void EmitIteratorPredicateMethod(TypeBuilder typeBuilder, EmittedRuntime runtime,
+    private void EmitIteratorPredicateMethod(TypeBuilder typeBuilder, MethodInfo normalizeToEnumerator, IteratorCallbackInputs callback,
         string name, bool trueOnMatch, out MethodBuilder methodBuilder)
     {
         var method = typeBuilder.DefineMethod(
@@ -987,7 +999,7 @@ public partial class RuntimeEmitter
         var earlyReturnLabel = il.DefineLabel();
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.NormalizeToEnumerator);
+        il.Emit(OpCodes.Call, normalizeToEnumerator);
         il.Emit(OpCodes.Stloc, enumLocal);
 
         il.Emit(OpCodes.Ldc_I4_2);
@@ -1020,8 +1032,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloc, argsLocal);
-        il.Emit(OpCodes.Call, runtime.Invocation.Method);
-        il.Emit(OpCodes.Call, runtime.Booleans.IsTruthy);
+        il.Emit(OpCodes.Call, callback.InvokeMethod);
+        il.Emit(OpCodes.Call, callback.IsTruthy);
 
         if (trueOnMatch)
         {
@@ -1048,12 +1060,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitIteratorFind(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitIteratorFind(TypeBuilder typeBuilder, EmittedIteratorHelpersRuntime iteratorHelpers, IteratorCallbackInputs callback)
     {
         var method = typeBuilder.DefineMethod(
             "IteratorFind", MethodAttributes.Public | MethodAttributes.Static,
             _types.Object, [_types.Object, _types.Object]);
-        runtime.IteratorFind = method;
+        iteratorHelpers.Find = method;
 
         var il = method.GetILGenerator();
         var enumLocal = il.DeclareLocal(_types.IEnumeratorOfObject);
@@ -1065,7 +1077,7 @@ public partial class RuntimeEmitter
         var foundLabel = il.DefineLabel();
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.NormalizeToEnumerator);
+        il.Emit(OpCodes.Call, iteratorHelpers.NormalizeToEnumerator);
         il.Emit(OpCodes.Stloc, enumLocal);
 
         il.Emit(OpCodes.Ldc_I4_2);
@@ -1102,8 +1114,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloc, argsLocal);
-        il.Emit(OpCodes.Call, runtime.Invocation.Method);
-        il.Emit(OpCodes.Call, runtime.Booleans.IsTruthy);
+        il.Emit(OpCodes.Call, callback.InvokeMethod);
+        il.Emit(OpCodes.Call, callback.IsTruthy);
         il.Emit(OpCodes.Brtrue, foundLabel);
         il.Emit(OpCodes.Br, loopLabel);
 
@@ -1116,7 +1128,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitIteratorNext(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitIteratorNext(TypeBuilder typeBuilder, EmittedIteratorHelpersRuntime iteratorHelpers, EmittedGeneratorRuntime generators, FieldInfo undefinedInstance)
     {
         // static object IteratorNext(object source, object sent)
         // Calls MoveNext on the source (which should already be an IEnumerator from prior normalization
@@ -1126,7 +1138,7 @@ public partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "IteratorNext", MethodAttributes.Public | MethodAttributes.Static,
             _types.Object, [_types.Object, _types.Object]);
-        runtime.IteratorNext = method;
+        iteratorHelpers.Next = method;
 
         var il = method.GetILGenerator();
         var enumLocal = il.DeclareLocal(_types.IEnumeratorOfObject);
@@ -1139,23 +1151,23 @@ public partial class RuntimeEmitter
         // array.values(), user iterators) carry no resume slot — fall through and
         // drive MoveNext directly (the sent value is ignored, matching the spec's
         // "the next method of a built-in iterator ignores its argument").
-        if (runtime.Generators.Type != null)
+        if (generators.Type != null)
         {
             var notGeneratorLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.Generators.Type);
+            il.Emit(OpCodes.Isinst, generators.Type);
             il.Emit(OpCodes.Brfalse, notGeneratorLabel);
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Castclass, runtime.Generators.Type);
+            il.Emit(OpCodes.Castclass, generators.Type);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Callvirt, runtime.Generators.Next);
+            il.Emit(OpCodes.Callvirt, generators.Next);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(notGeneratorLabel);
         }
 
         // Normalize source to IEnumerator<object>
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.NormalizeToEnumerator);
+        il.Emit(OpCodes.Call, iteratorHelpers.NormalizeToEnumerator);
         il.Emit(OpCodes.Stloc, enumLocal);
 
         // Call MoveNext
@@ -1192,7 +1204,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, dictLocal);
 
         var completionLocal = il.DeclareLocal(_types.Object);
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, undefinedInstance);
         il.Emit(OpCodes.Stloc, completionLocal);
         il.BeginExceptionBlock();
         il.Emit(OpCodes.Ldloc, enumLocal);
@@ -1224,7 +1236,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitIteratorFrom(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitIteratorFrom(TypeBuilder typeBuilder, EmittedIteratorHelpersRuntime iteratorHelpers)
     {
         // static object IteratorFrom(object source)
         // Wraps any iterable source into something that can use iterator helpers.
@@ -1233,7 +1245,7 @@ public partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "IteratorFrom", MethodAttributes.Public | MethodAttributes.Static,
             _types.Object, [_types.Object]);
-        runtime.IteratorFrom = method;
+        iteratorHelpers.From = method;
 
         var il = method.GetILGenerator();
         // Just return the source - our helper methods will normalize it

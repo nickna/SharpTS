@@ -17,6 +17,10 @@ namespace SharpTS.Compilation;
 /// <seealso cref="ILEmitter"/>
 public class EmittedRuntime
 {
+    /// <summary>Required lazy iterator adapter construction and helper declarations.</summary>
+    public EmittedIteratorHelpersRuntime IteratorHelpers { get; } = new();
+
+
     /// <summary>Required iterable collection declarations, available before their bodies are emitted.</summary>
     public EmittedIteratorCollectionRuntime IteratorCollection { get; } = new();
 
@@ -582,27 +586,8 @@ public class EmittedRuntime
 
 
     // Iterator helper methods (ES2025 Iterator Helpers)
-    public MethodBuilder NormalizeToEnumerator { get; set; } = null!;
-    public MethodBuilder IteratorMap { get; set; } = null!;
-    public MethodBuilder IteratorFilter { get; set; } = null!;
-    public MethodBuilder IteratorTake { get; set; } = null!;
-    public MethodBuilder IteratorDrop { get; set; } = null!;
-    public MethodBuilder IteratorFlatMap { get; set; } = null!;
-    public MethodBuilder IteratorReduce { get; set; } = null!;
-    public MethodBuilder IteratorToArray { get; set; } = null!;
-    public MethodBuilder IteratorForEach { get; set; } = null!;
-    public MethodBuilder IteratorSome { get; set; } = null!;
-    public MethodBuilder IteratorEvery { get; set; } = null!;
-    public MethodBuilder IteratorFind { get; set; } = null!;
-    public MethodBuilder IteratorNext { get; set; } = null!;
-    public MethodBuilder IteratorFrom { get; set; } = null!;
 
     // Iterator helper lazy wrapper types
-    public ConstructorBuilder MapIteratorCtor { get; set; } = null!;
-    public ConstructorBuilder FilterIteratorCtor { get; set; } = null!;
-    public ConstructorBuilder TakeIteratorCtor { get; set; } = null!;
-    public ConstructorBuilder DropIteratorCtor { get; set; } = null!;
-    public ConstructorBuilder FlatMapIteratorCtor { get; set; } = null!;
 
     // OS module methods
     /// <summary>OS metadata, or null when OS helpers are omitted.</summary>

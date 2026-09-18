@@ -1693,7 +1693,12 @@ public partial class RuntimeEmitter
         );
         runtime.IteratorCollection.CompleteEmission();
         // ES2025 Iterator Helper methods and lazy wrapper types
-        EmitIteratorHelperMethods(typeBuilder, moduleBuilder, runtime);
+        EmitIteratorHelperMethods(
+            typeBuilder, moduleBuilder, runtime.IteratorHelpers,
+            new IteratorHelperInputs(runtime.Errors, runtime.IteratorWrappers.Ctor,
+                runtime.Invocation.Method, runtime.Booleans.IsTruthy,
+                runtime.Generators, runtime.UndefinedInstance));
+        runtime.IteratorHelpers.CompleteEmission();
         // Arrays - must come AFTER iterator methods since ConcatArrays/ExpandCallArgs use IterateToList.
         // SetArrayElement* helpers (including Object variant) are emitted earlier, BEFORE SetIndex,
         // since SetIndex's object-list branch also calls SetArrayElement for auto-extend semantics.
@@ -2487,7 +2492,7 @@ public partial class RuntimeEmitter
         EmitStringFromCharCode(typeBuilder, runtime.Strings, runtime.NumericCoercion.ToNumber);
         EmitStringCodePointAt(typeBuilder, runtime.Strings, runtime.NumericCoercion.ToIntegerOrInfinity, runtime.UndefinedInstance);
         EmitStringWellFormedMethods(typeBuilder, runtime.Strings);
-        EmitStringIterator(typeBuilder, runtime.Strings, runtime.Errors.CreateException, runtime.NormalizeToEnumerator, runtime.Errors.TypeErrorConstructor,
+        EmitStringIterator(typeBuilder, runtime.Strings, runtime.Errors.CreateException, runtime.IteratorHelpers.NormalizeToEnumerator, runtime.Errors.TypeErrorConstructor,
             runtime.StringCoercion.ToJsString, runtime.UndefinedType);
         EmitStringFromCodePoint(typeBuilder, runtime.Strings, runtime.Errors.CreateException, runtime.Errors.RangeErrorConstructor, runtime.StringCoercion.ToJsString,
             runtime.NumericCoercion.ToNumber);
@@ -2514,7 +2519,7 @@ public partial class RuntimeEmitter
                     runtime.ObjectRead.Index,
                     runtime.ObjectRead.Property,
                     runtime.Invocation.Method,
-                    runtime.NormalizeToEnumerator,
+                    runtime.IteratorHelpers.NormalizeToEnumerator,
                     runtime.NumericCoercion,
                     runtime.FunctionAttributes.PadUndefinedCtor,
                     runtime.ObjectWrite.Property,
