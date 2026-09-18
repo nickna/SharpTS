@@ -14781,4 +14781,151 @@ public class StandaloneDllTests
     }
 
 
+    public static IEnumerable<object[]> GlobalObjectPrograms =>
+    [
+        new object[]
+        {
+            "identity",
+            "const root:any=globalThis;console.log(typeof root,root!==null,root===globalThis,root.globalThis===root,root.global===root);console.log(root.Object===Object,root.Array===Array,root.Function===Function,root.Error===Error,root.TypeError===TypeError);\n",
+            "object true true true true\ntrue true true true true\n",
+            false,
+            true,
+        },
+        new object[]
+        {
+            "writes",
+            "const root:any=globalThis;root.__sharptsGlobalProbe=4;console.log(globalThis.__sharptsGlobalProbe,root[\"__sharptsGlobalProbe\"]);globalThis[\"__sharptsGlobalProbe\"]=7;console.log(root.__sharptsGlobalProbe);delete root.__sharptsGlobalProbe;console.log(root.__sharptsGlobalProbe===undefined);\n",
+            "4 4\n7\ntrue\n",
+            false,
+            true,
+        },
+        new object[]
+        {
+            "constants",
+            "const root:any=globalThis;console.log(root.undefined===undefined,Number.isNaN(root.NaN),root.Infinity===Infinity);console.log(root.Math===Math,root.JSON===JSON,root.Symbol===Symbol,root.process===process);\n",
+            "true true true\ntrue true true true\n",
+            false,
+            true,
+        },
+        new object[]
+        {
+            "optional_classes",
+            "const root:any=globalThis;const d=new Date(0);const r=new RegExp(\"a\");console.log(root.Date===Date,root.RegExp===RegExp,d.getTime(),r.test(\"a\"));console.log(root.Reflect===Reflect);\n",
+            "true true 0 true\ntrue\n",
+            false,
+            true,
+        },
+        new object[]
+        {
+            "optional_buffer_text",
+            "const root:any=globalThis;const b=Buffer.from(\"a\");const e=new TextEncoder();const d=new TextDecoder();console.log(root.Buffer===Buffer,root.TextEncoder===TextEncoder,root.TextDecoder===TextDecoder,b[0],d.decode(e.encode(\"text\")));\n",
+            "true true true 97 text\n",
+            false,
+            true,
+        },
+        new object[]
+        {
+            "optional_fetch_crypto",
+            "const root:any=globalThis;const f=fetch;const c=crypto;console.log(typeof f,root.fetch===f,typeof c,root.crypto===c);\n",
+            "function true object true\n",
+            false,
+            true,
+        },
+        new object[]
+        {
+            "indirect_nonstring",
+            "const e:any=eval;const value:any={x:1};console.log(e(42),e(true),e(null),e(undefined)===undefined,e(value)===value);console.log(e.name,e.length,e===globalThis.eval);\n",
+            "42 true null true true\neval 1 true\n",
+            false,
+            true,
+        },
+        new object[]
+        {
+            "direct_eval_control",
+            "function get():number{const value=4;return eval(\"value+2\") as number;}console.log(get(),eval(\"1+2\"));\n",
+            "6 3\n",
+            false,
+            true,
+        },
+        new object[]
+        {
+            "hosted_property",
+            "export function read(name:string):any{return globalThis[name];}export function write(name:string,value:any):void{globalThis[name]=value;}\n",
+            "",
+            true,
+            true,
+        },
+        new object[]
+        {
+            "hosted_identity",
+            "export function root():any{return globalThis;}\n",
+            "",
+            true,
+            true,
+        },
+        new object[]
+        {
+            "ordinary_accessor_control",
+            "const root:any={};const box:any={value:2};Object.defineProperty(root,\"value\",{get(){return box.value;},set(value:number){box.value=value;},configurable:true});root[\"value\"]=8;console.log(root.value,box.value);delete root.value;console.log(root.value===undefined);\n",
+            "8 8\ntrue\n",
+            false,
+            true,
+        },
+        new object[]
+        {
+            "delete_nonnull_control",
+            "const root:any=globalThis;root.__sharptsGlobalDelete=3;console.log(delete root.__sharptsGlobalDelete,root.__sharptsGlobalDelete===undefined);Object.defineProperty(root,\"__sharptsGlobalDelete\",{value:9,writable:false,configurable:true});console.log(root.__sharptsGlobalDelete,Object.getOwnPropertyDescriptor(root,\"__sharptsGlobalDelete\")!.writable);console.log(delete root.__sharptsGlobalDelete,root.__sharptsGlobalDelete===undefined);\n",
+            "true true\n9 false\ntrue true\n",
+            false,
+            true,
+        },
+        new object[]
+        {
+            "isnan_controls",
+            "console.log(isNaN(\"x\" as any),Number.isNaN(\"x\" as any));const root:any=globalThis;console.log(root.isNaN(NaN),root.isNaN(4),root.parseInt(\"3\"));\n",
+            "true false\ntrue false 3\n",
+            false,
+            true,
+        },
+        new object[]
+        {
+            "function_identity_control",
+            "const probe:any=Function(\"return this\")();console.log(probe===globalThis,probe.Object===Object);\n",
+            "true true\n",
+            false,
+            true,
+        },
+        new object[]
+        {
+            "direct_dynamic_eval_control",
+            "const text=String(\"1+2\");console.log(eval(text));\n",
+            "3\n",
+            false,
+            false,
+        },
+    ];
+
+    [Theory]
+    [MemberData(nameof(GlobalObjectPrograms))]
+    public void Isolated_GlobalObject_PreservesIdentityPropertiesAndEvalDeployment(
+        string name, string source, string expected, bool hosted, bool standalone)
+    {
+        using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var sourcePath = tempDir.CreateFile("main.ts", source);
+        var dllPath = tempDir.GetPath($"global_object_{name}.dll");
+        var hosting = hosted ? " --target dll --hosted" : "";
+        var deployment = standalone ? " --standalone" : "";
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{sourcePath}\" -o \"{dllPath}\" --verify{deployment}{hosting}", tempDir.Path);
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        var references = GetAssemblyReferences(dllPath);
+        Assert.DoesNotContain("SharpTS", references);
+        Assert.Equal(hosted, references.Contains("SharpTS.Hosting.Abstractions"));
+        Assert.Equal(!standalone, File.Exists(tempDir.GetPath("SharpTS.dll")));
+        if (!hosted)
+            Assert.Equal(expected, ExecuteCompiledDllIsolated(dllPath, timeoutMs: 30000,
+                verifyStandardError: error => Assert.Empty(error), standardInput: ""));
+    }
+
 }

@@ -633,7 +633,7 @@ public class LocalVariableResolver : IVariableResolver
         //    idle `undefined` sentinel into the script's global execution context.
         if (_ctx.IsScriptTopLevel && _ctx.Runtime != null)
         {
-            _il.Emit(OpCodes.Ldsfld, _ctx.Runtime.GlobalThisSingletonField);
+            _il.Emit(OpCodes.Ldsfld, _ctx.Runtime.GlobalObject.SingletonField);
             return;
         }
 
@@ -657,7 +657,7 @@ public class LocalVariableResolver : IVariableResolver
         //    assembly mode (no runtime) falls back to bare null as before.
         if (_ctx.Runtime != null)
         {
-            _il.Emit(OpCodes.Ldsfld, _ctx.Runtime.GlobalThisSingletonField);
+            _il.Emit(OpCodes.Ldsfld, _ctx.Runtime.GlobalObject.SingletonField);
             return;
         }
 
@@ -678,7 +678,7 @@ public class LocalVariableResolver : IVariableResolver
     /// </summary>
     private void EmitCoerceSloppyThisToGlobal()
     {
-        if (_ctx.Runtime?.GlobalThisSingletonField == null) return;
+        if (_ctx.Runtime?.GlobalObject.HasSingletonField != true) return;
 
         var keep = _il.DefineLabel();
         var useGlobal = _il.DefineLabel();
@@ -700,7 +700,7 @@ public class LocalVariableResolver : IVariableResolver
 
         _il.MarkLabel(useGlobal);
         _il.Emit(OpCodes.Pop);
-        _il.Emit(OpCodes.Ldsfld, _ctx.Runtime.GlobalThisSingletonField);
+        _il.Emit(OpCodes.Ldsfld, _ctx.Runtime.GlobalObject.SingletonField);
 
         _il.MarkLabel(keep);
     }

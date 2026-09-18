@@ -142,7 +142,7 @@ public partial class ILEmitter
 
             IL.Emit(OpCodes.Ldstr, v.Name.Lexeme);
             emitValue();
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.GlobalThisSetProperty);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.GlobalObject.SetProperty);
         }
 
         // Module-level storage (static field / entry-point display class) is only the right

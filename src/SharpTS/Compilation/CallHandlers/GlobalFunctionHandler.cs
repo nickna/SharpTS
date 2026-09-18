@@ -59,7 +59,7 @@ public class GlobalFunctionHandler : ICallHandler
         // sloppy functions receive globalThis and strict functions keep undefined.
         il.Emit(System.Reflection.Emit.OpCodes.Ldsfld, ctx.Runtime!.Sentinels.UndefinedInstance);
         il.Emit(System.Reflection.Emit.OpCodes.Ldstr, name);
-        il.Emit(System.Reflection.Emit.OpCodes.Call, ctx.Runtime.GlobalThisGetProperty);
+        il.Emit(System.Reflection.Emit.OpCodes.Call, ctx.Runtime.GlobalObject.GetProperty);
         emitter.EmitArgsArrayWithSpread(call.Arguments);
         il.Emit(System.Reflection.Emit.OpCodes.Call, ctx.Runtime.Invocation.Method);
         emitter.SetStackUnknown();
@@ -161,7 +161,7 @@ public class GlobalFunctionHandler : ICallHandler
         il.Emit(System.Reflection.Emit.OpCodes.Stelem_Ref);
         il.Emit(System.Reflection.Emit.OpCodes.Dup);
         il.Emit(System.Reflection.Emit.OpCodes.Ldc_I4_1);
-        il.Emit(System.Reflection.Emit.OpCodes.Ldsfld, ctx.Runtime!.GlobalThisSingletonField);
+        il.Emit(System.Reflection.Emit.OpCodes.Ldsfld, ctx.Runtime!.GlobalObject.SingletonField);
         il.Emit(System.Reflection.Emit.OpCodes.Stelem_Ref);
         il.Emit(System.Reflection.Emit.OpCodes.Dup);
         il.Emit(System.Reflection.Emit.OpCodes.Ldc_I4_2);

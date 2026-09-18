@@ -643,7 +643,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
             EmitExpression(gi.Index);
             EnsureBoxed();
             IL.Emit(OpCodes.Callvirt, Types.GetMethodNoParams(Types.Object, "ToString"));
-            IL.Emit(OpCodes.Call, Ctx.Runtime!.GlobalThisGetProperty);
+            IL.Emit(OpCodes.Call, Ctx.Runtime!.GlobalObject.GetProperty);
             SetStackUnknown();
             return;
         }
@@ -717,7 +717,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
             IL.Emit(OpCodes.Ldloc, indexTemp);
             IL.Emit(OpCodes.Callvirt, Types.GetMethodNoParams(Types.Object, "ToString"));
             IL.Emit(OpCodes.Ldloc, valueTemp);
-            IL.Emit(OpCodes.Call, Ctx.Runtime!.GlobalThisSetProperty);
+            IL.Emit(OpCodes.Call, Ctx.Runtime!.GlobalObject.SetProperty);
             IL.Emit(OpCodes.Ldloc, valueTemp);
             SetStackUnknown();
             return;
@@ -760,9 +760,9 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
             IL.Emit(OpCodes.Ldfld, thisField);
             SetStackUnknown();
         }
-        else if (Ctx.Runtime?.GlobalThisSingletonField != null)
+        else if (Ctx.Runtime?.GlobalObject.HasSingletonField == true)
         {
-            IL.Emit(OpCodes.Ldsfld, Ctx.Runtime.GlobalThisSingletonField);
+            IL.Emit(OpCodes.Ldsfld, Ctx.Runtime.GlobalObject.SingletonField);
             SetStackUnknown();
         }
         else
@@ -946,7 +946,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
             IL.Emit(OpCodes.Stloc, gtResultTemp);
             IL.Emit(OpCodes.Ldstr, s.Name.Lexeme);
             IL.Emit(OpCodes.Ldloc, gtResultTemp);
-            IL.Emit(OpCodes.Call, Ctx.Runtime!.GlobalThisSetProperty);
+            IL.Emit(OpCodes.Call, Ctx.Runtime!.GlobalObject.SetProperty);
             IL.Emit(OpCodes.Ldloc, gtResultTemp);
             SetStackUnknown();
             return;

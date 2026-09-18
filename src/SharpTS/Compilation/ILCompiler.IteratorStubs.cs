@@ -44,7 +44,7 @@ public partial class ILCompiler
         {
             il.Emit(OpCodes.Dup);       // Keep state machine reference on stack
             il.Emit(OpCodes.Ldsfld, _runtime.FunctionValues.CurrentThisField);
-            if (_runtime.GlobalThisSingletonField != null)
+            if (_runtime.GlobalObject.HasSingletonField)
             {
                 var keepThis = il.DefineLabel();
                 var useGlobalThis = il.DefineLabel();
@@ -62,7 +62,7 @@ public partial class ILCompiler
                 }
                 il.MarkLabel(useGlobalThis);
                 il.Emit(OpCodes.Pop);
-                il.Emit(OpCodes.Ldsfld, _runtime.GlobalThisSingletonField);
+                il.Emit(OpCodes.Ldsfld, _runtime.GlobalObject.SingletonField);
                 il.MarkLabel(keepThis);
             }
             il.Emit(OpCodes.Stfld, smBuilder.ThisField);

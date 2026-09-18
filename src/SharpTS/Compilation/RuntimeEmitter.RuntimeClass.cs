@@ -103,7 +103,7 @@ public partial class RuntimeEmitter
         // $TSFunction.InvokeWithThis, emitted before this method, can coerce a
         // null sloppy-this thisArg to it — #735/#733). Only the .cctor init below
         // runs here; re-DefineField would throw a duplicate.
-        var globalThisSingletonField = runtime.GlobalThisSingletonField;
+        var globalThisSingletonField = runtime.GlobalObject.SingletonField;
 
         // Boolean / Number / String prototype singletons. Test262 patterns like
         //   Boolean.prototype[0] = true; Boolean.prototype.length = 1;
@@ -587,6 +587,7 @@ public partial class RuntimeEmitter
         // Initialize _globalThisSingleton = new object() (#271 sentinel identity)
         cctorIL.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.Object));
         cctorIL.Emit(OpCodes.Stsfld, globalThisSingletonField);
+        runtime.GlobalObject.MarkInitializerEmitted();
 
         // Initialize the symbol-keyed accessor registry (#266).
         InitSymbolAccessorRegistry(cctorIL, runtime.SymbolAccessors);
@@ -932,7 +933,7 @@ public partial class RuntimeEmitter
                 runtime.DescriptorStorage,
                 runtime.Errors,
                 runtime.ObjectRead.Property,
-                runtime.GlobalThisSingletonField,
+                runtime.GlobalObject.SingletonField,
                 runtime.ObjectFields.HasProperty,
                 runtime.ObjectFields.Interface,
                 runtime.Json,
@@ -1304,8 +1305,8 @@ public partial class RuntimeEmitter
                 runtime.FunctionPrototypes.Prototype,
                 runtime.FunctionPrototypes.Populate,
                 runtime.FunctionIntrospection.GetProperty,
-                runtime.GlobalThisGetProperty,
-                runtime.GlobalThisSingletonField,
+                runtime.GlobalObject.GetProperty,
+                runtime.GlobalObject.SingletonField,
                 runtime.ObjectFields.GetProperty,
                 runtime.ObjectFields.Interface,
                 runtime.ReflectedMethods.InvokeUnwrapped,
@@ -1359,7 +1360,7 @@ public partial class RuntimeEmitter
         // ToJsString depends on GetProperty + InvokeMethodValue + Stringify; emit after those.
         EmitToJsString(typeBuilder, runtime.StringCoercion, runtime.ArrayStorage, runtime.ArrayOperations,
             new StringCoercionInputs(
-                runtime.Sentinels.UndefinedType, runtime.Symbols.Type, runtime.GlobalThisSingletonField, runtime.GlobalThisGetProperty,
+                runtime.Sentinels.UndefinedType, runtime.Symbols.Type, runtime.GlobalObject.SingletonField, runtime.GlobalObject.GetProperty,
                 runtime.Operators.TypeOf, runtime.Invocation.Method, runtime.Arguments.Type, runtime.ObjectRead.Property, runtime.ObjectStorage.Type,
                 runtime.FunctionValues.Type, runtime.FunctionBindings.AnyType, runtime.ObjectOwnProperties.HasOwnProperty, runtime.ObjectFields.Interface,
                 runtime.Symbols.GetStorage, runtime.Symbols.ToPrimitive, runtime.DescriptorStorage.DescriptorType,
@@ -1418,8 +1419,8 @@ public partial class RuntimeEmitter
                 runtime.Modules.CommonJs,
                 runtime.DescriptorStorage,
                 runtime.Errors,
-                runtime.GlobalThisSetProperty,
-                runtime.GlobalThisSingletonField,
+                runtime.GlobalObject.SetProperty,
+                runtime.GlobalObject.SingletonField,
                 runtime.ReflectedMethods.InvokeUnwrapped,
                 runtime.Invocation.Method,
                 runtime.LookupBuiltInStaticMember,
@@ -1449,8 +1450,8 @@ public partial class RuntimeEmitter
                 runtime.Modules.CommonJs,
                 runtime.DescriptorStorage,
                 runtime.Errors,
-                runtime.GlobalThisSetProperty,
-                runtime.GlobalThisSingletonField,
+                runtime.GlobalObject.SetProperty,
+                runtime.GlobalObject.SingletonField,
                 runtime.ReflectedMethods.InvokeUnwrapped,
                 runtime.Invocation.Method,
                 runtime.ObjectDescriptors,
@@ -1471,8 +1472,8 @@ public partial class RuntimeEmitter
                 runtime.DescriptorStorage,
                 runtime.Errors,
                 runtime.ObjectRead.Property,
-                runtime.GlobalThisProperties,
-                runtime.GlobalThisSingletonField,
+                runtime.GlobalObject.Properties,
+                runtime.GlobalObject.SingletonField,
                 runtime.ObjectFields.FieldsGetter,
                 runtime.ObjectFields.Interface,
                 runtime.ReflectedMethods.InvokeUnwrapped,
@@ -1493,8 +1494,8 @@ public partial class RuntimeEmitter
                 runtime.DescriptorStorage,
                 runtime.Errors,
                 runtime.ObjectRead.Property,
-                runtime.GlobalThisProperties,
-                runtime.GlobalThisSingletonField,
+                runtime.GlobalObject.Properties,
+                runtime.GlobalObject.SingletonField,
                 runtime.ObjectFields.FieldsGetter,
                 runtime.ObjectFields.Interface,
                 runtime.ReflectedMethods.InvokeUnwrapped,
@@ -1559,8 +1560,8 @@ public partial class RuntimeEmitter
                 runtime.DescriptorStorage,
                 runtime.FunctionPrototypes.Prototype,
                 runtime.FunctionPrototypes.Populate,
-                runtime.GlobalThisGetProperty,
-                runtime.GlobalThisSingletonField,
+                runtime.GlobalObject.GetProperty,
+                runtime.GlobalObject.SingletonField,
                 runtime.ReflectedMethods.InvokeUnwrapped,
                 runtime.Invocation.Method,
                 runtime.ObjectDescriptors,
@@ -1588,8 +1589,8 @@ public partial class RuntimeEmitter
                 runtime.ArrayStorage,
                 runtime.Buffer,
                 runtime.DescriptorStorage,
-                runtime.GlobalThisSetProperty,
-                runtime.GlobalThisSingletonField,
+                runtime.GlobalObject.SetProperty,
+                runtime.GlobalObject.SingletonField,
                 runtime.ReflectedMethods.InvokeUnwrapped,
                 runtime.Invocation.Method,
                 runtime.Math,
@@ -1974,8 +1975,8 @@ public partial class RuntimeEmitter
                 runtime.ObjectKeys.Keys,
                 runtime.ObjectKeys.Names,
                 runtime.ObjectRead.Property,
-                runtime.GlobalThisGetProperty,
-                runtime.GlobalThisSingletonField,
+                runtime.GlobalObject.GetProperty,
+                runtime.GlobalObject.SingletonField,
                 runtime.ObjectFields.FieldsGetter,
                 runtime.ObjectFields.Interface,
                 runtime.Json,

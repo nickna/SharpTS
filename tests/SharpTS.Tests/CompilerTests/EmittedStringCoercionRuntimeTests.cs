@@ -143,7 +143,7 @@ public class EmittedStringCoercionRuntimeTests
         var inputType = typeof(RuntimeEmitter).GetNestedType("StringCoercionInputs", BindingFlags.NonPublic)!;
         var peers = Activator.CreateInstance(inputType,
         [
-            runtime.Sentinels.UndefinedType, runtime.Symbols.Type, runtime.GlobalThisSingletonField, runtime.GlobalThisGetProperty,
+            runtime.Sentinels.UndefinedType, runtime.Symbols.Type, runtime.GlobalObject.SingletonField, runtime.GlobalObject.GetProperty,
             runtime.Operators.TypeOf, runtime.Invocation.Method, runtime.Arguments.Type, runtime.ObjectRead.Property, runtime.ObjectStorage.Type,
             runtime.FunctionValues.Type, runtime.FunctionBindings.AnyType, runtime.ObjectOwnProperties.HasOwnProperty, runtime.ObjectFields.Interface,
             getSymbols, runtime.Symbols.ToPrimitive, runtime.DescriptorStorage.DescriptorType,

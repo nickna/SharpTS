@@ -449,7 +449,7 @@ public class AsyncArrowStateMachineBuilder : AsyncBuilderBase
             il.Emit(OpCodes.Dup);
             il.Emit(OpCodes.Brtrue, thisNotNull);
             il.Emit(OpCodes.Pop);
-            il.Emit(OpCodes.Ldsfld, runtime.GlobalThisSingletonField);
+            il.Emit(OpCodes.Ldsfld, runtime.GlobalObject.SingletonField);
             il.MarkLabel(thisNotNull);
             il.Emit(OpCodes.Stfld, OwnThisField);
         }

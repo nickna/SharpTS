@@ -432,6 +432,20 @@ wrappers retain separate feature selections; Map and Set remain selected by
 metadata availability. Tests cover missing declarations, reuse, disabled
 optional metadata, receiver identity, zero-argument fallback and saved output.
 
+Required `GlobalObject` owns the global singleton, property dictionary, forward
+get/set methods and indirect-eval helper. Forward declarations complete at their
+original phase-one position; singleton initialization stays in the runtime static
+constructor, and the late helper bodies complete the owner. Missing, duplicate,
+out-of-order and completed writes fail explicitly. Nullable singleton probes preserve
+reference-assembly and partial-runtime paths without reading an undeclared handle.
+Property/eval emitters receive exact peer handles or cohesive descriptor/number/error
+owners, with optional global choices selected explicitly by orchestration. Generated
+signatures, attributes, order, cached identities and optional eval deployment remain
+unchanged. Tests cover lifecycle repair/freeze, emitter reuse, absent and combined
+features, globals through aliases and indexes, and standalone/hosted deployment.
+Shared runtime-type metadata, local builders, registries and remaining ownership
+infrastructure stay within the complete audit.
+
 Required `UriComponents` owns the encode/decode component helpers. Its scoped emitter
 receives only the runtime type builder, owner, string-conversion method and nullable
 undefined-padding attribute constructor. Completion follows the original helper call

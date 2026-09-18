@@ -81,7 +81,7 @@ public partial class ILEmitter
                 IL.Emit(OpCodes.Stloc, value);
                 IL.Emit(OpCodes.Ldstr, function.Name.Lexeme);
                 IL.Emit(OpCodes.Ldloc, value);
-                IL.Emit(OpCodes.Call, _ctx.Runtime!.GlobalThisSetProperty);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.GlobalObject.SetProperty);
             }
         }
 
