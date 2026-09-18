@@ -6,7 +6,7 @@ namespace SharpTS.Compilation;
 public partial class RuntimeEmitter
 {
     private void EmitStableNumberIteratorResult(
-        ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+        ModuleBuilder moduleBuilder, EmittedStableIteratorResultRuntime stableIteratorResults)
     {
         var builder = EmitTypeDefinitions.DefineType(
             moduleBuilder,
@@ -32,10 +32,10 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
 
         Type resultType = builder.CreateType()!;
-        runtime.StableNumberIteratorResultType = resultType;
-        runtime.StableNumberIteratorResultCtor = resultType.GetConstructor(
+        stableIteratorResults.Type = resultType;
+        stableIteratorResults.Ctor = resultType.GetConstructor(
             [_types.Double, _types.Boolean])!;
-        runtime.StableNumberIteratorResultValueField = resultType.GetField("Value")!;
-        runtime.StableNumberIteratorResultDoneField = resultType.GetField("Done")!;
+        stableIteratorResults.Value = resultType.GetField("Value")!;
+        stableIteratorResults.Done = resultType.GetField("Done")!;
     }
 }

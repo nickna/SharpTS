@@ -3708,6 +3708,136 @@ public class StandaloneDllTests
             verifyStandardError: error => Assert.Empty(error)));
     }
 
+    public static IEnumerable<object[]> GeneratorProtocolPrograms =>
+    [
+        new object[]
+        {
+            "generator_throw_return",
+            "function* values(){try{yield 3;}catch(e:any){yield e.tag;}finally{console.log(\"finally\");}}const g:any=values();console.log(g.next().value);console.log(g.throw({tag:7}).value);const r=g.return(9);console.log(r.value,r.done);\n",
+            "3\n7\nfinally\n9 true\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "generator_delegated_sent",
+            "function* inner(){const n:any=yield 4;return n+1;}function* outer(){const n:any=yield* inner();return n+2;}const g:any=outer();const a=g.next();const b=g.next(8);console.log(a.value,a.done,b.value,b.done);\n",
+            "4 false 11 true\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "generator_numeric_direct",
+            "function* range(n:number):Generator<number>{for(let i:number=0;i<n;i++)yield i;}function sum(n:number):number{let s:number=0;for(const x of range(n))s=s+x;return s;}console.log(sum(10),sum(100));\n",
+            "45 4950\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "generator_numeric_alias",
+            "function* range(n:number):Generator<number>{for(let i:number=0;i<n;i++)yield i;}const makeRange=range;function sum(n:number):number{let s:number=0;for(const x of makeRange(n))s=s+x;return s;}console.log(sum(10));\n",
+            "45\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "iterator_numeric_result",
+            "function iterate(n:number):number{let current:number=0;const iterable={[Symbol.iterator](){return this;},next(){if(current<n){const value:number=current;current=current+1;return {value,done:false};}return {value:0,done:true};}};let total:number=0;for(const value of iterable)total=total+value;return total;}console.log(iterate(10));\n",
+            "45\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "iterator_numeric_break",
+            "let current:number=0;let closes:number=0;const iterable={[Symbol.iterator](){return this;},next(){const value:number=current++;return {value,done:false};},return(){closes=closes+1;return {value:0,done:true};}};for(const value of iterable){console.log(value);break;}console.log(\"closes=\"+closes);\n",
+            "0\ncloses=1\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "iterator_numeric_escaped",
+            "let current:number=0;const iterable:any={[Symbol.iterator](){return this;},next(){return {value:current++,done:current>3};}};const alias:any=iterable;alias.next=()=>({value:9,done:true});let total:number=0;for(const value of iterable)total=total+value;console.log(total);\n",
+            "0\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "generator_async_from_sync",
+            "function* values(){try{yield 1;yield 2;}finally{console.log(\"closed\");}}async function run(){for await(const value of values()){console.log(value);break;}console.log(\"done\");}run();\n",
+            "1\nclosed\ndone\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "generator_async_protocol",
+            "async function* values(){yield 1;yield await Promise.resolve(2);}async function run(){const g=values();const a=await g.next();const b=await g.next();const c=await g.next();console.log(a.value,a.done,b.value,b.done,c.value===undefined,c.done);}run();\n",
+            "1 false 2 false true true\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "generator_return_finally_yield",
+            "function* values(){try{yield 1;}finally{yield 2;}}const g:any=values();const a=g.next();const b=g.return(9);const c=g.next();console.log(a.value,a.done,b.value,b.done,c.value,c.done);\n",
+            "1 false 2 false 9 true\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "generator_public_next_control",
+            "function* values(){yield 1;const sent:any=yield 2;return sent;}const g:any=values();const a=g.next();const b=g.next();const c=g.next(9);console.log(a.value,a.done,b.value,b.done,c.value,c.done);\n",
+            "1 false 2 false 9 true\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "generator_array_delegation_control",
+            "function* values(){yield* [1,2];}console.log([...values()].join(\",\"));\n",
+            "1,2\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "generator_plain_string_control",
+            "const result:any=[...\"a\ud83d\ude00\"];console.log(result.length,result[1].length,result[1].charCodeAt(0));\n",
+            "2 2 55357\n",
+            false,
+            "",
+        },
+    ];
+
+    [Theory]
+    [MemberData(nameof(GeneratorProtocolPrograms))]
+    public void Isolated_GeneratorProtocol_PreservesIterationAndNumericResults(
+        string name, string source, string expected, bool hosted, string extraArguments)
+    {
+        using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var sourcePath = tempDir.CreateFile("main.ts", source);
+        var dllPath = tempDir.GetPath($"generator_protocol_{name}.dll");
+        var hosting = hosted ? " --target dll --hosted" : "";
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{sourcePath}\" -o \"{dllPath}\" --verify --standalone{hosting} {extraArguments}", tempDir.Path);
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        var references = GetAssemblyReferences(dllPath);
+        Assert.DoesNotContain("SharpTS", references);
+        Assert.Equal(hosted, references.Contains("SharpTS.Hosting.Abstractions"));
+        Assert.False(File.Exists(tempDir.GetPath("SharpTS.dll")));
+        if (!hosted)
+            Assert.Equal(expected, ExecuteCompiledDllIsolated(dllPath, timeoutMs: 30000,
+                verifyStandardError: error => Assert.Empty(error)));
+    }
+
     public static IEnumerable<object[]> CallArgumentsPrograms =>
     [
         new object[]

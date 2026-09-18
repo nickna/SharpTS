@@ -231,7 +231,7 @@ public partial class ILCompiler
                 }
             }
             if (_typeMap?.TryGetStableCustomIteratorNext(arrow, out var stableIterator) == true &&
-                _runtime.StableNumberIteratorResultType is { } iteratorResultType)
+                _runtime.StableIteratorResults?.Type is { } iteratorResultType)
             {
                 returnType = iteratorResultType;
             }

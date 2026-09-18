@@ -805,12 +805,12 @@ public partial class RuntimeEmitter
         // shared close primitive so every iterator consumer observes the same
         // GeneratorResumeAbrupt semantics.
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.GeneratorInterfaceType);
+        il.Emit(OpCodes.Isinst, runtime.Generators.Type);
         il.Emit(OpCodes.Brfalse, lookupReturn);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.GeneratorInterfaceType);
+        il.Emit(OpCodes.Castclass, runtime.Generators.Type);
         il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
-        il.Emit(OpCodes.Callvirt, runtime.GeneratorReturnMethod);
+        il.Emit(OpCodes.Callvirt, runtime.Generators.Return);
         il.Emit(OpCodes.Stloc, closeResult);
         il.Emit(OpCodes.Br, validateResult);
 
@@ -1077,9 +1077,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldsfld, runtime.Symbols.Iterator);
         il.Emit(OpCodes.Bne_Un, notGeneratorIterator);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.GeneratorInterfaceType);
+        il.Emit(OpCodes.Isinst, runtime.Generators.Type);
         il.Emit(OpCodes.Brfalse, notGeneratorIterator);
-        EmitInstanceMethodInfoLiteral(il, runtime.GeneratorIteratorMethod, runtime.GeneratorInterfaceType);
+        EmitInstanceMethodInfoLiteral(il, runtime.Generators.Iterator, runtime.Generators.Type);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notGeneratorIterator);
 

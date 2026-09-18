@@ -147,7 +147,7 @@ public partial class GeneratorMoveNextEmitter
         // drives via IEnumerator.MoveNext() — a path with no slot to forward the outer's
         // resume value. The per-element loop detects $IGenerator and drives it via
         // next(sent) instead, forwarding next(v) into the delegate (ECMA-262 §14.4.14, #476).
-        var generatorInterfaceType = _ctx?.Runtime?.GeneratorInterfaceType;
+        var generatorInterfaceType = _ctx?.Runtime?.Generators.Type;
         if (generatorInterfaceType != null)
         {
             var notDelegatedGeneratorLabel = _il.DefineLabel();
@@ -386,7 +386,7 @@ public partial class GeneratorMoveNextEmitter
                 _il.Emit(OpCodes.Castclass, generatorInterfaceType);
                 _il.Emit(OpCodes.Ldarg_0);
                 _il.Emit(OpCodes.Ldfld, _builder.SentField);
-                _il.Emit(OpCodes.Callvirt, _ctx!.Runtime!.GeneratorNextMethod);
+                _il.Emit(OpCodes.Callvirt, _ctx!.Runtime!.Generators.Next);
                 _il.Emit(OpCodes.Stloc, genResultLocal);
             });
 
@@ -540,7 +540,7 @@ public partial class GeneratorMoveNextEmitter
             _il.Emit(OpCodes.Ldfld, delegatedField);
             _il.Emit(OpCodes.Castclass, generatorInterfaceType);
             LoadInjectedValue();
-            _il.Emit(OpCodes.Callvirt, _ctx!.Runtime!.GeneratorReturnMethod);
+            _il.Emit(OpCodes.Callvirt, _ctx!.Runtime!.Generators.Return);
             _il.Emit(OpCodes.Stloc, genResultLocal);
 
             // result.done → the outer returns result.value (§14.4.14 c.7); else the delegate's
@@ -598,7 +598,7 @@ public partial class GeneratorMoveNextEmitter
             _il.Emit(OpCodes.Ldfld, delegatedField);
             _il.Emit(OpCodes.Castclass, generatorInterfaceType);
             LoadInjectedValue();
-            _il.Emit(OpCodes.Callvirt, _ctx!.Runtime!.GeneratorThrowMethod);
+            _il.Emit(OpCodes.Callvirt, _ctx!.Runtime!.Generators.Throw);
             _il.Emit(OpCodes.Stloc, genResultLocal);
             _il.BeginCatchBlock(typeof(Exception));
             _il.Emit(OpCodes.Call, _ctx.Runtime.Errors.WrapException);

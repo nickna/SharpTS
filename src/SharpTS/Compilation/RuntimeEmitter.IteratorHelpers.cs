@@ -1139,16 +1139,16 @@ public partial class RuntimeEmitter
         // array.values(), user iterators) carry no resume slot — fall through and
         // drive MoveNext directly (the sent value is ignored, matching the spec's
         // "the next method of a built-in iterator ignores its argument").
-        if (runtime.GeneratorInterfaceType != null)
+        if (runtime.Generators.Type != null)
         {
             var notGeneratorLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.GeneratorInterfaceType);
+            il.Emit(OpCodes.Isinst, runtime.Generators.Type);
             il.Emit(OpCodes.Brfalse, notGeneratorLabel);
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Castclass, runtime.GeneratorInterfaceType);
+            il.Emit(OpCodes.Castclass, runtime.Generators.Type);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Callvirt, runtime.GeneratorNextMethod);
+            il.Emit(OpCodes.Callvirt, runtime.Generators.Next);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(notGeneratorLabel);
         }

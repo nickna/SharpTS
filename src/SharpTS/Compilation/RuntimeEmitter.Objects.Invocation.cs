@@ -1084,7 +1084,7 @@ public partial class RuntimeEmitter
         // not the null that GetProperty+InvokeMethodValue would pad in for a missing
         // argument (#452). User iterators carrying their own next() keep the
         // GetProperty path below (they don't implement $IGenerator).
-        if (runtime.GeneratorInterfaceType != null)
+        if (runtime.Generators.Type != null)
         {
             var notGeneratorNextLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_1);
@@ -1092,13 +1092,13 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Call, _types.StringOpEquality);
             il.Emit(OpCodes.Brfalse, notGeneratorNextLabel);
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.GeneratorInterfaceType);
+            il.Emit(OpCodes.Isinst, runtime.Generators.Type);
             il.Emit(OpCodes.Brfalse, notGeneratorNextLabel);
             // ((​$IGenerator)recv).next(args.Length > 0 ? args[0] : undefined)
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Castclass, runtime.GeneratorInterfaceType);
+            il.Emit(OpCodes.Castclass, runtime.Generators.Type);
             EmitArgZeroOrUndefined(il, runtime);
-            il.Emit(OpCodes.Callvirt, runtime.GeneratorNextMethod);
+            il.Emit(OpCodes.Callvirt, runtime.Generators.Next);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(notGeneratorNextLabel);
 
@@ -1112,12 +1112,12 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Call, _types.StringOpEquality);
             il.Emit(OpCodes.Brfalse, notGeneratorReturnLabel);
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.GeneratorInterfaceType);
+            il.Emit(OpCodes.Isinst, runtime.Generators.Type);
             il.Emit(OpCodes.Brfalse, notGeneratorReturnLabel);
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Castclass, runtime.GeneratorInterfaceType);
+            il.Emit(OpCodes.Castclass, runtime.Generators.Type);
             EmitArgZeroOrUndefined(il, runtime);
-            il.Emit(OpCodes.Callvirt, runtime.GeneratorReturnMethod);
+            il.Emit(OpCodes.Callvirt, runtime.Generators.Return);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(notGeneratorReturnLabel);
 
@@ -1131,12 +1131,12 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Call, _types.StringOpEquality);
             il.Emit(OpCodes.Brfalse, notGeneratorThrowLabel);
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.GeneratorInterfaceType);
+            il.Emit(OpCodes.Isinst, runtime.Generators.Type);
             il.Emit(OpCodes.Brfalse, notGeneratorThrowLabel);
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Castclass, runtime.GeneratorInterfaceType);
+            il.Emit(OpCodes.Castclass, runtime.Generators.Type);
             EmitArgZeroOrUndefined(il, runtime);
-            il.Emit(OpCodes.Callvirt, runtime.GeneratorThrowMethod);
+            il.Emit(OpCodes.Callvirt, runtime.Generators.Throw);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(notGeneratorThrowLabel);
         }

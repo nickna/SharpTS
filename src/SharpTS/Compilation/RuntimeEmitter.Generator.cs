@@ -12,7 +12,7 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits the $IGenerator interface that extends IEnumerator&lt;object&gt; with Return/Throw methods.
     /// </summary>
-    private void EmitGeneratorInterface(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private void EmitGeneratorInterface(ModuleBuilder moduleBuilder, EmittedGeneratorRuntime generators)
     {
         // Define interface: public interface $IGenerator : IEnumerator<object>, IEnumerable<object>
         var interfaceBuilder = moduleBuilder.DefineType(
@@ -21,7 +21,7 @@ public partial class RuntimeEmitter
             null,
             [_types.IEnumeratorOfObject, _types.IEnumerableOfObject]
         );
-        runtime.GeneratorInterfaceType = interfaceBuilder;
+        generators.Type = interfaceBuilder;
 
         // @@iterator() returns the generator itself. GetIteratorFunction exposes
         // this MethodInfo for dynamically typed generator values, allowing for-of
@@ -32,7 +32,7 @@ public partial class RuntimeEmitter
             _types.Object,
             Type.EmptyTypes
         );
-        runtime.GeneratorIteratorMethod = iteratorMethod;
+        generators.Iterator = iteratorMethod;
 
         // Define next(object value) method: object next(object value)
         // Wraps MoveNext + Current into a single call returning an iterator result.
@@ -44,7 +44,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object]
         );
-        runtime.GeneratorNextMethod = nextMethod;
+        generators.Next = nextMethod;
 
         // Define return(object value) method: object return(object value)
         // Note: "return" is a C# keyword but valid as a method name via reflection
@@ -54,7 +54,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object]
         );
-        runtime.GeneratorReturnMethod = returnMethod;
+        generators.Return = returnMethod;
 
         // Define throw(object error) method: object throw(object error)
         // Note: "throw" is a C# keyword but valid as a method name via reflection
@@ -64,10 +64,10 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object]
         );
-        runtime.GeneratorThrowMethod = throwMethod;
+        generators.Throw = throwMethod;
 
         interfaceBuilder.CreateType();
-        EmitNativeNumberGeneratorInterface(moduleBuilder, runtime);
+        EmitNativeNumberGeneratorInterface(moduleBuilder, generators);
     }
 
     /// <summary>
@@ -77,23 +77,23 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitNativeNumberGeneratorInterface(
         ModuleBuilder moduleBuilder,
-        EmittedRuntime runtime)
+        EmittedGeneratorRuntime generators)
     {
         var interfaceBuilder = moduleBuilder.DefineType(
             "$INativeNumberGenerator",
             TypeAttributes.NotPublic | TypeAttributes.Interface | TypeAttributes.Abstract,
             null,
-            [runtime.GeneratorInterfaceType]);
-        runtime.NativeNumberGeneratorInterfaceType = interfaceBuilder;
+            [generators.Type]);
+        generators.NumericType = interfaceBuilder;
 
-        runtime.NativeNumberGeneratorMoveNextMethod = interfaceBuilder.DefineMethod(
+        generators.NumericMoveNext = interfaceBuilder.DefineMethod(
             "$moveNextForOf",
             MethodAttributes.Public | MethodAttributes.Virtual | MethodAttributes.Abstract |
                 MethodAttributes.HideBySig | MethodAttributes.NewSlot,
             _types.Boolean,
             Type.EmptyTypes);
 
-        runtime.NativeNumberGeneratorCurrentMethod = interfaceBuilder.DefineMethod(
+        generators.NumericCurrent = interfaceBuilder.DefineMethod(
             "$getCurrentNumber",
             MethodAttributes.Public | MethodAttributes.Virtual | MethodAttributes.Abstract |
                 MethodAttributes.HideBySig | MethodAttributes.NewSlot,
