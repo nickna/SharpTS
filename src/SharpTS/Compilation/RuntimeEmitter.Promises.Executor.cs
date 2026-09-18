@@ -332,7 +332,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldsfld, runtime.Symbols.Iterator);
         il.Emit(OpCodes.Ldtoken, runtime.RuntimeType);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
-        il.Emit(OpCodes.Call, runtime.IterateToList);
+        il.Emit(OpCodes.Call, runtime.IteratorCollection.ToList);
         il.Emit(OpCodes.Stloc, listLocal);
 
         // The overwhelmingly common Promise.all case is a dense intrinsic

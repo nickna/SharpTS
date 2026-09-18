@@ -232,7 +232,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);  // iterable
         il.Emit(OpCodes.Ldarg_2);  // iteratorSymbol
         il.Emit(OpCodes.Ldarg_3);  // runtimeType
-        il.Emit(OpCodes.Call, runtime.IterateToList);
+        il.Emit(OpCodes.Call, runtime.IteratorCollection.ToList);
         il.Emit(OpCodes.Stloc, resultLocal);
         il.MarkLabel(afterListInit);
 

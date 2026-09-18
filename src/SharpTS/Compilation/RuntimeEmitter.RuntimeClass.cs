@@ -1042,7 +1042,7 @@ public partial class RuntimeEmitter
         // Promise combinators are emitted before the iterator wrapper, but
         // their normalization path consumes arbitrary iterables. Reserve the
         // method token now and fill its body in EmitIteratorMethodsAdvanced.
-        DeclareIterateToList(typeBuilder, runtime);
+        DeclareIterateToList(typeBuilder, runtime.IteratorCollection, runtime.Symbols.Type);
         runtime.Invocation.Method = typeBuilder.DefineMethod(
             "InvokeMethodValue",
             MethodAttributes.Public | MethodAttributes.Static,
@@ -1668,7 +1668,7 @@ public partial class RuntimeEmitter
             new IteratorWrapperInputs(runtime.IteratorRecords, runtime.IteratorProtocol.Done, runtime.IteratorProtocol.Value)
         );
         runtime.IteratorWrappers.CompleteEmission();
-        EmitArrayIteratorType(moduleBuilder, runtime);
+        EmitArrayIteratorType(moduleBuilder, runtime.ArrayOperations, new ArrayIteratorInputs(runtime.Arguments, runtime.ObjectRead.Index));
         if (runtime.Map is not null)
             EmitMapCollectionIteratorType(moduleBuilder, runtime.CollectionKeys, runtime.RequireMap());
         if (runtime.Set is not null)
@@ -1681,7 +1681,17 @@ public partial class RuntimeEmitter
         if (_features.UsesPromise)
             EmitNormalizePromiseList(typeBuilder, runtime);
         // Fill the previously declared iterable-to-list methods.
-        EmitIteratorMethodsAdvanced(typeBuilder, runtime);
+        EmitIteratorMethodsAdvanced(
+            typeBuilder,
+            runtime.IteratorCollection,
+            new IteratorCollectionInputs(
+                runtime.ArrayStorage, runtime.CollectionKeys, runtime.Errors, runtime.Invocation,
+                runtime.IteratorProtocol, runtime.IteratorRecords, runtime.ObjectRead,
+                runtime.UndefinedType, runtime.UndefinedInstance, runtime.TypedArrays.Implementation,
+                _features.UsesBuffer ? runtime.RequireBuffer() : null,
+                runtime.Map is not null, _features.UsesArrayPrototypeMutation)
+        );
+        runtime.IteratorCollection.CompleteEmission();
         // ES2025 Iterator Helper methods and lazy wrapper types
         EmitIteratorHelperMethods(typeBuilder, moduleBuilder, runtime);
         // Arrays - must come AFTER iterator methods since ConcatArrays/ExpandCallArgs use IterateToList.
@@ -1867,7 +1877,7 @@ public partial class RuntimeEmitter
         EmitObjectFromEntries(
             typeBuilder,
             runtime.ObjectOperations,
-            new ObjectFromEntriesInputs(runtime.Errors, runtime.IterateToList, runtime.Symbols, runtime.UndefinedType)
+            new ObjectFromEntriesInputs(runtime.Errors, runtime.IteratorCollection.ToList, runtime.Symbols, runtime.UndefinedType)
         );
         EmitObjectHasOwn(
             typeBuilder,
@@ -2107,7 +2117,7 @@ public partial class RuntimeEmitter
                 runtime.Errors,
                 runtime.IteratorProtocol.Function,
                 runtime.Invocation.Value,
-                runtime.IterateToList,
+                runtime.IteratorCollection.ToList,
                 runtime.RuntimeType,
                 runtime.Symbols,
                 runtime.FunctionValues.Type,
@@ -2283,7 +2293,7 @@ public partial class RuntimeEmitter
         EmitExpandCallArgs(
             typeBuilder,
             runtime.CallArguments,
-            new ExpandCallArgsInputs(runtime.Symbols, runtime.IterateToList)
+            new ExpandCallArgsInputs(runtime.Symbols, runtime.IteratorCollection.ToList)
         );
         runtime.CallArguments.CompleteEmission();
         EmitArrayPop(typeBuilder, runtime);
@@ -2928,7 +2938,7 @@ public partial class RuntimeEmitter
                     runtime.Errors.CreateException,
                     runtime.IteratorProtocol.Function,
                     runtime.Invocation.Value,
-                    runtime.IterateToList,
+                    runtime.IteratorCollection.ToList,
                     runtime.RuntimeType,
                     runtime.Symbols.Iterator,
                     runtime.Errors.TypeErrorConstructor,

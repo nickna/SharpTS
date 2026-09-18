@@ -2436,7 +2436,7 @@ public partial class ILEmitter
             IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.Symbols.Iterator);
             IL.Emit(OpCodes.Ldtoken, _ctx.Runtime!.RuntimeType);
             IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(_ctx.Types.Type, "GetTypeFromHandle"));
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.IterateToList);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.IteratorCollection.ToList);
             IL.Emit(OpCodes.Stloc, iterableLocal);
 
             var startLabel = builder.DefineLabel("forof_idx_start");
@@ -2765,7 +2765,7 @@ public partial class ILEmitter
             IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.Symbols.Iterator);
             IL.Emit(OpCodes.Ldtoken, _ctx.Runtime!.RuntimeType);
             IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(_ctx.Types.Type, "GetTypeFromHandle"));
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.IterateToList);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.IteratorCollection.ToList);
             IL.Emit(OpCodes.Stloc, listLocal);
         }
         else

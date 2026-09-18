@@ -758,7 +758,7 @@ public partial class RuntimeEmitter
                     runtime.IteratorProtocol.Value,
                     runtime.Invocation,
                     runtime.IteratorRecords.InvokeNext,
-                    runtime.IterateToList,
+                    runtime.IteratorCollection.ToList,
                     runtime.NormalizeToEnumerator,
                     runtime.ObjectRead,
                     runtime.RequirePromise(),
