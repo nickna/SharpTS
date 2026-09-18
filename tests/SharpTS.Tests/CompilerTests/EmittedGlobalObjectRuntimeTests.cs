@@ -124,7 +124,7 @@ public sealed class EmittedGlobalObjectRuntimeTests
     {
         var emitter = new RuntimeEmitter(TypeProvider.Runtime, emitHosted: hosted);
         var owners = new HashSet<EmittedGlobalObjectRuntime>(); var singletons = new HashSet<object>();
-        foreach (string source in new[] { "const n=1;", "new Date();new RegExp('x');Reflect.ownKeys({});Buffer.from('x');new TextEncoder();fetch('https://example.invalid');", "const n=2;" })
+        foreach (string source in new[] { "const n=1;", "new Date();new RegExp('x');Reflect.ownKeys({});Buffer.from('x');new TextEncoder();fetch('http://127.0.0.1');", "const n=2;" })
         {
             var builder = NewAssembly(); var module = builder.DefineDynamicModule("main");
             var statements = new Parser(new Lexer(source).ScanTokens()).ParseOrThrow();
