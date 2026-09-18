@@ -330,6 +330,19 @@ carrier; the strict SyntaxError helper retains its existing CLR exception repres
 Exception wrapping follows supplied optional Promise metadata. Error-cause Proxy handling
 receives six explicit invocation/delegate handles through the shared reflection bridge.
 
+Optional `AsyncGenerators` owns the async generator interface. Its optional
+`Continuations` and `FromSync` children independently own async-generator
+continuation/result helpers and the async-from-sync adapter. The interface
+begins at the original async-generator-or-for-await gate. Each child begins
+and completes at its original, separate feature gate; the root completes
+after adapter emission and validates selected children without completing
+them sequentially. This leaves an incomplete child repairable. Thirteen
+helpers receive exact owners and peer inputs, including the runtime type
+builder. Three adapter construction handles leave the emitter and become
+per-compilation child metadata. Optional runtime/interface probes remain
+nullable; selected consumers use checked accessors. Local state-machine and
+adapter type builders stay local, preserving type/member/body order.
+
 Required `Generators` owns synchronous generator protocol declarations and the
 internal numeric bridge. Both interfaces retain their original creation order;
 completion validates all eight declarations after the nested bridge helper.

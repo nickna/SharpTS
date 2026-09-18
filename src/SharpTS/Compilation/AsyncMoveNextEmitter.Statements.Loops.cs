@@ -96,7 +96,7 @@ public partial class AsyncMoveNextEmitter
             _il.MarkLabel(adaptSyncIteratorLabel);
             _il.Emit(OpCodes.Ldarg_0);
             _il.Emit(OpCodes.Ldloc, iterableLocal);
-            _il.Emit(OpCodes.Call, _ctx.Runtime.AdaptSyncIterableToAsyncGenerator);
+            _il.Emit(OpCodes.Call, _ctx.Runtime.RequireAsyncGenerators().RequireFromSync().Adapt);
             _il.Emit(OpCodes.Stfld, iteratorField);
             _il.Emit(OpCodes.Ldarg_0);
             _il.Emit(OpCodes.Ldc_I4_0);
@@ -395,18 +395,18 @@ public partial class AsyncMoveNextEmitter
         // ----- $IAsyncGenerator path: invoke the interface method (returns Task<object>) -----
         _il.Emit(OpCodes.Ldarg_0);
         _il.Emit(OpCodes.Ldfld, iteratorField);
-        _il.Emit(OpCodes.Castclass, _ctx!.Runtime!.AsyncGeneratorInterfaceType);
+        _il.Emit(OpCodes.Castclass, _ctx!.Runtime!.RequireAsyncGenerators().Type);
         if (isReturn)
         {
             _il.Emit(OpCodes.Ldnull);
-            _il.Emit(OpCodes.Callvirt, _ctx.Runtime.AsyncGeneratorReturnMethod);
+            _il.Emit(OpCodes.Callvirt, _ctx.Runtime.RequireAsyncGenerators().Return);
         }
         else
         {
             // for-await-of never sends a value; pass undefined so the yield expression sees undefined
             // (not null) if the consumer somehow observes it (#473).
             _il.Emit(OpCodes.Ldsfld, _ctx.Runtime.UndefinedInstance);
-            _il.Emit(OpCodes.Callvirt, _ctx.Runtime.AsyncGeneratorNextMethod);
+            _il.Emit(OpCodes.Callvirt, _ctx.Runtime.RequireAsyncGenerators().Next);
         }
         _il.Emit(OpCodes.Stloc, stepLocal);
         _il.Emit(OpCodes.Br, doneLabel);

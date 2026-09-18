@@ -1339,9 +1339,9 @@ public abstract class StatementEmitterBase : ExpressionEmitterBase
         {
             // Adapt synchronous iterables, then cast to the common interface.
             // Non-iterables still fail here.
-            var asyncGenInterface = runtime.AsyncGeneratorInterfaceType;
+            var asyncGenInterface = runtime.RequireAsyncGenerators().Type;
             il.Emit(OpCodes.Ldloc, iterableLocal);
-            il.Emit(OpCodes.Call, runtime.AdaptSyncIterableToAsyncGenerator);
+            il.Emit(OpCodes.Call, runtime.RequireAsyncGenerators().RequireFromSync().Adapt);
             il.Emit(OpCodes.Castclass, asyncGenInterface);
 
             // Store the async generator in a local
@@ -1362,7 +1362,7 @@ public abstract class StatementEmitterBase : ExpressionEmitterBase
             // value (#473 — next() now takes one argument matching the $IAsyncGenerator interface).
             il.Emit(OpCodes.Ldloc, asyncGenLocal);
             il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
-            il.Emit(OpCodes.Callvirt, runtime.AsyncGeneratorNextMethod);
+            il.Emit(OpCodes.Callvirt, runtime.RequireAsyncGenerators().Next);
 
             // Await the Task<object>
             var genTaskLocal = il.DeclareLocal(types.TaskOfObject);
@@ -1406,7 +1406,7 @@ public abstract class StatementEmitterBase : ExpressionEmitterBase
             il.MarkLabel(genCleanupLabel);
             il.Emit(OpCodes.Ldloc, asyncGenLocal);
             il.Emit(OpCodes.Ldnull);
-            il.Emit(OpCodes.Callvirt, runtime.AsyncGeneratorReturnMethod);
+            il.Emit(OpCodes.Callvirt, runtime.RequireAsyncGenerators().Return);
             // Await the Task<object> result and discard it
             var cleanupGenTaskLocal = il.DeclareLocal(types.TaskOfObject);
             il.Emit(OpCodes.Stloc, cleanupGenTaskLocal);

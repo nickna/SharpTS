@@ -125,9 +125,9 @@ public class AsyncGeneratorStateMachineBuilder : StateMachineBuilderBase, IItera
         };
 
         // Add $IAsyncGenerator interface if runtime is available
-        if (runtime?.AsyncGeneratorInterfaceType != null)
+        if (runtime?.AsyncGenerators?.Type != null)
         {
-            interfaces.Add(runtime.AsyncGeneratorInterfaceType);
+            interfaces.Add(runtime.RequireAsyncGenerators().Type);
         }
 
         // Define the state machine class (using class for reference semantics)
@@ -214,7 +214,7 @@ public class AsyncGeneratorStateMachineBuilder : StateMachineBuilderBase, IItera
         DefineGetAsyncEnumeratorMethod();
 
         // Define $IAsyncGenerator methods if runtime is available
-        if (_runtime?.AsyncGeneratorInterfaceType != null)
+        if (_runtime?.AsyncGenerators?.Type != null)
         {
             DefineAsyncGeneratorMethods();
         }
@@ -417,7 +417,7 @@ public class AsyncGeneratorStateMachineBuilder : StateMachineBuilderBase, IItera
         EmitNextMethodBody();
         EmitDriveOnceBody();
         EmitDriveContinuationBody();
-        _stateMachineType.DefineMethodOverride(NextMethod, _runtime!.AsyncGeneratorNextMethod);
+        _stateMachineType.DefineMethodOverride(NextMethod, _runtime!.RequireAsyncGenerators().Next);
 
         // return(value) method - returns Task<object> with { value, done: true }
         ReturnMethod = _stateMachineType.DefineMethod(
@@ -428,7 +428,7 @@ public class AsyncGeneratorStateMachineBuilder : StateMachineBuilderBase, IItera
         );
 
         EmitReturnMethodBody();
-        _stateMachineType.DefineMethodOverride(ReturnMethod, _runtime!.AsyncGeneratorReturnMethod);
+        _stateMachineType.DefineMethodOverride(ReturnMethod, _runtime!.RequireAsyncGenerators().Return);
 
         // throw(error) method - returns Task<object>
         ThrowMethod = _stateMachineType.DefineMethod(
@@ -439,7 +439,7 @@ public class AsyncGeneratorStateMachineBuilder : StateMachineBuilderBase, IItera
         );
 
         EmitThrowMethodBody();
-        _stateMachineType.DefineMethodOverride(ThrowMethod, _runtime!.AsyncGeneratorThrowMethod);
+        _stateMachineType.DefineMethodOverride(ThrowMethod, _runtime!.RequireAsyncGenerators().Throw);
     }
 
     private void EmitNextMethodBody()
@@ -541,7 +541,7 @@ public class AsyncGeneratorStateMachineBuilder : StateMachineBuilderBase, IItera
         il.Emit(OpCodes.Ldloc, vtLocal);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, _types.IAsyncEnumeratorOfObject);
-        il.Emit(OpCodes.Call, _runtime!.AsyncGeneratorBuildResult);
+        il.Emit(OpCodes.Call, _runtime!.RequireAsyncGenerators().RequireContinuations().BuildResult);
         il.Emit(OpCodes.Stloc, resultLocal);
         il.Emit(OpCodes.Leave, doneLabel);
 

@@ -2962,7 +2962,15 @@ public partial class RuntimeEmitter
         // Async generator await continuation helper — gated on UsesAsyncGenerator
         // (any `async function*` or async-generator arrow in the AST).
         if (_features.UsesAsyncGenerator)
-            EmitAsyncGeneratorAwaitContinueMethods(typeBuilder, moduleBuilder, runtime);
+        {
+            runtime.RequireAsyncGenerators().BeginContinuationsEmission();
+            EmitAsyncGeneratorAwaitContinueMethods(
+                typeBuilder,
+                moduleBuilder,
+                runtime.RequireAsyncGenerators().RequireContinuations()
+            );
+            runtime.RequireAsyncGenerators().RequireContinuations().CompleteEmission();
+        }
         // NodeError conversion helpers (must be before fs methods which use them)
         EmitNodeErrorHelpers(typeBuilder, runtime.NodeErrors);
         // Built-in module methods (fs, os, dns) — path migrated to stdlib/node/path.ts.

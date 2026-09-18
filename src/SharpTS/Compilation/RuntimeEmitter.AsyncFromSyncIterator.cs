@@ -10,36 +10,123 @@ namespace SharpTS.Compilation;
 /// </summary>
 public partial class RuntimeEmitter
 {
-    private MethodBuilder _asyncFromSyncCreateResult = null!;
-    private MethodBuilder _asyncFromSyncAwaitResult = null!;
-    private MethodBuilder _asyncFromSyncAwaitContinuation = null!;
+    private readonly record struct AsyncFromSyncIteratorSupportInputs(
+        EmittedGeneratorRuntime Generators,
+        MethodBuilder GetIteratorDone,
+        MethodBuilder GetIteratorFunction,
+        MethodBuilder GetIteratorNextMethod,
+        MethodBuilder GetIteratorValue,
+        EmittedInvocationRuntime Invocation,
+        MethodBuilder InvokeCapturedIteratorNext,
+        MethodBuilder IterateToList,
+        MethodBuilder NormalizeToEnumerator,
+        EmittedObjectReadRuntime ObjectRead,
+        EmittedPromiseRuntime Promise,
+        TypeBuilder RuntimeType,
+        EmittedSymbolRuntime Symbols,
+        FieldInfo UndefinedInstance,
+        Type UndefinedType
+    );
+
+    private readonly record struct AsyncFromSyncAwaitResultInputs(MethodBuilder GetIteratorValue, EmittedPromiseRuntime Promise);
+
+    private readonly record struct AsyncFromSyncIteratorTypeInputs(
+        EmittedGeneratorRuntime Generators,
+        MethodBuilder GetIteratorNextMethod,
+        EmittedInvocationRuntime Invocation,
+        MethodBuilder InvokeCapturedIteratorNext,
+        EmittedObjectReadRuntime ObjectRead,
+        FieldInfo UndefinedInstance,
+        Type UndefinedType
+    );
+
+    private readonly record struct AsyncFromSyncNextInputs(MethodBuilder InvokeCapturedIteratorNext, FieldInfo UndefinedInstance);
+
+    private readonly record struct AsyncFromSyncReturnInputs(
+        EmittedGeneratorRuntime Generators,
+        EmittedInvocationRuntime Invocation,
+        EmittedObjectReadRuntime ObjectRead,
+        Type UndefinedType
+    );
+
+    private readonly record struct AsyncFromSyncThrowInputs(
+        EmittedGeneratorRuntime Generators,
+        EmittedInvocationRuntime Invocation,
+        EmittedObjectReadRuntime ObjectRead,
+        Type UndefinedType
+    );
+
+    private readonly record struct AdaptSyncIterableToAsyncGeneratorInputs(
+        MethodBuilder GetIteratorFunction,
+        EmittedInvocationRuntime Invocation,
+        MethodBuilder IterateToList,
+        MethodBuilder NormalizeToEnumerator,
+        TypeBuilder RuntimeType,
+        EmittedSymbolRuntime Symbols,
+        Type UndefinedType
+    );
+
 
     /// <summary>
     /// Emits a BCL-only adapter into the generated assembly, preserving
     /// standalone output with no dependency on SharpTS.dll.
     /// </summary>
-    private void EmitAsyncFromSyncIteratorSupport(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private void EmitAsyncFromSyncIteratorSupport(
+        ModuleBuilder moduleBuilder,
+        TypeBuilder runtimeType,
+        EmittedAsyncGeneratorRuntime asyncGenerators,
+        EmittedAsyncFromSyncRuntime fromSync,
+        AsyncFromSyncIteratorSupportInputs inputs
+    )
     {
-        var runtimeType = _runtimeTypeBuilder!;
-
-        EmitAsyncFromSyncCreateResult(runtimeType);
-        EmitAsyncFromSyncAwaitContinuation(runtimeType, runtime);
-        EmitAsyncFromSyncAwaitResult(runtimeType, runtime);
-        EmitAsyncFromSyncIteratorType(moduleBuilder, runtime);
-        EmitAdaptSyncIterableToAsyncGenerator(runtimeType, runtime);
+        EmitAsyncFromSyncCreateResult(runtimeType, fromSync);
+        EmitAsyncFromSyncAwaitContinuation(runtimeType, fromSync, inputs.GetIteratorDone);
+        EmitAsyncFromSyncAwaitResult(
+            runtimeType,
+            fromSync,
+            new AsyncFromSyncAwaitResultInputs(inputs.GetIteratorValue, inputs.Promise)
+        );
+        EmitAsyncFromSyncIteratorType(
+            moduleBuilder,
+            asyncGenerators,
+            fromSync,
+            new AsyncFromSyncIteratorTypeInputs(
+                inputs.Generators,
+                inputs.GetIteratorNextMethod,
+                inputs.Invocation,
+                inputs.InvokeCapturedIteratorNext,
+                inputs.ObjectRead,
+                inputs.UndefinedInstance,
+                inputs.UndefinedType
+            )
+        );
+        EmitAdaptSyncIterableToAsyncGenerator(
+            runtimeType,
+            asyncGenerators,
+            fromSync,
+            new AdaptSyncIterableToAsyncGeneratorInputs(
+                inputs.GetIteratorFunction,
+                inputs.Invocation,
+                inputs.IterateToList,
+                inputs.NormalizeToEnumerator,
+                inputs.RuntimeType,
+                inputs.Symbols,
+                inputs.UndefinedType
+            )
+        );
     }
 
     /// <summary>
     /// static object AsyncFromSyncCreateResult(object value, bool done)
     /// </summary>
-    private void EmitAsyncFromSyncCreateResult(TypeBuilder runtimeType)
+    private void EmitAsyncFromSyncCreateResult(TypeBuilder runtimeType, EmittedAsyncFromSyncRuntime fromSync)
     {
         var method = runtimeType.DefineMethod(
             "AsyncFromSyncCreateResult",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.Object, _types.Boolean]);
-        _asyncFromSyncCreateResult = method;
+        fromSync.CreateResult = method;
 
         var il = method.GetILGenerator();
         var dictLocal = il.DeclareLocal(_types.DictionaryStringObject);
@@ -66,14 +153,18 @@ public partial class RuntimeEmitter
     /// static object AsyncFromSyncAwaitContinuation(Task&lt;object&gt; task, object step)
     /// — replaces the sync result's value with the awaited value while preserving done.
     /// </summary>
-    private void EmitAsyncFromSyncAwaitContinuation(TypeBuilder runtimeType, EmittedRuntime runtime)
+    private void EmitAsyncFromSyncAwaitContinuation(
+        TypeBuilder runtimeType,
+        EmittedAsyncFromSyncRuntime fromSync,
+        MethodBuilder getIteratorDone
+    )
     {
         var method = runtimeType.DefineMethod(
             "AsyncFromSyncAwaitContinuation",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.TaskOfObject, _types.Object]);
-        _asyncFromSyncAwaitContinuation = method;
+        fromSync.AwaitContinuation = method;
 
         var il = method.GetILGenerator();
         var awaiterLocal = il.DeclareLocal(_types.TaskAwaiterOfObject);
@@ -88,8 +179,8 @@ public partial class RuntimeEmitter
 
         il.Emit(OpCodes.Ldloc, valueLocal);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.GetIteratorDone);
-        il.Emit(OpCodes.Call, _asyncFromSyncCreateResult);
+        il.Emit(OpCodes.Call, getIteratorDone);
+        il.Emit(OpCodes.Call, fromSync.CreateResult);
         il.Emit(OpCodes.Ret);
     }
 
@@ -97,14 +188,18 @@ public partial class RuntimeEmitter
     /// static Task&lt;object&gt; AsyncFromSyncAwaitResult(object step)
     /// — awaits Promise/Task/thenable iterator values and rebuilds the result.
     /// </summary>
-    private void EmitAsyncFromSyncAwaitResult(TypeBuilder runtimeType, EmittedRuntime runtime)
+    private void EmitAsyncFromSyncAwaitResult(
+        TypeBuilder runtimeType,
+        EmittedAsyncFromSyncRuntime fromSync,
+        AsyncFromSyncAwaitResultInputs inputs
+    )
     {
         var method = runtimeType.DefineMethod(
             "AsyncFromSyncAwaitResult",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.TaskOfObject,
             [_types.Object]);
-        _asyncFromSyncAwaitResult = method;
+        fromSync.AwaitResult = method;
 
         var il = method.GetILGenerator();
         var valueLocal = il.DeclareLocal(_types.Object);
@@ -114,15 +209,15 @@ public partial class RuntimeEmitter
         var haveTask = il.DefineLabel();
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.GetIteratorValue);
+        il.Emit(OpCodes.Call, inputs.GetIteratorValue);
         il.Emit(OpCodes.Stloc, valueLocal);
 
         il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Isinst, runtime.RequirePromise().Type);
+        il.Emit(OpCodes.Isinst, inputs.Promise.Type);
         il.Emit(OpCodes.Brfalse, notPromise);
         il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Castclass, runtime.RequirePromise().Type);
-        il.Emit(OpCodes.Callvirt, runtime.RequirePromise().TaskGetter);
+        il.Emit(OpCodes.Castclass, inputs.Promise.Type);
+        il.Emit(OpCodes.Callvirt, inputs.Promise.TaskGetter);
         il.Emit(OpCodes.Stloc, taskLocal);
         il.Emit(OpCodes.Br, haveTask);
 
@@ -139,13 +234,13 @@ public partial class RuntimeEmitter
         // adoption path used by compiled await expressions.
         il.MarkLabel(notTask);
         il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Call, runtime.RequirePromise().CoerceAwaitableToTaskMethod);
+        il.Emit(OpCodes.Call, inputs.Promise.CoerceAwaitableToTaskMethod);
         il.Emit(OpCodes.Stloc, taskLocal);
 
         il.MarkLabel(haveTask);
         il.Emit(OpCodes.Ldloc, taskLocal);
         il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Ldftn, _asyncFromSyncAwaitContinuation);
+        il.Emit(OpCodes.Ldftn, fromSync.AwaitContinuation);
         var continuationType = _types.MakeGenericType(
             typeof(Func<,,>), _types.TaskOfObject, _types.Object, _types.Object);
         il.Emit(OpCodes.Newobj, _types.GetConstructor(continuationType, [_types.Object, typeof(IntPtr)])!);
@@ -164,13 +259,18 @@ public partial class RuntimeEmitter
                 && p[1].ParameterType == typeof(object)
                 && p[2].ParameterType == typeof(TaskContinuationOptions)), _types.Object);
 
-    private void EmitAsyncFromSyncIteratorType(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private void EmitAsyncFromSyncIteratorType(
+        ModuleBuilder moduleBuilder,
+        EmittedAsyncGeneratorRuntime asyncGenerators,
+        EmittedAsyncFromSyncRuntime fromSync,
+        AsyncFromSyncIteratorTypeInputs inputs
+    )
     {
         var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$AsyncFromSyncIterator",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object,
-            [runtime.AsyncGeneratorInterfaceType]);
+            [asyncGenerators.Type]);
 
         var iteratorField = typeBuilder.DefineField("_iterator", _types.Object, FieldAttributes.Private);
         var nextField = typeBuilder.DefineField("_next", _types.Object, FieldAttributes.Private);
@@ -180,7 +280,7 @@ public partial class RuntimeEmitter
             MethodAttributes.Public,
             CallingConventions.Standard,
             [_types.Object, _types.Boolean]);
-        runtime.AsyncFromSyncIteratorCtor = ctor;
+        fromSync.Ctor = ctor;
         var ctorIl = ctor.GetILGenerator();
         ctorIl.Emit(OpCodes.Ldarg_0);
         ctorIl.Emit(OpCodes.Call, _types.GetConstructor(_types.Object, Type.EmptyTypes)!);
@@ -195,25 +295,60 @@ public partial class RuntimeEmitter
         ctorIl.Emit(OpCodes.Brfalse, initialized);
         ctorIl.Emit(OpCodes.Ldarg_0);
         ctorIl.Emit(OpCodes.Ldarg_1);
-        ctorIl.Emit(OpCodes.Call, runtime.GetIteratorNextMethod);
+        ctorIl.Emit(OpCodes.Call, inputs.GetIteratorNextMethod);
         ctorIl.Emit(OpCodes.Stfld, nextField);
         ctorIl.MarkLabel(initialized);
         ctorIl.Emit(OpCodes.Ret);
 
-        EmitAsyncFromSyncNext(typeBuilder, runtime, iteratorField, isProtocolField, nextField);
-        EmitAsyncFromSyncReturn(typeBuilder, runtime, iteratorField, isProtocolField);
-        EmitAsyncFromSyncThrow(typeBuilder, runtime, iteratorField, isProtocolField);
-        EmitAsyncFromSyncInheritedMembers(typeBuilder, runtime, iteratorField);
+        EmitAsyncFromSyncNext(
+            typeBuilder,
+            asyncGenerators,
+            fromSync,
+            new AsyncFromSyncNextInputs(inputs.InvokeCapturedIteratorNext, inputs.UndefinedInstance),
+            iteratorField,
+            isProtocolField,
+            nextField
+        );
+        EmitAsyncFromSyncReturn(
+            typeBuilder,
+            asyncGenerators,
+            fromSync,
+            new AsyncFromSyncReturnInputs(
+                inputs.Generators,
+                inputs.Invocation,
+                inputs.ObjectRead,
+                inputs.UndefinedType
+            ),
+            iteratorField,
+            isProtocolField
+        );
+        EmitAsyncFromSyncThrow(
+            typeBuilder,
+            asyncGenerators,
+            fromSync,
+            new AsyncFromSyncThrowInputs(
+                inputs.Generators,
+                inputs.Invocation,
+                inputs.ObjectRead,
+                inputs.UndefinedType
+            ),
+            iteratorField,
+            isProtocolField
+        );
+        EmitAsyncFromSyncInheritedMembers(typeBuilder, inputs.UndefinedInstance, iteratorField);
 
         typeBuilder.CreateType();
     }
 
     private void EmitAsyncFromSyncNext(
         TypeBuilder typeBuilder,
-        EmittedRuntime runtime,
+        EmittedAsyncGeneratorRuntime asyncGenerators,
+        EmittedAsyncFromSyncRuntime fromSync,
+        AsyncFromSyncNextInputs inputs,
         FieldBuilder iteratorField,
         FieldBuilder isProtocolField,
-        FieldBuilder nextField)
+        FieldBuilder nextField
+    )
     {
         var method = typeBuilder.DefineMethod(
             "next",
@@ -221,7 +356,7 @@ public partial class RuntimeEmitter
             MethodAttributes.HideBySig | MethodAttributes.NewSlot,
             _types.TaskOfObject,
             [_types.Object]);
-        typeBuilder.DefineMethodOverride(method, runtime.AsyncGeneratorNextMethod);
+        typeBuilder.DefineMethodOverride(method, asyncGenerators.Next);
 
         var il = method.GetILGenerator();
         var resultTask = il.DeclareLocal(_types.TaskOfObject);
@@ -242,7 +377,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldfld, iteratorField);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, nextField);
-        il.Emit(OpCodes.Call, runtime.InvokeCapturedIteratorNext);
+        il.Emit(OpCodes.Call, inputs.InvokeCapturedIteratorNext);
         il.Emit(OpCodes.Stloc, stepLocal);
         il.Emit(OpCodes.Br, haveStep);
 
@@ -257,19 +392,19 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, enumLocal);
         il.Emit(OpCodes.Callvirt, _types.GetPropertyGetter(_types.IEnumeratorOfObject, "Current"));
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Call, _asyncFromSyncCreateResult);
+        il.Emit(OpCodes.Call, fromSync.CreateResult);
         il.Emit(OpCodes.Stloc, stepLocal);
         il.Emit(OpCodes.Br, haveStep);
 
         il.MarkLabel(exhausted);
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, inputs.UndefinedInstance);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Call, _asyncFromSyncCreateResult);
+        il.Emit(OpCodes.Call, fromSync.CreateResult);
         il.Emit(OpCodes.Stloc, stepLocal);
 
         il.MarkLabel(haveStep);
         il.Emit(OpCodes.Ldloc, stepLocal);
-        il.Emit(OpCodes.Call, _asyncFromSyncAwaitResult);
+        il.Emit(OpCodes.Call, fromSync.AwaitResult);
         il.Emit(OpCodes.Stloc, resultTask);
         il.Emit(OpCodes.Leave, done);
 
@@ -288,9 +423,12 @@ public partial class RuntimeEmitter
 
     private void EmitAsyncFromSyncReturn(
         TypeBuilder typeBuilder,
-        EmittedRuntime runtime,
+        EmittedAsyncGeneratorRuntime asyncGenerators,
+        EmittedAsyncFromSyncRuntime fromSync,
+        AsyncFromSyncReturnInputs inputs,
         FieldBuilder iteratorField,
-        FieldBuilder isProtocolField)
+        FieldBuilder isProtocolField
+    )
     {
         var method = typeBuilder.DefineMethod(
             "return",
@@ -298,7 +436,7 @@ public partial class RuntimeEmitter
             MethodAttributes.HideBySig | MethodAttributes.NewSlot,
             _types.TaskOfObject,
             [_types.Object]);
-        typeBuilder.DefineMethodOverride(method, runtime.AsyncGeneratorReturnMethod);
+        typeBuilder.DefineMethodOverride(method, asyncGenerators.Return);
 
         var il = method.GetILGenerator();
         var resultTask = il.DeclareLocal(_types.TaskOfObject);
@@ -322,25 +460,25 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, iteratorField);
         il.Emit(OpCodes.Ldstr, "return");
-        il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
+        il.Emit(OpCodes.Call, inputs.ObjectRead.Property);
         il.Emit(OpCodes.Stloc, fnLocal);
         il.Emit(OpCodes.Ldloc, fnLocal);
         il.Emit(OpCodes.Brfalse, noProtocolReturn);
         il.Emit(OpCodes.Ldloc, fnLocal);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
         il.Emit(OpCodes.Brtrue, noProtocolReturn);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, iteratorField);
         il.Emit(OpCodes.Ldloc, fnLocal);
         EmitSingleObjectArgumentArray(il, argumentIndex: 1);
-        il.Emit(OpCodes.Call, runtime.Invocation.Method);
+        il.Emit(OpCodes.Call, inputs.Invocation.Method);
         il.Emit(OpCodes.Stloc, stepLocal);
         il.Emit(OpCodes.Br, haveStep);
 
         il.MarkLabel(noProtocolReturn);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Call, _asyncFromSyncCreateResult);
+        il.Emit(OpCodes.Call, fromSync.CreateResult);
         il.Emit(OpCodes.Stloc, stepLocal);
         il.Emit(OpCodes.Br, haveStep);
 
@@ -348,13 +486,13 @@ public partial class RuntimeEmitter
         il.MarkLabel(clrIterator);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, iteratorField);
-        il.Emit(OpCodes.Isinst, runtime.Generators.Type);
+        il.Emit(OpCodes.Isinst, inputs.Generators.Type);
         il.Emit(OpCodes.Brfalse, notGenerator);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, iteratorField);
-        il.Emit(OpCodes.Castclass, runtime.Generators.Type);
+        il.Emit(OpCodes.Castclass, inputs.Generators.Type);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, runtime.Generators.Return);
+        il.Emit(OpCodes.Callvirt, inputs.Generators.Return);
         il.Emit(OpCodes.Stloc, stepLocal);
         il.Emit(OpCodes.Br, haveStep);
 
@@ -372,12 +510,12 @@ public partial class RuntimeEmitter
         il.MarkLabel(afterDispose);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Call, _asyncFromSyncCreateResult);
+        il.Emit(OpCodes.Call, fromSync.CreateResult);
         il.Emit(OpCodes.Stloc, stepLocal);
 
         il.MarkLabel(haveStep);
         il.Emit(OpCodes.Ldloc, stepLocal);
-        il.Emit(OpCodes.Call, _asyncFromSyncAwaitResult);
+        il.Emit(OpCodes.Call, fromSync.AwaitResult);
         il.Emit(OpCodes.Stloc, resultTask);
         il.Emit(OpCodes.Leave, done);
 
@@ -396,9 +534,12 @@ public partial class RuntimeEmitter
 
     private void EmitAsyncFromSyncThrow(
         TypeBuilder typeBuilder,
-        EmittedRuntime runtime,
+        EmittedAsyncGeneratorRuntime asyncGenerators,
+        EmittedAsyncFromSyncRuntime fromSync,
+        AsyncFromSyncThrowInputs inputs,
         FieldBuilder iteratorField,
-        FieldBuilder isProtocolField)
+        FieldBuilder isProtocolField
+    )
     {
         var method = typeBuilder.DefineMethod(
             "throw",
@@ -406,7 +547,7 @@ public partial class RuntimeEmitter
             MethodAttributes.HideBySig | MethodAttributes.NewSlot,
             _types.TaskOfObject,
             [_types.Object]);
-        typeBuilder.DefineMethodOverride(method, runtime.AsyncGeneratorThrowMethod);
+        typeBuilder.DefineMethodOverride(method, asyncGenerators.Throw);
 
         var il = method.GetILGenerator();
         var fnLocal = il.DeclareLocal(_types.Object);
@@ -420,34 +561,34 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, iteratorField);
         il.Emit(OpCodes.Ldstr, "throw");
-        il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
+        il.Emit(OpCodes.Call, inputs.ObjectRead.Property);
         il.Emit(OpCodes.Stloc, fnLocal);
         il.Emit(OpCodes.Ldloc, fnLocal);
         il.Emit(OpCodes.Brfalse, noThrow);
         il.Emit(OpCodes.Ldloc, fnLocal);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
         il.Emit(OpCodes.Brtrue, noThrow);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, iteratorField);
         il.Emit(OpCodes.Ldloc, fnLocal);
         EmitSingleObjectArgumentArray(il, argumentIndex: 1);
-        il.Emit(OpCodes.Call, runtime.Invocation.Method);
+        il.Emit(OpCodes.Call, inputs.Invocation.Method);
         il.Emit(OpCodes.Stloc, stepLocal);
         il.Emit(OpCodes.Ldloc, stepLocal);
-        il.Emit(OpCodes.Call, _asyncFromSyncAwaitResult);
+        il.Emit(OpCodes.Call, fromSync.AwaitResult);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(clrIterator);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, iteratorField);
-        il.Emit(OpCodes.Isinst, runtime.Generators.Type);
+        il.Emit(OpCodes.Isinst, inputs.Generators.Type);
         il.Emit(OpCodes.Brfalse, noThrow);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, iteratorField);
-        il.Emit(OpCodes.Castclass, runtime.Generators.Type);
+        il.Emit(OpCodes.Castclass, inputs.Generators.Type);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, runtime.Generators.Throw);
-        il.Emit(OpCodes.Call, _asyncFromSyncAwaitResult);
+        il.Emit(OpCodes.Callvirt, inputs.Generators.Throw);
+        il.Emit(OpCodes.Call, fromSync.AwaitResult);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(noThrow);
@@ -459,8 +600,9 @@ public partial class RuntimeEmitter
 
     private void EmitAsyncFromSyncInheritedMembers(
         TypeBuilder typeBuilder,
-        EmittedRuntime runtime,
-        FieldBuilder iteratorField)
+        FieldInfo undefinedInstance,
+        FieldBuilder iteratorField
+    )
     {
         var current = typeBuilder.DefineMethod(
             "get_Current",
@@ -469,7 +611,7 @@ public partial class RuntimeEmitter
             _types.Object,
             Type.EmptyTypes);
         var currentIl = current.GetILGenerator();
-        currentIl.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        currentIl.Emit(OpCodes.Ldsfld, undefinedInstance);
         currentIl.Emit(OpCodes.Ret);
         typeBuilder.DefineMethodOverride(
             current, _types.GetPropertyGetter(_types.IAsyncEnumeratorOfObject, "Current"));
@@ -533,14 +675,19 @@ public partial class RuntimeEmitter
     /// <summary>
     /// static object AdaptSyncIterableToAsyncGenerator(object source)
     /// </summary>
-    private void EmitAdaptSyncIterableToAsyncGenerator(TypeBuilder runtimeType, EmittedRuntime runtime)
+    private void EmitAdaptSyncIterableToAsyncGenerator(
+        TypeBuilder runtimeType,
+        EmittedAsyncGeneratorRuntime asyncGenerators,
+        EmittedAsyncFromSyncRuntime fromSync,
+        AdaptSyncIterableToAsyncGeneratorInputs inputs
+    )
     {
         var method = runtimeType.DefineMethod(
             "AdaptSyncIterableToAsyncGenerator",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.Object]);
-        runtime.AdaptSyncIterableToAsyncGenerator = method;
+        fromSync.Adapt = method;
 
         var il = method.GetILGenerator();
         var iteratorFnLocal = il.DeclareLocal(_types.Object);
@@ -553,7 +700,7 @@ public partial class RuntimeEmitter
 
         // A genuine async generator already implements the common interface.
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.AsyncGeneratorInterfaceType);
+        il.Emit(OpCodes.Isinst, asyncGenerators.Type);
         il.Emit(OpCodes.Brfalse, trySyncProtocol);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ret);
@@ -562,19 +709,19 @@ public partial class RuntimeEmitter
         // return/throw protocol for early-close behavior.
         il.MarkLabel(trySyncProtocol);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldsfld, runtime.Symbols.Iterator);
-        il.Emit(OpCodes.Call, runtime.GetIteratorFunction);
+        il.Emit(OpCodes.Ldsfld, inputs.Symbols.Iterator);
+        il.Emit(OpCodes.Call, inputs.GetIteratorFunction);
         il.Emit(OpCodes.Stloc, iteratorFnLocal);
         il.Emit(OpCodes.Ldloc, iteratorFnLocal);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
         il.Emit(OpCodes.Brtrue, tryClrIterator);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, iteratorFnLocal);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Newarr, _types.Object);
-        il.Emit(OpCodes.Call, runtime.Invocation.Method);
+        il.Emit(OpCodes.Call, inputs.Invocation.Method);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Newobj, runtime.AsyncFromSyncIteratorCtor);
+        il.Emit(OpCodes.Newobj, fromSync.Ctor);
         il.Emit(OpCodes.Ret);
 
         // Preserve an existing object enumerator or obtain one once from an
@@ -592,7 +739,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, _types.IEnumerableOfObject);
         il.Emit(OpCodes.Brfalse, materialize);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.NormalizeToEnumerator);
+        il.Emit(OpCodes.Call, inputs.NormalizeToEnumerator);
         il.Emit(OpCodes.Stloc, iteratorLocal);
         il.Emit(OpCodes.Br, constructClr);
 
@@ -601,17 +748,17 @@ public partial class RuntimeEmitter
         // resulting dense object list.
         il.MarkLabel(materialize);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldsfld, runtime.Symbols.Iterator);
-        il.Emit(OpCodes.Ldtoken, runtime.RuntimeType);
+        il.Emit(OpCodes.Ldsfld, inputs.Symbols.Iterator);
+        il.Emit(OpCodes.Ldtoken, inputs.RuntimeType);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle"));
-        il.Emit(OpCodes.Call, runtime.IterateToList);
+        il.Emit(OpCodes.Call, inputs.IterateToList);
         il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.IEnumerableOfObject, "GetEnumerator"));
         il.Emit(OpCodes.Stloc, iteratorLocal);
 
         il.MarkLabel(constructClr);
         il.Emit(OpCodes.Ldloc, iteratorLocal);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Newobj, runtime.AsyncFromSyncIteratorCtor);
+        il.Emit(OpCodes.Newobj, fromSync.Ctor);
         il.Emit(OpCodes.Ret);
     }
 

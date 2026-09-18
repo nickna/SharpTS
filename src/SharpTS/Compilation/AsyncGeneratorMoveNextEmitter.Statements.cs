@@ -193,7 +193,7 @@ public partial class AsyncGeneratorMoveNextEmitter
     {
         string varName = f.Variable.Lexeme;
         var varField = _builder.GetVariableField(varName);
-        var asyncGenInterface = _ctx!.Runtime!.AsyncGeneratorInterfaceType;
+        var asyncGenInterface = _ctx!.Runtime!.RequireAsyncGenerators().Type;
 
         // The iterator must survive the per-iteration suspensions (a MoveNextAsync re-entry wipes IL
         // locals — and the loop body itself may yield/await), so store it in a state-machine field,
@@ -207,7 +207,7 @@ public partial class AsyncGeneratorMoveNextEmitter
         // resulting async iterator. Casting validates non-iterable inputs.
         EmitExpression(f.Iterable);
         EnsureBoxed();
-        _il.Emit(OpCodes.Call, _ctx.Runtime.AdaptSyncIterableToAsyncGenerator);
+        _il.Emit(OpCodes.Call, _ctx.Runtime.RequireAsyncGenerators().RequireFromSync().Adapt);
         _il.Emit(OpCodes.Castclass, asyncGenInterface);
         var iterTemp = _il.DeclareLocal(asyncGenInterface);
         _il.Emit(OpCodes.Stloc, iterTemp);
@@ -233,7 +233,7 @@ public partial class AsyncGeneratorMoveNextEmitter
         _il.Emit(OpCodes.Ldfld, iteratorField);
         _il.Emit(OpCodes.Castclass, asyncGenInterface);
         _il.Emit(OpCodes.Ldsfld, _ctx!.Runtime!.UndefinedInstance);
-        _il.Emit(OpCodes.Callvirt, _ctx.Runtime.AsyncGeneratorNextMethod);  // Task<object>
+        _il.Emit(OpCodes.Callvirt, _ctx.Runtime.RequireAsyncGenerators().Next);  // Task<object>
         SetStackUnknown();
         EmitAwaitFromValueOnStack(nextState);
         var resultLocal = _il.DeclareLocal(_types.Object);
@@ -274,7 +274,7 @@ public partial class AsyncGeneratorMoveNextEmitter
         _il.Emit(OpCodes.Ldfld, iteratorField);
         _il.Emit(OpCodes.Castclass, asyncGenInterface);
         _il.Emit(OpCodes.Ldnull);
-        _il.Emit(OpCodes.Callvirt, _ctx.Runtime.AsyncGeneratorReturnMethod);  // Task<object>
+        _il.Emit(OpCodes.Callvirt, _ctx.Runtime.RequireAsyncGenerators().Return);  // Task<object>
         SetStackUnknown();
         EmitAwaitFromValueOnStack(returnState);
         _il.Emit(OpCodes.Pop);
