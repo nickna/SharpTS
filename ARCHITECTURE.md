@@ -330,6 +330,16 @@ carrier; the strict SyntaxError helper retains its existing CLR exception repres
 Exception wrapping follows supplied optional Promise metadata. Error-cause Proxy handling
 receives six explicit invocation/delegate handles through the shared reflection bridge.
 
+Required `Generators` owns synchronous generator protocol declarations and the
+internal numeric bridge. Both interfaces retain their original creation order;
+completion validates all eight declarations after the nested bridge helper.
+Independent optional `StableIteratorResults` owns the numeric result value type
+and its baked constructor and fields. Its original compact-iterator feature gate
+remains early, before function and generator emission. Availability checks use
+the nullable owner; selected consumers use `RequireStableIteratorResults()`.
+All three helpers receive only their respective owner. Generated interfaces,
+layouts, overrides and numeric iteration behavior remain unchanged.
+
 Required `CallArguments` owns the shared argument-array pool accessor and
 spread-expansion helper. The pool retains its separate type and early body;
 expansion stays after iterator support in the runtime class. Completion

@@ -348,13 +348,13 @@ public partial class RuntimeEmitter
         il.MarkLabel(clrIterator);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, iteratorField);
-        il.Emit(OpCodes.Isinst, runtime.GeneratorInterfaceType);
+        il.Emit(OpCodes.Isinst, runtime.Generators.Type);
         il.Emit(OpCodes.Brfalse, notGenerator);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, iteratorField);
-        il.Emit(OpCodes.Castclass, runtime.GeneratorInterfaceType);
+        il.Emit(OpCodes.Castclass, runtime.Generators.Type);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, runtime.GeneratorReturnMethod);
+        il.Emit(OpCodes.Callvirt, runtime.Generators.Return);
         il.Emit(OpCodes.Stloc, stepLocal);
         il.Emit(OpCodes.Br, haveStep);
 
@@ -440,13 +440,13 @@ public partial class RuntimeEmitter
         il.MarkLabel(clrIterator);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, iteratorField);
-        il.Emit(OpCodes.Isinst, runtime.GeneratorInterfaceType);
+        il.Emit(OpCodes.Isinst, runtime.Generators.Type);
         il.Emit(OpCodes.Brfalse, noThrow);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, iteratorField);
-        il.Emit(OpCodes.Castclass, runtime.GeneratorInterfaceType);
+        il.Emit(OpCodes.Castclass, runtime.Generators.Type);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, runtime.GeneratorThrowMethod);
+        il.Emit(OpCodes.Callvirt, runtime.Generators.Throw);
         il.Emit(OpCodes.Call, _asyncFromSyncAwaitResult);
         il.Emit(OpCodes.Ret);
 

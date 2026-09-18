@@ -17,6 +17,23 @@ namespace SharpTS.Compilation;
 /// <seealso cref="ILEmitter"/>
 public class EmittedRuntime
 {
+    /// <summary>Required synchronous and native-number generator protocol declarations.</summary>
+    public EmittedGeneratorRuntime Generators { get; } = new();
+
+    /// <summary>Optional numeric iterator-result value type and baked member metadata.</summary>
+    public EmittedStableIteratorResultRuntime? StableIteratorResults { get; private set; }
+
+    internal void BeginStableIteratorResultsEmission()
+    {
+        if (StableIteratorResults is not null)
+            throw new InvalidOperationException("Stable iterator result metadata emission has already started.");
+        StableIteratorResults = new EmittedStableIteratorResultRuntime();
+    }
+
+    public EmittedStableIteratorResultRuntime RequireStableIteratorResults() => StableIteratorResults
+        ?? throw new InvalidOperationException("Stable iterator result runtime was not enabled for this compilation.");
+
+
     /// <summary>Required argument-array pooling and spread-expansion metadata.</summary>
     public EmittedCallArgumentsRuntime CallArguments { get; } = new();
 
@@ -186,11 +203,6 @@ public class EmittedRuntime
     public Type LexicalUninitializedType { get; set; } = null!;
     public FieldInfo LexicalUninitializedInstance { get; set; } = null!;
 
-    // The emitted TSFunction class
-    public Type StableNumberIteratorResultType { get; set; } = null!;
-    public ConstructorInfo StableNumberIteratorResultCtor { get; set; } = null!;
-    public FieldInfo StableNumberIteratorResultValueField { get; set; } = null!;
-    public FieldInfo StableNumberIteratorResultDoneField { get; set; } = null!;
 
     // The emitted TSNamespace class
     public TypeBuilder TSNamespaceType { get; set; } = null!;
@@ -553,20 +565,7 @@ public class EmittedRuntime
     public MethodBuilder IterateIntoList { get; set; } = null!;
     public MethodBuilder IteratorWrapperMoveNextWithSent { get; set; } = null!; // $IteratorWrapper.MoveNextWithSent(sent) (#503)
 
-    // Generator interface ($IGenerator extends IEnumerator<object> with Return/Throw)
-    public TypeBuilder GeneratorInterfaceType { get; set; } = null!;
-    public MethodBuilder GeneratorIteratorMethod { get; set; } = null!;
-    public MethodBuilder GeneratorReturnMethod { get; set; } = null!;
-    public MethodBuilder GeneratorThrowMethod { get; set; } = null!;
-    public MethodBuilder GeneratorNextMethod { get; set; } = null!;
 
-    // Private typed bridge implemented only by sync generators whose complete
-    // yield set is proven numeric. Direct for...of lowering uses it to avoid
-    // iterator-result allocation and per-yield number boxing while the public
-    // $IGenerator ABI remains object-valued.
-    public TypeBuilder NativeNumberGeneratorInterfaceType { get; set; } = null!;
-    public MethodBuilder NativeNumberGeneratorMoveNextMethod { get; set; } = null!;
-    public MethodBuilder NativeNumberGeneratorCurrentMethod { get; set; } = null!;
 
     // Async Generator interface ($IAsyncGenerator extends IAsyncEnumerator<object> with async Return/Throw)
     public TypeBuilder AsyncGeneratorInterfaceType { get; set; } = null!;

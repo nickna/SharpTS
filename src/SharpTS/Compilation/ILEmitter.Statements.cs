@@ -2586,9 +2586,9 @@ public partial class ILEmitter
         IReadOnlyList<string>? labelNames)
     {
         _ctx.ArrowMethods.TryGetValue(info.NextMethod, out var nextMethod);
-        Type resultType = _ctx.Runtime!.StableNumberIteratorResultType;
-        var valueField = _ctx.Runtime.StableNumberIteratorResultValueField;
-        var doneField = _ctx.Runtime.StableNumberIteratorResultDoneField;
+        Type resultType = _ctx.Runtime!.RequireStableIteratorResults().Type;
+        var valueField = _ctx.Runtime.RequireStableIteratorResults().Value;
+        var doneField = _ctx.Runtime.RequireStableIteratorResults().Done;
         if (nextMethod is null ||
             nextMethod.ReturnType != resultType)
         {
@@ -2859,8 +2859,8 @@ public partial class ILEmitter
         // Stack has the emitted generator. Drive it through the same iterator-result
         // protocol as a custom iterator so abrupt loop completion is routed through
         // the shared IteratorClose primitive (including generator.return()).
-        var generatorLocal = IL.DeclareLocal(_ctx.Runtime!.GeneratorInterfaceType);
-        IL.Emit(OpCodes.Castclass, _ctx.Runtime.GeneratorInterfaceType);
+        var generatorLocal = IL.DeclareLocal(_ctx.Runtime!.Generators.Type);
+        IL.Emit(OpCodes.Castclass, _ctx.Runtime.Generators.Type);
         IL.Emit(OpCodes.Stloc, generatorLocal);
 
         // Loop variable
@@ -2874,7 +2874,7 @@ public partial class ILEmitter
 
         IL.Emit(OpCodes.Ldloc, generatorLocal);
         IL.Emit(OpCodes.Ldsfld, _ctx.Runtime.UndefinedInstance);
-        IL.Emit(OpCodes.Callvirt, _ctx.Runtime.GeneratorNextMethod);
+        IL.Emit(OpCodes.Callvirt, _ctx.Runtime.Generators.Next);
         IL.Emit(OpCodes.Stloc, resultLocal);
         IL.Emit(OpCodes.Ldloc, resultLocal);
         IL.Emit(OpCodes.Call, _ctx.Runtime.GetIteratorDone);
@@ -3004,8 +3004,8 @@ public partial class ILEmitter
     {
         var builder = _ctx.ILBuilder;
         var generatorLocal = IL.DeclareLocal(
-            _ctx.Runtime!.NativeNumberGeneratorInterfaceType);
-        IL.Emit(OpCodes.Castclass, _ctx.Runtime.NativeNumberGeneratorInterfaceType);
+            _ctx.Runtime!.Generators.NumericType);
+        IL.Emit(OpCodes.Castclass, _ctx.Runtime.Generators.NumericType);
         IL.Emit(OpCodes.Stloc, generatorLocal);
 
         var loopVar = _ctx.Locals.DeclareLocal(
@@ -3018,7 +3018,7 @@ public partial class ILEmitter
 
         IL.Emit(OpCodes.Ldloc, generatorLocal);
         IL.Emit(OpCodes.Callvirt,
-            _ctx.Runtime.NativeNumberGeneratorMoveNextMethod);
+            _ctx.Runtime.Generators.NumericMoveNext);
         builder.Emit_Brfalse(endLabel);
 
         IL.Emit(OpCodes.Ldc_I4_1);
@@ -3038,7 +3038,7 @@ public partial class ILEmitter
 
         IL.Emit(OpCodes.Ldloc, generatorLocal);
         IL.Emit(OpCodes.Callvirt,
-            _ctx.Runtime.NativeNumberGeneratorCurrentMethod);
+            _ctx.Runtime.Generators.NumericCurrent);
         IL.Emit(OpCodes.Stloc, loopVar);
 
         _iteratorLoopCompletionScopes.Push(new IteratorLoopCompletionScope(
@@ -4270,7 +4270,7 @@ public partial class ILEmitter
 
     private bool TryEmitStableIteratorResultReturn(Type returnType, Expr expression)
     {
-        if (_ctx.Runtime?.StableNumberIteratorResultType != returnType)
+        if (_ctx.Runtime?.StableIteratorResults?.Type != returnType)
             return false;
 
         while (true)
@@ -4308,7 +4308,7 @@ public partial class ILEmitter
         EmitExpressionAsDouble(value);
         EmitExpression(done);
         EnsureBoolean();
-        IL.Emit(OpCodes.Newobj, _ctx.Runtime.StableNumberIteratorResultCtor);
+        IL.Emit(OpCodes.Newobj, _ctx.Runtime.RequireStableIteratorResults().Ctor);
         SetStackUnknown();
         return true;
     }

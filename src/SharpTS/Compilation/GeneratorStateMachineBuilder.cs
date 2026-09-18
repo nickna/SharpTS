@@ -127,13 +127,13 @@ public class GeneratorStateMachineBuilder : StateMachineBuilderBase, IIteratorSt
         };
 
         // Add $IGenerator interface if runtime is available
-        if (runtime?.GeneratorInterfaceType != null)
+        if (runtime?.Generators.Type != null)
         {
-            interfaces.Add(runtime.GeneratorInterfaceType);
+            interfaces.Add(runtime.Generators.Type);
         }
-        if (useNativeNumberCurrent && runtime?.NativeNumberGeneratorInterfaceType != null)
+        if (useNativeNumberCurrent && runtime?.Generators.NumericType != null)
         {
-            interfaces.Add(runtime.NativeNumberGeneratorInterfaceType);
+            interfaces.Add(runtime.Generators.NumericType);
         }
 
         // Define the state machine class (using class for reference semantics with IEnumerable)
@@ -198,7 +198,7 @@ public class GeneratorStateMachineBuilder : StateMachineBuilderBase, IIteratorSt
         DefineGetEnumeratorMethods();
 
         // Define $IGenerator methods if runtime is available
-        if (_runtime?.GeneratorInterfaceType != null)
+        if (_runtime?.Generators.Type != null)
         {
             DefineGeneratorMethods();
             if (NativeNumberCurrentField != null)
@@ -482,7 +482,7 @@ public class GeneratorStateMachineBuilder : StateMachineBuilderBase, IIteratorSt
         var iteratorIL = IteratorMethod.GetILGenerator();
         iteratorIL.Emit(OpCodes.Ldarg_0);
         iteratorIL.Emit(OpCodes.Ret);
-        _stateMachineType.DefineMethodOverride(IteratorMethod, _runtime!.GeneratorIteratorMethod);
+        _stateMachineType.DefineMethodOverride(IteratorMethod, _runtime!.Generators.Iterator);
 
         // Re-entrancy flag: set only while the body runs inside MoveNext (see next()).
         // The single observable window for a guest call is re-entrancy — the generator
@@ -588,7 +588,7 @@ public class GeneratorStateMachineBuilder : StateMachineBuilderBase, IIteratorSt
         nextIL.MarkLabel(endLabel);
         nextIL.Emit(OpCodes.Ret);
 
-        _stateMachineType.DefineMethodOverride(NextMethod, _runtime!.GeneratorNextMethod);
+        _stateMachineType.DefineMethodOverride(NextMethod, _runtime!.Generators.Next);
 
         // return(value) method - closes generator and returns { value, done: true }
         // Using lowercase to match JavaScript API
@@ -633,7 +633,7 @@ public class GeneratorStateMachineBuilder : StateMachineBuilderBase, IIteratorSt
         returnIL.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item", _types.String, _types.Object));
         returnIL.Emit(OpCodes.Ret);
 
-        _stateMachineType.DefineMethodOverride(ReturnMethod, _runtime!.GeneratorReturnMethod);
+        _stateMachineType.DefineMethodOverride(ReturnMethod, _runtime!.Generators.Return);
 
         // throw(error) method - closes generator and throws
         // Using lowercase to match JavaScript API
@@ -686,7 +686,7 @@ public class GeneratorStateMachineBuilder : StateMachineBuilderBase, IIteratorSt
         throwIL.MarkLabel(isExceptionLabel);
         throwIL.Emit(OpCodes.Throw);
 
-        _stateMachineType.DefineMethodOverride(ThrowMethod, _runtime!.GeneratorThrowMethod);
+        _stateMachineType.DefineMethodOverride(ThrowMethod, _runtime!.Generators.Throw);
     }
 
     private void DefineNativeNumberGeneratorMethods()
@@ -723,7 +723,7 @@ public class GeneratorStateMachineBuilder : StateMachineBuilderBase, IIteratorSt
         il.Emit(OpCodes.Ldloc, moved);
         il.Emit(OpCodes.Ret);
         _stateMachineType.DefineMethodOverride(
-            moveNextForOf, _runtime.NativeNumberGeneratorMoveNextMethod);
+            moveNextForOf, _runtime.Generators.NumericMoveNext);
 
         var getCurrentNumber = _stateMachineType.DefineMethod(
             "$INativeNumberGenerator.$getCurrentNumber",
@@ -736,7 +736,7 @@ public class GeneratorStateMachineBuilder : StateMachineBuilderBase, IIteratorSt
         currentIL.Emit(OpCodes.Ldfld, NativeNumberCurrentField!);
         currentIL.Emit(OpCodes.Ret);
         _stateMachineType.DefineMethodOverride(
-            getCurrentNumber, _runtime.NativeNumberGeneratorCurrentMethod);
+            getCurrentNumber, _runtime.Generators.NumericCurrent);
     }
 
     private void EmitLoadYieldValueBoxed(ILGenerator il)

@@ -210,7 +210,11 @@ public partial class RuntimeEmitter
         runtime.FunctionAttributes.CompleteEmission();
 
         if (features.CompactObjectRecordStableIteratorShapes.Count > 0)
-            EmitStableNumberIteratorResult(moduleBuilder, runtime);
+        {
+            runtime.BeginStableIteratorResultsEmission();
+            EmitStableNumberIteratorResult(moduleBuilder, runtime.RequireStableIteratorResults());
+            runtime.RequireStableIteratorResults().CompleteEmission();
+        }
 
         // Emit TSFunction class first (other methods depend on it)
         EmitTSFunctionClass(
@@ -239,7 +243,8 @@ public partial class RuntimeEmitter
         EmitReferenceEqualityComparerClass(moduleBuilder, runtime.CollectionKeys, runtime.Symbols.Type);
 
         // Emit $IGenerator interface for generator return/throw support
-        EmitGeneratorInterface(moduleBuilder, runtime);
+        EmitGeneratorInterface(moduleBuilder, runtime.Generators);
+        runtime.Generators.CompleteEmission();
 
         // Emit $IAsyncGenerator only when async-generator or for-await support
         // can reference it.
