@@ -1410,7 +1410,7 @@ public partial class ILCompiler
                     il.Emit(OpCodes.Brfalse, keepThis);
                     il.MarkLabel(useGlobalThis);
                     il.Emit(OpCodes.Pop);
-                    il.Emit(OpCodes.Ldsfld, _runtime.GlobalThisSingletonField);
+                    il.Emit(OpCodes.Ldsfld, _runtime.GlobalObject.SingletonField);
                     il.MarkLabel(keepThis);
                 }
             }

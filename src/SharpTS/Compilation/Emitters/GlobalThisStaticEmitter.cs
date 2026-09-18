@@ -73,7 +73,7 @@ public sealed class GlobalThisStaticEmitter : IStaticTypeEmitterStrategy
         // TryEmitGlobalThisChainedProperty, so this only fires for the leaf.
         if (propertyName == "globalThis" || propertyName == "global")
         {
-            il.Emit(OpCodes.Ldsfld, ctx.Runtime!.GlobalThisSingletonField);
+            il.Emit(OpCodes.Ldsfld, ctx.Runtime!.GlobalObject.SingletonField);
             return true;
         }
 
@@ -110,27 +110,27 @@ public sealed class GlobalThisStaticEmitter : IStaticTypeEmitterStrategy
                 // Global parseInt - return function reference
                 // For now, emit a call to the runtime helper
                 il.Emit(OpCodes.Ldstr, "parseInt");
-                il.Emit(OpCodes.Call, ctx.Runtime!.GlobalThisGetProperty);
+                il.Emit(OpCodes.Call, ctx.Runtime!.GlobalObject.GetProperty);
                 return true;
 
             case "parseFloat":
                 il.Emit(OpCodes.Ldstr, "parseFloat");
-                il.Emit(OpCodes.Call, ctx.Runtime!.GlobalThisGetProperty);
+                il.Emit(OpCodes.Call, ctx.Runtime!.GlobalObject.GetProperty);
                 return true;
 
             case "isNaN":
                 il.Emit(OpCodes.Ldstr, "isNaN");
-                il.Emit(OpCodes.Call, ctx.Runtime!.GlobalThisGetProperty);
+                il.Emit(OpCodes.Call, ctx.Runtime!.GlobalObject.GetProperty);
                 return true;
 
             case "isFinite":
                 il.Emit(OpCodes.Ldstr, "isFinite");
-                il.Emit(OpCodes.Call, ctx.Runtime!.GlobalThisGetProperty);
+                il.Emit(OpCodes.Call, ctx.Runtime!.GlobalObject.GetProperty);
                 return true;
 
             case "fetch":
                 il.Emit(OpCodes.Ldstr, "fetch");
-                il.Emit(OpCodes.Call, ctx.Runtime!.GlobalThisGetProperty);
+                il.Emit(OpCodes.Call, ctx.Runtime!.GlobalObject.GetProperty);
                 return true;
 
             case "undefined":
@@ -150,7 +150,7 @@ public sealed class GlobalThisStaticEmitter : IStaticTypeEmitterStrategy
 
         // For user-assigned properties, use runtime helper
         il.Emit(OpCodes.Ldstr, propertyName);
-        il.Emit(OpCodes.Call, ctx.Runtime!.GlobalThisGetProperty);
+        il.Emit(OpCodes.Call, ctx.Runtime!.GlobalObject.GetProperty);
         return true;
     }
 

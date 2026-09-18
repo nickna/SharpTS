@@ -106,12 +106,12 @@ public partial class RuntimeEmitter
         // (run much later) fills the bodies, but GetProperty/GetIndex/SetProperty/
         // SetIndex — emitted before it — route the value-position globalThis
         // sentinel through these, so the signatures must exist now (#271).
-        runtime.GlobalThisGetProperty = typeBuilder.DefineMethod(
+        runtime.GlobalObject.GetProperty = typeBuilder.DefineMethod(
             "GlobalThisGetProperty",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.String]);
-        runtime.GlobalThisSetProperty = typeBuilder.DefineMethod(
+        runtime.GlobalObject.SetProperty = typeBuilder.DefineMethod(
             "GlobalThisSetProperty",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Void,
@@ -128,7 +128,7 @@ public partial class RuntimeEmitter
         // Shared backing store for value-form global assignments. DeleteProperty
         // is emitted before the GlobalThis helper bodies, so the field must be
         // reserved in phase 1 alongside their method signatures.
-        runtime.GlobalThisProperties = typeBuilder.DefineField(
+        runtime.GlobalObject.Properties = typeBuilder.DefineField(
             "_globalThisProperties",
             _types.DictionaryStringObject,
             FieldAttributes.Private | FieldAttributes.Static);
@@ -264,9 +264,10 @@ public partial class RuntimeEmitter
         // coerces a null sloppy-this thisArg to this sentinel, so the field must
         // exist now. EmitRuntimeClass initialises it in the .cctor (new object());
         // EmitRuntimeClass MUST skip its own DefineField when this is already set.
-        runtime.GlobalThisSingletonField = typeBuilder.DefineField(
+        runtime.GlobalObject.SingletonField = typeBuilder.DefineField(
             "_globalThisSingleton",
             _types.Object,
             FieldAttributes.Public | FieldAttributes.Static);
+        runtime.GlobalObject.CompleteDeclarations();
     }
 }

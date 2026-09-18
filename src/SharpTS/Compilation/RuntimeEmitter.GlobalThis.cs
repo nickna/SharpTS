@@ -37,13 +37,50 @@ public partial class RuntimeEmitter
             _types.Object,
             FieldAttributes.Private | FieldAttributes.Static);
 
-        EmitIndirectEval(typeBuilder, runtime);
+        EmitIndirectEval(typeBuilder, runtime.GlobalObject, runtime.Sentinels.UndefinedInstance);
         EmitUriComponentFunctions(typeBuilder, runtime.UriComponents,
             new UriComponentInputs(runtime.FunctionAttributes.PadUndefinedCtor, runtime.StringCoercion.ToJsString));
         runtime.UriComponents.CompleteEmission();
-        EmitGlobalThisGetProperty(typeBuilder, runtime);
-        EmitGlobalThisSetProperty(typeBuilder, runtime);
+        var optional = new GlobalPropertyOptionalInputs(
+            runtime.Dates.Implementation is not null ? runtime.Dates.RequireImplementation().Type : null,
+            runtime.RegExps.Implementation is not null ? runtime.RegExps.RequireImplementation().Type : null,
+            runtime.Reflect.Namespace is not null ? runtime.Reflect.RequireNamespace().SingletonField : null,
+            _features.UsesBuffer ? runtime.RequireBuffer().Type : null,
+            _features.UsesTextEncoding ? runtime.RequireTextEncoding().EncoderType : null,
+            _features.UsesTextEncoding ? runtime.RequireTextEncoding().DecoderType : null,
+            _features.UsesCrypto ? runtime.WebCrypto.GetObject : null,
+            _features.UsesFetch ? runtime.Fetch.RequireImplementation().Invoke : null);
+        EmitGlobalThisGetProperty(runtime.GlobalObject,
+            new GlobalPropertyReadInputs(runtime.DescriptorStorage, runtime.Invocation.Method,
+                runtime.ObjectState.IsBuiltinDeleted, runtime.Sentinels.UndefinedInstance,
+                runtime.FunctionValues.Type, runtime.Numbers, runtime.Errors,
+                runtime.Math.SingletonField, runtime.Json.SingletonField, runtime.Process.GetObject,
+                runtime.Symbols.Type, runtime.UriComponents, runtime.FunctionConstruction.GetOrCreate,
+                runtime.FunctionConstruction.Constructor, runtime.Fetch.CachedFunction, optional));
+        EmitGlobalThisSetProperty(runtime.GlobalObject,
+            new GlobalPropertyWriteInputs(runtime.DescriptorStorage.DescriptorType,
+                runtime.DescriptorStorage.GetPropertyDescriptor,
+                runtime.DescriptorStorage.DescriptorWritable.GetGetMethod()!,
+                runtime.DescriptorStorage.DescriptorValue.GetSetMethod()!));
+        runtime.GlobalObject.CompleteEmission();
     }
+
+    private readonly record struct GlobalPropertyOptionalInputs(
+        Type? DateType, Type? RegExpType, FieldBuilder? ReflectSingleton,
+        Type? BufferType, Type? EncoderType, Type? DecoderType,
+        MethodBuilder? GetCryptoObject, MethodBuilder? FetchInvoke);
+
+    private readonly record struct GlobalPropertyReadInputs(
+        EmittedDescriptorStorageRuntime Descriptors, MethodBuilder InvokeMethod,
+        MethodBuilder IsBuiltinDeleted, FieldInfo UndefinedInstance,
+        Type FunctionType, EmittedNumberRuntime Numbers, EmittedErrorRuntime Errors,
+        FieldBuilder MathSingleton, FieldBuilder JsonSingleton, MethodBuilder GetProcess,
+        Type SymbolType, EmittedUriComponentRuntime UriComponents, MethodBuilder GetOrCreateFunction,
+        ConstructorBuilder FunctionConstructor, FieldBuilder CachedFetchFunction,
+        GlobalPropertyOptionalInputs Optional);
+
+    private readonly record struct GlobalPropertyWriteInputs(
+        Type DescriptorType, MethodBuilder GetPropertyDescriptor, MethodInfo GetWritable, MethodInfo SetValue);
 
     private readonly record struct UriComponentInputs(ConstructorBuilder? PadUndefinedCtor, MethodBuilder ToJsString);
 
@@ -82,11 +119,11 @@ public partial class RuntimeEmitter
     /// Gets a property from globalThis, checking user-assigned properties first,
     /// then delegating to built-ins.
     /// </summary>
-    private void EmitGlobalThisGetProperty(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitGlobalThisGetProperty(EmittedGlobalObjectRuntime globalObject, GlobalPropertyReadInputs inputs)
     {
         // Signature forward-declared by DefineRuntimeClassPhase1 (#271) so the
         // property/index dispatchers emitted earlier can call it.
-        var method = (MethodBuilder)runtime.GlobalThisGetProperty;
+        var method = (MethodBuilder)globalObject.GetProperty;
 
         var il = method.GetILGenerator();
 
@@ -112,24 +149,24 @@ public partial class RuntimeEmitter
         // global sentinel. Consult that canonical descriptor carrier before
         // the assignment dictionary and synthesized intrinsic table.
         var globalGetterLocal = il.DeclareLocal(_types.Object);
-        il.Emit(OpCodes.Ldsfld, runtime.GlobalThisSingletonField);
+        il.Emit(OpCodes.Ldsfld, globalObject.SingletonField);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloca, globalGetterLocal);
-        il.Emit(OpCodes.Call, runtime.DescriptorStorage.TryGetGetter);
+        il.Emit(OpCodes.Call, inputs.Descriptors.TryGetGetter);
         var noGlobalGetterLabel = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, noGlobalGetterLabel);
-        il.Emit(OpCodes.Ldsfld, runtime.GlobalThisSingletonField);
+        il.Emit(OpCodes.Ldsfld, globalObject.SingletonField);
         il.Emit(OpCodes.Ldloc, globalGetterLocal);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Newarr, _types.Object);
-        il.Emit(OpCodes.Call, runtime.Invocation.Method);
+        il.Emit(OpCodes.Call, inputs.InvokeMethod);
         il.Emit(OpCodes.Br, returnLabel);
         il.MarkLabel(noGlobalGetterLabel);
 
-        var globalReadDescriptorLocal = il.DeclareLocal(runtime.DescriptorStorage.DescriptorType);
-        il.Emit(OpCodes.Ldsfld, runtime.GlobalThisSingletonField);
+        var globalReadDescriptorLocal = il.DeclareLocal(inputs.Descriptors.DescriptorType);
+        il.Emit(OpCodes.Ldsfld, globalObject.SingletonField);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetPropertyDescriptor);
+        il.Emit(OpCodes.Call, inputs.Descriptors.GetPropertyDescriptor);
         il.Emit(OpCodes.Stloc, globalReadDescriptorLocal);
         var noGlobalReadDescriptorLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, globalReadDescriptorLocal);
@@ -137,25 +174,25 @@ public partial class RuntimeEmitter
         var globalAccessorUndefinedLabel = il.DefineLabel();
         var globalDataDescriptorLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, globalReadDescriptorLocal);
-        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorGetter.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, inputs.Descriptors.DescriptorGetter.GetGetMethod()!);
         il.Emit(OpCodes.Brtrue, globalAccessorUndefinedLabel);
         il.Emit(OpCodes.Ldloc, globalReadDescriptorLocal);
-        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorSetter.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, inputs.Descriptors.DescriptorSetter.GetGetMethod()!);
         il.Emit(OpCodes.Brfalse, globalDataDescriptorLabel);
         il.MarkLabel(globalAccessorUndefinedLabel);
-        il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, inputs.UndefinedInstance);
         il.Emit(OpCodes.Br, returnLabel);
         il.MarkLabel(globalDataDescriptorLabel);
         il.Emit(OpCodes.Ldloc, globalReadDescriptorLocal);
-        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorValue.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, inputs.Descriptors.DescriptorValue.GetGetMethod()!);
         il.Emit(OpCodes.Br, returnLabel);
         il.MarkLabel(noGlobalReadDescriptorLabel);
 
         // --- Check user-assigned properties dictionary first ---
         var valueLocal = il.DeclareLocal(_types.Object);
-        il.Emit(OpCodes.Ldsfld, runtime.GlobalThisProperties);
+        il.Emit(OpCodes.Ldsfld, globalObject.Properties);
         il.Emit(OpCodes.Brfalse, checkDeletedLabel); // dict not initialized yet
-        il.Emit(OpCodes.Ldsfld, runtime.GlobalThisProperties);
+        il.Emit(OpCodes.Ldsfld, globalObject.Properties);
         il.Emit(OpCodes.Ldarg_0); // name
         il.Emit(OpCodes.Ldloca, valueLocal);
         var dictTryGetValue = _types.GetMethod(_types.DictionaryStringObject, "TryGetValue", _types.String, _types.Object.MakeByRefType());
@@ -168,11 +205,11 @@ public partial class RuntimeEmitter
         // User assignment is checked first above so a later assignment revives
         // the property, as ordinary JavaScript assignment does.
         il.MarkLabel(checkDeletedLabel);
-        il.Emit(OpCodes.Ldsfld, runtime.GlobalThisSingletonField);
+        il.Emit(OpCodes.Ldsfld, globalObject.SingletonField);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.ObjectState.IsBuiltinDeleted);
+        il.Emit(OpCodes.Call, inputs.IsBuiltinDeleted);
         il.Emit(OpCodes.Brfalse, checkBuiltInsLabel);
-        il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, inputs.UndefinedInstance);
         il.Emit(OpCodes.Br, returnLabel);
 
         il.MarkLabel(checkBuiltInsLabel);
@@ -210,7 +247,7 @@ public partial class RuntimeEmitter
 
         // Check for "fetch" — only when the program references fetch (or any fetch-family
         // identifier). HTTP-only programs also emit Web API helpers but do not expose this global.
-        if (_features.UsesFetch)
+        if (inputs.Optional.FetchInvoke is not null)
         {
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldstr, "fetch");
@@ -282,22 +319,22 @@ public partial class RuntimeEmitter
         }
 
         EmitTypeBranch("Array", _types.IListOfObject);
-        if (runtime.Dates.Implementation is not null)
-            EmitTypeBranch("Date", runtime.Dates.RequireImplementation().Type);
-        if (runtime.RegExps.Implementation is not null)
-            EmitTypeBranch("RegExp", runtime.RegExps.RequireImplementation().Type);
+        if (inputs.Optional.DateType is not null)
+            EmitTypeBranch("Date", inputs.Optional.DateType);
+        if (inputs.Optional.RegExpType is not null)
+            EmitTypeBranch("RegExp", inputs.Optional.RegExpType);
         EmitTypeBranch("Map", _types.DictionaryObjectObject);
         EmitTypeBranch("Set", _types.HashSetOfObject);
         EmitTypeBranch("WeakMap", _types.ConditionalWeakTableObjectObject);
         EmitTypeBranch("WeakSet", _types.ConditionalWeakTableObjectObject);
         EmitTypeBranch("Promise", _types.TaskOfObject);
-        if (_features.UsesBuffer)
-            EmitTypeBranch("Buffer", runtime.RequireBuffer().Type);
-        EmitTypeBranch("Function", runtime.FunctionValues.Type);
-        if (_features.UsesTextEncoding)
+        if (inputs.Optional.BufferType is not null)
+            EmitTypeBranch("Buffer", inputs.Optional.BufferType!);
+        EmitTypeBranch("Function", inputs.FunctionType);
+        if (inputs.Optional.EncoderType is not null)
         {
-            EmitTypeBranch("TextEncoder", runtime.RequireTextEncoding().EncoderType);
-            EmitTypeBranch("TextDecoder", runtime.RequireTextEncoding().DecoderType);
+            EmitTypeBranch("TextEncoder", inputs.Optional.EncoderType!);
+            EmitTypeBranch("TextDecoder", inputs.Optional.DecoderType!);
         }
         // `Object` — return System.Object's Type token so `globalThis.Object === Object`
         // holds (bare `Object` lowers to this same helper via ILEmitter.Expressions.cs,
@@ -318,20 +355,20 @@ public partial class RuntimeEmitter
         // "function", `globalThis.Symbol === Symbol` holds, and aliased
         // member access resolves the well-known-symbol static fields via
         // GetProperty's Type branch.
-        EmitTypeBranch("Symbol", runtime.Symbols.Type);
+        EmitTypeBranch("Symbol", inputs.SymbolType);
 
         // Error and the native-error subclasses are constructor functions; expose
         // their .NET Type tokens so value-form `root.Error` / `root.TypeError`
         // resolve to the real constructors (lodash's runInContext reads
         // `context.Error` and `context.TypeError`). #271.
-        EmitTypeBranch("Error", runtime.Errors.Type);
-        EmitTypeBranch("TypeError", runtime.Errors.TypeErrorType);
-        EmitTypeBranch("RangeError", runtime.Errors.RangeErrorType);
-        EmitTypeBranch("ReferenceError", runtime.Errors.ReferenceErrorType);
-        EmitTypeBranch("SyntaxError", runtime.Errors.SyntaxErrorType);
-        EmitTypeBranch("URIError", runtime.Errors.URIErrorType);
-        EmitTypeBranch("EvalError", runtime.Errors.EvalErrorType);
-        EmitTypeBranch("AggregateError", runtime.Errors.AggregateErrorType);
+        EmitTypeBranch("Error", inputs.Errors.Type);
+        EmitTypeBranch("TypeError", inputs.Errors.TypeErrorType);
+        EmitTypeBranch("RangeError", inputs.Errors.RangeErrorType);
+        EmitTypeBranch("ReferenceError", inputs.Errors.ReferenceErrorType);
+        EmitTypeBranch("SyntaxError", inputs.Errors.SyntaxErrorType);
+        EmitTypeBranch("URIError", inputs.Errors.URIErrorType);
+        EmitTypeBranch("EvalError", inputs.Errors.EvalErrorType);
+        EmitTypeBranch("AggregateError", inputs.Errors.AggregateErrorType);
 
         // Math / JSON are extensible singleton objects in the runtime — return the
         // real Dictionary singletons so `root.Math`/`root.JSON` are usable values
@@ -347,10 +384,10 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Br, returnLabel);
             il.MarkLabel(notThisName);
         }
-        EmitSingletonBranch("Math", runtime.Math.SingletonField);
-        EmitSingletonBranch("JSON", runtime.Json.SingletonField);
-        if (runtime.Reflect.Namespace is not null)
-            EmitSingletonBranch("Reflect", runtime.Reflect.RequireNamespace().SingletonField);
+        EmitSingletonBranch("Math", inputs.MathSingleton);
+        EmitSingletonBranch("JSON", inputs.JsonSingleton);
+        if (inputs.Optional.ReflectSingleton is not null)
+            EmitSingletonBranch("Reflect", inputs.Optional.ReflectSingleton);
 
         // globalThis.process → the live $Process singleton (epic #1078), same
         // object as the bare `process` identifier and the module facade's
@@ -361,7 +398,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldstr, "process");
             il.Emit(OpCodes.Call, strEquals);
             il.Emit(OpCodes.Brfalse, notProcess);
-            il.Emit(OpCodes.Call, runtime.Process.GetObject);
+            il.Emit(OpCodes.Call, inputs.GetProcess);
             il.Emit(OpCodes.Br, returnLabel);
             il.MarkLabel(notProcess);
         }
@@ -369,14 +406,14 @@ public partial class RuntimeEmitter
         // globalThis.crypto → the $WebCrypto singleton (#1063), same object as
         // crypto.webcrypto. Gated: without crypto the reserved accessor's stub
         // returns null, so keep the name resolving to undefined instead.
-        if (_features.UsesCrypto)
+        if (inputs.Optional.GetCryptoObject is not null)
         {
             var notCrypto = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldstr, "crypto");
             il.Emit(OpCodes.Call, strEquals);
             il.Emit(OpCodes.Brfalse, notCrypto);
-            il.Emit(OpCodes.Call, runtime.WebCrypto.GetObject);
+            il.Emit(OpCodes.Call, inputs.Optional.GetCryptoObject!);
             il.Emit(OpCodes.Br, returnLabel);
             il.MarkLabel(notCrypto);
         }
@@ -394,12 +431,12 @@ public partial class RuntimeEmitter
         }
 
         // Default: return undefined
-        il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, inputs.UndefinedInstance);
         il.Emit(OpCodes.Br, returnLabel);
 
         // globalThis / global self-reference → the runtime sentinel (#271).
         il.MarkLabel(globalThisRefLabel);
-        il.Emit(OpCodes.Ldsfld, runtime.GlobalThisSingletonField);
+        il.Emit(OpCodes.Ldsfld, globalObject.SingletonField);
         il.Emit(OpCodes.Br, returnLabel);
 
         // Null marker for namespaces whose value-form access stays null (legacy).
@@ -410,7 +447,7 @@ public partial class RuntimeEmitter
 
         // undefined property
         il.MarkLabel(undefinedPropLabel);
-        il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, inputs.UndefinedInstance);
         il.Emit(OpCodes.Br, returnLabel);
 
         // NaN property
@@ -426,10 +463,10 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, returnLabel);
 
         // fetch property - return cached fetch TSFunction (only emitted when UsesFetch)
-        if (_features.UsesFetch)
+        if (inputs.Optional.FetchInvoke is not null)
         {
             il.MarkLabel(fetchLabel);
-            EmitCachedTSFunction(il, runtime.Fetch.CachedFunction, runtime.Fetch.RequireImplementation().Invoke, runtime);
+            EmitCachedTSFunction(il, inputs.CachedFetchFunction, inputs.Optional.FetchInvoke!, inputs.FunctionConstructor);
             il.Emit(OpCodes.Br, returnLabel);
         }
 
@@ -444,37 +481,37 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Castclass, _types.MethodInfo);
             il.Emit(OpCodes.Ldstr, jsName);
             il.Emit(OpCodes.Ldc_I4, jsLength);
-            il.Emit(OpCodes.Call, runtime.FunctionConstruction.GetOrCreate);
+            il.Emit(OpCodes.Call, inputs.GetOrCreateFunction);
         }
         il.MarkLabel(parseIntLabel);
-        EmitGetOrCreateTSFn(runtime.Numbers.ParseInt, "parseInt", 2);
+        EmitGetOrCreateTSFn(inputs.Numbers.ParseInt, "parseInt", 2);
         il.Emit(OpCodes.Br, returnLabel);
 
         // parseFloat — same pattern.
         il.MarkLabel(parseFloatLabel);
-        EmitGetOrCreateTSFn(runtime.Numbers.ParseFloat, "parseFloat", 1);
+        EmitGetOrCreateTSFn(inputs.Numbers.ParseFloat, "parseFloat", 1);
         il.Emit(OpCodes.Br, returnLabel);
 
         // isNaN
         il.MarkLabel(isNaNLabel);
-        EmitGetOrCreateTSFn(runtime.Numbers.IsNaN, "isNaN", 1);
+        EmitGetOrCreateTSFn(inputs.Numbers.IsNaN, "isNaN", 1);
         il.Emit(OpCodes.Br, returnLabel);
 
         // isFinite
         il.MarkLabel(isFiniteLabel);
-        EmitGetOrCreateTSFn(runtime.Numbers.IsFinite, "isFinite", 1);
+        EmitGetOrCreateTSFn(inputs.Numbers.IsFinite, "isFinite", 1);
         il.Emit(OpCodes.Br, returnLabel);
 
         il.MarkLabel(encodeURIComponentLabel);
-        EmitGetOrCreateTSFn(runtime.UriComponents.Encode, "encodeURIComponent", 1);
+        EmitGetOrCreateTSFn(inputs.UriComponents.Encode, "encodeURIComponent", 1);
         il.Emit(OpCodes.Br, returnLabel);
 
         il.MarkLabel(decodeURIComponentLabel);
-        EmitGetOrCreateTSFn(runtime.UriComponents.Decode, "decodeURIComponent", 1);
+        EmitGetOrCreateTSFn(inputs.UriComponents.Decode, "decodeURIComponent", 1);
         il.Emit(OpCodes.Br, returnLabel);
 
         il.MarkLabel(evalLabel);
-        EmitGetOrCreateTSFn(runtime.EvalIndirect, "eval", 1);
+        EmitGetOrCreateTSFn(globalObject.IndirectEval, "eval", 1);
         il.Emit(OpCodes.Br, returnLabel);
 
         il.MarkLabel(returnLabel);
@@ -486,12 +523,12 @@ public partial class RuntimeEmitter
     /// string input uses the optional SharpTS interpreter bridge without adding
     /// a hard assembly reference to standalone output.
     /// </summary>
-    private void EmitIndirectEval(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitIndirectEval(TypeBuilder typeBuilder, EmittedGlobalObjectRuntime globalObject, FieldInfo undefinedInstance)
     {
         var method = typeBuilder.DefineMethod(
             "EvalIndirect", MethodAttributes.Public | MethodAttributes.Static,
             _types.Object, [_types.Object]);
-        runtime.EvalIndirect = method;
+        globalObject.IndirectEval = method;
         var il = method.GetILGenerator();
 
         var stringInput = il.DefineLabel();
@@ -530,11 +567,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stelem_Ref);
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Ldsfld, runtime.GlobalThisSingletonField);
+        il.Emit(OpCodes.Ldsfld, globalObject.SingletonField);
         il.Emit(OpCodes.Stelem_Ref);
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Ldc_I4_2);
-        il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, undefinedInstance);
         il.Emit(OpCodes.Stelem_Ref);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(
             _types.MethodInfo, "Invoke", _types.Object, _types.ObjectArray));
@@ -545,7 +582,7 @@ public partial class RuntimeEmitter
     /// Emits IL to load a cached TSFunction, creating it lazily if null.
     /// Pattern: if (cachedField == null) { cachedField = new TSFunction(null, methodInfo); } push cachedField;
     /// </summary>
-    private void EmitCachedTSFunction(ILGenerator il, FieldBuilder cachedField, MethodBuilder wrappedMethod, EmittedRuntime runtime)
+    private void EmitCachedTSFunction(ILGenerator il, FieldBuilder cachedField, MethodBuilder wrappedMethod, ConstructorBuilder functionConstructor)
     {
         var alreadyCachedLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldsfld, cachedField);
@@ -555,7 +592,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldtoken, wrappedMethod);
         il.Emit(OpCodes.Call, _types.MethodBaseGetMethodFromHandle);
         il.Emit(OpCodes.Castclass, _types.MethodInfo);
-        il.Emit(OpCodes.Newobj, runtime.FunctionConstruction.Constructor);
+        il.Emit(OpCodes.Newobj, functionConstructor);
         il.Emit(OpCodes.Stsfld, cachedField);
         il.MarkLabel(alreadyCachedLabel);
         il.Emit(OpCodes.Ldsfld, cachedField);
@@ -565,10 +602,10 @@ public partial class RuntimeEmitter
     /// Emits: public static void GlobalThisSetProperty(string name, object value)
     /// Sets a property on globalThis, storing in a static dictionary.
     /// </summary>
-    private void EmitGlobalThisSetProperty(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitGlobalThisSetProperty(EmittedGlobalObjectRuntime globalObject, GlobalPropertyWriteInputs inputs)
     {
         // Signature forward-declared by DefineRuntimeClassPhase1 (#271).
-        var method = (MethodBuilder)runtime.GlobalThisSetProperty;
+        var method = (MethodBuilder)globalObject.SetProperty;
 
         var il = method.GetILGenerator();
 
@@ -576,35 +613,35 @@ public partial class RuntimeEmitter
         // sentinel. A non-writable data property silently rejects sloppy-mode
         // assignment. For a writable descriptor, update its live [[Value]] so
         // subsequent descriptor reflection and ordinary reads agree.
-        var globalDescriptorLocal = il.DeclareLocal(runtime.DescriptorStorage.DescriptorType);
-        il.Emit(OpCodes.Ldsfld, runtime.GlobalThisSingletonField);
+        var globalDescriptorLocal = il.DeclareLocal(inputs.DescriptorType);
+        il.Emit(OpCodes.Ldsfld, globalObject.SingletonField);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.DescriptorStorage.GetPropertyDescriptor);
+        il.Emit(OpCodes.Call, inputs.GetPropertyDescriptor);
         il.Emit(OpCodes.Stloc, globalDescriptorLocal);
         var noGlobalDescriptorLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, globalDescriptorLocal);
         il.Emit(OpCodes.Brfalse, noGlobalDescriptorLabel);
         il.Emit(OpCodes.Ldloc, globalDescriptorLocal);
-        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorWritable.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, inputs.GetWritable);
         var globalDescriptorWritableLabel = il.DefineLabel();
         il.Emit(OpCodes.Brtrue, globalDescriptorWritableLabel);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(globalDescriptorWritableLabel);
         il.Emit(OpCodes.Ldloc, globalDescriptorLocal);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorValue.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, inputs.SetValue);
         il.MarkLabel(noGlobalDescriptorLabel);
 
         // Lazily initialize the dictionary: if (_globalThisProperties == null) _globalThisProperties = new();
         var dictReadyLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldsfld, runtime.GlobalThisProperties);
+        il.Emit(OpCodes.Ldsfld, globalObject.Properties);
         il.Emit(OpCodes.Brtrue, dictReadyLabel);
         il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.DictionaryStringObject));
-        il.Emit(OpCodes.Stsfld, runtime.GlobalThisProperties);
+        il.Emit(OpCodes.Stsfld, globalObject.Properties);
         il.MarkLabel(dictReadyLabel);
 
         // _globalThisProperties[name] = value
-        il.Emit(OpCodes.Ldsfld, runtime.GlobalThisProperties);
+        il.Emit(OpCodes.Ldsfld, globalObject.Properties);
         il.Emit(OpCodes.Ldarg_0); // name
         il.Emit(OpCodes.Ldarg_1); // value
         var dictSetItem = _types.GetMethod(_types.DictionaryStringObject, "set_Item", _types.String, _types.Object);

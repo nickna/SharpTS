@@ -226,7 +226,7 @@ public partial class RuntimeEmitter
             new TSFunctionClassInputs(
                 runtime.Arguments,
                 runtime.FunctionAttributes,
-                runtime.GlobalThisSingletonField,
+                runtime.GlobalObject.SingletonField,
                 runtime.Sentinels.UndefinedInstance,
                 runtime.Sentinels.UndefinedType
             )

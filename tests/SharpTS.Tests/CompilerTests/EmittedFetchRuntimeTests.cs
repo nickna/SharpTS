@@ -185,7 +185,7 @@ public class EmittedFetchRuntimeTests
         Assert.DoesNotContain(reader.AssemblyReferences,
             handle => reader.GetString(reader.GetAssemblyReference(handle).Name) == "SharpTS");
         var loaded = Assembly.Load(stream.ToArray()).GetType(runtime.RuntimeType.Name)!;
-        var globalGet = loaded.GetMethod(runtime.GlobalThisGetProperty.Name)!;
+        var globalGet = loaded.GetMethod(runtime.GlobalObject.GetProperty.Name)!;
         var function = globalGet.Invoke(null, ["fetch"]);
         Assert.NotNull(function);
         Assert.Same(function, globalGet.Invoke(null, ["fetch"]));

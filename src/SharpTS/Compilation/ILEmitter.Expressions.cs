@@ -160,7 +160,7 @@ public partial class ILEmitter
         // The syntactic `globalThis.X` path is still intercepted at compile time.
         if (name == "globalThis" || name == "global")
         {
-            IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.GlobalThisSingletonField);
+            IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.GlobalObject.SingletonField);
             SetStackUnknown();
             return;
         }
@@ -213,7 +213,7 @@ public partial class ILEmitter
         if (name == "fetch")
         {
             IL.Emit(OpCodes.Ldstr, "fetch");
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.GlobalThisGetProperty);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.GlobalObject.GetProperty);
             SetStackUnknown();
             return;
         }
@@ -227,7 +227,7 @@ public partial class ILEmitter
             or "queueMicrotask" or "structuredClone")
         {
             IL.Emit(OpCodes.Ldstr, name);
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.GlobalThisGetProperty);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.GlobalObject.GetProperty);
             SetStackUnknown();
             return;
         }
@@ -362,7 +362,7 @@ public partial class ILEmitter
             // don't throw ReferenceError — matches how Object and Function
             // already resolve via globalThis.
             IL.Emit(OpCodes.Ldstr, name);
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.GlobalThisGetProperty);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.GlobalObject.GetProperty);
             SetStackUnknown();
             return;
         }
@@ -373,7 +373,7 @@ public partial class ILEmitter
         if (name == "crypto")
         {
             IL.Emit(OpCodes.Ldstr, "crypto");
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.GlobalThisGetProperty);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.GlobalObject.GetProperty);
             SetStackUnknown();
             return;
         }
@@ -769,7 +769,7 @@ public partial class ILEmitter
                 IL.Emit(OpCodes.Stloc, value);
                 IL.Emit(OpCodes.Ldstr, a.Name.Lexeme);
                 IL.Emit(OpCodes.Ldloc, value);
-                IL.Emit(OpCodes.Call, _ctx.Runtime!.GlobalThisSetProperty);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.GlobalObject.SetProperty);
             }
             SetStackUnknown();
         }

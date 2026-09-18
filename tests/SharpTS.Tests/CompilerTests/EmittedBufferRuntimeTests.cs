@@ -158,7 +158,7 @@ public class EmittedBufferRuntimeTests
         var runtime = EmitRuntime("Buffer.from('data');");
         using var stream = Save(runtime);
         var loaded = Assembly.Load(stream.ToArray());
-        var getter = loaded.GetType(runtime.RuntimeType.Name)!.GetMethod(runtime.GlobalThisGetProperty.Name)!;
+        var getter = loaded.GetType(runtime.RuntimeType.Name)!.GetMethod(runtime.GlobalObject.GetProperty.Name)!;
         Assert.Same(loaded.GetType(runtime.RequireBuffer().Type.Name), getter.Invoke(null, ["Buffer"]));
     }
 

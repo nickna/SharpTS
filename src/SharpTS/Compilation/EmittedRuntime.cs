@@ -380,7 +380,7 @@ public class EmittedRuntime
     /// GlobalThisGetProperty/GlobalThisSetProperty. The syntactic `globalThis.X`
     /// path is still intercepted at compile time by GlobalThisStaticEmitter.
     /// </summary>
-    public FieldBuilder GlobalThisSingletonField { get; set; } = null!;
+    public EmittedGlobalObjectRuntime GlobalObject { get; } = new();
 
 
 
@@ -660,15 +660,8 @@ public class EmittedRuntime
     /// <summary>Required process metadata, with explicit optional stream and hosted declarations.</summary>
     public EmittedProcessRuntime Process { get; } = new();
 
-    // globalThis methods (ES2020)
-    public MethodBuilder GlobalThisGetProperty { get; set; } = null!;
-    public MethodBuilder GlobalThisSetProperty { get; set; } = null!;
-    public MethodBuilder EvalIndirect { get; set; } = null!;
-
     /// <summary>Required class accessor/method registry declarations, with early shells and later bodies.</summary>
     public EmittedSymbolAccessorRuntime SymbolAccessors { get; } = new();
-
-    public FieldBuilder GlobalThisProperties { get; set; } = null!;
 
     /// <summary>Node crypto metadata, or null when crypto is tree-shaken from this compilation.</summary>
     public EmittedCryptoRuntime? Crypto { get; private set; }
