@@ -255,7 +255,7 @@ public partial class GeneratorMoveNextEmitter
         _il.Emit(OpCodes.Ldloc, iteratorLocal);
         _il.Emit(OpCodes.Ldtoken, _ctx.Runtime.RuntimeType);
         _il.Emit(OpCodes.Call, Types.TypeGetTypeFromHandle);
-        _il.Emit(OpCodes.Newobj, _ctx.Runtime.IteratorWrapperCtor);
+        _il.Emit(OpCodes.Newobj, _ctx.Runtime.IteratorWrappers.Ctor);
         _il.Emit(OpCodes.Stloc, enumTemp);
 
         // Store enumerator in field
@@ -296,8 +296,8 @@ public partial class GeneratorMoveNextEmitter
             driveViaGeneratorLabel = _il.DefineLabel();
             genDoneLabel = _il.DefineLabel();
         }
-        var iteratorWrapperType = _ctx?.Runtime?.IteratorWrapperType;
-        var moveNextWithSent = _ctx?.Runtime?.IteratorWrapperMoveNextWithSent;
+        var iteratorWrapperType = _ctx?.Runtime?.IteratorWrappers.Type;
+        var moveNextWithSent = _ctx?.Runtime?.IteratorWrappers.MoveNextWithSent;
         Label plainEnumeratorLabel = default;
         if (iteratorWrapperType != null && moveNextWithSent != null)
             plainEnumeratorLabel = _il.DefineLabel();

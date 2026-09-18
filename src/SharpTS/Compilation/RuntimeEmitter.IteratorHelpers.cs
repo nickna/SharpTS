@@ -89,7 +89,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, throwLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldnull); // runtimeType parameter (unused)
-        il.Emit(OpCodes.Newobj, runtime.IteratorWrapperCtor);
+        il.Emit(OpCodes.Newobj, runtime.IteratorWrappers.Ctor);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(throwLabel);

@@ -564,12 +564,18 @@ public partial class RuntimeEmitter
         typeBuilder.CreateType();
     }
 
+    private readonly record struct IteratorWrapperInputs(
+        EmittedIteratorRecordRuntime IteratorRecords,
+        MethodBuilder GetIteratorDone,
+        MethodBuilder GetIteratorValue
+    );
+
     /// <summary>
     /// Emits the $IteratorWrapper class that adapts custom iterator objects to IEnumerator&lt;object&gt;.
     /// This allows for...of loops to work with any object that has a [Symbol.iterator]() method.
-    /// NOTE: Must be called AFTER EmitIteratorMethods so that runtime.InvokeIteratorNext etc. are defined.
+    /// Called after EmitIteratorMethodsBasic declares captured-next and iterator-result helpers.
     /// </summary>
-    private void EmitIteratorWrapperType(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private void EmitIteratorWrapperType(ModuleBuilder moduleBuilder, EmittedIteratorWrapperRuntime iteratorWrappers, IteratorWrapperInputs inputs)
     {
         // Define class: public sealed class $IteratorWrapper : IEnumerator<object>, IEnumerator, IDisposable
         var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
@@ -578,7 +584,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.IEnumeratorOfObject, _types.IEnumerator, _types.IDisposable]
         );
-        runtime.IteratorWrapperType = typeBuilder;
+        iteratorWrappers.Type = typeBuilder;
 
         // Define fields - simplified, no longer need _runtime field
         var iteratorField = typeBuilder.DefineField("_iterator", _types.Object, FieldAttributes.Private);
@@ -592,7 +598,7 @@ public partial class RuntimeEmitter
             CallingConventions.Standard,
             [_types.Object, _types.Type]  // Keep signature for compatibility
         );
-        runtime.IteratorWrapperCtor = ctor;
+        iteratorWrappers.Ctor = ctor;
 
         var ctorIl = ctor.GetILGenerator();
         // Call base constructor
@@ -604,7 +610,7 @@ public partial class RuntimeEmitter
         ctorIl.Emit(OpCodes.Stfld, iteratorField);
         ctorIl.Emit(OpCodes.Ldarg_0);
         ctorIl.Emit(OpCodes.Ldarg_1);
-        ctorIl.Emit(OpCodes.Call, runtime.IteratorRecords.NextMethod);
+        ctorIl.Emit(OpCodes.Call, inputs.IteratorRecords.NextMethod);
         ctorIl.Emit(OpCodes.Stfld, nextField);
         // this._current = null
         ctorIl.Emit(OpCodes.Ldarg_0);
@@ -657,24 +663,24 @@ public partial class RuntimeEmitter
         // Locals for MoveNext
         var resultLocal = moveNextIl.DeclareLocal(_types.Object);
 
-        // var result = InvokeIteratorNext(_iterator);  -- DIRECT CALL
+        // var result = InvokeCapturedIteratorNext(_iterator, _next);  -- DIRECT CALL
         moveNextIl.Emit(OpCodes.Ldarg_0);
         moveNextIl.Emit(OpCodes.Ldfld, iteratorField);
         moveNextIl.Emit(OpCodes.Ldarg_0);
         moveNextIl.Emit(OpCodes.Ldfld, nextField);
-        moveNextIl.Emit(OpCodes.Call, runtime.IteratorRecords.InvokeNext);
+        moveNextIl.Emit(OpCodes.Call, inputs.IteratorRecords.InvokeNext);
         moveNextIl.Emit(OpCodes.Stloc, resultLocal);
 
         // var done = GetIteratorDone(result);  -- DIRECT CALL
         moveNextIl.Emit(OpCodes.Ldloc, resultLocal);
-        moveNextIl.Emit(OpCodes.Call, runtime.GetIteratorDone);
+        moveNextIl.Emit(OpCodes.Call, inputs.GetIteratorDone);
 
         // Preserve IteratorValue(result) even when done is true.  `yield*` reads
         // Current after MoveNext returns false to obtain the delegated iterator's
         // completion value; ordinary iterator consumers simply ignore Current.
         moveNextIl.Emit(OpCodes.Ldarg_0);
         moveNextIl.Emit(OpCodes.Ldloc, resultLocal);
-        moveNextIl.Emit(OpCodes.Call, runtime.GetIteratorValue);
+        moveNextIl.Emit(OpCodes.Call, inputs.GetIteratorValue);
         moveNextIl.Emit(OpCodes.Stfld, currentField);
 
         // if (done) return false;
@@ -698,28 +704,28 @@ public partial class RuntimeEmitter
             _types.Boolean,
             [_types.Object]
         );
-        runtime.IteratorWrapperMoveNextWithSent = moveNextWithSent;
+        iteratorWrappers.MoveNextWithSent = moveNextWithSent;
         var mwsIl = moveNextWithSent.GetILGenerator();
 
         var mwsResultLocal = mwsIl.DeclareLocal(_types.Object);
 
-        // var result = InvokeIteratorNextWithSent(_iterator, sent);
+        // var result = InvokeCapturedIteratorNextWithSent(_iterator, _next, sent);
         mwsIl.Emit(OpCodes.Ldarg_0);
         mwsIl.Emit(OpCodes.Ldfld, iteratorField);
         mwsIl.Emit(OpCodes.Ldarg_0);
         mwsIl.Emit(OpCodes.Ldfld, nextField);
         mwsIl.Emit(OpCodes.Ldarg_1);               // sent value
-        mwsIl.Emit(OpCodes.Call, runtime.IteratorRecords.InvokeNextWithSent);
+        mwsIl.Emit(OpCodes.Call, inputs.IteratorRecords.InvokeNextWithSent);
         mwsIl.Emit(OpCodes.Stloc, mwsResultLocal);
 
         mwsIl.Emit(OpCodes.Ldloc, mwsResultLocal);
-        mwsIl.Emit(OpCodes.Call, runtime.GetIteratorDone);
+        mwsIl.Emit(OpCodes.Call, inputs.GetIteratorDone);
 
         // As above, retain the completion record's value for `yield*` when
         // this call reports done.
         mwsIl.Emit(OpCodes.Ldarg_0);
         mwsIl.Emit(OpCodes.Ldloc, mwsResultLocal);
-        mwsIl.Emit(OpCodes.Call, runtime.GetIteratorValue);
+        mwsIl.Emit(OpCodes.Call, inputs.GetIteratorValue);
         mwsIl.Emit(OpCodes.Stfld, currentField);
 
         var mwsNotDoneLabel = mwsIl.DefineLabel();
@@ -874,8 +880,7 @@ public partial class RuntimeEmitter
     }
 
     /// <summary>
-    /// Emits IterateToList method which depends on $IteratorWrapper.
-    /// Must be called after EmitIteratorWrapperType.
+    /// Fills the previously declared iterable-to-list methods after basic iterator helpers.
     /// </summary>
     private void EmitIteratorMethodsAdvanced(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {

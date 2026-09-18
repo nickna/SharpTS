@@ -1655,9 +1655,14 @@ public partial class RuntimeEmitter
         EmitStrictModeHelpers(typeBuilder, runtime.Operators, runtime.Errors);
         // Basic iterator protocol methods - must come AFTER object methods (need GetProperty, InvokeMethodValue)
         EmitIteratorMethodsBasic(typeBuilder, runtime);
-        // Emit $IteratorWrapper AFTER basic iterator methods (needs InvokeIteratorNext etc.)
-        // but BEFORE IterateToList (which needs IteratorWrapperCtor)
-        EmitIteratorWrapperType(moduleBuilder, runtime);
+        // Adapt custom iterator objects after captured-next and result helpers exist.
+        // Iterator collection and normalization helpers follow.
+        EmitIteratorWrapperType(
+            moduleBuilder,
+            runtime.IteratorWrappers,
+            new IteratorWrapperInputs(runtime.IteratorRecords, runtime.GetIteratorDone, runtime.GetIteratorValue)
+        );
+        runtime.IteratorWrappers.CompleteEmission();
         EmitArrayIteratorType(moduleBuilder, runtime);
         if (runtime.Map is not null)
             EmitMapCollectionIteratorType(moduleBuilder, runtime.CollectionKeys, runtime.RequireMap());
@@ -1670,7 +1675,7 @@ public partial class RuntimeEmitter
         // protocol helpers and $IteratorWrapper.
         if (_features.UsesPromise)
             EmitNormalizePromiseList(typeBuilder, runtime);
-        // Advanced iterator methods (IterateToList) - needs IteratorWrapperCtor
+        // Fill the previously declared iterable-to-list methods.
         EmitIteratorMethodsAdvanced(typeBuilder, runtime);
         // ES2025 Iterator Helper methods and lazy wrapper types
         EmitIteratorHelperMethods(typeBuilder, moduleBuilder, runtime);

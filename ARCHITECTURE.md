@@ -330,6 +330,13 @@ carrier; the strict SyntaxError helper retains its existing CLR exception repres
 Exception wrapping follows supplied optional Promise metadata. Error-cause Proxy handling
 receives six explicit invocation/delegate handles through the shared reflection bridge.
 
+Required `IteratorWrappers` owns the custom-iterator adapter type, constructor
+and sent-value method. It completes immediately after the original wrapper
+emission call, which receives the owner and exact captured-next/result-helper
+dependencies. Both nullable generator probes, the ignored constructor Type
+argument, captured next callable, both Current getters, completion values,
+Reset exception, no-op Dispose and local construction order are preserved.
+
 Required `IteratorRecords` owns captured-next lookup and invocation metadata.
 Its three declarations complete together immediately after their original
 basic-iterator emission call. The helper receives the owner and exact

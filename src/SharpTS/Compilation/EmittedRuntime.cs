@@ -17,6 +17,10 @@ namespace SharpTS.Compilation;
 /// <seealso cref="ILEmitter"/>
 public class EmittedRuntime
 {
+    /// <summary>Required custom-iterator adapter declarations for this compilation.</summary>
+    public EmittedIteratorWrapperRuntime IteratorWrappers { get; } = new();
+
+
     /// <summary>Required captured iterator-next lookup and invocation declarations.</summary>
     public EmittedIteratorRecordRuntime IteratorRecords { get; } = new();
 
@@ -564,9 +568,6 @@ public class EmittedRuntime
     public MethodInfo IHasFieldsHasProperty { get; set; } = null!;
     public MethodInfo IHasFieldsFieldsGetter { get; set; } = null!;
 
-    // Iterator wrapper type (implements IEnumerator<object?> for custom iterables)
-    public TypeBuilder IteratorWrapperType { get; set; } = null!;
-    public ConstructorBuilder IteratorWrapperCtor { get; set; } = null!;
 
     // Iterator protocol helper methods
     public MethodBuilder GetIteratorFunction { get; set; } = null!;              // Returns iterator function or $Undefined when absent
@@ -577,7 +578,6 @@ public class EmittedRuntime
     public MethodBuilder IteratorClose { get; set; } = null!;                   // IteratorClose(iterator, preserveThrowCompletion)
     public MethodBuilder IterateToList { get; set; } = null!;                   // Converts any iterable to List<object>
     public MethodBuilder IterateIntoList { get; set; } = null!;
-    public MethodBuilder IteratorWrapperMoveNextWithSent { get; set; } = null!; // $IteratorWrapper.MoveNextWithSent(sent) (#503)
 
 
 
