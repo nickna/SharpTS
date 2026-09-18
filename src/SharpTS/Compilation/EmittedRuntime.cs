@@ -559,14 +559,8 @@ public class EmittedRuntime
     // guest `throw` value. Message is derived lazily at a host boundary.
 
 
-    // $IHasFields interface - for unified property access on user classes and $Object
-    // Note: These use MethodInfo instead of MethodBuilder because we need the actual
-    // methods from the created interface type (after CreateType() is called)
-    public Type IHasFieldsInterface { get; set; } = null!;
-    public MethodInfo IHasFieldsGetProperty { get; set; } = null!;
-    public MethodInfo IHasFieldsSetProperty { get; set; } = null!;
-    public MethodInfo IHasFieldsHasProperty { get; set; } = null!;
-    public MethodInfo IHasFieldsFieldsGetter { get; set; } = null!;
+    /// <summary>Required object-field interface and baked methods for this compilation.</summary>
+    public EmittedObjectFieldRuntime ObjectFields { get; } = new();
 
 
     // Iterator protocol helper methods

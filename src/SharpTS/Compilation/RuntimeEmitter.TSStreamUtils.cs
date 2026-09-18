@@ -229,13 +229,13 @@ public partial class RuntimeEmitter
         var tryDictLabel = il.DefineLabel();
 
         il.Emit(OpCodes.Ldloc, optionsLocal);
-        il.Emit(OpCodes.Isinst, runtime.IHasFieldsInterface);
+        il.Emit(OpCodes.Isinst, runtime.ObjectFields.Interface);
         il.Emit(OpCodes.Brfalse, tryDictLabel);
 
         il.Emit(OpCodes.Ldloc, optionsLocal);
-        il.Emit(OpCodes.Castclass, runtime.IHasFieldsInterface);
+        il.Emit(OpCodes.Castclass, runtime.ObjectFields.Interface);
         il.Emit(OpCodes.Ldstr, propName);
-        il.Emit(OpCodes.Callvirt, runtime.IHasFieldsGetProperty);
+        il.Emit(OpCodes.Callvirt, runtime.ObjectFields.GetProperty);
         il.Emit(OpCodes.Stloc, valueLocal);
         var afterGetLabel = il.DefineLabel();
         il.Emit(OpCodes.Br, afterGetLabel);

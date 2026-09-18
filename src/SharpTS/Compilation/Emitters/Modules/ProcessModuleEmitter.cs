@@ -221,9 +221,9 @@ public sealed class ProcessModuleEmitter : IBuiltInModuleEmitter
             case "throwDeprecation" or "traceDeprecation" or "noDeprecation"
                 or "sourceMapsEnabled" or "connected" or "channel" or "send" or "disconnect":
                 il.Emit(OpCodes.Call, ctx.Runtime!.Process.GetObject);
-                il.Emit(OpCodes.Castclass, ctx.Runtime!.IHasFieldsInterface);
+                il.Emit(OpCodes.Castclass, ctx.Runtime!.ObjectFields.Interface);
                 il.Emit(OpCodes.Ldstr, propertyName);
-                il.Emit(OpCodes.Callvirt, ctx.Runtime!.IHasFieldsGetProperty);
+                il.Emit(OpCodes.Callvirt, ctx.Runtime!.ObjectFields.GetProperty);
                 return true;
 
             // Resolve against the live process object. Its emitted type defines
@@ -232,9 +232,9 @@ public sealed class ProcessModuleEmitter : IBuiltInModuleEmitter
             case "getuid" or "geteuid" or "getgid" or "getegid"
                 or "getgroups" or "setuid" or "setgid":
                 il.Emit(OpCodes.Call, ctx.Runtime!.Process.GetObject);
-                il.Emit(OpCodes.Castclass, ctx.Runtime!.IHasFieldsInterface);
+                il.Emit(OpCodes.Castclass, ctx.Runtime!.ObjectFields.Interface);
                 il.Emit(OpCodes.Ldstr, propertyName);
-                il.Emit(OpCodes.Callvirt, ctx.Runtime!.IHasFieldsGetProperty);
+                il.Emit(OpCodes.Callvirt, ctx.Runtime!.ObjectFields.GetProperty);
                 return true;
 
             default:

@@ -14607,4 +14607,95 @@ public class StandaloneDllTests
     }
 
 
+    public static IEnumerable<object[]> ObjectFieldPrograms =>
+    [
+        new object[]
+        {
+            "literal_fields",
+            "const o:any={a:1,u:undefined,n:null};o[\"a\"]=3;o[\"b\"]=4;console.log(o.a,o.b,\"a\" in o,\"u\" in o,\"missing\" in o,o.u===undefined,o.n===null,o.missing===undefined);console.log(Object.keys(o).join(\",\"));\n",
+            "3 4 true true false true true true\na,u,n,b\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "generic_class_fields",
+            "class Box<T>{value:T;constructor(value:T){this.value=value;}get(){return this.value;}}const a:any=new Box<number>(3);const b:any=new Box<string>(\"text\");a[\"value\"]=5;b[\"value\"]=\"next\";console.log(a.value,a.get(),b.value,b.get(),\"value\" in a);\n",
+            "5 5 next next true\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "class_expression",
+            "const Box=class{value:number=2;read(){return this.value;}};const b:any=new Box();b[\"value\"]=6;console.log(b.value,b.read(),\"value\" in b,\"absent\" in b,Object.keys(b).join(\",\"));\n",
+            "6 6 true false value\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "inherited_fields",
+            "class Base{a:number=2;}class Child extends Base{b:number=3;}const c:any=new Child();c[\"a\"]=5;c[\"b\"]=7;console.log(c.a,c.b,\"a\" in c,\"b\" in c,Object.keys(c).join(\",\"));\n",
+            "5 7 true true a,b\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "record_array",
+            "const rows:{x:number,y:number}[]=[{x:1,y:2},{x:3,y:4}];let sum=0;for(const row of rows){sum+=row.x+row.y;}const chosen:any=rows[1];chosen[\"x\"]=8;console.log(sum,chosen.x,chosen.y,\"x\" in chosen,Object.keys(chosen).join(\",\"));\n",
+            "10 8 4 true x,y\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "descriptors",
+            "const o:any={a:1};let stored=2;Object.defineProperty(o,\"value\",{get(){return stored;},set(value:number){stored=value;},enumerable:true,configurable:true});o[\"value\"]=6;console.log(o.value,stored,\"value\" in o,Object.keys(o).join(\",\"));delete o.a;console.log(\"a\" in o,o.a===undefined);\n",
+            "6 6 true a,value\nfalse true\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "prototype_fields",
+            "const parent:any={base:3};const o:any=Object.create(parent);o[\"own\"]=4;console.log(o.base,o.own,\"base\" in o,\"own\" in o,Object.keys(o).join(\",\"),Object.getPrototypeOf(o)===parent);\n",
+            "3 4 true true own true\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "environment_fields",
+            "const key=\"SHARPTS_FIELD_CONTRACT_PROBE_1599\";process.env[key]=\"value\";console.log(process.env[key],key in process.env);delete process.env[key];console.log(process.env[key]===undefined,key in process.env);\n",
+            "value true\ntrue false\n",
+            false,
+            "",
+        },
+    ];
+
+    [Theory]
+    [MemberData(nameof(ObjectFieldPrograms))]
+    public void Isolated_ObjectFields_PreserveFieldsAndPropertyAccess(
+        string name, string source, string expected, bool hosted, string extraArguments)
+    {
+        using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var sourcePath = tempDir.CreateFile("main.ts", source);
+        var dllPath = tempDir.GetPath($"object_fields_{name}.dll");
+        var hosting = hosted ? " --target dll --hosted" : "";
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{sourcePath}\" -o \"{dllPath}\" --verify --standalone{hosting} {extraArguments}", tempDir.Path);
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        var references = GetAssemblyReferences(dllPath);
+        Assert.DoesNotContain("SharpTS", references);
+        Assert.Equal(hosted, references.Contains("SharpTS.Hosting.Abstractions"));
+        Assert.False(File.Exists(tempDir.GetPath("SharpTS.dll")));
+        if (!hosted)
+            Assert.Equal(expected, ExecuteCompiledDllIsolated(dllPath, timeoutMs: 30000,
+                verifyStandardError: error => Assert.Empty(error)));
+    }
+
+
 }

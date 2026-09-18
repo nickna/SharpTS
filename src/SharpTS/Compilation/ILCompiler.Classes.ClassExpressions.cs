@@ -159,7 +159,7 @@ public partial class ILCompiler
 
         // Implement $IHasFields interface for unified property access
         // All classes implement this interface (including derived classes)
-        EmitTypeDefinitions.AddInterfaceImplementation(typeBuilder, _runtime.IHasFieldsInterface);
+        EmitTypeDefinitions.AddInterfaceImplementation(typeBuilder, _runtime.ObjectFields.Interface);
 
         // Initialize tracking dictionaries for this class expression
         _classExprs.BackingFields[classExpr] = [];

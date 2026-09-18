@@ -1340,7 +1340,7 @@ public partial class RuntimeEmitter
             "$Process",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             runtime.EventEmitter.Type);
-        EmitTypeDefinitions.AddInterfaceImplementation(tb, runtime.IHasFieldsInterface);
+        EmitTypeDefinitions.AddInterfaceImplementation(tb, runtime.ObjectFields.Interface);
 
         runtime.Process.FieldsField = tb.DefineField("_fields", _types.DictionaryStringObject, FieldAttributes.Private);
         var instanceField = tb.DefineField("_instance", tb, FieldAttributes.Private | FieldAttributes.Static);
@@ -1415,7 +1415,7 @@ public partial class RuntimeEmitter
         }
         var fieldsProp = tb.DefineProperty("Fields", PropertyAttributes.None, _types.DictionaryStringObject, null);
         fieldsProp.SetGetMethod(fieldsGetter);
-        tb.DefineMethodOverride(fieldsGetter, runtime.IHasFieldsFieldsGetter);
+        tb.DefineMethodOverride(fieldsGetter, runtime.ObjectFields.FieldsGetter);
 
         // GetProperty(string) — expando → property → method wrapper → null
         var getProp = tb.DefineMethod("GetProperty",
@@ -1481,7 +1481,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
             il.Emit(OpCodes.Ret);
         }
-        tb.DefineMethodOverride(getProp, runtime.IHasFieldsGetProperty);
+        tb.DefineMethodOverride(getProp, runtime.ObjectFields.GetProperty);
 
         // SetProperty(string, object) — writable property → setter; else expando
         var setProp = tb.DefineMethod("SetProperty",
@@ -1519,7 +1519,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item"));
             il.Emit(OpCodes.Ret);
         }
-        tb.DefineMethodOverride(setProp, runtime.IHasFieldsSetProperty);
+        tb.DefineMethodOverride(setProp, runtime.ObjectFields.SetProperty);
 
         // HasProperty(string)
         var hasProp = tb.DefineMethod("HasProperty",
@@ -1561,7 +1561,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldc_I4_1);
             il.Emit(OpCodes.Ret);
         }
-        tb.DefineMethodOverride(hasProp, runtime.IHasFieldsHasProperty);
+        tb.DefineMethodOverride(hasProp, runtime.ObjectFields.HasProperty);
     }
 
     /// <summary>
