@@ -432,6 +432,18 @@ wrappers retain separate feature selections; Map and Set remain selected by
 metadata availability. Tests cover missing declarations, reuse, disabled
 optional metadata, receiver identity, zero-argument fallback and saved output.
 
+Required `ResourceDisposal` owns the using-declaration disposal helper. Its
+emitter receives only the destination type, owner and exact indexed-read,
+undefined-type and method-invocation dependencies. Completion follows the
+original helper emission point. Missing/null/duplicate declarations are rejected;
+an omitted declaration can be supplied after failed completion, and completed
+metadata is frozen. Lookup timing, null/missing handling, managed `IDisposable`
+fallback, receiver binding, signature, locals, instructions and declaration order
+remain unchanged. Tests cover lifecycle repair/freeze, injected dependencies,
+fresh ownership across reused emitters, symbol precedence, managed fallback,
+standalone executions and hosted declarations. Shared reflection metadata and
+local builders remain within the complete audit.
+
 Required `EventSubscriptions` owns the emitted .NET event registry field and
 add/remove helpers. The main helper receives its destination type, owner and
 static initializer; the two method helpers receive the registry field directly.

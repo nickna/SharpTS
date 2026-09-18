@@ -3417,7 +3417,7 @@ public partial class ILEmitter
             IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.Symbols.Dispose);
 
             // Call $Runtime.DisposeResource(resource, Symbol.dispose)
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.DisposeResource);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.ResourceDisposal.Dispose);
         }
     }
 

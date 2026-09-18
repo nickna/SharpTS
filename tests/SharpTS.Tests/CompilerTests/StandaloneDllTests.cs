@@ -15095,4 +15095,127 @@ public class StandaloneDllTests
                 verifyStandardError: error => Assert.Empty(error), standardInput: ""));
     }
 
+    public static IEnumerable<object[]> ResourceDisposalPrograms =>
+    [
+        new object[]
+        {
+            "scoped_order",
+            "{using a={ [Symbol.dispose](){console.log(\"a\");} };using b={ [Symbol.dispose](){console.log(\"b\");} };console.log(\"body\");}console.log(\"after\");\n",
+            "",
+            "body\nb\na\nafter\n",
+            false,
+        },
+        new object[]
+        {
+            "nullish",
+            "{using a:any=null;using b:any=undefined;console.log(\"body\");}console.log(\"after\");\n",
+            "",
+            "body\nafter\n",
+            false,
+        },
+        new object[]
+        {
+            "nested",
+            "{using a={ [Symbol.dispose](){console.log(\"outer\");} };{using b={ [Symbol.dispose](){console.log(\"inner\");} };console.log(\"nested\");}console.log(\"outer body\");}\n",
+            "",
+            "nested\ninner\nouter body\nouter\n",
+            false,
+        },
+        new object[]
+        {
+            "function_return",
+            "function work():number{using r={ [Symbol.dispose](){console.log(\"dispose\");} };return 7;}console.log(work());\n",
+            "",
+            "dispose\n7\n",
+            false,
+        },
+        new object[]
+        {
+            "thrown_body",
+            "try{{using r={ [Symbol.dispose](){console.log(\"dispose\");} };throw new Error(\"body\");}}catch(e){console.log((e as any).message);}\n",
+            "",
+            "dispose\nbody\n",
+            false,
+        },
+        new object[]
+        {
+            "receiver",
+            "{using r={ value:7,[Symbol.dispose](){console.log(this.value);this.value=9;} };console.log(r.value);}console.log(\"done\");\n",
+            "",
+            "7\n7\ndone\n",
+            false,
+        },
+        new object[]
+        {
+            "data_descriptor",
+            "const r:any={value:4};Object.defineProperty(r,Symbol.dispose,{value:function(){console.log(this.value);}});{using x=r;console.log(\"body\");}\n",
+            "",
+            "body\n4\n",
+            false,
+        },
+        new object[]
+        {
+            "thrown_disposer",
+            "try{{using r={ [Symbol.dispose](){throw new Error(\"dispose\");} };console.log(\"body\");}}catch(e){console.log((e as any).message);}\n",
+            "",
+            "body\ndispose\n",
+            false,
+        },
+        new object[]
+        {
+            "hosted_dispose",
+            "export function work():number{using r={ [Symbol.dispose](){} };return 4;}\n",
+            "",
+            "",
+            true,
+        },
+        new object[]
+        {
+            "hosted_receiver",
+            "export function work(value:number):number{using r={value:value,[Symbol.dispose](){this.value=0;}};return r.value;}\n",
+            "",
+            "",
+            true,
+        },
+        new object[]
+        {
+            "loop_finally_control",
+            "for(let i=0;i<3;i++){try{if(i===0)continue;if(i===1)break;}finally{console.log(i);}}console.log(\"after\");\n",
+            "",
+            "0\n1\nafter\n",
+            false,
+        },
+        new object[]
+        {
+            "generator_finally_control",
+            "function* values(){try{yield 1;return 2;}finally{console.log(\"dispose\");}}const g=values();console.log(g.next().value);console.log(g.return(9).value);\n",
+            "",
+            "1\ndispose\n9\n",
+            false,
+        },
+    ];
+
+    [Theory]
+    [MemberData(nameof(ResourceDisposalPrograms))]
+    public void Isolated_ResourceDisposal_PreservesCleanupReceiversAndDeployment(
+        string name, string source, string librarySource, string expected, bool hosted)
+    {
+        using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        if (librarySource.Length != 0) tempDir.CreateFile("lib.ts", librarySource);
+        var sourcePath = tempDir.CreateFile("main.ts", source);
+        var dllPath = tempDir.GetPath($"resource_disposal_{name}.dll");
+        var hosting = hosted ? " --target dll --hosted" : "";
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{sourcePath}\" -o \"{dllPath}\" --verify --standalone{hosting}", tempDir.Path);
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        var references = GetAssemblyReferences(dllPath);
+        Assert.DoesNotContain("SharpTS", references);
+        Assert.Equal(hosted, references.Contains("SharpTS.Hosting.Abstractions"));
+        Assert.False(File.Exists(tempDir.GetPath("SharpTS.dll")));
+        if (!hosted)
+            Assert.Equal(expected, ExecuteCompiledDllIsolated(dllPath, timeoutMs: 30000,
+                verifyStandardError: error => Assert.Empty(error), standardInput: ""));
+    }
+
 }
