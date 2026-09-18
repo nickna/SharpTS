@@ -381,11 +381,8 @@ public class EmittedRuntime
 
 
 
-    // @DotNetType event subscription registry (compiled mode — see
-    // RuntimeEmitter.EventSubscriptions.cs).
-    public FieldBuilder EventSubscriptionsField { get; set; } = null!;
-    public MethodBuilder AddEventSubscription { get; set; } = null!;
-    public MethodBuilder RemoveEventSubscription { get; set; } = null!;
+    /// <summary>Required .NET event-subscription metadata for this compilation.</summary>
+    public EmittedEventSubscriptionRuntime EventSubscriptions { get; } = new();
 
 
     // Resource disposal for using declarations

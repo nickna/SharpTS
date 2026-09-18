@@ -432,6 +432,19 @@ wrappers retain separate feature selections; Map and Set remain selected by
 metadata availability. Tests cover missing declarations, reuse, disabled
 optional metadata, receiver identity, zero-argument fallback and saved output.
 
+Required `EventSubscriptions` owns the emitted .NET event registry field and
+add/remove helpers. The main helper receives its destination type, owner and
+static initializer; the two method helpers receive the registry field directly.
+Completion follows the original emission point. Checked declarations reject
+missing, null and duplicate handles; a failed completion can be repaired by
+supplying omitted handles, and completed metadata is frozen. The private static
+readonly registry, initializer position, signatures, declaration order, locking,
+handler identity and generated instructions remain unchanged. Tests cover the
+lifecycle, independent helper emission, fresh registries across reused emitters,
+duplicate/removal/re-add behavior and standalone/hosted deployment. Dynamic
+event names retain their existing runtime-backed bridge. Shared reflection
+lookups and local construction metadata remain within the complete audit.
+
 Required `Namespaces` owns the emitted namespace type, constructor and member
 get/set methods. Its helper receives only the destination module and namespace
 owner; completion follows the original type-creation point. Checked declarations

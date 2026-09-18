@@ -18,7 +18,7 @@ public partial class RuntimeEmitter
     /// simpler than emitting a hash-based dictionary without collapsing into SharpTS
     /// type dependencies.
     /// </remarks>
-    internal void EmitEventSubscriptionHelpers(TypeBuilder typeBuilder, EmittedRuntime runtime, ILGenerator cctorIL)
+    internal void EmitEventSubscriptionHelpers(TypeBuilder typeBuilder, EmittedEventSubscriptionRuntime subscriptions, ILGenerator cctorIL)
     {
         // Static field: List<object?[]> _eventSubscriptions
         var listType = _types.MakeGenericType(_types.ListOpen, _types.ObjectArray);
@@ -26,14 +26,14 @@ public partial class RuntimeEmitter
             "_eventSubscriptions",
             listType,
             FieldAttributes.Private | FieldAttributes.Static | FieldAttributes.InitOnly);
-        runtime.EventSubscriptionsField = field;
+        subscriptions.Entries = field;
 
         // cctor: _eventSubscriptions = new List<object?[]>();
         cctorIL.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(listType));
         cctorIL.Emit(OpCodes.Stsfld, field);
 
-        runtime.AddEventSubscription = EmitAddEventSubscription(typeBuilder, runtime, listType);
-        runtime.RemoveEventSubscription = EmitRemoveEventSubscription(typeBuilder, runtime, listType);
+        subscriptions.Add = EmitAddEventSubscription(typeBuilder, field, listType);
+        subscriptions.Remove = EmitRemoveEventSubscription(typeBuilder, field, listType);
     }
 
     /// <summary>
@@ -41,7 +41,7 @@ public partial class RuntimeEmitter
     /// Returns false if an entry already exists for (owner, name, fn) — idempotent, matches
     /// the interpreter's <c>DotNetEventBinder</c> semantics.
     /// </summary>
-    private MethodBuilder EmitAddEventSubscription(TypeBuilder typeBuilder, EmittedRuntime runtime, Type listType)
+    private MethodBuilder EmitAddEventSubscription(TypeBuilder typeBuilder, FieldBuilder entries, Type listType)
     {
         var method = typeBuilder.DefineMethod(
             "AddEventSubscription",
@@ -58,7 +58,7 @@ public partial class RuntimeEmitter
         var entryLocal = il.DeclareLocal(_types.ObjectArray);
 
         // list = _eventSubscriptions
-        il.Emit(OpCodes.Ldsfld, runtime.EventSubscriptionsField);
+        il.Emit(OpCodes.Ldsfld, entries);
         il.Emit(OpCodes.Stloc, listLocal);
 
         // Monitor.Enter(list, ref lockTaken)
@@ -183,7 +183,7 @@ public partial class RuntimeEmitter
     /// Returns the previously-registered Delegate for (owner, name, fn) and removes the entry,
     /// or null if none was registered.
     /// </summary>
-    private MethodBuilder EmitRemoveEventSubscription(TypeBuilder typeBuilder, EmittedRuntime runtime, Type listType)
+    private MethodBuilder EmitRemoveEventSubscription(TypeBuilder typeBuilder, FieldBuilder entries, Type listType)
     {
         var method = typeBuilder.DefineMethod(
             "RemoveEventSubscription",
@@ -203,7 +203,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Stloc, resultLocal);
 
-        il.Emit(OpCodes.Ldsfld, runtime.EventSubscriptionsField);
+        il.Emit(OpCodes.Ldsfld, entries);
         il.Emit(OpCodes.Stloc, listLocal);
 
         il.Emit(OpCodes.Ldc_I4_0);

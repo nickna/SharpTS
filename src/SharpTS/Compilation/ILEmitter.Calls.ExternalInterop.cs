@@ -1021,7 +1021,7 @@ public partial class ILEmitter
             IL.Emit(OpCodes.Ldstr, eventName);
             IL.Emit(OpCodes.Ldloc, tsFuncLocal);
             IL.Emit(OpCodes.Ldloc, delegateLocal);
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.AddEventSubscription);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.EventSubscriptions.Add);
 
             // If the subscription was a duplicate (add returned false), skip the actual AddEventHandler.
             var skipAddLabel = IL.DefineLabel();
@@ -1039,7 +1039,7 @@ public partial class ILEmitter
             EmitPushOwner(receiverLocal, externalType, isStatic);
             IL.Emit(OpCodes.Ldstr, eventName);
             IL.Emit(OpCodes.Ldloc, tsFuncLocal);
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.RemoveEventSubscription);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.EventSubscriptions.Remove);
             IL.Emit(OpCodes.Stloc, delegateLocal);
 
             var skipRemoveLabel = IL.DefineLabel();
