@@ -17,6 +17,10 @@ namespace SharpTS.Compilation;
 /// <seealso cref="ILEmitter"/>
 public class EmittedRuntime
 {
+    /// <summary>Required captured iterator-next lookup and invocation declarations.</summary>
+    public EmittedIteratorRecordRuntime IteratorRecords { get; } = new();
+
+
     /// <summary>Optional async-generator interfaces with independently selected continuations and sync adaptation.</summary>
     public EmittedAsyncGeneratorRuntime? AsyncGenerators { get; private set; }
 
@@ -567,10 +571,6 @@ public class EmittedRuntime
     // Iterator protocol helper methods
     public MethodBuilder GetIteratorFunction { get; set; } = null!;              // Returns iterator function or $Undefined when absent
     public MethodBuilder InvokeIteratorNext { get; set; } = null!;              // Calls next() on iterator (no sent value)
-    public MethodBuilder GetIteratorNextMethod { get; set; } = null!;
-    public MethodBuilder InvokeCapturedIteratorNext { get; set; } = null!;
-    public MethodBuilder InvokeCapturedIteratorNextWithSent { get; set; } = null!;
-    public MethodBuilder RequireIteratorObject { get; set; } = null!;
     public MethodBuilder InvokeIteratorNextWithSent { get; set; } = null!;      // Calls next(sent) forwarding resume value (#503)
     public MethodBuilder GetIteratorDone { get; set; } = null!;                 // Extracts done from result
     public MethodBuilder GetIteratorValue { get; set; } = null!;                // Extracts value from result

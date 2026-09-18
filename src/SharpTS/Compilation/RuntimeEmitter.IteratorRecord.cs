@@ -40,17 +40,24 @@ public partial class RuntimeEmitter
         }
     }
 
-    private void EmitCapturedIteratorMethods(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private readonly record struct CapturedIteratorInputs(
+        Type UndefinedType,
+        EmittedSymbolRuntime Symbols,
+        EmittedObjectReadRuntime ObjectRead,
+        EmittedInvocationRuntime Invocation,
+        EmittedErrorRuntime Errors
+    );
+
+    private void EmitCapturedIteratorMethods(TypeBuilder typeBuilder, EmittedIteratorRecordRuntime iteratorRecords, CapturedIteratorInputs inputs)
     {
         var require = typeBuilder.DefineMethod("RequireIteratorObject",
             MethodAttributes.Public | MethodAttributes.Static, _types.Object, [_types.Object]);
-        runtime.RequireIteratorObject = require;
         var il = require.GetILGenerator();
         var invalid = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Brfalse, invalid);
-        foreach (var primitive in new Type[] { runtime.UndefinedType, _types.Double,
-            _types.Boolean, _types.String, _types.BigInteger, runtime.Symbols.Type })
+        foreach (var primitive in new Type[] { inputs.UndefinedType, _types.Double,
+            _types.Boolean, _types.String, _types.BigInteger, inputs.Symbols.Type })
         {
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Isinst, primitive);
@@ -59,20 +66,20 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(invalid);
-        GuestErrorEmitter.ThrowTypeError(il, runtime, "Iterator protocol requires an object");
+        GuestErrorEmitter.ThrowError(il, inputs.Errors.CreateException, inputs.Errors.TypeErrorConstructor, "Iterator protocol requires an object");
 
         var getNext = typeBuilder.DefineMethod("GetIteratorNextMethod",
             MethodAttributes.Public | MethodAttributes.Static, _types.Object, [_types.Object]);
-        runtime.GetIteratorNextMethod = getNext;
+        iteratorRecords.NextMethod = getNext;
         il = getNext.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Call, require);
         il.Emit(OpCodes.Ldstr, "next");
-        il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
+        il.Emit(OpCodes.Call, inputs.ObjectRead.Property);
         il.Emit(OpCodes.Ret);
 
-        runtime.InvokeCapturedIteratorNext = EmitCall("InvokeCapturedIteratorNext", false);
-        runtime.InvokeCapturedIteratorNextWithSent = EmitCall("InvokeCapturedIteratorNextWithSent", true);
+        iteratorRecords.InvokeNext = EmitCall("InvokeCapturedIteratorNext", false);
+        iteratorRecords.InvokeNextWithSent = EmitCall("InvokeCapturedIteratorNextWithSent", true);
 
         MethodBuilder EmitCall(string name, bool hasSent)
         {
@@ -90,11 +97,11 @@ public partial class RuntimeEmitter
                 callIl.Emit(OpCodes.Ldc_I4_0);
                 callIl.Emit(OpCodes.Ldarg_2);
                 callIl.Emit(OpCodes.Stelem_Ref);
-                callIl.Emit(OpCodes.Call, runtime.Invocation.Method);
+                callIl.Emit(OpCodes.Call, inputs.Invocation.Method);
             }
             else
             {
-                callIl.Emit(OpCodes.Call, runtime.Invocation.Method0);
+                callIl.Emit(OpCodes.Call, inputs.Invocation.Method0);
             }
             callIl.Emit(OpCodes.Call, require);
             callIl.Emit(OpCodes.Ret);

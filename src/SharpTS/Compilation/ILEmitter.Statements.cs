@@ -2344,7 +2344,7 @@ public partial class ILEmitter
             // by a later next call or by the loop body.
             var nextMethodLocal = IL.DeclareLocal(_ctx.Types.Object);
             IL.Emit(OpCodes.Ldloc, iteratorObjLocal);
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.GetIteratorNextMethod);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.IteratorRecords.NextMethod);
             IL.Emit(OpCodes.Stloc, nextMethodLocal);
 
             // Loop variable
@@ -2360,7 +2360,7 @@ public partial class ILEmitter
             // close region and therefore do not trigger IteratorClose.
             IL.Emit(OpCodes.Ldloc, iteratorObjLocal);
             IL.Emit(OpCodes.Ldloc, nextMethodLocal);
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.InvokeCapturedIteratorNext);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.IteratorRecords.InvokeNext);
             IL.Emit(OpCodes.Stloc, resultLocal);
             IL.Emit(OpCodes.Ldloc, resultLocal);
             IL.Emit(OpCodes.Call, _ctx.Runtime!.GetIteratorDone);
