@@ -315,8 +315,8 @@ public partial class RuntimeEmitter
         var argsLocal = il.DeclareLocal(_types.ObjectArray);
         il.Emit(OpCodes.Stloc, argsLocal);
 
-        // Call mapFn with thisArg via InvokeMethodValue(thisArg, fn, args).
-        // Pre-fix InvokeValue passed no this binding, so Array.from(items, fn,
+        // Call mapFn with thisArg via Invocation.Method(thisArg, fn, args).
+        // Pre-fix Invocation.Value passed no this binding, so Array.from(items, fn,
         // thisArg) ignored the thisArg per ECMA-262 23.1.2.1 step 5.b.
         il.Emit(OpCodes.Ldarg, (short)4);  // thisArg
         il.Emit(OpCodes.Ldarg_1);  // mapFn

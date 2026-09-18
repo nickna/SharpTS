@@ -216,13 +216,13 @@ public partial class RuntimeEmitter
 
     /// <summary>
     /// Emits IL to create callback args array [list[i], (double)i, list],
-    /// invoke the callback via InvokeMethodValue with undefined thisArg,
+    /// invoke the callback via Invocation.Method with undefined thisArg,
     /// and leave the result on the stack.
     /// Expects: arg0 = list (List&lt;object&gt;), arg1 = callback (object).
     /// </summary>
     /// <remarks>
-    /// Must dispatch through <see cref="EmittedRuntime.InvokeMethodValue"/> (not
-    /// <see cref="EmittedRuntime.InvokeValue"/>) so that callbacks compiled from
+    /// Must dispatch through <see cref="EmittedInvocationRuntime.Method"/> (not
+    /// <see cref="EmittedInvocationRuntime.Value"/>) so that callbacks compiled from
     /// <c>function(…){…}</c> expressions (which carry a synthetic <c>__this</c>
     /// first parameter) have the <c>__this</c> slot filled by the runtime rather
     /// than absorbing the first real argument (list[i]) into it. ES spec: when
@@ -244,7 +244,7 @@ public partial class RuntimeEmitter
     /// (~32 bytes × 1M = ~32 MB of GC pressure on Map alone).
     /// </summary>
     /// <remarks>
-    /// Safety: <c>InvokeMethodValue</c> ultimately dispatches to
+    /// Safety: <c>Invocation.Method</c> ultimately dispatches to
     /// <c>MethodInfo.Invoke(target, args)</c>, which reads values out of the
     /// array onto the call stack and does NOT retain a reference to the args
     /// array. Compiled function bodies build their own <c>arguments</c> object
