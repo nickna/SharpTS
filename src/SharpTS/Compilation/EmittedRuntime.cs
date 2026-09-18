@@ -17,6 +17,10 @@ namespace SharpTS.Compilation;
 /// <seealso cref="ILEmitter"/>
 public class EmittedRuntime
 {
+    /// <summary>Required iterable collection declarations, available before their bodies are emitted.</summary>
+    public EmittedIteratorCollectionRuntime IteratorCollection { get; } = new();
+
+
     /// <summary>Required iterator lookup, result, close and dynamic protocol declarations.</summary>
     public EmittedIteratorProtocolRuntime IteratorProtocol { get; } = new();
 
@@ -570,8 +574,6 @@ public class EmittedRuntime
 
 
     // Iterator protocol helper methods
-    public MethodBuilder IterateToList { get; set; } = null!;                   // Converts any iterable to List<object>
-    public MethodBuilder IterateIntoList { get; set; } = null!;
 
 
 

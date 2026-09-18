@@ -1630,7 +1630,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldelem_Ref);
         il.Emit(OpCodes.Ldarg_1);  // iteratorSymbol
         il.Emit(OpCodes.Ldarg_2);  // runtimeType
-        il.Emit(OpCodes.Call, runtime.IterateToList);
+        il.Emit(OpCodes.Call, runtime.IteratorCollection.ToList);
         il.Emit(OpCodes.Stloc, iteratedLocal);
 
         // result.AddRange(iterated)

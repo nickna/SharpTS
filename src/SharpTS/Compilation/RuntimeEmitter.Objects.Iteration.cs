@@ -92,7 +92,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Call, runtime.IterateToList);
+        il.Emit(OpCodes.Call, runtime.IteratorCollection.ToList);
         il.Emit(OpCodes.Newobj, runtime.ArrayStorage.Ctor);
         il.Emit(OpCodes.Ret);
 

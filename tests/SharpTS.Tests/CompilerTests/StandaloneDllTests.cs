@@ -3708,6 +3708,120 @@ public class StandaloneDllTests
             verifyStandardError: error => Assert.Empty(error)));
     }
 
+    public static IEnumerable<object[]> IteratorCollectionPrograms =>
+    [
+        new object[]
+        {
+            "collection_sparse_spread",
+            "const a=[1,,3];const b=[0,...a,4];console.log(b.length,b.join(\",\"),b[2]===undefined);\n",
+            "5 0,1,,3,4 true\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "collection_array_override",
+            "const a:any=[1,2];a[Symbol.iterator]=function*(){yield 8;yield 9;};console.log([...a].join(\",\"));function collect(...xs:any[]){console.log(xs.join(\",\"));}collect(0,...a,3);\n",
+            "8,9\n0,8,9,3\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "collection_live_array_iterator",
+            "const a=[1,2];const it:any=a.values();const x=it.next();a.push(3);const y=it.next();const z=it.next();console.log(x.value,y.value,z.value,it.next().done);\n",
+            "1 2 3 true\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "collection_map_null",
+            "const m:any=new Map();m.set(null,1);m.set(\"x\",2);console.log([...m].map((p:any)=>String(p[0])+\":\"+p[1]).join(\",\"));\n",
+            "null:1,x:2\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "collection_typed_buffer",
+            "console.log([...new Uint8Array([3,4])].join(\",\"),[...Buffer.from([5,6])].join(\",\"));\n",
+            "3,4 5,6\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "collection_captured_next",
+            "let reads=0;let calls=0;const it:any={[Symbol.iterator](){return this;},get next(){reads++;return function(){calls++;return {value:calls,done:calls>2};};}};console.log([...it].join(\",\"),reads,calls);\n",
+            "1,2 1 3\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "collection_completion_value",
+            "const it:any={i:0,[Symbol.iterator](){return this;},next(){this.i++;if(this.i>1)return {done:true,get value(){throw new Error(\"terminal\");}};return {value:4,done:false};}};console.log([...it].join(\",\"));\n",
+            "4\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "collection_argument_append",
+            "function collect(...xs:any[]){console.log(xs.length,xs.join(\",\"));}const a=[1,2];const b=[3,4];collect(0,...a,9,...b,8);console.log(a.join(\",\"),b.join(\",\"));\n",
+            "7 0,1,2,9,3,4,8\n1,2 3,4\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "collection_hole_direct_control",
+            "const a:any[]=[1,,3];let reads=0;Object.defineProperty(a,\"1\",{get(){reads++;return 8;}});console.log(a[1],reads);\n",
+            "8 1\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "collection_hole_values_control",
+            "const a:any[]=[1,,3];let reads=0;Object.defineProperty(a,\"1\",{get(){reads++;return 8;}});console.log(Array.from(a.values()).join(\",\"),reads);\n",
+            "1,8,3 1\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "collection_unicode_units_control",
+            "const a=[...\"A\ud83d\ude00B\"];console.log(a.length,a[1].length,a[1].charCodeAt(0),a[1].charCodeAt(1));function collect(...xs:any[]){console.log(xs.length,xs[1].length,xs[1].charCodeAt(0),xs[1].charCodeAt(1));}collect(0,...\"\ud83d\ude00B\",9);\n",
+            "3 2 55357 56832\n4 2 55357 56832\n",
+            false,
+            "",
+        },
+    ];
+
+    [Theory]
+    [MemberData(nameof(IteratorCollectionPrograms))]
+    public void Isolated_IteratorCollection_PreservesSpreadAppendAndLiveArrayIteration(
+        string name, string source, string expected, bool hosted, string extraArguments)
+    {
+        using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var sourcePath = tempDir.CreateFile("main.ts", source);
+        var dllPath = tempDir.GetPath($"iterator_collection_{name}.dll");
+        var hosting = hosted ? " --target dll --hosted" : "";
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{sourcePath}\" -o \"{dllPath}\" --verify --standalone{hosting} {extraArguments}", tempDir.Path);
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        var references = GetAssemblyReferences(dllPath);
+        Assert.DoesNotContain("SharpTS", references);
+        Assert.Equal(hosted, references.Contains("SharpTS.Hosting.Abstractions"));
+        Assert.False(File.Exists(tempDir.GetPath("SharpTS.dll")));
+        if (!hosted)
+            Assert.Equal(expected, ExecuteCompiledDllIsolated(dllPath, timeoutMs: 30000,
+                verifyStandardError: error => Assert.Empty(error)));
+    }
+
     public static IEnumerable<object[]> IteratorProtocolPrograms =>
     [
         new object[]

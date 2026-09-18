@@ -330,6 +330,17 @@ carrier; the strict SyntaxError helper retains its existing CLR exception repres
 Exception wrapping follows supplied optional Promise metadata. Error-cause Proxy handling
 receives six explicit invocation/delegate handles through the shared reflection bridge.
 
+Required `IteratorCollection` owns iterable-to-list and append-to-list method
+handles. Both remain forward-declared before earlier consumers, and completion
+follows both bodies at their original orchestration boundary. Scoped helpers
+receive exact peer metadata, explicit array-mutation selection, optional
+TypedArray implementation, Map availability and the fine-selected Buffer
+component. Dense appending receives array storage and the undefined sentinel.
+The live array-iterator helper keeps its ArrayOperations owner and receives
+only Arguments metadata and indexed-read dependencies. Collection fast paths,
+Unicode handling, captured next, completion-value behavior and local iterator
+construction remain unchanged.
+
 Required `IteratorProtocol` owns iterator lookup, next invocation, result
 reading, close and dynamic protocol-call declarations. Its early dynamic-call
 declaration stays available before the basic iterator helpers; the component

@@ -1044,7 +1044,7 @@ public abstract partial class ExpressionEmitterBase
                 IL.Emit(OpCodes.Call, Types.TypeGetTypeFromHandle);
                 IL.Emit(OpCodes.Ldloc, target);
                 IL.Emit(OpCodes.Castclass, Types.ListOfObject);
-                IL.Emit(OpCodes.Call, Ctx.Runtime.IterateIntoList);
+                IL.Emit(OpCodes.Call, Ctx.Runtime.IteratorCollection.IntoList);
                 IL.Emit(OpCodes.Pop);
             }
             else
