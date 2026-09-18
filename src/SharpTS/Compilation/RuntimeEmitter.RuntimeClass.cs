@@ -2506,7 +2506,10 @@ public partial class RuntimeEmitter
         EmitStringNormalize(typeBuilder, runtime.Strings, runtime.Errors.CreateException, runtime.Errors.RangeErrorConstructor, runtime.StringCoercion.ToJsString,
             runtime.Sentinels.UndefinedType);
         EmitStringLocaleCompare(typeBuilder, runtime.Strings);
-        EmitStringTryInvokeSymbolMethod(typeBuilder, runtime);
+        EmitStringTryInvokeSymbolMethod(typeBuilder, runtime.Strings,
+            new StringSymbolDispatchInputs(runtime.Symbols.Type, runtime.Sentinels.UndefinedType,
+                runtime.Operators.TypeOf, runtime.RegExps.Implementation?.Type,
+                runtime.Symbols.GetStorage, runtime.ObjectRead.Index, runtime.Invocation.Method));
         // RegExp methods emitted before String.prototype populate so the
         // spec-correct match/matchAll/search/split slots can reference the
         // regex-aware helpers (Stage 1 of issue #91 follow-up). Moved up
@@ -2531,7 +2534,7 @@ public partial class RuntimeEmitter
                     runtime.FunctionAttributes.PadUndefinedCtor,
                     runtime.ObjectWrite.Property,
                     runtime.StringCoercion,
-                    runtime.StringTryInvokeSymbolMethod,
+                    runtime.Strings.TryInvokeSymbolMethod,
                     runtime.Symbols,
                     runtime.FunctionValues.GetMethodInfo,
                     runtime.FunctionValues.InvokeWithThis,

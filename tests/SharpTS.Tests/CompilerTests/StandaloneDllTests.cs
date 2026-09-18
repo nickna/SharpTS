@@ -15409,4 +15409,142 @@ public class StandaloneDllTests
                 verifyStandardError: error => Assert.Empty(error), standardInput: ""));
     }
 
+    public static IEnumerable<object[]> StringSymbolDispatchPrograms =>
+    [
+        new object[]
+        {
+            "native_protocols",
+            "console.log(\"aba\".match(/a/g)!.join(\",\"),\"abc\".search(/b/),\"abc\".replace(/a/,\"X\"),\"aba\".split(/b/).join(\"|\"));\n",
+            "a,a 1 Xbc a|a\n",
+            false,
+        },
+        new object[]
+        {
+            "custom_match",
+            "const value:any={tag:\"M\",[Symbol.match](s:string){return this.tag+\":\"+s;}};console.log(\"abc\".match(value));\n",
+            "M:abc\n",
+            false,
+        },
+        new object[]
+        {
+            "custom_search",
+            "const value:any={[Symbol.search](s:string){return s.length+4;}};console.log(\"abc\".search(value));\n",
+            "7\n",
+            false,
+        },
+        new object[]
+        {
+            "custom_replace",
+            "const value:any={[Symbol.replace](s:string,r:string){return s+\":\"+r;}};console.log(\"abc\".replace(value,\"X\"));\n",
+            "abc:X\n",
+            false,
+        },
+        new object[]
+        {
+            "custom_split",
+            "const value:any={[Symbol.split](s:string,limit:number){return [s,String(limit)];}};console.log(\"abc\".split(value,2).join(\"|\"));\n",
+            "abc|2\n",
+            false,
+        },
+        new object[]
+        {
+            "null_method",
+            "const value:any={toString(){return \"b\";},[Symbol.match]:null};console.log(\"abc\".match(value)![0]);\n",
+            "b\n",
+            false,
+        },
+        new object[]
+        {
+            "undefined_method",
+            "const value:any={toString(){return \"b\";},[Symbol.search]:undefined};console.log(\"abc\".search(value));\n",
+            "1\n",
+            false,
+        },
+        new object[]
+        {
+            "noncallable_method",
+            "const value:any={[Symbol.match]:17};try{console.log(\"abc\".match(value));}catch(e){console.log(e instanceof TypeError);}\n",
+            "true\n",
+            false,
+        },
+        new object[]
+        {
+            "getter_order",
+            "let order=\"\";const value:any={};Object.defineProperty(value,Symbol.match,{get(){order+=\"get>\";return function(s:string){order+=\"call>\";return s+\"!\";};}});console.log(\"abc\".match(value),order);\n",
+            "abc! get>call>\n",
+            false,
+        },
+        new object[]
+        {
+            "getter_error",
+            "const value:any={};Object.defineProperty(value,Symbol.search,{get(){throw \"getter\";}});try{console.log(\"abc\".search(value));}catch(e){console.log(e);}\n",
+            "getter\n",
+            false,
+        },
+        new object[]
+        {
+            "prototype_override",
+            "RegExp.prototype[Symbol.match]=function(s:string):any{return [\"hook\",s];};console.log(\"abc\".match(/b/)!.join(\",\"));\n",
+            "hook,abc\n",
+            false,
+        },
+        new object[]
+        {
+            "boxed_prototype",
+            "(Number.prototype as any)[Symbol.search]=function(s:string){return s.length+4;};console.log(\"abc\".search(new Number(1) as any));\n",
+            "7\n",
+            false,
+        },
+        new object[]
+        {
+            "function_candidate",
+            "const value:any=function(){};value[Symbol.match]=function(s:string){return this===value?s+\"!\":\"wrong\";};console.log(\"abc\".match(value));\n",
+            "abc!\n",
+            false,
+        },
+        new object[]
+        {
+            "undefined_result",
+            "const value:any={[Symbol.match](s:string){return undefined;}};console.log(\"abc\".match(value));\n",
+            "undefined\n",
+            false,
+        },
+        new object[]
+        {
+            "hosted_custom",
+            "export function match(s:string,value:any){return s.match(value);}\n",
+            "",
+            true,
+        },
+        new object[]
+        {
+            "hosted_native",
+            "export function split(s:string){return s.split(/b/);}\n",
+            "",
+            true,
+        },
+    ];
+
+    [Theory]
+    [MemberData(nameof(StringSymbolDispatchPrograms))]
+    public void Isolated_StringSymbolDispatch_PreservesProtocolsAndDeployment(
+        string name, string source, string expected, bool hosted)
+    {
+        using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var sourcePath = tempDir.CreateFile("main.ts", source);
+        var dllPath = tempDir.GetPath($"string_symbol_{name}.dll");
+        var hosting = hosted ? " --target dll --hosted" : "";
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{sourcePath}\" -o \"{dllPath}\" --verify --standalone{hosting}", tempDir.Path);
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        var references = GetAssemblyReferences(dllPath);
+        Assert.DoesNotContain("SharpTS", references);
+        Assert.Equal(hosted, references.Contains("SharpTS.Hosting.Abstractions"));
+        Assert.False(File.Exists(tempDir.GetPath("SharpTS.dll")));
+        if (!hosted)
+            Assert.Equal(expected, ExecuteCompiledDllIsolated(dllPath, timeoutMs: 30000,
+                verifyStandardError: error => Assert.Empty(error), standardInput: ""));
+    }
+
 }
