@@ -14698,4 +14698,87 @@ public class StandaloneDllTests
     }
 
 
+    public static IEnumerable<object[]> UriComponentPrograms =>
+    [
+        new object[]
+        {
+            "direct",
+            "console.log(encodeURIComponent(\"hello world\"));console.log(encodeURIComponent(\"a=b&c/d?e#f\"));console.log(encodeURIComponent(\"abcABC123-_.~\"));console.log(decodeURIComponent(\"a%3Db%26c%2Fd%3Fe%23f\"));console.log(encodeURIComponent(\"\")===\"\",decodeURIComponent(\"\") === \"\");\n",
+            "hello%20world\na%3Db%26c%2Fd%3Fe%23f\nabcABC123-_.~\na=b&c/d?e#f\ntrue true\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "first_class",
+            "const encode=encodeURIComponent;const decode=decodeURIComponent;console.log(encode.name,encode.length,encode.prototype===undefined);console.log(decode.name,decode.length,decode.prototype===undefined);console.log(encode===encodeURIComponent,decode===decodeURIComponent,encode===globalThis.encodeURIComponent,decode===globalThis.decodeURIComponent);console.log(decode(encode(\"hello world\")));\n",
+            "encodeURIComponent 1 true\ndecodeURIComponent 1 true\ntrue true true true\nhello world\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "borrowed",
+            "const encode:any=encodeURIComponent;const decode:any=decodeURIComponent;console.log(encode.call({x:1},\"a b\"),decode.apply(null,[\"a%20b\"]));const bound=encode.bind({x:2});console.log(bound(\"c d\"),bound());\n",
+            "a%20b a b\nc%20d undefined\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "unicode",
+            "const s=\"\\u00E9\\u6F22\\uD83D\\uDE00\";const encoded=encodeURIComponent(s);const decoded=decodeURIComponent(encoded);console.log(encoded,decoded===s,decoded.length);console.log(decoded.charCodeAt(0),decoded.charCodeAt(1),decoded.charCodeAt(2),decoded.charCodeAt(3));\n",
+            "%C3%A9%E6%BC%A2%F0%9F%98%80 true 4\n233 28450 55357 56832\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "coercion_order",
+            "let log=\"\";const value:any={toString(){log+=\"s\";return \"a b\";},valueOf(){log+=\"v\";return 3;}};console.log(encodeURIComponent(value),log);\n",
+            "a%20b s\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "omitted_values",
+            "const encode:any=encodeURIComponent;const decode:any=decodeURIComponent;console.log(encode(),decode());console.log(encode(undefined),decode(undefined),encode(null),decode(null));\n",
+            "undefined undefined\nundefined undefined null null\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "coercion_values",
+            "const encode:any=encodeURIComponent;const decode:any=decodeURIComponent;console.log(encode(42),decode(42),encode(true),decode(false));console.log(encode([1,2]),decode([1,2]));\n",
+            "42 42 true false\n1%2C2 1,2\n",
+            false,
+            "",
+        },
+    ];
+
+    [Theory]
+    [MemberData(nameof(UriComponentPrograms))]
+    public void Isolated_UriComponents_PreserveCoercionValuesAndDeployment(
+        string name, string source, string expected, bool hosted, string extraArguments)
+    {
+        using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var sourcePath = tempDir.CreateFile("main.ts", source);
+        var dllPath = tempDir.GetPath($"uri_components_{name}.dll");
+        var hosting = hosted ? " --target dll --hosted" : "";
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{sourcePath}\" -o \"{dllPath}\" --verify --standalone{hosting} {extraArguments}", tempDir.Path);
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        var references = GetAssemblyReferences(dllPath);
+        Assert.DoesNotContain("SharpTS", references);
+        Assert.Equal(hosted, references.Contains("SharpTS.Hosting.Abstractions"));
+        Assert.False(File.Exists(tempDir.GetPath("SharpTS.dll")));
+        if (!hosted)
+            Assert.Equal(expected, ExecuteCompiledDllIsolated(dllPath, timeoutMs: 30000,
+                verifyStandardError: error => Assert.Empty(error)));
+    }
+
+
 }
