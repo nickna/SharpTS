@@ -323,11 +323,8 @@ public class EmittedRuntime
     // tokens (issue #63). Returns a $TSFunction wrapper matching what the
     // compile-time ArrayStaticEmitter / NumberStaticEmitter / etc. would emit.
     public MethodBuilder LookupBuiltInStaticMember { get; set; } = null!;
-    // ECMA-262 RequireObjectCoercible(this) — throws TypeError if `this` is
-    // null or undefined. Called from $TSFunction.CoercePrimitiveArgs via
-    // late-bound reflection so the IL emitted before TSError ctors are built
-    // doesn't have to forward-reference TSTypeErrorCtor directly.
-    public MethodBuilder RequireObjectCoercibleThis { get; set; } = null!;
+    /// <summary>Required null, undefined and Symbol receiver-validation metadata.</summary>
+    public EmittedReceiverGuardRuntime ReceiverGuard { get; } = new();
 
     // $TSFunction static factory + instance cache: stable identity for
     // function-declaration references (see RuntimeEmitter.TSFunction.cs).

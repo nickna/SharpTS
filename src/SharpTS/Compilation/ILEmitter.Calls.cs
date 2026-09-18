@@ -549,7 +549,7 @@ public partial class ILEmitter
         {
             // Array.prototype.X.call() — spec: this is undefined, throw TypeError.
             IL.Emit(OpCodes.Ldnull);
-            IL.Emit(OpCodes.Call, runtime.RequireObjectCoercibleThis);
+            IL.Emit(OpCodes.Call, runtime.ReceiverGuard.RequireObjectCoercibleThis);
             IL.Emit(OpCodes.Pop);
             // Unreachable after throw, but keep stack balanced for any dead-code
             // path verification. Load default return and box.

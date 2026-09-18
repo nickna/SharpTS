@@ -2374,7 +2374,10 @@ public partial class RuntimeEmitter
         // RequireObjectCoercible(this) — emitted after TSError so it can
         // construct $TypeError directly. Called from $TSFunction.CoercePrimitiveArgs
         // via late-bound reflection.
-        EmitRequireObjectCoercibleThis(typeBuilder, runtime);
+        EmitRequireObjectCoercibleThis(typeBuilder, runtime.ReceiverGuard,
+            runtime.Sentinels.UndefinedType, runtime.Symbols.Type,
+            runtime.Errors.CreateException, runtime.Errors.TypeErrorConstructor);
+        runtime.ReceiverGuard.CompleteEmission();
         EmitArrayJoin(typeBuilder, runtime);
         EmitArrayConcat(typeBuilder, runtime);
         EmitArrayReverse(typeBuilder, runtime);

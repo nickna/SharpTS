@@ -432,6 +432,19 @@ wrappers retain separate feature selections; Map and Set remain selected by
 metadata availability. Tests cover missing declarations, reuse, disabled
 optional metadata, receiver identity, zero-argument fallback and saved output.
 
+Required `ReceiverGuard` owns the receiver-validation helper. Its emitter takes
+the destination type, owner, undefined and Symbol types, exception wrapper and
+TypeError constructor. Completion follows the original helper emission point.
+Missing/null/duplicate declarations are rejected, failed completion can be
+repaired, and completed metadata is frozen. The helper preserves receiver
+identity and the original null, undefined and Symbol errors, signature,
+instructions and declaration order. `$TSFunction` continues resolving the helper
+by name in its own emitted assembly, with a fresh cache for each emitted type.
+Tests cover these contracts, borrowed and bound methods, primitive conversion,
+custom conversion hooks, standalone execution and hosted declarations. Shared
+reflection metadata, local builders and the reflection cache remain in the full
+ownership audit.
+
 Required `Enums` owns the enum reverse-lookup declaration. Its emitter receives
 only the destination type and owner; completion follows the original helper
 emission point. Missing/null/duplicate declarations are rejected, an omitted

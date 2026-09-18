@@ -509,14 +509,16 @@ public partial class RuntimeEmitter
     /// instance that <c>e instanceof TypeError</c> sees correctly, without
     /// each <c>String.prototype.X</c> helper repeating the null/Symbol check.
     /// </remarks>
-    private void EmitRequireObjectCoercibleThis(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitRequireObjectCoercibleThis(
+        TypeBuilder typeBuilder, EmittedReceiverGuardRuntime receiverGuard,
+        Type undefinedType, Type symbolType, MethodInfo createException, ConstructorInfo typeErrorConstructor)
     {
         var method = typeBuilder.DefineMethod(
             "RequireObjectCoercibleThis",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.Object]);
-        runtime.RequireObjectCoercibleThis = method;
+        receiverGuard.RequireObjectCoercibleThis = method;
 
         var il = method.GetILGenerator();
         var passThroughLabel = il.DefineLabel();
@@ -525,15 +527,15 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         var notNullLabel = il.DefineLabel();
         il.Emit(OpCodes.Brtrue, notNullLabel);
-        GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot convert undefined or null to object");
+        GuestErrorEmitter.ThrowError(il, createException, typeErrorConstructor, "Cannot convert undefined or null to object");
         il.MarkLabel(notNullLabel);
 
         // $Undefined → throw TypeError "null/undefined"
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.Sentinels.UndefinedType);
+        il.Emit(OpCodes.Isinst, undefinedType);
         var notUndefLabel = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, notUndefLabel);
-        GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot convert undefined or null to object");
+        GuestErrorEmitter.ThrowError(il, createException, typeErrorConstructor, "Cannot convert undefined or null to object");
         il.MarkLabel(notUndefLabel);
 
         // Symbol → throw TypeError "Cannot convert a Symbol to a string".
@@ -541,9 +543,9 @@ public partial class RuntimeEmitter
         // does this implicitly via "Let S = ? ToString(O)". Catches the
         // `return-abrupt-from-this-as-symbol.js` cluster (~6 tests).
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.Symbols.Type);
+        il.Emit(OpCodes.Isinst, symbolType);
         il.Emit(OpCodes.Brfalse, passThroughLabel);
-        GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot convert a Symbol value to a string");
+        GuestErrorEmitter.ThrowError(il, createException, typeErrorConstructor, "Cannot convert a Symbol value to a string");
 
         // Pass-through (string, $TSObject, etc.).
         il.MarkLabel(passThroughLabel);
