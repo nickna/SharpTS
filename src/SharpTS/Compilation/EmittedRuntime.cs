@@ -507,9 +507,18 @@ public class EmittedRuntime
     /// <summary>Required finalization poke table and optional registry implementation for this compilation.</summary>
     public EmittedFinalizationRegistryRuntime FinalizationRegistry { get; } = new();
 
-    // Proxy support
-    public MethodBuilder CreateProxy { get; set; } = null!;
-    public MethodBuilder CreateRevocableProxy { get; set; } = null!;
+    /// <summary>Proxy factory declarations, or null when Proxy is omitted.</summary>
+    public EmittedProxyConstructionRuntime? ProxyConstruction { get; private set; }
+
+    internal void BeginProxyConstructionEmission()
+    {
+        if (ProxyConstruction is not null)
+            throw new InvalidOperationException("Proxy-construction metadata emission has already started.");
+        ProxyConstruction = new EmittedProxyConstructionRuntime();
+    }
+
+    public EmittedProxyConstructionRuntime RequireProxyConstruction() => ProxyConstruction
+        ?? throw new InvalidOperationException("Proxy construction was not enabled for this compilation.");
 
     /// <summary>Required module registry metadata with optional CommonJS and dynamic-import declarations.</summary>
     public EmittedModuleRuntime Modules { get; } = new();

@@ -198,7 +198,7 @@ public partial class ILEmitter
             // remains handled by the constructor emitter; this identity-stable
             // wrapper supplies function branding and standard name/length
             // metadata for reflection and aliases.
-            _ctx.Types.EmitLoadMethodInfo(IL, _ctx.Runtime!.CreateProxy);
+            _ctx.Types.EmitLoadMethodInfo(IL, _ctx.Runtime!.RequireProxyConstruction().Create);
             IL.Emit(OpCodes.Ldstr, "Proxy");
             IL.Emit(OpCodes.Ldc_I4_2);
             IL.Emit(OpCodes.Call, _ctx.Runtime.FunctionConstruction.GetOrCreate);

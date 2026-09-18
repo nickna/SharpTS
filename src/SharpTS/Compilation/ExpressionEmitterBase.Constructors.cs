@@ -293,7 +293,7 @@ public abstract partial class ExpressionEmitterBase
 
             // --- Two boxed args (null if missing) ---
             case "Proxy":
-                EmitTwoArgConstructor(arguments, Ctx.Runtime!.CreateProxy);
+                EmitTwoArgConstructor(arguments, Ctx.Runtime!.RequireProxyConstruction().Create);
                 return true;
 
             case "Request":

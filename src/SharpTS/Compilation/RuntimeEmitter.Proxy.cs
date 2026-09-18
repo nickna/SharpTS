@@ -72,10 +72,15 @@ public partial class RuntimeEmitter
 
     private const string ProxyTypeName = "SharpTS.Runtime.Types.SharpTSProxy";
 
-    private void EmitProxyMethods(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private readonly record struct ProxyConstructionInputs(
+        Type UndefinedType, Type SymbolType, FieldInfo UndefinedInstance,
+        MethodInfo CreateException, ConstructorInfo TypeErrorConstructor);
+
+    private void EmitProxyMethods(
+        TypeBuilder typeBuilder, EmittedProxyConstructionRuntime proxies, ProxyConstructionInputs inputs)
     {
-        EmitCreateProxy(typeBuilder, runtime);
-        EmitCreateRevocableProxy(typeBuilder, runtime);
+        EmitCreateProxy(typeBuilder, proxies, inputs);
+        EmitCreateRevocableProxy(typeBuilder, proxies, inputs);
     }
 
     /// <summary>
@@ -968,7 +973,8 @@ public partial class RuntimeEmitter
     /// Validates both args are non-null objects and creates a SharpTSProxy.
     /// Uses reflection to avoid compile-time dependency on SharpTS.dll.
     /// </summary>
-    private void EmitCreateProxy(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitCreateProxy(
+        TypeBuilder typeBuilder, EmittedProxyConstructionRuntime proxies, ProxyConstructionInputs inputs)
     {
         var method = typeBuilder.DefineMethod(
             "CreateProxy",
@@ -976,12 +982,12 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object, _types.Object]
         );
-        runtime.CreateProxy = method;
+        proxies.Create = method;
 
         var il = method.GetILGenerator();
 
-        EmitRequireProxyObject(il, runtime, 0, "target");
-        EmitRequireProxyObject(il, runtime, 1, "handler");
+        EmitRequireProxyObject(il, inputs, 0, "target");
+        EmitRequireProxyObject(il, inputs, 1, "handler");
 
         // Late-bound construction of SharpTSProxy(target, handler) — soft dependency
         // on SharpTS.dll (the Proxy feature records RequireSharpTSRuntime).
@@ -993,7 +999,8 @@ public partial class RuntimeEmitter
     /// Emits CreateRevocableProxy(object target, object handler) -> object ({ proxy, revoke }).
     /// Calls RuntimeTypes.CreateRevocableProxy via reflection to avoid SharpTS.dll dependency.
     /// </summary>
-    private void EmitCreateRevocableProxy(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitCreateRevocableProxy(
+        TypeBuilder typeBuilder, EmittedProxyConstructionRuntime proxies, ProxyConstructionInputs inputs)
     {
         var method = typeBuilder.DefineMethod(
             "CreateRevocableProxy",
@@ -1001,23 +1008,23 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object, _types.Object]
         );
-        runtime.CreateRevocableProxy = method;
+        proxies.CreateRevocable = method;
 
         var il = method.GetILGenerator();
-        EmitRequireProxyObject(il, runtime, 0, "target");
-        EmitRequireProxyObject(il, runtime, 1, "handler");
+        EmitRequireProxyObject(il, inputs, 0, "target");
+        EmitRequireProxyObject(il, inputs, 1, "handler");
         EmitReflectionCall(
             il, RuntimeTypesLateBoundName, "CreateRevocableProxy", 3,
             i =>
             {
                 if (i < 2) il.Emit(OpCodes.Ldarg, i);
-                else il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
+                else il.Emit(OpCodes.Ldsfld, inputs.UndefinedInstance);
             });
         il.Emit(OpCodes.Ret);
     }
 
     private void EmitRequireProxyObject(
-        ILGenerator il, EmittedRuntime runtime, int argument, string role)
+        ILGenerator il, ProxyConstructionInputs inputs, int argument, string role)
     {
         var invalid = il.DefineLabel();
         var valid = il.DefineLabel();
@@ -1026,11 +1033,11 @@ public partial class RuntimeEmitter
 
         Type[] primitiveTypes =
         [
-            runtime.Sentinels.UndefinedType, _types.String, _types.Boolean,
+            inputs.UndefinedType, _types.String, _types.Boolean,
             _types.Byte, _types.SByte, _types.Int16, _types.UInt16,
             _types.Int32, _types.UInt32, _types.Int64, _types.UInt64,
             _types.Single, _types.Double, _types.Decimal, _types.BigInteger,
-            runtime.Symbols.Type,
+            inputs.SymbolType,
         ];
         foreach (Type primitiveType in primitiveTypes)
         {
@@ -1041,8 +1048,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, valid);
 
         il.MarkLabel(invalid);
-        GuestErrorEmitter.ThrowTypeError(
-            il, runtime, $"Cannot create proxy with a non-object as {role}");
+        GuestErrorEmitter.ThrowError(
+            il, inputs.CreateException, inputs.TypeErrorConstructor,
+            $"Cannot create proxy with a non-object as {role}");
         il.MarkLabel(valid);
     }
 }

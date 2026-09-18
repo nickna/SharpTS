@@ -39,7 +39,7 @@ public sealed class ProxyStaticEmitter : IStaticTypeEmitterStrategy
                     il.Emit(OpCodes.Ldnull);
                 }
                 // Call emitted CreateRevocableProxy(target, handler)
-                il.Emit(OpCodes.Call, ctx.Runtime!.CreateRevocableProxy);
+                il.Emit(OpCodes.Call, ctx.Runtime!.RequireProxyConstruction().CreateRevocable);
                 return true;
             default:
                 return false;
@@ -50,7 +50,7 @@ public sealed class ProxyStaticEmitter : IStaticTypeEmitterStrategy
     {
         if (propertyName != "revocable") return false;
         var ctx = emitter.Context;
-        ctx.Types.EmitLoadMethodInfo(ctx.IL, ctx.Runtime!.CreateRevocableProxy);
+        ctx.Types.EmitLoadMethodInfo(ctx.IL, ctx.Runtime!.RequireProxyConstruction().CreateRevocable);
         ctx.IL.Emit(OpCodes.Ldstr, "revocable");
         ctx.IL.Emit(OpCodes.Ldc_I4_2);
         ctx.IL.Emit(OpCodes.Call, ctx.Runtime.FunctionConstruction.GetOrCreate);
