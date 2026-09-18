@@ -233,11 +233,8 @@ public class EmittedRuntime
     public EmittedSentinelRuntime Sentinels { get; } = new();
 
 
-    // The emitted TSNamespace class
-    public TypeBuilder TSNamespaceType { get; set; } = null!;
-    public ConstructorBuilder TSNamespaceCtor { get; set; } = null!;
-    public MethodBuilder TSNamespaceGet { get; set; } = null!;
-    public MethodBuilder TSNamespaceSet { get; set; } = null!;
+    /// <summary>Required namespace value declarations for this compilation.</summary>
+    public EmittedNamespaceRuntime Namespaces { get; } = new();
 
     /// <summary>Required collection key identity declarations for this compilation.</summary>
     public EmittedCollectionKeysRuntime CollectionKeys { get; } = new();

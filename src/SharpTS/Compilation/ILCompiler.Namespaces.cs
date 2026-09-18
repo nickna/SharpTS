@@ -61,7 +61,7 @@ public partial class ILCompiler
         {
             var field = _programType.DefineField(
                 $"$ns_{path.Replace(".", "_")}",
-                _runtime.TSNamespaceType,
+                _runtime.Namespaces.Type,
                 FieldAttributes.Public | FieldAttributes.Static);
             _namespaceFields[path] = field;
         }
@@ -280,7 +280,7 @@ public partial class ILCompiler
 
             // new $TSNamespace(simpleName)
             il.Emit(OpCodes.Ldstr, simpleName);
-            il.Emit(OpCodes.Newobj, _runtime.TSNamespaceCtor);
+            il.Emit(OpCodes.Newobj, _runtime.Namespaces.Constructor);
             il.Emit(OpCodes.Stsfld, field);
 
             // If nested, add to parent: parent.Set(childName, child)
@@ -293,7 +293,7 @@ public partial class ILCompiler
                     il.Emit(OpCodes.Ldsfld, parentField);
                     il.Emit(OpCodes.Ldstr, simpleName);
                     il.Emit(OpCodes.Ldsfld, field);
-                    il.Emit(OpCodes.Call, _runtime.TSNamespaceSet);
+                    il.Emit(OpCodes.Call, _runtime.Namespaces.Set);
                 }
             }
         }
