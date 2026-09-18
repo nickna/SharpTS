@@ -17,6 +17,10 @@ namespace SharpTS.Compilation;
 /// <seealso cref="ILEmitter"/>
 public class EmittedRuntime
 {
+    /// <summary>Required argument-array pooling and spread-expansion metadata.</summary>
+    public EmittedCallArgumentsRuntime CallArguments { get; } = new();
+
+
     /// <summary>Required dynamic function-construction and general constructor-value dispatch metadata.</summary>
     public EmittedDynamicConstructionRuntime DynamicConstruction { get; } = new();
 
@@ -282,7 +286,6 @@ public class EmittedRuntime
     // tokens (issue #63). Returns a $TSFunction wrapper matching what the
     // compile-time ArrayStaticEmitter / NumberStaticEmitter / etc. would emit.
     public MethodBuilder LookupBuiltInStaticMember { get; set; } = null!;
-    public MethodBuilder ExpandCallArgs { get; set; } = null!;
     // ECMA-262 RequireObjectCoercible(this) — throws TypeError if `this` is
     // null or undefined. Called from $TSFunction.CoercePrimitiveArgs via
     // late-bound reflection so the IL emitted before TSError ctors are built
@@ -521,12 +524,6 @@ public class EmittedRuntime
     // $ThrownValueException : Exception — the allocation-light carrier for a
     // guest `throw` value. Message is derived lazily at a host boundary.
 
-    /// <summary>
-    /// $CallArgsPool.Get(int arity) — returns a thread-static object[]
-    /// of the given arity (cached for arities 1..4, fresh allocation
-    /// for ≥5). Used at method-call sites to avoid per-call newarr.
-    /// </summary>
-    public MethodBuilder CallArgsPoolGet { get; set; } = null!;
 
     // $IHasFields interface - for unified property access on user classes and $Object
     // Note: These use MethodInfo instead of MethodBuilder because we need the actual

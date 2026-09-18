@@ -693,7 +693,7 @@ public partial class ILEmitter
             else
             {
                 IL.Emit(OpCodes.Ldc_I4, arguments.Count);
-                IL.Emit(OpCodes.Call, _ctx.Runtime!.CallArgsPoolGet);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.CallArguments.PoolGet);
             }
 
             for (int i = 0; i < arguments.Count; i++)

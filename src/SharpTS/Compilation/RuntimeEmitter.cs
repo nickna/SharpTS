@@ -277,7 +277,7 @@ public partial class RuntimeEmitter
         // newarr per `obj.method(a, b)` invocation. Lives on a separate
         // class — historically to avoid the layout-sensitive .NET 10
         // tier-0 JIT bug behind issue #39 (since fixed upstream).
-        EmitCallArgsPool(moduleBuilder, runtime);
+        EmitCallArgsPool(moduleBuilder, runtime.CallArguments);
 
         // Emit $PropertyDescriptorStore and $CompiledPropertyDescriptor before
         // $Array: array length truncation must remove indexed descriptors as

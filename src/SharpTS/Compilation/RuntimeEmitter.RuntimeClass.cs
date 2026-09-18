@@ -2270,7 +2270,12 @@ public partial class RuntimeEmitter
         }
         EmitIsArray(typeBuilder, runtime);
         EmitConcatArrays(typeBuilder, runtime);
-        EmitExpandCallArgs(typeBuilder, runtime);
+        EmitExpandCallArgs(
+            typeBuilder,
+            runtime.CallArguments,
+            new ExpandCallArgsInputs(runtime.Symbols, runtime.IterateToList)
+        );
+        runtime.CallArguments.CompleteEmission();
         EmitArrayPop(typeBuilder, runtime);
         EmitArrayPopProto(typeBuilder, runtime);
         EmitArrayShift(typeBuilder, runtime);
