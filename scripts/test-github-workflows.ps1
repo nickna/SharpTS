@@ -109,8 +109,8 @@ if (-not $coreJob.Contains('--filter "' + $coreFilter + '"', [StringComparison]:
     -not $standaloneScript.Contains('$baseFilter = ''' + $standaloneFilter + '''', [StringComparison]::Ordinal)) {
     $errors.Add('Core and standalone discovery must retain their complementary category/class filters.')
 }
-foreach ($requiredText in @('shard: [0, 1]', 'shell: pwsh',
-    './scripts/test-standalone-shard.ps1 -ShardIndex ${{ matrix.shard }} -ShardCount 2', 'timeout-minutes: 20')) {
+foreach ($requiredText in @('shard: [0, 1, 2]', 'shell: pwsh',
+    './scripts/test-standalone-shard.ps1 -ShardIndex ${{ matrix.shard }} -ShardCount 3', 'timeout-minutes: 20')) {
     if (-not $standaloneJob.Contains($requiredText, [StringComparison]::Ordinal)) {
         $errors.Add("ci.yml standalone job is missing its complete shard contract: $requiredText")
     }

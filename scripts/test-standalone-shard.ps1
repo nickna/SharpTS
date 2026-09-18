@@ -1,6 +1,6 @@
 param(
     [Parameter(Mandatory)][ValidateRange(0, 31)][int]$ShardIndex,
-    [ValidateRange(1, 32)][int]$ShardCount = 2,
+    [ValidateRange(1, 32)][int]$ShardCount = 3,
     [switch]$DescribeOnly
 )
 

@@ -216,7 +216,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-24.04, windows-2025]
-        shard: [0, 1]
+        shard: [0, 1, 2]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -233,7 +233,7 @@ jobs:
         shell: pwsh
         # Deterministic method shards cover the entire class on each platform
         # without extending individual test or aggregate step deadlines.
-        run: ./scripts/test-standalone-shard.ps1 -ShardIndex ${{ matrix.shard }} -ShardCount 2
+        run: ./scripts/test-standalone-shard.ps1 -ShardIndex ${{ matrix.shard }} -ShardCount 3
         timeout-minutes: 20
 
   typescript-conformance:
