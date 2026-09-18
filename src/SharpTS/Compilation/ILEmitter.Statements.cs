@@ -3305,7 +3305,7 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Ldtoken, builder!);
         IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(
             _ctx.Types.Type, "GetTypeFromHandle", _ctx.Types.RuntimeTypeHandle));
-        IL.Emit(OpCodes.Call, _ctx.Runtime!.RunClassDefinitionMethod);
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.ClassInitialization.RunDefinition);
 
         // Top-level classes are lexical declarations, so they may also be present
         // in BlockScopedClassBuilders. Regardless of that implementation detail,

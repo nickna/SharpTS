@@ -1826,7 +1826,7 @@ public abstract class StatementEmitterBase : ExpressionEmitterBase
         EmitClassHeritageExpression(classStmt.SuperclassExpr, classStmt.Name.Lexeme);
         IL.Emit(OpCodes.Ldtoken, builder);
         IL.Emit(OpCodes.Call, Types.TypeGetTypeFromHandle);
-        IL.Emit(OpCodes.Call, Ctx.Runtime!.RunClassDefinitionMethod);
+        IL.Emit(OpCodes.Call, Ctx.Runtime!.ClassInitialization.RunDefinition);
 
         if (Ctx.DeferredComputedClassKeys?.TryGetValue(classStmt, out var deferred) == true)
             EmitDeferredComputedKeys(deferred.Method, deferred.Keys);
@@ -1881,7 +1881,7 @@ public abstract class StatementEmitterBase : ExpressionEmitterBase
             EmitClassHeritageExpression(ce.SuperclassExpr, ce.Name?.Lexeme);
             IL.Emit(OpCodes.Ldtoken, typeBuilder);
             IL.Emit(OpCodes.Call, Types.TypeGetTypeFromHandle);
-            IL.Emit(OpCodes.Call, Ctx.Runtime!.RunClassDefinitionMethod);
+            IL.Emit(OpCodes.Call, Ctx.Runtime!.ClassInitialization.RunDefinition);
             if (Ctx.DeferredComputedClassExprKeys?.TryGetValue(ce, out var deferred) == true)
                 EmitDeferredComputedKeys(deferred.Method, deferred.Keys);
             IL.Emit(OpCodes.Ldtoken, typeBuilder);
