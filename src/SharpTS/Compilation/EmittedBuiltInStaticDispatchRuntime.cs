@@ -9,6 +9,7 @@ public sealed class EmittedBuiltInStaticDispatchRuntime
     public bool IsComplete { get; private set; }
 
     private MethodBuilder? _lookup;
+    private bool _bodyEmitted;
     /// <summary>Declared before property consumers; its body is emitted after backing methods exist.</summary>
     public MethodBuilder Lookup
     {
@@ -29,10 +30,21 @@ public sealed class EmittedBuiltInStaticDispatchRuntime
             throw new InvalidOperationException("Built-in static-dispatch metadata emission is already complete.");
     }
 
+    internal void MarkLookupBodyEmitted()
+    {
+        EnsureMutable();
+        _ = Lookup;
+        if (_bodyEmitted)
+            throw new InvalidOperationException("Built-in static dispatch body has already been emitted.");
+        _bodyEmitted = true;
+    }
+
     internal void CompleteEmission()
     {
         EnsureMutable();
         _ = Lookup;
+        if (!_bodyEmitted)
+            throw new InvalidOperationException("Built-in static dispatch body has not been emitted.");
         IsComplete = true;
     }
 }

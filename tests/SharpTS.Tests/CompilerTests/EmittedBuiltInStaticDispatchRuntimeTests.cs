@@ -31,14 +31,22 @@ public sealed class EmittedBuiltInStaticDispatchRuntimeTests
         var forward = owner.Lookup;
         Assert.False(owner.IsComplete);
         Assert.Same(type, forward.DeclaringType);
+        Expect<InvalidOperationException>(() => Complete(owner));
+        Assert.False(owner.IsComplete);
+        var undeclared = new EmittedRuntime().BuiltInStatics;
+        Expect<InvalidOperationException>(() => MarkBody(undeclared));
+        Assert.False(undeclared.IsComplete);
         Expect<InvalidOperationException>(() => property.SetValue(owner, forward));
         var consumer = type.DefineMethod("Consumer", MethodAttributes.Public | MethodAttributes.Static, typeof(object), [typeof(Type), typeof(string)]);
         var il = consumer.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldarg_1); il.Emit(OpCodes.Call, forward); il.Emit(OpCodes.Ret);
         il = forward.GetILGenerator(); il.Emit(OpCodes.Ldnull); il.Emit(OpCodes.Ret);
+        MarkBody(owner);
+        Expect<InvalidOperationException>(() => MarkBody(owner));
         Complete(owner);
         Assert.True(owner.IsComplete); Assert.Same(forward, owner.Lookup);
         Expect<InvalidOperationException>(() => property.SetValue(owner, forward));
+        Expect<InvalidOperationException>(() => MarkBody(owner));
         Expect<InvalidOperationException>(() => Complete(owner));
         type.CreateType();
         var loaded = SaveVerifyLoad(builder);
@@ -198,6 +206,8 @@ public sealed class EmittedBuiltInStaticDispatchRuntimeTests
 
     private static void Complete(EmittedBuiltInStaticDispatchRuntime owner) =>
         typeof(EmittedBuiltInStaticDispatchRuntime).GetMethod("CompleteEmission", Members)!.Invoke(owner, null);
+    private static void MarkBody(EmittedBuiltInStaticDispatchRuntime owner) =>
+        typeof(EmittedBuiltInStaticDispatchRuntime).GetMethod("MarkLookupBodyEmitted", Members)!.Invoke(owner, null);
     private static void Expect<T>(Action action) where T : Exception =>
         Assert.IsType<T>(Assert.Throws<TargetInvocationException>(action).InnerException);
     private static PersistedAssemblyBuilder NewAssembly() =>

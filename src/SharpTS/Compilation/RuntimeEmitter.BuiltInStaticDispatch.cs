@@ -243,5 +243,6 @@ public partial class RuntimeEmitter
         il.MarkLabel(notFoundLabel);
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ret);
+        statics.MarkLookupBodyEmitted();
     }
 }

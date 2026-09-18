@@ -435,8 +435,11 @@ optional metadata, receiver identity, zero-argument fallback and saved output.
 Required `BuiltInStatics` owns the built-in static-member lookup declaration.
 The forward handle is declared before property and descriptor consumer bodies;
 its body is filled after the backing methods are available, then completion
-checks and freezes the handle. Missing, null, duplicate and completed writes
-are rejected, while failed completion permits supplying an omitted declaration.
+requires both the declaration and a body-emission marker before freezing the handle.
+The marker rejects missing declarations, repeated marking and completed writes.
+Missing, null, duplicate and completed declaration writes
+are rejected, while failed completion permits supplying an omitted declaration
+or emitting the missing body.
 The body emitter receives explicit method handles and cohesive peer components,
 including optional BigInt, Promise and Date implementations selected by orchestration.
 It does not read global feature flags. Tests cover independent supplied metadata,
