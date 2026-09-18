@@ -3708,6 +3708,80 @@ public class StandaloneDllTests
             verifyStandardError: error => Assert.Empty(error)));
     }
 
+    public static IEnumerable<object[]> IteratorWrapperPrograms =>
+    [
+        new object[]
+        {
+            "wrapper_array_from",
+            "const it:any={i:0,[Symbol.iterator](){return this;},next(){this.i++;return {value:this.i,done:this.i>3};}};console.log(Array.from(it,(x:any,i:number)=>x*2+i).join(\",\"));\n",
+            "2,5,8\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "wrapper_array_from_capture",
+            "let reads=0;const it:any={i:0,[Symbol.iterator](){return this;},get next(){reads++;return function(){this.i++;return {value:this.i,done:this.i>3};};}};console.log(Array.from(it).join(\",\"),reads);\n",
+            "1,2,3 1\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "wrapper_promise_all",
+            "const it:any={i:0,[Symbol.iterator](){return this;},next(){this.i++;return {value:Promise.resolve(this.i),done:this.i>3};}};Promise.all(it).then((values:any)=>console.log(values.join(\",\")));\n",
+            "1,2,3\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "wrapper_promise_race",
+            "const it:any={i:3,[Symbol.iterator](){return this;},next(){this.i++;return {value:Promise.resolve(this.i),done:this.i>5};}};Promise.race(it).then((value:any)=>console.log(value));\n",
+            "4\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "wrapper_helper_chain",
+            "const it:any={i:0,next(){this.i++;return {value:this.i,done:this.i>4};}};console.log(Iterator.from(it).map((x:any)=>x*3).take(2).toArray().join(\",\"));\n",
+            "3,6\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "wrapper_delegate_completion",
+            "const it:any={i:0,[Symbol.iterator](){return this;},next(sent:any){this.i++;return {value:this.i===1?5:sent+2,done:this.i>1};}};function* values(){const n=yield* it;return n+1;}const g:any=values();const a=g.next();const b=g.next(10);console.log(a.value,a.done,b.value,b.done);\n",
+            "5 false 13 true\n",
+            false,
+            "",
+        },
+    ];
+
+    [Theory]
+    [MemberData(nameof(IteratorWrapperPrograms))]
+    public void Isolated_IteratorWrapper_PreservesConsumersAndDelegatedCompletion(
+        string name, string source, string expected, bool hosted, string extraArguments)
+    {
+        using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var sourcePath = tempDir.CreateFile("main.ts", source);
+        var dllPath = tempDir.GetPath($"iterator_wrapper_{name}.dll");
+        var hosting = hosted ? " --target dll --hosted" : "";
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{sourcePath}\" -o \"{dllPath}\" --verify --standalone{hosting} {extraArguments}", tempDir.Path);
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        var references = GetAssemblyReferences(dllPath);
+        Assert.DoesNotContain("SharpTS", references);
+        Assert.Equal(hosted, references.Contains("SharpTS.Hosting.Abstractions"));
+        Assert.False(File.Exists(tempDir.GetPath("SharpTS.dll")));
+        if (!hosted)
+            Assert.Equal(expected, ExecuteCompiledDllIsolated(dllPath, timeoutMs: 30000,
+                verifyStandardError: error => Assert.Empty(error)));
+    }
+
     public static IEnumerable<object[]> IteratorRecordPrograms =>
     [
         new object[]

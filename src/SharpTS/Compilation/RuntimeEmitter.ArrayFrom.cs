@@ -143,7 +143,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, iteratorLocal);
         il.Emit(OpCodes.Ldloc, iteratorLocal);
         il.Emit(OpCodes.Ldarg_3);
-        il.Emit(OpCodes.Newobj, runtime.IteratorWrapperCtor);
+        il.Emit(OpCodes.Newobj, runtime.IteratorWrappers.Ctor);
         il.Emit(OpCodes.Stloc, wrapperLocal);
         il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, _types.EmptyTypes));
         il.Emit(OpCodes.Stloc, resultLocal);

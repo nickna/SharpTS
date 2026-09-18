@@ -526,7 +526,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldtoken, runtime.RuntimeType);
         il.Emit(OpCodes.Call, _types.GetMethod(
             _types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
-        il.Emit(OpCodes.Newobj, runtime.IteratorWrapperCtor);
+        il.Emit(OpCodes.Newobj, runtime.IteratorWrappers.Ctor);
         il.Emit(OpCodes.Stloc, iteratorWrapperLocal);
 
         il.Emit(OpCodes.Newobj, _types.GetConstructor(listType, _types.EmptyTypes));
