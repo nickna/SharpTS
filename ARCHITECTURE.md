@@ -432,6 +432,19 @@ wrappers retain separate feature selections; Map and Set remain selected by
 metadata availability. Tests cover missing declarations, reuse, disabled
 optional metadata, receiver identity, zero-argument fallback and saved output.
 
+Required `Strings` also owns the shared symbol-protocol dispatch declaration.
+Its scoped emitter receives the destination, owner and seven metadata inputs,
+including an explicitly optional RegExp type. The existing string completion
+boundary validates this handle, and missing/null/duplicate declarations and
+post-completion writes are rejected. Tests cover repair after failed completion,
+fresh handles across reused emitters with/without RegExp, custom and nullish
+hooks, lookup order, exceptions, standalone output and hosted declarations.
+The original signature, by-reference flags, method order and generated IL remain
+unchanged. Three existing output differences from Node (own-null RegExp match,
+primitive prototype hooks and borrowed receivers) are retained separately;
+preserving them establishes refactor parity, not passing language conformance.
+Shared reflection metadata and local builders remain in the full ownership audit.
+
 Required `ReceiverGuard` owns the receiver-validation helper. Its emitter takes
 the destination type, owner, undefined and Symbol types, exception wrapper and
 TypeError constructor. Completion follows the original helper emission point.

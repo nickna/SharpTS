@@ -5,20 +5,25 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
+    private readonly record struct StringSymbolDispatchInputs(
+        Type SymbolType, Type UndefinedType, MethodInfo TypeOf, Type? RegExpType,
+        MethodInfo GetSymbolStorage, MethodInfo GetIndex, MethodInfo InvokeMethod);
+
     /// <summary>
     /// Implements the shared GetMethod(object, wellKnownSymbol) portion of the
     /// String match/search/replace/split protocols. Primitive candidates must
     /// not consult their prototype symbol properties, while object candidates
     /// invoke an existing method with the candidate as <c>this</c>.
     /// </summary>
-    private void EmitStringTryInvokeSymbolMethod(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitStringTryInvokeSymbolMethod(
+        TypeBuilder typeBuilder, EmittedStringRuntime strings, StringSymbolDispatchInputs inputs)
     {
         var method = typeBuilder.DefineMethod(
             "StringTryInvokeSymbolMethod",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
-            [_types.Object, runtime.Symbols.Type, _types.ObjectArray, _types.Boolean.MakeByRefType(), _types.Boolean.MakeByRefType()]);
-        runtime.StringTryInvokeSymbolMethod = method;
+            [_types.Object, inputs.SymbolType, _types.ObjectArray, _types.Boolean.MakeByRefType(), _types.Boolean.MakeByRefType()]);
+        strings.TryInvokeSymbolMethod = method;
 
         var il = method.GetILGenerator();
         var noMethodLabel = il.DefineLabel();
@@ -42,10 +47,10 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Brfalse, noMethodLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.Sentinels.UndefinedType);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
         il.Emit(OpCodes.Brtrue, noMethodLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.Operators.TypeOf);
+        il.Emit(OpCodes.Call, inputs.TypeOf);
         il.Emit(OpCodes.Stloc, typeOfLocal);
         il.Emit(OpCodes.Ldloc, typeOfLocal);
         il.Emit(OpCodes.Ldstr, "object");
@@ -63,17 +68,17 @@ public partial class RuntimeEmitter
         // it resolves the current RegExp.prototype descriptor before falling
         // back to the intrinsic. This makes prototype replacements observable
         // to String.prototype.match/search/replace/split as required by GetMethod.
-        if (runtime.RegExps.Implementation is not null)
+        if (inputs.RegExpType is not null)
         {
             var notNativeRegExpLabel = il.DefineLabel();
             var afterOwnRegExpSymbolLabel = il.DefineLabel();
             var ownSymbolsLocal = il.DeclareLocal(_types.DictionaryObjectObject);
             var ownSymbolValueLocal = il.DeclareLocal(_types.Object);
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.RegExps.RequireImplementation().Type);
+            il.Emit(OpCodes.Isinst, inputs.RegExpType);
             il.Emit(OpCodes.Brfalse, notNativeRegExpLabel);
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Call, runtime.Symbols.GetStorage);
+            il.Emit(OpCodes.Call, inputs.GetSymbolStorage);
             il.Emit(OpCodes.Stloc, ownSymbolsLocal);
             il.Emit(OpCodes.Ldloc, ownSymbolsLocal);
             il.Emit(OpCodes.Ldarg_1);
@@ -89,14 +94,14 @@ public partial class RuntimeEmitter
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.ObjectRead.Index);
+        il.Emit(OpCodes.Call, inputs.GetIndex);
         il.Emit(OpCodes.Stloc, methodLocal);
 
         // undefined and null both mean that the built-in fallback continues.
         il.Emit(OpCodes.Ldloc, methodLocal);
         il.Emit(OpCodes.Brfalse, noMethodLabel);
         il.Emit(OpCodes.Ldloc, methodLocal);
-        il.Emit(OpCodes.Isinst, runtime.Sentinels.UndefinedType);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
         il.Emit(OpCodes.Brfalse, callableLabel);
 
         il.MarkLabel(noMethodLabel);
@@ -110,7 +115,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, methodLocal);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Call, runtime.Invocation.Method);
+        il.Emit(OpCodes.Call, inputs.InvokeMethod);
         il.Emit(OpCodes.Ret);
     }
 }

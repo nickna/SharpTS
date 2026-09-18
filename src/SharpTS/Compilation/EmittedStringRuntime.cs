@@ -291,6 +291,21 @@ public sealed class EmittedStringRuntime
         internal set => Set(ref _localeCompare, value);
     }
 
+    // Shared string symbol dispatch is independent of the optional RegExp implementation.
+    private MethodBuilder? _tryInvokeSymbolMethod;
+    public MethodBuilder TryInvokeSymbolMethod
+    {
+        get => Require(_tryInvokeSymbolMethod);
+        internal set
+        {
+            EnsureMutable();
+            ArgumentNullException.ThrowIfNull(value);
+            if (_tryInvokeSymbolMethod is not null)
+                throw new InvalidOperationException("String symbol-dispatch metadata has already been declared.");
+            _tryInvokeSymbolMethod = value;
+        }
+    }
+
     private FieldBuilder? _prototypeField;
     public FieldBuilder PrototypeField
     {
@@ -378,6 +393,7 @@ public sealed class EmittedStringRuntime
         _ = FromCodePoint;
         _ = Normalize;
         _ = LocaleCompare;
+        _ = TryInvokeSymbolMethod;
         _ = PrototypeField;
         _ = PrototypePopulateMethod;
         _ = PrototypeGenericStub;

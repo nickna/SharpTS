@@ -520,9 +520,6 @@ public class EmittedRuntime
     /// <summary>Required RegExp prototype declarations and optional type, operation and protocol metadata.</summary>
     public EmittedRegExpRuntime RegExps { get; } = new();
 
-    // Shared string symbol dispatch is independent of the optional RegExp implementation.
-    public MethodBuilder StringTryInvokeSymbolMethod { get; set; } = null!;
-
     // groupBy support
 
     // Error support - emitted types for standalone assemblies
