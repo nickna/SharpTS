@@ -115,7 +115,7 @@ public partial class RuntimeEmitter
     /// Emits the $IUnionType marker interface for fast union type detection.
     /// All generated union types implement this interface.
     /// </summary>
-    private void EmitIUnionTypeInterface(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private void EmitIUnionTypeInterface(ModuleBuilder moduleBuilder, EmittedUnionRuntime unionValues)
     {
         // Define interface: public interface $IUnionType
         var typeBuilder = moduleBuilder.DefineType(
@@ -142,8 +142,8 @@ public partial class RuntimeEmitter
         valueProp.SetGetMethod(valueGetter);
 
         // Create and store the interface type
-        runtime.IUnionTypeInterface = typeBuilder.CreateType()!;
-        runtime.IUnionTypeValueGetter = _types.GetProperty(runtime.IUnionTypeInterface, "Value")!.GetGetMethod()!;
+        unionValues.Interface = typeBuilder.CreateType()!;
+        unionValues.ValueGetter = _types.GetProperty(unionValues.Interface, "Value")!.GetGetMethod()!;
     }
 
     /// <summary>
