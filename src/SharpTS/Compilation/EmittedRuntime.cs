@@ -385,8 +385,8 @@ public class EmittedRuntime
     public EmittedEventSubscriptionRuntime EventSubscriptions { get; } = new();
 
 
-    // Resource disposal for using declarations
-    public MethodBuilder DisposeResource { get; set; } = null!;
+    /// <summary>Required resource-disposal metadata for this compilation.</summary>
+    public EmittedResourceDisposalRuntime ResourceDisposal { get; } = new();
 
     // Invocation methods
 

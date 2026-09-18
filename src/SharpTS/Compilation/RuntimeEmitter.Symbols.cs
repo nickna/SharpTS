@@ -89,7 +89,9 @@ public partial class RuntimeEmitter
     /// Emits: public static void DisposeResource(object resource, object disposeSymbol)
     /// Disposes a resource using Symbol.dispose if available.
     /// </summary>
-    private void EmitDisposeResource(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitDisposeResource(
+        TypeBuilder typeBuilder, EmittedResourceDisposalRuntime disposal,
+        MethodInfo getIndex, Type undefinedType, MethodInfo invokeMethod)
     {
         var method = typeBuilder.DefineMethod(
             "DisposeResource",
@@ -97,7 +99,7 @@ public partial class RuntimeEmitter
             _types.Void,
             [_types.Object, _types.Object]
         );
-        runtime.DisposeResource = method;
+        disposal.Dispose = method;
 
         var il = method.GetILGenerator();
         var doneLabel = il.DefineLabel();
@@ -116,14 +118,14 @@ public partial class RuntimeEmitter
         // the resource as receiver.
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.ObjectRead.Index);
+        il.Emit(OpCodes.Call, getIndex);
         il.Emit(OpCodes.Stloc, disposeMethodLocal);
 
         // if (disposeMethod == null) return;
         il.Emit(OpCodes.Ldloc, disposeMethodLocal);
         il.Emit(OpCodes.Brfalse, noDisposeLabel);
         il.Emit(OpCodes.Ldloc, disposeMethodLocal);
-        il.Emit(OpCodes.Isinst, runtime.Sentinels.UndefinedType);
+        il.Emit(OpCodes.Isinst, undefinedType);
         il.Emit(OpCodes.Brtrue, noDisposeLabel);
 
         // Invoke the dispose method with resource as the context
@@ -132,7 +134,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, disposeMethodLocal);
         il.Emit(OpCodes.Ldc_I4_0); // no additional args
         il.Emit(OpCodes.Newarr, _types.Object);
-        il.Emit(OpCodes.Call, runtime.Invocation.Method);
+        il.Emit(OpCodes.Call, invokeMethod);
         il.Emit(OpCodes.Pop); // Discard return value
         il.Emit(OpCodes.Br, doneLabel);
 

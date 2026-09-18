@@ -1581,7 +1581,9 @@ public partial class RuntimeEmitter
         );
         // DisposeResource uses the shared Symbol indexed-get path so descriptor
         // carriers and accessors are observed correctly.
-        EmitDisposeResource(typeBuilder, runtime);
+        EmitDisposeResource(typeBuilder, runtime.ResourceDisposal, runtime.ObjectRead.Index,
+            runtime.Sentinels.UndefinedType, runtime.Invocation.Method);
+        runtime.ResourceDisposal.CompleteEmission();
         EmitSetIndex(
             typeBuilder,
             runtime.ObjectWrite,
