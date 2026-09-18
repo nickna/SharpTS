@@ -1736,7 +1736,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
                 IL.Emit(OpCodes.Stelem_Ref);
             }
 
-            IL.Emit(OpCodes.Call, Ctx.Runtime!.ConstructDynamicValue);
+            IL.Emit(OpCodes.Call, Ctx.Runtime!.DynamicConstruction.Value);
             SetStackUnknown();
         }
     }

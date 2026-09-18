@@ -365,7 +365,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldloc, executorLocal);
         il.Emit(OpCodes.Stelem_Ref);
-        il.Emit(OpCodes.Call, runtime.ConstructDynamicValue);
+        il.Emit(OpCodes.Call, runtime.DynamicConstruction.Value);
         il.Emit(OpCodes.Stloc, instanceLocal);
         il.MarkLabel(haveInstanceLabel);
 

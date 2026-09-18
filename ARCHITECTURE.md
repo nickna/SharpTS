@@ -330,6 +330,14 @@ carrier; the strict SyntaxError helper retains its existing CLR exception repres
 Exception wrapping follows supplied optional Promise metadata. Error-cause Proxy handling
 receives six explicit invocation/delegate handles through the shared reflection bridge.
 
+Required `DynamicConstruction` owns function-valued `new` and general
+constructor-value dispatch. The original Function shell remains available
+before the runtime class; its body and Value helper keep their later order.
+Completion checks that the delayed Function body was emitted. Both helpers
+receive exact peer metadata, preserving proxy construction, prototype links,
+return-object precedence, ambient receiver restoration, boxed and RegExp
+construction, and the existing non-constructor policy.
+
 Required `Invocation` owns dynamic value, receiver-aware and zero-argument
 call helpers. The Method shell keeps its original forward-declaration location;
 completion follows all three original bodies and checks the delayed Method body.

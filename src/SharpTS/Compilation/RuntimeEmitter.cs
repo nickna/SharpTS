@@ -641,7 +641,7 @@ public partial class RuntimeEmitter
 
         // Reflect.construct and Proxy [[Construct]] need this token while the
         // main $Runtime body is emitted. Its body is filled after $Runtime.
-        runtime.NewOnFunction = _runtimeTypeBuilder!.DefineMethod(
+        runtime.DynamicConstruction.Function = _runtimeTypeBuilder!.DefineMethod(
             "NewOnFunction",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
@@ -653,11 +653,39 @@ public partial class RuntimeEmitter
         // Emit $Runtime.NewOnFunction — the JS `new` protocol for runtime-valued
         // function callees. Depends on $Object, $TSFunction, $BoundTSFunction, and
         // the $Runtime type itself all being defined.
-        EmitNewOnFunction(_runtimeTypeBuilder!, runtime);
+        EmitNewOnFunction(
+            _runtimeTypeBuilder!,
+            runtime.DynamicConstruction,
+            new NewOnFunctionInputs(
+                runtime.DescriptorStorage,
+                runtime.Errors,
+                runtime.FunctionBindings,
+                runtime.FunctionIntrospection,
+                runtime.FunctionValues,
+                runtime.ObjectRead,
+                runtime.ObjectStorage,
+                runtime.ReflectedMethods,
+                runtime.UndefinedInstance
+            )
+        );
 
         // Dynamic-callee `new x(...)` dispatch for state-machine emitters (#224).
-        // Must follow EmitNewOnFunction — it calls through runtime.NewOnFunction.
-        EmitConstructDynamicValue(_runtimeTypeBuilder!, runtime);
+        // Must follow EmitNewOnFunction — it calls through runtime.DynamicConstruction.Function.
+        EmitConstructDynamicValue(
+            _runtimeTypeBuilder!,
+            runtime.DynamicConstruction,
+            new ConstructDynamicValueInputs(
+                runtime.BoxedPrimitives,
+                runtime.Errors,
+                runtime.FunctionConstruction,
+                runtime.FunctionValues,
+                runtime.RegExps,
+                runtime.StringCoercion,
+                runtime.UndefinedInstance,
+                runtime.UndefinedType
+            )
+        );
+        runtime.DynamicConstruction.CompleteEmission();
 
         // RegExp @@split needs ConstructDynamicValue for SpeciesConstructor;
         // its signature was reserved before $RegExp emitted its public wrapper.
@@ -667,7 +695,7 @@ public partial class RuntimeEmitter
                 runtime.RegExps.RequireImplementation(),
                 new RegExpSymbolSplitProtocolInputs(
                     runtime.ArrayStorage,
-                    runtime.ConstructDynamicValue,
+                    runtime.DynamicConstruction.Value,
                     runtime.Errors.CreateException,
                     runtime.ObjectRead.Index,
                     runtime.ObjectRead.Property,
@@ -682,7 +710,7 @@ public partial class RuntimeEmitter
             EmitRegExpSymbolMatchAllProtocol(
                 runtime.RegExps.RequireImplementation(),
                 new RegExpSymbolMatchAllProtocolInputs(
-                    runtime.ConstructDynamicValue,
+                    runtime.DynamicConstruction.Value,
                     runtime.Errors.CreateException,
                     runtime.ObjectRead.Index,
                     runtime.ObjectRead.Property,

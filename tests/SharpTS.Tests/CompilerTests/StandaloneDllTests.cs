@@ -3708,6 +3708,56 @@ public class StandaloneDllTests
             verifyStandardError: error => Assert.Empty(error)));
     }
 
+    public static IEnumerable<object[]> DynamicConstructionPrograms =>
+    [
+        new object[]
+        {
+            "dynamic_new_returns",
+            "function F(this:any,x:number){this.x=x;}const C:any=F;const a:any=new C(7);console.log(a.x,a instanceof C);function R(this:any){this.x=1;return {x:9};}const D:any=R;console.log(new D().x);function P(this:any){this.x=4;return 3;}const E:any=P;console.log(new E().x);\n",
+            "7 true\n9\n4\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "dynamic_new_aliases",
+            "const S:any=String;const s:any=new S(\"abc\");console.log(s.length,s.valueOf());const R:any=RegExp;const r:any=new R(\"a\",\"g\");console.log(r.source,r.flags,r.test(\"cat\"));const choose:any=()=>R;const q:any=new (choose())(\"b\",\"i\");console.log(q.source,q.flags,q.test(\"B\"));\n",
+            "3 abc\na g true\nb i true\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "dynamic_nested_control",
+            "function Inner(this:any){this.y=2;}function Outer(this:any){this.x=1;const C:any=Inner;const child:any=new C();this.x+=child.y;}const C:any=Outer;console.log(new C().x);\n",
+            "3\n",
+            false,
+            "",
+        },
+    ];
+
+    [Theory]
+    [MemberData(nameof(DynamicConstructionPrograms))]
+    public void Isolated_DynamicConstruction_PreservesReturnsAliasesAndNestedReceivers(
+        string name, string source, string expected, bool hosted, string extraArguments)
+    {
+        using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var sourcePath = tempDir.CreateFile("main.ts", source);
+        var dllPath = tempDir.GetPath($"dynamic_construction_{name}.dll");
+        var hosting = hosted ? " --target dll --hosted" : "";
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{sourcePath}\" -o \"{dllPath}\" --verify --standalone{hosting} {extraArguments}", tempDir.Path);
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        var references = GetAssemblyReferences(dllPath);
+        Assert.DoesNotContain("SharpTS", references);
+        Assert.Equal(hosted, references.Contains("SharpTS.Hosting.Abstractions"));
+        Assert.False(File.Exists(tempDir.GetPath("SharpTS.dll")));
+        if (!hosted)
+            Assert.Equal(expected, ExecuteCompiledDllIsolated(dllPath, timeoutMs: 30000,
+                verifyStandardError: error => Assert.Empty(error)));
+    }
+
     public static IEnumerable<object[]> InvocationDispatchPrograms =>
     [
         new object[]
