@@ -102,7 +102,8 @@ public sealed class EmittedReflectedMethodRuntimeTests
     [Fact]
     public void OwnerAndHelpersUseExplicitDependencies()
     {
-        Assert.Equal(8, Properties.Length);
+        Assert.Equal(8, Properties.Count(p => p.Name != "SuperMethod"));
+        Assert.Equal(9, Properties.Length);
         Assert.NotSame(new EmittedRuntime().ReflectedMethods, new EmittedRuntime().ReflectedMethods);
         Assert.Null(typeof(EmittedRuntime).GetProperty("ReflectedMethods")!.SetMethod);
         foreach (string old in new[] { "ToPascalCase", "SafeGetMethod", "ReflectedMethodCacheField", "MethodCallableType", "MethodCallableCtor", "MethodCallableInvoke", "MethodCallableField", "InvokeMethodUnwrapped" })
@@ -127,6 +128,7 @@ public sealed class EmittedReflectedMethodRuntimeTests
         return new()
         {
             ["ToPascalCase"] = type.DefineMethod("ToPascalCase", MethodAttributes.Public | MethodAttributes.Static, typeof(string), [typeof(string)]),
+            ["SuperMethod"] = type.DefineMethod("GetSuperMethod", MethodAttributes.Public | MethodAttributes.Static, typeof(object), [typeof(object), typeof(string)]),
             ["FindMethod"] = type.DefineMethod("FindMethod", MethodAttributes.Public | MethodAttributes.Static, typeof(MethodInfo), [typeof(Type), typeof(string), typeof(BindingFlags)]),
             ["Cache"] = type.DefineField("Cache", typeof(object), FieldAttributes.Static),
             ["CallableType"] = type, ["CallableConstructor"] = ctor,

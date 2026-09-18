@@ -790,7 +790,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
         }
 
         IL.Emit(OpCodes.Ldstr, s.Method?.Lexeme ?? "constructor");
-        IL.Emit(OpCodes.Call, Ctx.Runtime!.GetSuperMethod);
+        IL.Emit(OpCodes.Call, Ctx.Runtime!.ReflectedMethods.SuperMethod);
         SetStackUnknown();
     }
 

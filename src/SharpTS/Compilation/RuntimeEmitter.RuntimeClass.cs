@@ -2557,7 +2557,7 @@ public partial class RuntimeEmitter
                     runtime.Errors.CreateException, runtime.Errors.TypeErrorConstructor)));
         // Number.prototype populate is wired after EmitNumberMethods below.
         // Object utilities
-        EmitGetSuperMethod(typeBuilder, runtime);
+        EmitGetSuperMethod(typeBuilder, runtime.ReflectedMethods, runtime.FunctionConstruction.Constructor);
         // EmitCreateException and EmitWrapException moved earlier (before Promise methods)
         EmitThrowUndefinedVariable(typeBuilder, runtime.Errors);
         // EmitRandom moved to before gOPD (see line ~660). The original site

@@ -1324,7 +1324,11 @@ public partial class RuntimeEmitter
         il.MarkLabel(done);
     }
 
-    private void EmitGetSuperMethod(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitGetSuperMethod(
+        TypeBuilder typeBuilder,
+        EmittedReflectedMethodRuntime reflectedMethods,
+        ConstructorInfo functionConstructor
+    )
     {
         // GetSuperMethod(object instance, string methodName) -> object
         // Finds a method on the parent class using .NET type hierarchy (BaseType)
@@ -1335,7 +1339,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object, _types.String]
         );
-        runtime.GetSuperMethod = method;
+        reflectedMethods.SuperMethod = method;
 
         var il = method.GetILGenerator();
         var baseTypeLocal = il.DeclareLocal(_types.Type);
@@ -1387,7 +1391,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(foundLabel);
         il.Emit(OpCodes.Ldarg_0); // instance (target for the bound method)
         il.Emit(OpCodes.Ldloc, methodInfoLocal);
-        il.Emit(OpCodes.Newobj, runtime.FunctionConstruction.Constructor);
+        il.Emit(OpCodes.Newobj, functionConstructor);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(nullLabel);

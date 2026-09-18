@@ -401,7 +401,6 @@ public class EmittedRuntime
     public MethodBuilder DisposeResource { get; set; } = null!;
 
     // Invocation methods
-    public MethodBuilder GetSuperMethod { get; set; } = null!;
 
 
     // Function methods (bind/call/apply)

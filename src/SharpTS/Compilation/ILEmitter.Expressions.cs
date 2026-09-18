@@ -840,7 +840,7 @@ public partial class ILEmitter
         // Note: super() constructor calls are handled in EmitCall, not here
         IL.Emit(OpCodes.Ldarg_0);
         IL.Emit(OpCodes.Ldstr, s.Method?.Lexeme ?? "constructor");
-        EmitCallUnknown(_ctx.Runtime!.GetSuperMethod);
+        EmitCallUnknown(_ctx.Runtime!.ReflectedMethods.SuperMethod);
     }
 
     protected override void EmitTernary(Expr.Ternary t)
