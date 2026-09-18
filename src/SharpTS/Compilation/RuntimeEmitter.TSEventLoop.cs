@@ -19,9 +19,9 @@ public partial class RuntimeEmitter
     /// Emits the $EventLoop singleton class.
     /// Must be called before $NetServer/$NetSocket/$HttpServer so they can call Ref/Unref/Schedule.
     /// </summary>
-    private void EmitTSEventLoopClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private void EmitTSEventLoopClass(
+        ModuleBuilder moduleBuilder, EmittedEventLoopRuntime eventLoop, MethodBuilder? checkCancellation)
     {
-        var eventLoop = runtime.EventLoop;
         var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$EventLoop",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
@@ -103,10 +103,10 @@ public partial class RuntimeEmitter
         EmitEventLoopWake(typeBuilder, eventLoop);
 
         // Run()
-        EmitEventLoopRun(typeBuilder, runtime);
+        EmitEventLoopRun(typeBuilder, eventLoop, checkCancellation);
 
         // WaitForTask(Task)
-        EmitEventLoopWaitForTask(typeBuilder, runtime);
+        EmitEventLoopWaitForTask(typeBuilder, eventLoop, checkCancellation);
 
         // PumpOnce() — single cooperative tick for the PipeTo pump (#448)
         EmitEventLoopPumpOnce(typeBuilder, eventLoop);
@@ -561,9 +561,9 @@ public partial class RuntimeEmitter
     /// <para>I/O events and new timer additions call Wake() or Schedule() which signal the
     /// ManualResetEventSlim, breaking out of the wait early when work arrives.</para>
     /// </remarks>
-    private void EmitEventLoopRun(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitEventLoopRun(
+        TypeBuilder typeBuilder, EmittedEventLoopRuntime eventLoop, MethodBuilder? checkCancellation)
     {
-        var eventLoop = runtime.EventLoop;
         var method = typeBuilder.DefineMethod(
             "Run",
             MethodAttributes.Public,
@@ -590,8 +590,8 @@ public partial class RuntimeEmitter
         // unwind a never-settling promise chain by flipping _cancelRequested.
         // At worst we wait the inner ManualResetEventSlim.Wait(100) period
         // before checking; that's the timeout resolution.
-        if (runtime.CheckCancellationMethod != null)
-            il.Emit(OpCodes.Call, runtime.CheckCancellationMethod);
+        if (checkCancellation != null)
+            il.Emit(OpCodes.Call, checkCancellation);
 
         // waitMs = -1 (no timers by default)
         il.Emit(OpCodes.Ldc_I4_M1);
@@ -601,8 +601,8 @@ public partial class RuntimeEmitter
         il.MarkLabel(drainTop);
         // Also check cancellation inside the drain loop so a flood of
         // microtasks doesn't prevent timely cancellation.
-        if (runtime.CheckCancellationMethod != null)
-            il.Emit(OpCodes.Call, runtime.CheckCancellationMethod);
+        if (checkCancellation != null)
+            il.Emit(OpCodes.Call, checkCancellation);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, eventLoop.QueueField);
         il.Emit(OpCodes.Ldloca, actionLocal);
@@ -691,9 +691,9 @@ public partial class RuntimeEmitter
     /// never-settling top-level promises (`new Promise(() => {})`) hang the
     /// program until an external watchdog kills it.
     /// </summary>
-    private void EmitEventLoopWaitForTask(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitEventLoopWaitForTask(
+        TypeBuilder typeBuilder, EmittedEventLoopRuntime eventLoop, MethodBuilder? checkCancellation)
     {
-        var eventLoop = runtime.EventLoop;
         var method = typeBuilder.DefineMethod(
             "WaitForTask",
             MethodAttributes.Public,
@@ -744,8 +744,8 @@ public partial class RuntimeEmitter
         // Cooperative cancellation (issue #74) — without this, a pending task
         // makes the wait unkillable and the Test262 runner's cancel flag is
         // ignored until process teardown.
-        if (runtime.CheckCancellationMethod != null)
-            il.Emit(OpCodes.Call, runtime.CheckCancellationMethod);
+        if (checkCancellation != null)
+            il.Emit(OpCodes.Call, checkCancellation);
 
         // Drain queued callbacks on THIS (event-loop) thread. async/await
         // continuations are Posted here by $EventLoopSyncContext when their

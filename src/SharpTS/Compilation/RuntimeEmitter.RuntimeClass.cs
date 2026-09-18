@@ -45,15 +45,7 @@ public partial class RuntimeEmitter
         var typeBuilder = (TypeBuilder)runtime.RuntimeType;
         _runtimeTypeBuilder = typeBuilder;
 
-        // Cooperative cancellation flag — tripped by the Test262 runner
-        // (or any embedder) via reflection to unwind compiled IL on timeout.
-        // See issue #74. Public so the runner can SetValue via reflection;
-        // polled by loop-backedge emissions via CheckCancellation below.
-        var cancelRequestedField = typeBuilder.DefineField(
-            "_cancelRequested",
-            _types.Boolean,
-            FieldAttributes.Public | FieldAttributes.Static);
-        runtime.CancelRequestedField = cancelRequestedField;
+        DefineCancellationFlag(typeBuilder, runtime.Cancellation);
 
         // Thread-static "original array-like receiver" — see EmittedArrayOperationsRuntime for
         // full rationale. Set by the Array.prototype.X.call(receiver, ...) pattern
@@ -259,50 +251,9 @@ public partial class RuntimeEmitter
             classPrototypeCacheField
         );
 
-        // CheckCancellation(): if (_cancelRequested) throw new
-        //   OperationCanceledException("Compiled execution cancelled.");
-        // Called by loop emitters at each backedge. Method body is emitted
-        // here so the token is available as soon as EmitRuntimeClass starts;
-        // later emitters can reference runtime.CheckCancellationMethod.
-        var checkCancellation = typeBuilder.DefineMethod(
-            "CheckCancellation",
-            MethodAttributes.Public | MethodAttributes.Static,
-            _types.Void,
-            Type.EmptyTypes);
-        runtime.CheckCancellationMethod = checkCancellation;
-        {
-            var il = checkCancellation.GetILGenerator();
-            var returnLabel = il.DefineLabel();
-            il.Emit(OpCodes.Ldsfld, cancelRequestedField);
-            il.Emit(OpCodes.Brfalse, returnLabel);
-            il.Emit(OpCodes.Ldstr, "Compiled execution cancelled.");
-            il.Emit(OpCodes.Newobj,
-                typeof(OperationCanceledException).GetConstructor([typeof(string)])!);
-            il.Emit(OpCodes.Throw);
-            il.MarkLabel(returnLabel);
-            il.Emit(OpCodes.Ret);
-        }
-
-        // BuildCancellationException(): constructs and RETURNS (does not throw)
-        // the OperationCanceledException used at loop backedges. Loop emitters
-        // emit `call BuildCancellationException(); throw` so the cancel path is a
-        // non-returning `throw` rather than a returning `call CheckCancellation()`
-        // — keeping the hot loop body free of a call that would otherwise force
-        // loop-carried doubles onto the stack on SysV x64 (~1.8× on tight numeric
-        // loops, #856). See EmittedRuntime.BuildCancellationExceptionMethod.
-        var buildCancelEx = typeBuilder.DefineMethod(
-            "BuildCancellationException",
-            MethodAttributes.Public | MethodAttributes.Static,
-            typeof(Exception),
-            Type.EmptyTypes);
-        runtime.BuildCancellationExceptionMethod = buildCancelEx;
-        {
-            var il = buildCancelEx.GetILGenerator();
-            il.Emit(OpCodes.Ldstr, "Compiled execution cancelled.");
-            il.Emit(OpCodes.Newobj,
-                typeof(OperationCanceledException).GetConstructor([typeof(string)])!);
-            il.Emit(OpCodes.Ret);
-        }
+        EmitCancellationCheck(typeBuilder, runtime.Cancellation);
+        EmitCancellationExceptionFactory(typeBuilder, runtime.Cancellation);
+        runtime.Cancellation.CompleteEmission();
 
         // RunClassDefinition(Type): CLR wraps exceptions escaping a type
         // initializer in TypeInitializationException. JavaScript class
@@ -1060,7 +1011,7 @@ public partial class RuntimeEmitter
             runtime.Invocation,
             new InvokeValueInputs(
                 runtime.ArrayOperations,
-                runtime.CheckCancellationMethod,
+                runtime.Cancellation.Check,
                 runtime.Errors,
                 runtime.FunctionBindings,
                 runtime.FunctionValues,
@@ -1091,7 +1042,7 @@ public partial class RuntimeEmitter
             runtime.Invocation,
             new InvokeMethodValueInputs(
                 runtime.ArrayOperations,
-                runtime.CheckCancellationMethod,
+                runtime.Cancellation.Check,
                 runtime.Errors,
                 runtime.FunctionBindings,
                 runtime.FunctionValues,
@@ -1115,7 +1066,7 @@ public partial class RuntimeEmitter
         EmitInvokeMethodValue0(
             typeBuilder,
             runtime.Invocation,
-            new InvokeMethodValue0Inputs(runtime.CheckCancellationMethod, runtime.Errors, runtime.FunctionValues)
+            new InvokeMethodValue0Inputs(runtime.Cancellation.Check, runtime.Errors, runtime.FunctionValues)
         );
         runtime.Invocation.CompleteEmission();
         EmitGetFieldsProperty(

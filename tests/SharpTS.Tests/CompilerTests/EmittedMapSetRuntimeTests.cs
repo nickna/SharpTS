@@ -338,7 +338,7 @@ public sealed class EmittedMapSetRuntimeTests
         var invokeHelper = typeof(RuntimeEmitter).GetMethod("EmitInvokeValue", InstanceMembers)!;
         var invokeConstructor = invokeHelper.GetParameters()[2].ParameterType.GetConstructors().Single();
         var invokeInputs = invokeConstructor.Invoke(invokeConstructor.GetParameters().Select(parameter =>
-            parameter.ParameterType == typeof(bool)
+            parameter.Name == "CheckCancellationMethod" ? runtime.Cancellation.Check : parameter.ParameterType == typeof(bool)
                 ? typeof(RuntimeFeatureSet).GetProperty(parameter.Name!)!.GetValue(features)
                 : (parameter.Name! switch { "IHasFieldsInterface" => runtime.ObjectFields.Interface, "UndefinedType" => runtime.Sentinels.UndefinedType, "UndefinedInstance" => runtime.Sentinels.UndefinedInstance, _ => typeof(EmittedRuntime).GetProperty(parameter.Name!)!.GetValue(runtime) })).ToArray());
         invokeHelper.Invoke(emitter, [probe, new EmittedInvocationRuntime { Method = runtime.Invocation.Method }, invokeInputs]);
