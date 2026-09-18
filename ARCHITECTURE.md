@@ -432,6 +432,17 @@ wrappers retain separate feature selections; Map and Set remain selected by
 metadata availability. Tests cover missing declarations, reuse, disabled
 optional metadata, receiver identity, zero-argument fallback and saved output.
 
+Required `Enums` owns the enum reverse-lookup declaration. Its emitter receives
+only the destination type and owner; completion follows the original helper
+emission point. Missing/null/duplicate declarations are rejected, an omitted
+declaration can be supplied after failed completion, and completed metadata is
+frozen. The helper signature, unused enum-name argument, numeric matching,
+original missing-value exception, locals, instructions and declaration order
+remain unchanged. Tests cover independent helper emission, fresh ownership
+across reused emitters, dynamic and duplicate-value lookup, module use,
+standalone execution and hosted declarations. The caller's `EnumReverse`
+registry, shared reflection metadata and local builders remain in the full audit.
+
 Required `ResourceDisposal` owns the using-declaration disposal helper. Its
 emitter receives only the destination type, owner and exact indexed-read,
 undefined-type and method-invocation dependencies. Completion follows the
