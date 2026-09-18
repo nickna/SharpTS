@@ -15715,4 +15715,121 @@ public class StandaloneDllTests
                 verifyStandardError: error => Assert.Empty(error), standardInput: ""));
     }
 
+    public static IEnumerable<object[]> BuiltInStaticDispatchPrograms =>
+    [
+        new object[]
+        {
+            "plain_control",
+            "console.log(\"plain\");\n",
+            "plain\n",
+            false,
+        },
+        new object[]
+        {
+            "array_alias",
+            "const A:any=Array;const f=A.isArray;console.log(f([]),f({}),f===Array.isArray,f.name,f.length);\n",
+            "true false true isArray 1\n",
+            false,
+        },
+        new object[]
+        {
+            "string_alias",
+            "const S:any=String;console.log(S.fromCharCode(65,66),S.fromCodePoint(67),S.raw({raw:[\"a\",\"b\"]},3));console.log(S.fromCharCode===String.fromCharCode,S.fromCodePoint.name,S.fromCodePoint.length);\n",
+            "AB C a3b\ntrue fromCodePoint 1\n",
+            false,
+        },
+        new object[]
+        {
+            "object_alias",
+            "const O:any=Object;const value={x:1,y:2};console.log(O.keys(value).join(\",\"),O.values(value).join(\",\"),O.entries(value).length);console.log(O.is(NaN,NaN),O.hasOwn(value,\"x\"),O.assign({},value).y);\n",
+            "x,y 1,2 2\ntrue true 2\n",
+            false,
+        },
+        new object[]
+        {
+            "object_state",
+            "const O:any=Object;const value=O.freeze({x:2});console.log(O.isFrozen(value),O.isSealed(value),O.isExtensible(value),O.getOwnPropertyNames(value).join(\",\"));\n",
+            "true true false x\n",
+            false,
+        },
+        new object[]
+        {
+            "symbol_alias",
+            "const S:any=Symbol;const value=S.for(\"static-probe\");console.log(S.keyFor(value),value===Symbol.for(\"static-probe\"),S.for===Symbol.for,S.keyFor.length);\n",
+            "static-probe true true 1\n",
+            false,
+        },
+        new object[]
+        {
+            "bigint_alias",
+            "const B:any=BigInt;console.log(String(B.asIntN(8,255n)),String(B.asUintN(8,-1n)),B.asIntN===BigInt.asIntN,B.asUintN.length);\n",
+            "-1 255 true 2\n",
+            false,
+        },
+        new object[]
+        {
+            "date_alias",
+            "const D:any=Date;console.log(D.UTC(2000,0,1),D.parse(\"2000-01-01T00:00:00.000Z\"),D.UTC===Date.UTC,D.UTC.length,D.now.name);\n",
+            "946684800000 946684800000 true 7 now\n",
+            false,
+        },
+        new object[]
+        {
+            "promise_alias",
+            "const P:any=Promise;console.log(P.resolve===Promise.resolve,P.all===Promise.all,P.resolve.name,P.resolve.length);P.all([P.resolve(2),3]).then((values:any[])=>console.log(values.join(\",\")));\n",
+            "true true resolve 1\n2,3\n",
+            false,
+        },
+        new object[]
+        {
+            "missing_member",
+            "const A:any=Array;const N:any=Number;const S:any=String;console.log(A.missing===undefined,N.missing===undefined,S.missing===undefined);\n",
+            "true true true\n",
+            false,
+        },
+        new object[]
+        {
+            "hosted_required",
+            "export function check(value:any){const A:any=Array;return A.isArray(value);}\n",
+            "",
+            true,
+        },
+        new object[]
+        {
+            "hosted_optional",
+            "export function check(value:bigint){const B:any=BigInt;const D:any=Date;return String(B.asIntN(8,value))+\":\"+D.UTC(2000,0,1);}\n",
+            "",
+            true,
+        },
+        new object[]
+        {
+            "number_call_control",
+            "const N:any=Number;console.log(N.isNaN(NaN),N.isFinite(3),N.isInteger(3),N.isSafeInteger(3),N.isInteger(3.5));\n",
+            "true true true true false\n",
+            false,
+        },
+    ];
+
+    [Theory]
+    [MemberData(nameof(BuiltInStaticDispatchPrograms))]
+    public void Isolated_BuiltInStaticDispatch_PreservesValuesIdentityAndDeployment(
+        string name, string source, string expected, bool hosted)
+    {
+        using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var sourcePath = tempDir.CreateFile("main.ts", source);
+        var dllPath = tempDir.GetPath($"builtin_static_{name}.dll");
+        var hosting = hosted ? " --target dll --hosted" : "";
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{sourcePath}\" -o \"{dllPath}\" --verify --standalone{hosting}", tempDir.Path);
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        var references = GetAssemblyReferences(dllPath);
+        Assert.DoesNotContain("SharpTS", references);
+        Assert.Equal(hosted, references.Contains("SharpTS.Hosting.Abstractions"));
+        Assert.False(File.Exists(tempDir.GetPath("SharpTS.dll")));
+        if (!hosted)
+            Assert.Equal(expected, ExecuteCompiledDllIsolated(dllPath, timeoutMs: 30000,
+                verifyStandardError: error => Assert.Empty(error), standardInput: ""));
+    }
+
 }

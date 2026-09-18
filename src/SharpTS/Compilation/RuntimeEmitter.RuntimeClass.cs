@@ -916,7 +916,7 @@ public partial class RuntimeEmitter
         // The shared built-in static inventory is consumed by HasOwnProperty
         // as well as GetProperty. Reserve its method token before either body;
         // the implementation is still filled later after its backing methods.
-        DefineLookupBuiltInStaticMember(typeBuilder, runtime);
+        DefineLookupBuiltInStaticMember(typeBuilder, runtime.BuiltInStatics);
         // hasOwnProperty + isPrototypeOf helpers — must come before
         // GetFunctionMethod so the corresponding arms can return $TSFunction
         // wrappers.
@@ -938,7 +938,7 @@ public partial class RuntimeEmitter
                 runtime.ObjectFields.HasProperty,
                 runtime.ObjectFields.Interface,
                 runtime.Json,
-                runtime.LookupBuiltInStaticMember,
+                runtime.BuiltInStatics.Lookup,
                 runtime.Math,
                 runtime.ObjectState,
                 runtime.ObjectStorage,
@@ -1312,7 +1312,7 @@ public partial class RuntimeEmitter
                 runtime.ObjectFields.Interface,
                 runtime.ReflectedMethods.InvokeUnwrapped,
                 runtime.Invocation.Method,
-                runtime.LookupBuiltInStaticMember,
+                runtime.BuiltInStatics.Lookup,
                 runtime.Map,
                 runtime.Numbers,
                 runtime.ObjectDescriptors,
@@ -1424,7 +1424,7 @@ public partial class RuntimeEmitter
                 runtime.GlobalObject.SingletonField,
                 runtime.ReflectedMethods.InvokeUnwrapped,
                 runtime.Invocation.Method,
-                runtime.LookupBuiltInStaticMember,
+                runtime.BuiltInStatics.Lookup,
                 runtime.NumericCoercion,
                 runtime.ObjectDescriptors,
                 runtime.ObjectOwnProperties,
@@ -1983,7 +1983,7 @@ public partial class RuntimeEmitter
                 runtime.ObjectFields.FieldsGetter,
                 runtime.ObjectFields.Interface,
                 runtime.Json,
-                runtime.LookupBuiltInStaticMember,
+                runtime.BuiltInStatics.Lookup,
                 runtime.Math,
                 runtime.ObjectOperations.Assign,
                 runtime.ObjectOperations.FromEntries,
@@ -2843,7 +2843,16 @@ public partial class RuntimeEmitter
         // StringFrom*, TSFunctionCtor (#63) and DateNow (value-form `Date.now`,
         // gated on UsesDate) are all in place. Only the body is late — the
         // MethodBuilder was defined early, so earlier emitters can call it.
-        EmitLookupBuiltInStaticMemberBody(runtime);
+        EmitLookupBuiltInStaticMemberBody(runtime.BuiltInStatics,
+            new BuiltInStaticDispatchInputs(
+                runtime.FunctionConstruction.GetOrCreate, runtime.ArrayOperations.IsArray, runtime.Numbers,
+                runtime.Strings.FromCharCode, runtime.Strings.FromCodePoint, runtime.Templates.Raw,
+                runtime.ObjectKeys, runtime.ObjectOperations, runtime.ObjectState, runtime.ObjectPrototypes,
+                runtime.ObjectDescriptors, runtime.ObjectOwnProperties.HasOwn,
+                runtime.Symbols.Type, runtime.Symbols.For, runtime.Symbols.KeyFor,
+                runtime.BigInt.Implementation, _features.UsesPromise ? runtime.RequirePromise() : null,
+                runtime.Errors.Type, runtime.Errors.IsError, runtime.Dates.Implementation));
+        runtime.BuiltInStatics.CompleteEmission();
         // RegExp methods moved earlier — emitted before EmitStringPrototypePopulate.
         // Error methods
         EmitErrorMethods(
