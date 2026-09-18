@@ -15832,4 +15832,41 @@ public class StandaloneDllTests
                 verifyStandardError: error => Assert.Empty(error), standardInput: ""));
     }
 
+
+    public static IEnumerable<object[]> CancellationPrograms =>
+    [
+        new object[] { "for_loop", "let sum:number=0;for(let i:number=0;i<6;i++){sum+=i;}console.log(sum);\n", "15\n", false },
+        new object[] { "while_do", "let x=0;while(x<3){x++;}do{x--;}while(x>1);console.log(x);\n", "1\n", false },
+        new object[] { "for_of", "let sum=0;for(const value of [2,3,4]){sum+=value;}console.log(sum);\n", "9\n", false },
+        new object[] { "for_in", "let keys=\"\";for(const key in {a:1,b:2}){keys+=key;}console.log(keys);\n", "ab\n", false },
+        new object[] { "generator", "function* values():Generator<number>{for(let i=0;i<3;i++){yield i;}}let sum=0;for(const v of values()){sum+=v;}console.log(sum);\n", "3\n", false },
+        new object[] { "async_loop", "async function sum(){let x=0;for(const v of [2,3]){x+=await Promise.resolve(v);}return x;}sum().then(v=>console.log(v));\n", "5\n", false },
+        new object[] { "finally_loop", "let n=0;try{for(let i=0;i<3;i++){n+=i;}}finally{console.log(\"finally\",n);}\n", "finally 3\n", false },
+        new object[] { "numeric_accumulator", "function sum(n:number):number{let value:number=0;for(let i:number=0;i<n;i++){value+=i;}return value;}console.log(sum(100));\n", "4950\n", false },
+        new object[] { "hosted_required", "export function sum(n:number):number{let total=0;for(let i=0;i<n;i++){total+=i;}return total;}\n", "", true },
+        new object[] { "hosted_optional", "export async function sum(n:number):Promise<number>{let total=0;for(let i=0;i<n;i++){total+=await Promise.resolve(i);}return total;}\n", "", true },
+    ];
+
+    [Theory]
+    [MemberData(nameof(CancellationPrograms))]
+    public void Isolated_CancellationMetadata_PreservesLoopsAndDeployment(
+        string name, string source, string expected, bool hosted)
+    {
+        using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var sourcePath = tempDir.CreateFile("main.ts", source);
+        var dllPath = tempDir.GetPath($"cancellation_{name}.dll");
+        var hosting = hosted ? " --target dll --hosted" : "";
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{sourcePath}\" -o \"{dllPath}\" --verify --standalone{hosting}", tempDir.Path);
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        var references = GetAssemblyReferences(dllPath);
+        Assert.DoesNotContain("SharpTS", references);
+        Assert.Equal(hosted, references.Contains("SharpTS.Hosting.Abstractions"));
+        Assert.False(File.Exists(tempDir.GetPath("SharpTS.dll")));
+        if (!hosted)
+            Assert.Equal(expected, ExecuteCompiledDllIsolated(dllPath, timeoutMs: 30000,
+                verifyStandardError: error => Assert.Empty(error), standardInput: ""));
+    }
+
 }

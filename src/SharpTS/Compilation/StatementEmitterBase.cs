@@ -557,14 +557,14 @@ public abstract class StatementEmitterBase : ExpressionEmitterBase
     /// </remarks>
     protected void EmitCancellationCheck()
     {
-        if (Ctx.Runtime?.BuildCancellationExceptionMethod == null || Ctx.Runtime?.CancelRequestedField == null)
+        if (Ctx.Runtime is null)
             return;
 
         var notCancelled = IL.DefineLabel();
         IL.Emit(OpCodes.Volatile);
-        IL.Emit(OpCodes.Ldsfld, Ctx.Runtime.CancelRequestedField);
+        IL.Emit(OpCodes.Ldsfld, Ctx.Runtime.Cancellation.Requested);
         IL.Emit(OpCodes.Brfalse, notCancelled);
-        IL.Emit(OpCodes.Call, Ctx.Runtime.BuildCancellationExceptionMethod);
+        IL.Emit(OpCodes.Call, Ctx.Runtime.Cancellation.BuildException);
         IL.Emit(OpCodes.Throw);
         IL.MarkLabel(notCancelled);
     }
@@ -977,21 +977,20 @@ public abstract class StatementEmitterBase : ExpressionEmitterBase
 
     private void EmitCancellationCheckWithAccumulatorFlush(string name, LocalBuilder accumulator)
     {
-        if (Ctx.Runtime?.BuildCancellationExceptionMethod == null
-            || Ctx.Runtime.CancelRequestedField == null)
+        if (Ctx.Runtime is null)
         {
             return;
         }
 
         var notCancelled = IL.DefineLabel();
         IL.Emit(OpCodes.Volatile);
-        IL.Emit(OpCodes.Ldsfld, Ctx.Runtime.CancelRequestedField);
+        IL.Emit(OpCodes.Ldsfld, Ctx.Runtime.Cancellation.Requested);
         IL.Emit(OpCodes.Brfalse, notCancelled);
 
         // The generic loop stores after each iteration. Mirror its observable partial value on
         // the cold cancellation path without introducing a hot-path box.
         EmitBoxedAccumulatorStore(name, accumulator);
-        IL.Emit(OpCodes.Call, Ctx.Runtime.BuildCancellationExceptionMethod);
+        IL.Emit(OpCodes.Call, Ctx.Runtime.Cancellation.BuildException);
         IL.Emit(OpCodes.Throw);
         IL.MarkLabel(notCancelled);
     }

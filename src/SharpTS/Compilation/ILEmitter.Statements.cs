@@ -1513,18 +1513,17 @@ public partial class ILEmitter
         LocalBuilder target,
         LocalBuilder accumulator)
     {
-        if (_ctx.Runtime?.BuildCancellationExceptionMethod == null
-            || _ctx.Runtime.CancelRequestedField == null)
+        if (_ctx.Runtime is null)
         {
             return;
         }
 
         var notCancelled = IL.DefineLabel();
         IL.Emit(OpCodes.Volatile);
-        IL.Emit(OpCodes.Ldsfld, _ctx.Runtime.CancelRequestedField);
+        IL.Emit(OpCodes.Ldsfld, _ctx.Runtime.Cancellation.Requested);
         IL.Emit(OpCodes.Brfalse, notCancelled);
         EmitInt64AccumulatorStore(target, accumulator);
-        IL.Emit(OpCodes.Call, _ctx.Runtime.BuildCancellationExceptionMethod);
+        IL.Emit(OpCodes.Call, _ctx.Runtime.Cancellation.BuildException);
         IL.Emit(OpCodes.Throw);
         IL.MarkLabel(notCancelled);
     }

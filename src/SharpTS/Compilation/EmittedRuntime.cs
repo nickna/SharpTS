@@ -265,27 +265,8 @@ public class EmittedRuntime
     public EmittedSetRuntime RequireSet() => Set
         ?? throw new InvalidOperationException("Set runtime was not enabled for this compilation.");
 
-    // Cooperative cancellation for the Test262 runner (issue #74): a static
-    // `bool _cancelRequested` on $Runtime that the runner flips via reflection
-    // on timeout, plus a `CheckCancellation()` helper that throws
-    // OperationCanceledException if the flag is set. Loop emitters call the
-    // helper at each backedge so long-running / hanging tests unwind within
-    // one iteration of the runner setting the flag. Pure IL, no SharpTS.dll
-    // reference — each emitted assembly has its own field.
-    public FieldBuilder CancelRequestedField { get; set; } = null!;
-    public MethodBuilder CheckCancellationMethod { get; set; } = null!;
-
-    // Loop-backedge cancellation throws via `call BuildCancellationException();
-    // throw` rather than `call CheckCancellation()`. CheckCancellation() is a
-    // *returning* call from the JIT's flow-graph view (its throw is internal and
-    // conditional), so on SysV x64 — where every XMM register is caller-saved —
-    // it forces loop-carried doubles to be stack-resident across every iteration.
-    // A `throw` does not return, so the values are dead on the cancel path and
-    // stay in registers. Measured ~1.8× on tight numeric loops (#856). This
-    // factory only *constructs* the exception (no throw), so the backedge emits a
-    // genuine `throw` opcode. CheckCancellationMethod is retained for the
-    // non-hot-loop call sites (event loop, deep-recursion guard).
-    public MethodBuilder BuildCancellationExceptionMethod { get; set; } = null!;
+    /// <summary>Required cooperative cancellation metadata, emitted independently of feature selection.</summary>
+    public EmittedCancellationRuntime Cancellation { get; } = new();
 
     // Forces an emitted CLR class initializer at the JavaScript class
     // definition site and unwraps TypeInitializationException so guest
