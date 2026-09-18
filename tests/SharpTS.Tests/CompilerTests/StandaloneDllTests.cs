@@ -15906,4 +15906,45 @@ public class StandaloneDllTests
                 verifyStandardError: error => Assert.Empty(error), standardInput: ""));
     }
 
+    public static IEnumerable<object[]> RegexLiteralCachePrograms =>
+    [
+        new object[] { "empty", "console.log(1);\n", "1\n", false },
+        new object[] { "plain", "function run(){return /a/.test(\"ba\");}console.log(run(),run());\n", "true true\n", false },
+        new object[] { "exec", "function run(){const value=/a/.exec(\"ba\");return value===null?\"none\":value[0];}console.log(run(),run());\n", "a a\n", false },
+        new object[] { "stateful", "function global(){return /a/g.test(\"a\");}function sticky(){return /a/y.test(\"a\");}console.log(global(),global(),sticky(),sticky());\n", "true true true true\n", false },
+        new object[] { "string_consumers", "for(let i=0;i<2;i++){console.log(\"a1b2\".replace(/\\d/g,\"#\"),\"a,b\".split(/,/).length,\"cat\".search(/a/),(\"a1a\".match(/a/g)||[]).length);}\n", "a#b# 2 1 2\na#b# 2 1 2\n", false },
+        new object[] { "escaping", "function run(){return /a/.test(\"a\");}const a=/a/;a.lastIndex=7;const b=/a/;console.log(run(),a.lastIndex,a===b,b.lastIndex);\n", "true 7 false 0\n", false },
+        new object[] { "distinct_sites", "function first(){return /a/.test(\"a\");}function second(){return /a/.test(\"b\");}console.log(first(),second(),first());\n", "true false true\n", false },
+        new object[] { "async_function", "async function run(){await Promise.resolve(1);return /a/.test(\"a\");}run().then(v=>console.log(v));\n", "true\n", false },
+        new object[] { "async_arrow", "const run=async()=>{await Promise.resolve(1);return \"a1\".replace(/\\d/g,\"#\");};run().then(v=>console.log(v));\n", "a#\n", false },
+        new object[] { "generator", "function* run():Generator<boolean>{yield /a/.test(\"a\");yield /b/.test(\"b\");}const g=run();console.log(g.next().value,g.next().value);\n", "true true\n", false },
+        new object[] { "async_generator", "async function* run(){yield /a/.test(\"a\");yield /b/.test(\"b\");}async function main(){const g=run();console.log((await g.next()).value,(await g.next()).value);}main();\n", "true true\n", false },
+        new object[] { "prototype_mutation", "const prototype:any=RegExp.prototype;prototype.test=function(s:any){return false;};function run(){return /a/.test(\"a\");}console.log(run(),run());\n", "false false\n", false },
+        new object[] { "lazy_branch", "function unused(){return /a/.test(\"a\");}console.log(\"before\");if(false){unused();}console.log(\"after\");\n", "before\nafter\n", false },
+        new object[] { "hosted_required", "export function run(){return /a/.test(\"a\");}\n", "", true },
+        new object[] { "hosted_optional", "export async function run(){await Promise.resolve(1);return /a/.test(\"a\");}\n", "", true },
+    ];
+
+    [Theory]
+    [MemberData(nameof(RegexLiteralCachePrograms))]
+    public void Isolated_RegexLiteralCache_PreservesIdentityAndDeployment(
+        string name, string source, string expected, bool hosted)
+    {
+        using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var sourcePath = tempDir.CreateFile("main.ts", source);
+        var dllPath = tempDir.GetPath($"regex_literal_cache_{name}.dll");
+        var hosting = hosted ? " --target dll --hosted" : "";
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{sourcePath}\" -o \"{dllPath}\" --verify --standalone{hosting}", tempDir.Path);
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        var references = GetAssemblyReferences(dllPath);
+        Assert.DoesNotContain("SharpTS", references);
+        Assert.Equal(hosted, references.Contains("SharpTS.Hosting.Abstractions"));
+        Assert.False(File.Exists(tempDir.GetPath("SharpTS.dll")));
+        if (!hosted)
+            Assert.Equal(expected, ExecuteCompiledDllIsolated(dllPath, timeoutMs: 30000,
+                verifyStandardError: error => Assert.Empty(error), standardInput: ""));
+    }
+
 }

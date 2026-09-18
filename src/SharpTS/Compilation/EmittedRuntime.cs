@@ -217,17 +217,8 @@ public class EmittedRuntime
             requirements | SharpTSRuntimeRequirements.RuntimeAssembly;
     }
 
-    /// <summary>
-    /// Per-site hoisted regex-literal static fields (compiled-mode optimization),
-    /// keyed by <c>Expr.RegexLiteral</c> node <em>identity</em> — see
-    /// <see cref="RegexLiteralHoistAnalyzer"/>. Null when nothing was hoisted.
-    /// <c>EmitRegexLiteral</c> loads the field (constructing the <c>$RegExp</c>
-    /// once, lazily) instead of allocating a fresh instance per evaluation. Lives
-    /// on the shared <see cref="EmittedRuntime"/> so it is reachable from every
-    /// emission context (functions, arrows, state machines) with no extra
-    /// threading.
-    /// </summary>
-    public Dictionary<SharpTS.Parsing.Expr.RegexLiteral, FieldBuilder>? RegexHoistFields { get; set; }
+    /// <summary>Required per-site regex cache declarations, including an explicitly empty selection.</summary>
+    public EmittedRegexLiteralCacheRuntime RegexLiteralCache { get; } = new();
 
     /// <summary>Required undefined and lexical-initialization sentinels for this compilation.</summary>
     public EmittedSentinelRuntime Sentinels { get; } = new();
