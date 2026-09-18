@@ -32,7 +32,7 @@ public partial class RuntimeEmitter
     /// allocation — common-case wins are preserved without growing the
     /// thread-static field list further.
     /// </summary>
-    private void EmitCallArgsPool(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private void EmitCallArgsPool(ModuleBuilder moduleBuilder, EmittedCallArgumentsRuntime callArguments)
     {
         var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$CallArgsPool",
@@ -107,7 +107,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Newarr, _types.Object);
         il.Emit(OpCodes.Ret);
 
-        runtime.CallArgsPoolGet = method;
+        callArguments.PoolGet = method;
         typeBuilder.CreateType();
     }
 

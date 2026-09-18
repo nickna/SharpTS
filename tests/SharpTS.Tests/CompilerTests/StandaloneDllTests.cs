@@ -3708,6 +3708,80 @@ public class StandaloneDllTests
             verifyStandardError: error => Assert.Empty(error)));
     }
 
+    public static IEnumerable<object[]> CallArgumentsPrograms =>
+    [
+        new object[]
+        {
+            "arguments_arities",
+            "const o:any={f:function(...x:any[]){return x.length+\":\"+x.join(\",\");}};console.log(o.f(),o.f(1),o.f(1,2),o.f(1,2,3),o.f(1,2,3,4),o.f(1,2,3,4,5));\n",
+            "0: 1:1 2:1,2 3:1,2,3 4:1,2,3,4 5:1,2,3,4,5\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "arguments_spread_iterable",
+            "const iterable:any={[Symbol.iterator]:function(){let i=0;return{next:function(){i++;return{value:i,done:i>2};}};}};const o:any={tag:\"ok\",f:function(...x:any[]){console.log(this.tag,x.join(\"|\"));}};o.f(0,...[1,2],...\"ab\",...iterable,9);\n",
+            "ok 0|1|2|a|b|1|2|9\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "arguments_spread_order",
+            "let order=\"\";function mark(n:number){order+=n;return n;}const o:any={f:function(...x:any[]){console.log(x.join(\",\"));}};o.f(mark(1),...[mark(2),mark(3)],mark(4));console.log(order);\n",
+            "1,2,3,4\n1234\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "arguments_nested_materialized",
+            "const o:any={f:function(a:any,b:any){return a*10+b;}};const left=o.f(1,2);const right=o.f(3,4);console.log(o.f(left,right));\n",
+            "154\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "arguments_nested_spread",
+            "const o:any={f:function(a:any,b:any){return a*10+b;}};console.log(o.f(...[o.f(1,2),o.f(3,4)]));\n",
+            "154\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "arguments_nested_value",
+            "const o:any={f:function(a:any,b:any){return a*10+b;}};const f:any=o.f;console.log(f(f(1,2),f(3,4)));\n",
+            "154\n",
+            false,
+            "",
+        },
+    ];
+
+    [Theory]
+    [MemberData(nameof(CallArgumentsPrograms))]
+    public void Isolated_CallArguments_PreservesAritySpreadAndEvaluationOrder(
+        string name, string source, string expected, bool hosted, string extraArguments)
+    {
+        using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var sourcePath = tempDir.CreateFile("main.ts", source);
+        var dllPath = tempDir.GetPath($"call_arguments_{name}.dll");
+        var hosting = hosted ? " --target dll --hosted" : "";
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{sourcePath}\" -o \"{dllPath}\" --verify --standalone{hosting} {extraArguments}", tempDir.Path);
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        var references = GetAssemblyReferences(dllPath);
+        Assert.DoesNotContain("SharpTS", references);
+        Assert.Equal(hosted, references.Contains("SharpTS.Hosting.Abstractions"));
+        Assert.False(File.Exists(tempDir.GetPath("SharpTS.dll")));
+        if (!hosted)
+            Assert.Equal(expected, ExecuteCompiledDllIsolated(dllPath, timeoutMs: 30000,
+                verifyStandardError: error => Assert.Empty(error)));
+    }
+
     public static IEnumerable<object[]> DynamicConstructionPrograms =>
     [
         new object[]

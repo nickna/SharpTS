@@ -6,6 +6,8 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
+    private readonly record struct ExpandCallArgsInputs(EmittedSymbolRuntime Symbols, MethodBuilder IterateToList);
+
     private readonly record struct GetLengthInputs(
         FieldBuilder ArgumentsLengthField,
         TypeBuilder ArgumentsType,
@@ -1655,15 +1657,19 @@ public partial class RuntimeEmitter
     /// Supports arrays, strings, and custom iterables with Symbol.iterator.
     /// Signature: object[] ExpandCallArgs(object[] args, bool[] isSpread, $TSSymbol iteratorSymbol, Type runtimeType)
     /// </summary>
-    private void EmitExpandCallArgs(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitExpandCallArgs(
+        TypeBuilder typeBuilder,
+        EmittedCallArgumentsRuntime callArguments,
+        ExpandCallArgsInputs inputs
+    )
     {
         var method = typeBuilder.DefineMethod(
             "ExpandCallArgs",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.ObjectArray,
-            [_types.ObjectArray, _types.BoolArray, runtime.Symbols.Type, _types.Type]  // Added iteratorSymbol and runtimeType
+            [_types.ObjectArray, _types.BoolArray, inputs.Symbols.Type, _types.Type]  // Added iteratorSymbol and runtimeType
         );
-        runtime.ExpandCallArgs = method;
+        callArguments.Expand = method;
 
         var il = method.GetILGenerator();
         // Create result list, iterate args, expand spreads using IterateToList
@@ -1699,7 +1705,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldelem_Ref);
         il.Emit(OpCodes.Ldarg_2);  // iteratorSymbol
         il.Emit(OpCodes.Ldarg_3);  // runtimeType
-        il.Emit(OpCodes.Call, runtime.IterateToList);
+        il.Emit(OpCodes.Call, inputs.IterateToList);
         il.Emit(OpCodes.Stloc, iteratedLocal);
 
         // result.AddRange(iterated)

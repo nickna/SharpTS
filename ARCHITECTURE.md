@@ -330,6 +330,14 @@ carrier; the strict SyntaxError helper retains its existing CLR exception repres
 Exception wrapping follows supplied optional Promise metadata. Error-cause Proxy handling
 receives six explicit invocation/delegate handles through the shared reflection bridge.
 
+Required `CallArguments` owns the shared argument-array pool accessor and
+spread-expansion helper. The pool retains its separate type and early body;
+expansion stays after iterator support in the runtime class. Completion
+validates both declarations after expansion is emitted. Pool construction
+receives its owner alone; expansion receives Symbol metadata and IterateToList
+explicitly. Four per-arity thread-static fields remain local to pool emission.
+The migration preserves allocation, argument evaluation and iteration behavior.
+
 Required `DynamicConstruction` owns function-valued `new` and general
 constructor-value dispatch. The original Function shell remains available
 before the runtime class; its body and Value helper keep their later order.
