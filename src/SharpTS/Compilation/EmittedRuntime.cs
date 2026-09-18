@@ -322,7 +322,7 @@ public class EmittedRuntime
     // Runtime dispatcher for built-in static member access on stored Type
     // tokens (issue #63). Returns a $TSFunction wrapper matching what the
     // compile-time ArrayStaticEmitter / NumberStaticEmitter / etc. would emit.
-    public MethodBuilder LookupBuiltInStaticMember { get; set; } = null!;
+    public EmittedBuiltInStaticDispatchRuntime BuiltInStatics { get; } = new();
     /// <summary>Required null, undefined and Symbol receiver-validation metadata.</summary>
     public EmittedReceiverGuardRuntime ReceiverGuard { get; } = new();
 

@@ -23,6 +23,16 @@ namespace SharpTS.Compilation;
 /// </summary>
 public partial class RuntimeEmitter
 {
+    private readonly record struct BuiltInStaticDispatchInputs(
+        MethodInfo GetOrCreate, MethodInfo IsArray, EmittedNumberRuntime Numbers,
+        MethodInfo StringFromCharCode, MethodInfo StringFromCodePoint, MethodInfo StringRaw,
+        EmittedObjectKeysRuntime ObjectKeys, EmittedObjectOperationsRuntime ObjectOperations,
+        EmittedObjectStateRuntime ObjectState, EmittedObjectPrototypeRuntime ObjectPrototypes,
+        EmittedObjectDescriptorRuntime ObjectDescriptors, MethodInfo ObjectHasOwn,
+        Type SymbolType, MethodInfo SymbolFor, MethodInfo SymbolKeyFor,
+        EmittedBigIntImplementation? BigInt, EmittedPromiseRuntime? Promise,
+        Type ErrorType, MethodInfo ErrorIsError, EmittedDateImplementation? Dates);
+
     /// <summary>
     /// Defines the <c>LookupBuiltInStaticMember</c> <see cref="MethodBuilder"/>
     /// without writing its body. Must be called early in runtime emission —
@@ -32,9 +42,9 @@ public partial class RuntimeEmitter
     /// static runtime methods (<c>IsArray</c>, <c>NumberIs*</c>, <c>StringFrom*</c>)
     /// have been emitted.
     /// </summary>
-    private void DefineLookupBuiltInStaticMember(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void DefineLookupBuiltInStaticMember(TypeBuilder typeBuilder, EmittedBuiltInStaticDispatchRuntime statics)
     {
-        runtime.LookupBuiltInStaticMember = typeBuilder.DefineMethod(
+        statics.Lookup = typeBuilder.DefineMethod(
             "LookupBuiltInStaticMember",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
@@ -48,9 +58,10 @@ public partial class RuntimeEmitter
     /// <c>EmitIsArray</c>, <c>EmitNumberMethods</c>, <c>EmitStringFromCharCode</c>,
     /// <c>EmitStringFromCodePoint</c>, and <c>EmitTSFunctionClass</c>.
     /// </summary>
-    private void EmitLookupBuiltInStaticMemberBody(EmittedRuntime runtime)
+    private void EmitLookupBuiltInStaticMemberBody(
+        EmittedBuiltInStaticDispatchRuntime statics, BuiltInStaticDispatchInputs inputs)
     {
-        var method = runtime.LookupBuiltInStaticMember;
+        var method = statics.Lookup;
         var il = method.GetILGenerator();
         var notFoundLabel = il.DefineLabel();
 
@@ -87,26 +98,26 @@ public partial class RuntimeEmitter
             _types.EmitLoadMethodInfo(il, backingMethod);
             il.Emit(OpCodes.Ldstr, memberName);
             il.Emit(OpCodes.Ldc_I4, specLength);
-            il.Emit(OpCodes.Call, runtime.FunctionConstruction.GetOrCreate);
+            il.Emit(OpCodes.Call, inputs.GetOrCreate);
             il.Emit(OpCodes.Ret);
 
             il.MarkLabel(skipLabel);
         }
 
         // Array.* — stored-as-value Array reference accessing static members.
-        EmitLookup(_types.IListOfObject, "isArray", runtime.ArrayOperations.IsArray, 1);
+        EmitLookup(_types.IListOfObject, "isArray", inputs.IsArray, 1);
 
         // Number.* — bare `Number` identifier now resolves to typeof(double)
         // via issue #62, so the value-form path lands here.
-        EmitLookup(_types.Double, "isNaN",         runtime.Numbers.IsNaN, 1);
-        EmitLookup(_types.Double, "isFinite",      runtime.Numbers.IsFinite, 1);
-        EmitLookup(_types.Double, "isInteger",     runtime.Numbers.IsInteger, 1);
-        EmitLookup(_types.Double, "isSafeInteger", runtime.Numbers.IsSafeInteger, 1);
+        EmitLookup(_types.Double, "isNaN",         inputs.Numbers.IsNaN, 1);
+        EmitLookup(_types.Double, "isFinite",      inputs.Numbers.IsFinite, 1);
+        EmitLookup(_types.Double, "isInteger",     inputs.Numbers.IsInteger, 1);
+        EmitLookup(_types.Double, "isSafeInteger", inputs.Numbers.IsSafeInteger, 1);
 
         // String.* — bare `String` identifier resolves to typeof(string).
-        EmitLookup(_types.String, "fromCharCode",  runtime.Strings.FromCharCode, 1);
-        EmitLookup(_types.String, "fromCodePoint", runtime.Strings.FromCodePoint, 1);
-        EmitLookup(_types.String, "raw",           runtime.Templates.Raw, 1);
+        EmitLookup(_types.String, "fromCharCode",  inputs.StringFromCharCode, 1);
+        EmitLookup(_types.String, "fromCodePoint", inputs.StringFromCodePoint, 1);
+        EmitLookup(_types.String, "raw",           inputs.StringRaw, 1);
 
         // Object.* — bracket-form access (`Object["assign"]`) and value-form
         // access (`let f = Object; f.assign`) both land here. Routes through
@@ -132,38 +143,38 @@ public partial class RuntimeEmitter
             _types.EmitLoadMethodInfo(il, backingMethod);
             il.Emit(OpCodes.Ldstr, memberName);
             il.Emit(OpCodes.Ldc_I4, specLength);
-            il.Emit(OpCodes.Call, runtime.FunctionConstruction.GetOrCreate);
+            il.Emit(OpCodes.Call, inputs.GetOrCreate);
             il.Emit(OpCodes.Ret);
 
             il.MarkLabel(skipLabel);
         }
 
-        EmitObjectMethodLookup("keys",                    runtime.ObjectKeys.Keys, 1);
-        EmitObjectMethodLookup("values",                  runtime.ObjectOperations.Values, 1);
-        EmitObjectMethodLookup("entries",                 runtime.ObjectOperations.Entries, 1);
-        EmitObjectMethodLookup("fromEntries",             runtime.ObjectOperations.FromEntries, 1);
-        EmitObjectMethodLookup("freeze",                  runtime.ObjectState.Freeze, 1);
-        EmitObjectMethodLookup("seal",                    runtime.ObjectState.Seal, 1);
-        EmitObjectMethodLookup("preventExtensions",       runtime.ObjectState.PreventExtensions, 1);
-        EmitObjectMethodLookup("getOwnPropertyNames",     runtime.ObjectKeys.Names, 1);
-        EmitObjectMethodLookup("getOwnPropertySymbols",   runtime.ObjectKeys.Symbols, 1);
-        EmitObjectMethodLookup("getPrototypeOf",          runtime.ObjectPrototypes.GetPrototypeOf, 1);
-        EmitObjectMethodLookup("setPrototypeOf",          runtime.ObjectPrototypes.SetPrototypeOf, 2);
-        EmitObjectMethodLookup("defineProperty",          runtime.ObjectDescriptors.DefineProperty, 3);
-        EmitObjectMethodLookup("defineProperties",        runtime.ObjectDescriptors.DefineProperties, 2);
-        EmitObjectMethodLookup("getOwnPropertyDescriptor",  runtime.ObjectDescriptors.GetOwnPropertyDescriptor, 2);
-        EmitObjectMethodLookup("getOwnPropertyDescriptors", runtime.ObjectDescriptors.GetOwnPropertyDescriptors, 1);
+        EmitObjectMethodLookup("keys",                    inputs.ObjectKeys.Keys, 1);
+        EmitObjectMethodLookup("values",                  inputs.ObjectOperations.Values, 1);
+        EmitObjectMethodLookup("entries",                 inputs.ObjectOperations.Entries, 1);
+        EmitObjectMethodLookup("fromEntries",             inputs.ObjectOperations.FromEntries, 1);
+        EmitObjectMethodLookup("freeze",                  inputs.ObjectState.Freeze, 1);
+        EmitObjectMethodLookup("seal",                    inputs.ObjectState.Seal, 1);
+        EmitObjectMethodLookup("preventExtensions",       inputs.ObjectState.PreventExtensions, 1);
+        EmitObjectMethodLookup("getOwnPropertyNames",     inputs.ObjectKeys.Names, 1);
+        EmitObjectMethodLookup("getOwnPropertySymbols",   inputs.ObjectKeys.Symbols, 1);
+        EmitObjectMethodLookup("getPrototypeOf",          inputs.ObjectPrototypes.GetPrototypeOf, 1);
+        EmitObjectMethodLookup("setPrototypeOf",          inputs.ObjectPrototypes.SetPrototypeOf, 2);
+        EmitObjectMethodLookup("defineProperty",          inputs.ObjectDescriptors.DefineProperty, 3);
+        EmitObjectMethodLookup("defineProperties",        inputs.ObjectDescriptors.DefineProperties, 2);
+        EmitObjectMethodLookup("getOwnPropertyDescriptor",  inputs.ObjectDescriptors.GetOwnPropertyDescriptor, 2);
+        EmitObjectMethodLookup("getOwnPropertyDescriptors", inputs.ObjectDescriptors.GetOwnPropertyDescriptors, 1);
         // create routes through the value-form wrapper: reflection dispatch
         // pads the missing props arg with null, which raw ObjectCreate must
         // treat as the explicit-null TypeError case.
-        EmitObjectMethodLookup("create",                  runtime.ObjectPrototypes.CreateValueForm, 2);
-        EmitObjectMethodLookup("assign",                  runtime.ObjectOperations.Assign, 2);
-        EmitObjectMethodLookup("is",                      runtime.ObjectOperations.Is, 2);
-        EmitObjectMethodLookup("hasOwn",                  runtime.ObjectOwnProperties.HasOwn, 2);
-        EmitObjectMethodLookup("groupBy",                 runtime.ObjectOperations.GroupBy, 2);
-        EmitObjectMethodLookup("isExtensible",            runtime.ObjectState.IsExtensible, 1);
-        EmitObjectMethodLookup("isFrozen",                runtime.ObjectState.IsFrozen, 1);
-        EmitObjectMethodLookup("isSealed",                runtime.ObjectState.IsSealed, 1);
+        EmitObjectMethodLookup("create",                  inputs.ObjectPrototypes.CreateValueForm, 2);
+        EmitObjectMethodLookup("assign",                  inputs.ObjectOperations.Assign, 2);
+        EmitObjectMethodLookup("is",                      inputs.ObjectOperations.Is, 2);
+        EmitObjectMethodLookup("hasOwn",                  inputs.ObjectHasOwn, 2);
+        EmitObjectMethodLookup("groupBy",                 inputs.ObjectOperations.GroupBy, 2);
+        EmitObjectMethodLookup("isExtensible",            inputs.ObjectState.IsExtensible, 1);
+        EmitObjectMethodLookup("isFrozen",                inputs.ObjectState.IsFrozen, 1);
+        EmitObjectMethodLookup("isSealed",                inputs.ObjectState.IsSealed, 1);
 
         // Symbol.* (#234) — bare `Symbol` resolves to the $TSSymbol Type token.
         // Well-known symbols (iterator, species, …) are public static FIELDS
@@ -171,12 +182,12 @@ public partial class RuntimeEmitter
         // them before this table is consulted. Only the static methods need
         // entries: their .NET names are For/KeyFor, which the case-sensitive
         // static-method probe misses.
-        EmitLookup(runtime.Symbols.Type, "for", runtime.Symbols.For, 1);
-        EmitLookup(runtime.Symbols.Type, "keyFor", runtime.Symbols.KeyFor, 1);
+        EmitLookup(inputs.SymbolType, "for", inputs.SymbolFor, 1);
+        EmitLookup(inputs.SymbolType, "keyFor", inputs.SymbolKeyFor, 1);
 
         // BigInt.asIntN/asUintN — BigInt resolves to System.Numerics.BigInteger
         // in emitted value form; the BCL type has no JavaScript truncation APIs.
-        if (runtime.BigInt.Implementation is { } bigInt)
+        if (inputs.BigInt is { } bigInt)
         {
             EmitLookup(_types.BigInteger, "asIntN", bigInt.AsIntN, 2);
             EmitLookup(_types.BigInteger, "asUintN", bigInt.AsUintN, 2);
@@ -186,27 +197,27 @@ public partial class RuntimeEmitter
         // CLR statics on their constructor Type tokens. Route value-form and
         // descriptor reads through the same identity-cached wrappers used by
         // their compile-time static emitters.
-        if (_features.UsesPromise)
+        if (inputs.Promise is { } promise)
         {
-            EmitLookup(_types.TaskOfObject, "resolve", runtime.RequirePromise().ResolveStatic, 1);
-            EmitLookup(_types.TaskOfObject, "reject", runtime.RequirePromise().RejectStatic, 1);
-            EmitLookup(_types.TaskOfObject, "all", runtime.RequirePromise().AllStatic, 1);
-            EmitLookup(_types.TaskOfObject, "allKeyed", runtime.RequirePromise().AllKeyedStatic, 1);
-            EmitLookup(_types.TaskOfObject, "race", runtime.RequirePromise().RaceStatic, 1);
-            EmitLookup(_types.TaskOfObject, "allSettled", runtime.RequirePromise().AllSettledStatic, 1);
-            EmitLookup(_types.TaskOfObject, "allSettledKeyed", runtime.RequirePromise().AllSettledKeyedStatic, 1);
-            EmitLookup(_types.TaskOfObject, "any", runtime.RequirePromise().AnyStatic, 1);
+            EmitLookup(_types.TaskOfObject, "resolve", promise.ResolveStatic, 1);
+            EmitLookup(_types.TaskOfObject, "reject", promise.RejectStatic, 1);
+            EmitLookup(_types.TaskOfObject, "all", promise.AllStatic, 1);
+            EmitLookup(_types.TaskOfObject, "allKeyed", promise.AllKeyedStatic, 1);
+            EmitLookup(_types.TaskOfObject, "race", promise.RaceStatic, 1);
+            EmitLookup(_types.TaskOfObject, "allSettled", promise.AllSettledStatic, 1);
+            EmitLookup(_types.TaskOfObject, "allSettledKeyed", promise.AllSettledKeyedStatic, 1);
+            EmitLookup(_types.TaskOfObject, "any", promise.AnyStatic, 1);
             // Guest classes that `extend Promise` derive from the emitted wrapper.
-            EmitLookup(runtime.RequirePromise().Type, "resolve", runtime.RequirePromise().ResolveStatic, 1);
-            EmitLookup(runtime.RequirePromise().Type, "reject", runtime.RequirePromise().RejectStatic, 1);
-            EmitLookup(runtime.RequirePromise().Type, "all", runtime.RequirePromise().AllStatic, 1);
-            EmitLookup(runtime.RequirePromise().Type, "allKeyed", runtime.RequirePromise().AllKeyedStatic, 1);
-            EmitLookup(runtime.RequirePromise().Type, "race", runtime.RequirePromise().RaceStatic, 1);
-            EmitLookup(runtime.RequirePromise().Type, "allSettled", runtime.RequirePromise().AllSettledStatic, 1);
-            EmitLookup(runtime.RequirePromise().Type, "allSettledKeyed", runtime.RequirePromise().AllSettledKeyedStatic, 1);
-            EmitLookup(runtime.RequirePromise().Type, "any", runtime.RequirePromise().AnyStatic, 1);
+            EmitLookup(promise.Type, "resolve", promise.ResolveStatic, 1);
+            EmitLookup(promise.Type, "reject", promise.RejectStatic, 1);
+            EmitLookup(promise.Type, "all", promise.AllStatic, 1);
+            EmitLookup(promise.Type, "allKeyed", promise.AllKeyedStatic, 1);
+            EmitLookup(promise.Type, "race", promise.RaceStatic, 1);
+            EmitLookup(promise.Type, "allSettled", promise.AllSettledStatic, 1);
+            EmitLookup(promise.Type, "allSettledKeyed", promise.AllSettledKeyedStatic, 1);
+            EmitLookup(promise.Type, "any", promise.AnyStatic, 1);
         }
-        EmitLookup(runtime.Errors.Type, "isError", runtime.Errors.IsError, 1);
+        EmitLookup(inputs.ErrorType, "isError", inputs.ErrorIsError, 1);
 
         // Date.* — bare `Date` resolves to the $TSDate Type token. The static
         // is .NET-cased ("Now"), so the case-sensitive static-method probe in
@@ -214,14 +225,14 @@ public partial class RuntimeEmitter
         // dispatch (`var nativeNow = Date.now;` — lodash's shortOut idiom)
         // matches the syntactic Date.now() path, virtual timers included.
         // Null when UsesDate is off — Date can't be referenced then anyway.
-        if (runtime.Dates.Implementation != null)
-            EmitLookup(runtime.Dates.RequireImplementation().Type, "now", runtime.Dates.RequireImplementation().Now, 0);
+        if (inputs.Dates != null)
+            EmitLookup(inputs.Dates.Type, "now", inputs.Dates.Now, 0);
         // Date.UTC / Date.parse value-form (`const f = Date.UTC; f(...)`) — #538. The wrapper
         // packs the JS args into the backing methods' object[] / object parameter.
-        if (runtime.Dates.Implementation != null)
-            EmitLookup(runtime.Dates.RequireImplementation().Type, "UTC", runtime.Dates.RequireImplementation().StaticUTC, 7);
-        if (runtime.Dates.Implementation != null)
-            EmitLookup(runtime.Dates.RequireImplementation().Type, "parse", runtime.Dates.RequireImplementation().StaticParse, 1);
+        if (inputs.Dates != null)
+            EmitLookup(inputs.Dates.Type, "UTC", inputs.Dates.StaticUTC, 7);
+        if (inputs.Dates != null)
+            EmitLookup(inputs.Dates.Type, "parse", inputs.Dates.StaticParse, 1);
 
         // Math.* deliberately not handled here — bare `Math` emits the null
         // pseudo-variable (not a Type token), so its value-form access goes
@@ -232,5 +243,6 @@ public partial class RuntimeEmitter
         il.MarkLabel(notFoundLabel);
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ret);
+        statics.MarkLookupBodyEmitted();
     }
 }

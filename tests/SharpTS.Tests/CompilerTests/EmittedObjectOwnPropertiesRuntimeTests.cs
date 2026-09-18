@@ -153,6 +153,7 @@ public sealed class EmittedObjectOwnPropertiesRuntimeTests
             if (overrides.TryGetValue(name, out var value)) return value;
             if (name == "ProxyDescriptor") return MakeInputs(parameter.ParameterType, runtime, overrides);
             if (name == "GlobalThisSingletonField") return runtime.GlobalObject.SingletonField;
+            if (name == "LookupBuiltInStaticMember") return runtime.BuiltInStatics.Lookup;
             return name switch
             {
                 "GetOwnPropertyDescriptor" => runtime.ObjectDescriptors.GetOwnPropertyDescriptor,
