@@ -2192,7 +2192,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldloc, liveMethodLocal);
             il.Emit(OpCodes.Ldc_I4_0);
             il.Emit(OpCodes.Newarr, _types.Object);
-            il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+            il.Emit(OpCodes.Call, runtime.Invocation.Method);
             il.Emit(OpCodes.Br, endLabel);
 
             il.MarkLabel(skipLabel);

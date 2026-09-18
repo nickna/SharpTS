@@ -652,7 +652,7 @@ public abstract partial class ExpressionEmitterBase
         IL.Emit(OpCodes.Ldloc, objLocal);                // receiver for InvokeMethodValue
         IL.Emit(OpCodes.Ldloc, fnLocal);                 // resolved fn
         EmitBoxedArgsArray(arguments, argLocals);
-        IL.Emit(OpCodes.Call, Ctx.Runtime!.InvokeMethodValue);
+        IL.Emit(OpCodes.Call, Ctx.Runtime!.Invocation.Method);
     }
 
     /// <summary>
@@ -1805,7 +1805,7 @@ public abstract partial class ExpressionEmitterBase
             IL.Emit(OpCodes.Ldsfld, Ctx.Runtime!.UndefinedInstance);
         IL.Emit(OpCodes.Ldloc, calleeLocal);
         IL.Emit(OpCodes.Ldloc, argsLocal);
-        IL.Emit(OpCodes.Call, Ctx.Runtime!.InvokeMethodValue);
+        IL.Emit(OpCodes.Call, Ctx.Runtime!.Invocation.Method);
 
         if (optChainNullishLabel != null)
         {
@@ -1955,7 +1955,7 @@ public abstract partial class ExpressionEmitterBase
             IL.Emit(OpCodes.Ldloc, recvLocal);
             IL.Emit(OpCodes.Ldloc, fnLocal);
             EmitBoxedArgsArray(c.Arguments, argLocals);
-            IL.Emit(OpCodes.Call, Ctx.Runtime!.InvokeMethodValue);
+            IL.Emit(OpCodes.Call, Ctx.Runtime!.Invocation.Method);
             IL.Emit(OpCodes.Br, endLabel);
         }
 
@@ -2031,7 +2031,7 @@ public abstract partial class ExpressionEmitterBase
         IL.Emit(OpCodes.Ldloc, recvLocal);
         IL.Emit(OpCodes.Ldloc, fnLocal);
         EmitBoxedArgsArray(c.Arguments, argLocals);
-        IL.Emit(OpCodes.Call, Ctx.Runtime!.InvokeMethodValue);
+        IL.Emit(OpCodes.Call, Ctx.Runtime!.Invocation.Method);
         IL.Emit(OpCodes.Br, endLabel);
     }
 
@@ -2147,7 +2147,7 @@ public abstract partial class ExpressionEmitterBase
             IL.Emit(OpCodes.Ldsfld, Ctx.Runtime!.UndefinedInstance);
         IL.Emit(OpCodes.Ldloc, calleeLocal);
         IL.Emit(OpCodes.Ldloc, argsLocal);
-        IL.Emit(OpCodes.Call, Ctx.Runtime!.InvokeMethodValue);
+        IL.Emit(OpCodes.Call, Ctx.Runtime!.Invocation.Method);
         IL.Emit(OpCodes.Br, endLabel);
 
         // Nullish path: push undefined

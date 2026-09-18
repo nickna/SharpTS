@@ -46,7 +46,7 @@ public sealed class ErrorEmitter : ITypeEmitterStrategy
         il.Emit(OpCodes.Ldloc, receiverLocal);
         il.Emit(OpCodes.Ldloc, functionLocal);
         il.Emit(OpCodes.Ldloc, argumentsLocal);
-        il.Emit(OpCodes.Call, ctx.Runtime.InvokeMethodValue);
+        il.Emit(OpCodes.Call, ctx.Runtime.Invocation.Method);
         emitter.SetStackUnknown();
         return true;
     }

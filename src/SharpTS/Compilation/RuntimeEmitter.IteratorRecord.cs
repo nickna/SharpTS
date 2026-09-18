@@ -90,11 +90,11 @@ public partial class RuntimeEmitter
                 callIl.Emit(OpCodes.Ldc_I4_0);
                 callIl.Emit(OpCodes.Ldarg_2);
                 callIl.Emit(OpCodes.Stelem_Ref);
-                callIl.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+                callIl.Emit(OpCodes.Call, runtime.Invocation.Method);
             }
             else
             {
-                callIl.Emit(OpCodes.Call, runtime.InvokeMethodValue0);
+                callIl.Emit(OpCodes.Call, runtime.Invocation.Method0);
             }
             callIl.Emit(OpCodes.Call, require);
             callIl.Emit(OpCodes.Ret);

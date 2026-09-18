@@ -332,7 +332,7 @@ public sealed class DateEmitter : ITypeEmitterStrategy
         il.Emit(OpCodes.Ldloc, receiverLocal);
         il.Emit(OpCodes.Ldloc, functionLocal);
         il.Emit(OpCodes.Ldloc, argsLocal);
-        il.Emit(OpCodes.Call, ctx.Runtime.InvokeMethodValue);
+        il.Emit(OpCodes.Call, ctx.Runtime.Invocation.Method);
         emitter.SetStackUnknown();
     }
 

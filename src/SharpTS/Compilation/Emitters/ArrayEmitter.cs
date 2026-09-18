@@ -470,7 +470,7 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
                 il.Emit(OpCodes.Ldloc, toStringMethodLocal);
                 il.Emit(OpCodes.Ldc_I4_0);
                 il.Emit(OpCodes.Newarr, ctx.Types.Object);
-                il.Emit(OpCodes.Call, ctx.Runtime!.InvokeMethodValue);
+                il.Emit(OpCodes.Call, ctx.Runtime!.Invocation.Method);
                 break;
 
             default:

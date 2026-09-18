@@ -110,7 +110,7 @@ public partial class AsyncMoveNextEmitter
             _il.Emit(OpCodes.Ldloc, asyncIterFnLocal);
             _il.Emit(OpCodes.Ldc_I4_0);
             _il.Emit(OpCodes.Newarr, _types.Object);
-            _il.Emit(OpCodes.Call, _ctx.Runtime.InvokeMethodValue);
+            _il.Emit(OpCodes.Call, _ctx.Runtime.Invocation.Method);
             _il.Emit(OpCodes.Stloc, iteratorTemp);
             _il.Emit(OpCodes.Ldarg_0);
             _il.Emit(OpCodes.Ldloc, iteratorTemp);
@@ -437,7 +437,7 @@ public partial class AsyncMoveNextEmitter
             _il.Emit(OpCodes.Ldloc, fnLocal);
             _il.Emit(OpCodes.Ldc_I4_0);
             _il.Emit(OpCodes.Newarr, _types.Object);
-            _il.Emit(OpCodes.Call, _ctx.Runtime.InvokeMethodValue);
+            _il.Emit(OpCodes.Call, _ctx.Runtime.Invocation.Method);
             _il.Emit(OpCodes.Stloc, stepLocal);
             _il.Emit(OpCodes.Br, haveFnLabel);
 

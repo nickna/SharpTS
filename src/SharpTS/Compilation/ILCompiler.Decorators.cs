@@ -354,7 +354,7 @@ public partial class ILCompiler
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ldloc, funcLocal);
         il.Emit(OpCodes.Ldloc, argsLocal);
-        il.Emit(OpCodes.Call, _runtime.InvokeMethodValue);
+        il.Emit(OpCodes.Call, _runtime.Invocation.Method);
         il.Emit(OpCodes.Pop);
     }
 
@@ -397,7 +397,7 @@ public partial class ILCompiler
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ldloc, funcLocal);
         il.Emit(OpCodes.Ldloc, argsLocal);
-        il.Emit(OpCodes.Call, _runtime.InvokeMethodValue);
+        il.Emit(OpCodes.Call, _runtime.Invocation.Method);
         il.Emit(OpCodes.Pop);
     }
 
@@ -428,7 +428,7 @@ public partial class ILCompiler
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ldloc, funcLocal);
         il.Emit(OpCodes.Ldloc, argsLocal);
-        il.Emit(OpCodes.Call, _runtime.InvokeMethodValue);
+        il.Emit(OpCodes.Call, _runtime.Invocation.Method);
         il.Emit(OpCodes.Pop);
     }
 
@@ -470,7 +470,7 @@ public partial class ILCompiler
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ldloc, funcLocal);
         il.Emit(OpCodes.Ldloc, argsLocal);
-        il.Emit(OpCodes.Call, _runtime.InvokeMethodValue);
+        il.Emit(OpCodes.Call, _runtime.Invocation.Method);
         il.Emit(OpCodes.Pop);
     }
 
@@ -508,7 +508,7 @@ public partial class ILCompiler
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ldloc, funcLocal);
         il.Emit(OpCodes.Ldloc, argsLocal);
-        il.Emit(OpCodes.Call, _runtime.InvokeMethodValue);
+        il.Emit(OpCodes.Call, _runtime.Invocation.Method);
         il.Emit(OpCodes.Pop);
     }
 
@@ -547,7 +547,7 @@ public partial class ILCompiler
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ldloc, funcLocal);
         il.Emit(OpCodes.Ldloc, argsLocal);
-        il.Emit(OpCodes.Call, _runtime.InvokeMethodValue);
+        il.Emit(OpCodes.Call, _runtime.Invocation.Method);
         il.Emit(OpCodes.Pop);
     }
 
@@ -581,7 +581,7 @@ public partial class ILCompiler
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ldloc, funcLocal);
         il.Emit(OpCodes.Ldloc, argsLocal);
-        il.Emit(OpCodes.Call, _runtime.InvokeMethodValue);
+        il.Emit(OpCodes.Call, _runtime.Invocation.Method);
         il.Emit(OpCodes.Pop);
     }
 

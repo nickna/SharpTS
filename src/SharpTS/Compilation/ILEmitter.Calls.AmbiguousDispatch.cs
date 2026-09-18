@@ -366,7 +366,7 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Ldloc, objLocal);
         IL.Emit(OpCodes.Ldloc, fnLocal);
         IL.Emit(OpCodes.Ldloc, argsLocal);
-        IL.Emit(OpCodes.Call, _ctx.Runtime!.InvokeMethodValue);
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.Invocation.Method);
 
         builder.MarkLabel(doneLabel);
     }

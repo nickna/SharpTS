@@ -330,7 +330,7 @@ public partial class ILEmitter
             IL.Emit(OpCodes.Stelem_Ref);
         }
 
-        IL.Emit(OpCodes.Call, _ctx.Runtime!.InvokeMethodValue);
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.Invocation.Method);
 
         builder.MarkLabel(doneLabel);
     }

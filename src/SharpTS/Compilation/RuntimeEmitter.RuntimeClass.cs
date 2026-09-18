@@ -1043,7 +1043,7 @@ public partial class RuntimeEmitter
         // their normalization path consumes arbitrary iterables. Reserve the
         // method token now and fill its body in EmitIteratorMethodsAdvanced.
         DeclareIterateToList(typeBuilder, runtime);
-        runtime.InvokeMethodValue = typeBuilder.DefineMethod(
+        runtime.Invocation.Method = typeBuilder.DefineMethod(
             "InvokeMethodValue",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
@@ -1053,9 +1053,69 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.Object, _types.String, _types.Object]);
-        EmitInvokeValue(typeBuilder, runtime);
-        EmitInvokeMethodValue(typeBuilder, runtime);
-        EmitInvokeMethodValue0(typeBuilder, runtime);
+        EmitInvokeValue(
+            typeBuilder,
+            runtime.Invocation,
+            new InvokeValueInputs(
+                runtime.ArrayOperations,
+                runtime.CheckCancellationMethod,
+                runtime.Errors,
+                runtime.FunctionBindings,
+                runtime.FunctionValues,
+                runtime.Map,
+                runtime.NodeStreams,
+                runtime.ObjectRead,
+                runtime.Operators,
+                runtime.Promise,
+                runtime.ReflectedMethods,
+                runtime.RegExps,
+                runtime.Set,
+                runtime.TextEncoding,
+                runtime.TypedArrays,
+                runtime.UndefinedType,
+                _features.HasAnyTypedArray,
+                _features.UsesNodeStreams,
+                _features.UsesPromise,
+                _features.UsesTextEncoding,
+                runtime.FunctionConstruction,
+                runtime.IHasFieldsInterface,
+                runtime.StringCoercion,
+                runtime.Symbols,
+                runtime.UndefinedInstance
+            )
+        );
+        EmitInvokeMethodValue(
+            typeBuilder,
+            runtime.Invocation,
+            new InvokeMethodValueInputs(
+                runtime.ArrayOperations,
+                runtime.CheckCancellationMethod,
+                runtime.Errors,
+                runtime.FunctionBindings,
+                runtime.FunctionValues,
+                runtime.Map,
+                runtime.NodeStreams,
+                runtime.ObjectRead,
+                runtime.Operators,
+                runtime.Promise,
+                runtime.ReflectedMethods,
+                runtime.RegExps,
+                runtime.Set,
+                runtime.TextEncoding,
+                runtime.TypedArrays,
+                runtime.UndefinedType,
+                _features.HasAnyTypedArray,
+                _features.UsesNodeStreams,
+                _features.UsesPromise,
+                _features.UsesTextEncoding
+            )
+        );
+        EmitInvokeMethodValue0(
+            typeBuilder,
+            runtime.Invocation,
+            new InvokeMethodValue0Inputs(runtime.CheckCancellationMethod, runtime.Errors, runtime.FunctionValues)
+        );
+        runtime.Invocation.CompleteEmission();
         EmitGetFieldsProperty(
             typeBuilder,
             runtime.ObjectRead,
@@ -1068,7 +1128,7 @@ public partial class RuntimeEmitter
                 runtime.IHasFieldsGetProperty,
                 runtime.IHasFieldsHasProperty,
                 runtime.IHasFieldsInterface,
-                runtime.InvokeMethodValue,
+                runtime.Invocation.Method,
                 runtime.ReflectedMethods.CallableConstructor,
                 runtime.ObjectOwnProperties,
                 runtime.ObjectPrototypes,
@@ -1094,7 +1154,7 @@ public partial class RuntimeEmitter
                 _features.UsesArrayPrototypeMutation,
                 runtime.DescriptorStorage,
                 _features.UsesDynamicPropertyDescriptors,
-                runtime.InvokeMethodValue,
+                runtime.Invocation.Method,
                 runtime.ObjectPrototypes,
                 runtime.Templates,
                 runtime.UndefinedInstance,
@@ -1122,7 +1182,7 @@ public partial class RuntimeEmitter
                 runtime.IHasFieldsHasProperty,
                 runtime.IHasFieldsInterface,
                 runtime.IHasFieldsSetProperty,
-                runtime.InvokeMethodValue,
+                runtime.Invocation.Method,
                 runtime.ObjectState,
                 runtime.ObjectStorage,
                 runtime.Promise,
@@ -1140,7 +1200,7 @@ public partial class RuntimeEmitter
                 runtime.IHasFieldsHasProperty,
                 runtime.IHasFieldsInterface,
                 runtime.IHasFieldsSetProperty,
-                runtime.InvokeMethodValue,
+                runtime.Invocation.Method,
                 runtime.ObjectState,
                 runtime.ObjectStorage,
                 runtime.Promise,
@@ -1249,7 +1309,7 @@ public partial class RuntimeEmitter
                 runtime.IHasFieldsGetProperty,
                 runtime.IHasFieldsInterface,
                 runtime.ReflectedMethods.InvokeUnwrapped,
-                runtime.InvokeMethodValue,
+                runtime.Invocation.Method,
                 runtime.LookupBuiltInStaticMember,
                 runtime.Map,
                 runtime.Numbers,
@@ -1296,7 +1356,7 @@ public partial class RuntimeEmitter
         EmitToJsString(typeBuilder, runtime.StringCoercion, runtime.ArrayStorage, runtime.ArrayOperations,
             new StringCoercionInputs(
                 runtime.UndefinedType, runtime.Symbols.Type, runtime.GlobalThisSingletonField, runtime.GlobalThisGetProperty,
-                runtime.Operators.TypeOf, runtime.InvokeMethodValue, runtime.Arguments.Type, runtime.ObjectRead.Property, runtime.ObjectStorage.Type,
+                runtime.Operators.TypeOf, runtime.Invocation.Method, runtime.Arguments.Type, runtime.ObjectRead.Property, runtime.ObjectStorage.Type,
                 runtime.FunctionValues.Type, runtime.FunctionBindings.AnyType, runtime.ObjectOwnProperties.HasOwnProperty, runtime.IHasFieldsInterface,
                 runtime.Symbols.GetStorage, runtime.Symbols.ToPrimitive, runtime.DescriptorStorage.DescriptorType,
                 runtime.DescriptorStorage.DescriptorGetter.GetGetMethod()!,
@@ -1331,12 +1391,12 @@ public partial class RuntimeEmitter
                 runtime.FunctionValues.Type, runtime.FunctionBindings.AnyType, runtime.IHasFieldsInterface,
                 runtime.DescriptorStorage.DescriptorType, runtime.DescriptorStorage.DescriptorGetter.GetGetMethod()!,
                 runtime.DescriptorStorage.DescriptorSetter.GetGetMethod()!, runtime.DescriptorStorage.DescriptorValue.GetGetMethod()!,
-                runtime.Symbols.ToPrimitive, runtime.Symbols.GetStorage, runtime.ObjectRead.Property, runtime.InvokeMethodValue,
+                runtime.Symbols.ToPrimitive, runtime.Symbols.GetStorage, runtime.ObjectRead.Property, runtime.Invocation.Method,
                 runtime.Operators.TypeOf, runtime.StringCoercion.ToJsString, runtime.BoxedPrimitives.UnwrapIfBoxed,
                 runtime.Errors.CreateException, runtime.Errors.TypeErrorConstructor));
         EmitConvertToNumber(typeBuilder, runtime.NumericCoercion,
             new ExplicitNumberInputs(runtime.UndefinedType, runtime.Symbols.Type, runtime.ObjectStorage.Type,
-                runtime.ObjectRead.Property, runtime.InvokeMethodValue, runtime.StringCoercion.ToJsString,
+                runtime.ObjectRead.Property, runtime.Invocation.Method, runtime.StringCoercion.ToJsString,
                 runtime.BigInt.ToNumber, runtime.Errors.CreateException, runtime.Errors.TypeErrorConstructor));
         // String.raw lives here so its body can read `template.raw` via
         // GetProperty and ToString-coerce substitutions via ToJsString.
@@ -1357,7 +1417,7 @@ public partial class RuntimeEmitter
                 runtime.GlobalThisSetProperty,
                 runtime.GlobalThisSingletonField,
                 runtime.ReflectedMethods.InvokeUnwrapped,
-                runtime.InvokeMethodValue,
+                runtime.Invocation.Method,
                 runtime.LookupBuiltInStaticMember,
                 runtime.NumericCoercion,
                 runtime.ObjectDescriptors,
@@ -1388,7 +1448,7 @@ public partial class RuntimeEmitter
                 runtime.GlobalThisSetProperty,
                 runtime.GlobalThisSingletonField,
                 runtime.ReflectedMethods.InvokeUnwrapped,
-                runtime.InvokeMethodValue,
+                runtime.Invocation.Method,
                 runtime.ObjectDescriptors,
                 runtime.ObjectRead,
                 runtime.ObjectState,
@@ -1498,7 +1558,7 @@ public partial class RuntimeEmitter
                 runtime.GlobalThisGetProperty,
                 runtime.GlobalThisSingletonField,
                 runtime.ReflectedMethods.InvokeUnwrapped,
-                runtime.InvokeMethodValue,
+                runtime.Invocation.Method,
                 runtime.ObjectDescriptors,
                 runtime.ObjectStorage,
                 runtime.RegExps,
@@ -1527,7 +1587,7 @@ public partial class RuntimeEmitter
                 runtime.GlobalThisSetProperty,
                 runtime.GlobalThisSingletonField,
                 runtime.ReflectedMethods.InvokeUnwrapped,
-                runtime.InvokeMethodValue,
+                runtime.Invocation.Method,
                 runtime.Math,
                 runtime.ObjectDescriptors,
                 runtime.ObjectOwnProperties,
@@ -1553,7 +1613,7 @@ public partial class RuntimeEmitter
                 runtime.ArrayStorage,
                 runtime.DescriptorStorage,
                 runtime.Errors,
-                runtime.InvokeMethodValue,
+                runtime.Invocation.Method,
                 runtime.ObjectState,
                 runtime.StringCoercion,
                 runtime.Symbols,
@@ -2036,7 +2096,7 @@ public partial class RuntimeEmitter
                 runtime.DescriptorStorage,
                 runtime.Errors,
                 runtime.GetIteratorFunction,
-                runtime.InvokeValue,
+                runtime.Invocation.Value,
                 runtime.IterateToList,
                 runtime.RuntimeType,
                 runtime.Symbols,
@@ -2062,7 +2122,7 @@ public partial class RuntimeEmitter
                 runtime.ObjectDescriptors.GetOwnPropertyDescriptor,
                 runtime.ObjectOwnProperties.HasOwnProperty,
                 runtime.FunctionIntrospection.GetProperty,
-                runtime.InvokeMethodValue,
+                runtime.Invocation.Method,
                 runtime.UndefinedInstance,
                 runtime.UndefinedType,
                 runtime.ObjectRead.Property
@@ -2086,7 +2146,7 @@ public partial class RuntimeEmitter
                     runtime.StringCoercion.ToJsString,
                     runtime.ObjectPrototypes.GetPrototypeOf,
                     runtime.Booleans.IsTruthy,
-                    runtime.InvokeMethodValue,
+                    runtime.Invocation.Method,
                     runtime.UndefinedType,
                     runtime.ObjectRead.Property,
                     runtime.ObjectWrite.Property
@@ -2173,7 +2233,7 @@ public partial class RuntimeEmitter
             EmitReflectApply(
                 typeBuilder,
                 runtime.Reflect.RequireNamespace(),
-                new ReflectApplyInputs(runtime.InvokeMethodValue)
+                new ReflectApplyInputs(runtime.Invocation.Method)
             );
             EmitReflectConstruct(
                 typeBuilder,
@@ -2260,7 +2320,7 @@ public partial class RuntimeEmitter
         // Search helpers use ToIntegerOrInfinity for spec-compliant fromIndex clamping.
         EmitToIntegerOrInfinityHelper(typeBuilder, runtime.NumericCoercion,
             new IntegerOrInfinityInputs(runtime.UndefinedType, runtime.ObjectStorage.Type, runtime.IHasFieldsInterface,
-                runtime.Symbols.ToPrimitive, runtime.Symbols.GetStorage, runtime.ObjectRead.Property, runtime.InvokeMethodValue,
+                runtime.Symbols.ToPrimitive, runtime.Symbols.GetStorage, runtime.ObjectRead.Property, runtime.Invocation.Method,
                 runtime.Operators.TypeOf, runtime.BoxedPrimitives.IsOfType, runtime.Errors.CreateException, runtime.Errors.TypeErrorConstructor));
         EmitArrayIncludes(typeBuilder, runtime);
         EmitArrayIncludesProto(typeBuilder, runtime);
@@ -2428,7 +2488,7 @@ public partial class RuntimeEmitter
                     runtime.DescriptorStorage,
                     runtime.ObjectRead.Index,
                     runtime.ObjectRead.Property,
-                    runtime.InvokeMethodValue,
+                    runtime.Invocation.Method,
                     runtime.NormalizeToEnumerator,
                     runtime.NumericCoercion,
                     runtime.FunctionAttributes.PadUndefinedCtor,
@@ -2473,7 +2533,7 @@ public partial class RuntimeEmitter
         // EmitRandom moved to before gOPD (see line ~660). The original site
         // here is now empty.
         EmitMathSumPrecise(typeBuilder, runtime.Math, new MathSumInputs(
-            runtime.Symbols.GetStorage, runtime.Symbols.Iterator, runtime.GetIteratorFunction, runtime.UndefinedType, runtime.InvokeMethodValue, runtime.GetIteratorNextMethod, runtime.InvokeCapturedIteratorNext, runtime.GetIteratorDone, runtime.GetIteratorValue, runtime.ObjectRead.Property, runtime.Errors.CreateException, runtime.Errors.TypeErrorConstructor));
+            runtime.Symbols.GetStorage, runtime.Symbols.Iterator, runtime.GetIteratorFunction, runtime.UndefinedType, runtime.Invocation.Method, runtime.GetIteratorNextMethod, runtime.InvokeCapturedIteratorNext, runtime.GetIteratorDone, runtime.GetIteratorValue, runtime.ObjectRead.Property, runtime.Errors.CreateException, runtime.Errors.TypeErrorConstructor));
         EmitDefineSymbolAccessor(
             typeBuilder,
             runtime.ObjectConstruction,
@@ -2492,7 +2552,7 @@ public partial class RuntimeEmitter
                 runtime.ObjectRead.Property,
                 runtime.IHasFieldsFieldsGetter,
                 runtime.IHasFieldsInterface,
-                runtime.InvokeMethodValue,
+                runtime.Invocation.Method,
                 runtime.ObjectKeys,
                 runtime.ObjectStorage
             )
@@ -2503,9 +2563,9 @@ public partial class RuntimeEmitter
         EmitGetEnumMemberName(typeBuilder, runtime);
         EmitConcatTemplate(typeBuilder, runtime.Templates, runtime.StringCoercion.StringifyCoerce);
         EmitInvokeTaggedTemplate(typeBuilder, runtime.Templates,
-            runtime.ObjectState.Freeze, runtime.InvokeValue, runtime.Errors.CreateException, runtime.Errors.TypeErrorConstructor);
+            runtime.ObjectState.Freeze, runtime.Invocation.Value, runtime.Errors.CreateException, runtime.Errors.TypeErrorConstructor);
         EmitInvokeTaggedTemplateWithThis(typeBuilder, runtime.Templates,
-            runtime.ObjectState.Freeze, runtime.InvokeMethodValue, runtime.Errors.CreateException, runtime.Errors.TypeErrorConstructor);
+            runtime.ObjectState.Freeze, runtime.Invocation.Method, runtime.Errors.CreateException, runtime.Errors.TypeErrorConstructor);
         EmitObjectRest(
             typeBuilder,
             runtime.ObjectConstruction,
@@ -2559,7 +2619,7 @@ public partial class RuntimeEmitter
                     runtime.ObjectRead.Property,
                     runtime.IHasFieldsInterface,
                     runtime.ReflectedMethods.InvokeUnwrapped,
-                    runtime.InvokeMethodValue,
+                    runtime.Invocation.Method,
                     runtime.Records.RequireScalars().GetValue,
                     runtime.Records.RequireScalars().IsMaterializedGetter,
                     runtime.Records.RequireScalars().ShapeGetter,
@@ -2602,8 +2662,8 @@ public partial class RuntimeEmitter
                     runtime.ObjectRead.Property,
                     runtime.IHasFieldsInterface,
                     runtime.ReflectedMethods.InvokeUnwrapped,
-                    runtime.InvokeMethodValue,
-                    runtime.InvokeValue,
+                    runtime.Invocation.Method,
+                    runtime.Invocation.Value,
                     runtime.Numbers,
                     runtime.NumericCoercion,
                     runtime.ObjectPrototypes.Prototype,
@@ -2650,7 +2710,7 @@ public partial class RuntimeEmitter
             var bigInt = runtime.BigInt.RequireImplementation();
             EmitCreateBigInt(typeBuilder, bigInt,
                 new BigIntConversionInputs(
-                    new BigIntPrimitiveInputs(runtime.ObjectRead.Index, runtime.ObjectRead.Property, runtime.InvokeMethodValue,
+                    new BigIntPrimitiveInputs(runtime.ObjectRead.Index, runtime.ObjectRead.Property, runtime.Invocation.Method,
                         runtime.Symbols.ToPrimitive, runtime.Symbols.Type, runtime.Operators.TypeOf, runtime.UndefinedType,
                         runtime.Errors.CreateException, runtime.Errors.TypeErrorConstructor),
                     runtime.ObjectStorage.Type, runtime.StringCoercion.ToJsString, runtime.Errors.RangeErrorConstructor, runtime.Errors.SyntaxErrorConstructor));
@@ -2730,7 +2790,7 @@ public partial class RuntimeEmitter
                 runtime.ObjectRead.Index,
                 runtime.UndefinedType,
                 runtime.Operators.TypeOf,
-                runtime.InvokeMethodValue,
+                runtime.Invocation.Method,
                 runtime.ObjectStorage.GetProperty,
                 runtime.ObjectOwnProperties.HasOwnProperty,
                 runtime.ObjectRead.Property,
@@ -2799,7 +2859,7 @@ public partial class RuntimeEmitter
                 runtime.ObjectPrototypes,
                 runtime.FunctionConstruction,
                 runtime.UndefinedInstance,
-                runtime.InvokeMethodValue,
+                runtime.Invocation.Method,
                 runtime.UndefinedType,
                 runtime.Operators,
                 runtime.FunctionBindings,
@@ -2843,7 +2903,7 @@ public partial class RuntimeEmitter
                 typeBuilder,
                 runtime.CollectionKeys,
                 runtime.RequireMap(),
-                new MapMethodsInputs(runtime.ArrayStorage, runtime.InvokeMethodValue, runtime.UndefinedInstance)
+                new MapMethodsInputs(runtime.ArrayStorage, runtime.Invocation.Method, runtime.UndefinedInstance)
             );
             EmitMapGroupBy(
                 typeBuilder,
@@ -2852,7 +2912,7 @@ public partial class RuntimeEmitter
                     runtime.ArrayStorage,
                     runtime.Errors.CreateException,
                     runtime.GetIteratorFunction,
-                    runtime.InvokeValue,
+                    runtime.Invocation.Value,
                     runtime.IterateToList,
                     runtime.RuntimeType,
                     runtime.Symbols.Iterator,
@@ -2872,7 +2932,7 @@ public partial class RuntimeEmitter
                     runtime.ArrayOperations,
                     runtime.ArrayStorage,
                     runtime.Errors.CreateException,
-                    runtime.InvokeMethodValue,
+                    runtime.Invocation.Method,
                     runtime.Errors.TypeErrorConstructor
                 )
             );

@@ -146,7 +146,7 @@ public partial class RuntimeEmitter
             new ObjectProtoToLocaleStringHelperInputs(
                 runtime.Errors,
                 runtime.ObjectRead.Property,
-                runtime.InvokeMethodValue,
+                runtime.Invocation.Method,
                 runtime.StringCoercion,
                 runtime.Operators.TypeOf,
                 runtime.UndefinedType
@@ -302,7 +302,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, methodLocal);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Newarr, _types.Object);
-        il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+        il.Emit(OpCodes.Call, runtime.Invocation.Method);
         il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", _types.String, _types.String));
         il.Emit(OpCodes.Stloc, resultLocal);

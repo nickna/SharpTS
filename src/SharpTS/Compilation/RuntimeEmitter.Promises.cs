@@ -1067,7 +1067,7 @@ public partial class RuntimeEmitter
             // Unknown callable - use InvokeValue fallback
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldloc, argsLocal);
-            il.Emit(OpCodes.Call, runtime.InvokeValue);
+            il.Emit(OpCodes.Call, runtime.Invocation.Value);
             il.Emit(OpCodes.Br, endLabel);
 
             // isTSFunctionLabel: call $TSFunction.InvokeWithThis(undefined, args).
@@ -1142,7 +1142,7 @@ public partial class RuntimeEmitter
             // Unknown callable - use InvokeValue fallback
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldloc, argsLocal);
-            il.Emit(OpCodes.Call, runtime.InvokeValue);
+            il.Emit(OpCodes.Call, runtime.Invocation.Value);
             il.Emit(OpCodes.Br, endLabel);
 
             // isTSFunctionLabel: call $TSFunction.InvokeWithThis(undefined, args).

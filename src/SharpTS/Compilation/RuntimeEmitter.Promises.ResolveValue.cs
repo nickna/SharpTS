@@ -180,7 +180,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldfld, rejectField);
             il.Emit(OpCodes.Stelem_Ref);
-            il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+            il.Emit(OpCodes.Call, runtime.Invocation.Method);
             il.Emit(OpCodes.Pop);
             il.Emit(OpCodes.Leave, doneLabel);
 

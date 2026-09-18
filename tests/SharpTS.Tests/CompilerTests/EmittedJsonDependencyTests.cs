@@ -46,6 +46,9 @@ public class EmittedJsonDependencyTests
             if (parameter.Name == "TSFunctionInvokeWithThis") return runtime.FunctionValues.InvokeWithThis;
             if (parameter.Name == "TSFunctionType") return runtime.FunctionValues.Type;
             if (parameter.Name == "InvokeMethodUnwrapped") return runtime.ReflectedMethods.InvokeUnwrapped;
+            if (parameter.Name == "InvokeValue") return runtime.Invocation.Value;
+            if (parameter.Name == "InvokeMethodValue") return runtime.Invocation.Method;
+            if (parameter.Name == "InvokeMethodValue0") return runtime.Invocation.Method0;
             var property = typeof(EmittedRuntime).GetProperty(parameter.Name!);
             return property is not null ? property.GetValue(runtime)
                 : typeof(RuntimeFeatureSet).GetProperty(parameter.Name!)!.GetValue(features);

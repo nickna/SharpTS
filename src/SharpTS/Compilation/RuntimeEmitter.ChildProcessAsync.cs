@@ -560,7 +560,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, dictLocal);
     }
 
-    /// <summary>Emit: runtime.InvokeValue(ctx._callback, args[]) when callback != null. Pops result.</summary>
+    /// <summary>Emit: runtime.Invocation.Value(ctx._callback, args[]) when callback != null. Pops result.</summary>
     private void EmitInvokeCallback(ILGenerator il, EmittedRuntime runtime, Action emitArgsArray)
     {
         var skip = il.DefineLabel();
@@ -570,7 +570,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, runtime.RequireChildProcess().ContextCallback);
         emitArgsArray();
-        il.Emit(OpCodes.Call, runtime.InvokeValue);
+        il.Emit(OpCodes.Call, runtime.Invocation.Value);
         il.Emit(OpCodes.Pop);
         il.MarkLabel(skip);
     }
@@ -1222,7 +1222,7 @@ public partial class RuntimeEmitter
     {
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Newarr, _types.Object);
-        il.Emit(OpCodes.Call, runtime.InvokeValue);
+        il.Emit(OpCodes.Call, runtime.Invocation.Value);
         il.Emit(OpCodes.Pop);
     }
 
