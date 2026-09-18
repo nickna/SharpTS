@@ -434,7 +434,6 @@ public class EmittedRuntime
     /// <summary>Required truthiness and Boolean prototype declarations.</summary>
     public EmittedBooleanRuntime Booleans { get; } = new();
 
-    public MethodBuilder ArrayDestructureSource { get; set; } = null!;  // #685: normalize array binding-pattern source via the iterator protocol
 
     // General invocation helper
 

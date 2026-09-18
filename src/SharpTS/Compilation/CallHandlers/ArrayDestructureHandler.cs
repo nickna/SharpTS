@@ -14,8 +14,8 @@ namespace SharpTS.Compilation.CallHandlers;
 /// and tuple positional element types). Every other source — including <b>strings</b> — is routed
 /// through the emitted <c>ArrayDestructureSource</c> runtime helper, which materializes non-indexable
 /// iterables (generators, Set, Map, strings, <c>[Symbol.iterator]</c> objects) into an array. Strings
-/// are deliberately not on the fast path so a rest element binds a fresh character array rather than
-/// the trailing substring (#753); non-rest character values are identical either way.
+/// are deliberately not on the fast path: their iterator yields code-point strings, and a rest
+/// element binds a fresh array rather than the trailing substring (#753).
 /// </summary>
 public class ArrayDestructureHandler : ICallHandler
 {
@@ -39,7 +39,7 @@ public class ArrayDestructureHandler : ICallHandler
         // Fast path: a statically index-addressable source needs no normalization. The type
         // checker passes these through with their precise type (see
         // TypeChecker.NormalizeArrayDestructureSourceType), so the runtime value is already an
-        // array/tuple/string the index access reads directly — and tuple positional element types
+        // array/tuple the index access reads directly — and tuple positional element types
         // stay intact.
         if (IsIndexAddressable(ctx.TypeMap?.Get(arg)))
         {
@@ -63,7 +63,7 @@ public class ArrayDestructureHandler : ICallHandler
         il.Emit(OpCodes.Ldsfld, ctx.Runtime!.Symbols.Iterator);
         il.Emit(OpCodes.Ldtoken, ctx.Runtime!.RuntimeType);
         il.Emit(OpCodes.Call, ctx.Types.GetMethod(ctx.Types.Type, "GetTypeFromHandle"));
-        il.Emit(OpCodes.Call, ctx.Runtime!.ArrayDestructureSource);
+        il.Emit(OpCodes.Call, ctx.Runtime!.ArrayOperations.DestructureSource);
         return true;
     }
 

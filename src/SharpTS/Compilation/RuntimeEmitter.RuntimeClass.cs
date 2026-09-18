@@ -2601,9 +2601,10 @@ public partial class RuntimeEmitter
             runtime.ObjectConstruction,
             new ObjectRestInputs(runtime.IHasFieldsFieldsGetter, runtime.IHasFieldsInterface)
         );
-        // #685: array binding-pattern source normalizer — depends on IterateToList /
-        // GetIteratorFunction (emitted above via EmitIteratorMethodsAdvanced).
-        EmitArrayDestructureSource(typeBuilder, runtime);
+        // #685: array binding-pattern source normalizer uses the declared iterator
+        // collection helper and array storage constructor.
+        EmitArrayDestructureSource(typeBuilder, runtime.ArrayOperations,
+            runtime.Symbols.Type, runtime.IteratorCollection.ToList, runtime.ArrayStorage.Ctor);
         // JSON methods — gated on UsesJSON (also implied by UsesHttp).
         if (runtime.Json.Implementation is not null)
         {

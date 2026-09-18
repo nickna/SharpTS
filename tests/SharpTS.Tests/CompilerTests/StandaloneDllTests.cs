@@ -3708,6 +3708,120 @@ public class StandaloneDllTests
             verifyStandardError: error => Assert.Empty(error)));
     }
 
+    public static IEnumerable<object[]> ArrayDestructuringPrograms =>
+    [
+        new object[]
+        {
+            "destructure_array_tuple",
+            "const [a,,b=9,...rest]=[1,2];const tuple:[number,string]=[4,\"x\"];const [n,s]=tuple;console.log(a,b,rest.length,n,s);\n",
+            "1 9 0 4 x\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "destructure_dynamic_array",
+            "const values:any=[2,3,4];const [first,...rest]=values;console.log(first,rest.join(\",\"),rest===values);\n",
+            "2 3,4 false\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "destructure_string",
+            "const [a,...rest]=\"abc\";console.log(a,Array.isArray(rest),rest.join(\",\"));\n",
+            "a true b,c\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "destructure_unicode_units",
+            "const [a,b,...rest]=\"A\\u{1F600}B\";console.log(a,b.length,b.charCodeAt(0),b.charCodeAt(1),rest.join(\",\"));\n",
+            "A 2 55357 56832 B\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "destructure_set",
+            "const [a,b=8,...rest]=new Set([2,3,4]);console.log(a,b,rest.join(\",\"));\n",
+            "2 3 4\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "destructure_map",
+            "const [[key,value],...rest]=new Map([[\"a\",1],[\"b\",2]]);console.log(key,value,rest.length,rest[0][0],rest[0][1]);\n",
+            "a 1 1 b 2\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "destructure_generator_rest",
+            "function* g(){yield 2;yield 4;yield 6;}const [a,,...rest]=g();console.log(a,rest.join(\",\"));\n",
+            "2 6\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "destructure_empty_defaults",
+            "function* g(){}const [a=7,...rest]=g();const [b=8,...tail]=\"\";console.log(a,rest.length,b,tail.length);\n",
+            "7 0 8 0\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "destructure_nested",
+            "function* g(){yield [1,2];yield [3,4];}const [[a,...b],...rest]=g();console.log(a,b.join(\",\"),rest[0].join(\",\"));\n",
+            "1 2 3,4\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "destructure_custom_rest",
+            "const source:any={i:0,[Symbol.iterator](){return this;},next(){this.i++;return {value:this.i*3,done:this.i>3};}};const [a,...rest]=source;console.log(a,rest.join(\",\"),source.i);\n",
+            "3 6,9 4\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "destructure_override_alias_control",
+            "const source=[1,2];const alias:any=source;alias[Symbol.iterator]=function*(){yield 8;yield 9;};const [a,...rest]=source;console.log(a,rest.join(\",\"));\n",
+            "8 9\n",
+            false,
+            "",
+        },
+    ];
+
+    [Theory]
+    [MemberData(nameof(ArrayDestructuringPrograms))]
+    public void Isolated_ArrayDestructuring_PreservesSourcesDefaultsAndRest(
+        string name, string source, string expected, bool hosted, string extraArguments)
+    {
+        using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var sourcePath = tempDir.CreateFile("main.ts", source);
+        var dllPath = tempDir.GetPath($"array_destructuring_{name}.dll");
+        var hosting = hosted ? " --target dll --hosted" : "";
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{sourcePath}\" -o \"{dllPath}\" --verify --standalone{hosting} {extraArguments}", tempDir.Path);
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        var references = GetAssemblyReferences(dllPath);
+        Assert.DoesNotContain("SharpTS", references);
+        Assert.Equal(hosted, references.Contains("SharpTS.Hosting.Abstractions"));
+        Assert.False(File.Exists(tempDir.GetPath("SharpTS.dll")));
+        if (!hosted)
+            Assert.Equal(expected, ExecuteCompiledDllIsolated(dllPath, timeoutMs: 30000,
+                verifyStandardError: error => Assert.Empty(error)));
+    }
+
     public static IEnumerable<object[]> IteratorHelpersPrograms =>
     [
         new object[]
