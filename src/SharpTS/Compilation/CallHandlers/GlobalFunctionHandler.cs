@@ -330,7 +330,7 @@ public class GlobalFunctionHandler : ICallHandler
             emitter.EmitExpression(call.Arguments[0]);
             emitter.EmitBoxIfNeeded(call.Arguments[0]);
         }
-        il.Emit(System.Reflection.Emit.OpCodes.Call, ctx.Runtime!.GlobalEncodeURIComponent);
+        il.Emit(System.Reflection.Emit.OpCodes.Call, ctx.Runtime!.UriComponents.Encode);
         emitter.SetStackType(StackType.String);
         return true;
     }
@@ -346,7 +346,7 @@ public class GlobalFunctionHandler : ICallHandler
             emitter.EmitExpression(call.Arguments[0]);
             emitter.EmitBoxIfNeeded(call.Arguments[0]);
         }
-        il.Emit(System.Reflection.Emit.OpCodes.Call, ctx.Runtime!.GlobalDecodeURIComponent);
+        il.Emit(System.Reflection.Emit.OpCodes.Call, ctx.Runtime!.UriComponents.Decode);
         emitter.SetStackType(StackType.String);
         return true;
     }

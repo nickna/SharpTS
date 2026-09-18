@@ -38,12 +38,16 @@ public partial class RuntimeEmitter
             FieldAttributes.Private | FieldAttributes.Static);
 
         EmitIndirectEval(typeBuilder, runtime);
-        EmitUriComponentFunctions(typeBuilder, runtime);
+        EmitUriComponentFunctions(typeBuilder, runtime.UriComponents,
+            new UriComponentInputs(runtime.FunctionAttributes.PadUndefinedCtor, runtime.StringCoercion.ToJsString));
+        runtime.UriComponents.CompleteEmission();
         EmitGlobalThisGetProperty(typeBuilder, runtime);
         EmitGlobalThisSetProperty(typeBuilder, runtime);
     }
 
-    private void EmitUriComponentFunctions(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private readonly record struct UriComponentInputs(ConstructorBuilder? PadUndefinedCtor, MethodBuilder ToJsString);
+
+    private void EmitUriComponentFunctions(TypeBuilder typeBuilder, EmittedUriComponentRuntime uriComponents, UriComponentInputs inputs)
     {
         MethodBuilder Emit(string clrName, MethodInfo uriMethod)
         {
@@ -55,21 +59,21 @@ public partial class RuntimeEmitter
 
             // Value calls must turn an omitted argument into JS undefined, not
             // CLR null, before applying the URI function's ToString coercion.
-            if (runtime.FunctionAttributes.PadUndefinedCtor is not null)
+            if (inputs.PadUndefinedCtor is not null)
                 method.SetCustomAttribute(
-                    runtime.FunctionAttributes.PadUndefinedCtor, CustomAttributeEncoder.EmptyBlob);
+                    inputs.PadUndefinedCtor, CustomAttributeEncoder.EmptyBlob);
 
             var il = method.GetILGenerator();
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
+            il.Emit(OpCodes.Call, inputs.ToJsString);
             il.Emit(OpCodes.Call, uriMethod);
             il.Emit(OpCodes.Ret);
             return method;
         }
 
-        runtime.GlobalEncodeURIComponent = Emit(
+        uriComponents.Encode = Emit(
             "GlobalEncodeURIComponent", _types.UriEscapeDataString);
-        runtime.GlobalDecodeURIComponent = Emit(
+        uriComponents.Decode = Emit(
             "GlobalDecodeURIComponent", _types.UriUnescapeDataString);
     }
 
@@ -462,11 +466,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, returnLabel);
 
         il.MarkLabel(encodeURIComponentLabel);
-        EmitGetOrCreateTSFn(runtime.GlobalEncodeURIComponent, "encodeURIComponent", 1);
+        EmitGetOrCreateTSFn(runtime.UriComponents.Encode, "encodeURIComponent", 1);
         il.Emit(OpCodes.Br, returnLabel);
 
         il.MarkLabel(decodeURIComponentLabel);
-        EmitGetOrCreateTSFn(runtime.GlobalDecodeURIComponent, "decodeURIComponent", 1);
+        EmitGetOrCreateTSFn(runtime.UriComponents.Decode, "decodeURIComponent", 1);
         il.Emit(OpCodes.Br, returnLabel);
 
         il.MarkLabel(evalLabel);

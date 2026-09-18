@@ -432,6 +432,16 @@ wrappers retain separate feature selections; Map and Set remain selected by
 metadata availability. Tests cover missing declarations, reuse, disabled
 optional metadata, receiver identity, zero-argument fallback and saved output.
 
+Required `UriComponents` owns the encode/decode component helpers. Its scoped emitter
+receives only the runtime type builder, owner, string-conversion method and nullable
+undefined-padding attribute constructor. Completion follows the original helper call
+before global property dispatch. Generated method signatures, attributes, coercion,
+BCL calls, declaration order and cached function wrappers are preserved. Tests cover
+missing/duplicate/completed declarations, supplied conversion inputs, attribute presence,
+fresh ownership under emitter reuse, direct and value calls, Unicode, and deployment.
+GlobalThis/eval state, wrapper caches and shared reflection infrastructure remain in
+the complete ownership audit.
+
 Required `ObjectFields` owns the baked `$IHasFields` interface and its four methods.
 The scoped emitter receives only the module and owner; completion follows the
 original interface-emission point before object storage and record implementations.

@@ -471,8 +471,8 @@ public class EmittedRuntime
     /// <summary>Required Number parsing, formatting and prototype declarations.</summary>
     public EmittedNumberRuntime Numbers { get; } = new();
 
-    public MethodBuilder GlobalEncodeURIComponent { get; set; } = null!;
-    public MethodBuilder GlobalDecodeURIComponent { get; set; } = null!;
+    /// <summary>Required URI component conversion declarations for this compilation.</summary>
+    public EmittedUriComponentRuntime UriComponents { get; } = new();
 
     /// <summary>WeakMap metadata, or null when the feature is omitted.</summary>
     public EmittedWeakMapRuntime? WeakMap { get; private set; }
